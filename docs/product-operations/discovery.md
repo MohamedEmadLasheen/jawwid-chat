@@ -163,10 +163,11 @@ Verified by `grep -ril` across `apps/api/src`, `apps/admin-web/src`, `lib`, `sup
   The brief conditions stickiness on the replier being *"still online"*; nothing reads
   `staff.presence`. A manager who escalates once, or an admin who assists once, silently
   becomes the current handler — including after they log off.
-- **G-D · Assist has no preconditions.** `authorization.service.ts` allows
-  `requestedMode: ASSIST` from any family-facing admin unconditionally. The brief's gate
-  (family in NOW, waited > 50% of target, on-duty admin has not opened it) is not
-  implemented; `assist.min_wait_fraction` is seeded and read by nothing.
+- **G-D · Assist is closed, not gated.** *(Changed during this audit: `fa53ba7` closed the
+  client-supplied bypass — assist and escalation are now denied outright.)* The brief's gate
+  (family in NOW, waited > 50% of target, on-duty admin has not opened it) is still not
+  implemented, so `assist.min_wait_fraction` is seeded and read by nothing and the permitted
+  assist case cannot be exercised. The manager path still trusts the client-supplied mode.
 - **G-E · Conversation state mislabels Jawwid's own obligations.**
   `dto.ts::conversationState()` returns `WAITING_ON_CUSTOMER` whenever staff spoke last.
   *"We'll check and get back to you"* files the family under waiting-on-customer.

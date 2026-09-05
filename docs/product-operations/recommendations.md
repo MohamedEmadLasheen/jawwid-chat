@@ -6,7 +6,8 @@ Each entry states: **Problem · Evidence · Business impact · Recommendation ·
 Owner · Acceptance criteria.** Recommendations that are mine rather than the product
 owner's are marked **[REC]**; product decisions are cross-referenced to `open-decisions.md`.
 
-Priorities are deliberately not inflated: 8 × P0, 12 × P1.
+Priorities are deliberately not inflated: 8 × P0, 12 × P1. One finding (R-06's assist
+bypass) was fixed by AI #1 while this audit was being written and is marked accordingly.
 
 ---
 
@@ -79,12 +80,16 @@ transition.
 handler; going offline releases the thread within one presence TTL.
 
 ### R-06 · Gate assist on its four preconditions; derive the manager's mode
-**Problem.** Any family-facing admin may send with `requestedMode: ASSIST` unconditionally,
-and a manager may send with any mode the client chooses.
-**Evidence.** `authorization.service.ts`; `assist.min_wait_fraction` (0.5) is seeded and read
-by nothing; FS-11, FS-12.
-**Business impact.** The permanent-ownership model is bypassable by one flag on a request,
-and the audit trail can record a manager's escalation as an owner reply.
+**Problem.** *(Half fixed during this audit.)* `fa53ba7` (AI #1) closed the client-supplied
+assist/escalation bypass — both are now denied outright pending a server-evaluated grant.
+Two gaps remain: the grant is unimplemented, so the brief's *permitted* assist case cannot
+be exercised at all; and a manager may still send with any mode the client chooses.
+**Evidence.** `authorization.service.ts` lines 130-131 (manager path unchanged) and 150-175
+(assist now denied); `assist.min_wait_fraction` (0.5) is seeded and read by nothing;
+FS-11, FS-12.
+**Business impact.** The audit trail can record a manager's escalation as an owner reply.
+And with assist closed rather than gated, an admin who *should* be allowed to help a waiting
+family cannot — the brief's escape valve for a breached response target is unavailable.
 **Recommendation.** Move the brief's §5 gate into `canSendMessage`: family in NOW **and**
 waited > `assist.min_wait_fraction` of target **and** the on-duty admin has not opened it —
 or the on-duty admin explicitly asked for help. Return the failing precondition as the
