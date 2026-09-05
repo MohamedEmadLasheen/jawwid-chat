@@ -1,0 +1,172 @@
+# Jawwid Chat — CI (QA-owned, AI #5)
+#
+# Ordered for fast feedback: cheap release-gate guards run first and fail the
+# whole run in seconds, then per-package typecheck/tests, then the deeper
+# migration gate that needs a database.
+#
+# Gate references are to docs/qa/release-gate.md.
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '24'
+
+jobs:
+  # ---------------------------------------------------------------- fast gates
+  guards:
+    name: Release-gate guards (fast)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: G-18 · no secrets committed
+        run: |
+          set -uo pipefail
+          # Hard patterns: never legitimate anywhere in the tree.
+          if grep -rInE '(AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----)' \
+               --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist . ; then
+            echo "::error::G-18 FAIL — credential material committed"; exit 1
+          fi
+          # JWT-shaped strings, excluding test files. A synthetic token inside a
+          # redaction test is the control working, not a leak (AI #3's
+          # redacting_logger_test.dart asserts such a token never reaches a log),
+          # so test paths are exempt from this heuristic only.
+          if grep -rInE 'eyJhbGciOi[A-Za-z0-9_-]{10,}' \
+               --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist \
+               --exclude-dir=test --exclude-dir=tests \
+               --exclude='*_test.dart' --exclude='*.spec.ts' --exclude='*.test.ts' . ; then
+            echo "::error::G-18 FAIL — JWT-shaped credential committed outside a test"; exit 1
+          fi
+          if git ls-files | grep -E '(^|/)\.env$|(^|/)\.env\.(local|production)$' ; then
+            echo "::error::G-18 FAIL — a real .env file is tracked"; exit 1
+          fi
+          echo "G-18 pass"
+
+      - name: G-20 · no real employee names in source, tests or seed data
+        run: |
+          set -uo pipefail
+          # The product brief names real staff. They are acceptable in docs/,
+          # never in code, fixtures or seed data (system-inventory.md §4).
+          hits=$(grep -rIl $'رحاب\|زينب\|دينا\|أسماء\|مريم\|رضوى\|رقيه' \
+            --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=docs . || true)
+          if [ -n "$hits" ]; then
+            echo "::error::G-20 FAIL — real employee names outside docs/:"; echo "$hits"; exit 1
+          fi
+          echo "G-20 pass"
+
+      - name: G-31..G-35 · Phase 2 functionality must not ship in MVP
+        run: |
+          set -uo pipefail
+          # Advisory scan. Fails only on unmistakable Phase 2 feature wiring.
+          if grep -rInE '\b(videoCall|enableVideo|startVideo|broadcastToAll|aiScore|aiSuggest|draftWithAI)\b' \
+               --include='*.ts' --include='*.dart' --include='*.tsx' \
+               --exclude-dir=node_modules --exclude-dir=dist . ; then
+            echo "::error::G-31..G-35 FAIL — Phase 2 capability referenced in MVP code"; exit 1
+          fi
+          echo "G-31..G-35 pass"
+
+  # ------------------------------------------------------------------ backend
+  api:
+    name: API · typecheck + unit
+    runs-on: ubuntu-latest
+    needs: guards
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/api/package-lock.json
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit tests (incl. G-07 phone-privacy guard, G-04/G-44 authz)
+        run: npm run test:unit
+
+  # ---------------------------------------------------------------- admin web
+  admin-web:
+    name: Admin Web · typecheck + tests
+    runs-on: ubuntu-latest
+    needs: guards
+    defaults:
+      run:
+        working-directory: apps/admin-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/admin-web/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  # --------------------------------------------------------------- migrations
+  migrations:
+    name: G-19 · migrations apply and are idempotent
+    runs-on: ubuntu-latest
+    needs: guards
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: jawwid_chat_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/jawwid_chat_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Apply the Jawwid Core shim
+        run: psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f db/test/00_core_shim.sql
+
+      - name: Apply migrations
+        run: bash scripts/db/apply.sh
+
+      - name: Re-apply — the ledger must make this a no-op
+        run: |
+          out=$(bash scripts/db/apply.sh)
+          echo "$out"
+          if echo "$out" | grep -q '^  apply'; then
+            echo "::error::G-19 FAIL — a migration re-applied on a clean ledger"; exit 1
+          fi
+
+      - name: Integration tests (skipped while none exist)
+        run: |
+          if ls apps/api/test/integration/*.spec.ts >/dev/null 2>&1; then
+            cd apps/api && npm ci && npx prisma generate && npm run test:int
+          else
+            echo "::notice::no integration specs yet — G-38 remains UNVERIFIED"
+          fi
+
+  # ------------------------------------------------------------------- mobile
+  mobile:
+    name: Mobile · BLOCKED (toolchain absent)
+    runs-on: ubuntu-latest
+    needs: guards
+    steps:
+      - name: Report blocked status
+        run: |
+          echo "::warning::G-37 UNVERIFIED — Flutter/Dart is not installed on any"
+          echo "::warning::build host, so no mobile unit, widget or integration test"
+          echo "::warning::can execute. Parent and Teacher apps are untested by"
+          echo "::warning::construction. See docs/qa/release-gate.md G-37."

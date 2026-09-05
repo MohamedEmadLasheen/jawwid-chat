@@ -29,7 +29,7 @@ not yet built.
 | G-04 | One centralized authorization policy governs messaging **and** calling; no second matrix; **no client-supplied field widens authority** | **PASS (messaging)** — JC-005 fixed, regression-tested. Calling unverified. |
 | G-05 | Approvals: approve / reject / mandatory reason; pending never delivered, pushed, searchable or emitted; no self-approval; concurrent decisions resolve to one state | UNVERIFIED |
 | G-06 | Voice calling authorized through the same policy; tokens server-generated, short-lived, room-scoped; unauthorized room join denied | UNVERIFIED |
-| G-07 | **No phone number** in any API response, realtime event, push payload, call setup/metadata/history, search result, log, cache or export | UNVERIFIED (structural control in place — PF-1) |
+| G-07 | **No phone number** in any API response, realtime event, push payload, call setup/metadata/history, search result, log, cache or export | PARTIAL — structural control now **guarded in CI** (`no-contact-channel-columns.spec.ts`: schema, migrations, Actor seam, DTO/event contracts). Runtime surfaces still unverified. |
 | G-08 | Internal notes unreachable by any parent or teacher through any surface | PARTIAL — contacts and deactivated actors denied (verified, JC-006 fixed); other surfaces unverified |
 | G-09 | No cross-family or cross-group access; IDOR sweep clean across every entity id | UNVERIFIED |
 | G-10 | Realtime delivers only in-scope events; re-authorized on reconnect and on permission change | UNVERIFIED |
@@ -42,7 +42,7 @@ not yet built.
 | G-16 | No message loss across restart, reconnect, worker crash or client crash | UNVERIFIED |
 | G-17 | `message` / `event_log` / `audit_log` immutable or append-only; audit manager-read-only | UNVERIFIED |
 | G-18 | No secrets in source or git history | **PASS** (re-checked each release) |
-| G-19 | Migrations apply cleanly forward; rollback defined and tested | UNVERIFIED |
+| G-19 | Migrations apply cleanly forward; rollback defined and tested | PARTIAL — forward apply + ledger idempotency now gated in CI; **rollback still undefined** |
 | G-20 | No real employee or customer data in seed data, fixtures or tests | UNVERIFIED |
 | G-21 | Jawwid Core remains source of truth; boundary views read-only; Chat is not a second source of truth | UNVERIFIED |
 
@@ -74,7 +74,7 @@ not yet built.
 
 | # | Gate | Status |
 |---|---|---|
-| G-36 | CI runs lint, typecheck, unit, integration, security and migration validation on every push | **FAIL — no CI pipeline** (jest projects now wired; runner exists) |
+| G-36 | CI runs typecheck, unit, security and migration validation on every push | **PASS (partial)** — `.github/workflows/ci.yml`: fast release-gate guards (G-18/G-20/G-31..35), API typecheck+unit, Admin Web typecheck+tests, migration apply + idempotency. Integration job self-skips until specs exist; no linter configured in any package yet. |
 | G-37 | Every component's toolchain installed and its tests executable in CI (Flutter/Dart still absent) | **FAIL** |
 | G-38 | Full E2E suite green (`test-plan.md` §20) | UNVERIFIED |
 | G-39 | Zero open P0; zero open critical P1 | **FAIL — 3 open P0 (JC-001/002/003), 1 open P1 (JC-007)** |

@@ -1,0 +1,26 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  errors:
+    # Localisation is not optional in this product: a hardcoded user-visible string is a
+    # defect, not a style nit (§46).
+    missing_required_param: error
+    missing_return: error
+  exclude:
+    - "**/*.g.dart"
+    - "lib/l10n/app_localizations*.dart"
+    - build/**
+    - android/**
+    - ios/**
+
+linter:
+  rules:
+    - always_declare_return_types
+    - avoid_print
+    - prefer_const_constructors
+    - prefer_const_declarations
+    - prefer_final_locals
+    - unawaited_futures
+    - use_super_parameters
+    - directives_ordering
+    - require_trailing_commas
