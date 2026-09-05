@@ -3,6 +3,8 @@ import { render } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { I18nProvider } from '@/core/i18n/I18nProvider'
+import { SessionProvider } from '@/core/auth/SessionProvider'
+import { qk } from '@/core/api/queryKeys'
 import type { Locale } from '@/core/i18n/messages'
 import type {
   Case,
@@ -23,9 +25,19 @@ export function createTestQueryClient(): QueryClient {
 
 export function renderWithProviders(
   ui: ReactElement,
-  { locale = 'en' as Locale, route = '/' } = {},
+  { locale = 'en' as Locale, route = '/', staff }: {
+    locale?: Locale
+    route?: string
+    /** Seeds the session cache so role-gated UI can be exercised. */
+    staff?: Staff
+  } = {},
 ) {
   const queryClient = createTestQueryClient()
+  if (staff) queryClient.setQueryData(qk.me, staff)
+
+  const Inner = ({ children }: { children: ReactNode }) =>
+    staff ? <SessionProvider>{children}</SessionProvider> : <>{children}</>
+
   const Wrapper = ({ children }: { children: ReactNode }) => (
     <I18nProvider initialLocale={locale}>
       <QueryClientProvider client={queryClient}>
@@ -33,7 +45,7 @@ export function renderWithProviders(
           initialEntries={[route]}
           future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
         >
-          {children}
+          <Inner>{children}</Inner>
         </MemoryRouter>
       </QueryClientProvider>
     </I18nProvider>
