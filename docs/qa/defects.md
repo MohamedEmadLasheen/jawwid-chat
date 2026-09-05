@@ -50,6 +50,13 @@ Student Groups, approvals and voice calling are MVP. Approval is intentionally
 simple in MVP — approve, reject, rejection reason — with escalation, expiry and
 coverage-aware approval deferred to Phase 2. Video calling is Phase 2.
 
+### Mitigating factor
+
+The groundwork exists: `ThreadKind` already includes `STUDENT_GROUP`, and
+`ModerationStatus` already declares `PENDING` / `REJECTED` "so the approval
+workflow can be switched on without a migration". The correction is cheaper than
+the §C comment implies.
+
 ### Fix direction
 
 Promote §C models to implemented, and route them through the same centralized
@@ -164,6 +171,103 @@ behaviour the comment says it prevents. A config key silently becoming NULL
 changes operational thresholds without failing loudly.
 
 **Fix:** add a `jsonb_typeof(v) = 'null'` guard, or `CHECK (jsonb_typeof(value) <> 'null')`.
+
+---
+
+## JC-005 · `requestedMode: ASSIST` / `ESCALATION` bypasses the on-duty check
+
+| | |
+|---|---|
+| **Severity** | **P0 — horizontal privilege escalation, client-reachable** |
+| **Area** | `apps/api/src/platform/authorization.service.ts` `canSendMessage()` |
+| **Owner agent** | AI #1 |
+| **Status** | OPEN |
+| **Evidence** | `apps/api/test/unit/authorization/assist-escalation-bypass.spec.ts` — **3 failing assertions, reproducible** |
+
+### Steps
+
+1. Authenticate as any family-facing staff member (ADMIN or COVERAGE) who is
+   **not** on duty for family F and is not F's owner.
+2. `POST` a customer-visible message to F's thread with
+   `requestedMode: "ASSIST"` (or `"ESCALATION"`) in the body.
+
+### Expected
+
+DENY. Assist requires **all** of: family in the NOW bucket · waited >50% of the
+response target · the on-duty admin has not opened it — or the on-duty admin
+explicitly requested help. None hold.
+
+### Actual
+
+`allow(OnBehalfMode.ASSIST)` is returned unconditionally:
+
+```ts
+if (intent.requestedMode === OnBehalfMode.ASSIST)     return allow(OnBehalfMode.ASSIST);
+if (intent.requestedMode === OnBehalfMode.ESCALATION) return allow(OnBehalfMode.ESCALATION);
+```
+
+### Impact
+
+Any admin or coverage admin can write a **customer-visible** message to **any
+family** at any time by setting one field in the request body — defeating
+`on_duty()`, which the architecture designates as the sole authority for who may
+act on a family. The `on_behalf_mode` recorded on the message is also
+client-chosen at this point, so the audit trail records the attacker's own
+label.
+
+### Root cause
+
+The gate is delegated to "the caller" by comment, contradicting the class's own
+contract: *"No controller, gateway, or worker is permitted to make its own
+access decision."* `CommErrorCode.ASSIST_NOT_PERMITTED` is **declared but never
+used**, confirming the check was intended and not implemented.
+
+### Fix direction
+
+Evaluate the assist preconditions inside `AuthorizationService`, returning
+`ASSIST_NOT_PERMITTED` when unmet. `ESCALATION` needs its own explicit
+predicate. Neither may be satisfiable by a client-supplied field alone.
+
+---
+
+## JC-006 · `canReadInternal()` does not check `isActive` — offboarded staff retain internal-note access
+
+| | |
+|---|---|
+| **Severity** | **P1** |
+| **Area** | `apps/api/src/platform/authorization.service.ts` `canReadInternal()` |
+| **Owner agent** | AI #1 |
+| **Status** | OPEN |
+| **Evidence** | `apps/api/test/unit/authorization/internal-note-privacy.spec.ts` — 1 failing assertion |
+
+`canReadThread()` gates on `actor.isActive`; `canReadInternal()` does not:
+
+```ts
+canReadInternal(actor: Actor): boolean {
+  return actor.kind === 'STAFF' && isFamilyFacing(actor.staffRole);
+}
+```
+
+A deactivated or offboarded admin therefore still passes this check. Manager
+one-click offboarding is supposed to revoke access; whether it does currently
+depends on the order in which a caller happens to invoke the two methods —
+exactly the per-caller reasoning the centralized-policy contract forbids.
+
+**Fix:** gate on `actor.isActive` here too. Every public method of the
+authorization service should be independently safe to call.
+
+**Passing alongside it (verified):** no CONTACT can read internal notes,
+regardless of capability flags, and FINANCE / TECHNICAL / ACADEMIC staff are
+correctly excluded. The core of INV-11 is sound.
+
+---
+
+## Test infrastructure note
+
+`apps/api/package.json` declared `test:unit` / `test:int` with
+`--selectProjects unit|integration`, but **no jest config existed and no test
+had been written**. AI #5 added `apps/api/jest.config.js` defining both
+projects. Suites now execute: `npm --prefix apps/api run test:unit`.
 
 ---
 
