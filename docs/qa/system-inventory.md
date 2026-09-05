@@ -68,3 +68,44 @@ same two conclusions I did: (a) the repository is empty, (b) the role briefs
 materially contradict the authoritative product brief. Three independent
 findings agreeing is sufficient evidence to treat both as established fact
 rather than as one agent's misreading.
+
+---
+
+## 6. Addendum — live state at 16:02 (repository is actively changing)
+
+Sections 1–5 snapshot the repository at 15:58. Within four minutes AI #1 and
+AI #4 began scaffolding, so the "no stack chosen" finding above is now
+**superseded**. Recorded here rather than rewritten, because the timestamps
+matter for the discovery trail.
+
+Newly observed:
+
+| Item | Finding |
+|---|---|
+| Backend stack | **Supabase / PostgreSQL**, declared in `supabase/migrations/20260905090000_chat_foundation.sql` |
+| Schema strategy | Jawwid Chat lives in a `chat` schema **inside the Jawwid Core database**; Core's `public` schema remains source of truth, read only via `chat.core_*` boundary views |
+| Directories created | `apps/admin-web/`, `src/`, `db/tests/`, `prisma/`, `scripts/db/`, `test/`, `README.md`, `.gitignore` |
+| First real artifact | `chat.config` table + typed accessors + `chat.forbid_mutation()` append-only trigger function |
+
+**This materially changes one QA conclusion.** Jawwid Core integration is real
+and architectural, not absent as the discovery pass concluded. The `chat.core_*`
+boundary is now a first-class test target: it is the seam where Chat could
+silently become a second source of truth (brief §3 treats Core data as read-only
+input). Integration tests must assert the boundary views are read-only and that
+no `chat.*` table duplicates a Core-owned entity.
+
+`prisma/` alongside `supabase/migrations/` is a **contract-drift risk to watch**:
+two schema authorities over one database is exactly how migration state diverges.
+Flagged, not yet a defect — neither directory is populated.
+
+### First code-level observation (P3, non-blocking)
+
+`chat.config_num()` and `chat.config_text()` document the intent *"raise if a key
+is missing rather than silently defaulting."* They detect a **missing row**
+(`v is null` after `SELECT INTO`) but not a row **holding JSON `null`** — in that
+case `v` is `'null'::jsonb`, `v #>> '{}'` yields SQL NULL, and the function
+returns NULL silently, which is the behaviour the comment says it prevents.
+
+A `not null` check on the stored value, or `jsonb_typeof(v) = 'null'` guard,
+closes it. Raised to AI #1; the migration was still being written when observed,
+so this may already be addressed.
