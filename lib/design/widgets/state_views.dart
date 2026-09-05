@@ -26,7 +26,7 @@ class JawwidLoadingView extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 2.5),
             ),
             if (label != null) ...[
-              const SizedBox(height: Spacing.lg),
+              const SizedBox(height: Spacing.spacing5),
               Text(
                 label!,
                 textAlign: TextAlign.center,
@@ -60,12 +60,12 @@ class JawwidEmptyView extends StatelessWidget {
 
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(Spacing.xl),
+        padding: const EdgeInsets.all(Spacing.spacing7),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: 44, color: theme.colorScheme.outline),
-            const SizedBox(height: Spacing.lg),
+            const SizedBox(height: Spacing.spacing5),
             Text(
               title,
               textAlign: TextAlign.center,
@@ -74,7 +74,7 @@ class JawwidEmptyView extends StatelessWidget {
               ),
             ),
             if (body != null) ...[
-              const SizedBox(height: Spacing.sm),
+              const SizedBox(height: Spacing.spacing3),
               Text(
                 body!,
                 textAlign: TextAlign.center,
@@ -84,7 +84,7 @@ class JawwidEmptyView extends StatelessWidget {
               ),
             ],
             if (action != null) ...[
-              const SizedBox(height: Spacing.xl),
+              const SizedBox(height: Spacing.spacing7),
               action!,
             ],
           ],
@@ -120,12 +120,12 @@ class JawwidErrorView extends StatelessWidget {
 
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(Spacing.xl),
+        padding: const EdgeInsets.all(Spacing.spacing7),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: 44, color: theme.colorScheme.error),
-            const SizedBox(height: Spacing.lg),
+            const SizedBox(height: Spacing.spacing5),
             Text(
               title,
               textAlign: TextAlign.center,
@@ -134,7 +134,7 @@ class JawwidErrorView extends StatelessWidget {
               ),
             ),
             if (body != null) ...[
-              const SizedBox(height: Spacing.sm),
+              const SizedBox(height: Spacing.spacing3),
               Text(
                 body!,
                 textAlign: TextAlign.center,
@@ -144,7 +144,7 @@ class JawwidErrorView extends StatelessWidget {
               ),
             ],
             if (onRetry != null && retryLabel != null) ...[
-              const SizedBox(height: Spacing.xl),
+              const SizedBox(height: Spacing.spacing7),
               OutlinedButton.icon(
                 onPressed: onRetry,
                 icon: const Icon(Icons.refresh),
@@ -181,7 +181,7 @@ class JawwidBanner extends StatelessWidget {
           theme.colorScheme.onSurface,
         ),
       JawwidBannerTone.warning => (
-          JawwidColors.warning.withValues(alpha: 0.14),
+          JawwidTokens.of(context).colorStatusWarningBg,
           theme.colorScheme.onSurface,
         ),
       JawwidBannerTone.error => (
@@ -196,13 +196,13 @@ class JawwidBanner extends StatelessWidget {
         width: double.infinity,
         color: background,
         padding: const EdgeInsets.symmetric(
-          horizontal: Spacing.lg,
-          vertical: Spacing.sm,
+          horizontal: Spacing.spacing5,
+          vertical: Spacing.spacing3,
         ),
         child: Row(
           children: [
             Icon(icon, size: 18, color: foreground),
-            const SizedBox(width: Spacing.sm),
+            const SizedBox(width: Spacing.spacing3),
             Expanded(
               child: Text(
                 message,

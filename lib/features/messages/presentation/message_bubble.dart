@@ -36,12 +36,20 @@ class MessageBubble extends StatelessWidget {
 
     final l10n = L10n.of(context);
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final tokens = JawwidTokens.of(context);
     final mine = message.isMine;
+    final failed = message.deliveryState == DeliveryState.failed;
 
-    final background = mine
-        ? (isDark ? JawwidColors.bubbleMineDark : JawwidColors.bubbleMine)
-        : (isDark ? JawwidColors.bubbleTheirsDark : JawwidColors.bubbleTheirs);
+    // A message awaiting approval is muted, never the outgoing colour (§2.6): its sender must
+    // not read it as published.
+    final background = message.approvalState == ApprovalState.pending
+        ? tokens.colorMessagePendingBg
+        : mine
+            ? tokens.colorMessageOutgoingBg
+            : tokens.colorMessageIncomingBg;
+
+    final foreground =
+        mine ? tokens.colorMessageOutgoingText : tokens.colorMessageIncomingText;
 
     // A withheld message is visually de-emphasised so its sender can see at a glance that
     // it has not reached anyone yet.
@@ -58,26 +66,32 @@ class MessageBubble extends StatelessWidget {
           opacity: withheld ? 0.72 : 1,
           child: Container(
             margin: const EdgeInsets.symmetric(
-              horizontal: Spacing.md,
-              vertical: Spacing.xxs,
+              horizontal: Spacing.spacing4,
+              vertical: Spacing.spacing1,
             ),
             padding: const EdgeInsets.symmetric(
-              horizontal: Spacing.md,
-              vertical: Spacing.sm,
+              horizontal: Spacing.spacing4,
+              vertical: Spacing.spacing3,
             ),
             decoration: BoxDecoration(
               color: background,
-              borderRadius: Radii.bubble,
-              border: withheld
-                  ? Border.all(color: theme.colorScheme.outlineVariant)
-                  : null,
+              borderRadius: _bubbleRadius(mine),
+              // A permanently failed bubble stays in place with a red border and an inline
+              // retry — never dropped, never retried forever (handoff §8).
+              border: failed
+                  ? Border.all(color: tokens.colorMessageFailedBorder)
+                  : Border.all(
+                      color: withheld
+                          ? tokens.colorBorderStrong
+                          : tokens.colorBorderSubtle,
+                    ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (showAuthor && !mine)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: Spacing.xxs),
+                    padding: const EdgeInsets.only(bottom: Spacing.spacing1),
                     child: Text(
                       message.authorName,
                       style: theme.textTheme.labelSmall?.copyWith(
@@ -96,8 +110,14 @@ class MessageBubble extends StatelessWidget {
                     ),
                   )
                 else
-                  Text(message.body, style: theme.textTheme.bodyMedium),
-                const SizedBox(height: Spacing.xxs),
+                  // Message bodies resolve their own base direction per paragraph, so a
+                  // mixed Arabic/English message reads correctly either way (§4).
+                  Text(
+                    message.body,
+                    textDirection: null,
+                    style: theme.textTheme.bodyLarge?.copyWith(color: foreground),
+                  ),
+                const SizedBox(height: Spacing.spacing1),
                 _StatusLine(message: message, onRetry: onRetry, onDiscard: onDiscard),
               ],
             ),
@@ -106,6 +126,19 @@ class MessageBubble extends StatelessWidget {
       ),
     );
   }
+}
+
+/// `radius.lg` on three corners, `radius.bubbleTail` on the one nearest the author.
+///
+/// Directional, so the tail follows the bubble when the layout mirrors: own messages sit on
+/// the reading-start-opposite edge — left in Arabic, right in English (cross-platform §4).
+BorderRadiusDirectional _bubbleRadius(bool mine) {
+  return BorderRadiusDirectional.only(
+    topStart: Radii.radiusLg,
+    topEnd: Radii.radiusLg,
+    bottomStart: mine ? Radii.radiusLg : Radii.radiusBubbleTail,
+    bottomEnd: mine ? Radii.radiusBubbleTail : Radii.radiusLg,
+  );
 }
 
 /// Timestamp plus the message's honest state.
@@ -151,17 +184,17 @@ class _StatusLine extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(Icons.error_outline, size: 14, color: theme.colorScheme.error),
-          const SizedBox(width: Spacing.xs),
+          const SizedBox(width: Spacing.spacing2),
           Text(
             l10n.messageStateFailed,
             style: muted?.copyWith(color: theme.colorScheme.error),
           ),
           if (onRetry != null) ...[
-            const SizedBox(width: Spacing.sm),
+            const SizedBox(width: Spacing.spacing3),
             _InlineAction(label: l10n.messageRetry, onPressed: onRetry!),
           ],
           if (onDiscard != null) ...[
-            const SizedBox(width: Spacing.sm),
+            const SizedBox(width: Spacing.spacing3),
             _InlineAction(label: l10n.messageDiscard, onPressed: onDiscard!),
           ],
         ],
@@ -190,7 +223,7 @@ class _StatusLine extends StatelessWidget {
       children: [
         Text(stamp, style: muted),
         if (message.isMine) ...[
-          const SizedBox(width: Spacing.xs),
+          const SizedBox(width: Spacing.spacing2),
           // Icon plus an accessible label — state is never conveyed by the glyph alone
           // (§53).
           Semantics(
@@ -222,7 +255,7 @@ class _Status extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, size: 14, color: style?.color),
-        const SizedBox(width: Spacing.xs),
+        const SizedBox(width: Spacing.spacing2),
         Flexible(child: Text(label, style: style)),
       ],
     );
@@ -266,10 +299,10 @@ class _QuotedMessage extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: Spacing.xs),
+      margin: const EdgeInsets.only(bottom: Spacing.spacing2),
       padding: const EdgeInsets.symmetric(
-        horizontal: Spacing.sm,
-        vertical: Spacing.xs,
+        horizontal: Spacing.spacing3,
+        vertical: Spacing.spacing2,
       ),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface.withValues(alpha: 0.55),
@@ -311,30 +344,28 @@ class _SystemMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final tokens = JawwidTokens.of(context);
 
     return Padding(
       padding: const EdgeInsets.symmetric(
-        horizontal: Spacing.xl,
-        vertical: Spacing.sm,
+        horizontal: Spacing.spacing7,
+        vertical: Spacing.spacing3,
       ),
       child: Center(
         child: Container(
           padding: const EdgeInsets.symmetric(
-            horizontal: Spacing.md,
-            vertical: Spacing.sm,
+            horizontal: Spacing.spacing4,
+            vertical: Spacing.spacing3,
           ),
           decoration: BoxDecoration(
-            color: isDark
-                ? JawwidColors.bubbleSystemDark
-                : JawwidColors.bubbleSystem,
+            color: tokens.colorMessageSystemBg,
             borderRadius: Radii.card,
           ),
           child: Text(
             message.body,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+              color: tokens.colorMessageSystemText,
             ),
           ),
         ),

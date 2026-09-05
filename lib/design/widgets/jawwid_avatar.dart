@@ -28,7 +28,6 @@ class JawwidAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final url = imageUrl;
     final pixels = (size * MediaQuery.devicePixelRatioOf(context)).round();
 
@@ -47,7 +46,7 @@ class JawwidAvatar extends StatelessWidget {
                     _Initials(displayName: displayName, size: size),
                 loadingBuilder: (context, child, progress) => progress == null
                     ? child
-                    : ColoredBox(color: theme.colorScheme.surfaceContainerHighest),
+                    : ColoredBox(color: JawwidTokens.of(context).colorSurfaceMuted),
               ),
       ),
     );
@@ -63,7 +62,7 @@ class JawwidAvatar extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           avatar,
-          Positioned(bottom: -2, right: -2, child: badge!),
+          PositionedDirectional(bottom: -2, end: -2, child: badge!),
         ],
       ),
     );
@@ -87,13 +86,16 @@ class _Initials extends StatelessWidget {
   }
 
   /// Stable per-name tint, so the same person keeps the same colour between sessions.
-  static Color tintFor(String name, ColorScheme scheme) {
-    const palette = [
-      JawwidColors.brand,
-      JawwidColors.brandLight,
-      JawwidColors.accent,
-      JawwidColors.info,
-      JawwidColors.success,
+  ///
+  /// Drawn from the brand and status foregrounds, all of which are contrast-checked against
+  /// white in §2.2 — the initials sit on this colour, so it must stay legible.
+  static Color tintFor(String name, JawwidTokens tokens) {
+    final palette = [
+      tokens.colorBrandPrimary,
+      tokens.colorBrandPrimaryPressed,
+      tokens.colorStatusInfoFg,
+      tokens.colorStatusSuccessFg,
+      tokens.colorTextSecondary,
     ];
     final hash = name.codeUnits.fold<int>(0, (acc, unit) => (acc * 31 + unit) & 0xFFFF);
     return palette[hash % palette.length];
@@ -101,16 +103,16 @@ class _Initials extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final tokens = JawwidTokens.of(context);
 
     return ColoredBox(
-      color: tintFor(displayName, scheme),
+      color: tintFor(displayName, tokens),
       child: Center(
         child: Text(
           initialsOf(displayName),
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: JawwidColors.textOnBrand,
+            color: tokens.colorBrandOnPrimary,
             fontSize: size * 0.38,
             fontWeight: FontWeight.w600,
             height: 1,

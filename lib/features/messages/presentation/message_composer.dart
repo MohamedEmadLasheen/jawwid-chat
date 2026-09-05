@@ -98,8 +98,8 @@ class _MessageComposerState extends State<MessageComposer> {
             ),
           Container(
             padding: const EdgeInsets.symmetric(
-              horizontal: Spacing.sm,
-              vertical: Spacing.sm,
+              horizontal: Spacing.spacing3,
+              vertical: Spacing.spacing3,
             ),
             decoration: BoxDecoration(
               color: theme.colorScheme.surface,
@@ -134,16 +134,16 @@ class _MessageComposerState extends State<MessageComposer> {
                           ? null
                           : '',
                       border: const OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radii.lg),
+                        borderRadius: BorderRadius.all(Radii.radiusLg),
                       ),
                       contentPadding: const EdgeInsets.symmetric(
-                        horizontal: Spacing.md,
-                        vertical: Spacing.sm,
+                        horizontal: Spacing.spacing4,
+                        vertical: Spacing.spacing3,
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: Spacing.xs),
+                const SizedBox(width: Spacing.spacing2),
                 // Voice note when there is nothing to send, send button once there is —
                 // familiar, and it keeps the row to one trailing control.
                 if (_canSend)
@@ -181,13 +181,13 @@ class _Notice extends StatelessWidget {
       width: double.infinity,
       color: theme.colorScheme.surfaceContainerHighest,
       padding: const EdgeInsets.symmetric(
-        horizontal: Spacing.lg,
-        vertical: Spacing.sm,
+        horizontal: Spacing.spacing5,
+        vertical: Spacing.spacing3,
       ),
       child: Row(
         children: [
           Icon(icon, size: 16, color: theme.colorScheme.onSurfaceVariant),
-          const SizedBox(width: Spacing.sm),
+          const SizedBox(width: Spacing.spacing3),
           Expanded(
             child: Text(
               text,
@@ -215,7 +215,7 @@ class _ReplyBanner extends StatelessWidget {
 
     return Container(
       color: theme.colorScheme.surfaceContainerHighest,
-      padding: const EdgeInsetsDirectional.only(start: Spacing.lg, end: Spacing.xs),
+      padding: const EdgeInsetsDirectional.only(start: Spacing.spacing5, end: Spacing.spacing2),
       child: Row(
         children: [
           Expanded(
@@ -223,7 +223,7 @@ class _ReplyBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const SizedBox(height: Spacing.sm),
+                const SizedBox(height: Spacing.spacing3),
                 Text(
                   l10n.replyingTo(reply.authorName),
                   style: theme.textTheme.labelSmall?.copyWith(
@@ -237,7 +237,7 @@ class _ReplyBanner extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall,
                 ),
-                const SizedBox(height: Spacing.sm),
+                const SizedBox(height: Spacing.spacing3),
               ],
             ),
           ),

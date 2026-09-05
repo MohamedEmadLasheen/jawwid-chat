@@ -31,12 +31,21 @@ class JawwidApp extends ConsumerWidget {
     final router = ref.watch(routerProvider);
     final override = ref.watch(localeOverrideProvider);
 
+    // The type scale differs between Arabic and Latin (Arabic needs more leading), so the
+    // theme is rebuilt when the resolved language changes rather than fixed at startup.
+    final resolved = override ??
+        resolveLocale(
+          WidgetsBinding.instance.platformDispatcher.locale,
+          supportedLocales,
+        );
+    final isArabic = resolved.languageCode == 'ar';
+
     return MaterialApp.router(
       onGenerateTitle: (context) => L10n.of(context).appName,
       debugShowCheckedModeBanner: false,
       routerConfig: router,
-      theme: JawwidTheme.light(),
-      darkTheme: JawwidTheme.dark(),
+      theme: JawwidTheme.light(isArabic: isArabic),
+      darkTheme: JawwidTheme.dark(isArabic: isArabic),
       locale: override,
       supportedLocales: supportedLocales,
       localizationsDelegates: const [

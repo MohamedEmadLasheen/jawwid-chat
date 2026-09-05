@@ -1,144 +1,160 @@
 import 'package:flutter/material.dart';
 
 import 'tokens.dart';
+import 'typography.dart';
 
-/// Jawwid's Material 3 themes.
+/// Jawwid's themes, assembled from [JawwidTokens] and [JawwidTypography].
 ///
-/// Two things here are load-bearing beyond ordinary styling:
-///
-/// * **Arabic-capable type.** The font stack must fall back to a face with full Arabic
-///   coverage on both platforms, or long Arabic names render in tofu on some Android builds
-///   (§45).
-/// * **Generous line height.** Arabic diacritics need vertical room; the tight leading that
-///   looks good in English clips them.
+/// The theme is locale-aware because the type scale is (see [JawwidTypography]), so it is
+/// built per-locale rather than once at startup.
 abstract final class JawwidTheme {
-  /// Platform fallbacks with Arabic coverage, in preference order.
-  static const _fontFallback = <String>[
-    'SF Arabic', // iOS 16+
-    'Geeza Pro', // older iOS
-    'Noto Sans Arabic', // Android
-    'Noto Naskh Arabic',
-    'Arial',
-  ];
+  static ThemeData light({required bool isArabic}) =>
+      _build(JawwidTokens.light, Brightness.light, isArabic);
 
-  static ThemeData light() => _build(Brightness.light);
+  static ThemeData dark({required bool isArabic}) =>
+      _build(JawwidTokens.dark, Brightness.dark, isArabic);
 
-  static ThemeData dark() => _build(Brightness.dark);
-
-  static ThemeData _build(Brightness brightness) {
-    final isDark = brightness == Brightness.dark;
-
-    final scheme = ColorScheme.fromSeed(
-      seedColor: JawwidColors.brand,
+  static ThemeData _build(
+    JawwidTokens tokens,
+    Brightness brightness,
+    bool isArabic,
+  ) {
+    final scheme = ColorScheme(
       brightness: brightness,
-    ).copyWith(
-      primary: isDark ? JawwidColors.brandLight : JawwidColors.brand,
-      onPrimary: JawwidColors.textOnBrand,
-      secondary: JawwidColors.accent,
-      surface: isDark ? JawwidColors.surfaceDark : JawwidColors.surface,
-      onSurface: isDark ? JawwidColors.textPrimaryDark : JawwidColors.textPrimary,
-      surfaceContainerHighest:
-          isDark ? JawwidColors.surfaceSunkenDark : JawwidColors.surfaceSunken,
-      outlineVariant: isDark ? JawwidColors.outlineDark : JawwidColors.outline,
-      error: isDark ? JawwidColors.dangerDark : JawwidColors.danger,
+      primary: tokens.colorBrandPrimary,
+      onPrimary: tokens.colorBrandOnPrimary,
+      primaryContainer: tokens.colorBrandSubtle,
+      onPrimaryContainer: tokens.colorTextPrimary,
+      secondary: tokens.colorAccent,
+      onSecondary: tokens.colorBrandOnPrimary,
+      surface: tokens.colorSurfaceDefault,
+      onSurface: tokens.colorTextPrimary,
+      surfaceContainerHighest: tokens.colorSurfaceMuted,
+      onSurfaceVariant: tokens.colorTextSecondary,
+      outline: tokens.colorBorderStrong,
+      outlineVariant: tokens.colorBorderDefault,
+      error: tokens.colorStatusDangerFg,
+      onError: tokens.colorBrandOnPrimary,
+      errorContainer: tokens.colorStatusDangerBg,
+      onErrorContainer: tokens.colorStatusDangerFg,
+      inverseSurface: tokens.colorSurfaceInverse,
+      onInverseSurface: tokens.colorTextInverse,
     );
 
-    final base = ThemeData(
+    final textTheme = JawwidTypography.textTheme(
+      isArabic: isArabic,
+      onSurface: tokens.colorTextPrimary,
+    );
+
+    return ThemeData(
       useMaterial3: true,
+      brightness: brightness,
       colorScheme: scheme,
-      scaffoldBackgroundColor:
-          isDark ? JawwidColors.surfaceDark : JawwidColors.surfaceMuted,
-      splashFactory: InkSparkle.splashFactory,
-    );
-
-    return base.copyWith(
-      textTheme: _textTheme(base.textTheme, scheme),
+      extensions: [tokens],
+      textTheme: textTheme,
+      scaffoldBackgroundColor: tokens.colorBackgroundPage,
+      // §4: no blur, no glass, no gradients — all three are expensive on the low-end
+      // Android devices that dominate the parent audience.
+      splashFactory: InkRipple.splashFactory,
       appBarTheme: AppBarTheme(
-        backgroundColor: isDark ? JawwidColors.surfaceDark : JawwidColors.surface,
-        foregroundColor: scheme.onSurface,
+        backgroundColor: tokens.colorSurfaceDefault,
+        foregroundColor: tokens.colorTextPrimary,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
-        scrolledUnderElevation: 1,
+        scrolledUnderElevation: 0,
         centerTitle: false,
+        titleTextStyle: textTheme.titleMedium,
+        shape: Border(bottom: BorderSide(color: tokens.colorBorderSubtle)),
       ),
       dividerTheme: DividerThemeData(
-        color: scheme.outlineVariant,
+        color: tokens.colorBorderSubtle,
         space: 1,
         thickness: 1,
       ),
-      listTileTheme: const ListTileThemeData(
-        minVerticalPadding: Spacing.md,
-        horizontalTitleGap: Spacing.md,
-      ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
+          backgroundColor: tokens.colorBrandPrimary,
+          foregroundColor: tokens.colorBrandOnPrimary,
           minimumSize: const Size.fromHeight(Sizes.minTouchTarget),
-          shape: const RoundedRectangleBorder(borderRadius: Radii.control),
-          textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+          shape: const RoundedRectangleBorder(borderRadius: Radii.card),
+          textStyle: JawwidTypography.button(isArabic),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
+          foregroundColor: tokens.colorTextPrimary,
           minimumSize: const Size.fromHeight(Sizes.minTouchTarget),
-          shape: const RoundedRectangleBorder(borderRadius: Radii.control),
+          side: BorderSide(color: tokens.colorBorderDefault),
+          shape: const RoundedRectangleBorder(borderRadius: Radii.card),
+          textStyle: JawwidTypography.button(isArabic),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: tokens.colorTextLink,
+          textStyle: JawwidTypography.button(isArabic),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: isDark ? JawwidColors.surfaceMutedDark : JawwidColors.surface,
+        fillColor: tokens.colorSurfaceDefault,
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: Spacing.lg,
-          vertical: Spacing.md,
+          horizontal: Spacing.spacing5,
+          vertical: Spacing.spacing4,
         ),
+        labelStyle: textTheme.bodyMedium,
+        hintStyle: textTheme.bodyMedium?.copyWith(color: tokens.colorTextMuted),
         border: OutlineInputBorder(
           borderRadius: Radii.control,
-          borderSide: BorderSide(color: scheme.outlineVariant),
+          borderSide: BorderSide(color: tokens.colorBorderDefault),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: Radii.control,
-          borderSide: BorderSide(color: scheme.outlineVariant),
+          borderSide: BorderSide(color: tokens.colorBorderDefault),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: Radii.control,
-          borderSide: BorderSide(color: scheme.primary, width: 2),
+          borderSide: BorderSide(color: tokens.colorBorderFocus, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: Radii.control,
-          borderSide: BorderSide(color: scheme.error),
+          borderSide: BorderSide(color: tokens.colorStatusDangerFg),
         ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: tokens.colorSurfaceDefault,
+        surfaceTintColor: Colors.transparent,
+        indicatorColor: tokens.colorBrandSubtle,
+        height: Sizes.tabBarHeight,
+        // Icon *and* label, always — never icon-only (handoff §3).
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        labelTextStyle: WidgetStatePropertyAll(JawwidTypography.caption(isArabic)),
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        shape: const RoundedRectangleBorder(borderRadius: Radii.control),
-        backgroundColor: isDark ? JawwidColors.surfaceSunkenDark : const Color(0xFF23302A),
-        contentTextStyle: const TextStyle(color: Colors.white),
+        shape: const RoundedRectangleBorder(borderRadius: Radii.card),
+        backgroundColor: tokens.colorSurfaceInverse,
+        contentTextStyle:
+            textTheme.bodyMedium?.copyWith(color: tokens.colorTextInverse),
       ),
-      chipTheme: base.chipTheme.copyWith(
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: tokens.colorSurfaceDefault,
+        surfaceTintColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(borderRadius: Radii.sheet),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: tokens.colorSurfaceMuted,
+        side: BorderSide(color: tokens.colorBorderDefault),
         shape: const StadiumBorder(),
-        side: BorderSide(color: scheme.outlineVariant),
+        labelStyle: JawwidTypography.label(isArabic),
       ),
-      // Page transitions are left at Flutter's per-platform defaults: on Android that is
-      // already the cheap fade-forwards transition §47 asks for, and on iOS it is the
-      // native interactive back swipe, which a custom builder would break.
-    );
-  }
-
-  static TextTheme _textTheme(TextTheme base, ColorScheme scheme) {
-    TextStyle? style(TextStyle? from, {double height = 1.45}) => from?.copyWith(
-          fontFamilyFallback: _fontFallback,
-          height: height,
-          color: scheme.onSurface,
-        );
-
-    return base.copyWith(
-      titleLarge: style(base.titleLarge, height: 1.3),
-      titleMedium: style(base.titleMedium, height: 1.3),
-      titleSmall: style(base.titleSmall, height: 1.3),
-      bodyLarge: style(base.bodyLarge),
-      bodyMedium: style(base.bodyMedium),
-      bodySmall: style(base.bodySmall),
-      labelLarge: style(base.labelLarge, height: 1.2),
-      labelMedium: style(base.labelMedium, height: 1.2),
-      labelSmall: style(base.labelSmall, height: 1.2),
+      listTileTheme: const ListTileThemeData(
+        minVerticalPadding: Spacing.spacing4,
+        horizontalTitleGap: Spacing.spacing4,
+      ),
+      // Page transitions stay at Flutter's per-platform defaults: on Android that is already
+      // the cheap fade-forwards transition, and on iOS it is the native interactive back
+      // swipe, which a custom builder would break.
     );
   }
 }

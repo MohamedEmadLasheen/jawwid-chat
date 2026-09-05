@@ -101,14 +101,14 @@ class _SectionHeader extends StatelessWidget {
             ? l10n.sectionLearner(section.learner!.displayName)
             : label);
 
-    if (resolved.isEmpty) return const SizedBox(height: Spacing.sm);
+    if (resolved.isEmpty) return const SizedBox(height: Spacing.spacing3);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        Spacing.lg,
-        Spacing.lg,
-        Spacing.lg,
-        Spacing.xs,
+      padding: const EdgeInsetsDirectional.fromSTEB(
+        Spacing.spacing5,
+        Spacing.spacing5,
+        Spacing.spacing5,
+        Spacing.spacing2,
       ),
       child: Semantics(
         header: true,

@@ -53,7 +53,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(Spacing.xl),
+            padding: const EdgeInsets.all(Spacing.spacing7),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
               child: Form(
@@ -62,21 +62,21 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _Brand(name: l10n.appName),
-                    const SizedBox(height: Spacing.xxl),
+                    const SizedBox(height: Spacing.spacing8),
                     Text(
                       l10n.signInTitle,
                       style: theme.textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: Spacing.xs),
+                    const SizedBox(height: Spacing.spacing2),
                     Text(
                       l10n.signInSubtitle,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
-                    const SizedBox(height: Spacing.xl),
+                    const SizedBox(height: Spacing.spacing7),
 
                     if (state is AuthSignedOut) _SignInNotice(state: state),
 
@@ -93,7 +93,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                           (value == null || value.trim().isEmpty) ? '' : null,
                       onFieldSubmitted: (_) => _passwordFocus.requestFocus(),
                     ),
-                    const SizedBox(height: Spacing.md),
+                    const SizedBox(height: Spacing.spacing4),
 
                     TextFormField(
                       controller: _password,
@@ -117,7 +117,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                           (value == null || value.isEmpty) ? '' : null,
                       onFieldSubmitted: (_) => _submit(),
                     ),
-                    const SizedBox(height: Spacing.xl),
+                    const SizedBox(height: Spacing.spacing7),
 
                     FilledButton(
                       onPressed: isBusy ? null : _submit,
@@ -161,9 +161,9 @@ class _SignInNotice extends StatelessWidget {
     if (message == null) return const SizedBox.shrink();
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: Spacing.lg),
+      padding: const EdgeInsets.only(bottom: Spacing.spacing5),
       child: Container(
-        padding: const EdgeInsets.all(Spacing.md),
+        padding: const EdgeInsets.all(Spacing.spacing4),
         decoration: BoxDecoration(
           color: theme.colorScheme.errorContainer,
           borderRadius: Radii.card,
@@ -171,7 +171,7 @@ class _SignInNotice extends StatelessWidget {
         child: Row(
           children: [
             Icon(Icons.info_outline, color: theme.colorScheme.onErrorContainer),
-            const SizedBox(width: Spacing.sm),
+            const SizedBox(width: Spacing.spacing3),
             Expanded(
               child: Text(
                 message,
@@ -194,6 +194,8 @@ class _Brand extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = JawwidTokens.of(context);
+
     // Placeholder brand mark. Replaced by the official Jawwid logo once brand assets are
     // supplied — see lib/design/tokens.dart.
     return Column(
@@ -201,21 +203,21 @@ class _Brand extends StatelessWidget {
         Container(
           width: Sizes.avatarXl,
           height: Sizes.avatarXl,
-          decoration: const BoxDecoration(
-            color: JawwidColors.brand,
+          decoration: BoxDecoration(
+            color: tokens.colorBrandPrimary,
             shape: BoxShape.circle,
           ),
           alignment: Alignment.center,
           child: Text(
             name.characters.first,
-            style: const TextStyle(
-              color: JawwidColors.textOnBrand,
+            style: TextStyle(
+              color: tokens.colorBrandOnPrimary,
               fontSize: 40,
               fontWeight: FontWeight.w700,
             ),
           ),
         ),
-        const SizedBox(height: Spacing.md),
+        const SizedBox(height: Spacing.spacing4),
         Text(name, style: Theme.of(context).textTheme.titleLarge),
       ],
     );

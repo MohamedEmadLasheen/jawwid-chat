@@ -63,8 +63,8 @@ class ConversationTile extends StatelessWidget {
             constraints: const BoxConstraints(minHeight: 72),
             child: Padding(
               padding: const EdgeInsets.symmetric(
-                horizontal: Spacing.lg,
-                vertical: Spacing.md,
+                horizontal: Spacing.spacing5,
+                vertical: Spacing.spacing4,
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -74,7 +74,7 @@ class ConversationTile extends StatelessWidget {
                     imageUrl: conversation.avatarUrl,
                     size: Sizes.avatarLg,
                   ),
-                  const SizedBox(width: Spacing.md),
+                  const SizedBox(width: Spacing.spacing4),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -87,7 +87,7 @@ class ConversationTile extends StatelessWidget {
                                 size: 14,
                                 color: theme.colorScheme.onSurfaceVariant,
                               ),
-                              const SizedBox(width: Spacing.xs),
+                              const SizedBox(width: Spacing.spacing2),
                             ],
                             Expanded(
                               child: Text(
@@ -100,7 +100,7 @@ class ConversationTile extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            const SizedBox(width: Spacing.sm),
+                            const SizedBox(width: Spacing.spacing3),
                             Text(
                               stamp,
                               style: theme.textTheme.labelSmall?.copyWith(
@@ -111,7 +111,7 @@ class ConversationTile extends StatelessWidget {
                         ),
                         if (conversation.handledByLabel != null)
                           Padding(
-                            padding: const EdgeInsets.only(top: Spacing.xxs),
+                            padding: const EdgeInsets.only(top: Spacing.spacing1),
                             child: Text(
                               l10n.handledBy(conversation.handledByLabel!),
                               maxLines: 1,
@@ -121,7 +121,7 @@ class ConversationTile extends StatelessWidget {
                               ),
                             ),
                           ),
-                        const SizedBox(height: Spacing.xxs),
+                        const SizedBox(height: Spacing.spacing1),
                         Row(
                           children: [
                             Expanded(
@@ -140,7 +140,7 @@ class ConversationTile extends StatelessWidget {
                             ),
                             if (conversation.isMuted)
                               Padding(
-                                padding: const EdgeInsets.only(left: Spacing.xs),
+                                padding: const EdgeInsetsDirectional.only(start: Spacing.spacing2),
                                 child: Icon(
                                   Icons.notifications_off_outlined,
                                   size: 15,
@@ -148,7 +148,7 @@ class ConversationTile extends StatelessWidget {
                                 ),
                               ),
                             if (unread) ...[
-                              const SizedBox(width: Spacing.sm),
+                              const SizedBox(width: Spacing.spacing3),
                               _UnreadBadge(count: conversation.unreadCount),
                             ],
                           ],
@@ -181,7 +181,7 @@ class _UnreadBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: theme.colorScheme.primary,
-        borderRadius: const BorderRadius.all(Radii.pill),
+        borderRadius: const BorderRadius.all(Radii.radiusFull),
       ),
       child: Text(
         label,
