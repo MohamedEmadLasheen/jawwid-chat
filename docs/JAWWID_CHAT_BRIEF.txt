@@ -1,0 +1,720 @@
+PAGECOUNT: 8
+
+===== PAGE 1 =====
+Jawwid Chat — Project Brief for Implementation
+Customer Success operating system inside the Jawwid app. Replaces WhatsApp for the CS team.
+Full design doc (v3) exists separately; this brief is the contract for what to build.
+0. The one rule
+One Family → One Primary Owner. The Owner is not a bottleneck. The system — not the employee —
+owns the family's history. People can change; the customer experience must not reset.
+1. Operating model (decided — do not re-litigate)
+Permanent Ownership + Configurable Coverage.
+.)دينا، زينب، رحاب، أسماء :Every family has exactly one fixed Primary Owner (one of 4 admins
+At any moment, every family has exactly one on-duty admin, derived by a single function
+on
+_
+duty(family, now) from three config tables (shifts, coverage rules, absences). Nothing else
+decides who sees a message.
+Coverage admins (مريم، رضوى) handle families outside the owner's shift. مريم covers all owners on
+Friday. Absent admin → configured backup. Nobody on duty → "Unattended" list for the manager
+.)رقيه(
+No shared queue. No automatic routing/distribution. No AI deciding priority.
+One continuous thread per family (WhatsApp-like). Topics are cases layered on the thread.
+Priority is not a stored field. It is a computed attention score from live signals, shown as a readable
+reason.
+Workload is a weighted sum of real work units. Number of families is never part of workload.
+All thresholds/weights/windows live in a config table. Every number below is an initial hypothesis.
+2. Roles
+Role Who Can
+دينا، زينب، رحاب، )admin (owner
+أسماء
+coverage مريم، رضوى managerرقيه Reply, manage cases/tasks/follow-ups for families where on
+_
+internal notes anywhere; "reply as assist" when allowed
+duty()==me;
+Same permissions as admin. Role label only. Sees covered families in a
+separate inbox section
+Everything + transfer ownership, edit shifts/coverage/absences, edit config
+weights, read audit log, oﬀboard admin
+Jawwid Chat — Project Brief · 1 / 8
+
+===== PAGE 2 =====
+Role Who Can
+finance / technical
+/ academic
+internal staﬀ See and complete tasks assigned to them only. Never message families
+system automation Deterministic templates and timers only
+Family-side contacts have capability flags: can
+message, can
+view
+_
+_
+_progress, can
+manage
+schedule,
+_
+_
+can
+manage
+billing, can
+manage
+contacts, can
+_
+_
+_
+_
+_
+cancel, with 4 presets (Primary Guardian / Billing
+Authorized / Authorized Contact / Secondary Read-only). Store flags, display presets. At least one Primary
+Guardian per family.
+3. Data model
+Core
+family id, display_
+name, owner
+_
+id FK staff NOT NULL, primary_
+contact
+id,
+_
+tier(standard|priority), tier
+reason,
+_
+state(onboarding|active|at
+_
+risk|renewal
+_
+due|paused|churned), state
+_
+state
+changed
+at,
+_
+_
+language, manual
+_
+flag(urgent|null), manual
+_
+flag_
+reason, created
+at
+_
+contact id, family_
+id, app_
+user
+id, name, relationship, role
+_
+_preset, can
+_
+is
+active
+_
+learner id, family_
+id, name, level, teacher
+id, schedule
+ref, next
+class
+at,
+_
+_
+_
+_
+last
+attended
+at, consecutive
+absences
+_
+_
+_
+subscription id, family_
+id, learner
+id NULL, plan, status, ends
+at, renewal
+due
+_
+_
+_
+_
+last
+_payment
+status, last
+_
+_payment
+at
+_
+family_
+note id, family_
+id, author
+id, body, pinned, created
+at
+_
+_
+reason,
+* flags (6),
+at,
+Jawwid Chat — Project Brief · 2 / 8
+
+===== PAGE 3 =====
+Conversation
+thread id, family_
+id UNIQUE, last
+customer
+message
+at, last
+staff
+message
+_
+_
+_
+_
+_
+_
+last
+staff
+id,
+at,
+_
+_
+needs
+reply (derived: last
+customer > last
+_
+_
+_
+staff), sticky_
+handler
+_
+id NULL,
+sticky_
+until NULL
+message id, thread
+id, case
+id NULL, author
+_
+_
+_
+type(contact|staff|system), author
+id,
+_
+on
+behalf
+_
+_
+mode(owner|coverage|assist|escalation), body, attachments jsonb,
+visibility(customer|internal), created
+at -- immutable
+_
+case id, thread
+_
+id, family_
+id, learner
+id NULL,
+_
+type(technical|billing|schedule|renewal|cancellation|complaint|onboarding|at
+_
+risk|academic|gener
+al),
+severity(low|medium|high) NULL, is
+blocking bool,
+_
+status(open|waiting_
+customer|waiting_
+internal|scheduled|resolved|closed),
+handler
+id NULL, owner
+locked bool, due
+at NULL, follow
+_
+_
+_
+_
+up_
+reason,
+escalation
+level int, escalated
+to
+id NULL, opened
+by, resolved
+at, closed
+at,
+_
+_
+_
+_
+_
+_
+reopen
+count, root
+cause, resolution
+summary
+_
+_
+_
+task id, case
+_
+id, family_
+id, type(finance|technical|academic|other), title, details,
+owner
+id,
+_
+status(open|in
+_progress|done|cancelled), due
+at, result, created
+by, created
+_
+_
+_
+at,
+done
+at
+_
+handoff id, thread
+id, from
+staff
+id, to
+staff
+id,
+_
+_
+_
+_
+_
+reason(shift
+_
+end|absence|friday|assist|escalation|sticky_
+expired),
+summary, note, created
+at, acknowledged
+at
+_
+_
+Staﬀ & coverage config
+staff id, name, role(admin|coverage|manager|finance|technical|academic),
+presence(online|away|offline),
+last
+_
+activity_
+at, capacity_
+override NULL, is
+active, left
+at
+_
+_
+shift id, staff
+id, days[], starts, ends, valid
+from, valid
+to
+_
+_
+_
+coverage
+_
+rule id, covering_
+id, covered
+id NULL (NULL = ALL owners), days[],
+_
+window(outside
+owner
+_
+_
+shift|all
+_
+day|custom), custom
+from, custom
+_
+_
+valid
+from, valid
+to
+_
+_
+absence id, staff
+_
+id, from, to, backup_
+id NULL, type(planned|sick|auto
+_
+activated
+by
+to, priority int,
+detected),
+_
+Logs & config
+event
+_
+log id, family_
+id, case
+id NULL, actor
+type, actor
+id, type, payload jsonb, at _
+_
+_
+append-only
+audit
+log id, actor
+_
+_
+id, action, entity, entity_
+id, before jsonb, after jsonb, reason NOT
+NULL, at -- append-only, manager-only read
+config key, value, scope, updated
+by, updated
+at
+_
+_
+family_
+state
+_
+cache family_
+id, on
+_
+duty_
+id, attention, bucket, top_
+reason, computed
+at --
+_
+recomputed on every family event + every minute for now/today buckets
+--
+Invariants
+family.owner
+_
+id changes only through transfer
+ownership(family, to, reason) → writes
+_
+audit
+_
+log + notifies family.
+A family appears in exactly one inbox at any moment (or in the manager's Unattended list). Never
+two, never zero.
+Jawwid Chat — Project Brief · 3 / 8
+
+===== PAGE 4 =====
+Every staﬀ message carries on
+behalf
+mode.
+_
+_
+event
+log and audit
+_
+_
+log exist from day one. Audit write happens in the same transaction as the
+sensitive action.
+Relationship case types ( renewal, cancellation, complaint[severity=high], onboarding, at
+_
+get owner
+_
+locked=true automatically (list in config).
+risk)
+4. Coverage engine
+on
+duty(family, now):
+_
+owner = family.owner
+chain = [owner] + coverage
+rules(owner, now).sorted
+_
+for admin in chain:
+if is
+absent(admin, now):
+_
+backup = absence(admin, now).backup
+if backup and not is
+absent(backup, now) and in
+continue
+by(priority).map(r => r.covering)
+_
+shift(backup, now): return backup
+_
+_
+if in
+_
+return NONE shift(admin, now): return admin
+# → Unattended list + manager alert. Never silently assigned.
+Stickiness: if a staﬀ member replied to the thread within config.handoff.grace
+minutes and is still
+_
+online, the thread stays with them past shift end ( thread.sticky_
+handler
+_
+id/sticky_
+until). On expiry →
+new on-duty admin + handoﬀ record.
+Shift-end flow: 1. N minutes before shift end: banner to owner ("3 families waiting, 2 follow-ups →
+snooze to my next shift?"). 2. At shift end: every family with needs
+_
+reply=true appears in coverage inbox
+with an auto handoﬀ card (last 3 messages, open cases, owner note, subscription, next class). Quiet
+families do not move. 3. Coverage replies are tagged on
+behalf
+_
+_
+mode=coverage. 4. Next morning: owner
+sees "What happened while you were away" (handoﬀs + summaries).
+Absence auto-detect: admin in shift, no activity for config.absence.auto
+detect
+minutes, families
+_
+_
+waiting → warn manager with one-click "activate backup"
+. Do not auto-activate in MVP .
+Initial config (illustrative, editable in settings UI): - Owners: Sat–Thu 09:00–17:00. مريم: Sat–Thu 17:00–
+23:00 + Fri 10:00–22:00. رضوى: Sat–Thu 17:00–23:00.
+- Rules: مريم→ALL on Fri (priority 1); 2→مريم owners &
+,99 ALL any time (priority→رقيه ;)owners outside owner shift (priority 1; which owners is a setting رضوى→2
+surfaces as Unattended).
+5. Handling rules (who may act)
+Situation Rule
+Owner in shift Owner oﬀ-shift, family needs reply Everything is hers
+On-duty coverage handles, unless case is owner
+_
+locked and not urgent
+→ coverage acknowledges only and it's deferred to owner's next shift
+Jawwid Chat — Project Brief · 4 / 8
+
+===== PAGE 5 =====
+Situation Rule
+owner
+_
+locked but urgent (blocking,
+class now, payment failed, customer
+wants to renew n o w )
+Any admin "Reply as assist" Coverage acts on the transactional part (send renewal link, record
+request), never closes the case, flags owner
+Escalation to manager (auto) Escalation (manual) Nobody on shift (after 23:00) May open any family and write internal notes any time
+Allowed only if family is in NOW bucket, waited > 50% of response target,
+and on-duty admin hasn't opened it — or on-duty admin explicitly
+requested help. Tagged assist, on-duty notified
+Unattended family; response target fully breached with no open;
+complaint severity=high; same case type 3rd time in 30d; admin at HIGH
+workload receives a new NOW item; Friday coverage over workload
+threshold
+Button with reason; customer asks for a manager
+Auto-reply with honest next-shift time; family shown in manager's
+"Overnight" section; response clock starts at next covering shift
+Coverage never: changes owner , closes relationship cases, promises discounts/exceptions.
+6. Attention model (replaces P1/P2/P3)
+attention(family) = Σ signal
+_points × tier
+_
+multiplier. Signals are computed from data — no
+text/AI reading in MVP .
+Signal Initial points
+Customer message unanswered +30, +1/min waiting up to +40
+Class in progress or within 30 min AND message +40
+Blocking issue (customer chose "can't join" / admin set is
+_
+blocking) +35
+Payment failed within 48h +20
+Renewal due within window +10 → +25 at 3 days (owner only)
+Complaint case open +25 (+15 if severity high)
+Family state at
+risk +15
+_
+Same case type within 30 days +15
+Response target: 70% elapsed / breached +20 / +40
+Follow-up due now +10
+Manual flag urgent / escalated +50
+tier=priority ×1.2 (multiplier , not addition)
+Buckets: NOW (≥60) · TODAY (≥25) · WAITING ON FAMILY (last message from staﬀ, nothing due) ·
+QUIET. Show top_
+reason as text ("class started 5 min ago"), never a number/label.
+Jawwid Chat — Project Brief · 5 / 8
+
+===== PAGE 6 =====
+Response targets (business-hours, initial): NOW-blocking 10/15/20 min (day/night/Friday); NOW-other
+30/45/60 min; TODAY before shift end (or deferred to owner). Add an inbox button "this order is wrong"
+that logs what the admin would have done — calibration data.
+7. Workload engine
+workload(admin, now) = Σ weight[unit] × count(unit where on
+_
+duty(family, now) == admin)
+Units (initial weights): needs
+_
+reply 1.0 · active case 1.0 · follow-up due today 0.7 · SLA risk 1.5 ·
+waiting_
+internal 0.3 · renewal in window 0.5 · complaint open 1.5 · technical open 1.2 · at
+_
+Covered families count fully on the coverage admin during her shift.
+risk family 0.8.
+Levels: LOW < 8 · MEDIUM < 15 · HIGH ≥ 15, plus HIGH if needs
+_
+reply_
+count ≥ config.reply_
+burst. All
+in config.
+Log per case from day one: staﬀ message count, time to first reply, handling time excluding
+waiting_
+customer , reopen count → used after 60–90 days to derive weights from real minutes.
+8. Screens
+Admin inbox (list of families, not tickets)
+Sections: NOW (attention desc, then oldest) · TODAY (by due) · WAITING ON FAMILY (collapsed) · QUIET
+(search only) · Families I'm covering now (coverage/backup) · What happened while you were away
+(owner , morning). Each row: family name, top_
+reason, wait time, colored dot.
+Family screen
+Center: single continuous thread (all contacts, all staﬀ, system cards for payment failed / class started
+/ handoﬀ / task done), internal notes inline in a diﬀerent color , open case cards on top (click to filter).
+Composer: reply, canned replies, attach,
+"reply + snooze"
+,
+"reply + resolve"
+. Actions: new case, follow-
+up date, internal task, escalate,
+"I'll keep this" (pin handler),
+"for owner" (defer),
+"reply as assist"
+(conditional).
+Side panel (always visible): owner + on-duty if diﬀerent; contacts with roles; learners (level, teacher ,
+next class, last attended, consecutive absences); subscription (plan, ends, last payment, renewal in N
+days); family state + reason; pinned notes; last 5 cases; open tasks.
+)رقيه( Manager dashboard
+Header: Unattended count (target 0), open escalations.
+Team now: per admin → presence, NOW count, TODAY count, late replies, workload score, level,
+inactivity warning.
+Coverage: tonight (who → whom), next Friday, gaps in next 7 days (absence without backup, missing
+rule).
+Jawwid Chat — Project Brief · 6 / 8
+
+===== PAGE 7 =====
+Needs your action: escalations, auto-detected absence (with "activate backup"), HIGH admin receiving
+NOW item.
+This week: renewals (due/renewed/no reply/refused), at
+_
+risk (by reason), response-target compliance,
+median first reply by shift.
+Actions: transfer ownership, activate backup, edit shifts/coverage/absences, edit weights/thresholds,
+oﬀboard admin (one click: deactivate, transfer families evenly or to a named admin, flag orphaned
+coverage rules, notify families, audit).
+Tasks screen (finance/technical/academic)
+Only their tasks, with case context. Completing the last open task on a case → case waiting_
+internal →
+open, family moves to TODAY with reason "inform family of finance result"
+. Task SLA: 1 business day;
+delays show on manager dashboard by department.
+Customer (help screen in app)
+دينا :Owner name + photo ("Your Jawwid team
+"). Their open topics in plain status.
+"Continue this topic" /
+"New topic" (pick from ~5 categories, optional "I can't join the class"). Self-service buttons by permission:
+my subscription, next class, invoice, renewal link. Honest expected reply time from current/next shift. No
+internal labels.
+9. Automation (deterministic only)
+Instant acknowledgement with honest reply-time from on
+_
+duty()/next shift; out-of-hours reply.
+Batch wait ~60s before acknowledging multiple rapid messages.
+Self-service: subscription status, next class, invoice resend, renewal link (billing-permitted contacts
+only).
+Lifecycle triggers (open a case for the owner): onboarding on first payment; renewal at
+renewal
+due
+days
+before (14); at
+_
+_
+_
+_
+risk on payment failure or inactivity_
+days (14) without
+attendance. Cancellation intent → at
+risk + case for owner .
+_
+Timers: no-reply reminders [24h, 72h]; operational auto-resolve after 168h (never for owner
+locked
+_
+types → becomes owner follow-up); resolved → closed after reopen.window
+hours (72); customer
+_
+message inside window reopens automatically (same handler if on duty).
+10. MVP scope (build exactly this)
+1. family / contact (flags) / learner (next
+class
+_
+_
+at) / subscription / family_
+note; import current owner
+assignments as-is.
+2. thread + message + case + task + handoﬀ with the invariants above.
+3. Coverage engine: shift / coverage
+_
+rule / absence tables + settings UI + on
+duty() + stickiness +
+_
+handoﬀ cards + "while you were away" + Unattended list + absence auto-detect (suggest only).
+4. Admin inbox and family screen as specified; end-of-shift banner .
+5. Attention model + workload engine with all points/weights/thresholds in config;
+family_
+state
+_
+cache; "this order is wrong" button; calibration logging.
+Jawwid Chat — Project Brief · 7 / 8
+
+===== PAGE 8 =====
+6. Tasks screen for departments.
+7. Deterministic automation above.
+8. Manager dashboard + actions + one-click oﬀboarding.
+9. event
+_
+log, audit
+_
+log, weekly report (first reply by shift, target compliance, renewals, at
+_
+risk, workload
+per admin).
+Not in MVP: shared queue / auto-distribution · any AI (no summaries, no drafting, no classification) ·
+skills engine · weighted routing · predictive churn/risk · WFM · auto-activating backups · CSAT · QA rubrics
+· multiple specialized queues · multi-team/pod structures.
+11. Later phases (design for, don't build)
+Phase 2 (after 60–90 days of data): recalibrate weights/thresholds from logs; internal AI copilot (handoﬀ
+summary first, then family summary, suggested reply, case-type suggestion — read-only, outputs stored
+as internal); text-derived attention signals (can't join / cancel / anger) as s i g n a l s , not decisions; richer
+at
+_
+risk rules; CSAT; broader self-service; optional auto-activate backup; night-balance suggestions to
+manager; targeted assist suggestions.
+Phase 3 (scale): teams ( staff.team
+id, coverage
+rule.covered
+team
+_
+_
+_
+_
+id); coverage pools (least-loaded
+w i t h i n a small pool — the only place "least loaded" ever appears); specialist desks via tasks; optional
+family.retention
+owner
+_
+_
+id; AI with explicit allowlisted actions via an ai
+_
+authorization table; light
+WFM from event
+_
+log volume forecasts. None of this should require changing
+family/thread/case/coverage entities.
+12. Non-negotiables checklist for code review
+[ ] No code path assigns a message/family to a staﬀ member other than via on
+duty() (+ stickiness,
+_
+assist, escalation — all logged with reason).
+[ ] No queue table, no round-robin, no "least loaded" outside Phase 3 pools.
+[ ] Owner changes only via transfer
+ownership(); writes audit
+_
+_
+log in the same transaction.
+[ ] thread is UNIQUE per family; cases never create a second thread.
+[ ] Every staﬀ message has on
+behalf
+mode.
+_
+_
+[ ] Attention and workload are computed, never user-entered; all constants read from config.
+[ ] Family can never be in two inboxes or in none (except Unattended).
+[ ] Coverage cannot close owner
+_
+locked cases or change owners.
+[ ] No customer-facing AI output. No AI-initiated state changes.
+[ ] Every number in this brief is treated as a config default with a comment "initial hypothesis"
+.
+Jawwid Chat — Project Brief · 8 / 8
