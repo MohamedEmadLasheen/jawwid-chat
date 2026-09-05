@@ -106,11 +106,18 @@ select test.eq(chat.on_duty(test.family_id('Family A'), '2026-09-07 19:00 Africa
                'a deactivated coverage admin is dropped from the chain, not silently used');
 
 update chat.staff set is_active = true, left_at = null where name = 'Coverage A';
+
+-- An owner holding families cannot be deactivated through normal paths (that
+-- guard is asserted in the ownership suite). Triggers are suspended here purely
+-- to construct the state and prove on_duty() is defensive if it ever arose --
+-- through a bad import, or a race during offboarding.
+set session_replication_role = replica;
 update chat.staff set is_active = false, left_at = now() where name = 'Owner A';
+set session_replication_role = origin;
 
 select test.eq(chat.on_duty(test.family_id('Family A'), '2026-09-07 12:00 Africa/Cairo'),
                null::uuid,
-               'a deactivated owner is skipped: the family is Unattended until reassigned');
+               'an inactive owner is never returned by on_duty, even if the state exists');
 
 select test.reset_data();
 select test.seed_operations();
