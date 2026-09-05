@@ -1,0 +1,146 @@
+/*
+ * Jawwid Operations — design tokens.
+ *
+ * Principles (role brief §79, §81):
+ *  - A professional operations workspace, not an alarm panel. Only the NOW
+ *    bucket is allowed to be loud.
+ *  - Attention is never colour-only: every state also carries a text label and
+ *    a shape, so it survives colour-blindness and greyscale.
+ *  - All spacing/positioning uses LOGICAL properties so RTL is a real mirror
+ *    of the layout rather than a set of overrides.
+ */
+:root {
+  color-scheme: light;
+
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-sunken: #f0f2f5;
+  --surface-hover: #eef1f5;
+  --border: #dfe3e8;
+  --border-strong: #c4cad2;
+
+  --text: #16202c;
+  --text-muted: #5b6875;
+  --text-subtle: #8a94a0;
+  --text-inverse: #ffffff;
+
+  --accent: #1f6feb;
+  --accent-hover: #1a5fd0;
+  --accent-soft: #e8f0fe;
+
+  /* Attention. NOW is the only saturated one. */
+  --now: #c2371f;
+  --now-soft: #fdecea;
+  --today: #b26a00;
+  --today-soft: #fdf3e3;
+  --waiting: #4b6a8a;
+  --waiting-soft: #eef2f7;
+  --quiet: #6b7684;
+  --quiet-soft: #f1f3f5;
+
+  --ok: #1f7a4d;
+  --ok-soft: #e7f4ed;
+  --danger: #c2371f;
+  --danger-soft: #fdecea;
+
+  --internal: #6b4fbb;
+  --internal-soft: #f1edfb;
+
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 12px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --font: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', sans-serif;
+  --font-ar: 'Segoe UI', 'Noto Naskh Arabic', 'Tahoma', system-ui, sans-serif;
+
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-lg: 15px;
+  --fs-xl: 18px;
+
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow: 0 4px 12px rgba(16, 24, 40, 0.1);
+
+  --header-h: 52px;
+  --rail-w: 200px;
+  --list-w: 380px;
+  --panel-w: 340px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #12161c;
+    --surface: #1a1f27;
+    --surface-sunken: #151a21;
+    --surface-hover: #232935;
+    --border: #2b323d;
+    --border-strong: #3b434f;
+    --text: #e6eaf0;
+    --text-muted: #a3adba;
+    --text-subtle: #78828f;
+    --accent: #5a9bff;
+    --accent-soft: #16273f;
+    --now: #ff7a63;
+    --now-soft: #3a1d18;
+    --today: #e0a256;
+    --today-soft: #33260f;
+    --waiting: #8fb0d0;
+    --waiting-soft: #1b2530;
+    --quiet: #8b95a1;
+    --quiet-soft: #1d222a;
+    --ok: #57c288;
+    --ok-soft: #14291f;
+    --danger: #ff7a63;
+    --danger-soft: #3a1d18;
+    --internal: #a992f0;
+    --internal-soft: #241f38;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--fs-md);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+html[lang='ar'] body { font-family: var(--font-ar); }
+
+/* Arabic needs a little more line height to stay readable at small sizes. */
+html[lang='ar'] { line-height: 1.7; }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+button { font: inherit; cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: 0.55; }
+
+/* Screen-reader-only text: how non-colour meaning reaches assistive tech. */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
