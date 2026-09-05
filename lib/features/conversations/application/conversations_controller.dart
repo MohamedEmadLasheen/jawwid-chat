@@ -4,7 +4,6 @@ import '../../../app/providers.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/network/error_mapper.dart';
 import '../../../shared/models/conversation.dart';
-import '../../../shared/models/user_role.dart';
 import '../domain/conversation_list.dart';
 
 /// The chat list, sectioned for the signed-in role.
@@ -111,7 +110,7 @@ final conversationsControllerProvider = AsyncNotifierProvider<
 
 /// Total unread across everything, for the tab badge.
 final totalUnreadProvider = Provider<int>((ref) {
-  final sections = ref.watch(conversationsControllerProvider).valueOrNull;
+  final sections = ref.watch(conversationsControllerProvider).value;
   if (sections == null) return 0;
 
   return sections.fold<int>(

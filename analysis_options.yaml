@@ -15,12 +15,16 @@ analyzer:
 
 linter:
   rules:
-    - always_declare_return_types
-    - avoid_print
-    - prefer_const_constructors
-    - prefer_const_declarations
-    - prefer_final_locals
-    - unawaited_futures
-    - use_super_parameters
-    - directives_ordering
-    - require_trailing_commas
+    always_declare_return_types: true
+    avoid_print: true
+    prefer_const_constructors: true
+    prefer_const_declarations: true
+    prefer_final_locals: true
+    unawaited_futures: true
+    use_super_parameters: true
+    directives_ordering: true
+    require_trailing_commas: true
+    # Dart forbids `this._field` as a *named* parameter, so this rule cannot be satisfied
+    # by the constructors here, which deliberately keep their fields private while taking
+    # public named arguments.
+    prefer_initializing_formals: false

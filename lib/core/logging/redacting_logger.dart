@@ -94,9 +94,9 @@ class RedactingLogger {
   }
 
   static Object? _redactValue(Object? value) => switch (value) {
-        String s => redactText(s),
-        Map<String, Object?> m => redactMap(m),
-        Iterable<Object?> list => list.map(_redactValue).toList(),
+        final String s => redactText(s),
+        final Map<String, Object?> m => redactMap(m),
+        final Iterable<Object?> list => list.map(_redactValue).toList(),
         _ => value,
       };
 }

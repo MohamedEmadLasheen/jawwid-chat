@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/providers.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/errors/error_presenter.dart';
 import '../../../design/tokens.dart';
 import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/user_role.dart';
-import '../../../app/providers.dart';
 import '../application/conversations_controller.dart';
 import '../domain/conversation_list.dart';
 import 'conversation_tile.dart';

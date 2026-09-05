@@ -123,6 +123,26 @@ void main() {
       );
     });
 
+    test('a teacher signs in with the teacher role the server asserted', () async {
+      final teacherRepo = _FakeAuthRepository(role: UserRole.teacher);
+      final teacherProvider = NotifierProvider<AuthController, AuthState>(
+        () => AuthController(
+          repository: teacherRepo,
+          tokens: InMemoryTokenStore(),
+          clearLocalData: () async {},
+        ),
+      );
+      final teacherContainer = ProviderContainer();
+      addTearDown(teacherContainer.dispose);
+      addTearDown(teacherRepo.dispose);
+
+      await teacherContainer
+          .read(teacherProvider.notifier)
+          .signIn(username: 'teacher', password: 'secret');
+
+      expect(teacherContainer.read(teacherProvider).user?.role, UserRole.teacher);
+    });
+
     test('a disabled account is reported distinctly from bad credentials', () async {
       repository.signInError = const AppError(
         AppErrorKind.accountDisabled,

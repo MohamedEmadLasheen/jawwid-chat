@@ -1,11 +1,34 @@
-node_modules/
-dist/
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins-dependencies
 build/
-coverage/
+*.iml
+.packages
+.pub-cache/
+.pub/
+
+# Android
+android/.gradle/
+android/local.properties
+android/app/google-services.json
+android/key.properties
+*.jks
+*.keystore
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/ephemeral/
+ios/Runner/GoogleService-Info.plist
+*.mobileprovision
+*.p12
+
+# macOS
+.DS_Store
+
+# Never commit secrets or environment files
 .env
 .env.*
 !.env.example
-*.log
-.DS_Store
-.vite/
-.turbo/

@@ -20,7 +20,10 @@ class SecureTokenStore implements TokenStore {
   SecureTokenStore({FlutterSecureStorage? storage})
       : _storage = storage ??
             const FlutterSecureStorage(
-              aOptions: AndroidOptions(encryptedSharedPreferences: true),
+              // Defaults on Android 11+ of this plugin are AES-GCM data encryption with
+              // RSA-OAEP key wrapping in the platform keystore.
+              aOptions: AndroidOptions(),
+              // Readable only after first unlock, and never migrated to a new device.
               iOptions: IOSOptions(
                 accessibility: KeychainAccessibility.first_unlock_this_device,
               ),

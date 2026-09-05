@@ -43,7 +43,7 @@ class JawwidAvatar extends StatelessWidget {
                 fit: BoxFit.cover,
                 cacheWidth: pixels,
                 cacheHeight: pixels,
-                errorBuilder: (context, _, __) =>
+                errorBuilder: (context, _, _) =>
                     _Initials(displayName: displayName, size: size),
                 loadingBuilder: (context, child, progress) => progress == null
                     ? child

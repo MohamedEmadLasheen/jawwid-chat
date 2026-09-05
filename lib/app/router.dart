@@ -94,7 +94,7 @@ class _AuthRefresh extends ChangeNotifier {
   _AuthRefresh(this._ref) {
     _subscription = _ref.listen(
       authControllerProvider,
-      (_, __) => notifyListeners(),
+      (_, _) => notifyListeners(),
     );
   }
 

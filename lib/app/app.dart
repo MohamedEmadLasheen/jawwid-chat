@@ -7,7 +7,17 @@ import '../l10n/app_localizations.dart';
 import 'router.dart';
 
 /// The user's language choice. `null` means "follow the device" (§46).
-final localeOverrideProvider = StateProvider<Locale?>((ref) => null);
+///
+/// Persisted by the settings feature; held here so the whole app rebuilds on a change.
+class LocaleController extends Notifier<Locale?> {
+  @override
+  Locale? build() => null;
+
+  void set(Locale? locale) => state = locale;
+}
+
+final localeOverrideProvider =
+    NotifierProvider<LocaleController, Locale?>(LocaleController.new);
 
 class JawwidApp extends ConsumerWidget {
   const JawwidApp({super.key});

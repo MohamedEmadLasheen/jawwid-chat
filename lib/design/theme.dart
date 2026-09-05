@@ -116,13 +116,9 @@ abstract final class JawwidTheme {
         shape: const StadiumBorder(),
         side: BorderSide(color: scheme.outlineVariant),
       ),
-      // Page transitions are kept cheap on Android; §47.
-      pageTransitionsTheme: const PageTransitionsTheme(
-        builders: {
-          TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
-          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-        },
-      ),
+      // Page transitions are left at Flutter's per-platform defaults: on Android that is
+      // already the cheap fade-forwards transition §47 asks for, and on iOS it is the
+      // native interactive back swipe, which a custom builder would break.
     );
   }
 
