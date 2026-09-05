@@ -1,0 +1,75 @@
+# Jawwid Chat environment-variable manifest. Owner: AI #7 (infrastructure).
+#
+# The single machine-readable source of truth for configuration. Consumed by
+# scripts/infra/check-env.sh, which CI and every deployment run.
+#
+# Columns (tab-separated):
+#   NAME     variable name
+#   GROUP    documentation grouping
+#   SECRET   yes = must come from the secret store, never from a tracked file
+#   LOCAL    req | opt | forbid   -- state required in local development
+#   STAGING  req | opt | forbid
+#   PROD     req | opt | forbid   -- forbid = deployment is refused if present
+#
+# `forbid` is not decoration. DEBUG-style switches are forbidden in production
+# so that "temporarily enable it to debug prod" is a deliberate change to this
+# file and its review, not a console edit nobody sees.
+#
+#NAME	GROUP	SECRET	LOCAL	STAGING	PROD
+NODE_ENV	application	no	req	req	req
+APP_ENV	application	no	req	req	req
+PORT	application	no	req	req	req
+LOG_LEVEL	application	no	opt	req	req
+CORS_ALLOWED_ORIGINS	application	no	req	req	req
+REQUEST_TIMEOUT_MS	application	no	opt	req	req
+SHUTDOWN_GRACE_MS	application	no	opt	req	req
+DATABASE_URL	database	yes	req	req	req
+DATABASE_STATEMENT_TIMEOUT_MS	database	no	opt	req	req
+DATABASE_POOL_MAX	database	no	opt	req	req
+REDIS_URL	redis	yes	req	req	req
+QUEUE_PREFIX	redis	no	req	req	req
+WORKER_CONCURRENCY	redis	no	opt	req	req
+JWT_ACCESS_SECRET	auth	yes	req	req	req
+JWT_REFRESH_SECRET	auth	yes	req	req	req
+JWT_ACCESS_TTL	auth	no	opt	req	req
+JWT_REFRESH_TTL	auth	no	opt	req	req
+STORAGE_ENDPOINT	storage	no	req	req	req
+STORAGE_REGION	storage	no	opt	req	req
+STORAGE_BUCKET	storage	no	req	req	req
+STORAGE_ACCESS_KEY	storage	yes	req	req	req
+STORAGE_SECRET_KEY	storage	yes	req	req	req
+STORAGE_SIGNED_URL_TTL_SECONDS	storage	no	opt	req	req
+ATTACHMENT_MAX_BYTES_IMAGE	storage	no	opt	opt	opt
+ATTACHMENT_MAX_BYTES_VIDEO	storage	no	opt	opt	opt
+ATTACHMENT_MAX_BYTES_VOICE	storage	no	opt	opt	opt
+ATTACHMENT_MAX_BYTES_FILE	storage	no	opt	opt	opt
+FCM_PROJECT_ID	push	no	opt	req	req
+FCM_SERVICE_ACCOUNT_JSON	push	yes	opt	req	req
+APNS_KEY_ID	push	no	opt	req	req
+APNS_TEAM_ID	push	no	opt	req	req
+APNS_BUNDLE_ID	push	no	opt	req	req
+APNS_PRIVATE_KEY	push	yes	opt	req	req
+APNS_PRODUCTION	push	no	opt	req	req
+LIVEKIT_URL	calling	no	req	req	req
+LIVEKIT_API_KEY	calling	yes	req	req	req
+LIVEKIT_API_SECRET	calling	yes	req	req	req
+LIVEKIT_TOKEN_TTL_SECONDS	calling	no	opt	req	req
+CORE_BASE_URL	core	no	req	req	req
+CORE_API_KEY	core	yes	opt	req	req
+CORE_WEBHOOK_SECRET	core	yes	opt	req	req
+CORE_TIMEOUT_MS	core	no	opt	req	req
+CORE_RETRY_MAX	core	no	opt	req	req
+SENTRY_DSN	observability	yes	opt	req	req
+OTEL_SERVICE_NAME	observability	no	opt	req	req
+OTEL_EXPORTER_OTLP_ENDPOINT	observability	no	opt	req	req
+OTEL_TRACES_SAMPLER_ARG	observability	no	opt	opt	opt
+HEALTH_PROBE_TIMEOUT_MS	observability	no	opt	opt	opt
+GIT_COMMIT	release	no	opt	req	req
+BUILD_VERSION	release	no	opt	req	req
+BUILD_TIME	release	no	opt	req	req
+PRISMA_MIGRATE_SKIP_GENERATE	guardrail	no	opt	opt	opt
+DEBUG	guardrail	no	opt	forbid	forbid
+PRISMA_STUDIO	guardrail	no	opt	forbid	forbid
+USE_MOCK_PUSH	guardrail	no	opt	forbid	forbid
+USE_MOCK_CORE	guardrail	no	opt	forbid	forbid
+ALLOW_INSECURE_TLS	guardrail	no	forbid	forbid	forbid

@@ -16,7 +16,7 @@ const base = {
     '^@communication/(.*)$': '<rootDir>/src/communication/$1',
   },
   transform: {
-    '^.+\\.ts$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.json', isolatedModules: true }],
+    '^.+\\.ts$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.json'}],
   },
 };
 

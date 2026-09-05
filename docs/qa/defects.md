@@ -181,8 +181,8 @@ changes operational thresholds without failing loudly.
 | **Severity** | **P0 — horizontal privilege escalation, client-reachable** |
 | **Area** | `apps/api/src/platform/authorization.service.ts` `canSendMessage()` |
 | **Owner agent** | AI #1 |
-| **Status** | OPEN |
-| **Evidence** | `apps/api/test/unit/authorization/assist-escalation-bypass.spec.ts` — **3 failing assertions, reproducible** |
+| **Status** | **FIXED — verified** (fail-closed; real predicate still owed by AI #1) |
+| **Evidence** | `apps/api/test/unit/authorization/assist-escalation-bypass.spec.ts` — was 3 failing, now passing |
 
 ### Steps
 
@@ -237,8 +237,8 @@ predicate. Neither may be satisfiable by a client-supplied field alone.
 | **Severity** | **P1** |
 | **Area** | `apps/api/src/platform/authorization.service.ts` `canReadInternal()` |
 | **Owner agent** | AI #1 |
-| **Status** | OPEN |
-| **Evidence** | `apps/api/test/unit/authorization/internal-note-privacy.spec.ts` — 1 failing assertion |
+| **Status** | **FIXED — verified** |
+| **Evidence** | `apps/api/test/unit/authorization/internal-note-privacy.spec.ts` — was 1 failing, now passing |
 
 `canReadThread()` gates on `actor.isActive`; `canReadInternal()` does not:
 
@@ -281,3 +281,68 @@ projects. Suites now execute: `npm --prefix apps/api run test:unit`.
 | **PF-4** | `on_behalf_mode`: OWNER vs COVERAGE is **derived, never trusted** from the client. *(AI #1)* |
 | **PF-5** | Migration ledger is separate from Jawwid Core's (`chat.schema_migrations`), and each migration commits with its ledger row in one transaction — a failed migration is never recorded as applied. *(AI #1)* |
 | **PF-6** | Config accessors raise on a missing key rather than defaulting, so a deleted threshold fails loudly. *(AI #1, modulo JC-004)* |
+
+
+---
+
+## Fix record — 2026-09-05
+
+### JC-005 — fixed by failing closed
+
+`canSendMessage()` now **denies** a client-supplied `ASSIST` / `ESCALATION`
+rather than granting it:
+
+```ts
+if (intent.requestedMode === OnBehalfMode.ASSIST) {
+  return deny(CommErrorCode.ASSIST_NOT_PERMITTED, '...a client-supplied mode never grants access');
+}
+if (intent.requestedMode === OnBehalfMode.ESCALATION) {
+  return deny(CommErrorCode.ESCALATION_NOT_PERMITTED, '...');
+}
+```
+
+**QA deliberately did not implement the real assist predicate.** It depends on
+the attention bucket and response target, which live in engines AI #1 owns and
+which have not landed. Inventing it here would fabricate a product rule. The
+branches are marked for AI #1 with an explicit instruction not to restore an
+unconditional `allow()` and not to move the gate into a caller.
+
+**Residual risk (tracked):** assist and escalation are currently *unavailable*,
+not merely *gated*. This is the safe direction — no unauthorized access — but it
+is a functional gap until AI #1 lands the predicate. Tracked as **JC-007**.
+
+### JC-006 — fixed
+
+`canReadInternal()` now returns `false` for `!actor.isActive`.
+
+### Contract impact for peer agents
+
+| Agent | Impact |
+|---|---|
+| **AI #1** | Owns the follow-up: implement the real assist/escalation predicate inside `AuthorizationService`. Two marked branches await it. |
+| **AI #2** | `canSendMessage()` with `requestedMode: ASSIST\|ESCALATION` now returns a denial instead of allowing. No caller relied on it — `message.service.ts` passed the client value straight through with no gate of its own. |
+| **AI #3 / AI #4** | New stable error code `COMM.ESCALATION_NOT_PERMITTED` (additive; `errors.ts` declares adding a code safe). Any "reply as assist" or "escalate" affordance will now receive `COMM.ASSIST_NOT_PERMITTED` / `COMM.ESCALATION_NOT_PERMITTED`. Render the denial; do not retry, and do not build a client-side workaround. |
+
+**Verification:** `npm --prefix apps/api run test:unit` → 28 passing.
+`npm --prefix apps/api run typecheck` → clean.
+`legitimate-access.spec.ts` pins the paths that must keep working: on-duty owner
+(tagged OWNER), on-duty coverage (tagged COVERAGE, ownership untouched), live
+stickiness, expired stickiness correctly denied, manager on any family, internal
+notes by any family-facing admin, the family's own contact, cross-family contact
+denied, and the system actor.
+
+---
+
+## JC-007 · Assist and escalation are unavailable until the server-side predicate lands
+
+| | |
+|---|---|
+| **Severity** | P1 (functional gap, introduced deliberately by the JC-005 fix) |
+| **Owner agent** | AI #1 |
+| **Status** | OPEN |
+
+Both paths now fail closed. "Reply as assist" and manual escalation cannot
+succeed until `AuthorizationService` evaluates the real preconditions
+server-side. Deliberate: unavailable beats bypassable. Release gate G-44 stays
+FAIL until the predicate exists **and** is covered by tests asserting both the
+permitted and the denied case.

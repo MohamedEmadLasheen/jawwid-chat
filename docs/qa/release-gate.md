@@ -10,9 +10,12 @@ treated identically: an untested control is not a control.
 
 # 🔴 NOT READY
 **Reason: implementation is in progress.**
-Scope is settled — PRD v0.1 governs. **Four P0 and one P1 defects are open**
-(`defects.md` JC-001/002/003/005/006). JC-005 and JC-006 are proven by executing
-tests, not by inspection. The MVP communication layer is not yet built.
+Scope is settled — PRD v0.1 governs. **Three P0 defects remain open**
+(`defects.md` JC-001/002/003 — Student Groups, approvals and calling are not
+implemented, and BR-1's permitted case is unrepresentable). JC-005 (P0) and
+JC-006 (P1) were found, fixed and regression-tested in this pass; JC-007 tracks
+the functional gap the JC-005 fix leaves behind. The MVP communication layer is
+not yet built.
 
 ---
 
@@ -23,15 +26,15 @@ tests, not by inspection. The MVP communication layer is not yet built.
 | **G-01** | **BR-1: no Teacher↔Parent 1:1 messaging or calling exists, enforced server-side, verified with client-side policy disabled (BR1-19)** | **FAIL — JC-002** |
 | **G-02** | Student Groups implemented, with membership derived from Jawwid Core and BR-1 enforced at creation **and** every membership mutation | **FAIL — JC-001** |
 | **G-03** | Teacher is a first-class authenticated actor with Teacher↔Admin and group access | **FAIL — JC-003** |
-| **G-04** | One centralized authorization policy governs messaging **and** calling; no second matrix; **no client-supplied field widens authority** | **FAIL — JC-005** |
+| G-04 | One centralized authorization policy governs messaging **and** calling; no second matrix; **no client-supplied field widens authority** | **PASS (messaging)** — JC-005 fixed, regression-tested. Calling unverified. |
 | G-05 | Approvals: approve / reject / mandatory reason; pending never delivered, pushed, searchable or emitted; no self-approval; concurrent decisions resolve to one state | UNVERIFIED |
 | G-06 | Voice calling authorized through the same policy; tokens server-generated, short-lived, room-scoped; unauthorized room join denied | UNVERIFIED |
 | G-07 | **No phone number** in any API response, realtime event, push payload, call setup/metadata/history, search result, log, cache or export | UNVERIFIED (structural control in place — PF-1) |
-| G-08 | Internal notes unreachable by any parent or teacher through any surface | PARTIAL — contacts denied (verified); **JC-006: offboarded staff still pass** |
+| G-08 | Internal notes unreachable by any parent or teacher through any surface | PARTIAL — contacts and deactivated actors denied (verified, JC-006 fixed); other surfaces unverified |
 | G-09 | No cross-family or cross-group access; IDOR sweep clean across every entity id | UNVERIFIED |
 | G-10 | Realtime delivers only in-scope events; re-authorized on reconnect and on permission change | UNVERIFIED |
 | G-11 | Manager-only actions unreachable by admin, coverage, teacher, parent or internal staff | UNVERIFIED |
-| **G-44** | `on_duty()` is the sole authority for acting on a family; assist and escalation are gated by server-evaluated preconditions | **FAIL — JC-005** |
+| **G-44** | `on_duty()` is the sole authority for acting on a family; assist and escalation are gated by server-evaluated preconditions | **FAIL — JC-007**: now fail-closed (not bypassable) but the real predicate is not implemented |
 | G-12 | Exactly one Primary Owner per family; ownership changes only via `transfer_ownership()` with audit in the same transaction | UNVERIFIED |
 | G-13 | Coverage, handoff and workload never change Primary Ownership | UNVERIFIED |
 | G-14 | Exactly one current handler at all times — never two, never zero (Unattended counts) | UNVERIFIED |
@@ -74,7 +77,7 @@ tests, not by inspection. The MVP communication layer is not yet built.
 | G-36 | CI runs lint, typecheck, unit, integration, security and migration validation on every push | **FAIL — no CI pipeline** (jest projects now wired; runner exists) |
 | G-37 | Every component's toolchain installed and its tests executable in CI (Flutter/Dart still absent) | **FAIL** |
 | G-38 | Full E2E suite green (`test-plan.md` §20) | UNVERIFIED |
-| G-39 | Zero open P0; zero open critical P1 | **FAIL — 4 open P0, 1 open P1** |
+| G-39 | Zero open P0; zero open critical P1 | **FAIL — 3 open P0 (JC-001/002/003), 1 open P1 (JC-007)** |
 | G-40 | Observability: structured logs, health/readiness, error monitoring with token/PII redaction | UNVERIFIED |
 | G-41 | Backup and restore documented **and rehearsed**; RPO/RTO stated | **FAIL — absent** |
 | G-42 | Environments separated; no production credentials or debug mode outside production | UNVERIFIED |

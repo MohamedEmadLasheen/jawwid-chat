@@ -1,0 +1,63 @@
+# Admin Web static hosting. Owner: AI #7 (infrastructure).
+# Rendered by the nginx image's envsubst at container start.
+
+server {
+    listen       ${NGINX_PORT};
+    server_name  _;
+    root         /usr/share/nginx/html;
+
+    # Never advertise the nginx version to the internet.
+    server_tokens off;
+
+    # The Admin Web bundle is an internal staff tool. Search engines have no
+    # business indexing it even if a URL escapes.
+    add_header X-Robots-Tag "noindex, nofollow" always;
+
+    add_header X-Content-Type-Options    "nosniff" always;
+    add_header Referrer-Policy           "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy        "geolocation=(), camera=(), payment=(), usb=()" always;
+    # HSTS is set here for the container case. Behind a CDN or load balancer
+    # that already sets it, remove one of the two -- duplicated HSTS headers
+    # are ignored by some browsers, which silently disables it.
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    # frame-ancestors 'none' replaces X-Frame-Options: it is the version modern
+    # browsers honour, and clickjacking an admin console that can transfer
+    # family ownership is a real risk, not a theoretical one.
+    #
+    # connect-src is pinned to this environment's API and realtime origins.
+    # A wildcard here would let injected script exfiltrate customer messages to
+    # any host it liked.
+    add_header Content-Security-Policy "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ${API_ORIGIN} ${REALTIME_ORIGIN}; form-action 'self'" always;
+
+    gzip on;
+    gzip_types text/plain text/css application/javascript application/json image/svg+xml;
+    gzip_min_length 1024;
+
+    location = /healthz {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 "ok\n";
+    }
+
+    # Vite emits content-hashed filenames under /assets, so these are safe to
+    # cache permanently. A new deploy produces new names.
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    # index.html must NEVER be cached: it is the file that points at the hashed
+    # bundles. A cached index.html is how a browser keeps loading the previous
+    # release after a rollback and reports "the fix didn't deploy".
+    location = /index.html {
+        add_header Cache-Control "no-store, must-revalidate" always;
+        try_files $uri =404;
+    }
+
+    # SPA routing: unknown paths are client routes, not 404s.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

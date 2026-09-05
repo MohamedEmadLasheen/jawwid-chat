@@ -1,0 +1,43 @@
+/**
+ * Stable, documented error codes. Clients (AI #3 mobile, AI #4 admin) branch on
+ * these, never on message text. Adding a code is fine; changing one is a
+ * breaking contract change.
+ */
+export enum CommErrorCode {
+  // Authorization
+  ROLE_CANNOT_MESSAGE_FAMILY = 'COMM.ROLE_CANNOT_MESSAGE_FAMILY',
+  NOT_ON_DUTY = 'COMM.NOT_ON_DUTY',
+  NOT_THREAD_PARTICIPANT = 'COMM.NOT_THREAD_PARTICIPANT',
+  CONTACT_CANNOT_MESSAGE = 'COMM.CONTACT_CANNOT_MESSAGE',
+  CONTACT_CANNOT_WRITE_INTERNAL = 'COMM.CONTACT_CANNOT_WRITE_INTERNAL',
+  ACTOR_INACTIVE = 'COMM.ACTOR_INACTIVE',
+  ASSIST_NOT_PERMITTED = 'COMM.ASSIST_NOT_PERMITTED',
+  ESCALATION_NOT_PERMITTED = 'COMM.ESCALATION_NOT_PERMITTED',
+  NOT_MESSAGE_AUTHOR = 'COMM.NOT_MESSAGE_AUTHOR',
+  DELETE_WINDOW_EXPIRED = 'COMM.DELETE_WINDOW_EXPIRED',
+
+  // Validation
+  UNKNOWN_ACTOR = 'COMM.UNKNOWN_ACTOR',
+  THREAD_NOT_FOUND = 'COMM.THREAD_NOT_FOUND',
+  MESSAGE_NOT_FOUND = 'COMM.MESSAGE_NOT_FOUND',
+  REPLY_TARGET_CROSS_THREAD = 'COMM.REPLY_TARGET_CROSS_THREAD',
+  REPLY_TARGET_NOT_VISIBLE = 'COMM.REPLY_TARGET_NOT_VISIBLE',
+  EMPTY_MESSAGE = 'COMM.EMPTY_MESSAGE',
+  ATTACHMENT_TOO_LARGE = 'COMM.ATTACHMENT_TOO_LARGE',
+  ATTACHMENT_TYPE_NOT_ALLOWED = 'COMM.ATTACHMENT_TYPE_NOT_ALLOWED',
+  MISSING_ON_BEHALF_MODE = 'COMM.MISSING_ON_BEHALF_MODE',
+
+  // Not implemented in this MVP (declared so clients get a stable answer)
+  NOT_IN_MVP = 'COMM.NOT_IN_MVP',
+}
+
+export class CommError extends Error {
+  constructor(
+    readonly code: CommErrorCode,
+    message: string,
+    readonly status = 403,
+  ) {
+    super(message);
+    this.name = 'CommError';
+  }
+}
