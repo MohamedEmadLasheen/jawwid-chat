@@ -1,0 +1,179 @@
+# Jawwid Chat — Defect Log
+
+Owner: AI #5 · Opened 2026-09-05
+Severity: **P0** breach/corruption/blocked-MVP · **P1** major workflow broken ·
+**P2** important · **P3** minor.
+
+Status values: OPEN · IN PROGRESS · FIXED · VERIFIED · WONTFIX
+
+---
+
+## JC-001 · Student Groups, Approvals and Calling are implemented as "DESIGN-ONLY, not in MVP"
+
+| | |
+|---|---|
+| **Severity** | **P0 — MVP is unbuildable as currently architected** |
+| **Area** | Backend schema + communication authorization |
+| **Owner agent** | AI #1 (schema, authorization) · AI #2 (communication engine) |
+| **Status** | OPEN |
+| **Found** | 2026-09-05, static review of live code |
+
+### Evidence
+
+`apps/api/prisma/schema.prisma` §C:
+
+> `// SECTION C - DESIGN-ONLY (declared, deliberately NOT implemented in MVP)`
+> `// The authoritative product brief's MVP scope (section 10) contains no student`
+> `// groups, no message approval, and no calling.`
+
+Models `StudentGroup`, `StudentGroupMember` and the approval/calling models are
+each tagged `/// DESIGN-ONLY. Not implemented.` and no service reads or writes
+them.
+
+### Root cause
+
+Built against `docs/JAWWID_CHAT_BRIEF.pdf`, which is **superseded**. See
+`docs/qa/authoritative-scope.md`. The approved **PRD v0.1** places Student
+Groups, the approval workflow (approve / reject / rejection reason), and voice
+calling — 1:1 **and group** — inside MVP.
+
+### Impact
+
+Three of the PRD's headline MVP capabilities have no runtime implementation, and
+the Teacher mobile app (AI #3) and Admin approval UI (AI #4) have no backend to
+integrate against. This is not a missing feature; it is an architectural
+position that must be reversed.
+
+### Expected
+
+Student Groups, approvals and voice calling are MVP. Approval is intentionally
+simple in MVP — approve, reject, rejection reason — with escalation, expiry and
+coverage-aware approval deferred to Phase 2. Video calling is Phase 2.
+
+### Fix direction
+
+Promote §C models to implemented, and route them through the same centralized
+authorization service (see JC-002). Do **not** create a second authorization
+path for groups or calls.
+
+---
+
+## JC-002 · BR-1 is enforced by making Student Groups unrepresentable
+
+| | |
+|---|---|
+| **Severity** | **P0 — correct rule, structurally incompatible implementation** |
+| **Area** | `apps/api/src/platform/authorization.service.ts` |
+| **Owner agent** | AI #1 |
+| **Status** | OPEN |
+| **Depends on** | JC-001 |
+
+### Evidence
+
+> `STRUCTURAL GUARANTEE - no teacher <-> parent channel can exist:`
+> `1. There is no user-to-user conversation entity in this system at all. The only`
+> `   customer-facing thread is Thread(kind=FAMILY), keyed by familyId and unique`
+> `   per family. A "Teacher <-> Parent 1:1 thread" is not merely denied, it is`
+> `   unrepresentable in the schema.`
+
+### Analysis
+
+The instinct is right and worth preserving: making a forbidden state
+unrepresentable is stronger than denying it at runtime. **But the guarantee is
+purchased with the wrong asset.** It holds only because *no* multi-party
+conversation can exist — which also forbids the Student Group, the one channel
+through which Teacher↔Parent communication is *required* to flow.
+
+The rule is not "teachers and parents never share a conversation." It is
+**"teachers and parents share only the official Student Group, with required
+admin presence/authorization."** The current design cannot express the
+permitted case.
+
+### Expected
+
+Conversations carry an explicit `type` and an explicit participant set.
+Authorization is a total function of *(actor, conversation, channel, context)*,
+server-side, and is the **single** code path for messaging **and** calling.
+BR-1 becomes: no conversation of a 1:1 type may contain both a teacher and a
+parent — checked at creation **and** at every join/add-member, so the invariant
+cannot be reached by mutation after the fact.
+
+### Regression tests required
+
+`BR1-01` … `BR1-14` in `docs/qa/test-plan.md` §3 — including group→1:1
+promotion, add-member escalation, and calling parity.
+
+---
+
+## JC-003 · Teacher is not a first-class actor; ACADEMIC staff are barred from all family communication
+
+| | |
+|---|---|
+| **Severity** | **P0 — blocks Teacher mobile app and Student Groups** |
+| **Area** | `apps/api/src/platform/types.ts`, `prisma/schema.prisma` (`StaffRole`), `supabase/migrations/*` (`chat.staff.role` CHECK) |
+| **Owner agent** | AI #1 |
+| **Status** | OPEN |
+
+### Evidence
+
+```ts
+export const FAMILY_FACING_ROLES: ReadonlySet<StaffRole> =
+  new Set([StaffRole.ADMIN, StaffRole.COVERAGE, StaffRole.MANAGER]);
+```
+> `ACADEMIC (teaching) staff are excluded here, so a teacher cannot message a`
+> `family through any channel.`
+
+`ActorKind` is `'STAFF' | 'CONTACT' | 'SYSTEM'` — there is no teacher kind.
+`chat.staff.role` CHECK omits `teacher`. `chat.learner.teacher_id` is a bare
+`uuid` with no FK and no identity behind it.
+
+### Analysis — two distinct rules have been conflated
+
+| Rule | Source | Meaning |
+|---|---|---|
+| "finance / technical / academic staff never message families" | superseded brief, about **internal back-office staff** | correct, keep |
+| **BR-1** | PRD v0.1, about **teachers** | teachers *do* communicate with parents — only inside the Student Group |
+
+Mapping "teacher" onto `StaffRole.ACADEMIC` and then barring that role from all
+family communication implements the first rule and **deletes the second**.
+Teachers additionally require Teacher↔Admin 1:1, which is also currently denied.
+
+### Expected
+
+A teacher is an authenticated first-class actor, distinct from CS back-office
+staff, who can: hold Teacher↔Admin 1:1 conversations and calls; participate in
+Student Groups for their assigned learners; and **never** obtain a 1:1 channel
+to a parent. QA specifies the behaviour, not the table design.
+
+---
+
+## JC-004 · `chat.config_num()` / `config_text()` return NULL silently for a JSON-null value
+
+| | |
+|---|---|
+| **Severity** | P3 |
+| **Area** | `supabase/migrations/20260905090000_chat_foundation.sql` |
+| **Owner agent** | AI #1 |
+| **Status** | OPEN |
+
+The functions document *"raise if a key is missing rather than silently
+defaulting."* They detect a missing **row** (`v IS NULL` after `SELECT INTO`) but
+not a row whose stored value is JSON `null`: then `v = 'null'::jsonb`,
+`v #>> '{}'` yields SQL NULL, and the accessor returns NULL — the exact
+behaviour the comment says it prevents. A config key silently becoming NULL
+changes operational thresholds without failing loudly.
+
+**Fix:** add a `jsonb_typeof(v) = 'null'` guard, or `CHECK (jsonb_typeof(value) <> 'null')`.
+
+---
+
+## Positive findings (verified, preserve these)
+
+| # | Finding |
+|---|---|
+| **PF-1** | `Actor` deliberately carries **no phone, email or address**, and `Contact` has no phone column. Phone privacy is enforced by *construction* — the communication engine has no code path that can obtain a number. This is the strongest possible form of the control. Preserve it through the JC-002 refactor and extend it to call signalling. *(AI #1)* |
+| **PF-2** | A single centralized `AuthorizationService` with an explicit "no controller, gateway or worker may make its own access decision" contract. Exactly the right shape. *(AI #1)* |
+| **PF-3** | `CommunicationPolicy` in the Flutter client is correctly labelled *"defence in depth only; the backend remains the authority"*, and denies the group-member→1:1 affordance so a group never becomes a directory. *(AI #3)* |
+| **PF-4** | `on_behalf_mode`: OWNER vs COVERAGE is **derived, never trusted** from the client. *(AI #1)* |
+| **PF-5** | Migration ledger is separate from Jawwid Core's (`chat.schema_migrations`), and each migration commits with its ledger row in one transaction — a failed migration is never recorded as applied. *(AI #1)* |
+| **PF-6** | Config accessors raise on a missing key rather than defaulting, so a deleted threshold fails loudly. *(AI #1, modulo JC-004)* |
