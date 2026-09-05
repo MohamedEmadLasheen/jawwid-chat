@@ -96,3 +96,85 @@ begin
   perform set_config('test.suite', p_name, false);
 end;
 $$;
+
+-- Runs a query as the Supabase `authenticated` role, impersonating one auth
+-- user, so RLS is genuinely exercised rather than bypassed by the superuser
+-- that owns the schema. Results are returned to the caller, which is still the
+-- owner, so assertions can be recorded normally.
+create or replace function test.count_as(p_auth_user uuid, p_sql text)
+returns integer
+language plpgsql
+as $$
+declare
+  v_count integer;
+begin
+  perform set_config('request.jwt.claim.sub', coalesce(p_auth_user::text, ''), true);
+  set local role authenticated;
+  execute p_sql into v_count;
+  reset role;
+  perform set_config('request.jwt.claim.sub', '', true);
+  return v_count;
+exception when others then
+  reset role;
+  raise;
+end;
+$$;
+
+-- Asserts that a statement fails when run as that user.
+create or replace function test.denied_for(
+  p_auth_user uuid, p_sql text, p_label text, p_sqlstate text default null
+) returns void
+language plpgsql
+as $$
+declare
+  v_state text;
+  v_msg   text;
+begin
+  perform set_config('request.jwt.claim.sub', coalesce(p_auth_user::text, ''), true);
+  set local role authenticated;
+  begin
+    execute p_sql;
+    reset role;
+    perform test.ok(false, p_label, 'the statement was permitted but should not have been');
+    return;
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate, v_msg = message_text;
+  end;
+  reset role;
+  if p_sqlstate is not null and v_state <> p_sqlstate then
+    perform test.ok(false, p_label, format('expected SQLSTATE %s, got %s: %s',
+                                           p_sqlstate, v_state, v_msg));
+  else
+    perform test.ok(true, p_label, v_msg);
+  end if;
+end;
+$$;
+
+-- Runs a statement as that user and asserts it succeeds.
+create or replace function test.allowed_for(p_auth_user uuid, p_sql text, p_label text)
+returns void
+language plpgsql
+as $$
+declare
+  v_msg text;
+begin
+  perform set_config('request.jwt.claim.sub', coalesce(p_auth_user::text, ''), true);
+  set local role authenticated;
+  begin
+    execute p_sql;
+    reset role;
+    perform test.ok(true, p_label);
+    return;
+  exception when others then
+    get stacked diagnostics v_msg = message_text;
+  end;
+  reset role;
+  perform test.ok(false, p_label, v_msg);
+end;
+$$;
+
+create or replace function test.auth_of(p_staff_name text)
+returns uuid
+language sql
+stable
+as $$ select auth_user_id from chat.staff where name = p_staff_name $$;

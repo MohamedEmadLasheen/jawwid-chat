@@ -91,3 +91,17 @@ begin
   select id from chat.family;
 end;
 $$;
+
+-- Clears the Jawwid Core shim so an integration suite starts from a known
+-- state no matter what ran before it. auth.users is not dropped by the database
+-- reset (it belongs to Supabase, not to this project), so it is cleared here.
+create or replace function test.reset_core()
+returns void
+language sql
+as $$
+  delete from public.payments;
+  delete from public.subscriptions;
+  delete from public.children;
+  delete from public.profiles;
+  delete from auth.users;
+$$;
