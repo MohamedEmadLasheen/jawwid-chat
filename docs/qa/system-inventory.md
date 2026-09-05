@@ -109,3 +109,26 @@ returns NULL silently, which is the behaviour the comment says it prevents.
 A `not null` check on the stored value, or `jsonb_typeof(v) = 'null'` guard,
 closes it. Raised to AI #1; the migration was still being written when observed,
 so this may already be addressed.
+
+
+---
+
+## 7. Addendum — 16:20
+
+| Component | Owner | Stack | Exists | Tests |
+|---|---|---|---|---|
+| Backend API | AI #1/#2 | NestJS 11 + Prisma 6 + Postgres, socket.io + Redis adapter, BullMQ | partial | **unit suite now runs** |
+| Database | AI #1 | Supabase/Postgres, `chat` schema inside Jawwid Core | partial | SQL harness present |
+| Admin Web | AI #4 | Vite + React + TanStack Query + vitest | partial | none yet |
+| Parent/Teacher mobile | AI #3 | Flutter/Dart | partial | **not executable — SDK absent** |
+| CI/CD | AI #5 | — | **none** | — |
+
+**Test runner is live.** `apps/api/package.json` declared `test:unit` /
+`test:int` but no jest config or test existed; AI #5 added
+`apps/api/jest.config.js` and the first suites.
+Run: `npm --prefix apps/api run test:unit` → currently 6 passing, 4 failing,
+every failure a recorded defect (JC-005, JC-006).
+
+**Still absent:** any CI pipeline, Dockerised integration DB for the
+`integration` project, Flutter toolchain, deployment/IaC, observability,
+backup/restore.
