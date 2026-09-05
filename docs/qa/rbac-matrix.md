@@ -1,91 +1,196 @@
-# Jawwid Chat — RBAC Test Matrix
+# Jawwid Chat — RBAC & Communication Authorization Matrix
 
-Date: 2026-09-05 · Owner: AI #5 · Source: brief §2, §5, §8
-**The backend is authoritative.** A UI-only restriction is a defect, not a control.
-Every DENY must be verified by direct API call, not by observing a hidden button.
+Date: 2026-09-05 · Owner: AI #5
+Authoritative scope: `docs/qa/authoritative-scope.md` (PRD v0.1)
 
-## 1. Staff roles
+> **The backend is authoritative.** Every DENY in this document must be verified
+> by a direct authenticated API call — never by observing that a button is
+> hidden. A UI-only restriction is a cosmetic, not a control, and is recorded as
+> a defect.
+>
+> Every DENY assertion checks **status code *and* response body**. A 403 that
+> still returns the record is a data leak, not a denial.
 
-Roles are exactly: `admin` · `coverage` · `manager` · `finance` · `technical` ·
-`academic` · `system`. There is **no `super_admin`**.
+## 1. Actors
 
-`on_duty` below means `on_duty(family, now) == actor` (or actor holds
-stickiness / a granted assist / an escalation).
-
-| Action | admin (on_duty) | admin (not on_duty) | coverage (on_duty) | coverage (not on_duty) | manager | finance/technical/academic | system |
-|---|---|---|---|---|---|---|---|
-| Log in | ALLOW | ALLOW | ALLOW | ALLOW | ALLOW | ALLOW | n/a |
-| Open any family record | ALLOW | ALLOW | ALLOW | ALLOW | ALLOW | **DENY** | n/a |
-| Write internal note (any family) | ALLOW | ALLOW | ALLOW | ALLOW | ALLOW | **DENY** | DENY |
-| Send customer-visible message | ALLOW | **DENY** | ALLOW | **DENY** | ALLOW | **DENY** | templates only |
-| Reply as assist | conditional¹ | conditional¹ | conditional¹ | conditional¹ | ALLOW | DENY | DENY |
-| Open / edit case | ALLOW | DENY | ALLOW | DENY | ALLOW | DENY | lifecycle only |
-| Close/resolve **non**-`owner_locked` case | ALLOW | DENY | ALLOW | DENY | ALLOW | DENY | auto-resolve² |
-| Close/resolve **`owner_locked`** case | ALLOW (owner) | DENY | **DENY** | **DENY** | ALLOW | DENY | **DENY**² |
-| Act on transactional part of urgent `owner_locked` case | ALLOW | DENY | ALLOW (no close) | DENY | ALLOW | DENY | DENY |
-| Create internal task | ALLOW | DENY | ALLOW | DENY | ALLOW | DENY | DENY |
-| View tasks | own families | own families | covered families | — | ALL | **only own assigned** | n/a |
-| Complete task | ALLOW | DENY | ALLOW | DENY | ALLOW | ALLOW (own only) | DENY |
-| Escalate (manual, with reason) | ALLOW | DENY | ALLOW | DENY | n/a | DENY | auto only |
-| Pin handler ("I'll keep this") | ALLOW | DENY | ALLOW | DENY | ALLOW | DENY | DENY |
-| Defer to owner ("for owner") | ALLOW | DENY | ALLOW | DENY | ALLOW | DENY | DENY |
-| View own workload / inbox | ALLOW | ALLOW | ALLOW | ALLOW | ALLOW | n/a | n/a |
-| View **team** workload / manager dashboard | **DENY** | **DENY** | **DENY** | **DENY** | ALLOW | DENY | n/a |
-| View Unattended list | DENY | DENY | DENY | DENY | ALLOW | DENY | n/a |
-| **Transfer ownership** | **DENY** | **DENY** | **DENY** | **DENY** | ALLOW | **DENY** | **DENY** |
-| Edit shifts / coverage rules / absences | **DENY** | **DENY** | **DENY** | **DENY** | ALLOW | DENY | DENY |
-| Activate backup | DENY | DENY | DENY | DENY | ALLOW | DENY | **DENY** (suggest only, MVP) |
-| Edit `config` weights / thresholds | **DENY** | **DENY** | **DENY** | **DENY** | ALLOW | DENY | DENY |
-| Read `audit_log` | **DENY** | **DENY** | **DENY** | **DENY** | ALLOW | DENY | n/a |
-| Offboard admin | **DENY** | **DENY** | **DENY** | **DENY** | ALLOW | DENY | DENY |
-| Set attention / priority / workload directly | **DENY (all roles — computed only, INV-8/9)** | | | | **DENY** | **DENY** | **DENY** |
-
-¹ Assist requires **all** of: family in NOW bucket · waited >50% of response
-target · on-duty admin has not opened it — **or** on-duty explicitly requested
-help. Enforced server-side; tagged `assist`; on-duty notified.
-² Operational auto-resolve after 168h **never** applies to `owner_locked` types —
-it becomes an owner follow-up instead.
-
-`coverage` has "same permissions as admin — role label only" (§2). The DENYs in
-its columns are therefore not role-derived; they are the §5 rule *"Coverage
-never: changes owner, closes relationship cases, promises discounts/exceptions."*
-
-## 2. Family-side contacts
-
-Capability flags, not roles. Presets are display sugar over the six flags —
-**test the flags, not the presets.**
-
-| Action | Gate | Preset defaults (Primary Guardian / Billing Authorized / Authorized Contact / Secondary Read-only) |
+| Actor | Authenticates via | Bound to |
 |---|---|---|
-| Send a message / open a topic | `can_message` | ✓ / ✓ / ✓ / ✗ |
-| View learner progress | `can_view_progress` | ✓ / — / — / ✓ |
-| Change schedule | `can_manage_schedule` | ✓ / ✗ / ✗ / ✗ |
-| View invoice, resend invoice, get renewal link | `can_manage_billing` | ✓ / ✓ / ✗ / ✗ |
-| Add / edit contacts | `can_manage_contacts` | ✓ / ✗ / ✗ / ✗ |
-| Cancel subscription | `can_cancel` | ✓ / ✗ / ✗ / ✗ |
+| **Parent** | Parent mobile app | one family |
+| **Teacher** | Teacher mobile app | assigned learners / their Student Groups |
+| **Admin (Primary Owner)** | Admin Web | families where they are Primary Owner |
+| **Coverage Admin** | Admin Web | families where `on_duty()` currently resolves to them |
+| **Manager** | Admin Web | everything, plus ownership/coverage/config/audit |
+| **Internal staff** (finance / technical / academic) | Admin Web | their assigned tasks only — **never** message families |
+| **System** | — | deterministic templates and timers only |
 
-Preset↔flag defaults above are **inferred from role names and require product
-confirmation** — the brief lists the six flags and the four preset names but does
-not publish the mapping. Until confirmed, test flags directly and treat preset
-seeding as unverified.
+`on_duty` below means the actor is the currently-resolved handler for that
+family (owner in shift, active coverage, stickiness holder, granted assist, or
+escalation target). **Primary Owner ≠ Current Handler**, and the matrix treats
+them as independent axes.
 
-Universal contact DENYs (all presets, always):
-- Read any other family's data — DENY
-- Read any `visibility=internal` message — **DENY (P0 if reachable)**
-- Read staff identities beyond owner name/photo (§8 customer screen) — DENY
-- See internal labels, case types, attention scores, or workload — DENY
-- Mutate `owner_id`, case status, task state, or config — DENY
+---
 
-## 3. Test construction rules
+## 2. BR-1 — the communication authorization matrix
 
-1. Every cell is one automated test, asserted against the **API**.
-2. Every DENY asserts both status code **and** an empty/absent body — a 403 that
-   still returns the record is a leak.
-3. Fixtures use synthetic staff (`admin_a`, `coverage_b`, `manager_c`) and
-   synthetic schedules. **Real employee names from the brief must never appear in
-   seed data, fixtures, or assertions** (see `system-inventory.md` §4).
-4. Each role is exercised with a **valid** session for that role — never by
-   stripping a token, which tests authentication instead of authorization.
-5. `on_duty` / `not on_duty` cells are produced by moving fixture clock time, not
-   by editing assignment state directly (there is no assignment state to edit —
-   INV-3).
+This is the single most important table in the project. It governs **messaging
+and calling identically** — calling is never more permissive than messaging.
+
+### 2.1 Direct 1:1 channels
+
+| Initiator → Target | 1:1 message | 1:1 voice call |
+|---|---|---|
+| **Parent → Teacher** | **DENY** | **DENY** |
+| **Teacher → Parent** | **DENY** | **DENY** |
+| Parent → Admin / Coverage | ALLOW | ALLOW |
+| Teacher → Admin / Coverage | ALLOW | ALLOW |
+| Admin / Coverage → Parent | ALLOW (if on_duty) | ALLOW (if on_duty) |
+| Admin / Coverage → Teacher | ALLOW | ALLOW |
+| Manager → Parent / Teacher | ALLOW | ALLOW |
+| Parent → Parent (same or other family) | **DENY** | **DENY** |
+| Teacher → Teacher | **DENY** | **DENY** |
+| Parent / Teacher → internal staff (finance/technical/academic) | **DENY** | **DENY** |
+| Internal staff → any family member | **DENY** | **DENY** |
+| Anyone → System | **DENY** | **DENY** |
+
+### 2.2 Student Group channels
+
+| Action | Parent (member) | Teacher (member) | Admin/Coverage | Manager | Non-member |
+|---|---|---|---|---|---|
+| Read group messages | ALLOW | ALLOW | ALLOW | ALLOW | **DENY** |
+| Post to group | ALLOW¹ | ALLOW¹ | ALLOW | ALLOW | **DENY** |
+| Join group voice call | ALLOW | ALLOW | ALLOW | ALLOW | **DENY** |
+| Start group voice call | ALLOW¹ | ALLOW¹ | ALLOW | ALLOW | **DENY** |
+| Add a member | **DENY** | **DENY** | ALLOW² | ALLOW | **DENY** |
+| Remove a member | **DENY** | **DENY** | ALLOW² | ALLOW | **DENY** |
+| Leave group unilaterally | **DENY** | **DENY** | n/a | n/a | n/a |
+| Archive group | **DENY** | **DENY** | ALLOW² | ALLOW | **DENY** |
+| Read group member **contact details** | **DENY** | **DENY** | display identity only | display identity only | **DENY** |
+| Open 1:1 with a co-member | **governed by §2.1 — group membership grants no 1:1 channel** | | | | |
+
+¹ Subject to the approval workflow (§3) where configured.
+² Admin/Coverage may administer groups only for families where they are on_duty;
+   Manager, always.
+
+### 2.3 The BR-1 invariant
+
+> **No conversation of a 1:1 type may contain both a teacher and a parent.**
+
+Checked at **creation** and at **every membership mutation** — so the forbidden
+state cannot be reached by creating a legal conversation and then mutating it.
+Enforced in the one centralized authorization service used by both the messaging
+and the calling path.
+
+**Required admin presence/authorization** in Student Groups is a PRD condition
+that must be given a precise, testable definition — see `test-plan.md` AMB-9.
+
+---
+
+## 3. Approvals (MVP: approve · reject · rejection reason)
+
+| Action | Parent | Teacher | Admin/Coverage (on_duty) | Admin (not on_duty) | Manager |
+|---|---|---|---|---|---|
+| Submit a message that enters PENDING | ALLOW¹ | ALLOW¹ | n/a | n/a | n/a |
+| See own pending message (as pending) | ALLOW | ALLOW | ALLOW | ALLOW | ALLOW |
+| See **another actor's** pending message | **DENY** | **DENY** | ALLOW | **DENY** | ALLOW |
+| Approve | **DENY** | **DENY** | ALLOW | **DENY** | ALLOW |
+| Reject | **DENY** | **DENY** | ALLOW | **DENY** | ALLOW |
+| Reject **without** a reason | **DENY (all roles — reason is mandatory)** | | | | |
+| Edit a pending message | **DENY** | **DENY** | **DENY** | **DENY** | **DENY** |
+| Approve one's own message | **DENY (self-approval forbidden)** | | | | |
+
+¹ Governed by `teacherRequiresApproval` / `parentRequiresApproval` on the group.
+
+**Hard rule:** a PENDING message is **never** delivered, pushed, surfaced in
+search, emitted on realtime, or included in a group read — to anyone except its
+author and an authorized approver. Escalation, expiry and coverage-aware
+approval are **Phase 2** and must not appear in MVP.
+
+---
+
+## 4. Operational actions
+
+| Action | Parent | Teacher | Admin (on_duty) | Admin (not on_duty) | Coverage (on_duty) | Manager | Internal staff |
+|---|---|---|---|---|---|---|---|
+| Log in | ALLOW | ALLOW | ALLOW | ALLOW | ALLOW | ALLOW | ALLOW |
+| View own family | ALLOW | **DENY** | ALLOW | ALLOW | ALLOW | ALLOW | **DENY** |
+| View **another** family | **DENY** | **DENY** | ALLOW (read) | ALLOW (read) | ALLOW (read) | ALLOW | **DENY** |
+| View Family 360 | **DENY** | **DENY** | ALLOW | ALLOW | ALLOW | ALLOW | **DENY** |
+| Send customer-visible message | ALLOW | group only | ALLOW | **DENY** | ALLOW | ALLOW | **DENY** |
+| Write **internal note** | **DENY** | **DENY** | ALLOW | ALLOW | ALLOW | ALLOW | **DENY** |
+| **Read** internal note | **DENY (P0)** | **DENY (P0)** | ALLOW | ALLOW | ALLOW | ALLOW | **DENY** |
+| Search | own family only | own groups only | permitted families | permitted families | permitted families | all | own tasks only |
+| Create task / follow-up | **DENY** | **DENY** | ALLOW | **DENY** | ALLOW | ALLOW | **DENY** |
+| View tasks | **DENY** | **DENY** | own families | own families | covered families | all | **own assigned only** |
+| Complete task | **DENY** | **DENY** | ALLOW | **DENY** | ALLOW | ALLOW | ALLOW (own only) |
+| View **own** workload | **DENY** | **DENY** | ALLOW | ALLOW | ALLOW | ALLOW | **DENY** |
+| View **team** workload / Manager Dashboard | **DENY** | **DENY** | **DENY** | **DENY** | **DENY** | ALLOW | **DENY** |
+| View Unattended list | **DENY** | **DENY** | **DENY** | **DENY** | **DENY** | ALLOW | **DENY** |
+| **Transfer Primary Ownership** | **DENY** | **DENY** | **DENY** | **DENY** | **DENY** | ALLOW | **DENY** |
+| Configure shifts / coverage / absences | **DENY** | **DENY** | **DENY** | **DENY** | **DENY** | ALLOW | **DENY** |
+| Edit config weights / thresholds | **DENY** | **DENY** | **DENY** | **DENY** | **DENY** | ALLOW | **DENY** |
+| Read audit log | **DENY** | **DENY** | **DENY** | **DENY** | **DENY** | ALLOW | **DENY** |
+| Offboard an admin | **DENY** | **DENY** | **DENY** | **DENY** | **DENY** | ALLOW | **DENY** |
+| Set attention / priority / workload directly | **DENY — all roles, always. These are computed, never entered.** | | | | | | |
+| Register a push device token | own device | own device | own device | own device | own device | own device | own device |
+
+**Coverage-specific limits** (coverage has admin-equivalent permissions, but):
+coverage never changes Primary Ownership, never closes owner-locked relationship
+cases, and never promises discounts or exceptions.
+
+---
+
+## 5. Family-side capability flags
+
+Parents are authorized by **capability flags**, not by preset. Presets are
+display sugar — **test the flags**.
+
+| Action | Gate |
+|---|---|
+| Send a message / open a topic | `can_message` |
+| View learner progress | `can_view_progress` |
+| Change schedule | `can_manage_schedule` |
+| View / resend invoice, get renewal link | `can_manage_billing` |
+| Add or edit contacts | `can_manage_contacts` |
+| Cancel subscription | `can_cancel` |
+
+Preset→flag defaults are **not published in any document available to QA** and
+must be confirmed by product before seeding (`test-plan.md` AMB-10). Until then,
+tests assert flags directly and treat preset seeding as unverified.
+
+Universal parent/teacher DENYs, all presets, always: read another family's data ·
+read any internal-visibility message · read staff phone numbers or personal
+contact details · see attention scores, workload, case internals or operational
+labels · mutate ownership, coverage, config or approval state.
+
+---
+
+## 6. Phone privacy (cross-cutting)
+
+Phone numbers must never appear in: API responses · realtime events · push
+notification payloads · **call setup or call metadata** · call history · search
+results · deep links · error messages · logs · client caches · exports.
+
+Current implementation enforces this **by construction** — `Actor` and the
+`Contact` shell carry no phone column, so the communication engine has no code
+path that can obtain one (`defects.md` PF-1). That property is a release gate:
+it must survive the JC-002 refactor and must extend to call signalling, where
+telephony integrations most commonly reintroduce a number.
+
+---
+
+## 7. Test construction rules
+
+1. Every cell is one automated test asserted against the **API**, not the UI.
+2. Every DENY asserts status **and** empty body.
+3. Each role is exercised with a **valid session for that role** — never by
+   stripping or corrupting a token, which tests authentication instead of
+   authorization.
+4. `on_duty` / `not on_duty` states are produced by **moving fixture clock
+   time**, never by editing assignment state directly — there is no assignment
+   state to edit.
+5. Fixtures use **synthetic** people (`parent_a`, `teacher_b`, `admin_c`,
+   `coverage_d`, `manager_e`) with synthetic schedules. Real employee or
+   customer names must never appear in seed data, fixtures or assertions.
+6. Every 1:1 row in §2.1 is additionally exercised through the **calling** path,
+   not only the messaging path. Calling parity is where BR-1 is most likely to
+   regress.
