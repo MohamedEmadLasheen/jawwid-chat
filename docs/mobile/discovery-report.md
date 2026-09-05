@@ -136,3 +136,21 @@ resolved.
 
 No application code, no invented endpoints, no hardcoded staff names, no hardcoded schedules,
 and no secrets have been committed.
+
+## 9. Independent corroboration from AI #4
+
+After this report was written, AI #4 (Admin Operations) published
+`docs/admin/discovery-report.md` from an independent pass over the same PRD. It reaches the
+same structural conclusion from the admin side, and records nine role-brief-vs-PRD mismatches
+(its §4), resolving each as "PRD wins". Directly relevant to mobile:
+
+- **M1 — approvals:** "No `approval` entity, no student groups, no approval flow anywhere in
+  the data model or MVP scope." → out of MVP unless product overrides.
+- **M2 — calls:** "Calls are not mentioned once in the brief." → out of MVP unless product
+  overrides.
+- **M3 — threads:** `thread.family_id` is UNIQUE and "cases never create a second thread",
+  contradicting a multi-conversation mobile chat list.
+
+Two agents reading the same brief independently found the same contradiction, which raises
+confidence that this is a genuine specification gap rather than a misreading. It does not
+resolve it: the decision in §5.1 is still required from product.
