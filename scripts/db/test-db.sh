@@ -35,7 +35,7 @@ case "${1:-reset}" in
     "$0" up
     psql_cmd -q -c "drop schema if exists chat cascade;" \
                 -c "drop table if exists public.payments, public.subscriptions, public.children, public.profiles cascade;"
-    psql_cmd -q -f - < "$ROOT/db/test/00_core_shim.sql"
+    psql_cmd -q -f - < "$ROOT/db/testkit/00_core_shim.sql"
     PSQL="docker exec -i $CONTAINER psql -v ON_ERROR_STOP=1 -U supabase_admin -d $DB" \
       bash "$ROOT/scripts/db/apply.sh"
     ;;
