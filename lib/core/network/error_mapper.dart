@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 
+import '../data/wire/wire_vocab.dart';
 import '../errors/app_error.dart';
 
 /// Collapses every transport and HTTP outcome into the [AppError] taxonomy.
@@ -54,6 +55,22 @@ abstract final class ErrorMapper {
     if (code != null) {
       if (_disabledCodes.contains(code)) return AppErrorKind.accountDisabled;
       if (_revokedCodes.contains(code)) return AppErrorKind.sessionRevoked;
+
+      // The communication engine's own refusals. These are decided by policy and will fail
+      // identically on every attempt, so they must classify as terminal regardless of the
+      // status code that carried them — retrying a BR-1 refusal is exactly what §3 forbids.
+      if (WireErrors.terminal.contains(code)) {
+        return switch (code) {
+          WireErrors.conversationNotFound ||
+          WireErrors.messageNotFound =>
+            AppErrorKind.notFound,
+          WireErrors.emptyMessage ||
+          WireErrors.replyTargetCrossConversation =>
+            AppErrorKind.validation,
+          WireErrors.actorInactive => AppErrorKind.accountDisabled,
+          _ => AppErrorKind.forbidden,
+        };
+      }
     }
 
     return switch (status) {
@@ -67,11 +84,21 @@ abstract final class ErrorMapper {
     };
   }
 
-  /// Read the backend's machine-readable code, tolerating a body that is not the shape we
-  /// expect — an error path must never itself throw.
+  /// Read the backend's machine-readable code.
+  ///
+  /// The communication engine wraps it as `{ error: { code, message } }`; other services may
+  /// send it flat. Both shapes are accepted, and anything unexpected yields null rather than
+  /// throwing — an error path must never itself throw.
   static String? _codeOf(Object? body) {
     if (body is! Map) return null;
-    final code = body['code'] ?? body['error'] ?? body['error_code'];
-    return code is String && code.isNotEmpty ? code : null;
+
+    final nested = body['error'];
+    if (nested is Map) {
+      final code = nested['code'];
+      if (code is String && code.isNotEmpty) return code;
+    }
+
+    final flat = body['code'] ?? body['error_code'] ?? nested;
+    return flat is String && flat.isNotEmpty ? flat : null;
   }
 }
