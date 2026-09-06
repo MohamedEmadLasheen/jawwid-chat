@@ -1,0 +1,238 @@
+diff --git a/apps/api/test/integration/schema-invariants.spec.ts b/apps/api/test/integration/schema-invariants.spec.ts
+index ae5ab39..d94f9b3 100644
+--- a/apps/api/test/integration/schema-invariants.spec.ts
++++ b/apps/api/test/integration/schema-invariants.spec.ts
+@@ -53,9 +53,28 @@ function addMember(conversationId: string, actorKind: string, memberRole: string
+   );
+ }
+ 
++/**
++ * A real family to scope conversations to.
++ *
++ * OD-01 added chat.assert_conversation_family_scope(): any conversation holding
++ * a live family contact must be family-scoped, to that contact's family (PRD §6,
++ * product decision C-2). These fixtures previously left family_id null and
++ * added a contact member anyway, which is now -- correctly -- rejected. Giving
++ * them a real family makes the fixture well-formed; every assertion below is
++ * unchanged.
++ */
++let FAMILY_ID = '';
++
+ beforeAll(() => {
+   // Fails fast with a clear message if the environment is not up.
+   sql('select 1 from chat.conversation limit 1');
++  const staffId = sql(
++    `insert into chat.staff (name, role) values ('Integration Owner', 'admin') returning id`,
++  );
++  FAMILY_ID = sql(
++    `insert into chat.family (display_name, owner_id)
++     values ('Integration Family', '${staffId}') returning id`,
++  );
+ });
+ 
+ describe('BR-1 database backstop', () => {
+@@ -72,32 +91,65 @@ describe('BR-1 database backstop', () => {
+     expect(err).toContain('BR-1 violation');
+   });
+ 
+-  it('allows a teacher and a parent to share a GROUP conversation', () => {
+-    const id = sql(`insert into chat.conversation (type, state) values ('class_group','open') returning id`);
++  it('allows a teacher and a parent to share a GROUP conversation, with an admin present', () => {
++    // The admin member is REQUIRED, not decoration. Red-team RT-025 showed that
++    // a two-party teacher+parent group with no admin is a private
++    // teacher<->parent channel wearing a group's name, which BR-1 forbids:
++    // "only through the official Student Group, with the required admin
++    // presence". 20260905093300 now enforces that, so this fixture asserts the
++    // legitimate shape rather than the one the finding was about.
++    const id = sql(
++      `insert into chat.conversation (type, state, family_id)
++       values ('class_group','open','${FAMILY_ID}') returning id`,
++    );
+     addMember(id, 'teacher', 'teacher');
++    addMember(id, 'staff', 'admin');
+     addMember(id, 'contact', 'parent');
+-    expect(sql(`select count(*) from chat.conversation_member where conversation_id='${id}' and left_at is null`)).toBe('2');
++    expect(sql(`select count(*) from chat.conversation_member where conversation_id='${id}' and left_at is null`)).toBe('3');
++  });
++
++  it('RT-025: the same group WITHOUT an admin is rejected', () => {
++    const id = sql(
++      `insert into chat.conversation (type, state, family_id)
++       values ('class_group','open','${FAMILY_ID}') returning id`,
++    );
++    addMember(id, 'teacher', 'teacher');
++    const err = expectRejected(
++      `insert into chat.conversation_member (conversation_id, actor_kind, actor_id, member_role)
++       values ('${id}', 'contact', gen_random_uuid(), 'parent')`,
++    );
++    expect(err).toContain('BR-1 violation');
+   });
+ 
+   /**
+-   * JC-008 — the backstop guards only one of the invariant's two inputs.
++   * JC-008 / red-team RT-024 — the backstop guarded only one of the invariant's
++   * two inputs.
+    *
+-   * conversation_member_br1 fires on conversation_member. Nothing guards
++   * conversation_member_br1 fires on conversation_member. Nothing guarded
+    * chat.conversation.type, so a legal group containing a teacher and a parent
+-   * can be converted into a forbidden 1:1 with a plain UPDATE.
++   * could be converted into a forbidden 1:1 with a plain UPDATE. Fixed by
++   * 20260905093300, which freezes `type` and re-checks the invariant from both
++   * tables with deferred constraint triggers.
++   *
++   * The group now carries its required admin, so this is the real attack: a
++   * fully legitimate Student Group being promoted, not an already-invalid one.
+    *
+    * Maps to test-plan BR1-10.
+    */
+-  it('JC-008: converting a teacher+parent GROUP into a DIRECT conversation must be rejected', () => {
+-    const id = sql(`insert into chat.conversation (type, state) values ('class_group','open') returning id`);
++  it('JC-008 / RT-024: converting a teacher+parent GROUP into a DIRECT conversation must be rejected', () => {
++    const id = sql(
++      `insert into chat.conversation (type, state, family_id)
++       values ('class_group','open','${FAMILY_ID}') returning id`,
++    );
+     addMember(id, 'teacher', 'teacher');
++    addMember(id, 'staff', 'admin');
+     addMember(id, 'contact', 'parent');
+ 
+     const err = expectRejected(
+       `update chat.conversation set type='direct', direct_key=gen_random_uuid()::text where id='${id}'`,
+     );
+ 
+-    expect(err).toContain('BR-1 violation');
++    expect(err).toMatch(/BR-1 violation|type is immutable/);
+   });
+ });
+ 
+diff --git a/scripts/db/integration-db.sh b/scripts/db/integration-db.sh
+index b51301b..910e022 100755
+--- a/scripts/db/integration-db.sh
++++ b/scripts/db/integration-db.sh
+@@ -3,30 +3,28 @@
+ #
+ # Plain `postgres:17`. NOT the Supabase image: docs/release/database-decision.md
+ # fixes that Jawwid Chat owns its own PostgreSQL database and does not depend on
+-# Jawwid Core's database or Supabase's `auth` schema. The only remaining coupling
+-# is one auth.uid() call, supplied by db/integration/00_identity_stub.sql, which
+-# is scaffolding that DB-1 deletes.
++# Jawwid Core's database or Supabase's `auth` schema. That coupling is now gone:
++# identity resolves through chat.account, and 20260905091150 creates the three
++# role names the RLS policies are written against, so a bare postgres:17 is
++# sufficient.
+ #
+ #   scripts/db/integration-db.sh up       start + migrate
+ #   scripts/db/integration-db.sh reset    drop and rebuild from empty
+ #   scripts/db/integration-db.sh psql     interactive shell
++#   scripts/db/integration-db.sh verify   run the structural gates
+ #   scripts/db/integration-db.sh down     remove
+ #
+ # MIGRATION SOURCE
+ # ----------------
+-# The working tree alone DOES NOT APPLY. 20260905093000_chat_communication
+-# references chat.family / chat.thread / chat.staff, which live only on
+-# feat/backend-foundation (090200-090800). Verified:
++# supabase/migrations is the SINGLE SQL authority and builds an empty database
++# on its own. Red-team finding RT-023 was that it could not: 093000 referenced
++# chat.family / chat.thread / chat.staff / chat.learner / chat.message, which
++# existed only on feat/backend-foundation, so this script used to compose the
++# set across branches with `git show`, and applied two stub files to supply an
++# `auth` schema and Jawwid Core's tables.
+ #
+-#   ERROR:  relation "chat.family" does not exist
+-#
+-# Until docs/release/branch-reconciliation.md is executed, this script composes
+-# the full set into a scratch directory by reading the missing migrations from
+-# that branch with `git show`. It does NOT merge, checkout, or modify the
+-# working tree -- composition is read-only and lives outside the repo.
+-#
+-# Set JAWWID_COMPOSE=0 once reconciliation has landed and the working tree is
+-# self-sufficient.
++# All three crutches are gone. Do not reintroduce them: a harness that can build
++# a database the migration chain cannot is how RT-023 stayed invisible.
+ set -euo pipefail
+ 
+ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+@@ -34,51 +32,12 @@ CONTAINER=${JAWWID_INT_CONTAINER:-jawwid-chat-int}
+ IMAGE=postgres:17
+ DB=jawwid_chat_int
+ PORT=${JAWWID_INT_PORT:-55433}
+-COMPOSE=${JAWWID_COMPOSE:-1}
+-FOUNDATION_BRANCH=${JAWWID_FOUNDATION_BRANCH:-feat/backend-foundation}
+-STAGE="${TMPDIR:-/tmp}/jawwid-int-migrations"
+ 
+-# Migrations deliberately NOT applied to the integration database.
+-#
+-# 20260905090900_chat_core_integration creates chat.core_* VIEWS over Jawwid
+-# Core's public.profiles / children / subscriptions / payments. The fixed
+-# database decision (docs/release/database-decision.md DB-2) replaces those
+-# views with the approved integration boundary: Chat owns its database and does
+-# not read Core over SQL. Applying it here would require stubbing Core's tables
+-# and would validate an architecture that has been overruled.
+-#
+-# Excluding it is a QA position, not a deletion -- the migration is untouched on
+-# its branch. Tracked as JC-009 / defect log.
+-# Nothing excluded by default: 20260905091200_chat_rls depends on
+-# chat.sync_state from 090900, so the Core-coupled migration is not isolable.
+-# That non-isolability is itself recorded as a finding (JC-009).
+-EXCLUDE=${JAWWID_EXCLUDE_MIGRATIONS:-'^$'}
+ 
+ export DATABASE_URL="postgres://postgres:postgres@localhost:${PORT}/${DB}"
+ 
+ psql_q() { docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d "$DB" "$@"; }
+ 
+-stage_migrations() {
+-  rm -rf "$STAGE"; mkdir -p "$STAGE"
+-  cp "$ROOT"/supabase/migrations/*.sql "$STAGE"/
+-  if [ "$COMPOSE" = "1" ]; then
+-    local n=0
+-    while read -r f; do
+-      [ -z "$f" ] && continue
+-      local base; base="$(basename "$f")"
+-      if [ -n "$(printf '%s' "$base" | grep -E "$EXCLUDE" || true)" ]; then
+-        echo "  EXCLUDED $base -- see database-decision.md DB-2"
+-        continue
+-      fi
+-      if [ ! -f "$STAGE/$base" ]; then
+-        git -C "$ROOT" show "$FOUNDATION_BRANCH:$f" > "$STAGE/$base"
+-        n=$((n+1))
+-      fi
+-    done < <(git -C "$ROOT" ls-tree -r --name-only "$FOUNDATION_BRANCH" -- supabase/migrations 2>/dev/null || true)
+-    echo "  composed $n migration(s) from $FOUNDATION_BRANCH (pre-reconciliation)"
+-  fi
+-}
+-
+ start() {
+   if ! docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
+     docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+@@ -94,17 +53,22 @@ start() {
+ }
+ 
+ migrate() {
+-  psql_q -q < "$ROOT/db/integration/00_identity_stub.sql"
+-  psql_q -q < "$ROOT/db/integration/01_core_boundary_stub.sql"
+-  stage_migrations
+   PSQL="docker exec -i $CONTAINER psql -v ON_ERROR_STOP=1 -U postgres -d $DB" \
+-    MIGRATIONS_DIR="$STAGE" bash "$ROOT/scripts/db/apply.sh"
++    bash "$ROOT/scripts/db/apply.sh"
++}
++
++# The two structural gates, runnable locally exactly as CI runs them.
++verify() {
++  psql_q -v ON_ERROR_STOP=1 -q < "$ROOT/db/tests/schema_acceptance.sql"
++  psql_q -v ON_ERROR_STOP=1 -q < "$ROOT/db/tests/br1_invariants.sql"
++  psql_q -v ON_ERROR_STOP=1 -q < "$ROOT/db/tests/od01_conversation_model.sql"
+ }
+ 
+ case "${1:-up}" in
+-  up)    start; migrate; echo "ready: $DATABASE_URL" ;;
+-  reset) docker rm -f "$CONTAINER" >/dev/null 2>&1 || true; start; migrate; echo "reset: $DATABASE_URL" ;;
++  up)     start; migrate; echo "ready: $DATABASE_URL" ;;
++  reset)  docker rm -f "$CONTAINER" >/dev/null 2>&1 || true; start; migrate; echo "reset: $DATABASE_URL" ;;
++  verify) verify ;;
+   psql)  docker exec -it "$CONTAINER" psql -U postgres -d "$DB" ;;
+   down)  docker rm -f "$CONTAINER" >/dev/null 2>&1 || true; echo "removed" ;;
+-  *)     echo "usage: $0 {up|reset|psql|down}" >&2; exit 2 ;;
++  *)      echo "usage: $0 {up|reset|verify|psql|down}" >&2; exit 2 ;;
+ esac
