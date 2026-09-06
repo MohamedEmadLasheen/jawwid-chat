@@ -17,3 +17,7 @@ apps/api/test/unit/authorization/jc005-jc006-regression.spec.ts	14	JC-005 assist
 apps/api/test/unit/privacy/no-contact-channel-columns.spec.ts	4	G-07 phone privacy enforced structurally
 apps/api/test/unit/authorization/br1-conformance.spec.ts	3	BR-1 matrix + current-state tripwires
 apps/api/test/integration/schema-invariants.spec.ts	9	BR-1 DB backstop, append-only logs, JC-010
+apps/api/test/unit/red-team/authz-attacks.spec.ts	19	RT-002/003/004 inverted guards: participant-set authorization, on_behalf_mode attribution
+apps/api/test/unit/red-team/storage-and-integrity-attacks.spec.ts	16	RT-005/007/008 inverted guards: signing secret, attachment validation, SYSTEM-message forgery
+db/tests/br1_invariants.sql	20	RT-024/025 BR-1 structural backstop, proven against the database with the application bypassed
+db/tests/schema_acceptance.sql	61	RT-023 fresh-database acceptance: every table, FK, trigger and index a running system needs

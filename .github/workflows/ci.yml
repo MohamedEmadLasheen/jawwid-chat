@@ -179,48 +179,35 @@ jobs:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/jawwid_chat_test
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0          # branch composition needs full history
 
       - name: Install psql
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      - name: Integration scaffolding (stubs — removed by database-decision DB-1/DB-2)
-        run: |
-          psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f db/integration/00_identity_stub.sql
-          psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f db/integration/01_core_boundary_stub.sql
-
-      - name: Compose the migration set across branches
-        # The working tree alone does NOT apply: 093000 references chat.family /
-        # chat.thread / chat.staff, which live on feat/backend-foundation. See
-        # docs/release/branch-reconciliation.md §8.1. Remove this step once
-        # reconciliation has landed.
-        run: |
-          set -euo pipefail
-          mkdir -p /tmp/migrations
-          cp supabase/migrations/*.sql /tmp/migrations/
-          git fetch origin 'refs/heads/*:refs/remotes/origin/*' --quiet || true
-          BR="${JAWWID_FOUNDATION_BRANCH:-origin/feat/backend-foundation}"
-          if git rev-parse --verify --quiet "$BR" >/dev/null; then
-            for f in $(git ls-tree -r --name-only "$BR" -- supabase/migrations); do
-              b=$(basename "$f")
-              [ -f "/tmp/migrations/$b" ] || git show "$BR:$f" > "/tmp/migrations/$b"
-            done
-            echo "composed from $BR"
-          else
-            echo "::warning::$BR not found — applying working tree only; expect failure until reconciliation lands"
-          fi
-
-      - name: G-19 · migrations apply from empty
-        run: MIGRATIONS_DIR=/tmp/migrations bash scripts/db/apply.sh
+      # RT-023. There is no branch composition and no Core/identity stub any
+      # more: supabase/migrations is the single SQL authority and builds an
+      # empty database on its own. Reintroducing a stub or a `git show` from
+      # another branch here would restore the finding.
+      - name: G-19 · migrations apply from an empty database
+        run: bash scripts/db/apply.sh
 
       - name: G-19 · re-apply must be a no-op
         run: |
-          out=$(MIGRATIONS_DIR=/tmp/migrations bash scripts/db/apply.sh)
+          out=$(bash scripts/db/apply.sh)
           echo "$out"
           if echo "$out" | grep -q '^  apply'; then
             echo "::error::G-19 FAIL — a migration re-applied on a clean ledger"; exit 1
           fi
+
+      # RT-023 acceptance: every table, FK, trigger and index a running system
+      # needs is present, and nothing from another product's database is.
+      - name: G-19 · fresh-database schema acceptance
+        run: psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f db/tests/schema_acceptance.sql
+
+      # RT-024 / RT-025. The BR-1 backstop, proven against the database with the
+      # application entirely out of the picture. Do not weaken an assertion in
+      # db/tests/br1_invariants.sql to make a change pass.
+      - name: G-01 · BR-1 structural invariants (RT-024, RT-025)
+        run: psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f db/tests/br1_invariants.sql
 
       - uses: actions/setup-node@v4
         with:

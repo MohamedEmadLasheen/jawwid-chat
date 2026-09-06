@@ -72,32 +72,56 @@ describe('BR-1 database backstop', () => {
     expect(err).toContain('BR-1 violation');
   });
 
-  it('allows a teacher and a parent to share a GROUP conversation', () => {
+  it('allows a teacher and a parent to share a GROUP conversation, with an admin present', () => {
+    // The admin member is REQUIRED, not decoration. Red-team RT-025 showed that
+    // a two-party teacher+parent group with no admin is a private
+    // teacher<->parent channel wearing a group's name, which BR-1 forbids:
+    // "only through the official Student Group, with the required admin
+    // presence". 20260905093300 now enforces that, so this fixture asserts the
+    // legitimate shape rather than the one the finding was about.
     const id = sql(`insert into chat.conversation (type, state) values ('class_group','open') returning id`);
     addMember(id, 'teacher', 'teacher');
+    addMember(id, 'staff', 'admin');
     addMember(id, 'contact', 'parent');
-    expect(sql(`select count(*) from chat.conversation_member where conversation_id='${id}' and left_at is null`)).toBe('2');
+    expect(sql(`select count(*) from chat.conversation_member where conversation_id='${id}' and left_at is null`)).toBe('3');
+  });
+
+  it('RT-025: the same group WITHOUT an admin is rejected', () => {
+    const id = sql(`insert into chat.conversation (type, state) values ('class_group','open') returning id`);
+    addMember(id, 'teacher', 'teacher');
+    const err = expectRejected(
+      `insert into chat.conversation_member (conversation_id, actor_kind, actor_id, member_role)
+       values ('${id}', 'contact', gen_random_uuid(), 'parent')`,
+    );
+    expect(err).toContain('BR-1 violation');
   });
 
   /**
-   * JC-008 — the backstop guards only one of the invariant's two inputs.
+   * JC-008 / red-team RT-024 — the backstop guarded only one of the invariant's
+   * two inputs.
    *
-   * conversation_member_br1 fires on conversation_member. Nothing guards
+   * conversation_member_br1 fires on conversation_member. Nothing guarded
    * chat.conversation.type, so a legal group containing a teacher and a parent
-   * can be converted into a forbidden 1:1 with a plain UPDATE.
+   * could be converted into a forbidden 1:1 with a plain UPDATE. Fixed by
+   * 20260905093300, which freezes `type` and re-checks the invariant from both
+   * tables with deferred constraint triggers.
+   *
+   * The group now carries its required admin, so this is the real attack: a
+   * fully legitimate Student Group being promoted, not an already-invalid one.
    *
    * Maps to test-plan BR1-10.
    */
-  it('JC-008: converting a teacher+parent GROUP into a DIRECT conversation must be rejected', () => {
+  it('JC-008 / RT-024: converting a teacher+parent GROUP into a DIRECT conversation must be rejected', () => {
     const id = sql(`insert into chat.conversation (type, state) values ('class_group','open') returning id`);
     addMember(id, 'teacher', 'teacher');
+    addMember(id, 'staff', 'admin');
     addMember(id, 'contact', 'parent');
 
     const err = expectRejected(
       `update chat.conversation set type='direct', direct_key=gen_random_uuid()::text where id='${id}'`,
     );
 
-    expect(err).toContain('BR-1 violation');
+    expect(err).toMatch(/BR-1 violation|type is immutable/);
   });
 });
 

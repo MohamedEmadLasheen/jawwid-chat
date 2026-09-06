@@ -90,12 +90,12 @@ a record. No gaps, no duplicates.
 
 | Severity | Count | IDs | Still open |
 |---|---|---|---|
-| **P0** | **5** | RT-001, RT-002, RT-023, RT-024, RT-026 | **3** — RT-001, RT-023, RT-024 |
-| **P1** | **9** | RT-003, RT-004, RT-005, RT-006, RT-007, RT-008, RT-009, RT-010, RT-025 | 4 — RT-006, RT-009, RT-010 (partial), RT-025 |
-| **P2** | **5** | RT-011, RT-012, RT-013, RT-014, RT-027 | 4 — RT-011, RT-012, RT-013, RT-014 |
+| **P0** | **5** | RT-001, RT-002, RT-023, RT-024, RT-026 | **1** — RT-001 |
+| **P1** | **9** | RT-003, RT-004, RT-005, RT-006, RT-007, RT-008, RT-009, RT-010, RT-025 | 3 — RT-006, RT-009, RT-010 (partial) |
+| **P2** | **6** | RT-011, RT-012, RT-013, RT-014, RT-027, RT-028 | 5 — RT-011, RT-012, RT-013, RT-014, RT-028 |
 | **P3** | **7** | RT-016, RT-017, RT-018, RT-019, RT-020, RT-021, RT-022 | 7 (RT-020 partial) |
 | Closed | 1 | RT-015 | — |
-| | **27** | | **18 open · 8 resolved · 1 closed** |
+| | **28** | | **15 open · 12 resolved · 1 closed** |
 
 **Of the five P0s, three were proven by execution** (RT-002, RT-023, RT-024);
 RT-001 and RT-026 are CONFIRMED (static). An earlier verbal summary of this audit
@@ -142,14 +142,14 @@ this register records what closed it.
 
 | ID | Sev | Exact attack | Exact evidence | Affected component | Status | Regression? |
 |---|---|---|---|---|---|---|
-| **RT-023** | **P0** | Apply the committed migration series to an empty database. | `bash scripts/db/test-db.sh reset` → `ERROR: relation "chat.family" does not exist` at `20260905093000`. `comm` of `references chat.*` against `create table chat.*` still yields **`chat.family`, `chat.staff`, `chat.learner`, `chat.thread`, `chat.message`** at `b634fe8` — created by no migration; `git log --diff-filter=D` shows none were deleted. | `supabase/migrations/*`, CI gate G-19 | **OPEN · CONFIRMED (runtime)** · **RELEASE BLOCKER** | No |
+| **RT-023** | **P0** | Apply the committed migration series to an empty database. | **Original:** `ERROR: relation "chat.family" does not exist` at `20260905093000`; five tables referenced by FK and created by nothing. **Closed:** the 13 platform migrations were brought onto the integration branch from `feat/backend-foundation`, and `20260905091150_chat_application_roles` creates the three role names the RLS policies are written against (`ERROR: role "authenticated" does not exist` was the last remaining break). Verified on a bare `postgres:17`: **20 migrations apply from empty, re-apply is 20 skip**, `db/tests/schema_acceptance.sql` passes 58 structural assertions including zero non-`chat` tables and no `auth` schema. Branch composition, the Core shim and the identity stub are removed from CI and from `integration-db.sh`. | `supabase/migrations/*`, CI gate G-19 | **RESOLVED · verified on an empty database** | No |
 | **RT-010** | P1 | None — architectural fork. | **Half closed.** `schema.prisma:18` is now `schemas = ["chat"]`, so the duplicate `public`-schema model is gone and the two definitions no longer disagree. **Unchanged:** `20260905090000_chat_foundation.sql:3-7` still states Jawwid Chat "lives in the `chat` schema inside the Jawwid Core Supabase database", which contradicts `docs/qa/authoritative-scope.md` §2. | schema, infra | **OPEN (partial)** · CONFIRMED (static) — *schema divergence resolved; the tenancy question is not* | No |
 
 ### B · Authorization failures
 
 | ID | Sev | Exact attack | Exact evidence | Affected component | Status | Regression? |
 |---|---|---|---|---|---|---|
-| **RT-001** | **P0** | Open a WebSocket with `auth.actorId` set to any staff or contact primary key. | `realtime.gateway.ts:57` — `String(client.handshake.auth?.actorId ?? '')` passed to `identity.resolveActor`. **The field was renamed from `userId` to `actorId`; nothing else changed.** No token verifier exists in `apps/api`; no `APP_ENV` guard. | `RealtimeGateway`, `IdentityService` | **OPEN · CONFIRMED (static)** | No |
+| **RT-001** | **P0** | Send any HTTP request with `x-actor-id` set to a staff primary key, or open a WebSocket with `auth.actorId` set to one. No credential of any kind. | **Upgraded to CONFIRMED (runtime), and the blast radius has grown.** Against the running API: `curl -H 'x-actor-id: <admin uuid>' /api/v1/conversations` returns that admin's full conversation list, HTTP 200. `api/actor.decorator.ts` reads `request.headers['x-actor-id']` with no guard; `realtime.gateway.ts:57` does the same with `handshake.auth.actorId`. The API now exposes **six controllers**, so this is no longer one socket — it is the whole REST surface. No token verifier and no `APP_ENV` guard exist. Secondary: a request with no header at all returns **HTTP 500**, not 401. | `actor.decorator.ts`, `RealtimeGateway`, all controllers | **OPEN · CONFIRMED (runtime)** · **now the sole P0** | No |
 | **RT-002** | **P0** | Read/write a conversation of any kind for a family; probe `familyId: '*'`. | Original: `authz-attacks.spec.ts` §RT-002, 4 assertions. **Closed by the refactor:** `canRead(actor, conv, membership)` now receives the conversation and the membership, and a contact or teacher must be a live member (`NOT_CONVERSATION_MEMBER`). `canOpenDirect()` is a closed allow-list; `canCall()` takes a participant set. | `AuthorizationService` | **RESOLVED** · re-verify by inverting the spec (RT-027) | No |
 | **RT-026** | **P0** | None — the control guarded tables no code used. | Original: `grep` for `chat.conversation` across `apps/api/src` returned nothing. **Closed:** `conversation.service.ts` and `call.service.ts` now exist and `schema.prisma` is `schemas = ["chat"]`. The application and the BR-1 triggers now target the same tables. | schema ↔ services seam | **RESOLVED** | No |
 | **RT-003** | P1 | Manager sends with `requestedMode: 'OWNER'` on a family they do not own. | Original: `authz-attacks.spec.ts` §RT-003, 2 assertions; survived `fa53ba7`. **Closed:** `authorization.service.ts:311-326` — `deriveMode` honours only `ESCALATION` from `requested`, returns `OWNER` solely when `actor.actorId === familyOwnerId`, and the manager branch is commented "may not choose their own attribution". | `AuthorizationService` | **RESOLVED** | No |
@@ -175,8 +175,9 @@ this register records what closed it.
 
 | ID | Sev | Exact attack | Exact evidence | Affected component | Status | Regression? |
 |---|---|---|---|---|---|---|
-| **RT-024** | **P0** | Create a legal `student_group` with a teacher and a parent, then `UPDATE chat.conversation SET type='direct', direct_key=…`. | Executed on Supabase Postgres 17.6. Control refused: `ERROR: BR-1 violation: a direct conversation may never contain both a teacher and a family contact`. Attack succeeded: `direct \| contact \| parent` and `direct \| teacher \| teacher`. **Calling identical**: a `group` call promoted to `direct` yields `direct \| contact` + `direct \| teacher`. At `b634fe8` the triggers on `20260905093000` are still only `conversation_member_br1` and `call_participant_br1`; `chat.conversation` still carries only `conversation_set_updated_at`. | `chat.enforce_direct_conversation_rules()`, `chat.enforce_call_participant_rules()` | **OPEN · CONFIRMED (runtime)** · **RELEASE BLOCKER** | No |
-| **RT-025** | P1 | Create a `student_group` (or `class_group`) containing exactly one teacher and one parent, no admin. | Executed: `student_group \| admin_members 0 \| live_members 2`; `class_group \| 0 \| 2`; group call `group \| staff_present 0 \| participants 2`. The trigger tests `type = 'direct'` only, so `class_group` is entirely out of scope. | same triggers | **OPEN · CONFIRMED (runtime)** | No |
+| **RT-024** | **P0** | Create a legal `student_group` with a teacher and a parent, then `UPDATE chat.conversation SET type='direct'`. Same for `chat.call`. | **Closed by `20260905093300_chat_br1_structural_backstop`:** `type` is now immutable on `chat.conversation` and `chat.call`, and the invariant is re-checked from **both** tables it spans by `DEFERRABLE INITIALLY DEFERRED` constraint triggers, so it holds however the state is reached. Proven at a real `COMMIT` with no `SET CONSTRAINTS` assistance, and against the running system with the application bypassed entirely: injecting a parent into a live Teacher↔Admin conversation by direct SQL returns `ERROR: BR-1 violation: a direct conversation may never contain both a teacher and a family contact`. `db/tests/br1_invariants.sql` — 11 attacks blocked, 7 legitimate channels preserved. | `chat.assert_conversation_br1()`, `chat.assert_call_br1()` | **RESOLVED · verified by executable SQL tests** | No |
+| **RT-025** | P1 | Create a `student_group` (or `class_group`) containing exactly one teacher and one parent, no admin. | **Closed by the same migration.** Required admin presence is now enforced on **every** conversation type, not just `student_group` — `class_group` was outside the old trigger's scope. The admin must be `actor_kind='staff'` AND `member_role='admin'`, so a teacher cannot satisfy the rule by claiming the role on their own row (no constraint tied the two columns). Enforced on removal and deletion too, so the last admin cannot be dropped afterwards. Calling has the parity rule. Tests C1–C5, D3 in `db/tests/br1_invariants.sql`. | `chat.assert_conversation_br1()`, `chat.assert_call_br1()` | **RESOLVED · verified by executable SQL tests** | No |
+
 | **RT-004** ↗ | P1 | *Cross-reference — full record in section E.* Ownership attribution asserted with no basis. | see §E | `AuthorizationService.deriveMode` | **RESOLVED** | Regression was transient |
 
 ### E · Refactor regressions
@@ -194,6 +195,15 @@ were re-pointed and inverted rather than deleted, and they now guard the fixed
 behaviour. The one section that went missing in the process (`RT-008`) was
 detected precisely because the file header still claimed it, and was restored.
 That is the intended failure mode — visible, not silent.
+
+| **RT-028** | P2 | None — a false-positive in a privacy guard. | `groups-approval-calls.spec.ts:467` asserts a LiveKit token's identity claims contain no `/\+?\d{7,}/`. The claims are UUIDs and a display name, and a random UUID hex segment can be seven or more consecutive digits — observed failing on `...-c0801160-...`. Passes 3/3 in isolation; fails intermittently in the full run. | `apps/api/test/integration/groups-approval-calls.spec.ts` | **OPEN · CONFIRMED (runtime, intermittent)** | No |
+
+**RT-028 was deliberately not "fixed".** The assertion is a phone-privacy control
+and loosening the pattern to stop the false positive is exactly the kind of
+change this audit refuses to make on its own authority. The correct fix is to
+assert over the fields that could carry a phone number (the display name) rather
+than over UUIDs — an owner decision for AI #2/#5, not a red-team edit. Until then
+CI will red intermittently for a reason that is not a product defect.
 
 ### F · Remaining hardening and closed findings
 

@@ -21,7 +21,15 @@ while IFS=$'\t' read -r path floor reason; do
 
   # Count assertions. Gutting a file to an empty shell is the same failure as
   # deleting it.
-  n=$(grep -c 'expect(' "$ROOT/$path" || true)
+  #
+  # SQL suites express assertions as pg_temp.expect_violation / expect_ok /
+  # want_* calls rather than expect(), so they are counted on their own idiom.
+  # Without this a .sql guard would count zero and fail every run, which would
+  # get it removed from the manifest -- the exact outcome JC-011 exists to stop.
+  case "$path" in
+    *.sql) n=$(grep -cE 'pg_temp\.(expect_violation|expect_ok|want_)' "$ROOT/$path" || true) ;;
+    *)     n=$(grep -c 'expect(' "$ROOT/$path" || true) ;;
+  esac
   if [ "$n" -lt "$floor" ]; then
     echo "::error::JC-011 — protected test GUTTED: $path has $n assertions, floor is $floor"
     echo "           guards: $reason"

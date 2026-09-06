@@ -18,52 +18,72 @@ PRD. Those are your calls and AI #1's work.
 
 ## Where this stands
 
-27 findings. **18 open, 8 resolved, 1 closed.**
+28 findings. **15 open, 12 resolved, 1 closed.**
 
 | Severity | Total | Open |
 |---|---|---|
-| P0 | 5 | **3** — RT-001, RT-023, RT-024 |
-| P1 | 9 | 4 — RT-006, RT-009, RT-010 (partial), RT-025 |
-| P2 | 5 | 5 — RT-011, RT-012, RT-013, RT-014, RT-027 |
-| P3 | 7 | 7 — RT-020 partial |
+| P0 | 5 | **1** — RT-001 |
+| P1 | 9 | 3 — RT-006, RT-009, RT-010 (partial) |
+| P2 | 6 | 5 — RT-011, RT-012, RT-013, RT-014, RT-028 |
+| P3 | 7 | 7 (RT-020 partial) |
 
-**Red team position: RED TEAM FAILED** — two blockers stand, both proven by
-execution.
+**Red team status: still FAILED — one P0 stands.**
 
-Resolved during the audit, with the evidence that closed each recorded in
-`findings.md`: **RT-002, RT-003, RT-004, RT-005, RT-007, RT-008, RT-026** and
-**RT-027**, plus **RT-015** closed earlier. That is real progress on the
-authorization and message-integrity surfaces, and it happened fast.
+Both previous release blockers are closed, verified by execution rather than by
+code inspection:
+
+* **RT-023 · RESOLVED.** The chain builds a bare `postgres:17` from empty:
+  20 migrations in deterministic order, re-apply is a 20-skip no-op,
+  `db/tests/schema_acceptance.sql` passes 58 structural assertions, and the
+  database contains **no non-`chat` tables and no `auth` schema**. Branch
+  composition, the Core shim and the identity stub are gone from CI and from the
+  local harness.
+* **RT-024 · RESOLVED**, and **RT-025 with it.** `type` is immutable on
+  `chat.conversation` and `chat.call`, and the invariant is re-checked from both
+  tables it spans by deferred constraint triggers. Proven at a real `COMMIT`
+  with no `SET CONSTRAINTS` assistance, and against the running system with the
+  application bypassed entirely: direct SQL injecting a parent into a live
+  Teacher↔Admin conversation is refused.
+
+**The acceptance chain now runs end to end.** Empty database → migrations →
+running backend → HTTP → database → BR-1 enforcement. Against the live API:
+Teacher→Parent and Parent→Teacher direct conversations return **403
+`COMM.BR1_TEACHER_PARENT_DIRECT`**; Teacher→Admin and Parent→Admin are created
+normally.
+
+**The link that does not hold is AUTH.**
 
 ---
 
-## 1. Release blockers — must be RESOLVED. Acceptance is not available.
+## 1. Release blockers
+
+| ID | Finding | Status |
+|---|---|---|
+| ~~RT-023~~ | Migration chain could not build an empty database | **CLEARED** — verified from zero on a bare `postgres:17` |
+| ~~RT-024~~ | BR-1 backstop bypassed by `type` mutation, messaging and calling | **CLEARED** — verified by executable SQL tests at a real commit |
+
+### The blocker that replaces them
 
 | ID | Finding | Why it cannot be accepted |
 |---|---|---|
-| **RT-023** | The migration series cannot apply to an empty database. `chat.family`, `chat.staff`, `chat.learner`, `chat.thread`, `chat.message` are referenced by foreign keys and created by no migration. Still true at `b634fe8`. | No environment can be built from the repository. Every database-level control — the BR-1 triggers, the append-only log triggers, message immutability, the approval constraints — is installed **nowhere**. Accepting this means accepting that no reviewed database control exists in production. CI's own G-19 gate cannot pass. |
-| **RT-024** | The BR-1 database backstop is bypassed by mutation: a legal Student Group becomes a teacher↔parent 1:1 channel with one `UPDATE chat.conversation SET type='direct'`. Calling has the identical bypass. | BR-1 is the product's constitutional rule. The control exists specifically to hold when the API is compromised and its own comment claims it does. Proven by execution against Supabase Postgres 17.6; the trigger set is unchanged at `b634fe8`. |
+| **RT-001** | Identity is a request header. `curl -H 'x-actor-id: <admin uuid>' /api/v1/conversations` returns that admin's conversation list, HTTP 200, with no credential of any kind. | It was one WebSocket handshake when this audit opened. The API now exposes **six controllers**, so this is the entire REST surface. Every control this reconciliation just proved — BR-1, RBAC, coverage, approvals — is evaluated for an actor the caller names. The database backstop still holds against it, which is precisely why the backstop was worth building; nothing else does. |
 
-**Exit criteria.** `bash scripts/db/test-db.sh reset` succeeds on an empty volume
-and is a no-op on re-run; G-19 is green; and the BR-1 invariant raises on the
-**type-change path** as well as the insert path, for `chat.conversation` **and**
-`chat.call`.
+**Exit criteria.** `x-actor-id` and `handshake.auth.actorId` are replaced by a
+verified credential, and the reference implementations refuse to construct
+outside `APP_ENV=local`. Until then no environment reachable by an untrusted
+network may run this build.
 
 ---
 
 ## 2. Must be resolved or explicitly accepted
 
-### P0 — one open, and it is the whole authentication story
+### P0 — RT-001 is covered in §1 above.
 
-| ID | Finding | Status | If accepted, what ships |
-|---|---|---|---|
-| **RT-001** | The only runtime entry point takes self-asserted identity. `realtime.gateway.ts:57` reads `client.handshake.auth?.actorId` and treats it as an authenticated principal. **The field was renamed from `userId` to `actorId` during the refactor; nothing else changed.** | OPEN · CONFIRMED (static) | A complete authentication bypass. Every other control is downstream of an identity the caller chooses. Acceptable **only** if the gateway cannot start outside local — that guard does not exist. |
-
-### P1 — four open
+### P1 — three open
 
 | ID | Finding | Status |
 |---|---|---|
-| **RT-025** | BR-1's "required admin presence" is unenforced. A `student_group` — or `class_group`, which the trigger does not cover at all — containing exactly one teacher and one parent and no admin is permitted. | OPEN · CONFIRMED (runtime) |
+| ~~RT-025~~ | BR-1's required admin presence | **RESOLVED** — enforced on every conversation type, on add, remove and delete; the admin must be `actor_kind='staff'` with `member_role='admin'`, so a teacher cannot claim the role |
 | **RT-006** | `signUrlsForMessages(messageIds)` still takes no actor: object-level authorization absent by shape. No caller exists yet, so it is free to fix now. | OPEN · CONFIRMED (static) |
 | **RT-009** | A realtime session never re-evaluates identity. `resolveActor` is still called exactly once per socket; the `Actor` is cached for the connection's lifetime. Offboarding does not offboard. | OPEN · CONFIRMED (static) |
 | **RT-010** | **Half closed.** `schema.prisma` is now `schemas = ["chat"]`, so the duplicate `public`-schema model is gone and the two definitions agree. **Unchanged:** the foundation migration still states Jawwid Chat lives "inside the Jawwid Core Supabase database", contradicting `docs/qa/authoritative-scope.md` §2. | OPEN (partial) |
@@ -80,7 +100,11 @@ unbounded scope is not), RT-012 (receipt roster still discloses staff ids and re
 times to contacts; field renamed `userId` → `actorId`, disclosure unchanged),
 RT-013 (internal-note existence still fanned out to the whole thread room —
 CONFIRMED in contract, UNVERIFIED at runtime, no drain worker), RT-014
-(authorization still decided before the transaction that acts on it).
+(authorization still decided before the transaction that acts on it), and
+**RT-028** — a phone-privacy assertion in the integration suite that false-positives
+on random UUIDs containing seven consecutive digits, reddening CI intermittently.
+It was deliberately left alone: loosening a privacy pattern is an owner decision,
+not a red-team edit.
 
 ### P3 — seven open
 
@@ -144,29 +168,42 @@ the product.
 
 ---
 
-## 5. What was never tested, and why
+## 5. What is now tested, and what still is not
 
-Not clearances — untested surfaces:
+The acceptance chain was executed, not inferred:
+
+| Link | Result |
+|---|---|
+| EMPTY DATABASE → MIGRATIONS | ✅ 20 migrations from zero on a bare `postgres:17`; re-apply is a no-op |
+| MIGRATIONS → SCHEMA | ✅ 58 structural assertions; no non-`chat` tables, no `auth` schema |
+| → RUNNING BACKEND | ✅ boots; `/health/ready` reports `database: up, redis: up` |
+| → AUTH | ❌ **RT-001** — a header names the actor |
+| → HTTP | ✅ 6 controllers mapped and answering |
+| → DATABASE | ✅ reads and writes through the running API |
+| → BR-1 ENFORCEMENT | ✅ 403 at the API, and refused by the database with the application bypassed |
+| → REALTIME | ⚠️ gateway boots and is registered; **not exercised end to end** |
+| → MOBILE / ADMIN CLIENT | ❌ **not exercised against the running API** |
+
+Still untested, and not clearances:
 
 | Area | Blocked by |
 |---|---|
-| HTTP-layer attacks (REST IDOR, CORS, CSRF, rate limiting) | No `main.ts`, no `AppModule` at the time of testing; `/health` was the only controller. `applyInfrastructure()` is written, correct, and called by nothing. **Re-check — `src/communication/api/` appeared in the working tree during the audit.** |
-| Chaos / recovery, queue and worker attacks | Nothing to kill: `docker-compose.yml` provisions Postgres, Redis and MinIO but no API container. No queue, worker or job exists. Database-layer chaos *was* possible and produced RT-023/024/025. |
-| Notification and search attacks | `notifications/` and `handoff/` were empty directories; no search exists. |
-| Calling attacks beyond the database trigger | `calls/call.service.ts` appeared during the audit and was not attacked at runtime. |
-| Jawwid Core integration attacks | No integration code; `CORE_*` environment variables only. Webhook replay, ordering and authenticity all unaddressed. |
-
-**Re-run the campaign once the application boots.** Reproduction commands are in
-[`README.md`](README.md). Given how fast this tree moves, treat any finding older
-than a few commits as needing re-verification before you act on it.
-
----
+| Realtime end to end | Not driven by a client in this pass. The gateway's auth is RT-001. |
+| Mobile and Admin Web against the live API | Neither client was run against it; contract drift between them and the six new controllers is unverified. |
+| Chaos / recovery, queue and worker attacks | `worker.ts` now exists and was not exercised. No chaos was injected. |
+| Jawwid Core integration | `chat.core_event` ingestion exists; webhook replay, ordering and authenticity were not attacked. |
+| RLS policies | `20260905091200_chat_rls` applies, but no policy was tested from an unprivileged role. The API connects as owner, so RLS is currently inert in practice. |
 
 ## 6. Recommended order — advisory
 
-1. **RT-023** — cheap, unblocks G-19, and until it lands no database fix reaches any environment. **Blocker.**
-2. **RT-024**, then **RT-025** — the BR-1 gaps. RT-023 must land first for the fix to exist anywhere. **RT-024 is a blocker.**
-3. **RT-027** — re-point the specs; this is also the fix validation for the six findings closed without a guard.
-4. **RT-001** — the cheapest single break in the attack chain (`cross-agent-red-team.md`).
-5. **RT-010** — the tenancy decision. **Not this audit's call.**
-6. **RT-006, RT-009**, then the P2s.
+1. **RT-001** — now the only P0, and the only broken link in the acceptance
+   chain. Everything else in this report is downstream of it.
+2. **RT-006, RT-009** — the remaining authorization P1s.
+3. **RT-010** — the tenancy decision. Smaller than it was: the schema divergence
+   is gone, only the "inside Core's database" claim in the foundation migration
+   header remains. **Not this audit's call.**
+4. **RT-028** — decide the privacy assertion; it will red CI intermittently until
+   someone owns it.
+5. Exercise **realtime and the two clients** against the running API. That is the
+   part of the acceptance chain this pass could not reach.
+6. The remaining P2s and P3s.
