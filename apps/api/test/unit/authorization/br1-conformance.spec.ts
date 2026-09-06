@@ -150,7 +150,13 @@ describe('BR-1 — the permitted case: teacher and parent inside the student gro
     expect(d.allowed).toBe(true);
   });
 
-  it('teacher and parent may share a GROUP call', async () => {
+  it('teacher and parent may share a GROUP call — with the admin actually present', async () => {
+    // C-4 (2026-09-06) requires admin presence to be evaluated at operation
+    // time, so the permitted case must now SAY who is present rather than imply
+    // it from the participant list. Without live membership the policy fails
+    // closed, which is deliberate: a caller that cannot establish who is in the
+    // group cannot be told the interaction is safe. The negative cases live in
+    // br1-admin-presence.spec.ts.
     const t = teacher();
     const d = await authz.canCall(
       t,
@@ -158,6 +164,12 @@ describe('BR-1 — the permitted case: teacher and parent inside the student gro
       member(t),
       [teacher(), parent(), admin()],
       NOW,
+      null,
+      [
+        { actorId: 'teacher-1', actorKind: 'teacher', memberRole: 'teacher' },
+        { actorId: 'parent-1', actorKind: 'contact', memberRole: 'parent' },
+        { actorId: 'admin-1', actorKind: 'staff', memberRole: 'admin', isActive: true },
+      ],
     );
     expect(d.allowed).toBe(true);
   });

@@ -74,6 +74,9 @@ export class CallService {
       participantActors,
       now,
       family?.ownerId ?? null,
+      // C-4: the call path runs the same admin-presence check as the message
+      // path. Calling is never more permissive than messaging.
+      await this.conversations.liveMembersOf(conv.id),
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
@@ -181,6 +184,9 @@ export class CallService {
       participantActors,
       now,
       family?.ownerId ?? null,
+      // C-4: the call path runs the same admin-presence check as the message
+      // path. Calling is never more permissive than messaging.
+      await this.conversations.liveMembersOf(conv.id),
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 

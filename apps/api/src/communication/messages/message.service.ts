@@ -133,6 +133,9 @@ export class MessageService {
       now,
       family?.ownerId ?? null,
       members.map((m) => m.actorKind),
+      // C-4: admin presence is evaluated at post time, not only as committed
+      // membership state.
+      await this.conversations.liveMembersOf(conv.id),
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 

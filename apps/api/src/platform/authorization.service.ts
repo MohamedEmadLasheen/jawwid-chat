@@ -45,6 +45,23 @@ type Conv = Pick<
 type Member = Pick<ConversationMember, 'actorId' | 'actorKind' | 'memberRole' | 'isSilent' | 'leftAt'>;
 
 /**
+ * A live member of a conversation, as it stands AT THE MOMENT OF THE OPERATION.
+ *
+ * `isActive` is what makes this different from the membership row: a member row
+ * survives an account being deactivated, so "an admin is a member" and "an admin
+ * is present" are not the same statement. Product decision C-4 requires the
+ * second one, evaluated when the message is posted or the call is authorized.
+ */
+export interface LiveMember {
+  actorId: string;
+  actorKind: string;
+  memberRole: string;
+  /** Resolved identity state. Undefined means "not resolved"; only an explicit
+   *  false excludes the member from satisfying admin presence. */
+  isActive?: boolean;
+}
+
+/**
  * THE centralized communication authorization service.
  *
  * There is exactly one implementation of the communication matrix in this
@@ -172,6 +189,9 @@ export class AuthorizationService {
     /** actor_kind of every live member. Supplied by the caller for the BR-1
      *  participant-set check; the database trigger is the final backstop. */
     participantKinds: string[] = [],
+    /** Live membership with roles and resolved activity, for the C-4
+     *  admin-presence check. When empty the check cannot run and says so. */
+    liveMembers: LiveMember[] = [],
   ): Promise<Decision> {
     const readable = this.canRead(actor, conv, membership);
     if (!readable.allowed) return readable;
@@ -193,6 +213,8 @@ export class AuthorizationService {
       if (membership?.isSilent) {
         return deny(CommErrorCode.MEMBER_IS_SILENT, 'this member is present but may not post');
       }
+      const presence = this.requireAdminPresence(conv, liveMembers, participantKinds);
+      if (presence) return presence;
       return allow(null, this.moderationFor(conv, MemberRole.PARENT));
     }
 
@@ -218,6 +240,8 @@ export class AuthorizationService {
       if (membership?.isSilent) {
         return deny(CommErrorCode.MEMBER_IS_SILENT, 'this member is present but may not post');
       }
+      const presence = this.requireAdminPresence(conv, liveMembers, participantKinds);
+      if (presence) return presence;
       return allow(null, this.moderationFor(conv, MemberRole.TEACHER));
     }
 
@@ -295,6 +319,64 @@ export class AuthorizationService {
   }
 
   /** Group approval policy. Staff messages are never held. */
+  /**
+   * BR-1 required admin presence, evaluated at operation time (product decision
+   * C-4, 2026-09-06).
+   *
+   * PRD BR-1: "Teachers and parents communicate only inside the official
+   * Student Group, WHERE THE ASSIGNED ADMIN/SUPERVISOR IS A MEMBER." A group
+   * that pairs a teacher with a family contact and has no live Jawwid admin in
+   * it is a private teacher<->parent channel wearing a group's name, so the
+   * prohibited interaction is refused -- for the teacher and the parent. Staff
+   * are not the prohibited interaction and are deliberately still allowed, so
+   * an admin can always rejoin and repair the group.
+   *
+   * The database backstop (chat.assert_conversation_br1) constrains the
+   * COMMITTED membership state. This is the other half: a membership row
+   * survives deactivation, so an offboarded admin still satisfies the row-level
+   * rule while satisfying nothing operationally. Both checks are required, and
+   * neither replaces the other.
+   *
+   * Returns a denial, or null when the rule does not apply.
+   */
+  private requireAdminPresence(
+    conv: Conv,
+    liveMembers: LiveMember[],
+    participantKinds: string[],
+  ): Decision | null {
+    const isGroup =
+      conv.type === ConversationType.STUDENT_GROUP || conv.type === ConversationType.CLASS_GROUP;
+    if (!isGroup) return null;
+
+    const kinds = liveMembers.length > 0 ? liveMembers.map((m) => m.actorKind) : participantKinds;
+    const pairsTeacherAndParent =
+      kinds.includes(ActorKind.TEACHER) && kinds.includes(ActorKind.CONTACT);
+    if (!pairsTeacherAndParent) return null;
+
+    if (liveMembers.length === 0) {
+      // Fail closed. A caller that cannot say who is present cannot be told the
+      // interaction is safe.
+      return deny(
+        CommErrorCode.BR1_ADMIN_PRESENCE_REQUIRED,
+        'BR-1: admin presence could not be established for this group',
+      );
+    }
+
+    const adminPresent = liveMembers.some(
+      (m) =>
+        m.actorKind === ActorKind.STAFF &&
+        m.memberRole === MemberRole.ADMIN &&
+        m.isActive !== false,
+    );
+    if (!adminPresent) {
+      return deny(
+        CommErrorCode.BR1_ADMIN_PRESENCE_REQUIRED,
+        'BR-1: a teacher and a parent may communicate only with a live Jawwid admin present',
+      );
+    }
+    return null;
+  }
+
   private moderationFor(conv: Conv, role: string): string {
     if (conv.type !== ConversationType.STUDENT_GROUP && conv.type !== ConversationType.CLASS_GROUP) {
       return Moderation.PUBLISHED;
@@ -368,6 +450,10 @@ export class AuthorizationService {
     participants: Array<Pick<Actor, 'kind'>>,
     now: Date,
     familyOwnerId: string | null = null,
+    /** Live membership for the C-4 admin-presence check on the call path.
+     *  Calling is never more permissive than messaging, so it runs the same
+     *  check with the same data. */
+    liveMembers: LiveMember[] = [],
   ): Promise<Decision> {
     const sendable = await this.canSend(
       actor,
@@ -377,6 +463,7 @@ export class AuthorizationService {
       now,
       familyOwnerId,
       participants.map((p) => p.kind),
+      liveMembers,
     );
     if (!sendable.allowed) return sendable;
 
