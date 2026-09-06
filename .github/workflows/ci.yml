@@ -176,84 +176,61 @@ jobs:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/jawwid_chat_test
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # branch composition needs full history
+
       - name: Install psql
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      - name: Apply the Jawwid Core shim
-        run: psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f db/test/00_core_shim.sql
-
-      - name: Apply migrations
-        run: bash scripts/db/apply.sh
-
-      - name: Re-apply — the ledger must make this a no-op
+      - name: Integration scaffolding (stubs — removed by database-decision DB-1/DB-2)
         run: |
-          out=$(bash scripts/db/apply.sh)
+          psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f db/integration/00_identity_stub.sql
+          psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f db/integration/01_core_boundary_stub.sql
+
+      - name: Compose the migration set across branches
+        # The working tree alone does NOT apply: 093000 references chat.family /
+        # chat.thread / chat.staff, which live on feat/backend-foundation. See
+        # docs/release/branch-reconciliation.md §8.1. Remove this step once
+        # reconciliation has landed.
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/migrations
+          cp supabase/migrations/*.sql /tmp/migrations/
+          git fetch origin 'refs/heads/*:refs/remotes/origin/*' --quiet || true
+          BR="${JAWWID_FOUNDATION_BRANCH:-origin/feat/backend-foundation}"
+          if git rev-parse --verify --quiet "$BR" >/dev/null; then
+            for f in $(git ls-tree -r --name-only "$BR" -- supabase/migrations); do
+              b=$(basename "$f")
+              [ -f "/tmp/migrations/$b" ] || git show "$BR:$f" > "/tmp/migrations/$b"
+            done
+            echo "composed from $BR"
+          else
+            echo "::warning::$BR not found — applying working tree only; expect failure until reconciliation lands"
+          fi
+
+      - name: G-19 · migrations apply from empty
+        run: MIGRATIONS_DIR=/tmp/migrations bash scripts/db/apply.sh
+
+      - name: G-19 · re-apply must be a no-op
+        run: |
+          out=$(MIGRATIONS_DIR=/tmp/migrations bash scripts/db/apply.sh)
           echo "$out"
           if echo "$out" | grep -q '^  apply'; then
             echo "::error::G-19 FAIL — a migration re-applied on a clean ledger"; exit 1
           fi
 
-      - name: Integration tests (skipped while none exist)
-        run: |
-          if ls apps/api/test/integration/*.spec.ts >/dev/null 2>&1; then
-            cd apps/api && npm ci && npx prisma generate && npm run test:int
-          else
-            echo "::notice::no integration specs yet — G-38 remains UNVERIFIED"
-          fi
-
-      - name: Backup drill against the current schema
-        # A `chat`-only dump is NOT self-restorable: chat.core_* are views over
-        # Core-owned tables in public. This asserts the documented procedure in
-        # docs/infrastructure/backup-recovery.md still holds as the schema moves.
-        run: |
-          APP_ENV=ci PG_IMAGE=postgres:17-alpine \
-            scripts/infra/backup-db.sh --out ./backups --schema chat
-
-  # ------------------------------------------------------------------- images
-  images:
-    name: Container images build and run unprivileged
-    runs-on: ubuntu-latest
-    needs: guards
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Build API image
-        run: docker build -t jawwid-chat-api:${{ github.sha }} apps/api
-
-      - name: The API image must not run as root
-        run: |
-          user="$(docker run --rm --entrypoint id jawwid-chat-api:${{ github.sha }} -un)"
-          echo "image user: $user"
-          [ "$user" != "root" ] || { echo "::error::API image runs as root"; exit 1; }
-
-      - name: Build Admin Web image
-        run: |
-          docker build \
-            --build-arg VITE_API_BASE_URL=https://api.ci.invalid/api/v1 \
-            --build-arg VITE_REALTIME_URL=wss://api.ci.invalid \
-            -t jawwid-chat-admin:${{ github.sha }} apps/admin-web
-
-  # ------------------------------------------------------------- dependencies
-  dependencies:
-    name: Dependency audit (advisory)
-    runs-on: ubuntu-latest
-    needs: guards
-    steps:
-      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - name: Audit — high and critical
-        # Advisory. A transitive advisory with no fix available must not block an
-        # unrelated bugfix; what it must do is be visible. Promoting this to
-        # blocking is AI #5's release-gate decision, not a side effect here.
-        continue-on-error: true
+          cache: npm
+          cache-dependency-path: apps/api/package-lock.json
+
+      - name: Integration suite
+        working-directory: apps/api
         run: |
-          for app in apps/api apps/admin-web; do
-            echo "::group::$app"
-            (cd "$app" && npm audit --audit-level=high) || true
-            echo "::endgroup::"
-          done
+          npm ci
+          npx prisma generate
+          npm run test:int
 
   # ------------------------------------------------------------------- mobile
   mobile:

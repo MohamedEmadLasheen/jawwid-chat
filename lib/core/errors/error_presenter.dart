@@ -1,4 +1,5 @@
 import '../../l10n/app_localizations.dart';
+import '../network/error_mapper.dart';
 import 'app_error.dart';
 
 /// A user-facing rendering of a failure.
@@ -60,3 +61,6 @@ abstract final class ErrorPresenter {
     };
   }
 }
+
+/// Normalise any thrown object into an [AppError] for presentation.
+AppError asAppErrorOf(Object error) => ErrorMapper.map(error);

@@ -108,7 +108,7 @@ The last four are **never** shown to a family under any name.
 | activate backup | Activate backup | تفعيل البديل | Manager only. Never automatic in MVP. |
 | offboard | Offboard | إنهاء عمل الموظف | Manager only. |
 
-## 6. Approvals *(conditional on OQ-1)*
+## 6. Approvals *(PRD MVP scope; the authorized approver is OQ-1)*
 
 | Concept | English UI | Arabic UI | Usage rule |
 |---|---|---|---|
@@ -117,7 +117,7 @@ The last four are **never** shown to a family under any name.
 | rejected | Not sent | لم تُرسل | Always accompanied by the reason. Never the bare word "rejected". |
 | approval queue *(admin)* | Approvals | الاعتمادات | |
 
-## 7. Calls *(conditional on OQ-4)*
+## 7. Calls *(PRD MVP scope — voice, 1:1 and group; video is Phase 2)*
 
 Calling · مكالمة | Incoming · مكالمة واردة | Outgoing · مكالمة صادرة | Connecting · جارٍ الاتصال |
 Connected · متصل | Mute · كتم | Speaker · مكبر الصوت | End · إنهاء | Missed · مكالمة فائتة |

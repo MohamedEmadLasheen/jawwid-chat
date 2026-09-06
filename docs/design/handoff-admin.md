@@ -8,15 +8,33 @@ Where you see `[BE]`, the behaviour is the backend's and you render it.
 
 ---
 
-## 1. Your discovery report was right
+## 1. Your discovery report was right — and one of its conclusions has since been overturned
 
 Your M1–M9 mismatch table resolved every conflict as "PRD wins". I reached the same conclusions
 independently and adopted them — `discovery.md` §5 is that table, extended. **No SLA, no
-CRITICAL workload, no attention badges, no `super_admin`.** You do not need
-to relitigate any of it.
+CRITICAL workload, no attention badges, no `super_admin`.** You do not need to relitigate any
+of it.
+
+**Two things have changed since you wrote it**, and both come from
+`docs/qa/authoritative-scope.md`, not from me:
+
+1. **The PDF brief is superseded.** Its *communication* chapter is void; its *operating model*
+   chapter is carried forward. Your M3 conclusion (`thread.family_id UNIQUE`, one thread per
+   family) came from the superseded chapter and is now correction **C-2** / **OD-01**. My pack
+   asserted the same thing and has been corrected too — see `scope-authority.md` §3.
+2. **Approvals and calling are PRD MVP scope**, not out of scope. Your
+   `docs/admin/backend-contract-required.md` §10 reserved seams and built nothing, and flagged
+   that the admin counterpart *"should be scheduled deliberately — not absorbed silently."*
+   That flag was right, and it has now been raised: `docs/qa/defects.md` **JC-001** is a P0.
+
+**Terminology restored on review:** the PRD's own terms are **Primary Owner** and **Current
+Handler**. An earlier revision of this pack renamed them to "Owner" / "On duty" from the
+superseded brief; that was an override of PRD language.
 
 ## 2. Read in this order
 
+0. **`scope-authority.md`** (the hierarchy) → 0b. **`token-reconciliation.md`** (your tokens
+   predate this pack; R-1 and R-2 matter, the rest are cosmetic) →
 1. `discovery.md` §5 (vocabulary) → 2. `terminology.md` → 3. `design-system.md` →
 4. `cross-platform.md` → 5. the screens below → 6. `design-qa.md`.
 
@@ -24,7 +42,7 @@ to relitigate any of it.
 
 Rail (data-driven registry, role-filtered — your existing plan is right):
 
-**Inbox** · **My follow-ups** · **Tasks** · *Approvals (OQ-1, unregistered)* ·
+**Inbox** · **My follow-ups** · **Tasks** · **Approvals** ·
 **Coverage** *(manager)* · **Team** *(manager)* · **Settings**
 
 Landing screen by role: admin/coverage → Inbox · manager → **Manager Dashboard** ·
@@ -46,8 +64,8 @@ someone else's job (`screens/auth.md` §4).
 | ✓ | `screens/settings.md` |
 | P1 | `screens/manager-dashboard.md` — the **Unattended header is P0** |
 | P1 | `screens/workload.md` |
-| ⚠ | `screens/approvals.md` — **OQ-1**, keep your route slot unregistered until it is answered |
-| ⚠ | `screens/call.md` — **OQ-4**, likewise |
+| ⚠ | `screens/approvals.md` — **PRD MVP scope.** Blocked on **OQ-1** (who the authorized approver is) and **JC-001** (no backend entity). Register the route; the queue is written approver-agnostic, so naming the approver changes no pixel |
+| ⚠ | `screens/call.md` — **PRD MVP scope.** Blocked on **JC-001** (implementation status only) |
 
 ## 5. Layout
 
@@ -75,9 +93,10 @@ not wired up.
    dashboard's workload score, shown only beside its breakdown.
 2. **You render the server's order. You never re-sort.** The "This order is wrong" button is the
    pressure valve, and its copy must say the order will not change today (journey J15).
-3. **Owner is a permanent line in every family header and in Family 360.** On-duty is an
-   *additional* line, present only when it differs. They never share a component (DD-02) — this
-   is the single design mechanism that stops coverage reading as an ownership transfer.
+3. **The Primary Owner is a permanent line in every family header and in Family 360.** The
+   **Current Handler** is an *additional* line, present only when it differs. They never share a
+   component (DD-02) — this is the single design mechanism that stops coverage reading as an
+   ownership transfer, and the PRD states the distinction directly.
 4. **Internal notes are not bubbles.** Full-width violet block, 3px leading edge, explicit label.
    Violet appears nowhere else in the product (DD-05).
 5. **`on_behalf_mode` is set by the server.** Never send it, never let a user choose it.
@@ -110,7 +129,7 @@ correct; the UX constraints on top of it:
 
 The whole app is operable without a mouse: `j`/`k` rows · `Enter` open · `r` composer ·
 `n` internal note · `/` search · `Esc` close · `Cmd/Ctrl+Enter` send · `a`/`r` approve/reject
-in the queue *(OQ-1)*. Focus order follows visual order in **both** directions.
+in the approvals queue. Focus order follows visual order in **both** directions.
 
 ## 10. RTL
 

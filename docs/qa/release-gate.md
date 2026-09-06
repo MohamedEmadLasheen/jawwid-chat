@@ -10,12 +10,13 @@ treated identically: an untested control is not a control.
 
 # 🔴 NOT READY
 **Reason: implementation is in progress.**
-Scope is settled — PRD v0.1 governs. **Three P0 defects remain open**
-(`defects.md` JC-001/002/003 — Student Groups, approvals and calling are not
-implemented, and BR-1's permitted case is unrepresentable). JC-005 (P0) and
-JC-006 (P1) were found, fixed and regression-tested in this pass; JC-007 tracks
-the functional gap the JC-005 fix leaves behind. The MVP communication layer is
-not yet built.
+Scope is settled — PRD v0.1 governs. Additionally, **the repository has two unmerged
+migration lineages and the working tree cannot build a database on its own**
+(`docs/release/branch-reconciliation.md`). **Five P0 defects remain open**
+(JC-001/002/003 scope, JC-009 database architecture, JC-010 silent schema
+divergence) and two P1 (JC-007, JC-008). JC-005 and JC-006 were found, fixed and
+regression-tested. The integration environment is now executable: 8 tests
+passing, 1 failing, and that failure is JC-008 rather than a test defect.
 
 ---
 
@@ -23,7 +24,7 @@ not yet built.
 
 | # | Gate | Status |
 |---|---|---|
-| **G-01** | **BR-1: no Teacher↔Parent 1:1 messaging or calling exists, enforced server-side, verified with client-side policy disabled (BR1-19)** | **FAIL — JC-002** |
+| **G-01** | **BR-1: no Teacher↔Parent 1:1 messaging or calling exists, enforced server-side, verified with client-side policy disabled (BR1-19)** | **FAIL — JC-008.** Materially improved: BR-1 is now a DB constraint trigger and blocks the member path (verified). It does **not** guard `conversation.type`, so a group converts to a forbidden 1:1 by `UPDATE` (reproduced). |
 | **G-02** | Student Groups implemented, with membership derived from Jawwid Core and BR-1 enforced at creation **and** every membership mutation | **FAIL — JC-001** |
 | **G-03** | Teacher is a first-class authenticated actor with Teacher↔Admin and group access | **FAIL — JC-003** |
 | G-04 | One centralized authorization policy governs messaging **and** calling; no second matrix; **no client-supplied field widens authority** | **PASS (messaging)** — JC-005 fixed, regression-tested. Calling unverified. |
@@ -42,9 +43,9 @@ not yet built.
 | G-16 | No message loss across restart, reconnect, worker crash or client crash | UNVERIFIED |
 | G-17 | `message` / `event_log` / `audit_log` immutable or append-only; audit manager-read-only | UNVERIFIED |
 | G-18 | No secrets in source or git history | **PASS** (re-checked each release) |
-| G-19 | Migrations apply cleanly forward; rollback defined and tested | PARTIAL — forward apply + ledger idempotency now gated in CI; **rollback still undefined** |
+| G-19 | Migrations apply cleanly forward; rollback defined and tested | PARTIAL — forward apply + idempotency gated in CI **and verified locally against postgres:17**. Requires cross-branch composition: the working tree alone fails with `relation "chat.family" does not exist`. **Rollback still undefined.** |
 | G-20 | No real employee or customer data in seed data, fixtures or tests | UNVERIFIED |
-| G-21 | Jawwid Core remains source of truth; boundary views read-only; Chat is not a second source of truth | UNVERIFIED |
+| **G-21** | Chat owns its own database; Core integration via the approved boundary; single migration authority | **FAIL — JC-009.** `090900_chat_core_integration` reads `public.profiles` over SQL; `091200_chat_rls` depends on it. Prisma remains a second schema authority. |
 
 ## 3. P1 — major workflow gates
 
@@ -77,7 +78,8 @@ not yet built.
 | G-36 | CI runs typecheck, unit, security and migration validation on every push | **PASS (partial)** — `.github/workflows/ci.yml`: fast release-gate guards (G-18/G-20/G-31..35), API typecheck+unit, Admin Web typecheck+tests, migration apply + idempotency. Integration job self-skips until specs exist; no linter configured in any package yet. |
 | G-37 | Every component's toolchain installed and its tests executable in CI (Flutter/Dart still absent) | **FAIL** |
 | G-38 | Full E2E suite green (`test-plan.md` §20) | UNVERIFIED |
-| G-39 | Zero open P0; zero open critical P1 | **FAIL — 3 open P0 (JC-001/002/003), 1 open P1 (JC-007)** |
+| **G-45** | Branch reconciliation complete; one migration lineage; no silently-divergent schema objects | **FAIL — JC-010.** Two `chat.event_log` definitions; `create table if not exists` hides the conflict and it surfaces only at runtime. `docs/release/branch-reconciliation.md`. |
+| G-39 | Zero open P0; zero open critical P1 | **FAIL — 5 open P0 (JC-001/002/003/009/010), 2 open P1 (JC-007/008)** |
 | G-40 | Observability: structured logs, health/readiness, error monitoring with token/PII redaction | UNVERIFIED |
 | G-41 | Backup and restore documented **and rehearsed**; RPO/RTO stated | **FAIL — absent** |
 | G-42 | Environments separated; no production credentials or debug mode outside production | UNVERIFIED |

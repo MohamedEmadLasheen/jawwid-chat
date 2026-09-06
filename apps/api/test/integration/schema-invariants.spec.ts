@@ -12,15 +12,25 @@
 import { execFileSync } from 'node:child_process';
 
 const CONTAINER = process.env.JAWWID_INT_CONTAINER ?? 'jawwid-chat-int';
-const DB = 'jawwid_chat_int';
+const DB = process.env.JAWWID_INT_DB ?? 'jawwid_chat_int';
+
+/**
+ * Local runs talk to the Docker container; CI talks to a Postgres service
+ * container over DATABASE_URL. Set JAWWID_PSQL to override entirely.
+ */
+function psqlArgv(statement: string): [string, string[]] {
+  const flags = ['-q', '-v', 'ON_ERROR_STOP=1', '-tAc', statement];
+  if (process.env.DATABASE_URL) return ['psql', [process.env.DATABASE_URL, ...flags]];
+  return ['docker', ['exec', '-i', CONTAINER, 'psql', '-U', 'postgres', '-d', DB, ...flags]];
+}
 
 /** Runs SQL. Returns stdout on success; throws with the postgres error on failure. */
 function sql(statement: string): string {
-  return execFileSync(
-    'docker',
-    ['exec', '-i', CONTAINER, 'psql', '-q', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', DB, '-tAc', statement],
-    { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] },
-  ).trim();
+  const [cmd, args] = psqlArgv(statement);
+  return execFileSync(cmd, args, {
+    encoding: 'utf8',
+    stdio: ['pipe', 'pipe', 'pipe'],
+  }).trim();
 }
 
 /** Returns the postgres error message, or null if the statement unexpectedly succeeded. */

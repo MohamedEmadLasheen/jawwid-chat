@@ -154,13 +154,13 @@ one action-needed card if any, the Jawwid contact, unread count per child's grou
 self-service actions the contact's capability flags permit. Nothing else. No ownership, no
 workload, no coverage, no case types, no internal labels.
 
-## J17 — Teacher sends a group message *(P0, conditional on OQ-2/OQ-3)*
+## J17 — Teacher sends a group message *(P0; blocked on C-1/C-2)*
 Teacher opens **Groups** → *Yusuf's group* → sends. The group header names the student, the
 teacher, and the family, and there is **no affordance anywhere to start a private chat with a
 parent** — not disabled, absent. `[BE]` enforces it; the UI simply never suggests it (role
 brief §18).
 
-## J18 — Teacher message requires approval *(conditional on OQ-1)*
+## J18 — Teacher message requires approval *(P0; the approver is OQ-1)*
 Teacher sends → the bubble shows **Waiting for approval** in a muted treatment, clearly not
 delivered. Other members see nothing. `[BE]` routes it to the family's on-duty admin (DD-15).
 - **Approved** → the bubble becomes an ordinary message; the word "approved" is never shown,
@@ -168,18 +168,18 @@ delivered. Other members see nothing. `[BE]` routes it to the family's on-duty a
 - **Rejected** → the bubble becomes muted with **Not sent** and the reason, always the reason
   (role brief §16). The teacher can edit and resend from that bubble.
 
-## J19 — Admin decides an approval *(conditional on OQ-1)*
+## J19 — The authorized approver decides an approval *(P0; who that is, is OQ-1)*
 Approvals queue, sorted by time pending. Each card: sender, student, family, **the full message
 body** (never truncated — you cannot approve what you cannot read), time pending, group.
 **Approve** is one tap. **Reject** opens a reason field, required. Keyboard: `a` approve,
 `r` reject, `j`/`k` move. Empty state: *"No messages waiting for approval."*
 
-## J20 — Admin starts a call *(conditional on OQ-4)*
+## J20 — Admin starts a call *(P0; implementation status is OQ-4)*
 Family 360 → **Call**, enabled only where `[BE]` authorizes it. Connecting → Connected →
 controls: mute, speaker, end. On end, a `SystemCard` in the thread with duration and outcome.
 No recording UI. **No phone number is displayed at any point** — people are named, never dialled.
 
-## J21 — Group call *(conditional on OQ-4)*
+## J21 — Group call *(P0; implementation status is OQ-4)*
 From a Student Group header. Participants shown by name and role. Joining and leaving are
 `SystemCard`s in the group. Same control set; a participant list replaces the single avatar.
 

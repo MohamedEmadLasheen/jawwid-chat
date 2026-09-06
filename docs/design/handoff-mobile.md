@@ -9,8 +9,11 @@ No implementation code — where you see `[BE]`, the behaviour is the backend's 
 
 ## 1. Read in this order
 
+0. **`scope-authority.md`** — the source-of-truth hierarchy. The PRD governs; this pack is
+   subordinate to it.
 1. `discovery.md` §5 — the vocabulary reconciliation. Several terms in **your** role assignment
-   do not match the PRD; the right-hand column is what ships.
+   do not match the PRD; the right-hand column is what ships. Note **Primary Owner** and
+   **Current Handler** — the PRD's own terms, restored on review.
 2. `terminology.md` — every string, both languages.
 3. `design-system.md` — tokens, components, states.
 4. `cross-platform.md` — what must match Admin Web exactly.
@@ -26,14 +29,24 @@ No implementation code — where you see `[BE]`, the behaviour is the backend's 
 | ✓ | `screens/parent-chat.md` | — |
 | ✓ | `screens/notifications.md` | Payload schema |
 | ✓ | `screens/settings.md` | Preset↔flag mapping (OQ-5) |
-| ⚠ | `screens/student-group.md` | **OQ-3** — the entity does not exist |
-| ⚠ | `screens/teacher-home.md` | **OQ-2** — no teacher principal exists |
-| ⚠ | `screens/teacher-chat.md` | **OQ-2** |
-| ⚠ | `screens/approvals.md` §5 (sender states only) | **OQ-1** |
-| ⚠ | `screens/call.md` | **OQ-4** |
+| ⚠ | `screens/student-group.md` | **C-2 / OD-01** — conversation model must carry one group **per student** |
+| ⚠ | `screens/teacher-home.md` | **C-1 / OD-04** — no teacher principal exists |
+| ⚠ | `screens/teacher-chat.md` | **C-1 / OD-04** |
+| ⚠ | `screens/approvals.md` §5 (sender states only) | **OQ-1** — who the authorized approver is |
+| ⚠ | `screens/call.md` | **JC-001** — implementation status only |
 
-**Build the ✓ rows now.** The ⚠ rows are designed and waiting on product decisions you already
-escalated — do not start them on the strength of this document alone.
+**Every ⚠ row is PRD MVP scope** (`docs/qa/authoritative-scope.md` §3) — Student Groups,
+approvals and voice calling (1:1 **and** group) are all in MVP. They are blocked on decisions
+and backend entities owned by others, **not** on whether the capability exists. Build the ✓ rows
+now; build the ⚠ rows against the contract table at the end of each spec, once its blocker
+clears.
+
+**Correction to your D1.** `docs/mobile/decisions.md` D1 — *"the brief governs the staff side,
+role assignments govern the family/teacher side"* — was this pack's original premise and is
+**withdrawn**. The PRD governs; the brief's communication chapter is superseded
+(`scope-authority.md`). The conflict between the two records is **OD-01**, and neither you nor
+I resolve it. Practically, this changes little for you: your screens were already drawn for
+separate Student Group conversations.
 
 ## 3. Navigation — two shells, not one
 
@@ -68,7 +81,9 @@ Mobile supports **light and dark** (Admin Web does not — DD-13). Every token h
    (`screens/parent-chat.md` §3).
 5. **You may only author `queued`, `sending`, `failed`.** Everything else comes from the server
    (`cross-platform.md` §2). A queued message must never look delivered.
-6. **A pending message is invisible to non-senders** — absent, not greyed (OQ-1).
+6. **A pending message is invisible to non-senders** — absent, not greyed. And **no dead-end
+   pending**: every pending message must reach a terminal outcome its sender can see
+   (`screens/approvals.md` §1). Who approves is OQ-1 and changes no pixel on your side.
 7. **No teacher → parent 1:1 affordance exists anywhere.** Not disabled. Absent. Member profiles
    have no message action and no call action (`screens/student-group.md` §1).
 8. **The composer never jumps when the keyboard opens.** The list resizes; the composer does not

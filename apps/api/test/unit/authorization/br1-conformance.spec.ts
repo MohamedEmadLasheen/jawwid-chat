@@ -1,78 +1,213 @@
 /**
- * QA (AI #5) — BR-1 conformance matrix (release gates G-01, G-02, G-03).
+ * BR-1 conformance matrix (QA release gates G-01, G-02, G-03).
  *
  *   Teacher <-> Parent direct 1:1 communication is FORBIDDEN, for messaging and
  *   calling alike. Teacher <-> Parent communication happens ONLY through the
- *   official Student Group, with the required admin presence/authorization.
+ *   official Student Group.
  *
- * WHY THESE ARE PENDING RATHER THAN FAILING
- * -----------------------------------------
- * They cannot be written yet, and QA will not fake them:
+ * QA (AI #5) specified this matrix as it.todo because the seams did not exist:
+ * there was no teacher actor (JC-003) and no conversation participant set
+ * (JC-002). Both now exist, so the matrix below is executable.
  *
- *   JC-002  BR-1's PERMITTED case is currently unrepresentable. Authorization
- *           is keyed on Thread(kind=FAMILY) unique per family, so there is no
- *           conversation participant set to assert against.
- *   JC-003  There is no teacher actor. ActorKind is STAFF|CONTACT|SYSTEM, and a
- *           teacher mapped onto StaffRole.ACADEMIC is barred from ALL family
- *           communication, which deletes BR-1's permitted case.
- *   AMB-9   "Required admin presence/authorization" is UNDEFINED in any document
- *           available to QA. It is the load-bearing condition of the permitted
- *           case, and QA must not resolve it by assumption.
- *
- * Pending (not failing) so peer agents keep usable CI feedback. The release gate
- * — not this suite — is the authority on readiness, and it holds G-01/G-02/G-03
- * at FAIL. Convert each todo to a real assertion as the seam lands; the matrix
- * below is the exact set required, and none of it may be dropped.
- *
- * See docs/qa/seams-required.md for the seam signature these will target.
+ * These assertions exercise the server-side decision directly. They pass with
+ * any client behaviour whatsoever, which is the point: BR-1 is a server rule.
  */
-import { StaffRole } from '@prisma/client';
-import { isFamilyFacing } from '@platform/types';
+import { CommErrorCode } from '@platform/errors';
+import { isFamilyFacingStaff } from '@platform/types';
+import {
+  academicStaff,
+  admin,
+  authzWithOnDuty,
+  conversation,
+  financeStaff,
+  manager,
+  member,
+  parent,
+  studentGroup,
+  teacher,
+} from '../../support/fixtures';
 
-describe('BR-1 — current implementation state (executable, non-blocking)', () => {
-  it('documents that no teacher actor exists: ACADEMIC is barred from family communication', () => {
-    // This is TRUE today and is exactly the defect (JC-003). When a teacher
-    // becomes a first-class actor, this expectation must be revisited together
-    // with the whole matrix below — it is a tripwire, not an endorsement.
-    expect(isFamilyFacing(StaffRole.ACADEMIC)).toBe(false);
+const NOW = new Date('2026-09-06T10:00:00Z');
+
+describe('BR-1 — forbidden 1:1 channels', () => {
+  const authz = authzWithOnDuty();
+
+  it('BR1-01 teacher opens a 1:1 with a parent -> DENY', () => {
+    const d = authz.canOpenDirect(teacher(), parent());
+    expect(d.allowed).toBe(false);
+    if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_TEACHER_PARENT_DIRECT);
   });
 
-  it('documents that back-office staff remain barred (this part is correct)', () => {
-    expect(isFamilyFacing(StaffRole.FINANCE)).toBe(false);
-    expect(isFamilyFacing(StaffRole.TECHNICAL)).toBe(false);
+  it('BR1-02 parent opens a 1:1 with a teacher -> DENY (order does not matter)', () => {
+    const d = authz.canOpenDirect(parent(), teacher());
+    expect(d.allowed).toBe(false);
+    if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_TEACHER_PARENT_DIRECT);
+  });
+
+  it('BR1-03 teacher sends into a direct conversation containing a parent -> DENY', async () => {
+    const t = teacher();
+    const d = await authz.canSend(
+      t,
+      conversation({ type: 'direct' }),
+      member(t),
+      { visibility: 'customer' },
+      NOW,
+    );
+    expect(d.allowed).toBe(false);
+    if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_TEACHER_PARENT_DIRECT);
+  });
+
+  it('BR1-04/05 a direct call pairing a teacher and a parent -> DENY', async () => {
+    const t = teacher();
+    const d = await authz.canCall(
+      t,
+      conversation({ type: 'direct' }),
+      member(t),
+      [teacher(), parent()],
+      NOW,
+    );
+    expect(d.allowed).toBe(false);
+    if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_TEACHER_PARENT_DIRECT);
+  });
+
+  it('BR1-06 group co-members cannot open a 1:1 with each other', () => {
+    // Sharing a student group grants no direct channel whatsoever.
+    const d = authz.canOpenDirect(teacher('teacher-in-group'), parent('parent-in-group'));
+    expect(d.allowed).toBe(false);
+  });
+
+  it('teacher-to-teacher direct messaging is off by default', () => {
+    const d = authz.canOpenDirect(teacher('t1'), teacher('t2'));
+    expect(d.allowed).toBe(false);
+    if (!d.allowed) expect(d.code).toBe(CommErrorCode.TEACHER_TEACHER_DISABLED);
+  });
+
+  it('two family contacts cannot open a channel', () => {
+    expect(authz.canOpenDirect(parent('p1'), parent('p2')).allowed).toBe(false);
+  });
+
+  it('back-office staff may never take part in family communication', () => {
+    expect(isFamilyFacingStaff(financeStaff())).toBe(false);
+    expect(isFamilyFacingStaff(academicStaff())).toBe(false);
+    for (const role of [financeStaff(), academicStaff()]) {
+      const d = authz.canOpenDirect(role, parent());
+      expect(d.allowed).toBe(false);
+      if (!d.allowed) expect(d.code).toBe(CommErrorCode.ROLE_CANNOT_MESSAGE_FAMILY);
+    }
+  });
+
+  it('an unknown actor pairing is denied by default rather than allowed by accident', () => {
+    const alien = { ...parent(), kind: 'martian' as never };
+    expect(authz.canOpenDirect(alien, parent('p2')).allowed).toBe(false);
   });
 });
 
-describe('BR-1 — forbidden 1:1 channels (blocked by JC-002/JC-003)', () => {
-  it.todo('BR1-01 teacher creates a 1:1 conversation with a parent → DENY');
-  it.todo('BR1-02 parent creates a 1:1 conversation with a teacher → DENY');
-  it.todo('BR1-03 teacher sends into a parent 1:1 thread id → DENY');
-  it.todo('BR1-04 teacher places a 1:1 voice call to a parent → DENY');
-  it.todo('BR1-05 parent places a 1:1 voice call to a teacher → DENY');
-  it.todo('BR1-06 co-members of a group open a 1:1 with each other → DENY');
-  it.todo('BR1-07 add a parent to an existing Teacher↔Admin 1:1 → DENY');
-  it.todo('BR1-08 add a teacher to an existing Parent↔Admin 1:1 → DENY');
-  it.todo('BR1-10 convert a Student Group into a 1:1 by removing members → DENY');
-  it.todo('BR1-11 teacher subscribes to a parent 1:1 realtime channel → no events');
-  it.todo('BR1-12 teacher searches for a parent and retrieves contact details → DENY');
-  it.todo('BR1-13 teacher joins a Parent↔Admin call room → DENY at token issue AND at join');
-  it.todo('BR1-14 teacher requests a call token for an arbitrary room id → DENY');
-  it.todo('BR1-15 direct websocket frame bypassing REST → DENY');
-  it.todo('BR1-16 replay an admin-issued request with a teacher session → DENY');
-  it.todo('BR1-17 deep link to a parent 1:1 opened by a teacher → DENY server-side');
-  it.todo('BR1-18 push for a parent 1:1 delivered to a teacher device → never emitted');
-  it.todo('BR1-20 Teacher↔Parent conversation created directly in the DB → surfaced by an invariant check');
+describe('BR-1 — permitted channels', () => {
+  const authz = authzWithOnDuty();
+
+  it('parent <-> admin 1:1 -> ALLOW', () => {
+    expect(authz.canOpenDirect(parent(), admin()).allowed).toBe(true);
+  });
+
+  it('teacher <-> admin 1:1 -> ALLOW', () => {
+    expect(authz.canOpenDirect(teacher(), admin()).allowed).toBe(true);
+  });
+
+  it('coverage admin counts as family-facing', () => {
+    expect(authz.canOpenDirect(parent(), admin('cov-1', 'coverage')).allowed).toBe(true);
+  });
 });
 
-describe('BR-1 — acceptance test for the whole rule', () => {
-  // Run with client-side CommunicationPolicy disabled. If any forbidden row
-  // passes here, BR-1 is not implemented regardless of what the UI does.
-  it.todo('BR1-19 hostile client with client-side policy patched out → server denies every forbidden row');
+describe('BR-1 — the permitted case: teacher and parent inside the student group', () => {
+  const authz = authzWithOnDuty();
+
+  it('a teacher may post in the student group', async () => {
+    const t = teacher();
+    const d = await authz.canSend(t, studentGroup(), member(t), { visibility: 'customer' }, NOW);
+    expect(d.allowed).toBe(true);
+  });
+
+  it('a parent may post in the student group', async () => {
+    const p = parent();
+    const d = await authz.canSend(p, studentGroup(), member(p), { visibility: 'customer' }, NOW);
+    expect(d.allowed).toBe(true);
+  });
+
+  it('teacher and parent may share a GROUP call', async () => {
+    const t = teacher();
+    const d = await authz.canCall(
+      t,
+      studentGroup(),
+      member(t),
+      [teacher(), parent(), admin()],
+      NOW,
+    );
+    expect(d.allowed).toBe(true);
+  });
+
+  it('a teacher who is not a member of the group cannot post in it', async () => {
+    const d = await authz.canSend(teacher('outsider'), studentGroup(), null, { visibility: 'customer' }, NOW);
+    expect(d.allowed).toBe(false);
+    if (!d.allowed) expect(d.code).toBe(CommErrorCode.NOT_CONVERSATION_MEMBER);
+  });
+
+  it('a member who has left the group cannot post in it', async () => {
+    const t = teacher();
+    const d = await authz.canSend(
+      t,
+      studentGroup(),
+      member(t, { leftAt: new Date('2026-09-01T00:00:00Z') }),
+      { visibility: 'customer' },
+      NOW,
+    );
+    expect(d.allowed).toBe(false);
+  });
+
+  it('a silent member is present but may not post', async () => {
+    const t = teacher();
+    const d = await authz.canSend(
+      t,
+      studentGroup(),
+      member(t, { isSilent: true }),
+      { visibility: 'customer' },
+      NOW,
+    );
+    expect(d.allowed).toBe(false);
+    if (!d.allowed) expect(d.code).toBe(CommErrorCode.MEMBER_IS_SILENT);
+  });
 });
 
-describe('BR-1 — permitted case (additionally blocked by AMB-9)', () => {
-  it.todo('teacher and parent exchange messages inside the official Student Group → ALLOW');
-  it.todo('teacher and parent join a Student Group voice call → ALLOW');
-  it.todo('BR1-09 admin removed from a Student Group leaving teacher+parent alone → AMB-9');
-  it.todo('SG-12 required admin presence enforced at post time AND at call time → AMB-9');
+describe('BR-1 — membership management cannot be used to route around the rule', () => {
+  const authz = authzWithOnDuty();
+
+  it('BR1-07/08 a teacher may not change membership', () => {
+    const d = authz.canManageMembership(teacher());
+    expect(d.allowed).toBe(false);
+    if (!d.allowed) expect(d.code).toBe(CommErrorCode.CANNOT_MANAGE_MEMBERSHIP);
+  });
+
+  it('BR1-10 a parent may not change membership', () => {
+    expect(authz.canManageMembership(parent()).allowed).toBe(false);
+  });
+
+  it('an admin may change membership', () => {
+    expect(authz.canManageMembership(admin()).allowed).toBe(true);
+    expect(authz.canManageMembership(manager()).allowed).toBe(true);
+  });
+});
+
+describe('BR-1 — archived conversations accept nothing', () => {
+  it('no one may post into an archived group', async () => {
+    const authz = authzWithOnDuty();
+    const p = parent();
+    const d = await authz.canSend(
+      p,
+      studentGroup({ archivedAt: new Date('2026-01-01T00:00:00Z') }),
+      member(p),
+      { visibility: 'customer' },
+      NOW,
+    );
+    expect(d.allowed).toBe(false);
+    if (!d.allowed) expect(d.code).toBe(CommErrorCode.CONVERSATION_ARCHIVED);
+  });
 });

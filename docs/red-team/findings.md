@@ -1,6 +1,8 @@
 # Jawwid Chat — Red Team Findings
 
-Owner: AI #9 (Adversarial Red Team / Chaos) · Opened 2026-09-05 · Status: **CAMPAIGN 1 COMPLETE**
+Owner: AI #9 (Adversarial Red Team / Chaos) · Opened 2026-09-05 · Updated 2026-09-06
+Status: **EVIDENCE FROZEN — handed off to release (Agent #10)**
+Handoff: [`handoff-to-release.md`](handoff-to-release.md)
 
 Scope of this pass: static attack of the whole tree, **runtime-executed**
 attacks against `AuthorizationService`, `SignedLocalObjectStorage`,
@@ -80,36 +82,121 @@ refactor is where the risk now is:
 | **RT-004** | **REGRESSED — worse than reported.** `deriveMode` is now `private deriveMode(actor, _conv, fallback) { return fallback; }` — the owner comparison is gone. Every internal note by any family-facing admin is now stamped **`OWNER`**, on every family, whoever owns it. The previous behaviour was a wrong-but-distinguishable `COVERAGE`; this is an affirmative false claim of ownership written into the audit trail, and `actor` and `_conv` are both now unused parameters. **New severity: P1, and it should be fixed before the refactor is committed.** |
 
 
-## Summary
+## Severity tally
 
-| ID | Finding | Sev | Grade | Owner |
-|---|---|---|---|---|
-| **RT-001** | WebSocket accepts self-asserted identity (`auth.userId`) | P0 | static | AI #1 |
-| **RT-002** | Authorization is a function of `familyId` alone; BR-1 unexpressible | P0 | **runtime** | AI #1 / #2 |
-| **RT-023** | Migration series cannot apply to an empty database | P0 | **runtime** | AI #1 |
-| **RT-024** | BR-1 database trigger bypassed by `type` promotion (messaging **and** calling) | P0 | **runtime** | AI #1 |
-| **RT-026** | Running code targets the schema *without* the BR-1 backstop | P0 | static | AI #1 / #2 |
-| **RT-003** | Manager can forge `on_behalf_mode` — survives the JC-005 fix | P1 | **runtime** | AI #1 |
-| **RT-004** | `COVERAGE` asserted without consulting `on_duty()` | P1 | **runtime** | AI #1 |
-| **RT-005** | Storage signing secret falls back to a git-committed literal | P1 | **runtime** | AI #2 / #7 |
-| **RT-006** | `signUrlsForMessages()` takes no actor — IDOR by shape | P1 | static | AI #2 |
-| **RT-007** | Attachment MIME/size/key never validated on the send path | P1 | **runtime** | AI #2 |
-| **RT-008** | Parent can forge a `SYSTEM` / `AUTOMATION` message | P1 | **runtime** | AI #2 |
-| **RT-009** | Realtime session never re-evaluates identity | P1 | static | AI #1 / #2 |
-| **RT-025** | BR-1's "required admin presence" unenforced; `class_group` unscoped | P1 | **runtime** | AI #1 |
-| **RT-010** | Two divergent database architectures committed at once | P1 | static | product |
-| RT-011…RT-014 | Probe-based list authz · receipt-roster leak · internal notes over realtime · authz outside the transaction | P2 | static | AI #2 |
-| RT-015 | ✅ **CLOSED** by `bf279a7` — CI now exists | — | — | AI #7 |
-| RT-016…RT-022 | Hardening | P3 | static | various |
+Counted from the detailed findings below. Every id RT-001…RT-027 is present
+exactly once; there are no gaps and no duplicates.
 
-**Recommended fix order.** RT-023 first — it is cheap, it unblocks CI's G-19,
-and until it lands no other database fix reaches any environment. Then RT-010
-(one schema), because RT-002, RT-024 and RT-026 all resolve differently
-depending on the answer. Then RT-001, which is the cheapest single break in the
-attack chain (see `cross-agent-red-team.md`).
+| Severity | Count | IDs |
+|---|---|---|
+| **P0** | **5** | RT-001, RT-002, RT-023, RT-024, RT-026 |
+| **P1** | **9** | RT-003, RT-004, RT-005, RT-006, RT-007, RT-008, RT-009, RT-010, RT-025 |
+| **P2** | **5** | RT-011, RT-012, RT-013, RT-014, RT-027 |
+| **P3** | **7** | RT-016, RT-017, RT-018, RT-019, RT-020, RT-021, RT-022 |
+| Closed | 1 | RT-015 |
+| | **27** | |
 
+**Of the five P0s, three are proven by execution** (RT-002, RT-023, RT-024); two
+are CONFIRMED (static) — RT-001 and RT-026. An earlier verbal summary of this
+audit said "four proven by execution". That was wrong; the figure is three.
+
+## Test-preservation contract
+
+`apps/api/test/unit/red-team/` holds **security regression tests**. They assert
+the *observed insecure* behaviour so each finding can be graded CONFIRMED rather
+than THEORETICAL, and so a fix is visible rather than silent.
+
+> **A fix must make the invariant hold and the assertion be inverted in the same
+> commit. A test must never be deleted, skipped, or weakened because the
+> implementation fails it.** A red-team spec that has been relaxed to go green is
+> a regression in the audit, not a fix in the product.
+
+Both specs are intact and unmodified in substance. They currently do not compile
+— see RT-027 — which is the in-flight refactor, not an edit to the tests.
 
 ---
+
+## Evidence register
+
+Every finding, with the fields required for release triage. `Regression?` means
+*introduced or worsened by the uncommitted refactor now in the working tree*.
+Full attack steps, expected behaviour, root cause and acceptance criteria are in
+the detailed finding bodies below.
+
+### A · Database and migration failures
+
+| ID | Sev | Exact attack | Exact evidence | Affected component | Status | Regression? |
+|---|---|---|---|---|---|---|
+| **RT-023** | **P0** | Apply the committed migration series to an empty database. | `bash scripts/db/test-db.sh reset` → `ERROR: relation "chat.family" does not exist` at `20260905093000`. `comm` of `references chat.*` against `create table chat.*` yields **`chat.family`, `chat.staff`, `chat.learner`, `chat.thread`, `chat.message`** — created by no migration; `git log --diff-filter=D` shows none were deleted. | `supabase/migrations/*`, CI gate G-19 | **CONFIRMED (runtime)** | No — pre-existing |
+| **RT-010** | P1 | None — architectural fork. | `20260905090000_chat_foundation.sql:3-7` places `chat` *inside the Jawwid Core database*; `schema.prisma` + `.env.example:37` target a standalone Postgres; `infra/docker/postgres-init/10-app-role.sh:5-8` states it serves "both database strategies currently in the tree". | schema, infra | **CONFIRMED (static)** | No — pre-existing |
+
+### B · Authorization failures
+
+| ID | Sev | Exact attack | Exact evidence | Affected component | Status | Regression? |
+|---|---|---|---|---|---|---|
+| **RT-001** | **P0** | Open a WebSocket with `auth.userId` set to any staff or contact primary key. | `realtime.gateway.ts:57` `String(client.handshake.auth?.userId ?? '')` passed to `identity.resolveActor`; no verifier exists in `apps/api`. `Contact.appUserId` is read by no code. | `RealtimeGateway`, `IdentityService` | **CONFIRMED (static)** | No — pre-existing |
+| **RT-002** | **P0** | Read/write a thread of any `kind` for a family; probe `familyId: '*'`. | `authz-attacks.spec.ts` §RT-002, 4 assertions: all four `ThreadKind` values admitted for a contact; all family ids admitted for all three operator roles. | `AuthorizationService` | **CONFIRMED (runtime)** — *largely addressed by the uncommitted refactor: `canRead(actor, conv, membership)` now requires live membership for contacts and teachers* | No |
+| **RT-026** | **P0** | None — the control guards tables no code uses. | `grep -rln "chat\.\|conversation_member\|conversationId" apps/api/src apps/admin-web/src` → no matches at `c6aa4a6`. BR-1 triggers live on `chat.conversation_member`; all services target Prisma `Thread`/`Message`. | schema ↔ services seam | **CONFIRMED (static)** | No — the uncommitted refactor is the fix in progress |
+| **RT-003** | P1 | Manager sends with `requestedMode: 'OWNER'` on a family they do not own. | `authz-attacks.spec.ts` §RT-003, 2 assertions. Survives `fa53ba7` and the refactor: `authorization.service.ts:217-218` `if (actor.staffRole === 'manager') return allow(intent.requestedMode ?? ESCALATION, …)`. | `AuthorizationService` | **CONFIRMED (runtime)** | No — but **survived two rewrites** |
+| **RT-006** | P1 | Pass another family's message ids to the signing helper. | `attachment.service.ts` `signUrlsForMessages(messageIds: string[])` — no actor parameter. `grep` confirms no caller exists yet. | `AttachmentService` | **CONFIRMED (static)**; UNVERIFIED at runtime (unreachable) | No |
+| **RT-009** | P1 | Disable an account while its socket is open; keep using it. | `resolveActor` appears once in `realtime.gateway.ts` (line 58, `handleConnection`); the `Actor` is cached on the socket and reused by `subscribe`/`typingStart`/`canTouchThread`. No TTL, no eviction. | `RealtimeGateway` | **CONFIRMED (static)** | No |
+| **RT-011** | P2 | List threads as any operator. | `thread.service.ts:142` `canReadThread(actor, { familyId: '*' })` then `findMany({ take: 200 })`, unfiltered. `authz-attacks.spec.ts` §RT-002 shows `'*'` is allowed for all operator roles. | `ThreadService` | **CONFIRMED (runtime)** | No — file is deleted by the refactor; re-verify the replacement |
+| **RT-014** | P2 | Revoke authority between the decision and the commit. | `message.service.ts:81-137` — actor, family and `canSendMessage` all resolved before `$transaction`; the `FOR UPDATE` lock is taken afterwards. | `MessageService` | **CONFIRMED (static)** | No |
+
+### C · Privacy and security failures
+
+| ID | Sev | Exact attack | Exact evidence | Affected component | Status | Regression? |
+|---|---|---|---|---|---|---|
+| **RT-005** | P1 | Sign a read URL for any object key using the literal in the repo. | `storage-and-integrity-attacks.spec.ts` §RT-005: with `STORAGE_SIGNING_SECRET` deleted, an attacker-constructed signer's signature makes the victim instance's `verify()` return `true`. `object-storage.ts:35` `?? 'dev-only-not-a-secret'`; variable absent from `.env.example`. | `SignedLocalObjectStorage` | **CONFIRMED (runtime)** | No |
+| **RT-007** | P1 | Authorize an `image/png` upload, PUT other bytes, then send the attachment declaring any MIME/size. | `storage-and-integrity-attacks.spec.ts` §RT-007: `AttachmentService.validate` correctly rejects `text/html`, `image/svg+xml`, oversize — and a static assertion over `message.service.ts` shows no `AttachmentService` reference and no `.validate(` call, while `objectKey: a.objectKey` is persisted verbatim. | `MessageService`, `AttachmentService` | **CONFIRMED (runtime + static)** | No |
+| **RT-008** | P1 | Contact sends `{ type: 'SYSTEM', origin: 'AUTOMATION' }` into their own thread. | `storage-and-integrity-attacks.spec.ts` §RT-008: `validateContent(SYSTEM, { body: null, attachments: [] })` does not throw, while the same emptiness throws for `TEXT` and `IMAGE`. `message.service.ts:102-103` takes both fields from the request. | `MessageService` | **CONFIRMED (runtime)** | No |
+| **RT-012** | P2 | Read any message as a contact. | `dto.ts:185-190` — `toMessageDto` maps every `MessageReceipt` row (`userId`, `deliveredAt`, `readAt`), including staff. | `MessageDto` | **CONFIRMED (static)** | No |
+| **RT-013** | P2 | Observe realtime while staff write internal notes. | `message.created` is published with `toThread(threadId, …)` to a room holding contacts and staff; payload carries `visibility: 'INTERNAL'`, `authorId`, `createdAt`. REST filters internal messages; realtime has no audience filter. | realtime fan-out contract | **CONFIRMED (in contract)**; **UNVERIFIED at runtime** — no outbox drain worker exists | No |
+| RT-016 | P3 | Timing oracle on HMAC comparison. | `object-storage.ts:64` `===` on hex digests. | `SignedLocalObjectStorage` | CONFIRMED (static) | No |
+| RT-021 | P3 | Log an email, `authToken`, `idToken`, `jwt`, `otp`. | `redacting_logger.dart:20-40` — exact-key match list; those keys are absent. | Flutter `RedactingLogger` | CONFIRMED (static) | No |
+| RT-022 | P3 | None — storage halves cannot connect. | `object-storage.ts:33-60` expects this API to serve bytes (no such route); `docker-compose.yml:70-110` + `.env.example:49-53` provision MinIO credentials no code reads. | storage layer | CONFIRMED (static) | No |
+
+### D · Product invariant failures (BR-1, ownership)
+
+| ID | Sev | Exact attack | Exact evidence | Affected component | Status | Regression? |
+|---|---|---|---|---|---|---|
+| **RT-024** | **P0** | Create a legal `student_group` with a teacher and a parent, then `UPDATE chat.conversation SET type='direct', direct_key=…`. | Executed on Supabase Postgres 17.6. Control refused: `ERROR: BR-1 violation: a direct conversation may never contain both a teacher and a family contact`. Attack succeeded: result rows `direct \| contact \| parent` and `direct \| teacher \| teacher`. **Calling identical**: a `group` call promoted to `direct` yields `direct \| contact` + `direct \| teacher`. | `chat.enforce_direct_conversation_rules()`, `chat.enforce_call_participant_rules()` | **CONFIRMED (runtime)** | No — the trigger is new, the gap shipped with it |
+| **RT-025** | P1 | Create a `student_group` (or `class_group`) containing exactly one teacher and one parent, no admin. | Executed: `student_group \| admin_members 0 \| live_members 2`; `class_group \| 0 \| 2`; group call `group \| staff_present 0 \| participants 2`. The trigger checks `type = 'direct'` only, so `class_group` is entirely out of scope. | same triggers | **CONFIRMED (runtime)** | No |
+| **RT-004** | P1 | Any family-facing admin writes an internal note on a family they neither own nor cover. | See section E — this finding is a **refactor regression** and is recorded there. | `AuthorizationService.deriveMode` | **CONFIRMED (runtime)** | **YES** |
+
+### E · Refactor regressions
+
+Both entries below concern the **uncommitted** refactor in the working tree
+(Prisma remapped onto `chat`, `Conversation`/`ConversationMember`/`Call`,
+`thread.service.ts` deleted). Neither is committed history; both are the current
+state of the working copy and must not be lost when it lands.
+
+| ID | Sev | Exact attack | Exact evidence | Affected component | Status | Regression? |
+|---|---|---|---|---|---|---|
+| **RT-004** | P1 | Any family-facing admin writes an internal note on any family. | **Before the refactor:** `deriveMode` compared `actor.userId === familyOwnerId` and returned `COVERAGE` for a non-owner — wrong, but distinguishable; `authz-attacks.spec.ts` §RT-004 proves `onDuty()` was never called (`onDutyCalls === 0`). **After the refactor:** `authorization.service.ts:269-271` is `private deriveMode(actor: Actor, _conv: Conv, fallback: string): string { return fallback; }` — the ownership comparison is gone and **both parameters are unused**, so the OWNER fallback is returned verbatim and every internal note by any family-facing admin is stamped **`OWNER`** on every family. | `AuthorizationService.deriveMode` | **CONFIRMED (runtime, pre-refactor); CONFIRMED (static, post-refactor)** | **YES — worsened.** `COVERAGE` (unjustified) → `OWNER` (an affirmative false ownership claim in the audit trail) |
+| **RT-027** | P2 | None — the regression tests stop running. | `npx jest --selectProjects unit` → **6 failed, 1 passed**, all six `Test suite failed to run` with `TS2305: Module '"@prisma/client"' has no exported member 'MessageVisibility'` and `TS2820: Type '"STAFF"' is not assignable to type 'ActorKind'`. AI #5's JC-005/JC-006 conformance specs and both red-team specs are among the six. | whole `apps/api` unit suite | **CONFIRMED (runtime)** | **YES** |
+
+**Why RT-027 is a security finding and not a build annoyance:** the JC-005,
+JC-006 and red-team specs are the only automated evidence that these invariants
+hold. While the suite does not compile, CI's `npm run test:unit` step cannot
+distinguish "the invariant holds" from "nothing ran". The tests must be
+re-pointed at the new `AuthorizationService` API — **not** deleted — before the
+refactor is committed.
+
+---
+
+## Recommended fix order
+
+Unchanged from the original assessment, and deliberately narrow — this audit
+does not prescribe the remediation:
+
+1. **RT-023** — cheap, unblocks CI's G-19, and until it lands no database fix
+   reaches any environment.
+2. **RT-010** — the database decision. RT-002, RT-024 and RT-026 all resolve
+   differently depending on the answer. **This audit does not make that choice.**
+3. **RT-001** — the cheapest single break in the attack chain
+   (see `cross-agent-red-team.md`).
+4. **RT-004 and RT-027** — before the refactor is committed, not after.
 
 # BLOCKING RELEASE — P0
 
@@ -570,16 +657,37 @@ the message is stamped `ESCALATION` (or `COVERAGE`), never `OWNER`.
 
 ---
 
-## RT-004
+## RT-004 — ⚠️ REFACTOR REGRESSION, DO NOT LET THIS BE ABSORBED SILENTLY
 
 ### Title
-`COVERAGE` is asserted for actors who hold no coverage assignment; `on_duty()` is never consulted on the internal-note path.
+`on_behalf_mode` is asserted without any basis. Pre-refactor: `COVERAGE` for actors holding no coverage. Post-refactor: **`OWNER` for actors who do not own the family.**
 
 ### Category
-Integrity / Audit
+Product invariant (ownership attribution) / Integrity / Audit — **and a refactor regression**
 
 ### Severity
-**P1**
+**P1** · **Regression: YES, worsened**
+
+### Regression record — the fact this finding exists to protect
+
+| | Pre-refactor (committed) | Post-refactor (uncommitted working tree) |
+|---|---|---|
+| `deriveMode` | compares `actor.userId === familyOwnerId`, returns `COVERAGE` for a non-owner | `private deriveMode(actor: Actor, _conv: Conv, fallback: string): string { return fallback; }` — **both parameters unused** |
+| Internal note by a non-owner admin | stamped `COVERAGE` — unjustified, but distinguishable from ownership | stamped **`OWNER`** — an affirmative false claim of permanent ownership |
+| `on_duty()` consulted | never (`onDutyCalls === 0`, proven) | never |
+
+The product's core rule is *One Family → One Primary Owner; the system, not the
+employee, owns the family's history.* `on_behalf_mode` is the field that records
+which of the two an action was taken under, and it is written to `audit_log` and
+`event_log` as fact. After the refactor, that field asserts ownership for every
+family-facing admin on every family.
+
+**This must not be closed by the refactor landing.** The refactor is what caused
+it. If the working tree is committed as-is, the regression ships and the
+pre-refactor evidence for it (`authz-attacks.spec.ts` §RT-004) stops compiling at
+the same moment (RT-027) — the finding and its proof would disappear together.
+Fix `deriveMode`, or re-point the spec so the assertion still runs, in the same
+commit that lands the refactor.
 
 ### Attack Scenario
 Any ADMIN writes an internal note on a family they neither own nor cover. The
@@ -1088,6 +1196,55 @@ header says so. Flagged here so nobody meets it as a surprise.
 
 Note also G-19 ("migrations apply and are idempotent") **cannot pass** — see
 RT-023. *Owner: AI #7, with AI #5.*
+
+---
+
+## RT-027 · The in-flight refactor leaves the unit suite uncompilable, so every security regression test is silently not running
+
+| | |
+|---|---|
+| **Severity** | **P2** |
+| **Category** | Operational Safety / Test integrity |
+| **Status** | **CONFIRMED (runtime)** |
+| **Regression** | **YES** — caused by the uncommitted refactor |
+| **Owner** | the agent landing the refactor · **AI #7** for the gate |
+
+### Attack Scenario
+None. This is the failure mode where a control stops being verified without
+anyone deciding that it should.
+
+### Actual Behaviour
+```
+$ npx jest --selectProjects unit
+Test Suites: 6 failed, 1 passed, 7 total
+  ● Test suite failed to run
+    TS2305: Module '"@prisma/client"' has no exported member 'MessageVisibility'
+    TS2820: Type '"STAFF"' is not assignable to type 'ActorKind'. Did you mean '"staff"'?
+```
+
+The six include AI #5's `assist-escalation-bypass.spec.ts` and
+`internal-note-privacy.spec.ts` (the JC-005/JC-006 conformance suites) and both
+red-team specs. The refactor removed the Prisma enums in favour of
+`contracts/vocab.ts`, renamed `Actor.userId` → `Actor.actorId`, and lower-cased
+the actor kinds.
+
+### Impact
+CI's `npm run test:unit` step cannot distinguish *"the invariant holds"* from
+*"nothing ran"*. Every finding whose grade depends on an executing test —
+RT-002, RT-003, RT-004, RT-005, RT-007, RT-008 — loses its automated evidence
+for as long as this persists, and the JC-005/JC-006 fixes lose their regression
+guard at the same time.
+
+### Recommended Fix
+Re-point the specs at the new `AuthorizationService` API as part of the commit
+that lands the refactor. **The assertions do not change** — only the imports,
+the `Actor` shape and the vocabulary constants. Deleting or skipping a spec to
+make the suite compile is out of bounds; see the test-preservation contract at
+the top of this document.
+
+### Acceptance Criteria
+`npx jest --selectProjects unit` reports 0 failed suites, all specs execute, and
+`test/unit/red-team/` still contains both files with their assertions intact.
 
 ---
 

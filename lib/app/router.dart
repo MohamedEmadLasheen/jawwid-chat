@@ -7,7 +7,7 @@ import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/conversations/presentation/conversations_screen.dart';
 import '../features/conversations/presentation/groups_screen.dart';
 import '../features/home/presentation/home_screen.dart';
-import '../features/messages/presentation/chat_screen.dart';
+import '../features/messages/presentation/chat_screen_route.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../shared/models/user_role.dart';
 import 'providers.dart';

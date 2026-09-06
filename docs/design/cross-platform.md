@@ -42,9 +42,9 @@ For each concept: the one word, the one icon, the one visual treatment, and wher
 | Message delivered | — | `check-double` | Double tick, `text.muted` | ✓ | ✓ | ✓ |
 | Message read | — | `check-double` | Double tick, `brand.primary` | ✓ | ✓ | ✓ |
 | Message failed | Not sent / لم تُرسل | `alert-circle` | Red border + inline **Retry** | ✓ | ✓ | ✓ |
-| Pending approval *(OQ-1)* | Waiting for approval / بانتظار الاعتماد | `hourglass` | `message.pending.bg`, **sender only** | ✓ | ✓ | ✓ (queue) |
-| Rejected *(OQ-1)* | Not sent / لم تُرسل | `x-circle` | Muted block + reason, sender only | ✓ | ✓ | ✓ |
-| Call *(OQ-4)* | Call / مكالمة | `phone` | `CallButton`; history entries are `SystemCard`s | ✓ | ✓ | ✓ |
+| Pending approval | Waiting for approval / بانتظار الاعتماد | `hourglass` | `message.pending.bg`, **sender only** | ✓ | ✓ | ✓ (queue) |
+| Rejected | Not sent / لم تُرسل | `x-circle` | Muted block + reason, sender only | ✓ | ✓ | ✓ |
+| Call | Call / مكالمة | `phone` | `CallButton`; history entries are `SystemCard`s | ✓ | ✓ | ✓ |
 | Offline | You're offline / أنت غير متصل | `wifi-off` | In-flow warning banner | ✓ | ✓ | ✓ |
 | Reconnecting | Reconnecting… / جارٍ إعادة الاتصال… | `refresh` | In-flow warning banner | ✓ | ✓ | ✓ |
 
@@ -163,14 +163,20 @@ When brand sign-off lands, exactly two files change.
 
 ---
 
-## 7. Known cross-platform gap — approvals and calls
+## 7. Approvals and calls — both platforms, both MVP
 
-`discovery.md` §4 records it in full. In short: mobile builds Student Groups, approvals and
-calling; admin has reserved seams but builds none of them. Until **OQ-1** and **OQ-4** are
-decided:
+**Corrected on review.** An earlier revision of this section described approvals and calling as
+a "gap" pending a decision on whether they exist. `docs/qa/authoritative-scope.md` §3 places
+**Student Groups, the message approval workflow, and voice calling (1:1 and group)** inside PRD
+MVP scope. What is open is *who approves* (**OQ-1**) and *implementation sequencing*
+(**JC-001**) — not existence.
 
-- `screens/approvals.md` and `screens/call.md` are marked **conditional** and are not counted
-  in P0 delivery.
-- The concept register above marks their rows `(OQ-1)` / `(OQ-4)`.
-- Neither platform should ship a *half* of either feature. A teacher whose message enters
-  `pending` with no approver anywhere is worse than a teacher whose message simply sends.
+Both platforms therefore build their half, and the halves must fit:
+
+- The **sender** states (Flutter, `screens/approvals.md` §5) and the **approver** queue
+  (Admin Web, same file) are one workflow. Neither is complete alone.
+- **No dead-end pending state**: every pending message reaches an authorized approver and a
+  terminal outcome the sender can see. A teacher whose message sits in `pending` with no
+  approver anywhere is worse than a teacher whose message simply sends.
+- Calling authorization must run through the **same** *(actor, conversation, channel)* path as
+  messaging, so **BR-1** cannot be enforced in one and missed in the other.

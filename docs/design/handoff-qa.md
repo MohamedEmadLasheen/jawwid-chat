@@ -15,7 +15,7 @@ These map to `design-qa.md` §A. Each is objectively pass/fail.
 | Gate | Assertion | How to produce the state |
 |---|---|---|
 | **DQ-01** | No attention score, bucket number, or priority label is rendered anywhere | grep for numeric attention bindings; screenshot every admin screen at 3 data volumes; the **only** legal number is the manager dashboard's workload score beside its breakdown |
-| **DQ-02** | Owner is visible on every family surface and is never replaced by on-duty | fixture the same family under coverage, assist, escalation and stickiness — owner line present in all four |
+| **DQ-02** | The **Primary Owner** is visible on every family surface and is never replaced by the **Current Handler** | fixture the same family under coverage, assist, escalation and stickiness — the Primary Owner line is present in all four |
 | **DQ-03** | No internal note, case type, severity, or staff identity beyond the owner reaches a parent or teacher surface | fixture a family with internal notes, an `at_risk` state and an escalated case; sweep every mobile screen **and** assert at the API |
 | **DQ-04** | No phone number in any screen, payload, notification, call log, search result or export | server-side response filter test + visual sweep. You already flagged this; it is worth one dedicated test |
 | **DQ-05** | A queued or pending message never looks delivered | airplane mode, send, screenshot beside a delivered message |
@@ -115,12 +115,25 @@ gradient surfaces, no shadow-heavy lists.
 name · an unbroken 200-character token in a message · a 4000-character message · an emoji-only
 message inside an RTL thread · a family with 6 contacts and 4 students.
 
-## 9. One thing I need from you
+## 9. Two things I need from you
 
-**`docs/design/discovery.md` §4** documents a live cross-agent contradiction: mobile is building
-approvals and calling, admin is not building their counterparts, and neither has a backend
-entity. Please treat **OQ-1** and **OQ-4** as release-blocking *product* decisions in your gate
-list, not as design questions.
+**First — your `authoritative-scope.md` corrected this pack.** It was originally written on the
+premise that the PDF brief governed, and it has been re-conformed against your §3. Three of its
+conclusions were withdrawn (the conversation model, the approver, and treating calling as
+droppable). `scope-authority.md` records the corrections. If you find more, they are defects in
+my work, not decisions to route around.
 
-Shipping half of an approval workflow — a teacher whose message sits in `pending` with no
-approver anywhere — is worse than shipping none of it.
+**Second — one gate I would add, and one history note.**
+
+**The gate: no dead-end pending state.** `screens/approvals.md` §1 requires that every pending
+message reaches an authorized approver and a terminal outcome. It is testable independently of
+**OQ-1**: whatever routing rule is chosen, assert that it can never yield "nobody", or that it
+has an explicit fallback in the way `on_duty()` returning NONE yields the Unattended list rather
+than silence. A teacher whose message sits in `pending` with no approver anywhere is worse than
+no approval workflow.
+
+**The history note, for G-16.** One real employee name from the brief reached
+`docs/design/terminology.md` and was removed during review. Before the fix landed, that revision
+was swept into another agent's commit, so **the name is present in git history**. The working
+tree is clean and the scan in `FREEZE.md` §6 confirms it. Whether history needs remediation is
+your call, not mine.
