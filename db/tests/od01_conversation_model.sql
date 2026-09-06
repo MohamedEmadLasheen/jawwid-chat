@@ -201,12 +201,26 @@ begin
   end if;
   raise notice 'pass  D4 task carries the PRD §7.6 vocabulary (C-3 system-event carrier)';
 
-  -- C-1: exactly four conversation types, no fifth.
-  if (select pg_get_constraintdef(oid) from pg_constraint
-       where conrelid = 'chat.conversation'::regclass
-         and pg_get_constraintdef(oid) like '%student_group%' limit 1)
-     not like '%direct%student_group%class_group%official%' then
+  -- C-1: exactly four conversation types, no fifth. Targets the named type
+  -- constraint rather than "any constraint mentioning student_group" -- the
+  -- learner_id check mentions it too, and matching whichever came back first
+  -- made this assertion depend on catalogue ordering.
+  if not exists (
+    select 1 from pg_constraint
+     where conrelid = 'chat.conversation'::regclass
+       and conname = 'conversation_type_check'
+       and pg_get_constraintdef(oid) like '%direct%'
+       and pg_get_constraintdef(oid) like '%student_group%'
+       and pg_get_constraintdef(oid) like '%class_group%'
+       and pg_get_constraintdef(oid) like '%official%') then
     raise exception 'FAIL: conversation.type is not exactly the four PRD types';
+  end if;
+  if exists (
+    select 1 from pg_constraint
+     where conrelid = 'chat.conversation'::regclass
+       and conname = 'conversation_type_check'
+       and pg_get_constraintdef(oid) ~ '''(?!direct|student_group|class_group|official)[a-z_]+''') then
+    raise exception 'FAIL: conversation.type carries a fifth type (C-1 forbids one)';
   end if;
   raise notice 'pass  D5 conversation.type is exactly the four PRD types (C-1)';
 end $$;
