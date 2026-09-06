@@ -187,6 +187,24 @@ abstract class L10n {
   /// **'Groups'**
   String get tabGroups;
 
+  /// No description provided for @homeYourChildren.
+  ///
+  /// In en, this message translates to:
+  /// **'Your children'**
+  String get homeYourChildren;
+
+  /// No description provided for @homeMessageJawwid.
+  ///
+  /// In en, this message translates to:
+  /// **'Message Jawwid'**
+  String get homeMessageJawwid;
+
+  /// No description provided for @homeNeedsReply.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs a reply'**
+  String get homeNeedsReply;
+
   /// No description provided for @tabCalls.
   ///
   /// In en, this message translates to:

@@ -58,6 +58,15 @@ class L10nEn extends L10n {
   String get tabGroups => 'Groups';
 
   @override
+  String get homeYourChildren => 'Your children';
+
+  @override
+  String get homeMessageJawwid => 'Message Jawwid';
+
+  @override
+  String get homeNeedsReply => 'Needs a reply';
+
+  @override
   String get tabCalls => 'Calls';
 
   @override

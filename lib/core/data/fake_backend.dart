@@ -40,6 +40,10 @@ class FakeBackend {
   /// Set to make the next network-ish call fail, so tests can drive error paths.
   AppError? nextFailure;
 
+  /// Set to make every call fail until cleared — used to assert a settled error state,
+  /// which a single-shot failure cannot do once retries are in play.
+  AppError? persistentFailure;
+
   void dispose() => _sessionRevoked.close();
 
   /// Simulate the backend ending this session (§7, §9).
@@ -181,6 +185,9 @@ class FakeBackend {
   }
 
   void _maybeFail() {
+    final persistent = persistentFailure;
+    if (persistent != null) throw persistent;
+
     final failure = nextFailure;
     if (failure != null) {
       nextFailure = null;

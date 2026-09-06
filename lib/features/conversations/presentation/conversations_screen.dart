@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/providers.dart';
+import '../../../app/router.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/errors/error_presenter.dart';
 import '../../../design/tokens.dart';
@@ -17,6 +19,7 @@ import 'conversation_tile.dart';
 class ConversationsScreen extends ConsumerWidget {
   const ConversationsScreen({super.key, this.onOpenConversation});
 
+  /// Overridable so widget tests can observe navigation without a router.
   final void Function(String conversationId)? onOpenConversation;
 
   @override
@@ -36,7 +39,8 @@ class ConversationsScreen extends ConsumerWidget {
           AsyncData(:final value) when value.isEmpty => _EmptyState(role: role),
           AsyncData(:final value) => _SectionedList(
               sections: value,
-              onOpenConversation: onOpenConversation,
+              onOpenConversation: onOpenConversation ??
+                  (id) => context.push(Routes.conversation(id)),
             ),
         },
       ),
@@ -45,10 +49,10 @@ class ConversationsScreen extends ConsumerWidget {
 }
 
 class _SectionedList extends StatelessWidget {
-  const _SectionedList({required this.sections, this.onOpenConversation});
+  const _SectionedList({required this.sections, required this.onOpenConversation});
 
   final List<ConversationSection> sections;
-  final void Function(String conversationId)? onOpenConversation;
+  final void Function(String conversationId) onOpenConversation;
 
   @override
   Widget build(BuildContext context) {
@@ -64,7 +68,7 @@ class _SectionedList extends StatelessWidget {
           ConversationTile(
             conversation: conversation,
             now: now,
-            onTap: () => onOpenConversation?.call(conversation.id),
+            onTap: () => onOpenConversation(conversation.id),
           ),
         );
       }

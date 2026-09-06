@@ -58,6 +58,15 @@ class L10nAr extends L10n {
   String get tabGroups => 'المجموعات';
 
   @override
+  String get homeYourChildren => 'أبناؤك';
+
+  @override
+  String get homeMessageJawwid => 'مراسلة جَوِّد';
+
+  @override
+  String get homeNeedsReply => 'بانتظار ردك';
+
+  @override
   String get tabCalls => 'المكالمات';
 
   @override
