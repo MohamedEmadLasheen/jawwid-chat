@@ -75,8 +75,19 @@ refuse to pick a winner by accident:
   is a superset able to host either model — so resolving F-1 does not also
   require rebuilding local development.
 
-**This must be decided before a production database exists.** After that, the
-loser's schema has to be migrated rather than chosen.
+**Update, later the same day — the decision has been made.** The product owner
+locked it (`docs/product-operations/database-divergence.md` §0): Jawwid Chat is
+standalone, **owns its own PostgreSQL database**, has **one** authoritative
+migration system — the SQL migrations — and integrates with Jawwid Core over an
+API/webhook boundary rather than direct database coupling. That matches the
+authority infrastructure had already inferred from the evidence (ADR-002), so no
+pipeline changes were needed. AI #1 owns the reconciliation; AI #8 and AI #10
+track it as a release blocker.
+
+One infrastructure decision *was* reversed by the lock: the local Postgres image.
+It was the Supabase image solely because Chat was believed to live inside Core's
+database. That premise is gone, so the local stack is now plain
+`postgres:17-alpine`, matching the image CI runs migrations against (ADR-001).
 
 ### F-2 · The API cannot start while Postgres is unavailable — for AI #1
 
@@ -114,6 +125,12 @@ The corrected procedure — apply the Core schema (or `db/test/00_core_shim.sql`
 first, then restore `chat` — was then verified to complete cleanly: 0 errors,
 31 tables, 57 config rows, 13 migration ledger entries. It is documented in
 `backup-recovery.md` and is exercised by CI.
+
+**This constraint is transitional.** Once the locked decision lands and Core is
+reached over an API/webhook boundary instead of `chat.core_*` views, a `chat`
+dump becomes self-contained and the extra step disappears. The warning must be
+removed from the runbook when that happens — a stale recovery caveat is its own
+hazard.
 
 Second-order finding from the same drill: restoring a Supabase-flavoured dump
 requires a role with `CREATE` on the target database. The plain `postgres`
