@@ -122,4 +122,16 @@ insert into chat.config (key, value, scope, description) values
 ('reopen.window_hours', '72', 'lifecycle',
  '[brief] resolved -> closed after this window; a customer message inside it reopens the case.'),
 ('automation.batch_ack_seconds', '60', 'lifecycle',
- '[brief] Batch wait before acknowledging multiple rapid messages.');
+ '[brief] Batch wait before acknowledging multiple rapid messages.'),
+
+-- Integration boundary -------------------------------------------------------
+-- Jawwid Chat keeps its own subscription vocabulary. This map translates what
+-- Jawwid Core sends. A Core status that is missing here lands as `unknown` and
+-- is reported by chat.unmapped_core_subscription_status -- a config edit, not
+-- an outage. Seeded from the vocabulary Core used at the time of writing.
+('integration.subscription_status_map',
+ '{"trialing":"trialing","free":"active","active":"active","lifetime":"active",
+   "grace_period":"grace","pending_payment":"past_due","failed_payment":"past_due",
+   "paused":"paused","cancelled":"cancelled","refunded":"cancelled","expired":"expired"}',
+ 'integration',
+ 'Jawwid Core subscription status -> Jawwid Chat status. Unmapped values become `unknown`.');

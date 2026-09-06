@@ -72,11 +72,16 @@ describe('BR-1 database backstop', () => {
     expect(err).toContain('BR-1 violation');
   });
 
-  it('allows a teacher and a parent to share a GROUP conversation', () => {
+  it('allows a teacher and a parent to share a GROUP conversation (with an admin present)', () => {
     const id = sql(`insert into chat.conversation (type, state) values ('class_group','open') returning id`);
+    // RT-025 hardening: a teacher and a parent may share a group, but BR-1's
+    // second clause -- "with the required admin presence" -- is now enforced, so
+    // the admin is part of the legal shape rather than optional.
+    addMember(id, 'staff', 'admin');
     addMember(id, 'teacher', 'teacher');
     addMember(id, 'contact', 'parent');
-    expect(sql(`select count(*) from chat.conversation_member where conversation_id='${id}' and left_at is null`)).toBe('2');
+    // admin + teacher + parent
+    expect(sql(`select count(*) from chat.conversation_member where conversation_id='${id}' and left_at is null`)).toBe('3');
   });
 
   /**
@@ -90,6 +95,7 @@ describe('BR-1 database backstop', () => {
    */
   it('JC-008: converting a teacher+parent GROUP into a DIRECT conversation must be rejected', () => {
     const id = sql(`insert into chat.conversation (type, state) values ('class_group','open') returning id`);
+    addMember(id, 'staff', 'admin');   // RT-025: required admin presence
     addMember(id, 'teacher', 'teacher');
     addMember(id, 'contact', 'parent');
 

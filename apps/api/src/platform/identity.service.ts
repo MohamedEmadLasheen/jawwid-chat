@@ -10,6 +10,8 @@ import { ActorKind, Locale, StaffRole } from '../communication/contracts/vocab';
  * Until it lands, a teacher is recognised by appearing as chat.learner.teacher_id.
  * When AI #1 adds a real teacher table this resolver changes and nothing else does.
  */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export interface IdentityService {
   resolveActor(actorId: string): Promise<Actor | null>;
 }
@@ -20,6 +22,12 @@ export class PrismaIdentityService implements IdentityService {
 
   async resolveActor(actorId: string): Promise<Actor | null> {
     if (actorId === SYSTEM_ACTOR.actorId) return SYSTEM_ACTOR;
+
+    // Every actor id is a uuid. Without this guard an absent or malformed
+    // header reaches Prisma, which raises P2023 and surfaces as a 500 -- an
+    // unauthenticated request must be a clean 401, and a driver error must
+    // never be the thing that answers it.
+    if (!UUID_RE.test(actorId)) return null;
 
     const staff = await this.prisma.staff.findUnique({ where: { id: actorId } });
     if (staff) {

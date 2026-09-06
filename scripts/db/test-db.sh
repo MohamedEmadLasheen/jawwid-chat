@@ -6,17 +6,18 @@
 #   scripts/db/test-db.sh psql    interactive shell
 #   scripts/db/test-db.sh down    remove the container
 #
-# Uses the same Postgres image Supabase runs, so the auth schema, the
-# anon/authenticated/service_role roles and RLS behave as they do in production.
+# Plain PostgreSQL: Jawwid Chat owns its entire schema and depends on no other
+# product's database. The two application roles are created by
+# db/testkit/00_bootstrap.sql.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CONTAINER=jawwid-chat-test
-IMAGE=public.ecr.aws/supabase/postgres:17.6.1.140
+IMAGE=postgres:17
 DB=jawwid_chat_test
 PORT=55432
 
-psql_cmd() { docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 -U supabase_admin -d "$DB" "$@"; }
+psql_cmd() { docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d "$DB" "$@"; }
 
 case "${1:-reset}" in
   up)
@@ -33,10 +34,9 @@ case "${1:-reset}" in
     ;;
   reset)
     "$0" up
-    psql_cmd -q -c "drop schema if exists chat cascade;" \
-                -c "drop table if exists public.payments, public.subscriptions, public.children, public.profiles cascade;"
-    psql_cmd -q -f - < "$ROOT/db/test/00_core_shim.sql"
-    PSQL="docker exec -i $CONTAINER psql -v ON_ERROR_STOP=1 -U supabase_admin -d $DB" \
+    psql_cmd -q -c "drop schema if exists chat cascade;"
+    psql_cmd -q -f - < "$ROOT/db/testkit/00_bootstrap.sql"
+    PSQL="docker exec -i $CONTAINER psql -v ON_ERROR_STOP=1 -U postgres -d $DB" \
       bash "$ROOT/scripts/db/apply.sh"
     ;;
   psql) psql_cmd ;;

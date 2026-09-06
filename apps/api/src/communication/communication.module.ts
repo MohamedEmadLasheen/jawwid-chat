@@ -16,6 +16,7 @@ import { AttachmentService } from './attachments/attachment.service';
 import { SignedLocalObjectStorage } from './attachments/object-storage';
 import { OutboxService } from './outbox/outbox.service';
 import { OutboxWorker } from './outbox/outbox.worker';
+import { WorkerScheduler } from './outbox/worker.scheduler';
 import { NotificationService } from './notifications/notification.service';
 import { ReminderService } from './notifications/reminder.service';
 import { TemplateService } from './notifications/template.service';
@@ -50,6 +51,7 @@ import { NotificationController } from './api/notification.controller';
     AttachmentService,
     OutboxService,
     OutboxWorker,
+    WorkerScheduler,
     NotificationService,
     ReminderService,
     TemplateService,
@@ -71,6 +73,7 @@ import { NotificationController } from './api/notification.controller';
     NotificationService,
     ReminderService,
     OutboxWorker,
+    WorkerScheduler,
   ],
 })
 export class CommunicationModule {}
