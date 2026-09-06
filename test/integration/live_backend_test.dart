@@ -90,9 +90,21 @@ void main() {
         expect(conversation.requiresApproval, isA<bool>());
       });
 
-      test('message history comes back ordered with a string seq parsed', () async {
-        final page =
-            await messagesAs(parentId!).history(conversationId!, limit: 50);
+      test('message history comes back with a string seq parsed', () async {
+        final repository = messagesAs(parentId!);
+
+        // Self-contained: a freshly seeded conversation has no messages, and a test that
+        // depends on what an earlier test left behind is a test that fails in isolation.
+        await repository.send(
+          OutgoingMessage(
+            clientMessageId: 'live-history-${DateTime.now().microsecondsSinceEpoch}',
+            conversationId: conversationId!,
+            kind: MessageKind.text,
+            body: 'سجل المحادثة',
+          ),
+        );
+
+        final page = await repository.history(conversationId, limit: 50);
 
         expect(page.items, isNotEmpty);
         for (final message in page.items) {
@@ -157,7 +169,17 @@ void main() {
 
       test('resync returns only what came after a watermark', () async {
         final repository = messagesAs(parentId!);
-        final page = await repository.history(conversationId!, limit: 50);
+
+        await repository.send(
+          OutgoingMessage(
+            clientMessageId: 'live-resync-${DateTime.now().microsecondsSinceEpoch}',
+            conversationId: conversationId!,
+            kind: MessageKind.text,
+            body: 'نقطة المزامنة',
+          ),
+        );
+
+        final page = await repository.history(conversationId, limit: 50);
         final highest = page.items
             .map((m) => m.sequence ?? 0)
             .fold<int>(0, (a, b) => a > b ? a : b);
