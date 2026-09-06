@@ -165,3 +165,77 @@ boundary; (3) every mirrored entity has a named producer and a visible `synced_a
 **CF-01** (audience), **CF-02** (stickiness scope + presence), **CF-05** (Node state inference),
 **CF-06** (renewal producers), **FS-12** (manager mode), **X-03** (config fail-quiet),
 **NF-02** (no branch builds a database) — all unchanged in the working tree.
+
+---
+
+## Re-verification pass 3 — 2026-09-06
+
+Triggered by the product owner accepting CF-09 as a release blocker. Two new artifacts:
+`core-decoupling-audit.md` (every coupling occurrence classified) and
+`domain-authority-register.md` (one definition per entity). Isolation strategy drafted into
+`docs/release/worktree-isolation.md` at instruction.
+
+### AI #9 security findings — retained, independently re-verified
+
+Instruction: retain RT-003, RT-004, RT-005, RT-007, RT-008, RT-023, RT-024, RT-025; delete no
+tests; weaken no assertions; close only on an enforced and independently verified invariant.
+
+| RT | AI #9's record | AI #8 re-verification (2026-09-06) | Status |
+|---|---|---|---|
+| **RT-003** | Manager may choose `on_behalf_mode`; *"survives verbatim through two rewrites"* | `authorization.service.ts:223-225` now reads `if (actor.staffRole === 'manager') { const mode = await this.deriveMode(actor, conv, familyOwnerId, now, intent.requestedMode) }` and `deriveMode` honours **only** `ESCALATION` from the client. A manager can no longer claim `OWNER` | **FIXED — pending AI #9 re-verification.** Also closes my **FS-12** |
+| **RT-004** | **REGRESSED** — `deriveMode(actor,_conv,fallback){return fallback}`, stamping every internal note `OWNER` | `deriveMode` now takes `familyOwnerId` and `now`; returns `OWNER` only on `actor.actorId === familyOwnerId`, `COVERAGE` only when `await this.coverage.onDuty(...) === actor.actorId`. The ownership comparison **and** the `onDuty()` call are restored | **FIXED — pending AI #9 re-verification.** The regression AI #9 flagged *"do not let this be absorbed silently"* was not absorbed silently — it is recorded here as fixed, with evidence |
+| **RT-005** | `STORAGE_SIGNING_SECRET` falls back to `'dev-only-not-a-secret'`; absent from `.env.example` | not re-read this pass | **OPEN — retained** |
+| **RT-007** | MIME/size validation exists but the send path never calls `AttachmentService.validate` | `npx jest --selectProjects unit` → the two failing tests are **`RT-007 (fixed) · rejects an oversized image`** and **`· accepts a legitimate voice note`**. The suite is named "(fixed)" and is **red** | **OPEN — retained. The fix is incomplete or regressed; the test name asserts a state the run contradicts** |
+| **RT-008** | Contact may send `type: SYSTEM, origin: AUTOMATION`; `validateContent` does not reject empty SYSTEM | not re-read this pass | **OPEN — retained** |
+| **RT-023** | Migrations do not apply to an empty database — `chat.family/staff/learner/thread/message` referenced, created by no migration | Independently confirmed as my **NF-02** by branch inspection: those tables live in `…090200/090300/090400` on `feat/backend-foundation`, absent from `feat/infrastructure` | **OPEN — retained. Same defect as NF-02; RT-023 is the runtime proof, NF-02 the branch analysis** |
+| **RT-024** | BR-1 bypass by `UPDATE chat.conversation SET type='direct'` on an existing group — trigger checks membership, not type mutation. Calling identical | not re-executed (needs a live database) | **OPEN — retained.** Directly narrows my PC-3: the DB backstop does **not** hold under type mutation |
+| **RT-025** | `student_group`/`class_group` may exist with **zero** admin members; trigger scopes to `type='direct'` only | not re-executed | **OPEN — retained.** **Interacts with OD-03/AMB-9:** the required admin presence rule is undefined, so the *correct* enforcement cannot be specified. RT-025 must not be "fixed" by guessing the rule |
+| **RT-027** | Unit suite did not run at all — 6 failed, 1 passed, all `Test suite failed to run` | `npx jest --selectProjects unit` → **2 failed, 3 passed; 4 failed, 65 passed, 69 total**. The suite executes; `br1-conformance.spec.ts` passes | **IMPROVED — retained until green.** The remaining failures are RT-007's, which is the correct signal for an open finding |
+
+**Correction to my own PC-3.** `positive-controls.md` records the BR-1 database trigger as a
+strong control. **RT-024 proves it is bypassable by type mutation** and RT-025 proves it does
+not cover `class_group` at all. PC-3's verification step is amended: it must assert the trigger
+fires on `chat.conversation.type` **UPDATE**, not only on membership insert/update. The control
+is real but narrower than I recorded it.
+
+### CF-09 — expanded into a full disposition register
+
+`core-decoupling-audit.md` classifies **21 occurrences**: 7 Core-business-table sites (C-01…C-07),
+3 Supabase-auth sites (A-01…A-03), 7 test/CI fixture sites (T-01…T-07), plus 4 objects that
+already have the right shape and must be preserved.
+
+Two findings worth surfacing here:
+
+- **The coupling is smaller than feared and the shim is what hides it.** The entire Core read
+  surface is three views in one migration. Every migration "applies cleanly" in CI *because CI
+  fabricates Core first* (`scripts/db/test-db.sh:37-38`). **Removing the shim is the test.**
+- **`auth.uid()` must change regardless of the auth decision.** A clean PostgreSQL has no `auth`
+  schema, so the five RLS policies in `…091200` fail at creation. This makes the undeclared
+  authorization strategy (**X-15**) urgent rather than theoretical. **The replacement mechanism
+  is AI #1's choice and is not named by this audit.**
+
+### Correction accepted: Prisma is no longer a competing schema
+
+**X-01 / DB-M1 are narrowed.** Prisma now declares `previewFeatures = ["multiSchema"]`,
+`schemas = ["chat"]` and `@@schema("chat")` per model; the `/// DESIGN-ONLY` block is gone; CI
+runs `prisma generate` only. **My earlier characterisation — two competing schemas — is no
+longer accurate and is corrected here rather than left to age.** What remains is DA-2: a legacy
+`Thread` coexisting with `Conversation` in both stacks, which AI #9 records as **RT-026** (the
+BR-1 triggers guard tables no service targets).
+
+### Status changes
+
+| ID | BEFORE | AFTER | VERIFIED STATUS |
+|---|---|---|---|
+| **FS-12 / RT-003** | manager mode client-chosen | `deriveMode` honours only ESCALATION | **FIXED** |
+| **RT-004** | regressed to unconditional `OWNER` | ownership comparison and `onDuty()` restored | **FIXED** |
+| **X-01 / DB-M1** | two competing schemas | Prisma is client-only over `chat` | **NARROWED to DA-2** |
+| **DB-M8** | superseded `/// DESIGN-ONLY` models | removed from Prisma | **FIXED** |
+| **PC-3** | BR-1 trigger recorded as a strong control | bypassable by type mutation (RT-024); no `class_group` cover (RT-025) | **NARROWED** |
+| **CF-09** | raised at pass 2 | 21 occurrences classified; CI gates G-CORE-01…06 specified | **OPEN — RELEASE BLOCKER** |
+| **CF-08** | teacher seam | invariant INV-CF08 + acceptance criteria stated | **OPEN — BLOCKING** |
+
+### Minor observation, not a finding
+
+`deriveMode`'s final two lines are `if (requested === ASSIST) return ASSIST; return ASSIST;` —
+a dead branch. Harmless; worth removing when the assist grant (FS-11) is implemented.

@@ -5,7 +5,17 @@
 
 ---
 
-# 🔴 NOT READY
+# 🔴 NOT READY — RECONCILIATION BLOCKED
+
+**Status reaffirmed 2026-09-06.** READY and READY WITH KNOWN RISKS are both unavailable until
+reconciliation completes. The immediate objective is not features: **one PRD · one database ·
+one domain model · one authorization model · one realtime contract · one isolated integration
+process.** Feature implementation resumes only after that.
+
+Blocking, as of pass 3: **CF-09** (Core DB coupling) · **CF-08** (teacher identity) ·
+**RC-01** (no API process) · **NF-02 / RT-023** (no branch builds a database) ·
+**RT-005 / RT-007 / RT-008 / RT-024 / RT-025** (open security findings) · shared-worktree
+isolation (`docs/release/worktree-isolation.md`).
 
 Not as a judgement of the work — the documentation and the code that exists are of high
 quality — but as a statement of fact: **the operating model that distinguishes Jawwid Chat
