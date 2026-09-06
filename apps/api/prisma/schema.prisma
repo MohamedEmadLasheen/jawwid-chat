@@ -23,6 +23,8 @@ datasource db {
 // =====================================================================
 
 model Staff {
+  /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
+  organizationId String @map("organization_id") @db.Uuid
   id             String    @id @default(uuid()) @db.Uuid
   name           String
   role           String
@@ -41,6 +43,8 @@ model Staff {
 }
 
 model Family {
+  /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
+  organizationId String @map("organization_id") @db.Uuid
   id               String   @id @default(uuid()) @db.Uuid
   displayName      String   @map("display_name")
   ownerId          String   @map("owner_id") @db.Uuid
@@ -62,6 +66,8 @@ model Family {
 }
 
 model Contact {
+  /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
+  organizationId String @map("organization_id") @db.Uuid
   id                String   @id @default(uuid()) @db.Uuid
   familyId          String   @map("family_id") @db.Uuid
   family            Family   @relation(fields: [familyId], references: [id])
@@ -83,6 +89,8 @@ model Contact {
 }
 
 model Learner {
+  /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
+  organizationId String @map("organization_id") @db.Uuid
   id          String    @id @default(uuid()) @db.Uuid
   familyId    String    @map("family_id") @db.Uuid
   family      Family    @relation(fields: [familyId], references: [id])
@@ -103,6 +111,8 @@ model Learner {
 /// The family's continuous customer-success record. Cases, tasks, handoffs and
 /// the attention engine hang off it. Communication channels are Conversations.
 model Thread {
+  /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
+  organizationId String @map("organization_id") @db.Uuid
   id                    String    @id @default(uuid()) @db.Uuid
   familyId              String    @unique @map("family_id") @db.Uuid
   family                Family    @relation(fields: [familyId], references: [id])
@@ -167,6 +177,8 @@ model AuditLog {
 // =====================================================================
 
 model Conversation {
+  /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
+  organizationId String @map("organization_id") @db.Uuid
   id        String  @id @default(uuid()) @db.Uuid
   type      String
   familyId  String? @map("family_id") @db.Uuid
@@ -229,6 +241,8 @@ model ConversationMember {
 }
 
 model Message {
+  /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
+  organizationId String @map("organization_id") @db.Uuid
   id             String        @id @default(uuid()) @db.Uuid
   conversationId String?       @map("conversation_id") @db.Uuid
   conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -349,6 +363,8 @@ model ConversationParticipantState {
 }
 
 model MessageApproval {
+  /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
+  organizationId String @map("organization_id") @db.Uuid
   id              String       @id @default(uuid()) @db.Uuid
   messageId       String       @unique @map("message_id") @db.Uuid
   message         Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
@@ -381,6 +397,8 @@ model OutboxEvent {
 }
 
 model DeviceToken {
+  /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
+  organizationId String @map("organization_id") @db.Uuid
   id         String   @id @default(uuid()) @db.Uuid
   actorId    String   @map("actor_id") @db.Uuid
   token      String   @unique
@@ -396,6 +414,8 @@ model DeviceToken {
 }
 
 model NotificationTemplate {
+  /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
+  organizationId String @map("organization_id") @db.Uuid
   id        String   @id @default(uuid()) @db.Uuid
   key       String
   locale    String
@@ -411,6 +431,8 @@ model NotificationTemplate {
 }
 
 model NotificationRule {
+  /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
+  organizationId String @map("organization_id") @db.Uuid
   key               String   @id
   eventType         String   @map("event_type")
   offsetSeconds     Int      @map("offset_seconds") @default(0)
@@ -429,6 +451,8 @@ model NotificationRule {
 }
 
 model Notification {
+  /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
+  organizationId String @map("organization_id") @db.Uuid
   id          String  @id @default(uuid()) @db.Uuid
   /// THE deduplication guarantee.
   dedupeKey   String  @unique @map("dedupe_key")
@@ -461,6 +485,8 @@ model Notification {
 }
 
 model QuietHours {
+  /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
+  organizationId String @map("organization_id") @db.Uuid
   actorId     String  @id @map("actor_id") @db.Uuid
   timezone    String  @default("Africa/Cairo")
   startMinute Int     @map("start_minute") @default(1320)
@@ -472,6 +498,8 @@ model QuietHours {
 }
 
 model Call {
+  /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
+  organizationId String @map("organization_id") @db.Uuid
   id              String       @id @default(uuid()) @db.Uuid
   conversationId  String       @map("conversation_id") @db.Uuid
   conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -506,5 +534,18 @@ model CallParticipant {
 
   @@unique([callId, actorId])
   @@map("call_participant")
+  @@schema("chat")
+}
+
+/// Tenant root (PRD 2.3). DDL lives in supabase/migrations/20260906120000_chat_organization.sql.
+model Organization {
+  id           String   @id @default(uuid()) @db.Uuid
+  slug         String   @unique
+  displayName  String   @map("display_name")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("organization")
   @@schema("chat")
 }
