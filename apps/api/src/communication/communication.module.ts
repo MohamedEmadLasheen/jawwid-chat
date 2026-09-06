@@ -25,6 +25,8 @@ import { RealtimeGateway } from './realtime/realtime.gateway';
 import { TypingService } from './realtime/typing.service';
 import { PresenceService } from './realtime/presence.service';
 import { redisProvider } from './realtime/redis.provider';
+import { RelayRealtimePublisher } from '../infra/realtime/relay.publisher';
+import { RealtimeRelay } from '../infra/realtime/realtime-relay.service';
 
 import { ConversationController } from './api/conversation.controller';
 import { MessageController } from './api/message.controller';
@@ -60,8 +62,15 @@ import { NotificationController } from './api/notification.controller';
     { provide: OBJECT_STORAGE, useClass: SignedLocalObjectStorage },
     { provide: PUSH_PROVIDER, useClass: LoggingPushProvider },
     { provide: MEDIA_TOKEN_ISSUER, useClass: LiveKitTokenIssuer },
-    // The gateway is the realtime publisher; workers depend on the interface.
-    { provide: REALTIME_PUBLISHER, useExisting: RealtimeGateway },
+    // AI #7 (D-2). The gateway ALONE cannot be the publisher: in the worker
+    // process there is no Socket.IO server, so gateway.toThread()'s
+    // `this.server?.` made every emit a silent no-op while OutboxWorker still
+    // marked the row published. RelayRealtimePublisher delegates to the gateway
+    // when this process owns a server and otherwise publishes over Redis to the
+    // instances that do -- throwing if none received it, so the outbox retries.
+    RelayRealtimePublisher,
+    RealtimeRelay,
+    { provide: REALTIME_PUBLISHER, useExisting: RelayRealtimePublisher },
   ],
   exports: [
     ConversationService,
@@ -71,6 +80,7 @@ import { NotificationController } from './api/notification.controller';
     NotificationService,
     ReminderService,
     OutboxWorker,
+    RealtimeRelay,
   ],
 })
 export class CommunicationModule {}
