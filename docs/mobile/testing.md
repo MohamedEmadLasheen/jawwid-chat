@@ -123,3 +123,20 @@ flutter test
 
 Both must be clean. The directionality and privacy guards run inside `flutter test`, so CI
 needs no extra step for them.
+
+### Verifying a full compile without the platform SDKs
+
+`flutter analyze` is a static pass; it is not the compiler. On a machine without the Android
+SDK or CocoaPods — which is how this codebase was developed — the whole of `lib/` can still
+be put through the real Dart compiler by adding a throwaway web target:
+
+```bash
+flutter create . --platforms=web && flutter build web --release && rm -rf web build
+```
+
+This was run and **succeeded**, so every file compiles, not merely analyses. Web is not a
+shipping target and the scaffolding is deliberately not committed.
+
+A genuine device build still requires the Android SDK (Android) or CocoaPods (iOS), and
+neither has been run here — see the final report's honest statement of what is and is not
+verified.

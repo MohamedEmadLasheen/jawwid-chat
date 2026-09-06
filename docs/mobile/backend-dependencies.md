@@ -1,13 +1,39 @@
 # Mobile → Backend Dependencies (AI #3 → AI #1 / AI #2)
 
-**Status: REQUEST — not an agreed contract.**
-Nothing in this document has been implemented or signed off by AI #1 or AI #2. It exists
-because role-assignment §57/§58/§80 require missing contracts to be *documented rather than
-invented*. The mobile client is built against the interfaces in `lib/core/data/` so that when
-the real contract lands, only the HTTP/WebSocket implementations change.
+> ## Status update — 2026-09-05, after AI #2 published its contract
+>
+> **Most of this document is now satisfied.** AI #2 has shipped
+> `apps/api/src/communication/contracts/` (`dto.ts`, `events.ts`, `vocab.ts`), the
+> `chat.*` schema, and REST controllers for conversations, messages, approvals, calls and
+> notifications. `lib/core/data/wire/` maps that contract into the domain models and is
+> covered by `test/core/data/wire_mappers_test.dart`.
+>
+> Specifically resolved:
+>
+> | Was | Now |
+> |---|---|
+> | **C6** client idempotency key — "schema addition request" | `message.clientMessageId` exists; re-sending returns the original |
+> | **C8** Student Groups — "no entity exists" | `chat.conversation` type `student_group`, with `conversation_member` |
+> | **C9** approvals — "no entity exists" | `chat.message_approval` + `moderation` on the message |
+> | **C13** call authorization — "no entity exists" | `chat.call` + `POST /calls/:id/token` |
+> | **C5** cursor pagination + ordering key | `seq`, with `before`/`after` cursors |
+> | **C7** resumable realtime cursor | `after` on the message list; realtime gateway published |
+> | **C10** short-lived media URLs | `AttachmentDto.url` documented as signed, never permanent |
+> | Phone privacy | DTO mappers enumerate fields explicitly; the chat schema has no phone column |
+>
+> **Two contract details corrected the client**, and are worth recording because they were
+> not what mobile assumed:
+>
+> 1. `seq` is a **string**, not a number — it is 64-bit and JSON numbers are unsafe at that
+>    width. Parsing it as a number would silently round in a long conversation.
+> 2. Errors arrive as `{ error: { code, message } }`, not a flat `code`.
+>
+> **Still outstanding — see §5 below.**
 
-Where a requirement below has **no home in the project brief's §3 data model**, that is called
-out explicitly. Those need a product/architecture answer before they can be built server-side.
+---
+
+**Original request (2026-09-05, before the contract was published).** Retained as the record
+of what mobile asked for and why.
 
 ---
 
@@ -190,15 +216,27 @@ parameters. Timezone defaults to Cairo (§46).
 
 ---
 
-## 4. Open questions requiring a product or architecture answer
+## 4. Open questions — resolved
 
-1. **How does a teacher authenticate, and what entity is a teacher?** No teacher principal
-   exists in the brief. Blocks the entire teacher experience.
-2. **How do per-learner Student Groups coexist with `thread.family_id UNIQUE`** and "cases never
-   create a second thread"?
-3. **Is calling actually in scope?** It appears in the mobile role assignment and nowhere in the
-   brief. It is the single largest and riskiest piece of mobile work (LiveKit, CallKit,
-   ConnectionService) and should be confirmed before it is built.
-4. **Is message approval in scope**, and what is the real default policy?
-5. **Where is design doc v3?** The brief cites it as existing; it was never located, and it is
-   the most likely home for the answers to 1–4.
+Questions 1–4 of the original list are answered: `docs/qa/authoritative-scope.md` confirms the
+teacher app, Student Groups, approvals and voice calling are all MVP, and AI #2's `vocab.ts`
+supplies the teacher actor kind and the group/approval/call entities. Question 5 (design doc
+v3) was overtaken by `docs/design/`, which supplies the screen specs mobile needed.
+
+## 5. Still outstanding
+
+These are what mobile is currently blocked on or working around. Each is small.
+
+| # | Need | Owner | Why it matters |
+|---|---|---|---|
+| O1 | **Unread count per conversation** on `ConversationDto` | AI #2 | The chat list, the tab badge and Parent Home all render it. `GET /conversations/:id/messages/unread` exists but the list would need one call per row — a per-row round trip is exactly the cost the low-end target cannot absorb. |
+| O2 | **Last-message preview** on `ConversationDto` | AI #2 | Every chat-list row shows it; without it the list needs a second fetch per conversation. |
+| O3 | **Display names for members and authors** | AI #1 / AI #2 | `MessageDto` carries `authorId` but no name; `ConversationMemberDto` carries `actorId` but no name. Mobile renders names and avatars and must never fall back to an id. |
+| O4 | **The `handledBy` label** for the Jawwid thread | AI #2 | `parent-home.md` §4 requires the parent's Jawwid contact. Mobile must not derive it; it needs a supplied, already-localised string. |
+| O5 | **Auth, session and device endpoints** | AI #1 | C1–C3 are unchanged: login, refresh, logout, `me`, device registration and revocation. The communication engine assumes an actor id already exists. |
+| O6 | **Localisation of server-originated strings** | AI #1 / AI #2 | System messages, rejection reasons and reminder bodies must arrive localised or as key+params. Mobile will not compose them. |
+| O7 | **Learner reference on a student-group conversation** | AI #2 | `learnerId` is present; mobile also needs the learner's display name to group rows under each child. |
+
+O1 and O2 are the two that shape a screen rather than a field: without them the chat list
+cannot be built in one request, and the parent audience's network is the constraint the whole
+mobile design is organised around.
