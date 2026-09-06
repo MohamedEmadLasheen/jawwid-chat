@@ -117,9 +117,6 @@ export class ConversationService {
     // The family context is whichever side is a family contact.
     const contact = a.kind === ActorKind.CONTACT ? a : b.kind === ActorKind.CONTACT ? b : null;
     const familyId = contact?.familyId ?? null;
-    const thread = familyId
-      ? await this.prisma.thread.findUnique({ where: { familyId } })
-      : null;
 
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -128,7 +125,6 @@ export class ConversationService {
             type: ConversationType.DIRECT,
             directKey: key,
             familyId,
-            threadId: thread?.id ?? null,
             title: null,
           },
         });
@@ -196,8 +192,6 @@ export class ConversationService {
     });
     if (existing) return existing;
 
-    const thread = await this.prisma.thread.findUnique({ where: { familyId: learner.familyId } });
-
     const members: MemberSpec[] = [
       ...learner.family.contacts
         .filter((c) => c.canMessage)
@@ -226,7 +220,6 @@ export class ConversationService {
           type: ConversationType.STUDENT_GROUP,
           familyId: learner.familyId,
           learnerId: learner.id,
-          threadId: thread?.id ?? null,
           title: `${learner.name} · Jawwid`,
         },
       });

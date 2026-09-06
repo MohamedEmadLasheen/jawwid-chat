@@ -67,7 +67,6 @@ export interface Scenario {
   teacherId: string;
   newTeacherId: string;
   learnerId: string;
-  threadId: string;
 }
 
 /**
@@ -85,7 +84,6 @@ export async function seed(prisma: PrismaService): Promise<Scenario> {
     teacherId: randomUUID(),
     newTeacherId: randomUUID(),
     learnerId: randomUUID(),
-    threadId: randomUUID(),
   };
 
   await prisma.$executeRawUnsafe(
@@ -112,10 +110,6 @@ export async function seed(prisma: PrismaService): Promise<Scenario> {
     `insert into chat.learner (id, family_id, name, teacher_id)
      values ('${randomUUID()}'::uuid, '${ids.familyId}'::uuid, 'learner_m', '${ids.newTeacherId}'::uuid)`,
   );
-  await prisma.$executeRawUnsafe(
-    `insert into chat.thread (id, family_id) values ('${ids.threadId}'::uuid, '${ids.familyId}'::uuid)`,
-  );
-
   return ids;
 }
 
@@ -126,7 +120,7 @@ export async function truncate(prisma: PrismaService): Promise<void> {
              chat.message_hidden_for, chat.message_approval, chat.call_participant,
              chat.call, chat.notification, chat.outbox_event,
              chat.conversation_participant_state, chat.conversation_member,
-             chat.message, chat.conversation, chat.thread, chat.learner,
+             chat.message, chat.conversation, chat.learner,
              chat.contact, chat.family, chat.staff, chat.event_log, chat.audit_log
     restart identity cascade`);
 }

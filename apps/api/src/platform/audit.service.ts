@@ -16,7 +16,6 @@ export interface AuditWriteInput {
 
 export interface EventWriteInput {
   familyId?: string | null;
-  caseId?: string | null;
   actorKind: string;
   actorId?: string | null;
   type: string;
@@ -54,7 +53,6 @@ export class PrismaAuditService implements AuditService {
     await tx.eventLog.create({
       data: {
         familyId: input.familyId ?? null,
-        caseId: input.caseId ?? null,
         actorKind: input.actorKind, // maps to chat.event_log.actor_type
         actorId: input.actorId ?? null,
         type: input.type,

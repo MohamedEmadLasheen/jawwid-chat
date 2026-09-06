@@ -24,6 +24,18 @@ begin
   raise notice 'table    chat.%', p_name;
 end; $$;
 
+-- OD-01: some tables must NOT exist. A structure the PRD forbids is as much a
+-- defect as a missing control, and asserting its absence is what stops it being
+-- reintroduced by a later migration.
+create or replace function pg_temp.want_no_table(p_name text, p_why text)
+returns void language plpgsql as $$
+begin
+  if to_regclass('chat.' || p_name) is not null then
+    raise exception 'FORBIDDEN TABLE chat.% still exists -- %', p_name, p_why;
+  end if;
+  raise notice 'absent   chat.%  (%)', p_name, p_why;
+end; $$;
+
 create or replace function pg_temp.want_trigger(p_trigger text, p_table text)
 returns void language plpgsql as $$
 begin
@@ -71,7 +83,6 @@ select pg_temp.want_table('staff');
 select pg_temp.want_table('family');
 select pg_temp.want_table('contact');
 select pg_temp.want_table('learner');
-select pg_temp.want_table('thread');
 select pg_temp.want_table('message');
 select pg_temp.want_table('config');
 select pg_temp.want_table('event_log');
@@ -79,9 +90,19 @@ select pg_temp.want_table('audit_log');
 select pg_temp.want_table('shift');
 select pg_temp.want_table('coverage_rule');
 select pg_temp.want_table('absence');
-select pg_temp.want_table('support_case');
 select pg_temp.want_table('task');
 select pg_temp.want_table('handoff');
+
+\echo ''
+\echo '=== OD-01: structures the PRD forbids (must be absent) ==='
+-- chat.thread carried the superseded brief's `family_id UNIQUE` invariant. PRD
+-- §7.5 requires many conversations per family and §7.3 one Student Group per
+-- STUDENT; neither is representable while it exists.
+select pg_temp.want_no_table('thread',
+  'PRD §6 has no thread entity; conversation is the only message parent');
+-- PRD §6's entity list has no Case. Product decision C-3, 2026-09-06.
+select pg_temp.want_no_table('support_case',
+  'PRD §6 has no Case entity; use Conversation + Task + Attention + state');
 
 \echo ''
 \echo '=== communication tables ==='

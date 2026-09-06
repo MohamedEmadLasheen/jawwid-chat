@@ -89,11 +89,15 @@ describe('direct conversations', () => {
     expect(count).toBe(1);
   });
 
-  it('links the conversation to the family thread without creating a second thread', async () => {
+  it('is scoped to the family and is the family\'s only direct Jawwid conversation (OD-01)', async () => {
+    // OD-01 removed chat.thread: the conversation is the only parent of a
+    // message and carries the family scope itself (PRD §6, decision C-2).
     const conv = await parentAdminConversation();
     expect(conv.familyId).toBe(s.familyId);
-    expect(conv.threadId).toBe(s.threadId);
-    expect(await g.prisma.thread.count()).toBe(1);
+    const perFamily = await g.prisma.conversation.count({
+      where: { type: 'direct', familyId: s.familyId },
+    });
+    expect(perFamily).toBe(1);
   });
 });
 

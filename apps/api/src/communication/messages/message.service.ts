@@ -47,7 +47,6 @@ export interface SendMessageInput {
   /** Client-generated idempotency key. Strongly recommended on mobile. */
   clientMessageId?: string | null;
   replyToMessageId?: string | null;
-  caseId?: string | null;
   attachments?: AttachmentInput[];
   /** Only assist / escalation are honoured; owner vs coverage is derived. */
   requestedMode?: string;
@@ -170,8 +169,6 @@ export class MessageService {
         const message = await tx.message.create({
           data: {
             conversationId: conv.id,
-            threadId: conv.threadId,
-            caseId: input.caseId ?? null,
             authorType: actor.kind,
             authorId: actor.kind === ActorKind.SYSTEM ? null : actor.actorId,
             onBehalfMode: decision.onBehalfMode,

@@ -50,7 +50,6 @@ export class MessageController {
       visibility?: string;
       clientMessageId?: string;
       replyToMessageId?: string;
-      caseId?: string;
       requestedMode?: string;
       attachments?: Array<{
         kind: string;
@@ -77,7 +76,6 @@ export class MessageController {
       visibility: body.visibility,
       clientMessageId: body.clientMessageId,
       replyToMessageId: body.replyToMessageId,
-      caseId: body.caseId,
       requestedMode: body.requestedMode,
       attachments: body.attachments,
     });

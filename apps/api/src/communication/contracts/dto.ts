@@ -34,7 +34,6 @@ export interface AttachmentDto {
 export interface MessageDto {
   id: string;
   conversationId: string | null;
-  caseId: string | null;
   /** Stringified: seq is 64-bit and JSON numbers are not safe at that width. */
   seq: string | null;
   authorKind: string;
@@ -158,7 +157,6 @@ export function toMessageDto(
   return {
     id: m.id,
     conversationId: m.conversationId,
-    caseId: m.caseId,
     seq: m.seq?.toString() ?? null,
     authorKind: m.authorType,
     authorId: m.authorId,

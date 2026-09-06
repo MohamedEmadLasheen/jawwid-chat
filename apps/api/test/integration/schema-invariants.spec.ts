@@ -53,9 +53,28 @@ function addMember(conversationId: string, actorKind: string, memberRole: string
   );
 }
 
+/**
+ * A real family to scope conversations to.
+ *
+ * OD-01 added chat.assert_conversation_family_scope(): any conversation holding
+ * a live family contact must be family-scoped, to that contact's family (PRD §6,
+ * product decision C-2). These fixtures previously left family_id null and
+ * added a contact member anyway, which is now -- correctly -- rejected. Giving
+ * them a real family makes the fixture well-formed; every assertion below is
+ * unchanged.
+ */
+let FAMILY_ID = '';
+
 beforeAll(() => {
   // Fails fast with a clear message if the environment is not up.
   sql('select 1 from chat.conversation limit 1');
+  const staffId = sql(
+    `insert into chat.staff (name, role) values ('Integration Owner', 'admin') returning id`,
+  );
+  FAMILY_ID = sql(
+    `insert into chat.family (display_name, owner_id)
+     values ('Integration Family', '${staffId}') returning id`,
+  );
 });
 
 describe('BR-1 database backstop', () => {
@@ -79,7 +98,10 @@ describe('BR-1 database backstop', () => {
     // "only through the official Student Group, with the required admin
     // presence". 20260905093300 now enforces that, so this fixture asserts the
     // legitimate shape rather than the one the finding was about.
-    const id = sql(`insert into chat.conversation (type, state) values ('class_group','open') returning id`);
+    const id = sql(
+      `insert into chat.conversation (type, state, family_id)
+       values ('class_group','open','${FAMILY_ID}') returning id`,
+    );
     addMember(id, 'teacher', 'teacher');
     addMember(id, 'staff', 'admin');
     addMember(id, 'contact', 'parent');
@@ -87,7 +109,10 @@ describe('BR-1 database backstop', () => {
   });
 
   it('RT-025: the same group WITHOUT an admin is rejected', () => {
-    const id = sql(`insert into chat.conversation (type, state) values ('class_group','open') returning id`);
+    const id = sql(
+      `insert into chat.conversation (type, state, family_id)
+       values ('class_group','open','${FAMILY_ID}') returning id`,
+    );
     addMember(id, 'teacher', 'teacher');
     const err = expectRejected(
       `insert into chat.conversation_member (conversation_id, actor_kind, actor_id, member_role)
@@ -112,7 +137,10 @@ describe('BR-1 database backstop', () => {
    * Maps to test-plan BR1-10.
    */
   it('JC-008 / RT-024: converting a teacher+parent GROUP into a DIRECT conversation must be rejected', () => {
-    const id = sql(`insert into chat.conversation (type, state) values ('class_group','open') returning id`);
+    const id = sql(
+      `insert into chat.conversation (type, state, family_id)
+       values ('class_group','open','${FAMILY_ID}') returning id`,
+    );
     addMember(id, 'teacher', 'teacher');
     addMember(id, 'staff', 'admin');
     addMember(id, 'contact', 'parent');
