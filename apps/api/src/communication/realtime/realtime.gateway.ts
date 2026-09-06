@@ -18,6 +18,7 @@ import { RealtimePublisher } from './realtime.publisher';
 import { TypingService } from './typing.service';
 import { PresenceService } from './presence.service';
 import { MessageService } from '../messages/message.service';
+import { AuthService } from '../../platform/auth/auth.service';
 import { ConversationService } from '../conversations/conversation.service';
 import { ReceiptState } from '../contracts/vocab';
 
@@ -48,19 +49,28 @@ export class RealtimeGateway
     private readonly typing: TypingService,
     private readonly presence: PresenceService,
     private readonly messages: MessageService,
+    private readonly auth: AuthService,
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
   ) {}
 
   async handleConnection(client: AuthedSocket): Promise<void> {
-    // AI #1 SEAM: replace with verification of the real auth token. The shape -
-    // a resolved Actor on the socket - does not change.
-    const actorId = String(client.handshake.auth?.actorId ?? '');
-    const actor = actorId ? await this.identity.resolveActor(actorId) : null;
+    // D-6: the socket authenticates with the same bearer token as HTTP, through
+    // the same AuthService -- signature, live session, active actor. It used to
+    // read `handshake.auth.actorId`, which let a socket claim to be anyone.
+    // That path is gone; an actorId in the handshake is ignored.
+    const token = String(client.handshake.auth?.token ?? '');
+    const authenticated = token ? await this.auth.authenticate(token) : null;
 
-    if (!actor || !actor.isActive) {
+    if (!authenticated) {
+      // Tell the client why before dropping it: "unauthorized" and "server is
+      // down" require different behaviour, and a socket that simply vanishes is
+      // indistinguishable from a network failure.
+      client.emit('auth.failed', { code: 'AUTH.INVALID_TOKEN' });
       client.disconnect(true);
       return;
     }
+
+    const actor = authenticated.actor;
 
     client.actor = actor;
     // Every socket joins its own actor room, so multi-device fan-out is free.

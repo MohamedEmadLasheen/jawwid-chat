@@ -22,8 +22,65 @@ datasource db {
 // AI #1's tables -- read-mostly from the communication engine.
 // =====================================================================
 
+/// Authentication (D-6). One account record per person who can log in; the
+/// actor (staff, contact or teacher) is resolved from it. Not a second identity
+/// system -- chat.account already existed, it simply had no Prisma model.
+model Account {
+  id        String   @id @default(uuid()) @db.Uuid
+  /// Login identifier. Unique.
+  subject   String   @unique
+  /// staff | family | teacher
+  kind      String
+  /// Set only when kind = 'teacher'. Stopgap until chat.teacher exists (C-1).
+  teacherId String?  @map("teacher_id") @db.Uuid
+  isActive  Boolean  @map("is_active") @default(true)
+  createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
+  updatedAt DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  credential AccountCredential?
+  sessions   Session[]
+
+  @@map("account")
+  @@schema("chat")
+}
+
+/// Password material. Never selected outside the login path.
+model AccountCredential {
+  accountId         String   @id @map("account_id") @db.Uuid
+  account           Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  passwordHash      String   @map("password_hash")
+  passwordChangedAt DateTime @map("password_changed_at") @db.Timestamptz @default(now())
+  failedAttempts    Int      @map("failed_attempts") @default(0)
+  lockedUntil       DateTime? @map("locked_until") @db.Timestamptz
+  updatedAt         DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  @@map("account_credential")
+  @@schema("chat")
+}
+
+/// One row per login. The access token carries this id as `sid`, so revoking
+/// the row ends the session immediately instead of at token expiry.
+model Session {
+  id               String    @id @default(uuid()) @db.Uuid
+  accountId        String    @map("account_id") @db.Uuid
+  account          Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  refreshTokenHash String    @unique @map("refresh_token_hash")
+  issuedAt         DateTime  @map("issued_at") @db.Timestamptz @default(now())
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz
+  revokedReason    String?   @map("revoked_reason")
+  lastUsedAt       DateTime? @map("last_used_at") @db.Timestamptz
+  userAgent        String?   @map("user_agent")
+
+  @@index([accountId])
+  @@map("session")
+  @@schema("chat")
+}
+
 model Staff {
   id             String    @id @default(uuid()) @db.Uuid
+  /// Login account, when this staff member can sign in (D-6).
+  accountId      String?   @unique @map("account_id") @db.Uuid
   name           String
   role           String
   presence       String    @default("offline")
@@ -62,6 +119,8 @@ model Family {
 }
 
 model Contact {
+  /// Login account, when this contact can sign in (D-6).
+  accountId String? @unique @map("account_id") @db.Uuid
   id                String   @id @default(uuid()) @db.Uuid
   familyId          String   @map("family_id") @db.Uuid
   family            Family   @relation(fields: [familyId], references: [id])

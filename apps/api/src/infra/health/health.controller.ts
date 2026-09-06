@@ -1,5 +1,6 @@
 import { Controller, Get, Header, ServiceUnavailableException } from '@nestjs/common';
 import { HealthService } from './health.service';
+import { Public } from '../../platform/auth/auth.guard';
 
 /**
  * Health endpoints. Owner: AI #7 (infrastructure).
@@ -11,6 +12,10 @@ import { HealthService } from './health.service';
  *
  * Mount by importing HealthModule in the root module. Nothing else is required.
  */
+// A load balancer has no session, so these are exempt from the global
+// authentication guard. The payload carries only build metadata and probe
+// status -- no configuration, no customer data (see health.service.ts).
+@Public()
 @Controller('health')
 export class HealthController {
   constructor(private readonly health: HealthService) {}
