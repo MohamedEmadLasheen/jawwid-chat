@@ -52,8 +52,10 @@ export class RealtimeGateway
   ) {}
 
   async handleConnection(client: AuthedSocket): Promise<void> {
-    // AI #1 SEAM: replace with verification of the real auth token. The shape -
-    // a resolved Actor on the socket - does not change.
+    // DEPRECATED SEAM (RT-001): the client names its own actor. Phase 1 verifies
+    // a token from handshake.auth.token instead; the shape -- a resolved Actor on
+    // the socket -- does not change. src/platform/identity-seam.ts keeps the
+    // process from starting outside a local environment while this stands.
     const actorId = String(client.handshake.auth?.actorId ?? '');
     const actor = actorId ? await this.identity.resolveActor(actorId) : null;
 
