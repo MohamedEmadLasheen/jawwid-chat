@@ -462,10 +462,17 @@ describe('calling', () => {
     expect(claims.video.roomCreate).toBe(false);
     expect(claims.exp - claims.nbf).toBeLessThanOrEqual(180);
     // The identity is an opaque uuid and a display name; never a phone number.
-    // (exp/nbf are unix timestamps, so only the identity fields are checked.)
-    const identityFields = `${claims.sub} ${claims.name} ${claims.video.room}`;
-    expect(identityFields).not.toMatch(/\+?\d{7,}/);
+    //
+    // A bare /\d{7,}/ scan is NOT a valid check here: uuid hex segments can be
+    // all digits (e.g. "206f67036934"), which made this assertion flaky while
+    // the behaviour was always correct. Assert the structure instead.
     expect(claims.sub).toMatch(/^[0-9a-f-]{36}$/);
+    expect(claims.name).toBe('Teacher');
+    expect(Object.keys(claims)).not.toContain(
+      expect.stringMatching(/phone|tel|msisdn|email|mobile/i),
+    );
+    // Nothing anywhere in the token looks like a dialable number.
+    expect(JSON.stringify(claims)).not.toMatch(/\+\d[\d\s()-]{6,}/);
   });
 
   it('refuses a token to someone who is not a participant', async () => {
