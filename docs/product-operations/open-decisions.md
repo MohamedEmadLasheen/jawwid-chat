@@ -27,29 +27,37 @@ Where a decision is technical-ambiguity-only, AI #5 already owns it in
 - **Impact:** schema, authorization, inbox, mobile chat list, every BR-1 test.
 - **Owner:** product owner → AI #1. **Deadline:** before any `thread` migration is written.
 
-## OD-02 · One database or two?
-- **Status:** **BLOCKING**
-- **Current assumption:** both, simultaneously (`cross-agent-audit.md` X-01).
-- **Options:** (1) `chat` schema inside Core's Supabase DB — cheap sync, tight coupling,
-  contradicts "no direct dependency on Core's database"; (2) separate database + explicit
-  sync — matches the stated architecture, needs a real sync service; (3) separate database,
-  Supabase only for auth.
-- **Recommendation [AI #8]:** (2) or (3). (1) makes Jawwid Chat a Core module, which the
-  product context explicitly rejects, and it is the option that is hardest to reverse later.
-- **Impact:** migrations, RLS-vs-service authorization, deployment, backup/restore, X-15.
-- **Owner:** product owner + AI #1 + AI #7. **Deadline:** before the next migration.
+## OD-02 · One database or two? — **CLOSED 2026-09-05**
+- **Status:** **DECIDED — see `decision-log.md` DEC-11 … DEC-14.**
+- **Decision:** Jawwid Chat is completely standalone; it does **not** share Second School /
+  Jawwid Core's database; it owns its own PostgreSQL database; there is **one** authoritative
+  migration system and it is the **SQL migrations**; Jawwid Core integration happens through
+  an integration/API/webhook boundary, never direct DB coupling.
+- **Consequences.** Execution analysis in `database-divergence.md`: what belongs to the
+  authoritative stack, what is preserved, what is discarded or migrated, what AI #1 must
+  reconcile, and the eight things (DB-M1 … DB-M8) that must not be merged. Migration headers
+  and comments stating that Chat lives inside Core's Supabase database now contradict this
+  decision and must be corrected.
+- **Owner of execution.** AI #1, sequenced by AI #10.
 
 ## OD-03 · What does "required admin presence" in a Student Group mean?
-- **Status:** **BLOCKING** (= AI #5 AMB-9, restated as a product question)
-- **Options:** (a) an admin is a **member** of every group; (b) an admin is a member **and
-  on duty**; (c) messages are visible to the on-duty admin without membership;
-  (d) approval substitutes for presence.
-- **Recommendation [AI #8]:** (a) + approval. Presence must be a *membership* fact, not a
-  *liveness* fact — a rule that depends on someone being online cannot be enforced at 02:00,
-  and BR-1's permitted case must be enforceable at all times.
-- **Impact:** BR-1's entire permitted path; group creation; offboarding (does removing an
-  admin invalidate a group?); AI #5 cannot write BR1-09/SG-12 until this is answered.
-- **Owner:** product owner. **Deadline:** before Student Groups are implemented.
+- **Status:** **BLOCKING · MUST NOT BE GUESSED** (= AI #5 AMB-9)
+- **Conformance tag:** **UNVERIFIED — PRD SOURCE NOT PRESENT.**
+- **Current assumption:** none may be adopted. The product owner has instructed that AMB-9
+  remains unresolved and must not be guessed. **The recommendation previously offered here by
+  AI #8 is withdrawn.**
+- **Why it matters.** This is the load-bearing condition of BR-1's *permitted* case. BR-1's
+  prohibition is now enforced in the database (`chat.enforce_direct_conversation_rules()`),
+  but the condition under which teacher↔parent communication **is** allowed is undefined, so
+  the permitted path cannot be specified, built or tested.
+- **What is blocked.** AI #5 cannot write BR1-09 or SG-12; AI #1 cannot finish Student Group
+  membership rules; AI #3 and AI #4 cannot finish the group surfaces; offboarding behaviour
+  for an admin who is a group member is undefined.
+- **Questions the PRD must answer** (stated as questions, not options, deliberately):
+  must an admin be a member of every group? must that admin be on duty, or merely a member?
+  does a group become invalid if its admin is removed or offboarded? does the approval
+  workflow substitute for presence, or complement it?
+- **Owner.** Product owner. **Deadline:** before any Student Group membership rule is written.
 
 ## OD-04 · Who is authoritative for the teacher↔learner assignment?
 - **Status:** **BLOCKING**
@@ -166,10 +174,12 @@ Where a decision is technical-ambiguity-only, AI #5 already owns it in
 
 ## Blocking summary
 
+OD-02 is closed. Six blocking decisions remain, plus OD-03 which is blocking **and**
+explicitly not to be guessed.
+
 | ID | Topic | Blocks |
 |---|---|---|
 | OD-01 | conversation model | every schema and authorization decision |
-| OD-02 | one database or two | migrations, deployment, authorization strategy |
 | OD-03 | admin presence in groups | BR-1's permitted case; AI #5 BR1-09/SG-12 |
 | OD-04 | teacher assignment authority | group membership sync, teacher app |
 | OD-05 | `adminDirect` for parents | mobile chat list, attention, ownership |

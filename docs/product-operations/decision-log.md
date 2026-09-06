@@ -17,6 +17,12 @@ Records decisions that have been **made**. Decisions still open live in
 | DEC-08 | 2026-09-05 | Voice calling (1:1 and group) is MVP; video is Phase 2 | product owner | `authoritative-scope.md` §3 | |
 | DEC-09 | 2026-09-05 | Phone numbers never appear in any product surface | product owner | `authoritative-scope.md` §3 | enforced by construction in `Actor`/`Contact`; must extend to call signalling |
 | DEC-10 | 2026-09-05 | Every number in the brief is a `config` default and an initial hypothesis, recalibrated from `event_log` after 60–90 days | product owner | brief §12 | no business constant may be hardcoded — currently breached by `AppConfigService` |
+| DEC-11 | 2026-09-05 | Jawwid Chat is completely standalone and does **not** share Second School / Jawwid Core's database | product owner | stated as a locked decision | migration headers and comments placing `chat` inside Core's Supabase database are now incorrect and must be corrected |
+| DEC-12 | 2026-09-05 | Jawwid Chat owns its own PostgreSQL database | product owner | locked decision | `docker-compose.yml`, `.env.example` and deployment docs must reflect one Chat-owned database |
+| DEC-13 | 2026-09-05 | There is exactly **one** authoritative migration system, and it is the **SQL migrations** (`supabase/migrations/*.sql`) | product owner | locked decision | Prisma may generate a client but must never define a table that `chat.*` owns; no `prisma migrate` in CI (DB-M1, DB-M3) |
+| DEC-14 | 2026-09-05 | Jawwid Core integration happens through an integration / API / webhook boundary, never direct DB coupling | product owner | locked decision | every Core-mirrored entity needs a named producer through that boundary; closes OD-02 |
+| DEC-15 | 2026-09-05 | AMB-9 / OD-03 ("required admin presence" in a Student Group) remains unresolved and **must not be guessed** | product owner | locked instruction | AI #8's prior recommendation is withdrawn; the permitted BR-1 path stays unspecified until the PRD answers it |
+| DEC-16 | 2026-09-05 | AI #8 operates in AUDIT / CONFORMANCE mode; AI #10 owns final reconciliation | product owner | locked instruction | AI #8 introduces no new business rules and performs no branch reconciliation |
 
 ---
 
@@ -25,9 +31,11 @@ Records decisions that have been **made**. Decisions still open live in
 These are proposed in `open-decisions.md` and are **not yet decided**. They are listed here
 so that a future reader can tell at a glance what this log is still missing:
 
-OD-01 conversation model · OD-02 one database · OD-03 admin presence in Student Groups ·
+OD-01 conversation model · OD-03 admin presence in Student Groups (**must not be guessed**) ·
 OD-04 teacher assignment authority · OD-05 `adminDirect` for parents · OD-11 approver when
 the owner is off duty · OD-13 class-schedule signal.
+
+*(OD-02 closed as DEC-11 … DEC-14.)*
 
 Non-blocking and awaiting a decision: OD-06 Super Admin / CRITICAL · OD-07 workload staleness ·
 OD-08 shift-boundary inclusivity · OD-09 follow-up ownership · OD-10 overdue follow-ups
