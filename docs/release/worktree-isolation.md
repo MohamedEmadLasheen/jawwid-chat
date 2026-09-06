@@ -22,9 +22,14 @@ Nine or more agents share one checkout at `~/Documents/jawwid chat`. Five incide
 | **I-4** | **The sweep recurred against an agent following the safe procedure exactly** — 9 explicit paths staged, stage verified with `git diff --cached --name-only`, then `git commit` returned *"no changes added to commit"*. All 9 had landed in `939b41f feat(mobile): chat screen…` | `git log --diff-filter=A -1 -- docs/product-operations/audit-baseline.md` → `939b41f` |
 | **I-5** | `.git/index.lock` contention from a `git gc --auto` storm triggered by a peer's commit | `pgrep -fl "git "` → `git maintenance run --auto`, `gc`, `repack`, `pack-objects` |
 
+| **I-6** | Recurred a third time, minutes after I-4 and while this document was being written: `core-decoupling-audit.md` and `domain-authority-register.md` were swept into `46a0850 fix(authz): re-apply JC-005/JC-006…`. Note that commit's own title — a peer was **re-applying a silently regressed fix**, itself a symptom of the same shared-tree instability | `git log --oneline -1 -- docs/product-operations/core-decoupling-audit.md` → `46a0850` |
+
 **The load-bearing fact is I-4.** I-1 happened to an agent taking no precautions. **I-4 happened
 to the same agent taking every precaution.** Explicit staging does not close the window between
 `git add` and `git commit`; with nine concurrent agents that window is routinely lost.
+
+Three of the six incidents (I-1, I-4, I-6) are the same failure, and the last two happened to
+an agent applying every rule in §5. The rate is roughly one sweep per commit attempt.
 
 **Therefore: this is not solvable with instructions to be careful.** Discipline reduces blast
 radius. Only isolation removes the shared mutable index.
