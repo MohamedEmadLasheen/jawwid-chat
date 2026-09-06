@@ -1,32 +1,54 @@
+# ---------------------------------------------------------------------------
+# Jawwid Chat -- repository-wide ignore rules.
+#
+# Rules are ANCHORED (leading slash, or a full relative path) wherever a bare
+# directory name could also match a source folder. A bare `coverage/` once
+# silently excluded apps/admin-web/src/features/coverage/ from four commits;
+# see docs/recovery/PHASE-0-BRANCH-LEDGER.md. Vendor and build output that is
+# generated at any depth (node_modules, dist) is the deliberate exception.
+# ---------------------------------------------------------------------------
+
+# Node / TypeScript (apps/api, apps/admin-web)
+node_modules/
+dist/
+*.tsbuildinfo
+npm-debug.log*
+
 # Flutter / Dart
 .dart_tool/
+.flutter-plugins
 .flutter-plugins-dependencies
-build/
-*.iml
+/build/
 .packages
 .pub-cache/
 .pub/
+*.iml
 
 # Android
-android/.gradle/
-android/local.properties
-android/app/google-services.json
-android/key.properties
+/android/.gradle/
+/android/local.properties
+/android/app/google-services.json
+/android/key.properties
+/android/**/build/
 *.jks
 *.keystore
 
 # iOS
-ios/Pods/
-ios/.symlinks/
-ios/Flutter/Flutter.framework
-ios/Flutter/Flutter.podspec
-ios/Flutter/ephemeral/
-ios/Runner/GoogleService-Info.plist
+/ios/Pods/
+/ios/.symlinks/
+/ios/Flutter/Flutter.framework
+/ios/Flutter/Flutter.podspec
+/ios/Flutter/ephemeral/
+/ios/Runner/GoogleService-Info.plist
+/ios/build/
 *.mobileprovision
 *.p12
 
 # macOS
 .DS_Store
+
+# Agent tooling: worktrees must never live inside the repository
+/.claude/worktrees/
 
 # Never commit secrets or environment files
 .env
@@ -34,4 +56,4 @@ ios/Runner/GoogleService-Info.plist
 !.env.example
 
 # Local database dumps taken by scripts/infra/backup-db.sh
-backups/
+/backups/
