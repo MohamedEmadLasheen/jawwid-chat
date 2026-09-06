@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { Conversation, ConversationMember, Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
+import type { LiveMember } from '../../platform/authorization.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
 import { AUDIT_SERVICE, COVERAGE_SERVICE, IDENTITY_SERVICE } from '../../platform/tokens';
 import type { IdentityService } from '../../platform/identity.service';
@@ -55,6 +56,35 @@ export class ConversationService {
     return this.prisma.conversationMember.findFirst({
       where: { conversationId, actorId, leftAt: null },
     });
+  }
+
+  /**
+   * Live membership with resolved activity, for the C-4 admin-presence check.
+   *
+   * Only staff-admin members have their identity resolved: they are the only
+   * members whose activity decides the rule, and resolving every member of a
+   * group on every send would be a per-message cost for no decision. Everyone
+   * else is returned with isActive undefined, which the policy reads as
+   * "not resolved", never as "inactive".
+   */
+  async liveMembersOf(conversationId: string): Promise<LiveMember[]> {
+    const rows = await this.prisma.conversationMember.findMany({
+      where: { conversationId, leftAt: null },
+    });
+    return Promise.all(
+      rows.map(async (m) => {
+        if (m.actorKind === ActorKind.STAFF && m.memberRole === MemberRole.ADMIN) {
+          const a = await this.identity.resolveActor(m.actorId);
+          return {
+            actorId: m.actorId,
+            actorKind: m.actorKind,
+            memberRole: m.memberRole,
+            isActive: a?.isActive ?? false,
+          };
+        }
+        return { actorId: m.actorId, actorKind: m.actorKind, memberRole: m.memberRole };
+      }),
+    );
   }
 
   /** Canonical, order-independent identity of a 1:1 channel. */
