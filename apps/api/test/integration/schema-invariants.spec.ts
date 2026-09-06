@@ -143,7 +143,45 @@ describe('append-only and immutability guarantees', () => {
       `select string_agg(tgname, ',' order by tgname) from pg_trigger
         where tgrelid = 'chat.message'::regclass and not tgisinternal`,
     );
-    expect(triggers).toContain('message_is_immutable');
+    // The blanket message_is_immutable trigger was deliberately narrowed to
+    // message_no_rewrite by 20260905093000_chat_communication.
+    //
+    // PRD v0.1 gives a message two lawful state changes after sending -- an
+    // approval decision (pending -> published/rejected) and a soft delete --
+    // and a total UPDATE ban makes both impossible. The narrower trigger still
+    // forbids what actually matters: body, author, conversation and seq cannot
+    // be rewritten once the message exists. The two assertions below prove the
+    // protection was narrowed rather than removed.
+    expect(triggers).toContain('message_no_rewrite');
+  });
+
+  it('chat.message body still cannot be rewritten', () => {
+    const conv = sql(
+      `insert into chat.conversation (type, state, direct_key)
+       values ('direct','open', gen_random_uuid()::text) returning id`,
+    );
+    const msg = sql(
+      // System-authored: chat.assert_message_author_exists() requires a real
+      // contact/staff row for those author types, and this test is about
+      // immutability, not authorship.
+      `insert into chat.message (conversation_id, author_type, body, visibility, seq, type)
+       values ('${conv}', 'system', 'original', 'customer', 1, 'text') returning id`,
+    );
+    expect(expectRejected(`update chat.message set body='tampered' where id='${msg}'`))
+      .toContain('immutable');
+  });
+
+  it('chat.message moderation may still be decided', () => {
+    const conv = sql(
+      `insert into chat.conversation (type, state, direct_key)
+       values ('direct','open', gen_random_uuid()::text) returning id`,
+    );
+    const msg = sql(
+      `insert into chat.message (conversation_id, author_type, body, visibility, seq, type, moderation)
+       values ('${conv}', 'system', 'held', 'customer', 1, 'text', 'pending') returning id`,
+    );
+    sql(`update chat.message set moderation='published' where id='${msg}'`);
+    expect(sql(`select moderation from chat.message where id='${msg}'`)).toBe('published');
   });
 });
 

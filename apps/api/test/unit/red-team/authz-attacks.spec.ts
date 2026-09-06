@@ -123,7 +123,9 @@ describe('conversation-type confusion', () => {
 
   it('a teacher cannot post into a direct conversation by presenting a membership row', async () => {
     const t = teacher();
-    const d = await authz.canSend(t, conversation({ type: 'direct' }), member(t), customer, NOW);
+    const d = await authz.canSend(
+      t, conversation({ type: 'direct' }), member(t), customer, NOW, null, ['teacher', 'contact'],
+    );
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_TEACHER_PARENT_DIRECT);
   });

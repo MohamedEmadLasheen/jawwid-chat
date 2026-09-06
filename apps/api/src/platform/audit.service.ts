@@ -55,7 +55,7 @@ export class PrismaAuditService implements AuditService {
       data: {
         familyId: input.familyId ?? null,
         caseId: input.caseId ?? null,
-        actorKind: input.actorKind,
+        actorKind: input.actorKind, // maps to chat.event_log.actor_type
         actorId: input.actorId ?? null,
         type: input.type,
         payload: (input.payload ?? {}) as Prisma.InputJsonValue,

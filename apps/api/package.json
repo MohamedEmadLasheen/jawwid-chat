@@ -9,7 +9,7 @@
     "start": "node dist/main.js",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push --skip-generate",
-    "test": "jest",
+    "test": "jest --runInBand",
     "test:unit": "jest --selectProjects unit",
     "test:int": "jest --selectProjects integration --runInBand"
   },

@@ -118,7 +118,7 @@ export class CallService {
         familyId: conv.familyId,
         actorKind: initiator.kind,
         actorId: initiator.actorId,
-        type: 'call.started',
+        type: 'call_started',
         payload: { callId: call.id, conversationId: conv.id, type },
       });
 
@@ -267,7 +267,7 @@ export class CallService {
         familyId: call.familyId,
         actorKind: actor.kind,
         actorId: actor.actorId,
-        type: 'call.ended',
+        type: 'call_ended',
         payload: { callId, outcome: resolved, durationSeconds: duration },
       });
     });

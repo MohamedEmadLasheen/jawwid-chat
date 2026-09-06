@@ -52,6 +52,9 @@ describe('BR-1 — forbidden 1:1 channels', () => {
       member(t),
       { visibility: 'customer' },
       NOW,
+      null,
+      // The participant set is what BR-1 is decided on: a contact is present.
+      ['teacher', 'contact'],
     );
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_TEACHER_PARENT_DIRECT);
@@ -115,6 +118,20 @@ describe('BR-1 — permitted channels', () => {
 
   it('coverage admin counts as family-facing', () => {
     expect(authz.canOpenDirect(parent(), admin('cov-1', 'coverage')).allowed).toBe(true);
+  });
+
+  it('a teacher may post in a Teacher<->Admin 1:1: no contact is present', async () => {
+    const t = teacher();
+    const d = await authz.canSend(
+      t,
+      conversation({ type: 'direct' }),
+      member(t),
+      { visibility: 'customer' },
+      NOW,
+      null,
+      ['teacher', 'staff'],
+    );
+    expect(d.allowed).toBe(true);
   });
 });
 

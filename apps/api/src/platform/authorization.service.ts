@@ -169,6 +169,9 @@ export class AuthorizationService {
     /** chat.family.owner_id. Supplied by the caller; owner/coverage is derived
      *  from it and from on_duty(), never taken from the request. */
     familyOwnerId: string | null = null,
+    /** actor_kind of every live member. Supplied by the caller for the BR-1
+     *  participant-set check; the database trigger is the final backstop. */
+    participantKinds: string[] = [],
   ): Promise<Decision> {
     const readable = this.canRead(actor, conv, membership);
     if (!readable.allowed) return readable;
@@ -198,15 +201,19 @@ export class AuthorizationService {
       if (intent.visibility === Visibility.INTERNAL) {
         return deny(CommErrorCode.TEACHER_CANNOT_WRITE_INTERNAL, 'teachers cannot write internal notes');
       }
-      // BR-1 backstop: a teacher may only ever speak in a group.
-      if (conv.type !== ConversationType.STUDENT_GROUP && conv.type !== ConversationType.CLASS_GROUP) {
-        const hasContact = membership && conv.type === ConversationType.DIRECT;
-        if (hasContact) {
-          return deny(
-            CommErrorCode.BR1_TEACHER_PARENT_DIRECT,
-            'BR-1: a teacher may not message a parent outside the student group',
-          );
-        }
+      // BR-1 backstop. A teacher may speak in a group, and in a 1:1 whose other
+      // side is Jawwid staff. What they may never do is share a direct channel
+      // with a family contact, so the check is on the participant set, not on
+      // the conversation type: Teacher <-> Admin is a permitted 1:1 and must
+      // not be caught here.
+      if (
+        conv.type === ConversationType.DIRECT &&
+        participantKinds.includes(ActorKind.CONTACT)
+      ) {
+        return deny(
+          CommErrorCode.BR1_TEACHER_PARENT_DIRECT,
+          'BR-1: a teacher may not message a parent outside the student group',
+        );
       }
       if (membership?.isSilent) {
         return deny(CommErrorCode.MEMBER_IS_SILENT, 'this member is present but may not post');
@@ -369,6 +376,7 @@ export class AuthorizationService {
       { visibility: Visibility.CUSTOMER },
       now,
       familyOwnerId,
+      participants.map((p) => p.kind),
     );
     if (!sendable.allowed) return sendable;
 

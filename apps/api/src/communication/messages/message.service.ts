@@ -121,6 +121,10 @@ export class MessageService {
         })
       : null;
 
+    const members = await this.prisma.conversationMember.findMany({
+      where: { conversationId: conv.id, leftAt: null },
+    });
+
     const decision = await this.authz.canSend(
       actor,
       conv,
@@ -128,6 +132,7 @@ export class MessageService {
       { visibility, requestedMode: input.requestedMode },
       now,
       family?.ownerId ?? null,
+      members.map((m) => m.actorKind),
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
@@ -141,9 +146,6 @@ export class MessageService {
 
     // Recipients: live members other than the author. Internal notes never
     // reach a contact or a teacher.
-    const members = await this.prisma.conversationMember.findMany({
-      where: { conversationId: conv.id, leftAt: null },
-    });
     const recipients = members.filter(
       (m) =>
         m.actorId !== actor.actorId &&
@@ -275,7 +277,7 @@ export class MessageService {
           familyId: conv.familyId,
           actorKind: actor.kind,
           actorId: actor.kind === ActorKind.SYSTEM ? null : actor.actorId,
-          type: 'message.sent',
+          type: 'message_sent',
           // Deliberately no body: message contents never enter the event log.
           payload: { conversationId: conv.id, messageId: message.id, type, visibility, moderation },
         });

@@ -116,7 +116,7 @@ export class ConversationService {
           familyId,
           actorKind: a.kind,
           actorId: a.actorId,
-          type: 'conversation.created',
+          type: 'conversation_created',
           payload: { conversationId: conv.id, type: ConversationType.DIRECT },
         });
 
@@ -220,7 +220,7 @@ export class ConversationService {
         familyId: learner.familyId,
         actorKind: ActorKind.SYSTEM,
         actorId: null,
-        type: 'student_group.created',
+        type: 'student_group_created',
         payload: { conversationId: conv.id, learnerId },
       });
 
@@ -312,7 +312,7 @@ export class ConversationService {
         familyId: learner.familyId,
         actorKind: ActorKind.SYSTEM,
         actorId: null,
-        type: 'student_group.membership_synced',
+        type: 'student_group_membership_synced',
         payload: { conversationId: conv.id, added: toAdd.length, removed: toRemove.length },
       });
     });

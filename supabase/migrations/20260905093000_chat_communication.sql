@@ -194,6 +194,48 @@ create trigger conversation_member_br1
   after insert or update on chat.conversation_member
   for each row execute function chat.enforce_direct_conversation_rules();
 
+-- JC-008. The membership trigger guards only one of BR-1's two inputs: it fires
+-- when the participant set changes, but not when the conversation's TYPE
+-- changes. Without this, a lawful teacher+parent group could be converted into
+-- a forbidden 1:1 with a plain UPDATE, and every row involved would still look
+-- individually valid.
+--
+-- A conversation's type is fixed at creation. Converting a group into a 1:1 (or
+-- back) silently rewrites who is allowed to speak to whom, so it is refused
+-- outright rather than re-validated.
+create or replace function chat.enforce_conversation_type_immutable()
+returns trigger
+language plpgsql
+as $$
+declare
+  v_kinds text[];
+begin
+  if new.type is not distinct from old.type then
+    return new;
+  end if;
+
+  if new.type = 'direct' then
+    select array_agg(distinct actor_kind) into v_kinds
+      from chat.conversation_member
+     where conversation_id = new.id and left_at is null;
+
+    if v_kinds @> array['teacher']::text[] and v_kinds @> array['contact']::text[] then
+      raise exception
+        'BR-1 violation: a conversation containing a teacher and a family contact may not become a direct conversation'
+        using errcode = 'check_violation';
+    end if;
+  end if;
+
+  raise exception
+    'chat.conversation.type is immutable: converting between a group and a 1:1 would rewrite who may communicate'
+    using errcode = 'restrict_violation';
+end;
+$$;
+
+create trigger conversation_type_immutable
+  before update on chat.conversation
+  for each row execute function chat.enforce_conversation_type_immutable();
+
 -- ---------------------------------------------------------------------------
 -- chat.message -- EXTENDED IN PLACE (AI #1's table, AI #2's domain)
 -- ---------------------------------------------------------------------------
@@ -238,6 +280,17 @@ alter table chat.message add constraint message_author_type_check
 alter table chat.message add constraint message_has_conversation
   check (conversation_id is not null or thread_id is not null);
 
+-- AI #1's message_has_content check assumed attachment metadata lived in the
+-- `attachments` jsonb column. It now lives in chat.message_attachment, because
+-- object storage needs an object key, a checksum, a duration and a thumbnail
+-- key that a jsonb blob was not carrying. A media message therefore
+-- legitimately has an empty jsonb, and without this the database would reject
+-- every voice note. The original intent -- a message must say something -- is
+-- preserved for text messages.
+alter table chat.message drop constraint if exists message_has_content;
+alter table chat.message add constraint message_has_content
+  check (body is not null or jsonb_array_length(attachments) > 0 or type <> 'text');
+
 comment on column chat.message.seq is
   'Per-conversation monotonic sequence. Clients reconstruct order from this '
   'after reconnect, delayed delivery, retries or multi-device sends. Device '
@@ -257,6 +310,19 @@ create index message_conversation_seq_desc
   on chat.message (conversation_id, seq desc);
 create index message_pending_approval_idx
   on chat.message (conversation_id) where moderation = 'pending';
+
+-- AI #1 made chat.message wholly append-only (message_is_immutable), which was
+-- right for the thread model where a message had no lifecycle after sending.
+-- PRD v0.1 gives it two lawful state changes: an approval decision
+-- (pending -> published/rejected) and a soft delete. A blanket UPDATE ban makes
+-- both impossible, and working around it -- deleting and re-inserting, or
+-- keeping moderation in a side table that can drift from the message -- would be
+-- worse for auditability than a narrow rule.
+--
+-- The blanket trigger is therefore replaced by a column-level one below.
+-- What actually matters is unchanged and now enforced precisely: body,
+-- author, conversation and seq remain immutable once sent.
+drop trigger if exists message_is_immutable on chat.message;
 
 -- A sent message is a record, not a draft.
 create or replace function chat.forbid_message_rewrite()
@@ -283,6 +349,58 @@ $$;
 create trigger message_no_rewrite
   before update on chat.message
   for each row execute function chat.forbid_message_rewrite();
+
+-- ---------------------------------------------------------------------------
+-- chat.event_log vocabulary (AI #1's table, extended for the communication domain)
+-- ---------------------------------------------------------------------------
+-- Two extensions, both required by PRD v0.1:
+--   1. 'teacher' becomes a valid actor. The PRD ships a Teacher app, so a
+--      teacher acts in their own right and their actions must be loggable.
+--   2. The communication events below join the vocabulary. Names follow AI #1's
+--      existing snake_case convention, and every pre-existing value is kept.
+do $$
+begin
+  if exists (select 1 from pg_constraint where conname = 'event_log_actor_type_check') then
+    alter table chat.event_log drop constraint event_log_actor_type_check;
+    alter table chat.event_log add constraint event_log_actor_type_check
+      check (actor_type in ('contact', 'staff', 'teacher', 'system'));
+  end if;
+
+  if exists (select 1 from pg_constraint where conname = 'event_log_type_check') then
+    alter table chat.event_log drop constraint event_log_type_check;
+    alter table chat.event_log add constraint event_log_type_check
+      check (type in (
+        -- AI #1's existing vocabulary, unchanged
+        'message_received', 'message_sent', 'internal_note_added',
+        'case_opened', 'case_status_changed', 'case_resolved', 'case_closed',
+        'case_reopened', 'case_escalated', 'case_auto_resolved',
+        'task_created', 'task_completed', 'task_cancelled',
+        'handoff_created', 'handoff_acknowledged',
+        'coverage_started', 'coverage_ended', 'sticky_started', 'sticky_expired',
+        'absence_activated', 'absence_auto_detected', 'unattended_detected',
+        'ownership_transferred', 'family_state_changed', 'family_flagged',
+        'payment_failed', 'payment_succeeded', 'renewal_due',
+        'subscription_synced', 'class_reminder_due', 'class_attended',
+        'class_missed', 'attention_order_disputed', 'family_opened',
+        'assist_requested',
+        -- communication domain (AI #2)
+        'conversation_created', 'conversation_archived',
+        'student_group_created', 'student_group_membership_synced',
+        'message_approved', 'message_rejected',
+        'call_started', 'call_ended'
+      ));
+  end if;
+end $$;
+
+-- chat.audit_log.actor_id was foreign-keyed to chat.staff, which encoded the
+-- assumption that only employees take auditable actions. PRD v0.1 breaks that
+-- assumption: a parent deleting their own message and a teacher having a message
+-- rejected are both auditable, and both actors are non-staff. Since an actor may
+-- now be a staff member, a contact or a teacher, no single table can be the
+-- foreign-key target (ADR-004 also forbids reaching outside the chat schema), so
+-- the constraint is dropped rather than repointed. actor_id keeps its meaning and
+-- its index; what is lost is referential enforcement against one specific table.
+alter table chat.audit_log drop constraint if exists audit_log_actor_id_fkey;
 
 -- ---------------------------------------------------------------------------
 -- Attachments, reactions, receipts, per-user state
