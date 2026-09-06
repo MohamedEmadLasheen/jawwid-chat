@@ -5,7 +5,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '@platform/prisma.service';
 import { CoreEventAccepted, CoreRejectionReason } from './contracts';
 import { CoreIngestionService, MalformedCoreEvent } from './core-ingestion.service';
-import { parseSecrets, verifySignature } from './signature';
+import { parseKeyOrganizations, parseSecrets, verifySignature } from './signature';
 
 interface RawBodyRequest {
   readonly rawBody?: Buffer;
@@ -28,6 +28,8 @@ export class CoreWebhookController {
   private readonly log = new Logger(CoreWebhookController.name);
   private readonly secrets = parseSecrets(process.env.CORE_WEBHOOK_SECRETS);
   private readonly toleranceSeconds = Number(process.env.CORE_WEBHOOK_TOLERANCE_SECONDS ?? 300);
+  /** Signing key -> organization. The payload never gets a say in this. */
+  private readonly keyOrganizations = parseKeyOrganizations(process.env.CORE_WEBHOOK_ORGANIZATIONS);
 
   constructor(
     private readonly ingestion: CoreIngestionService,
@@ -79,7 +81,10 @@ export class CoreWebhookController {
     }
 
     try {
-      return await this.ingestion.ingest(envelope);
+      // The tenant is derived from the verified signing key, never from the
+      // body. A caller holding organization A's key cannot write into B by
+      // saying so in the payload.
+      return await this.ingestion.ingest(envelope, this.keyOrganizations.get(keyId as string));
     } catch (error) {
       if (error instanceof MalformedCoreEvent) {
         await this.auditRejection('malformed_envelope', keyId, error.message);

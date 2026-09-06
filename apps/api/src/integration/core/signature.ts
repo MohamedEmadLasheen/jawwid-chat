@@ -25,7 +25,10 @@ export interface SignatureCheck {
   readonly reason?: CoreRejectionReason;
 }
 
-/** Parses `keyid:secret,keyid2:secret2` — two entries is how a rotation lands. */
+/**
+ * Parses `keyid:secret,keyid2:secret2` — two entries is how a rotation lands.
+ * The secret may itself contain ':'; everything after the first one is secret.
+ */
 export function parseSecrets(raw: string | undefined): ReadonlyMap<string, string> {
   const out = new Map<string, string>();
   for (const entry of (raw ?? '').split(',')) {
@@ -72,4 +75,23 @@ export function verifySignature(
   if (!timingSafeEqual(expected, provided)) return { ok: false, reason: 'bad_signature' };
 
   return { ok: true };
+}
+
+/**
+ * Which organization a signing key belongs to: `keyid:slug,keyid2:slug2`.
+ *
+ * Kept separate from CORE_WEBHOOK_SECRETS so that adding a tenant never means
+ * re-parsing, re-quoting or redeploying a secret.
+ *
+ * A key with no mapping binds no organization, and the database falls back to
+ * the only one — correct in the single-tenant phase, and it stops resolving the
+ * moment a second organization exists.
+ */
+export function parseKeyOrganizations(raw: string | undefined): ReadonlyMap<string, string> {
+  const out = new Map<string, string>();
+  for (const entry of (raw ?? '').split(',')) {
+    const [keyId, slug] = entry.split(':').map((p) => p.trim());
+    if (keyId && slug) out.set(keyId, slug);
+  }
+  return out;
 }

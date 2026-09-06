@@ -20,6 +20,9 @@ const { Client } = require('pg');
 const DATABASE_URL = 'postgresql://postgres:postgres@localhost:55432/jawwid_chat_test';
 const KEY_ID = 'core-2026-09';
 const SECRET = 'a-test-secret-of-at-least-32-characters-long';
+// A second Jawwid Core, belonging to a second organization.
+const KEY_ID_B = 'core-b-2026-09';
+const SECRET_B = 'a-different-test-secret-at-least-32-chars-ok';
 const PORT = 3399;
 const BASE = `http://127.0.0.1:${PORT}`;
 
@@ -62,7 +65,8 @@ const server = spawn('node', ['dist/main.js'], {
     ...process.env,
     DATABASE_URL,
     PORT: String(PORT),
-    CORE_WEBHOOK_SECRETS: `${KEY_ID}:${SECRET}`,
+    CORE_WEBHOOK_SECRETS: `${KEY_ID}:${SECRET},${KEY_ID_B}:${SECRET_B}`,
+    CORE_WEBHOOK_ORGANIZATIONS: `${KEY_ID}:jawwid,${KEY_ID_B}:academy-b`,
     // Required by AI #2's attachment storage, which refuses to start without a
     // real signing secret. Unrelated to this boundary, but the whole app boots.
     STORAGE_SIGNING_SECRET: 'runtime-verification-signing-secret-32-plus',
@@ -236,6 +240,50 @@ try {
     `status=${health?.last_status} unprocessed=${health?.unprocessed}`);
   check('and surfaces the parent still awaiting an owner', health?.waiting === 1,
     `awaiting=${health?.waiting}`);
+
+  // --- tenant isolation at the boundary ------------------------------------
+  // Two organizations, two Jawwid Core instances, two signing keys. The same
+  // Core identifier from each must not collide or overwrite.
+  await db.query(`select chat.bootstrap_organization('academy-b', 'Academy B')`);
+
+  const sharedCoreId = randomUUID();
+  const intoA = await post(envelope('teacher.upserted', {
+    core_teacher_id: sharedCoreId, display_name: 'A teacher',
+  }));
+  const intoB = await post(envelope('teacher.upserted', {
+    core_teacher_id: sharedCoreId, display_name: 'B teacher',
+  }), { keyId: KEY_ID_B, secret: SECRET_B });
+
+  check('both organizations accept the same Core identifier',
+    (await intoA.json()).status === 'applied' && (await intoB.json()).status === 'applied',
+    'applied to each');
+
+  const perOrg = await one(
+    `select count(*)::int as n from chat.teacher where core_teacher_id = $1`, [sharedCoreId]);
+  check('and it becomes two separate records, one per organization', perOrg.n === 2,
+    `rows=${perOrg.n}`);
+
+  const orgARow = await one(
+    `select t.display_name from chat.teacher t
+       join chat.organization o on o.id = t.organization_id
+      where t.core_teacher_id = $1 and o.slug = 'jawwid'`, [sharedCoreId]);
+  check("organization A's record was not overwritten by organization B's delivery",
+    orgARow?.display_name === 'A teacher', `A has "${orgARow?.display_name}"`);
+
+  // A payload that names another organization must not be able to reach it.
+  const smuggle = await post(envelope('teacher.upserted', {
+    core_teacher_id: randomUUID(), display_name: 'Smuggled',
+    organization_id: (await one(`select id from chat.organization where slug='jawwid'`)).id,
+    organization_slug: 'jawwid',
+  }), { keyId: KEY_ID_B, secret: SECRET_B });
+  check('a payload naming another organization is accepted but ignored',
+    (await smuggle.json()).status === 'applied', 'applied');
+  const smuggled = await one(
+    `select o.slug from chat.teacher t join chat.organization o on o.id = t.organization_id
+      where t.display_name = 'Smuggled'`);
+  check("and lands in the signing key's organization, not the payload's",
+    smuggled?.slug === 'academy-b', `landed in ${smuggled?.slug}`);
+
 } finally {
   await db.end().catch(() => undefined);
   server.kill('SIGTERM');

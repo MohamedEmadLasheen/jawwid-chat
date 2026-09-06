@@ -36,6 +36,8 @@ model Staff {
   ownedFamilies  Family[]        @relation("FamilyOwner")
   stickyOf       Conversation[]  @relation("ConversationStickyHandler")
 
+  organizationId String @map("organization_id") @db.Uuid
+
   @@map("staff")
   @@schema("chat")
 }
@@ -56,6 +58,8 @@ model Family {
   learners      Learner[]
   threads       Thread[]
   conversations Conversation[]
+
+  organizationId String @map("organization_id") @db.Uuid
 
   @@map("family")
   @@schema("chat")
@@ -78,6 +82,8 @@ model Contact {
   createdAt         DateTime @map("created_at") @db.Timestamptz @default(now())
   updatedAt         DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
+  organizationId String @map("organization_id") @db.Uuid
+
   @@map("contact")
   @@schema("chat")
 }
@@ -95,6 +101,8 @@ model Learner {
   updatedAt   DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
   conversations Conversation[]
+
+  organizationId String @map("organization_id") @db.Uuid
 
   @@map("learner")
   @@schema("chat")
@@ -117,6 +125,8 @@ model Thread {
 
   conversations Conversation[]
 
+  organizationId String @map("organization_id") @db.Uuid
+
   @@map("thread")
   @@schema("chat")
 }
@@ -126,6 +136,8 @@ model Config {
   value     Json
   scope     String   @default("global")
   updatedAt DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  organizationId String @map("organization_id") @db.Uuid
 
   @@map("config")
   @@schema("chat")
@@ -142,6 +154,8 @@ model EventLog {
   payload   Json     @default("{}")
   at        DateTime @db.Timestamptz @default(now())
 
+  organizationId String @map("organization_id") @db.Uuid
+
   @@map("event_log")
   @@schema("chat")
 }
@@ -157,6 +171,8 @@ model AuditLog {
   after    Json?
   reason   String
   at       DateTime @db.Timestamptz @default(now())
+
+  organizationId String @map("organization_id") @db.Uuid
 
   @@map("audit_log")
   @@schema("chat")
@@ -207,6 +223,8 @@ model Conversation {
   calls        Call[]
   notifications Notification[]
 
+  organizationId String @map("organization_id") @db.Uuid
+
   @@map("conversation")
   @@schema("chat")
 }
@@ -223,6 +241,8 @@ model ConversationMember {
   addedBy        String?      @map("added_by") @db.Uuid
   joinedAt       DateTime     @map("joined_at") @db.Timestamptz @default(now())
   leftAt         DateTime?    @map("left_at") @db.Timestamptz
+
+  organizationId String @map("organization_id") @db.Uuid
 
   @@map("conversation_member")
   @@schema("chat")
@@ -269,6 +289,8 @@ model Message {
   hiddenFor   MessageHiddenFor[]
   approval    MessageApproval?
 
+  organizationId String @map("organization_id") @db.Uuid
+
   @@map("message")
   @@schema("chat")
 }
@@ -289,6 +311,8 @@ model MessageAttachment {
   thumbnailObjectKey String?  @map("thumbnail_object_key")
   createdAt          DateTime @map("created_at") @db.Timestamptz @default(now())
 
+  organizationId String @map("organization_id") @db.Uuid
+
   @@map("message_attachment")
   @@schema("chat")
 }
@@ -300,6 +324,8 @@ model MessageReaction {
   actorId   String   @map("actor_id") @db.Uuid
   emoji     String
   createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
+
+  organizationId String @map("organization_id") @db.Uuid
 
   @@unique([messageId, actorId])
   @@map("message_reaction")
@@ -316,6 +342,8 @@ model MessageReceipt {
   deliveredAt DateTime? @map("delivered_at") @db.Timestamptz
   readAt      DateTime? @map("read_at") @db.Timestamptz
 
+  organizationId String @map("organization_id") @db.Uuid
+
   @@unique([messageId, actorId])
   @@map("message_receipt")
   @@schema("chat")
@@ -326,6 +354,8 @@ model MessageHiddenFor {
   message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
   actorId   String   @map("actor_id") @db.Uuid
   hiddenAt  DateTime @map("hidden_at") @db.Timestamptz @default(now())
+
+  organizationId String @map("organization_id") @db.Uuid
 
   @@id([messageId, actorId])
   @@map("message_hidden_for")
@@ -342,6 +372,8 @@ model ConversationParticipantState {
   mutedUntil     DateTime?    @map("muted_until") @db.Timestamptz
   pinnedAt       DateTime?    @map("pinned_at") @db.Timestamptz
   updatedAt      DateTime     @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  organizationId String @map("organization_id") @db.Uuid
 
   @@unique([conversationId, actorId])
   @@map("conversation_participant_state")
@@ -361,6 +393,8 @@ model MessageApproval {
   createdAt       DateTime     @map("created_at") @db.Timestamptz @default(now())
   decidedAt       DateTime?    @map("decided_at") @db.Timestamptz
 
+  organizationId String @map("organization_id") @db.Uuid
+
   @@map("message_approval")
   @@schema("chat")
 }
@@ -375,6 +409,8 @@ model OutboxEvent {
   availableAt DateTime  @map("available_at") @db.Timestamptz @default(now())
   createdAt   DateTime  @map("created_at") @db.Timestamptz @default(now())
   publishedAt DateTime? @map("published_at") @db.Timestamptz
+
+  organizationId String @map("organization_id") @db.Uuid
 
   @@map("outbox_event")
   @@schema("chat")
@@ -391,6 +427,8 @@ model DeviceToken {
   lastSeenAt DateTime @map("last_seen_at") @db.Timestamptz @default(now())
   createdAt  DateTime @map("created_at") @db.Timestamptz @default(now())
 
+  organizationId String @map("organization_id") @db.Uuid
+
   @@map("device_token")
   @@schema("chat")
 }
@@ -404,6 +442,8 @@ model NotificationTemplate {
   body      String
   isActive  Boolean  @map("is_active") @default(true)
   createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
+
+  organizationId String @map("organization_id") @db.Uuid
 
   @@unique([key, locale, version])
   @@map("notification_template")
@@ -423,6 +463,8 @@ model NotificationRule {
   updatedAt         DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
   notifications Notification[]
+
+  organizationId String @map("organization_id") @db.Uuid
 
   @@map("notification_rule")
   @@schema("chat")
@@ -456,6 +498,8 @@ model Notification {
   attempts    Int       @default(0)
   createdAt   DateTime  @map("created_at") @db.Timestamptz @default(now())
 
+  organizationId String @map("organization_id") @db.Uuid
+
   @@map("notification")
   @@schema("chat")
 }
@@ -466,6 +510,8 @@ model QuietHours {
   startMinute Int     @map("start_minute") @default(1320)
   endMinute   Int     @map("end_minute") @default(480)
   enabled     Boolean @default(true)
+
+  organizationId String @map("organization_id") @db.Uuid
 
   @@map("quiet_hours")
   @@schema("chat")
@@ -490,6 +536,8 @@ model Call {
 
   participants CallParticipant[]
 
+  organizationId String @map("organization_id") @db.Uuid
+
   @@map("call")
   @@schema("chat")
 }
@@ -504,7 +552,97 @@ model CallParticipant {
   joinedAt  DateTime? @map("joined_at") @db.Timestamptz
   leftAt    DateTime? @map("left_at") @db.Timestamptz
 
+  organizationId String @map("organization_id") @db.Uuid
+
   @@unique([callId, actorId])
   @@map("call_participant")
+  @@schema("chat")
+}
+
+/// The tenant. PRD v0.1 §2.3.
+model Organization {
+  id          String   @id @default(uuid()) @db.Uuid
+  slug        String   @unique
+  displayName String   @map("display_name")
+  isActive    Boolean  @map("is_active") @default(true)
+  createdAt   DateTime @map("created_at") @db.Timestamptz @default(now())
+  updatedAt   DateTime @map("updated_at") @db.Timestamptz @default(now())
+
+  @@map("organization")
+  @@schema("chat")
+}
+
+/// AUTHORITATIVE IN CORE, mirrored here. Carries no contact channel (BR-2).
+model Teacher {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  coreTeacherId  String    @map("core_teacher_id") @db.Uuid
+  displayName    String    @map("display_name")
+  accountId      String?   @map("account_id") @db.Uuid
+  isActive       Boolean   @map("is_active") @default(true)
+  deactivatedAt  DateTime? @map("deactivated_at") @db.Timestamptz
+  coreSyncedAt   DateTime? @map("core_synced_at") @db.Timestamptz
+  createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
+  updatedAt      DateTime  @map("updated_at") @db.Timestamptz @default(now())
+
+  @@map("teacher")
+  @@schema("chat")
+}
+
+/// AUTHORITATIVE IN CORE, mirrored here. The student <-> teacher relationship.
+model Enrollment {
+  id               String    @id @default(uuid()) @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  coreEnrollmentId String    @map("core_enrollment_id") @db.Uuid
+  learnerId        String    @map("learner_id") @db.Uuid
+  teacherId        String    @map("teacher_id") @db.Uuid
+  subject          String?
+  status           String    @default("active")
+  startedAt        DateTime? @map("started_at") @db.Timestamptz
+  endedAt          DateTime? @map("ended_at") @db.Timestamptz
+  coreSyncedAt     DateTime? @map("core_synced_at") @db.Timestamptz
+  createdAt        DateTime  @map("created_at") @db.Timestamptz @default(now())
+  updatedAt        DateTime  @map("updated_at") @db.Timestamptz @default(now())
+
+  @@map("enrollment")
+  @@schema("chat")
+}
+
+/// AUTHORITATIVE IN CORE, mirrored here. Drives class reminders and attention.
+model ClassSession {
+  id                 String    @id @default(uuid()) @db.Uuid
+  organizationId     String    @map("organization_id") @db.Uuid
+  coreClassSessionId String    @map("core_class_session_id") @db.Uuid
+  learnerId          String    @map("learner_id") @db.Uuid
+  teacherId          String?   @map("teacher_id") @db.Uuid
+  startsAt           DateTime  @map("starts_at") @db.Timestamptz
+  endsAt             DateTime? @map("ends_at") @db.Timestamptz
+  joinUrl            String?   @map("join_url")
+  status             String    @default("scheduled")
+  coreSyncedAt       DateTime? @map("core_synced_at") @db.Timestamptz
+  createdAt          DateTime  @map("created_at") @db.Timestamptz @default(now())
+  updatedAt          DateTime  @map("updated_at") @db.Timestamptz @default(now())
+
+  @@map("class_session")
+  @@schema("chat")
+}
+
+/// AUTHORITATIVE IN CORE, mirrored here. No card or account detail is accepted.
+model Payment {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  corePaymentId  String    @map("core_payment_id") @db.Uuid
+  familyId       String    @map("family_id") @db.Uuid
+  subscriptionId String?   @map("subscription_id") @db.Uuid
+  amount         Decimal?  @db.Decimal(12, 2)
+  currency       String?
+  status         String
+  dueAt          DateTime? @map("due_at") @db.Timestamptz
+  paidAt         DateTime? @map("paid_at") @db.Timestamptz
+  coreSyncedAt   DateTime? @map("core_synced_at") @db.Timestamptz
+  createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
+  updatedAt      DateTime  @map("updated_at") @db.Timestamptz @default(now())
+
+  @@map("payment")
   @@schema("chat")
 }
