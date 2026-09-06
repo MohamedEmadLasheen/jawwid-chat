@@ -74,24 +74,20 @@ a `chat`-only dump is **not** restorable without the Core tables first — see
 ## 4. Run the applications
 
 ```bash
-# API — note: dist/main.js does not exist yet (no bootstrap; AI #1/#2)
+# API — boots and serves /api/v1 (see docs/infrastructure/runtime-integration.md)
 cd apps/api && npm ci && npx prisma generate && npm run build && node dist/main.js
+
+# Worker — NOTE: running this as the only outbox drain silently drops every
+# realtime event today (runtime-integration.md D-2).
+cd apps/api && node dist/worker.js
 
 # Admin Web — http://localhost:5174
 cd apps/admin-web && npm ci && npm run dev
 ```
 
-When the bootstrap is written, one line in `main.ts` adopts the infrastructure
-concerns (security headers, CORS allowlist, graceful shutdown):
-
-```ts
-import { applyInfrastructure } from './infra';
-const app = await NestFactory.create(AppModule);
-applyInfrastructure(app);
-await app.listen(Number(process.env.PORT ?? 3000), '0.0.0.0');
-```
-
-and importing `HealthModule` mounts `/health`, `/health/live`, `/health/ready`.
+`main.ts` applies the infrastructure concerns (security headers, CORS allowlist,
+graceful shutdown, the Socket.IO CORS + Redis adapter) and mounts `/health`,
+`/health/live` and `/health/ready` outside the `/api/v1` prefix.
 
 ## 5. Verify
 
@@ -127,7 +123,10 @@ scripts/infra/dev.sh nuke    # stop and delete volumes (asks for confirmation)
 | Symptom | Cause |
 |---|---|
 | `port is already allocated` | The hand-started containers still hold 5433/6380. Remove them, or override the ports. |
-| API exits at boot with "Can't reach database server" | Expected today: Prisma connects eagerly and aborts startup if Postgres is down (F-2). Start the stack first. |
+| API exits at boot with "Can't reach database server" | Prisma connects eagerly and aborts startup if Postgres is down (F-2). Start the stack first. |
+| API exits with "STORAGE_SIGNING_SECRET must be set" | Correct behaviour — signed attachment URLs are forgeable without it. Set it (≥32 chars). |
+| Migrations fail with `role "authenticated" does not exist` | The RLS migration expects PostgREST-style roles. Create them first (runtime-integration.md D-7). |
+| Sending a message returns HTTP 500 | Known P0: the author-validation trigger still resolves family via `chat.thread` (runtime-integration.md D-1). |
 | `docker compose: unknown command` | The plugin is missing — see Prerequisites. |
 | Backup written but the file is missing | Docker cannot see the output path. Use a directory under your home directory; `/tmp` is often not shared with the Docker VM. |
 | `pg_dump: server version mismatch` | The container image's major version must match the server. Set `PG_IMAGE`. |

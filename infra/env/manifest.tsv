@@ -39,6 +39,10 @@ STORAGE_BUCKET	storage	no	req	req	req
 STORAGE_ACCESS_KEY	storage	yes	req	req	req
 STORAGE_SECRET_KEY	storage	yes	req	req	req
 STORAGE_SIGNED_URL_TTL_SECONDS	storage	no	opt	req	req
+STORAGE_SIGNING_SECRET	storage	yes	req	req	req
+OUTBOX_POLL_MS	worker	no	opt	opt	opt
+OUTBOX_BATCH_SIZE	worker	no	opt	opt	opt
+OUTBOX_IDLE_BACKOFF_MS	worker	no	opt	opt	opt
 ATTACHMENT_MAX_BYTES_IMAGE	storage	no	opt	opt	opt
 ATTACHMENT_MAX_BYTES_VIDEO	storage	no	opt	opt	opt
 ATTACHMENT_MAX_BYTES_VOICE	storage	no	opt	opt	opt
