@@ -5,21 +5,24 @@
  * and the contract in docs/admin/backend-contract-required.md.
  *
  * Rules that these types deliberately encode:
- *  - There is no `super_admin` role.
- *  - `workload_level` has no CRITICAL level.
+ *  - Roles are PRD v0.1 section 3, exactly, and `super_admin` IS one of them.
+ *  - `workload_level` has four states, including CRITICAL (PRD section 5.3).
  *  - Attention is a server-computed `bucket` + `top_reason` TEXT. There is no
  *    client-visible score, and no P1/P2/P3.
  *  - One thread per family; `Case` is layered on the thread, never a second thread.
  */
 
 export type StaffRole =
+  | 'parent'
+  | 'student'
+  | 'teacher'
   | 'admin'
-  | 'coverage'
+  | 'coverage_admin'
   | 'manager'
-  | 'finance'
-  | 'technical'
-  | 'academic'
-  | 'system'
+  | 'super_admin'
+
+/** Operational department — NOT an RBAC role (product decision X-1). */
+export type StaffDepartment = 'finance' | 'technical' | 'academic'
 
 export type Presence = 'online' | 'away' | 'offline'
 

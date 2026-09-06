@@ -16,7 +16,7 @@
  * This file therefore only answers coarse, role-level questions used for
  * navigation and page-level routing.
  */
-import type { StaffRole } from '@/shared/types/domain'
+import type { StaffDepartment, StaffRole } from '@/shared/types/domain'
 
 export type NavArea =
   | 'inbox'
@@ -26,26 +26,43 @@ export type NavArea =
   | 'dashboard'
   | 'settings'
 
-/** Roles that operate the customer relationship. */
-const OPERATOR_ROLES: readonly StaffRole[] = ['admin', 'coverage', 'manager']
-
-/** Departments: see and complete only their own tasks. Never message families. */
-const DEPARTMENT_ROLES: readonly StaffRole[] = ['finance', 'technical', 'academic']
+/** Roles that operate the customer relationship (PRD v0.1 §3). */
+const OPERATOR_ROLES: readonly StaffRole[] = [
+  'admin',
+  'coverage_admin',
+  'manager',
+  'super_admin',
+]
 
 export function isOperator(role: StaffRole): boolean {
   return OPERATOR_ROLES.includes(role)
 }
 
-export function isDepartment(role: StaffRole): boolean {
-  return DEPARTMENT_ROLES.includes(role)
+/**
+ * Departments are an operational concept, NOT a role (product decision X-1).
+ * A departmental staff member sees and completes only their own tasks and
+ * never messages a family — but that is now driven by `staff.department`,
+ * not by `staff.role`.
+ */
+export function isDepartment(department?: StaffDepartment | null): boolean {
+  return department != null
 }
 
+/** PRD §3: super_admin has everything the manager has, and more. */
 export function isManager(role: StaffRole): boolean {
-  return role === 'manager'
+  return role === 'manager' || role === 'super_admin'
 }
 
 /** Which nav areas this role may even attempt to open. */
-export function visibleAreas(role: StaffRole): NavArea[] {
+export function visibleAreas(
+  role: StaffRole,
+  department?: StaffDepartment | null,
+): NavArea[] {
+  // Department first: a departmental staff member gets tasks and nothing else,
+  // whatever operator role they also carry. They may not open family records.
+  if (isDepartment(department)) {
+    return ['tasks']
+  }
   if (isManager(role)) {
     return ['inbox', 'families', 'tasks', 'coverage', 'dashboard', 'settings']
   }
@@ -53,15 +70,15 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // No coverage configuration, no manager dashboard, no config editing.
     return ['inbox', 'families', 'tasks']
   }
-  if (isDepartment(role)) {
-    // Departments get tasks and nothing else — they may not open family records.
-    return ['tasks']
-  }
   return []
 }
 
-export function canOpenArea(role: StaffRole, area: NavArea): boolean {
-  return visibleAreas(role).includes(area)
+export function canOpenArea(
+  role: StaffRole,
+  area: NavArea,
+  department?: StaffDepartment | null,
+): boolean {
+  return visibleAreas(role, department).includes(area)
 }
 
 /** Manager-only, per the brief's invariants and AI #5's matrix. */
@@ -77,8 +94,11 @@ export const managerOnly = {
 } as const
 
 /** The task scope a role should request from the API. */
-export function taskScopeFor(role: StaffRole): 'mine' | 'team' | 'department' {
+export function taskScopeFor(
+  role: StaffRole,
+  department?: StaffDepartment | null,
+): 'mine' | 'team' | 'department' {
+  if (isDepartment(department)) return 'department'
   if (isManager(role)) return 'team'
-  if (isDepartment(role)) return 'department'
   return 'mine'
 }

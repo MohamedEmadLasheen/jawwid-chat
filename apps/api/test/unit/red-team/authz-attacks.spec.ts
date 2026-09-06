@@ -48,7 +48,7 @@ describe('RT-003 (fixed) · on_behalf_mode cannot be asserted by the client', ()
   });
 
   it('an on-duty admin who is not the owner is attributed COVERAGE, not OWNER', async () => {
-    const cov = admin('coverage-admin', 'coverage');
+    const cov = admin('coverage-admin', 'coverage_admin');
     const authz = authzWithOnDuty('coverage-admin');
     const d = await authz.canSend(cov, conversation(), member(cov), customer, NOW, OWNER);
     expect(d.allowed).toBe(true);

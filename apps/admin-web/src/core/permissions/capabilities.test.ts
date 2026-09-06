@@ -16,14 +16,31 @@ import { ROLES } from '@/test/utils'
  * hidden button is not a control.
  */
 describe('role → navigation', () => {
-  it('has no super_admin role', () => {
-    expect(ROLES).not.toContain('super_admin')
+  it('includes super_admin — PRD v0.1 §3 defines it', () => {
+    // This assertion was previously inverted. The superseded brief had no
+    // super_admin; the PRD does, and grants it "Everything, plus users, roles,
+    // policies, templates, automations, integrations, audit logs".
+    expect(ROLES).toContain('super_admin')
+  })
+
+  it('carries exactly the seven PRD roles', () => {
+    expect([...ROLES].sort()).toEqual(
+      [
+        'admin',
+        'coverage_admin',
+        'manager',
+        'parent',
+        'student',
+        'super_admin',
+        'teacher',
+      ].sort(),
+    )
   })
 
   it('gives only the manager coverage, dashboard and settings', () => {
     for (const role of ROLES) {
       const areas = visibleAreas(role)
-      if (role === 'manager') {
+      if (isManager(role)) {
         expect(areas).toEqual(
           expect.arrayContaining(['coverage', 'dashboard', 'settings']),
         )
@@ -36,24 +53,28 @@ describe('role → navigation', () => {
   })
 
   it('gives departments tasks and nothing else', () => {
-    for (const role of ['finance', 'technical', 'academic'] as const) {
-      expect(isDepartment(role)).toBe(true)
-      expect(visibleAreas(role)).toEqual(['tasks'])
+    // Department is now a separate concept from role (product decision X-1):
+    // an operator role plus a department still gets only tasks.
+    for (const department of ['finance', 'technical', 'academic'] as const) {
+      expect(isDepartment(department)).toBe(true)
+      expect(visibleAreas('admin', department)).toEqual(['tasks'])
       // Departments must never reach a family record (AI #5 matrix §1).
-      expect(canOpenArea(role, 'families')).toBe(false)
-      expect(canOpenArea(role, 'inbox')).toBe(false)
+      expect(canOpenArea('admin', 'families', department)).toBe(false)
+      expect(canOpenArea('admin', 'inbox', department)).toBe(false)
     }
+    expect(isDepartment(null)).toBe(false)
+    expect(isDepartment(undefined)).toBe(false)
   })
 
-  it('gives admin and coverage the same areas — coverage is a label, not a lesser role', () => {
-    expect(visibleAreas('admin')).toEqual(visibleAreas('coverage'))
+  it('gives admin and coverage_admin the same areas — coverage is a label, not a lesser role', () => {
+    expect(visibleAreas('admin')).toEqual(visibleAreas('coverage_admin'))
     expect(isOperator('admin')).toBe(true)
-    expect(isOperator('coverage')).toBe(true)
+    expect(isOperator('coverage_admin')).toBe(true)
   })
 
-  it('restricts every manager-only action to the manager', () => {
+  it('restricts every manager-only action to the manager and super_admin', () => {
     for (const role of ROLES) {
-      const expected = role === 'manager'
+      const expected = role === 'manager' || role === 'super_admin'
       expect(isManager(role)).toBe(expected)
       for (const [, check] of Object.entries(managerOnly)) {
         expect(check(role)).toBe(expected)
@@ -63,8 +84,9 @@ describe('role → navigation', () => {
 
   it('requests the task scope that matches the role', () => {
     expect(taskScopeFor('admin')).toBe('mine')
-    expect(taskScopeFor('coverage')).toBe('mine')
+    expect(taskScopeFor('coverage_admin')).toBe('mine')
     expect(taskScopeFor('manager')).toBe('team')
-    expect(taskScopeFor('finance')).toBe('department')
+    expect(taskScopeFor('super_admin')).toBe('team')
+    expect(taskScopeFor('admin', 'finance')).toBe('department')
   })
 })

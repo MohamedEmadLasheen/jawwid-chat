@@ -117,7 +117,7 @@ describe('BR-1 — permitted channels', () => {
   });
 
   it('coverage admin counts as family-facing', () => {
-    expect(authz.canOpenDirect(parent(), admin('cov-1', 'coverage')).allowed).toBe(true);
+    expect(authz.canOpenDirect(parent(), admin('cov-1', 'coverage_admin')).allowed).toBe(true);
   });
 
   it('a teacher may post in a Teacher<->Admin 1:1: no contact is present', async () => {

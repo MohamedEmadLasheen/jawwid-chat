@@ -185,11 +185,11 @@ export function makeFamilyDetail(overrides: Partial<FamilyDetail> = {}): FamilyD
 }
 
 export const ROLES: StaffRole[] = [
+  'parent',
+  'student',
+  'teacher',
   'admin',
-  'coverage',
+  'coverage_admin',
   'manager',
-  'finance',
-  'technical',
-  'academic',
-  'system',
+  'super_admin',
 ]

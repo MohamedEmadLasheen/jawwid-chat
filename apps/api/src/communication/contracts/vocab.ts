@@ -14,25 +14,39 @@ export const ActorKind = {
 } as const;
 export type ActorKind = (typeof ActorKind)[keyof typeof ActorKind];
 
+/**
+ * PRD v0.1 section 3, exactly. `coverage` was the superseded brief's name for
+ * `coverage_admin`; finance / technical / academic were never PRD roles and are
+ * now an operational department (chat.staff.department), not an identity.
+ */
 export const StaffRole = {
+  PARENT: 'parent',
+  STUDENT: 'student',
+  TEACHER: 'teacher',
   ADMIN: 'admin',
-  COVERAGE: 'coverage',
+  COVERAGE_ADMIN: 'coverage_admin',
   MANAGER: 'manager',
+  SUPER_ADMIN: 'super_admin',
+} as const;
+
+/** Operational department — NOT an RBAC role (product decision X-1). */
+export const StaffDepartment = {
   FINANCE: 'finance',
   TECHNICAL: 'technical',
   ACADEMIC: 'academic',
 } as const;
+export type StaffDepartment = (typeof StaffDepartment)[keyof typeof StaffDepartment];
 export type StaffRole = (typeof StaffRole)[keyof typeof StaffRole];
 
 /**
  * Staff roles that may take part in family communication at all.
- * finance / technical / academic staff complete tasks; they never message
- * families.
+ * Departmental staff complete tasks; they never message families.
  */
 export const FAMILY_FACING_STAFF_ROLES: ReadonlySet<string> = new Set([
   StaffRole.ADMIN,
-  StaffRole.COVERAGE,
+  StaffRole.COVERAGE_ADMIN,
   StaffRole.MANAGER,
+  StaffRole.SUPER_ADMIN,
 ]);
 
 export const ConversationType = {
