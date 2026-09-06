@@ -97,22 +97,22 @@ begin
 end;
 $$;
 
--- Runs a query as the Supabase `authenticated` role, impersonating one auth
--- user, so RLS is genuinely exercised rather than bypassed by the superuser
--- that owns the schema. Results are returned to the caller, which is still the
--- owner, so assertions can be recorded normally.
-create or replace function test.count_as(p_auth_user uuid, p_sql text)
+-- Runs a query as the `authenticated` role, impersonating one token subject, so
+-- RLS is genuinely exercised rather than bypassed by the superuser that owns
+-- the schema. Results are returned to the caller, which is still the owner, so
+-- assertions can be recorded normally.
+create or replace function test.count_as(p_subject text, p_sql text)
 returns integer
 language plpgsql
 as $$
 declare
   v_count integer;
 begin
-  perform set_config('request.jwt.claim.sub', coalesce(p_auth_user::text, ''), true);
+  perform set_config('chat.actor_subject', coalesce(p_subject, ''), true);
   set local role authenticated;
   execute p_sql into v_count;
   reset role;
-  perform set_config('request.jwt.claim.sub', '', true);
+  perform set_config('chat.actor_subject', '', true);
   return v_count;
 exception when others then
   reset role;
@@ -122,7 +122,7 @@ $$;
 
 -- Asserts that a statement fails when run as that user.
 create or replace function test.denied_for(
-  p_auth_user uuid, p_sql text, p_label text, p_sqlstate text default null
+  p_subject text, p_sql text, p_label text, p_sqlstate text default null
 ) returns void
 language plpgsql
 as $$
@@ -130,7 +130,7 @@ declare
   v_state text;
   v_msg   text;
 begin
-  perform set_config('request.jwt.claim.sub', coalesce(p_auth_user::text, ''), true);
+  perform set_config('chat.actor_subject', coalesce(p_subject, ''), true);
   set local role authenticated;
   begin
     execute p_sql;
@@ -151,14 +151,14 @@ end;
 $$;
 
 -- Runs a statement as that user and asserts it succeeds.
-create or replace function test.allowed_for(p_auth_user uuid, p_sql text, p_label text)
+create or replace function test.allowed_for(p_subject text, p_sql text, p_label text)
 returns void
 language plpgsql
 as $$
 declare
   v_msg text;
 begin
-  perform set_config('request.jwt.claim.sub', coalesce(p_auth_user::text, ''), true);
+  perform set_config('chat.actor_subject', coalesce(p_subject, ''), true);
   set local role authenticated;
   begin
     execute p_sql;
@@ -173,8 +173,13 @@ begin
 end;
 $$;
 
-create or replace function test.auth_of(p_staff_name text)
-returns uuid
+-- The token subject a staff member signs in with, in this fixture.
+create or replace function test.subject_of(p_staff_name text)
+returns text
 language sql
 stable
-as $$ select auth_user_id from chat.staff where name = p_staff_name $$;
+as $$
+  select a.subject from chat.account a
+  join chat.staff s on s.account_id = a.id
+  where s.name = p_staff_name
+$$;

@@ -1,6 +1,6 @@
 -- Jawwid Chat -- row level security.
 --
--- Two populations sign in against the same Supabase project:
+-- Two populations reach this database, both resolving through chat.account:
 --
 --   staff          have a chat.staff row. They reach the tables directly, and
 --                  every policy below narrows what they see.
@@ -41,6 +41,8 @@ alter table chat.family_state_cache enable row level security;
 alter table chat.sync_state         enable row level security;
 alter table chat.core_event         enable row level security;
 alter table chat.schema_migrations  enable row level security;
+alter table chat.account            enable row level security;
+alter table chat.core_parent_inbox  enable row level security;
 
 -- Roster and configuration --------------------------------------------------
 
@@ -83,8 +85,8 @@ create policy config_managed_by_manager on chat.config for all to authenticated
 grant select, insert, update on chat.family, chat.contact, chat.learner, chat.subscription,
   chat.family_note, chat.thread, chat.support_case, chat.task, chat.handoff to authenticated;
 grant select, insert on chat.message, chat.event_log to authenticated;
-grant select on chat.audit_log, chat.family_state_cache, chat.sync_state, chat.core_event
-  to authenticated;
+grant select on chat.audit_log, chat.family_state_cache, chat.sync_state, chat.core_event,
+  chat.core_parent_inbox to authenticated;
 
 create policy family_visible_to_staff on chat.family for select to authenticated
   using (chat.staff_can_see_family(id));
@@ -202,13 +204,20 @@ create policy sync_state_manager_only on chat.sync_state for select to authentic
   using (chat.is_manager());
 create policy core_event_manager_only on chat.core_event for select to authenticated
   using (chat.is_manager());
+create policy core_parent_inbox_manager_only on chat.core_parent_inbox for select to authenticated
+  using (chat.is_manager());
+
+-- chat.account is never readable through the API. Identity is resolved by
+-- SECURITY DEFINER helpers; nothing needs to enumerate accounts, and no policy
+-- grants it.
 
 -- ---------------------------------------------------------------------------
 -- The family-side surface
 -- ---------------------------------------------------------------------------
 -- These views are owned by the migration role and run with its rights, so they
 -- do not depend on any grant to the tables underneath. Their WHERE clauses on
--- auth.uid() are therefore the entire access control -- keep them airtight.
+-- chat.current_account_id() are therefore the entire access control -- keep
+-- them airtight.
 -- Brief SS8: the customer screen shows the owner, plain topic status, and an
 -- honest reply time. No internal labels, no staff ids, no attention scores.
 
@@ -220,7 +229,7 @@ create or replace view chat.my_family as
          on_duty.name    as replying_now,
          chat.next_on_duty_at(f.id) as next_reply_expected_at
   from chat.family f
-  join chat.contact c on c.family_id = f.id and c.app_user_id = auth.uid() and c.is_active
+  join chat.contact c on c.family_id = f.id and c.account_id = chat.current_account_id() and c.is_active
   left join chat.staff owner on owner.id = f.owner_id
   left join chat.staff on_duty on on_duty.id = chat.effective_handler(f.id);
 
@@ -229,7 +238,7 @@ create or replace view chat.my_permissions as
          c.can_message, c.can_view_progress, c.can_manage_schedule,
          c.can_manage_billing, c.can_manage_contacts, c.can_cancel
   from chat.contact c
-  where c.app_user_id = auth.uid() and c.is_active;
+  where c.account_id = chat.current_account_id() and c.is_active;
 
 create or replace view chat.my_topics as
   select sc.id as topic_id,
@@ -245,7 +254,7 @@ create or replace view chat.my_topics as
          sc.resolved_at
   from chat.support_case sc
   where sc.family_id in (select family_id from chat.contact
-                         where app_user_id = auth.uid() and is_active);
+                         where account_id = chat.current_account_id() and is_active);
 
 comment on view chat.my_topics is
   'Plain status only. waiting_internal and open both read as in_progress: the '
@@ -271,7 +280,7 @@ create or replace view chat.my_messages as
   join chat.thread t on t.id = m.thread_id
   where m.visibility = 'customer'
     and t.family_id in (select family_id from chat.contact
-                        where app_user_id = auth.uid() and is_active);
+                        where account_id = chat.current_account_id() and is_active);
 
 comment on view chat.my_messages is
   'Filtered on visibility = customer. Internal notes are not merely hidden by '
@@ -289,7 +298,7 @@ create or replace function chat.post_customer_message(
 ) returns uuid
 language plpgsql
 security definer
-set search_path = chat, public, pg_temp
+set search_path = chat, pg_temp
 as $$
 declare
   v_contact   chat.contact%rowtype;
@@ -298,7 +307,7 @@ declare
 begin
   select * into v_contact
   from chat.contact
-  where app_user_id = auth.uid() and is_active
+  where account_id = chat.current_account_id() and is_active
     and (p_family_id is null or family_id = p_family_id)
   order by (family_id = p_family_id) desc
   limit 1;

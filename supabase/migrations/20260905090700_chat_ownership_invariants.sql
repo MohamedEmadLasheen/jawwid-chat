@@ -8,9 +8,10 @@
 --   * Relationship case types are owner-locked automatically, from config.
 
 -- Who is acting -------------------------------------------------------------
--- Resolved from the Supabase session first. Server-side jobs that legitimately
--- act without a session set chat.actor_staff_id explicitly, so an action is
--- never attributed to nobody by accident.
+-- Resolved from the caller's own identity first (chat.account, via the token
+-- subject or the per-request GUC). Server-side jobs that legitimately act
+-- without a session set chat.actor_staff_id explicitly, so an action is never
+-- attributed to nobody by accident.
 
 create or replace function chat.current_staff_id()
 returns uuid
@@ -18,7 +19,8 @@ language sql
 stable
 as $$
   select coalesce(
-    (select s.id from chat.staff s where s.auth_user_id = auth.uid() and s.is_active),
+    (select s.id from chat.staff s
+      where s.account_id = chat.current_account_id() and s.is_active),
     nullif(current_setting('chat.actor_staff_id', true), '')::uuid
   )
 $$;

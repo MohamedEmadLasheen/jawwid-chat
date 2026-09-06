@@ -5,6 +5,10 @@
 -- chat.task's policy calls chat.staff_can_see_family(). Evaluated as the
 -- querying user, each pair recurses until the stack limit.
 --
+-- chat.current_account_id() is here for a different reason: chat.account has
+-- RLS enabled and no policy at all, so nothing can read it through the API.
+-- Identity resolution has to run as the owner or nobody could sign in.
+--
 -- These four functions therefore run as their owner, so their internal reads
 -- are not themselves subject to RLS. They are the smallest possible set: every
 -- other helper reaches its tables through one of these and needs no elevation.
@@ -19,11 +23,11 @@ begin
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'chat'
-      and p.proname in ('current_staff_id', 'current_staff_role',
+      and p.proname in ('current_account_id', 'current_staff_id', 'current_staff_role',
                         'staff_can_see_family', 'current_contact_family_ids')
   loop
     execute format('alter function %s security definer', r.signature);
-    execute format('alter function %s set search_path = chat, public, pg_temp', r.signature);
+    execute format('alter function %s set search_path = chat, pg_temp', r.signature);
   end loop;
 end;
 $$;

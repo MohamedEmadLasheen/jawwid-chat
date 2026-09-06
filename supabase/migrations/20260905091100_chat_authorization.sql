@@ -41,7 +41,7 @@ language sql
 stable
 as $$
   select family_id from chat.contact
-  where app_user_id = auth.uid() and is_active
+  where account_id = chat.current_account_id() and is_active
 $$;
 
 -- Visibility ---------------------------------------------------------------

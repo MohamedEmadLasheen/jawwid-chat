@@ -3,10 +3,10 @@
 -- The family is the unit of ownership, of the inbox, and of the thread.
 -- Not the phone number, not the conversation, not the employee.
 --
--- Columns named core_* mirror an identifier owned by Jawwid Core. They are
--- deliberately NOT foreign keys (ADR-004): the `chat` schema references neither
--- `auth` nor `public`, so Core can change or move without chat blocking it.
--- Reconciliation happens in the chat.core_* boundary, not in the planner.
+-- Columns named core_* record the identifier the corresponding record carries
+-- in Jawwid Core. They are plain columns, never foreign keys: Core lives in a
+-- different database and reaches this one only through the integration
+-- boundary (ADR-004). They are what makes ingestion idempotent.
 
 create table chat.family (
   id                 uuid primary key default gen_random_uuid(),
@@ -61,7 +61,7 @@ create trigger family_set_updated_at
 create table chat.contact (
   id                  uuid primary key default gen_random_uuid(),
   family_id           uuid not null references chat.family (id) on delete cascade,
-  app_user_id         uuid,
+  account_id          uuid references chat.account (id) on delete restrict,
   name                text not null,
   relationship        text,
   role_preset         text not null
@@ -78,13 +78,14 @@ create table chat.contact (
   updated_at          timestamptz not null default now()
 );
 
-comment on column chat.contact.app_user_id is
-  'Jawwid Core auth user id. A contact without one exists in the CS record but '
-  'cannot sign in and therefore never passes an RLS check.';
+comment on column chat.contact.account_id is
+  'Null for a contact who exists in the CS record but has never signed in -- a '
+  'second guardian the admin recorded, say. Such a contact never passes an RLS '
+  'check, because there is no session that can resolve to them.';
 
 create index contact_family_idx on chat.contact (family_id) where is_active;
-create unique index contact_app_user_family_uniq
-  on chat.contact (family_id, app_user_id) where app_user_id is not null;
+create unique index contact_account_family_uniq
+  on chat.contact (family_id, account_id) where account_id is not null;
 
 create trigger contact_set_updated_at
   before update on chat.contact
@@ -133,9 +134,10 @@ create trigger learner_set_updated_at
 -- ---------------------------------------------------------------------------
 -- Subscriptions (mirror of Core)
 -- ---------------------------------------------------------------------------
--- Jawwid Core owns billing. This mirror exists so the family side panel and the
--- attention engine can read renewal and payment state without chat querying
--- Core's tables directly.
+-- Jawwid Core owns billing and remains its source of truth. This is a replica
+-- Jawwid Chat does not author: it exists so the family side panel and the
+-- attention engine can read renewal and payment state without a synchronous
+-- call to Core on every inbox render.
 
 create table chat.subscription (
   id                   uuid primary key default gen_random_uuid(),
@@ -143,9 +145,8 @@ create table chat.subscription (
   learner_id           uuid references chat.learner (id) on delete set null,
   plan                 text,
   status               text not null check (status in (
-                         'trialing', 'free', 'active', 'grace_period', 'expired',
-                         'cancelled', 'paused', 'pending_payment', 'failed_payment',
-                         'refunded', 'lifetime')),
+                         'trialing', 'active', 'past_due', 'grace', 'paused',
+                         'cancelled', 'expired', 'unknown')),
   ends_at              timestamptz,
   renewal_due_at       timestamptz,
   last_payment_status  text check (last_payment_status in ('succeeded', 'failed', 'refunded')),
@@ -156,8 +157,10 @@ create table chat.subscription (
 );
 
 comment on column chat.subscription.status is
-  'Mirrors public.subscriptions.status verbatim so the boundary needs no '
-  'translation table. If Core widens its vocabulary this CHECK must widen too.';
+  'Jawwid Chat''s own vocabulary, deliberately smaller than Jawwid Core''s. The '
+  'integration boundary translates through a config-driven map, so a Core '
+  'release that adds a status cannot break ingestion here: an unrecognised '
+  'value lands as `unknown` and is reported, not rejected (ADR-014).';
 
 create index subscription_family_idx on chat.subscription (family_id);
 create index subscription_renewal_idx on chat.subscription (renewal_due_at)

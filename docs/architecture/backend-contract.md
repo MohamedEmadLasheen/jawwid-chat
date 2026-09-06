@@ -16,20 +16,50 @@ describes.
 
 ## 1. Where the backend is
 
-Jawwid Chat is the **`chat` schema inside the Jawwid Core Supabase database**
-(the `second-school` project). There is no separate API service. Clients talk to
-PostgREST, and every rule is enforced by RLS and database functions
-([ADR-002](./decisions.md#adr-002--jawwid-chat-lives-in-the-chat-schema-of-the-core-database),
-[ADR-005](./decisions.md#adr-005--the-domain-lives-in-sql-not-in-an-application-service-layer)).
+Jawwid Chat is a **standalone product with its own PostgreSQL database**. It
+depends on no other product's schema: no Supabase image, no `auth` schema, no
+foreign key leaving the `chat` schema, and no function or view that reads
+another product's tables. Three assertions in `db/tests/invariants.sql` enforce
+that, so it cannot regress quietly
+([ADR-002](./decisions.md#adr-002--jawwid-chat-owns-its-own-postgresql-database)).
+
+Everything lives in the `chat` schema, and the rules are enforced by RLS and
+database functions rather than by a service layer any client could bypass
+([ADR-005](./decisions.md#adr-005--the-domain-lives-in-sql-not-in-an-application-service-layer)).
+An API service in front of this database is expected — it should **call these
+functions, not reimplement them**.
+
+### Identity
+
+Every actor resolves through `chat.account`, which holds an opaque token
+`subject` and nothing else — no email, no phone
+([ADR-015](./decisions.md#adr-015--chat-owns-its-identity-and-that-identity-carries-no-contact-channel)).
+Tell the database who is calling in one of two ways:
+
+```sql
+-- an API service on a pooled connection, per request
+select set_config('chat.actor_subject', '<token sub>', true);
+set local role authenticated;
+
+-- or a gateway that forwards verified JWT claims in request.jwt.claims
+```
+
+A caller with neither is anonymous and every policy denies them. Attach a
+subject to a person on first sign-in with `chat.link_staff_account(staff_id,
+subject)` or `chat.link_contact_account(contact_id, subject)`.
 
 ```
-supabase/migrations/     the chat schema, in order
+supabase/migrations/     the chat schema, in order -- the single schema authority
 scripts/db/apply.sh      apply migrations (own ledger: chat.schema_migrations)
-scripts/db/test-db.sh    local Postgres in Docker (the image Supabase runs)
+scripts/db/test-db.sh    local postgres:17 in Docker
 scripts/db/test.sh       run every suite
-db/testkit/              Core shim, assertions, the operations fixture
-db/tests/                seven suites, 166 assertions
+db/testkit/              role bootstrap, assertions, the operations fixture
+db/tests/                seven suites, 177 assertions
 ```
+
+`supabase/migrations/*.sql` is the **only** schema authority. Nothing else may
+create or alter a table: no ORM migration, no `db push`. A generated client is
+fine as a read model, introspected from the migrated database.
 
 ```bash
 bash scripts/db/test.sh
@@ -68,7 +98,7 @@ Names follow the brief's §3 except for three reserved-word renames
 | Table | Notes |
 |---|---|
 | `chat.family` | `owner_id` NOT NULL and trigger-guarded. `tier`, `state`, `manual_flag` (a flag requires a reason). `core_parent_id` mirrors Core. |
-| `chat.contact` | Six capability flags are the authority; `role_preset` is a display label no check reads. `app_user_id` is the Supabase identity. |
+| `chat.contact` | Six capability flags are the authority; `role_preset` is a display label no check reads. `account_id` links to `chat.account`, and is null until that person signs in. |
 | `chat.learner` | `next_class_at` drives the class attention signal. `teacher_id` stays null until Core has teachers. |
 | `chat.subscription` | Mirror of Core billing. `status` copies Core's vocabulary verbatim. |
 | `chat.family_note` | Internal. Any admin may write one on any family at any time. |
@@ -165,8 +195,10 @@ than the brief intends.
 ## 7. The family-side surface — AI #3
 
 Family contacts have **no grant on any base table**
-([ADR-006](./decisions.md#adr-006--two-populations-two-access-paths)). Build
-against exactly this:
+([ADR-006](./decisions.md#adr-006--two-populations-two-access-paths)).
+
+Sign the parent in, attach their subject with `chat.link_contact_account()`, then
+set `chat.actor_subject` per request. Build against exactly this:
 
 | Surface | Gives you |
 |---|---|
@@ -217,35 +249,70 @@ chat.dispute_attention_order(family_id, staff_id, expected_rank, note)  -- "this
 `reason` is mandatory on the first two and lands in `chat.audit_log` in the same
 transaction. Both refuse a non-manager.
 
-Set `chat.actor_staff_id` for server-side calls; in a signed-in session the actor
-is resolved from `auth.uid()` automatically.
+Set `chat.actor_staff_id` for server-side calls that have no session. In a
+signed-in session the actor resolves from `chat.actor_subject` (or the forwarded
+JWT claim) automatically — see §1.
 
 ---
 
 ## 9. Jawwid Core boundary — AI #2 / AI #5
 
-Core owns accounts, children, subscriptions and payments. **Read them only
-through `chat.core_parent`, `chat.core_child`, `chat.core_subscription`.**
-Nothing else in the schema references `public.*`, which is what keeps
-[ADR-002](./decisions.md#adr-002--jawwid-chat-lives-in-the-chat-schema-of-the-core-database)
-reversible.
+Jawwid Core is a **separate product in a separate database**. Nothing in this
+schema reads it. Core-sourced facts arrive as payloads over the integration
+boundary — transport, auth and delivery semantics are **AI #2's to build and are
+not yet specified** — and are materialised into Chat-owned tables here.
+
+Core remains the source of truth. What this database holds is a replica it does
+not author, keyed by the `core_*_id` in the payload. That key is what makes every
+function below idempotent.
 
 ```sql
-chat.sync_from_core(core_parent_id, owner_id)   -- idempotent, end to end
-chat.sync_all_known_families_from_core()
+chat.ingest_core_parent(payload)        -> family_id, or NULL if awaiting an owner
+chat.ingest_core_learner(payload)       -> learner_id, or NULL if the family is unknown
+chat.ingest_core_subscription(payload)  -> subscription_id, or NULL likewise
+chat.assign_family_owner(core_parent_id, owner_id, reason, actor_id)
 chat.record_core_event(external_event_id, type, payload) -> boolean
 chat.mark_core_event_processed(external_event_id, error)
-select * from chat.core_parent_awaiting_owner;
+chat.record_sync_result(source, status, error, cursor)
+select * from chat.sync_health;
 ```
 
-`record_core_event` returns **true only the first time** an event id is seen. A
-handler that ignores a false return is idempotent by construction.
+**The payload shapes are the contract.** They are flat by design — this boundary
+must not grow knowledge of Core's internal schema
+([ADR-014](./decisions.md#adr-014--jawwid-chat-translates-cores-vocabulary-rather-than-adopting-it)):
 
-A new Core parent is **not** given a family automatically — it waits in
-`chat.core_parent_awaiting_owner` until a manager names an owner. Brief §1 rules
-out automatic distribution, and inventing an owner would be exactly that.
+```jsonc
+// parent
+{ "core_parent_id": uuid, "display_name": string, "language": "ar" | "en" }
 
----
+// learner
+{ "core_child_id": uuid, "core_parent_id": uuid, "name": string,
+  "level": string?, "schedule_ref": string?, "next_class_at": timestamptz?,
+  "last_attended_at": timestamptz?, "consecutive_absences": int? }
+
+// subscription
+{ "core_subscription_id": uuid, "core_parent_id": uuid, "plan": string?,
+  "status": string,                    // Core's vocabulary; translated on the way in
+  "ends_at": timestamptz?, "renewal_due_at": timestamptz?,
+  "last_payment_status": "succeeded" | "failed" | "refunded" | null,
+  "last_payment_at": timestamptz? }
+```
+
+Three behaviours to build against:
+
+- **A NULL return is normal, not a failure.** A parent with no owner yet, or a
+  learner whose family does not exist, is recorded or skipped — never guessed at.
+- **`record_core_event` returns true only the first time** an event id is seen.
+  A handler that ignores a false return is idempotent by construction.
+- **An unrecognised subscription status becomes `unknown`**, is reported by
+  `chat.unmapped_core_subscription_status` and counted in `chat.sync_health`, and
+  is fixed by editing `chat.config['integration.subscription_status_map']`. A
+  Core release that adds a status must not break ingestion here.
+
+A new parent is **not** given a family automatically. It waits in
+`chat.core_parent_inbox` until a manager calls `chat.assign_family_owner()` with
+a reason, which is audited. Brief §1 rules out automatic distribution, and
+inventing an owner would be exactly that.
 
 ## 10. Events
 
@@ -276,8 +343,11 @@ Deferred to whoever picks them up, with the seams already in place:
   ever suggest; the brief forbids auto-activating a backup.
 - **Case lifecycle transitions** — statuses and guards exist; the automatic
   transitions (last task done → `waiting_internal` → `open`) do not.
-- **Realtime** — no subscriptions configured. Supabase Realtime on `chat.message`
-  is the obvious route and respects RLS.
+- **Realtime** — nothing configured. `chat.message` is append-only, so a
+  `LISTEN/NOTIFY` trigger or logical replication both work; whatever fans it out
+  must re-check visibility rather than trusting the client's filter.
+- **Authentication itself** — `chat.account` stores an opaque subject. Issuing
+  and verifying tokens is the identity provider's job and is not built here.
 - Everything in [ADR-001](./decisions.md#adr-001--build-the-briefs-customer-success-operating-system):
   student groups, approvals, calling, push, multi-tenancy, a teacher role.
 
@@ -294,13 +364,16 @@ the product):
 20260905091100_chat_authorization.sql          staff_may_send(), may_assist()
 20260905091200_chat_rls.sql                    the policies and the my_* views
 20260905091300_chat_policy_helper_privileges.sql
+20260905090050_chat_identity.sql               chat.account and caller resolution
 ```
 
 Adding to them is fine; weakening a guard is a product decision.
 
 **Safe to extend:** new tables in `chat`; new columns on `family`, `contact`,
 `learner`, `support_case`, `task`; new `event_log` types; new config keys; new
-views. Never add a column that stores a phone number — a test fails if you do.
+views. Never add a column that stores a phone number, an email address or any
+other contact channel — on `chat.account` least of all. A test fails if you do,
+and on the identity table it is a privacy review rather than a migration.
 
 **Rules that must survive any change:**
 
@@ -316,6 +389,8 @@ views. Never add a column that stores a phone number — a test fails if you do.
 7. A family is in exactly one inbox, or in the manager's Unattended list.
 8. Coverage cannot close owner-locked cases or change owners.
 9. No AI output reaches a customer, and no AI changes state.
+10. No foreign key leaves the `chat` schema, and nothing here reads another
+    product's database.
 
 Add a test to `db/tests/` for anything you add. `bash scripts/db/test.sh` must
 stay green.

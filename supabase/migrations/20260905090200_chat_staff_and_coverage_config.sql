@@ -13,11 +13,8 @@
 
 create table chat.staff (
   id                uuid primary key default gen_random_uuid(),
-  -- Staff sign in with the same Supabase identity as the rest of Jawwid.
-  -- Deliberately NOT a foreign key: nothing in the `chat` schema references
-  -- `auth` or `public`, so Core can evolve (or be extracted to its own
-  -- database) without chat blocking its deletes (ADR-004).
-  auth_user_id      uuid unique,
+  -- Every actor resolves through chat.account, which this database owns.
+  account_id        uuid unique references chat.account (id) on delete restrict,
   name              text not null,
   role              text not null check (role in
                       ('admin', 'coverage', 'manager', 'finance', 'technical', 'academic')),

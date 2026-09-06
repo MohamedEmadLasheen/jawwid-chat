@@ -33,34 +33,38 @@ exists because the brief lists it, and stays null until Core has teachers.
 
 ---
 
-## ADR-002 — Jawwid Chat lives in the `chat` schema of the Core database
+## ADR-002 — Jawwid Chat owns its own PostgreSQL database
 
-**Status:** accepted.
+**Status:** accepted. **Supersedes an earlier decision in this same log.**
 
-Jawwid Core is a Supabase project: 126 migrations, RLS throughout, 316
-`auth.uid()` references, and a React client that talks to PostgREST directly.
-There is no Node backend to extend.
+An earlier version of this ADR put Jawwid Chat in a `chat` schema inside Jawwid
+Core's Supabase database, reusing `auth.users` so parents would not need a second
+login, and reading Core through `chat.core_*` views.
 
-Three options were weighed: a standalone service with its own database and a
-sync pipeline; a standalone service against Core's database; or a schema inside
-Core's database.
+The product owner subsequently decided that **Jawwid Chat is a standalone
+product with its own database** (`docs/release/database-decision.md`, AI #5). No
+shared database, no cross-schema reads, no foreign keys into Core, and Core
+integration over an API/webhook boundary rather than SQL.
 
-**Decision:** a dedicated `chat` schema in the Core Supabase project.
+**Decision:** Jawwid Chat owns its database outright. It runs on plain
+PostgreSQL — the test database is `postgres:17`, with no Supabase image, no
+`auth` schema, and no fixture standing in for another product's tables.
 
-**Why.** Parents already have an identity in `auth.users`; a separate service
-means a second login for the same person. Family, subscription and payment data
-would otherwise have to be replicated through a sync pipeline that can lag or
-drift. The brief describes Jawwid Chat as living *"inside the Jawwid app"*.
+**Consequences, all implemented:**
 
-**Consequences.** Jawwid Chat keeps its own migration ledger,
-`chat.schema_migrations`, applied by `scripts/db/apply.sh`. It deliberately does
-not use Core's `supabase_migrations.schema_migrations`, because `supabase db
-push` run from either repository would otherwise see the other repository's
-migrations as missing and try to reconcile them.
+- Identity is Chat's own (ADR-015). No `auth.users`, no `auth.uid()`.
+- Core-sourced facts arrive as payloads and are materialised into Chat-owned
+  tables (ADR-014). The `chat.core_*` views are gone.
+- Jawwid Chat keeps its own migration ledger, `chat.schema_migrations`, applied
+  by `scripts/db/apply.sh`.
+- Three assertions in `db/tests/invariants.sql` hold the line: no foreign key
+  leaves the `chat` schema, no function in it reads another product's tables,
+  and no view does either.
 
-**To revisit:** the `chat.core_*` views are the entire read surface onto Core.
-Extracting Jawwid Chat to its own database means re-pointing those views at an
-HTTP client; nothing in the domain reads `public.*` directly.
+**Cost that was accepted with this decision.** Parents now need an identity in
+Jawwid Chat as well as in Jawwid Core, and family/subscription data is a replica
+that can lag. `chat.sync_health` exists so the lag is visible rather than
+assumed away.
 
 ---
 
@@ -80,23 +84,25 @@ migration rather than a schema change. `20260905091100` widens
 
 ---
 
-## ADR-004 — No foreign keys from `chat.*` into `auth.*` or `public.*`
+## ADR-004 — No foreign key leaves the `chat` schema
 
 **Status:** accepted.
 
-`chat.staff.auth_user_id`, `chat.contact.app_user_id`, `chat.family.core_parent_id`,
-`chat.learner.core_child_id` and `chat.subscription.core_subscription_id` are
-plain columns with unique indexes, not foreign keys.
+`chat.family.core_parent_id`, `chat.learner.core_child_id` and
+`chat.subscription.core_subscription_id` record the identifier the record
+carries in Jawwid Core. They are plain columns with unique indexes.
 
-**Why.** A foreign key would make Jawwid Chat able to block Core's own deletes.
-Core cascades `profiles` from `auth.users`; a `RESTRICT` from chat would break
-account deletion in Core, and a `CASCADE` would silently destroy CS history when
-an account is removed. Keeping the reference soft also means ADR-002 can be
-revisited without unpicking constraints.
+Under ADR-002 they *cannot* be foreign keys — Core is a different database — but
+they would not have been anyway: a foreign key would let Jawwid Chat block
+Core's own deletes, and cascade CS history away when an account is removed.
 
-**Consequences.** Referential integrity across the boundary is the sync
-functions' job, not the planner's. `chat.core_parent_awaiting_owner` and
-`chat.sync_health` exist so drift is visible rather than assumed away.
+What they are instead is the **idempotency key**. Every ingestion function
+upserts on one of them, so re-delivering a payload converges rather than
+duplicating.
+
+**Consequences.** Referential integrity across the boundary is the boundary's
+job, not the planner's. `chat.core_parent_inbox`, `chat.sync_health` and
+`chat.unmapped_core_subscription_status` exist so drift is visible.
 
 ---
 
@@ -116,8 +122,8 @@ changes only via transfer_ownership()" — and invariants belong where they cann
 be routed around.
 
 **Consequences.** Business logic is reviewed as SQL. The test suite is SQL and
-runs against the same Postgres image Supabase runs, exercising RLS as the
-`authenticated` role rather than bypassing it as the owner.
+runs against plain `postgres:17`, exercising RLS as the `authenticated` role
+rather than bypassing it as the owner.
 
 **To revisit:** if an API service is introduced later, it should call these
 functions rather than reimplement them.
@@ -128,9 +134,10 @@ functions rather than reimplement them.
 
 **Status:** accepted.
 
-Staff have a `chat.staff` row and query the tables directly under RLS. Family
-contacts have no grant on any base table: they read four `chat.my_*` views and
-write through one function, `chat.post_customer_message()`.
+Both populations resolve through `chat.account`. Staff have a `chat.staff` row
+and query the tables directly under RLS. Family contacts have no grant on any
+base table: they read four `chat.my_*` views and write through one function,
+`chat.post_customer_message()`.
 
 **Why.** The failure mode worth designing against is a staff-side policy widening
 by accident and exposing internal notes to a parent. If parents are not reading
@@ -230,13 +237,18 @@ this way — `on_duty()` remains the only thing that decides who handles a famil
 
 ---
 
-## ADR-013 — Three policy helpers run as their owner
+## ADR-013 — The identity and policy helpers run as their owner
 
 **Status:** accepted.
 
-`current_staff_id()`, `current_staff_role()`, `staff_can_see_family()` and
-`current_contact_family_ids()` are `SECURITY DEFINER` with a pinned
-`search_path`.
+`current_account_id()`, `current_staff_id()`, `current_staff_role()`,
+`staff_can_see_family()` and `current_contact_family_ids()` are
+`SECURITY DEFINER` with a pinned `search_path`.
+
+`current_account_id()` is elevated for a different reason from the others:
+`chat.account` has RLS enabled and **no policy at all**, so nothing can read it
+through the API. Identity resolution has to run as the owner or nobody could
+sign in.
 
 Without it they recurse: `chat.staff`'s policy calls a function that reads
 `chat.staff`; `chat.task`'s policy calls a function that reads `chat.task`. Both
@@ -245,4 +257,55 @@ hit the stack limit.
 They are the smallest set that breaks the cycles, and each returns only a boolean
 or an id about the caller's own identity — elevating them exposes nothing the
 caller could not already read. Every other helper reaches its tables through one
-of these and stays `SECURITY INVOKER`.
+of these and stays `SECURITY INVOKER`. All five pin `search_path` to
+`chat, pg_temp`.
+
+---
+
+## ADR-014 — Jawwid Chat translates Core's vocabulary rather than adopting it
+
+**Status:** accepted. Required by ADR-002.
+
+An earlier version mirrored `public.subscriptions.status` verbatim, with a
+comment saying the CHECK must widen whenever Core's did. Under a standalone
+database that is a release-coupling defect: a Core deploy would break ingestion
+here.
+
+**Decision.** `chat.subscription.status` is Jawwid Chat's own, smaller
+vocabulary. `chat.map_core_subscription_status()` translates through
+`chat.config['integration.subscription_status_map']`, and an **unmapped value
+degrades to `unknown` rather than failing the ingestion**.
+
+`chat.unmapped_core_subscription_status` reports anything that landed as
+`unknown`, so a status Core added that Jawwid Chat has not been told about is a
+config edit with a visible symptom — not an outage, and not a migration.
+
+The same principle governs the payload shapes in §9 of the backend contract:
+they are deliberately flat, and this boundary must not grow knowledge of Core's
+internal schema.
+
+---
+
+## ADR-015 — Chat owns its identity, and that identity carries no contact channel
+
+**Status:** accepted. Required by ADR-002.
+
+`chat.account` holds `subject` (the opaque `sub` claim from Jawwid Chat's
+identity provider), `kind`, and `is_active`. `chat.staff.account_id` and
+`chat.contact.account_id` reference it. Nothing references `auth.users`.
+
+The caller is resolved by `chat.current_subject()`, which reads either a
+per-request GUC (`chat.actor_subject`, for an API service on a pooled
+connection) or a forwarded JWT claim. Neither is trusted to be present; a caller
+with neither is anonymous, and every policy denies an anonymous caller.
+
+**`chat.account` deliberately holds no email, phone, or other contact channel.**
+Credentials live in the identity provider. An identity table is exactly where an
+email column gets added as a matter of routine, which is why
+`db/tests/invariants.sql` fails if one appears: adding it is a privacy review,
+not a migration.
+
+A contact can exist with `account_id` null — a second guardian an admin
+recorded, who has never signed in. They never pass an RLS check, because no
+session can resolve to them. `chat.link_contact_account()` attaches the subject
+on first sign-in.

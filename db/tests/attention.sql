@@ -7,8 +7,8 @@
 select test.begin_suite('attention');
 select test.seed_operations();
 
-insert into chat.contact (family_id, name, role_preset, can_message, app_user_id)
-select id, 'Parent of ' || display_name, 'primary_guardian', true, gen_random_uuid()
+insert into chat.contact (family_id, name, role_preset, can_message)
+select id, 'Parent of ' || display_name, 'primary_guardian', true
 from chat.family;
 
 -- Nothing happening ---------------------------------------------------------

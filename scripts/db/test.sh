@@ -11,7 +11,7 @@ DB=jawwid_chat_test
 FILTER="${1:-}"
 
 psql_file() {
-  docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 -q -U supabase_admin -d "$DB" -f - < "$1"
+  docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 -q -U postgres -d "$DB" -f - < "$1"
 }
 
 bash "$ROOT/scripts/db/test-db.sh" reset >/dev/null 2>&1 || {

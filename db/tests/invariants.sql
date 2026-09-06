@@ -32,6 +32,38 @@ select test.eq((select count(*)::int
                   and column_name ~* '(phone|mobile|msisdn|whatsapp|email|password)'),
                0, 'the Jawwid Core boundary views expose no contact details or credentials');
 
+-- The identity table carries no contact channel ----------------------------
+-- An identity table is exactly where an email column is normally added. If
+-- authentication ever needs one, it is a privacy review, not a routine
+-- migration.
+
+select test.eq((select count(*)::int from information_schema.columns
+                where table_schema = 'chat' and table_name = 'account'
+                  and column_name ~* '(email|phone|mobile|msisdn|whatsapp|address)'),
+               0, 'chat.account carries no email, phone or other contact channel');
+
+-- Jawwid Chat depends on no other product's database -----------------------
+
+select test.eq((select count(*)::int
+                from pg_constraint c
+                join pg_class t on t.oid = c.conrelid
+                join pg_namespace n on n.oid = t.relnamespace
+                join pg_class rt on rt.oid = c.confrelid
+                join pg_namespace rn on rn.oid = rt.relnamespace
+                where c.contype = 'f' and n.nspname = 'chat' and rn.nspname <> 'chat'),
+               0, 'no foreign key leaves the chat schema');
+
+select test.eq((select count(*)::int
+                from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                where n.nspname = 'chat'
+                  and p.prosrc ~* '(auth\.(uid|users|jwt)|public\.(profiles|children|subscriptions|payments))'),
+               0, 'no function in the chat schema reads another product''s tables');
+
+select test.eq((select count(*)::int from pg_views
+                where schemaname = 'chat'
+                  and definition ~* '(auth\.|public\.(profiles|children|subscriptions|payments))'),
+               0, 'no view in the chat schema reads another product''s tables');
+
 -- One thread per family ----------------------------------------------------
 select test.throws(
   format('insert into chat.thread (family_id) values (%L)', test.family_id('Family A')),

@@ -19,7 +19,8 @@ as $$
   truncate chat.family_state_cache, chat.event_log, chat.audit_log, chat.handoff,
            chat.task, chat.message, chat.support_case, chat.thread,
            chat.family_note, chat.subscription, chat.learner, chat.contact,
-           chat.family, chat.absence, chat.coverage_rule, chat.shift, chat.staff
+           chat.family, chat.absence, chat.coverage_rule, chat.shift, chat.staff,
+           chat.account, chat.core_parent_inbox, chat.core_event, chat.sync_state
     restart identity cascade;
 $$;
 
@@ -45,15 +46,21 @@ declare
 begin
   perform test.reset_data();
 
-  insert into chat.staff (name, role, presence, auth_user_id) values
-    ('Owner A',    'admin',    'online',  gen_random_uuid()),
-    ('Owner B',    'admin',    'online',  gen_random_uuid()),
-    ('Owner C',    'admin',    'online',  gen_random_uuid()),
-    ('Owner D',    'admin',    'online',  gen_random_uuid()),
-    ('Coverage A', 'coverage', 'online',  gen_random_uuid()),
-    ('Coverage B', 'coverage', 'online',  gen_random_uuid()),
-    ('Manager',    'manager',  'online',  gen_random_uuid()),
-    ('Finance',    'finance',  'offline', gen_random_uuid());
+  insert into chat.staff (name, role, presence) values
+    ('Owner A',    'admin',    'online'),
+    ('Owner B',    'admin',    'online'),
+    ('Owner C',    'admin',    'online'),
+    ('Owner D',    'admin',    'online'),
+    ('Coverage A', 'coverage', 'online'),
+    ('Coverage B', 'coverage', 'online'),
+    ('Manager',    'manager',  'online'),
+    ('Finance',    'finance',  'offline');
+
+  -- Each staff member signs in with an opaque token subject. The shape here
+  -- ('staff:owner-a') is a fixture convention, not a contract: chat.account
+  -- treats the subject as opaque.
+  perform chat.link_staff_account(s.id, 'staff:' || lower(replace(s.name, ' ', '-')))
+  from chat.staff s;
 
   insert into chat.shift (staff_id, days, starts, ends)
   select test.staff_id(n), weekdays, time '09:00', time '17:00'
@@ -92,16 +99,15 @@ begin
 end;
 $$;
 
--- Clears the Jawwid Core shim so an integration suite starts from a known
--- state no matter what ran before it. auth.users is not dropped by the database
--- reset (it belongs to Supabase, not to this project), so it is cleared here.
+-- Clears everything the integration boundary has received, so an integration
+-- suite starts from a known state. There is nothing to clear on the Jawwid Core
+-- side: Core is a different database and this one holds only what the boundary
+-- delivered.
 create or replace function test.reset_core()
 returns void
 language sql
 as $$
-  delete from public.payments;
-  delete from public.subscriptions;
-  delete from public.children;
-  delete from public.profiles;
-  delete from auth.users;
+  delete from chat.core_parent_inbox;
+  delete from chat.core_event;
+  delete from chat.sync_state;
 $$;
