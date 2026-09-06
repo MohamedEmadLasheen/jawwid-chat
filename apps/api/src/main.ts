@@ -6,6 +6,7 @@ import { CommErrorFilter } from './communication/api/http-exception.filter';
 import { applyInfrastructure } from './infra/http/bootstrap';
 import { InfraIoAdapter } from './infra/realtime/io-adapter';
 import { readBuildInfo } from './infra/build-info';
+import { RealtimeRelay } from './infra/realtime/realtime-relay.service';
 
 /**
  * API entrypoint.
@@ -45,6 +46,10 @@ async function bootstrap(): Promise<void> {
   const ioAdapter = new InfraIoAdapter(app);
   await ioAdapter.connectToRedis(process.env.REDIS_URL);
   app.useWebSocketAdapter(ioAdapter);
+
+  // Subscribes to the channel the worker publishes realtime events on (D-2).
+  // Started before listen() so no event can arrive while nothing is relaying.
+  await app.get(RealtimeRelay).start();
 
   const port = Number(process.env.PORT ?? 3000);
   // 0.0.0.0, not localhost: inside a container, binding the loopback interface
