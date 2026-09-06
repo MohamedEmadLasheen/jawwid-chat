@@ -86,22 +86,38 @@ class MessagesController extends Notifier<MessagesState> {
 
   Timer? _drainTimer;
 
+  late final MessageRepository _messages;
+
   @override
   MessagesState build() {
-    ref.onDispose(() => _drainTimer?.cancel());
+    // Captured once, at build. Reading it through `ref` after an await would throw if the
+    // user left the conversation while a request was in flight.
+    _messages = ref.read(messageRepositoryProvider);
+
+    ref.onDispose(() {
+      _drainTimer?.cancel();
+      _drainTimer = null;
+    });
+
     // Kick the first page off without blocking the first frame; the screen renders its
     // loading state meanwhile.
     scheduleMicrotask(loadInitial);
     return MessagesState(log: MessageLog.empty(), isLoadingInitial: true);
   }
 
-  MessageRepository get _messages => ref.read(messageRepositoryProvider);
+  /// Every async continuation checks this before touching state.
+  ///
+  /// A conversation can be closed while a page is loading or a send is in flight, and
+  /// writing to a disposed notifier throws. This is not hypothetical: it only became
+  /// reachable once the transport had real network latency in it.
+  bool get _alive => ref.mounted;
 
   Future<void> loadInitial() async {
     state = state.copyWith(isLoadingInitial: true, clearInitialError: true);
 
     try {
       final page = await _messages.history(conversationId);
+      if (!_alive) return;
       state = state.copyWith(
         log: state.log.merge(
           page.items,
@@ -111,6 +127,7 @@ class MessagesController extends Notifier<MessagesState> {
         isLoadingInitial: false,
       );
     } catch (error) {
+      if (!_alive) return;
       state = state.copyWith(
         isLoadingInitial: false,
         initialError: ErrorMapper.map(error),
@@ -130,6 +147,7 @@ class MessagesController extends Notifier<MessagesState> {
         conversationId,
         beforeCursor: state.log.oldestCursor,
       );
+      if (!_alive) return;
       state = state.copyWith(
         log: state.log.merge(
           page.items,
@@ -139,6 +157,7 @@ class MessagesController extends Notifier<MessagesState> {
         isLoadingOlder: false,
       );
     } catch (error) {
+      if (!_alive) return;
       state = state.copyWith(
         isLoadingOlder: false,
         olderError: ErrorMapper.map(error),
@@ -190,6 +209,7 @@ class MessagesController extends Notifier<MessagesState> {
 
   /// Release whatever the outbox says is ready, one head per conversation.
   Future<void> drain() async {
+    if (!_alive) return;
     final now = DateTime.now();
     final entry = _outbox.nextReady(conversationId, now);
     if (entry == null) {
@@ -218,12 +238,14 @@ class MessagesController extends Notifier<MessagesState> {
       _outbox.markSent(entry.clientMessageId);
       _pendingBodies.remove(entry.clientMessageId);
 
+      if (!_alive) return;
       // Reconciled by client id, so the echo is replaced rather than duplicated.
       state = state.copyWith(log: state.log.merge([confirmed]), isOffline: false);
 
       unawaited(drain());
     } catch (error) {
       final failure = ErrorMapper.map(error);
+      if (!_alive) return;
 
       _outbox.markFailed(
         entry.clientMessageId,
@@ -252,7 +274,7 @@ class MessagesController extends Notifier<MessagesState> {
   /// Re-arm the drain for whenever the head's backoff expires.
   void _scheduleNextDrain() {
     _drainTimer?.cancel();
-    if (_outbox.isEmpty) return;
+    if (!_alive || _outbox.isEmpty) return;
 
     final entries = _outbox.entriesFor(conversationId);
     if (entries.isEmpty) return;
@@ -304,10 +326,14 @@ class MessagesController extends Notifier<MessagesState> {
         conversationId,
         afterSequence: watermark,
       );
+      if (!_alive) return;
       state = state.copyWith(log: state.log.merge(missed), isOffline: false);
       await drain();
     } catch (error) {
-      state = state.copyWith(isOffline: ErrorMapper.map(error).kind == AppErrorKind.network);
+      if (!_alive) return;
+      state = state.copyWith(
+        isOffline: ErrorMapper.map(error).kind == AppErrorKind.network,
+      );
     }
   }
 

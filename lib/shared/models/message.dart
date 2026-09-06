@@ -156,6 +156,31 @@ class Message {
   bool get isVisibleToOthers =>
       !approvalState.isWithheld && !deliveryState.isLocal && !isDeleted;
 
+  /// Re-key this message to the client id it was composed under.
+  ///
+  /// Used only for the response to our own send, where the correspondence is certain.
+  Message withClientMessageId(String value) => Message(
+        id: id,
+        clientMessageId: value,
+        conversationId: conversationId,
+        sequence: sequence,
+        authorId: authorId,
+        authorName: authorName,
+        authorRole: authorRole,
+        kind: kind,
+        body: body,
+        attachments: attachments,
+        replyTo: replyTo,
+        reactions: reactions,
+        deliveryState: deliveryState,
+        approvalState: approvalState,
+        rejectionReason: rejectionReason,
+        createdAt: createdAt,
+        isMine: isMine,
+        isDeleted: isDeleted,
+        failureCode: failureCode,
+      );
+
   Message copyWith({
     String? id,
     int? sequence,
