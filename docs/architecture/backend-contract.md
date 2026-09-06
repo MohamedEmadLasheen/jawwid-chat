@@ -257,62 +257,19 @@ JWT claim) automatically — see §1.
 
 ## 9. Jawwid Core boundary — AI #2 / AI #5
 
-Jawwid Core is a **separate product in a separate database**. Nothing in this
-schema reads it. Core-sourced facts arrive as payloads over the integration
-boundary — transport, auth and delivery semantics are **AI #2's to build and are
-not yet specified** — and are materialised into Chat-owned tables here.
+**Moved.** The authoritative contract is
+[`core-integration-contract.md`](./core-integration-contract.md): authentication,
+envelope, event types, payload schemas, ordering, retry and duplicate semantics,
+failure handling, audit, the per-entity authority table, and the known gaps.
 
-Core remains the source of truth. What this database holds is a replica it does
-not author, keyed by the `core_*_id` in the payload. That key is what makes every
-function below idempotent.
+The payload shapes previously described in this section were proposals. They have
+been ratified against PRD v0.1 §12.4 and superseded — do not build against them.
 
-```sql
-chat.ingest_core_parent(payload)        -> family_id, or NULL if awaiting an owner
-chat.ingest_core_learner(payload)       -> learner_id, or NULL if the family is unknown
-chat.ingest_core_subscription(payload)  -> subscription_id, or NULL likewise
-chat.assign_family_owner(core_parent_id, owner_id, reason, actor_id)
-chat.record_core_event(external_event_id, type, payload) -> boolean
-chat.mark_core_event_processed(external_event_id, error)
-chat.record_sync_result(source, status, error, cursor)
-select * from chat.sync_health;
-```
-
-**The payload shapes are the contract.** They are flat by design — this boundary
-must not grow knowledge of Core's internal schema
-([ADR-014](./decisions.md#adr-014--jawwid-chat-translates-cores-vocabulary-rather-than-adopting-it)):
-
-```jsonc
-// parent
-{ "core_parent_id": uuid, "display_name": string, "language": "ar" | "en" }
-
-// learner
-{ "core_child_id": uuid, "core_parent_id": uuid, "name": string,
-  "level": string?, "schedule_ref": string?, "next_class_at": timestamptz?,
-  "last_attended_at": timestamptz?, "consecutive_absences": int? }
-
-// subscription
-{ "core_subscription_id": uuid, "core_parent_id": uuid, "plan": string?,
-  "status": string,                    // Core's vocabulary; translated on the way in
-  "ends_at": timestamptz?, "renewal_due_at": timestamptz?,
-  "last_payment_status": "succeeded" | "failed" | "refunded" | null,
-  "last_payment_at": timestamptz? }
-```
-
-Three behaviours to build against:
-
-- **A NULL return is normal, not a failure.** A parent with no owner yet, or a
-  learner whose family does not exist, is recorded or skipped — never guessed at.
-- **`record_core_event` returns true only the first time** an event id is seen.
-  A handler that ignores a false return is idempotent by construction.
-- **An unrecognised subscription status becomes `unknown`**, is reported by
-  `chat.unmapped_core_subscription_status` and counted in `chat.sync_health`, and
-  is fixed by editing `chat.config['integration.subscription_status_map']`. A
-  Core release that adds a status must not break ingestion here.
-
-A new parent is **not** given a family automatically. It waits in
-`chat.core_parent_inbox` until a manager calls `chat.assign_family_owner()` with
-a reason, which is audited. Brief §1 rules out automatic distribution, and
-inventing an owner would be exactly that.
+In short: Jawwid Core is a separate product in a separate database, reached only
+through `POST /integration/core/events` (HMAC-signed). Core-sourced facts are
+materialised into Chat-owned tables keyed by their `core_*_id`. Ownership never
+arrives that way — a new parent waits in `chat.core_parent_inbox` until a manager
+calls `chat.assign_family_owner()`.
 
 ## 10. Events
 

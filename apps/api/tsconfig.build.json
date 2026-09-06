@@ -1,4 +1,22 @@
 {
   "extends": "./tsconfig.json",
-  "exclude": ["node_modules", "dist", "test", "**/*.spec.ts"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "test",
+    "**/*.spec.ts"
+  ],
+  "compilerOptions": {
+    "paths": {
+      "@platform/*": [
+        "src/platform/*"
+      ],
+      "@communication/*": [
+        "src/communication/*"
+      ],
+      "@integration/*": [
+        "src/integration/*"
+      ]
+    }
+  }
 }
