@@ -8,6 +8,7 @@ import { AUDIT_SERVICE } from '../../platform/tokens';
 import type { AuditService } from '../../platform/audit.service';
 import { Actor } from '../../platform/types';
 import { ConversationService } from '../conversations/conversation.service';
+import { AttachmentService } from '../attachments/attachment.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
 import { MessageDto, toMessageDto, needsReply, conversationState } from '../contracts/dto';
@@ -68,6 +69,7 @@ export class MessageService {
     private readonly conversations: ConversationService,
     private readonly outbox: OutboxService,
     private readonly config: AppConfigService,
+    private readonly attachments: AttachmentService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
   ) {}
 
@@ -93,7 +95,31 @@ export class MessageService {
     }
 
     const visibility = input.visibility ?? Visibility.CUSTOMER;
-    const type = input.type ?? MessageType.TEXT;
+    // A client may never author a SYSTEM message or claim a non-user origin:
+    // those are how the backend speaks, and impersonating them would let a user
+    // post something that reads as coming from Jawwid itself.
+    const requestedType = input.type ?? MessageType.TEXT;
+    const type =
+      actor.kind === ActorKind.SYSTEM
+        ? requestedType
+        : requestedType === MessageType.SYSTEM
+          ? MessageType.TEXT
+          : requestedType;
+    const origin =
+      actor.kind === ActorKind.SYSTEM ? (input.origin ?? Origin.AUTOMATION) : Origin.USER;
+
+    // Size and MIME limits are enforced here, on the path every caller takes,
+    // not only on the upload-authorization endpoint.
+    for (const a of input.attachments ?? []) {
+      this.attachments.validate(a.kind, a.mimeType, a.byteSize);
+    }
+
+    const family = conv.familyId
+      ? await this.prisma.family.findUnique({
+          where: { id: conv.familyId },
+          select: { ownerId: true },
+        })
+      : null;
 
     const decision = await this.authz.canSend(
       actor,
@@ -101,6 +127,7 @@ export class MessageService {
       membership,
       { visibility, requestedMode: input.requestedMode },
       now,
+      family?.ownerId ?? null,
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
@@ -147,7 +174,7 @@ export class MessageService {
             body: input.body ?? null,
             visibility,
             moderation,
-            origin: input.origin ?? Origin.USER,
+            origin,
             seq,
             replyToMessageId: input.replyToMessageId ?? null,
             clientMessageId: input.clientMessageId ?? null,
@@ -360,7 +387,10 @@ export class MessageService {
       take: limit,
     });
 
-    const messages = rows.map((m) => toMessageDto(m));
+    // Signed URLs are minted per read, scoped to messages this actor is already
+    // permitted to see, and they expire.
+    const signed = await this.attachments.signUrlsForMessages(rows.map((m) => m.id));
+    const messages = rows.map((m) => toMessageDto(m, signed));
     const nextBefore =
       !ascending && rows.length === limit ? (rows[rows.length - 1].seq?.toString() ?? null) : null;
 

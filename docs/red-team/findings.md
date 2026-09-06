@@ -162,7 +162,7 @@ the detailed finding bodies below.
 |---|---|---|---|---|---|---|
 | **RT-024** | **P0** | Create a legal `student_group` with a teacher and a parent, then `UPDATE chat.conversation SET type='direct', direct_key=…`. | Executed on Supabase Postgres 17.6. Control refused: `ERROR: BR-1 violation: a direct conversation may never contain both a teacher and a family contact`. Attack succeeded: result rows `direct \| contact \| parent` and `direct \| teacher \| teacher`. **Calling identical**: a `group` call promoted to `direct` yields `direct \| contact` + `direct \| teacher`. | `chat.enforce_direct_conversation_rules()`, `chat.enforce_call_participant_rules()` | **CONFIRMED (runtime)** | No — the trigger is new, the gap shipped with it |
 | **RT-025** | P1 | Create a `student_group` (or `class_group`) containing exactly one teacher and one parent, no admin. | Executed: `student_group \| admin_members 0 \| live_members 2`; `class_group \| 0 \| 2`; group call `group \| staff_present 0 \| participants 2`. The trigger checks `type = 'direct'` only, so `class_group` is entirely out of scope. | same triggers | **CONFIRMED (runtime)** | No |
-| **RT-004** | P1 | Any family-facing admin writes an internal note on a family they neither own nor cover. | See section E — this finding is a **refactor regression** and is recorded there. | `AuthorizationService.deriveMode` | **CONFIRMED (runtime)** | **YES** |
+| **RT-004** ↗ | P1 | *Cross-reference only — the full record is in section E.* Ownership attribution is asserted with no basis, which is a product-invariant failure as well as a regression. | see §E | `AuthorizationService.deriveMode` | **CONFIRMED** | **YES** |
 
 ### E · Refactor regressions
 
@@ -182,6 +182,22 @@ hold. While the suite does not compile, CI's `npm run test:unit` step cannot
 distinguish "the invariant holds" from "nothing ran". The tests must be
 re-pointed at the new `AuthorizationService` API — **not** deleted — before the
 refactor is committed.
+
+### F · Remaining hardening and closed findings
+
+| ID | Sev | Exact attack | Exact evidence | Affected component | Status | Regression? |
+|---|---|---|---|---|---|---|
+| RT-017 | P3 | Send `before`, `after` or `seq` as a non-numeric string. | `message.service.ts:380-381, 438` — `BigInt(input.before)` on an unvalidated client string throws `SyntaxError`, not a typed `CommError`: an uncaught 500 and a stack trace rather than a 400. | `MessageService` | CONFIRMED (static) | No |
+| RT-018 | P3 | Send `before` and `after` together. | `message.service.ts:380-381` — the second assignment overwrites `where.seq`; `after` wins and the caller's other bound is discarded with no error. | `MessageService` | CONFIRMED (static) | No |
+| RT-019 | P3 | Emit `message.delivered` with a very large `messageIds[]`. | `realtime.gateway.ts:155-169` — array passed straight into a SQL `IN`, no cap, no rate limit; the socket is otherwise unmetered. | `RealtimeGateway` | CONFIRMED (static) | No |
+| RT-020 | P3 | None — documentation gap. | Seven documents cited as authoritative do not exist: `docs/brief/JAWWID_CHAT_BRIEF.md`, `docs/communication/{scope-decisions,realtime-events}.md`, `docs/infrastructure/{environment,architecture,decisions,handoff-ai2}.md`. `docs/architecture/` exists and is empty. RT-005 is a direct consequence of the missing `environment.md`. | repository | CONFIRMED (static) | No |
+| RT-015 | — | *Closed.* CI did not exist; the QA suite gated nothing. | Closed by `bf279a7`: `.github/workflows/ci.yml` runs typecheck, `test:unit`, admin-web tests and the G-18/G-19/G-20/G-31..35 guards. Retained as the record that the control was added. | CI | **CLOSED** | No |
+
+**Counting note.** RT-004 appears twice above: once in section D as a
+cross-reference (it is a product-invariant failure) and once in section E as its
+full record (it is a refactor regression). It is **one finding**. Every id
+RT-001…RT-027 appears in exactly one section as its record, and the severity
+tally counts records, not rows.
 
 ---
 

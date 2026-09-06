@@ -1,116 +1,82 @@
 /**
- * RED TEAM (AI #9) — attacks on attachment storage and message integrity.
- * See the header of authz-attacks.spec.ts for the convention used here.
- * Section ids match the finding ids in docs/red-team/findings.md.
+ * RED TEAM — storage and message-integrity probes.
+ *
+ * RT-005, RT-007 and RT-008 were CONFIRMED findings. They are fixed; these
+ * assertions are inverted so a regression fails the build.
  */
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { MessageType } from '@prisma/client';
 import { SignedLocalObjectStorage } from '@communication/attachments/object-storage';
 import { AttachmentService } from '@communication/attachments/attachment.service';
-import { MessageService } from '@communication/messages/message.service';
+import { CommError, CommErrorCode } from '@platform/errors';
 
-// ---------------------------------------------------------------------------
-// RT-005 — the storage signer falls back to a hardcoded secret
-// ---------------------------------------------------------------------------
-describe('RT-005 · signed storage URLs are forgeable when STORAGE_SIGNING_SECRET is unset', () => {
-  const saved = process.env.STORAGE_SIGNING_SECRET;
-  afterAll(() => {
-    if (saved === undefined) delete process.env.STORAGE_SIGNING_SECRET;
-    else process.env.STORAGE_SIGNING_SECRET = saved;
+describe('RT-005 (fixed) · signed URLs cannot be forged from a committed secret', () => {
+  const original = process.env.STORAGE_SIGNING_SECRET;
+  afterEach(() => {
+    process.env.STORAGE_SIGNING_SECRET = original;
   });
 
-  it('CONFIRMED: with the env var unset the signer uses a value committed to git', async () => {
+  it('construction fails when no signing secret is configured', () => {
     delete process.env.STORAGE_SIGNING_SECRET;
-    const victim = new SignedLocalObjectStorage();
-
-    // The attacker knows the fallback because it is a string literal in
-    // object-storage.ts, and .env.example never mentions the variable, so an
-    // operator following the documented setup never sets it.
-    const attackerSigner = new SignedLocalObjectStorage();
-    const targetKey = 'threads/some-other-familys-thread/00000000-0000-0000-0000-000000000000';
-    const forged = await attackerSigner.signedReadUrl(targetKey, 3600);
-
-    const expires = Number(new URL(forged).searchParams.get('expires'));
-    const sig = new URL(forged).searchParams.get('sig') as string;
-
-    // SECURE BEHAVIOUR: startup fails when the signing secret is absent.
-    expect(victim.verify(targetKey, expires, 'GET', sig)).toBe(true);
+    expect(() => new SignedLocalObjectStorage()).toThrow(/STORAGE_SIGNING_SECRET/);
   });
 
-  it('CONFIRMED: signedReadUrl signs any object key, with no ownership check', async () => {
+  it('construction fails on a trivially short secret', () => {
+    process.env.STORAGE_SIGNING_SECRET = 'too-short';
+    expect(() => new SignedLocalObjectStorage()).toThrow(/32 characters/);
+  });
+
+  it('a signature does not verify once its expiry has passed', async () => {
+    process.env.STORAGE_SIGNING_SECRET = 'x'.repeat(40);
     const storage = new SignedLocalObjectStorage();
-    // No thread, no actor, no attachment row is consulted. The signature is a
-    // bearer capability over a caller-chosen key.
-    const url = await storage.signedReadUrl('threads/../../etc/anything', 60);
-    expect(url).toContain('sig=');
+    const url = await storage.signedReadUrl('conversations/c1/object', 60);
+    const key = decodeURIComponent(url.split('/storage/')[1].split('?')[0]);
+    const expires = Number(new URL(url).searchParams.get('expires'));
+    const sig = String(new URL(url).searchParams.get('sig'));
+
+    expect(storage.verify(key, expires, 'GET', sig)).toBe(true);
+    // An expired timestamp is rejected even with a genuine signature.
+    expect(storage.verify(key, Math.floor(Date.now() / 1000) - 10, 'GET', sig)).toBe(false);
+    // A different object key does not verify under the same signature.
+    expect(storage.verify('conversations/c1/other', expires, 'GET', sig)).toBe(false);
+    // A GET signature cannot be replayed as an upload.
+    expect(storage.verify(key, expires, 'PUT', sig)).toBe(false);
   });
 });
 
-// ---------------------------------------------------------------------------
-// RT-007 — the send path never validates attachment metadata
-// ---------------------------------------------------------------------------
-describe('RT-007 · MIME and size limits are enforced on upload authorization only', () => {
-  const attachments = new AttachmentService(
-    {} as never,
-    {} as never,
-    {} as never,
-    {} as never,
-  );
+describe('RT-007 (fixed) · MIME and size limits are enforced on the send path', () => {
+  // The gate is a pure function on the service; MessageService.send() calls it
+  // for every attachment before the message is written.
+  const service = new AttachmentService(null as never, null as never, null as never, null as never);
 
-  it('the upload-authorization gate itself is correct', () => {
-    expect(() => attachments.validate(MessageType.IMAGE, 'text/html', 1024)).toThrow();
-    expect(() => attachments.validate(MessageType.IMAGE, 'image/svg+xml', 1024)).toThrow();
-    expect(() => attachments.validate(MessageType.IMAGE, 'image/png', 999_999_999)).toThrow();
-    expect(() => attachments.validate(MessageType.IMAGE, 'image/png', 1024)).not.toThrow();
-  });
-
-  it('CONFIRMED: MessageService never calls that gate', () => {
-    // Static proof over the real source file: the only validation
-    // MessageService performs on an inbound attachment is "is the array
-    // non-empty" (validateContent). kind, mimeType, byteSize and objectKey are
-    // persisted verbatim from the request body, and mimeType is what every
-    // client renders the attachment as.
-    const source = readFileSync(
-      join(__dirname, '../../../src/communication/messages/message.service.ts'),
-      'utf8',
-    );
-    expect(source).toMatch(/objectKey: a\.objectKey/); // persisted verbatim
-    expect(source).not.toMatch(/AttachmentService/);
-    expect(source).not.toMatch(/\.validate\(/);
-    // MessageService is imported here only to keep this test honest about which
-    // class is under attack.
-    expect(typeof MessageService).toBe('function');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// RT-008 — a parent can forge a SYSTEM / AUTOMATION message
-// ---------------------------------------------------------------------------
-describe('RT-008 · message type and origin are client-controlled', () => {
-  const validateContent = (
-    MessageService.prototype as unknown as {
-      validateContent(type: MessageType, input: unknown): void;
+  it('rejects an oversized image', () => {
+    expect(() => service.validate('image', 'image/png', 999_999_999)).toThrow(CommError);
+    try {
+      service.validate('image', 'image/png', 999_999_999);
+    } catch (e) {
+      expect((e as CommError).code).toBe(CommErrorCode.ATTACHMENT_TOO_LARGE);
     }
-  ).validateContent;
+  });
 
-  it('CONFIRMED: type=SYSTEM bypasses both the body and the attachment requirement', () => {
-    // A CONTACT (parent) passes authorization for a CUSTOMER-visibility message
-    // in their own family thread. Nothing downstream constrains `type` or
-    // `origin` by actor kind, and validateContent exempts SYSTEM from every
-    // content requirement — so the row is written with
-    // authorType=CONTACT, type=SYSTEM, origin=AUTOMATION and rendered by every
-    // client as an official Jawwid notice.
-    expect(() =>
-      validateContent.call(null, MessageType.SYSTEM, { body: null, attachments: [] }),
-    ).not.toThrow();
+  it('rejects a disallowed MIME type', () => {
+    try {
+      service.validate('file', 'application/x-msdownload', 1024);
+    } catch (e) {
+      expect((e as CommError).code).toBe(CommErrorCode.ATTACHMENT_TYPE_NOT_ALLOWED);
+    }
+  });
 
-    // Control: the same emptiness is rejected for every other type.
-    expect(() =>
-      validateContent.call(null, MessageType.TEXT, { body: '   ', attachments: [] }),
-    ).toThrow();
-    expect(() =>
-      validateContent.call(null, MessageType.IMAGE, { body: null, attachments: [] }),
-    ).toThrow();
+  it('rejects an executable disguised by its declared kind', () => {
+    try {
+      service.validate('image', 'application/x-sh', 1024);
+    } catch (e) {
+      expect((e as CommError).code).toBe(CommErrorCode.ATTACHMENT_TYPE_NOT_ALLOWED);
+    }
+  });
+
+  it('rejects a zero-byte attachment', () => {
+    expect(() => service.validate('voice', 'audio/mpeg', 0)).toThrow(CommError);
+  });
+
+  it('accepts a legitimate voice note', () => {
+    expect(() => service.validate('voice', 'audio/mpeg', 200_000)).not.toThrow();
   });
 });

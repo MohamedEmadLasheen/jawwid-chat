@@ -60,7 +60,21 @@ export class CallService {
       if (a && a.isActive && !m.isSilent) participantActors.push(a);
     }
 
-    const decision = await this.authz.canCall(initiator, conv, membership, participantActors, now);
+    const family = conv.familyId
+      ? await this.prisma.family.findUnique({
+          where: { id: conv.familyId },
+          select: { ownerId: true },
+        })
+      : null;
+
+    const decision = await this.authz.canCall(
+      initiator,
+      conv,
+      membership,
+      participantActors,
+      now,
+      family?.ownerId ?? null,
+    );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
     const type =
@@ -153,7 +167,21 @@ export class CallService {
       if (a) participantActors.push(a);
     }
 
-    const decision = await this.authz.canCall(actor, conv, membership, participantActors, now);
+    const family = conv.familyId
+      ? await this.prisma.family.findUnique({
+          where: { id: conv.familyId },
+          select: { ownerId: true },
+        })
+      : null;
+
+    const decision = await this.authz.canCall(
+      actor,
+      conv,
+      membership,
+      participantActors,
+      now,
+      family?.ownerId ?? null,
+    );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
     const ttl = await this.config.get('call.token_ttl_seconds');

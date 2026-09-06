@@ -149,6 +149,10 @@ export class AuthorizationService {
 
   /** Internal notes are invisible to contacts and to teachers. */
   canReadInternal(actor: Actor): boolean {
+    // JC-006 (re-applied, see JC-011): a deactivated or offboarded actor loses
+    // access on EVERY path, not only the one that happens to check first. Each
+    // public method of this service must be independently safe to call.
+    if (!actor.isActive) return false;
     return isFamilyFacingStaff(actor);
   }
 
@@ -162,6 +166,9 @@ export class AuthorizationService {
     membership: Member | null,
     intent: SendIntent,
     now: Date,
+    /** chat.family.owner_id. Supplied by the caller; owner/coverage is derived
+     *  from it and from on_duty(), never taken from the request. */
+    familyOwnerId: string | null = null,
   ): Promise<Decision> {
     const readable = this.canRead(actor, conv, membership);
     if (!readable.allowed) return readable;
@@ -208,14 +215,18 @@ export class AuthorizationService {
     }
 
     // --- staff ---
-    // Internal notes: any family-facing admin, any family, any time.
+    // Internal notes: any family-facing admin, any family, any time. The
+    // capacity is still derived from facts, never asserted by the client.
     if (intent.visibility === Visibility.INTERNAL) {
-      return allow(this.deriveMode(actor, conv, OnBehalfMode.OWNER), Moderation.PUBLISHED);
+      const mode = await this.deriveMode(actor, conv, familyOwnerId, now);
+      return allow(mode, Moderation.PUBLISHED);
     }
 
-    // A manager may act on anything.
+    // A manager may act on anything, but may not choose their own attribution:
+    // only assist/escalation are honourable requests, everything else is derived.
     if (actor.staffRole === 'manager') {
-      return allow(intent.requestedMode ?? OnBehalfMode.ESCALATION, Moderation.PUBLISHED);
+      const mode = await this.deriveMode(actor, conv, familyOwnerId, now, intent.requestedMode);
+      return allow(mode, Moderation.PUBLISHED);
     }
 
     // Staff messages in a group are always published; approval applies to
@@ -229,25 +240,45 @@ export class AuthorizationService {
       conv.stickyUntil !== null &&
       conv.stickyUntil > now
     ) {
-      return allow(this.deriveMode(actor, conv, OnBehalfMode.OWNER), Moderation.PUBLISHED);
+      return allow(await this.deriveMode(actor, conv, familyOwnerId, now), Moderation.PUBLISHED);
     }
 
     // Otherwise the on-duty admin, resolved by AI #1's coverage engine.
     if (conv.familyId) {
       const onDutyId = await this.coverage.onDuty(conv.familyId, now);
       if (onDutyId === actor.actorId) {
-        return allow(this.deriveMode(actor, conv, OnBehalfMode.OWNER), Moderation.PUBLISHED);
+        return allow(await this.deriveMode(actor, conv, familyOwnerId, now), Moderation.PUBLISHED);
       }
     } else if (isGroup) {
       return allow(OnBehalfMode.OWNER, Moderation.PUBLISHED);
     }
 
-    // "Reply as assist" and escalation: explicit, tagged, and audited by the caller.
+    // JC-005 - FAIL CLOSED. (Re-applied after the conversation-model rewrite
+    // reverted it; see defects.md JC-011.)
+    //
+    // ASSIST and ESCALATION are the only paths that let a staff member act on a
+    // family they are not on duty for. They must be granted by a
+    // SERVER-EVALUATED precondition, never by a field the client controls.
+    //
+    // The real assist predicate (family in the NOW bucket, waited > 50% of the
+    // response target, on-duty admin has not opened it -- or the on-duty admin
+    // explicitly requested help) depends on the attention and response-target
+    // engines that AI #1 owns. QA does not invent that predicate here.
+    //
+    // AI #1: replace these branches with the real check. Do NOT restore an
+    // unconditional allow(), and do NOT move the gate into a caller - this
+    // service is contractually the only place an access decision is made.
     if (intent.requestedMode === OnBehalfMode.ASSIST) {
-      return allow(OnBehalfMode.ASSIST, Moderation.PUBLISHED);
+      return deny(
+        CommErrorCode.ASSIST_NOT_PERMITTED,
+        'assist requires a server-evaluated grant; a client-supplied mode never grants access',
+      );
     }
     if (intent.requestedMode === OnBehalfMode.ESCALATION) {
-      return allow(OnBehalfMode.ESCALATION, Moderation.PUBLISHED);
+      return deny(
+        CommErrorCode.ESCALATION_NOT_PERMITTED,
+        'escalation requires a server-evaluated grant; a client-supplied mode never grants access',
+      );
     }
 
     return deny(
@@ -266,8 +297,32 @@ export class AuthorizationService {
     return Moderation.PUBLISHED;
   }
 
-  private deriveMode(actor: Actor, _conv: Conv, fallback: string): string {
-    return fallback;
+  /**
+   * on_behalf_mode is DERIVED, never accepted from the client.
+   *
+   *   owner      the actor is the family's permanent Primary Owner
+   *   coverage   the actor is on duty for this family but does not own it
+   *   assist     neither, and acting anyway (always audited by the caller)
+   *   escalation only when explicitly requested as such
+   *
+   * A caller asking for "owner" gets whatever the facts say, which is why a
+   * manager cannot stamp a message as the family's owner.
+   */
+  private async deriveMode(
+    actor: Actor,
+    conv: Conv,
+    familyOwnerId: string | null,
+    now: Date,
+    requested?: string,
+  ): Promise<string> {
+    if (requested === OnBehalfMode.ESCALATION) return OnBehalfMode.ESCALATION;
+    if (familyOwnerId && actor.actorId === familyOwnerId) return OnBehalfMode.OWNER;
+    if (conv.familyId) {
+      const onDutyId = await this.coverage.onDuty(conv.familyId, now);
+      if (onDutyId === actor.actorId) return OnBehalfMode.COVERAGE;
+    }
+    if (requested === OnBehalfMode.ASSIST) return OnBehalfMode.ASSIST;
+    return OnBehalfMode.ASSIST;
   }
 
   // ------------------------------------------------------------------
@@ -305,8 +360,16 @@ export class AuthorizationService {
     membership: Member | null,
     participants: Array<Pick<Actor, 'kind'>>,
     now: Date,
+    familyOwnerId: string | null = null,
   ): Promise<Decision> {
-    const sendable = await this.canSend(actor, conv, membership, { visibility: Visibility.CUSTOMER }, now);
+    const sendable = await this.canSend(
+      actor,
+      conv,
+      membership,
+      { visibility: Visibility.CUSTOMER },
+      now,
+      familyOwnerId,
+    );
     if (!sendable.allowed) return sendable;
 
     const kinds = new Set(participants.map((p) => p.kind));

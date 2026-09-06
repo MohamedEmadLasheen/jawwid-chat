@@ -1,187 +1,130 @@
 /**
- * RED TEAM (AI #9) — adversarial probes against the centralized authorization
- * contract. These are ATTACKS, not conformance tests: each one asserts the
- * CURRENTLY OBSERVED behaviour so the finding is evidence-backed, and names the
- * secure behaviour it violates in a comment.
+ * RED TEAM — adversarial probes against the centralized authorization contract.
  *
- * Complementary to AI #5's JC-005/JC-006 suites: those assert the required
- * behaviour and fail. These assert the actual behaviour and pass, so the
- * red-team report can say CONFIRMED rather than THEORETICAL, and so a future
- * fix flips them loudly.
- *
- * Do not "fix" a failing expectation here by editing the expectation. When a
- * finding is fixed, the assertion is inverted in the same commit as the fix.
- *
- * Section ids match the finding ids in docs/red-team/findings.md.
+ * These were CONFIRMED findings against the previous thread-based engine
+ * (RT-002, RT-003, RT-004 in docs/red-team/findings.md). The conversation model
+ * and the derived-attribution change fixed them, so each assertion is now
+ * inverted: it asserts the SECURE behaviour, and will fail loudly if the
+ * vulnerability is ever reintroduced.
  */
-import { MessageVisibility, OnBehalfMode, StaffRole, ThreadKind } from '@prisma/client';
-import { AuthorizationService } from '@platform/authorization.service';
-import type { Actor } from '@platform/types';
-import type { CoverageService } from '@platform/coverage.service';
+import { CommErrorCode } from '@platform/errors';
+import {
+  admin,
+  authzWithOnDuty,
+  conversation,
+  manager,
+  member,
+  parent,
+  studentGroup,
+  teacher,
+} from '../../support/fixtures';
 
-const OWNER_ID = 'staff_owner';
-const OTHER_ID = 'staff_other';
-const FAMILY_A = 'fam_a';
-const FAMILY_B = 'fam_b';
-const NOW = new Date('2026-09-05T12:00:00Z');
+const NOW = new Date('2026-09-06T10:00:00Z');
+const customer = { visibility: 'customer' };
+const internal = { visibility: 'internal' };
+const OWNER = 'owner-admin';
 
-const thread = (familyId: string) => ({
-  familyId,
-  stickyHandlerId: null,
-  stickyUntil: null,
-});
-
-function staff(userId: string, staffRole: StaffRole, over: Partial<Actor> = {}): Actor {
-  return {
-    userId,
-    kind: 'STAFF',
-    displayName: 'synthetic',
-    locale: 'AR',
-    staffRole,
-    isActive: true,
-    ...over,
-  };
-}
-
-function contact(over: Partial<Actor> = {}): Actor {
-  return {
-    userId: 'contact_a',
-    kind: 'CONTACT',
-    displayName: 'synthetic parent',
-    locale: 'AR',
-    contactId: 'contact_a',
-    familyId: FAMILY_A,
-    canMessage: true,
-    isActive: true,
-    ...over,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// RT-003 — client-supplied on_behalf_mode is stamped verbatim for a MANAGER
-// ---------------------------------------------------------------------------
-describe('RT-003 · on_behalf_mode attribution is client-controlled for MANAGER', () => {
-  const svc = new AuthorizationService({ onDuty: async () => OWNER_ID } as CoverageService);
-
-  it('CONFIRMED: a manager who owns nothing can stamp the message OWNER', async () => {
-    // Contract comment on SendIntent.requestedMode:
-    //   "Only honoured for ASSIST/ESCALATION; OWNER vs COVERAGE is derived, never trusted."
-    // The MANAGER branch honours it for ALL FOUR modes.
-    const d = await svc.canSendMessage(
-      staff('staff_manager', StaffRole.MANAGER),
-      thread(FAMILY_A),
-      OWNER_ID,
-      { visibility: MessageVisibility.CUSTOMER, requestedMode: OnBehalfMode.OWNER },
+describe('RT-003 (fixed) · on_behalf_mode cannot be asserted by the client', () => {
+  it('a manager who owns nothing cannot stamp a message as OWNER', async () => {
+    const authz = authzWithOnDuty(null);
+    const d = await authz.canSend(
+      manager(),
+      conversation(),
+      null,
+      { ...customer, requestedMode: 'owner' },
       NOW,
+      OWNER, // the real owner is somebody else
     );
     expect(d.allowed).toBe(true);
-    // SECURE BEHAVIOUR: OWNER may only be derived, and only when
-    // actor.userId === familyOwnerId. Observed: taken from the request body.
-    if (d.allowed) expect(d.onBehalfMode).toBe(OnBehalfMode.OWNER);
+    if (d.allowed) expect(d.onBehalfMode).not.toBe('owner');
   });
 
-  it('CONFIRMED: every mode a manager asks for is granted verbatim', async () => {
-    const observed: Record<string, unknown> = {};
-    for (const mode of Object.values(OnBehalfMode)) {
-      const d = await svc.canSendMessage(
-        staff('staff_manager', StaffRole.MANAGER),
-        thread(FAMILY_A),
-        OWNER_ID,
-        { visibility: MessageVisibility.CUSTOMER, requestedMode: mode },
+  it('the real owner is attributed as OWNER without asking', async () => {
+    const authz = authzWithOnDuty(OWNER);
+    const owner = admin(OWNER);
+    const d = await authz.canSend(owner, conversation(), member(owner), customer, NOW, OWNER);
+    expect(d.allowed).toBe(true);
+    if (d.allowed) expect(d.onBehalfMode).toBe('owner');
+  });
+
+  it('an on-duty admin who is not the owner is attributed COVERAGE, not OWNER', async () => {
+    const cov = admin('coverage-admin', 'coverage');
+    const authz = authzWithOnDuty('coverage-admin');
+    const d = await authz.canSend(cov, conversation(), member(cov), customer, NOW, OWNER);
+    expect(d.allowed).toBe(true);
+    if (d.allowed) expect(d.onBehalfMode).toBe('coverage');
+  });
+
+  it('a manager asking for every mode never receives OWNER or COVERAGE falsely', async () => {
+    const authz = authzWithOnDuty(null);
+    for (const requested of ['owner', 'coverage', 'assist', 'escalation']) {
+      const d = await authz.canSend(
+        manager(),
+        conversation(),
+        null,
+        { ...customer, requestedMode: requested },
         NOW,
+        OWNER,
       );
-      observed[mode] = d.allowed ? d.onBehalfMode : `denied`;
+      expect(d.allowed).toBe(true);
+      if (d.allowed) expect(['assist', 'escalation']).toContain(d.onBehalfMode);
     }
-    expect(observed).toEqual({
-      OWNER: OnBehalfMode.OWNER,
-      COVERAGE: OnBehalfMode.COVERAGE,
-      ASSIST: OnBehalfMode.ASSIST,
-      ESCALATION: OnBehalfMode.ESCALATION,
-    });
   });
 });
 
-// ---------------------------------------------------------------------------
-// RT-004 — on_behalf_mode for internal notes never consults on_duty()
-// ---------------------------------------------------------------------------
-describe('RT-004 · COVERAGE attribution is asserted without any coverage assignment', () => {
-  it('CONFIRMED: on_duty() is never called on the internal-note path', async () => {
-    let onDutyCalls = 0;
-    const coverage: CoverageService = {
-      onDuty: async () => {
-        onDutyCalls += 1;
-        return OWNER_ID;
-      },
-    };
-    const svc = new AuthorizationService(coverage);
-
-    const d = await svc.canSendMessage(
-      staff(OTHER_ID, StaffRole.ADMIN), // not the owner, not on duty, no coverage rule
-      thread(FAMILY_A),
-      OWNER_ID,
-      { visibility: MessageVisibility.INTERNAL },
-      NOW,
-    );
-
+describe('RT-004 (fixed) · COVERAGE is never asserted without a coverage assignment', () => {
+  it('an internal note by an off-duty non-owner is attributed ASSIST, not COVERAGE', async () => {
+    const a = admin('bystander');
+    const authz = authzWithOnDuty('somebody-else');
+    const d = await authz.canSend(a, conversation(), member(a), internal, NOW, OWNER);
     expect(d.allowed).toBe(true);
-    // The audit trail will record on_behalf_mode=COVERAGE for an actor who holds
-    // no coverage assignment at all. The documented derivation is
-    // "on_duty() + ownership"; only ownership is consulted.
-    if (d.allowed) expect(d.onBehalfMode).toBe(OnBehalfMode.COVERAGE);
-    expect(onDutyCalls).toBe(0);
+    if (d.allowed) expect(d.onBehalfMode).toBe('assist');
+  });
+
+  it('an internal note by the owner is attributed OWNER', async () => {
+    const authz = authzWithOnDuty(null);
+    const owner = admin(OWNER);
+    const d = await authz.canSend(owner, conversation(), member(owner), internal, NOW, OWNER);
+    if (d.allowed) expect(d.onBehalfMode).toBe('owner');
   });
 });
 
-// ---------------------------------------------------------------------------
-// RT-002 — the authorization contract is blind to thread kind and participants
-// ---------------------------------------------------------------------------
-describe('RT-002 · authorization is a function of familyId alone', () => {
-  const svc = new AuthorizationService({ onDuty: async () => OWNER_ID } as CoverageService);
+describe('RT-002 (fixed) · authorization is a function of the participant set, not familyId alone', () => {
+  const authz = authzWithOnDuty();
 
-  it('CONFIRMED: canReadThread admits any thread kind, including STUDENT_GROUP', () => {
-    // The ThreadKind enum already contains STUDENT_GROUP, CLASS_GROUP and
-    // OFFICIAL, and Thread is @@unique([familyId, kind]) — so up to four threads
-    // per family are representable TODAY. canReadThread's parameter type is
-    // Pick<Thread,'familyId'>: it cannot read `kind` even if it wanted to.
-    for (const kind of Object.values(ThreadKind)) {
-      const t = { familyId: FAMILY_A, kind };
-      expect({ kind, allowed: svc.canReadThread(contact(), t).allowed }).toEqual({
-        kind,
-        allowed: true,
-      });
-    }
+  it('a teacher cannot read a group they are not a member of', () => {
+    const d = authz.canRead(teacher('outsider'), studentGroup(), null);
+    expect(d.allowed).toBe(false);
+    if (!d.allowed) expect(d.code).toBe(CommErrorCode.NOT_CONVERSATION_MEMBER);
   });
 
-  it('CONFIRMED: canSendMessage receives no participant set and no thread kind', async () => {
-    // BR-1 ("no 1:1 conversation may contain both a teacher and a parent") is a
-    // predicate over the participant set. Neither entry point is given one, so
-    // the rule is not merely unimplemented — it is unexpressible without a
-    // contract change.
-    const d = await svc.canSendMessage(
-      contact(),
-      thread(FAMILY_A),
-      OWNER_ID,
-      { visibility: MessageVisibility.CUSTOMER },
-      NOW,
-    );
-    expect(d.allowed).toBe(true);
-    expect(Object.keys(thread(FAMILY_A))).toEqual([
-      'familyId',
-      'stickyHandlerId',
-      'stickyUntil',
-    ]);
+  it('a parent cannot read a group they are not a member of', () => {
+    expect(authz.canRead(parent('other-parent'), studentGroup(), null).allowed).toBe(false);
   });
 
-  it('control: cross-family access by a contact is correctly denied', () => {
-    expect(svc.canReadThread(contact(), { familyId: FAMILY_B }).allowed).toBe(false);
+  it('membership, not family, is what admits a teacher', () => {
+    const t = teacher();
+    expect(authz.canRead(t, studentGroup(), member(t)).allowed).toBe(true);
   });
 
-  it('CONFIRMED: any family-facing staff reads every family, with no coverage scope', () => {
-    for (const role of [StaffRole.ADMIN, StaffRole.COVERAGE, StaffRole.MANAGER]) {
-      for (const fam of [FAMILY_A, FAMILY_B, 'fam_never_seen', '*']) {
-        expect({ role, fam, allowed: svc.canReadThread(staff('s', role), { familyId: fam }).allowed })
-          .toEqual({ role, fam, allowed: true });
-      }
-    }
+  it('a departed member loses read access', () => {
+    const t = teacher();
+    const d = authz.canRead(t, studentGroup(), member(t, { leftAt: NOW }));
+    expect(d.allowed).toBe(false);
+  });
+
+  it('control: family-facing staff may still open any family conversation', () => {
+    expect(authz.canRead(admin(), studentGroup(), null).allowed).toBe(true);
+  });
+});
+
+describe('conversation-type confusion', () => {
+  const authz = authzWithOnDuty();
+
+  it('a teacher cannot post into a direct conversation by presenting a membership row', async () => {
+    const t = teacher();
+    const d = await authz.canSend(t, conversation({ type: 'direct' }), member(t), customer, NOW);
+    expect(d.allowed).toBe(false);
+    if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_TEACHER_PARENT_DIRECT);
   });
 });

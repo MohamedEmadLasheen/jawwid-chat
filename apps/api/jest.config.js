@@ -15,6 +15,7 @@ const base = {
     '^@platform/(.*)$': '<rootDir>/src/platform/$1',
     '^@communication/(.*)$': '<rootDir>/src/communication/$1',
   },
+  setupFiles: ['<rootDir>/test/setup.ts'],
   transform: {
     '^.+\\.ts$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.json'}],
   },

@@ -497,3 +497,64 @@ filenames, with `if not exists` suppressing the collision.
 or rewritten to `alter table`; all writers agree on the column name; duplicate
 triggers removed; the two JC-010 tests are rewritten to assert the *reconciled*
 schema rather than the broken one.
+
+---
+
+## JC-011 · Confirmed security fixes silently regressed, and their regression tests were deleted
+
+| | |
+|---|---|
+| **Severity** | **P0 — process defect; reintroduced one P0 and one P1** |
+| **Area** | `apps/api/src/platform/authorization.service.ts`, `apps/api/test/unit/authorization/` |
+| **Owner** | **AI #5** (guard) + whichever agent performed the conversation-model rewrite |
+| **Status** | **FIXED — fixes re-applied, regression suite restored and hardened** |
+
+**Expected.** Once JC-005 and JC-006 were fixed and covered by passing
+regression tests, no later change reintroduces them without a test failing.
+
+**Actual.** The conversation-model rewrite (`Thread` → `Conversation`,
+`canSendMessage` → `canSend`) restored the vulnerable code **verbatim**:
+
+```ts
+// "Reply as assist" and escalation: explicit, tagged, and audited by the caller.
+if (intent.requestedMode === OnBehalfMode.ASSIST)     return allow(OnBehalfMode.ASSIST, ...);
+if (intent.requestedMode === OnBehalfMode.ESCALATION) return allow(OnBehalfMode.ESCALATION, ...);
+```
+
+and `canReadInternal()` dropped the `isActive` check again. The error codes
+`ASSIST_NOT_PERMITTED` / `ESCALATION_NOT_PERMITTED` were removed with them.
+
+**Nothing failed**, because the three regression suites protecting the fixes —
+`assist-escalation-bypass.spec.ts`, `internal-note-privacy.spec.ts`,
+`legitimate-access.spec.ts` — were **deleted in the same sweep** and replaced by
+a consolidated file that did not carry the assist-denial or deactivated-actor
+assertions.
+
+**Evidence.** Unit count fell from 39 passing to 26 without any failure being
+reported. `grep ASSIST_NOT_PERMITTED src/platform/` returned nothing.
+
+**Impact.** JC-005 (P0, horizontal privilege escalation — any family-facing
+admin posting a customer-visible message to any family) and JC-006 (P1) were
+both live again. The rewrite itself was legitimate and necessary work; the
+defect is that a security fix was reverted **silently**.
+
+**Root cause.** Two causes, both process:
+1. A large refactor rewrote a file containing security-critical branches without
+   the fixes being re-applied.
+2. Test files were deleted rather than migrated, removing the only signal.
+   Deleting a test never fails a build.
+
+**Resolution.**
+- Both fixes re-applied to `canSend()` and `canReadInternal()`, with comments
+  naming JC-005/JC-006/JC-011 so the intent survives the next refactor.
+- Error codes restored.
+- Single consolidated suite `jc005-jc006-regression.spec.ts`, carrying a
+  DO-NOT-DELETE header that states the code is at fault if it fails, plus
+  positive assertions that legitimate access still works.
+- Verified: **81 unit tests passing, 6 suites, typecheck clean.**
+
+**Acceptance criteria for prevention (open, owner AI #5).** CI cannot currently
+detect a deleted test. A guard that fails when a file matching
+`*regression*.spec.ts` disappears, or a coverage floor on
+`authorization.service.ts`, would close this. Tracked for the next pass — the
+re-application above is complete, the prevention is not.

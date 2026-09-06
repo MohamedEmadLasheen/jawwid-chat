@@ -12,18 +12,21 @@
 #   POSTGRES_PORT=15433 REDIS_PORT=16380 docker compose up -d
 #
 # NOTE ON THE POSTGRES IMAGE
-# We use the Supabase Postgres image rather than postgres:16-alpine. It is a
-# strict superset: same Postgres, plus the `auth` schema, the anon/authenticated/
-# service_role roles and the RLS behaviour that Jawwid Core runs in production.
-# Choosing it means one container serves both database strategies currently in
-# the tree (see docs/infrastructure/decisions.md ADR-001) instead of forcing a
-# premature answer. Plain-Postgres consumers are unaffected.
+# Plain Postgres 17, matching the `postgres:17` service CI runs against.
+#
+# This changed on 2026-09-05 when the product owner locked the database
+# decision: Jawwid Chat is standalone and owns its own PostgreSQL database, and
+# Jawwid Core integration goes through an API/webhook boundary rather than
+# direct database coupling (docs/product-operations/database-divergence.md).
+# The Supabase image was only ever justified by Chat living inside Core's
+# database; that premise is gone, so the smaller, faster image is correct and
+# local now matches CI. See decisions.md ADR-001.
 
 name: jawwid-chat
 
 services:
   postgres:
-    image: public.ecr.aws/supabase/postgres:17.6.1.140
+    image: ${POSTGRES_IMAGE:-postgres:17-alpine}
     container_name: jawwid-chat-postgres
     restart: unless-stopped
     environment:

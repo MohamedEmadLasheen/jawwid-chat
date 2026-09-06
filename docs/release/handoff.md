@@ -87,3 +87,98 @@ In order. Steps 1–2 are not engineering work.
 domain that already has one. A second schema authority, authorization matrix,
 attention engine, conversation model or migration path is a release blocker on
 sight, regardless of quality or of who wrote it first.
+
+---
+
+# Addendum — 2026-09-06 · STEP 1 BLOCKED
+
+## BLOCKED — EXACT APPROVED PRD REQUIRED
+
+Step 1 requires PRD v0.1 to exist as an actual repository artifact. It does not,
+and I will not reconstruct it. Steps 2, 3 and 7 (`domain-reconciliation.md`,
+OD-01, `entity-authority-matrix.md`) are therefore **not started**: each would
+require me to assert product requirements I cannot source.
+
+### Search performed (2026-09-06)
+
+| Where | Result |
+|---|---|
+| Working tree, all paths | no file matching `*prd*` |
+| All four branches (`git ls-tree -r`) | none on any branch |
+| Full git history, all refs (36 commits) | **never tracked; `--diff-filter=D` shows none was ever deleted** |
+| Stashes | none |
+
+The PRD has never been in this repository at any point in its history. Its
+absence is not an accident of the current checkout.
+
+**Not used, deliberately:** the superseded `docs/JAWWID_CHAT_BRIEF.pdf`, and the
+Second School PRDs under `~/Documents/ss-*` / `second-school*` (a different
+product; opening them would corrupt this one's scope). The operative record
+remains `docs/qa/authoritative-scope.md` §3 — AI #5's summary, a **secondary
+source** — and every conclusion graded against it stays `UNVERIFIED (needs PRD)`.
+
+**Required to unblock:** the exact approved PRD v0.1 content, placed in `docs/`.
+Nothing else substitutes for it.
+
+---
+
+## New evidence since the freeze — one prior statement of mine is now wrong
+
+I described the SQL stack as coherent and its migrations as a sound foundation.
+**That is no longer accurate and the correction matters**, because the merge
+sequence in `branch-reconciliation.md` §5 assumes a migration chain that applies.
+
+**RT-023 (P0, AI #9, CONFIRMED at runtime) — the migration series does not apply
+to an empty database.** I re-verified it statically, without touching any
+database:
+
+```
+referenced by FK but created by no migration:
+  chat.family   chat.learner   chat.message   chat.staff   chat.thread
+```
+
+Root cause is the branch split itself: those five tables exist only on
+`feat/backend-foundation`, while the working tree carries `chat_foundation`,
+`chat_config_defaults` and three **new** communication migrations. The chain is
+incomplete on the integration branch. RC-07's acceptance criterion "empty DB →
+apply all → app starts" now has a proven failure, not merely an untested one.
+
+Consequences for the plan already recorded:
+- `branch-reconciliation.md` §5 step 3 (merge `feat/backend-foundation` →
+  `feat/infrastructure`) is now also the **repair** of the migration chain, not
+  just a schema-authority decision. It cannot be sequenced after step 4.
+- CI gate G-19 is failing for this reason, not for a configuration reason.
+
+**Governance observation, offered as fact rather than as a request.** The working
+tree has gained `chat.conversation`, `chat.conversation_member`, `chat.call`,
+`chat.call_participant`, `chat.message_approval` and `chat.device_token` —
+a typed conversation model with `direct` / `student_group` / `class_group` types
+and BR-1 enforcement triggers. This is implementation of exactly the model OD-01
+is meant to decide, landing **before** the PRD that would settle it. AI #9 has
+already attacked it and found two P0s in it (**RT-024**: a `student_group`
+containing a teacher and a parent can be `UPDATE`d to `type='direct'`, defeating
+the BR-1 trigger, with calling identically bypassable; **RT-025**: the trigger
+checks `type='direct'` only, so `class_group` is entirely out of scope). Both are
+confirmed by execution.
+
+I have changed nothing in response. Recording it because the freeze applies to
+me, and other agents in this shared tree are continuing to write the domain model
+that Steps 2 and 3 exist to reconcile.
+
+---
+
+## Status
+
+# NOT READY — RECONCILIATION BLOCKED
+# STEP 1 BLOCKED — EXACT APPROVED PRD REQUIRED
+
+Frozen at audit/reconciliation state. No migration, CI, deployment or
+application file modified by AI #10.
+
+**Correction on commit state.** I stated earlier that the release documents were
+uncommitted. They are now committed — **not by me**. Another agent working in
+this shared tree swept them into `aaca900 docs(release): branch reconciliation
+plan and database decision`, and this file into `37108eb`. All nine files in
+`docs/release/` are now tracked. AI #10 has run no `git add`, `commit`, `reset`
+or `clean`. This is the shared-worktree hazard already recorded in
+`integration-risk-register.md`, observed happening.

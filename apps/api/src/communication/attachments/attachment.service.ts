@@ -8,17 +8,17 @@ import { ConversationService } from '../conversations/conversation.service';
 
 /** Configurable limits. Read from env so ops can tune without a deploy. */
 const MAX_BYTES: Record<string, number> = {
-  IMAGE: Number(process.env.ATTACHMENT_MAX_BYTES_IMAGE ?? 10 * 1024 * 1024),
-  VIDEO: Number(process.env.ATTACHMENT_MAX_BYTES_VIDEO ?? 100 * 1024 * 1024),
-  VOICE: Number(process.env.ATTACHMENT_MAX_BYTES_VOICE ?? 16 * 1024 * 1024),
-  FILE: Number(process.env.ATTACHMENT_MAX_BYTES_FILE ?? 25 * 1024 * 1024),
+  image: Number(process.env.ATTACHMENT_MAX_BYTES_IMAGE ?? 10 * 1024 * 1024),
+  video: Number(process.env.ATTACHMENT_MAX_BYTES_VIDEO ?? 100 * 1024 * 1024),
+  voice: Number(process.env.ATTACHMENT_MAX_BYTES_VOICE ?? 16 * 1024 * 1024),
+  file: Number(process.env.ATTACHMENT_MAX_BYTES_FILE ?? 25 * 1024 * 1024),
 };
 
 const ALLOWED_MIME: Record<string, RegExp> = {
-  IMAGE: /^image\/(jpeg|png|webp|heic|gif)$/,
-  VIDEO: /^video\/(mp4|quicktime|webm)$/,
-  VOICE: /^audio\/(mpeg|mp4|aac|ogg|webm|wav)$/,
-  FILE: /^application\/(pdf|zip|msword|vnd\..+)$|^text\/plain$/,
+  image: /^image\/(jpeg|png|webp|heic|gif)$/,
+  video: /^video\/(mp4|quicktime|webm)$/,
+  voice: /^audio\/(mpeg|mp4|aac|ogg|webm|wav)$/,
+  file: /^application\/(pdf|zip|msword|vnd\..+)$|^text\/plain$/,
 };
 
 @Injectable()

@@ -9,6 +9,7 @@ the system satisfies its test cases; this asks what happens outside them.
 | [attack-surface.md](attack-surface.md) | What is reachable, what is declared-but-unreachable, what is absent. |
 | [race-conditions.md](race-conditions.md) | Concurrency analysis; protected invariants and unprotected windows. |
 | [cross-agent-red-team.md](cross-agent-red-team.md) | Seams between agents, and the attack chain that crosses them. |
+| [handoff-to-release.md](handoff-to-release.md) | **For Agent #10.** What must be resolved or explicitly accepted before release. |
 
 ## Executable evidence
 
@@ -34,6 +35,10 @@ means the fix did not land.
   survives the fix AI #5 specified for JC-005).
 
 ## Status
+
+**Evidence frozen 2026-09-06** and handed to release. 27 findings: 5 P0
+(3 proven by execution), 9 P1, 5 P2, 7 P3, 1 closed. Two release blockers that
+cannot be accepted: **RT-023** and **RT-024**.
 
 Campaign 1 (static + service-layer runtime) and campaign 2 (SQL attacks against
 the `chat.*` migration series) are complete. **A large refactor is uncommitted in

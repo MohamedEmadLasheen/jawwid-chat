@@ -7,32 +7,46 @@ costs. A decision with no cost listed has not been thought about hard enough.
 
 ---
 
-## ADR-001 · One local Postgres, on the Supabase image
+## ADR-001 · One local Postgres, plain `postgres:17-alpine`
 
-**Decision.** The local stack runs a single Postgres container using
-`public.ecr.aws/supabase/postgres:17.6.1.140`, not `postgres:16-alpine`.
+*Superseded once, on the day it was written. The original decision and why it
+changed are kept, because the reversal is the useful part.*
 
-**Alternatives.** (a) Two containers, one per database strategy — matches the
-status quo. (b) Plain `postgres:17-alpine` only. (c) Full `supabase start`.
+**Decision.** The local stack runs a single `postgres:17-alpine` container,
+overridable via `POSTGRES_IMAGE`.
 
-**Why.** The repository currently contains two competing database strategies
-(discovery F-1). Infrastructure must not resolve that by fiat, but it also must
-not force every developer to run two databases while it is unresolved. The
-Supabase image is a strict superset of stock Postgres: it adds the `auth` schema,
-the `anon`/`authenticated`/`service_role` roles and the RLS behaviour that AI
-#1's `chat` schema and Jawwid Core rely on, and it remains an ordinary Postgres
-for Prisma. One container serves both.
+**Originally decided.** The Supabase Postgres image
+(`public.ecr.aws/supabase/postgres:17.6.1.140`), on the grounds that Jawwid Chat
+lived in a `chat` schema **inside the Jawwid Core database** and therefore needed
+Core's `auth` schema, its `anon`/`authenticated`/`service_role` roles and its RLS
+behaviour. That image is a strict superset of stock Postgres, so one container
+could serve both of the competing database strategies in the tree (discovery
+F-1) without infrastructure picking a winner by fiat.
 
-**Trade-offs.** The image is ~1 GB versus ~80 MB for alpine, so first pull is
-slow. Rejected (c) because the full Supabase stack starts nine containers to
-provide services (Kong, GoTrue, Studio, Realtime) that Jawwid Chat does not use
-— its realtime layer is Socket.IO, not Supabase Realtime.
+**Why it changed.** On 2026-09-05 the product owner locked the database
+decision: Jawwid Chat is standalone, **owns its own PostgreSQL database**, and
+integrates with Core over an API/webhook boundary rather than direct database
+coupling (`docs/product-operations/database-divergence.md`). The entire premise
+for the Supabase image — sharing Core's database — is gone.
 
-**Impact.** Whichever way F-1 is resolved, local development does not change.
+**Why plain Postgres now.** It is ~80 MB rather than ~1 GB, and it matches the
+`postgres:17` service AI #5's CI already runs migrations against. Local and CI
+now exercise the same image, which is worth more than the superset ever was.
+
+**Trade-offs.** Anything that genuinely depends on Supabase-specific roles will
+fail locally. Given the lock, such a dependency is now a defect to find rather
+than a compatibility need to serve — so failing loudly is the desired behaviour.
+`scripts/db/test-db.sh` (AI #1's) still uses the Supabase image; converging it is
+part of the reconciliation AI #1 owns, not something to change underneath them.
 
 ---
 
 ## ADR-002 · The migration authority is `scripts/db/apply.sh`
+
+**Status: CONFIRMED by the product owner on 2026-09-05.** This ADR was written
+as infrastructure's inference from the evidence; the product owner then locked
+the same answer independently (`docs/product-operations/database-divergence.md`
+§0). It is recorded as a decision, not a proposal.
 
 **Decision.** The deployment pipeline applies migrations with AI #1's
 `scripts/db/apply.sh` and its `chat.schema_migrations` ledger. Prisma is used to
@@ -48,10 +62,12 @@ longer. (b) is the worst option available: two ledgers over one database is how
 migration state diverges irrecoverably, and it is precisely the risk AI #5
 flagged.
 
-**Trade-offs.** Prisma's schema and the SQL schema will drift until F-1 is
-resolved, and Prisma-generated types may not describe the live database. This is
-a real, live inconsistency; recording the authority does not fix it, and this
-ADR should be revisited the moment AI #1 and AI #2 converge.
+**Trade-offs.** Prisma's schema and the SQL schema drift until the reconciliation
+lands, and Prisma-generated types may not describe the live database. That is not
+hypothetical: as of 2026-09-06 the Prisma client no longer exports members the
+API's test suite imports, so `npm run typecheck` fails on the test project while
+`src/` still compiles. Recording the authority does not fix the drift; it only
+stops the pipeline from deepening it.
 
 **Impact.** CI runs `scripts/db/test-db.sh reset` — AI #1's own script — so the
 pipeline exercises the project's real migration path rather than a second

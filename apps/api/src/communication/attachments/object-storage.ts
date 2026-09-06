@@ -32,7 +32,23 @@ export interface ObjectStorage {
  */
 @Injectable()
 export class SignedLocalObjectStorage implements ObjectStorage {
-  private readonly secret = process.env.STORAGE_SIGNING_SECRET ?? 'dev-only-not-a-secret';
+  /**
+   * No default. A committed fallback secret would make every signed URL
+   * forgeable by anyone who can read this repository, so an unset secret is a
+   * startup failure rather than a silent downgrade.
+   */
+  private readonly secret = SignedLocalObjectStorage.requireSecret();
+
+  private static requireSecret(): string {
+    const secret = process.env.STORAGE_SIGNING_SECRET;
+    if (!secret || secret.length < 32) {
+      throw new Error(
+        'STORAGE_SIGNING_SECRET must be set to at least 32 characters; ' +
+          'signed attachment URLs are forgeable without it',
+      );
+    }
+    return secret;
+  }
   private readonly base = process.env.STORAGE_ENDPOINT ?? 'http://localhost:3000/storage';
   private readonly ttl = Number(process.env.STORAGE_SIGNED_URL_TTL_SECONDS ?? 300);
 
