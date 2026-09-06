@@ -95,7 +95,12 @@ String? _redirect(Ref ref, String location) {
 
   final atEntry = location == Routes.signIn || location == Routes.splash;
 
-  if (!auth.isAuthenticated) return atEntry ? null : Routes.signIn;
+  // Signed out: go to sign-in unless already there. Treating the splash as an acceptable
+  // destination here is what stranded the app on the loading spinner — the splash is a
+  // waiting state for AuthUnknown only, never somewhere to come to rest.
+  if (!auth.isAuthenticated) {
+    return location == Routes.signIn ? null : Routes.signIn;
+  }
   if (atEntry) return Routes.home;
 
   // A teacher has no Jawwid tab; landing on it via a stale deep link goes home rather than
