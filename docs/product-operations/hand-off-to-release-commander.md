@@ -1,5 +1,13 @@
 # Hand-off to AI #10 — Release Commander
 
+> **Update 2026-09-06.** AI #10 is active and has produced `docs/release/` — `reconnaissance.md`,
+> `blockers.md`, `branch-reconciliation.md`, `database-decision.md`, `integration-matrix.md`,
+> `integration-risk-register.md`, `cross-agent-product-conformance.md`, `release-scorecard.md`.
+> **That register is authoritative for release sequencing; this document is an input to it, not
+> a competing plan.** AI #10 has independently corrected one of my findings — accepted and
+> recorded in `audit-baseline.md` pass 2. Where we overlap (RC-01 vs my NF-01, RT-003 vs my
+> FS-12), AI #10's identifier governs.
+
 **From:** AI #8 (Product · Business Operations · Domain Logic · Cross-Agent Intelligence)
 **Date:** 2026-09-05 · **Baseline commit:** `d23bf93`
 **Status of the sender:** AUDIT / CONFORMANCE mode. No implementation, no branch
@@ -81,6 +89,7 @@ Owner · Acceptance criteria · Blocking status — in `critical-findings.md`.
 | **CF-06** | Renewal has no producer; auto-resolve exclusion unenforced | AI #1 | **yes** |
 | **CF-07** | No case/task layer, so nothing can be overdue | AI #1 + AI #4 | **yes** |
 | **CF-08** | Teacher identity inferred from `learner.teacher_id`, `isActive` hardcoded | AI #1 | **yes** before any deploy |
+| **CF-09** | **Core integration is direct DB coupling** — `chat.core_*` are views over `public.profiles/children/subscriptions/payments`, contrary to locked decisions 1, 2, 3 and 6 | AI #1 | **yes** |
 
 ---
 
@@ -95,7 +104,14 @@ Full analysis: `database-divergence.md`. Three hard facts:
   that live on other branches.
 - **NF-03** — `chat.on_duty()` is called by `SqlCoverageService` and **created by no migration**.
 
-Eight things that must not be merged are listed as DB-M1 … DB-M8. The most important:
+**CF-09 (raised at pass 2)** is the newest and most consequential: the Core integration
+boundary is currently **direct database coupling** — `chat.core_parent`, `chat.core_child` and
+`chat.core_subscription` are views over `public.*`, and the migration header states the two
+share a database. It predates the locked decision and its own comment anticipates the
+remediation, so the fix is scoped rather than structural.
+
+Nine things that must not be merged are listed as DB-M1 … **DB-M9** (the newest: any object
+referencing `public.*` or `auth.*`). The most important:
 **no Prisma model may define a table that `chat.*` owns, and no `prisma migrate` step may
 enter CI** — that would recreate a second migration authority the day after the decision to
 have one.
@@ -130,7 +146,11 @@ which would have caught NF-01 and NF-02 automatically, on the commit that introd
 - `cd apps/api && npx tsc -p tsconfig.json --noEmit` → expect failure (NF-01)
 - `ls supabase/migrations/` on each branch; grep `chat.staff|chat.family|chat.thread` in
   `20260905093000_chat_communication.sql` → expect unsatisfied references (NF-02)
-- `grep -rn "chat.on_duty" supabase/migrations apps/api/src` → called, never created (NF-03)
+- `git ls-tree -r --name-only feat/backend-foundation -- supabase/migrations` → **14** migrations
+  including `chat_coverage_engine`, `chat_ownership_invariants`, `chat_attention_and_workload`,
+  `chat_core_integration`, `chat_rls`. The operating model is **written and unmerged**, not missing
+- `git show feat/backend-foundation:supabase/migrations/20260905090900_chat_core_integration.sql | head -45`
+  → views over `public.*` (CF-09, DB-M9)
 - `apps/api/src/communication/messages/message.service.ts:199-200` → stickiness on every
   staff message (CF-02)
 - `apps/api/src/platform/authorization.service.ts:130-131` → manager mode client-chosen (FS-12)
