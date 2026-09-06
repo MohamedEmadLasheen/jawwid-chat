@@ -54,7 +54,8 @@ navigating away from the thread to find the student's next class.
    section titled **Families I'm covering now**, each with a `HandoffCard`: last 3 messages,
    open cases, owner's note, subscription, next class. Quiet families do **not** move.
 5. Coverage B opens *Al-Farsi*. The header reads:
-   `Owner · Admin A` on line 1, `On duty · Coverage B — covering` on line 2. **Both are visible.**
+   `Primary Owner · Admin A` on line 1, `Current Handler · Coverage B — covering` on line 2.
+   **Both are visible.**
 6. Coverage B replies. `[BE]` tags `on_behalf_mode=coverage`; the message carries a
    **Covering** `ModeBadge`.
 7. An `owner_locked` case (a renewal) is open. Its action buttons are **disabled with the

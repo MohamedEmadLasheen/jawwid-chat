@@ -175,6 +175,18 @@ abstract class L10n {
   /// **'Chats'**
   String get tabChats;
 
+  /// No description provided for @tabHome.
+  ///
+  /// In en, this message translates to:
+  /// **'Home'**
+  String get tabHome;
+
+  /// No description provided for @tabGroups.
+  ///
+  /// In en, this message translates to:
+  /// **'Groups'**
+  String get tabGroups;
+
   /// No description provided for @tabCalls.
   ///
   /// In en, this message translates to:

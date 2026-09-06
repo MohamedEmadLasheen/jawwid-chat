@@ -48,8 +48,8 @@ a missing responsibility block reads as a bug, not as an absence.
 The most important block in the admin product.
 
 ```
-Owner            Admin A                       [Change owner]   ← manager only
-On duty          Coverage B  · Covering                          ← only when ≠ owner
+Primary Owner    Admin A                       [Change owner]   ← manager only
+Current Handler  Coverage B  · Covering                          ← only when ≠ Primary Owner
                  Until 23:00 · covering for Admin A
 Tier             Priority · long-standing customer
 State            At risk · payment failed 2 days ago
@@ -57,7 +57,7 @@ State            At risk · payment failed 2 days ago
 
 - **Owner is a permanent row.** It is present for every family in every state, including
   unattended (DD-02).
-- **On duty is an additional row**, present only when it differs. It carries the `ModeBadge`,
+- **Current Handler is an additional row**, present only when it differs. It carries the `ModeBadge`,
   the window it applies to, and who it is covering for. The phrase is *"covering for Admin A"*,
   never *"assigned to Coverage B"* (`terminology.md` §1).
 - **Unattended** renders here as a `status.danger` row — *"No one is on duty for this family"* —

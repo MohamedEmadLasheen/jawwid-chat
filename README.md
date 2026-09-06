@@ -17,6 +17,7 @@ One Family -> One Primary Owner. The system, not the employee, owns the family's
 | `docs/admin` | AI #4 | Admin architecture, workflows, testing, backend dependencies |
 | `docs/architecture` | AI #1 | Backend core, data model, RBAC, coverage engine |
 | `docs/communication` | AI #2 | Thread/message/case/task/handoff, realtime, automation |
+| `docs/design` | AI #6 | Product UX, design system, terminology, screen specs, handoffs |
 
 ## Admin Web
 

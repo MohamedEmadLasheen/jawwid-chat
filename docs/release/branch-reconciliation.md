@@ -105,3 +105,68 @@ Ordered so that no step can silently create a second implementation.
 5. **The §C `/// DESIGN-ONLY` Student Group, approval and call models as-is.** They are the right entities with the wrong status; they must be implemented against the authoritative schema, not merged as declarations.
 6. **`thread.family_id UNIQUE`** into any branch that must satisfy PRD v0.1.
 7. **A second authorization matrix**, for calling, groups, search or notifications. There is exactly one `AuthorizationService`, and it governs messaging *and* calling.
+
+
+---
+
+## 8. Empirical validation (2026-09-05, superseding parts of §2 and §4)
+
+The plan above was written from static inspection. It was then **executed against
+a real database**, which corrected it. Recording both, because the correction is
+the useful part.
+
+### 8.1 The working tree alone does not apply
+
+```
+$ scripts/db/integration-db.sh reset      # working-tree migrations only
+  apply   20260905093000_chat_communication
+ERROR:  relation "chat.family" does not exist
+```
+
+`feat/infrastructure` cannot build a database by itself. Its communication
+migration references `chat.family`, `chat.thread`, `chat.learner` and
+`chat.staff`, which exist only on `feat/backend-foundation`. **Reconciliation is
+not optional housekeeping — it is a hard prerequisite for any integration
+environment.**
+
+### 8.2 The combined set DOES apply, in filename order
+
+All migrations from both branches apply cleanly from empty, once
+`db/integration/00_identity_stub.sql` supplies `auth.uid()` and
+`01_core_boundary_stub.sql` supplies the four Core tables. The two lineages are
+**mergeable**; they were never as divergent as the static view suggested.
+
+### 8.3 Corrections to §2 and §4
+
+| Claim | Status |
+|---|---|
+| **R-1** two competing `chat.message` definitions | **RESOLVED by AI #2**, uncommitted in the working tree. `093000` now does `alter table chat.message add column conversation_id` instead of creating its own. |
+| **R-2** two conversation models | **RESOLVED.** `conversation` is layered *onto* `thread`, not opposed to it. |
+| `090400` DISCARD | **REVERSED → KEEP.** It is now a dependency of `093000`. |
+| **R-5** engines must be repointed at `conversation` | **REDUCED.** The engines keep reading `thread` / `support_case`, which survive. Still needs review, no longer a rewrite. |
+| **R-3** duplicate logs | **CONFIRMED AND WORSE — now JC-010 (P0).** `create table if not exists` makes the conflict *silent*: AI #1's definition wins, AI #2's is skipped, and code writing `actor_kind` fails only at runtime. |
+| **R-7** Core coupling | **CONFIRMED, and narrowed.** The whole `auth` surface is one `auth.uid()` call in `090700`. But a **new** migration, `090900_chat_core_integration`, adds `chat.core_*` views over `public.profiles`/`children`/`subscriptions`/`payments` — a live violation of the database decision, and `091200_chat_rls` depends on it, so it is not isolable. |
+| **R-8** BR-1 trigger gap | **CONFIRMED by reproduction — now JC-008.** |
+
+### 8.4 Migrations that appeared during this pass
+
+`feat/backend-foundation` is moving quickly. Between the first and last run:
+`090900_chat_core_integration`, `091000_chat_message_idempotency`,
+`091100_chat_authorization`, `091200_chat_rls`,
+`091300_chat_policy_helper_privileges`.
+
+The plan is therefore a **snapshot**. Re-run `scripts/db/integration-db.sh reset`
+before executing the merge; it is the cheapest way to detect a new conflict.
+
+### 8.5 Revised bottom line
+
+Reconciliation is **substantially less risky than §2 implied**, because AI #2
+converged toward AI #1's model on their own. The remaining blockers are:
+
+1. **JC-010** — reconcile the duplicate logs. *Must be fixed before merge*; it is
+   silent, and a clean merge will hide it.
+2. **JC-008** — close the BR-1 trigger gap.
+3. **JC-009 / DB-2** — decide the Core boundary. `090900` currently violates the
+   database decision and `091200` depends on it.
+
+Nothing here changes the standing instruction: **no automatic merge.**

@@ -1,4 +1,8 @@
-# Jawwid Chat — CI (QA-owned, AI #5)
+# Jawwid Chat — CI
+#
+# Release gates are QA-owned (AI #5). The infrastructure jobs — configuration
+# validation, container images, dependency audit — are AI #7's. AI #5 decides
+# what must pass; AI #7 provides the pipeline that runs it.
 #
 # Ordered for fast feedback: cheap release-gate guards run first and fail the
 # whole run in seconds, then per-package typecheck/tests, then the deeper
@@ -11,6 +15,11 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+
+# Least privilege: this workflow is triggered by pull_request, so it can be run
+# by anyone able to open one. It reads; it never writes and never deploys.
+permissions:
+  contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -73,6 +82,29 @@ jobs:
           fi
           echo "G-31..G-35 pass"
 
+      # ---- infrastructure guardrails (AI #7) --------------------------------
+      # Complementary to G-18 above, not a replacement: G-18 catches credential
+      # material anywhere; these catch this project's specific failure modes.
+
+      - name: Secret scan — worktree and history
+        run: scripts/infra/scan-secrets.sh --history
+
+      - name: Server secrets must not be reachable from a client bundle
+        run: scripts/infra/check-web-env.sh
+
+      - name: The local environment example is valid
+        run: scripts/infra/check-env.sh local --file .env.example
+
+      - name: Environment templates match the manifest
+        # The templates are generated from infra/env/manifest.tsv. A
+        # hand-edited template drifts from the checker that deployments run,
+        # and the drift is only discovered by a failed release.
+        run: |
+          scripts/infra/render-env-template.sh staging    > /tmp/staging.env.example
+          scripts/infra/render-env-template.sh production > /tmp/production.env.example
+          diff -u infra/env/staging.env.example    /tmp/staging.env.example
+          diff -u infra/env/production.env.example /tmp/production.env.example
+
   # ------------------------------------------------------------------ backend
   api:
     name: API · typecheck + unit
@@ -113,6 +145,17 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: https://api.ci.invalid/api/v1
+          VITE_REALTIME_URL: wss://api.ci.invalid
+          VITE_APP_ENV: ci
+
+      - name: No credential reached the browser bundle
+        working-directory: .
+        run: scripts/infra/check-web-env.sh --bundle apps/admin-web/dist
 
   # --------------------------------------------------------------- migrations
   migrations:
@@ -157,6 +200,60 @@ jobs:
           else
             echo "::notice::no integration specs yet — G-38 remains UNVERIFIED"
           fi
+
+      - name: Backup drill against the current schema
+        # A `chat`-only dump is NOT self-restorable: chat.core_* are views over
+        # Core-owned tables in public. This asserts the documented procedure in
+        # docs/infrastructure/backup-recovery.md still holds as the schema moves.
+        run: |
+          APP_ENV=ci PG_IMAGE=postgres:17-alpine \
+            scripts/infra/backup-db.sh --out ./backups --schema chat
+
+  # ------------------------------------------------------------------- images
+  images:
+    name: Container images build and run unprivileged
+    runs-on: ubuntu-latest
+    needs: guards
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build API image
+        run: docker build -t jawwid-chat-api:${{ github.sha }} apps/api
+
+      - name: The API image must not run as root
+        run: |
+          user="$(docker run --rm --entrypoint id jawwid-chat-api:${{ github.sha }} -un)"
+          echo "image user: $user"
+          [ "$user" != "root" ] || { echo "::error::API image runs as root"; exit 1; }
+
+      - name: Build Admin Web image
+        run: |
+          docker build \
+            --build-arg VITE_API_BASE_URL=https://api.ci.invalid/api/v1 \
+            --build-arg VITE_REALTIME_URL=wss://api.ci.invalid \
+            -t jawwid-chat-admin:${{ github.sha }} apps/admin-web
+
+  # ------------------------------------------------------------- dependencies
+  dependencies:
+    name: Dependency audit (advisory)
+    runs-on: ubuntu-latest
+    needs: guards
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Audit — high and critical
+        # Advisory. A transitive advisory with no fix available must not block an
+        # unrelated bugfix; what it must do is be visible. Promoting this to
+        # blocking is AI #5's release-gate decision, not a side effect here.
+        continue-on-error: true
+        run: |
+          for app in apps/api apps/admin-web; do
+            echo "::group::$app"
+            (cd "$app" && npm audit --audit-level=high) || true
+            echo "::endgroup::"
+          done
 
   # ------------------------------------------------------------------- mobile
   mobile:

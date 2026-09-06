@@ -4,40 +4,24 @@ import { PrismaService } from './prisma.service';
 /**
  * PLATFORM SEAM - AI #1 OWNS THIS.
  *
- * Brief section 4 defines on_duty(family, now) over shift / coverage_rule /
- * absence tables. Those tables are AI #1's; this engine does not create them and
- * does not reimplement the algorithm.
+ * The coverage engine is AI #1's chat.on_duty(family, at) SQL function. This
+ * class is a thin call-through; the algorithm (shifts, coverage rules,
+ * absences, backups) is NOT reimplemented here.
  *
- * Brief section 12 non-negotiable: "No code path assigns a message/family to a
- * staff member other than via on_duty() (+ stickiness, assist, escalation - all
- * logged with reason)." The communication engine honours that by never choosing
- * a handler itself: it calls onDuty() and applies thread stickiness on top.
- *
- * Returning null is meaningful: it means Unattended (never silently assigned).
+ * A null result means Unattended - never a silent assignment.
  */
 export interface CoverageService {
   onDuty(familyId: string, at: Date): Promise<string | null>;
 }
 
-/**
- * Reference implementation ONLY, so the communication engine is runnable and
- * testable before AI #1 lands the coverage engine.
- *
- * It resolves to the family's permanent Primary Owner when that owner is active,
- * and null otherwise. It deliberately implements NO shift, coverage-rule or
- * absence logic - inventing that here would duplicate AI #1's domain and would
- * silently diverge from the brief.
- */
 @Injectable()
-export class ReferenceCoverageService implements CoverageService {
+export class SqlCoverageService implements CoverageService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async onDuty(familyId: string, _at: Date): Promise<string | null> {
-    const family = await this.prisma.family.findUnique({
-      where: { id: familyId },
-      include: { owner: true },
-    });
-    if (!family || !family.owner.isActive) return null;
-    return family.owner.id;
+  async onDuty(familyId: string, at: Date): Promise<string | null> {
+    const rows = await this.prisma.$queryRaw<Array<{ on_duty: string | null }>>`
+      SELECT chat.on_duty(${familyId}::uuid, ${at}::timestamptz) AS on_duty
+    `;
+    return rows[0]?.on_duty ?? null;
   }
 }

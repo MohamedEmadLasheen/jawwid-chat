@@ -32,3 +32,6 @@ ios/Runner/GoogleService-Info.plist
 .env
 .env.*
 !.env.example
+
+# Local database dumps taken by scripts/infra/backup-db.sh
+backups/

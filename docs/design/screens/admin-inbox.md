@@ -123,7 +123,7 @@ Banners are **in flow**, never floating over the list. At most two are visible; 
 `[BE]`. Results show enough context to distinguish families: family name, the student, and the
 matched snippet. **Phone numbers are not a search key and never appear in a result** (DQ-04).
 
-**Filter chips** — one row, always visible, four filters only: **Owner · On duty · Bucket ·
+**Filter chips** — one row, always visible, four filters only: **Primary Owner · Current Handler · Bucket ·
 Case state**. Everything else (renewal, payment, student, teacher, task state, coverage) lives
 behind **More filters** in a popover (role brief §43). Active filters render as removable chips
 above the list with a **Clear all**.

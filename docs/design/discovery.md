@@ -1,7 +1,12 @@
 # Jawwid Chat — Design Discovery Report
 
 **Author:** AI #6 — Product UX/UI Architect · **Date:** 2026-09-05
-**Status:** Complete. Design work proceeds on the reconciliations in §5.
+**Status:** Complete, and **corrected on review** against `docs/qa/authoritative-scope.md`.
+
+> **Read `scope-authority.md` first.** This report was originally written on the premise that
+> the PDF brief was authoritative. **That premise is withdrawn.** The approved **Jawwid Chat
+> PRD v0.1** governs product scope and behaviour; this pack is a design/UX conformance artifact
+> subordinate to it. Sections corrected on review are marked inline.
 
 ---
 
@@ -16,7 +21,7 @@
 | `docs/mobile/backend-dependencies.md` (AI #3) | Read |
 | `docs/admin/discovery-report.md` (AI #4) | Read |
 | `docs/admin/backend-contract-required.md` (AI #4) | Read |
-| `docs/qa/system-inventory.md`, `rbac-matrix.md` (AI #5) | Read |
+| `docs/qa/system-inventory.md`, `docs/qa/rbac-matrix.md` (AI #5) | Read |
 | `docs/architecture/` (AI #1) | **Empty directory** |
 | `docs/communication/` (AI #2) | **Does not exist** |
 | `supabase/migrations/*.sql` | 3 migrations, 384 lines: `chat.config`, `chat.staff`, `chat.shift`, `chat.coverage_rule`, `chat.absence` |
@@ -36,16 +41,27 @@ These were made by other agents and I am **not** re-litigating them:
 | # | Decision | Owner | Where |
 |---|---|---|---|
 | E1 | Backend is Supabase/PostgreSQL, `chat` schema inside Jawwid Core; Core read-only via `chat.core_*` views | AI #1 | migrations |
-| E2 | Transport is REST + Socket.IO | AI #2 / AI #4 | `backend-contract-required.md` |
+| E2 | Transport is REST + Socket.IO | AI #2 / AI #4 | `docs/admin/backend-contract-required.md` |
 | E3 | Admin Web is React 18 + TS + Vite + React Query + Zustand | AI #4 | `apps/admin-web/package.json` |
 | E4 | Mobile is Flutter 3.47.2 stable | AI #3 | `decisions.md` D2 |
-| E5 | Roles are `admin · coverage · manager · finance · technical · academic · system`. **No `super_admin`.** | AI #5 | `rbac-matrix.md` |
+| E5 | Roles are `admin · coverage · manager · finance · technical · academic · system`. **No `super_admin`.** | AI #5 | `docs/qa/rbac-matrix.md` |
 | E6 | All thresholds/weights live in `config`; the client reads them, never hardcodes them | brief §12 | — |
 | E7 | Attention and workload are **computed server-side**; the client renders, never derives | brief §12 | — |
-| E8 | The mobile role assignment governs the **family/teacher** side; the brief governs the **staff** side | product owner | `decisions.md` **D1** |
+| E8 | ~~The mobile role assignment governs the family/teacher side; the brief governs the staff side~~ | ~~product owner~~ | ~~`docs/mobile/decisions.md` D1~~ |
+| **E8′** | **The approved PRD v0.1 governs product scope. The PDF brief is superseded — its communication chapter is void; its operating-model chapter is carried forward.** | product owner | `docs/qa/authoritative-scope.md` |
 
-**E8 is the single most important input to this design.** It is the resolution of the scope
-conflict that AI #3, AI #4 and AI #5 each independently escalated. Everything below assumes it.
+Two rows above are contested by decisions this pack does not own, and are recorded here only so
+nobody mistakes them for settled: **E1** is **OD-02** (one database or two — BLOCKING), and
+**E5** omits a teacher actor, which is correction **C-1**, owned by AI #1.
+
+> **Corrected on review.** E8 was this pack's original premise and it is **withdrawn**. It is
+> one of two competing written records of the same product-owner decision of 2026-09-05, and
+> the conflict between them is registered as **OD-01 (BLOCKING)** in
+> `docs/product-operations/open-decisions.md`, owned by the product owner and AI #1.
+>
+> **This pack does not choose between them.** It is written to the PRD scope as recorded in
+> `docs/qa/authoritative-scope.md` §3, and where a screen's behaviour would differ between the
+> two reconciliations the spec states the requirement rather than the resolution.
 
 ## 3. What is missing and blocks nothing
 
@@ -59,28 +75,36 @@ Design can proceed without these, but they are named so no one thinks they were 
 - **AI #2 communication contract.** Affects payload shapes, not information hierarchy.
 - **Design doc v3.** Likely home for the answers to the open questions in §6.
 
-## 4. The one live cross-agent contradiction
+## 4. The cross-agent contradiction — resolved by the PRD, not by this pack
 
-This is the finding that most needs a decision, and it is not a misreading — it is two agents
-correctly following two different instructions.
+The original version of this report escalated a live contradiction: AI #3 was building Student
+Groups, approvals and calling; AI #4 was explicitly not building their admin counterparts; and
+none of the three had a backend entity.
 
-> **AI #3 is building Student Groups, message approvals and calling on mobile**
-> (`decisions.md` D1, accepted by the product owner).
-> **AI #4 is explicitly not building their admin counterparts**
-> (`backend-contract-required.md` §10: *"they are not built"*, seams reserved).
+**That is now resolved, and it was not this pack's to resolve.**
+`docs/qa/authoritative-scope.md` §3 places **Student Groups, the message approval workflow, and
+in-app voice calling (1:1 and group)** inside **PRD MVP scope**. AI #5 has since raised the
+implementation gap as a P0 defect — `docs/qa/defects.md` **JC-001** (*"Student Groups, Approvals
+and Calling are implemented as DESIGN-ONLY, not in MVP"*) and **JC-002** (BR-1 enforced by
+making Student Groups unrepresentable).
 
-Both cite a product decision. Both are internally consistent. Together they produce a product
-where a teacher's message enters a `pending` state on mobile and **no human being anywhere has
-a surface on which to approve it.** The approval queue does not exist on the only platform
-whose users are staff.
+What remains for this pack is therefore **not** whether these capabilities exist — they do —
+but that the interface for each is specified so the workflow is operable end to end with no
+dead ends. That is what `screens/approvals.md`, `screens/student-group.md` and `screens/call.md`
+provide. Their **scope** is settled by the PRD; their **implementation status** is unresolved
+and owned by others.
 
-AI #4 flagged exactly this risk in its own §10 — *"the admin-side counterpart becomes real work
-and should be scheduled deliberately — not absorbed silently."* This report is that flag being
-raised to a product decision. See §6, **OQ-1**.
+Two PRD rules constrain every one of those screens and are gates rather than guidance:
 
-I have designed the admin approval surface (`screens/approvals.md`) so the decision has
-something concrete to be made against, and marked the whole screen **conditional**. If the
-answer is "no approvals", one file is deleted and nothing else changes.
+- **BR-1 — Teacher ↔ Parent direct 1:1 communication is FORBIDDEN**, messaging and calling
+  alike. It happens **only** through the official Student Group with the required admin
+  presence/authorization, and it must be **enforced server-side**. This pack's contribution is
+  that the interface never *suggests* the forbidden path — member profiles carry no message and
+  no call affordance at all (`screens/student-group.md` §1). That is a cosmetic layer on top of
+  the real control, never a substitute for it.
+- **Phone privacy** — phone numbers never appear in product communication or calling flows,
+  including call setup, call metadata, push payloads, realtime events, search results and error
+  messages.
 
 ## 5. Vocabulary reconciliation — my role brief vs. the PRD
 
@@ -94,8 +118,8 @@ PRD wins**, matching AI #4's M1–M9 resolutions. This table is the authority; i
 | Attention: `now / soon / normal` | Buckets **NOW · TODAY · WAITING ON FAMILY · QUIET**, computed; show `top_reason` **as text, never a number or label** | PRD. Buckets are inbox *sections*, not badges on a row. |
 | Workload `LOW/MEDIUM/HIGH/CRITICAL` | `LOW < 8 · MEDIUM < 15 · HIGH ≥ 15` | PRD. **There is no CRITICAL.** |
 | Conversation states `open / waiting_customer / waiting_jawwid / resolved` | Status lives on **`case`**: `open · waiting_customer · waiting_internal · scheduled · resolved · closed` | PRD. A *thread* has no status; a *case* does. |
-| Multiple conversations per family | `thread.family_id` is **UNIQUE**; "cases never create a second thread" | PRD. One continuous thread, cases layered on it. |
-| "Primary Owner" vs "Current Handler" | `family.owner_id` vs `on_duty(family, now)` + `message.on_behalf_mode` | Concept survives, names change: **Owner** and **On duty**. |
+| Multiple conversations per family | **PRD requires at least three concurrent conversation kinds** (parent↔admin, teacher↔admin, Student Group) and one Student Group **per student** | **Ruling reversed on review.** The original ruling here cited `thread.family_id UNIQUE` from the **superseded** brief. The data shape is correction **C-2** / **OD-01** and is not this pack's. See §6.1. |
+| "Primary Owner" vs "Current Handler" | `family.owner_id` vs `on_duty(family, now)` + `message.on_behalf_mode` | **PRD terms kept verbatim: Primary Owner and Current Handler.** An earlier revision of this pack renamed them to "Owner" / "On duty" from the superseded brief; that was an override of PRD language and is withdrawn. |
 | `SUPER_ADMIN` role | Not a role | PRD (and AI #5's matrix). |
 | "Conversation is resolved" | Cases resolve. Threads persist forever. | PRD. |
 | Admin "Inbox" of conversations | Inbox of **families**, "not tickets" (§8) | PRD. The row is a family. |
@@ -104,20 +128,60 @@ Two of my role brief's instructions **survive intact** and are worth stating pos
 the PRD implies them without naming them: *"make the next correct action obvious"*, and
 *"never rely on colour alone"*.
 
-## 6. Open product decisions
+## 6. Open questions this pack depends on
 
-Each is a real decision I cannot infer safely. Smallest viable option set given, with a
-recommendation. None of them block the rest of the design.
+**Corrected on review.** The original version of this section carried a *"Recommendation"*
+column in which this pack proposed answers to authorization, identity and data-model questions.
+**Those recommendations are withdrawn.** They were outside design authority, and one of them
+(an `on_duty()`-derived approver) would have built an explicitly Phase 2 capability —
+coverage-aware approval — into MVP.
 
-| # | Decision | Options | Recommendation |
-|---|---|---|---|
-| **OQ-1** | Does the **approval** workflow exist, and if so who approves? | (a) No approvals — mobile drops the feature; (b) the family's **on-duty admin** approves; (c) a named academic supervisor approves | **(b)** — it is the only option that adds no new routing concept. `on_duty()` already answers "who is responsible for this family right now"; approvals inherit it and the brief's "one function decides" invariant holds. |
-| **OQ-2** | How does a **teacher** authenticate, and what entity is a teacher? | (a) `staff.role='academic'` extended to message families; (b) a new `teacher` principal | Product/AI #1 call. UX is identical either way; flagged because the whole teacher experience hangs on it. |
-| **OQ-3** | How do per-learner **Student Groups** coexist with `thread.family_id UNIQUE`? | (a) Groups are a separate entity beside `thread`, never merged; (b) groups are cases on the family thread | **(a)** — (b) would put teacher-visible content on the staff thread, which breaks the internal/customer visibility boundary. |
-| **OQ-4** | Is **calling** in scope for MVP? | (a) yes; (b) defer to Phase 2 | Product call. It is the largest, riskiest mobile workstream and it appears nowhere in the brief. Designed (`screens/call.md`) and marked conditional so the decision is cheap either way. |
-| **OQ-5** | Preset ↔ capability-flag mapping for family contacts | brief lists 6 flags + 4 preset names, not the mapping | Needed before the settings screen can show presets honestly. AI #5 raised the same gap. |
-| **OQ-6** | Are gendered Arabic role nouns acceptable? The initial roster is all women; standard Arabic UI convention defaults masculine. | (a) masculine generic; (b) neutral phrasing + always show the person's *name* instead of a role noun | **(b)** — `terminology.md` §4 specifies neutral constructions. Cheap now, expensive later. |
-| **OQ-7** | Numerals: Western (`0-9`) or Eastern Arabic (`٠-٩`)? | — | **Western in all contexts, both locales.** Rationale in `decisions.md` DD-09. |
+What follows is what the **design requires** from each decision, and who owns it. No option is
+preferred here. Where AI #8 has already registered the same question, the OD number is
+authoritative and this row is a cross-reference, not a second register.
+
+| # | Question | Register | Owner | What the design requires of any answer |
+|---|---|---|---|---|
+| **OQ-1** | Who is the **authorized approver**, and how does a pending message reach them? | new | product owner → AI #1 (authz) / AI #2 (routing) | **No dead-end pending state.** Every pending message reaches an authorized approver and reaches a terminal outcome (published or rejected-with-reason) that its sender can see. The queue is written approver-agnostic; naming the approver changes no pixel. MVP stays *approve · reject · reason* — escalation, expiry and coverage-aware approval are Phase 2. |
+| **OQ-2** | What entity is a **teacher**, and how does one authenticate? | **C-1**, **OD-04** | AI #1 + product owner | **BLOCKING** for the whole teacher experience. The design's requirements are enumerated in `screens/teacher-home.md` §8 — this pack does not propose a model. |
+| **OQ-3** | How is the **conversation model** shaped, and how do Student Groups sit in it? | **C-2**, **OD-01** | product owner → AI #1 / AI #2 | The interface must be able to render **one official Student Group per student**, so a family with several students has **several** groups, concurrently with the parent↔admin and teacher↔admin channels. See §6.1. |
+| **OQ-4** | **Implementation status and sequencing** for voice calling. | `docs/qa/defects.md` JC-001 | integration / release authority | Calling is **PRD MVP scope** — this is not a question about whether it exists. The UX states and the contract the interface needs are in `screens/call.md`. |
+| **OQ-5** | The **preset ↔ capability-flag** mapping for family contacts | AI #5 §2 | product owner | Presets are display sugar over the six flags. Until published, every surface renders from server-supplied flags and never derives them from a preset name. |
+| **OQ-6** | Are **gendered Arabic role nouns** acceptable? | new | product owner | A pure localisation question. `terminology.md` §8 states the working rule (prefer the person's name; neutral nominal constructions otherwise) and flags it as unconfirmed. |
+| **OQ-7** | **Numerals** — Western `0-9` or Eastern Arabic `٠-٩`? | new | product owner | A UX decision this pack *does* own; recorded as `decisions.md` DD-09 with its rationale and its reversal condition. |
+| **OQ-8** | What does **"required admin presence"** in a Student Group mean? | **OD-03** | product owner | Determines whether `screens/student-group.md` renders an admin in the header and member list **always** or **conditionally**. The spec currently renders conditionally and marks the line as open. |
+| **OQ-9** | Does a parent have **one** channel to Jawwid, or two? | **OD-05** | product owner → AI #3 | `screens/parent-home.md` and `screens/parent-chat.md` are drawn for **one**. If the answer is two, both need a conversation-list surface they do not currently have. |
+
+### 6.1 Family · Student · Student Group — the cardinality the interface must support
+
+This is a **restatement of PRD scope**, not a design decision, and it is written down because
+three artifacts in this repository have collapsed these three things into one.
+
+| Concept | Is | Cardinality |
+|---|---|---|
+| **Family** | the customer / account context — the unit of **ownership**, of the admin inbox row, and of Family 360 | 1 |
+| **Student** (`learner`) | the learner within a family | **1..n per family** |
+| **Student Group** | the **official communication channel for that student** — the only permitted Teacher↔Parent path (BR-1) | **exactly 1 per student**, therefore **1..n per family** |
+
+**A family with two students has two Student Groups.** They are distinct channels with distinct
+membership — different teachers, potentially different authorised contacts — and neither is a
+view of the other.
+
+**"One family, one Primary Owner" does not imply "one conversation per family."** Ownership
+cardinality and conversation cardinality are different axes, and conflating them is what
+produced `thread.family_id UNIQUE` (correction **C-2**, defect **JC-002**).
+
+The interface consequences, which hold under **any** resolution of OD-01:
+
+- A parent with several children sees **several groups**, grouped or labelled by child. The
+  child's name is the group's identity (`screens/student-group.md` §2).
+- The staff inbox row stays **one row per family** regardless of how many groups that family
+  has (`decisions.md` DD-01).
+- Family 360 must be able to show several students, each with their own teacher and group.
+- Unread, attention and notification routing must be attributable to the **right group**, not
+  to the family as an undifferentiated whole.
+
+**This pack does not modify any schema and proposes none.** The data shape is C-2 / OD-01.
 
 ## 7. Risks I am designing around
 

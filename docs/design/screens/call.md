@@ -1,22 +1,34 @@
 # Screen: Calls
 
-**Priority:** **CONDITIONAL — blocked on OQ-4** · **Platform:** Flutter + Admin Web · **Owner:** AI #3 / AI #4
+**Priority:** **P0 — PRD MVP scope** · **Platform:** Flutter + Admin Web · **Owner:** AI #3 / AI #4
 
-> **Calling appears nowhere in the project brief.** It is in the mobile role assignment only.
-> AI #3 called it *"the single largest and riskiest piece of mobile work"* (LiveKit, CallKit,
-> ConnectionService) and asked for it to be confirmed before it is built. AI #4 has reserved a
-> route slot and built nothing.
+> **In-app voice calling is MVP** — 1:1 **and group calling in Student Groups**
+> (`docs/qa/authoritative-scope.md` §3). **Video is Phase 2.**
 >
-> **Do not build this until OQ-4 is answered.** This spec exists to make the decision cheap in
-> either direction. If the answer is no, delete this file; the `TimelineEntry` union already
-> reserves a `call` kind, so adding it later is not a refactor.
+> **Corrected on review.** An earlier revision of this pack marked calling *"conditional"* and
+> said this file could be deleted if the answer were no. That framing came from the superseded
+> brief, in which calling does not appear, and it risked reading as a design decision to drop a
+> PRD capability. **Calling is in scope. This pack does not question that.**
+>
+> **OQ-4 is now narrowed to implementation status and sequencing**, owned by the integration /
+> release authority — not to whether the capability exists. `docs/qa/defects.md` **JC-001**
+> records calling as P0 and currently DESIGN-ONLY in the backend. AI #3 has flagged it as the
+> largest mobile workstream (LiveKit, CallKit, ConnectionService); that is a sequencing input,
+> not a scope argument.
+>
+> This spec defines the UX states and the contract the interface needs. It does not define the
+> transport, the signalling, or the authorization rule.
 
 ---
 
 ## 1. Role and purpose
 
-**Roles:** parent ↔ Jawwid · teacher ↔ Jawwid · group calls within a Student Group ·
-admin → family. **Never teacher ↔ parent 1:1**, in either direction.
+**Roles:** parent ↔ Jawwid · teacher ↔ Jawwid · **group calls within a Student Group** ·
+admin → family.
+
+**Never teacher ↔ parent 1:1, in either direction** — this is **BR-1**, and it covers calling
+exactly as it covers messaging. It must be **enforced server-side**; the interface's only job is
+never to suggest the path exists (`docs/qa/authoritative-scope.md` §3).
 
 **Purpose:** *"talk, when typing is the wrong tool."*
 
@@ -88,9 +100,15 @@ is the largest target on screen and is never adjacent to mute.
 - **A group call with one participant** — allowed; it shows *"Waiting for others"*.
 - **Call ends while the app is backgrounded** — the `SystemCard` is present on next open.
 
-## 8. Backend dependencies — none of these exist
+## 8. Backend contract required
 
-A **call session entity** and authorization returning a short-lived token + server URL, per
-conversation (never a client-constructed room) · group call authorization · call history with
-**no phone numbers** · push payloads for incoming and missed calls carrying only id, type and
-target · a server-enforced prohibition on teacher ↔ parent 1:1 calls.
+| # | Requirement | Owner |
+|---|---|---|
+| K1 | A **call session** entity — participants, direction, duration, outcome, timestamp — with **no phone number in any column or payload** | AI #1 / AI #2 |
+| K2 | **Authorization per conversation**, returning a short-lived token + server URL. The client never constructs or guesses a room and never self-authorizes | AI #1 |
+| K3 | **Group call** authorization within a Student Group | AI #1 |
+| K4 | Calling authorization evaluated by the **same** *(actor, conversation, channel)* code path as messaging, so BR-1 cannot be enforced in one and missed in the other (`docs/qa/authoritative-scope.md` C-2) | AI #1 |
+| K5 | Push payloads for incoming and missed calls carrying **only** id, type and target id | AI #2 |
+| K6 | Call history readable by the authorized participants, **no phone numbers** | AI #2 |
+
+None of these is designed here.

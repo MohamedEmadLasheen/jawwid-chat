@@ -1,12 +1,12 @@
 /**
  * Realtime event contracts.
  *
- * Every event has a named constant and a typed payload. No code in this repo may
- * emit a raw string event. AI #3 (mobile) and AI #4 (admin web) generate their
+ * Every event has a named constant and a typed payload. No code in this repo
+ * emits a raw string event. AI #3 (mobile) and AI #4 (admin web) generate their
  * client types from this file; see docs/communication/realtime-events.md.
  *
- * PRIVACY: no payload carries a phone number, email, or address. Participants
- * are identified by userId + displayName + role only.
+ * PRIVACY: no payload carries a phone number, email or address. Actors appear
+ * as opaque ids plus a display name.
  */
 
 export const CommEvent = {
@@ -18,72 +18,116 @@ export const CommEvent = {
   TYPING_STARTED: 'typing.started',
   TYPING_STOPPED: 'typing.stopped',
   PRESENCE_CHANGED: 'presence.changed',
-  THREAD_UPDATED: 'thread.updated',
-  HANDOFF_CREATED: 'handoff.created',
+  CONVERSATION_UPDATED: 'conversation.updated',
+  MEMBERSHIP_CHANGED: 'conversation.membership_changed',
+  APPROVAL_REQUESTED: 'approval.requested',
+  APPROVAL_DECIDED: 'approval.decided',
+  CALL_INCOMING: 'call.incoming',
+  CALL_ACCEPTED: 'call.accepted',
+  CALL_DECLINED: 'call.declined',
+  CALL_ENDED: 'call.ended',
+  CALL_PARTICIPANT_JOINED: 'call.participant_joined',
+  CALL_PARTICIPANT_LEFT: 'call.participant_left',
   NOTIFICATION_CREATED: 'notification.created',
 } as const;
 
 export type CommEventName = (typeof CommEvent)[keyof typeof CommEvent];
 
 export interface MessageCreatedPayload {
-  threadId: string;
+  conversationId: string;
   messageId: string;
   seq: string;
-  authorType: 'CONTACT' | 'STAFF' | 'SYSTEM';
+  authorKind: string;
   authorId: string | null;
-  type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'VOICE' | 'FILE' | 'SYSTEM';
-  visibility: 'CUSTOMER' | 'INTERNAL';
+  type: string;
+  visibility: string;
+  moderation: string;
   createdAt: string;
 }
 
 export interface MessageDeletedPayload {
-  threadId: string;
+  conversationId: string;
   messageId: string;
   deletedForAll: boolean;
 }
 
 export interface MessageReceiptUpdatedPayload {
-  threadId: string;
+  conversationId: string;
   messageId: string;
-  userId: string;
-  state: 'SENT' | 'DELIVERED' | 'READ';
+  actorId: string;
+  state: string;
   at: string;
 }
 
 export interface ReactionPayload {
-  threadId: string;
+  conversationId: string;
   messageId: string;
-  userId: string;
+  actorId: string;
   emoji: string;
 }
 
 export interface TypingPayload {
-  threadId: string;
-  userId: string;
+  conversationId: string;
+  actorId: string;
   displayName: string;
 }
 
 export interface PresencePayload {
-  userId: string;
-  state: 'ONLINE' | 'OFFLINE';
+  actorId: string;
+  state: 'online' | 'offline';
   lastSeenAt: string | null;
 }
 
-export interface ThreadUpdatedPayload {
-  threadId: string;
-  familyId: string;
+export interface ConversationUpdatedPayload {
+  conversationId: string;
+  familyId: string | null;
+  state: string;
   needsReply: boolean;
-  state: 'OPEN' | 'WAITING_ON_CUSTOMER' | 'WAITING_ON_JAWWID' | 'RESOLVED';
   lastActivityAt: string;
   handlerId: string | null;
 }
 
-export interface HandoffCreatedPayload {
-  threadId: string;
-  handoffId: string;
-  fromStaffId: string | null;
-  toStaffId: string | null;
-  reason: string;
+export interface MembershipChangedPayload {
+  conversationId: string;
+  added: string[];
+  removed: string[];
+}
+
+export interface ApprovalRequestedPayload {
+  conversationId: string;
+  messageId: string;
+  approvalId: string;
+  requestedBy: string;
+}
+
+export interface ApprovalDecidedPayload {
+  conversationId: string;
+  messageId: string;
+  approvalId: string;
+  decision: string;
+  rejectionReason: string | null;
+}
+
+export interface CallPayload {
+  callId: string;
+  conversationId: string;
+  type: string;
+  initiatorId: string;
+  /** Never a phone number. */
+  initiatorName: string;
+  roomName: string;
+}
+
+export interface CallEndedPayload {
+  callId: string;
+  conversationId: string;
+  outcome: string;
+  durationSeconds: number | null;
+}
+
+export interface CallParticipantPayload {
+  callId: string;
+  actorId: string;
 }
 
 export interface NotificationCreatedPayload {
@@ -92,7 +136,7 @@ export interface NotificationCreatedPayload {
   eventType: string;
   title: string;
   body: string;
-  threadId: string | null;
+  conversationId: string | null;
 }
 
 export interface CommEventPayloads {
@@ -104,13 +148,21 @@ export interface CommEventPayloads {
   [CommEvent.TYPING_STARTED]: TypingPayload;
   [CommEvent.TYPING_STOPPED]: TypingPayload;
   [CommEvent.PRESENCE_CHANGED]: PresencePayload;
-  [CommEvent.THREAD_UPDATED]: ThreadUpdatedPayload;
-  [CommEvent.HANDOFF_CREATED]: HandoffCreatedPayload;
+  [CommEvent.CONVERSATION_UPDATED]: ConversationUpdatedPayload;
+  [CommEvent.MEMBERSHIP_CHANGED]: MembershipChangedPayload;
+  [CommEvent.APPROVAL_REQUESTED]: ApprovalRequestedPayload;
+  [CommEvent.APPROVAL_DECIDED]: ApprovalDecidedPayload;
+  [CommEvent.CALL_INCOMING]: CallPayload;
+  [CommEvent.CALL_ACCEPTED]: CallParticipantPayload;
+  [CommEvent.CALL_DECLINED]: CallParticipantPayload;
+  [CommEvent.CALL_ENDED]: CallEndedPayload;
+  [CommEvent.CALL_PARTICIPANT_JOINED]: CallParticipantPayload;
+  [CommEvent.CALL_PARTICIPANT_LEFT]: CallParticipantPayload;
   [CommEvent.NOTIFICATION_CREATED]: NotificationCreatedPayload;
 }
 
 /** Rooms a socket may join. Never a client-supplied raw string. */
 export const room = {
-  thread: (threadId: string) => `thread:${threadId}`,
-  user: (userId: string) => `user:${userId}`,
+  conversation: (id: string) => `conversation:${id}`,
+  actor: (id: string) => `actor:${id}`,
 };

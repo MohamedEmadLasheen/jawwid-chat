@@ -1,8 +1,6 @@
 {
   "@@locale": "en",
-
   "appName": "Jawwid",
-
   "signInTitle": "Sign in to Jawwid",
   "signInSubtitle": "Your account is created by Jawwid. There is no public sign-up.",
   "usernameLabel": "Username",
@@ -14,29 +12,43 @@
   "sessionExpiredBody": "Your session ended. Please sign in again.",
   "signOutAction": "Sign out",
   "signOutConfirm": "Sign out of Jawwid on this device?",
-
   "tabChats": "Chats",
+  "tabHome": "Home",
+  "tabGroups": "Groups",
   "tabCalls": "Calls",
   "tabNotifications": "Updates",
   "tabProfile": "Profile",
-
   "sectionJawwid": "Jawwid",
   "sectionStaff": "Jawwid team",
   "sectionMyGroups": "My groups",
   "sectionLearner": "{name}",
-  "@sectionLearner": { "placeholders": { "name": { "type": "String" } } },
-
+  "@sectionLearner": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "handledBy": "Handled by {name}",
-  "@handledBy": { "placeholders": { "name": { "type": "String" } } },
-
+  "@handledBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "conversationsEmptyTitle": "No conversations yet",
   "conversationsEmptyBodyParent": "When Jawwid or your child's group sends a message, it will appear here.",
   "conversationsEmptyBodyTeacher": "Your assigned student groups will appear here.",
   "conversationsErrorTitle": "Could not load your chats",
-
   "unreadCount": "{count, plural, =1{1 unread message} other{{count} unread messages}}",
-  "@unreadCount": { "placeholders": { "count": { "type": "int" } } },
-
+  "@unreadCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "pinAction": "Pin",
   "unpinAction": "Unpin",
   "muteAction": "Mute",
@@ -45,7 +57,6 @@
   "unarchiveAction": "Unarchive",
   "archivedLabel": "Archived",
   "mutedLabel": "Muted",
-
   "composerHint": "Message",
   "composerSend": "Send",
   "composerAttach": "Attach",
@@ -53,7 +64,6 @@
   "composerRecording": "Recording",
   "composerSlideToCancel": "Slide to cancel",
   "composerReadOnly": "You can no longer send messages here.",
-
   "messageStateSending": "Sending",
   "messageStateSent": "Sent",
   "messageStateDelivered": "Delivered",
@@ -62,33 +72,46 @@
   "messageStatePendingApproval": "Pending approval",
   "messageStateRejected": "Not approved",
   "messageRejectedReason": "Not approved: {reason}",
-  "@messageRejectedReason": { "placeholders": { "reason": { "type": "String" } } },
+  "@messageRejectedReason": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
   "messageDeleted": "This message was deleted",
   "messageRetry": "Retry",
   "messageDiscard": "Discard",
   "messageQueuedOffline": "Waiting for a connection",
-
   "replyAction": "Reply",
   "replyingTo": "Replying to {name}",
-  "@replyingTo": { "placeholders": { "name": { "type": "String" } } },
+  "@replyingTo": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "reactAction": "React",
   "copyAction": "Copy",
-
   "typingSingle": "{name} is typing…",
-  "@typingSingle": { "placeholders": { "name": { "type": "String" } } },
+  "@typingSingle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "typingMany": "Several people are typing…",
-
   "loadingOlder": "Loading earlier messages…",
   "loadOlderFailed": "Could not load earlier messages.",
   "messagesEmptyTitle": "No messages yet",
   "messagesEmptyBody": "Say hello to start the conversation.",
-
   "groupMembersTitle": "Members",
   "groupMemberRoleParent": "Parent",
   "groupMemberRoleTeacher": "Teacher",
   "groupMemberRoleAdmin": "Jawwid",
   "groupApprovalNotice": "Messages here are reviewed by Jawwid before everyone sees them.",
-
   "callVoice": "Voice call",
   "callGroup": "Group call",
   "callIncoming": "Incoming call",
@@ -106,17 +129,24 @@
   "callOutcomeMissed": "Missed",
   "callOutcomeDeclined": "Declined",
   "callDuration": "{minutes}m {seconds}s",
-  "@callDuration": { "placeholders": { "minutes": { "type": "int" }, "seconds": { "type": "int" } } },
+  "@callDuration": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      },
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
   "callFailedMicrophone": "Jawwid needs microphone access to make calls.",
   "callFailedNotAllowed": "This call is not available.",
   "callFailedNetwork": "The call could not connect. Check your connection and try again.",
-
   "notificationsTitle": "Updates",
   "notificationsEmpty": "You are all caught up",
   "notificationPermissionTitle": "Turn on notifications",
   "notificationPermissionBody": "Jawwid uses notifications for class reminders, messages, and calls.",
   "notificationPermissionAction": "Open settings",
-
   "profileTitle": "Profile",
   "settingsTitle": "Settings",
   "settingsLanguage": "Language",
@@ -127,17 +157,20 @@
   "settingsDevices": "Active devices",
   "devicesThisDevice": "This device",
   "devicesLastActive": "Last active {when}",
-  "@devicesLastActive": { "placeholders": { "when": { "type": "String" } } },
+  "@devicesLastActive": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
   "devicesSignOutOther": "Sign out this device",
-
   "searchHint": "Search your chats",
   "searchEmpty": "Nothing matched your search",
-
   "retryAction": "Try again",
   "cancelAction": "Cancel",
   "okAction": "OK",
   "closeAction": "Close",
-
   "errorNetworkTitle": "No connection",
   "errorNetworkBody": "Check your internet connection and try again.",
   "errorTimeoutTitle": "This is taking too long",
@@ -147,7 +180,6 @@
   "errorForbiddenBody": "You do not have access to this.",
   "errorNotFoundTitle": "Not found",
   "errorNotFoundBody": "This is no longer available.",
-
   "todayLabel": "Today",
   "yesterdayLabel": "Yesterday"
 }

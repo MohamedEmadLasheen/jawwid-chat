@@ -10,9 +10,17 @@
 
 **Purpose:** *"understand this family and act, without leaving the screen."*
 
-One continuous thread per family, forever (`thread.family_id` UNIQUE). Cases are layered on it,
-not separate conversations (`decisions.md` DD-01). The thread is never opened, closed or
-resolved — **cases** are.
+The parent↔admin conversation is **continuous**: it does not reset when the Current Handler
+changes, when coverage takes over, or when a topic is resolved. Cases are layered on it. The
+conversation is never opened, closed or resolved — **cases** are.
+
+> **Corrected on review.** This spec previously asserted `thread.family_id UNIQUE` and *"one
+> thread per family"*. That is the **superseded** brief's communication chapter. The
+> conversation model is correction **C-2** / **OD-01**, owned by AI #1 and AI #2. What this
+> screen requires is only that **the customer relationship is continuous and its history is
+> never split by a staffing change** — which holds under any resolution. A family's Student
+> Groups (one per student) are **separate conversations** reachable from Family 360, not
+> content on this one.
 
 **Entry points:** an inbox row · a notification deep-link · a search result · a task's family
 link · a handover card · a timeline event.
@@ -45,15 +53,15 @@ and is **already populated** when this opens — no second click to learn who th
 
 ```
 Al-Farsi                                    [Priority]   ⋯
-Owner · Admin A
-On duty · Coverage B — Covering                          ← line 3 only when ≠ owner
+Primary Owner · Admin A
+Current Handler · Coverage B — Covering                  ← line 3 only when ≠ Primary Owner
 ```
 
 | Line | Content | Rule |
 |---|---|---|
 | 1 | Family name (`type.h2`) + tier marker if `priority` + overflow menu | |
-| 2 | **`Owner · {name}`** | **Always present.** Never replaced, never conditional, never moved. |
-| 3 | `On duty · {name}` + `ModeBadge` | Rendered **only when the on-duty person differs from the owner.** For an owner working her own family, line 3 is absent — the normal case must look normal. |
+| 2 | **`Primary Owner · {name}`** | **Always present.** Never replaced, never conditional, never moved. |
+| 3 | `Current Handler · {name}` + `ModeBadge` | Rendered **only when the Current Handler differs from the Primary Owner.** When the Primary Owner is working her own family, line 3 is absent — the normal case must look normal. |
 
 Additional header state, appended to line 3 when it applies: **Keeping this · until 18:30** ·
 **Unattended** *(manager view only)*.
@@ -68,7 +76,7 @@ A horizontal strip above the thread, one card per **open** case: type icon, type
 
 Clicking a card **filters the thread to that case's messages** and the card becomes selected;
 clicking again clears. This is how a family with three simultaneous topics stays legible without
-a second thread.
+a second parent↔admin conversation.
 
 Resolved and closed cases live in Family 360's history, not here.
 
@@ -119,7 +127,7 @@ Keyboard: `r` focus composer, `n` internal note, `Cmd/Ctrl+Enter` send, `Esc` bl
 
 | Situation | Composer |
 |---|---|
-| On duty (owner, coverage, sticky, assist granted, escalation) | Full |
+| Current Handler (Primary Owner, coverage, sticky, assist granted, escalation) | Full |
 | Not on duty | **Internal note only.** Customer send is disabled with the reason above. Brief §5: any admin may write internal notes any time. |
 | Coverage + case is `owner_locked` + not urgent | Reply and acknowledge; **resolve disabled**. |
 | Coverage + `owner_locked` + urgent | Transactional actions enabled; **resolve stays disabled**. Coverage never closes relationship cases. |

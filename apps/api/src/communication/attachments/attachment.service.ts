@@ -1,11 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { MessageType } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
 import { OBJECT_STORAGE } from '../../platform/tokens';
 import type { ObjectStorage, UploadAuthorization } from './object-storage';
-import { ThreadService } from '../threads/thread.service';
+import { ConversationService } from '../conversations/conversation.service';
 
 /** Configurable limits. Read from env so ops can tune without a deploy. */
 const MAX_BYTES: Record<string, number> = {
@@ -27,7 +26,7 @@ export class AttachmentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly authz: AuthorizationService,
-    private readonly threads: ThreadService,
+    private readonly conversations: ConversationService,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
   ) {}
 
@@ -37,29 +36,29 @@ export class AttachmentService {
    * has no access to.
    */
   async authorizeUpload(params: {
-    threadId: string;
-    userId: string;
-    kind: MessageType;
+    conversationId: string;
+    actorId: string;
+    kind: string;
     mimeType: string;
     byteSize: number;
   }): Promise<UploadAuthorization> {
-    const actor = await this.threads.requireActor(params.userId);
-    const thread = await this.prisma.thread.findUnique({ where: { id: params.threadId } });
-    if (!thread) throw new CommError(CommErrorCode.THREAD_NOT_FOUND, 'thread not found', 404);
+    const actor = await this.conversations.requireActor(params.actorId);
+    const conv = await this.conversations.requireConversation(params.conversationId);
+    const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
 
-    const decision = this.authz.canReadThread(actor, thread);
+    const decision = this.authz.canRead(actor, conv, membership);
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
     this.validate(params.kind, params.mimeType, params.byteSize);
 
     return this.storage.authorizeUpload({
-      prefix: `threads/${params.threadId}`,
+      prefix: `conversations/${params.conversationId}`,
       mimeType: params.mimeType,
       byteSize: params.byteSize,
     });
   }
 
-  validate(kind: MessageType, mimeType: string, byteSize: number): void {
+  validate(kind: string, mimeType: string, byteSize: number): void {
     const key = kind as string;
     const max = MAX_BYTES[key];
     const allowed = ALLOWED_MIME[key];

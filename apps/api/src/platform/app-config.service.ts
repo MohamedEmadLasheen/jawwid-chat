@@ -28,6 +28,10 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   /** initial hypothesis - max messages returned per page */
   'communication.page_size_max': 100,
   'communication.page_size_default': 50,
+  /** initial hypothesis - LiveKit room token lifetime, short by design */
+  'call.token_ttl_seconds': 120,
+  /** initial hypothesis - unanswered call becomes a missed call */
+  'call.ring_timeout_seconds': 45,
   /** initial hypothesis - notification delivery retry budget */
   'notification.max_attempts': 5,
 } as const;

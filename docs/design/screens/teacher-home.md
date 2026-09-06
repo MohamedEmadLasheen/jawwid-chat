@@ -1,11 +1,18 @@
 # Screen: Teacher Home
 
-**Priority:** P0 for mobile · **CONDITIONAL — depends on OQ-2** · **Platform:** Flutter (teacher) · **Owner:** AI #3
+**Priority:** **P0 — PRD MVP scope** · **BLOCKED on OQ-2 / C-1 / OD-04** · **Platform:** Flutter (teacher) · **Owner:** AI #3
 
-> **OQ-2 is unresolved:** no teacher principal exists in the brief. `learner.teacher_id` is a
-> bare field. Until AI #1 decides what a teacher *is* and how one authenticates, this screen
-> cannot be built — AI #3 named it *"the single largest unmodelled dependency in the mobile
-> scope"* and this spec agrees.
+> **The Teacher mobile app is MVP** (`docs/qa/authoritative-scope.md` §3).
+>
+> **It is blocked, and the blocker is not a design question.** No teacher principal exists:
+> `chat.staff.role` does not include a teacher, and `chat.learner.teacher_id` is a bare `uuid`
+> with no FK and no identity behind it. This is correction **C-1** (owner: AI #1) and
+> **OD-04** (owner: product owner + AI #1).
+>
+> **This pack does not propose a teacher identity model** — not a `chat.teacher` table, not a
+> role-enum extension, not a Core mirror. Domain authority belongs to the System Architect /
+> Backend / Integration Commander. §8 states only what the **interface** requires, observably,
+> from whatever model is chosen.
 
 ---
 
@@ -93,8 +100,21 @@ each row's accessible name. Chevrons mirror.
 - **A teacher who is also a parent at Jawwid** — out of scope for MVP; flagged so it is a
   decision rather than a surprise. It would require two principals or a role switcher.
 
-## 8. Backend dependencies
+## 8. Backend contract required — what the design needs from the teacher model
 
-**A teacher principal and its authentication (OQ-2) — blocking.** Then: the teacher's groups
-with unread counts, their schedule, their Jawwid conversation, push registration, and a
-server-enforced prohibition on any teacher → parent 1:1 path with a stable error code.
+**Requirements, not a design.** Each row is an observable property the interface depends on. How
+it is modelled is AI #1's and the Integration Commander's to decide.
+
+| # | Requirement | Why the interface needs it | Owner |
+|---|---|---|---|
+| **T1** | **Stable teacher identity** — an id that does not change across sessions, devices, or a change of the students they teach | Message authorship, group membership, unread state, push targeting and call participation all key on it. An identity that changes reassigns history | AI #1 (C-1) |
+| **T2** | **Authentication** for that identity, with the same distinguishable failures as every other principal — bad credentials · account disabled · session revoked | `screens/auth.md` §3 renders a different experience for each; collapsing them strands an offboarded teacher retrying a password | AI #1 (C-1) |
+| **T3** | **Authorization role**, server-asserted on every session and never trusted from local cache | The app renders the navigation the server says the principal has (`docs/mobile/decisions.md` D3). A teacher must be authorized **independently of CS staff** | AI #1 (C-1) |
+| **T4** | **Jawwid Core relationship** — whether the teacher originates in Core and Chat mirrors, or Chat owns the identity, with an explicit sync direction and an explicit migration path if it changes | Determines whether the app can trust a teacher's name and student list, and what a stale read looks like on screen | product owner + AI #1 (**OD-04**) |
+| **T5** | **Student assignment** — which learners a teacher teaches, and who is authoritative for that fact | Drives Teacher Home's Today list, the Groups tab, and the scope of a teacher's search. `chat.learner.teacher_id` currently has no authority behind it | product owner + AI #1 (**OD-04**) |
+| **T6** | **Student Group membership derived from T5**, not maintained separately | Two sources for "who is in this group" will diverge, and the divergence is a privacy incident | AI #1 (**OD-04**) |
+| **T7** | **Teacher-change and sync behaviour** — what happens to group membership, in-flight messages, pending approvals and history when a teacher is reassigned, deactivated or offboarded | `screens/student-group.md` §8 requires that **history is never truncated by a staffing change** while **send access is revoked immediately**. Those two must be separable | AI #1 (**OD-04**) |
+| **T8** | **BR-1 enforced server-side** — no teacher↔parent 1:1 conversation or call may be created in either direction, with a stable machine-readable error code | The UI never offers the path; that is cosmetic, and BR-1 is a gate (`docs/qa/release-gate.md` G-01) | AI #1 (C-2 / JC-002) |
+
+Then the ordinary surface contracts: the teacher's groups with unread counts, their schedule,
+their teacher↔admin conversation, and push registration.

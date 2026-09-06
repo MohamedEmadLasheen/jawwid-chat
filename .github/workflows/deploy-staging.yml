@@ -1,0 +1,194 @@
+# Staging deployment. Owner: AI #7 (infrastructure).
+#
+# Triggered by a push to main (i.e. after review and a green CI run) and
+# manually, for redeploying or rolling back to a previously built image.
+#
+# Kept separate from ci.yml on purpose: pull_request workflows can be triggered
+# by anyone who can open a pull request, and must never have access to a
+# deployment credential. Nothing in this file runs on a pull request.
+name: Deploy staging
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Existing image tag to deploy (blank = build from this commit). Use this to roll back.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+# Never two staging deployments at once, and never cancel one midway: an
+# interrupted deployment leaves the environment in a state nobody chose.
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  APP_ENV: staging
+
+jobs:
+  build:
+    name: Build and publish images
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: meta
+        name: Resolve release identity
+        run: |
+          if [ -n "${{ inputs.image_tag }}" ]; then
+            echo "tag=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+            echo "reusing existing image ${{ inputs.image_tag }}"
+          else
+            echo "tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          fi
+          echo "build_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to the registry
+        if: inputs.image_tag == ''
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push API image
+        if: inputs.image_tag == ''
+        run: |
+          IMAGE="${REGISTRY}/${GITHUB_REPOSITORY,,}/api"
+          # Build identity is baked in so /health/live can answer
+          # "what is running?" without consulting the pipeline.
+          docker build \
+            --build-arg NODE_ENV=production \
+            -t "$IMAGE:${GITHUB_SHA}" -t "$IMAGE:staging" \
+            apps/api
+          docker push "$IMAGE:${GITHUB_SHA}"
+          docker push "$IMAGE:staging"
+
+      - name: Build and push Admin Web image
+        if: inputs.image_tag == ''
+        env:
+          API_BASE_URL: ${{ vars.STAGING_API_BASE_URL }}
+          REALTIME_URL: ${{ vars.STAGING_REALTIME_URL }}
+        run: |
+          test -n "$API_BASE_URL" || { echo "::error::vars.STAGING_API_BASE_URL is not set"; exit 1; }
+          IMAGE="${REGISTRY}/${GITHUB_REPOSITORY,,}/admin-web"
+          # These values are compiled into the browser bundle, so the image is
+          # environment-specific and is never promoted to production.
+          docker build \
+            --build-arg VITE_API_BASE_URL="$API_BASE_URL" \
+            --build-arg VITE_REALTIME_URL="$REALTIME_URL" \
+            --build-arg VITE_APP_ENV=staging \
+            --build-arg VITE_GIT_COMMIT="${GITHUB_SHA}" \
+            -t "$IMAGE:${GITHUB_SHA}" -t "$IMAGE:staging" \
+            apps/admin-web
+          docker push "$IMAGE:${GITHUB_SHA}"
+          docker push "$IMAGE:staging"
+
+  deploy:
+    name: Deploy to staging
+    runs-on: ubuntu-latest
+    needs: [build]
+    # The GitHub Environment holds the staging secrets and any protection rules.
+    # Secrets are scoped to it, so no other workflow or job can read them.
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_API_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate the staging configuration
+        # Runs BEFORE anything is changed. A missing or placeholder value stops
+        # the deployment here rather than halfway through it.
+        env:
+          NODE_ENV: production
+          APP_ENV: staging
+          PORT: '3000'
+          LOG_LEVEL: info
+          CORS_ALLOWED_ORIGINS: ${{ vars.STAGING_CORS_ALLOWED_ORIGINS }}
+          REQUEST_TIMEOUT_MS: '30000'
+          SHUTDOWN_GRACE_MS: '15000'
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_STATEMENT_TIMEOUT_MS: '15000'
+          DATABASE_POOL_MAX: '10'
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          QUEUE_PREFIX: jawwid-chat-staging
+          WORKER_CONCURRENCY: '5'
+          JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
+          JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+          JWT_ACCESS_TTL: 15m
+          JWT_REFRESH_TTL: 30d
+          STORAGE_ENDPOINT: ${{ vars.STORAGE_ENDPOINT }}
+          STORAGE_REGION: auto
+          STORAGE_BUCKET: ${{ vars.STORAGE_BUCKET }}
+          STORAGE_ACCESS_KEY: ${{ secrets.STORAGE_ACCESS_KEY }}
+          STORAGE_SECRET_KEY: ${{ secrets.STORAGE_SECRET_KEY }}
+          STORAGE_SIGNED_URL_TTL_SECONDS: '300'
+          FCM_PROJECT_ID: ${{ vars.FCM_PROJECT_ID }}
+          FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
+          APNS_KEY_ID: ${{ vars.APNS_KEY_ID }}
+          APNS_TEAM_ID: ${{ vars.APNS_TEAM_ID }}
+          APNS_BUNDLE_ID: ${{ vars.APNS_BUNDLE_ID }}
+          APNS_PRIVATE_KEY: ${{ secrets.APNS_PRIVATE_KEY }}
+          APNS_PRODUCTION: 'false'
+          LIVEKIT_URL: ${{ vars.LIVEKIT_URL }}
+          LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET: ${{ secrets.LIVEKIT_API_SECRET }}
+          LIVEKIT_TOKEN_TTL_SECONDS: '300'
+          CORE_BASE_URL: ${{ vars.CORE_BASE_URL }}
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+          CORE_WEBHOOK_SECRET: ${{ secrets.CORE_WEBHOOK_SECRET }}
+          CORE_TIMEOUT_MS: '5000'
+          CORE_RETRY_MAX: '3'
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          OTEL_SERVICE_NAME: jawwid-chat-api
+          OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}
+          GIT_COMMIT: ${{ github.sha }}
+          BUILD_VERSION: staging-${{ github.run_number }}
+          BUILD_TIME: ${{ github.event.repository.updated_at }}
+        run: scripts/infra/check-env.sh staging
+
+      - name: Back up the database before migrating
+        env:
+          APP_ENV: staging
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: scripts/infra/backup-db.sh --out ./backups --schema chat
+
+      - name: Apply database migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          # AI #1's migration runner is the single migration authority.
+          PSQL="psql -v ON_ERROR_STOP=1 $DATABASE_URL" scripts/db/apply.sh
+
+      - name: Release
+        env:
+          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+        run: |
+          # ------------------------------------------------------------------
+          # NOT YET IMPLEMENTED -- no hosting platform has been provisioned.
+          #
+          # This step fails deliberately rather than printing "deployed". A
+          # pipeline that reports success without deploying is worse than no
+          # pipeline: it is a false negative on every future incident.
+          #
+          # To complete it, replace this block with the platform's release
+          # command (see docs/infrastructure/decisions.md ADR-003), passing
+          # IMAGE_TAG and the environment variables validated above.
+          # ------------------------------------------------------------------
+          echo "::error title=Deployment target not configured::No staging host exists yet. See docs/infrastructure/production-readiness.md (BLOCKER-1)."
+          exit 1
+
+      - name: Smoke test
+        if: success()
+        run: |
+          scripts/infra/smoke.sh "${{ vars.STAGING_API_BASE_URL }}" \
+            --web "${{ vars.STAGING_ADMIN_WEB_URL }}"

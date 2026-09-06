@@ -277,3 +277,28 @@ criteria, verify, and report.
 I will not mark any gate `PASS` that I have not executed. Where a control is implemented but
 unexecuted it is `UNVERIFIED`; where it does not exist it is `FAIL`; where it cannot be run on
 this host it is `BLOCKED`. None of those is `PASS`.
+
+---
+
+## Addendum — 2026-09-05, post-decision re-verification
+
+This report is a point-in-time record and is **not** rewritten. Four findings
+above have since changed. Recorded here because the sequence matters.
+
+| Finding | Change | Verified how |
+|---|---|---|
+| **JC-005** | **FIXED** — both branches now `deny()` with `ASSIST_NOT_PERMITTED` / `ESCALATION_NOT_PERMITTED`. Original assertions intact, not weakened. Residual: the MANAGER branch still honours a client-supplied mode (**RT-003**) | Re-read `authorization.service.ts:129,148-176`; re-ran the suite |
+| **JC-006** | **FIXED** — `canReadInternal()` now gates on `actor.isActive` | Same |
+| **RC-11** | Partially resolved — `.github/workflows/ci.yml` now exists with real gates; `backup-db.sh`/`restore-db.sh` added. Observability, runbooks, `docs/infrastructure/*` and a rehearsed restore remain absent | Read `ci.yml`; filesystem |
+| **RC-12** | Reclassified **PARTIAL**, not "absent" — AI #9 delivered Campaign 1 (15 findings) with **executable** runtime evidence: `npx jest --testPathPattern red-team` → 2 suites, 12 tests, all passing. Transport/queue/storage/chaos surfaces remain NOT TESTED because the app cannot boot | Executed the suite |
+
+Suite state at re-verification: **7 suites, 39 passed, 23 todo, 0 failed.** The
+23 `it.todo` are the `BR1-01…BR1-20` conformance cases — declared, **not
+written**, and graded NOT TESTED under JC-002. They are not passes.
+
+Also changed: `feat/infrastructure` now **tracks** what was untracked at
+reconnaissance (the API, Admin Web, Flutter app, infra and docs), so the
+"majority of the system is untracked" finding in §1 no longer holds.
+
+Superseded by: `database-decision.md`, `branch-reconciliation.md`,
+`blockers.md`, `integration-matrix.md`, `release-scorecard.md`.

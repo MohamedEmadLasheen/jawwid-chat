@@ -11,6 +11,8 @@
  *
  * Do not "fix" a failing expectation here by editing the expectation. When a
  * finding is fixed, the assertion is inverted in the same commit as the fix.
+ *
+ * Section ids match the finding ids in docs/red-team/findings.md.
  */
 import { MessageVisibility, OnBehalfMode, StaffRole, ThreadKind } from '@prisma/client';
 import { AuthorizationService } from '@platform/authorization.service';
@@ -56,9 +58,9 @@ function contact(over: Partial<Actor> = {}): Actor {
 }
 
 // ---------------------------------------------------------------------------
-// RT-001 — client-supplied on_behalf_mode is stamped verbatim for a MANAGER
+// RT-003 — client-supplied on_behalf_mode is stamped verbatim for a MANAGER
 // ---------------------------------------------------------------------------
-describe('RT-001 · on_behalf_mode attribution is client-controlled for MANAGER', () => {
+describe('RT-003 · on_behalf_mode attribution is client-controlled for MANAGER', () => {
   const svc = new AuthorizationService({ onDuty: async () => OWNER_ID } as CoverageService);
 
   it('CONFIRMED: a manager who owns nothing can stamp the message OWNER', async () => {
@@ -100,9 +102,9 @@ describe('RT-001 · on_behalf_mode attribution is client-controlled for MANAGER'
 });
 
 // ---------------------------------------------------------------------------
-// RT-002 — on_behalf_mode for internal notes never consults on_duty()
+// RT-004 — on_behalf_mode for internal notes never consults on_duty()
 // ---------------------------------------------------------------------------
-describe('RT-002 · COVERAGE attribution is asserted without any coverage assignment', () => {
+describe('RT-004 · COVERAGE attribution is asserted without any coverage assignment', () => {
   it('CONFIRMED: on_duty() is never called on the internal-note path', async () => {
     let onDutyCalls = 0;
     const coverage: CoverageService = {
@@ -131,9 +133,9 @@ describe('RT-002 · COVERAGE attribution is asserted without any coverage assign
 });
 
 // ---------------------------------------------------------------------------
-// RT-003 — the authorization contract is blind to thread kind and participants
+// RT-002 — the authorization contract is blind to thread kind and participants
 // ---------------------------------------------------------------------------
-describe('RT-003 · authorization is a function of familyId alone', () => {
+describe('RT-002 · authorization is a function of familyId alone', () => {
   const svc = new AuthorizationService({ onDuty: async () => OWNER_ID } as CoverageService);
 
   it('CONFIRMED: canReadThread admits any thread kind, including STUDENT_GROUP', () => {

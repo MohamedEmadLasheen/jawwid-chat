@@ -346,3 +346,154 @@ succeed until `AuthorizationService` evaluates the real preconditions
 server-side. Deliberate: unavailable beats bypassable. Release gate G-44 stays
 FAIL until the predicate exists **and** is covered by tests asserting both the
 permitted and the denied case.
+
+---
+
+## JC-008 · BR-1 database backstop does not guard conversation type changes
+
+| | |
+|---|---|
+| **Severity** | **P1** (P0 if any code path can set `conversation.type`) |
+| **Area** | `supabase/migrations/20260905093000_chat_communication.sql` |
+| **Owner** | **AI #2** |
+| **Status** | OPEN — reproduced against the live integration database |
+| **Test** | `apps/api/test/integration/schema-invariants.spec.ts` → *"JC-008: converting a teacher+parent GROUP into a DIRECT conversation must be rejected"* — **currently failing** |
+
+**Expected.** A teacher and a family contact can never be alone together in a
+`direct` conversation, by any route. The trigger's own comment states the
+guarantee: *"Even a compromised API or a manual SQL session cannot create a
+teacher↔parent 1:1 channel."*
+
+**Actual.** They can, with one `UPDATE`:
+
+```sql
+insert into chat.conversation (id, type, state) values ('1111…','class_group','open');
+insert into chat.conversation_member (conversation_id, actor_kind, actor_id, member_role)
+  values ('1111…','teacher',gen_random_uuid(),'teacher'),
+         ('1111…','contact',gen_random_uuid(),'parent');   -- legal: it is a group
+
+update chat.conversation set type='direct', direct_key='jc008' where id='1111…';
+-- UPDATE SUCCEEDED
+```
+
+**Evidence.**
+```
+ type   |     members
+--------+-----------------
+ direct | contact+teacher
+```
+
+**Impact.** The BR-1 structural backstop does not hold. It is not reachable
+through the current API — no endpoint mutates `conversation.type` today — but
+the backstop exists precisely for when the API is bypassed or a future endpoint
+is added, so its guarantee is currently false. Gate **G-01**.
+
+**Root cause.** The invariant is a property of *(conversation.type, member
+set)*. `conversation_member_br1` fires only on `chat.conversation_member`, so
+only one of the two inputs is guarded. `chat.conversation` carries just
+`conversation_set_updated_at` (a timestamp trigger). `call_participant_br1` has
+the identical shape and therefore the same gap on `chat.call.type`.
+
+**Acceptance criteria.**
+1. A trigger on `chat.conversation` re-validates the member set when `type`
+   changes; likewise on `chat.call`.
+2. The reproduction above raises `check_violation`.
+3. The failing integration test passes, and the two BR-1 positive tests still
+   pass (group membership stays legal).
+4. Test-plan **BR1-10** converted from pending to asserting.
+
+---
+
+## JC-009 · Database architecture contradicts the fixed standalone decision
+
+| | |
+|---|---|
+| **Severity** | **P0** (architectural) |
+| **Area** | migrations, `db/test/00_core_shim.sql`, `apps/api/prisma/` |
+| **Owner** | **AI #1** |
+| **Status** | OPEN — partially improving |
+| **Detail** | `docs/release/database-decision.md` (DB-1…DB-5) |
+
+**Expected.** Jawwid Chat owns its own PostgreSQL database, does not depend on
+Jawwid Core's database, integrates with Core through the approved API/webhook
+boundary, and has exactly one migration authority (SQL).
+
+**Actual.** Seven verified contradictions, itemised in `database-decision.md` §2:
+Chat declared as living inside Core's database; `chat.core_*` **SQL views** over
+`public.profiles` / `children` / `subscriptions` / `payments`; a subscription
+vocabulary mirroring Core verbatim; a Core shim whose column shapes are
+*"copied from second-school's live migrations"*; and Prisma as a second schema
+authority alongside SQL.
+
+**Evidence.** `20260905090900_chat_core_integration.sql` selects directly
+`from public.profiles`. Reproduced during environment build:
+`ERROR: relation "public.profiles" does not exist` on a standalone database.
+
+**Impact.** Chat cannot be deployed to its own database as specified. Gate
+**G-21** FAIL.
+
+**Root cause.** Built against the superseded brief, which co-located Chat with
+Core.
+
+**Improving:** the `auth.users` coupling has narrowed sharply. AI #2's rewrite
+of `093000` removed it entirely, and the whole remaining surface is **one**
+`auth.uid()` call in `090700`; `staff.auth_user_id` is a plain uuid with no FK.
+DB-1 is therefore much smaller than it first appeared.
+
+**Acceptance criteria.** DB-1, DB-2 and DB-5 complete; the integration database
+runs on plain `postgres:17` with **no** `db/integration/*` stub files; G-21 PASS.
+
+**Blocked:** DB-2 needs the approved integration boundary's transport, auth,
+payloads and delivery semantics, which are in no document available to QA.
+
+---
+
+## JC-010 · Two incompatible `chat.event_log` definitions; one silently wins
+
+| | |
+|---|---|
+| **Severity** | **P0** (silent schema divergence, runtime-only failure) |
+| **Area** | `090500_chat_logs_and_state_cache.sql` vs `093200_chat_shared_logs.sql` |
+| **Owner** | **AI #1 + AI #2** (joint) |
+| **Status** | OPEN — reproduced |
+| **Test** | `schema-invariants.spec.ts` → *"JC-010"* — 2 tests, **passing** (they pin the broken state) |
+
+**Expected.** One definition of `chat.event_log` and `chat.audit_log`.
+
+**Actual.** Two, differing fundamentally:
+
+| | AI #1 `090500` | AI #2 `093200` |
+|---|---|---|
+| `id` | `bigint generated always as identity` | `uuid default gen_random_uuid()` |
+| actor column | **`actor_type`** (CHECK) | **`actor_kind`** (no CHECK) |
+| `family_id` / `case_id` | FKs with cascade | plain uuid, no FK |
+| `type` | CHECK, ~35 values | no CHECK |
+
+AI #2 used `create table if not exists`, so in filename order AI #1's applies
+first and **AI #2's is silently skipped**:
+
+```
+NOTICE:  relation "event_log" already exists, skipping
+```
+
+**Evidence.**
+```
+insert into chat.event_log (type, actor_kind, payload) values ('message_sent','staff','{}');
+ERROR:  column "actor_kind" of relation "event_log" does not exist
+```
+Both lineages also install their own append-only trigger, so `chat.event_log`
+carries duplicates (`event_log_is_append_only`, `event_log_append_only`).
+
+**Impact.** Any AI #2 code writing `actor_kind` fails at runtime, and any event
+type outside AI #1's CHECK list is rejected. `create table if not exists` turned
+a schema conflict into a **silent** one — a merge is clean, migrations apply
+green, and the failure surfaces only when the code runs. This is the exact class
+of defect that branch reconciliation exists to catch.
+
+**Root cause.** Two lineages defining the same object under non-colliding
+filenames, with `if not exists` suppressing the collision.
+
+**Acceptance criteria.** One definition survives; the other migration is removed
+or rewritten to `alter table`; all writers agree on the column name; duplicate
+triggers removed; the two JC-010 tests are rewritten to assert the *reconciled*
+schema rather than the broken one.

@@ -10,9 +10,13 @@
 
 **Purpose:** *"talk to Jawwid, and see where my topics stand."*
 
-This is the same `thread` the admin sees (`thread.family_id` UNIQUE) with everything internal
-filtered out `[BE]`. **One continuous conversation, forever.** It does not reset when the handling
-admin changes, when coverage takes over, or when a topic is resolved (journey J1).
+This is the same parent↔admin conversation the admin sees, with everything internal filtered
+out `[BE]`. **It is continuous:** it does not reset when the Current Handler changes, when
+coverage takes over, or when a topic is resolved (journey J1).
+
+A parent's **Student Groups are separate conversations**, one per child, reached from the Groups
+tab — not content on this screen. Whether a parent has exactly one channel to Jawwid or two is
+**OD-05**, open; this screen is drawn for one.
 
 **Entry points:** the Jawwid tab · the Home card · a notification deep-link · a topic card.
 

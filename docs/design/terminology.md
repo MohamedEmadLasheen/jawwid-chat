@@ -24,8 +24,8 @@ Rules:
 | `family` | Family | الأسرة | The unit of ownership and of the inbox row. Never "customer" in UI. |
 | `contact` | Contact | جهة التواصل | A person inside a family. Show `name + relationship`. |
 | `learner` | Student | الطالب | Customer-facing word for a learner. Never "learner" in UI. |
-| `family.owner_id` | **Owner** | **المسؤول الأساسي** | Permanent. Changes only through *Change owner*. Always visible on the family header. |
-| `on_duty(family, now)` | **On duty** | **المناوب الآن** | Who may act *right now*. Additive to Owner, never a replacement for it. |
+| `family.owner_id` | **Primary Owner** | **المسؤول الأساسي** | The PRD's term. Permanent. Changes only through *Change owner*. Always visible on the family header. |
+| `on_duty(family, now)` | **Current Handler** | **المسؤول الحالي** | The PRD's term (*"Primary Owner ≠ Current Handler"*). Who may act *right now*. Additive to the Primary Owner, never a replacement for it. |
 | `on_behalf_mode=owner` | (no label) | (بدون تسمية) | The default. Showing a label here would make the normal case look exceptional. |
 | `on_behalf_mode=coverage` | Covering | تغطية | Shown on the message and on the family header. |
 | `on_behalf_mode=assist` | Assist | مساندة | Shown on the message. Always paired with the reason. |
@@ -128,7 +128,7 @@ Call history · سجل المكالمات.
 ## 8. Arabic writing rules
 
 1. **Gender.** Prefer the person's *name* over a gendered role noun wherever the sentence allows
-   it: «دينا تغطي هذه الأسرة» not «المسؤولة المناوبة». Where a role noun is unavoidable, use the
+   it: «نور تغطي هذه الأسرة» not «المسؤولة المناوبة». Where a role noun is unavoidable, use the
    neutral nominal construction (`جهة التواصل`, `المناوبة الحالية`) rather than a gendered agent
    noun. See OQ-6 — pending confirmation, this is the working rule.
 2. **Numerals.** Western digits `0–9` in both locales, always (see `decisions.md` DD-09).

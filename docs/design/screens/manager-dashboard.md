@@ -140,8 +140,9 @@ LTR; the drill-through chevron mirrors.
 - **Config change while the dashboard is open** — thresholds re-read from `config`; badges may
   re-level. A toast says *"Thresholds updated"* so a manager is not confused by a level that
   moved without the work moving.
-- **Score visible in a screenshot** — acceptable here and **only** here; nowhere else in the
-  product may a score be rendered (DQ-01).
+- **A score visible in a screenshot** — the *workload* score is legal here and on
+  `screens/workload.md`, always beside its breakdown. An **attention** score is legal nowhere,
+  in any surface, ever (DQ-01). The two are different numbers and only one of them is forbidden.
 
 ## 12. Backend dependencies
 

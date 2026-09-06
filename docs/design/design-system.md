@@ -364,7 +364,8 @@ Used for: offline, realtime disconnected, end-of-shift, unattended count.
 ### 7.7 Conversation components
 
 `ConversationHeader` — family name (`type.h2`), then a **two-line responsibility block**:
-line 1 `Owner · {name}`, line 2 `On duty · {name}` **only when it differs from the owner**.
+line 1 `Primary Owner · {name}`, line 2 `Current Handler · {name}` **only when it differs from the
+Primary Owner**.
 This is the component that carries risk R2; the owner line is never replaced, only joined.
 
 `MessageBubble` — max width 78% (mobile) / 620px (admin). `radius.lg` with `radius.bubbleTail`

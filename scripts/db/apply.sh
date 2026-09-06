@@ -13,7 +13,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-MIGRATIONS="$ROOT/supabase/migrations"
+# MIGRATIONS_DIR lets the integration harness point at a composed set while
+# branch reconciliation is pending (docs/release/branch-reconciliation.md).
+# Defaults to the repository migrations, so existing callers are unaffected.
+MIGRATIONS="${MIGRATIONS_DIR:-$ROOT/supabase/migrations}"
 PSQL="${PSQL:-psql -v ON_ERROR_STOP=1 ${DATABASE_URL:-}}"
 
 run_sql() { echo "$1" | $PSQL -q -t -A; }

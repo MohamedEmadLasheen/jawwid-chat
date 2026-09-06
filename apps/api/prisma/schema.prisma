@@ -1,675 +1,510 @@
-// Jawwid Chat - database schema
+// Jawwid Chat -- Prisma mapping layer.
 //
-// OWNERSHIP
-//   Section A "PLATFORM" models are AI #1's domain. They exist here only as the
-//   minimum shells the communication engine needs in order to run and be tested.
-//   AI #1 replaces/extends them. Do not add business logic to them here.
+// THE SQL MIGRATIONS IN supabase/migrations ARE AUTHORITATIVE FOR DDL.
+// This file is a typed access layer mapped onto that schema; it never defines
+// the schema. `npm run db:drift` proves the two agree.
 //
-//   Section B "COMMUNICATION" models are AI #2's domain (thread, message,
-//   attachments, reactions, receipts, handoff, outbox, notifications).
-//
-//   Section C "DESIGN-ONLY" models are declared for extensibility per the AI #2
-//   brief but are NOT implemented in this MVP, because the authoritative product
-//   brief (docs/brief) does not include them in its MVP scope. See
-//   docs/communication/scope-decisions.md.
+// Enumerations are text + check constraint in SQL (AI #1's convention), so they
+// surface here as String. The allowed values live in src/communication/contracts/vocab.ts.
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  schemas  = ["chat"]
 }
 
 // =====================================================================
-// SECTION A - PLATFORM SHELLS (AI #1 OWNS - minimal, replace me)
+// AI #1's tables -- read-mostly from the communication engine.
 // =====================================================================
 
-enum StaffRole {
-  ADMIN
-  COVERAGE
-  MANAGER
-  FINANCE
-  TECHNICAL
-  ACADEMIC
-}
-
-enum Presence {
-  ONLINE
-  AWAY
-  OFFLINE
-}
-
-enum Locale {
-  AR
-  EN
-}
-
-enum FamilyTier {
-  STANDARD
-  PRIORITY
-}
-
-/// AI #1 OWNS. Shell only.
 model Staff {
-  id             String    @id @default(uuid())
+  id             String    @id @default(uuid()) @db.Uuid
+  authUserId     String?   @map("auth_user_id") @db.Uuid
   name           String
-  role           StaffRole
-  presence       Presence  @default(OFFLINE)
-  locale         Locale    @default(AR)
-  lastActivityAt DateTime?
-  isActive       Boolean   @default(true)
-  createdAt      DateTime  @default(now())
+  role           String
+  presence       String    @default("offline")
+  lastActivityAt DateTime? @map("last_activity_at") @db.Timestamptz
+  isActive       Boolean   @map("is_active") @default(true)
+  leftAt         DateTime? @map("left_at") @db.Timestamptz
+  createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
+  updatedAt      DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
-  ownedFamilies    Family[]        @relation("FamilyOwner")
-  stickyThreads    Thread[]        @relation("ThreadStickyHandler")
-  lastStaffThreads Thread[]        @relation("ThreadLastStaff")
-  handoffsFrom     Handoff[]       @relation("HandoffFrom")
-  handoffsTo       Handoff[]       @relation("HandoffTo")
+  ownedFamilies  Family[]        @relation("FamilyOwner")
+  stickyOf       Conversation[]  @relation("ConversationStickyHandler")
 
-  @@index([role, isActive])
   @@map("staff")
+  @@schema("chat")
 }
 
-/// AI #1 OWNS. Shell only.
 model Family {
-  id            String     @id @default(uuid())
-  displayName   String
-  ownerId       String
-  owner         Staff      @relation("FamilyOwner", fields: [ownerId], references: [id])
-  tier          FamilyTier @default(STANDARD)
-  language      Locale     @default(AR)
-  createdAt     DateTime   @default(now())
+  id               String   @id @default(uuid()) @db.Uuid
+  displayName      String   @map("display_name")
+  ownerId          String   @map("owner_id") @db.Uuid
+  owner            Staff    @relation("FamilyOwner", fields: [ownerId], references: [id])
+  primaryContactId String?  @map("primary_contact_id") @db.Uuid
+  tier             String   @default("standard")
+  state            String   @default("onboarding")
+  language         String   @default("ar")
+  createdAt        DateTime @map("created_at") @db.Timestamptz @default(now())
+  updatedAt        DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
   contacts      Contact[]
+  learners      Learner[]
   threads       Thread[]
+  conversations Conversation[]
 
-  @@index([ownerId])
   @@map("family")
+  @@schema("chat")
 }
 
-/// AI #1 OWNS. Shell only. `can*` capability flags per brief section 2.
 model Contact {
-  id         String  @id @default(uuid())
-  familyId   String
-  family     Family  @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  appUserId  String? @unique
-  name       String
-  locale     Locale  @default(AR)
-  canMessage Boolean @default(true)
-  isActive   Boolean @default(true)
+  id                String   @id @default(uuid()) @db.Uuid
+  familyId          String   @map("family_id") @db.Uuid
+  family            Family   @relation(fields: [familyId], references: [id])
+  appUserId         String?  @map("app_user_id") @db.Uuid
+  name              String
+  relationship      String?
+  rolePreset        String   @map("role_preset")
+  canMessage        Boolean  @map("can_message") @default(false)
+  canViewProgress   Boolean  @map("can_view_progress")
+  canManageSchedule Boolean  @map("can_manage_schedule")
+  canManageBilling  Boolean  @map("can_manage_billing")
+  canManageContacts Boolean  @map("can_manage_contacts")
+  canCancel         Boolean  @map("can_cancel")
+  isActive          Boolean  @map("is_active") @default(true)
+  createdAt         DateTime @map("created_at") @db.Timestamptz @default(now())
+  updatedAt         DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
-  @@index([familyId])
   @@map("contact")
+  @@schema("chat")
 }
 
-/// AI #1 OWNS. Append-only. Brief section 3: "exist from day one".
-model EventLog {
-  id        String   @id @default(uuid())
-  familyId  String?
-  actorType String
-  actorId   String?
-  type      String
-  payload   Json     @default("{}")
-  at        DateTime @default(now())
+model Learner {
+  id          String    @id @default(uuid()) @db.Uuid
+  familyId    String    @map("family_id") @db.Uuid
+  family      Family    @relation(fields: [familyId], references: [id])
+  name        String
+  level       String?
+  /// AI #1 owns teacher identity (correction C-1). Bare uuid until it lands.
+  teacherId   String?   @map("teacher_id") @db.Uuid
+  nextClassAt DateTime? @map("next_class_at") @db.Timestamptz
+  createdAt   DateTime  @map("created_at") @db.Timestamptz @default(now())
+  updatedAt   DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
-  @@index([familyId, at])
-  @@index([type, at])
-  @@map("event_log")
+  conversations Conversation[]
+
+  @@map("learner")
+  @@schema("chat")
 }
 
-/// AI #1 OWNS. Append-only, manager-only read. `reason` is NOT NULL by design.
-model AuditLog {
-  id       String   @id @default(uuid())
-  actorId  String?
-  action   String
-  entity   String
-  entityId String
-  before   Json?
-  after    Json?
-  reason   String
-  at       DateTime @default(now())
+/// The family's continuous customer-success record. Cases, tasks, handoffs and
+/// the attention engine hang off it. Communication channels are Conversations.
+model Thread {
+  id                    String    @id @default(uuid()) @db.Uuid
+  familyId              String    @unique @map("family_id") @db.Uuid
+  family                Family    @relation(fields: [familyId], references: [id])
+  lastCustomerMessageAt DateTime? @map("last_customer_message_at") @db.Timestamptz
+  lastStaffMessageAt    DateTime? @map("last_staff_message_at") @db.Timestamptz
+  lastStaffId           String?   @map("last_staff_id") @db.Uuid
+  needsReply            Boolean?  @map("needs_reply")
+  stickyHandlerId       String?   @map("sticky_handler_id") @db.Uuid
+  stickyUntil           DateTime? @map("sticky_until") @db.Timestamptz
+  createdAt             DateTime  @map("created_at") @db.Timestamptz @default(now())
+  updatedAt             DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
-  @@index([entity, entityId, at])
-  @@map("audit_log")
+  conversations Conversation[]
+
+  @@map("thread")
+  @@schema("chat")
 }
 
-/// AI #1 OWNS. Brief: "All thresholds/weights/windows live in a config table."
 model Config {
   key       String   @id
   value     Json
   scope     String   @default("global")
-  updatedBy String?
-  updatedAt DateTime @updatedAt @default(now())
+  updatedAt DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
   @@map("config")
+  @@schema("chat")
+}
+
+model EventLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  familyId  String?  @map("family_id") @db.Uuid
+  caseId    String?  @map("case_id") @db.Uuid
+  actorKind String?  @map("actor_kind")
+  actorId   String?  @map("actor_id") @db.Uuid
+  type      String
+  payload   Json     @default("{}")
+  at        DateTime @db.Timestamptz @default(now())
+
+  @@map("event_log")
+  @@schema("chat")
+}
+
+model AuditLog {
+  id       String   @id @default(uuid()) @db.Uuid
+  actorId  String?  @map("actor_id") @db.Uuid
+  action   String
+  entity   String
+  entityId String   @map("entity_id") @db.Uuid
+  before   Json?
+  after    Json?
+  reason   String
+  at       DateTime @db.Timestamptz @default(now())
+
+  @@map("audit_log")
+  @@schema("chat")
 }
 
 // =====================================================================
-// SECTION B - COMMUNICATION DOMAIN (AI #2 OWNS)
+// AI #2 -- communication domain
 // =====================================================================
 
-enum ThreadKind {
-  FAMILY
-  STUDENT_GROUP
-  CLASS_GROUP
-  OFFICIAL
+model Conversation {
+  id        String  @id @default(uuid()) @db.Uuid
+  type      String
+  familyId  String? @map("family_id") @db.Uuid
+  family    Family? @relation(fields: [familyId], references: [id])
+  threadId  String? @map("thread_id") @db.Uuid
+  thread    Thread? @relation(fields: [threadId], references: [id])
+  learnerId String? @map("learner_id") @db.Uuid
+  learner   Learner? @relation(fields: [learnerId], references: [id])
+  title     String?
+
+  /// Canonical id of a 1:1 channel; makes a duplicate direct conversation impossible.
+  directKey String? @unique @map("direct_key")
+
+  state String @default("open")
+
+  teacherRequiresApproval Boolean @map("teacher_requires_approval") @default(true)
+  parentRequiresApproval  Boolean @map("parent_requires_approval") @default(true)
+
+  stickyHandlerId String?   @map("sticky_handler_id") @db.Uuid
+  stickyHandler   Staff?    @relation("ConversationStickyHandler", fields: [stickyHandlerId], references: [id])
+  stickyUntil     DateTime? @map("sticky_until") @db.Timestamptz
+
+  /// Server-assigned monotonic message counter.
+  lastSeq BigInt @map("last_seq") @default(0)
+
+  lastCustomerMessageAt DateTime? @map("last_customer_message_at") @db.Timestamptz
+  lastStaffMessageAt    DateTime? @map("last_staff_message_at") @db.Timestamptz
+  lastActivityAt        DateTime  @map("last_activity_at") @db.Timestamptz @default(now())
+  resolvedAt            DateTime? @map("resolved_at") @db.Timestamptz
+  archivedAt            DateTime? @map("archived_at") @db.Timestamptz
+  createdAt             DateTime  @map("created_at") @db.Timestamptz @default(now())
+  updatedAt             DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  members      ConversationMember[]
+  messages     Message[]
+  approvals    MessageApproval[]
+  participants ConversationParticipantState[]
+  calls        Call[]
+  notifications Notification[]
+
+  @@map("conversation")
+  @@schema("chat")
 }
 
-enum AuthorType {
-  CONTACT
-  STAFF
-  SYSTEM
-}
+/// The explicit participant set BR-1 is enforced against.
+model ConversationMember {
+  id             String       @id @default(uuid()) @db.Uuid
+  conversationId String       @map("conversation_id") @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  actorKind      String       @map("actor_kind")
+  actorId        String       @map("actor_id") @db.Uuid
+  memberRole     String       @map("member_role")
+  isSilent       Boolean      @map("is_silent") @default(false)
+  addedBy        String?      @map("added_by") @db.Uuid
+  joinedAt       DateTime     @map("joined_at") @db.Timestamptz @default(now())
+  leftAt         DateTime?    @map("left_at") @db.Timestamptz
 
-/// Brief section 3 invariant: "Every staff message carries on_behalf_mode."
-enum OnBehalfMode {
-  OWNER
-  COVERAGE
-  ASSIST
-  ESCALATION
-}
-
-enum MessageType {
-  TEXT
-  IMAGE
-  VIDEO
-  VOICE
-  FILE
-  SYSTEM
-}
-
-/// Brief section 3: message.visibility(customer|internal). Audience, not moderation.
-enum MessageVisibility {
-  CUSTOMER
-  INTERNAL
-}
-
-/// Moderation status. Orthogonal to visibility. PUBLISHED in MVP; PENDING/REJECTED
-/// exist so the approval workflow can be switched on without a migration.
-enum ModerationStatus {
-  PUBLISHED
-  PENDING
-  REJECTED
-}
-
-enum MessageOrigin {
-  USER
-  AUTOMATION
-  BROADCAST
-}
-
-enum ReceiptState {
-  SENT
-  DELIVERED
-  READ
-}
-
-enum HandoffReason {
-  SHIFT_END
-  ABSENCE
-  FRIDAY
-  ASSIST
-  ESCALATION
-  STICKY_EXPIRED
-}
-
-/// One continuous thread per family (brief section 1 + section 12 non-negotiable:
-/// "thread is UNIQUE per family; cases never create a second thread").
-/// Enforced by @@unique([familyId, kind]): a family has at most one FAMILY thread.
-/// Cases layer on top of this thread and never create a second one.
-model Thread {
-  id       String     @id @default(uuid())
-  kind     ThreadKind @default(FAMILY)
-  familyId String
-  family   Family     @relation(fields: [familyId], references: [id], onDelete: Cascade)
-
-  // Derived-state inputs. needs_reply = lastCustomerMessageAt > lastStaffMessageAt.
-  lastCustomerMessageAt DateTime?
-  lastStaffMessageAt    DateTime?
-  lastStaffId           String?
-  lastStaff             Staff?    @relation("ThreadLastStaff", fields: [lastStaffId], references: [id])
-
-  // Stickiness (brief section 4).
-  stickyHandlerId String?
-  stickyHandler   Staff?    @relation("ThreadStickyHandler", fields: [stickyHandlerId], references: [id])
-  stickyUntil     DateTime?
-
-  /// Monotonic per-thread message sequence. Assigned under a row lock so ordering
-  /// is deterministic and gap-free regardless of device clocks.
-  lastSeq BigInt @default(0)
-
-  lastActivityAt DateTime @default(now())
-  resolvedAt     DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  messages      Message[]
-  handoffs      Handoff[]
-  participants  ThreadParticipantState[]
-
-  @@unique([familyId, kind])
-  @@index([lastActivityAt])
-  @@map("thread")
-}
-
-/// Per-user, per-thread preferences and read cursor.
-/// Brief-adjacent: archive/mute/pin are per-user, never global thread state.
-model ThreadParticipantState {
-  id       String @id @default(uuid())
-  threadId String
-  thread   Thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  /// Staff.id or Contact.appUserId. Resolved through IdentityService.
-  userId   String
-
-  lastReadSeq  BigInt    @default(0)
-  archivedAt   DateTime?
-  mutedUntil   DateTime?
-  pinnedAt     DateTime?
-  updatedAt    DateTime  @updatedAt
-
-  @@unique([threadId, userId])
-  @@index([userId])
-  @@map("thread_participant_state")
+  @@map("conversation_member")
+  @@schema("chat")
 }
 
 model Message {
-  id       String @id @default(uuid())
-  threadId String
-  thread   Thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  id             String        @id @default(uuid()) @db.Uuid
+  conversationId String?       @map("conversation_id") @db.Uuid
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  threadId       String?       @map("thread_id") @db.Uuid
+  caseId         String?       @map("case_id") @db.Uuid
 
-  /// Cases are the ops domain (AI #4/#1). Nullable link, deliberately no FK here
-  /// so the communication engine does not take ownership of the case table.
-  caseId String?
+  authorType   String  @map("author_type")
+  authorId     String? @map("author_id") @db.Uuid
+  onBehalfMode String? @map("on_behalf_mode")
 
-  authorType   AuthorType
-  /// Staff.id when authorType=STAFF, Contact.id when CONTACT, null when SYSTEM.
-  authorId     String?
-  onBehalfMode OnBehalfMode?
-
-  type       MessageType       @default(TEXT)
+  type       String @default("text")
   body       String?
-  visibility MessageVisibility @default(CUSTOMER)
-  moderation ModerationStatus  @default(PUBLISHED)
-  origin     MessageOrigin     @default(USER)
+  visibility String
+  moderation String @default("published")
+  origin     String @default("user")
 
-  /// Deterministic ordering. Unique within a thread.
-  seq BigInt
+  seq BigInt?
 
-  replyToMessageId String?
+  replyToMessageId String?   @map("reply_to_message_id") @db.Uuid
   replyTo          Message?  @relation("MessageReply", fields: [replyToMessageId], references: [id])
   replies          Message[] @relation("MessageReply")
 
-  /// Client-generated idempotency key. Unique per (thread, author).
-  clientMessageId String?
+  clientMessageId String? @map("client_message_id")
 
-  /// Soft delete. Brief: never silently destroy operational history.
-  deletedAt       DateTime?
-  deletedBy       String?
-  deletedForAll   Boolean   @default(false)
-  redactedReason  String?
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+  deletedBy      String?   @map("deleted_by") @db.Uuid
+  deletedForAll  Boolean   @map("deleted_for_all") @default(false)
+  redactedReason String?   @map("redacted_reason")
 
-  createdAt DateTime @default(now())
+  /// Superseded by MessageAttachment; kept because AI #1 defined it NOT NULL.
+  attachmentsJson Json @map("attachments") @default("[]")
 
-  attachments  MessageAttachment[]
-  reactions    MessageReaction[]
-  receipts     MessageReceipt[]
-  hiddenFor    MessageHiddenFor[]
+  createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
 
-  @@unique([threadId, seq])
-  @@unique([threadId, authorId, clientMessageId], name: "message_idempotency")
-  @@index([threadId, seq(sort: Desc)])
-  @@index([threadId, createdAt])
-  @@index([moderation, threadId])
+  attachments MessageAttachment[]
+  reactions   MessageReaction[]
+  receipts    MessageReceipt[]
+  hiddenFor   MessageHiddenFor[]
+  approval    MessageApproval?
+
   @@map("message")
+  @@schema("chat")
 }
 
-/// "Delete for me" - per-user hiding, does not affect other participants.
-model MessageHiddenFor {
-  messageId String
-  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  userId    String
-  hiddenAt  DateTime @default(now())
-
-  @@id([messageId, userId])
-  @@map("message_hidden_for")
-}
-
-/// Binary content lives in object storage. Postgres holds metadata only.
 model MessageAttachment {
-  id        String  @id @default(uuid())
-  messageId String
-  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  id                 String   @id @default(uuid()) @db.Uuid
+  messageId          String   @map("message_id") @db.Uuid
+  message            Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  kind               String
+  objectKey          String   @unique @map("object_key")
+  mimeType           String   @map("mime_type")
+  byteSize           Int      @map("byte_size")
+  checksumSha256     String?  @map("checksum_sha256")
+  originalName       String?  @map("original_name")
+  durationMs         Int?     @map("duration_ms")
+  width              Int?
+  height             Int?
+  thumbnailObjectKey String?  @map("thumbnail_object_key")
+  createdAt          DateTime @map("created_at") @db.Timestamptz @default(now())
 
-  kind        MessageType
-  objectKey   String      @unique
-  mimeType    String
-  byteSize    Int
-  checksumSha256 String?
-  originalName   String?
-
-  /// Voice notes and video.
-  durationMs Int?
-  /// Images and video.
-  width  Int?
-  height Int?
-  thumbnailObjectKey String?
-
-  createdAt DateTime @default(now())
-
-  @@index([messageId])
   @@map("message_attachment")
+  @@schema("chat")
 }
 
-/// One reaction per user per message. Changing a reaction replaces it.
 model MessageReaction {
-  id        String   @id @default(uuid())
-  messageId String
+  id        String   @id @default(uuid()) @db.Uuid
+  messageId String   @map("message_id") @db.Uuid
   message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  userId    String
+  actorId   String   @map("actor_id") @db.Uuid
   emoji     String
-  createdAt DateTime @default(now())
+  createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
 
-  @@unique([messageId, userId])
-  @@index([messageId])
+  @@unique([messageId, actorId])
   @@map("message_reaction")
+  @@schema("chat")
 }
 
-/// Per-recipient delivery state. Transitions are monotonic: SENT < DELIVERED < READ.
 model MessageReceipt {
-  id        String       @id @default(uuid())
-  messageId String
-  message   Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  userId    String
-  state     ReceiptState @default(SENT)
-  sentAt      DateTime  @default(now())
-  deliveredAt DateTime?
-  readAt      DateTime?
+  id          String    @id @default(uuid()) @db.Uuid
+  messageId   String    @map("message_id") @db.Uuid
+  message     Message   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  actorId     String    @map("actor_id") @db.Uuid
+  state       String    @default("sent")
+  sentAt      DateTime  @map("sent_at") @db.Timestamptz @default(now())
+  deliveredAt DateTime? @map("delivered_at") @db.Timestamptz
+  readAt      DateTime? @map("read_at") @db.Timestamptz
 
-  @@unique([messageId, userId])
-  @@index([userId, state])
+  @@unique([messageId, actorId])
   @@map("message_receipt")
+  @@schema("chat")
 }
 
-/// Brief section 3. Written whenever a thread changes hands.
-model Handoff {
-  id         String        @id @default(uuid())
-  threadId   String
-  thread     Thread        @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  fromStaffId String?
-  fromStaff   Staff?       @relation("HandoffFrom", fields: [fromStaffId], references: [id])
-  toStaffId   String?
-  toStaff     Staff?       @relation("HandoffTo", fields: [toStaffId], references: [id])
-  reason      HandoffReason
-  summary     String?
-  note        String?
-  createdAt      DateTime  @default(now())
-  acknowledgedAt DateTime?
+model MessageHiddenFor {
+  messageId String   @map("message_id") @db.Uuid
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  actorId   String   @map("actor_id") @db.Uuid
+  hiddenAt  DateTime @map("hidden_at") @db.Timestamptz @default(now())
 
-  @@index([threadId, createdAt])
-  @@index([toStaffId, acknowledgedAt])
-  @@map("handoff")
+  @@id([messageId, actorId])
+  @@map("message_hidden_for")
+  @@schema("chat")
 }
 
-// ---------------------------------------------------------------------
-// Reliable delivery: transactional outbox
-// ---------------------------------------------------------------------
+model ConversationParticipantState {
+  id             String       @id @default(uuid()) @db.Uuid
+  conversationId String       @map("conversation_id") @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  actorId        String       @map("actor_id") @db.Uuid
+  lastReadSeq    BigInt       @map("last_read_seq") @default(0)
+  archivedAt     DateTime?    @map("archived_at") @db.Timestamptz
+  mutedUntil     DateTime?    @map("muted_until") @db.Timestamptz
+  pinnedAt       DateTime?    @map("pinned_at") @db.Timestamptz
+  updatedAt      DateTime     @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
-enum OutboxStatus {
-  PENDING
-  PUBLISHED
-  FAILED
+  @@unique([conversationId, actorId])
+  @@map("conversation_participant_state")
+  @@schema("chat")
 }
 
-/// Written in the same transaction as the domain change, drained by a worker.
-/// Guarantees a committed message always produces its realtime/notification effects.
+model MessageApproval {
+  id              String       @id @default(uuid()) @db.Uuid
+  messageId       String       @unique @map("message_id") @db.Uuid
+  message         Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  conversationId  String       @map("conversation_id") @db.Uuid
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  requestedBy     String       @map("requested_by") @db.Uuid
+  approverId      String?      @map("approver_id") @db.Uuid
+  decision        String       @default("pending")
+  rejectionReason String?      @map("rejection_reason")
+  createdAt       DateTime     @map("created_at") @db.Timestamptz @default(now())
+  decidedAt       DateTime?    @map("decided_at") @db.Timestamptz
+
+  @@map("message_approval")
+  @@schema("chat")
+}
+
 model OutboxEvent {
-  id          String       @id @default(uuid())
+  id          String    @id @default(uuid()) @db.Uuid
   type        String
   payload     Json
-  status      OutboxStatus @default(PENDING)
-  attempts    Int          @default(0)
-  lastError   String?
-  availableAt DateTime     @default(now())
-  createdAt   DateTime     @default(now())
-  publishedAt DateTime?
+  status      String    @default("pending")
+  attempts    Int       @default(0)
+  lastError   String?   @map("last_error")
+  availableAt DateTime  @map("available_at") @db.Timestamptz @default(now())
+  createdAt   DateTime  @map("created_at") @db.Timestamptz @default(now())
+  publishedAt DateTime? @map("published_at") @db.Timestamptz
 
-  @@index([status, availableAt])
   @@map("outbox_event")
+  @@schema("chat")
 }
 
-// ---------------------------------------------------------------------
-// Notification + reminder engine
-// ---------------------------------------------------------------------
-
-enum NotificationChannel {
-  PUSH
-  IN_APP
-}
-
-enum NotificationStatus {
-  SCHEDULED
-  SENT
-  DELIVERED
-  OPENED
-  FAILED
-  SUPPRESSED
-  CANCELLED
-}
-
-enum NotificationPriority {
-  CRITICAL
-  HIGH
-  NORMAL
-  LOW
-}
-
-enum DevicePlatform {
-  ANDROID
-  IOS
-  WEB
-}
-
-/// A user may be signed in on many devices. Never assume one user = one device.
 model DeviceToken {
-  id         String         @id @default(uuid())
-  userId     String
-  token      String         @unique
-  platform   DevicePlatform
-  /// Separate VoIP/CallKit token channel.
-  isVoip     Boolean        @default(false)
-  locale     Locale         @default(AR)
-  isActive   Boolean        @default(true)
-  lastSeenAt DateTime       @default(now())
-  createdAt  DateTime       @default(now())
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String   @map("actor_id") @db.Uuid
+  token      String   @unique
+  platform   String
+  isVoip     Boolean  @map("is_voip") @default(false)
+  locale     String   @default("ar")
+  isActive   Boolean  @map("is_active") @default(true)
+  lastSeenAt DateTime @map("last_seen_at") @db.Timestamptz @default(now())
+  createdAt  DateTime @map("created_at") @db.Timestamptz @default(now())
 
-  @@index([userId, isActive])
   @@map("device_token")
+  @@schema("chat")
 }
 
-/// Versioned bilingual templates. Message text never lives in controllers.
 model NotificationTemplate {
-  id        String   @id @default(uuid())
+  id        String   @id @default(uuid()) @db.Uuid
   key       String
+  locale    String
   version   Int      @default(1)
-  locale    Locale
   title     String
   body      String
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
+  isActive  Boolean  @map("is_active") @default(true)
+  createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
 
   @@unique([key, locale, version])
-  @@index([key, locale, isActive])
   @@map("notification_template")
+  @@schema("chat")
 }
 
-/// Config-driven reminder rules. Brief section 9 timers are seeded as rows, never
-/// hardcoded into business logic.
 model NotificationRule {
-  id            String               @id @default(uuid())
-  key           String               @unique
-  eventType     String
-  /// Signed seconds relative to the anchor time. -86400 = 24h before.
-  offsetSeconds Int                  @default(0)
-  templateKey   String
-  recipientRole String
-  channel       NotificationChannel  @default(PUSH)
-  priority      NotificationPriority @default(NORMAL)
-  /// CRITICAL and call notifications ignore quiet hours.
-  respectQuietHours Boolean          @default(true)
-  enabled       Boolean              @default(true)
-  updatedAt     DateTime             @updatedAt @default(now())
+  key               String   @id
+  eventType         String   @map("event_type")
+  offsetSeconds     Int      @map("offset_seconds") @default(0)
+  templateKey       String   @map("template_key")
+  recipientRole     String   @map("recipient_role")
+  channel           String   @default("push")
+  priority          String   @default("normal")
+  respectQuietHours Boolean  @map("respect_quiet_hours") @default(true)
+  enabled           Boolean  @default(true)
+  updatedAt         DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
-  @@index([eventType, enabled])
+  notifications Notification[]
+
   @@map("notification_rule")
+  @@schema("chat")
 }
 
-/// One row per intended delivery. `dedupeKey` is the single source of
-/// "this notification has already been accounted for".
 model Notification {
-  id        String @id @default(uuid())
-  /// Deterministic, e.g. no_reply_reminder:thread_x:24h:user_y
-  dedupeKey String @unique
+  id          String  @id @default(uuid()) @db.Uuid
+  /// THE deduplication guarantee.
+  dedupeKey   String  @unique @map("dedupe_key")
+  ruleKey     String? @map("rule_key")
+  rule        NotificationRule? @relation(fields: [ruleKey], references: [key])
+  templateKey String  @map("template_key")
+  eventType   String  @map("event_type")
+  recipientId String  @map("recipient_id") @db.Uuid
+  locale      String  @default("ar")
+  channel     String  @default("push")
+  priority    String  @default("normal")
 
-  ruleKey     String?
-  templateKey String
-  eventType   String
-  recipientId String
-  locale      Locale               @default(AR)
-  channel     NotificationChannel  @default(PUSH)
-  priority    NotificationPriority @default(NORMAL)
+  familyId       String?       @map("family_id") @db.Uuid
+  conversationId String?       @map("conversation_id") @db.Uuid
+  conversation   Conversation? @relation(fields: [conversationId], references: [id])
+  variables      Json    @default("{}")
 
-  familyId  String?
-  threadId  String?
-  variables Json    @default("{}")
+  status      String    @default("scheduled")
+  scheduledAt DateTime  @map("scheduled_at") @db.Timestamptz
+  sentAt      DateTime? @map("sent_at") @db.Timestamptz
+  deliveredAt DateTime? @map("delivered_at") @db.Timestamptz
+  openedAt    DateTime? @map("opened_at") @db.Timestamptz
+  failedAt    DateTime? @map("failed_at") @db.Timestamptz
+  failureCode String?   @map("failure_code")
+  attempts    Int       @default(0)
+  createdAt   DateTime  @map("created_at") @db.Timestamptz @default(now())
 
-  status      NotificationStatus @default(SCHEDULED)
-  scheduledAt DateTime
-  sentAt      DateTime?
-  deliveredAt DateTime?
-  openedAt    DateTime?
-  failedAt    DateTime?
-  failureCode String?
-  attempts    Int      @default(0)
-  createdAt   DateTime @default(now())
-
-  @@index([status, scheduledAt])
-  @@index([recipientId, createdAt])
   @@map("notification")
+  @@schema("chat")
 }
 
-/// Quiet hours per user, in their own timezone. Configurable, not invented rules.
 model QuietHours {
-  userId    String @id
-  timezone  String @default("Africa/Cairo")
-  /// Minutes from local midnight. 1320 = 22:00, 480 = 08:00.
-  startMinute Int  @default(1320)
-  endMinute   Int  @default(480)
+  actorId     String  @id @map("actor_id") @db.Uuid
+  timezone    String  @default("Africa/Cairo")
+  startMinute Int     @map("start_minute") @default(1320)
+  endMinute   Int     @map("end_minute") @default(480)
   enabled     Boolean @default(true)
 
   @@map("quiet_hours")
+  @@schema("chat")
 }
 
-// =====================================================================
-// SECTION C - DESIGN-ONLY (declared, deliberately NOT implemented in MVP)
-// =====================================================================
-// The authoritative product brief's MVP scope (section 10) contains no student
-// groups, no message approval, and no calling. These models exist so the schema
-// is extensible without a rewrite if product adds them. No service in this
-// codebase reads or writes them. See docs/communication/scope-decisions.md.
-
-enum GroupMemberRole {
-  PARENT
-  TEACHER
-  ADMIN
-  OBSERVER
-}
-
-/// DESIGN-ONLY. Not implemented.
-model StudentGroup {
-  id         String   @id @default(uuid())
-  familyId   String
-  learnerId  String
-  threadId   String?  @unique
-  title      String
-  archivedAt DateTime?
-  teacherRequiresApproval Boolean @default(true)
-  parentRequiresApproval  Boolean @default(true)
-  createdAt  DateTime @default(now())
-
-  members StudentGroupMember[]
-
-  @@unique([learnerId])
-  @@map("student_group")
-}
-
-/// DESIGN-ONLY. Not implemented.
-model StudentGroupMember {
-  id       String          @id @default(uuid())
-  groupId  String
-  group    StudentGroup    @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  userId   String
-  role     GroupMemberRole
-  isSilent Boolean         @default(false)
-  joinedAt DateTime        @default(now())
-  leftAt   DateTime?
-
-  @@unique([groupId, userId])
-  @@map("student_group_member")
-}
-
-/// DESIGN-ONLY. Not implemented.
-model MessageApproval {
-  id          String    @id @default(uuid())
-  messageId   String    @unique
-  approverId  String?
-  decidedAt   DateTime?
-  rejectionReason String?
-  createdAt   DateTime  @default(now())
-
-  @@map("message_approval")
-}
-
-enum CallType {
-  DIRECT
-  GROUP
-}
-
-enum CallOutcome {
-  ANSWERED
-  MISSED
-  DECLINED
-}
-
-/// DESIGN-ONLY. Not implemented. No audio recording in MVP.
 model Call {
-  id          String       @id @default(uuid())
-  threadId    String?
-  familyId    String?
-  initiatorId String
-  type        CallType     @default(DIRECT)
-  roomName    String       @unique
-  startedAt   DateTime     @default(now())
-  endedAt     DateTime?
-  durationSeconds Int?
-  outcome     CallOutcome?
+  id              String       @id @default(uuid()) @db.Uuid
+  conversationId  String       @map("conversation_id") @db.Uuid
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  familyId        String?      @map("family_id") @db.Uuid
+  initiatorId     String       @map("initiator_id") @db.Uuid
+  type            String
+  /// Server-minted. A client-supplied room name is never trusted.
+  roomName        String       @unique @map("room_name")
+  status          String       @default("ringing")
+  outcome         String?
+  startedAt       DateTime     @map("started_at") @db.Timestamptz @default(now())
+  answeredAt      DateTime?    @map("answered_at") @db.Timestamptz
+  endedAt         DateTime?    @map("ended_at") @db.Timestamptz
+  durationSeconds Int?         @map("duration_seconds")
+  createdAt       DateTime     @map("created_at") @db.Timestamptz @default(now())
 
   participants CallParticipant[]
 
-  @@index([familyId, startedAt])
   @@map("call")
+  @@schema("chat")
 }
 
-/// DESIGN-ONLY. Not implemented.
 model CallParticipant {
-  id       String    @id @default(uuid())
-  callId   String
-  call     Call      @relation(fields: [callId], references: [id], onDelete: Cascade)
-  userId   String
-  joinedAt DateTime?
-  leftAt   DateTime?
+  id        String    @id @default(uuid()) @db.Uuid
+  callId    String    @map("call_id") @db.Uuid
+  call      Call      @relation(fields: [callId], references: [id], onDelete: Cascade)
+  actorId   String    @map("actor_id") @db.Uuid
+  actorKind String    @map("actor_kind")
+  invitedAt DateTime  @map("invited_at") @db.Timestamptz @default(now())
+  joinedAt  DateTime? @map("joined_at") @db.Timestamptz
+  leftAt    DateTime? @map("left_at") @db.Timestamptz
 
-  @@unique([callId, userId])
+  @@unique([callId, actorId])
   @@map("call_participant")
+  @@schema("chat")
 }

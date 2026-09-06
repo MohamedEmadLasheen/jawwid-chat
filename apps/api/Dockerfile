@@ -11,11 +11,12 @@
 #   API     : node dist/main.js
 #   Worker  : node dist/worker.js
 #
-# Base image is pinned by digest-bearing tag rather than `node:22` so a rebuild
-# of an old commit produces the same runtime.
+# The Node major version is pinned, and MUST match the version CI tests on
+# (.github/workflows/ci.yml, env.NODE_VERSION). Testing on one major and
+# shipping another means the runtime differences are discovered in production.
 
 # ---------------------------------------------------------------- deps
-FROM node:22.14.0-bookworm-slim AS deps
+FROM node:24.18.0-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 # npm ci, not npm install: fails loudly if the lockfile and manifest disagree,
@@ -23,7 +24,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --include=dev
 
 # ---------------------------------------------------------------- build
-FROM node:22.14.0-bookworm-slim AS build
+FROM node:24.18.0-bookworm-slim AS build
 WORKDIR /app
 ENV NODE_ENV=development
 COPY --from=deps /app/node_modules ./node_modules
@@ -35,14 +36,14 @@ RUN npx prisma generate
 RUN npm run build
 
 # ---------------------------------------------------------------- runtime deps
-FROM node:22.14.0-bookworm-slim AS prod-deps
+FROM node:24.18.0-bookworm-slim AS prod-deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
 RUN npm ci --omit=dev && npx prisma generate && npm cache clean --force
 
 # ---------------------------------------------------------------- runtime
-FROM node:22.14.0-bookworm-slim AS runtime
+FROM node:24.18.0-bookworm-slim AS runtime
 # tini reaps zombies and forwards SIGTERM, which is what makes the graceful
 # shutdown in docs/infrastructure/production-runbook.md actually happen. Without
 # a real init, PID 1 ignores SIGTERM and the platform SIGKILLs us instead --

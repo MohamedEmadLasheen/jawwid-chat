@@ -1,25 +1,21 @@
 import {
+  Conversation,
+  ConversationMember,
   Message,
   MessageAttachment,
   MessageReaction,
   MessageReceipt,
-  Thread,
 } from '@prisma/client';
+import { ConversationState, Moderation } from './vocab';
 
 /**
- * Safe DTOs. Prisma entities are never returned from a controller or gateway.
+ * Safe DTOs. A Prisma entity is never returned from a controller or a gateway.
  *
- * PRIVACY INVARIANT: these mappers enumerate fields explicitly. There is no
+ * PRIVACY INVARIANT: every mapper enumerates its fields explicitly. There is no
  * spread of a database row into a response anywhere in the communication
- * engine, so a column added upstream (a phone number, an address) cannot leak
- * into an API payload by accident.
+ * engine, so a column added upstream cannot leak into an API payload by
+ * accident. The chat schema has no phone column to begin with.
  */
-
-export type ConversationState =
-  | 'OPEN'
-  | 'WAITING_ON_CUSTOMER'
-  | 'WAITING_ON_JAWWID'
-  | 'RESOLVED';
 
 export interface AttachmentDto {
   id: string;
@@ -35,25 +31,13 @@ export interface AttachmentDto {
   thumbnailUrl: string | null;
 }
 
-export interface ReactionDto {
-  userId: string;
-  emoji: string;
-}
-
-export interface ReceiptDto {
-  userId: string;
-  state: string;
-  deliveredAt: string | null;
-  readAt: string | null;
-}
-
 export interface MessageDto {
   id: string;
-  threadId: string;
+  conversationId: string | null;
   caseId: string | null;
-  /** Stringified because seq is a 64-bit integer; JSON numbers are not safe. */
-  seq: string;
-  authorType: string;
+  /** Stringified: seq is 64-bit and JSON numbers are not safe at that width. */
+  seq: string | null;
+  authorKind: string;
   authorId: string | null;
   onBehalfMode: string | null;
   type: string;
@@ -67,68 +51,77 @@ export interface MessageDto {
   deletedForAll: boolean;
   createdAt: string;
   attachments: AttachmentDto[];
-  reactions: ReactionDto[];
-  receipts: ReceiptDto[];
+  reactions: Array<{ actorId: string; emoji: string }>;
+  receipts: Array<{ actorId: string; state: string; deliveredAt: string | null; readAt: string | null }>;
 }
 
-export interface ThreadDto {
+export interface ConversationMemberDto {
+  actorId: string;
+  actorKind: string;
+  memberRole: string;
+  isSilent: boolean;
+}
+
+export interface ConversationDto {
   id: string;
-  kind: string;
-  familyId: string;
-  state: ConversationState;
+  type: string;
+  familyId: string | null;
+  learnerId: string | null;
+  title: string | null;
+  state: string;
   needsReply: boolean;
   lastSeq: string;
   lastActivityAt: string;
-  lastCustomerMessageAt: string | null;
-  lastStaffMessageAt: string | null;
-  stickyHandlerId: string | null;
-  stickyUntil: string | null;
-  resolvedAt: string | null;
+  archivedAt: string | null;
+  teacherRequiresApproval: boolean;
+  parentRequiresApproval: boolean;
+  members?: ConversationMemberDto[];
 }
 
-type MessageWithRelations = Message & {
-  attachments?: MessageAttachment[];
-  reactions?: MessageReaction[];
-  receipts?: MessageReceipt[];
-};
-
-export function needsReply(thread: Pick<Thread, 'lastCustomerMessageAt' | 'lastStaffMessageAt'>): boolean {
-  if (!thread.lastCustomerMessageAt) return false;
-  if (!thread.lastStaffMessageAt) return true;
-  return thread.lastCustomerMessageAt > thread.lastStaffMessageAt;
+export function needsReply(
+  c: Pick<Conversation, 'lastCustomerMessageAt' | 'lastStaffMessageAt'>,
+): boolean {
+  if (!c.lastCustomerMessageAt) return false;
+  if (!c.lastStaffMessageAt) return true;
+  return c.lastCustomerMessageAt > c.lastStaffMessageAt;
 }
 
 /**
- * Conversation state, computed - never a stored, client-settable field.
- *
- * The authoritative brief puts open/waiting/resolved on `case`, which is the ops
- * domain (AI #4). This is the thread-level projection the AI #2 brief asks for,
- * derived from thread facts the communication engine owns, plus an explicit
- * staff-set resolvedAt marker. It does not duplicate case status.
+ * Conversation state is computed, never a client-settable field.
+ * chat.support_case.status remains the ops domain and is not duplicated here.
  */
 export function conversationState(
-  thread: Pick<Thread, 'lastCustomerMessageAt' | 'lastStaffMessageAt' | 'resolvedAt'>,
-): ConversationState {
-  if (thread.resolvedAt) return 'RESOLVED';
-  if (needsReply(thread)) return 'WAITING_ON_JAWWID';
-  if (thread.lastStaffMessageAt) return 'WAITING_ON_CUSTOMER';
-  return 'OPEN';
+  c: Pick<Conversation, 'lastCustomerMessageAt' | 'lastStaffMessageAt' | 'resolvedAt'>,
+): string {
+  if (c.resolvedAt) return ConversationState.RESOLVED;
+  if (needsReply(c)) return ConversationState.WAITING_ON_JAWWID;
+  if (c.lastStaffMessageAt) return ConversationState.WAITING_ON_CUSTOMER;
+  return ConversationState.OPEN;
 }
 
-export function toThreadDto(thread: Thread): ThreadDto {
+export function toConversationDto(
+  c: Conversation,
+  members?: ConversationMember[],
+): ConversationDto {
   return {
-    id: thread.id,
-    kind: thread.kind,
-    familyId: thread.familyId,
-    state: conversationState(thread),
-    needsReply: needsReply(thread),
-    lastSeq: thread.lastSeq.toString(),
-    lastActivityAt: thread.lastActivityAt.toISOString(),
-    lastCustomerMessageAt: thread.lastCustomerMessageAt?.toISOString() ?? null,
-    lastStaffMessageAt: thread.lastStaffMessageAt?.toISOString() ?? null,
-    stickyHandlerId: thread.stickyHandlerId,
-    stickyUntil: thread.stickyUntil?.toISOString() ?? null,
-    resolvedAt: thread.resolvedAt?.toISOString() ?? null,
+    id: c.id,
+    type: c.type,
+    familyId: c.familyId,
+    learnerId: c.learnerId,
+    title: c.title,
+    state: conversationState(c),
+    needsReply: needsReply(c),
+    lastSeq: c.lastSeq.toString(),
+    lastActivityAt: c.lastActivityAt.toISOString(),
+    archivedAt: c.archivedAt?.toISOString() ?? null,
+    teacherRequiresApproval: c.teacherRequiresApproval,
+    parentRequiresApproval: c.parentRequiresApproval,
+    members: members?.map((m) => ({
+      actorId: m.actorId,
+      actorKind: m.actorKind,
+      memberRole: m.memberRole,
+      isSilent: m.isSilent,
+    })),
   };
 }
 
@@ -151,22 +144,29 @@ export function toAttachmentDto(
   };
 }
 
+type MessageWithRelations = Message & {
+  attachments?: MessageAttachment[];
+  reactions?: MessageReaction[];
+  receipts?: MessageReceipt[];
+};
+
 export function toMessageDto(
   m: MessageWithRelations,
   signedUrls: Map<string, { url: string; thumbnailUrl: string | null }> = new Map(),
 ): MessageDto {
+  const hidden = m.deletedForAll;
   return {
     id: m.id,
-    threadId: m.threadId,
+    conversationId: m.conversationId,
     caseId: m.caseId,
-    seq: m.seq.toString(),
-    authorType: m.authorType,
+    seq: m.seq?.toString() ?? null,
+    authorKind: m.authorType,
     authorId: m.authorId,
     onBehalfMode: m.onBehalfMode,
     type: m.type,
-    // A message deleted for everyone keeps its row for auditability but its body
-    // is never served again.
-    body: m.deletedForAll ? null : m.body,
+    // A message deleted for everyone keeps its row for auditability, but its
+    // body is never served again.
+    body: hidden ? null : m.body,
     visibility: m.visibility,
     moderation: m.moderation,
     origin: m.origin,
@@ -175,18 +175,24 @@ export function toMessageDto(
     deletedAt: m.deletedAt?.toISOString() ?? null,
     deletedForAll: m.deletedForAll,
     createdAt: m.createdAt.toISOString(),
-    attachments: m.deletedForAll
+    attachments: hidden
       ? []
       : (m.attachments ?? []).map((a) => {
           const signed = signedUrls.get(a.id);
           return toAttachmentDto(a, signed?.url ?? null, signed?.thumbnailUrl ?? null);
         }),
-    reactions: (m.reactions ?? []).map((r) => ({ userId: r.userId, emoji: r.emoji })),
+    reactions: (m.reactions ?? []).map((r) => ({ actorId: r.actorId, emoji: r.emoji })),
     receipts: (m.receipts ?? []).map((r) => ({
-      userId: r.userId,
+      actorId: r.actorId,
       state: r.state,
       deliveredAt: r.deliveredAt?.toISOString() ?? null,
       readAt: r.readAt?.toISOString() ?? null,
     })),
   };
+}
+
+/** What a pending message looks like to someone who may not read it yet. */
+export function redactPending(dto: MessageDto): MessageDto {
+  if (dto.moderation !== Moderation.PENDING) return dto;
+  return { ...dto, body: null, attachments: [] };
 }

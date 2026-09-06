@@ -52,6 +52,12 @@ class L10nAr extends L10n {
   String get tabChats => 'المحادثات';
 
   @override
+  String get tabHome => 'الرئيسية';
+
+  @override
+  String get tabGroups => 'المجموعات';
+
+  @override
   String get tabCalls => 'المكالمات';
 
   @override

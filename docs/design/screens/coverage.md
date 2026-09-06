@@ -28,7 +28,7 @@ visible **before** they are saved.
 ┌──────────────────────────────────────────────────────────┐
 │  ⚠ Gaps in the next 7 days (2)                           │  ← always first when non-empty
 ├──────────────────────────────────────────────────────────┤
-│  On duty right now                                       │
+│  Current Handler right now                               │
 │  Admin A → her own families · Coverage B → all owners    │
 ├──────────────────────────────────────────────────────────┤
 │  Week grid   Sat Sun Mon Tue Wed Thu Fri                 │

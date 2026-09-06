@@ -2,9 +2,22 @@
 
 Owner: AI #9 (Adversarial Red Team / Chaos) · Opened 2026-09-05 · Status: **CAMPAIGN 1 COMPLETE**
 
-Scope of this pass: static attack of the whole tree plus **runtime-executed**
+Scope of this pass: static attack of the whole tree, **runtime-executed**
 attacks against `AuthorizationService`, `SignedLocalObjectStorage`,
-`AttachmentService` and `MessageService`.
+`AttachmentService` and `MessageService`, and **runtime-executed SQL attacks
+against the `chat.*` migration series** on a local Supabase Postgres.
+
+> **Re-verified at `c6aa4a6`.** This tree moved under this audit: AI #1 landed
+> the JC-005/JC-006 authorization fixes (`fa53ba7`), a 620-line
+> `chat.conversation` communication schema with BR-1 database triggers, and AI #7
+> landed CI (`bf279a7`). **Every finding below was re-checked against the tree as
+> of `c6aa4a6`, not against the tree this audit started on.** Findings closed by
+> those commits are marked ✅ and kept, not deleted — a closed finding is the
+> record that the control now exists.
+>
+> Three of the highest-severity findings in this report (**RT-023, RT-024,
+> RT-026**) are consequences of that new work and did not exist when this audit
+> began.
 
 ## Evidence grades — read these before reading a severity
 
@@ -30,9 +43,71 @@ attacks against `AuthorizationService`, `SignedLocalObjectStorage`,
 cd apps/api && npx jest --selectProjects unit --testPathPattern red-team
 ```
 
+The SQL attacks (RT-023, RT-024, RT-025) are reproduced with:
+
+```bash
+bash scripts/db/test-db.sh reset
+```
+
+which currently **fails** — that failure *is* RT-023. RT-024 and RT-025 were
+executed against a harness that first creates the platform tables the series
+omits; the harness is scratch-only and deliberately not committed, so it cannot
+be mistaken for a schema proposal.
+
 These specs assert **observed** behaviour, so they pass today. When a finding is
 fixed, invert its assertion in the same commit as the fix — a green red-team
 suite after a fix means the fix did not land.
+
+## ⚠️ Live-tree notice — an unlandeded refactor is in the working copy
+
+At the close of this campaign the working tree (uncommitted, `git status`)
+contains a large in-flight refactor by another agent: Prisma has been remapped
+onto the `chat` schema (`Conversation`, `ConversationMember`, `MessageApproval`,
+`Call`), enums have become `String` + `vocab.ts`, `Actor.userId` is now
+`Actor.actorId`, kinds are lower-case, and `thread.service.ts` is deleted. **Six
+of seven unit suites — including AI #5's — currently fail to compile**; this is
+that refactor mid-flight, not a defect any single suite introduced. The red-team
+specs are pinned to the pre-refactor API and must be re-pointed once it lands;
+they are deliberately not being rewritten against a half-applied change.
+
+Three findings were re-checked against the *uncommitted* code, because the
+refactor is where the risk now is:
+
+| Finding | Status against the in-flight refactor |
+|---|---|
+| **RT-002** | **Largely addressed.** `canRead(actor, conv, membership)` now receives the conversation and the membership; a contact or teacher must be a live member. `canOpenDirect()` is a closed allow-list and `canCall()` takes a participant set. This is the fix RT-002 asked for. Blanket staff access to every family remains (RT-011). |
+| **RT-003** | **Survives verbatim.** `if (actor.staffRole === 'manager') return allow(intent.requestedMode ?? ESCALATION, …)` is unchanged through two rewrites of this file. |
+| **RT-004** | **REGRESSED — worse than reported.** `deriveMode` is now `private deriveMode(actor, _conv, fallback) { return fallback; }` — the owner comparison is gone. Every internal note by any family-facing admin is now stamped **`OWNER`**, on every family, whoever owns it. The previous behaviour was a wrong-but-distinguishable `COVERAGE`; this is an affirmative false claim of ownership written into the audit trail, and `actor` and `_conv` are both now unused parameters. **New severity: P1, and it should be fixed before the refactor is committed.** |
+
+
+## Summary
+
+| ID | Finding | Sev | Grade | Owner |
+|---|---|---|---|---|
+| **RT-001** | WebSocket accepts self-asserted identity (`auth.userId`) | P0 | static | AI #1 |
+| **RT-002** | Authorization is a function of `familyId` alone; BR-1 unexpressible | P0 | **runtime** | AI #1 / #2 |
+| **RT-023** | Migration series cannot apply to an empty database | P0 | **runtime** | AI #1 |
+| **RT-024** | BR-1 database trigger bypassed by `type` promotion (messaging **and** calling) | P0 | **runtime** | AI #1 |
+| **RT-026** | Running code targets the schema *without* the BR-1 backstop | P0 | static | AI #1 / #2 |
+| **RT-003** | Manager can forge `on_behalf_mode` — survives the JC-005 fix | P1 | **runtime** | AI #1 |
+| **RT-004** | `COVERAGE` asserted without consulting `on_duty()` | P1 | **runtime** | AI #1 |
+| **RT-005** | Storage signing secret falls back to a git-committed literal | P1 | **runtime** | AI #2 / #7 |
+| **RT-006** | `signUrlsForMessages()` takes no actor — IDOR by shape | P1 | static | AI #2 |
+| **RT-007** | Attachment MIME/size/key never validated on the send path | P1 | **runtime** | AI #2 |
+| **RT-008** | Parent can forge a `SYSTEM` / `AUTOMATION` message | P1 | **runtime** | AI #2 |
+| **RT-009** | Realtime session never re-evaluates identity | P1 | static | AI #1 / #2 |
+| **RT-025** | BR-1's "required admin presence" unenforced; `class_group` unscoped | P1 | **runtime** | AI #1 |
+| **RT-010** | Two divergent database architectures committed at once | P1 | static | product |
+| RT-011…RT-014 | Probe-based list authz · receipt-roster leak · internal notes over realtime · authz outside the transaction | P2 | static | AI #2 |
+| RT-015 | ✅ **CLOSED** by `bf279a7` — CI now exists | — | — | AI #7 |
+| RT-016…RT-022 | Hardening | P3 | static | various |
+
+**Recommended fix order.** RT-023 first — it is cheap, it unblocks CI's G-19,
+and until it lands no other database fix reaches any environment. Then RT-010
+(one schema), because RT-002, RT-024 and RT-026 all resolve differently
+depending on the answer. Then RT-001, which is the cheapest single break in the
+attack chain (see `cross-agent-red-team.md`).
+
 
 ---
 
@@ -166,7 +241,7 @@ tables. Done against the current contract, it silently creates the exact channel
 BR-1 forbids.
 
 ### Evidence
-`apps/api/test/unit/red-team/authz-attacks.spec.ts` → *RT-003 · authorization is
+`apps/api/test/unit/red-team/authz-attacks.spec.ts` → *RT-002 · authorization is
 a function of familyId alone* (4 assertions). CONFIRMED (runtime): all four
 `ThreadKind` values are admitted for a contact, and all family ids — including
 the literal `'*'` — are admitted for every family-facing staff role.
@@ -191,6 +266,235 @@ and deny by default for any kind the function does not explicitly handle. A new
 **AI #1** (contract) · **AI #2** (call sites). Blocks JC-001 and JC-002.
 
 ---
+
+---
+
+## RT-023
+
+### Title
+The migration series cannot be applied to an empty database: five `chat.*` tables are referenced by foreign keys and never created.
+
+### Category
+Operational Safety / Security (control non-installation)
+
+### Severity
+**P0**
+
+### Attack Scenario
+Not an attacker action. A clean environment — a new staging database, a
+disaster-recovery rebuild, or CI — cannot be built from this repository, and
+every database-level security control lands in **no** environment.
+
+### Attack Steps
+```
+$ bash scripts/db/test-db.sh reset
+  apply   20260905090000_chat_foundation
+  apply   20260905090100_chat_config_defaults
+  apply   20260905093000_chat_communication
+ERROR:  relation "chat.family" does not exist
+```
+
+### Actual Behaviour
+`supabase/migrations/` creates 17 tables and references 8. Five of the
+referenced tables — **`chat.family`, `chat.staff`, `chat.learner`,
+`chat.thread`, `chat.message`** — are created by no migration in the tree, and
+`git log --diff-filter=D -- supabase/migrations` shows nothing was deleted:
+**they were never committed.** `20260905093000` even performs
+`alter table chat.message add column …` against a table that does not exist,
+which is only writable by someone whose working copy had it.
+
+### Impact
+1. **The database cannot be built from the repository.** Reproducible
+   environments and disaster recovery are both blocked.
+2. **Every control AI #1 just wrote is absent from every environment**: the BR-1
+   triggers, the append-only `event_log`/`audit_log` triggers, the
+   `message_no_rewrite` immutability trigger, the approval CHECK constraints.
+   Code review will read them as present. No deployed database has them.
+3. CI's own **G-19 gate — "migrations apply and are idempotent" — fails today.**
+   It was added in `bf279a7`, the commit *after* the migrations it cannot apply.
+4. `docs/qa/authoritative-scope.md` §5 C-1 cites a `chat.staff.role` CHECK
+   constraint as "already committed" evidence. That file is not in the tree, so
+   the finding's evidence cannot be inspected.
+
+### Evidence
+CONFIRMED (runtime), transcript above. Cross-check:
+`grep -ohE "references chat\.[a-z_]+" supabase/migrations/*.sql | sort -u`
+against `grep -ohE "create table chat\.[a-z_]+" …`.
+
+### Root Cause
+Work exists in a working copy and not in the repository. The migration ledger
+(`chat.schema_migrations`) records what was applied on a developer's machine,
+which makes local runs succeed and hides the gap.
+
+### Recommended Fix
+Commit the platform migration that creates `chat.staff`, `chat.family`,
+`chat.contact`, `chat.learner`, `chat.thread`, `chat.message`, `chat.event_log`
+and `chat.audit_log`, with a sequence number before `20260905093000`. Then make
+G-19 blocking on a clean database.
+
+### Acceptance Criteria
+`scripts/db/test-db.sh reset` succeeds on an empty volume, and re-running it is
+a no-op. G-19 is green.
+
+### Owner
+**AI #1**, blocking. **AI #7** for the gate.
+
+---
+
+## RT-024
+
+### Title
+The BR-1 database backstop is bypassed by mutation: a Student Group is promoted to a teacher↔parent 1:1 channel with one `UPDATE`.
+
+### Category
+Security / Authorization — BR-1
+
+### Severity
+**P0**
+
+### Attack Scenario
+Create the legitimate thing, then change what it is. The trigger validates
+membership; nothing validates the conversation's `type`.
+
+### Preconditions
+The ability to run one `UPDATE` against `chat.conversation` — a compromised API,
+a SQL-injection sink, an admin tool, an operator, or a future service method
+that legitimately edits a conversation.
+
+### Attack Steps
+```sql
+-- 1. A perfectly legal student group.
+insert into chat.conversation (type, family_id, learner_id, title)
+     values ('student_group', :fam, :learner, 'Learner A group');
+insert into chat.conversation_member (conversation_id, actor_kind, member_role)
+     values (:conv, 'teacher', 'teacher'), (:conv, 'contact', 'parent');   -- allowed
+
+-- 2. Promote it.
+update chat.conversation
+   set type = 'direct', direct_key = 'promoted-by-attacker', learner_id = null
+ where id = :conv;                                                          -- ALLOWED
+```
+
+### Expected Secure Behaviour
+The function's own comment:
+> `'BR-1 backstop. Even a compromised API or a manual SQL session cannot create a teacher<->parent 1:1 channel.'`
+
+### Actual Behaviour
+```
+### CONTROL — create a teacher<->parent DIRECT conversation
+ERROR:  BR-1 violation: a direct conversation may never contain both a teacher and a family contact
+
+### ATTACK A — promote a legal student_group {teacher,parent} to type=direct
+ conversation_type | actor_kind | member_role
+-------------------+------------+-------------
+ direct            | contact    | parent
+ direct            | teacher    | teacher
+```
+
+**Calling has the identical bypass** — `chat.enforce_call_participant_rules()` is
+also attached only to `call_participant`:
+```
+### ATTACK D — build a group call {teacher,parent}, then promote it to direct
+ call_type | actor_kind
+-----------+------------
+ direct    | contact
+ direct    | teacher
+```
+
+### Impact
+The single strongest control in the system — the one explicitly designed to hold
+when the API is compromised — does not hold. The forbidden state is not
+unrepresentable; it is one `UPDATE` away, and the `v_live > 2` participant cap is
+bypassed the same way. This is the product's constitutional rule.
+
+The control is genuinely good for what it checks: the control case is correctly
+refused, in both messaging and calling. The defect is placement, not intent.
+
+### Evidence
+CONFIRMED (runtime), transcripts above, against `20260905093000` applied to
+Supabase Postgres 17.6.
+
+### Root Cause
+`create trigger conversation_member_br1 after insert or update on chat.conversation_member`
+— the invariant spans two tables and is enforced on one. `chat.conversation` has
+only an `updated_at` trigger.
+
+### Recommended Fix
+Add the mirror trigger on `chat.conversation` (`after update of type`) calling a
+shared validation function, so the invariant is checked from whichever side
+changes. A constraint trigger deferred to commit would cover both in one place.
+
+### Acceptance Criteria
+Both the insert path *and* the type-change path raise `BR-1 violation`, for
+`chat.conversation` and `chat.call` alike. `BR1-01…BR1-14` include the promotion
+case (`docs/qa/test-plan.md` §3 already calls for "group→1:1 promotion").
+
+### Owner
+**AI #1**.
+
+---
+
+## RT-026
+
+### Title
+The running application targets the weaker of the two schemas: no TypeScript references `chat.conversation`, so the BR-1 backstop guards tables no code uses.
+
+### Category
+Architecture / Authorization
+
+### Severity
+**P0**
+
+### Attack Scenario
+Not an attacker action — a control that protects the wrong asset.
+
+### Actual Behaviour
+`20260905093000` introduces exactly the model `docs/qa/defects.md` JC-002 asks
+for: `chat.conversation` with an explicit `type`, `chat.conversation_member` as
+an explicit participant set, a `teacher` actor kind, `chat.message_approval`
+with `rejection_reason`, and BR-1 triggers over both messaging and calling.
+
+Every line of application code targets the **other** schema — Prisma's
+`Thread` / `Message` in `public`, where a family has one `FAMILY` thread, there
+is no teacher actor, and Student Groups are `/// DESIGN-ONLY. Not implemented.`
+
+```
+$ grep -rln "chat\.\|conversation_member\|conversationId" apps/api/src apps/admin-web/src
+(no matches)
+```
+
+### Impact
+- The BR-1 backstop protects tables that no service reads or writes. Even fixing
+  RT-024 changes nothing for the running system.
+- **RT-002 is unchanged.** `AuthorizationService` still decides on `familyId`
+  alone, against Prisma's `Thread`. The conversation model exists in SQL and is
+  invisible to the authorization path.
+- JC-001, JC-002 and JC-003 are answered in one schema and still open in the
+  other. A reviewer reading the migrations concludes they are fixed; a reviewer
+  reading `src/` concludes they are open. **Both are reading correctly.**
+- This is RT-010 (two databases) escalated: the two are no longer merely
+  divergent, they now *disagree about the security model*, and the application
+  runs on the permissive one.
+
+### Evidence
+CONFIRMED (static): the grep above; `schema.prisma` §C unchanged at `c6aa4a6`;
+`message.service.ts` and `authorization.service.ts` still import from
+`@prisma/client`.
+
+### Recommended Fix
+Resolve RT-010 first — one schema — then port the communication engine onto
+`chat.conversation` and widen `AuthorizationService` per RT-002. Until then, no
+statement of the form "BR-1 is enforced" is true of the running system, and the
+release gate should say so.
+
+### Acceptance Criteria
+One schema in the tree. `AuthorizationService` receives a conversation type and
+a participant set. `BR1-01…BR1-14` execute against the code path the application
+actually uses.
+
+### Owner
+**AI #1** and **AI #2** jointly; needs a product-owner decision on RT-010 first.
+
 
 # MUST FIX BEFORE PILOT — P1
 
@@ -224,6 +528,14 @@ The contract states it plainly:
 `authorization.service.ts:126-128` — `return allow(intent.requestedMode ?? ESCALATION)`.
 All four modes are honoured verbatim for a manager.
 
+### Status at `c6aa4a6` — re-verified after the JC-005 fix
+`fa53ba7` closed JC-005 correctly: a non-manager who supplies
+`requestedMode: ASSIST | ESCALATION` is now denied with a fail-closed branch and
+an explicit "do not restore an unconditional allow" comment. **The MANAGER
+branch on line 126 is untouched**, and this finding's runtime probe still passes
+against the fixed file. This is the fix-validation case in §55 of the red-team
+charter: the reported request was closed, the boundary was not.
+
 ### Impact
 `on_behalf_mode` is the field the operating model relies on to distinguish
 Primary Owner from Current Handler, and it is written into `audit_log` and
@@ -237,7 +549,7 @@ this open.** (Red-team fix-validation rule §55: test the boundary, not the
 request.)
 
 ### Evidence
-`apps/api/test/unit/red-team/authz-attacks.spec.ts` → RT-001, 2 assertions.
+`apps/api/test/unit/red-team/authz-attacks.spec.ts` → RT-003, 2 assertions.
 CONFIRMED (runtime).
 
 ### Root Cause
@@ -291,7 +603,7 @@ the same field as one that means "was on duty". Downstream workload and coverage
 reporting inherits the error.
 
 ### Evidence
-`apps/api/test/unit/red-team/authz-attacks.spec.ts` → RT-002, asserting
+`apps/api/test/unit/red-team/authz-attacks.spec.ts` → RT-004, asserting
 `onDutyCalls === 0` while the decision returns `COVERAGE`. CONFIRMED (runtime).
 
 ### Recommended Fix
@@ -345,7 +657,7 @@ attachment store. Attachments are family communication content: photos of
 children, documents, voice notes.
 
 ### Evidence
-`apps/api/test/unit/red-team/storage-and-integrity-attacks.spec.ts` → RT-004,
+`apps/api/test/unit/red-team/storage-and-integrity-attacks.spec.ts` → RT-005,
 which deletes the env var, signs a key with an attacker-constructed instance and
 shows the victim instance's `verify()` returns `true`. CONFIRMED (runtime).
 
@@ -456,7 +768,7 @@ authorization for *this* thread.
 - Nothing binds an object key to the thread it was authorized for.
 
 ### Evidence
-`apps/api/test/unit/red-team/storage-and-integrity-attacks.spec.ts` → RT-005:
+`apps/api/test/unit/red-team/storage-and-integrity-attacks.spec.ts` → RT-007:
 `AttachmentService.validate` correctly rejects `text/html`, `image/svg+xml` and
 oversize; static assertion over `message.service.ts` shows no reference to
 `AttachmentService` and no `.validate(` call, while `objectKey: a.objectKey` is
@@ -517,7 +829,7 @@ so the forgery is detectable in the database — but only if a client renders
 prominence.
 
 ### Evidence
-`apps/api/test/unit/red-team/storage-and-integrity-attacks.spec.ts` → RT-006:
+`apps/api/test/unit/red-team/storage-and-integrity-attacks.spec.ts` → RT-008:
 `validateContent(SYSTEM, { body: null, attachments: [] })` does not throw, while
 the same emptiness throws for `TEXT` and `IMAGE`. CONFIRMED (runtime).
 
@@ -582,6 +894,69 @@ window; a subsequent `thread.subscribe` is refused.
 which is about `canReadInternal` ignoring `isActive` at all; this is about the
 check never re-running even once it is correct. **Fixing JC-006 alone does not
 close RT-009.**
+
+---
+
+## RT-025
+
+### Title
+BR-1's "required admin presence" is unenforced: a Student Group containing only a teacher and a parent is permitted.
+
+### Category
+Security / Authorization — BR-1
+
+### Severity
+**P1**
+
+### Attack Scenario
+BR-1 is not "teachers and parents may share a group". It is, per
+`docs/qa/authoritative-scope.md` §3: *"Teacher↔Parent communication happens
+**only** through the official Student Group, **with the required admin
+presence/authorization**."* The database enforces the first clause and not the
+second, so a two-party group is a private teacher↔parent channel wearing a group's
+name.
+
+### Attack Steps
+Create a `student_group` and add exactly one teacher and one parent. No admin.
+
+### Actual Behaviour
+```
+### ATTACK C — student_group {teacher,parent} with no admin
+ conversation_type | admin_members | live_members
+-------------------+---------------+--------------
+ student_group     |             0 |            2
+
+### ATTACK E — a GROUP call with exactly {teacher,parent} and no admin
+ call_type | staff_present | participants
+-----------+---------------+--------------
+ group     |             0 |            2
+```
+
+Additionally, **`class_group` is outside the trigger's scope entirely** — it
+checks `type = 'direct'` only — so a `class_group` with {teacher, parent} is
+also permitted (ATTACK B, confirmed).
+
+### Impact
+The permitted channel becomes the bypass. An attacker never needs RT-024's
+`UPDATE`: they can simply create the allowed thing and leave the admin out.
+
+### Evidence
+CONFIRMED (runtime), transcripts above.
+
+### Recommended Fix
+Require at least one live `admin` member on any conversation (or call) whose live
+membership contains both a teacher and a contact — whatever its type — and
+enforce it on member removal as well as on insert, so the admin cannot be
+dropped afterwards. Decide explicitly what `class_group` is for; if it can carry
+parents, it is in BR-1's scope.
+
+### Acceptance Criteria
+Removing the last admin from a teacher+parent conversation raises. Creating one
+without an admin raises. `class_group` is covered or removed.
+
+### Owner
+**AI #1** (trigger) · **Product** (the `class_group` question).
+
 
 ---
 
@@ -657,8 +1032,8 @@ for staff. The moment coverage scoping is added — which the PRD requires — t
 probe either denies every operator, or is "repaired" by keeping the fake id and
 permanently exempting the list endpoint from the rule. A list must be built from
 an authorization-derived filter, never from a probe with a sentinel value.
-CONFIRMED (runtime): `authz-attacks.spec.ts` shows `familyId: '*'` is allowed for
-all three operator roles. *Owner: AI #2.*
+CONFIRMED (runtime): `authz-attacks.spec.ts` §RT-002 shows `familyId: '*'` is
+allowed for all three operator roles. *Owner: AI #2.*
 
 ## RT-012 · `MessageDto` returns the full receipt roster to every reader
 
@@ -693,13 +1068,26 @@ Window is small and the exploit is a race, so P2 — but the fix is mechanical:
 re-read and re-decide inside the transaction, after the lock.
 CONFIRMED (static), `message.service.ts:81-137`. *Owner: AI #2.*
 
-## RT-015 · No CI exists; the QA regression suite gates nothing
+## RT-015 · ✅ CLOSED — CI now exists, with one hazard it introduces
 
-`.github/workflows/` is an **empty directory**. `apps/api/test/unit/` currently
-contains **four failing tests** (AI #5's JC-005 and JC-006 conformance specs)
-and nothing prevents a merge. A release gate that is not executed is not a gate.
-CONFIRMED (runtime): `npx jest --selectProjects unit` → *4 failed, 6 passed*.
-*Owner: AI #7, with AI #5.*
+**Closed by `bf279a7`.** When this audit opened, `.github/workflows/` was an
+empty directory and `npx jest --selectProjects unit` was *4 failed, 6 passed* —
+AI #5's JC-005/JC-006 conformance specs, failing, with nothing observing them.
+`.github/workflows/ci.yml` now runs typecheck, `npm run test:unit`, admin-web
+tests and the G-18/G-19/G-20/G-31..35 release-gate guards. The suite is green
+(39 passed, 23 todo) because AI #1 fixed both defects in `fa53ba7`.
+
+**Hazard introduced, and deliberately accepted.** `test:unit` now also runs
+`test/unit/red-team/`, whose specs assert *observed insecure behaviour* so the
+findings can be graded CONFIRMED. CI therefore currently enforces that RT-002,
+RT-003, RT-004, RT-005, RT-007 and RT-008 **remain unfixed** — fixing one turns
+CI red. That is the intended design (a fix must be visible, not silent), but it
+must be understood: **the correct response to that red build is to invert the
+assertion in the same commit as the fix, never to delete the spec.** Each spec
+header says so. Flagged here so nobody meets it as a surprise.
+
+Note also G-19 ("migrations apply and are idempotent") **cannot pass** — see
+RT-023. *Owner: AI #7, with AI #5.*
 
 ---
 
@@ -711,7 +1099,7 @@ CONFIRMED (runtime): `npx jest --selectProjects unit` → *4 failed, 6 passed*.
 | **RT-017** | `BigInt(input.before / after / seq)` on unvalidated client strings throws `SyntaxError`, not a typed `CommError` — an uncaught 500 and a stack trace instead of a 400. | `message.service.ts:380-381, 438` | AI #2 |
 | **RT-018** | Passing both `before` and `after` silently overwrites `where.seq`; `after` wins and the caller's page bound is discarded without error. | `message.service.ts:380-381` | AI #2 |
 | **RT-019** | `message.delivered` accepts an unbounded `messageIds[]` straight into a SQL `IN`. No cap, no rate limit; the socket is otherwise unmetered. | `realtime.gateway.ts:155-169` | AI #2 |
-| **RT-020** | Six documents are cited as authoritative and do not exist: `docs/brief/JAWWID_CHAT_BRIEF.md` (README), `docs/architecture/`, `docs/communication/` (incl. `scope-decisions.md`, cited by the schema to justify the DESIGN-ONLY section), `docs/infrastructure/{environment,architecture,decisions,handoff-ai2}.md`. A control justified by a missing document is unreviewable — and RT-005 is a direct consequence of one of them. | filesystem | all |
+| **RT-020** | Re-checked at `c6aa4a6`: **seven** cited documents still do not exist — `docs/brief/JAWWID_CHAT_BRIEF.md` (README), `docs/communication/{scope-decisions,realtime-events}.md`, `docs/infrastructure/{environment,architecture,decisions,handoff-ai2}.md`. `docs/architecture/` was created and is **empty**; `docs/infrastructure/` now holds only `discovery.md`. A control justified by a missing document is unreviewable, and RT-005 is a direct consequence of one of them (`environment.md` is named as the authoritative variable inventory; the variable that matters is in neither it nor `.env.example`). | filesystem | all |
 | **RT-022** | The storage layer has two incompatible halves. `AttachmentService` is wired to `SignedLocalObjectStorage`, which signs URLs with its own HMAC and expects **this API** to serve them — but no such route exists, and `docker-compose.yml` provisions MinIO with `STORAGE_ACCESS_KEY`/`STORAGE_SECRET_KEY`/`STORAGE_BUCKET` that no code reads. No S3 adapter exists. Attachments cannot currently be stored or served by any path. | `object-storage.ts:33-60`, `docker-compose.yml:70-110`, `.env.example:49-53` | AI #2 / AI #7 |
 | **RT-021** | `RedactingLogger._sensitiveKeys` matches keys exactly and omits `email`, `authtoken`, `idtoken`, `sessiontoken`, `jwt`, `credential`, `otp`. Phone numbers are covered; email addresses are not redacted anywhere. | `lib/core/logging/redacting_logger.dart:20-40` | AI #3 |
 
@@ -726,7 +1114,7 @@ worker). Re-open this campaign when it boots.
 | Area | Blocked because |
 |---|---|
 | Race conditions (real concurrency) | No runnable service; see `race-conditions.md` for the static analysis and the exact probes to run. |
-| Chaos / recovery (§37, §52) | Nothing to kill. `docker-compose.yml` exists; the API it would run does not. |
+| Chaos / recovery (§37, §52) | Nothing to kill. `docker-compose.yml` provisions Postgres, Redis and MinIO but **no API container**, and `apps/api` still has no `main.ts` or `AppModule` at `c6aa4a6` — `applyInfrastructure()` (`infra/http/bootstrap.ts`, added since) is written, correct, and called by nothing. Database-layer chaos *is* now possible and was used for RT-023/024/025. |
 | Queue / worker attacks | BullMQ is a dependency; no queue, worker or job is implemented. |
 | Notification attacks | `src/communication/notifications/` is an **empty directory**. |
 | Calling attacks | No implementation; `Call` models are DESIGN-ONLY (JC-001). |

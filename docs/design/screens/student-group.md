@@ -1,14 +1,33 @@
 # Screen: Student Group
 
-**Priority:** P0 for mobile · **CONDITIONAL — depends on OQ-3** · **Platform:** Flutter (parent + teacher) · **Owner:** AI #3
+**Priority:** **P0 — PRD MVP scope** · **Platform:** Flutter (parent + teacher) · **Owner:** AI #3
 
-> **Backend dependency, unresolved.** No Student Group entity exists in the brief's data model,
-> whose conversation model is deliberately one thread per family (`thread.family_id UNIQUE`,
-> *"cases never create a second thread"*). AI #3 raised this as C8; **OQ-3** must be answered
-> before this is built.
-> **Recommended answer (`discovery.md` §6):** a Student Group is a **separate entity beside
-> `thread`**, never merged into it. Merging would put teacher-visible content on the staff
-> thread, which breaks the internal/customer visibility boundary that DQ-03 exists to protect.
+> **Student Groups are MVP** (`docs/qa/authoritative-scope.md` §3). They are the **only**
+> permitted Teacher↔Parent communication path — **BR-1**.
+>
+> **Corrected on review.** An earlier revision framed this screen as conditional on the brief's
+> one-thread-per-family model and recommended a data shape. Both are **withdrawn**: the brief's
+> communication chapter is superseded, and the conversation model is correction **C-2** /
+> **OD-01**, owned by the product owner, AI #1 and AI #2. **This pack proposes no schema.**
+>
+> **Implementation status is unresolved:** `docs/qa/defects.md` **JC-001** and **JC-002** record
+> Student Groups as P0 and currently unrepresentable in the backend.
+
+### Cardinality the interface requires — a restatement of PRD scope, not a design decision
+
+| Concept | Is | Cardinality |
+|---|---|---|
+| **Family** | the customer / account context — the unit of ownership and of the admin inbox row | 1 |
+| **Student** | the learner | **1..n per family** |
+| **Student Group** | the official communication channel **for that student** | **exactly 1 per student → 1..n per family** |
+
+**A family with two students has two Student Groups**, concurrently, with distinct membership —
+different teachers, potentially different authorised contacts. Neither is a view of the other,
+and neither is a view of the parent↔admin conversation.
+
+*One family, one Primary Owner* is a statement about **ownership**, not about conversation
+count. Conflating the two axes is what produced `thread.family_id UNIQUE`
+(correction **C-2**, defect **JC-002**).
 
 ---
 
@@ -29,7 +48,7 @@ member opens a profile with **no message action and no call action**. Not disabl
 **Entry points:** Groups tab · a child's row on Parent Home · a notification.
 
 **Primary action:** send a message.
-**Secondary:** attach · voice note · reply · react · group info · group call *(OQ-4)*.
+**Secondary:** attach · voice note · reply · react · group info · group call.
 
 ## 2. Layout
 
@@ -46,9 +65,19 @@ member opens a profile with **no message action and no call action**. Not disabl
 ```
 
 **Header** is the student's identity first (name + level), then who is in the room. Tapping
-opens **Group info**: the student, the teacher(s), the family contacts, and — only when one is
-present — the admin. Members show **name, role and avatar only. Never a phone number, never an
-email** (DQ-04).
+opens **Group info**: the student, the teacher(s), the family contacts, and the admin. Members
+show **name, role and avatar only. Never a phone number, never an email** (DQ-04).
+
+> **Open — OD-03 / OQ-8.** BR-1 permits Teacher↔Parent communication *"through the official
+> Student Group, with the required admin presence/authorization."* **What "required admin
+> presence" means is an open product decision** (`docs/product-operations/open-decisions.md`
+> OD-03): an admin as a permanent member, a member who is also on duty, visibility without
+> membership, or approval substituting for presence.
+>
+> The spec currently renders the admin **conditionally** — present in the header and member list
+> when the server reports one. **If OD-03 lands on permanent membership, this becomes
+> unconditional**, and the header always names an admin. That is a one-line change here and a
+> significant one for the backend; it is flagged rather than assumed.
 
 **Membership is not editable by parents or teachers.** No add, no remove, no leave. The group
 exists because the student exists.
@@ -57,9 +86,9 @@ exists because the student exists.
 
 Standard bubbles with the author's name and role (*Teacher* / a parent's relationship /
 *Jawwid*). Group system cards: a teacher change, a schedule change, a student's level change,
-call started/ended *(OQ-4)*.
+call started/ended.
 
-**Approval states** *(OQ-1, see `screens/approvals.md` §5)*:
+**Approval states** *(see `screens/approvals.md` §5)*:
 
 | State | The sender sees | Every other member sees |
 |---|---|---|
@@ -94,7 +123,7 @@ in "pending" feels censored; a sender told beforehand feels supported.
 
 | Actor | Can |
 |---|---|
-| Parent contact with `can_message` | Read, send, attach, voice, reply, react, join a group call *(OQ-4)* |
+| Parent contact with `can_message` | Read, send, attach, voice, reply, react, join a group call |
 | Parent contact without | Read only |
 | Teacher | Read, send, attach, voice, reply, react, join a group call. **Cannot** start a 1:1 with a parent — the affordance does not exist |
 | Admin / coverage | Read; send where authorised; the group is visible in the family's context |
@@ -121,10 +150,17 @@ the role, so a screen-reader user knows who is a teacher without relying on a vi
 - **A teacher's message is rejected while they are offline** — they see the rejection with its
   reason on next open, in place, with Edit and resend.
 
-## 9. Backend dependencies — several do not exist yet
+## 9. Backend contract required
 
-A **Student Group entity** and its membership (OQ-3) · a **teacher principal** — the brief has
-`learner.teacher_id` as a bare field with no actor behind it (OQ-2, AI #3's C2) · the
-**approval entity and per-conversation policy** (OQ-1) · a server-enforced prohibition on
-teacher ↔ parent 1:1 conversations and calls, with a stable machine-readable error code ·
-**no phone numbers in any group-member payload** · group call authorization (OQ-4).
+| # | Requirement | Owner |
+|---|---|---|
+| G1 | A **Student Group** entity and membership, supporting **one group per student** and therefore several concurrent groups per family | AI #1 / AI #2 (C-2) |
+| G2 | A **teacher principal** — see `screens/teacher-home.md` §8 (C-1 / OD-04) | AI #1 |
+| G3 | Group membership that **follows the teacher↔learner assignment automatically**. A teacher change that does not update membership is a privacy incident, not a data gap | AI #1 (OD-04) |
+| G4 | **BR-1 enforced server-side** on a single *(actor, conversation, channel)* path covering messaging **and** calling, with a stable machine-readable error code | AI #1 (C-2 / JC-002) |
+| G5 | A resolution of **"required admin presence"** (OD-03) | product owner |
+| G6 | Approval state + per-conversation policy — `screens/approvals.md` §9 | AI #2 |
+| G7 | Group call authorization — `screens/call.md` §8 | AI #1 |
+| G8 | **No phone number in any group-member payload** | AI #1 |
+
+None of these is designed here.

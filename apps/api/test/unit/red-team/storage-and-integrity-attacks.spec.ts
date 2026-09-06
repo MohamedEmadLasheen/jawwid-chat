@@ -1,6 +1,7 @@
 /**
  * RED TEAM (AI #9) — attacks on attachment storage and message integrity.
  * See the header of authz-attacks.spec.ts for the convention used here.
+ * Section ids match the finding ids in docs/red-team/findings.md.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -10,9 +11,9 @@ import { AttachmentService } from '@communication/attachments/attachment.service
 import { MessageService } from '@communication/messages/message.service';
 
 // ---------------------------------------------------------------------------
-// RT-004 — the storage signer falls back to a hardcoded secret
+// RT-005 — the storage signer falls back to a hardcoded secret
 // ---------------------------------------------------------------------------
-describe('RT-004 · signed storage URLs are forgeable when STORAGE_SIGNING_SECRET is unset', () => {
+describe('RT-005 · signed storage URLs are forgeable when STORAGE_SIGNING_SECRET is unset', () => {
   const saved = process.env.STORAGE_SIGNING_SECRET;
   afterAll(() => {
     if (saved === undefined) delete process.env.STORAGE_SIGNING_SECRET;
@@ -47,9 +48,9 @@ describe('RT-004 · signed storage URLs are forgeable when STORAGE_SIGNING_SECRE
 });
 
 // ---------------------------------------------------------------------------
-// RT-005 — the send path never validates attachment metadata
+// RT-007 — the send path never validates attachment metadata
 // ---------------------------------------------------------------------------
-describe('RT-005 · MIME and size limits are enforced on upload authorization only', () => {
+describe('RT-007 · MIME and size limits are enforced on upload authorization only', () => {
   const attachments = new AttachmentService(
     {} as never,
     {} as never,
@@ -84,9 +85,9 @@ describe('RT-005 · MIME and size limits are enforced on upload authorization on
 });
 
 // ---------------------------------------------------------------------------
-// RT-006 — a parent can forge a SYSTEM / AUTOMATION message
+// RT-008 — a parent can forge a SYSTEM / AUTOMATION message
 // ---------------------------------------------------------------------------
-describe('RT-006 · message type and origin are client-controlled', () => {
+describe('RT-008 · message type and origin are client-controlled', () => {
   const validateContent = (
     MessageService.prototype as unknown as {
       validateContent(type: MessageType, input: unknown): void;

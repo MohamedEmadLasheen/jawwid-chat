@@ -3,20 +3,44 @@
 **Owner:** AI #6. Append-only. Each entry: the decision, why, what it costs, and what would
 reverse it.
 
+> **Scope of these decisions.** Every entry here is a **UX-layer** decision, subordinate to the
+> approved **Jawwid Chat PRD v0.1** (`scope-authority.md`). None of them decides product scope,
+> the data model, authorization, or identity. Where an entry appears to, it is a defect —
+> DD-01 and DD-15 were both corrected on review for exactly that reason.
+>
+> Entries marked **[PRD]** restate a PRD requirement rather than deciding anything; they are
+> here so the interface has a single place to point at. Entries marked **[OPEN]** were
+> withdrawn on review and are now product decisions, not design ones.
+
 ---
 
-### DD-01 — The inbox row is a **family**, not a conversation or a ticket
-**Decision.** Every operational list in the product is a list of families.
-**Why.** The brief's one rule is *one family → one owner*, and `thread.family_id` is UNIQUE.
-A ticket list would let the same family appear twice, which breaks the invariant *"a family
-appears in exactly one inbox at any moment — never two, never zero."*
+### DD-01 — The inbox row is a **family**, not a ticket
+**Decision.** Every operational list in the **staff** product is a list of families.
+**Why.** The operating model is *one family → one Primary Owner*, and the invariant *"a family
+appears in exactly one inbox at any moment — never two, never zero"* is carried forward by the
+PRD (`docs/qa/authoritative-scope.md` §4). A ticket list would let the same family appear twice.
 **Cost.** An admin cannot triage two unrelated topics for the same family separately; cases
 inside the family screen do that instead.
-**Reverses if.** The data model ever allows a second thread per family. It should not.
 
-### DD-02 — **Owner** and **On duty** are two different visual objects
-**Decision.** The family header renders the owner permanently on line 1; the on-duty person
-appears on line 2 *only when different*. They never share a component, a colour, or a slot.
+> **Corrected on review.** The original entry justified this with
+> `thread.family_id UNIQUE` and *"cases never create a second thread."* That is the
+> **superseded** brief's communication chapter, and asserting it here was this pack straying
+> into the data model. **Withdrawn.** The conversation model is **OD-01 / correction C-2**,
+> owned by the product owner, AI #1 and AI #2.
+>
+> This decision does **not** depend on how that is resolved. An inbox row is a family because
+> that is the unit of *ownership*; how many conversations a family has is a separate question
+> and the row is unaffected by its answer. A family with two students and therefore two Student
+> Groups is still **one** inbox row.
+
+**Reverses if.** The PRD ever makes something other than the family the unit of ownership.
+
+### DD-02 — **Primary Owner** and **Current Handler** are two different visual objects
+**[PRD]** The PRD states *"Primary Owner ≠ Current Handler"*, that coverage does not change
+Primary Ownership, and that handoff does not either. This entry is how that is rendered.
+**Decision.** The family header renders the **Primary Owner** permanently on line 1; the
+**Current Handler** appears on line 2 *only when different*. They never share a component, a
+colour, or a slot.
 **Why.** The product's entire promise is that ownership survives shift changes and staff
 turnover. If coverage visually replaces the owner, the UI teaches the opposite of the model,
 and an admin acting under coverage will believe the family moved to them (risk R2).
@@ -124,21 +148,41 @@ surface in a family's language.
 customer-safe status string should be server-supplied rather than mapped client-side, so the
 mapping cannot drift between Flutter and any future customer web surface.
 
-### DD-15 — Approvals are designed but **conditional**; the approver is the on-duty admin
-**Decision.** `screens/approvals.md` is specified in full and marked conditional on **OQ-1**.
-The recommended approver is `on_duty(family, now)`.
-**Why.** Mobile is building approvals (AI #3 decision D1); admin is not (AI #4 §10). Somebody
-has to approve, and inventing a new routing concept for approvals would break the brief's
-"one function decides who is responsible" invariant. `on_duty()` already answers the question.
-**Cost.** Adds approval work to the on-duty admin's load — which means it must also become a
-workload unit, or workload silently under-reports. Flagged to AI #1/#2 as part of OQ-1.
+### DD-15 — The approval queue is designed; **the approver is not this pack's to choose** [OPEN]
+**[PRD]** The message approval workflow is **MVP scope**: approve · reject · **rejection
+reason**, intentionally simple. Escalation, expiry and **coverage-aware approval** are Phase 2
+(`docs/qa/authoritative-scope.md` §3).
+**Decision.** `screens/approvals.md` specifies the queue and the sender-side states so the
+workflow is operable end to end. It is written **approver-agnostic**: every surface refers to
+*"the authorized approver"*, and no screen assumes who that is.
 
-### DD-16 — Calls are designed but **conditional**
-**Decision.** `screens/call.md` is specified and marked conditional on **OQ-4**. No recording
-UI. No phone numbers anywhere, in any payload or any screen.
-**Why.** Calling appears in the mobile role assignment and nowhere in the brief; it is the
-largest and riskiest mobile workstream. Specifying it costs one file and makes the product
-decision cheap in either direction.
+> **Corrected on review.** The original entry recommended `on_duty(family, now)` as the
+> approver. That is **withdrawn** on two grounds: it is an authorization decision, which this
+> pack does not make; and `on_duty()` is coverage-derived, so tying approval to it would have
+> built **coverage-aware approval** — an explicitly Phase 2 capability — into MVP.
+
+**Open:** who the authorized approver is, and how a pending message reaches them, is **OQ-1**,
+an integration/product decision. **Owner:** product owner → AI #1 (authorization) / AI #2
+(routing).
+**Constraint the design imposes on any answer:** there must be **no dead-end pending state** —
+every pending message must reach an authorized approver and reach a terminal outcome. See
+`screens/approvals.md` §1.
+**Consequence to decide with it:** whether approval work counts as a workload unit. If it does
+not, an approver's load silently under-reports.
+
+### DD-16 — Calling is **in MVP scope**; only its implementation status is unresolved
+**[PRD]** **In-app voice calling — 1:1 and group, in Student Groups — is MVP scope.** Video is
+Phase 2 (`docs/qa/authoritative-scope.md` §3).
+**Decision.** `screens/call.md` specifies the UX states and the contract the interface needs.
+No recording UI in MVP. **No phone number in any screen, payload, call log, push or realtime
+event** — phone privacy is a PRD gate, not a design preference.
+
+> **Corrected on review.** The original entry described calling as *"conditional"* and said the
+> file could be deleted if the answer were no. That framing came from the superseded brief, in
+> which calling does not appear, and it risked reading as a design decision to drop a PRD
+> capability. **Withdrawn.** Calling is in scope. **OQ-4** is now narrowed to *implementation
+> status and sequencing*, owned by the integration/release authority — not to whether the
+> capability exists.
 
 ### DD-17 — Every affordance in these specs is **UX only**
 **Decision.** No screen spec claims to enforce a permission. Hidden and disabled controls are

@@ -16,7 +16,7 @@
 # Production builds its own image from the same commit (ADR-006).
 
 # ---------------------------------------------------------------- build
-FROM node:22.14.0-bookworm-slim AS build
+FROM node:24.18.0-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci

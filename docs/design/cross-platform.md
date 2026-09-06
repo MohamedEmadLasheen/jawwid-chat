@@ -20,8 +20,8 @@ For each concept: the one word, the one icon, the one visual treatment, and wher
 | Waiting on family | Waiting on family / بانتظار الأسرة | `clock-arrow` | Section heading + dot blue.400; collapsed | — | — | ✓ |
 | Quiet | Quiet / هادئ | — | Section heading + dot neutral.300 | — | — | ✓ |
 | `top_reason` | *(the sentence)* | — | `type.caption`, `text.secondary`, always the second line of the row | — | — | ✓ |
-| Owner | Owner / المسؤول الأساسي | `shield-user` | Header line 1, always present, `type.label` + name | ✓ (as "your Jawwid contact") | — | ✓ |
-| On duty | On duty / المناوب الآن | `user-clock` | Header line 2, **only when ≠ owner** | — | — | ✓ |
+| Primary Owner | Primary Owner / المسؤول الأساسي | `shield-user` | Header line 1, always present, `type.label` + name | ✓ (as "your Jawwid contact") | — | ✓ |
+| Current Handler | Current Handler / المسؤول الحالي | `user-clock` | Header line 2, **only when ≠ Primary Owner** | — | — | ✓ |
 | Covering | Covering / تغطية | `users-arrow` | `ModeBadge` on message + header | — | — | ✓ |
 | Assist | Assist / مساندة | `hand-helping` | `ModeBadge` on message, always with reason | — | — | ✓ |
 | Escalated | Escalated / تصعيد | `arrow-up-double` | `ModeBadge` + case badge | — | — | ✓ |

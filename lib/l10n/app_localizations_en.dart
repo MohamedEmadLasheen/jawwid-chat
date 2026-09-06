@@ -52,6 +52,12 @@ class L10nEn extends L10n {
   String get tabChats => 'Chats';
 
   @override
+  String get tabHome => 'Home';
+
+  @override
+  String get tabGroups => 'Groups';
+
+  @override
   String get tabCalls => 'Calls';
 
   @override

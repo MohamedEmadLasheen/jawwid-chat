@@ -1,6 +1,10 @@
 # Screen: Teacher ↔ Jawwid conversation
 
-**Priority:** P0 for mobile · **CONDITIONAL — depends on OQ-2** · **Platform:** Flutter (teacher) · **Owner:** AI #3
+**Priority:** **P0 — PRD MVP scope** · **BLOCKED on OQ-2 / C-1 / OD-04** · **Platform:** Flutter (teacher) · **Owner:** AI #3
+
+> Teacher↔Admin 1:1 is one of the PRD's three required conversation kinds
+> (`docs/qa/authoritative-scope.md` C-2). It is blocked on the teacher identity model —
+> see `screens/teacher-home.md` §8 for the requirements, which this pack states but does not design.
 
 ---
 
@@ -35,11 +39,13 @@ set, two configurations.** A second chat implementation is how two chats drift.
 A teacher sees only their own conversation. Never other teachers, never families, never internal
 notes, never cases, never staff identities beyond whoever replied, never phone numbers.
 
-Approval *(OQ-1)*: whether teacher ↔ Jawwid messages are subject to approval is a **policy
-decision** and the policy is per conversation and server-supplied. The client never assumes.
-**Recommendation:** approval applies to Student Groups (parent-visible) and **not** to the
-teacher ↔ Jawwid channel — approving a teacher's question to their own operations team adds
-latency to an internal conversation and protects nobody.
+**Approval.** Whether teacher↔admin messages are subject to approval is a **policy decision**,
+not a design one. The policy is **per conversation and server-supplied**, and the client never
+assumes it is on or off (`screens/approvals.md` §9, A2). An earlier revision of this pack
+recommended an answer; that recommendation is **withdrawn** — it is part of OQ-1.
+
+What the design requires either way: if approval is on for this channel, the sender-side states
+in `screens/approvals.md` §5 apply here unchanged, and there must be no dead-end pending state.
 
 ## 4. States · Responsive · RTL · Edge cases
 
