@@ -182,3 +182,48 @@ plan and database decision`, and this file into `37108eb`. All nine files in
 `docs/release/` are now tracked. AI #10 has run no `git add`, `commit`, `reset`
 or `clean`. This is the shared-worktree hazard already recorded in
 `integration-risk-register.md`, observed happening.
+
+---
+
+# Addendum — 2026-09-06 · STEP 1 CLEARED
+
+## PRD v0.1 = AVAILABLE + AUTHORITATIVE
+
+| | |
+|---|---|
+| Path | `docs/product/jawwid-chat-prd-v0.1.md` |
+| sha256 | `3e63ec0127470b53b65f154651ab707b915771f3ca305a85c4374b9e60a1b697` |
+| Size | 69,331 bytes · 574 lines (no trailing newline) |
+| Commit | `62ff312b841eb8906e6fec6001dcbedf8dedffb0` — **one file, nothing else** |
+| Verification | source vs destination `cmp` → identical; hash confirmed before the move, after the move, and **on the committed git blob itself** (`git show HEAD:… \| shasum -a 256`), proving no line-ending or newline normalisation occurred |
+| Copies in tree | exactly one — the root copy was removed after verification |
+
+**RC-13 is closed.** It was the only blocker on the product source of truth, and
+the root cause of the divergence that produced two conflicting communication
+models built by five agents from second-hand summaries.
+
+Approved by the product owner as the source of truth for implementation,
+notwithstanding the document's internal "Draft for review" status line. That
+approval is recorded here because the discrepancy is on the record.
+
+### What this does and does not change
+
+**Does:** `docs/product/jawwid-chat-prd-v0.1.md` now governs Jawwid Chat.
+`JAWWID_CHAT_BRIEF.pdf` is superseded, retained as a historical artifact only.
+`docs/qa/authoritative-scope.md` §3 is now **secondary**; where it and the PRD
+differ, the PRD wins and the difference is a finding to record.
+
+**Does not:** no other blocker changes status. Every gate marked
+`UNVERIFIED (needs PRD)` is still unverified — the PRD makes that work
+*possible*, it does not perform it. OD-01 is still open; it must be resolved
+**only** by reading this file, and I have not read it for that purpose.
+
+Release status is unchanged: **NOT READY — RECONCILIATION BLOCKED.**
+
+### Note on commit scope
+
+Per instruction, commit `62ff312` contains **only** the PRD. The three
+reconciliation documents updated to record this status — `blockers.md`,
+`release-scorecard.md` and this file — are **left uncommitted** and are
+unstaged. No branch was merged, no cleanup performed, no other agent's work
+touched. Staging used explicit paths only; no `git add -A`, `reset` or `clean`.

@@ -13,7 +13,7 @@ are not merely failing — they are **unexecutable**.
 
 | Area | Status | Evidence | Blockers | Owner |
 |---|---|---|---|---|
-| **Product** | **UNVERIFIED** | PRD v0.1 is not on disk; scope is graded against `authoritative-scope.md` §3. Two conflicting owner reconciliations on record (OD-01) | RC-13 | Product owner |
+| **Product** | **UNVERIFIED** | **PRD v0.1 is now AVAILABLE + AUTHORITATIVE** — `docs/product/jawwid-chat-prd-v0.1.md`, commit `62ff312`, hash-verified. RC-13 closed. Status stays UNVERIFIED because no gate has yet been re-graded against it, and OD-01 remains unanswered pending that reading | ~~RC-13~~ · OD-01 | Product owner |
 | **Backend** | **FAIL** | Services typecheck and build (exit 0), but no `main.ts`, no root module, no controllers beyond `/health`. `dist/main.js` is never emitted | RC-01, RC-05 | AI #1, AI #2 |
 | **Database** | **FAIL** | Two schema authorities in different schemas; decision issued (`database-decision.md`), not yet executed. SQL stack is strong: 9 migrations, real engines, executable SQL tests — on an unmerged branch | RC-06, RC-07, DB-1…DB-8 | AI #1 |
 | **Authentication** | **FAIL** | Three incompatible positions (cookie / Bearer / none). Socket accepts a client-declared `handshake.auth.userId` — full authentication bypass at the only live entry point (RT-001 P0) | RC-03 | AI #1 |

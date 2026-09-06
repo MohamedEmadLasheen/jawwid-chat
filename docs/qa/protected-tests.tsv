@@ -1,0 +1,19 @@
+# Protected security regression tests (JC-011).
+#
+# Each line: <path><TAB><minimum expect() count><TAB><reason>
+#
+# These files guard CONFIRMED security defects. JC-011 happened because a
+# refactor deleted the regression suites protecting JC-005 and JC-006 and
+# reintroduced both defects with nothing failing -- deleting a test never fails
+# a build.
+#
+# scripts/qa/check-protected-tests.sh fails CI if a listed file disappears or is
+# gutted below its assertion floor.
+#
+# Removing a line is a DELIBERATE, REVIEWABLE act. Do it only when the defect it
+# guards is closed by design (the state is unrepresentable), never to make a
+# build green. Migrating a file? Update the path here in the same commit.
+apps/api/test/unit/authorization/jc005-jc006-regression.spec.ts	14	JC-005 assist/escalation bypass, JC-006 deactivated-actor internal notes
+apps/api/test/unit/privacy/no-contact-channel-columns.spec.ts	4	G-07 phone privacy enforced structurally
+apps/api/test/unit/authorization/br1-conformance.spec.ts	3	BR-1 matrix + current-state tripwires
+apps/api/test/integration/schema-invariants.spec.ts	9	BR-1 DB backstop, append-only logs, JC-010

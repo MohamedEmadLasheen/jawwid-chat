@@ -36,9 +36,15 @@ means the fix did not land.
 
 ## Status
 
-**Evidence frozen 2026-09-06** and handed to release. 27 findings: 5 P0
-(3 proven by execution), 9 P1, 5 P2, 7 P3, 1 closed. Two release blockers that
-cannot be accepted: **RT-023** and **RT-024**.
+**Evidence frozen 2026-09-06 at commit `b634fe8`** and handed to release.
+27 findings: 5 P0 (3 proven by execution), 9 P1, 5 P2, 7 P3.
+**18 open · 8 resolved · 1 closed.** Two release blockers that cannot be
+accepted: **RT-023** and **RT-024**.
+
+This tree moved six times during the audit and nine findings were fixed while
+the report was being written — including RT-027, closed when the specs were
+re-pointed and their assertions inverted. Every status was re-verified; treat
+anything older as stale.
 
 Campaign 1 (static + service-layer runtime) and campaign 2 (SQL attacks against
 the `chat.*` migration series) are complete. **A large refactor is uncommitted in

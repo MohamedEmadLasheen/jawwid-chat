@@ -27,6 +27,22 @@ are `NOT TESTED` and are tracked under JC-002.
 
 ---
 
+## PRD v0.1 — AVAILABLE + AUTHORITATIVE (2026-09-06)
+
+`docs/product/jawwid-chat-prd-v0.1.md` · sha256
+`3e63ec0127470b53b65f154651ab707b915771f3ca305a85c4374b9e60a1b697` · 69,331 bytes
+· commit `62ff312`.
+
+**This file governs Jawwid Chat.** `docs/JAWWID_CHAT_BRIEF.pdf` is superseded and
+retained only as a historical artifact. `docs/qa/authoritative-scope.md` §3 served
+as the operative written record and is now **secondary** to the PRD; where the two
+differ, the PRD wins and the difference is recorded as a finding.
+
+RC-13 is closed. **No other blocker changes status as a result** — the PRD makes
+the remaining work gradeable, it does not perform it.
+
+---
+
 ## BLOCKERS
 
 ### RC-01 · The API process does not exist
@@ -126,7 +142,7 @@ are `NOT TESTED` and are tracked under JC-002.
 | **Severity** | BLOCKER (documentation / release) |
 | **Area** | Product source of truth |
 | **Owner** | **Product owner**, escalated by AI #10 |
-| **Status** | OPEN — **restated as a standing request** |
+| **Status** | **VERIFIED RESOLVED — 2026-09-06.** PRD v0.1 committed at `docs/product/jawwid-chat-prd-v0.1.md` (`62ff312`), sha256 `3e63ec…a1b697`, byte-for-byte verified. Approved by the product owner as the source of truth for implementation, notwithstanding its internal "Draft for review" status line. **Downstream re-grading is not yet done:** every gate currently marked `UNVERIFIED (needs PRD)` must now be re-graded against this file. |
 | **Evidence** | `docs/qa/authoritative-scope.md` §6: the approved PRD v0.1 is *"not on disk"*. Scope is therefore graded against AI #5's summary of it. `docs/product-operations/discovery.md` §2 records **two mutually inconsistent reconciliations** of the same conflict, both attributed to the product owner on the same day (OD-01). `README.md` still points to `docs/brief/JAWWID_CHAT_BRIEF.md`, a path that does not exist. |
 | **Impact** | Every scope-derived gate is graded against a secondary source. This is precisely the failure mode that produced the current divergence — five agents reading five second-hand summaries. |
 | **Exact fix** | Add PRD v0.1 to `docs/`. Until then, `authoritative-scope.md` §3 remains the operative written record, per instruction 6. |

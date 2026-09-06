@@ -1,160 +1,172 @@
 # Red Team → Release · Handoff to Agent #10
 
 From: AI #9 (Adversarial Red Team) · 2026-09-06
-Evidence: [`findings.md`](findings.md) · Status: **EVIDENCE FROZEN**
+Evidence: [`findings.md`](findings.md) · Status: **EVIDENCE FROZEN at `b634fe8`**
 
-This is the release-decision list. Every item is either **resolved** (the
-invariant holds and a test proves it) or **explicitly accepted** (a named owner
-records that the risk ships). Nothing may reach release in an undecided state.
+This is the release-decision list. Every item is either **RESOLVED** (the
+invariant holds) or must be **explicitly accepted** by a named owner with a
+reason and a date. Nothing may reach release undecided.
 
-**Red team position: RED TEAM FAILED.** Five confirmed P0s, three of them proven
-by execution. This document does not prescribe remediation, does not choose the
-database architecture, does not redesign the authorization model, and does not
-touch the PRD. Those are Agent #10's calls and AI #1's work.
+This document does not prescribe remediation, does not choose the database
+architecture, does not redesign the authorization model, and does not touch the
+PRD. Those are your calls and AI #1's work.
+
+> **Read the anchor before acting.** All statuses were re-verified at commit
+> `b634fe8`, with 35 files uncommitted in the working tree. **This tree moved five
+> times during the audit and eight findings were fixed while the report was being
+> written.** Anything read from an older copy of these documents is stale.
+
+## Where this stands
+
+27 findings. **18 open, 8 resolved, 1 closed.**
+
+| Severity | Total | Open |
+|---|---|---|
+| P0 | 5 | **3** — RT-001, RT-023, RT-024 |
+| P1 | 9 | 4 — RT-006, RT-009, RT-010 (partial), RT-025 |
+| P2 | 5 | 5 — RT-011, RT-012, RT-013, RT-014, RT-027 |
+| P3 | 7 | 7 — RT-020 partial |
+
+**Red team position: RED TEAM FAILED** — two blockers stand, both proven by
+execution.
+
+Resolved during the audit, with the evidence that closed each recorded in
+`findings.md`: **RT-002, RT-003, RT-004, RT-005, RT-007, RT-008, RT-026** and
+**RT-027**, plus **RT-015** closed earlier. That is real progress on the
+authorization and message-integrity surfaces, and it happened fast.
 
 ---
 
-## 1. Release blockers — must be RESOLVED, acceptance is not available
+## 1. Release blockers — must be RESOLVED. Acceptance is not available.
 
 | ID | Finding | Why it cannot be accepted |
 |---|---|---|
-| **RT-023** | The migration series cannot apply to an empty database — `chat.family`, `chat.staff`, `chat.learner`, `chat.thread`, `chat.message` are referenced by foreign keys and created by no migration. | No environment can be built from the repository. Every database-level control — the BR-1 triggers, the append-only log triggers, the message-immutability trigger, the approval constraints — is installed **nowhere**. Accepting this would be accepting that no reviewed control exists in production. CI's own G-19 gate cannot pass. |
-| **RT-024** | The BR-1 database backstop is bypassed by mutation: a legal Student Group is promoted to a teacher↔parent 1:1 channel with one `UPDATE chat.conversation SET type='direct'`. Calling has the identical bypass. | BR-1 is the product's constitutional rule. The control was built specifically to hold when the API is compromised, and its own comment claims it does. Proven by execution against Supabase Postgres 17.6. |
+| **RT-023** | The migration series cannot apply to an empty database. `chat.family`, `chat.staff`, `chat.learner`, `chat.thread`, `chat.message` are referenced by foreign keys and created by no migration. Still true at `b634fe8`. | No environment can be built from the repository. Every database-level control — the BR-1 triggers, the append-only log triggers, message immutability, the approval constraints — is installed **nowhere**. Accepting this means accepting that no reviewed database control exists in production. CI's own G-19 gate cannot pass. |
+| **RT-024** | The BR-1 database backstop is bypassed by mutation: a legal Student Group becomes a teacher↔parent 1:1 channel with one `UPDATE chat.conversation SET type='direct'`. Calling has the identical bypass. | BR-1 is the product's constitutional rule. The control exists specifically to hold when the API is compromised and its own comment claims it does. Proven by execution against Supabase Postgres 17.6; the trigger set is unchanged at `b634fe8`. |
 
-**Blocker exit criteria.** `bash scripts/db/test-db.sh reset` succeeds on an
-empty volume and is a no-op on re-run; G-19 is green; and the BR-1 invariant
-raises on the **type-change path** as well as the insert path, for
-`chat.conversation` and `chat.call` alike.
+**Exit criteria.** `bash scripts/db/test-db.sh reset` succeeds on an empty volume
+and is a no-op on re-run; G-19 is green; and the BR-1 invariant raises on the
+**type-change path** as well as the insert path, for `chat.conversation` **and**
+`chat.call`.
 
 ---
 
-## 2. Must be resolved or explicitly accepted before release
+## 2. Must be resolved or explicitly accepted
 
-Each row needs a decision recorded against it. "Explicitly accepted" means a
-named owner, a stated reason, and a date — not silence.
-
-### P0 — accept only with an owner's signature
+### P0 — one open, and it is the whole authentication story
 
 | ID | Finding | Status | If accepted, what ships |
 |---|---|---|---|
-| **RT-001** | The only runtime entry point takes self-asserted identity: `auth.userId` from the WebSocket handshake is treated as an authenticated principal. | CONFIRMED (static) | A complete authentication bypass. Every other control is downstream of an identity the caller chooses. Acceptable **only** if the gateway cannot start outside local — that guard does not exist today. |
-| **RT-002** | Authorization is a function of `familyId` alone; thread kind and participant set are outside the contract's type signature, so BR-1 is unexpressible. | CONFIRMED (runtime) · **largely addressed by the uncommitted refactor** — `canRead(actor, conv, membership)` now requires live membership. | Re-verify against the refactor once committed, then close or re-open. Do not close it on the strength of uncommitted code. |
-| **RT-026** | The running application targets the schema *without* the BR-1 backstop: no TypeScript references `chat.conversation`. | CONFIRMED (static) · the uncommitted refactor is the fix in progress | Until it lands, **no statement of the form "BR-1 is enforced" is true of the running system**, and the release gate should say so in those words. |
+| **RT-001** | The only runtime entry point takes self-asserted identity. `realtime.gateway.ts:57` reads `client.handshake.auth?.actorId` and treats it as an authenticated principal. **The field was renamed from `userId` to `actorId` during the refactor; nothing else changed.** | OPEN · CONFIRMED (static) | A complete authentication bypass. Every other control is downstream of an identity the caller chooses. Acceptable **only** if the gateway cannot start outside local — that guard does not exist. |
 
-### P1 — nine findings
+### P1 — four open
 
-| ID | Finding | Status | Regression |
-|---|---|---|---|
-| **RT-004** | `on_behalf_mode` asserted with no basis — **post-refactor it stamps `OWNER` on families the actor does not own**. | CONFIRMED | **YES — see §3** |
-| **RT-003** | A manager stamps any `on_behalf_mode` they request, `OWNER` included. Survived the JC-005 fix and the refactor. | CONFIRMED (runtime) | No |
-| **RT-005** | Storage URL signing falls back to a literal committed to git; the variable is in neither `.env.example` nor any environment document. | CONFIRMED (runtime) | No |
-| **RT-006** | `signUrlsForMessages(messageIds)` takes no actor — object-level authorization absent by shape. | CONFIRMED (static) | No |
-| **RT-007** | Attachment MIME, size and object key are persisted verbatim; the validator is never called on the send path. | CONFIRMED (runtime + static) | No |
-| **RT-008** | A parent can forge a `SYSTEM` / `AUTOMATION` message; `type: SYSTEM` bypasses all content validation. | CONFIRMED (runtime) | No |
-| **RT-009** | A realtime session never re-evaluates identity: offboarding does not offboard. | CONFIRMED (static) | No |
-| **RT-025** | BR-1's "required admin presence" is unenforced; `class_group` is outside the trigger's scope entirely. | CONFIRMED (runtime) | No |
-| **RT-010** | Two divergent database architectures are committed simultaneously, one placing Jawwid Chat inside the Jawwid Core database. | CONFIRMED (static) | No |
+| ID | Finding | Status |
+|---|---|---|
+| **RT-025** | BR-1's "required admin presence" is unenforced. A `student_group` — or `class_group`, which the trigger does not cover at all — containing exactly one teacher and one parent and no admin is permitted. | OPEN · CONFIRMED (runtime) |
+| **RT-006** | `signUrlsForMessages(messageIds)` still takes no actor: object-level authorization absent by shape. No caller exists yet, so it is free to fix now. | OPEN · CONFIRMED (static) |
+| **RT-009** | A realtime session never re-evaluates identity. `resolveActor` is still called exactly once per socket; the `Actor` is cached for the connection's lifetime. Offboarding does not offboard. | OPEN · CONFIRMED (static) |
+| **RT-010** | **Half closed.** `schema.prisma` is now `schemas = ["chat"]`, so the duplicate `public`-schema model is gone and the two definitions agree. **Unchanged:** the foundation migration still states Jawwid Chat lives "inside the Jawwid Core Supabase database", contradicting `docs/qa/authoritative-scope.md` §2. | OPEN (partial) |
 
-> **RT-010 is a product-owner decision, not a red-team one.** This audit
-> deliberately does not choose. But RT-002, RT-024 and RT-026 all resolve
-> differently depending on the answer, so the decision gates them.
+> **RT-010's remainder is a product-owner decision on tenancy, not a red-team
+> one.** This audit deliberately does not choose. Note it is now a smaller
+> decision than it was: only the tenancy question is left.
 
-### P2 — five findings
+### P2 — five open
 
-RT-011 (probe-based list authorization), RT-012 (receipt roster discloses staff
-ids and read times to contacts), RT-013 (internal-note existence announced over
-realtime — CONFIRMED in contract, UNVERIFIED at runtime, no drain worker yet),
-RT-014 (authorization decided outside the transaction that acts on it),
-**RT-027** (see §3).
+RT-011 (staff conversation listing still `take: 200` with no
+coverage scope — the `familyId: '*'` probe is gone with `thread.service.ts`, the
+unbounded scope is not), RT-012 (receipt roster still discloses staff ids and read
+times to contacts; field renamed `userId` → `actorId`, disclosure unchanged),
+RT-013 (internal-note existence still fanned out to the whole thread room —
+CONFIRMED in contract, UNVERIFIED at runtime, no drain worker), RT-014
+(authorization still decided before the transaction that acts on it).
 
-### P3 — seven findings
+### P3 — seven open
 
-RT-016, RT-017, RT-018, RT-019, RT-020, RT-021, RT-022. Hardening. Acceptable to
-ship with a recorded decision. **RT-020** is worth reading before accepting: seven
-documents cited as authoritative by code do not exist, and RT-005 is a direct
-consequence of one of them.
+RT-016, RT-017, RT-018, RT-019, RT-020 (partial), RT-021, RT-022. Acceptable to
+ship with a recorded decision. **RT-020 is worth reading first:** five documents
+cited as authoritative by code still do not exist, and RT-005 was a direct
+consequence of one of them before it was fixed.
 
 ### Closed
 
-**RT-015** — closed by `bf279a7`; CI now exists. Kept in the record as evidence
-that the control was added, not deleted as though it never applied.
+**RT-015** — CI now exists (`bf279a7`). Retained as the record that the control
+was added, not deleted as though it never applied.
 
 ---
 
-## 3. Refactor regressions — do not let these be absorbed
+## 3. RT-027 — resolved, and the one thing to watch
 
-A large refactor is **uncommitted in the working tree**: Prisma remapped onto the
-`chat` schema, `Conversation` / `ConversationMember` / `Call` models,
-`thread.service.ts` deleted. It is genuinely good work and it closes RT-002 and
-RT-026. It also introduces two regressions that must be handled **in the commit
-that lands it**, not after.
+For a period during this audit both red-team specs failed to compile against the
+refactored API, so CI's `test:unit` could not distinguish *"the invariant holds"*
+from *"nothing ran"*, and six findings were closed without their guard executing.
 
-### RT-004 — worsened by the refactor
+**This is now closed.** The specs were re-pointed and their assertions
+**inverted**: `RT-002 (fixed)`, `RT-003 (fixed)`, `RT-004 (fixed)`,
+`RT-005 (fixed)`, `RT-007 (fixed)` and `RT-008 (fixed)` now assert the *secure*
+behaviour and fail loudly if the vulnerability returns, plus a new
+`conversation-type confusion` section. Full unit suite: **6 suites, 81 tests,
+green.**
 
-`deriveMode` is now `private deriveMode(actor, _conv, fallback) { return fallback; }`
-— the ownership comparison is gone and both parameters are unused. Every internal
-note by any family-facing admin is stamped **`OWNER`**, on every family, whoever
-owns it. Before the refactor it was `COVERAGE`: unjustified, but at least
-distinguishable from ownership. This writes an affirmative false ownership claim
-into `audit_log`.
+**The one thing to watch.** During that inversion the `RT-008` section was
+dropped while the file header still listed it — a fixed finding left with no
+regression guard. It was caught only because the header disagreed with the
+contents, and has been restored. Expect this failure mode again: when a spec is
+re-pointed, check that every section named in its header still exists.
 
-The trap: the pre-refactor proof for RT-004 lives in `authz-attacks.spec.ts`
-§RT-004, and that spec stops compiling the moment the refactor lands (RT-027).
-**The finding and its evidence would disappear in the same commit.** That is why
-it is called out here separately.
+### RT-004 — a regression that was caught and closed, kept on the record
 
-### RT-027 — the security regression tests are not running
+Mid-audit the refactor reduced `deriveMode` to `{ return fallback; }` with both
+parameters unused, stamping **`OWNER`** on every family for every family-facing
+admin — an affirmative false ownership claim in the audit trail, worse than the
+`COVERAGE` it replaced. It is **now fixed** (`authorization.service.ts:311-326`:
+async, `OWNER` only for the actual owner, `onDuty()` consulted for `COVERAGE`,
+`ASSIST` otherwise) and was fixed **before it was committed**.
 
-`npx jest --selectProjects unit` → **6 failed, 1 passed**, all six
-`Test suite failed to run` on `TS2305` / `TS2820`. The six include AI #5's
-JC-005 and JC-006 conformance suites and both red-team specs.
-
-While this persists, CI's `npm run test:unit` cannot distinguish *"the invariant
-holds"* from *"nothing ran"*, and RT-002, RT-003, RT-004, RT-005, RT-007 and
-RT-008 have no automated evidence.
-
-**Required before the refactor is committed:** re-point the specs at the new
-`AuthorizationService` API. Imports, the `Actor` shape and the vocabulary
-constants change. **The assertions do not.**
+It stays on the record because the near-miss is the lesson: the regression and
+the spec that proved it would have disappeared in the same commit. That is the
+failure mode RT-027 describes, and it nearly landed.
 
 ---
 
 ## 4. The rule that governs every fix
 
-`apps/api/test/unit/red-team/` holds **security regression tests**. They assert
-observed insecure behaviour so each finding is graded CONFIRMED rather than
-THEORETICAL. Because CI now runs them, **fixing a finding turns CI red — by
-design.**
+`apps/api/test/unit/red-team/` holds **security regression tests** — 24
+assertions across 6 sections, currently intact and unmodified in substance.
 
-> A fix must make the invariant hold, and invert the assertion in the same
-> commit. A test must never be deleted, skipped, renamed away, or weakened
+> A fix must make the invariant hold, and the assertion must be inverted in the
+> same commit. A test must never be deleted, skipped, renamed away, or weakened
 > because the implementation fails it.
 
 A red-team spec relaxed to go green is a regression in the audit, not a fix in
-the product. Both specs are currently intact and unmodified in substance.
+the product.
 
 ---
 
-## 5. What this audit could not test, and why
+## 5. What was never tested, and why
 
 Not clearances — untested surfaces:
 
 | Area | Blocked by |
 |---|---|
-| HTTP-layer attacks (REST IDOR, CORS, CSRF, rate limiting) | No `main.ts`, no `AppModule`; `/health` is the only controller. `applyInfrastructure()` is written, correct, and called by nothing. |
+| HTTP-layer attacks (REST IDOR, CORS, CSRF, rate limiting) | No `main.ts`, no `AppModule` at the time of testing; `/health` was the only controller. `applyInfrastructure()` is written, correct, and called by nothing. **Re-check — `src/communication/api/` appeared in the working tree during the audit.** |
 | Chaos / recovery, queue and worker attacks | Nothing to kill: `docker-compose.yml` provisions Postgres, Redis and MinIO but no API container. No queue, worker or job exists. Database-layer chaos *was* possible and produced RT-023/024/025. |
-| Notification, calling and search attacks | `notifications/` and `handoff/` are empty directories; calling is DESIGN-ONLY (JC-001); no search exists. |
-| Jawwid Core integration attacks | No integration code; `CORE_*` environment variables only. Webhook replay, ordering and authenticity are all unaddressed. |
+| Notification and search attacks | `notifications/` and `handoff/` were empty directories; no search exists. |
+| Calling attacks beyond the database trigger | `calls/call.service.ts` appeared during the audit and was not attacked at runtime. |
+| Jawwid Core integration attacks | No integration code; `CORE_*` environment variables only. Webhook replay, ordering and authenticity all unaddressed. |
 
-**Re-run the campaign once the application boots.** The reproduction commands are
-in [`README.md`](README.md).
+**Re-run the campaign once the application boots.** Reproduction commands are in
+[`README.md`](README.md). Given how fast this tree moves, treat any finding older
+than a few commits as needing re-verification before you act on it.
 
 ---
 
-## 6. Recommended order — advisory only
+## 6. Recommended order — advisory
 
-1. **RT-023** — cheap, unblocks G-19, and until it lands no database fix reaches any environment.
-2. **RT-010** — the database decision. Gates RT-002, RT-024 and RT-026. **Not this audit's call.**
-3. **RT-001** — the cheapest single break in the attack chain (`cross-agent-red-team.md`).
-4. **RT-004 and RT-027** — before the refactor is committed, not after.
-5. **RT-024, RT-025** — with the answer to (2) in hand.
+1. **RT-023** — cheap, unblocks G-19, and until it lands no database fix reaches any environment. **Blocker.**
+2. **RT-024**, then **RT-025** — the BR-1 gaps. RT-023 must land first for the fix to exist anywhere. **RT-024 is a blocker.**
+3. **RT-027** — re-point the specs; this is also the fix validation for the six findings closed without a guard.
+4. **RT-001** — the cheapest single break in the attack chain (`cross-agent-red-team.md`).
+5. **RT-010** — the tenancy decision. **Not this audit's call.**
+6. **RT-006, RT-009**, then the P2s.

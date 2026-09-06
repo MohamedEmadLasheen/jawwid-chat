@@ -84,21 +84,31 @@ refactor is where the risk now is:
 
 ## Severity tally
 
-Counted from the detailed findings below. Every id RT-001…RT-027 is present
-exactly once; there are no gaps and no duplicates.
+Severity is the severity of the *finding*; it does not change when the finding
+is fixed — only **Status** does. Every id RT-001…RT-027 appears exactly once as
+a record. No gaps, no duplicates.
 
-| Severity | Count | IDs |
-|---|---|---|
-| **P0** | **5** | RT-001, RT-002, RT-023, RT-024, RT-026 |
-| **P1** | **9** | RT-003, RT-004, RT-005, RT-006, RT-007, RT-008, RT-009, RT-010, RT-025 |
-| **P2** | **5** | RT-011, RT-012, RT-013, RT-014, RT-027 |
-| **P3** | **7** | RT-016, RT-017, RT-018, RT-019, RT-020, RT-021, RT-022 |
-| Closed | 1 | RT-015 |
-| | **27** | |
+| Severity | Count | IDs | Still open |
+|---|---|---|---|
+| **P0** | **5** | RT-001, RT-002, RT-023, RT-024, RT-026 | **3** — RT-001, RT-023, RT-024 |
+| **P1** | **9** | RT-003, RT-004, RT-005, RT-006, RT-007, RT-008, RT-009, RT-010, RT-025 | 4 — RT-006, RT-009, RT-010 (partial), RT-025 |
+| **P2** | **5** | RT-011, RT-012, RT-013, RT-014, RT-027 | 4 — RT-011, RT-012, RT-013, RT-014 |
+| **P3** | **7** | RT-016, RT-017, RT-018, RT-019, RT-020, RT-021, RT-022 | 7 (RT-020 partial) |
+| Closed | 1 | RT-015 | — |
+| | **27** | | **18 open · 8 resolved · 1 closed** |
 
-**Of the five P0s, three are proven by execution** (RT-002, RT-023, RT-024); two
-are CONFIRMED (static) — RT-001 and RT-026. An earlier verbal summary of this
-audit said "four proven by execution". That was wrong; the figure is three.
+**Of the five P0s, three were proven by execution** (RT-002, RT-023, RT-024);
+RT-001 and RT-026 are CONFIRMED (static). An earlier verbal summary of this audit
+said "four proven by execution" — that was wrong; the figure is three.
+
+### Verification anchor
+
+> **All statuses below were re-verified at commit `b634fe8` on 2026-09-06**, with
+> a further 35 files uncommitted in the working tree. This tree moved five times
+> during the audit. **Eight findings were fixed while this report was being
+> written** — RT-002, RT-003, RT-004, RT-005, RT-007, RT-008, RT-026, and
+> RT-015 — and they are recorded as RESOLVED with the evidence that closed them,
+> not deleted. Anything read from an older copy of this file is stale.
 
 ## Test-preservation contract
 
@@ -106,113 +116,119 @@ audit said "four proven by execution". That was wrong; the figure is three.
 the *observed insecure* behaviour so each finding can be graded CONFIRMED rather
 than THEORETICAL, and so a fix is visible rather than silent.
 
-> **A fix must make the invariant hold and the assertion be inverted in the same
-> commit. A test must never be deleted, skipped, or weakened because the
-> implementation fails it.** A red-team spec that has been relaxed to go green is
-> a regression in the audit, not a fix in the product.
+> **A fix must make the invariant hold, and the assertion must be inverted in the
+> same commit. A test must never be deleted, skipped, renamed away, or weakened
+> because the implementation fails it.** A red-team spec relaxed to go green is a
+> regression in the audit, not a fix in the product.
 
-Both specs are intact and unmodified in substance. They currently do not compile
-— see RT-027 — which is the in-flight refactor, not an edit to the tests.
+**The contract has now been exercised end to end.** Six sections were re-pointed
+at the refactored API and **inverted** — they assert the secure behaviour and
+fail loudly if the vulnerability returns — and a seventh (`RT-008`) that had gone
+missing during the inversion was restored. Nothing was deleted, skipped or
+weakened. Current state: **22 assertions across 7 sections, all passing**; the
+full unit suite is 6 suites / 81 tests green.
 
 ---
 
 ## Evidence register
 
-Every finding, with the fields required for release triage. `Regression?` means
-*introduced or worsened by the uncommitted refactor now in the working tree*.
-Full attack steps, expected behaviour, root cause and acceptance criteria are in
-the detailed finding bodies below.
+Every finding with the fields required for release triage. `Regression?` means
+*introduced or worsened by the refactor that landed during this audit*.
+Full attack steps, root cause and acceptance criteria are in the finding bodies
+below; where a finding is now RESOLVED, the body records the original attack and
+this register records what closed it.
 
 ### A · Database and migration failures
 
 | ID | Sev | Exact attack | Exact evidence | Affected component | Status | Regression? |
 |---|---|---|---|---|---|---|
-| **RT-023** | **P0** | Apply the committed migration series to an empty database. | `bash scripts/db/test-db.sh reset` → `ERROR: relation "chat.family" does not exist` at `20260905093000`. `comm` of `references chat.*` against `create table chat.*` yields **`chat.family`, `chat.staff`, `chat.learner`, `chat.thread`, `chat.message`** — created by no migration; `git log --diff-filter=D` shows none were deleted. | `supabase/migrations/*`, CI gate G-19 | **CONFIRMED (runtime)** | No — pre-existing |
-| **RT-010** | P1 | None — architectural fork. | `20260905090000_chat_foundation.sql:3-7` places `chat` *inside the Jawwid Core database*; `schema.prisma` + `.env.example:37` target a standalone Postgres; `infra/docker/postgres-init/10-app-role.sh:5-8` states it serves "both database strategies currently in the tree". | schema, infra | **CONFIRMED (static)** | No — pre-existing |
+| **RT-023** | **P0** | Apply the committed migration series to an empty database. | `bash scripts/db/test-db.sh reset` → `ERROR: relation "chat.family" does not exist` at `20260905093000`. `comm` of `references chat.*` against `create table chat.*` still yields **`chat.family`, `chat.staff`, `chat.learner`, `chat.thread`, `chat.message`** at `b634fe8` — created by no migration; `git log --diff-filter=D` shows none were deleted. | `supabase/migrations/*`, CI gate G-19 | **OPEN · CONFIRMED (runtime)** · **RELEASE BLOCKER** | No |
+| **RT-010** | P1 | None — architectural fork. | **Half closed.** `schema.prisma:18` is now `schemas = ["chat"]`, so the duplicate `public`-schema model is gone and the two definitions no longer disagree. **Unchanged:** `20260905090000_chat_foundation.sql:3-7` still states Jawwid Chat "lives in the `chat` schema inside the Jawwid Core Supabase database", which contradicts `docs/qa/authoritative-scope.md` §2. | schema, infra | **OPEN (partial)** · CONFIRMED (static) — *schema divergence resolved; the tenancy question is not* | No |
 
 ### B · Authorization failures
 
 | ID | Sev | Exact attack | Exact evidence | Affected component | Status | Regression? |
 |---|---|---|---|---|---|---|
-| **RT-001** | **P0** | Open a WebSocket with `auth.userId` set to any staff or contact primary key. | `realtime.gateway.ts:57` `String(client.handshake.auth?.userId ?? '')` passed to `identity.resolveActor`; no verifier exists in `apps/api`. `Contact.appUserId` is read by no code. | `RealtimeGateway`, `IdentityService` | **CONFIRMED (static)** | No — pre-existing |
-| **RT-002** | **P0** | Read/write a thread of any `kind` for a family; probe `familyId: '*'`. | `authz-attacks.spec.ts` §RT-002, 4 assertions: all four `ThreadKind` values admitted for a contact; all family ids admitted for all three operator roles. | `AuthorizationService` | **CONFIRMED (runtime)** — *largely addressed by the uncommitted refactor: `canRead(actor, conv, membership)` now requires live membership for contacts and teachers* | No |
-| **RT-026** | **P0** | None — the control guards tables no code uses. | `grep -rln "chat\.\|conversation_member\|conversationId" apps/api/src apps/admin-web/src` → no matches at `c6aa4a6`. BR-1 triggers live on `chat.conversation_member`; all services target Prisma `Thread`/`Message`. | schema ↔ services seam | **CONFIRMED (static)** | No — the uncommitted refactor is the fix in progress |
-| **RT-003** | P1 | Manager sends with `requestedMode: 'OWNER'` on a family they do not own. | `authz-attacks.spec.ts` §RT-003, 2 assertions. Survives `fa53ba7` and the refactor: `authorization.service.ts:217-218` `if (actor.staffRole === 'manager') return allow(intent.requestedMode ?? ESCALATION, …)`. | `AuthorizationService` | **CONFIRMED (runtime)** | No — but **survived two rewrites** |
-| **RT-006** | P1 | Pass another family's message ids to the signing helper. | `attachment.service.ts` `signUrlsForMessages(messageIds: string[])` — no actor parameter. `grep` confirms no caller exists yet. | `AttachmentService` | **CONFIRMED (static)**; UNVERIFIED at runtime (unreachable) | No |
-| **RT-009** | P1 | Disable an account while its socket is open; keep using it. | `resolveActor` appears once in `realtime.gateway.ts` (line 58, `handleConnection`); the `Actor` is cached on the socket and reused by `subscribe`/`typingStart`/`canTouchThread`. No TTL, no eviction. | `RealtimeGateway` | **CONFIRMED (static)** | No |
-| **RT-011** | P2 | List threads as any operator. | `thread.service.ts:142` `canReadThread(actor, { familyId: '*' })` then `findMany({ take: 200 })`, unfiltered. `authz-attacks.spec.ts` §RT-002 shows `'*'` is allowed for all operator roles. | `ThreadService` | **CONFIRMED (runtime)** | No — file is deleted by the refactor; re-verify the replacement |
-| **RT-014** | P2 | Revoke authority between the decision and the commit. | `message.service.ts:81-137` — actor, family and `canSendMessage` all resolved before `$transaction`; the `FOR UPDATE` lock is taken afterwards. | `MessageService` | **CONFIRMED (static)** | No |
+| **RT-001** | **P0** | Open a WebSocket with `auth.actorId` set to any staff or contact primary key. | `realtime.gateway.ts:57` — `String(client.handshake.auth?.actorId ?? '')` passed to `identity.resolveActor`. **The field was renamed from `userId` to `actorId`; nothing else changed.** No token verifier exists in `apps/api`; no `APP_ENV` guard. | `RealtimeGateway`, `IdentityService` | **OPEN · CONFIRMED (static)** | No |
+| **RT-002** | **P0** | Read/write a conversation of any kind for a family; probe `familyId: '*'`. | Original: `authz-attacks.spec.ts` §RT-002, 4 assertions. **Closed by the refactor:** `canRead(actor, conv, membership)` now receives the conversation and the membership, and a contact or teacher must be a live member (`NOT_CONVERSATION_MEMBER`). `canOpenDirect()` is a closed allow-list; `canCall()` takes a participant set. | `AuthorizationService` | **RESOLVED** · re-verify by inverting the spec (RT-027) | No |
+| **RT-026** | **P0** | None — the control guarded tables no code used. | Original: `grep` for `chat.conversation` across `apps/api/src` returned nothing. **Closed:** `conversation.service.ts` and `call.service.ts` now exist and `schema.prisma` is `schemas = ["chat"]`. The application and the BR-1 triggers now target the same tables. | schema ↔ services seam | **RESOLVED** | No |
+| **RT-003** | P1 | Manager sends with `requestedMode: 'OWNER'` on a family they do not own. | Original: `authz-attacks.spec.ts` §RT-003, 2 assertions; survived `fa53ba7`. **Closed:** `authorization.service.ts:311-326` — `deriveMode` honours only `ESCALATION` from `requested`, returns `OWNER` solely when `actor.actorId === familyOwnerId`, and the manager branch is commented "may not choose their own attribution". | `AuthorizationService` | **RESOLVED** | No |
+| **RT-006** | P1 | Pass another family's message ids to the signing helper. | `attachment.service.ts:89-91` — still `signUrlsForMessages(messageIds: string[])`, no actor parameter, no thread or membership check. | `AttachmentService` | **OPEN · CONFIRMED (static)**; UNVERIFIED at runtime (no caller yet) | No |
+| **RT-009** | P1 | Disable an account while its socket is open; keep using it. | `realtime.gateway.ts` — `resolveActor` still appears exactly once (line 58, `handleConnection`); the `Actor` is cached on the socket for its lifetime. No TTL, no re-resolution, no revocation channel, no room eviction. | `RealtimeGateway` | **OPEN · CONFIRMED (static)** | No |
+| **RT-011** | P2 | List conversations as any operator. | `conversation.service.ts:420-445` — `listForActor` still returns `take: 200` with no coverage scoping for staff. The `familyId: '*'` probe is gone with `thread.service.ts`; **the unbounded staff scope is not.** | `ConversationService` | **OPEN (re-scoped)** · CONFIRMED (static) | No |
+| **RT-014** | P2 | Revoke authority between the decision and the commit. | `message.service.ts:124` — `canSend` is still evaluated before the transaction; the `SELECT last_seq … FOR UPDATE` lock is taken at line 158. | `MessageService` | **OPEN · CONFIRMED (static)** | No |
 
 ### C · Privacy and security failures
 
 | ID | Sev | Exact attack | Exact evidence | Affected component | Status | Regression? |
 |---|---|---|---|---|---|---|
-| **RT-005** | P1 | Sign a read URL for any object key using the literal in the repo. | `storage-and-integrity-attacks.spec.ts` §RT-005: with `STORAGE_SIGNING_SECRET` deleted, an attacker-constructed signer's signature makes the victim instance's `verify()` return `true`. `object-storage.ts:35` `?? 'dev-only-not-a-secret'`; variable absent from `.env.example`. | `SignedLocalObjectStorage` | **CONFIRMED (runtime)** | No |
-| **RT-007** | P1 | Authorize an `image/png` upload, PUT other bytes, then send the attachment declaring any MIME/size. | `storage-and-integrity-attacks.spec.ts` §RT-007: `AttachmentService.validate` correctly rejects `text/html`, `image/svg+xml`, oversize — and a static assertion over `message.service.ts` shows no `AttachmentService` reference and no `.validate(` call, while `objectKey: a.objectKey` is persisted verbatim. | `MessageService`, `AttachmentService` | **CONFIRMED (runtime + static)** | No |
-| **RT-008** | P1 | Contact sends `{ type: 'SYSTEM', origin: 'AUTOMATION' }` into their own thread. | `storage-and-integrity-attacks.spec.ts` §RT-008: `validateContent(SYSTEM, { body: null, attachments: [] })` does not throw, while the same emptiness throws for `TEXT` and `IMAGE`. `message.service.ts:102-103` takes both fields from the request. | `MessageService` | **CONFIRMED (runtime)** | No |
-| **RT-012** | P2 | Read any message as a contact. | `dto.ts:185-190` — `toMessageDto` maps every `MessageReceipt` row (`userId`, `deliveredAt`, `readAt`), including staff. | `MessageDto` | **CONFIRMED (static)** | No |
-| **RT-013** | P2 | Observe realtime while staff write internal notes. | `message.created` is published with `toThread(threadId, …)` to a room holding contacts and staff; payload carries `visibility: 'INTERNAL'`, `authorId`, `createdAt`. REST filters internal messages; realtime has no audience filter. | realtime fan-out contract | **CONFIRMED (in contract)**; **UNVERIFIED at runtime** — no outbox drain worker exists | No |
-| RT-016 | P3 | Timing oracle on HMAC comparison. | `object-storage.ts:64` `===` on hex digests. | `SignedLocalObjectStorage` | CONFIRMED (static) | No |
-| RT-021 | P3 | Log an email, `authToken`, `idToken`, `jwt`, `otp`. | `redacting_logger.dart:20-40` — exact-key match list; those keys are absent. | Flutter `RedactingLogger` | CONFIRMED (static) | No |
-| RT-022 | P3 | None — storage halves cannot connect. | `object-storage.ts:33-60` expects this API to serve bytes (no such route); `docker-compose.yml:70-110` + `.env.example:49-53` provision MinIO credentials no code reads. | storage layer | CONFIRMED (static) | No |
+| **RT-005** | P1 | Sign a read URL for any object key using the literal committed to git. | Original: `storage-and-integrity-attacks.spec.ts` §RT-005 — with the env var deleted, an attacker-built signer's signature made the victim's `verify()` return `true`. **Closed:** `object-storage.ts:43-46` now reads `process.env.STORAGE_SIGNING_SECRET` with no fallback and throws unless it is ≥32 characters. | `SignedLocalObjectStorage` | **RESOLVED** | No |
+| **RT-007** | P1 | Authorize an `image/png` upload, PUT other bytes, then send the attachment declaring any MIME/size. | Original: static proof that `message.service.ts` referenced no validator. **Closed:** `message.service.ts:11, 72, 114` — `AttachmentService` is injected and `this.attachments.validate(a.kind, a.mimeType, a.byteSize)` runs per attachment inside `send()`. | `MessageService` | **RESOLVED** | No |
+| **RT-008** | P1 | Contact sends `{ type: 'SYSTEM', origin: 'AUTOMATION' }` into their own conversation. | Original: `storage-and-integrity-attacks.spec.ts` §RT-008 — `validateContent(SYSTEM, empty)` did not throw. **Closed:** `message.service.ts:98-109` — "A client may never author a SYSTEM message or claim a non-user origin"; origin is forced to `USER` unless `actor.kind === SYSTEM`. | `MessageService` | **RESOLVED** | No |
+| **RT-012** | P2 | Read any message as a contact. | `dto.ts:55, 185` — `toMessageDto` still maps every `MessageReceipt` row (`actorId`, `state`, `deliveredAt`, `readAt`), staff included. Field renamed `userId` → `actorId`; the disclosure is unchanged. | `MessageDto` | **OPEN · CONFIRMED (static)** | No |
+| **RT-013** | P2 | Observe realtime while staff write internal notes. | `realtime.gateway.ts:180` — `toThread(threadId, …)` still fans out to a room holding contacts and staff, with no audience filter; the payload carries `visibility`. | realtime fan-out contract | **OPEN · CONFIRMED (in contract)**; UNVERIFIED at runtime — no outbox drain worker | No |
+| RT-016 | P3 | Timing oracle on HMAC comparison. | `object-storage.ts:80` — still `this.sign(…) === sig`, not `timingSafeEqual`. | `SignedLocalObjectStorage` | **OPEN** · CONFIRMED (static) | No |
+| RT-021 | P3 | Log an email, `authToken`, `idToken`, `jwt`, `otp`. | `redacting_logger.dart:20-40` — exact-key match list; those keys are absent. | Flutter `RedactingLogger` | **OPEN** · CONFIRMED (static) | No |
+| RT-022 | P3 | None — storage halves cannot connect. | `object-storage.ts:31-34` — `SignedLocalObjectStorage` is still the only implementation and still expects this API to serve the bytes; no route exists and no S3/MinIO adapter has been written. | storage layer | **OPEN** · CONFIRMED (static) | No |
 
 ### D · Product invariant failures (BR-1, ownership)
 
 | ID | Sev | Exact attack | Exact evidence | Affected component | Status | Regression? |
 |---|---|---|---|---|---|---|
-| **RT-024** | **P0** | Create a legal `student_group` with a teacher and a parent, then `UPDATE chat.conversation SET type='direct', direct_key=…`. | Executed on Supabase Postgres 17.6. Control refused: `ERROR: BR-1 violation: a direct conversation may never contain both a teacher and a family contact`. Attack succeeded: result rows `direct \| contact \| parent` and `direct \| teacher \| teacher`. **Calling identical**: a `group` call promoted to `direct` yields `direct \| contact` + `direct \| teacher`. | `chat.enforce_direct_conversation_rules()`, `chat.enforce_call_participant_rules()` | **CONFIRMED (runtime)** | No — the trigger is new, the gap shipped with it |
-| **RT-025** | P1 | Create a `student_group` (or `class_group`) containing exactly one teacher and one parent, no admin. | Executed: `student_group \| admin_members 0 \| live_members 2`; `class_group \| 0 \| 2`; group call `group \| staff_present 0 \| participants 2`. The trigger checks `type = 'direct'` only, so `class_group` is entirely out of scope. | same triggers | **CONFIRMED (runtime)** | No |
-| **RT-004** ↗ | P1 | *Cross-reference only — the full record is in section E.* Ownership attribution is asserted with no basis, which is a product-invariant failure as well as a regression. | see §E | `AuthorizationService.deriveMode` | **CONFIRMED** | **YES** |
+| **RT-024** | **P0** | Create a legal `student_group` with a teacher and a parent, then `UPDATE chat.conversation SET type='direct', direct_key=…`. | Executed on Supabase Postgres 17.6. Control refused: `ERROR: BR-1 violation: a direct conversation may never contain both a teacher and a family contact`. Attack succeeded: `direct \| contact \| parent` and `direct \| teacher \| teacher`. **Calling identical**: a `group` call promoted to `direct` yields `direct \| contact` + `direct \| teacher`. At `b634fe8` the triggers on `20260905093000` are still only `conversation_member_br1` and `call_participant_br1`; `chat.conversation` still carries only `conversation_set_updated_at`. | `chat.enforce_direct_conversation_rules()`, `chat.enforce_call_participant_rules()` | **OPEN · CONFIRMED (runtime)** · **RELEASE BLOCKER** | No |
+| **RT-025** | P1 | Create a `student_group` (or `class_group`) containing exactly one teacher and one parent, no admin. | Executed: `student_group \| admin_members 0 \| live_members 2`; `class_group \| 0 \| 2`; group call `group \| staff_present 0 \| participants 2`. The trigger tests `type = 'direct'` only, so `class_group` is entirely out of scope. | same triggers | **OPEN · CONFIRMED (runtime)** | No |
+| **RT-004** ↗ | P1 | *Cross-reference — full record in section E.* Ownership attribution asserted with no basis. | see §E | `AuthorizationService.deriveMode` | **RESOLVED** | Regression was transient |
 
 ### E · Refactor regressions
 
-Both entries below concern the **uncommitted** refactor in the working tree
-(Prisma remapped onto `chat`, `Conversation`/`ConversationMember`/`Call`,
-`thread.service.ts` deleted). Neither is committed history; both are the current
-state of the working copy and must not be lost when it lands.
-
 | ID | Sev | Exact attack | Exact evidence | Affected component | Status | Regression? |
 |---|---|---|---|---|---|---|
-| **RT-004** | P1 | Any family-facing admin writes an internal note on any family. | **Before the refactor:** `deriveMode` compared `actor.userId === familyOwnerId` and returned `COVERAGE` for a non-owner — wrong, but distinguishable; `authz-attacks.spec.ts` §RT-004 proves `onDuty()` was never called (`onDutyCalls === 0`). **After the refactor:** `authorization.service.ts:269-271` is `private deriveMode(actor: Actor, _conv: Conv, fallback: string): string { return fallback; }` — the ownership comparison is gone and **both parameters are unused**, so the OWNER fallback is returned verbatim and every internal note by any family-facing admin is stamped **`OWNER`** on every family. | `AuthorizationService.deriveMode` | **CONFIRMED (runtime, pre-refactor); CONFIRMED (static, post-refactor)** | **YES — worsened.** `COVERAGE` (unjustified) → `OWNER` (an affirmative false ownership claim in the audit trail) |
-| **RT-027** | P2 | None — the regression tests stop running. | `npx jest --selectProjects unit` → **6 failed, 1 passed**, all six `Test suite failed to run` with `TS2305: Module '"@prisma/client"' has no exported member 'MessageVisibility'` and `TS2820: Type '"STAFF"' is not assignable to type 'ActorKind'`. AI #5's JC-005/JC-006 conformance specs and both red-team specs are among the six. | whole `apps/api` unit suite | **CONFIRMED (runtime)** | **YES** |
+| **RT-004** | P1 | Any family-facing admin writes an internal note on a family they neither own nor cover. | **Original:** `deriveMode` compared ownership only and returned `COVERAGE` for a non-owner; `authz-attacks.spec.ts` §RT-004 proved `onDuty()` was never called (`onDutyCalls === 0`). **Regressed mid-audit:** `deriveMode` became `{ return fallback; }` with both parameters unused, stamping **`OWNER`** on every family. **Now closed:** `authorization.service.ts:311-326` — `deriveMode` is async, returns `OWNER` only for the actual family owner, calls `coverage.onDuty()` and returns `COVERAGE` only when it matches, and falls through to `ASSIST` otherwise. | `AuthorizationService.deriveMode` | **RESOLVED** — the regression was caught in the working tree and fixed before it was committed | **Was YES; now closed** |
+| **RT-027** | P2 | None — the regression tests stop running. | **Original:** at `b634fe8`, `npx jest --selectProjects unit` → 3 failed, 2 passed; both red-team specs failed to compile (`TS2305` on the removed Prisma enums, `TS2820` on `'STAFF'` vs `'staff'`). **Closed:** the specs were re-pointed at the new API and their assertions **inverted** — `RT-002 (fixed)`, `RT-003 (fixed)`, `RT-004 (fixed)`, `RT-005 (fixed)`, `RT-007 (fixed)` now assert the secure behaviour, plus a new `conversation-type confusion` section. Suite: **6 passed, 81 tests**. One gap found and closed by this audit: the `RT-008` section had been dropped while the file header still claimed it, leaving a fixed finding with no guard — restored as `RT-008 (fixed)`. | `apps/api/test/unit/red-team/*` | **RESOLVED** | Was YES; now closed |
 
-**Why RT-027 is a security finding and not a build annoyance:** the JC-005,
-JC-006 and red-team specs are the only automated evidence that these invariants
-hold. While the suite does not compile, CI's `npm run test:unit` step cannot
-distinguish "the invariant holds" from "nothing ran". The tests must be
-re-pointed at the new `AuthorizationService` API — **not** deleted — before the
-refactor is committed.
+**Why RT-027 mattered.** While the specs did not compile, CI's
+`npm run test:unit` could not distinguish *"the invariant holds"* from *"nothing
+ran"*, and six of the findings closed during this audit were closed without their
+guard executing. **The preservation contract then worked as designed:** the specs
+were re-pointed and inverted rather than deleted, and they now guard the fixed
+behaviour. The one section that went missing in the process (`RT-008`) was
+detected precisely because the file header still claimed it, and was restored.
+That is the intended failure mode — visible, not silent.
 
 ### F · Remaining hardening and closed findings
 
 | ID | Sev | Exact attack | Exact evidence | Affected component | Status | Regression? |
 |---|---|---|---|---|---|---|
-| RT-017 | P3 | Send `before`, `after` or `seq` as a non-numeric string. | `message.service.ts:380-381, 438` — `BigInt(input.before)` on an unvalidated client string throws `SyntaxError`, not a typed `CommError`: an uncaught 500 and a stack trace rather than a 400. | `MessageService` | CONFIRMED (static) | No |
-| RT-018 | P3 | Send `before` and `after` together. | `message.service.ts:380-381` — the second assignment overwrites `where.seq`; `after` wins and the caller's other bound is discarded with no error. | `MessageService` | CONFIRMED (static) | No |
-| RT-019 | P3 | Emit `message.delivered` with a very large `messageIds[]`. | `realtime.gateway.ts:155-169` — array passed straight into a SQL `IN`, no cap, no rate limit; the socket is otherwise unmetered. | `RealtimeGateway` | CONFIRMED (static) | No |
-| RT-020 | P3 | None — documentation gap. | Seven documents cited as authoritative do not exist: `docs/brief/JAWWID_CHAT_BRIEF.md`, `docs/communication/{scope-decisions,realtime-events}.md`, `docs/infrastructure/{environment,architecture,decisions,handoff-ai2}.md`. `docs/architecture/` exists and is empty. RT-005 is a direct consequence of the missing `environment.md`. | repository | CONFIRMED (static) | No |
-| RT-015 | — | *Closed.* CI did not exist; the QA suite gated nothing. | Closed by `bf279a7`: `.github/workflows/ci.yml` runs typecheck, `test:unit`, admin-web tests and the G-18/G-19/G-20/G-31..35 guards. Retained as the record that the control was added. | CI | **CLOSED** | No |
+| RT-017 | P3 | Send `before`, `after` or `seq` as a non-numeric string. | `message.service.ts:416-417, 469` — `BigInt(input.before)` on an unvalidated client string throws `SyntaxError`, not a typed `CommError`. | `MessageService` | **OPEN** · CONFIRMED (static) | No |
+| RT-018 | P3 | Send `before` and `after` together. | `message.service.ts:416-417` — the second assignment overwrites `where.seq`; `after` wins and the other bound is silently discarded. | `MessageService` | **OPEN** · CONFIRMED (static) | No |
+| RT-019 | P3 | Emit `message.delivered` with a very large `messageIds[]`. | `realtime.gateway.ts:150-157` — array passed straight into a SQL `IN`; no cap, no rate limit. | `RealtimeGateway` | **OPEN** · CONFIRMED (static) | No |
+| RT-020 | P3 | None — documentation gap. | **Partly closed:** `docs/infrastructure/environment.md` and `architecture.md` now exist. **Still missing:** `docs/brief/JAWWID_CHAT_BRIEF.md` (cited by README), `docs/communication/scope-decisions.md` (cited by the schema to justify its scope), `docs/communication/realtime-events.md`, `docs/infrastructure/{decisions,handoff-ai2}.md`. | repository | **OPEN (partial)** · CONFIRMED (static) | No |
+| RT-015 | — | *Closed.* CI did not exist; the QA suite gated nothing. | Closed by `bf279a7`: `.github/workflows/ci.yml` runs typecheck, `test:unit`, the integration suite and the G-18/G-19/G-20/G-31..35 guards. Retained as the record that the control was added. | CI | **CLOSED** | No |
 
-**Counting note.** RT-004 appears twice above: once in section D as a
+**Counting note.** RT-004 appears twice above — once in section D as a
 cross-reference (it is a product-invariant failure) and once in section E as its
-full record (it is a refactor regression). It is **one finding**. Every id
-RT-001…RT-027 appears in exactly one section as its record, and the severity
-tally counts records, not rows.
+full record (it is a refactor regression). It is **one finding**. The tally counts
+records, not rows.
 
 ---
 
 ## Recommended fix order
 
-Unchanged from the original assessment, and deliberately narrow — this audit
-does not prescribe the remediation:
+Advisory. This audit does not prescribe remediation, does not choose the database
+architecture, and does not redesign the authorization model.
 
 1. **RT-023** — cheap, unblocks CI's G-19, and until it lands no database fix
-   reaches any environment.
-2. **RT-010** — the database decision. RT-002, RT-024 and RT-026 all resolve
-   differently depending on the answer. **This audit does not make that choice.**
-3. **RT-001** — the cheapest single break in the attack chain
+   reaches any environment. **Blocker.**
+2. **RT-024** and **RT-025** — the BR-1 trigger gaps. RT-023 must land first for
+   the fix to exist in any environment. **RT-024 is a blocker.**
+3. **RT-027** — re-point the red-team specs. This is also the fix validation for
+   the six findings closed during this audit without their guard executing.
+4. **RT-001** — the cheapest single break in the attack chain
    (see `cross-agent-red-team.md`).
-4. **RT-004 and RT-027** — before the refactor is committed, not after.
+5. **RT-010** — the tenancy decision. **Not this audit's call.**
+6. **RT-006, RT-009**, then the P2s.
+
+---
 
 # BLOCKING RELEASE — P0
 

@@ -71,6 +71,9 @@ jobs:
           fi
           echo "G-20 pass"
 
+      - name: JC-011 · protected regression tests must not be deleted or gutted
+        run: bash scripts/qa/check-protected-tests.sh
+
       - name: G-31..G-35 · Phase 2 functionality must not ship in MVP
         run: |
           set -uo pipefail

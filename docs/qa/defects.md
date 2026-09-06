@@ -553,8 +553,16 @@ defect is that a security fix was reverted **silently**.
   positive assertions that legitimate access still works.
 - Verified: **81 unit tests passing, 6 suites, typecheck clean.**
 
-**Acceptance criteria for prevention (open, owner AI #5).** CI cannot currently
-detect a deleted test. A guard that fails when a file matching
-`*regression*.spec.ts` disappears, or a coverage floor on
-`authorization.service.ts`, would close this. Tracked for the next pass — the
-re-application above is complete, the prevention is not.
+**Prevention — DONE.** `scripts/qa/check-protected-tests.sh` reads
+`docs/qa/protected-tests.tsv` and fails CI if a listed security regression test
+is **deleted** or **gutted** below an assertion floor. Wired into the fast
+`guards` job, so it fails a run in seconds.
+
+Verified in both failure modes before landing: deleting the JC-005/006 suite
+exits 1 with `protected test DELETED`; neutering 10 of its 14 assertions exits 1
+with `protected test GUTTED`; restoring it passes. Four files are protected
+today (JC-005/006 regression, phone-privacy structural guard, BR-1 conformance,
+integration schema invariants).
+
+Removing a manifest line is deliberate and reviewable — the file states it may
+be done only when the defect is closed by design, never to make a build green.
