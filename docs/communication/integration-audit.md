@@ -155,6 +155,18 @@ every caller is covered.
 | **AI #9** red team | six findings closed with executable evidence; assertions inverted in place as their suites instruct | RT-016/17/18/19/22 remain open |
 | **AI #6** design, **AI #8** product ops | — | no interface with this domain was found in the tree |
 
+## 7b · A flaky security test, found and fixed
+
+The call-token privacy assertion scanned the LiveKit claims for `/\d{7,}/` as a
+phone-number check. A uuid hex segment can be all digits (`206f67036934`), so it
+failed about one run in four while the behaviour was always correct.
+
+Worth recording for two reasons: a flaky *security* test is worse than no test,
+because it teaches people to re-run rather than read it; and this is the kind of
+defect that only appears when a suite is run repeatedly, which an audit does and
+ordinary development does not. Replaced with structural assertions — 5
+consecutive green runs against 2 failures in the previous 9.
+
 ## 8 · Integration hygiene
 
 Worked in `.claude/worktrees/ai2-integration-audit` on `integration/ai2-audit`.
@@ -190,6 +202,7 @@ adapter, no storage transport, no producer for reminder anchor events.
 - [x] API boots; HTTP smoke passes
 - [x] workers executed by the runtime
 - [x] six red-team findings closed with evidence
+- [x] test suite stable across repeated runs (one flaky assertion fixed)
 - [ ] teacher identity real
 - [ ] authentication real
 - [ ] branches merged; one branch builds the database
