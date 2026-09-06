@@ -2,7 +2,32 @@
 
 Date: 2026-09-05
 Author: AI #3 — Flutter Mobile Engineer
-Status: **Discovery complete. Implementation BLOCKED pending two decisions (see §5).**
+Status: **HISTORICAL. Superseded in part — read this notice before §4 or §5.**
+
+> ## ⚠️ Correction (2026-09-05, after this report was written)
+>
+> **§4 and §5.1 of this report are wrong, and the conclusion they reach was overturned.**
+>
+> This report treated `docs/JAWWID_CHAT_BRIEF.pdf` as authoritative because the PDF says so
+> of itself. It is not. `docs/qa/authoritative-scope.md` is **GOVERNING**: the PDF is an
+> older, CS-console-only document and is superseded by **Jawwid Chat PRD v0.1**.
+>
+> The product owner confirmed the resolution: **the parent and teacher mobile apps, Student
+> Groups, message approvals, push notifications and voice calling are all in MVP scope.**
+> Everything §4 lists as "absent from the brief" is in fact in scope. See
+> `docs/mobile/decisions.md` D1.
+>
+> All three discovery agents (AI #3, AI #4, AI #5) reached the same wrong conclusion
+> independently, which is worth recording: agreement between agents reading the same
+> document is not evidence that the document is authoritative.
+>
+> §5.2 (no Flutter toolchain) and §5.3 (no backend contracts) were accurate at the time and
+> have both since been resolved — Flutter 3.47.2 is installed and AI #2 has published
+> `apps/api/src/communication/contracts/`.
+>
+> The rest of this report — the repository state in §1, the related-repository findings in
+> §2, and the record of what was actually on disk — remains accurate and is kept as the
+> historical record of the discovery pass.
 
 ---
 

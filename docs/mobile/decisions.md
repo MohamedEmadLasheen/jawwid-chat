@@ -1,24 +1,27 @@
 # Mobile Decisions Record (AI #3)
 
-## D1 — Scope: the AI #3 role assignment is authoritative for the mobile client
-**Date:** 2026-09-05 · **Decided by:** product owner · **Status:** accepted
+## D1 — Scope: build the parent and teacher apps in full
+**Date:** 2026-09-05 · **Decided by:** product owner · **Status:** accepted, then confirmed
+by the governing scope document
 
-`docs/mobile/discovery-report.md` §4 documented a conflict between the project brief
-(a staff-facing CS console with no teacher role, no student groups, no approvals and no
-calling) and the AI #3 role assignment (a parent + teacher messenger built largely from those
-features). The decision is:
+`docs/mobile/discovery-report.md` §4 escalated a conflict between the PDF brief (a staff-only
+CS console with no teacher role, no student groups, no approvals and no calling) and the AI #3
+role assignment (a parent + teacher messenger built largely from those features).
 
-> The project brief governs the **staff** side. The AI #3 role assignment governs the
-> **family/teacher** side. Build the parent + teacher Flutter application as assigned.
+The product owner ruled: **build the parent and teacher apps as assigned.**
+
+`docs/qa/authoritative-scope.md` (GOVERNING, AI #5) then settled the underlying question:
+**the PDF brief is superseded** by Jawwid Chat PRD v0.1, and the authoritative MVP scope
+explicitly includes the parent mobile app, the teacher mobile app, Student Groups, the message
+approval workflow, push notifications, and 1:1 and group voice calling. So the decision here
+and the governing document agree; the PDF was simply the wrong source.
 
 Consequences:
-- Student Groups, message approvals, voice notes, and 1:1 / group calling are **in scope** for
-  mobile even though they are absent from the brief's data model.
-- These features imply backend entities that do not exist in the brief's §3 data model.
-  Every one of them is recorded in `docs/mobile/backend-dependencies.md` as a **request** to
-  AI #1 / AI #2, not as an assumption.
-- The brief's staff-side invariants are **not** contradicted by this decision and are still
-  respected where they touch mobile (see D3).
+- Student Groups, approvals, voice notes and calling are in scope.
+- The brief's staff-side invariants still constrain mobile where they touch it (see D3), and
+  BR-1 — no teacher ↔ parent direct messaging or calling — is unchanged and absolute.
+- `docs/mobile/backend-dependencies.md` recorded these as requests to AI #1 / AI #2. Most are
+  now satisfied by `apps/api/src/communication/contracts/`; that file records which remain.
 
 ## D2 — Toolchain: Flutter stable 3.47.2 / Dart 3.13.2
 **Date:** 2026-09-05 · **Decided by:** product owner · **Status:** accepted
@@ -42,7 +45,7 @@ The brief's non-negotiables are backend-enforced, but two of them constrain mobi
 Hardcoding staff names, schedules, class times, or payment/subscription state is prohibited.
 
 ## D4 — Backend integration is behind a data-source seam, with a fake for development
-**Date:** 2026-09-05 · **Status:** accepted
+**Date:** 2026-09-05 · **Status:** accepted; the contract has since been published
 
 No AI #1 or AI #2 contract exists yet, and role-assignment §57/§58/§80 forbid inventing a
 backend protocol. Rather than block all mobile work on that, the client is built against
@@ -52,6 +55,19 @@ backend protocol. Rather than block all mobile work on that, the client is built
 2. an **HTTP/WebSocket** implementation written against the contract proposed in
    `docs/mobile/backend-dependencies.md`.
 
-The proposed contract is explicitly a **request awaiting AI #1 / AI #2 sign-off** — it is not
-treated as agreed, and it is not a second source of truth. When the real contract lands, only
-the HTTP implementation changes; UI, state, and tests do not.
+The proposed contract was explicitly a **request awaiting AI #1 / AI #2 sign-off**. AI #2 has
+since published the real one at `apps/api/src/communication/contracts/`, and
+`lib/core/data/wire/` maps it into the domain models. The seam did its job: adopting the real
+contract changed the mapping layer only — no UI, controller, or domain test changed.
+
+## D5 — Retry is explicit, and a refusal is never retried
+**Date:** 2026-09-05 · **Status:** accepted
+
+Riverpod 3 retries every failed provider by default. Left alone that would re-attempt a BR-1
+refusal, a validation failure, and a revoked session forever — burning battery and data on
+exactly the low-end devices and slow networks this audience uses, and directly contradicting
+the instruction not to retry a backend refusal.
+
+`lib/app/retry_policy.dart` retries only failures classified as transient (network, timeout,
+rate limit, 5xx), with capped exponential backoff and an attempt ceiling. Everything else is
+terminal. The same rule governs the message outbox.
