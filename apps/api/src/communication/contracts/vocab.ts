@@ -146,18 +146,154 @@ export const ApprovalDecision = {
 } as const;
 export type ApprovalDecision = (typeof ApprovalDecision)[keyof typeof ApprovalDecision];
 
-export const CallType = { DIRECT: 'direct', GROUP: 'group' } as const;
+export const CallType = { DIRECT: 'direct', GROUP: 'group', CLASS: 'class' } as const;
 export type CallType = (typeof CallType)[keyof typeof CallType];
 
-export const CallStatus = { RINGING: 'ringing', ACTIVE: 'active', ENDED: 'ended' } as const;
+/**
+ * `initiated` is the entry state of the machine: the call row exists and
+ * nobody has been invited yet. It is not observable through the API, because
+ * `CallService.start` invites in the SAME transaction that creates the call --
+ * a call that reached a client has always already reached `ringing`. It is a
+ * state rather than an implicit prelude so that the machine has one declared
+ * entry point, and so that a dispatch failure has somewhere lawful to end from.
+ */
+export const CallStatus = {
+  INITIATED: 'initiated',
+  RINGING: 'ringing',
+  ACTIVE: 'active',
+  ENDED: 'ended',
+} as const;
 export type CallStatus = (typeof CallStatus)[keyof typeof CallStatus];
 
+/**
+ * How a call ended. `ended` is the single terminal STATUS and this says what
+ * happened, which is why the Phase 5 brief's `declined` / `missed` / `failed`
+ * "states" are outcomes here -- see 20260907150000_chat_phase5_calls.sql for
+ * why one terminal status carrying an outcome beats four terminal statuses.
+ *
+ * CANCELLED and FAILED are new. Both used to be recorded as MISSED, which reads
+ * as "the recipient did not pick up" and blames the wrong party: the caller
+ * hanging up before an answer is not the recipient's doing, and neither is the
+ * media layer breaking.
+ */
 export const CallOutcome = {
   ANSWERED: 'answered',
   MISSED: 'missed',
   DECLINED: 'declined',
+  CANCELLED: 'cancelled',
+  FAILED: 'failed',
 } as const;
 export type CallOutcome = (typeof CallOutcome)[keyof typeof CallOutcome];
+
+/**
+ * NORMAL_CALL records nothing. FOLLOW_UP_CALL may be recorded.
+ *
+ * The mode is fixed when the call is created, by an actor holding
+ * `calls.record`, and it is never a per-request flag -- "record this call" must
+ * not be something a client can switch on mid-call or ask for on a call it
+ * merely joined. A database trigger refuses a recording row for a `normal`
+ * call, so the guarantee survives a bug in this service.
+ */
+export const CallMode = { NORMAL: 'normal', FOLLOW_UP: 'follow_up' } as const;
+export type CallMode = (typeof CallMode)[keyof typeof CallMode];
+
+/**
+ * Per-invitee lifecycle, independent of the call's.
+ *
+ * A group call does not end because one invitee refused, and it does not start
+ * ringing again because one invitee left. Before Phase 5 a refusal could only
+ * be recorded by stamping `left_at`, which is indistinguishable from somebody
+ * who joined and hung up.
+ */
+export const CallParticipantState = {
+  INVITED: 'invited',
+  JOINED: 'joined',
+  DECLINED: 'declined',
+  LEFT: 'left',
+  MISSED: 'missed',
+} as const;
+export type CallParticipantState =
+  (typeof CallParticipantState)[keyof typeof CallParticipantState];
+
+export const RecordingStatus = {
+  PENDING: 'pending',
+  AVAILABLE: 'available',
+  FAILED: 'failed',
+  DELETED: 'deleted',
+} as const;
+export type RecordingStatus = (typeof RecordingStatus)[keyof typeof RecordingStatus];
+
+// --- Stories and broadcast (Phase 5) ---------------------------------------
+
+export const StoryState = {
+  DRAFT: 'draft',
+  PUBLISHED: 'published',
+  EXPIRED: 'expired',
+  DELETED: 'deleted',
+} as const;
+export type StoryState = (typeof StoryState)[keyof typeof StoryState];
+
+/**
+ * THE audience vocabulary -- one language, shared by stories and broadcast.
+ *
+ * Two vocabularies would let "the Thursday group" mean different sets of people
+ * depending on which feature asked, which is exactly the class of divergence
+ * an audience resolver exists to prevent. Mirrors the CHECK on both
+ * chat.story_audience.kind and chat.broadcast_audience.kind.
+ */
+export const AudienceKind = {
+  /** Every family in the organization. Organization-wide roles only. */
+  ALL_FAMILIES: 'all_families',
+  /** Every active teacher in the organization. */
+  ALL_TEACHERS: 'all_teachers',
+  /** The families currently assigned to the author. */
+  ASSIGNED_FAMILIES: 'assigned_families',
+  FAMILY: 'family',
+  GROUP: 'group',
+  LABEL: 'label',
+  TEACHER: 'teacher',
+  /** One named actor: a contact or a teacher. */
+  USER: 'user',
+} as const;
+export type AudienceKind = (typeof AudienceKind)[keyof typeof AudienceKind];
+
+/** Kinds that name no particular record, so they carry no ref id. */
+export const UNREFERENCED_AUDIENCE_KINDS: ReadonlySet<string> = new Set([
+  AudienceKind.ALL_FAMILIES,
+  AudienceKind.ALL_TEACHERS,
+  AudienceKind.ASSIGNED_FAMILIES,
+]);
+
+export const BroadcastState = {
+  DRAFT: 'draft',
+  QUEUED: 'queued',
+  PROCESSING: 'processing',
+  COMPLETED: 'completed',
+  /** Some recipients were delivered and some were not. A real, terminal answer. */
+  PARTIAL_FAILURE: 'partial_failure',
+  FAILED: 'failed',
+  CANCELLED: 'cancelled',
+} as const;
+export type BroadcastState = (typeof BroadcastState)[keyof typeof BroadcastState];
+
+/**
+ * Per-recipient delivery state.
+ *
+ * SENT and DELIVERED are deliberately different things. SENT means the message
+ * row was written and a notification scheduled -- work this system actually
+ * did. DELIVERED means a client or a push provider acknowledged receipt. A
+ * successful database insert is never promoted to DELIVERED, because that would
+ * make the delivery report a report on our own optimism.
+ */
+export const BroadcastRecipientStatus = {
+  PENDING: 'pending',
+  QUEUED: 'queued',
+  SENT: 'sent',
+  DELIVERED: 'delivered',
+  FAILED: 'failed',
+} as const;
+export type BroadcastRecipientStatus =
+  (typeof BroadcastRecipientStatus)[keyof typeof BroadcastRecipientStatus];
 
 export const NotificationStatus = {
   SCHEDULED: 'scheduled',

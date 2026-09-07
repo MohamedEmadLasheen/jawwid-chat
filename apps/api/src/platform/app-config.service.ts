@@ -48,6 +48,39 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   /** initial hypothesis - notification delivery retry budget */
   'notification.max_attempts': 5,
 
+  // --- Calls, recording, stories and broadcast (Phase 5) ---------------------
+  // Mirrors the rows inserted by 2026090715*.sql. As everywhere else in this
+  // file, the ROW is authoritative and these are the fallbacks a fresh database
+  // starts from.
+  /** how many expired ringing calls one missed-call sweep claims */
+  'call.missed_sweep_batch': 200,
+  /** offsets after a class call starts at which a not-yet-joined recipient is reminded */
+  'call.class_reminder_seconds': [60, 180],
+  /**
+   * Days an available recording is retained before the retention sweep deletes
+   * it.
+   *
+   * A SAFE TECHNICAL DEFAULT, NOT A STATED BUSINESS POLICY. Neither the PRD nor
+   * the audit states a retention period for call recordings, and inventing one
+   * and calling it the academy's policy would be a fabrication. This exists so
+   * that no recording is stored unbounded by omission; the real figure is a
+   * config row away. See docs/recovery/PHASE-5-REPORT.md.
+   */
+  'recording.retention_days': 30,
+  /** signed playback URL lifetime. Short by design: it is a bearer credential */
+  'recording.playback_url_ttl_seconds': 120,
+  'recording.retention_sweep_batch': 100,
+  'story.default_lifetime_hours': 24,
+  'story.max_body_length': 2000,
+  'story.feed_page_size': 50,
+  'broadcast.fanout_batch_size': 100,
+  /** deliveries in flight at once -- bounded so fan-out cannot starve live chat */
+  'broadcast.fanout_concurrency': 8,
+  'broadcast.lease_seconds': 60,
+  'broadcast.max_attempts': 5,
+  /** a guard against an audience clause that accidentally means everyone */
+  'broadcast.max_recipients': 5000,
+
   // --- Authentication and sessions (Phase 1) ---------------------------------
   // ONE source of truth for session policy. Nothing in the auth code may
   // hardcode these numbers, and changing the device limit is a config change,

@@ -69,6 +69,55 @@ export enum CommErrorCode {
   CALL_NOT_A_PARTICIPANT = 'COMM.CALL_NOT_A_PARTICIPANT',
   /** PD-2: a family contact may join a Student Group call but never start one. */
   PARENT_CANNOT_START_GROUP_CALL = 'COMM.PARENT_CANNOT_START_GROUP_CALL',
+  /** The action is not legal from the call's current state. See calls/call-state.ts. */
+  CALL_INVALID_TRANSITION = 'COMM.CALL_INVALID_TRANSITION',
+  /** The invitation window closed before anyone answered. */
+  CALL_EXPIRED = 'COMM.CALL_EXPIRED',
+  /** Only the actor who started a call may cancel it. */
+  CALL_NOT_INITIATOR = 'COMM.CALL_NOT_INITIATOR',
+  /** A class call may only be started in a Student Group or Class Group. */
+  CLASS_CALL_REQUIRES_GROUP = 'COMM.CLASS_CALL_REQUIRES_GROUP',
+
+  // --- Recording ---
+  /** A `normal` call cannot be recorded. Recording belongs to follow-up calls. */
+  RECORDING_NOT_PERMITTED_FOR_MODE = 'COMM.RECORDING_NOT_PERMITTED_FOR_MODE',
+  RECORDING_NOT_FOUND = 'COMM.RECORDING_NOT_FOUND',
+  /** The recording exists but is not yet playable, or is no longer playable. */
+  RECORDING_NOT_AVAILABLE = 'COMM.RECORDING_NOT_AVAILABLE',
+  /** Retention elapsed; the audio is gone and no URL will be minted. */
+  RECORDING_EXPIRED = 'COMM.RECORDING_EXPIRED',
+  RECORDING_ALREADY_EXISTS = 'COMM.RECORDING_ALREADY_EXISTS',
+
+  // --- Stories ---
+  STORY_NOT_FOUND = 'COMM.STORY_NOT_FOUND',
+  STORY_ALREADY_PUBLISHED = 'COMM.STORY_ALREADY_PUBLISHED',
+  STORY_NOT_PUBLISHED = 'COMM.STORY_NOT_PUBLISHED',
+  STORY_EXPIRED = 'COMM.STORY_EXPIRED',
+  STORY_EMPTY = 'COMM.STORY_EMPTY',
+  STORY_TOO_LONG = 'COMM.STORY_TOO_LONG',
+
+  // --- Audience resolution (stories and broadcast share it) ---
+  /** The audience list was empty, or every clause was malformed. */
+  AUDIENCE_EMPTY = 'COMM.AUDIENCE_EMPTY',
+  /** A clause named a kind that is not in the audience vocabulary. */
+  AUDIENCE_KIND_INVALID = 'COMM.AUDIENCE_KIND_INVALID',
+  /**
+   * A clause named a record the author may not target. Returned for a forged
+   * id and for a real id outside the author's scope ALIKE -- distinguishing
+   * them would turn this endpoint into an existence oracle for other people's
+   * families, labels and groups.
+   */
+  AUDIENCE_TARGET_NOT_FOUND = 'COMM.AUDIENCE_TARGET_NOT_FOUND',
+  /** Only an organization-wide role may target everyone. */
+  AUDIENCE_TOO_BROAD = 'COMM.AUDIENCE_TOO_BROAD',
+  /** The resolved audience exceeds broadcast.max_recipients. */
+  AUDIENCE_TOO_LARGE = 'COMM.AUDIENCE_TOO_LARGE',
+
+  // --- Broadcast ---
+  BROADCAST_NOT_FOUND = 'COMM.BROADCAST_NOT_FOUND',
+  /** Queue/cancel was called from a state that has no such transition. */
+  BROADCAST_INVALID_STATE = 'COMM.BROADCAST_INVALID_STATE',
+  BROADCAST_EMPTY_BODY = 'COMM.BROADCAST_EMPTY_BODY',
 }
 
 export class CommError extends Error {

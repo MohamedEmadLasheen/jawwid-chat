@@ -30,6 +30,26 @@ export const CommEvent = {
   CALL_ENDED: 'call.ended',
   CALL_PARTICIPANT_JOINED: 'call.participant_joined',
   CALL_PARTICIPANT_LEFT: 'call.participant_left',
+  /**
+   * The invitation window closed with nobody answering.
+   *
+   * Emitted by the SERVER-SIDE sweeper, not by a client noticing. A recipient
+   * whose app was killed, whose push never arrived, or who was simply offline
+   * still gets a missed call in their history, because the transition never
+   * depended on them being awake to report it.
+   */
+  CALL_MISSED: 'call.missed',
+  /** The caller hung up before anyone answered. */
+  CALL_CANCELLED: 'call.cancelled',
+  /** The call ended abnormally -- dispatch or media failure, not a person. */
+  CALL_FAILED: 'call.failed',
+  /** A class call started: "the teacher is waiting". */
+  CLASS_CALL_STARTED: 'call.class_started',
+  STORY_PUBLISHED: 'story.published',
+  STORY_EXPIRED: 'story.expired',
+  BROADCAST_QUEUED: 'broadcast.queued',
+  BROADCAST_PROGRESS: 'broadcast.progress',
+  BROADCAST_COMPLETED: 'broadcast.completed',
   NOTIFICATION_CREATED: 'notification.created',
   /**
    * The socket has lost access to a conversation it was subscribed to.
@@ -159,6 +179,64 @@ export interface CallParticipantPayload {
   actorId: string;
 }
 
+/**
+ * A call reached a terminal state without being answered.
+ *
+ * Carries the conversation so a client can update the right thread, and the
+ * outcome so it can render "missed" and "declined" differently -- both matter
+ * to the person looking at the screen and they are not the same event.
+ */
+export interface CallTerminalPayload {
+  callId: string;
+  conversationId: string;
+  outcome: string;
+  initiatorId: string;
+  initiatorName: string;
+}
+
+/**
+ * A teacher opened a class call.
+ *
+ * `message` is NOT here, and that is deliberate: the words a recipient sees
+ * ("the teacher is waiting") are rendered from chat.notification_template in
+ * the recipient's own locale, at the moment of delivery. Putting a sentence in
+ * an event payload would freeze it in whatever language the server happened to
+ * pick, for everyone.
+ */
+export interface ClassCallStartedPayload extends CallPayload {
+  groupName: string;
+  teacherName: string;
+  /** When the invitation stops being valid. Lets a client stop ringing. */
+  expiresAt: string;
+}
+
+export interface StoryPublishedPayload {
+  storyId: string;
+  title: string | null;
+  hasMedia: boolean;
+  publishedAt: string;
+  expiresAt: string;
+}
+
+export interface StoryExpiredPayload {
+  storyId: string;
+}
+
+/**
+ * Fan-out progress, for the operator watching a large broadcast.
+ *
+ * Counts only. A broadcast's audience is a directory of the academy's
+ * customers, and a progress event never names one.
+ */
+export interface BroadcastProgressPayload {
+  broadcastId: string;
+  state: string;
+  recipientCount: number;
+  sentCount: number;
+  deliveredCount: number;
+  failedCount: number;
+}
+
 export interface NotificationCreatedPayload {
   notificationId: string;
   recipientId: string;
@@ -194,6 +272,15 @@ export interface CommEventPayloads {
   [CommEvent.CALL_ENDED]: CallEndedPayload;
   [CommEvent.CALL_PARTICIPANT_JOINED]: CallParticipantPayload;
   [CommEvent.CALL_PARTICIPANT_LEFT]: CallParticipantPayload;
+  [CommEvent.CALL_MISSED]: CallTerminalPayload;
+  [CommEvent.CALL_CANCELLED]: CallTerminalPayload;
+  [CommEvent.CALL_FAILED]: CallTerminalPayload;
+  [CommEvent.CLASS_CALL_STARTED]: ClassCallStartedPayload;
+  [CommEvent.STORY_PUBLISHED]: StoryPublishedPayload;
+  [CommEvent.STORY_EXPIRED]: StoryExpiredPayload;
+  [CommEvent.BROADCAST_QUEUED]: BroadcastProgressPayload;
+  [CommEvent.BROADCAST_PROGRESS]: BroadcastProgressPayload;
+  [CommEvent.BROADCAST_COMPLETED]: BroadcastProgressPayload;
   [CommEvent.NOTIFICATION_CREATED]: NotificationCreatedPayload;
   [CommEvent.ACCESS_REVOKED]: AccessRevokedPayload;
 }
