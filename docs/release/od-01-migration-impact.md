@@ -1,4 +1,4 @@
-> **STATUS: HISTORICAL** (Phase 0, 2026-09-07). Executed by `20260905094000` and commit 1b27075; the §17 STOP condition is recorded as PD-4.
+> **STATUS: HISTORICAL** (Phase 0, 2026-09-07). Executed by `20260905094000` and commit 1b27075. The §17 STOP condition became PD-4 and is **now CLOSED** (2026-09-07): system events are system messages in the family's existing `direct` conversation, with no Task and no new conversation type. Neither of the two options offered in §17 was adopted. See `docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4.
 > Canonical index: `docs/README.md`.
 
 # OD-01 — Migration Impact Note

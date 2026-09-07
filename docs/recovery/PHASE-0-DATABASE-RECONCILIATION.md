@@ -6,7 +6,8 @@
 | Date | 2026-09-07 |
 | Scope | The 22 files in `supabase/migrations/`, `db/tests/*.sql`, `scripts/db/*.sh`, `apps/api/prisma/schema.prisma`, `.github/workflows/ci.yml`, `apps/api/test/integration/schema-invariants.spec.ts` |
 | Purpose | Fix the single migration authority, record the full object inventory with one classification label per object, name the invariants the schema already enforces, list the defects, and record the verification run |
-| Not decided here | How RLS engages at runtime (deferred to `docs/security/RLS-STRATEGY.md`, not yet written); the Phase 1 role vocabulary, supervisor-assignment model and teacher identity (`docs/architecture/AUTHORIZATION-MODEL.md`, `docs/architecture/SUPERVISOR-OWNERSHIP.md`, both referenced by the Phase 0 plan and not yet present in the tree) |
+| Not decided here | How RLS engages at runtime (`docs/security/RLS-STRATEGY.md`); the Phase 1 role vocabulary, supervisor-assignment model and teacher identity (`docs/architecture/AUTHORIZATION-MODEL.md`, `docs/architecture/SUPERVISOR-OWNERSHIP.md`) |
+| Product decisions | PD-1 to PD-5 were CLOSED on 2026-09-07, after this document was written. Two of them change classifications here and the deltas are recorded in the addendum at the end: **PD-3** (coverage machinery moves from frozen-pending-decision to frozen-and-scheduled-for-removal) and **PD-4** (`chat.task` is never revived). The record is `../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4. |
 
 Product direction assumed throughout: Jawwid Chat is a communication platform for parents, teachers, supervisors (admins) and managers around families and learners. It is not a customer-success CRM. The communication core is kept; identity, ownership, permissions, tenancy and RLS are modified in Phase 1; CRM machinery is deprecated in place and removed by a later numbered migration after product confirms.
 
@@ -356,3 +357,24 @@ Executed 2026-09-07 by the Phase 0 lead and re-executed for this document agains
 | Live catalogue (for §3) | `pg_tables`, `pg_views`, `pg_proc`, `pg_trigger`, `pg_policies`, `pg_indexes`, `pg_roles` | 38 tables, 6 views, 76 functions, 40 triggers, 55 policies (34 permissive / 21 restrictive), RLS enabled on 21 tables and disabled on 17, roles `anon`/`authenticated`/`service_role` present with `service_role.rolbypassrls=true`. |
 
 Not verified in this record: `apps/api` `npm run test:int` (`schema-invariants.spec.ts`) was not re-run here; it is protected by JC-011 and runs in the `migrations` CI job (`ci.yml:218-223`). No Prisma drift check exists to run (D-7).
+
+
+---
+
+## 7. Addendum — effect of product decisions PD-1 to PD-5 (closed 2026-09-07)
+
+This document was written before PD-1 to PD-5 were closed. The classifications
+above stand except where this addendum narrows them. The decision record is
+`../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4.
+
+| PD | Effect on the classification above |
+|---|---|
+| PD-1 (coverage admins join a Student Group only for the window) | No change to any object. `chat.conversation_member.is_silent` stays KEEP; it is not used to make coverage admins permanent members. Window-scoped membership is Phase 2. |
+| PD-2 (a parent may join but never start a group call) | No schema change. Enforced in `AuthorizationService.canCall`; `chat.call` / `chat.call_participant` stay KEEP unchanged. The database BR-1 backstop is untouched. |
+| **PD-3 (coverage is an explicit temporary assignment)** | `chat.shift`, `chat.coverage_rule`, `chat.absence`, `chat.handoff` and the coverage-engine functions (`local_at`, `window_contains`, `in_shift`, `is_absent`, `absence_backup`, `coverage_chain`, `on_duty`, `effective_handler`, `extend_stickiness`, `next_on_duty_at`) move from **DEPRECATE (frozen pending a product decision)** to **DEPRECATE → REMOVE LATER (frozen, removal scheduled)**. The removal migration lands after Phase 1's `chat.family_assignment` carries the routing decision. `chat.on_duty()` keeps exactly one caller until then: `CoverageService` feeding `AuthorizationService.canSend`. Nothing new may depend on it. |
+| **PD-4 (system events are system messages)** | `chat.task` stays **DEPRECATE** and is now explicitly **not to be revived**: the only remaining candidate use for it, carrying system-event types, is rejected. `chat.task.type`'s OD-01 re-pointing to the PRD §7.6 vocabulary is left in place as history and is not a signal that Tasks return. No new column is added to `chat.message` in Phase 0; the event-metadata carrier is a Phase 2 design item. The four `chat.conversation.type` values stay exactly four. |
+| PD-5 (`super_admin` exists; departments are not roles) | Confirms the MODIFY already recorded for `chat.staff`: one Phase 1 migration changes `staff_role_check` to `super_admin \| manager \| admin \| coverage_admin`, renames the existing `coverage` rows, and moves `finance` / `technical` / `academic` to a new `chat.staff.department` attribute. The legacy role values must not survive as roles. |
+
+Nothing in this addendum changes the migration chain, the invariants in §4, or
+the verification record in §6. No migration was added or edited when the
+decisions were closed.

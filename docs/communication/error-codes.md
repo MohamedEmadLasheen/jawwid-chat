@@ -56,6 +56,7 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.CALL_NOT_FOUND` | 404 | |
 | `COMM.CALL_ALREADY_ENDED` | 409 | No token is issued for an ended call. |
 | `COMM.CALL_NOT_A_PARTICIPANT` | 403 | Not in the server-derived participant set. |
+| `COMM.PARENT_CANNOT_START_GROUP_CALL` | 403 | Product decision PD-2: a parent may JOIN a Student Group or Class Group call but may never START one. Never retry; a teacher or an admin starts it. |
 
 ## Client guidance
 

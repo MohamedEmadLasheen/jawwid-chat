@@ -33,7 +33,7 @@ communication safe and answerable, never as a general workflow system.
 | **Conversations** — typed, multi-party, explicit participant set: `direct`, `student_group`, `class_group`, `official` | MVP (class groups Phase 2, type present from day one) | `chat.conversation`, `chat.conversation_member` |
 | **Messaging** — text, media, voice notes, replies, reactions, receipts, typing, delete-for-me / delete-for-everyone, per-user archive/mute/pin | MVP | `apps/api/src/communication/messages` |
 | **Teacher ↔ Admin communication** — one persistent direct conversation per (teacher, admin) pair; never family-scoped | MVP (decision C-2) | `direct` with `family_id = null` |
-| **Supervisor communication and coverage** — the assigned supervisor answers; a covering admin may act with the same permissions inside a coverage window | MVP; coverage *windows* pending product confirmation (see §4) | `AuthorizationService`, `SUPERVISOR-OWNERSHIP.md` |
+| **Supervisor communication and coverage** — the assigned supervisor answers; a covering admin may act with the same permissions for the duration of an explicit temporary assignment | MVP; coverage is an explicit manager-created assignment (**PD-3**, §4) | `AuthorizationService`, `SUPERVISOR-OWNERSHIP.md` |
 | **Realtime** — delivery, receipts, typing, presence, approvals and call signalling over Socket.IO with Redis fan-out | MVP | `RealtimeGateway`, outbox worker |
 | **Notifications** — push with priority, quiet hours, templates, dedupe, delivery/open tracking, automated reminders | MVP (dispatch pipeline to be completed) | `apps/api/src/communication/notifications` |
 | **Moderation** — group messages from teachers and parents are held for the supervisor's approval; approve / reject with reason; audit | MVP | `chat.message_approval` |
@@ -54,9 +54,9 @@ communication safe and answerable, never as a general workflow system.
 | A generic CRM | The PRD centres the product on families and conversations, not accounts and pipelines | CRM-shaped machinery is **deprecated and frozen** (§3) |
 | A customer-success operating system | The brief that described one is superseded (`docs/qa/authoritative-scope.md`) | `attention`/`workload` engines and the "team now / this week" dashboard are deprecated |
 | A case-management system | Product decision C-3 (2026-09-06): there is **no Case entity** | `chat.support_case` removed by OD-01; Admin Web `CaseCards` deprecated |
-| A generic task-management system | Tasks routed to departments are CRM tooling; a *conversation-scoped follow-up* may return later as a communication feature | `chat.task` frozen; Admin Web `features/tasks` deprecated |
+| A generic task-management system | Tasks routed to departments are CRM tooling. **PD-4** settles the last open use for them: system events are system messages, so no Task is needed and none is revived | `chat.task` frozen; Admin Web `features/tasks` deprecated |
 | A renewal / subscription management platform | Renewals live in Jawwid Core | `chat.subscription` mirror and renewal config deprecated |
-| A workload / coverage CRM | Coverage exists only so a family is never unanswered | coverage *engine* retained until the ownership model replaces its routing role; shift/absence UI deprecated |
+| A workload / coverage CRM | Coverage exists only so a family is never unanswered, and is an explicit temporary assignment (**PD-3**) | coverage *engine* frozen and scheduled for removal; it keeps routing `canSend` only until Phase 1's assignment model replaces it; shift/absence UI deprecated |
 | A WhatsApp Business layer or a WhatsApp clone | PRD §1 | — |
 | An AI product | AI intent classification is Phase 2 and suggestion-only; no AI in Phase 0/1 | — |
 
@@ -74,7 +74,7 @@ communication safe and answerable, never as a general workflow system.
 │ SUPPORTING PLATFORM SERVICES                                        │
 │  Identity & Sessions · Authorization · Realtime · Notifications     │
 │  Storage · Audit / Event log · Outbox & Workers · Config            │
-│  Coverage windows (pending decision, see §4)                        │
+│  Supervisor assignment, incl. explicit temporary cover (PD-3)       │
 ├─────────────────────────────────────────────────────────────────────┤
 │ EXTERNAL INTEGRATIONS                                               │
 │  Jawwid Core (identity provisioning, learners, enrolments,          │
@@ -106,8 +106,8 @@ the product owner confirms; it is never edited in place.
 | Machinery | Objects | Status |
 |---|---|---|
 | Cases | `chat.support_case` (dropped by OD-01), Admin Web `CaseCards`, `/cases/*` endpoints | removed in DB · deprecated in Admin Web |
-| Tasks | `chat.task`, Admin Web `features/tasks`, `/tasks` | frozen |
-| Shifts / absences / coverage rules | `chat.shift`, `chat.coverage_rule`, `chat.absence`, `chat.handoff`, Admin Web `features/coverage` | frozen pending §4 decision |
+| Tasks | `chat.task`, Admin Web `features/tasks`, `/tasks` | **frozen, not to be revived** (PD-4) |
+| Shifts / absences / coverage rules | `chat.shift`, `chat.coverage_rule`, `chat.absence`, `chat.handoff`, Admin Web `features/coverage` | **frozen, scheduled for removal** (PD-3); `chat.on_duty()` routes `canSend` only until Phase 1 |
 | Workload scoring | `workload_*` functions, `WorkloadBadge`, team-now table | frozen |
 | Attention scoring | `attention_*` functions, `family_state_cache`, attention buckets | frozen; the *idea* (needs-reply queue) returns as a conversation section in the console |
 | Renewals / at-risk | `chat.subscription` mirror, renewal config keys, dashboard "this week" | frozen |
@@ -117,15 +117,198 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Open product decisions (recorded, not assumed)
+## 4. Product decisions PD-1 to PD-5 — CLOSED
 
-| ID | Question | Why it matters | Default until decided |
-|---|---|---|---|
-| PD-1 | Are coverage admins permanent silent members of Student Groups, or joined for the window only? (PRD §15.2 Q4) | membership model, C-4 admin presence | not implemented either way |
-| PD-2 | May parents initiate group calls? (PRD §15.2 Q5) | `canCall` policy | parents cannot initiate group calls |
-| PD-3 | Do coverage *windows* (shift schedule → on-duty admin) survive as a communication feature, or is coverage reduced to explicit temporary assignment? | decides whether the coverage engine is KEEP or REMOVE LATER | engine retained, UI deprecated, no new code |
-| PD-4 | PRD §7.5 "conversations created automatically by the system (onboarding, renewal, payment, schedule change, follow-up)" has no representable type after C-1 + C-3 (`od-01-migration-impact.md` §17) | notification/reminder pipeline target | system events post into the family's existing `direct` conversation as `system` messages; no new conversation type |
-| PD-5 | Does `super_admin` exist as a role from day one? PRD §3 says yes; Admin Web asserts no | role model | **yes** (PRD governs); see `AUTHORIZATION-MODEL.md` |
+All five were closed by the product owner on **2026-09-07**, at the Phase 0 exit
+gate, before `main` was baselined. This section is the canonical record. Any
+document that contradicts it is superseded on that point, whatever its own
+status banner says.
+
+| ID | Subject | Status |
+|---|---|---|
+| PD-1 | Coverage admin membership of Student Groups | **CLOSED** — window-only |
+| PD-2 | Who may initiate a Student Group call | **CLOSED** — not the parent |
+| PD-3 | Coverage model | **CLOSED** — explicit temporary assignment |
+| PD-4 | Representation of system-generated events | **CLOSED** — system messages |
+| PD-5 | Role model | **CLOSED** — `super_admin` exists from day one |
+
+---
+
+### PD-1 · Coverage admin membership of Student Groups
+
+**Final decision.** Coverage admins are members of a Student Group **only during
+an active coverage window**. They are **not** permanent silent members of every
+Student Group.
+
+**Canonical rule.**
+
+```
+coverage_admin + student_group + inside an active coverage window  = MEMBER
+coverage_admin + student_group + outside that window               = NOT A MEMBER
+```
+
+**Implementation phase.** Phase 2. Phase 0 and Phase 1 do not change the
+membership system. Today's Student Group membership stays exactly as built:
+family contacts with `can_message`, the family's assigned supervisor, and the
+learner's teacher.
+
+**Consequences.**
+- Supervisor-scoped privacy is preserved. A coverage admin never gains standing visibility of every family's group.
+- The C-4 live-admin presence rule (BR-1) must be satisfiable inside the window. A coverage admin joining for the window counts as the required admin only while they are a live member with `member_role = 'admin'`.
+- Group notification and realtime audiences change when a window opens and closes, so the window transition is an event the fan-out must handle.
+- `is_silent` already exists in the schema and is honoured by `canSend`, participant selection and the media grant. It is retained for silent membership generally; it is not used to make coverage admins permanent members.
+- `syncStudentGroup` removes any member outside its desired set. Phase 2 must teach it about window-scoped members before any coverage admin is added, or the next sync will remove them.
+
+**Deprecated or conflicting behaviour.** PRD §7.3 offers both shapes as
+"configurable"; the configurable alternative is not built. The permanent silent
+member option is rejected and must not be implemented.
+
+---
+
+### PD-2 · Who may initiate a Student Group call
+
+**Final decision.** Parents **may join** Student Group calls. Parents **may not
+initiate** them. A Student Group call is initiated by a teacher or by
+admin / authorized staff.
+
+**Canonical rule.**
+
+```
+parent + student_group_call + initiate = DENY   (COMM.PARENT_CANNOT_START_GROUP_CALL)
+parent + student_group_call + join     = ALLOW, subject to normal membership
+                                         and authorization rules
+```
+
+**Implementation phase.** The authorization rule is implemented **now**, in
+Phase 0, because the pre-existing behaviour permitted parent initiation. No
+broader calling work is done. The client surfaces follow in Phase 2.
+
+**Consequences.**
+- `AuthorizationService.canCall` takes a `CallIntent` (`initiate` | `join`). The default is `initiate`, the stricter value, so a caller that does not state its intent is denied rather than allowed.
+- `CallService.start` passes `initiate`; `CallService.token`, which mints the media grant for joining, passes `join`.
+- The rule is scoped to `student_group` and `class_group`. The parent's 1:1 call to their handler (PRD §9) is untouched.
+- Ordering is fixed: BR-1 and C-4 are evaluated first, so a constitutional violation always reports its own code and never this policy code.
+- New stable error code `COMM.PARENT_CANNOT_START_GROUP_CALL`, HTTP 403.
+- Protected by `apps/api/test/unit/authorization/pd002-group-call-initiation.spec.ts`.
+
+**Deprecated or conflicting behaviour.** The behaviour before this decision
+allowed a parent member of a compliant group to start a group call, and no test
+covered either direction. PRD §7.3's "if policy allows, start one" is now
+resolved: the policy does not allow it.
+
+---
+
+### PD-3 · Coverage model
+
+**Final decision.** Coverage is based on **explicit temporary assignments
+created by a manager**. The shift, schedule and coverage-rule engine is **not**
+the core authorization mechanism.
+
+**Canonical rule.**
+
+```
+authorization scope reads from   chat.family_assignment
+temporary assignment created by  an authorized manager, explicitly
+schedule engine                  deprecated; may later become only a WRITER
+                                 into the assignment model, never a reader
+                                 the authorization path consults
+```
+
+**Implementation phase.** Phase 1 establishes the identity, role and assignment
+foundation, including `chat.family_assignment`. No new product behaviour is
+built around `chat.on_duty()`.
+
+**Consequences.**
+- The shift, coverage rule, absence and handoff machinery is deprecated and frozen. It moves from "frozen pending a decision" to "frozen and scheduled for removal" once the assignment model carries the routing decision.
+- `chat.on_duty()` keeps its current role as the routing input to `canSend` only until Phase 1 replaces it. It must not be extended, and nothing new may depend on it.
+- The coverage engine is not expanded, and the deprecated Admin Web coverage feature is not revived.
+- `visible_families(actor)` is defined against assignments, not against a schedule.
+- A future scheduling feature, if the product asks for one, writes `temporary` rows into `chat.family_assignment`. The authorization path still reads only assignments.
+
+**Deprecated or conflicting behaviour.** The schedule-driven option in
+`SUPERVISOR-OWNERSHIP.md` §4 is rejected as an authorization mechanism.
+`docs/JAWWID_CHAT_BRIEF.txt`'s `on_duty()` as "the sole assignment function" is
+superseded.
+
+---
+
+### PD-4 · Representation of system-generated events
+
+**Final decision.** System-generated events are represented as **system
+messages inside the family's existing direct conversation**. The removed `Task`
+entity is **not** resurrected. **No** new conversation type is created for
+system events.
+
+**Canonical rule.**
+
+```
+system event  ->  the family's existing direct conversation
+                  + a message of type `system`
+                  + event metadata / type carried on the message where needed
+```
+
+Applies to onboarding, renewal, payment, schedule change and follow-up.
+
+**Implementation phase.** Phase 2 builds automatic event generation and the
+notification pipeline. Phase 0 records the decision only.
+
+**Consequences.**
+- The four conversation types stay exactly four: `direct`, `student_group`, `class_group`, `official`. No fifth type, and no per-event-class `official` conversation.
+- `chat.task` stays deprecated and frozen. It is not revived to carry event types, and PRD §7.6's task types are not reintroduced as a domain entity in this model.
+- PRD §7.5's phrase "with their type shown" refers to metadata carried on the system message, not to a conversation type and not to a Task type.
+- The family's history stays in one conversation, which preserves PRD §7.5's "the full timeline across all of the family's conversations" without fragmenting it per event.
+- The notification and reminder pipeline in `../architecture/JAWUID-CHAT-ARCHITECTURE.md` §2.7 terminates on this representation.
+- The event metadata carrier on `chat.message` is a Phase 2 design item; nothing is added to the schema now.
+
+**Deprecated or conflicting behaviour.** Both options offered in
+`docs/release/od-01-migration-impact.md` §17 are superseded: option 1 because it
+requires a Task, option 2 because it creates `official` conversations per event
+class. The STOP condition recorded there is now cleared.
+
+---
+
+### PD-5 · Role model
+
+**Final decision.** `super_admin` **exists from day one**. Departments are
+**not** roles.
+
+**Canonical rule.**
+
+```
+roles        super_admin | manager | admin | coverage_admin
+departments  finance | technical | academic        (an attribute, never a role)
+
+role != department
+```
+
+`super_admin` is the organization owner and holds the capabilities defined in
+`../architecture/AUTHORIZATION-MODEL.md`, including user management.
+
+**Implementation phase.** Phase 1 foundation item. The role vocabulary is
+normalized in Phase 1: `coverage` is renamed to `coverage_admin`, `super_admin`
+is added, and `finance` / `technical` / `academic` move to a department
+attribute.
+
+**Consequences.**
+- One migration changes `chat.staff.role`'s CHECK constraint, renames `coverage`, adds `super_admin`, and moves the three department values to `chat.staff.department`.
+- `apps/api/src/communication/contracts/vocab.ts` `StaffRole` and `FAMILY_FACING_STAFF_ROLES` are normalized in the same phase.
+- Admin Web's `domain.ts` comment "There is no `super_admin` role" and the assertion `expect(ROLES).not.toContain('super_admin')` in `capabilities.test.ts` are **known wrong** and are replaced in Phase 1. They are not edited before then, so the change is visible as one reviewed commit.
+- Compatibility is preserved only where technically necessary, for example existing rows during the migration. Conflicting legacy role semantics are not kept silently.
+
+**Deprecated or conflicting behaviour.** The historical role model
+`coverage | finance | technical | academic` must not be restored.
+`docs/product-operations/open-decisions.md` OD-06, which recommended keeping
+`super_admin` out, is overruled. `docs/qa/rbac-matrix.md`'s role vocabulary is
+superseded. `docs/design/terminology.md` governs display labels only; it does
+not govern whether the role exists.
+
+---
+
+### Decisions still open after PD-1 to PD-5
+
+None from the Phase 0 set. Any new product question is recorded here with a new
+`PD-n` and the same six fields: decision, canonical rule, implementation phase,
+consequences, deprecated behaviour, and the date it was closed.
 
 ---
 
@@ -135,6 +318,6 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 |---|---|---|
 | **0 — Reconciliation** (this) | one integration line, one architecture, one contract, deprecations, security containment | any new feature |
 | **1 — Identity, Authentication & Authorization** | accounts, credentials, sessions, devices, teacher identity, role/permission model, supervisor assignment, RLS engagement | messaging features |
-| 2 — Console & clients on the canonical contract | Admin Web rework, Flutter realtime client, notification dispatch, storage serving | broadcast, labels |
+| 2 — Console & clients on the canonical contract | Admin Web rework, Flutter realtime client, notification dispatch, storage serving, coverage-window group membership (PD-1), system-event generation as system messages (PD-4) | broadcast, labels |
 | 3 — Communication features | broadcast, labels, class groups, search across chats | AI, video |
 | Later | AI suggestions, video, stories/status, multi-tenant SaaS | — |

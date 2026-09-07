@@ -1,6 +1,7 @@
 # Jawwid Chat — Canonical Architecture
 
 Status: **CANONICAL** · Locked in Phase 0 (2026-09-07)
+Product decisions PD-1 to PD-5 are CLOSED; the record is `../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4.
 Companions: `IDENTITY-MODEL.md`, `AUTHORIZATION-MODEL.md`, `SUPERVISOR-OWNERSHIP.md`,
 `TENANCY-MODEL.md`, `../security/RLS-STRATEGY.md`, `../contracts/API-CONTRACT.md`,
 `../contracts/DOMAIN-VOCABULARY.md`.
@@ -84,7 +85,7 @@ Module map (as built):
 
 | Module | Path | Responsibility |
 |---|---|---|
-| Platform | `src/platform` | Prisma client, IdentityService (actor resolution), AuthorizationService, AuditService, CoverageService, AppConfigService, identity-seam guard |
+| Platform | `src/platform` | Prisma client, IdentityService (actor resolution), AuthorizationService, AuditService, CoverageService (**deprecated by PD-3**; interim `canSend` routing only), AppConfigService, identity-seam guard |
 | Communication | `src/communication/{conversations,messages,approvals,calls,attachments,notifications,outbox,realtime,api,contracts}` | domain services, controllers, DTO/event/vocab contracts |
 | Infra | `src/infra/{http,realtime,health}` | security headers, CORS, graceful shutdown, Socket.IO Redis adapter, relay publisher, health probes, build info |
 | Integration | *(archived on `archive/phase0/feat/core-integration-boundary`)* | Jawwid Core webhook ingestion — re-implemented in a later phase |
@@ -157,6 +158,14 @@ Rules: delivery state is never fabricated (`deliver` keeps `SENT` until a
 platform acknowledgement); quiet hours defer, never drop; `dedupeKey` is the
 uniqueness guarantee; reminder rules are data (`chat.notification_rule`).
 Phase 2 wires `dispatchDue` into the worker loop and a real provider.
+
+**Where a system-generated event lands (PD-4, closed 2026-09-07).** Onboarding,
+renewal, payment, schedule change and follow-up events are written as a
+**message of type `system` in the family's existing `direct` conversation**,
+carrying the event type as metadata. They never create a conversation, never
+add a fifth conversation type, and never revive `chat.task`. The notification
+above is the delivery of that message, not a separate object. Generation is
+Phase 2 work; nothing writes these events today.
 
 ### 2.8 Outbox and workers
 

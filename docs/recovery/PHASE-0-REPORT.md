@@ -112,9 +112,18 @@ Full detail with evidence: `PHASE-0-BRANCH-LEDGER.md`.
 |---|---|---|
 | Family communication, typed conversations (4 types), messaging, groups with moderation, calls, attachments, realtime, notifications, audit, supervisor ownership, CRM integration boundary, labels/broadcast as Phase 2 | tasks, shifts/absences/coverage rules, workload and attention scoring, renewal/subscription mirror, `family_state_cache`, Admin Web cases/tasks/coverage/dashboard CRM views | the Customer Success operating-system direction (brief, ADR-001), a Case entity (C-3), a second vocabulary (thread/InboxRow), client-side authorization as a control, Stories (not in the PRD; deferred) |
 
-Open product decisions recorded, not assumed: PD-1 coverage admins in groups,
-PD-2 parents starting group calls, PD-3 coverage windows vs explicit assignment,
-PD-4 system-created conversations' type, PD-5 `super_admin` (decided yes per PRD).
+**PD-1 to PD-5 were CLOSED by the product owner on 2026-09-07**, at the Phase 0
+exit gate and before `main` was baselined. The canonical record, with the
+canonical rule, implementation phase, consequences and deprecated behaviour for
+each, is `../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4.
+
+| ID | Decision | Implemented |
+|---|---|---|
+| PD-1 | Coverage admins are members of a Student Group only during an active coverage window; never permanent silent members | Phase 2 |
+| PD-2 | A parent may join a Student Group call but may never initiate one; teachers and authorized staff initiate | **Phase 0** (`canCall` + protected test) |
+| PD-3 | Coverage is an explicit temporary assignment created by a manager; the shift/schedule engine is not the authorization mechanism | Phase 1 |
+| PD-4 | System events are system messages in the family's existing direct conversation; no Task, no new conversation type | Phase 2 |
+| PD-5 | `super_admin` exists from day one; departments are an attribute, not roles | Phase 1 |
 
 ---
 
@@ -274,8 +283,8 @@ clients against the live API, realtime end to end with a client, `npm audit`.
 | Staff see every conversation; moderation queue global | documented predicate; database backstops only BR-1/family/org | 1 |
 | RLS inert at runtime | strategy fixed; parity tests specified | 1 |
 | Teacher identity synthesized, always active | model fixed; membership rows unaffected | 1 |
-| Role vocabulary in code/DB is brief-era (`coverage`, departments, no `super_admin`) | vocabulary locked; two migration drafts preserved | 1 |
-| Coverage engine still routes `canSend` (`on_duty()`) while classified deprecated | frozen; PD-3 recorded | product + 1 |
+| Role vocabulary in code/DB is brief-era (`coverage`, departments, no `super_admin`) | vocabulary locked and closed by **PD-5**; two migration drafts preserved | 1 |
+| Coverage engine still routes `canSend` (`on_duty()`) while classified deprecated | frozen and scheduled for removal by **PD-3**; the interim routing role is the only permitted use | 1 |
 | Outbox claim-before-publish window on crash | D-2 removes the silent-loss case; lease design specified | 1 |
 | Notifications never dispatch; storage never serves bytes; no Flutter realtime client | pipelines documented as not wired | 2 |
 | Admin Web is disconnected from the API | full migration map; no code changed | 2 |
@@ -308,9 +317,10 @@ with these entry conditions, all satisfiable without further reconciliation:
    every list endpoint → `PrismaService.withActor` + `chat_app` role per
    `RLS-STRATEGY.md` → parity and scope tests, all added to
    `docs/qa/protected-tests.tsv`.
-3. Product answers needed *during* Phase 1, not before it: PD-3 (coverage
-   windows), PD-5 is decided (`super_admin` exists); PD-1/PD-2/PD-4 can wait
-   for Phase 2.
+3. **All five product decisions are closed** (2026-09-07). Phase 1 implements
+   PD-3 (assignment-based coverage) and PD-5 (role vocabulary). PD-2 is already
+   implemented and protected. PD-1 and PD-4 are Phase 2 and are recorded, not
+   built.
 4. Do not start Admin Web rework, notification dispatch, storage serving or
    the Flutter realtime client in Phase 1; they are Phase 2 and depend on the
    contract Phase 1 completes.

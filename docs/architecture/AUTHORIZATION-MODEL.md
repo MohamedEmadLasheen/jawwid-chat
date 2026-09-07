@@ -1,6 +1,7 @@
 # Jawwid Chat — Authorization Model (roles, permissions, scope)
 
 Status: **CANONICAL** · Locked in Phase 0 (2026-09-07) · Implemented in Phase 1
+Product decisions PD-2, PD-3 and PD-5 are CLOSED; the record is `../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4.
 Companions: `IDENTITY-MODEL.md`, `SUPERVISOR-OWNERSHIP.md`, `TENANCY-MODEL.md`,
 `../security/RLS-STRATEGY.md`, `../contracts/API-CONTRACT.md` §1.2.
 Supersedes: `docs/qa/rbac-matrix.md` role vocabulary (known wrong — no `super_admin`),
@@ -31,7 +32,12 @@ the role migrations on `archive/phase0/integration/prd-reconciliation` (`ee0dcdd
 
 ---
 
-## 2. Roles (canonical vocabulary — PRD §3, decision PD-5)
+## 2. Roles (canonical vocabulary — PRD §3, decision PD-5, **CLOSED 2026-09-07**)
+
+PD-5 is closed: `super_admin` exists from day one, and departments are not roles.
+The four staff roles are `super_admin`, `manager`, `admin`, `coverage_admin`.
+The legacy vocabulary `coverage | finance | technical | academic` must not be
+restored.
 
 | Role | Kind | Platform | Definition | Today's value |
 |---|---|---|---|---|
@@ -39,7 +45,7 @@ the role migrations on `archive/phase0/integration/prd-reconciliation` (`ee0dcdd
 | `student` | context only | — | Exists as a learner record; no login in MVP | — |
 | `teacher` | teacher | mobile | Teaches learners; communicates with families **only** inside Student Groups with a live admin (BR-1) | synthesized (fixed in Phase 1) |
 | `admin` | staff | web + mobile | A **supervisor**: the assigned owner of families; answers their conversations; moderates their groups | `staff.role='admin'` |
-| `coverage_admin` | staff | web + mobile | A supervisor acting for others inside a coverage window, with the owner's permissions on that family and nothing more | `staff.role='coverage'` → **rename** |
+| `coverage_admin` | staff | web + mobile | A supervisor acting for others for the duration of an explicit temporary assignment (PD-3), with the owner's permissions on that family and nothing more | `staff.role='coverage'` → **rename** |
 | `manager` | staff | web | Runs the operation: assigns supervisors, reads audit, edits settings, sees every family in the organization | `staff.role='manager'` |
 | `super_admin` | staff | web | Organization owner: everything a manager can, plus user management, credentials, and (later) organization settings. Named `super_manager` in the Phase 0 brief; the PRD name is canonical. | absent → **add** |
 | `system` | actor kind | — | Automation author (system messages, reminders); never a role a person holds | actor kind |
@@ -69,7 +75,7 @@ Family-facing staff (may take part in family conversations): `admin`,
 | `families.read` | read family, learners, contacts (no channels) | own³ | via groups³ | ● | ●¹ | ● | ● |
 | `families.assign` | assign / reassign the supervisor | | | | | ● | ● |
 | `contacts.view_private` | reserved for future private fields; nothing today | | | | | ● | ● |
-| `calls.start` | start a call in a readable conversation | ●⁴ | ●⁴ | ● | ●¹ | ● | ● |
+| `calls.start` | start a call in a readable conversation | ●⁴ | ● | ● | ●¹ | ● | ● |
 | `calls.accept` | join/answer a call one is invited to | ● | ● | ● | ● | ● | ● |
 | `broadcasts.send` | send official messages (Phase 2) | | | | | ● | ● |
 | `audit.read` | read audit log | | | | | ● | ● |
@@ -77,10 +83,10 @@ Family-facing staff (may take part in family conversations): `admin`,
 | `users.manage` | provision/suspend/deactivate accounts, reset credentials, revoke others' sessions | | | | | | ● |
 | `sessions.manage` | list/revoke own sessions | ● | ● | ● | ● | ● | ● |
 
-¹ only on families routed to the coverage admin by an active coverage window or an explicit temporary assignment (scope, §6).
+¹ only on families with an active **explicit temporary assignment** to the coverage admin (PD-3; scope, §6). A shift schedule is not an authorization input.
 ² in `student_group`/`class_group`, held for moderation by default (`conversation.parentRequiresApproval` / `teacherRequiresApproval`); refused entirely when no live admin is present (C-4).
 ³ a parent reads only their own family; a teacher reads only the families of learners they teach, through the group.
-⁴ PD-2 (parents initiating group calls) is undecided; default: parents may start 1:1 calls only.
+⁴ **PD-2, CLOSED 2026-09-07.** A parent may start a 1:1 call to their handler, and may JOIN a Student Group or Class Group call, but may **never initiate** one. Group calls are initiated by a teacher or by admin / authorized staff. Enforced by `canCall`'s `CallIntent` parameter, which defaults to the stricter `initiate`; denial code `COMM.PARENT_CANNOT_START_GROUP_CALL`. Protected by `apps/api/test/unit/authorization/pd002-group-call-initiation.spec.ts`.
 
 The table is the *default* mapping. Phase 1 stores it in `chat.role_permission`
 (`role`, `permission`) seeded by migration, exposes it through `GET /config`
@@ -98,7 +104,7 @@ for UX, and asserts the TypeScript mirror equals the table in a protected test.
 | `canSend(actor, conv, membership, intent, now, familyOwnerId, participantKinds, liveMembers)` | ✔ | read → silence → C-4 admin presence → moderation policy for parents/teachers; ownership/coverage/stickiness → on-behalf mode for staff; assist/escalation fail closed (JC-005) | routing reads the **assignment** rather than `family.owner_id` + `on_duty()` (see `SUPERVISOR-OWNERSHIP.md` §6) |
 | `canManageMembership(actor)` | ✔ | staff only | scope + permission key |
 | `canApprove(actor, activeHandlerId)` | ✔ | active handler or manager | queue **listing** must also be scoped (§6) — today `approval.service.ts:45-61` lists every pending approval in the system |
-| `canCall(actor, conv, membership, participants, now, familyOwnerId)` | ✔ | read + BR-1 participant set + C-4 | PD-2 |
+| `canCall(actor, conv, membership, participants, now, familyOwnerId, liveMembers, intent)` | ✔ | read + BR-1 participant set + C-4 + **PD-2** (a parent may join a group call, never start one) | scope; the PD-2 rule is already implemented |
 | `can(actor, permission, scope)` | ✘ | generic permission-key check for the new admin surface (families, assignment, staff, audit, config) | **new** — the single entry point for Phase 1 controllers |
 | `visibleFamilies(actor)` / `visibleConversationsWhere(actor)` | ✘ | the *query predicate* for lists, so every list endpoint is scoped by construction | **new** |
 
@@ -114,8 +120,8 @@ compare roles.
 | A-1 | Staff visibility is blanket: any family-facing staff reads **every** conversation (`canRead` returns `allow()` for staff; `listForActor` returns `take: 200` of all conversations) — RT-011 | `authorization.service.ts:134-142`, `conversation.service.ts:423-440` | scope predicate (§6) |
 | A-2 | Moderation queue is globally visible: `GET /approvals/pending` lists all pending approvals unless a `conversationId` is supplied | `approval.service.ts:45-61` | scope predicate on `conversationId ∈ visible conversations` |
 | A-3 | Ownership is used for attribution (`deriveMode`) but not for visibility | `authorization.service.ts:318-333` | `canRead` consults assignment |
-| A-4 | Roles hard-coded: `StaffRole` and `FAMILY_FACING_STAFF_ROLES` in `contracts/vocab.ts`, `CHECK` in `chat.staff.role` | `vocab.ts:17-36`, `090200:20` | role table + migration (rename `coverage`, add `super_admin`, move departments) |
-| A-5 | No `super_admin` | everywhere | as above; Admin Web's "has no super_admin" test is KNOWN WRONG and is replaced |
+| A-4 | Roles hard-coded: `StaffRole` and `FAMILY_FACING_STAFF_ROLES` in `contracts/vocab.ts`, `CHECK` in `chat.staff.role` | `vocab.ts:17-36`, `090200:20` | role table + migration (rename `coverage`, add `super_admin`, move departments) — **PD-5, closed** |
+| A-5 | No `super_admin` | everywhere | as above; Admin Web's "has no super_admin" test is KNOWN WRONG and is replaced. **PD-5 closed: it exists from day one.** |
 | A-6 | Three routes take no actor at all | `conversation.controller.ts:36`, `notification.controller.ts:21,28` | `AuthenticatedGuard` + scope |
 | A-7 | Receipt roster disclosed to contacts (staff ids, read times) — RT-012 | `dto.ts` `toMessageDto` | viewer-scoped receipts |
 | A-8 | Object-level authorization absent on `signUrlsForMessages` — RT-006 | `attachment.service.ts` | actor parameter + `canRead` |
@@ -133,14 +139,19 @@ visible_families(actor) =
   parent          → { family of the contact }
   teacher         → { families of learners where learner.teacher_id = teacher }
   admin           → { families currently assigned to actor }
-                    ∪ { families with an active coverage/temporary assignment to actor }
-  coverage_admin  → { families with an active coverage/temporary assignment to actor }
+                    ∪ { families with an active temporary assignment to actor }
+  coverage_admin  → { families with an active temporary assignment to actor }
   manager, super_admin → { every family in actor.organizationId }
 
 visible_conversations(actor) =
   { c : c.familyId ∈ visible_families(actor) }
   ∪ { c : actor is a live member of c }            (Teacher↔Admin directs have no family)
 ```
+
+Temporary assignments are created explicitly by a manager (**PD-3**, closed
+2026-09-07). `chat.on_duty()` is not consulted by this predicate; it survives
+only as the interim routing input to `canSend` until Phase 1's assignment model
+replaces it.
 
 This predicate feeds `canRead`, every list endpoint (`GET /conversations`,
 `GET /families`, `GET /approvals/pending`, search, notifications, dashboards,

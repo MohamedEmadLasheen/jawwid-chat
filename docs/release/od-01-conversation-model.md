@@ -1,4 +1,4 @@
-> **STATUS: REFERENCE** (Phase 0, 2026-09-07). Product decisions C-1..C-4 are adopted; PD-1/PD-2 remain open in `docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4.
+> **STATUS: REFERENCE** (Phase 0, 2026-09-07). Product decisions C-1..C-4 are adopted. **PD-1 and PD-2 are now CLOSED** (2026-09-07): a coverage admin joins a Student Group only for the coverage window, and a parent may join but never initiate a Student Group call. This document's statement that they "remain PRODUCT DECISION REQUIRED" is superseded by `docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4.
 > Canonical index: `docs/README.md`.
 
 # OD-01 — Conversation Model · RESOLVED FROM THE PRD

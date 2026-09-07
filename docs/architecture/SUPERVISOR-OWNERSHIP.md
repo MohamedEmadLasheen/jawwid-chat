@@ -1,6 +1,7 @@
 # Jawwid Chat — Supervisor Ownership (Family → Supervisor Assignment)
 
 Status: **CANONICAL** · Locked in Phase 0 (2026-09-07) · Implemented in Phase 1
+Product decision PD-3 is CLOSED (§4); the record is `../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4.
 Companions: `AUTHORIZATION-MODEL.md` §6, `IDENTITY-MODEL.md` §5, `../contracts/API-CONTRACT.md` §3.3.
 Product basis: PRD §5 (BR-4 "one family, one primary owner"; reassignment by a manager with a reason and audit; deactivation blocked until every family is reassigned; coverage admins act with the owner's permissions "and nothing more").
 
@@ -25,7 +26,7 @@ visibility. See `AUTHORIZATION-MODEL.md` §6 for the predicate.
 | `family.owner_id` NOT NULL → `chat.staff` | `20260905090300:17` | the current assignment, no history |
 | Owner change only through `transfer_ownership()` (manager-only, reason required, audit + event in-transaction) guarded by a trigger and a transaction-local GUC | `20260905090700:36-109` | keep semantics |
 | Deactivation blocked while any family is owned; `offboard_staff()` reassigns then deactivates | `090700:183-287` | keep semantics |
-| Coverage windows: `shift`, `coverage_rule`, `absence`, `on_duty()`, `coverage_chain()`, stickiness, `handoff` | `090200`, `090600`, `094000 §7` | routing input to `canSend`; **not** a visibility input; pending PD-3 |
+| Coverage engine: `shift`, `coverage_rule`, `absence`, `on_duty()`, `coverage_chain()`, stickiness, `handoff` | `090200`, `090600`, `094000 §7` | interim routing input to `canSend`; **not** a visibility input; **deprecated and scheduled for removal by PD-3** |
 | `AuthorizationService.deriveMode` uses `familyOwnerId` for *attribution* (`owner` vs `coverage` vs `assist`) | `authorization.service.ts:318-333` | keep |
 | Visibility ignores ownership entirely (any family-facing staff reads everything) | `authorization.service.ts:134-142` | **the gap** |
 | Admin Web filters reassignment recipients to `role === 'admin'` on the client only | `TransferOwnershipDialog.tsx:36-38` | move to the server |
@@ -86,24 +87,33 @@ longer readable by them.
 
 ---
 
-## 4. Relationship to coverage windows (PD-3)
+## 4. Coverage (PD-3 — CLOSED 2026-09-07)
 
-Today `canSend` routes a family conversation to the *on-duty* admin computed
-from shifts and coverage rules (`chat.on_duty()`), independent of ownership.
-The canonical model expresses the same need as an **assignment**: an active
-`temporary` assignment is what makes a coverage admin in scope. Whether
-temporary assignments are created **automatically from a schedule** (the
-current engine) or **explicitly by a manager** is product decision PD-3.
-Until decided:
+**Coverage is an explicit temporary assignment created by a manager.** The
+shift, schedule and coverage-rule engine is **not** the core authorization
+mechanism. The decision record is
+`../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4 PD-3.
 
-* `chat.on_duty()` remains the routing input to `canSend` (no regression);
-* it becomes *also* a visibility input by treating "on duty for this family
-  right now" as an implicit temporary assignment in `visible_families(actor)`;
-* no new code depends on shifts/absences/handoff beyond that.
+```
+authorization scope reads from   chat.family_assignment  (kind = temporary)
+created by                       an authorized manager, explicitly, with a
+                                 window and a mandatory reason
+chat.on_duty()                   NOT an authorization input
+```
 
-If PD-3 chooses explicit assignment, the coverage engine becomes REMOVE LATER;
-if it chooses schedules, the engine is re-homed to write `temporary`
-assignment rows, so the rest of the system only ever reads assignments.
+Consequences:
+
+* The coverage engine (`chat.shift`, `chat.coverage_rule`, `chat.absence`,
+  `chat.handoff`, `chat.on_duty()`, `coverage_chain()`) is deprecated, frozen
+  and scheduled for removal. It must not be extended.
+* `chat.on_duty()` keeps exactly one job until Phase 1 lands the assignment
+  model: it is the interim routing input to `canSend`, so removing it now
+  would be a regression. Nothing new may depend on it, and it is not a
+  visibility input.
+* `visible_families(actor)` reads assignments only.
+* If the product later wants a schedule, that schedule becomes a **writer**
+  of `temporary` assignment rows. The authorization path still reads only
+  assignments, so nothing downstream changes.
 
 ---
 

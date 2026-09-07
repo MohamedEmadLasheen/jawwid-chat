@@ -1,6 +1,7 @@
 # Jawwid Chat — Canonical Domain Vocabulary
 
 **Status:** canonical · **Date:** 2026-09-07 · **Branch:** `integration/recovery`
+**Product decisions PD-1 to PD-5 are CLOSED** (`../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4). PD-5 fixes the staff role set as `super_admin | manager | admin | coverage_admin`, with departments as an attribute; PD-3 makes *Coverage* an explicit temporary assignment rather than a schedule.
 **Authority:** `docs/product/jawwid-chat-prd-v0.1.md` (§3 roles, §6 entities, §13 phasing) and the
 product-owner decisions C-1…C-4 in `docs/release/od-01-conversation-model.md` §14.
 **Supersedes for vocabulary purposes:** `docs/product-operations/domain-language.md` §3 (internal

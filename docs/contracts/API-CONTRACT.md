@@ -3,6 +3,7 @@
 **Status: CANONICAL · Phase 0 · supersedes `docs/admin/backend-contract-required.md`, `docs/communication/{mobile,admin}-contract.md` as contracts (they remain as reference), `docs/infrastructure/api-contract-reconciliation.md`.**
 
 Date: 2026-09-07 · Branch: `integration/recovery` (HEAD includes OD-01 and `organization_id`).
+Product decisions PD-1 to PD-5 are **CLOSED**; the record is `../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4. PD-2 is implemented in this branch.
 Evidence base: `apps/api/src/**` (controllers, services, `contracts/dto.ts`, `contracts/events.ts`, `platform/errors.ts`, `platform/authorization.service.ts`), `apps/admin-web/src/core/api/endpoints.ts`, `apps/admin-web/src/core/realtime/*`, `lib/core/data/http/*.dart`, `lib/core/network/*.dart`.
 
 How to read this document:
@@ -82,6 +83,7 @@ Source of truth: `apps/api/src/platform/errors.ts`. Default HTTP status of a `Co
 | `COMM.CALL_NOT_FOUND` | 404 | |
 | `COMM.CALL_ALREADY_ENDED` | 409 | Token requested for an ended call. |
 | `COMM.CALL_NOT_A_PARTICIPANT` | 403 | Not in the server-derived participant set. |
+| `COMM.PARENT_CANNOT_START_GROUP_CALL` | 403 | **PD-2.** A family contact tried to START a `student_group` / `class_group` call. Joining is allowed; starting is a teacher or staff action. Never retry. |
 
 **Phase 1 codes (normative, not yet in `errors.ts`):**
 
@@ -524,13 +526,14 @@ CallHistoryDto { id, conversationId, type: 'direct'|'group', status: 'ringing'|'
 ```
 
 **POST /calls** — EXISTS
-- Auth: required. Permission: `calls.start`. Scope: `canCall` = `canSend` (customer visibility) + BR-1 participant-set check. Participants = live, active, non-silent members (server-derived; never client-supplied). Room name minted server-side.
+- Auth: required. Permission: `calls.start`. Scope: `canCall(intent = initiate)` = `canSend` (customer visibility) + BR-1 participant-set check + **PD-2**. Participants = live, active, non-silent members (server-derived; never client-supplied). Room name minted server-side.
+- **PD-2:** a family contact may not start a `student_group` or `class_group` call. A parent's 1:1 call to their handler is unaffected.
 - Request: `{ conversationId: string }`. Response: `{ callId, roomName }`.
-- Errors: matrix codes; `COMM.BR1_TEACHER_PARENT_DIRECT` 403.
+- Errors: matrix codes; `COMM.BR1_TEACHER_PARENT_DIRECT` 403; `COMM.PARENT_CANNOT_START_GROUP_CALL` 403.
 - Audit: `event_log` `call_started`. Realtime: `call.incoming { callId, conversationId, type, initiatorId, initiatorName, roomName }` to the conversation room.
 
 **POST /calls/:id/token** — EXISTS
-- Auth: required. Permission: `calls.accept`. Scope: recorded participant, call not ended, still a member, `canCall` re-evaluated (a revoked permission takes effect on the next join). Response: `{ token, url, roomName, expiresAt }`; TTL `call.token_ttl_seconds` (120); `canPublish = !isSilent`.
+- Auth: required. Permission: `calls.accept`. Scope: recorded participant, call not ended, still a member, `canCall(intent = join)` re-evaluated (a revoked permission takes effect on the next join). This is the JOIN path, so a parent is allowed here (**PD-2**). Response: `{ token, url, roomName, expiresAt }`; TTL `call.token_ttl_seconds` (120); `canPublish = !isSilent`.
 - Errors: `COMM.CALL_NOT_FOUND` 404 · `COMM.CALL_ALREADY_ENDED` 409 · `COMM.CALL_NOT_A_PARTICIPANT` 403 · matrix codes. Audit / Realtime: none.
 
 **POST /calls/:id/accept** — EXISTS · Permission `calls.accept` · Scope participant. `joinedAt` set; `ringing → active` with `answeredAt`. Response `{ ok: true }`. Realtime: **`call.participant_joined { callId, actorId }`** (not `call.accepted`). Audit: none.
