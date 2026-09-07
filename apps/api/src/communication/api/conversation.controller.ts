@@ -74,14 +74,22 @@ export class ConversationController {
     return conv ? toConversationDto(conv) : { synced: false };
   }
 
+  /**
+   * One conversation, carrying the same row data the list does.
+   *
+   * The unread count in particular: a client opening a thread from a
+   * notification or a deep link never sees the list, and without the count it
+   * cannot place the "unread messages" divider -- which is the one piece of
+   * state that makes opening there useful.
+   *
+   * rowForActor() authorizes the read explicitly. This used to rely on
+   * setPreferences() running the check as a side effect, which is true but
+   * invisible -- and one refactor away from an unauthorized read.
+   */
   @Get(':id')
   async get(@ActorId() actorId: string, @Param('id') id: string) {
-    // Explicit read authorization. It used to rely on setPreferences() running
-    // the check as a side effect, which is true but invisible -- and one
-    // refactor away from an unauthorized read.
-    const conv = await this.conversations.requireForActor(id, actorId);
-    await this.conversations.setPreferences(id, actorId, {});
-    return toConversationDto(conv);
+    const row = await this.conversations.rowForActor(id, actorId);
+    return toConversationDto(row.conversation, row.members, row.extras);
   }
 
   /** Membership mutations are staff-only, and always carry a reason. */

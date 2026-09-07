@@ -112,6 +112,26 @@ describe('conversations', () => {
     );
   });
 
+  it('the by-id row carries the unread count, so a deep link can place the divider', async () => {
+    const conv = await familyChannel();
+    await g.messages.send({ conversationId: conv.id, senderId: s.ownerId, body: 'one' });
+    await g.messages.send({ conversationId: conv.id, senderId: s.ownerId, body: 'two' });
+
+    // A client opening from a notification never sees the list, and without
+    // the count it cannot place the "unread messages" divider.
+    const row = await g.conversations.rowForActor(conv.id, s.parentId);
+    expect(row.extras.unreadCount).toBe(2);
+    expect(row.extras.lastMessagePreview).toBe('two');
+    expect(row.members.map((m) => m.displayName).sort()).toEqual(['admin_a', 'parent_p']);
+  });
+
+  it('the by-id row refuses an actor who may not read the conversation', async () => {
+    const conv = await familyChannel();
+    await expect(g.conversations.rowForActor(conv.id, s.otherAdminId)).rejects.toMatchObject({
+      code: CommErrorCode.CONVERSATION_NOT_FOUND,
+    });
+  });
+
   it('an out-of-scope admin cannot open the conversation, and it is NOT FOUND rather than forbidden', async () => {
     const conv = await familyChannel();
     await expect(

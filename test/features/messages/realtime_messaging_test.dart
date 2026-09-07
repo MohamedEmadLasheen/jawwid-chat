@@ -100,6 +100,47 @@ void main() {
       expect((signal! as ReceiptAdvanced).state, DeliveryState.read);
     });
 
+    test('a reaction carries its delta, so no refetch is needed', () {
+      final added = ConversationSignals.read(
+        envelope(RealtimeEvent.reactionAdded, {
+          'conversationId': conversationId,
+          'messageId': 'm1',
+          'actorId': 'a1',
+          'emoji': '👍',
+        }),
+        conversationId,
+      )! as ReactionsChanged;
+
+      expect(added.added, isTrue);
+      expect(added.emoji, '👍');
+      expect(added.actorId, 'a1');
+
+      final removed = ConversationSignals.read(
+        envelope(RealtimeEvent.reactionRemoved, {
+          'conversationId': conversationId,
+          'messageId': 'm1',
+          'actorId': 'a1',
+          'emoji': '👍',
+        }),
+        conversationId,
+      )! as ReactionsChanged;
+      expect(removed.added, isFalse);
+    });
+
+    test('a reaction with no emoji is ignored rather than applied as a blank', () {
+      expect(
+        ConversationSignals.read(
+          envelope(RealtimeEvent.reactionAdded, {
+            'conversationId': conversationId,
+            'messageId': 'm1',
+            'actorId': 'a1',
+          }),
+          conversationId,
+        ),
+        isNull,
+      );
+    });
+
     test('typing carries the actor and whether they started or stopped', () {
       final started = ConversationSignals.read(
         envelope(RealtimeEvent.typingStarted, {

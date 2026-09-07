@@ -237,11 +237,12 @@ class MessagesController extends Notifier<MessagesState> {
       case ReceiptAdvanced(:final messageId, state: final receiptState):
         _applyReceipt(messageId, receiptState);
 
-      case ReactionsChanged():
-        // Reaction rosters are per message and the payload names one actor.
-        // Re-reading the page is cheaper than modelling a partial roster merge
-        // that could drift from the server's.
-        unawaited(_refreshReactions());
+      case ReactionsChanged(:final messageId, :final actorId, :final emoji, :final added):
+        // Applied as a delta, not by refetching. The event names the actor and
+        // the emoji, which is everything the roster needs — and a refetch of
+        // the NEWEST page could not update a reaction on an older message the
+        // user has scrolled back to.
+        _applyRemoteReaction(messageId, actorId, emoji, added);
 
       case TypingChanged(:final actorId, :final displayName, :final isTyping):
         if (isTyping) {
@@ -277,14 +278,42 @@ class MessagesController extends Notifier<MessagesState> {
         _ => 0,
       };
 
-  Future<void> _refreshReactions() async {
+  /// Apply somebody else's reaction to a message this client holds.
+  ///
+  /// An event about the VIEWER's own reaction is ignored: the optimistic update
+  /// already applied it, and re-applying the server's echo of it would double
+  /// the count on a message the user just tapped.
+  void _applyRemoteReaction(String messageId, String actorId, String emoji, bool added) {
+    if (actorId == _viewerActorId()) return;
+
+    state = state.copyWith(
+      log: state.log.updateById(messageId, (m) {
+        final next = [
+          for (final r in m.reactions)
+            if (r.emoji == emoji)
+              r.copyWith(count: r.count + (added ? 1 : -1))
+            else
+              r,
+        ].where((r) => r.count > 0).toList();
+
+        if (added && !next.any((r) => r.emoji == emoji)) {
+          next.add(Reaction(emoji: emoji, count: 1, mine: false));
+        }
+        return m.copyWith(reactions: next);
+      }),
+    );
+  }
+
+  /// The signed-in actor's id, or empty before a session exists.
+  ///
+  /// Read on demand so this controller does not require an authenticated
+  /// container to be constructed — which is what lets the transport tests
+  /// exercise sending without standing up a session.
+  String _viewerActorId() {
     try {
-      final page = await _messages.history(conversationId);
-      if (!_alive) return;
-      state = state.copyWith(log: state.log.merge(page.items));
+      return ref.read(authControllerProvider).user?.id ?? '';
     } catch (_) {
-      // A failed refresh leaves the reaction stale for one screen. Surfacing an
-      // error for something the user did not ask for would be worse.
+      return '';
     }
   }
 

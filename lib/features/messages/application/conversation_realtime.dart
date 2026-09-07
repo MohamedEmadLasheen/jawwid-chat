@@ -53,10 +53,25 @@ class ReceiptAdvanced extends ConversationSignal {
   final DeliveryState state;
 }
 
-/// A reaction was added or removed; the message needs re-reading.
+/// One actor's reaction on one message changed.
+///
+/// The payload names the actor and the emoji, which is everything needed to
+/// apply the delta — so this does NOT trigger a refetch. It used to, and that
+/// was wrong twice over: a refetch of the newest page cannot update a reaction
+/// on an older message the user has scrolled back to, and it is a request per
+/// reaction on a busy thread.
 class ReactionsChanged extends ConversationSignal {
-  const ReactionsChanged(this.messageId);
+  const ReactionsChanged({
+    required this.messageId,
+    required this.actorId,
+    required this.emoji,
+    required this.added,
+  });
+
   final String messageId;
+  final String actorId;
+  final String emoji;
+  final bool added;
 }
 
 /// Somebody started or stopped typing.
@@ -110,7 +125,15 @@ abstract final class ConversationSignals {
 
       case RealtimeEvent.reactionAdded:
       case RealtimeEvent.reactionRemoved:
-        return messageId == null ? null : ReactionsChanged(messageId);
+        final reactor = envelope.actorId;
+        final emoji = envelope.payload['emoji'];
+        if (messageId == null || reactor == null || emoji is! String) return null;
+        return ReactionsChanged(
+          messageId: messageId,
+          actorId: reactor,
+          emoji: emoji,
+          added: envelope.event == RealtimeEvent.reactionAdded,
+        );
 
       case RealtimeEvent.typingStarted:
       case RealtimeEvent.typingStopped:

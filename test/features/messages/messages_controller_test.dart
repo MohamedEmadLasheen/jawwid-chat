@@ -19,6 +19,7 @@ class _RecordingMessageRepository implements MessageRepository {
   final deletedForEveryone = <String>[];
   final forwarded = <(String, List<String>)>[];
   final markedDelivered = <String>[];
+  int historyReads = 0;
 
   AppError? failWith;
   int failuresRemaining = 0;
@@ -29,8 +30,10 @@ class _RecordingMessageRepository implements MessageRepository {
     String conversationId, {
     String? beforeCursor,
     int limit = 30,
-  }) async =>
-      Page(items: List.of(history_), hasMore: false);
+  }) async {
+    historyReads++;
+    return Page(items: List.of(history_), hasMore: false);
+  }
 
   @override
   Future<List<Message>> since(
@@ -737,6 +740,41 @@ void main() {
       final reactions = read().log.byId('srv_6')!.reactions;
       expect(reactions, hasLength(1));
       expect(reactions.single.emoji, '❤️');
+    });
+
+    test('somebody else\'s reaction is applied as a delta, without a refetch', () async {
+      final c = controller();
+      await settle();
+
+      repository.history_.add(inbound(6));
+      await c.loadInitial();
+      await settle();
+      final historyReadsBefore = repository.historyReads;
+
+      realtime.emit('reaction.added', {
+        'conversationId': 'c1',
+        'messageId': 'srv_6',
+        'actorId': 'somebody-else',
+        'emoji': '❤️',
+      });
+      await settle();
+
+      final reaction = read().log.byId('srv_6')!.reactions.single;
+      expect(reaction.emoji, '❤️');
+      expect(reaction.count, 1);
+      expect(reaction.mine, isFalse);
+      // A refetch of the newest page could not have updated a reaction on an
+      // older message the user had scrolled back to.
+      expect(repository.historyReads, historyReadsBefore);
+
+      realtime.emit('reaction.removed', {
+        'conversationId': 'c1',
+        'messageId': 'srv_6',
+        'actorId': 'somebody-else',
+        'emoji': '❤️',
+      });
+      await settle();
+      expect(read().log.byId('srv_6')!.reactions, isEmpty);
     });
 
     test('a refusal restores the reactions that were there', () async {

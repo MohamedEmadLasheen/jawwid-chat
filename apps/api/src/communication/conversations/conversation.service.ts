@@ -731,6 +731,78 @@ export class ConversationService {
   }
 
   /**
+   * ONE conversation, with the same row data the list carries.
+   *
+   * The by-id route used to return the conversation alone, so a client opening
+   * a thread from a notification or a deep link had no unread count -- and
+   * without one it cannot place the "unread messages" divider, which is the
+   * whole point of having opened there. Built from listRowsForActor's pieces
+   * rather than duplicating them.
+   */
+  async rowForActor(conversationId: string, actorId: string): Promise<{
+    conversation: Conversation;
+    members: Array<ConversationMember & { displayName?: string }>;
+    extras: ConversationRowExtras;
+  }> {
+    const actor = await this.requireActor(actorId);
+    // Authorized first, and reported as NOT FOUND when it is not: the extras
+    // below would otherwise be computed for a conversation this actor may not
+    // read, and a timing difference is a signal.
+    const conversation = await this.requireForActor(conversationId, actorId);
+
+    const [members, state, unreadCount, newest] = await Promise.all([
+      this.prisma.conversationMember.findMany({
+        where: { conversationId, leftAt: null },
+      }),
+      this.prisma.conversationParticipantState.findFirst({
+        where: { conversationId, actorId: actor.actorId },
+      }),
+      this.prisma.messageReceipt.count({
+        where: {
+          actorId: actor.actorId,
+          state: { in: [ReceiptState.SENT, ReceiptState.DELIVERED] },
+          message: { conversationId, deletedForAll: false },
+        },
+      }),
+      this.prisma.message.findFirst({
+        where: {
+          conversationId,
+          deletedForAll: false,
+          moderation: Moderation.PUBLISHED,
+          hiddenFor: { none: { actorId: actor.actorId } },
+          ...(this.authz.canReadInternal(actor) ? {} : { visibility: Visibility.CUSTOMER }),
+        },
+        orderBy: { seq: 'desc' },
+        select: { body: true, type: true, authorId: true, createdAt: true },
+      }),
+    ]);
+
+    const names = new Map<string, string>();
+    await Promise.all(
+      [...new Set(members.map((m) => m.actorId))].map(async (id) => {
+        const resolved = await this.identity.resolveActor(id);
+        if (resolved) names.set(id, resolved.displayName);
+      }),
+    );
+
+    const now = new Date();
+    return {
+      conversation,
+      members: members.map((m) => ({ ...m, displayName: names.get(m.actorId) })),
+      extras: {
+        unreadCount,
+        lastMessagePreview:
+          newest && newest.type !== MessageType.SYSTEM ? (newest.body ?? '') : '',
+        lastMessageAt: newest?.createdAt.toISOString() ?? null,
+        lastMessageAuthorId: newest?.authorId ?? null,
+        isPinned: state?.pinnedAt != null,
+        isMuted: state?.mutedUntil != null && state.mutedUntil > now,
+        isArchivedForMe: state?.archivedAt != null,
+      },
+    };
+  }
+
+  /**
    * Conversation search, scoped by construction.
    *
    * Matches on the conversation's own title and on the display names of its
