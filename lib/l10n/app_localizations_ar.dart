@@ -510,4 +510,22 @@ class L10nAr extends L10n {
 
   @override
   String get reconnecting => 'جارٍ إعادة الاتصال…';
+
+  @override
+  String get composerAttachUnavailable => 'المرفقات غير متاحة بعد';
+
+  @override
+  String get searchFilters => 'عوامل التصفية';
+
+  @override
+  String get searchFromDate => 'من';
+
+  @override
+  String get searchToDate => 'إلى';
+
+  @override
+  String get searchAnySender => 'الجميع';
+
+  @override
+  String get searchClearFilters => 'مسح';
 }

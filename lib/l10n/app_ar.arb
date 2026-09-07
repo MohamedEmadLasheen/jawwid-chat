@@ -226,5 +226,11 @@
   "searchTabChats": "المحادثات",
   "searchTabMessages": "الرسائل",
   "searchMinimumLength": "اكتب حرفين على الأقل",
-  "reconnecting": "جارٍ إعادة الاتصال…"
+  "reconnecting": "جارٍ إعادة الاتصال…",
+  "composerAttachUnavailable": "المرفقات غير متاحة بعد",
+  "searchFilters": "عوامل التصفية",
+  "searchFromDate": "من",
+  "searchToDate": "إلى",
+  "searchAnySender": "الجميع",
+  "searchClearFilters": "مسح"
 }

@@ -6,6 +6,18 @@ import type { AttentionBucket } from '@/shared/types/domain'
  */
 export const qk = {
   me: ['me'] as const,
+
+  // --- Communication Operations Console (canonical) -------------------------
+  // Keyed so a realtime payload can invalidate without guessing: every event
+  // that matters carries a `conversationId`, and that is the key segment.
+  conversations: ['conversations'] as const,
+  conversation: (id: string) => ['conversations', id] as const,
+  conversationMessages: (id: string) => ['conversations', id, 'messages'] as const,
+  conversationSearch: (q: string) => ['conversations', 'search', q] as const,
+  messageSearch: (input: Record<string, unknown>) => ['search', 'messages', input] as const,
+
+  // --- Frozen (brief-era CRM). Unrouted; see PHASE-0-ADMIN-WEB-RECONCILIATION.
+
   duty: ['me', 'duty'] as const,
   config: ['config'] as const,
   staff: ['staff'] as const,

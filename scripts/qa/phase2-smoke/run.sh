@@ -48,8 +48,15 @@ echo "== HTTP =="
 node "$HERE/http.mjs" "$ids"
 
 echo
-echo "== realtime =="
+echo "== realtime (Family -> Supervisor) =="
 node "$HERE/realtime.mjs" "$ids"
+
+echo
+echo "== bidirectional (Supervisor console -> Family mobile) =="
+# The second direction, and the one an API-only test cannot cover: the
+# supervisor acts through the Admin Web console's OWN endpoint module, so a
+# path or body the console gets wrong fails here rather than in a browser.
+node "$HERE/bidirectional.mjs" "$ids"
 
 echo
 echo "PHASE 2 LIVE SMOKE: ALL PASS"

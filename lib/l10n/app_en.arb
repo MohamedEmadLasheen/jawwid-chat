@@ -226,5 +226,11 @@
   "searchTabChats": "Chats",
   "searchTabMessages": "Messages",
   "searchMinimumLength": "Type at least two characters",
-  "reconnecting": "Reconnecting…"
+  "reconnecting": "Reconnecting…",
+  "composerAttachUnavailable": "Attachments are not available yet",
+  "searchFilters": "Filters",
+  "searchFromDate": "From",
+  "searchToDate": "To",
+  "searchAnySender": "Anyone",
+  "searchClearFilters": "Clear"
 }

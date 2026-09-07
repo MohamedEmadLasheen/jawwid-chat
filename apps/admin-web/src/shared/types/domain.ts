@@ -17,12 +17,17 @@
  *  - One thread per family; `Case` is layered on the thread, never a second thread.
  */
 
-export type StaffRole =
-  | 'super_admin'
-  | 'manager'
-  | 'admin'
-  | 'coverage_admin'
-  | 'system'
+/**
+ * The canonical staff roles — exactly the four the API defines
+ * (`vocab.ts` StaffRole) and the four `chat.staff.role`'s CHECK constraint
+ * admits.
+ *
+ * `system` was here and was wrong: it is an ACTOR KIND, not a staff role. No
+ * `chat.staff` row can hold it, so every branch that tested for it was dead —
+ * and `visibleAreas('system')` was answering a question about a principal that
+ * cannot exist.
+ */
+export type StaffRole = 'super_admin' | 'manager' | 'admin' | 'coverage_admin'
 
 /** A routing attribute for task work. Never a role; never family-facing. */
 export type Department = 'finance' | 'technical' | 'academic'

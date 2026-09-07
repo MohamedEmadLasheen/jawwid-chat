@@ -4,12 +4,31 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { RealtimeProvider } from './RealtimeProvider'
 import { SessionProvider } from '@/core/auth/SessionProvider'
 import { qk } from '@/core/api/queryKeys'
-import { createTestQueryClient, makeInboxRow, makeStaff } from '@/test/utils'
+import { setAccessToken } from '@/core/api/client'
+import { createTestQueryClient, makeStaff } from '@/test/utils'
 
-/** Minimal Socket.IO stand-in that lets a test emit a server event. */
+/**
+ * The realtime contract, from the console's side.
+ *
+ * The harness is unchanged from the suite this replaces — a socket stand-in
+ * that lets a test emit a server event. What changed is WHICH events: the
+ * brief-era set (`family.updated`, `case.updated`, `task.updated`,
+ * `coverage.changed`, `ownership.changed`, `shift.ending`) shared two names
+ * with the API and neither payload matched, so those assertions were testing a
+ * contract nothing served.
+ *
+ * The rule they existed to protect is carried over verbatim and is the point of
+ * this file: events are SIGNALS, so a handler invalidates and refetches. It
+ * never writes a payload into the cache — the server decides what THIS operator
+ * may see, and a patched-in copy is a second answer to that question.
+ */
 const handlers = new Map<string, (payload: unknown) => void>()
 const socket = {
+  connected: true,
   on: (event: string, handler: (payload: unknown) => void) => handlers.set(event, handler),
+  emit: vi.fn(),
+  emitWithAck: vi.fn().mockResolvedValue({ ok: true, typing: [] }),
+  timeout: () => socket,
   removeAllListeners: () => handlers.clear(),
   disconnect: vi.fn(),
 }
@@ -20,12 +39,21 @@ function emit(event: string, payload: unknown) {
   handlers.get(event)?.(payload)
 }
 
+const CONVERSATION = 'conv-1'
+
 describe('realtime', () => {
   beforeEach(() => {
     handlers.clear()
+    socket.emit.mockClear()
+    // The socket presents the same bearer token HTTP does; without one the
+    // provider does not connect at all.
+    setAccessToken('test-token')
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('null', { status: 200 })))
   })
-  afterEach(() => vi.unstubAllGlobals())
+  afterEach(() => {
+    setAccessToken(null)
+    vi.unstubAllGlobals()
+  })
 
   function mount() {
     const queryClient = createTestQueryClient()
@@ -42,81 +70,153 @@ describe('realtime', () => {
     return queryClient
   }
 
-  it('subscribes to the events the operator’s workspace depends on', async () => {
+  it('subscribes to the canonical events the console depends on', async () => {
+    mount()
+
+    await waitFor(() => expect(handlers.size).toBeGreaterThan(0))
+
+    // Every event that changes what is on screen. A name that is not here is a
+    // screen that silently stops updating.
+    for (const event of [
+      'message.created',
+      'message.updated',
+      'message.deleted',
+      'message.receipt.updated',
+      'reaction.added',
+      'reaction.removed',
+      'conversation.updated',
+      'conversation.membership_changed',
+      'approval.requested',
+      'approval.decided',
+      'typing.started',
+      'typing.stopped',
+    ]) {
+      expect(handlers.has(event)).toBe(true)
+    }
+  })
+
+  it('does NOT listen for the brief-era events the API never emits', async () => {
     mount()
     await waitFor(() => expect(handlers.size).toBeGreaterThan(0))
-    for (const event of [
+
+    for (const gone of [
       'family.updated',
-      'message.created',
       'case.updated',
       'task.updated',
+      'handoff.created',
       'coverage.changed',
       'ownership.changed',
+      'unattended.changed',
+      'escalation.created',
+      'shift.ending',
     ]) {
-      expect(handlers.has(event), `missing handler for ${event}`).toBe(true)
+      expect(handlers.has(gone)).toBe(false)
     }
   })
 
-  it('invalidates the inbox on family.updated instead of writing the new bucket into the cache', async () => {
+  it('invalidates on message.created rather than writing the message into the cache', async () => {
     const queryClient = mount()
-    await waitFor(() => expect(handlers.has('family.updated')).toBe(true))
-
-    const stale = [makeInboxRow({ bucket: 'now', top_reason: 'stale reason' })]
-    queryClient.setQueryData(qk.inbox('now'), { pages: [{ items: stale, next_cursor: null }] })
+    await waitFor(() => expect(handlers.has('message.created')).toBe(true))
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
 
-    emit('family.updated', {
-      family_id: 'fam_1',
-      bucket: 'quiet',
-      top_reason: 'server says quiet now',
-      needs_reply: false,
-      on_duty_id: 'staff_b',
-      handling_mode: 'coverage',
+    emit('message.created', {
+      conversationId: CONVERSATION,
+      messageId: 'm1',
+      seq: '4',
+      authorKind: 'contact',
+      authorId: 'contact-1',
+      type: 'text',
+      visibility: 'customer',
+      moderation: 'published',
+      createdAt: '2026-09-07T10:00:00.000Z',
     })
 
-    // The refetch is what makes the server the single source of computed truth.
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: qk.inboxAll })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: qk.conversationMessages(CONVERSATION),
+    })
+    // The row's unread count and preview changed too, so the queue is stale.
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: qk.conversations })
 
-    // Critically: the payload must NOT have been patched into the cached row.
-    const cached = queryClient.getQueryData(qk.inbox('now')) as {
-      pages: { items: typeof stale }[]
-    }
-    expect(cached.pages[0]!.items[0]!.bucket).toBe('now')
-    expect(cached.pages[0]!.items[0]!.top_reason).toBe('stale reason')
+    // Nothing was written. The payload deliberately carries no body, because
+    // the body is subject to per-reader rules only the read path applies.
+    expect(queryClient.getQueryData(qk.conversationMessages(CONVERSATION))).toBeUndefined()
   })
 
-  it('refreshes duty and the inbox when coverage changes, not just the schedule', async () => {
+  it('invalidates on an edit rather than trusting the body it carries', async () => {
     const queryClient = mount()
-    await waitFor(() => expect(handlers.has('coverage.changed')).toBe(true))
+    await waitFor(() => expect(handlers.has('message.updated')).toBe(true))
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
 
-    emit('coverage.changed', { effective_at: new Date().toISOString() })
+    emit('message.updated', {
+      conversationId: CONVERSATION,
+      messageId: 'm1',
+      seq: '4',
+      body: 'edited text',
+      editedAt: '2026-09-07T10:05:00.000Z',
+      editCount: 1,
+    })
 
-    // Changing a rule changes who on_duty() returns, so the inbox is stale too.
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: qk.coverageAll })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: qk.duty })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: qk.inboxAll })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: qk.conversationMessages(CONVERSATION),
+    })
+    expect(queryClient.getQueryData(qk.conversationMessages(CONVERSATION))).toBeUndefined()
   })
 
-  it('refreshes the inbox when a task is completed, because the case may reopen', async () => {
+  it('refreshes the queue when a conversation changes section', async () => {
     const queryClient = mount()
-    await waitFor(() => expect(handlers.has('task.updated')).toBe(true))
+    await waitFor(() => expect(handlers.has('conversation.updated')).toBe(true))
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
 
-    emit('task.updated', { task: { id: 't1', family_id: 'fam_1' } })
+    emit('conversation.updated', {
+      conversationId: CONVERSATION,
+      familyId: 'fam-1',
+      state: 'waiting_on_jawwid',
+      needsReply: true,
+      lastActivityAt: '2026-09-07T10:00:00.000Z',
+      handlerId: 'staff-1',
+    })
 
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: qk.tasksAll })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: qk.inboxAll })
+    // The conversation may have moved between sections, so the LIST is stale
+    // and not only the row.
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: qk.conversations })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: qk.conversation(CONVERSATION) })
   })
 
-  it('refreshes the family and the dashboard when ownership changes', async () => {
+  it('refreshes a conversation when an approval is decided', async () => {
     const queryClient = mount()
-    await waitFor(() => expect(handlers.has('ownership.changed')).toBe(true))
+    await waitFor(() => expect(handlers.has('approval.decided')).toBe(true))
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
 
-    emit('ownership.changed', { family_id: 'fam_1', from: 'staff_a', to: 'staff_b' })
+    emit('approval.decided', {
+      conversationId: CONVERSATION,
+      messageId: 'm1',
+      approvalId: 'a1',
+      decision: 'approved',
+      rejectionReason: null,
+    })
 
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: qk.family('fam_1') })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: qk.dashboardAll })
+    // An approved message becomes visible to the group, so the thread changed.
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: qk.conversationMessages(CONVERSATION),
+    })
+  })
+
+  it('a receipt moving does not write a receipt into the cache', async () => {
+    const queryClient = mount()
+    await waitFor(() => expect(handlers.has('message.receipt.updated')).toBe(true))
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+
+    emit('message.receipt.updated', {
+      conversationId: CONVERSATION,
+      messageId: 'm1',
+      actorId: 'contact-1',
+      state: 'read',
+      at: '2026-09-07T10:01:00.000Z',
+    })
+
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: qk.conversationMessages(CONVERSATION),
+    })
+    expect(queryClient.getQueryData(qk.conversationMessages(CONVERSATION))).toBeUndefined()
   })
 })

@@ -27,33 +27,33 @@ describe('role → navigation', () => {
     expect(ROLES).not.toContain('coverage')
   })
 
-  it('gives only management coverage, dashboard and settings', () => {
+  it('gives every family-facing role the console, and nothing frozen', () => {
+    // Phase 2: the Communication Operations Console is THE operator surface.
+    // The brief-era areas are frozen and unrouted — a role that could "open"
+    // one would reach a page whose every query hits an endpoint the API does
+    // not serve, which is a worse experience than not offering it.
     for (const role of ROLES) {
       const areas = visibleAreas(role)
-      if (role === 'manager' || role === 'super_admin') {
-        expect(areas).toEqual(
-          expect.arrayContaining(['coverage', 'dashboard', 'settings']),
-        )
-      } else {
-        expect(areas).not.toContain('coverage')
-        expect(areas).not.toContain('dashboard')
-        expect(areas).not.toContain('settings')
+      expect(areas).toEqual(['console'])
+      for (const frozen of ['inbox', 'families', 'tasks', 'coverage', 'dashboard', 'settings'] as const) {
+        expect(areas).not.toContain(frozen)
       }
     }
   })
 
-  it('gives departmental staff tasks and nothing else, whatever their role', () => {
-    // A department is an ATTRIBUTE now: the same `admin` role is family-facing
-    // without one and task-only with one.
+  it('gives departmental staff NO communication surface, whatever their role', () => {
+    // A department is an ATTRIBUTE: the same `admin` role is family-facing
+    // without one and not family-facing with one (PD-5). The task console that
+    // used to serve them is frozen, so they get nothing rather than a
+    // communication console they may not operate.
     for (const department of DEPARTMENTS) {
       expect(isDepartment('admin', department)).toBe(true)
       expect(isOperator('admin', department)).toBe(false)
-      expect(visibleAreas('admin', department)).toEqual(['tasks'])
-      expect(canOpenArea('admin', 'families', department)).toBe(false)
-      expect(canOpenArea('admin', 'inbox', department)).toBe(false)
+      expect(visibleAreas('admin', department)).toEqual([])
+      expect(canOpenArea('admin', 'console', department)).toBe(false)
     }
     // Even a super_admin carrying a department is not family-facing.
-    expect(visibleAreas('super_admin', 'finance')).toEqual(['tasks'])
+    expect(visibleAreas('super_admin', 'finance')).toEqual([])
     expect(isManager('super_admin', 'finance')).toBe(false)
   })
 

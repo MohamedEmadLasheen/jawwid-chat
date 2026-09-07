@@ -212,7 +212,17 @@ class MessagesController extends Notifier<MessagesState> {
         // fetches from the watermark rather than trusting the payload — and
         // because the fetch merges by id, an arrival this client already holds
         // (its own send, or a duplicate event) adds nothing.
-        unawaited(resync());
+        //
+        // Then advance the read cursor IF the reader is looking at the bottom
+        // of the conversation. A message that arrives while somebody is reading
+        // it has been read, and leaving it unread until they scroll or reopen
+        // is how a conversation the user is actively watching accumulates a
+        // phantom unread badge.
+        unawaited(
+          resync().then((_) {
+            if (_alive && _isViewingLatest) unawaited(markReadThroughLatest());
+          }),
+        );
 
       case MessageEdited(:final messageId, :final body, :final editedAt):
         // The one signal that carries content. The backend emits it only to the
@@ -603,6 +613,17 @@ class MessagesController extends Notifier<MessagesState> {
       }
     }
   }
+
+  /// Whether the reader is looking at the newest messages.
+  ///
+  /// Set by the screen from its scroll position, because only the screen knows
+  /// it. Defaults to TRUE: a conversation that has just opened is showing its
+  /// bottom, and the first arrival should not wait for a scroll event that may
+  /// never come.
+  bool _isViewingLatest = true;
+
+  // ignore: use_setters_to_change_properties
+  void setViewingLatest(bool value) => _isViewingLatest = value;
 
   /// The conversation was opened, or scrolled to the bottom: mark it read.
   ///

@@ -507,4 +507,22 @@ class L10nEn extends L10n {
 
   @override
   String get reconnecting => 'Reconnecting…';
+
+  @override
+  String get composerAttachUnavailable => 'Attachments are not available yet';
+
+  @override
+  String get searchFilters => 'Filters';
+
+  @override
+  String get searchFromDate => 'From';
+
+  @override
+  String get searchToDate => 'To';
+
+  @override
+  String get searchAnySender => 'Anyone';
+
+  @override
+  String get searchClearFilters => 'Clear';
 }

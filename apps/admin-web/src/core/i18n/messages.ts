@@ -138,6 +138,46 @@ export const messages = {
     'common.signOut': 'Sign out',
     'common.internalNote': 'Internal note',
     'common.systemEvent': 'System',
+    // --- Communication Operations Console (Phase 2) -------------------------
+    'nav.console': 'Console',
+    'nav.conversation': 'Conversation',
+
+    'section.needsReply': 'Needs reply',
+    'section.waiting': 'Waiting on family',
+    'section.empty': 'Nothing here',
+
+    'console.selectPrompt': 'Select a conversation',
+
+    'conversation.group': 'Student group',
+    'conversation.empty': 'No messages yet',
+    'conversation.unread': '{count} unread',
+    'conversation.typingOne': '{name} is typing…',
+    'conversation.typingMany': '{count} people are typing…',
+
+    'message.reply': 'Reply',
+    'message.replyingTo': 'Replying to',
+    'message.edit': 'Edit',
+    'message.edited': 'edited',
+    'message.forward': 'Forward',
+    'message.forwarded': 'Forwarded',
+    'message.forwardEmpty': 'No other conversations to forward to',
+    'message.deleteForMe': 'Delete for me',
+    'message.deleteForEveryone': 'Delete for everyone',
+    'message.deleteForEveryoneWarning':
+      'This message will be removed for everyone in this conversation. This cannot be undone.',
+    'message.deleted': 'This message was deleted',
+    'message.quoteDeleted': 'The quoted message was deleted',
+    'message.quoteUnavailable': 'The quoted message is no longer available',
+    'message.pendingApproval': 'Pending approval',
+
+    'receipt.sent': 'Sent',
+    'receipt.delivered': 'Delivered',
+    'receipt.read': 'Read',
+
+    'search.conversations': 'Search conversations',
+    'search.messages': 'Messages',
+    'search.none': 'Nothing matched',
+
   },
 
   ar: {
@@ -271,6 +311,46 @@ export const messages = {
     'common.signOut': 'تسجيل الخروج',
     'common.internalNote': 'ملاحظة داخلية',
     'common.systemEvent': 'النظام',
+    // --- وحدة تشغيل التواصل (المرحلة الثانية) -------------------------------
+    'nav.console': 'لوحة التواصل',
+    'nav.conversation': 'المحادثة',
+
+    'section.needsReply': 'بانتظار الرد',
+    'section.waiting': 'بانتظار الأسرة',
+    'section.empty': 'لا يوجد شيء هنا',
+
+    'console.selectPrompt': 'اختر محادثة',
+
+    'conversation.group': 'مجموعة الطالب',
+    'conversation.empty': 'لا توجد رسائل بعد',
+    'conversation.unread': '{count} غير مقروءة',
+    'conversation.typingOne': '{name} يكتب الآن…',
+    'conversation.typingMany': '{count} أشخاص يكتبون الآن…',
+
+    'message.reply': 'رد',
+    'message.replyingTo': 'رد على',
+    'message.edit': 'تعديل',
+    'message.edited': 'مُعدَّلة',
+    'message.forward': 'إعادة توجيه',
+    'message.forwarded': 'مُعاد توجيهها',
+    'message.forwardEmpty': 'لا توجد محادثات أخرى لإعادة التوجيه إليها',
+    'message.deleteForMe': 'حذف عندي',
+    'message.deleteForEveryone': 'حذف عند الجميع',
+    'message.deleteForEveryoneWarning':
+      'سيتم حذف هذه الرسالة عند جميع المشاركين في هذه المحادثة، ولا يمكن التراجع.',
+    'message.deleted': 'تم حذف هذه الرسالة',
+    'message.quoteDeleted': 'تم حذف الرسالة المقتبسة',
+    'message.quoteUnavailable': 'الرسالة المقتبسة لم تعد متاحة',
+    'message.pendingApproval': 'بانتظار الموافقة',
+
+    'receipt.sent': 'أُرسلت',
+    'receipt.delivered': 'وصلت',
+    'receipt.read': 'قُرئت',
+
+    'search.conversations': 'ابحث في المحادثات',
+    'search.messages': 'الرسائل',
+    'search.none': 'لا توجد نتائج',
+
   },
 } as const
 

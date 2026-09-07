@@ -210,12 +210,7 @@ export function makeFamilyDetail(overrides: Partial<FamilyDetail> = {}): FamilyD
  * `super_admin` exists from day one, and finance/technical/academic are
  * DEPARTMENTS rather than roles -- see DEPARTMENTS below.
  */
-export const ROLES: StaffRole[] = [
-  'super_admin',
-  'manager',
-  'admin',
-  'coverage_admin',
-  'system',
-]
+/** Every staff role there is. `system` is an actor kind, never a staff role. */
+export const ROLES: StaffRole[] = ['super_admin', 'manager', 'admin', 'coverage_admin']
 
 export const DEPARTMENTS = ['finance', 'technical', 'academic'] as const

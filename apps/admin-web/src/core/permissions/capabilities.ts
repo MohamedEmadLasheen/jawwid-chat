@@ -25,6 +25,11 @@
 import type { Department, StaffRole } from '@/shared/types/domain'
 
 export type NavArea =
+  // The Communication Operations Console — the canonical operator surface.
+  | 'console'
+  // Frozen brief-era areas. Still typed so the frozen pages compile; removed
+  // from the rail and from the route table (PHASE-0-ADMIN-WEB-RECONCILIATION
+  // §2.7), and deleted with their features in a later phase.
   | 'inbox'
   | 'families'
   | 'tasks'
@@ -67,19 +72,23 @@ export function isSuperAdmin(role: StaffRole, department?: Department | null): b
   return !department && role === 'super_admin'
 }
 
-/** Which nav areas this role may even attempt to open. */
+/**
+ * Which nav areas this role may even attempt to open.
+ *
+ * Phase 2: the console is the operator surface, and it is the only one. The
+ * brief-era areas (`inbox`, `families`, `tasks`, `coverage`, `dashboard`) are
+ * frozen and unrouted — a role that could "open" one would reach a page whose
+ * every query hits an endpoint the API does not serve.
+ *
+ * A DEPARTMENTAL staff member gets nothing. That is not a demotion: departments
+ * complete task work and take no part in family communication (PD-5), and the
+ * task console that served them is frozen until a canonical Task contract
+ * exists. Showing them a communication console they may not use would be worse
+ * than showing them nothing.
+ */
 export function visibleAreas(role: StaffRole, department?: Department | null): NavArea[] {
-  if (isManager(role, department)) {
-    return ['inbox', 'families', 'tasks', 'coverage', 'dashboard', 'settings']
-  }
-  if (isOperator(role, department)) {
-    // No coverage configuration, no manager dashboard, no config editing.
-    return ['inbox', 'families', 'tasks']
-  }
-  if (isDepartment(role, department)) {
-    // Departments get tasks and nothing else — they may not open family records.
-    return ['tasks']
-  }
+  if (isDepartment(role, department)) return []
+  if (isOperator(role, department)) return ['console']
   return []
 }
 

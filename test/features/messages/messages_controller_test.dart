@@ -560,6 +560,56 @@ void main() {
       expect(read().log.byId(id)!.deliveryState, DeliveryState.read);
     });
 
+    test('a message arriving while the reader is AT THE BOTTOM is marked read', () async {
+      final c = controller();
+      await settle();
+
+      repository.history_.add(inbound(1));
+      await c.loadInitial();
+      await settle();
+      await c.markReadThroughLatest();
+      expect(conversations.readCursors, [1]);
+
+      // Something arrives while the conversation is open and the reader is
+      // looking at the newest messages. It has been read — leaving it unread
+      // until they scroll or reopen is how a conversation somebody is actively
+      // watching accumulates a phantom unread badge.
+      repository.history_.add(inbound(2));
+      realtime.emit('message.created', {
+        'conversationId': 'c1',
+        'messageId': 'srv_2',
+        'seq': '2',
+      });
+      await settle();
+
+      expect(conversations.readCursors, [1, 2]);
+    });
+
+    test('a message arriving while the reader is reading HISTORY is left unread', () async {
+      final c = controller();
+      await settle();
+
+      repository.history_.add(inbound(1));
+      await c.loadInitial();
+      await settle();
+      await c.markReadThroughLatest();
+      conversations.readCursors.clear();
+
+      // The reader has scrolled away. Marking an arrival read now would clear a
+      // badge for a message they have not seen.
+      c.setViewingLatest(false);
+
+      repository.history_.add(inbound(2));
+      realtime.emit('message.created', {
+        'conversationId': 'c1',
+        'messageId': 'srv_2',
+        'seq': '2',
+      });
+      await settle();
+
+      expect(conversations.readCursors, isEmpty);
+    });
+
     test('reports the read cursor once, and only when it advances', () async {
       final c = controller();
       await settle();

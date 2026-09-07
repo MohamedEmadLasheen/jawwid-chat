@@ -1020,6 +1020,42 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Reconnecting…'**
   String get reconnecting;
+
+  /// No description provided for @composerAttachUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachments are not available yet'**
+  String get composerAttachUnavailable;
+
+  /// No description provided for @searchFilters.
+  ///
+  /// In en, this message translates to:
+  /// **'Filters'**
+  String get searchFilters;
+
+  /// No description provided for @searchFromDate.
+  ///
+  /// In en, this message translates to:
+  /// **'From'**
+  String get searchFromDate;
+
+  /// No description provided for @searchToDate.
+  ///
+  /// In en, this message translates to:
+  /// **'To'**
+  String get searchToDate;
+
+  /// No description provided for @searchAnySender.
+  ///
+  /// In en, this message translates to:
+  /// **'Anyone'**
+  String get searchAnySender;
+
+  /// No description provided for @searchClearFilters.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get searchClearFilters;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

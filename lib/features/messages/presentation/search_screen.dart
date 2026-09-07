@@ -46,6 +46,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
   Timer? _debounce;
 
   String _query = '';
+
+  /// Sender and date filters (§23). The backend supports both; exposing them
+  /// only in a scoped search would be arbitrary, so they apply to either.
+  String? _authorId;
+  DateTime? _from;
+  DateTime? _to;
+  bool _showFilters = false;
+
   bool _isSearching = false;
   Object? _error;
   List<Conversation> _conversations = const [];
@@ -92,6 +100,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
     _debounce = Timer(const Duration(milliseconds: 350), _run);
   }
 
+  /// Apply a filter change immediately: the user has already told us what they
+  /// want, and waiting for another keystroke to honour it would read as broken.
+  void _applyFilters(void Function() change) {
+    setState(change);
+    if (_query.length >= 2) unawaited(_run());
+  }
+
   Future<void> _run() async {
     final query = _query;
     setState(() {
@@ -101,7 +116,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
 
     try {
       final messages = await ref.read(messageRepositoryProvider).search(
-            MessageSearchQuery(text: query, conversationId: widget.conversationId),
+            MessageSearchQuery(
+              text: query,
+              conversationId: widget.conversationId,
+              authorId: _authorId,
+              from: _from,
+              to: _to,
+            ),
           );
       final conversations = _isScoped
           ? const <Conversation>[]
@@ -160,7 +181,27 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                 ],
               ),
       ),
-      body: _body(l10n),
+      body: Column(
+        children: [
+          _FilterBar(
+            isOpen: _showFilters,
+            onToggle: () => setState(() => _showFilters = !_showFilters),
+            conversationId: widget.conversationId,
+            authorId: _authorId,
+            from: _from,
+            to: _to,
+            onAuthorChanged: (id) => _applyFilters(() => _authorId = id),
+            onFromChanged: (date) => _applyFilters(() => _from = date),
+            onToChanged: (date) => _applyFilters(() => _to = date),
+            onClear: () => _applyFilters(() {
+              _authorId = null;
+              _from = null;
+              _to = null;
+            }),
+          ),
+          Expanded(child: _body(l10n)),
+        ],
+      ),
     );
   }
 
@@ -261,6 +302,222 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
           onTap: () => context.push(Routes.conversation(hit.conversationId)),
         );
       },
+    );
+  }
+}
+
+/// Sender and date filters.
+///
+/// Collapsed by default: most searches are a word, and a row of controls above
+/// every result list would cost more than it earns. Opening it is one tap, and
+/// an active filter is visible on the closed bar so a narrowed search never
+/// looks like an empty one.
+///
+/// The sender picker offers the conversation's own participants when the search
+/// is scoped to one, and nothing otherwise — a global list of everybody this
+/// user could filter by would be a directory, and the client does not assemble
+/// one.
+class _FilterBar extends ConsumerWidget {
+  const _FilterBar({
+    required this.isOpen,
+    required this.onToggle,
+    required this.conversationId,
+    required this.authorId,
+    required this.from,
+    required this.to,
+    required this.onAuthorChanged,
+    required this.onFromChanged,
+    required this.onToChanged,
+    required this.onClear,
+  });
+
+  final bool isOpen;
+  final VoidCallback onToggle;
+  final String? conversationId;
+  final String? authorId;
+  final DateTime? from;
+  final DateTime? to;
+  final ValueChanged<String?> onAuthorChanged;
+  final ValueChanged<DateTime?> onFromChanged;
+  final ValueChanged<DateTime?> onToChanged;
+  final VoidCallback onClear;
+
+  bool get _hasActiveFilter => authorId != null || from != null || to != null;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = L10n.of(context);
+    final theme = Theme.of(context);
+    final locale = Localizations.localeOf(context).toLanguageTag();
+
+    return Container(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          InkWell(
+            onTap: onToggle,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: Spacing.spacing5,
+                vertical: Spacing.spacing3,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    isOpen ? Icons.expand_less : Icons.tune,
+                    size: 18,
+                    color: _hasActiveFilter
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: Spacing.spacing3),
+                  Text(
+                    l10n.searchFilters,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: _hasActiveFilter ? theme.colorScheme.primary : null,
+                      fontWeight: _hasActiveFilter ? FontWeight.w700 : null,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (_hasActiveFilter)
+                    TextButton(
+                      onPressed: onClear,
+                      child: Text(l10n.searchClearFilters),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          if (isOpen)
+            Padding(
+              // Directional, not physical: a physical LTRB inset puts the
+              // padding on the wrong side in Arabic, which is what the
+              // directionality guard exists to catch.
+              padding: const EdgeInsetsDirectional.only(
+                start: Spacing.spacing5,
+                end: Spacing.spacing5,
+                bottom: Spacing.spacing3,
+              ),
+              child: Wrap(
+                spacing: Spacing.spacing3,
+                runSpacing: Spacing.spacing2,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  if (conversationId != null)
+                    _SenderPicker(
+                      conversationId: conversationId!,
+                      selected: authorId,
+                      onChanged: onAuthorChanged,
+                    ),
+                  _DateChip(
+                    label: l10n.searchFromDate,
+                    value: from,
+                    locale: locale,
+                    onChanged: onFromChanged,
+                  ),
+                  _DateChip(
+                    label: l10n.searchToDate,
+                    value: to,
+                    locale: locale,
+                    onChanged: onToChanged,
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Filter by who wrote it.
+///
+/// The candidates are the conversation's OWN members, resolved by the server on
+/// the conversation payload. There is no global people picker: assembling one
+/// would mean the client holding a directory of actors, which §41 forbids.
+class _SenderPicker extends ConsumerWidget {
+  const _SenderPicker({
+    required this.conversationId,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final String conversationId;
+  final String? selected;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = L10n.of(context);
+    final conversation = ref.watch(_conversationMembersProvider(conversationId));
+
+    return conversation.maybeWhen(
+      data: (members) => DropdownButton<String?>(
+        value: selected,
+        hint: Text(l10n.searchAnySender),
+        underline: const SizedBox.shrink(),
+        items: [
+          DropdownMenuItem<String?>(value: null, child: Text(l10n.searchAnySender)),
+          for (final member in members)
+            DropdownMenuItem<String?>(
+              value: member.id,
+              child: Text(member.displayName),
+            ),
+        ],
+        onChanged: onChanged,
+      ),
+      // No members yet, or the lookup failed: offer nothing rather than an
+      // empty picker that looks broken. The text search still works.
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+}
+
+/// The conversation's members, for the sender filter.
+final _conversationMembersProvider =
+    FutureProvider.family<List<GroupMember>, String>((ref, conversationId) async {
+  final group = await ref.read(groupRepositoryProvider).group(conversationId);
+  return group.members;
+});
+
+class _DateChip extends StatelessWidget {
+  const _DateChip({
+    required this.label,
+    required this.value,
+    required this.locale,
+    required this.onChanged,
+  });
+
+  final String label;
+  final DateTime? value;
+  final String locale;
+  final ValueChanged<DateTime?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = value;
+
+    return InputChip(
+      label: Text(
+        selected == null
+            ? label
+            : '$label ${RelativeTime.forDaySeparator(selected, DateTime.now(), locale: locale, todayLabel: L10n.of(context).todayLabel, yesterdayLabel: L10n.of(context).yesterdayLabel)}',
+      ),
+      selected: selected != null,
+      onSelected: (_) async {
+        final now = DateTime.now();
+        final picked = await showDatePicker(
+          context: context,
+          initialDate: selected ?? now,
+          // A conversation cannot predate the product, and a future date
+          // filters nothing — so the range is bounded rather than infinite.
+          firstDate: DateTime(now.year - 5),
+          lastDate: now,
+        );
+        if (picked != null) onChanged(picked);
+      },
+      onDeleted: selected == null ? null : () => onChanged(null),
     );
   }
 }

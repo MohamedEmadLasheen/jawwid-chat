@@ -104,6 +104,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         _isAwayFromBottom = away;
         if (!away) _unseenWhileAway = 0;
       });
+      // The controller needs this to decide whether an ARRIVING message has
+      // been read: one that lands while the reader is at the bottom has been.
+      _controller.setViewingLatest(!away);
       // Coming back to the bottom means the user has now seen everything.
       if (!away) unawaited(_controller.markReadThroughLatest());
     }
@@ -120,6 +123,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       _unseenWhileAway = 0;
       _isAwayFromBottom = false;
     });
+    _controller.setViewingLatest(true);
     _scrollController.animateTo(
       0,
       duration: Motion.respecting(context, Motion.motionBase),
@@ -289,6 +293,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
           Expanded(child: _body(state, controller, l10n)),
           MessageComposer(
+            // The attach affordance. The backend authorizes uploads
+            // (`POST …/messages/attachments/authorize`) and the schema carries
+            // attachments, but no file picker or upload pipeline exists on this
+            // client yet — so the control says what it is rather than being
+            // absent. A missing button reads as "this product cannot do that";
+            // a disabled one with a reason reads as "not yet", which is true.
+            onAttach: () => ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(l10n.composerAttachUnavailable)),
+            ),
             onSend: (body) {
               controller.send(body, replyTo: _replyingTo);
               // Sending IS stopping typing; leaving the indicator up until the

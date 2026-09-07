@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo } from 'react'
 import type { ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { sessionApi, type DutyState, type Me } from '@/core/api/endpoints'
+import { sessionApi, type Me } from '@/core/api/endpoints'
 import { qk } from '@/core/api/queryKeys'
 import { hasAccessToken, setAccessToken, setUnauthenticatedHandler } from '@/core/api/client'
 import type { Staff } from '@/shared/types/domain'
@@ -15,7 +15,6 @@ interface SessionValue {
    * itself -- the previous session's cached copy is cleared on every 401.
    */
   staff: Staff | null
-  duty: DutyState | null
   /** Effective permission keys, overrides already applied. UX only. */
   permissions: string[]
   isLoading: boolean
@@ -52,14 +51,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     staleTime: 60_000,
   })
 
-  const dutyQuery = useQuery({
-    queryKey: qk.duty,
-    queryFn: () => sessionApi.duty(),
-    enabled: Boolean(meQuery.data),
-    // Duty state changes on shift boundaries; a minute of staleness is enough
-    // because coverage.changed events invalidate it as well.
-    refetchInterval: 60_000,
-  })
+  // `/me/duty` is gone. Shift state was never a client concern: the operator
+  // who is currently responsible for a conversation arrives per conversation as
+  // `handlerId`, and whether THIS operator may reply is answered by the send
+  // endpoint's own refusal — not by a duty flag the client interprets.
 
   useEffect(() => {
     // A 401 from anywhere ends the session once: the token is dropped and every
@@ -74,7 +69,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const value = useMemo<SessionValue>(
     () => ({
       staff: toStaff(meQuery.data),
-      duty: dutyQuery.data ?? null,
       permissions: meQuery.data?.permissions ?? [],
       isLoading: hasAccessToken() && meQuery.isLoading,
       isAuthenticated: Boolean(meQuery.data),
@@ -92,7 +86,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         queryClient.clear()
       },
     }),
-    [meQuery.data, meQuery.isLoading, dutyQuery.data, queryClient],
+    [meQuery.data, meQuery.isLoading, queryClient],
   )
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>

@@ -64,6 +64,19 @@ export function hasAccessToken(): boolean {
   return accessToken !== null
 }
 
+/**
+ * The token, for the one caller that cannot go through `request()`.
+ *
+ * The realtime socket presents the SAME bearer token HTTP does, in
+ * `handshake.auth.token` — the gateway verifies it with the same AuthService,
+ * so a socket can never reach an identity an HTTP request could not. Reading it
+ * here keeps that single source; a second copy held by the realtime layer would
+ * be one refresh away from disagreeing with this one.
+ */
+export function getAccessToken(): string | null {
+  return accessToken
+}
+
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', query, body, signal, idempotencyKey } = options
 
@@ -94,10 +107,18 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   if (!response.ok) {
     const fallback = fallbackMessages(response.status)
     const err = payload?.error ?? {}
+    // The API sends `{error:{code,message}}` -- ONE message, not a bilingual
+    // pair (`http-exception.filter.ts`). That message is developer-facing
+    // English, so it is used as the English fallback and never as the Arabic
+    // one: showing an operator an untranslated server string is worse than
+    // showing them the generic localized text for the status. Where a code
+    // deserves better wording in either language, i18n keys it by `code`.
+    const serverMessage = typeof err.message === 'string' ? err.message : null
     const apiError = new ApiError({
       status: response.status,
       code: typeof err.code === 'string' ? err.code : `http_${response.status}`,
-      messageEn: typeof err.message_en === 'string' ? err.message_en : fallback.en,
+      messageEn:
+        typeof err.message_en === 'string' ? err.message_en : (serverMessage ?? fallback.en),
       messageAr: typeof err.message_ar === 'string' ? err.message_ar : fallback.ar,
       detail: err.detail ?? payload?.detail ?? null,
     })

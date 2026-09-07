@@ -5,11 +5,7 @@ import type { Staff } from '@/shared/types/domain'
 import { LoadingState } from '@/shared/components/States'
 import { AppShell } from './AppShell'
 import { LoginPage } from '@/features/auth/LoginPage'
-import { InboxPage } from '@/features/inbox/InboxPage'
-import { FamiliesPage } from '@/features/family/FamiliesPage'
-import { TasksPage } from '@/features/tasks/TasksPage'
-import { CoveragePage } from '@/features/coverage/CoveragePage'
-import { DashboardPage } from '@/features/dashboard/DashboardPage'
+import { ConsolePage } from '@/features/conversations/ConsolePage'
 import { ForbiddenPage } from './ForbiddenPage'
 import type { ReactElement } from 'react'
 
@@ -25,11 +21,11 @@ function Area({ area, children }: { area: NavArea; children: ReactElement }) {
 }
 
 function homeFor(staff: Pick<Staff, 'role' | 'department'>): string {
-  // Departments have no inbox — they only ever see their own tasks. A
-  // department is an attribute rather than a role since Phase 1, so it has to
-  // be passed alongside: asking the role alone would send a finance admin to an
-  // inbox they cannot open.
-  return isDepartment(staff.role, staff.department) ? '/tasks' : '/inbox'
+  // A departmental staff member has no communication surface at all: they
+  // complete task work and take no part in family communication (PD-5), and
+  // the task console is frozen. They land on the forbidden page rather than on
+  // a console they may not operate.
+  return isDepartment(staff.role, staff.department) ? '/forbidden' : '/console'
 }
 
 export function AppRoutes() {
@@ -42,18 +38,22 @@ export function AppRoutes() {
     <AppShell>
       <Routes>
         <Route path="/" element={<Navigate to={homeFor(staff)} replace />} />
-        <Route path="/inbox" element={<Area area="inbox"><InboxPage /></Area>} />
-        <Route path="/inbox/:familyId" element={<Area area="inbox"><InboxPage /></Area>} />
-        <Route path="/families" element={<Area area="families"><FamiliesPage /></Area>} />
-        <Route path="/tasks" element={<Area area="tasks"><TasksPage /></Area>} />
-        <Route path="/coverage" element={<Area area="coverage"><CoveragePage /></Area>} />
-        <Route path="/dashboard" element={<Area area="dashboard"><DashboardPage /></Area>} />
+        <Route path="/console" element={<Area area="console"><ConsolePage /></Area>} />
+        <Route
+          path="/console/:conversationId"
+          element={<Area area="console"><ConsolePage /></Area>}
+        />
+        <Route path="/forbidden" element={<ForbiddenPage />} />
         {/*
-          Reserved seams (docs/admin/backend-contract-required.md §10):
-          /approvals and /calls are intentionally unregistered. They exist in
-          the AI #4 role assignment but in no part of the product brief, so
-          they are not built. Adding one is a single Route here plus a nav
-          registry entry — no refactor.
+          The brief-era routes (/inbox, /families, /tasks, /coverage,
+          /dashboard) are GONE from the table. Their pages are frozen on disk
+          per PHASE-0-ADMIN-WEB-RECONCILIATION §2.7 and are deleted with a
+          later phase — but every query behind them calls an endpoint the API
+          does not serve, so routing to one would render a page of errors.
+
+          /approvals and /calls remain reserved seams: the API serves them,
+          the console does not surface them yet, and adding one is a Route here
+          plus a nav entry — no refactor.
         */}
         <Route path="*" element={<Navigate to={homeFor(staff)} replace />} />
       </Routes>
