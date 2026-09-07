@@ -161,6 +161,118 @@ select pg_temp.want_index('message_conversation_seq');
 select pg_temp.want_index('message_idempotency');
 
 \echo ''
+\echo '=== Phase 1: identity, RBAC, supervisor scope (must exist) ==='
+select pg_temp.want_table('teacher');
+select pg_temp.want_table('account_credential');
+select pg_temp.want_table('session');
+select pg_temp.want_table('device');
+select pg_temp.want_table('account_token');
+select pg_temp.want_table('family_assignment');
+select pg_temp.want_table('permission');
+select pg_temp.want_table('role_permission');
+select pg_temp.want_table('account_permission_override');
+
+-- Teacher identity is a real relationship now, not a bare uuid on a learner.
+select pg_temp.want_fk('learner', 'teacher_id');
+select pg_temp.want_fk('staff', 'account_id');
+select pg_temp.want_fk('contact', 'account_id');
+select pg_temp.want_fk('teacher', 'account_id');
+select pg_temp.want_fk('session', 'account_id');
+select pg_temp.want_fk('family_assignment', 'family_id');
+select pg_temp.want_fk('family_assignment', 'staff_id');
+
+-- BR-4: one family, one live primary supervisor.
+select pg_temp.want_index('family_assignment_one_live_primary');
+select pg_temp.want_index('account_subject_per_organization_key');
+select pg_temp.want_index('device_account_client_key');
+
+select pg_temp.want_trigger('family_assignment_is_guarded', 'family_assignment');
+select pg_temp.want_trigger('family_assignment_mirrors_owner', 'family_assignment');
+select pg_temp.want_trigger('family_opens_primary_assignment', 'family');
+select pg_temp.want_trigger('account_is_active_is_derived', 'account');
+select pg_temp.want_trigger('teacher_deactivation_is_guarded', 'teacher');
+
+\echo ''
+\echo '=== Phase 1: the role vocabulary is the canonical one (PD-5) ==='
+do $$
+declare v_definition text;
+begin
+  select pg_get_constraintdef(c.oid) into v_definition
+    from pg_constraint c join pg_class t on t.oid = c.conrelid
+    join pg_namespace n on n.oid = t.relnamespace
+   where n.nspname = 'chat' and t.relname = 'staff' and c.conname = 'staff_role_check';
+
+  if v_definition is null then
+    raise exception 'MISSING chat.staff role CHECK';
+  end if;
+  if v_definition !~ 'super_admin' then
+    raise exception 'chat.staff.role does not admit super_admin (PD-5)';
+  end if;
+  -- `coverage` followed by anything other than an underscore is the legacy
+  -- role name; `coverage_admin` is the canonical one and must not match.
+  if v_definition ~ '''coverage''' then
+    raise exception 'the legacy role `coverage` is still admitted; PD-5 renamed it coverage_admin';
+  end if;
+  raise notice 'roles     super_admin present, legacy `coverage` gone';
+end $$;
+
+\echo ''
+\echo '=== Phase 1: row-level security is enabled on EVERY table in the schema ==='
+do $$
+declare v_missing text;
+begin
+  select string_agg(c.relname, ', ' order by c.relname) into v_missing
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'chat' and c.relkind = 'r' and not c.relrowsecurity;
+  if v_missing is not null then
+    raise exception 'RLS DISABLED on chat.%s -- a policy on a table with RLS off is documentation, not a control', v_missing;
+  end if;
+  raise notice 'rls       enabled on every table in schema chat';
+end $$;
+
+\echo ''
+\echo '=== Phase 1: every root table carries the restrictive tenant policy ==='
+do $$
+declare v_missing text;
+begin
+  select string_agg(t, ', ' order by t) into v_missing
+    from unnest(array['account','staff','family','contact','learner','conversation',
+                      'message','message_approval','call','notification','device_token',
+                      'quiet_hours','teacher','family_assignment','event_log','audit_log']) as t
+   where to_regclass('chat.' || t) is not null
+     and not exists (
+       select 1 from pg_policies p
+        where p.schemaname = 'chat' and p.tablename = t and p.permissive = 'RESTRICTIVE');
+  if v_missing is not null then
+    raise exception 'MISSING tenant isolation policy on chat.%s', v_missing;
+  end if;
+  raise notice 'tenancy   restrictive organization policy on every root table';
+end $$;
+
+\echo ''
+\echo '=== Phase 1: the policy helpers still run as their owner ==='
+-- CREATE OR REPLACE FUNCTION resets every attribute the new definition does not
+-- restate, so a later edit can silently drop SECURITY DEFINER from a helper an
+-- RLS policy depends on. That happened once during Phase 1 and produced
+-- "permission denied for table account" on an ordinary SELECT. This gate is
+-- what makes it fail here instead of in an environment.
+do $$
+declare v_missing text;
+begin
+  select string_agg(p.proname, ', ' order by p.proname) into v_missing
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'chat'
+     and p.proname in ('current_account_id', 'current_actor_ids', 'current_staff_id',
+                       'staff_in_scope', 'staff_can_see_family', 'can_read_conversation',
+                       'is_live_member', 'account_has_permission')
+     and not p.prosecdef;
+  if v_missing is not null then
+    raise exception 'POLICY HELPER NOT SECURITY DEFINER: chat.%s -- RLS will fail closed on every read', v_missing;
+  end if;
+  raise notice 'helpers   every policy helper still runs as its owner';
+end $$;
+
+\echo ''
 \echo '=== isolation: no Jawwid Core and no Second School objects may be required ==='
 do $$
 declare v_foreign text;

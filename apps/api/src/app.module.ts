@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PlatformModule } from './platform/platform.module';
 import { AuthModule } from './platform/auth/auth.module';
+import { AdminModule } from './platform/admin.module';
 import { CommunicationModule } from './communication/communication.module';
 import { HealthModule } from './infra/health/health.module';
 
@@ -17,6 +18,6 @@ import { HealthModule } from './infra/health/health.module';
  * Adding a feature means adding its module here, not adding code here.
  */
 @Module({
-  imports: [PlatformModule, AuthModule, CommunicationModule, HealthModule],
+  imports: [PlatformModule, AuthModule, AdminModule, CommunicationModule, HealthModule],
 })
 export class AppModule {}

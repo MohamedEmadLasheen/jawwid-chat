@@ -23,3 +23,10 @@ db/tests/br1_invariants.sql	20	RT-024/025 BR-1 structural backstop, proven again
 db/tests/schema_acceptance.sql	61	RT-023 fresh-database acceptance: every table, FK, trigger and index a running system needs
 apps/api/test/unit/auth/no-header-identity.spec.ts	12	RT-001/NF-08 closed by design: no source reads a client-supplied identity; auth refuses to start unconfigured (supersedes identity-seam.spec.ts, whose seam Phase 1 deleted)
 apps/api/test/unit/authorization/pd002-group-call-initiation.spec.ts	15	PD-2 a parent may join a Student Group call but never start one; BR-1/C-4 still take precedence
+apps/api/test/integration/supervisor-scope.spec.ts	40	Phase 1: a supervisor reaches only their current scope; reassignment moves access immediately; conversations, messages, search, moderation, calls, notifications and IDOR
+apps/api/test/integration/auth-and-sessions.spec.ts	45	Phase 1: login, account lifecycle, device limit, per-device and global logout, and password reset ending every session
+apps/api/test/integration/tenant-and-rbac.spec.ts	25	Phase 1: cross-tenant access is blocked even for a manager; the permission table and its TypeScript mirror agree
+apps/api/test/unit/authorization/rbac-permissions.spec.ts	35	Phase 1: role defaults and override precedence -- DENY beats ALLOW beats the role default, and an inactive actor holds nothing
+apps/api/test/unit/auth/credentials-and-tokens.spec.ts	30	Phase 1: password hashing and JWT verification -- algorithm confusion, tampering and expiry all refused
+db/tests/assignment_invariants.sql	20	Phase 1: one live primary supervisor per family, bounded cover, guarded reassignment, scope follows the assignment
+db/tests/rls_enforcement.sql	20	Phase 1: RLS is a live control -- proved with the application bypassed, as the authenticated role

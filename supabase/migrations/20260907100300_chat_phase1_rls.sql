@@ -135,11 +135,23 @@ as $$
     select 1
       from chat.conversation c
      where c.id = p_conversation_id
-       and (
-         (c.family_id is not null and chat.staff_in_scope(c.family_id))
-         or exists (select 1 from chat.current_actor_ids() a
-                     where chat.is_live_member(c.id, a))
-       ))
+       and case
+         -- No family to be in scope of (a Teacher <-> Admin direct). Membership
+         -- is the only thing that can make such a channel someone's.
+         when c.family_id is null then
+           exists (select 1 from chat.current_actor_ids() a where chat.is_live_member(c.id, a))
+         -- STAFF: scope, and scope alone. Membership deliberately does NOT
+         -- rescue them -- a member row survives a reassignment (it is history,
+         -- and the messages they wrote stay attributed), so allowing membership
+         -- as an alternative would leave every previous supervisor reading the
+         -- family for ever. This is the exact rule AuthorizationService.canRead
+         -- applies.
+         when chat.current_staff_id() is not null then
+           chat.staff_in_scope(c.family_id)
+         -- Contacts and teachers: live membership.
+         else
+           exists (select 1 from chat.current_actor_ids() a where chat.is_live_member(c.id, a))
+       end)
 $$;
 
 comment on function chat.can_read_conversation is

@@ -4,6 +4,11 @@ import { AuthorizationService } from '@platform/authorization.service';
 import { AppConfigService } from '@platform/app-config.service';
 import { PrismaIdentityService } from '@platform/identity.service';
 import { ScopeService } from '@platform/scope.service';
+import { AuthService } from '@platform/auth/auth.service';
+import { AccountService } from '@platform/auth/account.service';
+import { SessionService } from '@platform/auth/session.service';
+import { FamilyService } from '@platform/families/family.service';
+import { UserAdminService } from '@platform/users/user-admin.service';
 import { PrismaAuditService } from '@platform/audit.service';
 import type { CoverageService } from '@platform/coverage.service';
 import { ConversationService } from '@communication/conversations/conversation.service';
@@ -21,6 +26,12 @@ import { CallService } from '@communication/calls/call.service';
 import { LiveKitTokenIssuer } from '@communication/calls/media-token';
 
 process.env.DATABASE_URL ??= 'postgres://postgres:postgres@localhost:55433/jawwid_chat_int';
+
+// Test-only signing secrets. Distinct and long enough, exactly as the startup
+// check demands in a real environment -- a harness that relaxed the rule would
+// stop the tests from exercising the code paths that depend on it.
+process.env.JWT_ACCESS_SECRET ??= 'test-access-secret-at-least-32-characters';
+process.env.JWT_REFRESH_SECRET ??= 'test-refresh-secret-at-least-32-characters';
 
 /** on_duty() is AI #1's engine; tests pin it so they assert OUR behaviour. */
 export class PinnedCoverage implements CoverageService {
@@ -41,6 +52,11 @@ export function buildGraph() {
   const storage = new SignedLocalObjectStorage();
 
   const scope = new ScopeService(prisma);
+  const sessions = new SessionService(prisma, config, audit);
+  const accounts = new AccountService(prisma, config, sessions, audit);
+  const auth = new AuthService(prisma, config, sessions, accounts, identity, audit);
+  const families = new FamilyService(prisma, authz, scope, audit);
+  const userAdmin = new UserAdminService(prisma, authz, accounts, sessions, audit);
 
   const conversations = new ConversationService(prisma, authz, scope, outbox, identity, coverage, audit);
   const attachments = new AttachmentService(prisma, authz, conversations, storage);
@@ -57,6 +73,7 @@ export function buildGraph() {
   return {
     prisma, coverage, identity, authz, scope, conversations, messages, approvals,
     attachments, notifications, reminders, templates, quietHours, calls,
+    config, sessions, accounts, auth, families, userAdmin,
   };
 }
 

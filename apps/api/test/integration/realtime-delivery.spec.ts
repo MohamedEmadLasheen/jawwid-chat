@@ -11,6 +11,7 @@
  *
  * Requires Redis (REDIS_URL) and the migrated database (DATABASE_URL).
  */
+import { randomUUID } from 'node:crypto';
 import Redis from 'ioredis';
 import { PrismaService } from '@platform/prisma.service';
 import { OutboxWorker } from '@communication/outbox/outbox.worker';
@@ -94,6 +95,24 @@ describe('D-2 · realtime delivery from a process with no Socket.IO server', () 
   });
 });
 
+/** A minimal family + conversation this suite owns outright. */
+async function seedConversation(prisma: PrismaService): Promise<string> {
+  const suffix = randomUUID();
+  const account = await prisma.account.create({
+    data: { subject: `outbox_${suffix}`, kind: 'staff', status: 'active' },
+  });
+  const staff = await prisma.staff.create({
+    data: { accountId: account.id, name: 'outbox_admin', role: 'admin' },
+  });
+  const family = await prisma.family.create({
+    data: { displayName: `outbox_family_${suffix}`, ownerId: staff.id },
+  });
+  const conversation = await prisma.conversation.create({
+    data: { type: 'direct', familyId: family.id, directKey: `outbox:${suffix}`, title: 'Jawwid' },
+  });
+  return conversation.id;
+}
+
 describe('D-2 · a failed publish returns the event to the outbox', () => {
   const prisma = new PrismaService();
 
@@ -102,10 +121,11 @@ describe('D-2 · a failed publish returns the event to the outbox', () => {
   });
 
   it('leaves the row pending with the error recorded, never published', async () => {
-    const conversationId = await prisma.conversation
-      .findFirst({ select: { id: true } })
-      .then((c) => c?.id);
-    if (!conversationId) throw new Error('no conversation in the test database');
+    // Seeded here rather than borrowed from whatever another suite happened to
+    // leave behind: an ordering dependency between suites is a test that
+    // passes for a reason nobody stated, and it broke the moment new suites
+    // were added.
+    const conversationId = await seedConversation(prisma);
 
     const event = await prisma.outboxEvent.create({
       data: {

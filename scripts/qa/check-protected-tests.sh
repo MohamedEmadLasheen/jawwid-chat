@@ -23,11 +23,13 @@ while IFS=$'\t' read -r path floor reason; do
   # deleting it.
   #
   # SQL suites express assertions as pg_temp.expect_violation / expect_ok /
-  # want_* calls rather than expect(), so they are counted on their own idiom.
-  # Without this a .sql guard would count zero and fail every run, which would
-  # get it removed from the manifest -- the exact outcome JC-011 exists to stop.
+  # want_* / check calls rather than expect(), so they are counted on their own
+  # idiom. Without this a .sql guard would count zero and fail every run, which
+  # would get it removed from the manifest -- the exact outcome JC-011 exists to
+  # stop. `check` was added for the Phase 1 suites, which use it as their single
+  # assertion helper.
   case "$path" in
-    *.sql) n=$(grep -cE 'pg_temp\.(expect_violation|expect_ok|want_)' "$ROOT/$path" || true) ;;
+    *.sql) n=$(grep -cE 'pg_temp\.(expect_violation|expect_ok|want_|check\()' "$ROOT/$path" || true) ;;
     *)     n=$(grep -c 'expect(' "$ROOT/$path" || true) ;;
   esac
   if [ "$n" -lt "$floor" ]; then
