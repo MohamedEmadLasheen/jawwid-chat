@@ -26,6 +26,11 @@ Future<void> main() async {
   // was designed for.
   unawaited(container.read(authControllerProvider.notifier).restore());
 
+  // Restore anything queued by a previous run and start draining. Not awaited
+  // either: a queued message sending is not something the first frame waits on,
+  // and a slow disk must not delay the app appearing.
+  unawaited(startOutbox(container));
+
   runApp(
     UncontrolledProviderScope(
       container: container,

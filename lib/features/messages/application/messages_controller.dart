@@ -11,8 +11,8 @@ import '../../../core/realtime/realtime_client.dart';
 import '../../../core/realtime/realtime_events.dart';
 import '../../../shared/models/message.dart';
 import '../domain/message_log.dart';
-import '../domain/outbox.dart';
 import 'conversation_realtime.dart';
+import 'outbox_courier.dart';
 
 /// Everything the chat screen renders for one conversation.
 class MessagesState {
@@ -98,13 +98,16 @@ class MessagesController extends Notifier<MessagesState> {
 
   final String conversationId;
 
-  final _outbox = Outbox();
-
-  /// The payload for each queued client id. Held beside the outbox so a retry re-sends the
-  /// original body rather than reconstructing it.
-  final _pendingBodies = <String, OutgoingMessage>{};
-
-  Timer? _drainTimer;
+  /// The app's outgoing queue.
+  ///
+  /// READ from a provider, not owned. It used to be `final _outbox = Outbox()`
+  /// on this notifier, with the bodies in a map beside it — and Riverpod
+  /// disposes a notifier when the user leaves the conversation, so a message
+  /// composed offline lived exactly as long as the screen it was typed on. The
+  /// queue now outlives every screen and survives the process; this controller
+  /// subscribes to it for the conversation it is showing.
+  late final OutboxCourier _courier;
+  StreamSubscription<OutboxSignal>? _outboxSignals;
 
   late final MessageRepository _messages;
   late final RealtimeClient _realtime;
@@ -133,6 +136,7 @@ class MessagesController extends Notifier<MessagesState> {
     // user left the conversation while a request was in flight.
     _messages = ref.read(messageRepositoryProvider);
     _realtime = ref.read(realtimeClientProvider);
+    _courier = ref.read(outboxCourierProvider);
 
     _typing = TypingRegistry()
       ..onChanged = () {
@@ -141,8 +145,7 @@ class MessagesController extends Notifier<MessagesState> {
     _signaller = TypingSignaller(realtime: _realtime, conversationId: conversationId);
 
     ref.onDispose(() {
-      _drainTimer?.cancel();
-      _drainTimer = null;
+      unawaited(_outboxSignals?.cancel());
       _signaller?.stop();
       _signaller?.dispose();
       _typing.dispose();
@@ -157,6 +160,7 @@ class MessagesController extends Notifier<MessagesState> {
     // loading state meanwhile.
     scheduleMicrotask(loadInitial);
     scheduleMicrotask(_attachRealtime);
+    scheduleMicrotask(_attachOutbox);
     return MessagesState(log: MessageLog.empty(), isLoadingInitial: true);
   }
 
@@ -420,123 +424,79 @@ class MessagesController extends Notifier<MessagesState> {
 
     state = state.copyWith(log: state.log.merge([echo]));
 
-    _outbox.enqueue(
-      OutboxEntry(
+    // Queued through the app-level courier, which persists it before it
+    // returns. Killing the app now — or the OS doing it — no longer discards
+    // the message the user has just been shown as queued.
+    unawaited(
+      _courier.enqueueWithId(
         clientMessageId: clientMessageId,
         conversationId: conversationId,
-        enqueuedAt: now,
+        body: body,
+        replyToMessageId: replyTo?.messageId,
       ),
     );
-    _pendingBodies[clientMessageId] =
-        OutgoingMessage(
-      clientMessageId: clientMessageId,
-      conversationId: conversationId,
-      kind: MessageKind.text,
-      body: body,
-      replyToMessageId: replyTo?.messageId,
-    );
-
-    unawaited(drain());
     return clientMessageId;
   }
 
-  /// Release whatever the outbox says is ready, one head per conversation.
-  Future<void> drain() async {
-    if (!_alive) return;
-    final now = DateTime.now();
-    final entry = _outbox.nextReady(conversationId, now);
-    if (entry == null) {
-      _scheduleNextDrain();
-      return;
-    }
+  /// Apply the queue's transitions to what is on screen.
+  ///
+  /// The controller no longer DRIVES the send; it reports it. That is what lets
+  /// a message queued in this conversation keep sending after the user has
+  /// navigated away, without two places deciding what the bubble says.
+  Future<void> _attachOutbox() async {
+    _outboxSignals = _courier.signals.listen((signal) {
+      if (!_alive || signal.conversationId != conversationId) return;
 
-    final outgoing = _pendingBodies[entry.clientMessageId];
-    if (outgoing == null) {
-      // Nothing to send under this id — drop it rather than spin.
-      _outbox.discard(entry.clientMessageId);
-      return;
-    }
+      switch (signal) {
+        case OutboxSending():
+          state = state.copyWith(
+            log: state.log.updateOne(
+              signal.clientMessageId,
+              (m) => m.copyWith(deliveryState: DeliveryState.sending),
+            ),
+          );
 
-    _outbox.markSending(entry.clientMessageId);
-    state = state.copyWith(
-      log: state.log.updateOne(
-        entry.clientMessageId,
-        (m) => m.copyWith(deliveryState: DeliveryState.sending),
-      ),
-    );
+        case OutboxQueued():
+          state = state.copyWith(
+            log: state.log.updateOne(
+              signal.clientMessageId,
+              (m) => m.copyWith(deliveryState: DeliveryState.queued),
+            ),
+          );
 
-    try {
-      final confirmed = await _messages.send(outgoing);
+        case OutboxAccepted(:final message):
+          // Reconciled by client id, so the echo is replaced rather than
+          // duplicated.
+          state = state.copyWith(log: state.log.merge([message]), isOffline: false);
 
-      _outbox.markSent(entry.clientMessageId);
-      _pendingBodies.remove(entry.clientMessageId);
-
-      if (!_alive) return;
-      // Reconciled by client id, so the echo is replaced rather than duplicated.
-      state = state.copyWith(log: state.log.merge([confirmed]), isOffline: false);
-
-      unawaited(drain());
-    } catch (error) {
-      final failure = ErrorMapper.map(error);
-      if (!_alive) return;
-
-      _outbox.markFailed(
-        entry.clientMessageId,
-        DateTime.now(),
-        // A policy refusal or a validation failure will fail identically forever, so it is
-        // parked for an explicit retry instead of being re-attempted (§3).
-        retryable: failure.isTransient,
-        failureCode: failure.code,
-      );
-
-      state = state.copyWith(
-        log: state.log.updateOne(
-          entry.clientMessageId,
-          (m) => m.copyWith(
-            deliveryState: DeliveryState.failed,
-            failureCode: failure.code,
-          ),
-        ),
-        isOffline: failure.kind == AppErrorKind.network,
-      );
-
-      _scheduleNextDrain();
-    }
+        case OutboxRejected(:final error):
+          state = state.copyWith(
+            log: state.log.updateOne(
+              signal.clientMessageId,
+              (m) => m.copyWith(
+                deliveryState: DeliveryState.failed,
+                failureCode: error.code,
+              ),
+            ),
+            isOffline: error.kind == AppErrorKind.network,
+          );
+      }
+    });
   }
 
-  /// Re-arm the drain for whenever the head's backoff expires.
-  void _scheduleNextDrain() {
-    _drainTimer?.cancel();
-    if (!_alive || _outbox.isEmpty) return;
+  /// Ask the queue to release whatever is ready.
+  ///
+  /// Delegated: the courier drains EVERY conversation, not only this one, so a
+  /// message queued in another thread is not held hostage by which screen the
+  /// user happens to have open.
+  Future<void> drain() => _courier.drain();
 
-    final entries = _outbox.entriesFor(conversationId);
-    if (entries.isEmpty) return;
-
-    final notBefore = entries.first.nextAttemptAt;
-    if (notBefore == null) return;
-
-    final delay = notBefore.difference(DateTime.now());
-    _drainTimer = Timer(
-      delay.isNegative ? Duration.zero : delay,
-      () => unawaited(drain()),
-    );
-  }
-
-  /// User-initiated retry. Reuses the same entry and therefore the same client id.
-  Future<void> retry(String clientMessageId) async {
-    _outbox.retryNow(clientMessageId);
-    state = state.copyWith(
-      log: state.log.updateOne(
-        clientMessageId,
-        (m) => m.copyWith(deliveryState: DeliveryState.queued),
-      ),
-    );
-    await drain();
-  }
+  /// User-initiated retry. Reuses the same entry and therefore the same client
+  /// id, so the server deduplicates rather than creating a second message.
+  Future<void> retry(String clientMessageId) => _courier.retry(clientMessageId);
 
   void discard(String clientMessageId) {
-    _outbox.discard(clientMessageId);
-    _pendingBodies.remove(clientMessageId);
+    unawaited(_courier.discard(clientMessageId));
     state = state.copyWith(
       log: state.log.updateOne(
         clientMessageId,

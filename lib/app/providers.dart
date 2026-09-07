@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -5,9 +7,12 @@ import '../core/data/fake_backend.dart';
 import '../core/data/repositories.dart';
 import '../core/logging/redacting_logger.dart';
 import '../core/realtime/realtime_client.dart';
+import '../core/storage/local_database.dart';
 import '../core/storage/secure_token_store.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/domain/auth_state.dart';
+import '../features/messages/application/outbox_courier.dart';
+import '../features/messages/data/outbox_store.dart';
 import '../shared/models/user_role.dart';
 
 /// Composition root.
@@ -56,6 +61,33 @@ final realtimeClientProvider = Provider<RealtimeClient>((ref) {
   ref.onDispose(client.dispose);
   return client;
 });
+
+/// The app's outgoing message queue.
+///
+/// APPLICATION-scoped, and that is the whole point. It used to be a field on
+/// the chat screen's notifier, which Riverpod disposes when the user leaves the
+/// conversation — so a message composed offline survived exactly as long as the
+/// screen it was typed on. It is overridden at startup with a courier backed by
+/// the local database; the default here is backed by memory, so a test or a
+/// fixture build gets working ordering and retry rules without a filesystem.
+final outboxCourierProvider = Provider<OutboxCourier>((ref) {
+  final database = ref.read(localDatabaseProvider);
+  final courier = OutboxCourier(
+    messages: ref.read(messageRepositoryProvider),
+    // No database means no persistence, not no queue: an app that cannot open
+    // its local storage must still be able to send.
+    store: database == null ? InMemoryOutboxStore() : SqliteOutboxStore(database),
+  );
+  ref.onDispose(() => unawaited(courier.dispose()));
+  return courier;
+});
+
+/// The app's local database, or null when this build has none.
+///
+/// Null rather than throwing, for the same reason `realtimeClientProvider`
+/// defaults to an offline client: a widget test does not have a filesystem and
+/// must not have to stand one up to render a chat screen.
+final localDatabaseProvider = Provider<AppDatabase?>((ref) => null);
 
 /// Clears every cache that would outlive a session. Overridden once the sqlite layer is
 /// wired; the default is a no-op so tests need not stand up a database.

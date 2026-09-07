@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 
 import '../core/data/fake_backend.dart';
@@ -13,9 +16,11 @@ import '../core/network/api_config.dart';
 import '../core/network/http_stack.dart';
 import '../core/realtime/realtime_client.dart';
 import '../core/realtime/socket_io_realtime_client.dart';
+import '../core/storage/local_database.dart';
 import '../core/storage/secure_token_store.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/domain/auth_state.dart';
+import '../features/messages/application/outbox_drain_policy.dart';
 import '../shared/models/user_role.dart';
 import 'providers.dart';
 
@@ -37,9 +42,52 @@ Future<List<Override>> bootstrap({
   UserRole developmentRole = UserRole.parent,
   String debugActorId = '',
 }) async {
-  return ApiConfig.isConfigured
+  final overrides = ApiConfig.isConfigured
       ? _httpOverrides(debugActorId: debugActorId)
       : _fakeOverrides(developmentRole);
+
+  // The local database is opened for BOTH builds. The offline queue is not a
+  // property of having a real backend -- the fixture build queues and drains
+  // through the same courier, so the path that matters is the one that runs in
+  // development too. A device that cannot open it (no filesystem, a corrupt
+  // file) degrades to the in-memory queue rather than refusing to start: a
+  // failure to persist is a lost queue, and a failure to start is a lost app.
+  try {
+    final database = await AppDatabase.open();
+    overrides.add(localDatabaseProvider.overrideWithValue(database));
+  } catch (_) {
+    // Left unoverridden; outboxCourierProvider falls back to memory.
+  }
+
+  return overrides;
+}
+
+/// Restore the queue and begin draining it.
+///
+/// Called once, after the container exists, because the courier needs the
+/// repositories the container holds. Anything restored here was composed in a
+/// previous run of the process and never acknowledged.
+Future<OutboxDrainPolicy> startOutbox(ProviderContainer container) async {
+  final courier = container.read(outboxCourierProvider);
+
+  // Queued words belong to whoever composed them. A session ending -- a logout,
+  // a revoked device, an offboarding -- must take the queue with it, or the next
+  // person to sign in on this handset would send the previous one's messages
+  // the moment the network returned. The local database is ordinary
+  // application storage, so this is a deletion, not a permissions change.
+  container.listen(authControllerProvider, (previous, next) {
+    if (previous?.isAuthenticated == true && !next.isAuthenticated) {
+      unawaited(courier.clear());
+    }
+  });
+
+  final policy = OutboxDrainPolicy(
+    courier: courier,
+    realtimeStatus: container.read(realtimeClientProvider).status,
+    logger: container.read(loggerProvider),
+  );
+  await policy.start();
+  return policy;
 }
 
 /// The real stack.
