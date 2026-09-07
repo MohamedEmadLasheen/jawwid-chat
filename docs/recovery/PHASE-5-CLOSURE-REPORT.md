@@ -120,9 +120,25 @@ backgrounded.
 `LIVEKIT_TOKEN_TTL_SECONDS` is marked required for every environment in
 `infra/env/manifest.tsv` and is set by both deploy workflows — and was read by
 nothing. An operator lowering it in production would have changed no behaviour
-at all: configuration that looks like a control and is a comment. The config row
-stays authoritative (that is this system's rule for every threshold); the
-environment variable is now honoured as the deployment-level default beneath it.
+at all: configuration that looks like a control and is a comment.
+
+> **CORRECTED BY THE ACCEPTANCE AUDIT.** This section originally claimed the
+> variable was "now honoured as the deployment-level default beneath" the config
+> row. **That was false.** `AppConfigService.get` returns the stored row, or its
+> own compile-time default when there is no row, so it always yields a finite
+> number and the fallback beneath it was unreachable in every possible state —
+> an operator setting `LIVEKIT_TOKEN_TTL_SECONDS=999` still got 120, which was
+> proved by direct observation rather than by reading.
+>
+> The dead branch is deleted. The `call.token_ttl_seconds` config row is the
+> single source, and a test now locks that. Wiring the variable in instead would
+> have given one threshold two sources of truth, which is the thing the config
+> table exists to prevent.
+>
+> The manifest divergence is therefore **still open** and is listed as a
+> production-hardening item in `PHASE-5-ACCEPTANCE-REPORT.md`: the
+> infrastructure owner should seed the config row from the variable at deploy
+> time, or drop it from the manifest.
 
 ---
 

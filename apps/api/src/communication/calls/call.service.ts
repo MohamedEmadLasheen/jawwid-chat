@@ -877,24 +877,33 @@ export class CallService {
   /**
    * How long a media token lives.
    *
-   * TWO SOURCES, and the closure pass found they disagreed.
-   * `LIVEKIT_TOKEN_TTL_SECONDS` is marked REQUIRED for every environment in
-   * `infra/env/manifest.tsv` and is set by both deploy workflows -- and was
-   * read by NOTHING. An operator lowering it in production would have changed
-   * no behaviour at all, which is the worst kind of configuration: it looks
-   * like a control and is a comment.
+   * ONE SOURCE: the `call.token_ttl_seconds` row in chat.config. That is this
+   * system's rule for every threshold (Phase 2 report §36 -- "no number is
+   * compiled into a service") and it can be changed without a deploy.
    *
-   * The config ROW stays authoritative, because that is this system's rule for
-   * every threshold and it can be changed without a deploy. The environment
-   * variable is honoured as the deployment-level default when no row overrides
-   * it, so the value an operator sets is the value that applies.
+   * ## Why there is no environment-variable fallback here
+   *
+   * The closure pass added one, and the acceptance audit proved it was
+   * UNREACHABLE. `AppConfigService.get` returns the stored row when there is
+   * one and its own compile-time default when there is not, so it always
+   * yields a finite number -- and the fallback below it could never execute.
+   * An operator setting LIVEKIT_TOKEN_TTL_SECONDS=999 still got 120.
+   *
+   * Deleting it rather than making it reachable is deliberate. Wiring the
+   * variable in would give ONE threshold TWO sources of truth, which is the
+   * thing the config table exists to prevent, and the precedence between them
+   * would be invisible to whoever next changed either.
+   *
+   * `LIVEKIT_TOKEN_TTL_SECONDS` is therefore NOT read by this application, and
+   * `infra/env/manifest.tsv` still marks it required. That divergence is real
+   * and is recorded as a production-hardening item in the Phase 5 acceptance
+   * report: the infrastructure owner should either seed the config row from it
+   * at deploy time or drop it from the manifest. It is not fixed here, because
+   * guessing at another domain's deployment contract is how the dead
+   * configuration got written in the first place.
    */
   private async tokenTtlSeconds(): Promise<number> {
-    const configured = await this.config.get('call.token_ttl_seconds');
-    if (typeof configured === 'number' && Number.isFinite(configured)) return configured;
-
-    const fromEnv = Number(process.env.LIVEKIT_TOKEN_TTL_SECONDS);
-    return Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : 120;
+    return this.config.get('call.token_ttl_seconds');
   }
 
   private resolveType(requested: string | undefined, isGroup: boolean): string {

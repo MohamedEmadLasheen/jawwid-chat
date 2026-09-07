@@ -18,6 +18,8 @@
  * or `docker compose up -d livekit`, which uses the same config file.
  */
 import { LiveKitTokenIssuer } from '@communication/calls/media-token';
+import { PrismaService } from '@platform/prisma.service';
+import { AppConfigService } from '@platform/app-config.service';
 
 const LIVEKIT_HTTP = process.env.LIVEKIT_TEST_URL ?? 'http://localhost:7880';
 
@@ -63,6 +65,41 @@ async function validate(token: string): Promise<number> {
   const response = await fetch(`${LIVEKIT_HTTP}/rtc/validate?access_token=${token}`);
   return response.status;
 }
+
+describe('the media token TTL has ONE source', () => {
+  /**
+   * The acceptance audit found the closure pass's environment-variable
+   * fallback was UNREACHABLE: `AppConfigService.get` returns the stored row, or
+   * its own compile-time default when there is no row, so it always yields a
+   * finite number and nothing below it could ever run. An operator setting
+   * LIVEKIT_TOKEN_TTL_SECONDS=999 still got 120.
+   *
+   * This locks the resolution: the config ROW decides, and an environment
+   * variable does not silently become a second source of truth for the same
+   * threshold. If somebody reintroduces a fallback, the first case fails.
+   */
+  it('is the config row, and the environment cannot override it', async () => {
+    const prisma = new PrismaService();
+    const config = new AppConfigService(prisma);
+    try {
+      process.env.LIVEKIT_TOKEN_TTL_SECONDS = '999';
+
+      const resolved = await config.get('call.token_ttl_seconds');
+      const row = await prisma.config.findUnique({
+        where: { key: 'call.token_ttl_seconds' },
+      });
+
+      // The row is what applies...
+      expect(row).not.toBeNull();
+      expect(resolved).toBe(Number(row!.value));
+      // ...and the environment variable is not consulted at all.
+      expect(resolved).not.toBe(999);
+    } finally {
+      delete process.env.LIVEKIT_TOKEN_TTL_SECONDS;
+      await prisma.$disconnect();
+    }
+  });
+});
 
 describe('the LiveKit deployment contract', () => {
   it('a token this API mints is ACCEPTED by a real LiveKit server', async () => {
