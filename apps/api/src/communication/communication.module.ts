@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PlatformModule } from '../platform/platform.module';
 import {
+  CALL_RECORDER,
   MEDIA_TOKEN_ISSUER,
   OBJECT_STORAGE,
   PUSH_PROVIDER,
@@ -14,6 +15,7 @@ import { CallService } from './calls/call.service';
 import { RecordingService } from './calls/recording.service';
 import { CallSweeper } from './calls/call-sweeper';
 import { LiveKitTokenIssuer } from './calls/media-token';
+import { DisabledCallRecorder, LiveKitEgressRecorder } from './calls/call-recorder';
 import { AudienceResolverService } from './audience/audience-resolver.service';
 import { StoryService } from './stories/story.service';
 import { BroadcastService } from './broadcast/broadcast.service';
@@ -47,6 +49,7 @@ import { MessageController, SearchController } from './api/message.controller';
 import { ApprovalController } from './api/approval.controller';
 import { CallController } from './api/call.controller';
 import { RecordingController } from './api/recording.controller';
+import { EgressWebhookController } from './api/egress-webhook.controller';
 import { StoryController } from './api/story.controller';
 import { BroadcastController } from './api/broadcast.controller';
 import { NotificationController } from './api/notification.controller';
@@ -60,6 +63,7 @@ import { NotificationController } from './api/notification.controller';
     ApprovalController,
     CallController,
     RecordingController,
+    EgressWebhookController,
     StoryController,
     BroadcastController,
     NotificationController,
@@ -116,6 +120,17 @@ import { NotificationController } from './api/notification.controller';
       },
     },
     { provide: MEDIA_TOKEN_ISSUER, useClass: LiveKitTokenIssuer },
+    // The real recorder when LiveKit is configured, and an honestly failing one
+    // when it is not. The disabled variant THROWS rather than silently
+    // succeeding: a recording request that appears to work and records nothing
+    // is worse than one that fails, because the participants were told the call
+    // is being recorded and the academy believes it has an artefact it has not.
+    {
+      provide: CALL_RECORDER,
+      useClass: LiveKitEgressRecorder.isConfigured()
+        ? LiveKitEgressRecorder
+        : DisabledCallRecorder,
+    },
     // AI #7 (D-2). The gateway ALONE cannot be the publisher: in the worker
     // process there is no Socket.IO server, so gateway.toThread()'s
     // `this.server?.` made every emit a silent no-op while OutboxWorker still

@@ -14,6 +14,7 @@ import { Actor } from '../../platform/types';
 import { ConversationService } from '../conversations/conversation.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { ReminderService } from '../notifications/reminder.service';
+import { RecordingService } from './recording.service';
 import { CommEvent } from '../contracts/events';
 import {
   ActorKind,
@@ -109,6 +110,13 @@ export class CallService {
     private readonly outbox: OutboxService,
     private readonly config: AppConfigService,
     private readonly reminders: ReminderService,
+    /**
+     * Optional, and injected rather than imported for one reason: RecordingService
+     * already depends on ConversationService, and making the dependency mandatory
+     * in both directions would be a cycle. A call can always end; stopping a
+     * recorder it may not have is best-effort.
+     */
+    private readonly recordings: RecordingService | undefined,
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
     @Inject(MEDIA_TOKEN_ISSUER) private readonly media: MediaTokenIssuer,
@@ -420,7 +428,7 @@ export class CallService {
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
-    const ttl = await this.config.get('call.token_ttl_seconds');
+    const ttl = await this.tokenTtlSeconds();
     const issued = await this.media.issue({
       roomName: call.roomName,
       identity: actor.actorId,
@@ -678,6 +686,19 @@ export class CallService {
       payload: { callId: call.id, outcome, durationSeconds: duration },
     });
 
+    // The recorder is told to stop AFTER the transaction commits, not inside
+    // it: it is a network call to another service, and holding a lock on this
+    // row across a third party's latency is how a hung recorder becomes a hung
+    // call. Best-effort by design -- Egress also stops when the room empties,
+    // so this is the prompt path rather than the only one, and a call must
+    // never fail to end because the recorder is unreachable.
+    if (this.recordings) {
+      const stop = this.recordings.stopForCall(call.id);
+      void stop.catch(() => {
+        this.log.warn(`could not stop the recorder for call ${call.id}`);
+      });
+    }
+
     return true;
   }
 
@@ -851,6 +872,29 @@ export class CallService {
         leftAt: p.leftAt?.toISOString() ?? null,
       })),
     };
+  }
+
+  /**
+   * How long a media token lives.
+   *
+   * TWO SOURCES, and the closure pass found they disagreed.
+   * `LIVEKIT_TOKEN_TTL_SECONDS` is marked REQUIRED for every environment in
+   * `infra/env/manifest.tsv` and is set by both deploy workflows -- and was
+   * read by NOTHING. An operator lowering it in production would have changed
+   * no behaviour at all, which is the worst kind of configuration: it looks
+   * like a control and is a comment.
+   *
+   * The config ROW stays authoritative, because that is this system's rule for
+   * every threshold and it can be changed without a deploy. The environment
+   * variable is honoured as the deployment-level default when no row overrides
+   * it, so the value an operator sets is the value that applies.
+   */
+  private async tokenTtlSeconds(): Promise<number> {
+    const configured = await this.config.get('call.token_ttl_seconds');
+    if (typeof configured === 'number' && Number.isFinite(configured)) return configured;
+
+    const fromEnv = Number(process.env.LIVEKIT_TOKEN_TTL_SECONDS);
+    return Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : 120;
   }
 
   private resolveType(requested: string | undefined, isGroup: boolean): string {

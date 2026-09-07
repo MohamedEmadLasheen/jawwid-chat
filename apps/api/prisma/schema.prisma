@@ -637,6 +637,9 @@ model CallRecording {
   startedAt          DateTime  @map("started_at") @db.Timestamptz @default(now())
   completedAt        DateTime? @map("completed_at") @db.Timestamptz
   failureCode        String?   @map("failure_code")
+  /// The LiveKit Egress job producing this recording. How it is stopped, and
+  /// how a completion webhook is matched back to this row.
+  egressId           String?   @unique @map("egress_id")
   /// Every AVAILABLE recording carries one; a CHECK constraint refuses a row
   /// without it, so nothing is retained indefinitely by omission.
   retentionExpiresAt DateTime? @map("retention_expires_at") @db.Timestamptz

@@ -5,8 +5,9 @@ import { ScopeService } from '../../platform/scope.service';
 import { AppConfigService } from '../../platform/app-config.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
 import { Permission } from '../../platform/rbac/permissions';
-import { AUDIT_SERVICE, OBJECT_STORAGE } from '../../platform/tokens';
+import { AUDIT_SERVICE, CALL_RECORDER, OBJECT_STORAGE } from '../../platform/tokens';
 import type { AuditService } from '../../platform/audit.service';
+import type { CallRecorder } from './call-recorder';
 import type { ObjectStorage, UploadAuthorization } from '../attachments/object-storage';
 import { Actor } from '../../platform/types';
 import { ConversationService } from '../conversations/conversation.service';
@@ -78,15 +79,29 @@ export class RecordingService {
     private readonly conversations: ConversationService,
     private readonly config: AppConfigService,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
+    @Inject(CALL_RECORDER) private readonly recorder: CallRecorder,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
   ) {}
 
   /**
-   * Begin recording a follow-up call, and authorize the upload of the audio.
+   * Begin recording a follow-up call.
    *
-   * Returns an upload authorization for the media pipeline (the LiveKit egress
-   * worker, or whatever writes the file) rather than accepting bytes here: the
-   * API never proxies media, exactly as it never proxies an attachment.
+   * ## What changed in the closure pass
+   *
+   * This used to mint an upload authorization and create a `pending` row for a
+   * media pipeline that did not exist, and nothing in the repository ever moved
+   * that row to `available`. The metadata was real and the audio was imaginary.
+   *
+   * It now asks the CallRecorder — LiveKit Egress — to actually record, and
+   * stores the egress job id so the recording can be stopped and so a
+   * completion webhook can be matched back to this row. The upload
+   * authorization is still returned because the object key it carries is the
+   * destination Egress writes to, and a caller may need it; the API still never
+   * proxies the bytes.
+   *
+   * If the recorder refuses (not configured, or unreachable) the row is marked
+   * `failed` and the error is raised. It is never left `pending`, because a
+   * pending recording reads as "in progress" to every surface that shows it.
    */
   async start(
     callId: string,
@@ -138,7 +153,10 @@ export class RecordingService {
           callId,
           objectKey: upload.objectKey,
           status: RecordingStatus.PENDING,
-          mimeType: 'audio/mp4',
+          // Egress writes OGG/Opus for an audio-only composite. Declaring
+          // audio/mp4 here would mislabel the object for every player that
+          // trusts the metadata.
+          mimeType: 'audio/ogg',
           startedBy: actor.actorId,
         },
       });
@@ -162,7 +180,164 @@ export class RecordingService {
       return created;
     });
 
-    return { recording: this.toView(recording), upload };
+    // OUTSIDE the transaction, deliberately. Starting egress is a network call
+    // to another service; holding a database transaction open across it would
+    // put a third party's latency inside a lock on this row.
+    try {
+      const { egressId } = await this.recorder.start({
+        roomName: call.roomName,
+        objectKey: upload.objectKey,
+      });
+      await this.prisma.callRecording.update({
+        where: { id: recording.id },
+        data: { egressId },
+      });
+      return { recording: this.toView({ ...recording, egressId }), upload };
+    } catch (err) {
+      // The row does NOT stay pending. A pending recording reads as "recording
+      // in progress" on every surface that shows one, so a recorder that never
+      // started would look exactly like one that is working.
+      await this.markFailed(recording.id, 'EGRESS_START_FAILED', actor.actorId);
+      this.log.error(
+        `could not start recording for call ${callId}: ` +
+          (err instanceof Error ? err.message : 'unknown'),
+      );
+      throw new CommError(
+        CommErrorCode.RECORDING_NOT_AVAILABLE,
+        'recording could not be started',
+        503,
+      );
+    }
+  }
+
+  /**
+   * Stop the recorder for a call that is ending.
+   *
+   * Called on the call's terminal transition. Best-effort and never allowed to
+   * fail the call: a recording that keeps running after everyone has hung up is
+   * a problem, and a call that cannot be ended because the recorder is
+   * unreachable is a worse one. Egress also stops on its own when the room
+   * empties, so this is the prompt path rather than the only one.
+   */
+  async stopForCall(callId: string): Promise<void> {
+    const recording = await this.prisma.callRecording.findUnique({
+      where: { callId },
+      select: { id: true, egressId: true, status: true },
+    });
+    if (!recording?.egressId || recording.status !== RecordingStatus.PENDING) return;
+
+    try {
+      await this.recorder.stop(recording.egressId);
+    } catch (err) {
+      this.log.warn(
+        `could not stop egress ${recording.egressId} for call ${callId}: ` +
+          (err instanceof Error ? err.message : 'unknown'),
+      );
+    }
+  }
+
+  /**
+   * Egress reports that a recording finished, by webhook.
+   *
+   * THIS is what moves a recording to `available`, and it is driven by the
+   * component that actually wrote the file rather than by anything guessing.
+   * Matched on the egress job id, which only the recorder and this row know.
+   */
+  async completeFromEgress(input: {
+    egressId: string;
+    durationSeconds: number;
+    byteSize: number;
+    objectKey?: string | null;
+  }): Promise<boolean> {
+    const recording = await this.prisma.callRecording.findFirst({
+      where: { egressId: input.egressId },
+      include: { call: { select: { familyId: true } } },
+    });
+    if (!recording) {
+      // Not an error worth raising to the caller: a webhook for an egress this
+      // deployment does not know about is somebody else's job, or a replay.
+      this.log.warn(`egress webhook for unknown egress id ${input.egressId}`);
+      return false;
+    }
+    // Idempotent: Egress retries its webhooks, and a second delivery must not
+    // restart retention or overwrite the duration.
+    if (recording.status !== RecordingStatus.PENDING) return true;
+
+    const retentionDays = await this.config.get('recording.retention_days');
+    const now = new Date();
+    const expires = new Date(now.getTime() + Number(retentionDays) * 24 * 60 * 60 * 1000);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.callRecording.update({
+        where: { id: recording.id },
+        data: {
+          status: RecordingStatus.AVAILABLE,
+          durationSeconds: input.durationSeconds,
+          byteSize: BigInt(input.byteSize),
+          // Egress may write to a slightly different key than requested (it
+          // appends an extension). The key it REPORTS is the one that exists.
+          objectKey: input.objectKey || recording.objectKey,
+          completedAt: now,
+          retentionExpiresAt: expires,
+        },
+      });
+      await this.audit.audit(tx, {
+        actorId: null,
+        action: 'recording.completed',
+        entity: 'call_recording',
+        entityId: recording.id,
+        after: {
+          status: RecordingStatus.AVAILABLE,
+          durationSeconds: input.durationSeconds,
+          retentionExpiresAt: expires.toISOString(),
+        },
+        reason: 'egress reported the recording written to storage',
+      });
+      await this.audit.event(tx, {
+        familyId: recording.call.familyId,
+        actorKind: 'system',
+        actorId: null,
+        type: 'recording_completed',
+        payload: { recordingId: recording.id, callId: recording.callId },
+      });
+    });
+    return true;
+  }
+
+  /** Egress reports that it could not produce a file. */
+  async failFromEgress(egressId: string, code: string): Promise<boolean> {
+    const recording = await this.prisma.callRecording.findFirst({
+      where: { egressId },
+      select: { id: true, status: true },
+    });
+    if (!recording || recording.status !== RecordingStatus.PENDING) return false;
+    await this.markFailed(recording.id, code, null);
+    return true;
+  }
+
+  private async markFailed(
+    recordingId: string,
+    code: string,
+    actorId: string | null,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.callRecording.updateMany({
+        where: { id: recordingId, status: RecordingStatus.PENDING },
+        data: {
+          status: RecordingStatus.FAILED,
+          failureCode: code.slice(0, 64),
+          completedAt: new Date(),
+        },
+      });
+      await this.audit.audit(tx, {
+        actorId,
+        action: 'recording.failed',
+        entity: 'call_recording',
+        entityId: recordingId,
+        after: { status: RecordingStatus.FAILED, failureCode: code },
+        reason: 'the recording could not be produced',
+      });
+    });
   }
 
   /**
@@ -535,6 +710,7 @@ export class RecordingService {
     id: string;
     callId: string;
     status: string;
+    egressId?: string | null;
     durationSeconds: number | null;
     byteSize: bigint | null;
     startedAt: Date;
