@@ -76,12 +76,33 @@ broadcast to the whole conversation room, which leaked internal-note metadata
 to contacts. Typing is cleared on disconnect, and a subscriber is told who is
 already typing.
 
-### Mobile
+### Mobile (Flutter — the Family and Teacher client)
 
 Real authentication against the Phase 1 contract; a Socket.IO client; delivery
 acknowledgement, read cursors and status ticks; long-press actions with
 reactions, edit, forward, copy and both deletions; typing indicators; the
-unread divider; conversation and message search; graceful quote degradation.
+unread divider; conversation and message search with sender and date filters;
+graceful quote degradation; an attach affordance that says attachments are not
+available yet.
+
+### Admin Web (React — the Supervisor/Admin client)
+
+The Communication Operations Console: a conversation queue (needs reply /
+waiting on family) beside a conversation view carrying the same message surface
+the mobile client has — send, reply with a server-resolved quote, edit, both
+deletions, reactions, forwarding, search, typing, unread and receipts.
+
+It replaced a client that shared ZERO endpoints with the API and eleven
+realtime event names of which two matched and neither payload did. What
+changed: the CRM endpoint surface for `/conversations`; the `/staff` namespace
+and `withCredentials` for the default namespace, the same bearer token HTTP
+uses, and an explicit `conversation.subscribe`; the bilingual error body for
+the API's `{error:{code,message}}`; and `/me/duty` for nothing, because who is
+responsible arrives per conversation as `handlerId`.
+
+**One messaging core, two clients.** Both call the same routes, hold the same
+DTOs, obey the same authorization, consume the same realtime events, and share
+the same status and deletion semantics. There is no second messaging model.
 
 ## 3. Defects found and closed
 
@@ -94,6 +115,11 @@ unread divider; conversation and message search; graceful quote degradation.
 | P2-5 | `GET /conversations/:id` carried no unread count, so a client opening from a notification could never place the unread divider. | Reading the client path back |
 | P2-6 | A reaction event triggered a refetch of the newest page — which cannot update a reaction on an older message, and is a request per reaction. | Reading the client path back |
 | P2-7 | **The socket handshake race.** `handleConnection` was async; Socket.IO does not await it. A client subscribing on `connect` — which a correct client must, since rooms do not survive a reconnect — could be refused `COMM.UNKNOWN_ACTOR`. Indistinguishable from an authorization failure, so a correct client stops retrying and the conversation silently goes dead. | **Driving a real socket.** No service-level test could have found it |
+
+| P2-8 | The mobile attach affordance was never rendered: `ChatScreen` passed no `onAttach`, so the composer's button was permanently absent. "Attach buttons" is a named Phase 2 UX item. | The post-implementation audit |
+| P2-9 | Search by sender and by date were implemented in the API and in the repository, tested, and exposed by NEITHER client. | The post-implementation audit |
+| P2-10 | A message arriving while the conversation was open and the reader was at the bottom never advanced the read cursor, so an actively-watched conversation accumulated a phantom unread badge. | The post-implementation audit |
+| P2-11 | Admin Web's `StaffRole` included `system`, which is an actor kind. `chat.staff.role`'s CHECK admits four values and does not include it, so every branch testing for it was dead. | The post-implementation audit |
 
 P2-7 is why `scripts/qa/phase2-smoke/` is now in the repository: it exercises
 the running system — the global guard, the route table, the error filter, a
@@ -127,37 +153,102 @@ Authorization is unchanged from Phase 1 and reused, never re-implemented.
 
 ## 5. Verification
 
-| Gate | Result |
-|---|---|
-| API typecheck | PASS |
-| API build | PASS |
-| API unit | PASS — 169/169 |
-| API integration | PASS — 324/336; the 12 are `schema-invariants`, which shells to `psql`, absent on the dev host. 12/12 via its docker path |
-| Live HTTP smoke | PASS — 30/30 against the running API |
-| Live realtime smoke | PASS — 11/11 over a real socket, with the outbox worker |
-| Flutter analyze | PASS — one pre-existing lint on a file under `docs/` |
-| Flutter test | PASS — 291/291 (224 before Phase 2) |
-| Release gates G-18, G-19, G-20, G-31..35, JC-011 | PASS |
+Every command below was run from a clean working tree against a migrated
+database, the API and the outbox worker.
 
-The 35-step Family ↔ Supervisor acceptance scenario runs as a test:
+| Gate | Command | Result |
+|---|---|---|
+| API typecheck | `npm run typecheck` | PASS |
+| API build | `npm run build` | PASS |
+| API unit | `npm run test:unit` | PASS — 185/185 |
+| API full suite | `npx jest --runInBand` | PASS — **505/505**, 28 suites |
+| Admin Web typecheck | `npm run typecheck` | PASS |
+| Admin Web tests | `npx vitest run` | PASS — 87/87 (76 before) |
+| Admin Web build | `npm run build` | PASS |
+| Flutter analyze | `flutter analyze` | PASS — 1 pre-existing lint on a `docs/` file |
+| Flutter tests | `flutter test` | PASS — 293/293 (224 before Phase 2) |
+| Live smoke, both directions | `scripts/qa/phase2-smoke/run.sh` | PASS — 58/58 |
+| Flutter against the live API | `flutter test test/integration/live_backend_test.dart` | PASS — 15/15 |
+
+`505` is 185 unit plus 320 integration, in one `npx jest` invocation.
+
+**A correction to the previous report.** It reported `505/505` while also
+reporting `308/320` integration, and reconciled the two by counting a
+docker-path run of `schema-invariants` as if it belonged to the same
+invocation. It did not: those 12 were failing in the command as given. The
+cause was environmental — the suite shells out to `psql`, which was not
+installed on the development host — and installing it (`brew install libpq`)
+makes the single command pass 505/505 with no caveat. CI already installed
+`postgresql-client` for the same reason. Counting a test as PASS because a
+different invocation could run it was the wrong call, and the number is now
+one command's actual result.
+
+The 35-step Family <-> Supervisor acceptance scenario runs as a test:
 `apps/api/test/integration/phase2-acceptance.spec.ts`.
+
+### Which clients actually participated
+
+| Direction | Family side | Supervisor side |
+|---|---|---|
+| Family -> Supervisor | Flutter `HttpMessageRepository` + `SocketIoRealtimeClient` | Socket.IO client on the canonical events |
+| Supervisor -> Family | Flutter client on a real socket | **the Admin Web console's own endpoint module** (`core/api/conversations.ts`) |
+
+The supervisor direction drives the console's real path and body construction
+rather than a script's idea of it, so a route the console gets wrong fails in
+the smoke instead of in a browser. What it does NOT do is drive the console's
+React tree in a browser; that is stated as a limitation below rather than
+described as an end-to-end UI test.
 
 ## 6. What Phase 2 did NOT do
 
-* **Admin Web is not reworked.** It is built against a different, unimplemented
-  operations contract (`/families/:id/messages`, `/inbox`, `/tasks`,
-  `/coverage`, a `/staff` socket namespace). Bridging it onto the canonical
-  conversation API is an app-sized piece of work, and doing it inside this
-  phase would have been a rewrite disguised as an integration. The
-  Supervisor/Admin side is verified through the API and realtime, not through
-  that console.
+* **The console's React tree is not exercised in a browser.** Its logic is
+  covered by 87 unit tests and its contract by the live smoke; there is no
+  Playwright/Cypress layer in this repository to add a UI run to.
 * **Media forwarding.** Attachments are objects in storage with their own
   scoped URLs; copying the row would point a new audience at an object they
-  were never authorized for. Text only, refused explicitly.
+  were never authorized for. Text only, refused explicitly by the API.
+* **Attachments on mobile** are an affordance, not a feature: the API
+  authorizes uploads and the schema carries them, but no picker or upload
+  pipeline exists on the client, and the button says so.
+* **The console's frozen CRM features** (inbox, families, tasks, coverage,
+  dashboard, cases) stay on disk, unrouted, per
+  `PHASE-0-ADMIN-WEB-RECONCILIATION` §2.7. They are deleted with a later phase.
+* **The console's family directory, staff picker and supervisor assignment**
+  are unbuilt because the API serves no route for them (that document marks
+  them CONTRACT, not EXISTS). Approving a held message is likewise not
+  surfaced yet, though `/approvals/*` exists — it is queue work rather than
+  messaging.
 * **A plain `admin` still needs an on-duty coverage window** to reply to a
-  family. That is Phase 1 / coverage-engine behaviour, unchanged here, and it
-  is why the live smoke uses a manager as the supervisor.
+  family. Phase 1 behaviour, unchanged here; it is why the live smoke uses a
+  manager as the supervisor.
 * **Search is Phase 3 in this repository's own phase map**
-  (`product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §5). It was built because the
-  Phase 2 execution brief required it; the divergence is recorded here rather
-  than silently absorbed.
+  (`product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §5). Built because the Phase 2
+  execution brief required it; the divergence is recorded rather than absorbed.
+
+## 7. Role semantics for messaging
+
+| Role | May message a family | Scope | Notes |
+|---|---|---|---|
+| `admin` | yes, when on duty for it | families assigned to them | The coverage engine decides "on duty"; without a shift, `COMM.NOT_ON_DUTY` |
+| `coverage_admin` | yes, when on duty | families with a live temporary assignment | Same rule, different assignment kind |
+| `manager` | yes, any time | the whole organization | Also holds `messages.delete` and `messages.moderate` |
+| `super_admin` | yes, any time | the whole organization | Manager plus user management |
+| departmental staff | never | none | A department is an attribute, not a role (PD-5); no console area at all |
+| family contact | yes, to their own conversations | their family | `can_message` must be set |
+| teacher | yes, in the student group and to staff | families of learners they teach | Never a 1:1 with a parent (BR-1) |
+
+`system` is an ACTOR KIND and never a staff role. It was in Admin Web's
+`StaffRole` union and was removed in this phase: `chat.staff.role`'s CHECK
+admits four values and does not include it.
+
+## 8. The audit that produced this document
+
+The first Phase 2 report declared the phase COMPLETE and excluded Admin Web.
+That exclusion was wrong — three canonical documents name the Admin Web rework
+as Phase 2 work — and it was reached after implementation, on the grounds that
+the work was large. The audit that followed found seven further gaps; all are
+listed in §3 and all are closed.
+
+The lesson worth recording: a scope exclusion decided AFTER the work, and not
+traceable to a document written BEFORE it, is a rationalisation. The phase map
+existed the whole time.
