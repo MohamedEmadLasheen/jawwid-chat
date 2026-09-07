@@ -24,7 +24,7 @@ function Nav() {
   return (
     <nav className="rail" aria-label={t('app.title')}>
       <div className="rail__group">
-        {visibleAreas(staff.role)
+        {visibleAreas(staff.role, staff.department)
           // Settings has no page in MVP; it stays out of the rail until it does.
           .filter((area) => area !== 'settings')
           .map((area) => (

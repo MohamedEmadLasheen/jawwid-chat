@@ -20,7 +20,7 @@ export function TasksPage() {
   const [searchParams] = useSearchParams()
   const [showOverdueOnly, setShowOverdueOnly] = useState(searchParams.get('overdue') === 'true')
 
-  const scope = staff ? taskScopeFor(staff.role) : 'mine'
+  const scope = staff ? taskScopeFor(staff.role, staff.department) : 'mine'
   const query = useTasks({ scope, overdue: showOverdueOnly || undefined })
   const update = useUpdateTask()
 
@@ -82,7 +82,7 @@ export function TasksPage() {
                   </td>
                   <td>
                     {/* Departments may not open family records (AI #5 matrix). */}
-                    {staff && isDepartment(staff.role) ? (
+                    {staff && isDepartment(staff.role, staff.department) ? (
                       (task.family_name ?? '—')
                     ) : (
                       <button

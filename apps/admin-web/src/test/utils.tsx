@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { I18nProvider } from '@/core/i18n/I18nProvider'
 import { SessionProvider } from '@/core/auth/SessionProvider'
 import { qk } from '@/core/api/queryKeys'
+import type { Me } from '@/core/api/endpoints'
 import type { Locale } from '@/core/i18n/messages'
 import type {
   Case,
@@ -33,7 +34,11 @@ export function renderWithProviders(
   } = {},
 ) {
   const queryClient = createTestQueryClient()
-  if (staff) queryClient.setQueryData(qk.me, staff)
+  // `/me` returns an ACTOR, not a Staff row: since Phase 1 the server answers
+  // "who is this" with a kind, a role, a department and an effective permission
+  // set, and SessionProvider converts that into the Staff shape the pages use.
+  // Seeding the cache with the wire shape is what keeps this harness honest.
+  if (staff) queryClient.setQueryData(qk.me, toMe(staff))
 
   const Inner = ({ children }: { children: ReactNode }) =>
     staff ? <SessionProvider>{children}</SessionProvider> : <>{children}</>
@@ -60,6 +65,22 @@ export function renderWithProviders(
  * names from the brief appearing in seed data, fixtures or assertions — they
  * are real people, and their names plus shift patterns are personal data.
  */
+/** The `/me` payload for a staff fixture, as the API would return it. */
+export function toMe(staff: Staff): Me {
+  return {
+    actorId: staff.id,
+    kind: 'staff',
+    displayName: staff.name,
+    locale: 'ar',
+    organizationId: 'org_jawwid',
+    staffRole: staff.role,
+    department: staff.department ?? null,
+    familyId: null,
+    canMessage: null,
+    permissions: [],
+  }
+}
+
 export function makeStaff(overrides: Partial<Staff> = {}): Staff {
   return {
     id: 'staff_a',
@@ -184,12 +205,17 @@ export function makeFamilyDetail(overrides: Partial<FamilyDetail> = {}): FamilyD
   }
 }
 
+/**
+ * The canonical staff roles (PD-5). `coverage` was renamed `coverage_admin`,
+ * `super_admin` exists from day one, and finance/technical/academic are
+ * DEPARTMENTS rather than roles -- see DEPARTMENTS below.
+ */
 export const ROLES: StaffRole[] = [
-  'admin',
-  'coverage',
+  'super_admin',
   'manager',
-  'finance',
-  'technical',
-  'academic',
+  'admin',
+  'coverage_admin',
   'system',
 ]
+
+export const DEPARTMENTS = ['finance', 'technical', 'academic'] as const

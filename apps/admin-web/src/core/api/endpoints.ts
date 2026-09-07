@@ -26,12 +26,66 @@ export interface DutyState {
   sticky_threads: number
 }
 
+/**
+ * The authenticated principal, as `/me` returns it.
+ *
+ * `permissions` is the actor's EFFECTIVE set -- role defaults with that
+ * account's ALLOW/DENY overrides already applied -- so the UI can disable a
+ * control for one person without inventing a role for them.
+ */
+export interface Me {
+  actorId: string
+  kind: 'staff' | 'teacher' | 'contact' | 'system'
+  displayName: string
+  locale: 'ar' | 'en'
+  organizationId: string | null
+  staffRole: Staff['role'] | null
+  department: Staff['department']
+  familyId: string | null
+  canMessage: boolean | null
+  permissions: string[]
+}
+
+export interface LoginResponse {
+  accessToken: string
+  refreshToken: string
+  expiresIn: number
+  actor: Me
+}
+
+export interface DeviceSession {
+  id: string
+  deviceId: string | null
+  platform: string | null
+  displayName: string | null
+  appVersion: string | null
+  createdAt: string
+  lastSeenAt: string | null
+  expiresAt: string
+  current: boolean
+}
+
+/**
+ * `subject` rather than `email`: chat.account holds no contact channel by
+ * design (BR-2), so the login identifier is an opaque subject the identity
+ * provider owns. Sending an e-mail address here would be sending a field the
+ * server has nowhere to put.
+ */
 export const sessionApi = {
-  me: () => api.get<Staff>('/me'),
+  me: () => api.get<Me>('/me'),
   duty: () => api.get<DutyState>('/me/duty'),
-  login: (email: string, password: string) =>
-    api.post<Staff>('/auth/login', { email, password }),
-  logout: () => api.post<void>('/auth/logout'),
+  login: (subject: string, password: string, device?: Record<string, string>) =>
+    api.post<LoginResponse>('/auth/login', { subject, password, device }),
+  refresh: (refreshToken: string) =>
+    api.post<LoginResponse>('/auth/refresh', { refreshToken }),
+  logout: () => api.post<{ ok: true }>('/auth/logout'),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api.post<{ ok: true }>('/auth/change-password', { currentPassword, newPassword }),
+
+  /** My own devices. Revoking one is scoped to me by the server, never by this call. */
+  sessions: () => api.get<{ sessions: DeviceSession[] }>('/me/sessions'),
+  revokeSession: (id: string) => api.delete<{ ok: true }>(`/me/sessions/${id}`),
+  revokeAllSessions: () => api.delete<{ ok: true; revoked: number }>('/me/sessions'),
 }
 
 /**

@@ -33,12 +33,44 @@ export function setUnauthenticatedHandler(handler: () => void): void {
   onUnauthenticated = handler
 }
 
+/**
+ * The access token, held IN MEMORY ONLY.
+ *
+ * Phase 1's API authenticates with `Authorization: Bearer <access token>`.
+ * Where that token lives is a real decision, so it is stated here rather than
+ * left to whoever writes the next feature:
+ *
+ *   localStorage / sessionStorage  readable by any script that runs on this
+ *                                  origin, so one XSS is a stolen session that
+ *                                  survives the tab.
+ *   module scope (this)            lost on reload -- the operator signs in
+ *                                  again -- and unreachable from another
+ *                                  origin or a later page load.
+ *
+ * The cost is an extra sign-in after a refresh; the alternative is a session
+ * an injected script can walk off with. The refresh token is held the same way
+ * and is exchanged only by the auth layer.
+ *
+ * `credentials: 'include'` stays on the request, so if the API is later put
+ * behind a cookie session nothing here has to change.
+ */
+let accessToken: string | null = null
+
+export function setAccessToken(token: string | null): void {
+  accessToken = token
+}
+
+export function hasAccessToken(): boolean {
+  return accessToken !== null
+}
+
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', query, body, signal, idempotencyKey } = options
 
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey
+  if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
 
   let response: Response
   try {

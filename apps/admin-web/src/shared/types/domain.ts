@@ -5,7 +5,12 @@
  * and the contract in docs/admin/backend-contract-required.md.
  *
  * Rules that these types deliberately encode:
- *  - There is no `super_admin` role.
+ *  - The staff roles are the canonical four (PD-5, closed 2026-09-07):
+ *    super_admin, manager, admin, coverage_admin. `coverage` was renamed, and
+ *    finance/technical/academic were never roles -- they are DEPARTMENTS, an
+ *    attribute on the staff row. The earlier note here ("there is no
+ *    super_admin role") was known wrong and is superseded by
+ *    docs/architecture/AUTHORIZATION-MODEL.md.
  *  - `workload_level` has no CRITICAL level.
  *  - Attention is a server-computed `bucket` + `top_reason` TEXT. There is no
  *    client-visible score, and no P1/P2/P3.
@@ -13,13 +18,14 @@
  */
 
 export type StaffRole =
-  | 'admin'
-  | 'coverage'
+  | 'super_admin'
   | 'manager'
-  | 'finance'
-  | 'technical'
-  | 'academic'
+  | 'admin'
+  | 'coverage_admin'
   | 'system'
+
+/** A routing attribute for task work. Never a role; never family-facing. */
+export type Department = 'finance' | 'technical' | 'academic'
 
 export type Presence = 'online' | 'away' | 'offline'
 
@@ -27,6 +33,8 @@ export interface Staff {
   id: string
   name: string
   role: StaffRole
+  /** Set = departmental staff, who complete tasks and never message families. */
+  department?: Department | null
   presence: Presence
   is_active: boolean
   last_activity_at?: string | null

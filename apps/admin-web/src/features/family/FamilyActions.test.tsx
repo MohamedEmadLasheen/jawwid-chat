@@ -48,7 +48,7 @@ describe('FamilyActions — ownership', () => {
         })}
         activeCase={null}
       />,
-      { staff: makeStaff({ role: 'coverage' }) },
+      { staff: makeStaff({ role: 'coverage_admin' }) },
     )
     expect(screen.queryByRole('button', { name: 'Transfer ownership' })).not.toBeInTheDocument()
   })
@@ -128,7 +128,7 @@ describe('FamilyActions — handling', () => {
   it('offers "I\'ll keep this" and "For owner" — handling, not ownership', () => {
     renderWithProviders(
       <FamilyActions detail={makeFamilyDetail()} activeCase={null} />,
-      { staff: makeStaff({ role: 'coverage' }) },
+      { staff: makeStaff({ role: 'coverage_admin' }) },
     )
     expect(screen.getByRole('button', { name: "I'll keep this" })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'For owner' })).toBeEnabled()
