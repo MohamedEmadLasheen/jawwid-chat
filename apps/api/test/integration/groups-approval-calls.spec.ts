@@ -535,10 +535,35 @@ describe('calling', () => {
     expect(call!.durationSeconds).not.toBeNull();
   });
 
-  it('an unanswered call is recorded as missed', async () => {
+  it('a call the CALLER hangs up before an answer is cancelled, not missed', async () => {
+    // PHASE 5 CHANGED THIS, deliberately. This test previously asserted
+    // `missed`, because `missed` was the only terminal outcome the model had
+    // for a call nobody answered -- so hanging up before the other person could
+    // reach their phone put a MISSED CALL in their history and sent them a push
+    // about it. That blames the recipient for the caller's decision.
+    //
+    // `missed` now means exactly one thing: the invitation window expired
+    // without an answer, decided SERVER-SIDE by the sweeper (see the sibling
+    // assertion below). A caller withdrawing is `cancelled`.
     const conv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
     const { callId } = await g.calls.start(conv.id, s.ownerId);
     await g.calls.end(callId, s.ownerId);
+
+    const call = await g.prisma.call.findUnique({ where: { id: callId } });
+    expect(call!.outcome).toBe('cancelled');
+  });
+
+  it('a call nobody answers before the window closes IS missed', async () => {
+    // The other half of the rule above, so that "missed" is proved to still be
+    // reachable and is not merely a value nothing produces any more.
+    const conv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
+    const { callId } = await g.calls.start(conv.id, s.ownerId);
+    await g.prisma.call.updateMany({
+      where: { id: callId },
+      data: { ringExpiresAt: new Date(Date.now() - 1000) },
+    });
+
+    await g.calls.expireRingingCalls();
 
     const call = await g.prisma.call.findUnique({ where: { id: callId } });
     expect(call!.outcome).toBe('missed');

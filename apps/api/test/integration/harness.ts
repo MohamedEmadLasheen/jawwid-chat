@@ -28,7 +28,13 @@ import { QuietHoursService } from '@communication/notifications/quiet-hours.serv
 import { NotificationPreferenceService } from '@communication/notifications/preference.service';
 import { LoggingPushProvider } from '@communication/notifications/push.provider';
 import { CallService } from '@communication/calls/call.service';
+import { RecordingService } from '@communication/calls/recording.service';
+import { CallSweeper } from '@communication/calls/call-sweeper';
 import { LiveKitTokenIssuer } from '@communication/calls/media-token';
+import { AudienceResolverService } from '@communication/audience/audience-resolver.service';
+import { StoryService } from '@communication/stories/story.service';
+import { BroadcastService } from '@communication/broadcast/broadcast.service';
+import { BroadcastWorker } from '@communication/broadcast/broadcast.worker';
 
 process.env.DATABASE_URL ??= 'postgres://postgres:postgres@localhost:55433/jawwid_chat_int';
 
@@ -105,14 +111,33 @@ export function buildGraphOn(prisma: PrismaService) {
   );
   const reminders = new ReminderService(prisma, notifications);
   const calls = new CallService(
-    prisma, authz, conversations, outbox, config, identity, audit, new LiveKitTokenIssuer(),
+    prisma, authz, conversations, outbox, config, reminders, identity, audit,
+    new LiveKitTokenIssuer(),
   );
+
+  // Phase 5. The audience resolver is shared BY CONSTRUCTION here as well as in
+  // the Nest module: stories and broadcast are handed the same instance, so a
+  // test cannot accidentally exercise two different resolutions of the same
+  // audience.
+  const audience = new AudienceResolverService(prisma, scope);
+  const recordings = new RecordingService(
+    prisma, authz, scope, conversations, config, storage, audit,
+  );
+  const stories = new StoryService(
+    prisma, authz, audience, conversations, outbox, config, storage, audit,
+  );
+  const broadcasts = new BroadcastService(
+    prisma, authz, audience, conversations, outbox, config, audit,
+  );
+  const broadcastWorker = new BroadcastWorker(prisma, notifications, outbox, config, identity);
+  const sweeper = new CallSweeper(calls, recordings, stories);
 
   return {
     prisma, coverage, identity, authz, scope, conversations, messages, approvals,
     attachments, notifications, reminders, templates, quietHours, calls, preferences,
     config, sessions, accounts, auth, throttle, families, userAdmin, learners,
     groups, labels,
+    audience, recordings, stories, broadcasts, broadcastWorker, sweeper, storage,
   };
 }
 
@@ -207,7 +232,10 @@ export async function truncate(prisma: PrismaService): Promise<void> {
     truncate chat.message_receipt, chat.message_reaction, chat.message_attachment,
              chat.message_hidden_for, chat.message_revision,
              chat.message_approval, chat.call_participant,
-             chat.call, chat.notification, chat.outbox_event,
+             chat.call_recording, chat.call,
+             chat.story_view, chat.story_recipient, chat.story_audience, chat.story,
+             chat.broadcast_recipient, chat.broadcast_audience, chat.broadcast,
+             chat.notification, chat.outbox_event,
              chat.conversation_participant_state, chat.conversation_member,
              chat.message, chat.conversation,
              chat.group_member, chat.group_teacher, chat.group,
