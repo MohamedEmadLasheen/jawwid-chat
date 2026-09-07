@@ -368,6 +368,32 @@ A **dedicated database on port 55455** was used throughout, not the shared
 during this work, and a verification record taken from a database somebody else
 is truncating is not a verification record.
 
+### Final run, from the committed tree, against a database rebuilt from empty
+
+| Gate | Result |
+|---|---|
+| Migration chain builds an empty database | **PASS** |
+| `schema_acceptance.sql` | **FRESH DATABASE ACCEPTANCE PASSED** |
+| `br1_invariants.sql` | **ALL BR-1 INVARIANT TESTS PASSED** |
+| API typecheck | **PASS** |
+| API tests | **829 passed / 841**, 12 failing — all `schema-invariants.spec.ts` |
+| Admin-web typecheck | **PASS** |
+| Admin-web tests | **99 passed / 99** |
+| `flutter analyze` | **clean** |
+| `flutter test` | **346 passed**, 15 skipped |
+| JC-011 protected-tests guard | **pass** |
+
+**The 12 failures are pre-existing and environmental, not Phase 5.**
+`schema-invariants.spec.ts` shells out to a `psql` binary; this host has none
+(`spawnSync psql ENOENT`, 24 occurrences). The Phase 3 report records the same
+12 failures for the same reason. The SQL those tests wrap — `schema_acceptance`
+and `br1_invariants` — is the two rows above, and both **pass** when run through
+`docker exec`. So the invariants are proved; only the Jest wrapper cannot run
+here.
+
+The five new Phase 5 security suites are registered in
+`docs/qa/protected-tests.tsv`, so deleting one fails the build.
+
 ### Phase 5 test coverage
 
 | Suite | Tests |
