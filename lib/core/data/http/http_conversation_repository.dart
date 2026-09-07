@@ -22,14 +22,19 @@ class HttpConversationRepository implements ConversationRepository {
   HttpConversationRepository({
     required ApiClient client,
     required UserRole Function() viewerRole,
+    required String Function() viewerActorId,
   })  : _client = client,
-        _viewerRole = viewerRole;
+        _viewerRole = viewerRole,
+        _viewerActorId = viewerActorId;
 
   final ApiClient _client;
 
   /// The signed-in role, read per call. Approval policy is per role, so the same DTO maps
   /// differently for a parent and a teacher (§26).
   final UserRole Function() _viewerRole;
+
+  /// Used to name a 1:1 after the OTHER participant rather than after oneself.
+  final String Function() _viewerActorId;
 
   @override
   Future<List<Conversation>> list({bool includeArchived = false}) async {
@@ -40,7 +45,11 @@ class HttpConversationRepository implements ConversationRepository {
     for (final row in rows) {
       if (row is! Map<String, Object?>) continue;
       conversations.add(
-        WireMappers.conversation(row, viewerRole: _viewerRole()),
+        WireMappers.conversation(
+          row,
+          viewerRole: _viewerRole(),
+          viewerActorId: _viewerActorId(),
+        ),
       );
     }
 
@@ -64,7 +73,11 @@ class HttpConversationRepository implements ConversationRepository {
         debugDetail: 'conversation response carried no id',
       );
     }
-    return WireMappers.conversation(data, viewerRole: _viewerRole());
+    return WireMappers.conversation(
+      data,
+      viewerRole: _viewerRole(),
+      viewerActorId: _viewerActorId(),
+    );
   }
 
   @override
@@ -101,10 +114,11 @@ class HttpConversationRepository implements ConversationRepository {
 
   /// Per-conversation unread count.
   ///
-  /// `GET /conversations/:id/messages/unread`. Deliberately **not** called from [list]: doing
-  /// so would be one round trip per row, which is the cost the low-end/slow-network target
-  /// cannot absorb. Recorded as O1 in `docs/mobile/backend-dependencies.md` — the count
-  /// belongs on `ConversationDto`.
+  /// Phase 2 put `unreadCount` on the list row, so this is no longer on the
+  /// path that renders the chat list — which was the point of the O1 note in
+  /// `docs/mobile/backend-dependencies.md`: calling it per row was one round
+  /// trip per row, on exactly the networks that cannot absorb it. It remains
+  /// for the single-conversation case, where one call is one call.
   Future<int> unreadCount(String conversationId) async {
     final response = await _client.get<Map<String, Object?>>(
       '/conversations/$conversationId/messages/unread',
@@ -114,14 +128,29 @@ class HttpConversationRepository implements ConversationRepository {
 
   @override
   Future<List<Conversation>> search(String query) async {
-    // The contract has no search route. Filtering the already-fetched list locally would
-    // look like search while silently only covering what happens to be cached, so this
-    // fails honestly instead. Recorded as a backend dependency.
-    throw const AppError(
-      AppErrorKind.notFound,
-      code: 'search_not_supported',
-      debugDetail: 'No search endpoint exists in the published contract.',
+    final term = query.trim();
+    // The server refuses anything shorter, and a one-character search would in
+    // any case return most of the list.
+    if (term.length < 2) return const [];
+
+    // Delegated, never filtered locally. A client-side filter over the fetched
+    // page would look like search while silently covering only what happened to
+    // be cached — and would be the beginnings of a directory, which §41 forbids.
+    final response = await _client.get<Map<String, Object?>>(
+      '/conversations/search',
+      query: {'q': term},
     );
+    final rows = (response.data?['conversations'] as List?) ?? const [];
+
+    return [
+      for (final row in rows)
+        if (row is Map<String, Object?>)
+          WireMappers.conversation(
+            row,
+            viewerRole: _viewerRole(),
+            viewerActorId: _viewerActorId(),
+          ),
+    ];
   }
 
   Future<void> _preferences(

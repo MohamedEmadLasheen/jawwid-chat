@@ -222,7 +222,9 @@ class L10nEn extends L10n {
   }
 
   @override
-  String get typingMany => 'Several people are typing…';
+  String typingMany(int count) {
+    return '$count people are typing…';
+  }
 
   @override
   String get loadingOlder => 'Loading earlier messages…';
@@ -418,4 +420,91 @@ class L10nEn extends L10n {
 
   @override
   String get yesterdayLabel => 'Yesterday';
+
+  @override
+  String get messageActionReply => 'Reply';
+
+  @override
+  String get messageActionReact => 'React';
+
+  @override
+  String get messageActionForward => 'Forward';
+
+  @override
+  String get messageActionEdit => 'Edit';
+
+  @override
+  String get messageActionCopy => 'Copy';
+
+  @override
+  String get messageActionDeleteForMe => 'Delete for me';
+
+  @override
+  String get messageActionDeleteForEveryone => 'Delete for everyone';
+
+  @override
+  String get messageEdited => 'edited';
+
+  @override
+  String get messageForwarded => 'Forwarded';
+
+  @override
+  String get messageCopied => 'Copied';
+
+  @override
+  String get quoteUnavailable => 'This message is no longer available';
+
+  @override
+  String get quoteDeleted => 'This message was deleted';
+
+  @override
+  String get editMessageTitle => 'Edit message';
+
+  @override
+  String get saveAction => 'Save';
+
+  @override
+  String get deleteForEveryoneConfirmTitle => 'Delete for everyone?';
+
+  @override
+  String get deleteForEveryoneConfirmBody =>
+      'This message will be removed for everyone in this chat. This cannot be undone.';
+
+  @override
+  String get deleteAction => 'Delete';
+
+  @override
+  String get forwardTitle => 'Forward to';
+
+  @override
+  String get forwardAction => 'Forward';
+
+  @override
+  String get forwardEmpty => 'No other chats to forward to';
+
+  @override
+  String get forwardSent => 'Forwarded';
+
+  @override
+  String typingOne(String name) {
+    return '$name is typing…';
+  }
+
+  @override
+  String get unreadDivider => 'Unread messages';
+
+  @override
+  String get searchMessagesHint => 'Search messages';
+
+  @override
+  String get searchTabChats => 'Chats';
+
+  @override
+  String get searchTabMessages => 'Messages';
+
+  @override
+  String get searchMinimumLength => 'Type at least two characters';
+
+  @override
+  String get reconnecting => 'Reconnecting…';
 }

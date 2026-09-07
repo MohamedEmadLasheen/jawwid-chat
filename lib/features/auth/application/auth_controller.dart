@@ -6,6 +6,8 @@ import '../../../core/data/repositories.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/logging/redacting_logger.dart';
 import '../../../core/storage/secure_token_store.dart';
+import '../../../shared/models/auth.dart';
+import '../../../shared/models/user_role.dart';
 import '../domain/auth_state.dart';
 
 /// Owns the session for the whole app.
@@ -19,10 +21,12 @@ class AuthController extends Notifier<AuthState> {
     required AuthRepository repository,
     required TokenStore tokens,
     required Future<void> Function() clearLocalData,
+    void Function({required UserRole role, required String actorId})? onPrincipal,
     RedactingLogger logger = const RedactingLogger(),
   })  : _repository = repository,
         _tokens = tokens,
         _clearLocalData = clearLocalData,
+        _onPrincipal = onPrincipal,
         _logger = logger;
 
   final AuthRepository _repository;
@@ -31,6 +35,12 @@ class AuthController extends Notifier<AuthState> {
   /// Drops cached conversations, messages, and drafts. Injected rather than imported so the
   /// auth feature does not reach into the storage layer directly.
   final Future<void> Function() _clearLocalData;
+
+  /// Publishes the principal to the transport layer, which needs the actor id
+  /// (ownership is decided by id, never by role) and the role (approval policy
+  /// is per role). Injected for the same reason [_clearLocalData] is: the auth
+  /// feature must not reach into the transport.
+  final void Function({required UserRole role, required String actorId})? _onPrincipal;
 
   final RedactingLogger _logger;
 
@@ -56,6 +66,7 @@ class AuthController extends Notifier<AuthState> {
 
     try {
       final principal = await _repository.currentUser();
+      _adopt(principal);
       _watchRevocation();
       state = AuthAuthenticated(principal);
     } on AppError catch (error) {
@@ -81,6 +92,7 @@ class AuthController extends Notifier<AuthState> {
       await _tokens.write(session);
 
       final principal = await _repository.currentUser();
+      _adopt(principal);
       _watchRevocation();
       state = AuthAuthenticated(principal);
     } on AppError catch (error) {
@@ -107,6 +119,9 @@ class AuthController extends Notifier<AuthState> {
   /// Called when any layer observes that the backend has ended this session.
   Future<void> onSessionEnded(AppError error) =>
       _endSession(AuthSignedOut.reasonFor(error));
+
+  void _adopt(AuthUser principal) =>
+      _onPrincipal?.call(role: principal.role, actorId: principal.id);
 
   void _watchRevocation() {
     _revocationWatch?.cancel();

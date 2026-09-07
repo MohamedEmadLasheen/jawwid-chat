@@ -23,6 +23,12 @@ dependencies:
   dio: ^5.11.1
   web_socket_channel: ^3.0.3
 
+  # Realtime. The backend's gateway is Socket.IO (@nestjs/platform-socket.io),
+  # and Engine.IO's handshake, upgrade and framing are a protocol on top of a
+  # websocket rather than a convention over one -- so web_socket_channel alone
+  # cannot talk to it without reimplementing that protocol.
+  socket_io_client: ^3.1.6
+
   # Storage. Tokens go to the platform keystore/keychain, never to preferences (§50, §56).
   flutter_secure_storage: ^11.0.0
   sqflite: ^2.4.3

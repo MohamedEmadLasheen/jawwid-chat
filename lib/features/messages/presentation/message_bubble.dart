@@ -19,6 +19,9 @@ class MessageBubble extends StatelessWidget {
     this.onRetry,
     this.onDiscard,
     this.onReply,
+    this.onLongPress,
+    this.onDoubleTap,
+    this.onToggleReaction,
   });
 
   final Message message;
@@ -29,6 +32,15 @@ class MessageBubble extends StatelessWidget {
   final VoidCallback? onRetry;
   final VoidCallback? onDiscard;
   final VoidCallback? onReply;
+
+  /// Opens the actions sheet. The familiar gesture on both platforms.
+  final VoidCallback? onLongPress;
+
+  /// The WhatsApp shortcut for the default reaction.
+  final VoidCallback? onDoubleTap;
+
+  /// Tapping a reaction chip toggles the viewer's own reaction.
+  final void Function(String emoji)? onToggleReaction;
 
   @override
   Widget build(BuildContext context) {
@@ -57,7 +69,10 @@ class MessageBubble extends StatelessWidget {
 
     return Align(
       alignment: mine ? AlignmentDirectional.centerEnd : AlignmentDirectional.centerStart,
-      child: ConstrainedBox(
+      child: GestureDetector(
+        onLongPress: onLongPress,
+        onDoubleTap: onDoubleTap,
+        child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth:
               MediaQuery.sizeOf(context).width * Sizes.maxBubbleWidthFraction,
@@ -100,6 +115,8 @@ class MessageBubble extends StatelessWidget {
                       ),
                     ),
                   ),
+                if (message.isForwarded && !message.isDeleted)
+                  _ForwardedMarker(isMine: mine),
                 if (message.replyTo != null) _QuotedMessage(reply: message.replyTo!),
                 if (message.isDeleted)
                   Text(
@@ -117,12 +134,107 @@ class MessageBubble extends StatelessWidget {
                     textDirection: null,
                     style: theme.textTheme.bodyLarge?.copyWith(color: foreground),
                   ),
+                if (message.reactions.isNotEmpty && !message.isDeleted)
+                  _ReactionRow(
+                    reactions: message.reactions,
+                    onToggle: onToggleReaction,
+                  ),
                 const SizedBox(height: Spacing.spacing1),
                 _StatusLine(message: message, onRetry: onRetry, onDiscard: onDiscard),
               ],
             ),
           ),
+          ),
         ),
+      ),
+    );
+  }
+}
+
+/// "Forwarded" — the same small, unemphatic marker WhatsApp uses.
+///
+/// It says only that the message came from somewhere else. It does not name
+/// where: the source conversation is usually one this reader has no access to,
+/// which is why the backend serves a boolean and not a reference.
+class _ForwardedMarker extends StatelessWidget {
+  const _ForwardedMarker({required this.isMine});
+
+  final bool isMine;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = L10n.of(context);
+    final theme = Theme.of(context);
+    final colour = theme.colorScheme.onSurfaceVariant;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Spacing.spacing1),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Points away from the reader in both directions, so it mirrors.
+          Icon(Icons.shortcut, size: 13, color: colour),
+          const SizedBox(width: Spacing.spacing2),
+          Text(
+            l10n.messageForwarded,
+            style: theme.textTheme.labelSmall
+                ?.copyWith(color: colour, fontStyle: FontStyle.italic),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The reaction chips under a bubble.
+///
+/// Each chip shows the emoji and, once more than one person has used it, a
+/// count. The viewer's own is outlined, and tapping it removes it — one
+/// reaction per person, which is what the server's unique index enforces and
+/// what makes "tap to toggle" unambiguous.
+class _ReactionRow extends StatelessWidget {
+  const _ReactionRow({required this.reactions, this.onToggle});
+
+  final List<Reaction> reactions;
+  final void Function(String emoji)? onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: Spacing.spacing2),
+      child: Wrap(
+        spacing: Spacing.spacing2,
+        runSpacing: Spacing.spacing1,
+        children: [
+          for (final reaction in reactions)
+            InkWell(
+              onTap: onToggle == null ? null : () => onToggle!(reaction.emoji),
+              borderRadius: const BorderRadius.all(Radii.radiusFull),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: Spacing.spacing3,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface.withValues(alpha: 0.7),
+                  borderRadius: const BorderRadius.all(Radii.radiusFull),
+                  border: Border.all(
+                    color: reaction.mine
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.outlineVariant,
+                  ),
+                ),
+                child: Text(
+                  reaction.count > 1
+                      ? '${reaction.emoji} ${reaction.count}'
+                      : reaction.emoji,
+                  style: theme.textTheme.labelSmall,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -221,6 +333,13 @@ class _StatusLine extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // The timestamp stays the SEND time. An edit does not move a message in
+        // the conversation and must not look as though it did; "edited" beside
+        // it is how the reader is told the body changed.
+        if (message.isEdited) ...[
+          Text(l10n.messageEdited, style: muted?.copyWith(fontStyle: FontStyle.italic)),
+          const SizedBox(width: Spacing.spacing2),
+        ],
         Text(stamp, style: muted),
         if (message.isMine) ...[
           const SizedBox(width: Spacing.spacing2),
@@ -296,6 +415,7 @@ class _QuotedMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = L10n.of(context);
     final theme = Theme.of(context);
 
     return Container(
@@ -312,24 +432,39 @@ class _QuotedMessage extends StatelessWidget {
           start: BorderSide(color: theme.colorScheme.primary, width: 3),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            reply.authorName,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.primary,
-              fontWeight: FontWeight.w700,
+      child: reply.isAvailable
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (reply.authorName.isNotEmpty)
+                  Text(
+                    reply.authorName,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                Text(
+                  reply.excerpt,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            )
+          // The quoted message is gone, withheld, or hidden by this reader. The
+          // reply still renders — dropping the quote would make it look like an
+          // answer to nothing — and it carries no trace of the original text,
+          // because the backend served none.
+          : Text(
+              reply.unavailableReason == QuoteUnavailableReason.deleted
+                  ? l10n.quoteDeleted
+                  : l10n.quoteUnavailable,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontStyle: FontStyle.italic,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
-          ),
-          Text(
-            reply.excerpt,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall,
-          ),
-        ],
-      ),
     );
   }
 }

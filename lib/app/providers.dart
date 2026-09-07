@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/data/fake_backend.dart';
 import '../core/data/repositories.dart';
 import '../core/logging/redacting_logger.dart';
+import '../core/realtime/realtime_client.dart';
 import '../core/storage/secure_token_store.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/domain/auth_state.dart';
@@ -41,6 +42,19 @@ final groupRepositoryProvider = Provider<GroupRepository>((ref) {
 
 final callRepositoryProvider = Provider<CallRepository>((ref) {
   throw UnimplementedError('callRepositoryProvider must be overridden');
+});
+
+/// The realtime transport.
+///
+/// Overridden at startup with a Socket.IO client when this build has a backend,
+/// and with [OfflineRealtimeClient] otherwise. Defaulting to the offline one
+/// here — rather than throwing as the repositories do — is deliberate: a chat
+/// screen without realtime still works, it just does not update by itself, so
+/// an unwired realtime client must not take the app down with it.
+final realtimeClientProvider = Provider<RealtimeClient>((ref) {
+  final client = OfflineRealtimeClient();
+  ref.onDispose(client.dispose);
+  return client;
 });
 
 /// Clears every cache that would outlive a session. Overridden once the sqlite layer is

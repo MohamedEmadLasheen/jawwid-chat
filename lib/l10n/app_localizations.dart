@@ -478,8 +478,8 @@ abstract class L10n {
   /// No description provided for @typingMany.
   ///
   /// In en, this message translates to:
-  /// **'Several people are typing…'**
-  String get typingMany;
+  /// **'{count} people are typing…'**
+  String typingMany(int count);
 
   /// No description provided for @loadingOlder.
   ///
@@ -852,6 +852,174 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Yesterday'**
   String get yesterdayLabel;
+
+  /// No description provided for @messageActionReply.
+  ///
+  /// In en, this message translates to:
+  /// **'Reply'**
+  String get messageActionReply;
+
+  /// No description provided for @messageActionReact.
+  ///
+  /// In en, this message translates to:
+  /// **'React'**
+  String get messageActionReact;
+
+  /// No description provided for @messageActionForward.
+  ///
+  /// In en, this message translates to:
+  /// **'Forward'**
+  String get messageActionForward;
+
+  /// No description provided for @messageActionEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get messageActionEdit;
+
+  /// No description provided for @messageActionCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get messageActionCopy;
+
+  /// No description provided for @messageActionDeleteForMe.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete for me'**
+  String get messageActionDeleteForMe;
+
+  /// No description provided for @messageActionDeleteForEveryone.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete for everyone'**
+  String get messageActionDeleteForEveryone;
+
+  /// No description provided for @messageEdited.
+  ///
+  /// In en, this message translates to:
+  /// **'edited'**
+  String get messageEdited;
+
+  /// No description provided for @messageForwarded.
+  ///
+  /// In en, this message translates to:
+  /// **'Forwarded'**
+  String get messageForwarded;
+
+  /// No description provided for @messageCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get messageCopied;
+
+  /// No description provided for @quoteUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This message is no longer available'**
+  String get quoteUnavailable;
+
+  /// No description provided for @quoteDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'This message was deleted'**
+  String get quoteDeleted;
+
+  /// No description provided for @editMessageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit message'**
+  String get editMessageTitle;
+
+  /// No description provided for @saveAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get saveAction;
+
+  /// No description provided for @deleteForEveryoneConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete for everyone?'**
+  String get deleteForEveryoneConfirmTitle;
+
+  /// No description provided for @deleteForEveryoneConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This message will be removed for everyone in this chat. This cannot be undone.'**
+  String get deleteForEveryoneConfirmBody;
+
+  /// No description provided for @deleteAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get deleteAction;
+
+  /// No description provided for @forwardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Forward to'**
+  String get forwardTitle;
+
+  /// No description provided for @forwardAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Forward'**
+  String get forwardAction;
+
+  /// No description provided for @forwardEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No other chats to forward to'**
+  String get forwardEmpty;
+
+  /// No description provided for @forwardSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Forwarded'**
+  String get forwardSent;
+
+  /// No description provided for @typingOne.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is typing…'**
+  String typingOne(String name);
+
+  /// No description provided for @unreadDivider.
+  ///
+  /// In en, this message translates to:
+  /// **'Unread messages'**
+  String get unreadDivider;
+
+  /// No description provided for @searchMessagesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search messages'**
+  String get searchMessagesHint;
+
+  /// No description provided for @searchTabChats.
+  ///
+  /// In en, this message translates to:
+  /// **'Chats'**
+  String get searchTabChats;
+
+  /// No description provided for @searchTabMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages'**
+  String get searchTabMessages;
+
+  /// No description provided for @searchMinimumLength.
+  ///
+  /// In en, this message translates to:
+  /// **'Type at least two characters'**
+  String get searchMinimumLength;
+
+  /// No description provided for @reconnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Reconnecting…'**
+  String get reconnecting;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

@@ -130,10 +130,55 @@ class FakeMessageRepository implements MessageRepository {
   Future<Message> send(OutgoingMessage message) async => backend.send(message);
 
   @override
-  Future<void> react(String messageId, String emoji) async {}
+  Future<Message> edit({
+    required String conversationId,
+    required String messageId,
+    required String body,
+  }) async =>
+      backend.edit(conversationId, messageId, body);
 
   @override
-  Future<void> removeReaction(String messageId, String emoji) async {}
+  Future<void> deleteForMe({
+    required String conversationId,
+    required String messageId,
+  }) async =>
+      backend.hideForMe(conversationId, messageId);
+
+  @override
+  Future<void> deleteForEveryone({
+    required String conversationId,
+    required String messageId,
+    required String reason,
+  }) async =>
+      backend.deleteForEveryone(conversationId, messageId);
+
+  @override
+  Future<List<Message>> forward({
+    required String conversationId,
+    required String messageId,
+    required List<String> toConversationIds,
+  }) async =>
+      backend.forward(conversationId, messageId, toConversationIds);
+
+  @override
+  Future<void> react(String conversationId, String messageId, String emoji) async =>
+      backend.react(conversationId, messageId, emoji);
+
+  @override
+  Future<void> removeReaction(String conversationId, String messageId) async =>
+      backend.react(conversationId, messageId, null);
+
+  @override
+  Future<void> markDelivered({
+    required String conversationId,
+    required String messageId,
+  }) async {
+    // The fake has one participant, so there is no second device to deliver to.
+  }
+
+  @override
+  Future<List<MessageSearchHit>> search(MessageSearchQuery query) async =>
+      query.isEmpty ? const [] : backend.searchMessages(query);
 
   @override
   Future<void> setTyping(String conversationId, {required bool isTyping}) async {}

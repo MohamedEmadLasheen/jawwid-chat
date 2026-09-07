@@ -58,6 +58,7 @@ void main() {
       HttpConversationRepository(
         client: clientAs(actorId),
         viewerRole: () => role,
+        viewerActorId: () => actorId,
       );
 
   HttpMessageRepository messagesAs(String actorId) => HttpMessageRepository(

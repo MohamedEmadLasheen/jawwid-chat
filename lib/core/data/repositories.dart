@@ -154,6 +154,44 @@ abstract interface class AuthRepository {
   Stream<void> get sessionRevoked;
 }
 
+/// One message search result, with the conversation it was found in.
+///
+/// The conversation context travels with the hit because a global search shows
+/// results across threads, and a result the user cannot place is not a result.
+class MessageSearchHit {
+  const MessageSearchHit({
+    required this.message,
+    required this.conversationId,
+    required this.conversationTitle,
+  });
+
+  final Message message;
+  final String conversationId;
+  final String conversationTitle;
+}
+
+/// The filters a message search may carry (§23).
+class MessageSearchQuery {
+  const MessageSearchQuery({
+    required this.text,
+    this.conversationId,
+    this.authorId,
+    this.from,
+    this.to,
+  });
+
+  final String text;
+
+  /// Restrict to one conversation. Authorized by the server exactly as opening
+  /// that conversation would be.
+  final String? conversationId;
+  final String? authorId;
+  final DateTime? from;
+  final DateTime? to;
+
+  bool get isEmpty => text.trim().length < 2;
+}
+
 abstract interface class ConversationRepository {
   Future<List<Conversation>> list({bool includeArchived = false});
 
@@ -184,9 +222,48 @@ abstract interface class MessageRepository {
 
   Future<Message> send(OutgoingMessage message);
 
-  Future<void> react(String messageId, String emoji);
+  /// Replace the body of one's own message. The server enforces authorship and
+  /// the edit window; the UI hides the action when it is clearly unavailable,
+  /// but never decides it.
+  Future<Message> edit({
+    required String conversationId,
+    required String messageId,
+    required String body,
+  });
 
-  Future<void> removeReaction(String messageId, String emoji);
+  /// Hide a message from THIS user's view only. Others keep their copy.
+  Future<void> deleteForMe({
+    required String conversationId,
+    required String messageId,
+  });
+
+  /// Withdraw a message from everyone who can see it.
+  Future<void> deleteForEveryone({
+    required String conversationId,
+    required String messageId,
+    required String reason,
+  });
+
+  /// Copy a message into other conversations. The server authorizes the source
+  /// and every destination independently.
+  Future<List<Message>> forward({
+    required String conversationId,
+    required String messageId,
+    required List<String> toConversationIds,
+  });
+
+  Future<void> react(String conversationId, String messageId, String emoji);
+
+  Future<void> removeReaction(String conversationId, String messageId);
+
+  /// Confirm to the server that these messages are on this device.
+  Future<void> markDelivered({
+    required String conversationId,
+    required String messageId,
+  });
+
+  /// Scoped strictly to conversations the caller is authorized for (§41).
+  Future<List<MessageSearchHit>> search(MessageSearchQuery query);
 
   Future<void> setTyping(String conversationId, {required bool isTyping});
 }

@@ -13,14 +13,22 @@ import 'api_config.dart';
 class StoredTokenProvider implements TokenProvider {
   StoredTokenProvider({
     required TokenStore store,
-    required AuthRepository auth,
+    required AuthRepository Function() auth,
     required Future<void> Function(AppError) onEnded,
   })  : _store = store,
         _auth = auth,
         _onEnded = onEnded;
 
   final TokenStore _store;
-  final AuthRepository _auth;
+
+  /// Resolved on use, not at construction.
+  ///
+  /// The auth repository needs an [ApiClient] to call `/auth/refresh`, and the
+  /// client needs a token provider that can refresh — so one of the two has to
+  /// be late. Making it this one keeps the cycle in the composition root, where
+  /// it is visible, rather than in a second interface that exists only to hide
+  /// it.
+  final AuthRepository Function() _auth;
   final Future<void> Function(AppError) _onEnded;
 
   @override
@@ -32,7 +40,7 @@ class StoredTokenProvider implements TokenProvider {
     if (session == null) return null;
 
     try {
-      final renewed = await _auth.refresh(session.refreshToken);
+      final renewed = await _auth().refresh(session.refreshToken);
       await _store.write(renewed);
       return renewed.accessToken;
     } on AppError {

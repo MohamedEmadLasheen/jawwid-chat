@@ -118,6 +118,52 @@ class MessageLog {
 
   Message? byClientId(String clientMessageId) => _byKey[clientMessageId];
 
+  /// Replace one message keyed by its SERVER id.
+  ///
+  /// [updateOne] keys by client id, which is what the send path has. A realtime
+  /// event has neither: it names the server id, and for a message somebody else
+  /// sent that is the only id this client has ever seen. Both spellings are
+  /// needed, and conflating them is how an edit or a receipt silently applies
+  /// to nothing.
+  MessageLog updateById(String messageId, Message Function(Message) update) {
+    for (final entry in _byKey.entries) {
+      if (entry.value.id != messageId) continue;
+      final next = Map<String, Message>.from(_byKey)
+        ..[entry.key] = update(entry.value);
+      return MessageLog._(next, _sorted(next.values), oldestCursor, hasMoreOlder);
+    }
+    return this;
+  }
+
+  /// Drop a message from this client's view.
+  ///
+  /// Used for "delete for me", which is a per-user hide and not a deletion: the
+  /// message is untouched for everybody else, and the server keeps the row.
+  MessageLog removeById(String messageId) {
+    for (final entry in _byKey.entries) {
+      if (entry.value.id != messageId) continue;
+      final next = Map<String, Message>.from(_byKey)..remove(entry.key);
+      return MessageLog._(next, _sorted(next.values), oldestCursor, hasMoreOlder);
+    }
+    return this;
+  }
+
+  Message? byId(String messageId) {
+    for (final message in _byKey.values) {
+      if (message.id == messageId) return message;
+    }
+    return null;
+  }
+
+  /// Server ids of confirmed messages this client holds, newest first.
+  ///
+  /// Used to acknowledge delivery: a message is DELIVERED when the recipient's
+  /// device actually holds it, which is a fact only this client can assert.
+  List<String> get confirmedIds => [
+        for (final m in messages.reversed)
+          if (m.id != null && !m.isMine) m.id!,
+      ];
+
   /// The highest sequence we hold, used as the resync watermark after a reconnect (§49).
   int? get highestSequence {
     int? highest;

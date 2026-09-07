@@ -45,6 +45,14 @@ enum ApprovalState {
 
 enum MessageKind { text, image, video, file, voice, system }
 
+/// The reactions this client offers.
+///
+/// Mirrors `ALLOWED_REACTIONS` in
+/// `apps/api/src/communication/contracts/vocab.ts`. The server rejects anything
+/// outside its own list, so offering a wider picker here would only produce
+/// refusals the user cannot understand.
+const kReactionEmoji = <String>['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
 class Attachment {
   const Attachment({
     required this.id,
@@ -67,17 +75,53 @@ class Attachment {
   final List<double> waveform;
 }
 
+/// Why a quoted message cannot be shown.
+///
+/// The distinction is not pedantry: "deleted" is a thing the other person did
+/// and the reader should understand as such, whereas "unavailable" covers a
+/// message this reader specifically cannot see. Collapsing them would tell a
+/// parent that a supervisor's internal note had been deleted, which is both
+/// wrong and a disclosure.
+enum QuoteUnavailableReason { deleted, restricted, missing }
+
 /// A quoted message shown above a reply.
+///
+/// A quote may exist WITHOUT its content: the reply still renders, and the
+/// quote reads as "this message is no longer available". That is the graceful
+/// degradation §14 asks for — the alternative, dropping the quote entirely,
+/// makes the reply look like it was addressed to nothing.
 class ReplyPreview {
   const ReplyPreview({
     required this.messageId,
     required this.authorName,
     required this.excerpt,
+    this.isAvailable = true,
+    this.unavailableReason,
   });
+
+  /// A quote whose target this reader may not see. Carries no excerpt, ever.
+  const ReplyPreview.unavailable({
+    required this.messageId,
+    required QuoteUnavailableReason reason,
+  })  : authorName = '',
+        excerpt = '',
+        isAvailable = false,
+        unavailableReason = reason;
 
   final String messageId;
   final String authorName;
   final String excerpt;
+
+  /// False when the target is deleted, restricted or gone.
+  final bool isAvailable;
+  final QuoteUnavailableReason? unavailableReason;
+
+  static QuoteUnavailableReason? parseReason(String? raw) => switch (raw) {
+        'deleted' => QuoteUnavailableReason.deleted,
+        'restricted' => QuoteUnavailableReason.restricted,
+        'missing' => QuoteUnavailableReason.missing,
+        _ => null,
+      };
 }
 
 class Reaction {
@@ -116,6 +160,8 @@ class Message {
     this.rejectionReason,
     this.isMine = false,
     this.isDeleted = false,
+    this.isForwarded = false,
+    this.editedAt,
     this.failureCode,
   });
 
@@ -143,7 +189,20 @@ class Message {
   final String? rejectionReason;
   final DateTime createdAt;
   final bool isMine;
+
+  /// True for a message withdrawn for EVERYONE. A message the user hid for
+  /// themselves is not marked deleted — it is simply not in the log.
   final bool isDeleted;
+
+  /// Shown as a small "forwarded" marker. Deliberately a flag and not a source
+  /// reference: the conversation a message came from is usually one this reader
+  /// may not access, so the backend serves a boolean and nothing more.
+  final bool isForwarded;
+
+  /// When the author last replaced the body. Null means never edited.
+  final DateTime? editedAt;
+
+  bool get isEdited => editedAt != null;
 
   /// Machine-readable reason a send failed, for choosing the retry affordance.
   final String? failureCode;
@@ -178,6 +237,8 @@ class Message {
         createdAt: createdAt,
         isMine: isMine,
         isDeleted: isDeleted,
+        isForwarded: isForwarded,
+        editedAt: editedAt,
         failureCode: failureCode,
       );
 
@@ -190,6 +251,8 @@ class Message {
     List<Reaction>? reactions,
     String? failureCode,
     bool? isDeleted,
+    String? body,
+    DateTime? editedAt,
   }) {
     return Message(
       id: id ?? this.id,
@@ -200,7 +263,7 @@ class Message {
       authorName: authorName,
       authorRole: authorRole,
       kind: kind,
-      body: body,
+      body: body ?? this.body,
       attachments: attachments,
       replyTo: replyTo,
       reactions: reactions ?? this.reactions,
@@ -210,6 +273,8 @@ class Message {
       createdAt: createdAt,
       isMine: isMine,
       isDeleted: isDeleted ?? this.isDeleted,
+      isForwarded: isForwarded,
+      editedAt: editedAt ?? this.editedAt,
       failureCode: failureCode ?? this.failureCode,
     );
   }

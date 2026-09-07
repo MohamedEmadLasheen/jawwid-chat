@@ -105,7 +105,7 @@
       }
     }
   },
-  "typingMany": "أكثر من شخص يكتب الآن…",
+  "typingMany": "{count} أشخاص يكتبون الآن…",
   "loadingOlder": "جارٍ تحميل الرسائل السابقة…",
   "loadOlderFailed": "تعذّر تحميل الرسائل السابقة.",
   "messagesEmptyTitle": "لا توجد رسائل بعد",
@@ -184,5 +184,47 @@
   "errorNotFoundTitle": "غير موجود",
   "errorNotFoundBody": "لم يعد هذا متاحًا.",
   "todayLabel": "اليوم",
-  "yesterdayLabel": "أمس"
+  "yesterdayLabel": "أمس",
+  "messageActionReply": "رد",
+  "messageActionReact": "تفاعل",
+  "messageActionForward": "إعادة توجيه",
+  "messageActionEdit": "تعديل",
+  "messageActionCopy": "نسخ",
+  "messageActionDeleteForMe": "حذف عندي",
+  "messageActionDeleteForEveryone": "حذف عند الجميع",
+  "messageEdited": "مُعدَّلة",
+  "messageForwarded": "مُعاد توجيهها",
+  "messageCopied": "تم النسخ",
+  "quoteUnavailable": "هذه الرسالة لم تعد متاحة",
+  "quoteDeleted": "تم حذف هذه الرسالة",
+  "editMessageTitle": "تعديل الرسالة",
+  "saveAction": "حفظ",
+  "deleteForEveryoneConfirmTitle": "حذف عند الجميع؟",
+  "deleteForEveryoneConfirmBody": "سيتم حذف هذه الرسالة عند جميع المشاركين في هذه المحادثة، ولا يمكن التراجع.",
+  "deleteAction": "حذف",
+  "forwardTitle": "إعادة التوجيه إلى",
+  "forwardAction": "إعادة توجيه",
+  "forwardEmpty": "لا توجد محادثات أخرى لإعادة التوجيه إليها",
+  "forwardSent": "تمت إعادة التوجيه",
+  "typingOne": "{name} يكتب الآن…",
+  "@typingOne": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@typingMany": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "unreadDivider": "رسائل غير مقروءة",
+  "searchMessagesHint": "ابحث في الرسائل",
+  "searchTabChats": "المحادثات",
+  "searchTabMessages": "الرسائل",
+  "searchMinimumLength": "اكتب حرفين على الأقل",
+  "reconnecting": "جارٍ إعادة الاتصال…"
 }

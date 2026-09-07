@@ -226,7 +226,9 @@ class L10nAr extends L10n {
   }
 
   @override
-  String get typingMany => 'أكثر من شخص يكتب الآن…';
+  String typingMany(int count) {
+    return '$count أشخاص يكتبون الآن…';
+  }
 
   @override
   String get loadingOlder => 'جارٍ تحميل الرسائل السابقة…';
@@ -421,4 +423,91 @@ class L10nAr extends L10n {
 
   @override
   String get yesterdayLabel => 'أمس';
+
+  @override
+  String get messageActionReply => 'رد';
+
+  @override
+  String get messageActionReact => 'تفاعل';
+
+  @override
+  String get messageActionForward => 'إعادة توجيه';
+
+  @override
+  String get messageActionEdit => 'تعديل';
+
+  @override
+  String get messageActionCopy => 'نسخ';
+
+  @override
+  String get messageActionDeleteForMe => 'حذف عندي';
+
+  @override
+  String get messageActionDeleteForEveryone => 'حذف عند الجميع';
+
+  @override
+  String get messageEdited => 'مُعدَّلة';
+
+  @override
+  String get messageForwarded => 'مُعاد توجيهها';
+
+  @override
+  String get messageCopied => 'تم النسخ';
+
+  @override
+  String get quoteUnavailable => 'هذه الرسالة لم تعد متاحة';
+
+  @override
+  String get quoteDeleted => 'تم حذف هذه الرسالة';
+
+  @override
+  String get editMessageTitle => 'تعديل الرسالة';
+
+  @override
+  String get saveAction => 'حفظ';
+
+  @override
+  String get deleteForEveryoneConfirmTitle => 'حذف عند الجميع؟';
+
+  @override
+  String get deleteForEveryoneConfirmBody =>
+      'سيتم حذف هذه الرسالة عند جميع المشاركين في هذه المحادثة، ولا يمكن التراجع.';
+
+  @override
+  String get deleteAction => 'حذف';
+
+  @override
+  String get forwardTitle => 'إعادة التوجيه إلى';
+
+  @override
+  String get forwardAction => 'إعادة توجيه';
+
+  @override
+  String get forwardEmpty => 'لا توجد محادثات أخرى لإعادة التوجيه إليها';
+
+  @override
+  String get forwardSent => 'تمت إعادة التوجيه';
+
+  @override
+  String typingOne(String name) {
+    return '$name يكتب الآن…';
+  }
+
+  @override
+  String get unreadDivider => 'رسائل غير مقروءة';
+
+  @override
+  String get searchMessagesHint => 'ابحث في الرسائل';
+
+  @override
+  String get searchTabChats => 'المحادثات';
+
+  @override
+  String get searchTabMessages => 'الرسائل';
+
+  @override
+  String get searchMinimumLength => 'اكتب حرفين على الأقل';
+
+  @override
+  String get reconnecting => 'جارٍ إعادة الاتصال…';
 }

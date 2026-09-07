@@ -281,6 +281,126 @@ class FakeBackend {
     return message;
   }
 
+  /// Apply an edit, the way the server does: the body is replaced, the message
+  /// is stamped, and its ordering and send time are untouched.
+  Message edit(String conversationId, String messageId, String body) {
+    _maybeFail();
+    final list = _messages[conversationId] ?? const <Message>[];
+    final index = list.indexWhere((m) => m.id == messageId);
+    if (index < 0) {
+      throw const AppError(AppErrorKind.notFound, code: 'message_not_found');
+    }
+    if (!list[index].isMine) {
+      throw const AppError(AppErrorKind.forbidden, code: 'COMM.NOT_MESSAGE_AUTHOR');
+    }
+
+    final updated = list[index].copyWith(body: body, editedAt: _now);
+    _messages[conversationId]![index] = updated;
+    return updated;
+  }
+
+  /// Hide a message from this user only. Nothing else changes about it, which
+  /// is the distinction the real per-user deletion makes.
+  void hideForMe(String conversationId, String messageId) {
+    _maybeFail();
+    _messages[conversationId]?.removeWhere((m) => m.id == messageId);
+  }
+
+  /// Withdraw a message for everyone: the row stays, the body does not.
+  void deleteForEveryone(String conversationId, String messageId) {
+    _maybeFail();
+    final list = _messages[conversationId] ?? const <Message>[];
+    final index = list.indexWhere((m) => m.id == messageId);
+    if (index < 0) return;
+    _messages[conversationId]![index] =
+        list[index].copyWith(isDeleted: true, body: '');
+  }
+
+  /// Add or replace this user's reaction. One per user per message, matching
+  /// the unique index the real schema carries.
+  void react(String conversationId, String messageId, String? emoji) {
+    _maybeFail();
+    final list = _messages[conversationId] ?? const <Message>[];
+    final index = list.indexWhere((m) => m.id == messageId);
+    if (index < 0) return;
+
+    final current = list[index];
+    final others = current.reactions
+        .map((r) => r.mine ? r.copyWith(count: r.count - 1, mine: false) : r)
+        .where((r) => r.count > 0)
+        .toList();
+
+    if (emoji != null) {
+      final existing = others.indexWhere((r) => r.emoji == emoji);
+      if (existing >= 0) {
+        others[existing] = others[existing]
+            .copyWith(count: others[existing].count + 1, mine: true);
+      } else {
+        others.add(Reaction(emoji: emoji, count: 1, mine: true));
+      }
+    }
+
+    _messages[conversationId]![index] = current.copyWith(reactions: others);
+  }
+
+  /// Copy a message into other conversations, as the forwarder.
+  List<Message> forward(
+    String conversationId,
+    String messageId,
+    List<String> toConversationIds,
+  ) {
+    _maybeFail();
+    final source = (_messages[conversationId] ?? const <Message>[])
+        .where((m) => m.id == messageId);
+    if (source.isEmpty) {
+      throw const AppError(AppErrorKind.notFound, code: 'message_not_found');
+    }
+
+    return [
+      for (final target in toConversationIds)
+        send(
+          OutgoingMessage(
+            clientMessageId: 'fwd_${++_sequence}',
+            conversationId: target,
+            kind: source.first.kind,
+            body: source.first.body,
+          ),
+        ),
+    ];
+  }
+
+  /// Search every conversation this fake holds. The real backend scopes by
+  /// authorization; the fake holds only the signed-in user's conversations, so
+  /// searching all of them is the same set.
+  List<MessageSearchHit> searchMessages(MessageSearchQuery query) {
+    _maybeFail();
+    final needle = query.text.trim().toLowerCase();
+    final hits = <MessageSearchHit>[];
+
+    for (final entry in _messages.entries) {
+      if (query.conversationId != null && entry.key != query.conversationId) continue;
+
+      for (final message in entry.value) {
+        if (message.isDeleted) continue;
+        if (!message.body.toLowerCase().contains(needle)) continue;
+        if (query.authorId != null && message.authorId != query.authorId) continue;
+        if (query.from != null && message.createdAt.isBefore(query.from!)) continue;
+        if (query.to != null && message.createdAt.isAfter(query.to!)) continue;
+
+        hits.add(
+          MessageSearchHit(
+            message: message,
+            conversationId: entry.key,
+            conversationTitle: _conversations[entry.key]?.title ?? '',
+          ),
+        );
+      }
+    }
+
+    hits.sort((a, b) => b.message.createdAt.compareTo(a.message.createdAt));
+    return hits;
+  }
+
   StudentGroup group(String conversationId) {
     _maybeFail();
     final group = _groups[conversationId];

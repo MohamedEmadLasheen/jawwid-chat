@@ -14,6 +14,7 @@ class MessageComposer extends StatefulWidget {
   const MessageComposer({
     super.key,
     required this.onSend,
+    this.onTyping,
     this.replyingTo,
     this.onCancelReply,
     this.onAttach,
@@ -24,6 +25,12 @@ class MessageComposer extends StatefulWidget {
   });
 
   final void Function(String body) onSend;
+
+  /// Called on every keystroke. Debounced downstream by [TypingSignaller]: a
+  /// socket frame per keystroke would fan out hundreds of frames to say one
+  /// thing, so this reports the fact and the controller decides what to send.
+  final VoidCallback? onTyping;
+
   final ReplyPreview? replyingTo;
   final VoidCallback? onCancelReply;
   final VoidCallback? onAttach;
@@ -61,7 +68,10 @@ class _MessageComposerState extends State<MessageComposer> {
     super.dispose();
   }
 
-  void _onChanged() => setState(() {});
+  void _onChanged() {
+    setState(() {});
+    widget.onTyping?.call();
+  }
 
   void _send() {
     final body = _controller.text.trim();

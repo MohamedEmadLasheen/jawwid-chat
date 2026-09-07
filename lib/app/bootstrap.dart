@@ -1,15 +1,18 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/misc.dart';
 
 import '../core/data/fake_backend.dart';
 import '../core/data/fake_repositories.dart';
+import '../core/data/http/http_auth_repository.dart';
 import '../core/data/http/http_conversation_repository.dart';
 import '../core/data/http/http_group_repository.dart';
 import '../core/data/http/http_message_repository.dart';
-import '../core/data/http/unavailable_auth_repository.dart';
 import '../core/errors/app_error.dart';
 import '../core/network/actor_identity.dart';
 import '../core/network/api_config.dart';
 import '../core/network/http_stack.dart';
+import '../core/realtime/realtime_client.dart';
+import '../core/realtime/socket_io_realtime_client.dart';
 import '../core/storage/secure_token_store.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/domain/auth_state.dart';
@@ -41,17 +44,20 @@ Future<List<Override>> bootstrap({
 
 /// The real stack.
 ///
-/// **Authentication is not wired, because no auth contract exists.**
-/// [UnavailableAuthRepository] fails every auth call with a specific, terminal error rather
-/// than inventing `/auth/login`. That means this build reaches the login screen and stops
-/// there — which is the honest state of the integration, not a bug to route around.
+/// **Authentication is wired.** Phase 1 published the contract this client was
+/// waiting for — `/auth/login`, `/auth/refresh`, `/me`, `/auth/logout` and the
+/// session registry — so `UnavailableAuthRepository`, which existed to make the
+/// absence of that contract loud rather than to paper over it, is deleted. It
+/// was never a stub to be filled in; it was a statement that the contract did
+/// not exist, and that statement is no longer true.
 ///
-/// The conversation, message and group repositories are fully implemented against the
-/// published contract and will work the moment an actor identity is available.
+/// The realtime client presents the same access token the HTTP client does, and
+/// reads it from the same store on every connection attempt, so a session
+/// refreshed while offline is the one presented on reconnect.
 List<Override> _httpOverrides({required String debugActorId}) {
   final config = ApiConfig.fromEnvironment();
   final tokenStore = SecureTokenStore();
-  const auth = UnavailableAuthRepository();
+  final session = SessionContext(fallbackActorId: debugActorId);
 
   // Set only for local bring-up against the engine's documented `x-actor-id` seam, and
   // compiled out of release builds. See ActorIdentity for why this is not authentication.
@@ -59,23 +65,51 @@ List<Override> _httpOverrides({required String debugActorId}) {
       ? const BearerTokenIdentity() as ActorIdentity
       : DebugActorHeaderIdentity(actorId: debugActorId, enabled: true);
 
-  final session = SessionContext(fallbackActorId: debugActorId);
+  // The auth repository needs a client, and the client needs the repository to
+  // refresh with. The cycle is broken by building the client around a token
+  // provider that reads the repository through a late binding rather than at
+  // construction — which is also what lets `onSessionEnded` reach the same
+  // repository instance the app is using.
+  late final HttpAuthRepository auth;
 
   final client = buildApiClient(
     config: config,
     tokens: StoredTokenProvider(
       store: tokenStore,
-      auth: auth,
-      onEnded: session.end,
+      auth: () => auth,
+      onEnded: (error) async {
+        auth.notifyRevoked();
+        await session.end(error);
+      },
     ),
     identity: identity,
+  );
+
+  auth = HttpAuthRepository(
+    client: client,
+    device: DeviceDescriptor(
+      // A per-install key. Stable across launches, meaningless outside this
+      // account's own session list, and derived from nothing about the device.
+      clientKey: _installationKey(),
+      platform: defaultTargetPlatform.name,
+    ),
+  );
+
+  final realtime = SocketIoRealtimeClient(
+    baseUrl: config.baseUrl,
+    accessToken: () async => (await tokenStore.read())?.accessToken,
   );
 
   return [
     tokenStoreProvider.overrideWithValue(tokenStore),
     authRepositoryProvider.overrideWithValue(auth),
+    realtimeClientProvider.overrideWithValue(realtime),
     conversationRepositoryProvider.overrideWithValue(
-      HttpConversationRepository(client: client, viewerRole: session.role),
+      HttpConversationRepository(
+        client: client,
+        viewerRole: session.role,
+        viewerActorId: session.actorId,
+      ),
     ),
     messageRepositoryProvider.overrideWithValue(
       HttpMessageRepository(client: client, viewerActorId: session.actorId),
@@ -88,6 +122,10 @@ List<Override> _httpOverrides({required String debugActorId}) {
         repository: auth,
         tokens: tokenStore,
         clearLocalData: () async {},
+        // The session context is what the repositories read the viewer's actor
+        // id and role from, so it must learn the principal at the same moment
+        // the app does — and be cleared the moment the session ends.
+        onPrincipal: session.adopt,
       ),
     ),
   ];
@@ -98,10 +136,14 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
   final backend = FakeBackend(role: developmentRole);
   final tokens = InMemoryTokenStore();
   final authRepository = FakeAuthRepository(backend: backend, tokens: tokens);
+  final session = SessionContext();
 
   return [
     tokenStoreProvider.overrideWithValue(tokens),
     authRepositoryProvider.overrideWithValue(authRepository),
+    // No socket without a backend. The chat screen degrades to refresh-driven
+    // updates, which is what a fixture build should do rather than pretend.
+    realtimeClientProvider.overrideWithValue(OfflineRealtimeClient()),
     conversationRepositoryProvider
         .overrideWithValue(FakeConversationRepository(backend)),
     messageRepositoryProvider.overrideWithValue(FakeMessageRepository(backend)),
@@ -112,10 +154,18 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
         repository: authRepository,
         tokens: tokens,
         clearLocalData: () async {},
+        onPrincipal: session.adopt,
       ),
     ),
   ];
 }
+
+/// A stable identifier for this installation.
+///
+/// Deliberately NOT a device identifier: it says "this app on this phone", not
+/// "this phone". The backend uses it to recognise the same installation across
+/// logins so its session list does not grow one row per sign-in.
+String _installationKey() => 'jawwid-mobile-${defaultTargetPlatform.name}';
 
 /// The authenticated principal, as far as the transport layer needs it.
 ///

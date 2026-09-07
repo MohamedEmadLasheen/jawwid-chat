@@ -29,7 +29,16 @@ class ConversationsScreen extends ConsumerWidget {
     final role = ref.watch(currentRoleProvider);
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.tabChats)),
+      appBar: AppBar(
+        title: Text(l10n.tabChats),
+        actions: [
+          IconButton(
+            onPressed: () => context.push(Routes.search),
+            icon: const Icon(Icons.search),
+            tooltip: l10n.searchHint,
+          ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: () =>
             ref.read(conversationsControllerProvider.notifier).refresh(),

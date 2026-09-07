@@ -89,18 +89,67 @@ abstract final class WireMappers {
     return best;
   }
 
+  /// The quoted message shown above a reply.
+  ///
+  /// The backend decides availability, not this client: it knows whether the
+  /// target was deleted, is an internal note, or was hidden by this reader, and
+  /// it serves an excerpt ONLY when the reader may see one. An unavailable
+  /// quote therefore arrives with no excerpt, and this mapper's job is to
+  /// preserve that rather than to substitute anything for it.
+  static ReplyPreview? replyPreview(
+    Map<String, Object?> json, {
+    Map<String, String> displayNames = const {},
+  }) {
+    final raw = json['replyPreview'];
+    if (raw is! Map) {
+      // No preview served -- an older backend, or a message the read path did
+      // not resolve. Fall back to the bare id so the bubble can still show that
+      // a quote existed, rather than silently dropping the relationship.
+      final id = json['replyToMessageId'];
+      return id is String
+          ? ReplyPreview.unavailable(
+              messageId: id,
+              reason: QuoteUnavailableReason.missing,
+            )
+          : null;
+    }
+
+    final messageId = (raw['messageId'] as String?) ?? '';
+    if (raw['available'] != true) {
+      return ReplyPreview.unavailable(
+        messageId: messageId,
+        reason: ReplyPreview.parseReason(raw['unavailableReason'] as String?) ??
+            QuoteUnavailableReason.missing,
+      );
+    }
+
+    final authorId = raw['authorId'] as String?;
+    return ReplyPreview(
+      messageId: messageId,
+      authorName: (authorId == null ? null : displayNames[authorId]) ?? '',
+      excerpt: (raw['excerpt'] as String?) ?? '',
+    );
+  }
+
   static Conversation conversation(
     Map<String, Object?> json, {
     required UserRole viewerRole,
+    String? viewerActorId,
     LearnerRef? learner,
-    int unreadCount = 0,
-    String lastMessagePreview = '',
-    bool isPinned = false,
-    bool isMuted = false,
     String? handledByLabel,
   }) {
     final archivedAt = parseTime(json['archivedAt']);
     final lastActivity = parseTime(json['lastActivityAt']) ?? DateTime.now();
+
+    // Phase 2 serves these ON THE ROW. They used to be absent, which cost one
+    // request per row to render a chat list; the zero-defaults below are for
+    // the by-id endpoint, which returns a conversation without them.
+    final unreadCount = (json['unreadCount'] as num?)?.toInt() ?? 0;
+    final lastMessagePreview = (json['lastMessagePreview'] as String?) ?? '';
+    final lastMessageAt = parseTime(json['lastMessageAt']);
+    final isPinned = json['isPinned'] == true;
+    final isMuted = json['isMuted'] == true;
+    final isArchivedForMe = json['isArchivedForMe'] == true;
 
     // Approval policy is per role, so the flag the composer honours depends on who is
     // looking (§26).
@@ -111,31 +160,73 @@ abstract final class WireMappers {
     return Conversation(
       id: json['id']! as String,
       kind: conversationKind(json['type'] as String?),
-      title: (json['title'] as String?) ?? '',
+      title: (json['title'] as String?) ??
+          titleFromMembers(json, excludeActorId: viewerActorId) ??
+          '',
       learner: learner,
       updatedAt: lastActivity,
-      lastMessageAt: lastActivity,
+      lastMessageAt: lastMessageAt ?? lastActivity,
       lastMessagePreview: lastMessagePreview,
       unreadCount: unreadCount,
       isPinned: isPinned,
       isMuted: isMuted,
-      isArchived: archivedAt != null,
+      isArchived: archivedAt != null || isArchivedForMe,
       handledByLabel: handledByLabel,
       requiresApproval: requiresApproval,
       // An archived conversation is read-only for this client; the backend also refuses
-      // with CONVERSATION_ARCHIVED.
+      // with CONVERSATION_ARCHIVED. A conversation the USER filed away is merely out of
+      // the main list, and they may still write in it.
       isReadOnly: archivedAt != null,
     );
+  }
+
+  /// A name for a conversation the backend gave no title.
+  ///
+  /// A 1:1 has no title of its own, so it is named after the other side.
+  /// Returns null rather than a placeholder when the members were not served,
+  /// so the caller's own fallback applies.
+  static String? titleFromMembers(Map<String, Object?> json, {String? excludeActorId}) {
+    final members = json['members'];
+    if (members is! List) return null;
+
+    final names = <String>[
+      for (final m in members)
+        if (m is Map &&
+            m['actorId'] != excludeActorId &&
+            m['displayName'] is String &&
+            (m['displayName'] as String).isNotEmpty)
+          m['displayName'] as String,
+    ];
+    return names.isEmpty ? null : names.join('، ');
+  }
+
+  /// Display names by actor id, for resolving authors and quotes.
+  static Map<String, String> memberNames(Map<String, Object?> json) {
+    final members = json['members'];
+    if (members is! List) return const {};
+
+    return {
+      for (final m in members)
+        if (m is Map && m['actorId'] is String && m['displayName'] is String)
+          m['actorId'] as String: m['displayName'] as String,
+    };
   }
 
   static Message message(
     Map<String, Object?> json, {
     required String viewerActorId,
     String authorName = '',
+    /// Display names by actor id, from the conversation's member list. Used for
+    /// the author line and for the name above a quote, so the client never has
+    /// to fetch an actor to render a bubble.
+    Map<String, String> displayNames = const {},
   }) {
     final authorId = json['authorId'] as String?;
     final isMine = authorId != null && authorId == viewerActorId;
     final receipts = (json['receipts'] as List?) ?? const [];
+    final resolvedAuthorName = authorName.isNotEmpty
+        ? authorName
+        : (authorId == null ? '' : displayNames[authorId] ?? '');
 
     final reactionsRaw = (json['reactions'] as List?) ?? const [];
     final byEmoji = <String, List<String>>{};
@@ -157,7 +248,7 @@ abstract final class WireMappers {
       conversationId: (json['conversationId'] as String?) ?? '',
       sequence: parseSeq(json['seq']),
       authorId: authorId,
-      authorName: authorName,
+      authorName: resolvedAuthorName,
       authorRole: authorRole(json['authorKind'] as String?),
       kind: messageKind(json['type'] as String?),
       body: (json['body'] as String?) ?? '',
@@ -165,7 +256,7 @@ abstract final class WireMappers {
         for (final a in (json['attachments'] as List?) ?? const [])
           if (a is Map<String, Object?>) attachment(a),
       ],
-      replyTo: null,
+      replyTo: replyPreview(json, displayNames: displayNames),
       reactions: [
         for (final entry in byEmoji.entries)
           Reaction(
@@ -179,6 +270,8 @@ abstract final class WireMappers {
       createdAt: parseTime(json['createdAt']) ?? DateTime.now(),
       isMine: isMine,
       isDeleted: json['deletedAt'] != null || json['deletedForAll'] == true,
+      isForwarded: json['isForwarded'] == true,
+      editedAt: parseTime(json['editedAt']),
     );
   }
 

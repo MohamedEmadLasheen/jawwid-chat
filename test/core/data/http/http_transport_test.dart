@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jawwid_chat/core/data/http/http_auth_repository.dart';
 import 'package:jawwid_chat/core/data/http/http_conversation_repository.dart';
 import 'package:jawwid_chat/core/data/http/http_message_repository.dart';
-import 'package:jawwid_chat/core/data/http/unavailable_auth_repository.dart';
 import 'package:jawwid_chat/core/data/repositories.dart';
 import 'package:jawwid_chat/core/data/wire/wire_vocab.dart';
 import 'package:jawwid_chat/core/errors/app_error.dart';
@@ -15,7 +15,8 @@ import 'package:jawwid_chat/shared/models/user_role.dart';
 
 import 'test_server.dart';
 
-/// A token provider with no tokens, which is the state until AI #1 publishes auth.
+/// A token provider with no tokens: an anonymous caller, or one whose session
+/// has not been established yet.
 class _NoTokens implements TokenProvider {
   int refreshCalls = 0;
   AppError? ended;
@@ -80,8 +81,13 @@ void main() {
   HttpConversationRepository conversations(
     ApiClient client, {
     UserRole role = UserRole.parent,
+    String actorId = 'me',
   }) =>
-      HttpConversationRepository(client: client, viewerRole: () => role);
+      HttpConversationRepository(
+        client: client,
+        viewerRole: () => role,
+        viewerActorId: () => actorId,
+      );
 
   HttpMessageRepository messages(ApiClient client, {String actorId = 'me'}) =>
       HttpMessageRepository(client: client, viewerActorId: () => actorId);
@@ -764,42 +770,272 @@ void main() {
     });
   });
 
-  group('capabilities the contract does not provide', () {
-    test('search fails honestly rather than filtering locally', () async {
+  /// The capabilities that had NO contract before Phase 2, and now do.
+  ///
+  /// These replace the tests that asserted the ABSENCE: search threw
+  /// `search_not_supported`, and every auth call threw
+  /// `auth_contract_not_published`. Those were honest statements about a gap;
+  /// keeping them would now be a dishonest statement about a capability.
+  group('capabilities Phase 2 added', () {
+    HttpAuthRepository authRepo(ApiClient client) => HttpAuthRepository(
+          client: client,
+          device: const DeviceDescriptor(clientKey: 'k', platform: 'android'),
+        );
+
+    test('conversation search goes to the server, and is never a local filter', () async {
+      server.on('GET', '/conversations/search', [
+        Reply.ok({
+          'conversations': [conversationDto(id: 'c9', type: 'direct')],
+        }),
+      ]);
+
+      final results = await conversations(clientWith(_NoTokens())).search('أحمد');
+
+      expect(results.single.id, 'c9');
+      expect(server.lastRequestTo('GET', '/conversations/search')!.query['q'], 'أحمد');
+    });
+
+    test('a query too short to mean anything never reaches the network', () async {
+      final results = await conversations(clientWith(_NoTokens())).search('a');
+
+      expect(results, isEmpty);
+      // The server refuses it anyway; asking is a wasted round trip on exactly
+      // the networks this audience is on.
+      expect(server.countOf('GET', '/conversations/search'), 0);
+    });
+
+    test('message search carries its filters and reads the hits', () async {
+      server.on('GET', '/search/messages', [
+        Reply.ok({
+          'hits': [
+            {
+              'message': messageDto(id: 'm1'),
+              'conversationId': 'c1',
+              'conversationTitle': 'جَوِّد',
+            },
+          ],
+          'nextCursor': null,
+        }),
+      ]);
+
+      final hits = await messages(clientWith(_NoTokens())).search(
+        MessageSearchQuery(
+          text: 'مرحبا',
+          authorId: 'actor-9',
+          from: DateTime.utc(2026, 9),
+        ),
+      );
+
+      expect(hits.single.message.body, 'مرحبا');
+      expect(hits.single.conversationId, 'c1');
+      expect(hits.single.conversationTitle, 'جَوِّد');
+
+      final query = server.lastRequestTo('GET', '/search/messages')!.query;
+      expect(query['q'], 'مرحبا');
+      expect(query['authorId'], 'actor-9');
+      expect(query['from'], startsWith('2026-09-01'));
+      // A filter the caller did not set must not be sent as an empty string,
+      // which the server would read as a filter rather than as its absence.
+      expect(query.containsKey('to'), isFalse);
+    });
+
+    test('a conversation-scoped search asks the conversation, not the global route', () async {
+      server.on('GET', '/conversations/c1/messages/search', [
+        const Reply.ok({'hits': []}),
+      ]);
+
+      await messages(clientWith(_NoTokens()))
+          .search(const MessageSearchQuery(text: 'مرحبا', conversationId: 'c1'));
+
+      expect(server.countOf('GET', '/conversations/c1/messages/search'), 1);
+      expect(server.countOf('GET', '/search/messages'), 0);
+    });
+
+    test('editing PATCHes the message and returns the server\'s copy', () async {
+      server.on('PATCH', '/conversations/c1/messages/srv_1', [
+        Reply.ok({
+          ...messageDto(id: 'srv_1'),
+          'body': 'صححتها',
+          'editedAt': '2026-09-05T12:05:00.000Z',
+          'editCount': 1,
+        }),
+      ]);
+
+      final edited = await messages(clientWith(_NoTokens())).edit(
+        conversationId: 'c1',
+        messageId: 'srv_1',
+        body: 'صححتها',
+      );
+
+      expect(edited.body, 'صححتها');
+      expect(edited.isEdited, isTrue);
+      expect(
+        server.lastRequestTo('PATCH', '/conversations/c1/messages/srv_1')!.json['body'],
+        'صححتها',
+      );
+    });
+
+    test('the two deletions use different routes, because they mean different things', () async {
+      server.on('DELETE', '/conversations/c1/messages/srv_1/me', [const Reply.ok({'ok': true})]);
+      server.on('DELETE', '/conversations/c1/messages/srv_1', [const Reply.ok({'ok': true})]);
+
+      final repo = messages(clientWith(_NoTokens()));
+      await repo.deleteForMe(conversationId: 'c1', messageId: 'srv_1');
+      await repo.deleteForEveryone(
+        conversationId: 'c1',
+        messageId: 'srv_1',
+        reason: 'sent in error',
+      );
+
+      expect(server.countOf('DELETE', '/conversations/c1/messages/srv_1/me'), 1);
+      final global = server.lastRequestTo('DELETE', '/conversations/c1/messages/srv_1')!;
+      expect(global.query['reason'], 'sent in error');
+    });
+
+    test('reactions are addressed through their conversation', () async {
+      server.on('POST', '/conversations/c1/messages/srv_1/reactions', [
+        const Reply.ok({'ok': true}),
+      ]);
+      server.on('DELETE', '/conversations/c1/messages/srv_1/reactions', [
+        const Reply.ok({'ok': true}),
+      ]);
+
+      final repo = messages(clientWith(_NoTokens()));
+      await repo.react('c1', 'srv_1', '👍');
+      await repo.removeReaction('c1', 'srv_1');
+
+      // The route is nested under the conversation because the server asserts
+      // the message really is in it — a message id alone would let a readable
+      // conversation wrap operations on messages elsewhere.
+      expect(
+        server.lastRequestTo('POST', '/conversations/c1/messages/srv_1/reactions')!.json['emoji'],
+        '👍',
+      );
+      expect(server.countOf('DELETE', '/conversations/c1/messages/srv_1/reactions'), 1);
+    });
+
+    test('forwarding names its destinations and returns the copies', () async {
+      server.on('POST', '/conversations/c1/messages/srv_1/forward', [
+        Reply.ok({
+          'messages': [messageDto(id: 'srv_9')],
+        }),
+      ]);
+
+      final created = await messages(clientWith(_NoTokens())).forward(
+        conversationId: 'c1',
+        messageId: 'srv_1',
+        toConversationIds: ['c2', 'c3'],
+      );
+
+      expect(created.single.id, 'srv_9');
+      expect(
+        server.lastRequestTo('POST', '/conversations/c1/messages/srv_1/forward')!
+            .json['toConversationIds'],
+        ['c2', 'c3'],
+      );
+    });
+
+    test('sign-in posts a subject, and never an e-mail field', () async {
+      server.on('POST', '/auth/login', [
+        const Reply.ok({
+          'accessToken': 'access',
+          'refreshToken': 'refresh',
+          'expiresIn': 900,
+          'actor': {'actorId': 'a1', 'kind': 'contact'},
+        }),
+      ]);
+
+      final session = await authRepo(clientWith(_NoTokens()))
+          .signIn(username: 'subject_1', password: 'secret');
+
+      expect(session.accessToken, 'access');
+      expect(session.refreshToken, 'refresh');
+      expect(session.accessTokenExpiresAt.isAfter(DateTime.now()), isTrue);
+
+      final body = server.lastRequestTo('POST', '/auth/login')!.json;
+      expect(body['subject'], 'subject_1');
+      // chat.account holds no contact channel by design (BR-2), so there is
+      // nowhere for an e-mail to go and nothing that would read one.
+      expect(body.containsKey('email'), isFalse);
+      expect((body['device']! as Map)['platform'], 'android');
+    });
+
+    test('a login response with no token pair is a failure, not an empty session', () async {
+      server.on('POST', '/auth/login', [const Reply.ok({'expiresIn': 900})]);
+
       await expectLater(
-        conversations(clientWith(_NoTokens())).search('أحمد'),
+        authRepo(clientWith(_NoTokens())).signIn(username: 's', password: 'p'),
+        throwsA(isA<AppError>().having((e) => e.code, 'code', 'malformed_auth_response')),
+      );
+    });
+
+    test('the principal comes from /me, and a staff login is refused by THIS app', () async {
+      server.on('GET', '/me', [
+        const Reply.ok({'actorId': 'a1', 'kind': 'contact', 'displayName': 'Umm Ahmed'}),
+        const Reply.ok({'actorId': 's1', 'kind': 'staff', 'displayName': 'Admin'}),
+      ]);
+
+      final auth = authRepo(clientWith(_NoTokens()));
+
+      final parent = await auth.currentUser();
+      expect(parent.role, UserRole.parent);
+      expect(parent.id, 'a1');
+      expect(parent.displayName, 'Umm Ahmed');
+
+      // Valid credentials, wrong application. Saying so is more useful than a
+      // generic refusal — and quietly treating an admin as a parent would be
+      // very much worse.
+      await expectLater(
+        auth.currentUser(),
         throwsA(
-          isA<AppError>().having((e) => e.code, 'code', 'search_not_supported'),
+          isA<AppError>().having((e) => e.code, 'code', 'wrong_application_for_role'),
         ),
       );
     });
 
-    test('every auth call fails with a specific, terminal error', () async {
-      const auth = UnavailableAuthRepository();
-
-      for (final call in <Future<Object?> Function()>[
-        () => auth.signIn(username: 'u', password: 'p'),
-        () => auth.currentUser(),
-        () => auth.refresh('r'),
-        () => auth.devices(),
-        () => auth.revokeDevice('d'),
-      ]) {
-        await expectLater(
-          call(),
-          throwsA(
-            isA<AppError>().having(
-              (e) => e.code,
-              'code',
-              'auth_contract_not_published',
-            ),
-          ),
+    test('the role is never inferred from anything but the server\'s kind', () async {
+      for (final entry in {
+        'contact': UserRole.parent,
+        'teacher': UserRole.teacher,
+      }.entries) {
+        server.on('GET', '/me', [
+          Reply.ok({'actorId': 'a1', 'kind': entry.key, 'displayName': 'x'}),
+        ]);
+        expect(
+          (await authRepo(clientWith(_NoTokens())).currentUser()).role,
+          entry.value,
+          reason: entry.key,
         );
       }
     });
 
-    test('sign-out still clears locally even with no server session', () async {
-      const auth = UnavailableAuthRepository();
-      await expectLater(auth.signOut(), completes);
+    test('sign-out still completes when the session is already gone', () async {
+      server.on('POST', '/auth/logout', [Reply.commError(401, 'AUTH.INVALID_TOKEN')]);
+
+      // A failed sign-out must never strand the user signed in on their own
+      // device: the local session is cleared regardless.
+      await expectLater(authRepo(clientWith(_NoTokens())).signOut(), completes);
+    });
+
+    test('devices are listed with names a person can recognise', () async {
+      server.on('GET', '/me/sessions', [
+        const Reply.ok({
+          'sessions': [
+            {
+              'id': 's1',
+              'platform': 'ios',
+              'displayName': null,
+              'createdAt': '2026-09-05T12:00:00.000Z',
+              'lastSeenAt': '2026-09-05T12:30:00.000Z',
+              'current': true,
+            },
+          ],
+        }),
+      ]);
+
+      final devices = await authRepo(clientWith(_NoTokens())).devices();
+      expect(devices.single.label, 'iPhone');
+      expect(devices.single.isCurrent, isTrue);
     });
   });
 }

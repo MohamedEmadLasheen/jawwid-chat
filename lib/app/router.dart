@@ -8,6 +8,7 @@ import '../features/conversations/presentation/conversations_screen.dart';
 import '../features/conversations/presentation/groups_screen.dart';
 import '../features/home/presentation/home_screen.dart';
 import '../features/messages/presentation/chat_screen_route.dart';
+import '../features/messages/presentation/search_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../shared/models/user_role.dart';
 import 'providers.dart';
@@ -21,8 +22,13 @@ abstract final class Routes {
   static const chats = '/chats';
   static const groups = '/groups';
   static const settings = '/settings';
+  static const search = '/search';
 
   static String conversation(String id) => '/chats/$id';
+
+  /// Search inside one conversation. The server authorizes the scope exactly as
+  /// it authorizes opening the conversation.
+  static String conversationSearch(String id) => '/chats/$id/search';
 }
 
 /// Rebuilds on every authentication change, so a session ending immediately evicts every
@@ -68,6 +74,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
         ],
       ),
+      // Search opens full-screen: it takes over the keyboard and the viewport,
+      // and returning to where you were is the back gesture.
+      GoRoute(
+        path: Routes.search,
+        builder: (context, state) => const SearchScreen(),
+      ),
       // Conversations open full-screen, above the tab bar, so the thread gets the whole
       // viewport — the composer and keyboard already claim a large share of a small screen.
       GoRoute(
@@ -75,6 +87,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => ChatScreenRoute(
           conversationId: state.pathParameters['conversationId']!,
         ),
+        routes: [
+          GoRoute(
+            path: 'search',
+            builder: (context, state) => SearchScreen(
+              conversationId: state.pathParameters['conversationId'],
+            ),
+          ),
+        ],
       ),
     ],
   );

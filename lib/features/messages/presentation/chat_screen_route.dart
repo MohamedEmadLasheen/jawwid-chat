@@ -52,6 +52,7 @@ class ChatScreenRoute extends ConsumerWidget {
       AsyncData(:final value) => ChatScreen(
           conversationId: conversationId,
           title: value.title,
+          unreadCount: value.unreadCount,
           // "Handled by …" comes from the backend verbatim; the client never derives it and
           // never shows an internal handler id (decision D3).
           subtitle: value.handledByLabel == null

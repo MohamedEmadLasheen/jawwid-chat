@@ -105,7 +105,7 @@
       }
     }
   },
-  "typingMany": "Several people are typing…",
+  "typingMany": "{count} people are typing…",
   "loadingOlder": "Loading earlier messages…",
   "loadOlderFailed": "Could not load earlier messages.",
   "messagesEmptyTitle": "No messages yet",
@@ -184,5 +184,47 @@
   "errorNotFoundTitle": "Not found",
   "errorNotFoundBody": "This is no longer available.",
   "todayLabel": "Today",
-  "yesterdayLabel": "Yesterday"
+  "yesterdayLabel": "Yesterday",
+  "messageActionReply": "Reply",
+  "messageActionReact": "React",
+  "messageActionForward": "Forward",
+  "messageActionEdit": "Edit",
+  "messageActionCopy": "Copy",
+  "messageActionDeleteForMe": "Delete for me",
+  "messageActionDeleteForEveryone": "Delete for everyone",
+  "messageEdited": "edited",
+  "messageForwarded": "Forwarded",
+  "messageCopied": "Copied",
+  "quoteUnavailable": "This message is no longer available",
+  "quoteDeleted": "This message was deleted",
+  "editMessageTitle": "Edit message",
+  "saveAction": "Save",
+  "deleteForEveryoneConfirmTitle": "Delete for everyone?",
+  "deleteForEveryoneConfirmBody": "This message will be removed for everyone in this chat. This cannot be undone.",
+  "deleteAction": "Delete",
+  "forwardTitle": "Forward to",
+  "forwardAction": "Forward",
+  "forwardEmpty": "No other chats to forward to",
+  "forwardSent": "Forwarded",
+  "typingOne": "{name} is typing…",
+  "@typingOne": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@typingMany": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "unreadDivider": "Unread messages",
+  "searchMessagesHint": "Search messages",
+  "searchTabChats": "Chats",
+  "searchTabMessages": "Messages",
+  "searchMinimumLength": "Type at least two characters",
+  "reconnecting": "Reconnecting…"
 }
