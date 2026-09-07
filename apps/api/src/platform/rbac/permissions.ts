@@ -40,6 +40,16 @@ export const Permission = {
   STORIES_READ: 'stories.read',
   /** Phase 5: create and publish a story to a resolved audience. */
   STORIES_PUBLISH: 'stories.publish',
+  /**
+   * Phase 6: write the moderation rules that apply to the WHOLE organization.
+   *
+   * Deliberately separate from `messages.moderate`. Deciding one held message
+   * and rewriting the rules that decide every message are different powers: an
+   * admin who could disable the phone-number rule would be disabling it for
+   * families that are not theirs, which is the scope escape the supervisor
+   * model exists to prevent. Same reasoning as `labels.manage`.
+   */
+  MODERATION_RULES_MANAGE: 'moderation_rules.manage',
   BROADCASTS_SEND: 'broadcasts.send',
   /** Phase 7: use the AI assistant -- grounded answers, suggestions, summaries. */
   AI_USE: 'ai.use',
@@ -149,6 +159,9 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     P.FAMILIES_READ, P.FAMILIES_ASSIGN, P.CONTACTS_VIEW_PRIVATE,
     P.CALLS_START, P.CALLS_ACCEPT, P.BROADCASTS_SEND, P.AUDIT_READ,
     P.SETTINGS_MANAGE, P.SESSIONS_MANAGE,
+    // Phase 6. Note its absence from admin and coverage_admin above: they
+    // decide approvals (messages.moderate) but do not rewrite the rules.
+    P.MODERATION_RULES_MANAGE,
     P.FAMILIES_MANAGE, P.LEARNERS_ASSIGN_TEACHER,
     P.GROUPS_READ, P.GROUPS_MANAGE, P.LABELS_READ, P.LABELS_MANAGE,
     P.STORIES_READ, P.STORIES_PUBLISH, P.CALLS_RECORD, P.RECORDINGS_READ,
@@ -163,6 +176,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     P.FAMILIES_READ, P.FAMILIES_ASSIGN, P.CONTACTS_VIEW_PRIVATE,
     P.CALLS_START, P.CALLS_ACCEPT, P.BROADCASTS_SEND, P.AUDIT_READ,
     P.SETTINGS_MANAGE, P.USERS_MANAGE, P.SESSIONS_MANAGE,
+    P.MODERATION_RULES_MANAGE,
     P.FAMILIES_MANAGE, P.LEARNERS_ASSIGN_TEACHER,
     P.GROUPS_READ, P.GROUPS_MANAGE, P.LABELS_READ, P.LABELS_MANAGE,
     P.STORIES_READ, P.STORIES_PUBLISH, P.CALLS_RECORD, P.RECORDINGS_READ,
