@@ -1,6 +1,15 @@
 # Jawwid Chat — Row-Level Security Strategy
 
-Status: **CANONICAL** · Decided in Phase 0 (2026-09-07) · Engaged in Phase 1
+Status: **CANONICAL** · Decided in Phase 0 (2026-09-07) · **ENGAGED in Phase 1** (2026-09-07)
+
+> **Acceptance item 1 (section 7) is NOT yet true in any deployed environment.**
+> RLS is enabled on every table, the policies are proved live by
+> `db/tests/rls_enforcement.sql`, and the API sets the actor context per
+> transaction -- but the API still connects as the database owner until
+> `DATABASE_URL` points at `chat_app`. `/health/ready` reports `rlsEnforced` so
+> the state is visible. Until it is true, `AuthorizationService` is the only
+> authorization boundary, and every review must treat it as such.
+> See `../recovery/PHASE-1-REPORT.md` section 7.1.
 Companions: `../architecture/AUTHORIZATION-MODEL.md`, `../architecture/IDENTITY-MODEL.md`,
 `../architecture/TENANCY-MODEL.md`, `../recovery/PHASE-0-DATABASE-RECONCILIATION.md` §3.5.
 

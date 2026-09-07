@@ -1,6 +1,7 @@
 # Jawwid Chat — Authorization Model (roles, permissions, scope)
 
-Status: **CANONICAL** · Locked in Phase 0 (2026-09-07) · Implemented in Phase 1
+Status: **CANONICAL** · Locked in Phase 0 (2026-09-07) · **IMPLEMENTED in Phase 1** (2026-09-07)
+What actually landed, and what did not: `../recovery/PHASE-1-REPORT.md`. Defects A-1 to A-10 in section 5 are closed except where that report says otherwise.
 Product decisions PD-2, PD-3 and PD-5 are CLOSED; the record is `../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4.
 Companions: `IDENTITY-MODEL.md`, `SUPERVISOR-OWNERSHIP.md`, `TENANCY-MODEL.md`,
 `../security/RLS-STRATEGY.md`, `../contracts/API-CONTRACT.md` §1.2.

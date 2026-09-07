@@ -21,17 +21,18 @@ no other document may restate or reinterpret them.
 | `product/` | [JAWUID-CHAT-PRODUCT-BOUNDARY.md](product/JAWUID-CHAT-PRODUCT-BOUNDARY.md) | what Jawwid Chat is and is not; domain layering; deprecated machinery; **the closed product decisions PD-1..PD-5** (§4); phase map |
 | `product/` | [jawwid-chat-prd-v0.1.md](product/jawwid-chat-prd-v0.1.md) | product requirements (PRD v0.1, owner-approved). Read through the boundary document above. |
 | `architecture/` | [JAWUID-CHAT-ARCHITECTURE.md](architecture/JAWUID-CHAT-ARCHITECTURE.md) | layers, boundaries, what each may/may not do; storage, realtime, notifications, outbox semantics, Core integration boundary |
-| `architecture/` | [IDENTITY-MODEL.md](architecture/IDENTITY-MODEL.md) | accounts, credentials, sessions, devices, teacher identity, lifecycle, offboarding; Phase 1 baseline |
-| `architecture/` | [AUTHORIZATION-MODEL.md](architecture/AUTHORIZATION-MODEL.md) | roles, permission keys, `AuthorizationService` decision surface, scope, known defects |
-| `architecture/` | [SUPERVISOR-OWNERSHIP.md](architecture/SUPERVISOR-OWNERSHIP.md) | family → supervisor assignment, reassignment semantics, coverage (PD-3) |
+| `architecture/` | [IDENTITY-MODEL.md](architecture/IDENTITY-MODEL.md) | accounts, credentials, sessions, devices, teacher identity, lifecycle, offboarding. **Implemented in Phase 1** |
+| `architecture/` | [AUTHORIZATION-MODEL.md](architecture/AUTHORIZATION-MODEL.md) | roles, permission keys, `AuthorizationService` decision surface, scope, known defects. **Implemented in Phase 1** |
+| `architecture/` | [SUPERVISOR-OWNERSHIP.md](architecture/SUPERVISOR-OWNERSHIP.md) | family → supervisor assignment, reassignment semantics, coverage (PD-3). **Implemented in Phase 1** |
 | `architecture/` | [TENANCY-MODEL.md](architecture/TENANCY-MODEL.md) | `organization_id` from day one; per-layer rules; gaps |
 | `contracts/` | [API-CONTRACT.md](contracts/API-CONTRACT.md) | the one API contract: inventory, classification, canonical endpoint specs, realtime contract, client migration |
 | `contracts/` | [DOMAIN-VOCABULARY.md](contracts/DOMAIN-VOCABULARY.md) | canonical terms, enumerations, aliases, forbidden terms |
-| `security/` | [RLS-STRATEGY.md](security/RLS-STRATEGY.md) | how RLS engages (defence in depth behind `AuthorizationService`), connection roles, parity tests |
+| `security/` | [RLS-STRATEGY.md](security/RLS-STRATEGY.md) | how RLS engages (defence in depth behind `AuthorizationService`), connection roles, parity tests. **Engaged in Phase 1; runtime enforcement pending the connection-role change** |
 | `recovery/` | [PHASE-0-BRANCH-LEDGER.md](recovery/PHASE-0-BRANCH-LEDGER.md) | freeze snapshot; every branch's disposition; archive tags |
 | `recovery/` | [PHASE-0-DATABASE-RECONCILIATION.md](recovery/PHASE-0-DATABASE-RECONCILIATION.md) | every database object classified; invariants; debts; verification record |
 | `recovery/` | [PHASE-0-ADMIN-WEB-RECONCILIATION.md](recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md) | Admin Web classified; vocabulary/contract migration; console direction |
 | `recovery/` | [PHASE-0-REPORT.md](recovery/PHASE-0-REPORT.md) | the Phase 0 final report and Phase 1 readiness |
+| `recovery/` | [PHASE-1-REPORT.md](recovery/PHASE-1-REPORT.md) | **what Phase 1 actually built and what it deliberately did not** — authentication, sessions, identity, RBAC, scope, tenancy, RLS; the five defects found on the way; the verification record |
 | `qa/` | [protected-tests.tsv](qa/protected-tests.tsv) | the protected security tests (JC-011 guard) — canonical list |
 | `red-team/` | [findings.md](red-team/findings.md) | the security findings register (RT-xxx) — canonical status of each finding |
 

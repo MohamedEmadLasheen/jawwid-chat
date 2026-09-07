@@ -1,6 +1,7 @@
 # Jawwid Chat — Tenancy Model
 
-Status: **CANONICAL** · Decided in Phase 0 (2026-09-07)
+Status: **CANONICAL** · Decided in Phase 0 (2026-09-07) · **EXTENDED in Phase 1** (2026-09-07)
+M-1 and the `account.subject` half of M-2 are closed; M-4 is closed in code and pending a deployment change. See `../recovery/PHASE-1-REPORT.md`.
 Product basis: PRD §2.3 — *"Not multi-tenant, but the data model carries an `organization_id` on every root entity from day one so a future SaaS conversion is a migration, not a rewrite."*
 Reference (not adopted as-is): `organization-model.md` and the org-scoped RLS/keys on `archive/phase0/feat/core-integration-boundary`; `docs/integration/backend-decision-memo.md` §3 (the executed comparison).
 

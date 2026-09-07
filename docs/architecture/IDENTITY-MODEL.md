@@ -1,6 +1,7 @@
 # Jawwid Chat — Identity Model
 
-Status: **CANONICAL** · Locked in Phase 0 (2026-09-07) · Implemented in Phase 1
+Status: **CANONICAL** · Locked in Phase 0 (2026-09-07) · **IMPLEMENTED in Phase 1** (2026-09-07)
+What actually landed, and what did not: `../recovery/PHASE-1-REPORT.md`.
 Companions: `AUTHORIZATION-MODEL.md`, `TENANCY-MODEL.md`, `../security/RLS-STRATEGY.md`,
 `../contracts/API-CONTRACT.md` §3.1–3.2.
 Historical inputs (reference): `docs/integration/auth-current-state.md`,
