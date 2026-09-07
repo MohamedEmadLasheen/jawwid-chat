@@ -291,7 +291,7 @@ class L10nEn extends L10n {
   String get callHistoryTitle => 'Calls';
 
   @override
-  String get callHistoryEmpty => 'No calls yet';
+  String get callHistoryEmpty => 'No calls yet.';
 
   @override
   String get callOutcomeAnswered => 'Answered';
@@ -525,4 +525,72 @@ class L10nEn extends L10n {
 
   @override
   String get searchClearFilters => 'Clear';
+
+  @override
+  String get callIncomingTitle => 'Incoming call';
+
+  @override
+  String get callClassWaitingTitle => 'Your class has started';
+
+  @override
+  String callClassWaitingBody(String teacher) {
+    return '$teacher is waiting. Please join the class.';
+  }
+
+  @override
+  String get callRinging => 'Ringing…';
+
+  @override
+  String get callConnected => 'Connected';
+
+  @override
+  String get callEnded => 'Call ended';
+
+  @override
+  String get callHangUp => 'Hang up';
+
+  @override
+  String get callRecordingIndicator => 'This call is being recorded';
+
+  @override
+  String get callMissed => 'Missed call';
+
+  @override
+  String get callDeclinedLabel => 'Declined';
+
+  @override
+  String get callCancelledLabel => 'Cancelled';
+
+  @override
+  String get callFailedLabel => 'Call failed';
+
+  @override
+  String get callOutgoing => 'Outgoing';
+
+  @override
+  String get callIncomingLabel => 'Incoming';
+
+  @override
+  String get callStartAction => 'Call';
+
+  @override
+  String get callStartClassAction => 'Start class call';
+
+  @override
+  String get callUnavailable => 'This call is no longer available.';
+
+  @override
+  String get callNotPermitted => 'You are not able to start this call.';
+
+  @override
+  String get storiesTitle => 'Updates';
+
+  @override
+  String get storiesEmpty => 'Nothing new right now.';
+
+  @override
+  String get storyExpired => 'This update has expired.';
+
+  @override
+  String get storyFrom => 'From Jawwid';
 }

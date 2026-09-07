@@ -610,7 +610,7 @@ abstract class L10n {
   /// No description provided for @callHistoryEmpty.
   ///
   /// In en, this message translates to:
-  /// **'No calls yet'**
+  /// **'No calls yet.'**
   String get callHistoryEmpty;
 
   /// No description provided for @callOutcomeAnswered.
@@ -1056,6 +1056,138 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Clear'**
   String get searchClearFilters;
+
+  /// No description provided for @callIncomingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Incoming call'**
+  String get callIncomingTitle;
+
+  /// No description provided for @callClassWaitingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your class has started'**
+  String get callClassWaitingTitle;
+
+  /// No description provided for @callClassWaitingBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{teacher} is waiting. Please join the class.'**
+  String callClassWaitingBody(String teacher);
+
+  /// No description provided for @callRinging.
+  ///
+  /// In en, this message translates to:
+  /// **'Ringing…'**
+  String get callRinging;
+
+  /// No description provided for @callConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected'**
+  String get callConnected;
+
+  /// No description provided for @callEnded.
+  ///
+  /// In en, this message translates to:
+  /// **'Call ended'**
+  String get callEnded;
+
+  /// No description provided for @callHangUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Hang up'**
+  String get callHangUp;
+
+  /// No description provided for @callRecordingIndicator.
+  ///
+  /// In en, this message translates to:
+  /// **'This call is being recorded'**
+  String get callRecordingIndicator;
+
+  /// No description provided for @callMissed.
+  ///
+  /// In en, this message translates to:
+  /// **'Missed call'**
+  String get callMissed;
+
+  /// No description provided for @callDeclinedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Declined'**
+  String get callDeclinedLabel;
+
+  /// No description provided for @callCancelledLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get callCancelledLabel;
+
+  /// No description provided for @callFailedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Call failed'**
+  String get callFailedLabel;
+
+  /// No description provided for @callOutgoing.
+  ///
+  /// In en, this message translates to:
+  /// **'Outgoing'**
+  String get callOutgoing;
+
+  /// No description provided for @callIncomingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Incoming'**
+  String get callIncomingLabel;
+
+  /// No description provided for @callStartAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Call'**
+  String get callStartAction;
+
+  /// No description provided for @callStartClassAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Start class call'**
+  String get callStartClassAction;
+
+  /// No description provided for @callUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This call is no longer available.'**
+  String get callUnavailable;
+
+  /// No description provided for @callNotPermitted.
+  ///
+  /// In en, this message translates to:
+  /// **'You are not able to start this call.'**
+  String get callNotPermitted;
+
+  /// No description provided for @storiesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Updates'**
+  String get storiesTitle;
+
+  /// No description provided for @storiesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing new right now.'**
+  String get storiesEmpty;
+
+  /// No description provided for @storyExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'This update has expired.'**
+  String get storyExpired;
+
+  /// No description provided for @storyFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'From Jawwid'**
+  String get storyFrom;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

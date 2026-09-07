@@ -268,13 +268,13 @@ class L10nAr extends L10n {
   String get callIncoming => 'مكالمة واردة';
 
   @override
-  String get callConnecting => 'جارٍ الاتصال…';
+  String get callConnecting => 'جارٍ التوصيل…';
 
   @override
   String get callReconnecting => 'جارٍ إعادة الاتصال…';
 
   @override
-  String get callAccept => 'قبول';
+  String get callAccept => 'رد';
 
   @override
   String get callDecline => 'رفض';
@@ -283,7 +283,7 @@ class L10nAr extends L10n {
   String get callEnd => 'إنهاء';
 
   @override
-  String get callMute => 'كتم الصوت';
+  String get callMute => 'كتم';
 
   @override
   String get callUnmute => 'إلغاء الكتم';
@@ -295,7 +295,7 @@ class L10nAr extends L10n {
   String get callHistoryTitle => 'المكالمات';
 
   @override
-  String get callHistoryEmpty => 'لا توجد مكالمات بعد';
+  String get callHistoryEmpty => 'لا توجد مكالمات بعد.';
 
   @override
   String get callOutcomeAnswered => 'تم الرد';
@@ -528,4 +528,72 @@ class L10nAr extends L10n {
 
   @override
   String get searchClearFilters => 'مسح';
+
+  @override
+  String get callIncomingTitle => 'مكالمة واردة';
+
+  @override
+  String get callClassWaitingTitle => 'بدأت حصتك';
+
+  @override
+  String callClassWaitingBody(String teacher) {
+    return 'المعلم $teacher في انتظارك. من فضلك ادخل إلى الحصة.';
+  }
+
+  @override
+  String get callRinging => 'جارٍ الاتصال…';
+
+  @override
+  String get callConnected => 'متصل';
+
+  @override
+  String get callEnded => 'انتهت المكالمة';
+
+  @override
+  String get callHangUp => 'إنهاء';
+
+  @override
+  String get callRecordingIndicator => 'يتم تسجيل هذه المكالمة';
+
+  @override
+  String get callMissed => 'مكالمة فائتة';
+
+  @override
+  String get callDeclinedLabel => 'مرفوضة';
+
+  @override
+  String get callCancelledLabel => 'ملغاة';
+
+  @override
+  String get callFailedLabel => 'فشلت المكالمة';
+
+  @override
+  String get callOutgoing => 'صادرة';
+
+  @override
+  String get callIncomingLabel => 'واردة';
+
+  @override
+  String get callStartAction => 'اتصال';
+
+  @override
+  String get callStartClassAction => 'بدء حصة';
+
+  @override
+  String get callUnavailable => 'لم تعد هذه المكالمة متاحة.';
+
+  @override
+  String get callNotPermitted => 'لا يمكنك بدء هذه المكالمة.';
+
+  @override
+  String get storiesTitle => 'المستجدات';
+
+  @override
+  String get storiesEmpty => 'لا يوجد جديد الآن.';
+
+  @override
+  String get storyExpired => 'انتهت صلاحية هذا التحديث.';
+
+  @override
+  String get storyFrom => 'من جوّيد';
 }

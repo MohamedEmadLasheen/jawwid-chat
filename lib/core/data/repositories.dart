@@ -62,7 +62,132 @@ class CallGrant {
   final DateTime expiresAt;
 }
 
-enum CallOutcome { answered, missed, declined }
+/// How a call ended. Mirrors `CallOutcome` in
+/// `apps/api/src/communication/contracts/vocab.ts`.
+///
+/// [cancelled] and [failed] are Phase 5 additions, and the distinction is not
+/// cosmetic: both used to be shown as "missed", which tells the recipient they
+/// failed to pick up a call the caller withdrew, or that the network dropped.
+enum CallOutcome { answered, missed, declined, cancelled, failed }
+
+/// Where a call is in its lifecycle. Mirrors `CallStatus`.
+///
+/// The SERVER owns this. The client renders it and never advances it: a screen
+/// that decided locally that a call had connected would be showing a call that
+/// the server, and therefore the other participant, knows nothing about.
+enum CallStatus { initiated, ringing, active, ended }
+
+/// Whether this call may be recorded. Mirrors `CallMode`.
+///
+/// Fixed by the server when the call is created. The client DISPLAYS it -- a
+/// recording indicator is not optional -- and can never set it.
+enum CallMode { normal, followUp }
+
+/// What kind of call this is. Mirrors `CallType`.
+enum CallKind { direct, group, classCall }
+
+/// One invitee's relationship to a call. Mirrors `CallParticipantState`.
+enum CallParticipantState { invited, joined, declined, left, missed }
+
+class CallParticipantView {
+  const CallParticipantView({
+    required this.actorId,
+    required this.state,
+    this.joinedAt,
+  });
+
+  final String actorId;
+  final CallParticipantState state;
+  final DateTime? joinedAt;
+}
+
+/// The server's view of a call, as every transition returns it.
+///
+/// Every accept/decline/end call returns one of these rather than an
+/// acknowledgement, because a client that has just acted on a call needs to
+/// know what the SERVER decided -- especially when its request changed nothing
+/// because somebody else got there first.
+class CallView {
+  const CallView({
+    required this.id,
+    required this.conversationId,
+    required this.kind,
+    required this.mode,
+    required this.status,
+    required this.initiatorId,
+    required this.startedAt,
+    this.outcome,
+    this.answeredAt,
+    this.endedAt,
+    this.ringExpiresAt,
+    this.duration,
+    this.hasRecording = false,
+    this.participants = const [],
+  });
+
+  final String id;
+  final String conversationId;
+  final CallKind kind;
+  final CallMode mode;
+  final CallStatus status;
+  final String initiatorId;
+  final DateTime startedAt;
+  final CallOutcome? outcome;
+  final DateTime? answeredAt;
+  final DateTime? endedAt;
+
+  /// When an unanswered invitation stops being valid. Lets the client stop
+  /// ringing on its own instead of ringing until the user gives up -- but the
+  /// SERVER is still what makes the call missed.
+  final DateTime? ringExpiresAt;
+  final Duration? duration;
+
+  /// Whether a recording exists AND this viewer is allowed to know that.
+  /// False for everyone else -- including participants of the call.
+  final bool hasRecording;
+  final List<CallParticipantView> participants;
+
+  bool get isLive => status == CallStatus.ringing || status == CallStatus.active;
+  bool get isRecordable => mode == CallMode.followUp;
+}
+
+/// An incoming call, as the ring screen needs it.
+///
+/// Deliberately carries only what the recipient is authorized to see: who is
+/// calling (a display name, never a phone number), what kind of call, the
+/// conversation it belongs to, whether it may be recorded, and when the
+/// invitation lapses.
+class IncomingCall {
+  const IncomingCall({
+    required this.callId,
+    required this.conversationId,
+    required this.callerName,
+    required this.kind,
+    required this.mode,
+    this.expiresAt,
+    this.groupName,
+  });
+
+  final String callId;
+  final String conversationId;
+
+  /// A display name. §5 makes phone numbers unrenderable.
+  final String callerName;
+  final CallKind kind;
+  final CallMode mode;
+  final DateTime? expiresAt;
+
+  /// Set for a class call, so the ring screen can name the class.
+  final String? groupName;
+
+  bool get isClassCall => kind == CallKind.classCall;
+
+  /// Whether this invitation is still worth showing.
+  ///
+  /// A push that arrives late, or an app resumed long after the fact, must not
+  /// present a ringing screen for a call that ended twenty minutes ago.
+  bool isStale(DateTime now) => expiresAt != null && !expiresAt!.isAfter(now);
+}
 
 class CallHistoryEntry {
   const CallHistoryEntry({
@@ -275,11 +400,127 @@ abstract interface class GroupRepository {
 abstract interface class CallRepository {
   /// Ask the backend to authorize a call. Throws an [AppError] with
   /// [AppErrorKind.forbidden] when policy refuses; the client must not retry or improvise.
-  Future<CallGrant> requestGrant({required String conversationId});
+  ///
+  /// [followUp] asks for a RECORDABLE call and is refused unless this account
+  /// holds `calls.record`. The client asks; the server decides, and the mode it
+  /// returns on [CallView] is the truth.
+  Future<CallGrant> requestGrant({
+    required String conversationId,
+    bool followUp = false,
+  });
+
+  /// A teacher opens the class. Refused unless this actor may start a group
+  /// call in that conversation.
+  Future<CallGrant> startClassCall({required String conversationId});
 
   Future<CallGrant> acceptIncoming({required String callId});
 
   Future<void> decline({required String callId});
 
+  /// The caller withdraws before anybody answers. Initiator only.
+  Future<CallView> cancel({required String callId});
+
+  /// Hang up. Safe to call twice: the server treats a repeat as a no-op rather
+  /// than rewriting a finished call.
+  Future<CallView> end({required String callId, bool failed = false});
+
+  /// The server's current view. THE way a client recovers after a reconnect,
+  /// a cold start, or a missed realtime event.
+  Future<CallView> callById(String callId);
+
   Future<Page<CallHistoryEntry>> history({String? cursor});
+
+  /// Full call records for one conversation, including recording availability
+  /// where this viewer is entitled to know about it.
+  Future<List<CallView>> conversationHistory(String conversationId);
+
+  /// Mint a short-lived playback URL for a recording. Authorized and audited
+  /// server-side on every request; the client stores nothing.
+  Future<RecordingPlayback> recordingPlayback({required String recordingId});
 }
+
+/// A short-lived, authorized playback grant.
+///
+/// Held in memory for as long as the player needs it and never persisted: it is
+/// a bearer credential, and one written to disk outlives every check that
+/// produced it.
+class RecordingPlayback {
+  const RecordingPlayback({
+    required this.url,
+    required this.expiresAt,
+    this.duration,
+  });
+
+  final String url;
+  final DateTime expiresAt;
+  final Duration? duration;
+}
+
+// ---------------------------------------------------------------------------------------
+// Stories and broadcast (Phase 5).
+//
+// Note what neither repository exposes: any way to state WHO receives something.
+// A client sends an AUDIENCE -- "this label, that group" -- and the server
+// resolves it. Audience resolution lives in exactly one place, and it is not here.
+// ---------------------------------------------------------------------------------------
+
+// Audience AUTHORING is absent from this client too, for the same reason
+// broadcast is: composing an audience is a publisher's act, and this app cannot
+// authenticate as a publisher. A reader receives stories; they never state who
+// else does.
+class Story {
+  const Story({
+    required this.id,
+    required this.state,
+    this.title,
+    this.body,
+    this.mediaUrl,
+    this.mediaKind,
+    this.publishedAt,
+    this.expiresAt,
+    this.viewed = false,
+  });
+
+  final String id;
+  final String state;
+  final String? title;
+  final String? body;
+
+  /// Signed and short-lived, minted per read. Never cached to disk.
+  final String? mediaUrl;
+  final String? mediaKind;
+  final DateTime? publishedAt;
+  final DateTime? expiresAt;
+  final bool viewed;
+
+  /// Note what a reader's story does NOT carry: the audience it was published
+  /// to, and how many people received it. A parent who learned they were
+  /// reached via "the Installments label" would learn how the academy files its
+  /// customers. The server does not send those fields to a reader, and this
+  /// model has nowhere to put them if it did.
+  bool get isPublished => state == 'published';
+}
+
+abstract interface class StoryRepository {
+  /// The stories published to THIS reader.
+  ///
+  /// Server-filtered, and there is deliberately no unfiltered variant to reach
+  /// for by mistake: the client cannot ask for stories it is not in the
+  /// audience of, so there is no client-side filtering to get wrong.
+  Future<List<Story>> feed();
+
+  /// Record that this reader watched a story. Idempotent.
+  Future<void> markViewed(String storyId);
+}
+
+// Broadcast is deliberately ABSENT from this client.
+//
+// [UserRole] is `parent | teacher`: this app cannot authenticate as the roles
+// that may send a broadcast, so a repository for it here would be dead code
+// with a permission check as its only body. Composing, queueing and monitoring
+// a broadcast live in the operations console (`apps/admin-web`).
+//
+// A broadcast reaches a parent as an ORDINARY MESSAGE in their conversation --
+// `origin: broadcast`, delivered by the fan-out worker through the same
+// messaging engine as everything else -- which is why nothing on this client
+// has to know broadcasts exist at all.

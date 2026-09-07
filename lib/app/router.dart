@@ -4,12 +4,15 @@ import 'package:go_router/go_router.dart';
 
 import '../features/auth/domain/auth_state.dart';
 import '../features/auth/presentation/sign_in_screen.dart';
+import '../features/calls/presentation/call_history_screen.dart';
+import '../features/calls/presentation/call_screen.dart';
 import '../features/conversations/presentation/conversations_screen.dart';
 import '../features/conversations/presentation/groups_screen.dart';
 import '../features/home/presentation/home_screen.dart';
 import '../features/messages/presentation/chat_screen_route.dart';
 import '../features/messages/presentation/search_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
+import '../features/stories/presentation/stories_screen.dart';
 import '../shared/models/user_role.dart';
 import 'providers.dart';
 import 'shells/app_shell.dart';
@@ -24,7 +27,16 @@ abstract final class Routes {
   static const settings = '/settings';
   static const search = '/search';
 
+  /// The live call surface. ONE route, because a device is in at most one call
+  /// and modelling it per conversation is how two ring screens end up stacked.
+  static const call = '/call';
+  static const stories = '/stories';
+
   static String conversation(String id) => '/chats/$id';
+
+  /// Call history for one conversation. Scoped exactly as the server scopes
+  /// it -- per conversation, because that is the scope it authorizes.
+  static String conversationCalls(String id) => '/chats/$id/calls';
 
   /// Search inside one conversation. The server authorizes the scope exactly as
   /// it authorizes opening the conversation.
@@ -80,6 +92,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: Routes.search,
         builder: (context, state) => const SearchScreen(),
       ),
+      // A call takes the whole screen and sits above everything, including the
+      // tab bar: it is the only thing the user is doing while it is up.
+      GoRoute(
+        path: Routes.call,
+        builder: (context, state) => const CallScreen(),
+      ),
+      GoRoute(
+        path: Routes.stories,
+        builder: (context, state) => const StoriesScreen(),
+      ),
       // Conversations open full-screen, above the tab bar, so the thread gets the whole
       // viewport — the composer and keyboard already claim a large share of a small screen.
       GoRoute(
@@ -92,6 +114,12 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: 'search',
             builder: (context, state) => SearchScreen(
               conversationId: state.pathParameters['conversationId'],
+            ),
+          ),
+          GoRoute(
+            path: 'calls',
+            builder: (context, state) => CallHistoryScreen(
+              conversationId: state.pathParameters['conversationId']!,
             ),
           ),
         ],

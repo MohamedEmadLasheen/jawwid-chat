@@ -11,6 +11,8 @@ import '../core/storage/local_database.dart';
 import '../core/storage/secure_token_store.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/domain/auth_state.dart';
+import '../features/calls/application/call_controller.dart';
+import '../features/calls/domain/call_session.dart';
 import '../features/messages/application/outbox_courier.dart';
 import '../features/messages/data/outbox_store.dart';
 import '../shared/models/user_role.dart';
@@ -126,3 +128,64 @@ final fakeBackendProvider = Provider.family<FakeBackend, UserRole>((ref, role) {
   ref.onDispose(backend.dispose);
   return backend;
 });
+
+// ---------------------------------------------------------------------------------------
+// Phase 5 -- calls, stories and broadcast.
+// ---------------------------------------------------------------------------------------
+
+/// Stories, READ-ONLY on this client.
+///
+/// [UserRole] is `parent | teacher` and nothing else -- this app cannot
+/// authenticate as an admin or a manager, by construction. Publishing a story
+/// and composing a broadcast are therefore not features that belong here: they
+/// live in the operations console (`apps/admin-web`), which is the surface
+/// those roles sign in to.
+///
+/// So there is no `broadcastRepositoryProvider` on this client at all. A
+/// broadcast reaches a parent as an ORDINARY MESSAGE in their conversation,
+/// through the messaging engine that has carried every other message since
+/// Phase 2 -- which is why nothing here has to know broadcasts exist.
+final storyRepositoryProvider = Provider<StoryRepository>((ref) {
+  throw UnimplementedError('storyRepositoryProvider must be overridden');
+});
+
+/// The call screen's state.
+///
+/// A single controller for the whole app rather than one per conversation: a
+/// device is in at most one call, and modelling it per conversation is how two
+/// ring screens end up on top of each other.
+final callControllerProvider =
+    NotifierProvider<CallController, CallSession>(() {
+  throw UnimplementedError('callControllerProvider must be overridden');
+});
+
+NotifierProvider<CallController, CallSession> buildCallController(Ref ref) {
+  return NotifierProvider<CallController, CallSession>(
+    () => CallController(
+      calls: ref.read(callRepositoryProvider),
+      realtime: ref.read(realtimeClientProvider),
+    ),
+  );
+}
+
+/// The reader's story feed. Server-filtered; there is no unfiltered variant.
+final storyFeedProvider = FutureProvider<List<Story>>(
+  (ref) => ref.watch(storyRepositoryProvider).feed(),
+);
+
+/// Call history for one conversation, read fresh from the server.
+///
+/// A family-scoped provider rather than one global list: the server authorizes
+/// call history per conversation, because that is the scope it can decide in a
+/// single check, and mirroring that here keeps the client from assuming a
+/// cross-conversation view it is not entitled to.
+final conversationCallsProvider =
+    FutureProvider.family<List<CallView>, String>(
+  (ref, conversationId) =>
+      ref.watch(callRepositoryProvider).conversationHistory(conversationId),
+);
+
+/// The reader's story feed. Server-filtered; there is no unfiltered variant.
+final storyFeedProviderRefresh = Provider<void Function()>(
+  (ref) => () => ref.invalidate(storyFeedProvider),
+);

@@ -199,8 +199,21 @@ class FakeCallRepository implements CallRepository {
 
   final FakeBackend backend;
 
+  /// The calls this fake has been told about, so a test can drive a lifecycle
+  /// without a server. Deliberately dumb: the real state machine lives on the
+  /// server, and a fake that reimplemented it would let a test pass against
+  /// rules the server does not have.
+  final Map<String, CallView> calls = {};
+
   @override
-  Future<CallGrant> requestGrant({required String conversationId}) async =>
+  Future<CallGrant> requestGrant({
+    required String conversationId,
+    bool followUp = false,
+  }) async =>
+      backend.requestGrant(conversationId: conversationId);
+
+  @override
+  Future<CallGrant> startClassCall({required String conversationId}) async =>
       backend.requestGrant(conversationId: conversationId);
 
   @override
@@ -211,6 +224,47 @@ class FakeCallRepository implements CallRepository {
   Future<void> decline({required String callId}) async {}
 
   @override
+  Future<CallView> cancel({required String callId}) async => callById(callId);
+
+  @override
+  Future<CallView> end({required String callId, bool failed = false}) async =>
+      callById(callId);
+
+  @override
+  Future<CallView> callById(String callId) async {
+    final call = calls[callId];
+    if (call == null) {
+      throw const AppError(AppErrorKind.notFound, code: 'call_not_found');
+    }
+    return call;
+  }
+
+  @override
+  Future<List<CallView>> conversationHistory(String conversationId) async => [
+        for (final call in calls.values)
+          if (call.conversationId == conversationId) call,
+      ];
+
+  @override
   Future<Page<CallHistoryEntry>> history({String? cursor}) async =>
       const Page(items: []);
+
+  @override
+  Future<RecordingPlayback> recordingPlayback({required String recordingId}) async =>
+      throw const AppError(AppErrorKind.forbidden, code: 'COMM.PERMISSION_DENIED');
+}
+
+/// Stories, for development without a backend.
+///
+/// Returns nothing rather than fixture stories: a story is a publication to a
+/// resolved audience, and inventing one locally would put words on screen that
+/// no publisher wrote and no audience was chosen for.
+class FakeStoryRepository implements StoryRepository {
+  const FakeStoryRepository();
+
+  @override
+  Future<List<Story>> feed() async => const [];
+
+  @override
+  Future<void> markViewed(String storyId) async {}
 }

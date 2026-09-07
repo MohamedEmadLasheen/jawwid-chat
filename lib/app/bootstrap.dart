@@ -7,9 +7,11 @@ import 'package:flutter_riverpod/misc.dart';
 import '../core/data/fake_backend.dart';
 import '../core/data/fake_repositories.dart';
 import '../core/data/http/http_auth_repository.dart';
+import '../core/data/http/http_call_repository.dart';
 import '../core/data/http/http_conversation_repository.dart';
 import '../core/data/http/http_group_repository.dart';
 import '../core/data/http/http_message_repository.dart';
+import '../core/data/http/http_story_repository.dart';
 import '../core/errors/app_error.dart';
 import '../core/network/actor_identity.dart';
 import '../core/network/api_config.dart';
@@ -20,6 +22,7 @@ import '../core/storage/local_database.dart';
 import '../core/storage/secure_token_store.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/domain/auth_state.dart';
+import '../features/calls/application/call_controller.dart';
 import '../features/messages/application/outbox_drain_policy.dart';
 import '../shared/models/user_role.dart';
 import 'providers.dart';
@@ -165,6 +168,21 @@ List<Override> _httpOverrides({required String debugActorId}) {
     groupRepositoryProvider.overrideWithValue(
       HttpGroupRepository(client: client),
     ),
+    // Phase 5. The call controller is built here rather than left unimplemented
+    // because it needs the realtime client, and this is the only place both it
+    // and the repository exist.
+    callRepositoryProvider.overrideWithValue(
+      HttpCallRepository(client: client),
+    ),
+    storyRepositoryProvider.overrideWithValue(
+      HttpStoryRepository(client: client),
+    ),
+    callControllerProvider.overrideWith(
+      () => CallController(
+        calls: HttpCallRepository(client: client),
+        realtime: realtime,
+      ),
+    ),
     authControllerProvider.overrideWith(
       () => AuthController(
         repository: auth,
@@ -197,6 +215,13 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
     messageRepositoryProvider.overrideWithValue(FakeMessageRepository(backend)),
     groupRepositoryProvider.overrideWithValue(FakeGroupRepository(backend)),
     callRepositoryProvider.overrideWithValue(FakeCallRepository(backend)),
+    storyRepositoryProvider.overrideWithValue(const FakeStoryRepository()),
+    callControllerProvider.overrideWith(
+      () => CallController(
+        calls: FakeCallRepository(backend),
+        realtime: null,
+      ),
+    ),
     authControllerProvider.overrideWith(
       () => AuthController(
         repository: authRepository,

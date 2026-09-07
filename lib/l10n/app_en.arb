@@ -127,7 +127,7 @@
   "callUnmute": "Unmute",
   "callSpeaker": "Speaker",
   "callHistoryTitle": "Calls",
-  "callHistoryEmpty": "No calls yet",
+  "callHistoryEmpty": "No calls yet.",
   "callOutcomeAnswered": "Answered",
   "callOutcomeMissed": "Missed",
   "callOutcomeDeclined": "Declined",
@@ -232,5 +232,34 @@
   "searchFromDate": "From",
   "searchToDate": "To",
   "searchAnySender": "Anyone",
-  "searchClearFilters": "Clear"
+  "searchClearFilters": "Clear",
+  "callIncomingTitle": "Incoming call",
+  "callClassWaitingTitle": "Your class has started",
+  "callClassWaitingBody": "{teacher} is waiting. Please join the class.",
+  "@callClassWaitingBody": {
+    "placeholders": {
+      "teacher": {
+        "type": "String"
+      }
+    }
+  },
+  "callRinging": "Ringing…",
+  "callConnected": "Connected",
+  "callEnded": "Call ended",
+  "callHangUp": "Hang up",
+  "callRecordingIndicator": "This call is being recorded",
+  "callMissed": "Missed call",
+  "callDeclinedLabel": "Declined",
+  "callCancelledLabel": "Cancelled",
+  "callFailedLabel": "Call failed",
+  "callOutgoing": "Outgoing",
+  "callIncomingLabel": "Incoming",
+  "callStartAction": "Call",
+  "callStartClassAction": "Start class call",
+  "callUnavailable": "This call is no longer available.",
+  "callNotPermitted": "You are not able to start this call.",
+  "storiesTitle": "Updates",
+  "storiesEmpty": "Nothing new right now.",
+  "storyExpired": "This update has expired.",
+  "storyFrom": "From Jawwid"
 }

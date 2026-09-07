@@ -19,6 +19,35 @@ abstract final class RealtimeEvent {
   static const membershipChanged = 'conversation.membership_changed';
   static const approvalDecided = 'approval.decided';
 
+  // Calls (Phase 5). The lifecycle is server-authoritative: these are how the
+  // client LEARNS about a transition, never how one is made.
+  static const callIncoming = 'call.incoming';
+  static const callAccepted = 'call.accepted';
+  static const callDeclined = 'call.declined';
+  static const callEnded = 'call.ended';
+  static const callParticipantJoined = 'call.participant_joined';
+  static const callParticipantLeft = 'call.participant_left';
+
+  /// The invitation window closed with nobody answering.
+  ///
+  /// Emitted by the SERVER's sweeper, not by a client noticing. A recipient
+  /// whose app was killed still gets a missed call in their history.
+  static const callMissed = 'call.missed';
+  static const callCancelled = 'call.cancelled';
+  static const callFailed = 'call.failed';
+
+  /// A teacher opened the class. Carries the group and teacher names so the
+  /// ring screen can name the class -- but no SENTENCE: the words come from the
+  /// notification the server rendered in the recipient's own locale.
+  static const classCallStarted = 'call.class_started';
+
+  // Stories and broadcast (Phase 5).
+  static const storyPublished = 'story.published';
+  static const storyExpired = 'story.expired';
+  static const broadcastQueued = 'broadcast.queued';
+  static const broadcastProgress = 'broadcast.progress';
+  static const broadcastCompleted = 'broadcast.completed';
+
   /// Client → server frames. The client never names a room: it asks to
   /// subscribe to a conversation id and the server runs the same authorization
   /// the REST path does before joining it.
