@@ -521,14 +521,14 @@ Run against a database built from empty in an isolated worktree and container.
 
 | Gate | Result |
 |---|---|
-| Migrations from empty | **31 applied, 0 errors** |
+| Migrations from empty | **32 applied, 0 errors** |
 | `db/tests/schema_acceptance.sql` | **pass** |
 | `db/tests/br1_invariants.sql` | **pass** |
 | `db/tests/od01_conversation_model.sql` | **pass** |
 | `db/tests/tenant_isolation.sql` | **pass** |
 | `db/tests/assignment_invariants.sql` | **pass** |
 | `db/tests/rls_enforcement.sql` | **pass** |
-| API unit + integration | **394 passed, 23 suites** (was 322) |
+| API unit + integration | **482 passed, 26 suites** (322 before the closure pass; the count includes the Phase 2 messaging work merged in alongside it) |
 | — of which `runtime-rls.spec.ts` | **17 passed** — least privilege proved end to end |
 | — of which `security-regression.spec.ts` | **25 passed** |
 | — of which `auth-throttling.spec.ts` | **12 passed** |
@@ -536,6 +536,7 @@ Run against a database built from empty in an isolated worktree and container.
 | API typecheck / build / `prisma validate` | **pass / pass / valid** |
 | Admin Web tests / typecheck / build | **76 passed / pass / pass** |
 | Protected-tests gate | **pass**, 21 files |
+| Merged with the concurrent Phase 2 messaging work | clean; `chat.message_revision` granted to `chat_app` with policies mirroring its message (§10.4 note) |
 | `check-env.sh local` | **pass**, 64 variables |
 | `scan-secrets.sh` | **clean** |
 | Lint | **no lint script exists** in either package; linting in this repository is Dart-only (`analysis_options.yaml`) and Dart is not installed |

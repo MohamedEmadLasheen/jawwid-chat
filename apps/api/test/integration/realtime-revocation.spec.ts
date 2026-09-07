@@ -58,7 +58,13 @@ class FakeSocket {
 /** The gateway, with only the collaborators these handlers touch. */
 function gateway(): RealtimeGateway {
   const presence = { online: async () => undefined, offline: async () => undefined, heartbeat: async () => undefined };
-  const typing = { start: async () => false, stop: async () => false };
+  const typing = {
+    start: async () => false,
+    stop: async () => false,
+    // Phase 2's subscribe returns who is currently typing. Stubbed empty: this
+    // suite is about access, and a typing indicator is not access.
+    whoIsTyping: async () => [] as string[],
+  };
   return new RealtimeGateway(
     g.authz,
     g.conversations,

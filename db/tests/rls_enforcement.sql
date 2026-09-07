@@ -133,6 +133,8 @@ begin
   perform pg_temp.become('nobody-at-all');
   perform pg_temp.check('B4 an unknown subject is equally blind',
     (select count(*) from chat.conversation) = 0);
+  perform pg_temp.check('B5 ... and sees no message either',
+    (select count(*) from chat.message) = 0);
 end
 $b$;
 reset role;
@@ -150,8 +152,13 @@ begin
     exists (select 1 from chat.family where id = '44440000-0000-0000-0000-000000000001'));
   perform pg_temp.check('C2 supervisor A does NOT see family B',
     not exists (select 1 from chat.family where id = '44440000-0000-0000-0000-000000000002'));
+  -- Counted over THIS FILE'S fixtures rather than the whole table: the gate
+  -- shares a database with the integration suites, and an absolute count would
+  -- be asserting that nobody else has run rather than that RLS works.
   perform pg_temp.check('C3 an unscoped SELECT returns only their own',
-    (select count(*) from chat.family) = 1);
+    (select count(*) from chat.family
+      where id in ('44440000-0000-0000-0000-000000000001',
+                   '44440000-0000-0000-0000-000000000002')) = 1);
 
   perform pg_temp.check('C4 supervisor A sees conversation A',
     exists (select 1 from chat.conversation where id = '77770000-0000-0000-0000-000000000001'));
@@ -186,7 +193,9 @@ begin
 
   perform pg_temp.become('rls_admin_b');
   perform pg_temp.check('D3 the NEW supervisor sees both families',
-    (select count(*) from chat.family) = 2);
+    (select count(*) from chat.family
+      where id in ('44440000-0000-0000-0000-000000000001',
+                   '44440000-0000-0000-0000-000000000002')) = 2);
   perform pg_temp.check('D4 and the moved family''s conversation',
     exists (select 1 from chat.conversation where id = '77770000-0000-0000-0000-000000000001'));
 end
@@ -227,7 +236,9 @@ begin
   perform pg_temp.become('rls_teacher');
   perform pg_temp.check(
     'F1 a teacher who is not a conversation member sees no conversation',
-    (select count(*) from chat.conversation) = 0);
+    (select count(*) from chat.conversation
+      where id in ('77770000-0000-0000-0000-000000000001',
+                   '77770000-0000-0000-0000-000000000002')) = 0);
 end
 $f$;
 reset role;
@@ -241,9 +252,13 @@ do $g$
 begin
   perform pg_temp.become('rls_manager');
   perform pg_temp.check('G1 a manager sees every family in the organization',
-    (select count(*) from chat.family) = 2);
+    (select count(*) from chat.family
+      where id in ('44440000-0000-0000-0000-000000000001',
+                   '44440000-0000-0000-0000-000000000002')) = 2);
   perform pg_temp.check('G2 and every conversation in it',
-    (select count(*) from chat.conversation) = 2);
+    (select count(*) from chat.conversation
+      where id in ('77770000-0000-0000-0000-000000000001',
+                   '77770000-0000-0000-0000-000000000002')) = 2);
 end
 $g$;
 reset role;

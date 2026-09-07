@@ -462,3 +462,39 @@ create policy learner_visible_to_its_own_people on chat.learner
 drop policy if exists config_readable_by_staff on chat.config;
 create policy config_readable_by_authenticated on chat.config
   for select to authenticated using (true);
+
+-- ---------------------------------------------------------------------------
+-- 7. Tables added by migrations that land before this one
+-- ---------------------------------------------------------------------------
+--
+-- chat.message_revision arrived with the Phase 2 messaging migration
+-- (20260907110000), which grants it to `service_role` only and leaves it with
+-- RLS on and no policy -- correct, and the reason it is named here: the API
+-- WRITES it (an edit appends the superseded body in the same transaction as the
+-- body change), so under chat_app that write would fail closed and every edit
+-- would break.
+--
+-- This is the ordering note at the top of this file in practice. A table added
+-- later gets no privilege until somebody decides it should have one, and
+-- test/integration/phase2-messaging.spec.ts is what makes that decision loud.
+
+grant select, insert on chat.message_revision to chat_app;
+
+-- Readable and writable exactly when the message it belongs to is. The
+-- append-only trigger already refuses UPDATE and DELETE, so no policy for
+-- either is needed -- or would help.
+drop policy if exists message_revision_in_scope on chat.message_revision;
+create policy message_revision_in_scope on chat.message_revision
+  for select to authenticated
+  using (exists (select 1 from chat.message m
+                  where m.id = message_id
+                    and chat.can_read_conversation(m.conversation_id)
+                    and (m.visibility = 'customer'
+                         or chat.current_has_permission('messages.internal'))));
+
+drop policy if exists message_revision_written_in_scope on chat.message_revision;
+create policy message_revision_written_in_scope on chat.message_revision
+  for insert to authenticated
+  with check (exists (select 1 from chat.message m
+                       where m.id = message_id
+                         and chat.can_read_conversation(m.conversation_id)));
