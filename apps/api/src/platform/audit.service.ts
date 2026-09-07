@@ -33,10 +33,20 @@ export interface AuditService {
   event(tx: Tx, input: EventWriteInput): Promise<void>;
 }
 
+/**
+ * Both writes use createMany rather than create, so neither statement carries a
+ * RETURNING clause.
+ *
+ * The read policies on these two tables are deliberately narrow -- the audit log
+ * is manager-only, the event log is staff-and-in-scope -- and PostgreSQL applies
+ * the SELECT policy to an INSERT ... RETURNING. Asking for the row back would
+ * mean every actor who performs an auditable action must also be allowed to
+ * READ the audit log, which is precisely backwards. Nothing needs the id.
+ */
 @Injectable()
 export class PrismaAuditService implements AuditService {
   async audit(tx: Tx, input: AuditWriteInput): Promise<void> {
-    await tx.auditLog.create({
+    await tx.auditLog.createMany({
       data: {
         actorId: input.actorId ?? null,
         action: input.action,
@@ -50,7 +60,7 @@ export class PrismaAuditService implements AuditService {
   }
 
   async event(tx: Tx, input: EventWriteInput): Promise<void> {
-    await tx.eventLog.create({
+    await tx.eventLog.createMany({
       data: {
         familyId: input.familyId ?? null,
         actorKind: input.actorKind, // maps to chat.event_log.actor_type

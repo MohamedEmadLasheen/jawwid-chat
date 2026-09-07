@@ -41,8 +41,32 @@ export class PinnedCoverage implements CoverageService {
   }
 }
 
+/**
+ * The connection string for the least-privileged runtime role.
+ *
+ * scripts/db/integration-db.sh gives chat_app a LOGIN and a throwaway local
+ * password, exactly as a deployment's secret store does -- migrations create it
+ * NOLOGIN because a migration must never carry a credential.
+ */
+export function appDatabaseUrl(): string {
+  return (
+    process.env.DATABASE_APP_URL ??
+    'postgres://chat_app:chat_app@localhost:55433/jawwid_chat_int'
+  );
+}
+
 export function buildGraph() {
-  const prisma = new PrismaService();
+  return buildGraphOn(new PrismaService());
+}
+
+/**
+ * The same object graph, on a caller-supplied connection.
+ *
+ * test/integration/runtime-rls.spec.ts uses it to run the REAL services against
+ * the chat_app role, which is the only way to prove that least privilege does
+ * not take the product down.
+ */
+export function buildGraphOn(prisma: PrismaService) {
   const coverage = new PinnedCoverage();
   const identity = new PrismaIdentityService(prisma);
   const audit = new PrismaAuditService();

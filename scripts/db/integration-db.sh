@@ -35,6 +35,9 @@ PORT=${JAWWID_INT_PORT:-55433}
 
 
 export DATABASE_URL="postgres://postgres:postgres@localhost:${PORT}/${DB}"
+# The least-privileged runtime role the API connects as. The suite that proves
+# RLS is enforced uses this; everything else keeps using the owner connection.
+export DATABASE_APP_URL="postgres://chat_app:chat_app@localhost:${PORT}/${DB}"
 
 psql_q() { docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d "$DB" "$@"; }
 
@@ -55,6 +58,22 @@ start() {
 migrate() {
   PSQL="docker exec -i $CONTAINER psql -v ON_ERROR_STOP=1 -U postgres -d $DB" \
     bash "$ROOT/scripts/db/apply.sh"
+  grant_runtime_roles
+}
+
+# The two runtime roles, given a LOGIN and a throwaway local password.
+#
+# Migrations create chat_app and chat_service NOLOGIN on purpose -- a migration
+# must never contain a credential -- so something has to grant the login, and in
+# a deployed environment that something is the platform's secret store. Here it
+# is this function, so the integration suite can connect exactly as production
+# will: as chat_app, which is NOT the owner and cannot bypass RLS.
+grant_runtime_roles() {
+  psql_q -q -c "
+    alter role chat_app     login password 'chat_app';
+    alter role chat_service login password 'chat_service';
+    grant connect on database ${DB} to chat_app, chat_service;
+  " >/dev/null
 }
 
 # The two structural gates, runnable locally exactly as CI runs them.
@@ -64,8 +83,9 @@ verify() {
 }
 
 case "${1:-up}" in
-  up)     start; migrate; echo "ready: $DATABASE_URL" ;;
-  reset)  docker rm -f "$CONTAINER" >/dev/null 2>&1 || true; start; migrate; echo "reset: $DATABASE_URL" ;;
+  up)     start; migrate; echo "ready: $DATABASE_URL"; echo "  app role: $DATABASE_APP_URL" ;;
+  reset)  docker rm -f "$CONTAINER" >/dev/null 2>&1 || true; start; migrate;
+          echo "reset: $DATABASE_URL"; echo "  app role: $DATABASE_APP_URL" ;;
   verify) verify ;;
   psql)  docker exec -it "$CONTAINER" psql -U postgres -d "$DB" ;;
   down)  docker rm -f "$CONTAINER" >/dev/null 2>&1 || true; echo "removed" ;;

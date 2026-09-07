@@ -15,6 +15,8 @@ export interface AuthenticatedRequest {
   ip?: string;
   actor?: Actor;
   sessionId?: string;
+  /** The account's token subject, for the database actor context. */
+  subject?: string;
 }
 
 /**
@@ -64,6 +66,7 @@ export class AuthGuard implements CanActivate {
     // The ONLY place an actor is attached to a request.
     request.actor = authenticated.actor;
     request.sessionId = authenticated.claims.sid;
+    request.subject = authenticated.subject;
     return true;
   }
 }

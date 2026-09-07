@@ -25,6 +25,14 @@ export interface LoginResult {
 export interface AuthenticatedRequestIdentity {
   readonly actor: Actor;
   readonly claims: AccessClaims;
+  /**
+   * The account's opaque token subject.
+   *
+   * Carried on the request so ActorContextInterceptor can set
+   * `chat.actor_subject`, which is what every RLS policy resolves the caller
+   * through. It is an internal identifier and is never published to a client.
+   */
+  readonly subject: string;
 }
 
 /**
@@ -213,7 +221,7 @@ export class AuthService {
 
     const account = await this.prisma.account.findUnique({
       where: { id: claims.sub },
-      select: { status: true },
+      select: { status: true, subject: true },
     });
     if (!account || !AccountService.isUsable(account.status)) return null;
 
@@ -225,7 +233,7 @@ export class AuthService {
     if (actor.actorId !== claims.act) return null;
 
     void this.sessions.touch(claims.sid);
-    return { actor: { ...actor, sessionId: claims.sid }, claims };
+    return { actor: { ...actor, sessionId: claims.sid }, claims, subject: account.subject };
   }
 
   // ------------------------------------------------------------------

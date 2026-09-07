@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
@@ -60,9 +61,20 @@ export class NotificationService {
       input.respectQuietHours ?? true,
     );
 
+    // Created with an id we generate, through createMany, so the statement
+    // carries no RETURNING clause.
+    //
+    // That is not a style preference. A notification is addressed to SOMEBODY
+    // ELSE -- the sender writes the recipient's row -- and the row's read
+    // policy is "the recipient, and nobody else". PostgreSQL applies the SELECT
+    // policy to an INSERT ... RETURNING, so asking the database to hand the row
+    // back would require widening that policy to let a sender read other
+    // people's notifications. Not asking for it back is strictly safer.
+    const id = randomUUID();
     try {
-      const created = await this.prisma.notification.create({
+      await this.prisma.notification.createMany({
         data: {
+          id,
           dedupeKey: input.dedupeKey,
           ruleKey: input.ruleKey ?? null,
           templateKey: input.templateKey,
@@ -78,7 +90,7 @@ export class NotificationService {
           scheduledAt,
         },
       });
-      return created.id;
+      return id;
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         // Already accounted for. This is the dedupe guarantee doing its job.
