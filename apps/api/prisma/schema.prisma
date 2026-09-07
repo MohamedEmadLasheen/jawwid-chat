@@ -1192,3 +1192,62 @@ model AiInvocation {
   @@map("ai_invocation")
   @@schema("chat")
 }
+
+/// Phase 7.2. The academy answers the assistant is allowed to give. Only
+/// `approved` is ever retrieved for grounding.
+model KnowledgeArticle {
+  /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
+  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id       String @id @default(uuid()) @db.Uuid
+
+  title    String
+  question String
+  answer   String
+  category String @default("general")
+  locale   String @default("ar")
+  status   String @default("draft")
+  /// Bumped by chat.knowledge_bump_version on every reviewable change, so an
+  /// answer can name the revision it used and a later edit does not silently
+  /// rewrite what was said last week.
+  version  Int    @default(1)
+
+  createdBy  String?   @map("created_by") @db.Uuid
+  updatedBy  String?   @map("updated_by") @db.Uuid
+  approvedBy String?   @map("approved_by") @db.Uuid
+  approvedAt DateTime? @map("approved_at") @db.Timestamptz
+
+  createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
+  updatedAt DateTime @map("updated_at") @db.Timestamptz @default(now())
+
+  revisions KnowledgeRevision[]
+
+  @@index([organizationId, locale, category])
+  @@map("knowledge_article")
+  @@schema("chat")
+}
+
+/// Phase 7.2. Append-only snapshot per version. The previous content is the
+/// previous row, so no before/after pair can disagree with itself.
+model KnowledgeRevision {
+  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id        String @id @default(uuid()) @db.Uuid
+  articleId String @map("article_id") @db.Uuid
+  article   KnowledgeArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  version   Int
+
+  title    String
+  question String
+  answer   String
+  category String
+  locale   String
+  status   String
+
+  changedBy    String?  @map("changed_by") @db.Uuid
+  changeReason String   @map("change_reason")
+  changedAt    DateTime @map("changed_at") @db.Timestamptz @default(now())
+
+  @@unique([articleId, version])
+  @@index([articleId, version(sort: Desc)])
+  @@map("knowledge_revision")
+  @@schema("chat")
+}

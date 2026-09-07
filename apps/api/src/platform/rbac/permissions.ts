@@ -43,6 +43,17 @@ export const Permission = {
   BROADCASTS_SEND: 'broadcasts.send',
   /** Phase 7: use the AI assistant -- grounded answers, suggestions, summaries. */
   AI_USE: 'ai.use',
+  /** Phase 7: read the approved knowledge the assistant grounds answers on. */
+  KNOWLEDGE_READ: 'knowledge.read',
+  /** Phase 7: author and edit knowledge articles as DRAFTS. */
+  KNOWLEDGE_MANAGE: 'knowledge.manage',
+  /**
+   * Phase 7: approve a draft, or retire an approved article. Separate from
+   * authoring for the same reason LABELS_MANAGE is separate from filing a
+   * family under a label -- an approved article is what the academy says to
+   * every family, so publishing one is a manager's act.
+   */
+  KNOWLEDGE_APPROVE: 'knowledge.approve',
   AUDIT_READ: 'audit.read',
   SETTINGS_MANAGE: 'settings.manage',
   USERS_MANAGE: 'users.manage',
@@ -108,7 +119,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     P.STORIES_READ, P.STORIES_PUBLISH, P.CALLS_RECORD, P.RECORDINGS_READ,
     // Phase 7. Staff only: every assistant surface helps somebody answer a
     // family, and a family's own questions are answered by a person.
-    P.AI_USE,
+    P.AI_USE, P.KNOWLEDGE_READ, P.KNOWLEDGE_MANAGE,
   ],
   [AuthzRole.COVERAGE_ADMIN]: [
     P.CONVERSATIONS_READ, P.CONVERSATIONS_MANAGE, P.MESSAGES_READ, P.MESSAGES_SEND,
@@ -124,7 +135,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     P.STORIES_READ, P.STORIES_PUBLISH, P.CALLS_RECORD, P.RECORDINGS_READ,
     // Phase 7. Staff only: every assistant surface helps somebody answer a
     // family, and a family's own questions are answered by a person.
-    P.AI_USE,
+    P.AI_USE, P.KNOWLEDGE_READ, P.KNOWLEDGE_MANAGE,
   ],
   [AuthzRole.MANAGER]: [
     P.CONVERSATIONS_READ, P.CONVERSATIONS_MANAGE, P.MESSAGES_READ, P.MESSAGES_SEND,
@@ -137,7 +148,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     P.STORIES_READ, P.STORIES_PUBLISH, P.CALLS_RECORD, P.RECORDINGS_READ,
     // Phase 7. Staff only: every assistant surface helps somebody answer a
     // family, and a family's own questions are answered by a person.
-    P.AI_USE,
+    P.AI_USE, P.KNOWLEDGE_READ, P.KNOWLEDGE_MANAGE, P.KNOWLEDGE_APPROVE,
   ],
   [AuthzRole.SUPER_ADMIN]: [
     P.CONVERSATIONS_READ, P.CONVERSATIONS_MANAGE, P.MESSAGES_READ, P.MESSAGES_SEND,
@@ -150,7 +161,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     P.STORIES_READ, P.STORIES_PUBLISH, P.CALLS_RECORD, P.RECORDINGS_READ,
     // Phase 7. Staff only: every assistant surface helps somebody answer a
     // family, and a family's own questions are answered by a person.
-    P.AI_USE,
+    P.AI_USE, P.KNOWLEDGE_READ, P.KNOWLEDGE_MANAGE, P.KNOWLEDGE_APPROVE,
   ],
 };
 

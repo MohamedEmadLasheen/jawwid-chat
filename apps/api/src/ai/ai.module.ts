@@ -4,6 +4,9 @@ import { AI_PROVIDER } from './ai.tokens';
 import { AiInvocationService } from './ai-invocation.service';
 import { AnthropicAiProvider } from './provider/anthropic.provider';
 import { DisabledAiProvider } from './provider/disabled.provider';
+import { KnowledgeService } from './knowledge/knowledge.service';
+import { FaqService } from './knowledge/faq.service';
+import { FaqController, KnowledgeController } from './api/knowledge.controller';
 
 /**
  * The AI intelligence layer.
@@ -15,6 +18,7 @@ import { DisabledAiProvider } from './provider/disabled.provider';
  */
 @Module({
   imports: [PlatformModule],
+  controllers: [KnowledgeController, FaqController],
   providers: [
     // The real provider when the environment supplies a key, an honestly
     // disabled one otherwise -- the same pattern as OBJECT_STORAGE and
@@ -25,7 +29,9 @@ import { DisabledAiProvider } from './provider/disabled.provider';
       useClass: AnthropicAiProvider.isConfigured() ? AnthropicAiProvider : DisabledAiProvider,
     },
     AiInvocationService,
+    KnowledgeService,
+    FaqService,
   ],
-  exports: [AI_PROVIDER, AiInvocationService],
+  exports: [AI_PROVIDER, AiInvocationService, KnowledgeService, FaqService],
 })
 export class AiModule {}

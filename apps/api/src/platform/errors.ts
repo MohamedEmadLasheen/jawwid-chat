@@ -118,6 +118,28 @@ export enum CommErrorCode {
   /** Queue/cancel was called from a state that has no such transition. */
   BROADCAST_INVALID_STATE = 'COMM.BROADCAST_INVALID_STATE',
   BROADCAST_EMPTY_BODY = 'COMM.BROADCAST_EMPTY_BODY',
+
+  // --- AI and automation (Phase 7) ---
+  /**
+   * The assistant could not answer. NOT an error in the system: it is returned
+   * when no provider is configured, when the kill switch is off, and when the
+   * model timed out -- and the client's job in every case is the same, which is
+   * to let the person do the thing themselves.
+   */
+  AI_UNAVAILABLE = 'COMM.AI_UNAVAILABLE',
+  KNOWLEDGE_NOT_FOUND = 'COMM.KNOWLEDGE_NOT_FOUND',
+  /**
+   * An approved article cannot be edited in place. Demote it to draft, edit it,
+   * and have it approved again -- editing live academy policy without re-review
+   * is what the approval permission exists to prevent.
+   */
+  KNOWLEDGE_APPROVED_IS_FROZEN = 'COMM.KNOWLEDGE_APPROVED_IS_FROZEN',
+  /** Every knowledge change carries a reason, as every sensitive action does. */
+  KNOWLEDGE_REASON_REQUIRED = 'COMM.KNOWLEDGE_REASON_REQUIRED',
+  /** A suggestion that no longer matches the conversation it was drafted for. */
+  SUGGESTION_NOT_FOUND = 'COMM.SUGGESTION_NOT_FOUND',
+  SUGGESTION_ALREADY_RESOLVED = 'COMM.SUGGESTION_ALREADY_RESOLVED',
+  ATTENTION_FLAG_NOT_FOUND = 'COMM.ATTENTION_FLAG_NOT_FOUND',
 }
 
 export class CommError extends Error {
