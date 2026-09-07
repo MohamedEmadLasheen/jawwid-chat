@@ -165,10 +165,18 @@ export class MessageService {
     const origin =
       actor.kind === ActorKind.SYSTEM ? (input.origin ?? Origin.AUTOMATION) : Origin.USER;
 
-    // Size and MIME limits are enforced here, on the path every caller takes,
-    // not only on the upload-authorization endpoint.
-    for (const a of input.attachments ?? []) {
-      this.attachments.validate(a.kind, a.mimeType, a.byteSize);
+    // Attachments are checked here, on the path every caller takes, and not
+    // only on the upload-authorization endpoint -- because authorization and
+    // attachment are two separate requests and only this one produces a row.
+    //
+    // The check is no longer just "is this MIME type and size allowed", which
+    // interrogated the client's CLAIMS. It also requires the object key to sit
+    // under this conversation's own prefix (so a key from another conversation
+    // cannot be attached here and then read through this thread's signed URLs),
+    // and asks the storage what was actually uploaded. See
+    // AttachmentService.validateForConversation.
+    if (input.attachments?.length) {
+      await this.attachments.validateForConversation(conv.id, input.attachments);
     }
 
     const family = conv.familyId

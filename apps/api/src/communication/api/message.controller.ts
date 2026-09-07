@@ -113,9 +113,10 @@ export class MessageController {
       }>;
     },
   ) {
-    for (const a of body.attachments ?? []) {
-      this.attachments.validate(a.kind, a.mimeType, a.byteSize);
-    }
+    // Attachment checks are NOT duplicated here. They moved into
+    // MessageService.send, which is the path every caller takes -- and a
+    // controller-level copy of a security rule is a second definition to keep
+    // in step with the first.
     return this.messages.send({
       conversationId,
       senderId: actorId,

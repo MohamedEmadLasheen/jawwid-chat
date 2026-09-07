@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
-import type { ObjectStorage, UploadAuthorization } from './object-storage';
+import type { ObjectMetadata, ObjectStorage, UploadAuthorization } from './object-storage';
 
 /**
  * S3-compatible object storage, behind the same `ObjectStorage` interface.
@@ -144,7 +144,55 @@ export class S3ObjectStorage implements ObjectStorage {
   // AWS Signature Version 4, query-string ("presigned") form
   // ------------------------------------------------------------------
 
-  private presign(method: 'GET' | 'PUT', objectKey: string, expiresIn: number): string {
+  /**
+   * Ask the storage what it actually holds.
+   *
+   * A presigned HEAD, issued by this API with its own credentials, so the
+   * answer is the storage's and not the client's. Returns null for anything
+   * that is not there -- which is also the answer for "the client claimed an
+   * object key it never uploaded to".
+   *
+   * Network failures are NOT swallowed into null. "The object does not exist"
+   * and "I could not reach storage" are different facts, and collapsing them
+   * would turn a MinIO outage into every attachment being silently rejected as
+   * missing.
+   */
+  async head(objectKey: string): Promise<ObjectMetadata | null> {
+    const response = await fetch(this.presign('HEAD', objectKey, 60), { method: 'HEAD' });
+
+    if (response.status === 404 || response.status === 403) return null;
+    if (!response.ok) {
+      throw new Error(`object storage HEAD failed with ${response.status}`);
+    }
+
+    const length = Number(response.headers.get('content-length') ?? NaN);
+    return {
+      byteSize: Number.isFinite(length) ? length : 0,
+      // What storage recorded at upload time. Still not a guarantee about the
+      // BYTES -- only a sniff of the content could be that, and this API never
+      // sees them -- but it is no longer a value the client can simply assert
+      // to the message row while uploading something else.
+      mimeType: response.headers.get('content-type'),
+    };
+  }
+
+  async delete(objectKey: string): Promise<void> {
+    const response = await fetch(this.presign('DELETE', objectKey, 60), { method: 'DELETE' });
+    // 204 on success, 404 when it is already gone -- both are the desired end
+    // state, and treating "already absent" as a failure would make cleanup
+    // non-idempotent.
+    if (!response.ok && response.status !== 404) {
+      throw new Error(`object storage DELETE failed with ${response.status}`);
+    }
+  }
+
+  readonly verifiesObjects = true;
+
+  private presign(
+    method: 'GET' | 'PUT' | 'HEAD' | 'DELETE',
+    objectKey: string,
+    expiresIn: number,
+  ): string {
     const url = new URL(this.endpoint);
     const host = url.host;
     const now = new Date();
