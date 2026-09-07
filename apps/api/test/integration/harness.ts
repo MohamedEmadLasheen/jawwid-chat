@@ -25,6 +25,7 @@ import { NotificationService } from '@communication/notifications/notification.s
 import { ReminderService } from '@communication/notifications/reminder.service';
 import { TemplateService } from '@communication/notifications/template.service';
 import { QuietHoursService } from '@communication/notifications/quiet-hours.service';
+import { NotificationPreferenceService } from '@communication/notifications/preference.service';
 import { LoggingPushProvider } from '@communication/notifications/push.provider';
 import { CallService } from '@communication/calls/call.service';
 import { LiveKitTokenIssuer } from '@communication/calls/media-token';
@@ -98,7 +99,10 @@ export function buildGraphOn(prisma: PrismaService) {
   const approvals = new ApprovalService(prisma, authz, scope, conversations, outbox, audit);
   const templates = new TemplateService(prisma);
   const quietHours = new QuietHoursService(prisma);
-  const notifications = new NotificationService(prisma, templates, quietHours, config, new LoggingPushProvider());
+  const preferences = new NotificationPreferenceService(prisma);
+  const notifications = new NotificationService(
+    prisma, templates, quietHours, config, new LoggingPushProvider(), preferences,
+  );
   const reminders = new ReminderService(prisma, notifications);
   const calls = new CallService(
     prisma, authz, conversations, outbox, config, identity, audit, new LiveKitTokenIssuer(),
@@ -106,7 +110,7 @@ export function buildGraphOn(prisma: PrismaService) {
 
   return {
     prisma, coverage, identity, authz, scope, conversations, messages, approvals,
-    attachments, notifications, reminders, templates, quietHours, calls,
+    attachments, notifications, reminders, templates, quietHours, calls, preferences,
     config, sessions, accounts, auth, throttle, families, userAdmin, learners,
     groups, labels,
   };

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -8,6 +8,7 @@ import { PUSH_PROVIDER } from '../../platform/tokens';
 import type { PushProvider } from './push.provider';
 import { TemplateService } from './template.service';
 import { QuietHoursService } from './quiet-hours.service';
+import { NotificationPreferenceService } from './preference.service';
 import { NotificationStatus } from '../contracts/vocab';
 
 export interface ScheduleInput {
@@ -56,6 +57,7 @@ export class NotificationService {
     private readonly quietHours: QuietHoursService,
     private readonly config: AppConfigService,
     @Inject(PUSH_PROVIDER) private readonly push: PushProvider,
+    private readonly preferences?: NotificationPreferenceService,
   ) {}
 
   /**
@@ -68,6 +70,35 @@ export class NotificationService {
       input.scheduledAt,
       input.respectQuietHours ?? true,
     );
+
+    // The recipient's own choice, applied HERE -- where the notification is
+    // generated -- and not on the device. A preference the client applies is
+    // not a preference: by then APNs or FCM has the payload, the phone has
+    // buzzed and the lock screen has shown the text, and discarding it in the
+    // app changes what is displayed and nothing that matters.
+    //
+    // A suppressed notification is still a ROW, with status `suppressed` (a
+    // value the vocabulary already had). Not writing one would make the
+    // dedupe key free again, so the next replay of the same source event would
+    // ask the question a second time -- and would leave no record that anything
+    // had been decided.
+    const suppressed = await this.isSuppressed(input);
+
+    return this.create(input, scheduledAt, suppressed);
+  }
+
+  /** True when this recipient has turned this notification's category off. */
+  private async isSuppressed(input: ScheduleInput): Promise<boolean> {
+    if (!this.preferences) return false;
+    const category = await this.preferences.categoryOf(input.ruleKey);
+    return !(await this.preferences.isEnabled(input.recipientId, category));
+  }
+
+  private async create(
+    input: ScheduleInput,
+    scheduledAt: Date,
+    suppressed: boolean,
+  ): Promise<string> {
 
     // Created with an id we generate, through createMany, so the statement
     // carries no RETURNING clause.
@@ -94,7 +125,7 @@ export class NotificationService {
           familyId: input.familyId ?? null,
           conversationId: input.conversationId ?? null,
           variables: (input.variables ?? {}) as Prisma.InputJsonValue,
-          status: NotificationStatus.SCHEDULED,
+          status: suppressed ? NotificationStatus.SUPPRESSED : NotificationStatus.SCHEDULED,
           scheduledAt,
         },
       });
@@ -248,6 +279,18 @@ export class NotificationService {
           ...(n.conversationId ? { conversationId: n.conversationId } : {}),
         },
         isVoip: t.isVoip,
+        // From the device_token row, written at registration by a client that
+        // knows what it is -- never inferred from the token's shape.
+        platform: t.platform,
+        // One conversation, one notification stack. Without it, ten messages
+        // from one parent arrive as ten entries and bury everything else.
+        threadId: n.conversationId ?? n.eventType,
+        // The dedupe key IS the notification's identity, so a redelivery --
+        // which at-least-once will produce, when a worker pushes successfully
+        // and dies before recording it -- replaces the first notification
+        // rather than appearing beside it.
+        collapseId: NotificationService.collapseIdFor(n.dedupeKey),
+        priority: n.priority,
       });
       if (result.ok) anyOk = true;
       if (result.tokenInvalid) {
@@ -301,6 +344,20 @@ export class NotificationService {
           `expired; another worker owns it and may push it again`,
       );
     }
+  }
+
+  /**
+   * A collapse identifier derived from the dedupe key.
+   *
+   * Hashed rather than passed through: APNs caps `apns-collapse-id` at 64
+   * bytes and a dedupe key is an unbounded composite of ids
+   * (`new_message:<uuid>:<uuid>` is already 87). A key over the cap is rejected
+   * by APNs, which would fail the push for a reason that has nothing to do with
+   * the notification -- and would do it only for the longer keys, so it would
+   * look intermittent.
+   */
+  static collapseIdFor(dedupeKey: string): string {
+    return createHash('sha256').update(dedupeKey).digest('hex').slice(0, 32);
   }
 
   private async fail(notificationId: string, code: string): Promise<void> {

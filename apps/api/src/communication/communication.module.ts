@@ -21,7 +21,14 @@ import { NotificationService } from './notifications/notification.service';
 import { ReminderService } from './notifications/reminder.service';
 import { TemplateService } from './notifications/template.service';
 import { QuietHoursService } from './notifications/quiet-hours.service';
-import { LoggingPushProvider } from './notifications/push.provider';
+import {
+  LoggingPushProvider,
+  PlatformRoutingPushProvider,
+  type PushProvider,
+} from './notifications/push.provider';
+import { FcmPushProvider } from './notifications/fcm.provider';
+import { ApnsPushProvider } from './notifications/apns.provider';
+import { NotificationPreferenceService } from './notifications/preference.service';
 import { RealtimeGateway } from './realtime/realtime.gateway';
 import { TypingService } from './realtime/typing.service';
 import { PresenceService } from './realtime/presence.service';
@@ -70,7 +77,25 @@ import { NotificationController } from './api/notification.controller';
       provide: OBJECT_STORAGE,
       useClass: S3ObjectStorage.isConfigured() ? S3ObjectStorage : SignedLocalObjectStorage,
     },
-    { provide: PUSH_PROVIDER, useClass: LoggingPushProvider },
+    // Push goes out through the provider for the token's OWN platform. Which
+    // concrete clients exist is decided by configuration, exactly as object
+    // storage is: a developer with no Firebase project and no Apple key still
+    // gets a working process, and a deployment -- where the credentials are
+    // required -- gets the real ones.
+    //
+    // A platform with no configured provider is served by the logging provider,
+    // which says so at WARN rather than reporting a delivery that did not
+    // happen.
+    {
+      provide: PUSH_PROVIDER,
+      useFactory: (): PushProvider => {
+        const logging = new LoggingPushProvider();
+        const byPlatform: Record<string, PushProvider> = {};
+        if (FcmPushProvider.isConfigured()) byPlatform.android = new FcmPushProvider();
+        if (ApnsPushProvider.isConfigured()) byPlatform.ios = new ApnsPushProvider();
+        return new PlatformRoutingPushProvider(byPlatform, logging);
+      },
+    },
     { provide: MEDIA_TOKEN_ISSUER, useClass: LiveKitTokenIssuer },
     // AI #7 (D-2). The gateway ALONE cannot be the publisher: in the worker
     // process there is no Socket.IO server, so gateway.toThread()'s

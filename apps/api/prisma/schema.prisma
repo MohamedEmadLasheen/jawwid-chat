@@ -476,6 +476,10 @@ model NotificationRule {
   channel           String   @default("push")
   priority          String   @default("normal")
   respectQuietHours Boolean  @map("respect_quiet_hours") @default(true)
+  /// Phase 4: what a person is choosing when they turn this off. A column
+  /// rather than a switch in code, so adding a rule cannot drift from the
+  /// preference list.
+  category          String
   enabled           Boolean  @default(true)
   updatedAt         DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
@@ -521,6 +525,22 @@ model Notification {
 
   @@unique([organizationId, dedupeKey], map: "notification_dedupe_key_per_organization_key")
   @@map("notification")
+  @@schema("chat")
+}
+
+/// Per-recipient, per-category opt-out. An ABSENT row means enabled: somebody
+/// who has never opened the settings screen receives everything, which is the
+/// only default that cannot silently lose a notification.
+model NotificationPreference {
+  organizationId String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  actorId        String   @map("actor_id") @db.Uuid
+  category       String
+  enabled        Boolean  @default(true)
+  updatedAt      DateTime @map("updated_at") @db.Timestamptz @default(now())
+
+  @@id([actorId, category])
+  @@index([actorId])
+  @@map("notification_preference")
   @@schema("chat")
 }
 
