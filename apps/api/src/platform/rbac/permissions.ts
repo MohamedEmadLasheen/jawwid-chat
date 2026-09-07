@@ -32,6 +32,14 @@ export const Permission = {
   CONTACTS_VIEW_PRIVATE: 'contacts.view_private',
   CALLS_START: 'calls.start',
   CALLS_ACCEPT: 'calls.accept',
+  /** Phase 5: start a FOLLOW-UP call, which is a call that may be recorded. */
+  CALLS_RECORD: 'calls.record',
+  /** Phase 5: play back a recording, and know that one exists. */
+  RECORDINGS_READ: 'recordings.read',
+  /** Phase 5: see the stories published to you. */
+  STORIES_READ: 'stories.read',
+  /** Phase 5: create and publish a story to a resolved audience. */
+  STORIES_PUBLISH: 'stories.publish',
   BROADCASTS_SEND: 'broadcasts.send',
   AUDIT_READ: 'audit.read',
   SETTINGS_MANAGE: 'settings.manage',
@@ -68,6 +76,10 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
   [AuthzRole.PARENT]: [
     P.CONVERSATIONS_READ, P.MESSAGES_READ, P.MESSAGES_SEND, P.FAMILIES_READ,
     P.CALLS_START, P.CALLS_ACCEPT, P.SESSIONS_MANAGE,
+    // Phase 5: reading the stories published to them. Note the absence of
+    // CALLS_RECORD and RECORDINGS_READ -- a parent was on the call, which is
+    // not the same as being entitled to keep a copy of it.
+    P.STORIES_READ,
   ],
   [AuthzRole.TEACHER]: [
     P.CONVERSATIONS_READ, P.MESSAGES_READ, P.MESSAGES_SEND, P.FAMILIES_READ,
@@ -75,6 +87,9 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     // A teacher sees the groups they teach and nothing else about groups. The
     // roster policy narrows even that to their own groups.
     P.GROUPS_READ,
+    // Phase 5. A teacher READS stories and does not publish them: publishing
+    // reaches families the teacher has no supervisory relationship with.
+    P.STORIES_READ,
   ],
   [AuthzRole.ADMIN]: [
     P.CONVERSATIONS_READ, P.CONVERSATIONS_MANAGE, P.MESSAGES_READ, P.MESSAGES_SEND,
@@ -85,6 +100,10 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     // what every other supervisor sees, so curation is a manager's act.
     P.FAMILIES_MANAGE, P.LEARNERS_ASSIGN_TEACHER,
     P.GROUPS_READ, P.GROUPS_MANAGE, P.LABELS_READ,
+    // Phase 5. Publishing is Manager/Admin per the Phase 5 brief; the audience
+    // resolver still narrows an admin to their own families, so "publish" here
+    // means "to my families", not "to the academy".
+    P.STORIES_READ, P.STORIES_PUBLISH, P.CALLS_RECORD, P.RECORDINGS_READ,
   ],
   [AuthzRole.COVERAGE_ADMIN]: [
     P.CONVERSATIONS_READ, P.CONVERSATIONS_MANAGE, P.MESSAGES_READ, P.MESSAGES_SEND,
@@ -92,6 +111,12 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     P.CALLS_START, P.CALLS_ACCEPT, P.SESSIONS_MANAGE,
     P.FAMILIES_MANAGE, P.LEARNERS_ASSIGN_TEACHER,
     P.GROUPS_READ, P.GROUPS_MANAGE, P.LABELS_READ,
+    // Phase 5. IDENTICAL to admin above, which is the invariant this model
+    // rests on: the two roles differ in SCOPE, never in keys. A coverage admin
+    // publishes to the families they are covering right now -- the audience
+    // resolver narrows every clause to live scope -- and when the cover ends so
+    // does the reach, with no permission change at all.
+    P.STORIES_READ, P.STORIES_PUBLISH, P.CALLS_RECORD, P.RECORDINGS_READ,
   ],
   [AuthzRole.MANAGER]: [
     P.CONVERSATIONS_READ, P.CONVERSATIONS_MANAGE, P.MESSAGES_READ, P.MESSAGES_SEND,
@@ -101,6 +126,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     P.SETTINGS_MANAGE, P.SESSIONS_MANAGE,
     P.FAMILIES_MANAGE, P.LEARNERS_ASSIGN_TEACHER,
     P.GROUPS_READ, P.GROUPS_MANAGE, P.LABELS_READ, P.LABELS_MANAGE,
+    P.STORIES_READ, P.STORIES_PUBLISH, P.CALLS_RECORD, P.RECORDINGS_READ,
   ],
   [AuthzRole.SUPER_ADMIN]: [
     P.CONVERSATIONS_READ, P.CONVERSATIONS_MANAGE, P.MESSAGES_READ, P.MESSAGES_SEND,
@@ -110,6 +136,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     P.SETTINGS_MANAGE, P.USERS_MANAGE, P.SESSIONS_MANAGE,
     P.FAMILIES_MANAGE, P.LEARNERS_ASSIGN_TEACHER,
     P.GROUPS_READ, P.GROUPS_MANAGE, P.LABELS_READ, P.LABELS_MANAGE,
+    P.STORIES_READ, P.STORIES_PUBLISH, P.CALLS_RECORD, P.RECORDINGS_READ,
   ],
 };
 
