@@ -41,6 +41,8 @@ export const Permission = {
   /** Phase 5: create and publish a story to a resolved audience. */
   STORIES_PUBLISH: 'stories.publish',
   BROADCASTS_SEND: 'broadcasts.send',
+  /** Phase 7: use the AI assistant -- grounded answers, suggestions, summaries. */
+  AI_USE: 'ai.use',
   AUDIT_READ: 'audit.read',
   SETTINGS_MANAGE: 'settings.manage',
   USERS_MANAGE: 'users.manage',
@@ -104,6 +106,9 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     // resolver still narrows an admin to their own families, so "publish" here
     // means "to my families", not "to the academy".
     P.STORIES_READ, P.STORIES_PUBLISH, P.CALLS_RECORD, P.RECORDINGS_READ,
+    // Phase 7. Staff only: every assistant surface helps somebody answer a
+    // family, and a family's own questions are answered by a person.
+    P.AI_USE,
   ],
   [AuthzRole.COVERAGE_ADMIN]: [
     P.CONVERSATIONS_READ, P.CONVERSATIONS_MANAGE, P.MESSAGES_READ, P.MESSAGES_SEND,
@@ -117,6 +122,9 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     // resolver narrows every clause to live scope -- and when the cover ends so
     // does the reach, with no permission change at all.
     P.STORIES_READ, P.STORIES_PUBLISH, P.CALLS_RECORD, P.RECORDINGS_READ,
+    // Phase 7. Staff only: every assistant surface helps somebody answer a
+    // family, and a family's own questions are answered by a person.
+    P.AI_USE,
   ],
   [AuthzRole.MANAGER]: [
     P.CONVERSATIONS_READ, P.CONVERSATIONS_MANAGE, P.MESSAGES_READ, P.MESSAGES_SEND,
@@ -127,6 +135,9 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     P.FAMILIES_MANAGE, P.LEARNERS_ASSIGN_TEACHER,
     P.GROUPS_READ, P.GROUPS_MANAGE, P.LABELS_READ, P.LABELS_MANAGE,
     P.STORIES_READ, P.STORIES_PUBLISH, P.CALLS_RECORD, P.RECORDINGS_READ,
+    // Phase 7. Staff only: every assistant surface helps somebody answer a
+    // family, and a family's own questions are answered by a person.
+    P.AI_USE,
   ],
   [AuthzRole.SUPER_ADMIN]: [
     P.CONVERSATIONS_READ, P.CONVERSATIONS_MANAGE, P.MESSAGES_READ, P.MESSAGES_SEND,
@@ -137,6 +148,9 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     P.FAMILIES_MANAGE, P.LEARNERS_ASSIGN_TEACHER,
     P.GROUPS_READ, P.GROUPS_MANAGE, P.LABELS_READ, P.LABELS_MANAGE,
     P.STORIES_READ, P.STORIES_PUBLISH, P.CALLS_RECORD, P.RECORDINGS_READ,
+    // Phase 7. Staff only: every assistant surface helps somebody answer a
+    // family, and a family's own questions are answered by a person.
+    P.AI_USE,
   ],
 };
 

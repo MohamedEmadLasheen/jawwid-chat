@@ -108,6 +108,27 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'auth.throttle.reset_request_per_ip': 10,
   'auth.throttle.reset_request_per_subject': 5,
   'auth.throttle.reset_redeem_per_ip': 10,
+
+  // --- AI and automation (Phase 7) -------------------------------------------
+  // Mirrors the rows inserted by 202609071[89]*.sql. As everywhere else in this
+  // file, the ROW is authoritative and these are the fallbacks a fresh database
+  // starts from.
+  /**
+   * The master switch, INDEPENDENT of credentials. Removing an API key disables
+   * the assistant by accident and takes a deployment to undo; this turns it off
+   * on purpose, immediately, without one.
+   */
+  'ai.enabled': true,
+  /** initial hypothesis - below this the assistant declines rather than guesses */
+  'ai.min_confidence': 0.6,
+  /** initial hypothesis - approved articles retrieved as grounding for one question */
+  'ai.faq_max_articles': 6,
+  /** initial hypothesis - trailing messages given to the suggested-reply prompt */
+  'ai.suggestion_context_messages': 30,
+  /** initial hypothesis - trailing messages given to the summary prompt */
+  'ai.summary_context_messages': 120,
+  /** initial hypothesis - trailing messages given to the risk classifier */
+  'ai.risk_context_messages': 40,
 } as const;
 
 export type CommunicationConfigKey = keyof typeof COMMUNICATION_CONFIG_DEFAULTS;

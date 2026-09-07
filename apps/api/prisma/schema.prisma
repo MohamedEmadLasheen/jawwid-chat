@@ -1163,3 +1163,32 @@ model AccountPermissionOverride {
   @@map("account_permission_override")
   @@schema("chat")
 }
+
+/// Phase 7.1. One row per AI provider consultation. Holds no prompt and no
+/// response by design -- §27/§31 ask for auditability of the operation, not a
+/// second copy of family communication living outside the conversation that
+/// governs it.
+model AiInvocation {
+  /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
+  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id             String @id @default(uuid()) @db.Uuid
+
+  feature        String
+  actorId        String? @map("actor_id") @db.Uuid
+  conversationId String? @map("conversation_id") @db.Uuid
+
+  provider       String
+  model          String?
+  status         String
+
+  inputTokens    Int?    @map("input_tokens")
+  outputTokens   Int?    @map("output_tokens")
+  latencyMs      Int     @map("latency_ms")
+
+  createdAt      DateTime @map("created_at") @db.Timestamptz @default(now())
+
+  @@index([organizationId, feature, createdAt(sort: Desc)])
+  @@index([conversationId, createdAt(sort: Desc)])
+  @@map("ai_invocation")
+  @@schema("chat")
+}
