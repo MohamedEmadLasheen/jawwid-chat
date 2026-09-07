@@ -80,6 +80,29 @@ class SocketIoRealtimeClient implements RealtimeClient {
   RealtimeStatus _current = RealtimeStatus.idle;
   bool _hasConnectedBefore = false;
 
+  /// The connection attempt currently in flight, if any.
+  ///
+  /// This is what makes [connect] safe to call concurrently. The guard used to
+  /// be `if (_socket != null) return`, which is not atomic across the `await`
+  /// that follows it: reading the access token is asynchronous, so two callers
+  /// could both pass the guard, both build a socket, and the second assignment
+  /// would orphan the first — leaving a connection that is still open, still
+  /// receiving, and no longer referenced by anything that could close it.
+  ///
+  /// It is not hypothetical. `MessagesController._attachRealtime()` calls
+  /// `connect()` once per chat screen, so opening two conversations inside the
+  /// keychain read window is enough.
+  Future<void>? _connecting;
+
+  /// Incremented by every [disconnect] and [dispose].
+  ///
+  /// A connection attempt captures this before it starts awaiting and checks it
+  /// again before it takes ownership of a socket. Without it, a `disconnect()`
+  /// issued while a `connect()` was still reading the token would be silently
+  /// undone by that attempt finishing afterwards — the caller asked for no
+  /// connection and would get one anyway.
+  int _generation = 0;
+
   @override
   Stream<RealtimeEnvelope> get events => _events.stream;
 
@@ -95,11 +118,36 @@ class SocketIoRealtimeClient implements RealtimeClient {
     if (!_status.isClosed) _status.add(next);
   }
 
+  /// Open the connection. Safe to call concurrently and safe to call twice.
+  ///
+  /// Every caller that arrives while an attempt is in flight awaits THAT
+  /// attempt rather than starting a second one, so N concurrent callers produce
+  /// exactly one token read and one socket. The in-flight future is cleared
+  /// when the attempt settles, so a failed attempt does not poison later ones.
   @override
-  Future<void> connect() async {
-    if (_socket != null) return;
+  Future<void> connect() {
+    // Already connected: nothing to do, and nothing to await.
+    if (_socket != null) return Future<void>.value();
+    // An attempt is running: join it. This is the whole fix — the decision to
+    // start an attempt and the record that one is running happen in the same
+    // synchronous step, with no await between them, so there is no window for a
+    // second caller to slip through.
+    return _connecting ??= _open().whenComplete(() => _connecting = null);
+  }
+
+  Future<void> _open() async {
+    final generation = _generation;
 
     final token = await _accessToken();
+
+    // Superseded while reading the token. Return before touching ANY shared
+    // state — not just before installing the socket. An attempt that lost the
+    // race must not narrate one either: emitting `connecting` here would
+    // overwrite the `disconnected` that the disconnect just published, and the
+    // UI would show a connection spinner for an attempt that has been
+    // abandoned.
+    if (generation != _generation) return;
+
     if (token == null || token.isEmpty) {
       // No session, no socket. Connecting anonymously would be disconnected by
       // the gateway immediately, and retried forever by the reconnect logic.
@@ -161,6 +209,14 @@ class SocketIoRealtimeClient implements RealtimeClient {
         final payload = data is Map ? Map<String, Object?>.from(data) : <String, Object?>{};
         if (!_events.isClosed) _events.add(RealtimeEnvelope(event, payload));
       });
+    }
+
+    // The attempt was superseded while it was reading the token — a
+    // disconnect(), a sign-out, or a dispose(). Take the socket back down
+    // rather than installing it: the caller asked for no connection.
+    if (generation != _generation) {
+      socket.dispose();
+      return;
     }
 
     _socket = socket;
@@ -243,6 +299,9 @@ class SocketIoRealtimeClient implements RealtimeClient {
 
   @override
   Future<void> disconnect() async {
+    // Invalidates any attempt currently in flight, so one that is mid-await
+    // cannot install its socket after this returns.
+    _generation += 1;
     _stopHeartbeat();
     _socket?.dispose();
     _socket = null;
