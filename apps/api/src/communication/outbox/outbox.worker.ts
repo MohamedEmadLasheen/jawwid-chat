@@ -366,6 +366,41 @@ export class OutboxWorker {
         return;
       }
 
+      case CommEvent.CLASS_CALL_STARTED: {
+        if (!conversationId) return;
+        await this.realtime.toThread(conversationId, type, payload as never);
+        // A SEPARATE template from an ordinary incoming call, because a class
+        // call is a different thing to the person receiving it: it is not "so
+        // and so is calling you", it is "your class has started and the teacher
+        // is waiting". Same urgency, same quiet-hours exemption.
+        await this.notifyIncomingCall(conversationId, payload, 'class_call_invitation');
+        return;
+      }
+
+      case CommEvent.CALL_MISSED: {
+        if (!conversationId) return;
+        await this.realtime.toThread(conversationId, type, payload as never);
+        await this.notifyMissedCall(conversationId, payload);
+        return;
+      }
+
+      case CommEvent.STORY_PUBLISHED: {
+        // Fanned out to the RESOLVED AUDIENCE, one actor room each -- never to
+        // a broadcast channel. There is no room that means "everyone", and a
+        // story is only for the people it was published to.
+        await this.notifyStoryPublished(payload);
+        return;
+      }
+
+      case CommEvent.BROADCAST_QUEUED:
+      case CommEvent.BROADCAST_PROGRESS:
+      case CommEvent.BROADCAST_COMPLETED: {
+        // Operator-facing progress, counts only, to the people who may send
+        // broadcasts. It never names a recipient.
+        await this.notifyBroadcastWatchers(type, payload);
+        return;
+      }
+
       default: {
         if (conversationId) {
           await this.realtime.toThread(conversationId, type, payload as never);
@@ -452,6 +487,7 @@ export class OutboxWorker {
   private async notifyIncomingCall(
     conversationId: string,
     payload: Record<string, unknown>,
+    templateKey = 'incoming_call',
   ): Promise<void> {
     const callId = payload.callId as string | undefined;
     const initiatorId = (payload.initiatorId ?? payload.actorId) as string | undefined;
@@ -470,9 +506,12 @@ export class OutboxWorker {
       if (!recipient || !recipient.isActive) continue;
 
       await this.notifications.schedule({
-        dedupeKey: `incoming_call:${callId}:${m.actorId}`,
-        ruleKey: 'incoming_call',
-        templateKey: 'incoming_call',
+        dedupeKey: `${templateKey}:${callId}:${m.actorId}`,
+        // A ruleKey is a foreign key into chat.notification_rule, and the
+        // class-call TEMPLATE is not a scheduled RULE -- the reminders are.
+        // Naming one here would be a broken reference.
+        ruleKey: templateKey === 'incoming_call' ? 'incoming_call' : null,
+        templateKey,
         eventType: 'call_incoming',
         recipientId: m.actorId,
         locale: recipient.locale,
@@ -481,10 +520,116 @@ export class OutboxWorker {
         respectQuietHours: false,
         variables: {
           caller_name: initiator?.displayName ?? 'Jawwid',
+          teacher_name: (payload.teacherName as string) ?? initiator?.displayName ?? 'Jawwid',
+          group_name: (payload.groupName as string) ?? 'Jawwid',
           call_id: callId,
         },
         scheduledAt: now,
       });
     }
+  }
+
+  /**
+   * Tell the people who did not answer that they missed a call.
+   *
+   * The INITIATOR is excluded. They know; they were the one calling, and a push
+   * telling somebody they missed their own outgoing call is a bug that reads as
+   * a system that does not understand what happened.
+   *
+   * Not exempt from quiet hours, unlike the incoming call itself: the urgency
+   * of a call is that it is happening NOW, and a missed call is a notification
+   * about the past. Waking somebody at 3am for a call that already ended is
+   * exactly the kind of thing the quiet-hours mechanism exists to stop.
+   */
+  private async notifyMissedCall(
+    conversationId: string,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    const callId = payload.callId as string | undefined;
+    const initiatorId = payload.initiatorId as string | undefined;
+    if (!callId) return;
+
+    // Only those who were still ringing when it expired. Somebody who declined
+    // did not MISS the call, and telling them they did misdescribes their own
+    // deliberate act back to them.
+    const missed = await this.prisma.callParticipant.findMany({
+      where: { callId, state: 'missed' },
+      select: { actorId: true },
+    });
+    const now = new Date();
+
+    for (const p of missed) {
+      if (p.actorId === initiatorId) continue;
+      const recipient = await this.identity.resolveActor(p.actorId);
+      if (!recipient || !recipient.isActive) continue;
+
+      await this.notifications.schedule({
+        dedupeKey: `missed_call:${callId}:${p.actorId}`,
+        ruleKey: null,
+        templateKey: 'missed_call',
+        eventType: 'call_missed',
+        recipientId: p.actorId,
+        locale: recipient.locale,
+        conversationId,
+        variables: { caller_name: (payload.initiatorName as string) ?? 'Jawwid' },
+        scheduledAt: now,
+      });
+    }
+  }
+
+  /**
+   * Push a published story to its audience.
+   *
+   * Read from chat.story_recipient -- the audience the resolver already
+   * materialised -- rather than resolved again here. Re-resolving in the worker
+   * would be a second implementation of audience logic in the one place nobody
+   * would think to look at when the two disagreed.
+   */
+  private async notifyStoryPublished(payload: Record<string, unknown>): Promise<void> {
+    const storyId = payload.storyId as string | undefined;
+    if (!storyId) return;
+
+    const recipients = await this.prisma.storyRecipient.findMany({
+      where: { storyId },
+      select: { actorId: true },
+    });
+    const now = new Date();
+
+    await this.realtime.toUsers(
+      recipients.map((r) => r.actorId),
+      CommEvent.STORY_PUBLISHED,
+      payload as never,
+    );
+
+    for (const r of recipients) {
+      const recipient = await this.identity.resolveActor(r.actorId);
+      if (!recipient || !recipient.isActive) continue;
+      await this.notifications.schedule({
+        dedupeKey: `story:${storyId}:${r.actorId}`,
+        ruleKey: null,
+        templateKey: 'story_published',
+        eventType: 'story_published',
+        recipientId: r.actorId,
+        locale: recipient.locale,
+        variables: {
+          organization_name: 'Jawwid',
+          story_title: (payload.title as string) ?? '',
+        },
+        scheduledAt: now,
+      });
+    }
+  }
+
+  /** Progress to the operators. Counts only; never a recipient's name. */
+  private async notifyBroadcastWatchers(
+    type: CommEventName,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    const createdBy = await this.prisma.broadcast.findUnique({
+      where: { id: payload.broadcastId as string },
+      select: { createdBy: true },
+    });
+    if (!createdBy) return;
+    await this.realtime.toUsers([createdBy.createdBy], type, payload as never);
   }
 }

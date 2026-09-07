@@ -90,4 +90,30 @@ export class ReminderService {
     });
     return result.count;
   }
+
+  /**
+   * Cancel one PERSON's still-scheduled reminders for a subject.
+   *
+   * The narrow counterpart of cancelForSubject, and Phase 5 needs both. A
+   * student joining a class call must stop being told the teacher is waiting --
+   * but cancelling the whole subject there would silence the reminders for
+   * every OTHER student who has not joined yet, which is the opposite of what a
+   * class-call reminder is for.
+   *
+   * This works because dedupeKey is built as `rule:subject:recipient`
+   * (ReminderService.dedupeKey), so the pair is addressable. Matching on the
+   * two bracketed segments rather than a bare `contains` keeps a subject id
+   * that happens to be a substring of another from cancelling the wrong rows.
+   */
+  async cancelForSubjectRecipient(subjectId: string, recipientId: string): Promise<number> {
+    const result = await this.prisma.notification.updateMany({
+      where: {
+        status: 'scheduled',
+        recipientId,
+        dedupeKey: { contains: `:${subjectId}:${recipientId}` },
+      },
+      data: { status: 'cancelled' },
+    });
+    return result.count;
+  }
 }
