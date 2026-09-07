@@ -34,12 +34,32 @@ STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 LABEL="${APP_ENV:-local}"
 FILE="$OUT_DIR/jawwid-chat-${LABEL}-${STAMP}.dump"
 
-ARGS=(--format=custom --no-owner --no-privileges --verbose)
+ARGS=(--format=custom --no-owner --verbose)
 [ -n "$SCHEMA" ] && ARGS+=(--schema="$SCHEMA")
 
-# --no-owner/--no-privileges: role names differ between the managed production
-# database and any machine you restore onto. Without these, a restore fails on
-# roles that do not exist there, which is discovered during an incident.
+# --no-owner: the OWNER role genuinely differs between the managed production
+# database and any machine you restore onto (`postgres` here, `supabase_admin`
+# there), and without it a restore fails on a role that does not exist.
+#
+# --no-privileges is deliberately NOT passed, and this is a correction.
+#
+# It used to be, for the same stated reason -- but the roles named in this
+# schema's GRANTs are not the platform's, they are OURS: chat_app, chat_service,
+# authenticated, service_role, all created by 20260905091150 and therefore
+# identical in every environment this schema is ever restored into. Excluding
+# them did not buy portability; it silently dropped the privilege model.
+#
+# The cost was total. A `--no-privileges` dump carries ZERO ACL entries, so
+# every restore produced a database in which chat_app could not INSERT into a
+# single table -- the application fails closed against its own restored data,
+# and db/tests/schema_acceptance.sql rejects it. Verified: the dump this now
+# writes carries 93 ACL entries and 186 chat_app grants, and the restored
+# database passes schema_acceptance, br1_invariants, rls_enforcement,
+# tenant_isolation, assignment_invariants and od01_conversation_model.
+#
+# Capturing privileges is strictly safer than omitting them: pg_restore can
+# always skip ACLs it does not want (restore-db.sh --no-privileges), but it can
+# never reconstruct ACLs a dump never recorded.
 
 # Inside a container, "localhost" is the container. On Linux --network host
 # makes them the same; on macOS it does not, and the dump fails with a

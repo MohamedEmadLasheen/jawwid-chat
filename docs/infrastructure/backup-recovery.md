@@ -1,6 +1,6 @@
 # Backup, Restore and Disaster Recovery
 
-Owner: AI #7 · Date: 2026-09-05
+Owner: AI #7 · Date: 2026-09-05 · Last corrected and re-drilled: 2026-09-08 (Phase 8)
 
 ## 1. What is backed up
 
@@ -47,46 +47,82 @@ Writes a compressed `pg_dump` custom-format archive plus a `.sha256`. Uses local
 - `--no-owner --no-privileges`: role names differ between the managed production
   database and any machine you restore onto.
 
-## 4. Restoring — and the thing that will catch you
+## 4. Restoring — and the two things that will catch you
 
-> ### A `chat`-only dump is NOT restorable on its own.
+Both of these were found by an actual drill, on 2026-09-08. Both produced a
+restore that *looked* like it had worked.
+
+> ### 4.1 `pg_restore --schema chat` cannot create the schema it filters on
 >
-> `chat.core_*` are boundary views over Jawwid Core's tables in the `public`
-> schema. Restoring `--schema chat` into an empty database fails at the first
-> such view:
+> `pg_dump` records `CREATE SCHEMA chat` as a TOC entry whose own namespace is
+> `-`, not `chat`. `pg_restore --schema=chat` therefore filters that entry out,
+> and the restore dies on its first object:
 >
 > ```
-> pg_restore: error: relation "public.children" does not exist
+> pg_restore: error: could not execute query: ERROR:  schema "chat" does not exist
 > ```
 >
-> With `--exit-on-error` the restore **aborts partway**. A drill run on
-> 2026-09-05 produced 4 of 16 tables and **zero** `chat.config` rows — a
-> silently partial database. Finding this during an incident would be very
-> expensive.
+> `restore-db.sh` now creates the schema on the target before restoring, so
+> `--schema` is usable. Nothing an operator has to remember.
 
-**The recovery unit is the whole database** (Core's `public` schema plus
-`chat`), not the `chat` schema alone. When restoring `chat` in isolation — a
-drill, or an investigation copy — recreate the Core tables first.
+> ### 4.2 The dump used to carry no privileges at all
+>
+> `backup-db.sh` passed `--no-privileges` to `pg_dump`. Every archive it ever
+> wrote contained **zero ACL entries**, so every restore produced a database in
+> which `chat_app` — the role the application actually connects as — could not
+> `INSERT` into a single table. `db/tests/schema_acceptance.sql` states it
+> plainly:
+>
+> ```
+> ERROR:  chat_app cannot INSERT into chat.account, ... -- the application would fail closed
+> ```
+>
+> The stated reason was portability, but the roles named in these GRANTs are not
+> the platform's — they are ours (`chat_app`, `chat_service`, `authenticated`,
+> `service_role`, created by `20260905091150` and `20260907120000`), and they
+> are identical everywhere this schema is restored. `--no-owner` is what handles
+> the owner role that genuinely differs. Privileges are now captured; a restore
+> can always skip ACLs it does not want, but can never invent ones the dump
+> never recorded.
+>
+> **Role attributes and memberships live in no schema-scoped dump.** `chat_app`
+> must be `INHERIT` (a policy written `to authenticated` is matched with
+> `pg_has_role(..., 'USAGE')`, which is false for a non-inheriting member) and
+> `chat_service` must be `BYPASSRLS`. Get either wrong and the restore succeeds
+> while the application reads zero rows. `restore-db.sh` restates both, mirroring
+> `20260907120000`.
+
+**The recovery unit is the `chat` schema.** This is a correction: it used to be
+"Core's `public` schema plus `chat`", because `chat.core_*` were views over
+Jawwid Core's tables. That coupling is gone (RT-023) — `db/tests/schema_acceptance.sql`
+asserts "no non-chat tables, no auth schema" — and the Core shim the old
+procedure told you to load, `db/test/00_core_shim.sql`, **no longer exists**.
 
 Verified procedure:
 
 ```bash
 # 1. Target database, on the same Postgres major version as the source.
+#    Plain postgres:17 — not the Supabase image (docs/release/database-decision.md).
 docker run -d --name restore-target -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=restore -p 55498:5432 public.ecr.aws/supabase/postgres:17.6.1.140
+  -e POSTGRES_DB=recovered -p 55489:5432 postgres:17
 
-# 2. Core tables first. Locally that is the shim; for a real restore it is
-#    Core's own backup.
-docker exec -i restore-target psql -v ON_ERROR_STOP=1 -U supabase_admin -d restore \
-  < db/test/00_core_shim.sql
-
-# 3. Then chat.
+# 2. Restore. The schema and the runtime roles are prepared for you.
 scripts/infra/restore-db.sh --file backups/<dump> \
-  --into postgresql://supabase_admin:<pw>@localhost:55498/restore
+  --into postgres://postgres:postgres@localhost:55489/recovered --schema chat
+
+# 3. Verify. A restore is not verified until the copy passes the same gates a
+#    migrated database does.
+for s in schema_acceptance br1_invariants rls_enforcement \
+         tenant_isolation assignment_invariants od01_conversation_model; do
+  psql -v ON_ERROR_STOP=1 "$RECOVERED_URL" -f "db/tests/$s.sql"
+done
 ```
 
-The restoring role needs `CREATE` on the target database. In the Supabase image
-the plain `postgres` superuser is **not** sufficient — use `supabase_admin`.
+The restoring role needs `CREATE` on the target database and on the cluster
+(`CREATE ROLE`), because step 2 creates the runtime roles if they are absent. If
+your target forbids that, pass `--no-privileges` — and understand that you are
+choosing an investigation copy, not a recovery: the application cannot write to
+it.
 
 `restore-db.sh` verifies the checksum before touching the target, and refuses a
 target whose URL looks like production unless
@@ -94,30 +130,44 @@ target whose URL looks like production unless
 
 ## 5. Restore drill
 
-A backup is an assumption until it has been restored. **Monthly**, and after any
-migration that changes the schema shape.
+A backup is an assumption until it has been restored, and a restore is a second
+assumption until the copy has been *tested*. **Monthly**, and after any migration
+that changes the schema shape.
 
-Checklist — all five must pass:
+Checklist — all six must pass:
 
 1. [ ] The dump restores with **zero** `pg_restore` errors.
 2. [ ] Table count matches the source.
 3. [ ] `select count(*) from chat.config` is non-zero and matches.
 4. [ ] `chat.schema_migrations` holds every expected version.
-5. [ ] An application instance pointed at the restored database reaches
+5. [ ] The restored copy passes all six `db/tests/*.sql` suites — in particular
+       `schema_acceptance` (privileges and role attributes survived) and
+       `rls_enforcement` (RLS still applies to the runtime role).
+6. [ ] An application instance pointed at the restored database reaches
        `/health/ready` = 200.
 
-**Last drill: 2026-09-05 — PASSED**, against the live schema, after the
-correction in §4 was applied.
+**Last drill: 2026-09-08 — PASSED**, onto a bare `postgres:17` cluster that had
+never seen this schema and held none of its roles.
 
-| | Naive `--schema chat` restore | Corrected procedure |
+| | Before the Phase 8 fix | After |
 |---|---|---|
-| pg_restore errors | 1 (aborted) | **0** |
-| `chat` tables | 4 | **31** |
-| `chat.config` rows | 0 | **57** |
-| Migrations recorded | — | **13** |
+| `pg_restore` errors | 1 (aborted immediately) | **0** |
+| `chat` tables | 0 | **80** |
+| `chat.config` rows | 0 | **119** |
+| Migrations recorded | 0 | **50** |
+| `chat_app` grants | 0 | **186** |
+| `schema_acceptance` | FAIL | **PASS** |
+| `rls_enforcement` | not reached | **PASS** |
+| Integrity suites passing | 0 / 6 | **6 / 6** |
 
-CI re-runs the backup half of this on every pull request that touches
-migrations, so §4 cannot silently stop being true.
+Item 6 is the one part of the checklist this drill did **not** cover: no
+application instance was pointed at the restored copy, because no environment
+exists to run one against. It is listed as outstanding in §8.
+
+CI runs this whole drill — backup, restore into a database that did not exist,
+then all six suites against the copy — on every pull request. The previous
+pipeline ran only the backup half, which is precisely why §4.2 survived
+undetected: the archive was always fine.
 
 ## 6. Objectives
 
@@ -147,6 +197,11 @@ rather than assumed.
 
 ## 8. Gaps
 
+- **The drill has never restored into a running application.** Checklist item 6
+  (`/health/ready` = 200 against the restored copy) is unverified, because no
+  environment exists to run an instance in. Structure, data, privileges and
+  policies are proven; the application's behaviour against a restored database
+  is not.
 - No provider backups exist, because no managed database exists.
 - Retention, PITR window and restore speed are unmeasured.
 - Object storage backup is a policy, not yet a configuration.

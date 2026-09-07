@@ -181,7 +181,20 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install psql
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+        # Pinned to 17 to MATCH THE SERVICE CONTAINER above. pg_dump refuses to
+        # dump from a server newer than itself, so a distro client that lags the
+        # service turns the backup/restore drill below into a version error that
+        # reads like a broken script.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl ca-certificates
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo gpg --dearmor -o /usr/share/keyrings/pgdg.gpg
+          echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+          psql --version && pg_dump --version
 
       # RT-023. There is no branch composition and no Core/identity stub any
       # more: supabase/migrations is the single SQL authority and builds an
@@ -209,6 +222,22 @@ jobs:
       - name: G-01 · BR-1 structural invariants (RT-024, RT-025)
         run: psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f db/tests/br1_invariants.sql
 
+      # Phase 8. These four suites existed and passed but were gated by NOTHING,
+      # so a regression in tenant isolation or RLS enforcement at the DATABASE
+      # level could ship while every application test stayed green. They are the
+      # backstop for exactly the controls that must not silently weaken.
+      - name: G-09 · tenant isolation (database level)
+        run: psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f db/tests/tenant_isolation.sql
+
+      - name: G-09 · RLS is actually enforced on the runtime role
+        run: psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f db/tests/rls_enforcement.sql
+
+      - name: G-12 · supervisor assignment invariants
+        run: psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f db/tests/assignment_invariants.sql
+
+      - name: OD-01 · conversation model invariants
+        run: psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f db/tests/od01_conversation_model.sql
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -223,14 +252,47 @@ jobs:
           npm run test:int
 
       # ---- AI #7 -----------------------------------------------------------
-      - name: Backup drill against the current schema
-        # A `chat`-only dump is NOT self-restorable while chat.core_* are views
-        # over Core-owned tables in public: restore fails partway and looks like
-        # it worked. This asserts the documented recovery procedure still holds
-        # as the schema moves. See docs/infrastructure/backup-recovery.md.
+      # G-41. Phase 8 replaced a BACKUP drill with a BACKUP-AND-RESTORE drill,
+      # because the backup half was never the part that was broken.
+      #
+      # What the backup-only step could not see: every dump was taken with
+      # --no-privileges, so it carried zero ACL entries, and every restore
+      # produced a database in which chat_app could not INSERT into a single
+      # table. The archive was fine. The recovery was not, and only restoring
+      # and then TESTING the result says which.
+      #
+      # A backup that has never been restored is an assumption, and one that has
+      # been restored but not verified is a different assumption. This step
+      # takes the dump, restores it into a database that did not exist, and runs
+      # the same acceptance and invariant suites against the copy.
+      - name: G-41 · backup, restore and verify the restored database
         run: |
+          set -euo pipefail
           APP_ENV=ci PG_IMAGE=postgres:17-alpine \
             scripts/infra/backup-db.sh --out ./backups --schema chat
+          dump="$(ls -t ./backups/*.dump | head -1)"
+
+          psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -c 'create database jawwid_chat_recovered'
+          recovered="${DATABASE_URL%/*}/jawwid_chat_recovered"
+
+          PG_IMAGE=postgres:17-alpine \
+            scripts/infra/restore-db.sh --file "$dump" --into "$recovered" --schema chat
+
+          # The restored copy must satisfy the same gates as a migrated one. If
+          # privileges, role attributes or role memberships did not survive,
+          # schema_acceptance and rls_enforcement are what say so.
+          for suite in schema_acceptance br1_invariants rls_enforcement \
+                       tenant_isolation assignment_invariants od01_conversation_model; do
+            echo "::group::restored · $suite"
+            psql -v ON_ERROR_STOP=1 "$recovered" -f "db/tests/$suite.sql"
+            echo "::endgroup::"
+          done
+
+          # Data, not just structure: a restore that produces an empty database
+          # passes every structural check above.
+          rows=$(psql -tAX "$recovered" -c 'select count(*) from chat.config')
+          echo "restored chat.config rows: $rows"
+          [ "$rows" -gt 0 ] || { echo "::error::G-41 FAIL — restored database has no config rows"; exit 1; }
 
   # ------------------------------------------------------------------- images
   # AI #7. Deployment artifacts must build, and must not run privileged.
