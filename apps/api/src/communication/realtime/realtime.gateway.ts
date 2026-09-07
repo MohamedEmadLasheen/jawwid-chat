@@ -25,6 +25,16 @@ interface AuthedSocket extends Socket {
   sessionId?: string;
   /** When the socket's identity was last re-validated against the database. */
   revalidatedAt?: number;
+  /**
+   * Resolves when handleConnection has finished authenticating this socket.
+   *
+   * Socket.IO does NOT await an async connection handler before delivering
+   * frames, so a client that subscribes immediately on `connect` -- which is
+   * exactly what a well-written client does -- can arrive before `actor` is
+   * set and be refused as UNKNOWN_ACTOR. Every frame handler awaits this
+   * first, so the race is closed once rather than in each handler.
+   */
+  authenticated?: Promise<void>;
 }
 
 /**
@@ -73,7 +83,20 @@ export class RealtimeGateway
    * access token, verified by the same AuthService, so a socket can never reach
    * an identity an HTTP request could not.
    */
-  async handleConnection(client: AuthedSocket): Promise<void> {
+  handleConnection(client: AuthedSocket): Promise<void> {
+    // The promise is assigned SYNCHRONOUSLY, before the first frame can be
+    // delivered, so every handler has something to await even if it arrives
+    // while authentication is still in flight.
+    //
+    // It is also RETURNED. Socket.IO ignores the return value -- which is the
+    // whole reason the race existed -- but a caller that does await it, as a
+    // test driving the gateway directly does, gets a fully authenticated socket
+    // back rather than one that is still resolving.
+    client.authenticated = this.authenticate(client);
+    return client.authenticated;
+  }
+
+  private async authenticate(client: AuthedSocket): Promise<void> {
     const token = String(
       client.handshake.auth?.token ??
         (client.handshake.headers?.authorization ?? '').toString().replace(/^Bearer /, ''),
@@ -101,6 +124,12 @@ export class RealtimeGateway
    * take effect on a connection that is already open.
    */
   private async liveActor(client: AuthedSocket): Promise<Actor | null> {
+    // Wait for the handshake's authentication to finish. Without this, a frame
+    // that races the connection handler sees no actor and is refused, which
+    // looks to the client like an authorization failure rather than a timing
+    // one -- and a client that stops retrying on a refusal (correctly, because
+    // a refusal is a policy answer) then never subscribes at all.
+    await client.authenticated;
     if (!client.actor) return null;
     if (Date.now() - (client.revalidatedAt ?? 0) < REVALIDATE_AFTER_MS) return client.actor;
 
@@ -125,6 +154,10 @@ export class RealtimeGateway
    * eagerly, and tell the room.
    */
   async handleDisconnect(client: AuthedSocket): Promise<void> {
+    // A socket can disconnect while its own authentication is still resolving;
+    // awaiting it here is what stops presence and typing keys being left behind
+    // by a connection that came and went inside that window.
+    await client.authenticated;
     if (!client.actor) return;
     const actor = client.actor;
 
@@ -205,6 +238,7 @@ export class RealtimeGateway
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody() body: { conversationId?: string },
   ): Promise<{ ok: boolean }> {
+    await client.authenticated;
     const actor = client.actor;
     if (!actor || !body?.conversationId) return { ok: false };
     if (await this.typing.stop(body.conversationId, actor.actorId)) {
