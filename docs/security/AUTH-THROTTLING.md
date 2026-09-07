@@ -1,9 +1,15 @@
-# Jawwid Chat — Authentication Abuse Protection
+# Jawwid Chat — Abuse Protection
 
-Status: **CANONICAL** · Phase 1 closure (2026-09-07)
+Status: **CANONICAL** · Phase 1 closure (2026-09-07) · extended to authenticated
+actions in Phase 8 (2026-09-08)
 Implementation: `supabase/migrations/20260907120100_chat_phase1_auth_throttle.sql`,
-`apps/api/src/platform/auth/throttle.service.ts`
-Tests: `apps/api/test/integration/auth-throttling.spec.ts`
+`supabase/migrations/20260908090000_chat_phase8_action_throttle.sql`,
+`apps/api/src/platform/auth/throttle.service.ts`,
+`apps/api/src/platform/auth/action-throttle.guard.ts`,
+`apps/api/src/communication/realtime/frame-budget.ts`
+Tests: `apps/api/test/integration/auth-throttling.spec.ts`,
+`apps/api/test/integration/phase8-abuse-controls.spec.ts`,
+`apps/api/test/unit/abuse/`
 
 ---
 
@@ -96,8 +102,69 @@ delivers.
 * **`/auth/refresh` is not throttled.** A refresh token is opaque, 256 bits, and
   rotated on use; guessing one is not the cheap attack. Its session check is a
   single indexed lookup.
-* **Authenticated endpoints are not throttled.** They are bounded by
-  authorization, and a session that misbehaves can be revoked.
+
+> **Superseded (Phase 8).** This section used to end with "authenticated
+> endpoints are not throttled. They are bounded by authorization, and a session
+> that misbehaves can be revoked." That was true and it was not enough:
+> authorization answers whether an actor may do a thing, not whether they may do
+> it four thousand times a minute, and revocation is a human noticing. See §5.1.
+
+## 5.1 Authenticated actions
+
+The counters in §3 bound what can be reached **without** a session. These bound
+what a session can **repeat**, per actor — the axis an authenticated caller
+cannot rotate, because authorization already resolved it and it can be revoked.
+
+Same table, same function, same window semantics. A second mechanism with its
+own storage and its own off-by-one is how two limiters disagree during an
+incident.
+
+| Key | Default | Bounds |
+|---|---|---|
+| `abuse.throttle.window_seconds` | 60 | The rolling window. Much shorter than the auth window: this asks whether a session is behaving like a script *right now* |
+| `abuse.throttle.block_seconds` | 300 | How long a tripped actor stays blocked |
+| `abuse.throttle.message_send_actor` | 60 | One per second sustained — far above human typing, far below a script |
+| `abuse.throttle.attachment_upload_actor` | 30 | Each grant authorises a write to object storage, so this bounds spend too |
+| `abuse.throttle.broadcast_send_actor` | 5 | Fans out to every family in the audience: the most expensive action in the product |
+| `abuse.throttle.story_publish_actor` | 20 | |
+| `abuse.throttle.call_start_actor` | 20 | Each one mints a media token and reserves a room |
+
+Every number is an INITIAL HYPOTHESIS sized from the shape of the product rather
+than from measurement, and every one is a `chat.config` row. They sit well above
+human use on purpose: a limit a busy admin can reach on a difficult morning is a
+limit that gets raised in a panic and then forgotten.
+
+Refusal is `AUTH.TOO_MANY_ATTEMPTS`, HTTP **429** — the same code as §3, because
+it is the same answer. Unlike the login counters, an action counter is **not**
+cleared on success: a login counter measures failures, so signing in correctly
+should erase it, but this one measures the action itself. Sixty successful sends
+in a minute is exactly what it is looking for.
+
+The gate is **opt-in per route** (`@RateLimited(ActionScope.X)`), the opposite
+arrangement from authentication. A route nobody remembered to authenticate is a
+hole; a route nobody remembered to rate-limit is merely unlimited, and paying a
+database round trip on message-history paging would be a performance regression
+dressed as a security control.
+
+## 5.2 WebSocket frames
+
+Bounded in the gateway, per socket, **in memory** — `abuse.realtime.frames_per_socket_per_minute`,
+default 600. This is the one place the durable counter is the wrong tool:
+`typing.start` fires per keystroke, and a database write per keystroke would be a
+worse denial of service than the abuse it defends against.
+
+The trade is honest about what it buys. The resource being protected is one
+node's event loop, and a socket lives on exactly one node for its whole life, so
+a per-process counter is not an approximation of the right answer — it is the
+right answer for that resource. It is installed as socket middleware, so it
+bounds **frames** rather than handler invocations, including frames for events
+nothing subscribes to. A socket that exceeds it is refused *and* disconnected:
+refusing alone leaves a runaway client looping against a socket that keeps
+answering it.
+
+What it does not bound is an attacker opening a thousand sockets across a fleet.
+That is connection-count defence and belongs at the edge, with the volume
+defence below.
 
 ## 6. Operating it
 

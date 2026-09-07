@@ -25,5 +25,13 @@ module.exports = {
   projects: [
     { ...base, displayName: 'unit', testMatch: ['<rootDir>/test/unit/**/*.spec.ts'] },
     { ...base, displayName: 'integration', testMatch: ['<rootDir>/test/integration/**/*.spec.ts'] },
+    // perf  measures; it does not gate. Deliberately excluded from `npm test`
+    // and from CI: a timing assertion on a shared runner is a flaky test, and a
+    // flaky test in a security pipeline is one that gets disabled. Run it on
+    // purpose -- `npx jest --selectProjects perf` -- and record the output in
+    // docs/qa/performance-baseline.md together with the machine it came from.
+    //
+    // The *.perf.ts suffix is what keeps it out of the two projects above.
+    { ...base, displayName: 'perf', testMatch: ['<rootDir>/test/perf/**/*.perf.ts'] },
   ],
 };
