@@ -66,6 +66,23 @@ resolved member names. Every message route asserts the message is in the
 conversation its path names. `MessageDto` gained `replyPreview`, `editedAt`,
 `editCount` and `isForwarded`.
 
+### Attachments and storage
+
+`S3ObjectStorage` — SigV4 presigning against `node:crypto`, no AWS SDK — behind
+the existing `ObjectStorage` interface, chosen by configuration. This is the
+item architecture §2.5 assigns to Phase 2, and it was a real gap: `STORAGE_*`
+is REQUIRED for staging and production, `docker-compose` provisions a private
+MinIO bucket, and the local signer produced URLs for a path this API does not
+serve — so an authorized upload could not have been uploaded in a deployment.
+The other half of that section, object-level authorization on
+`signUrlsForMessages` (RT-006), was already in place.
+
+The mobile **attach button** is the affordance the phase scope supports: the
+phase map gives this client the realtime client, and assigns a picker and an
+upload pipeline to no phase at all. It is rendered, reachable, enabled and
+honest — it says attachments are not available yet, and carries a semantic
+label and hint.
+
 ### Realtime
 
 `message.updated` added. Receipt transitions now emit
@@ -120,6 +137,7 @@ the same status and deletion semantics. There is no second messaging model.
 | P2-9 | Search by sender and by date were implemented in the API and in the repository, tested, and exposed by NEITHER client. | The post-implementation audit |
 | P2-10 | A message arriving while the conversation was open and the reader was at the bottom never advanced the read cursor, so an actively-watched conversation accumulated a phantom unread badge. | The post-implementation audit |
 | P2-11 | Admin Web's `StaffRole` included `system`, which is an actor kind. `chat.staff.role`'s CHECK admits four values and does not include it, so every branch testing for it was dead. | The post-implementation audit |
+| P2-12 | **No S3/MinIO object storage.** `STORAGE_*` is REQUIRED for staging and production and `docker-compose` provisions a private bucket, but the wired implementation was the local reference signer, which produces URLs for a path this API does not serve. An upload authorized in a deployed environment could not have been uploaded. Its own class comment said so. | The attach-button closure |
 
 P2-7 is why `scripts/qa/phase2-smoke/` is now in the repository: it exercises
 the running system — the global guard, the route table, the error filter, a
@@ -160,31 +178,48 @@ database, the API and the outbox worker.
 |---|---|---|
 | API typecheck | `npm run typecheck` | PASS |
 | API build | `npm run build` | PASS |
-| API unit | `npm run test:unit` | PASS — 185/185 |
-| API full suite | `npx jest --runInBand` | PASS — **505/505**, 28 suites |
+| API suite (Phase 2 scope) | `npx jest --runInBand --testPathIgnorePatterns phase3` | PASS — **517/517**, 29 suites |
+| API suite (whole tree today) | `npx jest --runInBand` | PASS — 531/531, 31 suites |
 | Admin Web typecheck | `npm run typecheck` | PASS |
 | Admin Web tests | `npx vitest run` | PASS — 87/87 (76 before) |
 | Admin Web build | `npm run build` | PASS |
 | Flutter analyze | `flutter analyze` | PASS — 1 pre-existing lint on a `docs/` file |
-| Flutter tests | `flutter test` | PASS — 293/293 (224 before Phase 2) |
-| Live smoke, both directions | `scripts/qa/phase2-smoke/run.sh` | PASS — 58/58 |
+| Flutter tests | `flutter test` | PASS — 303/303 (224 before Phase 2) |
+| Live smoke, all four scripts | `scripts/qa/phase2-smoke/run.sh` | PASS — **76/76** |
 | Flutter against the live API | `flutter test test/integration/live_backend_test.dart` | PASS — 15/15 |
 
-`505` is 185 unit plus 320 integration, in one `npx jest` invocation.
+**Two API numbers, and why.** A concurrent agent began Phase 3 in this working
+tree while the audit ran; its specs are now in `apps/api/test`. `517` is the
+Phase 2 scope with those excluded, and is the number this report stands behind.
+`531` is what the tree currently runs. Neither is padded: the Phase 3 specs are
+somebody else's work and are named as such.
 
-**A correction to the previous report.** It reported `505/505` while also
-reporting `308/320` integration, and reconciled the two by counting a
+**A correction carried from the previous report.** It reported `505/505` while
+also reporting `308/320` integration, reconciling the two by counting a
 docker-path run of `schema-invariants` as if it belonged to the same
 invocation. It did not: those 12 were failing in the command as given. The
-cause was environmental — the suite shells out to `psql`, which was not
-installed on the development host — and installing it (`brew install libpq`)
-makes the single command pass 505/505 with no caveat. CI already installed
-`postgresql-client` for the same reason. Counting a test as PASS because a
-different invocation could run it was the wrong call, and the number is now
-one command's actual result.
+cause was environmental — the suite shells out to `psql`, absent on the
+development host — and installing it (`brew install libpq`) makes the single
+command pass with no caveat. CI already installed `postgresql-client` for the
+same reason. Counting a test as PASS because a different invocation could run
+it was the wrong call.
 
 The 35-step Family <-> Supervisor acceptance scenario runs as a test:
 `apps/api/test/integration/phase2-acceptance.spec.ts`.
+
+### Verification levels, stated precisely
+
+| Level | What it means here | Where |
+|---|---|---|
+| Unit tested | Pure logic, no I/O | 197 API unit, 87 Admin Web, most Flutter |
+| Integration tested | Real services against the real migrated database | 320 API integration |
+| Live transport tested | The running API, guard, route table, filter, socket, worker | `phase2-smoke` HTTP + realtime |
+| Client live tested | A real client's own transport modules against that running stack | Flutter `live_backend_test` (15); Admin Web's `core/api/conversations.ts` in `bidirectional.mjs` |
+| **Browser E2E tested** | **Nothing.** No browser drove the console's React tree | — |
+
+That last row is the honest one: the Admin Web console has no browser E2E
+coverage in this repository, and its React rendering is verified by unit tests
+and by its transport module, not by a browser.
 
 ### Which clients actually participated
 
@@ -207,9 +242,11 @@ described as an end-to-end UI test.
 * **Media forwarding.** Attachments are objects in storage with their own
   scoped URLs; copying the row would point a new audience at an object they
   were never authorized for. Text only, refused explicitly by the API.
-* **Attachments on mobile** are an affordance, not a feature: the API
-  authorizes uploads and the schema carries them, but no picker or upload
-  pipeline exists on the client, and the button says so.
+* **The mobile attach PIPELINE** — file picker, upload progress, attachment
+  rendering. The phase map assigns this client the realtime client and assigns
+  a picker to no phase; the server half that Phase 2 does name (real object
+  storage, object-level authorization) is built and verified end to end. The
+  button is the entry point, and says attachments are not available yet.
 * **The console's frozen CRM features** (inbox, families, tasks, coverage,
   dashboard, cases) stay on disk, unrouted, per
   `PHASE-0-ADMIN-WEB-RECONCILIATION` §2.7. They are deleted with a later phase.
