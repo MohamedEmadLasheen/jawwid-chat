@@ -49,7 +49,6 @@ export const Permission = {
    * families that are not theirs, which is the scope escape the supervisor
    * model exists to prevent. Same reasoning as `labels.manage`.
    */
-  MODERATION_RULES_MANAGE: 'moderation_rules.manage',
   BROADCASTS_SEND: 'broadcasts.send',
   /** Phase 7: use the AI assistant -- grounded answers, suggestions, summaries. */
   AI_USE: 'ai.use',
@@ -68,6 +67,13 @@ export const Permission = {
   ATTENTION_READ: 'attention.read',
   /** Phase 7: acknowledge, resolve or dismiss an attention flag. */
   ATTENTION_RESOLVE: 'attention.resolve',
+  /**
+   * Phase 7: create, edit, enable and disable automation rules, and read their
+   * execution history. Manager and above: one rule reaches every family in the
+   * organization at once, which is a broader act than anything an admin does --
+   * the same reasoning that made LABELS_MANAGE and BROADCASTS_SEND manager-level.
+   */
+  AUTOMATION_MANAGE: 'automation.manage',
   AUDIT_READ: 'audit.read',
   SETTINGS_MANAGE: 'settings.manage',
   USERS_MANAGE: 'users.manage',
@@ -161,14 +167,13 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     P.SETTINGS_MANAGE, P.SESSIONS_MANAGE,
     // Phase 6. Note its absence from admin and coverage_admin above: they
     // decide approvals (messages.moderate) but do not rewrite the rules.
-    P.MODERATION_RULES_MANAGE,
     P.FAMILIES_MANAGE, P.LEARNERS_ASSIGN_TEACHER,
     P.GROUPS_READ, P.GROUPS_MANAGE, P.LABELS_READ, P.LABELS_MANAGE,
     P.STORIES_READ, P.STORIES_PUBLISH, P.CALLS_RECORD, P.RECORDINGS_READ,
     // Phase 7. Staff only: every assistant surface helps somebody answer a
     // family, and a family's own questions are answered by a person.
     P.AI_USE, P.KNOWLEDGE_READ, P.KNOWLEDGE_MANAGE, P.KNOWLEDGE_APPROVE,
-    P.ATTENTION_READ, P.ATTENTION_RESOLVE,
+    P.ATTENTION_READ, P.ATTENTION_RESOLVE, P.AUTOMATION_MANAGE,
   ],
   [AuthzRole.SUPER_ADMIN]: [
     P.CONVERSATIONS_READ, P.CONVERSATIONS_MANAGE, P.MESSAGES_READ, P.MESSAGES_SEND,
@@ -176,14 +181,13 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     P.FAMILIES_READ, P.FAMILIES_ASSIGN, P.CONTACTS_VIEW_PRIVATE,
     P.CALLS_START, P.CALLS_ACCEPT, P.BROADCASTS_SEND, P.AUDIT_READ,
     P.SETTINGS_MANAGE, P.USERS_MANAGE, P.SESSIONS_MANAGE,
-    P.MODERATION_RULES_MANAGE,
     P.FAMILIES_MANAGE, P.LEARNERS_ASSIGN_TEACHER,
     P.GROUPS_READ, P.GROUPS_MANAGE, P.LABELS_READ, P.LABELS_MANAGE,
     P.STORIES_READ, P.STORIES_PUBLISH, P.CALLS_RECORD, P.RECORDINGS_READ,
     // Phase 7. Staff only: every assistant surface helps somebody answer a
     // family, and a family's own questions are answered by a person.
     P.AI_USE, P.KNOWLEDGE_READ, P.KNOWLEDGE_MANAGE, P.KNOWLEDGE_APPROVE,
-    P.ATTENTION_READ, P.ATTENTION_RESOLVE,
+    P.ATTENTION_READ, P.ATTENTION_RESOLVE, P.AUTOMATION_MANAGE,
   ],
 };
 

@@ -8,7 +8,6 @@ import { BroadcastWorker } from './communication/broadcast/broadcast.worker';
 import { CallSweeper } from './communication/calls/call-sweeper';
 import { AutomationSweeper } from './ai/automation/automation.sweeper';
 import { RiskSweeper } from './ai/risk/risk.sweeper';
-import { ModerationSweeper } from './communication/moderation/moderation.sweeper';
 import { readBuildInfo } from './infra/build-info';
 
 /**
@@ -65,7 +64,6 @@ async function bootstrap(): Promise<void> {
   // the only cost of the shared interval is that an item is escalated up to
   // SWEEP_MS after its threshold -- imperceptible against a threshold measured
   // in hours.
-  const moderationSweeper = app.get(ModerationSweeper);
 
   let running = true;
   let draining = false;
@@ -153,16 +151,6 @@ async function bootstrap(): Promise<void> {
       }
 
       // Its own try, for the same reason every other subsystem here has one: a
-      // moderation queue that cannot escalate must not be why missed calls stop
-      // being marked. (ModerationSweeper already swallows its own errors; this
-      // is the belt to that braces.)
-      try {
-        await moderationSweeper.sweep();
-      } catch (e) {
-        log.error(
-          `moderation sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`,
-        );
-      }
     }
 
     draining = false;
