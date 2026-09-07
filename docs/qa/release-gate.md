@@ -1,22 +1,61 @@
 # Jawwid Chat — Release Gate
 
 Date: 2026-09-05 · Owner: AI #5
+**Re-verified by execution: 2026-09-08 (Phase 8). See §1a.**
 Authoritative scope: `docs/qa/authoritative-scope.md` (PRD v0.1)
 
 A release is **BLOCKED** if any gate is failing **or unverified**. The two are
 treated identically: an untested control is not a control.
 
+> ## ⚠ The gate table below (§2–§5) is STALE, in both directions.
+>
+> It was last edited on 2026-09-05, before Phases 1–7 landed. It records P0
+> defects that are **fixed and regression-tested** (JC-008 and JC-010 both have
+> passing assertions in `schema-invariants.spec.ts`), and it records gates as
+> UNVERIFIED that are now covered by 752 passing integration tests. It is left
+> in place rather than rewritten because it is AI #5's artefact and rewriting
+> another owner's gate table from outside is how a gate quietly loosens.
+>
+> **§1a is the current, execution-backed status.** Where the two disagree, §1a
+> was measured on 2026-09-08 and §2–§5 were not.
+
 ## 1. Current verdict
 
 # 🔴 NOT READY
-**Reason: implementation is in progress.**
-Scope is settled — PRD v0.1 governs. Additionally, **the repository has two unmerged
-migration lineages and the working tree cannot build a database on its own**
-(`docs/release/branch-reconciliation.md`). **Five P0 defects remain open**
-(JC-001/002/003 scope, JC-009 database architecture, JC-010 silent schema
-divergence) and two P1 (JC-007, JC-008). JC-005 and JC-006 were found, fixed and
-regression-tested. The integration environment is now executable: 8 tests
-passing, 1 failing, and that failure is JC-008 rather than a test defect.
+**Reason: the delivery layer has never run.** Not the application — see §1a.
+
+There is no git remote, so no CI workflow in this repository has ever executed,
+and until 2026-09-08 the pipeline was red at its first job and could not have
+executed anyway. No environment exists to deploy to. Mobile tests have never run
+anywhere.
+
+*Superseded reasons, kept for the record:* the two unmerged migration lineages
+and the working tree's inability to build a database on its own are **resolved** —
+`supabase/migrations` is the single authority and 51 migrations apply from empty
+and are idempotent, verified 2026-09-08.
+
+## 1a. Phase 8 re-verification — measured 2026-09-08
+
+Full detail and evidence: `docs/recovery/PHASE-8-REPORT.md`.
+
+| Gate | 2026-09-05 | 2026-09-08 | Evidence |
+|---|---|---|---|
+| G-01 BR-1 enforced server-side | FAIL (JC-008) | **PASS** | `schema-invariants.spec.ts` asserts a GROUP→DIRECT conversion is rejected; `br1_invariants.sql` green |
+| G-45 one migration lineage, no divergent objects | FAIL (JC-010) | **PASS** | `exactly one actor column exists, and it is not both` passes; 51 migrations apply from empty |
+| G-19 migrations apply + idempotent | PARTIAL | **PASS** | Applied from empty on a clean container; re-apply is a no-op |
+| G-09 no cross-family/group access; IDOR sweep | UNVERIFIED | **PASS** | `security-regression`, `authz-attacks`, `tenant_isolation.sql`, `phase3-group-roster-security` |
+| G-10 realtime delivers only in-scope events | UNVERIFIED | **PASS** | `phase4-realtime`, `realtime-revocation` — subscribe by id, never by naming a room |
+| G-17 message/event/audit immutability | UNVERIFIED | **PASS** | `schema-invariants.spec.ts` append-only assertions |
+| G-12 one Primary Owner; transfer audited | UNVERIFIED | **PASS** | `assignment_invariants.sql`, `phase3-supervisor-transfer` |
+| G-15/G-16 no duplication or loss | UNVERIFIED | **PASS** | `phase2-messaging` idempotency, `phase4-outbox-crash-safety` |
+| G-18 no secrets in source or history | PASS | **PASS** | Scanner clean; hard rules proven still active in test paths |
+| G-40 observability | UNVERIFIED | **PARTIAL** | Structured JSON logging + health checks implemented and tested; no error tracking, metrics or alerts (BLOCKER-3) |
+| G-41 backup and restore rehearsed | FAIL (absent) | **PASS** | Restore was BROKEN, is fixed, and was drilled onto a bare cluster: 6/6 integrity suites on the restored copy |
+| G-36 CI runs the gates | PARTIAL | **BLOCKED** | The pipeline was red at its first job; now green locally through every check runnable here. **Never executed on a runner** |
+| G-37 every toolchain executable in CI | FAIL | **FAIL** | Mobile job now genuinely runs Flutter; has never executed. No Flutter/Dart/JDK on any known host |
+| G-39 zero open P0 / critical P1 | FAIL (5 P0, 2 P1) | **PARTIAL** | The listed application P0s are resolved. Open blockers are now delivery-layer: no remote, no hosting, no mobile execution |
+| — abuse limits on authenticated actions | *not a gate* | **PASS (new)** | Added Phase 8; `phase8-abuse-controls` |
+| — performance baseline | *not a gate* | **PARTIAL (new)** | First measurement ever taken; `docs/qa/performance-baseline.md` |
 
 ---
 

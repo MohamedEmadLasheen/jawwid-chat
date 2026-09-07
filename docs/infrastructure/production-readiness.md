@@ -1,12 +1,30 @@
 # Production Readiness
 
-Owner: AI #7 · Last verified: 2026-09-06
+Owner: AI #7 · Last verified: 2026-09-06 · **Re-verified 2026-09-08 (Phase 8)**
 
 Status: 🔴 **NOT READY.**
 
 Not because infrastructure is unfinished — most of it is built and verified —
-but because Jawwid Chat has no place to run and no application entrypoint to run
-there. Both are blockers no amount of configuration closes.
+but because Jawwid Chat has **no place to run**. That is the blocker no amount of
+configuration closes.
+
+> **Corrections as of 2026-09-08.** This page was written on 2026-09-06 and three
+> of its entries have since become false:
+>
+> - **BLOCKER-4 is CLOSED.** `apps/api/src/main.ts` and `src/worker.ts` both
+>   exist and are wired. The API has an entrypoint.
+> - **RISK-1 is CLOSED.** `npm run typecheck` passes cleanly on both projects.
+> - **RISK-3 is PARTLY closed.** `pubspec.yaml` exists and 30 Dart test files
+>   exist. Still no Flutter SDK on any known developer host, so they remain
+>   unexecuted — but CI is now genuinely wired to run them.
+>
+> One entry became **worse** on inspection, and it was the most dangerous:
+> "**Restore tested ✅ — drill executed 2026-09-05**" was true when written and
+> false by 2026-09-08. The restore path was broken in two ways and produced a
+> database the application could not write to. It is fixed and re-drilled. See
+> `docs/recovery/PHASE-8-REPORT.md` §1 and `backup-recovery.md` §4.
+>
+> The authoritative current status is `docs/recovery/PHASE-8-REPORT.md`.
 
 ## Checklist
 
@@ -16,23 +34,23 @@ Legend: ✅ done and verified · 🟡 partial · ❌ not done · ⛔ blocked
 |---|---|---|---|
 | ⛔ | Production environment exists | ❌ | No hosting account, no domain. BLOCKER-1 |
 | ⛔ | Repository hosted, CI executable | ❌ | No git remote. BLOCKER-2 |
-| ⛔ | Application entrypoint | ❌ | `main.ts` does not exist; the API cannot start. BLOCKER-4 |
+| ✅ | Application entrypoint | ✅ | `main.ts` and `worker.ts` exist and are wired (2026-09-08) |
 | ⛔ | Secrets configured | ❌ | No secret store exists |
 | ⛔ | TLS enabled | ❌ | No domain |
 | 🟡 | Database configured | 🟡 | Local ✅. No managed instance. Authority locked to the SQL migrations; reconciliation in progress |
 | ❌ | Database backup configured | ❌ | Provider backups need a provider. `pg_dump` path ✅ |
-| ✅ | **Restore tested** | ✅ | Drill executed 2026-09-05: 0 errors, 31 tables, 57 config rows |
+| ✅ | **Restore tested** | ✅ | **Was BROKEN; fixed 2026-09-08.** Re-drilled onto a bare cluster: 80 tables, 50 migrations, 119 config rows, 186 grants, 6/6 integrity suites |
 | 🟡 | Redis configured | 🟡 | Local ✅, `appendonly` + `noeviction`. No managed instance |
-| ❌ | Workers configured | ❌ | `dist/worker.js` does not exist (AI #2) |
+| 🟡 | Workers configured | 🟡 | `src/worker.ts` exists and builds; never run in a deployed environment |
 | 🟡 | Object storage configured | 🟡 | MinIO ✅, private bucket ✅. No production bucket |
 | ❌ | Push configured | ❌ | No Firebase or Apple credentials |
 | ❌ | LiveKit configured | ❌ | No project |
 | 🟡 | Core integration configured | 🟡 | Boundary being reworked to API/webhook per the locked decision |
 | 🟡 | Realtime configured | 🟡 | Gateway exists; multi-instance Redis adapter unproven |
 | ✅ | Health checks | ✅ | Liveness/readiness implemented; 200 and 503 paths both tested |
-| ❌ | Monitoring | ❌ | Specified, nothing provisioned. BLOCKER-3 |
+| 🟡 | Monitoring | 🟡 | Structured JSON logging implemented and tested (2026-09-08). Metrics, dashboards and alerts still unprovisioned. BLOCKER-3 |
 | ❌ | Error tracking | ❌ | `SENTRY_DSN` defined, SDK not wired |
-| 🟡 | CI configured | 🟡 | Pipeline written and locally dry-run; **never executed on a runner** |
+| 🟡 | CI configured | 🟡 | Was RED at its first job; fixed 2026-09-08 and green locally through every runnable check. **Still never executed on a runner** |
 | 🟡 | CD configured | 🟡 | Complete except the release step, which fails deliberately |
 | ✅ | Rollback documented | ✅ | Including which migrations are *not* reversible |
 | ✅ | Incident response documented | ✅ | No on-call rotation exists |

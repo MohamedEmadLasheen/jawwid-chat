@@ -116,6 +116,68 @@ production-shaped data; write the execution plan and the abort condition; know
 the lock it takes. `CREATE INDEX` without `CONCURRENTLY` locks writes on a large
 table for the duration.
 
+## 7a. Backup
+
+```bash
+APP_ENV=production DATABASE_URL=... scripts/infra/backup-db.sh --out ./backups --schema chat
+```
+
+Writes a `pg_dump` custom-format archive plus a `.sha256`. Take one before every
+risky migration and before every production deploy — the deploy workflow already
+does, as a 30-day artifact.
+
+**The archive now carries the privilege model.** Until Phase 8 the dump was taken
+with `--no-privileges` and contained zero ACL entries, so anything restored from
+it was a database the application could not write to. If you are holding an
+archive taken before 2026-09-08, assume it has that defect and re-take it.
+
+## 7b. Restore
+
+**Read `backup-recovery.md` §4 before doing this under pressure.** Two failure
+modes there produce a restore that looks like it worked.
+
+```bash
+# 1. Target on the SAME Postgres major version. Plain postgres:17.
+docker run -d --name restore-target -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=recovered -p 55489:5432 postgres:17
+
+# 2. Restore. The schema and the runtime roles are prepared for you.
+scripts/infra/restore-db.sh --file backups/<dump> \
+  --into postgres://postgres:postgres@localhost:55489/recovered --schema chat
+
+# 3. VERIFY. A restore is not a recovery until the copy passes the same gates a
+#    migrated database does. This is not optional and it takes seconds.
+for suite in schema_acceptance br1_invariants rls_enforcement \
+             tenant_isolation assignment_invariants od01_conversation_model; do
+  psql -v ON_ERROR_STOP=1 "$RECOVERED_URL" -f "db/tests/$suite.sql"
+done
+```
+
+The restoring role needs `CREATE` on the target database **and** `CREATE ROLE` on
+the cluster, because step 2 creates the runtime roles when they are absent. If
+your target forbids that, `--no-privileges` gets you an **investigation copy, not
+a recovery** — the application cannot write to it.
+
+Restoring over production additionally requires
+`--i-understand-this-overwrites-production`, and take a fresh backup of the
+current state first: you will want it if the restore turns out to be the wrong
+call.
+
+## 7c. Rotate a secret
+
+Full procedure in `secrets.md`. The order that matters:
+
+1. Issue the new value at the provider **before** touching the application.
+2. Update the secret store.
+3. Restart the API and the worker so both read it (§4).
+4. Verify with `/health/ready` and a smoke test.
+5. Revoke the old value at the provider — **last**, so a failed rollout can roll
+   back to something that still works.
+
+`JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` are the exception: rotating either
+invalidates every existing session, so every user is signed out. That is the
+correct response to a suspected token leak and an outage if done casually.
+
 ## 8. Incidents by symptom
 
 ### API returning 5xx

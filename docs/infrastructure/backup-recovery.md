@@ -153,8 +153,8 @@ never seen this schema and held none of its roles.
 |---|---|---|
 | `pg_restore` errors | 1 (aborted immediately) | **0** |
 | `chat` tables | 0 | **80** |
-| `chat.config` rows | 0 | **119** |
-| Migrations recorded | 0 | **50** |
+| `chat.config` rows | 0 | **129** |
+| Migrations recorded | 0 | **51** |
 | `chat_app` grants | 0 | **186** |
 | `schema_acceptance` | FAIL | **PASS** |
 | `rls_enforcement` | not reached | **PASS** |
