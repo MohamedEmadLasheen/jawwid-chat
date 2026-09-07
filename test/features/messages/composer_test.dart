@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/features/messages/presentation/message_composer.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/message.dart';
