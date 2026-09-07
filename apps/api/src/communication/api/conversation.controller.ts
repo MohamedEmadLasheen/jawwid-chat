@@ -9,10 +9,37 @@ import { CommErrorFilter } from './http-exception.filter';
 export class ConversationController {
   constructor(private readonly conversations: ConversationService) {}
 
-  /** The chat list, RBAC-scoped to what this actor may see. */
+  /**
+   * The chat list, RBAC-scoped to what this actor may see.
+   *
+   * Each row carries its unread count, its last readable message and this
+   * actor's own pin/mute/archive state. Those used to be absent, which forced
+   * every client into one request per row to render a list -- see
+   * ConversationService.listRowsForActor for the query budget that replaces it.
+   */
   @Get()
   async list(@ActorId() actorId: string) {
-    const rows = await this.conversations.listForActor(actorId);
+    const rows = await this.conversations.listRowsForActor(actorId);
+    return {
+      conversations: rows.map((r) => toConversationDto(r.conversation, r.members, r.extras)),
+    };
+  }
+
+  /**
+   * Find a conversation by its title or by a participant's name.
+   *
+   * Scoped by construction, never filtered afterwards: the candidate set is
+   * built from the same predicate the list is, so a name that matches somebody
+   * outside this actor's scope returns nothing rather than a redacted row.
+   * This is never a directory.
+   */
+  @Get('search')
+  async search(@ActorId() actorId: string, @Query('q') q = '', @Query('limit') limit?: string) {
+    const rows = await this.conversations.searchForActor(
+      actorId,
+      q,
+      limit ? Math.min(Number(limit), 50) : 20,
+    );
     return { conversations: rows.map((c) => toConversationDto(c)) };
   }
 

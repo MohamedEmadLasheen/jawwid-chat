@@ -115,16 +115,39 @@ export class RealtimeGateway
     return client.actor;
   }
 
+  /**
+   * Clean up everything transient this socket owned.
+   *
+   * Typing is the part that matters: a socket that drops mid-word leaves its
+   * Redis key behind, and until it expires every other participant sees a
+   * "typing…" for somebody who is not there. The TTL bounds that to seconds,
+   * but only after a disconnect the server already knew about -- so clear it
+   * eagerly, and tell the room.
+   */
   async handleDisconnect(client: AuthedSocket): Promise<void> {
     if (!client.actor) return;
-    await this.presence.offline(client.actor.actorId, client.id);
+    const actor = client.actor;
+
+    for (const roomName of client.rooms) {
+      if (!roomName.startsWith('conversation:')) continue;
+      const conversationId = roomName.slice('conversation:'.length);
+      if (await this.typing.stop(conversationId, actor.actorId)) {
+        client.to(roomName).emit(CommEvent.TYPING_STOPPED, {
+          conversationId,
+          actorId: actor.actorId,
+          displayName: actor.displayName,
+        });
+      }
+    }
+
+    await this.presence.offline(actor.actorId, client.id);
   }
 
   @SubscribeMessage('conversation.subscribe')
   async subscribe(
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody() body: { conversationId?: string },
-  ): Promise<{ ok: boolean; code?: string }> {
+  ): Promise<{ ok: boolean; code?: string; typing?: string[] }> {
     const actor = await this.liveActor(client);
     if (!actor || !body?.conversationId) return { ok: false, code: 'COMM.UNKNOWN_ACTOR' };
 
@@ -132,7 +155,15 @@ export class RealtimeGateway
     if (!check.ok) return check;
 
     await client.join(room.conversation(body.conversationId));
-    return { ok: true };
+
+    // Whoever is mid-sentence right now. Without this a client that joins
+    // between a typing.started and its typing.stopped never learns about it,
+    // and the indicator only ever appears for people who start typing AFTER
+    // you open the conversation.
+    const typing = (await this.typing.whoIsTyping(body.conversationId)).filter(
+      (id) => id !== actor.actorId,
+    );
+    return { ok: true, typing };
   }
 
   @SubscribeMessage('conversation.unsubscribe')
@@ -150,7 +181,10 @@ export class RealtimeGateway
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody() body: { conversationId?: string },
   ): Promise<{ ok: boolean }> {
-    const actor = client.actor;
+    // liveActor(), not client.actor: a typing indicator is a broadcast into a
+    // conversation, and a socket whose session was revoked must not be able to
+    // keep announcing itself there until it happens to reconnect.
+    const actor = await this.liveActor(client);
     if (!actor || !body?.conversationId) return { ok: false };
     if (!(await this.authorize(actor, body.conversationId)).ok) return { ok: false };
 
@@ -241,7 +275,7 @@ export class RealtimeGateway
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody() body: { messageIds?: string[] },
   ): Promise<{ ok: boolean; updated: number }> {
-    const actor = client.actor;
+    const actor = await this.liveActor(client);
     if (!actor || !body?.messageIds?.length) return { ok: false, updated: 0 };
     // Scoped to this actor's own receipt rows; a client cannot acknowledge for
     // somebody else.

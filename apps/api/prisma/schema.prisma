@@ -251,6 +251,19 @@ model Message {
 
   clientMessageId String? @map("client_message_id")
 
+  /// Phase 2. Null = never edited. A body change without one is refused by
+  /// chat.forbid_message_rewrite(), so an edit is always stamped.
+  editedAt  DateTime? @map("edited_at") @db.Timestamptz
+  editedBy  String?   @map("edited_by") @db.Uuid
+  editCount Int       @map("edit_count") @default(0)
+
+  /// Phase 2 forwarding provenance. Audit only -- never served to a client,
+  /// because the source conversation is often outside the recipient's scope.
+  forwardedFromMessageId      String?  @map("forwarded_from_message_id") @db.Uuid
+  forwardedFrom               Message? @relation("MessageForward", fields: [forwardedFromMessageId], references: [id])
+  forwards                    Message[] @relation("MessageForward")
+  forwardedFromConversationId String?  @map("forwarded_from_conversation_id") @db.Uuid
+
   deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
   deletedBy      String?   @map("deleted_by") @db.Uuid
   deletedForAll  Boolean   @map("deleted_for_all") @default(false)
@@ -265,6 +278,7 @@ model Message {
   reactions   MessageReaction[]
   receipts    MessageReceipt[]
   hiddenFor   MessageHiddenFor[]
+  revisions   MessageRevision[]
   approval    MessageApproval?
 
   @@map("message")
@@ -327,6 +341,25 @@ model MessageHiddenFor {
 
   @@id([messageId, actorId])
   @@map("message_hidden_for")
+  @@schema("chat")
+}
+
+/// Append-only history of superseded message bodies (Phase 2).
+///
+/// Revision 1 is what the message was SENT with; each edit appends the body it
+/// replaced. A database trigger refuses UPDATE and DELETE, so an edit can never
+/// destroy what was actually said.
+model MessageRevision {
+  id         String   @id @default(uuid()) @db.Uuid
+  messageId  String   @map("message_id") @db.Uuid
+  message    Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  revision   Int
+  body       String?
+  replacedBy String   @map("replaced_by") @db.Uuid
+  replacedAt DateTime @map("replaced_at") @db.Timestamptz @default(now())
+
+  @@unique([messageId, revision])
+  @@map("message_revision")
   @@schema("chat")
 }
 

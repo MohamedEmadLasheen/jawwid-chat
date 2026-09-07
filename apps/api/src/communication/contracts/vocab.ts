@@ -124,6 +124,21 @@ export const RECEIPT_RANK: Record<string, number> = {
   [ReceiptState.READ]: 2,
 };
 
+/**
+ * The reactions a client may send.
+ *
+ * An allow-list rather than "any grapheme cluster". A free-text reaction column
+ * is a second message body with none of a message body's controls: it bypasses
+ * approval, it is not searchable or moderatable, and it cannot be edited or
+ * deleted for everyone. Six emoji cover what the product asked for, and adding
+ * one is a one-line change here plus a client string.
+ *
+ * Mirrors the mobile client's list in lib/shared/models/message.dart.
+ */
+export const REACTION_EMOJI: readonly string[] = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
+export const ALLOWED_REACTIONS: ReadonlySet<string> = new Set(REACTION_EMOJI);
+
 export const ApprovalDecision = {
   PENDING: 'pending',
   APPROVED: 'approved',

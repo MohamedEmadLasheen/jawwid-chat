@@ -31,6 +31,16 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   /** initial hypothesis - max messages returned per page */
   'communication.page_size_max': 100,
   'communication.page_size_default': 50,
+
+  // --- Messaging lifecycle (Phase 2) -----------------------------------------
+  /** initial hypothesis - how long an author may edit their own message */
+  'communication.edit_window_minutes': 15,
+  /** hard cap on search results per request */
+  'communication.search_page_size_max': 50,
+  /** initial hypothesis - conversations one forward may target */
+  'communication.forward_max_targets': 5,
+  /** matches the mobile composer's cap, so client and server agree */
+  'communication.message_max_length': 4000,
   /** initial hypothesis - LiveKit room token lifetime, short by design */
   'call.token_ttl_seconds': 120,
   /** initial hypothesis - unanswered call becomes a missed call */

@@ -11,6 +11,8 @@
 
 export const CommEvent = {
   MESSAGE_CREATED: 'message.created',
+  /** The body or the moderation state of an existing message changed. */
+  MESSAGE_UPDATED: 'message.updated',
   MESSAGE_DELETED: 'message.deleted',
   MESSAGE_RECEIPT_UPDATED: 'message.receipt.updated',
   REACTION_ADDED: 'reaction.added',
@@ -53,6 +55,23 @@ export interface MessageCreatedPayload {
   visibility: string;
   moderation: string;
   createdAt: string;
+}
+
+/**
+ * An existing message changed.
+ *
+ * The new body travels with the event so a client can update its copy without a
+ * round trip. It is emitted only for CUSTOMER-visible messages on the
+ * conversation room, and only for published ones -- an edit to a message the
+ * recipient could not read in the first place is not broadcast at all.
+ */
+export interface MessageUpdatedPayload {
+  conversationId: string;
+  messageId: string;
+  seq: string | null;
+  body: string | null;
+  editedAt: string;
+  editCount: number;
 }
 
 export interface MessageDeletedPayload {
@@ -157,6 +176,7 @@ export interface AccessRevokedPayload {
 
 export interface CommEventPayloads {
   [CommEvent.MESSAGE_CREATED]: MessageCreatedPayload;
+  [CommEvent.MESSAGE_UPDATED]: MessageUpdatedPayload;
   [CommEvent.MESSAGE_DELETED]: MessageDeletedPayload;
   [CommEvent.MESSAGE_RECEIPT_UPDATED]: MessageReceiptUpdatedPayload;
   [CommEvent.REACTION_ADDED]: ReactionPayload;

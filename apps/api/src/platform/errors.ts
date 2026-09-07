@@ -32,6 +32,15 @@ export enum CommErrorCode {
   CANNOT_APPROVE = 'COMM.CANNOT_APPROVE',
   NOT_MESSAGE_AUTHOR = 'COMM.NOT_MESSAGE_AUTHOR',
   DELETE_WINDOW_EXPIRED = 'COMM.DELETE_WINDOW_EXPIRED',
+  /** The author's edit window has closed. A moderator is not bound by it. */
+  EDIT_WINDOW_EXPIRED = 'COMM.EDIT_WINDOW_EXPIRED',
+  /**
+   * The message is in a state that has no lawful edit: deleted for everyone,
+   * held for approval, rejected, or a type whose content is not text.
+   */
+  MESSAGE_NOT_EDITABLE = 'COMM.MESSAGE_NOT_EDITABLE',
+  /** The message may be read, but not copied out of the conversation. */
+  MESSAGE_NOT_FORWARDABLE = 'COMM.MESSAGE_NOT_FORWARDABLE',
 
   // --- Validation / state ---
   UNKNOWN_ACTOR = 'COMM.UNKNOWN_ACTOR',
@@ -40,6 +49,12 @@ export enum CommErrorCode {
   MESSAGE_NOT_FOUND = 'COMM.MESSAGE_NOT_FOUND',
   REPLY_TARGET_CROSS_CONVERSATION = 'COMM.REPLY_TARGET_CROSS_CONVERSATION',
   EMPTY_MESSAGE = 'COMM.EMPTY_MESSAGE',
+  /** The body exceeds communication.message_max_length. */
+  MESSAGE_TOO_LONG = 'COMM.MESSAGE_TOO_LONG',
+  /** The emoji is not in the supported reaction set. */
+  REACTION_NOT_ALLOWED = 'COMM.REACTION_NOT_ALLOWED',
+  /** A search was issued with nothing to search for. */
+  SEARCH_QUERY_TOO_SHORT = 'COMM.SEARCH_QUERY_TOO_SHORT',
   ATTACHMENT_TOO_LARGE = 'COMM.ATTACHMENT_TOO_LARGE',
   ATTACHMENT_TYPE_NOT_ALLOWED = 'COMM.ATTACHMENT_TYPE_NOT_ALLOWED',
   APPROVAL_ALREADY_DECIDED = 'COMM.APPROVAL_ALREADY_DECIDED',
