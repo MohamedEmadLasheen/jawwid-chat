@@ -16,7 +16,6 @@ import '../features/calls/data/call_media.dart';
 import '../features/calls/domain/call_session.dart';
 import '../features/messages/application/outbox_courier.dart';
 import '../features/messages/data/outbox_store.dart';
-import '../features/notifications/push_messaging.dart';
 import '../shared/models/user_role.dart';
 
 /// Composition root.
@@ -85,27 +84,6 @@ final outboxCourierProvider = Provider<OutboxCourier>((ref) {
   ref.onDispose(() => unawaited(courier.dispose()));
   return courier;
 });
-
-/// Device push tokens against the backend.
-///
-/// Throws when unimplemented, like every other repository: a release build that
-/// forgot to supply it must fail loudly rather than silently not registering.
-/// It is never reached on a build without push, because a disabled transport
-/// yields no tokens and the registrar only touches the repository when one
-/// arrives.
-final notificationRepositoryProvider = Provider<NotificationRepository>((ref) {
-  throw UnimplementedError('notificationRepositoryProvider must be overridden');
-});
-
-/// The device's push transport.
-///
-/// Defaults to DISABLED rather than throwing, exactly as the realtime client
-/// does: an app without push is degraded, not broken, and a widget test must
-/// not have to stand up Firebase to render a chat screen. Overridden at startup
-/// when this build has a Firebase configuration.
-final pushMessagingProvider = Provider<PushMessaging>(
-  (ref) => const DisabledPushMessaging(),
-);
 
 /// The app's local database, or null when this build has none.
 ///
