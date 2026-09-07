@@ -6,6 +6,7 @@ import { OutboxWorker } from './communication/outbox/outbox.worker';
 import { NotificationService } from './communication/notifications/notification.service';
 import { BroadcastWorker } from './communication/broadcast/broadcast.worker';
 import { CallSweeper } from './communication/calls/call-sweeper';
+import { ModerationSweeper } from './communication/moderation/moderation.sweeper';
 import { AutomationSweeper } from './ai/automation/automation.sweeper';
 import { RiskSweeper } from './ai/risk/risk.sweeper';
 import { readBuildInfo } from './infra/build-info';
@@ -53,6 +54,7 @@ async function bootstrap(): Promise<void> {
   const notifications = app.get(NotificationService);
   const broadcasts = app.get(BroadcastWorker);
   const sweeper = app.get(CallSweeper);
+  const moderationSweeper = app.get(ModerationSweeper);
   // Phase 7. Both are idempotent by construction -- the automation engine
   // claims each occurrence with a unique insert before acting, and a duplicate
   // attention flag is refused by a partial unique index -- so several worker
@@ -138,6 +140,14 @@ async function bootstrap(): Promise<void> {
       // is: AI is an ENHANCEMENT, and an enhancement that can stop the outbox
       // draining or the missed-call sweep running is a single point of failure
       // wearing a different hat (§28).
+      try {
+        await moderationSweeper.sweep();
+      } catch (e) {
+        log.error(
+          `moderation sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`,
+        );
+      }
+
       try {
         await automation.sweep();
       } catch (e) {

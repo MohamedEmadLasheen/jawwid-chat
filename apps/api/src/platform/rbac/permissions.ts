@@ -50,6 +50,7 @@ export const Permission = {
    * model exists to prevent. Same reasoning as `labels.manage`.
    */
   BROADCASTS_SEND: 'broadcasts.send',
+  MODERATION_RULES_MANAGE: 'moderation_rules.manage',
   /** Phase 7: use the AI assistant -- grounded answers, suggestions, summaries. */
   AI_USE: 'ai.use',
   /** Phase 7: read the approved knowledge the assistant grounds answers on. */
@@ -174,6 +175,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     // family, and a family's own questions are answered by a person.
     P.AI_USE, P.KNOWLEDGE_READ, P.KNOWLEDGE_MANAGE, P.KNOWLEDGE_APPROVE,
     P.ATTENTION_READ, P.ATTENTION_RESOLVE, P.AUTOMATION_MANAGE,
+    P.MODERATION_RULES_MANAGE,
   ],
   [AuthzRole.SUPER_ADMIN]: [
     P.CONVERSATIONS_READ, P.CONVERSATIONS_MANAGE, P.MESSAGES_READ, P.MESSAGES_SEND,
@@ -188,6 +190,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     // family, and a family's own questions are answered by a person.
     P.AI_USE, P.KNOWLEDGE_READ, P.KNOWLEDGE_MANAGE, P.KNOWLEDGE_APPROVE,
     P.ATTENTION_READ, P.ATTENTION_RESOLVE, P.AUTOMATION_MANAGE,
+    P.MODERATION_RULES_MANAGE,
   ],
 };
 
