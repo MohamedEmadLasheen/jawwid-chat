@@ -179,7 +179,7 @@ database, the API and the outbox worker.
 | API typecheck | `npm run typecheck` | PASS |
 | API build | `npm run build` | PASS |
 | API suite (Phase 2 scope) | `npx jest --runInBand --testPathIgnorePatterns phase3` | PASS — **517/517**, 29 suites |
-| API suite (whole tree today) | `npx jest --runInBand` | PASS — 531/531, 31 suites |
+| API suite (whole tree) | `npx jest --runInBand` | PASS — but the total MOVES: it includes the concurrent agent's Phase 3 specs, which grew from 2 files to 7 during this phase's freeze. Not a Phase 2 number. |
 | Admin Web typecheck | `npm run typecheck` | PASS |
 | Admin Web tests | `npx vitest run` | PASS — 87/87 (76 before) |
 | Admin Web build | `npm run build` | PASS |
@@ -188,11 +188,14 @@ database, the API and the outbox worker.
 | Live smoke, all four scripts | `scripts/qa/phase2-smoke/run.sh` | PASS — **76/76** |
 | Flutter against the live API | `flutter test test/integration/live_backend_test.dart` | PASS — 15/15 |
 
-**Two API numbers, and why.** A concurrent agent began Phase 3 in this working
-tree while the audit ran; its specs are now in `apps/api/test`. `517` is the
-Phase 2 scope with those excluded, and is the number this report stands behind.
-`531` is what the tree currently runs. Neither is padded: the Phase 3 specs are
-somebody else's work and are named as such.
+**One API number, and why.** A concurrent agent began Phase 3 in this working
+tree while the audit ran, and its specs live in `apps/api/test` alongside these.
+**517 is the Phase 2 scope** and is the number this report stands behind; it was
+last measured from a clean `git worktree` at the Phase 2 HEAD, against a
+database built from the Phase 2 migrations alone, so it does not depend on the
+state of anyone else's work in progress. The whole-tree total is deliberately
+not quoted as a figure: it counts somebody else's tests and moves as they write
+them.
 
 **A correction carried from the previous report.** It reported `505/505` while
 also reporting `308/320` integration, reconciling the two by counting a
