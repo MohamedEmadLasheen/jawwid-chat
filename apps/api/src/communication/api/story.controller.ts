@@ -1,6 +1,8 @@
 import { Body, Controller, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
 import { StoryService } from '../stories/story.service';
 import { ActorId } from '../../platform/auth/current-actor.decorator';
+import { RateLimited } from '../../platform/auth/action-throttle.guard';
+import { ActionScope } from '../../platform/auth/throttle.service';
 import { CommErrorFilter } from './http-exception.filter';
 import type { AudienceClause } from '../audience/audience-resolver.service';
 
@@ -28,6 +30,7 @@ export class StoryController {
     return { stories: await this.stories.list(actorId, drafts !== 'false') };
   }
 
+  @RateLimited(ActionScope.ATTACHMENT_UPLOAD)
   @Post('media')
   async media(
     @ActorId() actorId: string,
@@ -60,6 +63,7 @@ export class StoryController {
   }
 
   /** Resolve the audience and go live. Manager/Admin only, checked server-side. */
+  @RateLimited(ActionScope.STORY_PUBLISH)
   @Post(':id/publish')
   async publish(@ActorId() actorId: string, @Param('id') id: string) {
     return this.stories.publish(id, actorId);

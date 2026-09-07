@@ -19,6 +19,8 @@ import { PresenceService } from './presence.service';
 import { MessageService } from '../messages/message.service';
 import { ConversationService } from '../conversations/conversation.service';
 import { ReceiptState } from '../contracts/vocab';
+import { AppConfigService } from '../../platform/app-config.service';
+import { FrameBudget } from './frame-budget';
 
 interface AuthedSocket extends Socket {
   actor?: Actor;
@@ -73,6 +75,7 @@ export class RealtimeGateway
     private readonly presence: PresenceService,
     private readonly messages: MessageService,
     private readonly auth: AuthService,
+    private readonly config: AppConfigService,
   ) {}
 
   /**
@@ -111,6 +114,29 @@ export class RealtimeGateway
     client.actor = authenticated.actor;
     client.sessionId = authenticated.claims.sid;
     client.revalidatedAt = Date.now();
+
+    // Phase 8. Bound how fast this socket may send, and drop it if it stops
+    // behaving like a client.
+    //
+    // Installed as socket middleware rather than checked inside each handler,
+    // because the thing worth bounding is FRAMES -- including frames for events
+    // nothing subscribes to, which reach no handler and would therefore be free
+    // in a per-handler check. It is installed AFTER authentication so an
+    // unauthenticated socket cannot spend anything: that one is already
+    // disconnected above.
+    const limit = Number(await this.config.get('abuse.realtime.frames_per_socket_per_minute'));
+    const budget = new FrameBudget(limit);
+    client.use((_packet, next) => {
+      if (budget.admit()) return next();
+      // Refuse the frame AND end the connection. Refusing alone would leave a
+      // runaway client looping against a socket that keeps answering it, which
+      // costs this node the parse and the dispatch on every iteration.
+      this.log.warn(
+        `socket ${client.id} exceeded ${limit} frames/minute; disconnecting`,
+      );
+      next(new Error('COMM.RATE_LIMITED'));
+      client.disconnect(true);
+    });
     // Every socket joins its own actor room, so multi-device fan-out is free.
     await client.join(room.actor(authenticated.actor.actorId));
 

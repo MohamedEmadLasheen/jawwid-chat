@@ -37,6 +37,25 @@ class FakeSocket {
   authenticated?: Promise<void>;
   handshake = { auth: {} as Record<string, unknown>, headers: {} as Record<string, unknown> };
 
+
+  /**
+   * Socket.IO middleware, captured rather than discarded so a test can drive
+   * frames through it. The gateway installs the per-socket frame budget here
+   * (Phase 8); a double that silently swallowed `use` would let that control be
+   * deleted with every realtime test still green.
+   */
+  readonly middleware: Array<(packet: unknown[], next: (err?: Error) => void) => void> = [];
+  use(fn: (packet: unknown[], next: (err?: Error) => void) => void): void {
+    this.middleware.push(fn);
+  }
+
+  /** Send one frame through the installed middleware. Returns its refusal, if any. */
+  frame(): Error | undefined {
+    let refusal: Error | undefined;
+    for (const fn of this.middleware) fn([], (err?: Error) => { refusal = err; });
+    return refusal;
+  }
+
   async join(room: string): Promise<void> {
     this.rooms.add(room);
   }
@@ -72,6 +91,7 @@ function gateway(): RealtimeGateway {
     presence as never,
     g.messages,
     g.auth,
+    g.config,
   );
 }
 
@@ -158,6 +178,7 @@ describe('a frame that races the handshake', () => {
       } as never,
       g.messages,
       g.auth,
+      g.config,
     );
 
     const socket = new FakeSocket();
@@ -184,6 +205,7 @@ describe('a frame that races the handshake', () => {
       } as never,
       g.messages,
       g.auth,
+      g.config,
     );
 
     const socket = new FakeSocket();
@@ -214,6 +236,7 @@ describe('a frame that races the handshake', () => {
       } as never,
       g.messages,
       g.auth,
+      g.config,
     );
 
     const socket = new FakeSocket();

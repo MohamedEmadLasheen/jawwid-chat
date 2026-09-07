@@ -24,6 +24,28 @@ export const ThrottleScope = {
 } as const;
 export type ThrottleScope = (typeof ThrottleScope)[keyof typeof ThrottleScope];
 
+/**
+ * The expensive actions an AUTHENTICATED caller can repeat. Phase 8.
+ *
+ * Only one axis here, and it is the actor. An authenticated caller has
+ * something better than an address: an identity authorization already resolved,
+ * which address rotation does not shake off and which can be revoked. The *_ip
+ * axis above exists because a login has no identity yet -- that is the whole
+ * reason it needs one.
+ *
+ * Each name is BOTH the `scope` value stored in chat.auth_throttle and the
+ * suffix of its `abuse.throttle.*` configuration key, so adding a scope needs
+ * no mapping table that can drift from the migration.
+ */
+export const ActionScope = {
+  MESSAGE_SEND: 'message_send_actor',
+  ATTACHMENT_UPLOAD: 'attachment_upload_actor',
+  BROADCAST_SEND: 'broadcast_send_actor',
+  STORY_PUBLISH: 'story_publish_actor',
+  CALL_START: 'call_start_actor',
+} as const;
+export type ActionScope = (typeof ActionScope)[keyof typeof ActionScope];
+
 interface AttemptResult {
   blocked: boolean;
   attempts: number;
@@ -68,7 +90,7 @@ export class ThrottleService {
   }
 
   /** Keys are keyed hashes: the table stores no address and no subject. */
-  bucket(scope: ThrottleScope, value: string): string {
+  bucket(scope: ThrottleScope | ActionScope, value: string): string {
     const digest = createHmac('sha256', this.secret())
       .update(`${scope}:${value.trim().toLowerCase()}`)
       .digest('base64url')
@@ -116,6 +138,43 @@ export class ThrottleService {
       throw new AuthError(
         AuthErrorCode.TOO_MANY_ATTEMPTS,
         'too many attempts; try again later',
+        429,
+      );
+    }
+  }
+
+  /**
+   * Record one expensive action by an authenticated actor, and refuse if the
+   * actor has tripped their limit. Phase 8.
+   *
+   * NOT cleared on success, which is the difference from `hit`. A login counter
+   * measures FAILURES, so signing in correctly should erase it. This counter
+   * measures the action itself -- sixty successful sends in a minute is exactly
+   * what it is looking for, and clearing on success would count nothing at all.
+   *
+   * An absent actor becomes its own shared bucket rather than a free pass, for
+   * the same reason a missing address does above. In practice AuthGuard has
+   * already refused the request, so this is a belt-and-braces default rather
+   * than a path anything reaches.
+   */
+  async hitAction(scope: ActionScope, actorId: string | undefined): Promise<void> {
+    const [limit, windowSeconds, blockSeconds] = await Promise.all([
+      this.config.get(`abuse.throttle.${scope}` as 'abuse.throttle.message_send_actor'),
+      this.config.get('abuse.throttle.window_seconds'),
+      this.config.get('abuse.throttle.block_seconds'),
+    ]);
+
+    const bucket = this.bucket(scope, actorId ?? 'unattributed');
+    const [result] = await this.prisma.$queryRaw<AttemptResult[]>`
+      select * from chat.record_auth_attempt(
+        ${bucket}, ${scope}, ${Number(limit)}::int, ${Number(windowSeconds)}::int,
+        ${Number(blockSeconds)}::int)
+    `;
+
+    if (result?.blocked) {
+      throw new AuthError(
+        AuthErrorCode.TOO_MANY_ATTEMPTS,
+        'too many requests; slow down',
         429,
       );
     }

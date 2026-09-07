@@ -1,6 +1,8 @@
 import { Body, Controller, Get, Param, Post, UseFilters } from '@nestjs/common';
 import { BroadcastService } from '../broadcast/broadcast.service';
 import { ActorId } from '../../platform/auth/current-actor.decorator';
+import { RateLimited } from '../../platform/auth/action-throttle.guard';
+import { ActionScope } from '../../platform/auth/throttle.service';
 import { CommErrorFilter } from './http-exception.filter';
 import type { AudienceClause } from '../audience/audience-resolver.service';
 
@@ -44,6 +46,7 @@ export class BroadcastController {
     });
   }
 
+  @RateLimited(ActionScope.BROADCAST_SEND)
   @Post(':id/queue')
   async queue(@ActorId() actorId: string, @Param('id') id: string) {
     return this.broadcasts.queue(id, actorId);

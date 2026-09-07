@@ -14,6 +14,8 @@ import { AttachmentService } from '../attachments/attachment.service';
 import { ActorId } from '../../platform/auth/current-actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
 import { ReceiptState } from '../contracts/vocab';
+import { RateLimited } from '../../platform/auth/action-throttle.guard';
+import { ActionScope } from '../../platform/auth/throttle.service';
 
 @Controller('conversations/:conversationId/messages')
 @UseFilters(CommErrorFilter)
@@ -87,6 +89,7 @@ export class MessageController {
    * request body to `forwardedFrom`, `origin`, `seq` or the author: a client
    * that sends them is sending fields no code reads.
    */
+  @RateLimited(ActionScope.MESSAGE_SEND)
   @Post()
   async send(
     @ActorId() actorId: string,
@@ -131,6 +134,7 @@ export class MessageController {
   }
 
   /** Authorizes an upload before any object key exists. */
+  @RateLimited(ActionScope.ATTACHMENT_UPLOAD)
   @Post('attachments/authorize')
   async authorizeUpload(
     @ActorId() actorId: string,

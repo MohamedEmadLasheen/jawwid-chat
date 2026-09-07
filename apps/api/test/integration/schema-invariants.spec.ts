@@ -20,6 +20,18 @@ const DB = process.env.JAWWID_INT_DB ?? 'jawwid_chat_int';
  */
 function psqlArgv(statement: string): [string, string[]] {
   const flags = ['-q', '-v', 'ON_ERROR_STOP=1', '-tAc', statement];
+
+  // JAWWID_PSQL was documented above and never implemented, so a host without a
+  // local psql had no way to run this suite: it failed with `spawnSync psql
+  // ENOENT` on all twelve tests, which reads like a broken backstop rather than
+  // a missing binary. It takes the whole command, e.g.
+  //   JAWWID_PSQL="docker exec -i my-db psql -U postgres -d my_db"
+  const override = process.env.JAWWID_PSQL?.trim();
+  if (override) {
+    const [cmd, ...args] = override.split(/\s+/);
+    return [cmd, [...args, ...flags]];
+  }
+
   if (process.env.DATABASE_URL) return ['psql', [process.env.DATABASE_URL, ...flags]];
   return ['docker', ['exec', '-i', CONTAINER, 'psql', '-U', 'postgres', '-d', DB, ...flags]];
 }
@@ -27,10 +39,25 @@ function psqlArgv(statement: string): [string, string[]] {
 /** Runs SQL. Returns stdout on success; throws with the postgres error on failure. */
 function sql(statement: string): string {
   const [cmd, args] = psqlArgv(statement);
-  return execFileSync(cmd, args, {
-    encoding: 'utf8',
-    stdio: ['pipe', 'pipe', 'pipe'],
-  }).trim();
+  try {
+    return execFileSync(cmd, args, {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
+  } catch (e) {
+    // A missing client is a setup problem, not a failing invariant. Say which,
+    // and say how to fix it -- twelve ENOENTs look exactly like twelve broken
+    // database guarantees, and that is the wrong thing to go and investigate.
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
+      throw new Error(
+        `cannot run "${cmd}": not found on PATH. This suite talks to the database ` +
+          `through a client binary. Either install one, or set JAWWID_PSQL to the ` +
+          `command that reaches your database, e.g.\n` +
+          `  JAWWID_PSQL="docker exec -i ${CONTAINER} psql -U postgres -d ${DB}"`,
+      );
+    }
+    throw e;
+  }
 }
 
 /** Returns the postgres error message, or null if the statement unexpectedly succeeded. */

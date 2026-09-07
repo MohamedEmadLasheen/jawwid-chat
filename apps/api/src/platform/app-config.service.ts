@@ -145,6 +145,36 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'auth.throttle.reset_request_per_subject': 5,
   'auth.throttle.reset_redeem_per_ip': 10,
 
+  // --- Authenticated-action abuse protection (Phase 8) ----------------------
+  // The counters above bound what can be reached WITHOUT a session.
+  // Authorization then answers "may this actor do this at all" -- but not "may
+  // this actor do it four thousand times a minute". These bound the expensive
+  // actions per ACTOR, which is the axis an authenticated caller cannot rotate.
+  // Mirrors 20260908090000_chat_phase8_action_throttle.sql; the ROW is
+  // authoritative and these are the fallbacks a fresh database starts from.
+  //
+  // A much shorter window than the auth counters: this asks whether a session
+  // is behaving like a script right now, not whether somebody has been grinding
+  // at an account for a quarter of an hour.
+  'abuse.throttle.window_seconds': 60,
+  'abuse.throttle.block_seconds': 300,
+  /** initial hypothesis - one per second sustained is far above human typing */
+  'abuse.throttle.message_send_actor': 60,
+  /** initial hypothesis - each grant authorises a write to object storage */
+  'abuse.throttle.attachment_upload_actor': 30,
+  /** initial hypothesis - fans out to every family in the audience; bound hardest */
+  'abuse.throttle.broadcast_send_actor': 5,
+  'abuse.throttle.story_publish_actor': 20,
+  /** initial hypothesis - each one mints a media token and reserves a room */
+  'abuse.throttle.call_start_actor': 20,
+  /**
+   * Inbound WebSocket frames one socket may send per minute before it is
+   * disconnected. Enforced in the gateway IN MEMORY rather than through the
+   * throttle table: a typing indicator fires per keystroke, and a database
+   * write per keystroke would be a self-inflicted denial of service.
+   */
+  'abuse.realtime.frames_per_socket_per_minute': 600,
+
   // --- AI and automation (Phase 7) -------------------------------------------
   // Mirrors the rows inserted by 202609071[89]*.sql. As everywhere else in this
   // file, the ROW is authoritative and these are the fallbacks a fresh database

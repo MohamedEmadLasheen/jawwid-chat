@@ -44,6 +44,25 @@ class FakeSocket {
   authenticated?: Promise<void>;
   handshake = { auth: {} as Record<string, unknown>, headers: {} as Record<string, unknown> };
 
+
+  /**
+   * Socket.IO middleware, captured rather than discarded so a test can drive
+   * frames through it. The gateway installs the per-socket frame budget here
+   * (Phase 8); a double that silently swallowed `use` would let that control be
+   * deleted with every realtime test still green.
+   */
+  readonly middleware: Array<(packet: unknown[], next: (err?: Error) => void) => void> = [];
+  use(fn: (packet: unknown[], next: (err?: Error) => void) => void): void {
+    this.middleware.push(fn);
+  }
+
+  /** Send one frame through the installed middleware. Returns its refusal, if any. */
+  frame(): Error | undefined {
+    let refusal: Error | undefined;
+    for (const fn of this.middleware) fn([], (err?: Error) => { refusal = err; });
+    return refusal;
+  }
+
   async join(room: string): Promise<void> {
     this.rooms.add(room);
   }
@@ -81,6 +100,7 @@ function gateway(overrides: { typing?: unknown; presence?: unknown } = {}): Real
     }) as never,
     g.messages,
     g.auth,
+    g.config,
   );
 }
 
@@ -109,6 +129,77 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await g.prisma.$disconnect();
+});
+
+// ---------------------------------------------------------------------------
+// Frame flooding (Phase 8)
+// ---------------------------------------------------------------------------
+
+describe('a socket that stops behaving like a client is dropped', () => {
+  async function setFrameLimit(limit: number): Promise<void> {
+    await g.prisma.config.upsert({
+      where: { key: 'abuse.realtime.frames_per_socket_per_minute' },
+      create: { key: 'abuse.realtime.frames_per_socket_per_minute', value: String(limit) },
+      update: { value: String(limit) },
+    });
+    g.config.invalidate();
+  }
+
+  it('installs a frame budget on every authenticated socket', async () => {
+    // The control is socket middleware, so it bounds FRAMES -- including frames
+    // for events nothing subscribes to, which reach no handler and would
+    // otherwise be free.
+    const gw = gateway();
+    const socket = await connected(gw, s.parentId);
+    expect(socket.middleware).toHaveLength(1);
+  });
+
+  it('admits traffic up to the configured limit', async () => {
+    await setFrameLimit(5);
+    const gw = gateway();
+    const socket = await connected(gw, s.parentId);
+
+    for (let i = 0; i < 5; i += 1) expect(socket.frame()).toBeUndefined();
+    expect(socket.disconnected).toBe(false);
+  });
+
+  it('refuses the frame AND ends the connection once the budget is spent', async () => {
+    // Refusing alone would leave a runaway client looping against a socket that
+    // keeps answering it, which costs this node a parse and a dispatch every
+    // time round.
+    await setFrameLimit(5);
+    const gw = gateway();
+    const socket = await connected(gw, s.parentId);
+
+    for (let i = 0; i < 5; i += 1) socket.frame();
+
+    const refusal = socket.frame();
+    expect(refusal).toBeInstanceOf(Error);
+    expect(refusal?.message).toBe('COMM.RATE_LIMITED');
+    expect(socket.disconnected).toBe(true);
+  });
+
+  it('budgets each socket separately, so one flooding client drops only itself', async () => {
+    await setFrameLimit(2);
+    const gw = gateway();
+    const flooder = await connected(gw, s.parentId);
+    const bystander = await connected(gw, s.ownerId);
+
+    for (let i = 0; i < 3; i += 1) flooder.frame();
+    expect(flooder.disconnected).toBe(true);
+
+    expect(bystander.frame()).toBeUndefined();
+    expect(bystander.disconnected).toBe(false);
+  });
+
+  it('takes its limit from chat.config rather than a constant', async () => {
+    await setFrameLimit(1);
+    const gw = gateway();
+    const socket = await connected(gw, s.parentId);
+
+    expect(socket.frame()).toBeUndefined();
+    expect(socket.frame()).toBeInstanceOf(Error);
+  });
 });
 
 // ---------------------------------------------------------------------------

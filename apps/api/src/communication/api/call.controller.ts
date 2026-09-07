@@ -2,6 +2,8 @@ import { Body, Controller, Get, Param, Post, UseFilters } from '@nestjs/common';
 import { CallService } from '../calls/call.service';
 import { RecordingService } from '../calls/recording.service';
 import { ActorId } from '../../platform/auth/current-actor.decorator';
+import { RateLimited } from '../../platform/auth/action-throttle.guard';
+import { ActionScope } from '../../platform/auth/throttle.service';
 import { CommErrorFilter } from './http-exception.filter';
 
 @Controller('calls')
@@ -21,6 +23,7 @@ export class CallController {
    * call, so a bug that drops the field produces an unrecorded call rather than
    * a recorded one.
    */
+  @RateLimited(ActionScope.CALL_START)
   @Post()
   async start(
     @ActorId() actorId: string,
@@ -33,6 +36,7 @@ export class CallController {
    * A teacher opens the class. The invitation text is rendered per recipient
    * from a template, in their own locale -- no sentence travels from here.
    */
+  @RateLimited(ActionScope.CALL_START)
   @Post('class')
   async startClass(@ActorId() actorId: string, @Body() body: { conversationId: string }) {
     return this.calls.startClassCall(body.conversationId, actorId);
