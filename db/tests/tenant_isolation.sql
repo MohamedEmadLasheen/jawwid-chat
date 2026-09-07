@@ -20,14 +20,17 @@ insert into chat.organization (id, slug, display_name) values
   ('00000000-0000-0000-0000-0000000000b1', 'org-b', 'Org B')
 on conflict (id) do nothing;
 
-insert into chat.account (id, subject, kind, organization_id) values
-  ('00000000-0000-0000-0000-0000000000a2', 'subject-a', 'staff', '00000000-0000-0000-0000-0000000000a1'),
-  ('00000000-0000-0000-0000-0000000000b2', 'subject-b', 'staff', '00000000-0000-0000-0000-0000000000b1')
+-- Phase 1: an account carries a lifecycle status, and only an `active` one
+-- resolves. `provisioned` (the default) is deliberately not enough to see
+-- anything, which is why these fixtures set it explicitly.
+insert into chat.account (id, subject, kind, status, organization_id) values
+  ('00000000-0000-0000-0000-0000000000a2', 'subject-a', 'staff', 'active', '00000000-0000-0000-0000-0000000000a1'),
+  ('00000000-0000-0000-0000-0000000000b2', 'subject-b', 'staff', 'active', '00000000-0000-0000-0000-0000000000b1')
 on conflict (id) do nothing;
 
 insert into chat.staff (id, account_id, name, role, organization_id) values
-  ('00000000-0000-0000-0000-0000000000a3', '00000000-0000-0000-0000-0000000000a2', 'Admin A', 'manager', '00000000-0000-0000-0000-0000000000a1'),
-  ('00000000-0000-0000-0000-0000000000b3', '00000000-0000-0000-0000-0000000000b2', 'Admin B', 'manager', '00000000-0000-0000-0000-0000000000b1')
+  ('00000000-0000-0000-0000-0000000000a3', '00000000-0000-0000-0000-0000000000a2', 'Admin A', 'admin', '00000000-0000-0000-0000-0000000000a1'),
+  ('00000000-0000-0000-0000-0000000000b3', '00000000-0000-0000-0000-0000000000b2', 'Admin B', 'admin', '00000000-0000-0000-0000-0000000000b1')
 on conflict (id) do nothing;
 
 insert into chat.family (id, display_name, owner_id, organization_id) values
