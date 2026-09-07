@@ -452,13 +452,17 @@ working directory.
 This repository is worked by several agents in ONE shared working tree, and that
 had two consequences worth recording rather than hiding:
 
-1. **`apps/api/src/worker.ts` is not in the Phase 6 commit.** The three-line
-   change that drives `ModerationSweeper` from the existing worker loop was swept
-   into a peer's Phase 7 commit (`86b43a8`) by an over-broad `git add` before
-   Phase 6 was committed. The code is correct and present; its provenance is
-   simply wrong. It was left there rather than extracted, because rewriting
-   another agent's commit is the destructive act this project's shared-tree
-   protocol forbids.
+1. **`apps/api/src/worker.ts` is not in the Phase 6 commit — and that resolved
+   itself correctly.** The three-line change that drives `ModerationSweeper` from
+   the existing worker loop was swept into a peer's Phase 7 commit (`86b43a8`) by
+   an over-broad `git add` before Phase 6 was committed. It was left there rather
+   than extracted, because rewriting another agent's commit is the destructive act
+   this project's shared-tree protocol forbids. The peer then removed it
+   themselves (`d3206d7`, *"remove another agent's wiring two of my commits swept
+   in"*) and restored it once Phase 6 had landed (`549c67e`). The wiring is
+   present in `HEAD` and the history now says honestly who wrote what — which is
+   the outcome the protocol is for, reached by both agents declining to rewrite
+   the other's commits.
 
 2. **Everything else was verified out of the index, not off disk.** The peer's
    uncommitted `AUTOMATION_MANAGE` line lives in `permissions.ts` beside Phase
