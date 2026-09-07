@@ -343,14 +343,72 @@ jobs:
           done
 
   # ------------------------------------------------------------------- mobile
+  # G-37. This job used to print four ::warning:: lines and exit 0 -- a green
+  # check that tested nothing, which is worse than a red one, because a green
+  # check is read as evidence. The Flutter SDK was absent from every DEVELOPER
+  # machine; it was never absent from a GitHub runner, which can install it in
+  # about a minute.
+  #
+  # So it runs the tests now, and if they fail the job fails. That is the point.
+  # The release gate's own rule is that a failing gate and an unverified gate are
+  # treated identically -- "an untested control is not a control" -- and 30 Dart
+  # test files that have never executed anywhere are unverified by construction.
+  # Whatever this finds on its first real run is information the project did not
+  # previously have.
   mobile:
-    name: Mobile · BLOCKED (toolchain absent)
+    name: Mobile · analyze + test
     runs-on: ubuntu-latest
     needs: guards
     steps:
-      - name: Report blocked status
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          # Matches `environment.flutter` in pubspec.yaml. Pinned to a channel
+          # rather than a floating version so a Flutter release cannot turn a
+          # green pipeline red overnight without a commit to point at.
+          channel: stable
+          cache: true
+
+      - name: Toolchain identity
+        # Printed because "which Flutter was this?" is the first question asked
+        # of any mobile failure, and the answer must be in the log, not inferred.
         run: |
-          echo "::warning::G-37 UNVERIFIED — Flutter/Dart is not installed on any"
-          echo "::warning::build host, so no mobile unit, widget or integration test"
-          echo "::warning::can execute. Parent and Teacher apps are untested by"
-          echo "::warning::construction. See docs/qa/release-gate.md G-37."
+          flutter --version
+          dart --version
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Localizations are up to date with the .arb files
+        # lib/l10n/app_localizations*.dart is COMMITTED, not generated at build
+        # time, so this does not produce them -- it checks that whoever last
+        # edited an .arb file regenerated them. A stale generated file compiles
+        # perfectly and ships the previous translation, which is the kind of
+        # defect that reaches a parent rather than a build log.
+        run: |
+          flutter gen-l10n
+          if ! git diff --quiet -- lib/l10n; then
+            echo "::error::lib/l10n is stale — run 'flutter gen-l10n' and commit the result"
+            git diff --stat -- lib/l10n
+            exit 1
+          fi
+
+      - name: Analyze
+        # analysis_options.yaml promotes a missing required param to an ERROR.
+        run: flutter analyze --no-pub
+
+      - name: Unit and widget tests
+        # test/integration/live_backend_test.dart needs a running API. It skips
+        # ITSELF when JAWWID_LIVE_API is unset rather than being excluded here,
+        # so it costs nothing and starts working the moment an environment
+        # exists. Nothing is set, so it skips -- and that skip is the honest
+        # status of mobile integration testing (BLOCKER-1).
+        run: flutter test --no-pub --reporter expanded
+
+      - name: Build the Android APK (debug)
+        # Compiling is a test the test suite does not perform: a widget test
+        # exercises Dart, while this exercises the Gradle build, the plugin
+        # registrations and the manifest -- which is where mobile builds
+        # actually break.
+        run: flutter build apk --debug
