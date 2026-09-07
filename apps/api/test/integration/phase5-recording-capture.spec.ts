@@ -200,15 +200,36 @@ describe('only the recorder’s own report makes a recording available', () => {
 });
 
 describe('ending the call stops the recorder', () => {
+  /**
+   * Wait for a fire-and-forget effect, by POLLING for it rather than sleeping.
+   *
+   * Stopping the recorder is deliberately not awaited by `end()` -- a call must
+   * never fail to end because the recorder is unreachable -- so the test has to
+   * wait for something it cannot await. A fixed sleep is the obvious way and
+   * the wrong one: it is either too short under load (this test failed exactly
+   * that way in a full-suite run, having passed in isolation) or slow for
+   * everybody. Polling finishes as soon as the effect lands.
+   */
+  async function eventually(
+    condition: () => boolean,
+    timeoutMs = 5_000,
+  ): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (condition()) return;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    // Falls through to the caller's expect(), which reports the real assertion
+    // rather than a timeout with no detail.
+  }
+
   it('stops the egress job that was started for it', async () => {
     const started = await followUpCall();
     const { recording } = await g.recordings.start(started.callId, s.ownerId);
     const row = await prisma.callRecording.findUniqueOrThrow({ where: { id: recording.id } });
 
     await g.calls.end(started.callId, s.ownerId);
-    // The stop is fire-and-forget by design (it must never fail a call), so
-    // give the microtask queue a turn.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await eventually(() => g.recorder.stopped.includes(row.egressId!));
 
     expect(g.recorder.stopped).toContain(row.egressId);
   });
@@ -219,7 +240,10 @@ describe('ending the call stops the recorder', () => {
     await g.calls.accept(callId, s.parentId);
 
     await g.calls.end(callId, s.ownerId);
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // A NEGATIVE assertion cannot be polled for -- there is nothing to wait
+    // for -- so this gives the effect a generous window to appear and then
+    // asserts it did not.
+    await new Promise((resolve) => setTimeout(resolve, 250));
 
     expect(g.recorder.stopped).toHaveLength(0);
   });
