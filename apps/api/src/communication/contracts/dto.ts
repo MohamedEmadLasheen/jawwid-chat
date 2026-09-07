@@ -31,6 +31,28 @@ export interface AttachmentDto {
   thumbnailUrl: string | null;
 }
 
+/**
+ * The quoted message shown above a reply.
+ *
+ * DEGRADES RATHER THAN LEAKS. The excerpt is present only when the viewer may
+ * actually read the target; in every other case -- deleted for everyone, held
+ * for approval, an internal note seen by a contact, hidden by this viewer, or
+ * simply gone -- `available` is false and `excerpt` is null. The reply itself
+ * still renders, saying "this message is unavailable", which is what a quote of
+ * a withdrawn message must look like. See `unavailableReason` for which of the
+ * cases it was: the client renders "deleted" differently from "not available".
+ */
+export interface ReplyPreviewDto {
+  messageId: string;
+  available: boolean;
+  unavailableReason: 'deleted' | 'restricted' | 'missing' | null;
+  authorKind: string | null;
+  authorId: string | null;
+  type: string | null;
+  /** First line of the quoted body, truncated. Null when not available. */
+  excerpt: string | null;
+}
+
 export interface MessageDto {
   id: string;
   conversationId: string | null;
@@ -45,7 +67,18 @@ export interface MessageDto {
   moderation: string;
   origin: string;
   replyToMessageId: string | null;
+  /** Populated by the read path when it resolved the target; null otherwise. */
+  replyPreview: ReplyPreviewDto | null;
   clientMessageId: string | null;
+  editedAt: string | null;
+  editCount: number;
+  /**
+   * True when this message was forwarded from somewhere else. Deliberately a
+   * BOOLEAN: the source conversation is often one the reader may not access,
+   * and naming it would be a disclosure the forwarding UI never intended. The
+   * ids stay in the database for audit.
+   */
+  isForwarded: boolean;
   deletedAt: string | null;
   deletedForAll: boolean;
   createdAt: string;
@@ -59,9 +92,31 @@ export interface ConversationMemberDto {
   actorKind: string;
   memberRole: string;
   isSilent: boolean;
+  /** Resolved when the caller asked for it. Never a phone number or e-mail. */
+  displayName?: string;
 }
 
-export interface ConversationDto {
+/**
+ * What a chat-list row needs beyond the conversation itself.
+ *
+ * Supplied by the LIST endpoint, computed in two batched queries for the whole
+ * page. It used to be absent, and the mobile client's own notes record the
+ * consequence: one round trip PER ROW for the unread count alone, on exactly
+ * the slow networks this product targets.
+ */
+export interface ConversationRowExtras {
+  unreadCount: number;
+  /** Empty for a conversation whose newest message this viewer may not read. */
+  lastMessagePreview: string;
+  lastMessageAt: string | null;
+  lastMessageAuthorId: string | null;
+  /** Per-viewer preferences, never another participant's. */
+  isPinned: boolean;
+  isMuted: boolean;
+  isArchivedForMe: boolean;
+}
+
+export interface ConversationDto extends Partial<ConversationRowExtras> {
   id: string;
   type: string;
   familyId: string | null;
@@ -100,7 +155,8 @@ export function conversationState(
 
 export function toConversationDto(
   c: Conversation,
-  members?: ConversationMember[],
+  members?: Array<ConversationMember & { displayName?: string }>,
+  extras?: ConversationRowExtras,
 ): ConversationDto {
   return {
     id: c.id,
@@ -120,7 +176,9 @@ export function toConversationDto(
       actorKind: m.actorKind,
       memberRole: m.memberRole,
       isSilent: m.isSilent,
+      ...(m.displayName === undefined ? {} : { displayName: m.displayName }),
     })),
+    ...(extras ?? {}),
   };
 }
 
@@ -168,10 +226,38 @@ export interface MessageViewer {
   seesFullRoster: boolean;
 }
 
+/** First line of a body, bounded, for a quote. */
+export const QUOTE_EXCERPT_LENGTH = 140;
+
+export function excerptOf(body: string | null): string | null {
+  if (body === null) return null;
+  const firstLine = body.split('\n', 1)[0].trim();
+  return firstLine.length > QUOTE_EXCERPT_LENGTH
+    ? `${firstLine.slice(0, QUOTE_EXCERPT_LENGTH)}…`
+    : firstLine;
+}
+
+/** A quote of a message that cannot be shown, without saying why in detail. */
+export function unavailableReply(
+  messageId: string,
+  reason: 'deleted' | 'restricted' | 'missing',
+): ReplyPreviewDto {
+  return {
+    messageId,
+    available: false,
+    unavailableReason: reason,
+    authorKind: null,
+    authorId: null,
+    type: null,
+    excerpt: null,
+  };
+}
+
 export function toMessageDto(
   m: MessageWithRelations,
   signedUrls: Map<string, { url: string; thumbnailUrl: string | null }> = new Map(),
   viewer?: MessageViewer,
+  replyPreview: ReplyPreviewDto | null = null,
 ): MessageDto {
   const hidden = m.deletedForAll;
   return {
@@ -189,7 +275,13 @@ export function toMessageDto(
     moderation: m.moderation,
     origin: m.origin,
     replyToMessageId: m.replyToMessageId,
+    // A deleted message shows no quote either: the point of withdrawing it is
+    // that its content stops being served, and a quote is content.
+    replyPreview: hidden ? null : replyPreview,
     clientMessageId: m.clientMessageId,
+    editedAt: hidden ? null : (m.editedAt?.toISOString() ?? null),
+    editCount: hidden ? 0 : m.editCount,
+    isForwarded: !hidden && m.forwardedFromMessageId !== null,
     deletedAt: m.deletedAt?.toISOString() ?? null,
     deletedForAll: m.deletedForAll,
     createdAt: m.createdAt.toISOString(),
@@ -214,5 +306,7 @@ export function toMessageDto(
 /** What a pending message looks like to someone who may not read it yet. */
 export function redactPending(dto: MessageDto): MessageDto {
   if (dto.moderation !== Moderation.PENDING) return dto;
-  return { ...dto, body: null, attachments: [] };
+  // replyPreview goes too: quoting is a way of restating, and a redaction that
+  // leaves the quote intact has redacted nothing that matters.
+  return { ...dto, body: null, attachments: [], replyPreview: null };
 }

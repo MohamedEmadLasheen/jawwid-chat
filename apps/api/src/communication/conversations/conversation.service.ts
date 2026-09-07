@@ -12,12 +12,15 @@ import type { AuditService } from '../../platform/audit.service';
 import { Actor } from '../../platform/types';
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
+import type { ConversationRowExtras } from '../contracts/dto';
 import {
   ActorKind,
   ConversationType,
   MemberRole,
   MessageType,
+  Moderation,
   Origin,
+  ReceiptState,
   Visibility,
 } from '../contracts/vocab';
 
@@ -526,6 +529,209 @@ export class ConversationService {
       orderBy: { lastActivityAt: 'desc' },
       take: 200,
     });
+  }
+
+  /**
+   * The scope predicate on its own, for callers that build a bigger query on
+   * top of it -- search, most importantly.
+   *
+   * Exposed here rather than having those callers reach for ScopeService
+   * directly, so "which conversations may this actor touch" keeps arriving from
+   * one method and a future change to it reaches every consumer.
+   */
+  async scopedConversationWhere(actor: Actor, now = new Date()): Promise<Prisma.ConversationWhereInput> {
+    return this.scope.conversationWhere(actor, now);
+  }
+
+  /**
+   * The chat list, with everything a row needs, in a bounded number of queries.
+   *
+   * Four queries for the whole page regardless of its length: the conversations,
+   * their members, this actor's per-conversation preferences and unread counts,
+   * and the newest readable message of each. The alternative the mobile client
+   * had to live with was one request PER ROW for the unread count alone -- its
+   * own repository records that as a known cost. On the networks this product
+   * targets, that is the difference between a chat list and a spinner.
+   */
+  async listRowsForActor(actorId: string): Promise<
+    Array<{
+      conversation: Conversation;
+      members: Array<ConversationMember & { displayName?: string }>;
+      extras: ConversationRowExtras;
+    }>
+  > {
+    const actor = await this.requireActor(actorId);
+    const conversations = await this.listForActor(actorId);
+    if (conversations.length === 0) return [];
+
+    const ids = conversations.map((c) => c.id);
+    const canSeeInternal = this.authz.canReadInternal(actor);
+
+    const [members, states, unread, latest] = await Promise.all([
+      this.prisma.conversationMember.findMany({
+        where: { conversationId: { in: ids }, leftAt: null },
+      }),
+      this.prisma.conversationParticipantState.findMany({
+        where: { conversationId: { in: ids }, actorId: actor.actorId },
+      }),
+      // Unread is "messages addressed to me that I have not read", which is
+      // exactly the receipt rows below READ. Grouped in one pass.
+      this.prisma.messageReceipt.groupBy({
+        by: ['messageId'],
+        where: {
+          actorId: actor.actorId,
+          state: { in: [ReceiptState.SENT, ReceiptState.DELIVERED] },
+          message: { conversationId: { in: ids }, deletedForAll: false },
+        },
+        _count: { messageId: true },
+      }),
+      // The newest message of each conversation THIS ACTOR MAY READ. A preview
+      // is content: an internal note must never appear as the preview on a
+      // parent's chat list, and neither must a message they hid or one held for
+      // approval.
+      this.prisma.message.findMany({
+        where: {
+          conversationId: { in: ids },
+          deletedForAll: false,
+          moderation: Moderation.PUBLISHED,
+          hiddenFor: { none: { actorId: actor.actorId } },
+          ...(canSeeInternal ? {} : { visibility: Visibility.CUSTOMER }),
+        },
+        orderBy: [{ conversationId: 'asc' }, { seq: 'desc' }],
+        distinct: ['conversationId'],
+        select: {
+          conversationId: true,
+          body: true,
+          type: true,
+          authorId: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+
+    // groupBy returns one row per message, so the per-conversation count needs
+    // the message -> conversation mapping. One more query, still not per row.
+    const unreadByConversation = new Map<string, number>();
+    if (unread.length > 0) {
+      const owners = await this.prisma.message.findMany({
+        where: { id: { in: unread.map((u) => u.messageId) } },
+        select: { id: true, conversationId: true },
+      });
+      for (const o of owners) {
+        if (!o.conversationId) continue;
+        unreadByConversation.set(o.conversationId, (unreadByConversation.get(o.conversationId) ?? 0) + 1);
+      }
+    }
+
+    const membersByConversation = new Map<string, ConversationMember[]>();
+    for (const m of members) {
+      const list = membersByConversation.get(m.conversationId) ?? [];
+      list.push(m);
+      membersByConversation.set(m.conversationId, list);
+    }
+
+    // One identity resolution per DISTINCT actor across the whole page, not per
+    // membership row: the same admin sits in many of a family's conversations.
+    const distinctActorIds = [...new Set(members.map((m) => m.actorId))];
+    const names = new Map<string, string>();
+    await Promise.all(
+      distinctActorIds.map(async (id) => {
+        const resolved = await this.identity.resolveActor(id);
+        if (resolved) names.set(id, resolved.displayName);
+      }),
+    );
+
+    const stateByConversation = new Map(states.map((s) => [s.conversationId, s]));
+    const latestByConversation = new Map(latest.map((m) => [m.conversationId!, m]));
+    const now = new Date();
+
+    return conversations.map((conversation) => {
+      const state = stateByConversation.get(conversation.id);
+      const newest = latestByConversation.get(conversation.id);
+      return {
+        conversation,
+        members: (membersByConversation.get(conversation.id) ?? []).map((m) => ({
+          ...m,
+          displayName: names.get(m.actorId),
+        })),
+        extras: {
+          unreadCount: unreadByConversation.get(conversation.id) ?? 0,
+          // A system message's body is a JSON envelope the client renders
+          // itself; sending it as a preview string would put JSON in the list.
+          lastMessagePreview:
+            newest && newest.type !== MessageType.SYSTEM ? (newest.body ?? '') : '',
+          lastMessageAt: newest?.createdAt.toISOString() ?? null,
+          lastMessageAuthorId: newest?.authorId ?? null,
+          isPinned: state?.pinnedAt != null,
+          isMuted: state?.mutedUntil != null && state.mutedUntil > now,
+          isArchivedForMe: state?.archivedAt != null,
+        },
+      };
+    });
+  }
+
+  /**
+   * Conversation search, scoped by construction.
+   *
+   * Matches on the conversation's own title and on the display names of its
+   * members, so "Ahmed" finds the thread with Ahmed's family even though no
+   * message contains the word. Names are resolved from identity, never from a
+   * denormalised copy that could go stale after a rename.
+   */
+  async searchForActor(actorId: string, query: string, limit = 20): Promise<Conversation[]> {
+    const actor = await this.requireActor(actorId);
+    const term = query.trim();
+    if (term.length < 2) return [];
+
+    const scopeWhere = await this.scope.conversationWhere(actor);
+
+    // Title match, straight from the scoped set.
+    const byTitle = await this.prisma.conversation.findMany({
+      where: { AND: [scopeWhere, { title: { contains: term, mode: 'insensitive' } }] },
+      orderBy: { lastActivityAt: 'desc' },
+      take: limit,
+    });
+
+    // Member-name match. The candidate actor ids come from identity tables
+    // filtered by name; the conversations then come from the SCOPED set, so a
+    // name that matches somebody outside this actor's scope yields nothing.
+    const [staff, contacts, teachers] = await Promise.all([
+      this.prisma.staff.findMany({
+        where: { name: { contains: term, mode: 'insensitive' } },
+        select: { id: true },
+        take: 50,
+      }),
+      this.prisma.contact.findMany({
+        where: { name: { contains: term, mode: 'insensitive' } },
+        select: { id: true },
+        take: 50,
+      }),
+      this.prisma.teacher.findMany({
+        where: { name: { contains: term, mode: 'insensitive' } },
+        select: { id: true },
+        take: 50,
+      }),
+    ]);
+    const matchedActorIds = [...staff, ...contacts, ...teachers].map((r) => r.id);
+
+    const byMember = matchedActorIds.length
+      ? await this.prisma.conversation.findMany({
+          where: {
+            AND: [
+              scopeWhere,
+              { members: { some: { actorId: { in: matchedActorIds }, leftAt: null } } },
+            ],
+          },
+          orderBy: { lastActivityAt: 'desc' },
+          take: limit,
+        })
+      : [];
+
+    const merged = new Map<string, Conversation>();
+    for (const c of [...byTitle, ...byMember]) merged.set(c.id, c);
+    return [...merged.values()]
+      .sort((a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime())
+      .slice(0, limit);
   }
 
   /** Archive / mute / pin are per-user; one user's pin never affects another. */

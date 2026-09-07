@@ -190,7 +190,8 @@ export async function seed(prisma: PrismaService): Promise<Scenario> {
 export async function truncate(prisma: PrismaService): Promise<void> {
   await prisma.$executeRawUnsafe(`
     truncate chat.message_receipt, chat.message_reaction, chat.message_attachment,
-             chat.message_hidden_for, chat.message_approval, chat.call_participant,
+             chat.message_hidden_for, chat.message_revision,
+             chat.message_approval, chat.call_participant,
              chat.call, chat.notification, chat.outbox_event,
              chat.conversation_participant_state, chat.conversation_member,
              chat.message, chat.conversation, chat.learner,

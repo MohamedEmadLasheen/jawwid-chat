@@ -29,7 +29,7 @@ import { RelayRealtimePublisher } from '../infra/realtime/relay.publisher';
 import { RealtimeRelay } from '../infra/realtime/realtime-relay.service';
 
 import { ConversationController } from './api/conversation.controller';
-import { MessageController } from './api/message.controller';
+import { MessageController, SearchController } from './api/message.controller';
 import { ApprovalController } from './api/approval.controller';
 import { CallController } from './api/call.controller';
 import { NotificationController } from './api/notification.controller';
@@ -39,6 +39,7 @@ import { NotificationController } from './api/notification.controller';
   controllers: [
     ConversationController,
     MessageController,
+    SearchController,
     ApprovalController,
     CallController,
     NotificationController,

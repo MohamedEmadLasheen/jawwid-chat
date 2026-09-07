@@ -101,6 +101,19 @@ export interface LiveMember {
 }
 
 /**
+ * The facts about one message that an edit or delete decision turns on.
+ *
+ * Everything here is loaded and read-authorized by the caller before the
+ * decision is asked for, so this service never touches the database.
+ */
+export interface MessageFacts {
+  authorId: string | null;
+  type: string;
+  moderation: string;
+  deletedForAll: boolean;
+}
+
+/**
  * THE centralized communication authorization service.
  *
  * There is exactly one implementation of the communication matrix in this
@@ -594,6 +607,109 @@ export class AuthorizationService {
     }
     if (requested === OnBehalfMode.ASSIST) return OnBehalfMode.ASSIST;
     return OnBehalfMode.ASSIST;
+  }
+
+  // ------------------------------------------------------------------
+  // Acting on an existing message
+  // ------------------------------------------------------------------
+
+  /**
+   * The state of a message, as far as an edit/delete decision is concerned.
+   *
+   * Supplied rather than fetched, exactly like ScopeState and LiveMember: this
+   * service stays pure and synchronously testable, and the caller -- which has
+   * already loaded and read-authorized the message -- does the I/O.
+   */
+
+  /**
+   * MAY THIS ACTOR EDIT THIS MESSAGE?
+   *
+   * The author, inside the window. Deliberately NOT a manager: editing puts
+   * different words under somebody else's name, which is a different and worse
+   * act than removing what they said. A manager who needs a message gone uses
+   * canDeleteForEveryone, under their own id and with a reason.
+   *
+   * The window is passed in because it is a config value and this service
+   * reads no config.
+   */
+  canEditMessage(
+    actor: Actor,
+    message: MessageFacts,
+    ageMs: number,
+    windowMs: number,
+  ): Decision {
+    if (!actor.isActive) return deny(CommErrorCode.ACTOR_INACTIVE, 'actor is inactive');
+    if (message.authorId === null || message.authorId !== actor.actorId) {
+      return deny(CommErrorCode.NOT_MESSAGE_AUTHOR, 'only the author may edit a message');
+    }
+    if (actor.permissions && !actor.permissions.has(Permission.MESSAGES_SEND)) {
+      return deny(
+        CommErrorCode.PERMISSION_DENIED,
+        `this actor does not hold ${Permission.MESSAGES_SEND}`,
+      );
+    }
+    if (message.deletedForAll) {
+      return deny(CommErrorCode.MESSAGE_NOT_EDITABLE, 'a deleted message cannot be edited');
+    }
+    if (message.type !== 'text') {
+      return deny(
+        CommErrorCode.MESSAGE_NOT_EDITABLE,
+        `a ${message.type} message has no editable body`,
+      );
+    }
+    if (message.moderation !== Moderation.PUBLISHED) {
+      return deny(
+        CommErrorCode.MESSAGE_NOT_EDITABLE,
+        `a ${message.moderation} message cannot be edited`,
+      );
+    }
+    if (ageMs > windowMs) {
+      return deny(
+        CommErrorCode.EDIT_WINDOW_EXPIRED,
+        `the edit window of ${Math.round(windowMs / 60_000)} minutes has expired`,
+      );
+    }
+    return allow();
+  }
+
+  /**
+   * MAY THIS ACTOR DELETE THIS MESSAGE FOR EVERYONE?
+   *
+   * The author inside the window, or anyone holding messages.delete at any
+   * time. The permission KEY decides, never the role name: `staffRole ===
+   * 'manager'` was wrong twice over -- it excluded super_admin, who holds the
+   * key, and it could not see a per-account DENY on it.
+   */
+  canDeleteForEveryone(actor: Actor, message: MessageFacts, ageMs: number, windowMs: number): Decision {
+    if (!actor.isActive) return deny(CommErrorCode.ACTOR_INACTIVE, 'actor is inactive');
+
+    const mayDeleteAnyone = actorHasPermission(actor, Permission.MESSAGES_DELETE);
+    const isAuthor = message.authorId !== null && message.authorId === actor.actorId;
+
+    if (!isAuthor && !mayDeleteAnyone) {
+      return deny(CommErrorCode.NOT_MESSAGE_AUTHOR, 'not the author of this message');
+    }
+    if (isAuthor && !mayDeleteAnyone && ageMs > windowMs) {
+      return deny(
+        CommErrorCode.DELETE_WINDOW_EXPIRED,
+        `the delete-for-everyone window of ${Math.round(windowMs / 60_000)} minutes has expired`,
+      );
+    }
+    return allow();
+  }
+
+  /**
+   * MAY THIS ACTOR HIDE THIS MESSAGE FROM THEIR OWN VIEW?
+   *
+   * Anyone who can read it. Hiding affects nothing anyone else sees and
+   * destroys nothing, so there is no author check and no window: a participant
+   * has an unconditional right to tidy their own copy of a conversation. This
+   * exists as a named method rather than as an absent check so the two
+   * deletions cannot be confused for each other at a call site.
+   */
+  canDeleteForMe(actor: Actor): Decision {
+    if (!actor.isActive) return deny(CommErrorCode.ACTOR_INACTIVE, 'actor is inactive');
+    return allow();
   }
 
   // ------------------------------------------------------------------

@@ -79,6 +79,30 @@ export class OutboxWorker {
         return;
       }
 
+      // Every other event ABOUT ONE MESSAGE inherits that message's audience.
+      //
+      // message.created already did; these did not, and fell through to a
+      // broadcast on the conversation room. For an internal note that is a
+      // leak: a contact listening on the room would learn the id of a message
+      // they may not read, that somebody read it and when, that it was edited,
+      // and who reacted to it. Reading the visibility from the message is one
+      // query per event, on a path that already does several.
+      case CommEvent.MESSAGE_UPDATED:
+      case CommEvent.MESSAGE_DELETED:
+      case CommEvent.MESSAGE_RECEIPT_UPDATED:
+      case CommEvent.REACTION_ADDED:
+      case CommEvent.REACTION_REMOVED: {
+        if (!conversationId) return;
+        const visibility = await this.messageVisibility(payload.messageId as string);
+        if (visibility === Visibility.INTERNAL) {
+          const staff = await this.staffMemberIds(conversationId);
+          await this.realtime.toUsers(staff, type, payload as never);
+        } else {
+          await this.realtime.toThread(conversationId, type, payload as never);
+        }
+        return;
+      }
+
       case CommEvent.APPROVAL_REQUESTED: {
         if (!conversationId) return;
         // Never broadcast to the group: only staff who may decide see it.
@@ -105,6 +129,18 @@ export class OutboxWorker {
         }
       }
     }
+  }
+
+  /** The audience rule for a message-scoped event, read from the message. */
+  private async messageVisibility(messageId: string | undefined): Promise<string> {
+    if (!messageId) return Visibility.INTERNAL;
+    const row = await this.prisma.message.findUnique({
+      where: { id: messageId },
+      select: { visibility: true },
+    });
+    // A message that has vanished is treated as internal: the safe direction
+    // for an unknown audience is the narrower one.
+    return row?.visibility ?? Visibility.INTERNAL;
   }
 
   private async staffMemberIds(conversationId: string): Promise<string[]> {
