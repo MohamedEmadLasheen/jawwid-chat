@@ -407,7 +407,7 @@ mid-run.
 |---|---|---|
 | API typecheck | `npm run typecheck` (apps/api) | **pass**, clean |
 | API unit | `npm run test:unit` | **pass** — 375/375, 26 suites |
-| API integration | `npm run test:int` | 723/737 — see below |
+| API integration | `npm run test:int` | 725/737 — see below |
 | Phase 6 suites | `--testPathPattern phase6` | **pass** — 96/96, 3 suites |
 | Admin Web typecheck | `npm run typecheck` | **pass**, clean |
 | Admin Web tests | `npm test` | **pass** — 111/111, 15 files |
@@ -427,19 +427,18 @@ pending/rejected rendering is untouched.
 
 ### The 14 integration failures, and why none is Phase 6
 
-- **12 — `schema-invariants.spec.ts`: `spawnSync psql ENOENT`.** The suite shells
+- **12 (all that remain) — `schema-invariants.spec.ts`: `spawnSync psql ENOENT`.** The suite shells
   out to `psql`, which is not installed on this machine. Environmental, present
   before Phase 6, and it passes in CI, which installs `postgresql-client`. The
   same assertions were exercised directly against the database via
   `db/tests/schema_acceptance.sql` and `db/tests/br1_invariants.sql`, both of
   which pass.
-- **2 — `tenant-and-rbac.spec.ts`: `automation.manage` is in the database but not
-  in the TypeScript mirror.** That permission belongs to a **peer's in-flight
-  Phase 7 work** (migration `20260907180500_chat_phase7_automation.sql`, committed;
-  the mirror entry was still uncommitted in the shared tree at the time of
-  writing). Phase 6's own `moderation_rules.manage` is present on **both** sides
-  and does not appear in the diff. Not fixed here: it is another agent's file
-  and another phase's change.
+- **`tenant-and-rbac.spec.ts` failed for a while and no longer does.** Its two
+  failures were a peer's Phase 7 `automation.manage`, present in the database but
+  not yet in the TypeScript mirror. Phase 6's own `moderation_rules.manage` was
+  on **both** sides throughout. It was not fixed here — another agent's file,
+  another phase's change — and the peer committed their mirror entry, after which
+  the suite passes.
 
 Both were re-confirmed from a **detached worktree checked out at the Phase 6
 commit**, so they are properties of the committed tree and not of a dirty shared
