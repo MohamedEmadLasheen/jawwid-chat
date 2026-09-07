@@ -11,6 +11,7 @@ import '../../../core/realtime/realtime_client.dart';
 import '../../../core/realtime/realtime_events.dart';
 import '../../../shared/models/message.dart';
 import '../domain/message_log.dart';
+import '../domain/outgoing_attachment.dart';
 import 'conversation_realtime.dart';
 import 'outbox_courier.dart';
 
@@ -403,9 +404,18 @@ class MessagesController extends Notifier<MessagesState> {
   }
 
   /// Compose and enqueue. Returns the client id so a caller can track this message.
-  String send(String body, {ReplyPreview? replyTo}) {
+  String send(
+    String body, {
+    ReplyPreview? replyTo,
+    List<OutgoingAttachment> attachments = const [],
+  }) {
     final clientMessageId = _uuid.v4();
     final now = DateTime.now();
+
+    // A message carrying an attachment takes the attachment's kind, which is
+    // what the server's own type rules expect: an `image` message must have an
+    // attachment, and a `text` one carrying a photo would be refused.
+    final kind = attachments.isEmpty ? MessageKind.text : attachments.first.kind;
 
     // The echo carries no author identity beyond `isMine`. Author name and role are the
     // server's to assert, and own messages never render an author line anyway — so looking
@@ -413,13 +423,27 @@ class MessagesController extends Notifier<MessagesState> {
     final echo = Message(
       clientMessageId: clientMessageId,
       conversationId: conversationId,
-      kind: MessageKind.text,
+      kind: kind,
       body: body,
       createdAt: now,
       // Only ever queued/sending/failed locally — never a server state (cross-platform §2).
       deliveryState: DeliveryState.queued,
       isMine: true,
       replyTo: replyTo,
+      // The echo shows the file's own name and size, with no URL: the bytes are
+      // in storage and the signed URL is minted per read by the server, so the
+      // sender's own copy renders from what it already knows rather than
+      // waiting for a round trip.
+      attachments: [
+        for (final a in attachments)
+          Attachment(
+            id: a.objectKey,
+            kind: a.kind,
+            fileName: a.originalName,
+            byteSize: a.byteSize,
+            mimeType: a.mimeType,
+          ),
+      ],
     );
 
     state = state.copyWith(log: state.log.merge([echo]));
@@ -427,12 +451,18 @@ class MessagesController extends Notifier<MessagesState> {
     // Queued through the app-level courier, which persists it before it
     // returns. Killing the app now — or the OS doing it — no longer discards
     // the message the user has just been shown as queued.
+    //
+    // The attachment's BYTES are already in object storage by this point; what
+    // is queued is the metadata naming them. That ordering is what lets an
+    // attachment message survive a restart at all.
     unawaited(
       _courier.enqueueWithId(
         clientMessageId: clientMessageId,
         conversationId: conversationId,
         body: body,
+        kind: kind,
         replyToMessageId: replyTo?.messageId,
+        attachments: attachments,
       ),
     );
     return clientMessageId;

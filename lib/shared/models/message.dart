@@ -59,6 +59,8 @@ class Attachment {
     required this.kind,
     this.fileName,
     this.byteSize,
+    this.url,
+    this.mimeType,
     this.thumbnailUrl,
     this.durationMs,
     this.waveform = const [],
@@ -68,6 +70,17 @@ class Attachment {
   final MessageKind kind;
   final String? fileName;
   final int? byteSize;
+
+  /// Short-lived, backend-issued, minted PER READ. Never a permanent storage
+  /// URL, and never cached beyond the message it arrived with — the server
+  /// re-authorizes on every fetch, so a URL held past its expiry is simply
+  /// dead rather than a way around that check.
+  ///
+  /// Null for a message this client has just sent and not yet had back from the
+  /// server: the object exists, but no signed read has been minted for it.
+  final String? url;
+
+  final String? mimeType;
 
   /// Short-lived, backend-issued. Never a permanent storage URL (§22).
   final String? thumbnailUrl;

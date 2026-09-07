@@ -1,9 +1,12 @@
+import 'dart:convert';
+
 import 'package:sqflite/sqflite.dart';
 
 import '../../../core/data/repositories.dart';
 import '../../../core/storage/local_database.dart';
 import '../../../shared/models/message.dart';
 import '../domain/outbox.dart';
+import '../domain/outgoing_attachment.dart';
 
 /// One persisted queue entry: its state, and the message it will send.
 class PersistedOutboxEntry {
@@ -152,10 +155,14 @@ class SqliteOutboxStore implements OutboxStore {
         'kind': payload.kind.name,
         'body': payload.body,
         'reply_to_message_id': payload.replyToMessageId,
-        // A joined string rather than a child table: the list is short, it is
-        // never queried BY element, and a second table would need its own
-        // migration and its own cascade for no reader.
-        'attachment_ids': payload.attachmentIds.join(','),
+        // JSON, in one column. An attachment is a handful of metadata fields
+        // that are only ever read back whole, so a child table would need its
+        // own migration and its own cascade for a reader that does not exist.
+        //
+        // What is stored is a REFERENCE to bytes already in object storage, not
+        // the bytes: the upload completes before the message is queued, so a
+        // few hundred bytes is all the queue ever has to keep.
+        'attachments': jsonEncode(payload.attachments.map((a) => a.toJson()).toList()),
         'updated_at': DateTime.now().millisecondsSinceEpoch,
       };
 
@@ -164,10 +171,7 @@ class SqliteOutboxStore implements OutboxStore {
     final conversationId = row['conversation_id']! as String;
     final stored = row['status'] as String?;
 
-    final attachmentIds = (row['attachment_ids'] as String? ?? '')
-        .split(',')
-        .where((s) => s.isNotEmpty)
-        .toList();
+    final attachments = _attachmentsOf(row['attachments'] as String?);
 
     return PersistedOutboxEntry(
       entry: OutboxEntry(
@@ -191,9 +195,29 @@ class SqliteOutboxStore implements OutboxStore {
         ),
         body: row['body'] as String? ?? '',
         replyToMessageId: row['reply_to_message_id'] as String?,
-        attachmentIds: attachmentIds,
+        attachments: attachments,
       ),
     );
+  }
+
+  /// Attachments come back whole, or not at all.
+  ///
+  /// A row whose JSON cannot be parsed yields an empty list rather than
+  /// throwing: the message's text is still worth sending, and a queue that
+  /// refuses to load because one row is malformed would strand every other
+  /// message behind it.
+  static List<OutgoingAttachment> _attachmentsOf(String? raw) {
+    if (raw == null || raw.isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return const [];
+      return [
+        for (final item in decoded)
+          if (item is Map<String, Object?>) OutgoingAttachment.fromJson(item),
+      ];
+    } catch (_) {
+      return const [];
+    }
   }
 
   /// `sending` is not a state a restored entry can be in: nothing is in flight

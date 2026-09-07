@@ -13,6 +13,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/conversation.dart';
 import '../../../shared/models/message.dart';
 import '../../../shared/utils/relative_time.dart';
+import '../application/attachment_draft.dart';
 import '../application/messages_controller.dart';
 import 'forward_sheet.dart';
 import 'message_actions.dart';
@@ -211,6 +212,27 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
+  /// Choose a file, and say clearly when one cannot be sent.
+  ///
+  /// Both refusals name the FILE. "That cannot be sent" with no filename is
+  /// useless to somebody who picked from a grid of forty photos, and the limits
+  /// are checked here — mirroring the server's, which remain the authority — so
+  /// a 300 MB video is refused instantly rather than after it has crossed a
+  /// mobile network.
+  Future<void> _pickAttachment(L10n l10n) async {
+    final refusal = await ref
+        .read(attachmentDraftProvider(widget.conversationId).notifier)
+        .pick();
+    if (refusal == null || !mounted) return;
+
+    final message = switch (refusal.reason) {
+      AttachmentRefusalReason.tooLarge => l10n.attachmentTooLarge(refusal.fileName),
+      AttachmentRefusalReason.unsupportedType =>
+        l10n.attachmentTypeNotAllowed(refusal.fileName),
+    };
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
@@ -218,6 +240,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final controller =
         ref.read(messagesControllerProvider(widget.conversationId).notifier);
     final state = ref.watch(messagesControllerProvider(widget.conversationId));
+    final draft = ref.watch(attachmentDraftProvider(widget.conversationId));
 
     // Count arrivals while the user is reading history, so the pill can say there is
     // something new without ever moving the viewport under them.
@@ -293,17 +316,32 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
           Expanded(child: _body(state, controller, l10n)),
           MessageComposer(
-            // The attach affordance. The backend authorizes uploads
-            // (`POST …/messages/attachments/authorize`) and the schema carries
-            // attachments, but no file picker or upload pipeline exists on this
-            // client yet — so the control says what it is rather than being
-            // absent. A missing button reads as "this product cannot do that";
-            // a disabled one with a reason reads as "not yet", which is true.
-            onAttach: () => ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(l10n.composerAttachUnavailable)),
+            // Picks a file, uploads it, and holds it until the message is sent.
+            // The bytes are in object storage BEFORE the message is queued, so
+            // an attachment message survives a restart exactly as a text one
+            // does — see AttachmentDraftController for why that ordering is not
+            // negotiable.
+            onAttach: () => unawaited(_pickAttachment(l10n)),
+            attachment: draft,
+            onRemoveAttachment: () =>
+                ref.read(attachmentDraftProvider(widget.conversationId).notifier).clear(),
+            onRetryAttachment: () => unawaited(
+              ref.read(attachmentDraftProvider(widget.conversationId).notifier).retry(),
             ),
             onSend: (body) {
-              controller.send(body, replyTo: _replyingTo);
+              final drafts = ref.read(
+                attachmentDraftProvider(widget.conversationId).notifier,
+              );
+              // Only a READY attachment travels. One still uploading, or one
+              // that failed, must not be named by a message — the object would
+              // not be there, and the server would refuse it.
+              final ready = drafts.takeReady();
+              controller.send(
+                body,
+                replyTo: _replyingTo,
+                attachments: ready == null ? const [] : [ready],
+              );
+              if (ready != null) drafts.clear();
               // Sending IS stopping typing; leaving the indicator up until the
               // debounce expires would show the recipient a phantom.
               controller.stopTyping();

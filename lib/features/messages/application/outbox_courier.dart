@@ -8,6 +8,7 @@ import '../../../core/network/error_mapper.dart';
 import '../../../shared/models/message.dart';
 import '../data/outbox_store.dart';
 import '../domain/outbox.dart';
+import '../domain/outgoing_attachment.dart';
 
 /// What happened to one queued message. Consumed by whichever conversation is
 /// on screen, so its bubbles follow the queue rather than duplicating its rules.
@@ -148,7 +149,7 @@ class OutboxCourier {
     required String body,
     MessageKind kind = MessageKind.text,
     String? replyToMessageId,
-    List<String> attachmentIds = const [],
+    List<OutgoingAttachment> attachments = const [],
   }) =>
       enqueueWithId(
         clientMessageId: _uuid.v4(),
@@ -156,7 +157,7 @@ class OutboxCourier {
         body: body,
         kind: kind,
         replyToMessageId: replyToMessageId,
-        attachmentIds: attachmentIds,
+        attachments: attachments,
       );
 
   /// Queue a message whose client id the caller has already minted.
@@ -172,7 +173,7 @@ class OutboxCourier {
     required String body,
     MessageKind kind = MessageKind.text,
     String? replyToMessageId,
-    List<String> attachmentIds = const [],
+    List<OutgoingAttachment> attachments = const [],
   }) async {
     final payload = OutgoingMessage(
       clientMessageId: clientMessageId,
@@ -180,7 +181,7 @@ class OutboxCourier {
       kind: kind,
       body: body,
       replyToMessageId: replyToMessageId,
-      attachmentIds: attachmentIds,
+      attachments: attachments,
     );
     final entry = OutboxEntry(
       clientMessageId: clientMessageId,

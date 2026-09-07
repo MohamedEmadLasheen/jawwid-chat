@@ -1,20 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jawwid_chat/features/messages/application/attachment_draft.dart';
+import 'package:jawwid_chat/features/messages/domain/outgoing_attachment.dart';
 import 'package:jawwid_chat/features/messages/presentation/message_composer.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/message.dart';
 
 /// The composer, including the attach affordance.
 ///
-/// Phase 2 delivers the attach BUTTON, not an upload pipeline: the phase map
-/// gives this client the realtime client, and the attachment work it names is
-/// server-side (real object storage plus object-level authorization on signed
-/// reads). So the entry point must exist, be reachable, be honest about what it
-/// currently does, and not pretend to upload anything.
+/// Phase 2 delivered the attach BUTTON and nothing behind it: the storage, the
+/// schema and the object-level authorization were built, and no client could
+/// reach them, so the control said attachments were not available. Phase 4
+/// connected it. What is asserted here is the composer's half — that the button
+/// leads somewhere, that the tray reports the upload honestly, and that a
+/// second file cannot silently replace the first. The pipeline itself is
+/// asserted in attachment_send_test.dart.
 void main() {
   Future<void> pumpComposer(
     WidgetTester tester, {
+    AttachmentDraft? attachment,
+    VoidCallback? onRemoveAttachment,
+    VoidCallback? onRetryAttachment,
     VoidCallback? onAttach,
     void Function(String)? onSend,
     void Function()? onTyping,
@@ -38,6 +45,9 @@ void main() {
             onSend: onSend ?? (_) {},
             onTyping: onTyping,
             onAttach: onAttach,
+            attachment: attachment,
+            onRemoveAttachment: onRemoveAttachment,
+            onRetryAttachment: onRetryAttachment,
             replyingTo: replyingTo,
             onCancelReply: onCancelReply,
             isReadOnly: isReadOnly,
@@ -85,6 +95,86 @@ void main() {
       );
 
       handle.dispose();
+    });
+
+    testWidgets('the tray reports an upload in progress', (tester) async {
+      await pumpComposer(
+        tester,
+        onAttach: () {},
+        attachment: AttachmentDraft(
+          file: _picked(),
+          stage: AttachmentStage.uploading,
+          progress: 0.4,
+        ),
+      );
+
+      expect(find.text('photo.jpg'), findsOneWidget);
+      expect(find.text('Uploading…'), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    });
+
+    testWidgets('a failed upload offers a retry rather than vanishing', (tester) async {
+      var retried = false;
+      await pumpComposer(
+        tester,
+        onAttach: () {},
+        onRetryAttachment: () => retried = true,
+        attachment: AttachmentDraft(
+          file: _picked(),
+          stage: AttachmentStage.failed,
+        ),
+      );
+
+      expect(find.text('Upload failed'), findsOneWidget);
+      // The chosen file is never silently discarded: the user picked it, and
+      // must be able to see what happened and try again.
+      expect(find.text('photo.jpg'), findsOneWidget);
+      await tester.tap(find.text('Retry'));
+      expect(retried, isTrue);
+    });
+
+    testWidgets('a ready attachment can be removed', (tester) async {
+      var removed = false;
+      await pumpComposer(
+        tester,
+        onAttach: () {},
+        onRemoveAttachment: () => removed = true,
+        attachment: AttachmentDraft(
+          file: _picked(),
+          stage: AttachmentStage.ready,
+          uploaded: const OutgoingAttachment(
+            kind: MessageKind.image,
+            objectKey: 'conversations/c1/o1',
+            mimeType: 'image/jpeg',
+            byteSize: 2048,
+          ),
+        ),
+      );
+
+      expect(find.text('Ready to send'), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.close));
+      expect(removed, isTrue);
+    });
+
+    testWidgets('a second file cannot silently replace the first', (tester) async {
+      await pumpComposer(
+        tester,
+        onAttach: () {},
+        attachment: AttachmentDraft(
+          file: _picked(),
+          stage: AttachmentStage.ready,
+        ),
+      );
+
+      // A message carries one attachment. Leaving the button live would let a
+      // second pick overwrite a file the user had already waited for.
+      final button = tester.widget<IconButton>(
+        find.ancestor(
+          of: find.byIcon(Icons.attach_file),
+          matching: find.byType(IconButton),
+        ),
+      );
+      expect(button.onPressed, isNull);
     });
 
     testWidgets('does not appear when the screen offers no handler', (tester) async {
@@ -171,3 +261,12 @@ void main() {
     });
   });
 }
+
+
+PickedAttachment _picked() => const PickedAttachment(
+      path: '/tmp/photo.jpg',
+      fileName: 'photo.jpg',
+      byteSize: 2048,
+      kind: MessageKind.image,
+      mimeType: 'image/jpeg',
+    );

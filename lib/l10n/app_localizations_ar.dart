@@ -599,4 +599,35 @@ class L10nAr extends L10n {
 
   @override
   String get callAudioFailed => 'تعذّر توصيل الصوت.';
+
+  @override
+  String get attachmentUploading => 'جارٍ الرفع…';
+
+  @override
+  String get attachmentReady => 'جاهز للإرسال';
+
+  @override
+  String get attachmentFailed => 'فشل الرفع';
+
+  @override
+  String get attachmentRetry => 'إعادة المحاولة';
+
+  @override
+  String get attachmentRemove => 'إزالة المرفق';
+
+  @override
+  String attachmentTooLarge(String fileName) {
+    return '$fileName أكبر من الحد المسموح';
+  }
+
+  @override
+  String attachmentTypeNotAllowed(String fileName) {
+    return 'لا يمكن إرسال $fileName';
+  }
+
+  @override
+  String get attachmentOpen => 'فتح المرفق';
+
+  @override
+  String get attachmentUnavailable => 'هذا المرفق لم يعد متاحًا';
 }

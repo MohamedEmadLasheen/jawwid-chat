@@ -596,4 +596,35 @@ class L10nEn extends L10n {
 
   @override
   String get callAudioFailed => 'Audio could not connect.';
+
+  @override
+  String get attachmentUploading => 'Uploading…';
+
+  @override
+  String get attachmentReady => 'Ready to send';
+
+  @override
+  String get attachmentFailed => 'Upload failed';
+
+  @override
+  String get attachmentRetry => 'Retry';
+
+  @override
+  String get attachmentRemove => 'Remove attachment';
+
+  @override
+  String attachmentTooLarge(String fileName) {
+    return '$fileName is too large to send';
+  }
+
+  @override
+  String attachmentTypeNotAllowed(String fileName) {
+    return '$fileName cannot be sent';
+  }
+
+  @override
+  String get attachmentOpen => 'Open attachment';
+
+  @override
+  String get attachmentUnavailable => 'This attachment is no longer available';
 }

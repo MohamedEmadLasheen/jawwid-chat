@@ -262,5 +262,28 @@
   "storiesEmpty": "Nothing new right now.",
   "storyExpired": "This update has expired.",
   "storyFrom": "From Jawwid",
-  "callAudioFailed": "Audio could not connect."
+  "callAudioFailed": "Audio could not connect.",
+  "attachmentUploading": "Uploading…",
+  "attachmentReady": "Ready to send",
+  "attachmentFailed": "Upload failed",
+  "attachmentRetry": "Retry",
+  "attachmentRemove": "Remove attachment",
+  "attachmentTooLarge": "{fileName} is too large to send",
+  "@attachmentTooLarge": {
+    "placeholders": {
+      "fileName": {
+        "type": "String"
+      }
+    }
+  },
+  "attachmentTypeNotAllowed": "{fileName} cannot be sent",
+  "@attachmentTypeNotAllowed": {
+    "placeholders": {
+      "fileName": {
+        "type": "String"
+      }
+    }
+  },
+  "attachmentOpen": "Open attachment",
+  "attachmentUnavailable": "This attachment is no longer available"
 }

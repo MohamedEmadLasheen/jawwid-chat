@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/message.dart';
+import '../application/attachment_draft.dart';
 
 /// The message composer.
 ///
@@ -18,6 +19,9 @@ class MessageComposer extends StatefulWidget {
     this.replyingTo,
     this.onCancelReply,
     this.onAttach,
+    this.attachment,
+    this.onRemoveAttachment,
+    this.onRetryAttachment,
     this.onStartRecording,
     this.isReadOnly = false,
     this.requiresApproval = false,
@@ -34,6 +38,12 @@ class MessageComposer extends StatefulWidget {
   final ReplyPreview? replyingTo;
   final VoidCallback? onCancelReply;
   final VoidCallback? onAttach;
+
+  /// The file being attached to the message currently being composed, if any.
+  final AttachmentDraft? attachment;
+
+  final VoidCallback? onRemoveAttachment;
+  final VoidCallback? onRetryAttachment;
   final VoidCallback? onStartRecording;
 
   /// The user can no longer post here — removed from the group, or archived server-side.
@@ -106,6 +116,12 @@ class _MessageComposerState extends State<MessageComposer> {
               reply: widget.replyingTo!,
               onCancel: widget.onCancelReply,
             ),
+          if (widget.attachment != null)
+            _AttachmentTray(
+              draft: widget.attachment!,
+              onRemove: widget.onRemoveAttachment,
+              onRetry: widget.onRetryAttachment,
+            ),
           Container(
             padding: const EdgeInsets.symmetric(
               horizontal: Spacing.spacing3,
@@ -121,25 +137,20 @@ class _MessageComposerState extends State<MessageComposer> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 if (widget.onAttach != null)
-                  // The attach affordance.
+                  // The attach affordance. It opens a picker and uploads.
                   //
-                  // ENABLED, and honest about what it does. Phase 2's
-                  // attachment work is server-side — real object storage and
-                  // object-level authorization on signed reads
-                  // (architecture §2.5) — and the phase map gives this client
-                  // the realtime client, not a picker. So the entry point
-                  // exists and says attachments are not available yet.
-                  //
-                  // A DISABLED button would have been worse: it reads as "this
-                  // is broken" or "you are not allowed", and neither is true.
-                  // An absent one reads as "the product cannot do this", which
-                  // is also untrue — the storage and the schema are built.
+                  // Until Phase 4 this button existed and said attachments were
+                  // not available: the storage, the schema and the
+                  // authorization were built and no client could reach them.
+                  // Disabled while one attachment is already in the tray — a
+                  // message carries one, and a second pick would silently
+                  // replace the first.
                   Semantics(
                     button: true,
                     label: l10n.composerAttach,
-                    hint: l10n.composerAttachUnavailable,
                     child: IconButton(
-                      onPressed: widget.onAttach,
+                      onPressed:
+                          widget.attachment == null ? widget.onAttach : null,
                       icon: const Icon(Icons.attach_file),
                       tooltip: l10n.composerAttach,
                     ),
@@ -278,4 +289,98 @@ class _ReplyBanner extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The file attached to the message being composed.
+///
+/// Shown ABOVE the input row rather than inside it, so the text field keeps its
+/// full width and the keyboard does not fight a growing row. The composer stays
+/// usable throughout: an upload in progress does not block typing, because the
+/// two are independent and blocking would make a slow network feel like a
+/// frozen app.
+class _AttachmentTray extends StatelessWidget {
+  const _AttachmentTray({required this.draft, this.onRemove, this.onRetry});
+
+  final AttachmentDraft draft;
+  final VoidCallback? onRemove;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = L10n.of(context);
+    final failed = draft.stage == AttachmentStage.failed;
+
+    final status = switch (draft.stage) {
+      AttachmentStage.uploading => l10n.attachmentUploading,
+      AttachmentStage.ready => l10n.attachmentReady,
+      AttachmentStage.failed => l10n.attachmentFailed,
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: Spacing.spacing3,
+        vertical: Spacing.spacing2,
+      ),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        border: Border(top: BorderSide(color: theme.colorScheme.outlineVariant)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            _iconFor(draft.file.kind),
+            size: 20,
+            color: failed ? theme.colorScheme.error : theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: Spacing.spacing2),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  draft.file.fileName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium,
+                ),
+                Text(
+                  status,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: failed
+                        ? theme.colorScheme.error
+                        : theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                if (draft.stage == AttachmentStage.uploading)
+                  Padding(
+                    padding: const EdgeInsets.only(top: Spacing.spacing1),
+                    child: LinearProgressIndicator(
+                      // Indeterminate until the first byte is reported, so a
+                      // stalled upload does not sit at a confident 0%.
+                      value: draft.progress > 0 ? draft.progress : null,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (failed && onRetry != null)
+            TextButton(onPressed: onRetry, child: Text(l10n.attachmentRetry)),
+          IconButton(
+            onPressed: onRemove,
+            icon: const Icon(Icons.close),
+            tooltip: l10n.attachmentRemove,
+          ),
+        ],
+      ),
+    );
+  }
+
+  static IconData _iconFor(MessageKind? kind) => switch (kind) {
+        MessageKind.image => Icons.image_outlined,
+        MessageKind.video => Icons.videocam_outlined,
+        MessageKind.voice => Icons.mic_none_outlined,
+        _ => Icons.insert_drive_file_outlined,
+      };
 }

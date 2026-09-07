@@ -255,5 +255,28 @@
   "storiesEmpty": "لا يوجد جديد الآن.",
   "storyExpired": "انتهت صلاحية هذا التحديث.",
   "storyFrom": "من جوّيد",
-  "callAudioFailed": "تعذّر توصيل الصوت."
+  "callAudioFailed": "تعذّر توصيل الصوت.",
+  "attachmentUploading": "جارٍ الرفع…",
+  "attachmentReady": "جاهز للإرسال",
+  "attachmentFailed": "فشل الرفع",
+  "attachmentRetry": "إعادة المحاولة",
+  "attachmentRemove": "إزالة المرفق",
+  "attachmentTooLarge": "{fileName} أكبر من الحد المسموح",
+  "@attachmentTooLarge": {
+    "placeholders": {
+      "fileName": {
+        "type": "String"
+      }
+    }
+  },
+  "attachmentTypeNotAllowed": "لا يمكن إرسال {fileName}",
+  "@attachmentTypeNotAllowed": {
+    "placeholders": {
+      "fileName": {
+        "type": "String"
+      }
+    }
+  },
+  "attachmentOpen": "فتح المرفق",
+  "attachmentUnavailable": "هذا المرفق لم يعد متاحًا"
 }

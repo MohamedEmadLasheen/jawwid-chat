@@ -126,14 +126,22 @@ class MessageBubble extends StatelessWidget {
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   )
-                else
+                else ...[
+                  // Attachments come BEFORE the body: a caption reads as a
+                  // caption, and a photo with two words under it should not put
+                  // the words first.
+                  if (message.attachments.isNotEmpty)
+                    for (final attachment in message.attachments)
+                      _AttachmentView(attachment: attachment),
                   // Message bodies resolve their own base direction per paragraph, so a
                   // mixed Arabic/English message reads correctly either way (§4).
-                  Text(
-                    message.body,
-                    textDirection: null,
-                    style: theme.textTheme.bodyLarge?.copyWith(color: foreground),
-                  ),
+                  if (message.body.isNotEmpty)
+                    Text(
+                      message.body,
+                      textDirection: null,
+                      style: theme.textTheme.bodyLarge?.copyWith(color: foreground),
+                    ),
+                ],
                 if (message.reactions.isNotEmpty && !message.isDeleted)
                   _ReactionRow(
                     reactions: message.reactions,
@@ -505,6 +513,145 @@ class _SystemMessage extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// One attachment inside a bubble.
+///
+/// ## Access is the server's decision, every time
+///
+/// `attachment.url` is a SHORT-LIVED signed URL the server minted for this
+/// reader on this fetch, after running the same authorization that let them
+/// read the message at all. It is never cached and never persisted: a URL kept
+/// past its expiry is dead, which is the point — it cannot become a way around
+/// the check that produced it.
+///
+/// A null URL is therefore normal, not an error. It means either "this is the
+/// sender's own echo and the server has not served it back yet" or "the grant
+/// has expired"; both render as an unavailable attachment rather than a broken
+/// image, and reopening the conversation mints a fresh one.
+class _AttachmentView extends StatelessWidget {
+  const _AttachmentView({required this.attachment});
+
+  final Attachment attachment;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = L10n.of(context);
+    final url = attachment.url;
+
+    if (url == null || url.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: Spacing.spacing2),
+        child: _AttachmentRow(
+          icon: Icons.link_off,
+          label: attachment.fileName ?? l10n.attachmentUnavailable,
+          detail: l10n.attachmentUnavailable,
+        ),
+      );
+    }
+
+    if (attachment.kind == MessageKind.image) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: Spacing.spacing2),
+        child: ClipRRect(
+          borderRadius: Radii.card,
+          child: Image.network(
+            url,
+            fit: BoxFit.cover,
+            // Bounded, so one photo cannot push the whole conversation off
+            // screen before its dimensions are known.
+            height: 220,
+            width: double.infinity,
+            semanticLabel: attachment.fileName,
+            loadingBuilder: (context, child, progress) => progress == null
+                ? child
+                : SizedBox(
+                    height: 220,
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        value: progress.expectedTotalBytes == null
+                            ? null
+                            : progress.cumulativeBytesLoaded /
+                                progress.expectedTotalBytes!,
+                      ),
+                    ),
+                  ),
+            // An expired grant fails here. It is a stale URL, not a broken
+            // product, so it says so and the next fetch mints a new one.
+            errorBuilder: (context, error, stack) => _AttachmentRow(
+              icon: Icons.broken_image_outlined,
+              label: attachment.fileName ?? l10n.attachmentUnavailable,
+              detail: l10n.attachmentUnavailable,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Spacing.spacing2),
+      child: _AttachmentRow(
+        icon: switch (attachment.kind) {
+          MessageKind.video => Icons.play_circle_outline,
+          MessageKind.voice => Icons.audiotrack_outlined,
+          _ => Icons.insert_drive_file_outlined,
+        },
+        label: attachment.fileName ?? l10n.attachmentOpen,
+        detail: _size(attachment.byteSize) ?? attachment.mimeType ?? '',
+        style: theme.textTheme.bodyMedium,
+      ),
+    );
+  }
+
+  static String? _size(int? bytes) {
+    if (bytes == null || bytes <= 0) return null;
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(0)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+}
+
+class _AttachmentRow extends StatelessWidget {
+  const _AttachmentRow({
+    required this.icon,
+    required this.label,
+    required this.detail,
+    this.style,
+  });
+
+  final IconData icon;
+  final String label;
+  final String detail;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 28, color: theme.colorScheme.onSurfaceVariant),
+        const SizedBox(width: Spacing.spacing2),
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, style: style),
+              if (detail.isNotEmpty)
+                Text(
+                  detail,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

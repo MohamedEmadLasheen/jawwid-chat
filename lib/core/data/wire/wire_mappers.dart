@@ -281,7 +281,10 @@ abstract final class WireMappers {
       kind: messageKind(json['kind'] as String?),
       fileName: json['originalName'] as String?,
       byteSize: (json['byteSize'] as num?)?.toInt(),
-      // Short-lived signed URL from the backend, never a permanent storage URL (§22).
+      mimeType: json['mimeType'] as String?,
+      // Short-lived signed URLs from the backend, never permanent storage URLs
+      // (§22). Both are minted per read and expire; neither is stored.
+      url: json['url'] as String?,
       thumbnailUrl: json['thumbnailUrl'] as String?,
       durationMs: (json['durationMs'] as num?)?.toInt(),
     );

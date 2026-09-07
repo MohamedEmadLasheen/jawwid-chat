@@ -1,3 +1,4 @@
+import '../../features/messages/domain/outgoing_attachment.dart';
 import '../../shared/models/auth.dart';
 import '../../shared/models/conversation.dart';
 import '../../shared/models/message.dart';
@@ -236,7 +237,7 @@ class OutgoingMessage {
     required this.kind,
     this.body = '',
     this.replyToMessageId,
-    this.attachmentIds = const [],
+    this.attachments = const [],
   });
 
   /// Generated once at compose time and reused on every retry (§16, §17).
@@ -245,7 +246,12 @@ class OutgoingMessage {
   final MessageKind kind;
   final String body;
   final String? replyToMessageId;
-  final List<String> attachmentIds;
+  /// Objects ALREADY IN STORAGE that this message names.
+  ///
+  /// Metadata, not files: the upload completes before the message is queued, so
+  /// what the offline outbox persists is a few hundred bytes it can actually
+  /// keep rather than a video it cannot.
+  final List<OutgoingAttachment> attachments;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -391,6 +397,53 @@ abstract interface class MessageRepository {
   Future<List<MessageSearchHit>> search(MessageSearchQuery query);
 
   Future<void> setTyping(String conversationId, {required bool isTyping});
+}
+
+/// Permission to put bytes in object storage, minted by the server.
+///
+/// The client never composes an object key. `authorizeUpload` runs the same
+/// read authorization the conversation itself does and returns a key bound to
+/// that conversation; a key from anywhere else is refused when the message
+/// naming it is sent.
+class UploadGrant {
+  const UploadGrant({
+    required this.objectKey,
+    required this.uploadUrl,
+    required this.headers,
+    required this.expiresAt,
+  });
+
+  final String objectKey;
+  final String uploadUrl;
+  final Map<String, String> headers;
+  final DateTime? expiresAt;
+}
+
+/// Attachment upload, against
+/// `apps/api/src/communication/api/message.controller.ts`.
+///
+/// | Method | Path | Body |
+/// |---|---|---|
+/// | POST | `/conversations/:id/messages/attachments/authorize` | `{ kind, mimeType, byteSize }` |
+///
+/// The PUT that follows goes to OBJECT STORAGE, not to this API, and carries no
+/// session credential — the URL is presigned and its signature is the
+/// authorization. Sending a bearer token to a third-party storage host would
+/// hand that host a credential for this system.
+abstract interface class AttachmentRepository {
+  Future<UploadGrant> authorizeUpload({
+    required String conversationId,
+    required String kind,
+    required String mimeType,
+    required int byteSize,
+  });
+
+  /// PUT the bytes at [grant]. Returns when storage has accepted them.
+  Future<void> putObject({
+    required UploadGrant grant,
+    required String filePath,
+    void Function(int sent, int total)? onProgress,
+  });
 }
 
 /// Device push tokens, against `apps/api/src/communication/api/notification.controller.ts`.

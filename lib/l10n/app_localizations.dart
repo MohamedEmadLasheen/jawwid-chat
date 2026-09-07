@@ -1194,6 +1194,60 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Audio could not connect.'**
   String get callAudioFailed;
+
+  /// No description provided for @attachmentUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading…'**
+  String get attachmentUploading;
+
+  /// No description provided for @attachmentReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready to send'**
+  String get attachmentReady;
+
+  /// No description provided for @attachmentFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload failed'**
+  String get attachmentFailed;
+
+  /// No description provided for @attachmentRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get attachmentRetry;
+
+  /// No description provided for @attachmentRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove attachment'**
+  String get attachmentRemove;
+
+  /// No description provided for @attachmentTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'{fileName} is too large to send'**
+  String attachmentTooLarge(String fileName);
+
+  /// No description provided for @attachmentTypeNotAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'{fileName} cannot be sent'**
+  String attachmentTypeNotAllowed(String fileName);
+
+  /// No description provided for @attachmentOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open attachment'**
+  String get attachmentOpen;
+
+  /// No description provided for @attachmentUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This attachment is no longer available'**
+  String get attachmentUnavailable;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

@@ -101,6 +101,12 @@ class HttpMessageRepository implements MessageRepository {
         // creating a second one.
         'clientMessageId': message.clientMessageId,
         'replyToMessageId': ?message.replyToMessageId,
+        // Metadata only. The bytes were uploaded before this message was
+        // queued, and the server re-checks every field here against what
+        // storage actually holds — so a claim made in this body cannot become
+        // an attachment that does not match the object.
+        if (message.attachments.isNotEmpty)
+          'attachments': [for (final a in message.attachments) a.toWire()],
       },
       // Marks the POST replayable, since it carries an idempotency key (§48).
       options: ApiClient.idempotent(message.clientMessageId),

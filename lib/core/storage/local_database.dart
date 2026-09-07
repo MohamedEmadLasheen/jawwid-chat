@@ -31,7 +31,7 @@ class AppDatabase {
   /// Bumped whenever the schema below changes. Every bump needs a case in
   /// [_upgrade], or an existing install will open a database missing the
   /// columns the code expects.
-  static const schemaVersion = 1;
+  static const schemaVersion = 2;
 
   static const _fileName = 'jawwid_chat.db';
 
@@ -86,7 +86,11 @@ class AppDatabase {
         kind               TEXT NOT NULL,
         body               TEXT NOT NULL DEFAULT '',
         reply_to_message_id TEXT,
-        attachment_ids     TEXT NOT NULL DEFAULT '',
+        -- JSON array of attachment metadata. A REFERENCE to bytes already in
+        -- object storage, never the bytes: the upload completes before the
+        -- message is queued, so this is a few hundred bytes the queue can
+        -- actually keep rather than a video it cannot.
+        attachments        TEXT NOT NULL DEFAULT '',
         updated_at         INTEGER NOT NULL
       )
     ''');
@@ -105,6 +109,14 @@ class AppDatabase {
       switch (version) {
         case 1:
           await _create(db);
+        case 2:
+          // Attachments became metadata rather than a list of ids. An existing
+          // install has queued messages in this table, so the column is ADDED
+          // rather than the table rebuilt — dropping it would discard somebody's
+          // unsent words to add a column they were not using.
+          await db.execute(
+            "ALTER TABLE outbox_message ADD COLUMN attachments TEXT NOT NULL DEFAULT ''",
+          );
         default:
           throw StateError('no migration to local schema version $version');
       }
