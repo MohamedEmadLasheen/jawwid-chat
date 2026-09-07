@@ -244,14 +244,21 @@ void main() {
 
     test('order is preserved: a stuck message is not overtaken by the next one', () async {
       repository.failWith = const AppError(AppErrorKind.network);
-      final c = courier();
+      // A backoff long enough that the head is genuinely parked for the
+      // duration of the test. With the compressed one the head becomes
+      // eligible again between the two enqueues — which is correct behaviour
+      // and makes this assertion about the scheduler's timing rather than
+      // about ordering.
+      final c = courier(backoff: const Duration(seconds: 30));
       await c.enqueue(conversationId: 'c1', body: 'first');
       await c.enqueue(conversationId: 'c1', body: 'second');
       await c.drain();
 
       // Only the head was attempted. A flaky network must not silently reorder
-      // somebody's words.
+      // somebody's words: the second message waits behind the first rather
+      // than overtaking it.
       expect(repository.sent.map((m) => m.body), ['first']);
+      expect(repository.sent.map((m) => m.body), isNot(contains('second')));
       await c.dispose();
     });
 
