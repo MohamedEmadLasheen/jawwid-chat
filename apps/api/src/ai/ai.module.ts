@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PlatformModule } from '../platform/platform.module';
+import { CommunicationModule } from '../communication/communication.module';
 import { AI_PROVIDER } from './ai.tokens';
 import { AiInvocationService } from './ai-invocation.service';
 import { AnthropicAiProvider } from './provider/anthropic.provider';
@@ -7,6 +8,8 @@ import { DisabledAiProvider } from './provider/disabled.provider';
 import { KnowledgeService } from './knowledge/knowledge.service';
 import { FaqService } from './knowledge/faq.service';
 import { FaqController, KnowledgeController } from './api/knowledge.controller';
+import { SuggestionService } from './suggestions/suggestion.service';
+import { SuggestionController } from './api/suggestion.controller';
 
 /**
  * The AI intelligence layer.
@@ -17,8 +20,10 @@ import { FaqController, KnowledgeController } from './api/knowledge.controller';
  * to governance.
  */
 @Module({
-  imports: [PlatformModule],
-  controllers: [KnowledgeController, FaqController],
+  // CommunicationModule, and never the other way round. The assistant reaches
+  // the send pipeline; the send pipeline knows nothing about the assistant.
+  imports: [PlatformModule, CommunicationModule],
+  controllers: [KnowledgeController, FaqController, SuggestionController],
   providers: [
     // The real provider when the environment supplies a key, an honestly
     // disabled one otherwise -- the same pattern as OBJECT_STORAGE and
@@ -31,7 +36,8 @@ import { FaqController, KnowledgeController } from './api/knowledge.controller';
     AiInvocationService,
     KnowledgeService,
     FaqService,
+    SuggestionService,
   ],
-  exports: [AI_PROVIDER, AiInvocationService, KnowledgeService, FaqService],
+  exports: [AI_PROVIDER, AiInvocationService, KnowledgeService, FaqService, SuggestionService],
 })
 export class AiModule {}

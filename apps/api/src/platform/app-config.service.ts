@@ -129,6 +129,12 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'ai.summary_context_messages': 120,
   /** initial hypothesis - trailing messages given to the risk classifier */
   'ai.risk_context_messages': 40,
+  /**
+   * initial hypothesis - a pending suggestion older than this is not offered.
+   * A stale draft is worse than none: the conversation has moved on, and a
+   * manager who sends it is replying to a message that is no longer last.
+   */
+  'ai.suggestion_stale_minutes': 120,
 } as const;
 
 export type CommunicationConfigKey = keyof typeof COMMUNICATION_CONFIG_DEFAULTS;

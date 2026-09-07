@@ -1251,3 +1251,34 @@ model KnowledgeRevision {
   @@map("knowledge_revision")
   @@schema("chat")
 }
+
+/// Phase 7.3. A drafted reply awaiting a human decision. Deliberately NOT a
+/// row in Message with a flag: a draft in its own table cannot be delivered by
+/// code that does not know it exists, and the only bridge to delivery is
+/// SuggestionService.send, authored by the manager.
+model AiSuggestion {
+  /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
+  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id             String @id @default(uuid()) @db.Uuid
+
+  conversationId String @map("conversation_id") @db.Uuid
+  requestedBy    String @map("requested_by") @db.Uuid
+
+  body   String
+  status String @default("pending")
+
+  model         String?
+  confidence    Decimal? @db.Decimal(3, 2)
+  knowledgeIds  String[] @map("knowledge_ids") @db.Uuid
+
+  sentMessageId String?   @map("sent_message_id") @db.Uuid
+  resolvedBy    String?   @map("resolved_by") @db.Uuid
+  resolvedAt    DateTime? @map("resolved_at") @db.Timestamptz
+  createdAt     DateTime  @map("created_at") @db.Timestamptz @default(now())
+
+  @@index([conversationId, createdAt(sort: Desc)])
+  @@index([organizationId, status, createdAt(sort: Desc)])
+  @@index([requestedBy, createdAt(sort: Desc)])
+  @@map("ai_suggestion")
+  @@schema("chat")
+}
