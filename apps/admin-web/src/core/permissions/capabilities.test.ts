@@ -38,12 +38,46 @@ describe('role → navigation', () => {
     // was the only live area; it is widened to the live SET rather than
     // loosened, so a frozen area re-entering the rail still fails here — which
     // is the assertion that was actually load-bearing.
+    //
+    // PHASE 5 adds `stories` for every operator role, and `broadcast` for
+    // management only — so the expected set is no longer the same for all
+    // roles, and the loop below is split accordingly rather than relaxed into
+    // a `toContain`.
     for (const role of ROLES) {
       const areas = visibleAreas(role)
-      expect(areas).toEqual(['console', 'directory', 'groups', 'labels'])
+      expect(areas).toEqual([
+        'console',
+        'directory',
+        'groups',
+        'labels',
+        'stories',
+        ...(isManager(role) ? ['broadcast'] : []),
+      ])
       for (const frozen of ['inbox', 'families', 'tasks', 'coverage', 'dashboard', 'settings'] as const) {
         expect(areas).not.toContain(frozen)
       }
+    }
+  })
+
+  it('keeps BROADCAST out of a supervisor’s rail, and says why that is not a control', () => {
+    // The rail mirrors `broadcasts.send`, which manager and super_admin hold.
+    // It is NAVIGATION, not authorization: an admin granted the permission by a
+    // per-account override reaches /broadcasts by URL and the server serves
+    // them, narrowed to their own families by the audience resolver. What the
+    // rail must never do is offer the page to somebody the server will refuse.
+    expect(canOpenArea('admin', 'broadcast')).toBe(false)
+    expect(canOpenArea('coverage_admin', 'broadcast')).toBe(false)
+    expect(canOpenArea('manager', 'broadcast')).toBe(true)
+    expect(canOpenArea('super_admin', 'broadcast')).toBe(true)
+  })
+
+  it('gives every operator role STORIES, including one that cannot publish', () => {
+    // coverage_admin holds `stories.read` and not `stories.publish`. They still
+    // get the page: seeing what the academy published to their families is a
+    // legitimate reason to open it, and the compose form is what the permission
+    // hides — not the whole area.
+    for (const role of ROLES) {
+      expect(canOpenArea(role, 'stories')).toBe(true)
     }
   })
 

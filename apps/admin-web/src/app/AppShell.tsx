@@ -10,6 +10,8 @@ const AREA_PATH: Record<NavArea, string> = {
   directory: '/directory',
   groups: '/groups',
   labels: '/labels',
+  stories: '/stories',
+  broadcast: '/broadcasts',
   inbox: '/inbox',
   families: '/families',
   tasks: '/tasks',

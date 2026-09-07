@@ -38,6 +38,14 @@ export const qk = {
 
   labels: ['labels'] as const,
 
+  // --- Phase 5 (stories, broadcast) ----------------------------------------
+  // ADDITIVE ONLY, as Phase 3's keys were. Broadcast progress is polled rather
+  // than invalidated by an event: the fan-out runs in a worker and its
+  // progress event goes to the SENDER's actor room, so a console that is open
+  // but not the sender's would otherwise never refresh.
+  stories: ['stories'] as const,
+  broadcasts: ['broadcasts'] as const,
+
   // --- Frozen (brief-era CRM). Unrouted; see PHASE-0-ADMIN-WEB-RECONCILIATION.
 
   duty: ['me', 'duty'] as const,

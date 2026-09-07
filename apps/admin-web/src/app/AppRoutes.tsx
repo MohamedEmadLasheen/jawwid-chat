@@ -11,6 +11,8 @@ import { FamilyDetailPage } from '@/features/directory/FamilyDetailPage'
 import { GroupsPage } from '@/features/groups/GroupsPage'
 import { GroupDetailPage } from '@/features/groups/GroupDetailPage'
 import { LabelsPage } from '@/features/labels/LabelsPage'
+import { StoriesPage } from '@/features/stories/StoriesPage'
+import { BroadcastPage } from '@/features/broadcast/BroadcastPage'
 import { ForbiddenPage } from './ForbiddenPage'
 import type { ReactElement } from 'react'
 
@@ -61,6 +63,10 @@ export function AppRoutes() {
         <Route path="/groups" element={<Area area="groups"><GroupsPage /></Area>} />
         <Route path="/groups/:groupId" element={<Area area="groups"><GroupDetailPage /></Area>} />
         <Route path="/labels" element={<Area area="labels"><LabelsPage /></Area>} />
+
+        {/* Phase 5 -- publication and outbound communication. */}
+        <Route path="/stories" element={<Area area="stories"><StoriesPage /></Area>} />
+        <Route path="/broadcasts" element={<Area area="broadcast"><BroadcastPage /></Area>} />
 
         <Route path="/forbidden" element={<ForbiddenPage />} />
         {/*

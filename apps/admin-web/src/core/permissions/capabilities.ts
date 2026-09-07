@@ -31,6 +31,9 @@ export type NavArea =
   | 'directory'
   | 'groups'
   | 'labels'
+  // Phase 5 -- publication and outbound communication.
+  | 'stories'
+  | 'broadcast'
   // Frozen brief-era areas. Still typed so the frozen pages compile; removed
   // from the rail and from the route table (PHASE-0-ADMIN-WEB-RECONCILIATION
   // §2.7), and deleted with their features in a later phase.
@@ -95,8 +98,24 @@ export function visibleAreas(role: StaffRole, department?: Department | null): N
   // Phase 3 areas are open to every operator role. Which FAMILIES, STUDENTS and
   // GROUPS they then see is scope, decided server-side per request -- so the
   // rail showing an area grants nothing, exactly as this file's header says.
-  if (isOperator(role, department)) return ['console', 'directory', 'groups', 'labels']
-  return []
+  if (!isOperator(role, department)) return []
+
+  const areas: NavArea[] = ['console', 'directory', 'groups', 'labels']
+
+  // Phase 5. STORIES is open to every operator role -- publishing needs
+  // `stories.publish`, which coverage_admin does not hold, and the page hides
+  // its compose form accordingly rather than being hidden entirely: a
+  // coverage_admin still has a legitimate reason to see what went out.
+  areas.push('stories')
+
+  // BROADCAST is management-only in the rail, matching `broadcasts.send`, which
+  // manager and super_admin hold. Note this mirrors the permission rather than
+  // deciding it: an admin granted `broadcasts.send` by a per-account override
+  // reaches the page by URL and the server serves them -- narrowed to their own
+  // scope by the audience resolver. The rail is navigation, not a boundary.
+  if (isManager(role)) areas.push('broadcast')
+
+  return areas
 }
 
 export function canOpenArea(
