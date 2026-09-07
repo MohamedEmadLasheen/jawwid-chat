@@ -247,6 +247,32 @@ have (`spawnSync psql ENOENT`). The Phase 3 and Phase 5 reports record the same
 New in this pass: 12 recording-capture tests, 10 webhook-attack tests, 4 LiveKit
 contract tests, 10 Flutter media tests.
 
+### A provenance defect this verification found
+
+The Flutter numbers above were taken from an **isolated checkout of this pass's
+own commits**, not from the shared working tree, and that is what caught the one
+real mistake of the pass.
+
+`lib/app/providers.dart` and `lib/app/bootstrap.dart` are files this work
+legitimately edited to wire the media layer. At the moment they were staged they
+*also* carried a peer's in-flight push-notification work whose supporting files
+were still untracked — so the commit referenced `PushMessaging`,
+`PushRegistrar` and `HttpNotificationRepository` without them, and a clean
+checkout of the branch did not analyze. Both files were rebuilt as the
+pre-closure version plus only the media changes, and the peer's working-tree
+version was restored unstaged in the same operation, so nothing of theirs was
+lost or committed.
+
+**This is only visible from outside the shared tree.** In the working tree the
+peer's files are present, so everything analyzes and nothing looks wrong; the
+defect exists only in what the commit *contains*. Verifying from a detached
+worktree at the branch tip is the only way to see it, and it is worth doing on
+every phase that shares a checkout.
+
+A second, smaller defect surfaced the same way: the recorder-stop test slept
+50ms for a fire-and-forget effect, passed in isolation, and failed in a
+full-suite run. It now polls.
+
 ---
 
 ## 8. Exact commands
