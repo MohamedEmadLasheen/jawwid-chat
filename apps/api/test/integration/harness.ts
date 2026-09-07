@@ -31,6 +31,7 @@ import { CallService } from '@communication/calls/call.service';
 import { RecordingService } from '@communication/calls/recording.service';
 import { CallSweeper } from '@communication/calls/call-sweeper';
 import { LiveKitTokenIssuer } from '@communication/calls/media-token';
+import type { CallRecorder, RecordingRequest } from '@communication/calls/call-recorder';
 import { AudienceResolverService } from '@communication/audience/audience-resolver.service';
 import { StoryService } from '@communication/stories/story.service';
 import { BroadcastService } from '@communication/broadcast/broadcast.service';
@@ -68,6 +69,41 @@ export function appDatabaseUrl(): string {
 
 export function buildGraph() {
   return buildGraphOn(new PrismaService());
+}
+
+/**
+ * A CallRecorder that accepts jobs and records what it was asked for.
+ *
+ * Deliberately does NOT reach a real LiveKit Egress, even when one happens to
+ * be running on the developer's machine: a test asserting the recording
+ * contract must assert THIS repository's behaviour, not a third party's
+ * availability. What it captures is exactly what the contract is about -- that
+ * the room and the object key handed to the recorder are the server's own, and
+ * that stop() is called for the job that was started.
+ */
+export class FakeCallRecorder implements CallRecorder {
+  readonly isAvailable = true;
+  readonly started: RecordingRequest[] = [];
+  readonly stopped: string[] = [];
+
+  /** Set to make the next start() fail, as an unreachable Egress would. */
+  failNextStart = false;
+
+  private sequence = 0;
+
+  async start(request: RecordingRequest): Promise<{ egressId: string }> {
+    if (this.failNextStart) {
+      this.failNextStart = false;
+      throw new Error('egress unreachable');
+    }
+    this.started.push(request);
+    this.sequence += 1;
+    return { egressId: `EG_fake_${this.sequence}` };
+  }
+
+  async stop(egressId: string): Promise<void> {
+    this.stopped.push(egressId);
+  }
 }
 
 /**
@@ -110,10 +146,7 @@ export function buildGraphOn(prisma: PrismaService) {
     prisma, templates, quietHours, config, new LoggingPushProvider(), preferences,
   );
   const reminders = new ReminderService(prisma, notifications);
-  const calls = new CallService(
-    prisma, authz, conversations, outbox, config, reminders, identity, audit,
-    new LiveKitTokenIssuer(),
-  );
+  const recorder = new FakeCallRecorder();
 
   // Phase 5. The audience resolver is shared BY CONSTRUCTION here as well as in
   // the Nest module: stories and broadcast are handed the same instance, so a
@@ -121,7 +154,11 @@ export function buildGraphOn(prisma: PrismaService) {
   // audience.
   const audience = new AudienceResolverService(prisma, scope);
   const recordings = new RecordingService(
-    prisma, authz, scope, conversations, config, storage, audit,
+    prisma, authz, scope, conversations, config, storage, recorder, audit,
+  );
+  const calls = new CallService(
+    prisma, authz, conversations, outbox, config, reminders, recordings,
+    identity, audit, new LiveKitTokenIssuer(),
   );
   const stories = new StoryService(
     prisma, authz, audience, conversations, outbox, config, storage, audit,
@@ -138,6 +175,7 @@ export function buildGraphOn(prisma: PrismaService) {
     config, sessions, accounts, auth, throttle, families, userAdmin, learners,
     groups, labels,
     audience, recordings, stories, broadcasts, broadcastWorker, sweeper, storage,
+    recorder,
   };
 }
 

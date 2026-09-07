@@ -1,0 +1,140 @@
+/**
+ * PHASE 5 CLOSURE -- the token this API mints is accepted by a REAL LiveKit.
+ *
+ * Every other calling test asserts our own behaviour against our own
+ * assumptions about LiveKit's token format. That is exactly the class of
+ * assumption that is wrong silently: a token this repository considers
+ * perfectly formed, refused by the server, fails as a connection timeout on a
+ * parent's phone and as nothing at all in CI.
+ *
+ * So this presents a real, freshly minted token to a real LiveKit server's
+ * validation endpoint. It SKIPS when no server is reachable -- most developers
+ * and CI have none -- and the skip is loud rather than a silent pass.
+ *
+ *   docker run -d --name jawwid-lk -p 7880:7880 \
+ *     -v "$PWD/infra/livekit/livekit.yaml:/etc/livekit.yaml:ro" \
+ *     livekit/livekit-server:v1.8 --config /etc/livekit.yaml
+ *
+ * or `docker compose up -d livekit`, which uses the same config file.
+ */
+import { LiveKitTokenIssuer } from '@communication/calls/media-token';
+
+const LIVEKIT_HTTP = process.env.LIVEKIT_TEST_URL ?? 'http://localhost:7880';
+
+/** The development key pair in infra/livekit/livekit.yaml and .env.example. */
+const DEV_KEY = 'devkey';
+const DEV_SECRET = 'devsecret-local-only';
+
+async function livekitReachable(): Promise<boolean> {
+  try {
+    const response = await fetch(LIVEKIT_HTTP, {
+      signal: AbortSignal.timeout(1500),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+let reachable = false;
+
+beforeAll(async () => {
+  reachable = await livekitReachable();
+  if (!reachable) {
+    // Loud, so a green run is never mistaken for a verified one.
+    // eslint-disable-next-line no-console
+    console.warn(
+      `SKIPPING the LiveKit contract suite: no server at ${LIVEKIT_HTTP}. ` +
+        'Start one with `docker compose up -d livekit`.',
+    );
+  }
+});
+
+function issuer(): LiveKitTokenIssuer {
+  process.env.LIVEKIT_API_KEY = DEV_KEY;
+  process.env.LIVEKIT_API_SECRET = DEV_SECRET;
+  process.env.LIVEKIT_URL = 'ws://localhost:7880';
+  // Read at construction, so the issuer is built after the environment is set.
+  return new LiveKitTokenIssuer();
+}
+
+/** LiveKit's own token validation endpoint. */
+async function validate(token: string): Promise<number> {
+  const response = await fetch(`${LIVEKIT_HTTP}/rtc/validate?access_token=${token}`);
+  return response.status;
+}
+
+describe('the LiveKit deployment contract', () => {
+  it('a token this API mints is ACCEPTED by a real LiveKit server', async () => {
+    if (!reachable) return;
+
+    const grant = await issuer().issue({
+      roomName: 'jawwid-contract-room',
+      identity: 'actor-under-test',
+      name: 'admin_a',
+      canPublish: true,
+      ttlSeconds: 120,
+    });
+
+    expect(await validate(grant.token)).toBe(200);
+  });
+
+  it('a token signed with the WRONG secret is refused', async () => {
+    if (!reachable) return;
+
+    process.env.LIVEKIT_API_KEY = DEV_KEY;
+    process.env.LIVEKIT_API_SECRET = 'a-different-secret-entirely-0123456789';
+    const forged = await new LiveKitTokenIssuer().issue({
+      roomName: 'jawwid-contract-room',
+      identity: 'actor-under-test',
+      name: 'admin_a',
+      canPublish: true,
+      ttlSeconds: 120,
+    });
+
+    // If this ever returned 200, the signature would be decorative.
+    expect(await validate(forged.token)).toBe(401);
+  });
+
+  it('an EXPIRED token is refused', async () => {
+    if (!reachable) return;
+
+    // The whole reason the TTL is short: a leaked token stops working. If the
+    // server ignored `exp`, that property would be imaginary.
+    const grant = await issuer().issue({
+      roomName: 'jawwid-contract-room',
+      identity: 'actor-under-test',
+      name: 'admin_a',
+      canPublish: true,
+      ttlSeconds: -60,
+    });
+
+    expect(await validate(grant.token)).toBe(401);
+  });
+
+  it('the token names exactly one room, and cannot create or list others', async () => {
+    if (!reachable) return;
+
+    const grant = await issuer().issue({
+      roomName: 'jawwid-contract-room',
+      identity: 'actor-under-test',
+      name: 'admin_a',
+      canPublish: false,
+      ttlSeconds: 120,
+    });
+
+    const claims = JSON.parse(
+      Buffer.from(grant.token.split('.')[1], 'base64').toString('utf8'),
+    );
+    // The room is inside the SIGNED payload, so a client cannot replay the
+    // token into a different room.
+    expect(claims.video.room).toBe('jawwid-contract-room');
+    expect(claims.video.roomCreate).toBe(false);
+    expect(claims.video.roomList).toBe(false);
+    // A silenced member may listen and not speak.
+    expect(claims.video.canPublish).toBe(false);
+    expect(claims.video.canSubscribe).toBe(true);
+
+    expect(await validate(grant.token)).toBe(200);
+  });
+});
