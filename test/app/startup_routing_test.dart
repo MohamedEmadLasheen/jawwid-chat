@@ -184,7 +184,12 @@ void main() {
       await settle(tester);
       expect(currentLocation(), Routes.home);
 
-      await controller().signOut();
+      // signOut() cancels the session-revocation subscription. Cancelling a
+      // broadcast-stream subscription completes on the root zone, which the
+      // widget test's fake-async zone never turns, so the await never returns
+      // (a known FakeAsync limitation, not a product defect). runAsync moves
+      // this one call onto the real event loop; the assertions stay identical.
+      await tester.runAsync(() => controller().signOut());
       await settle(tester);
 
       expect(currentLocation(), Routes.signIn);
