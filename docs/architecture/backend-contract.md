@@ -1,3 +1,6 @@
+> **STATUS: SUPERSEDED** (Phase 0, 2026-09-07). Written for the PDF brief; the header's "that is not this product" warning is itself obsolete. Superseded by `JAWUID-CHAT-ARCHITECTURE.md`, `IDENTITY-MODEL.md` and `../contracts/API-CONTRACT.md`. Kept for the standalone-database rationale.
+> Canonical index: `docs/README.md`.
+
 # Jawwid Chat — backend contract
 
 For AI #2 (communication engine), AI #3 (Flutter mobile), AI #4 (admin

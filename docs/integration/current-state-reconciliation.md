@@ -1,3 +1,6 @@
+> **STATUS: HISTORICAL** (Phase 0, 2026-09-07). Parallel-agent reconciliation record recovered in Phase 0. Decisions it fed are consolidated under `docs/product`, `docs/architecture`, `docs/contracts`, `docs/security` and `docs/recovery`.
+> Canonical index: `docs/README.md`.
+
 # Current-state reconciliation
 
 Auditor: AI #2 · Date: 2026-09-06 · **Verification only — no implementation.**

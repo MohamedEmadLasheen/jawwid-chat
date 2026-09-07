@@ -1,3 +1,6 @@
+> **STATUS: HISTORICAL** (Phase 0, 2026-09-07). Executed and superseded by `docs/recovery/PHASE-0-BRANCH-LEDGER.md`.
+> Canonical index: `docs/README.md`.
+
 # Jawwid Chat — Branch Reconciliation Plan
 
 Date: 2026-09-05 · Owner: AI #10 · Status: **PLAN — no merge is authorised by this document**

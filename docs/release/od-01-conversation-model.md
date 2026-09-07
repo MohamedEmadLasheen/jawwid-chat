@@ -1,3 +1,6 @@
+> **STATUS: REFERENCE** (Phase 0, 2026-09-07). Product decisions C-1..C-4 are adopted; PD-1/PD-2 remain open in `docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4.
+> Canonical index: `docs/README.md`.
+
 # OD-01 — Conversation Model · RESOLVED FROM THE PRD
 
 Date: 2026-09-06 · Owner: AI #10 · Status: **RESOLVED (A) with 4 residual product decisions (C)**

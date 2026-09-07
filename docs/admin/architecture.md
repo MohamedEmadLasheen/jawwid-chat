@@ -1,3 +1,6 @@
+> **STATUS: REFERENCE** (Phase 0, 2026-09-07). Describes Admin Web as built (a CS console). Its future shape is `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`; the statement "there is no super_admin" is superseded by `docs/architecture/AUTHORIZATION-MODEL.md`.
+> Canonical index: `docs/README.md`.
+
 # Admin Web — Architecture
 
 Owner: AI #4 · App: `apps/admin-web` · Stack: React 18 · TypeScript 5.7 · Vite 6

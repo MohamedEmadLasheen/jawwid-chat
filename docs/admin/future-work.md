@@ -1,3 +1,6 @@
+> **STATUS: HISTORICAL** (Phase 0, 2026-09-07). Superseded by `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
+> Canonical index: `docs/README.md`.
+
 # Admin Web — Limitations, Debt and Future Work
 
 ## 1. The blocking limitation

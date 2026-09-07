@@ -1,3 +1,6 @@
+> **STATUS: REFERENCE** (Phase 0, 2026-09-07). Sound webhook contract from the archived branch `archive/phase0/feat/core-integration-boundary`; not implemented on the integration line. Re-implemented against the canonical schema in a later phase per `JAWUID-CHAT-ARCHITECTURE.md` §2.9.
+> Canonical index: `docs/README.md`.
+
 # Jawwid Core ⇄ Jawwid Chat — integration contract
 
 **Status: authoritative.** This supersedes the proposed payload shapes in

@@ -1,3 +1,6 @@
+> **STATUS: REFERENCE** (Phase 0, 2026-09-07). Display-label rules stand; concept names are governed by `docs/contracts/DOMAIN-VOCABULARY.md` (e.g. `super_admin` exists as a role even though the label 'super admin' is not shown).
+> Canonical index: `docs/README.md`.
+
 # Jawwid Chat — Terminology (English / العربية)
 
 **Owner:** AI #6 · **Status:** authoritative for all UI strings on both platforms.

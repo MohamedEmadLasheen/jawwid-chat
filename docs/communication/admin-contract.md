@@ -1,3 +1,6 @@
+> **STATUS: REFERENCE** (Phase 0, 2026-09-07). As above — contract of record is `docs/contracts/API-CONTRACT.md`.
+> Canonical index: `docs/README.md`.
+
 # Admin contract (AI #4)
 
 What Admin Web can consume from the communication engine. Object shapes, the

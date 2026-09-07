@@ -1,3 +1,6 @@
+> **STATUS: REFERENCE** (Phase 0, 2026-09-07). The decision stands (Chat owns its database; single SQL migration authority). Its D-1..D-7 are *violations found*, now closed; see `docs/recovery/PHASE-0-DATABASE-RECONCILIATION.md`.
+> Canonical index: `docs/README.md`.
+
 # Jawwid Chat — Database Decision
 
 Date: 2026-09-05 · Owner: AI #5 (release engineering)

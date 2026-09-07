@@ -1,3 +1,6 @@
+> **STATUS: HISTORICAL** (Phase 0, 2026-09-07). AI #7's D-5 analysis, recovered from an uncommitted worktree. Its dispositions are folded into `docs/contracts/API-CONTRACT.md`.
+> Canonical index: `docs/README.md`.
+
 # D-5 — API Contract Reconciliation
 
 Owner: AI #7 · Date: 2026-09-06

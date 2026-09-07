@@ -1,3 +1,6 @@
+> **STATUS: HISTORICAL** (Phase 0, 2026-09-07). Executed by `20260905094000` and commit 1b27075; the §17 STOP condition is recorded as PD-4.
+> Canonical index: `docs/README.md`.
+
 # OD-01 — Migration Impact Note
 
 Date: 2026-09-06 · Owner: AI #10 · Status: **ANALYSIS ONLY — NO MIGRATION WRITTEN**

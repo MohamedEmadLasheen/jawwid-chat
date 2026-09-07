@@ -1,3 +1,6 @@
+> **STATUS: HISTORICAL** (Phase 0, 2026-09-07). All worktrees were removed and branches archived in Phase 0; the standing rule is now one integration line and explicit-path staging.
+> Canonical index: `docs/README.md`.
+
 # Worktree Isolation Strategy
 
 **Drafted by:** AI #8 at the product owner's instruction · **Owner:** AI #10 (Release &

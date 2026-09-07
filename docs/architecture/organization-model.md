@@ -1,3 +1,6 @@
+> **STATUS: REFERENCE** (Phase 0, 2026-09-07). Root-entity analysis for tenancy; the adopted implementation is described in `TENANCY-MODEL.md`.
+> Canonical index: `docs/README.md`.
+
 # organization_id — the tenant model
 
 **Requirement.** PRD v0.1 §2.3, verbatim and in full:

@@ -1,3 +1,6 @@
+> **STATUS: REFERENCE** (Phase 0, 2026-09-07). ADR-001 ("build the brief": no teacher, no groups, no calls) is **SUPERSEDED** by `docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md`; ADR-002/003/004/008/013/015 remain valid; ADR-005 ("domain lives in SQL") is superseded by `JAWUID-CHAT-ARCHITECTURE.md` §2.3.
+> Canonical index: `docs/README.md`.
+
 # Architecture decisions — Jawwid Chat backend
 
 Owner: AI #1 (system architecture and backend core).

@@ -1,3 +1,6 @@
+> **STATUS: HISTORICAL** (Phase 0, 2026-09-07). Parallel-agent reconciliation record recovered in Phase 0. Decisions it fed are consolidated under `docs/product`, `docs/architecture`, `docs/contracts`, `docs/security` and `docs/recovery`.
+> Canonical index: `docs/README.md`.
+
 # Jawwid Core — Authentication & Teacher Identity Contract Request
 
 From: Jawwid Chat engineering · 2026-09-06 · Base commit `d236ce3`

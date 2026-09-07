@@ -1,3 +1,6 @@
+> **STATUS: REFERENCE** (Phase 0, 2026-09-07). Its verdict (PRD supersedes the brief) is adopted and extended by `docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md`; corrections C-1..C-4 are resolved in `docs/architecture/IDENTITY-MODEL.md` and the OD-01 migration.
+> Canonical index: `docs/README.md`.
+
 # Jawwid Chat — Authoritative Scope (READ THIS FIRST)
 
 Date: 2026-09-05 · Owner: AI #5 · Status: **GOVERNING**

@@ -1,3 +1,6 @@
+> **STATUS: HISTORICAL** (Phase 0, 2026-09-07). Brief-derived, snake_case, thread/case vocabulary. Superseded by `docs/contracts/API-CONTRACT.md`; still useful as the list of what the inbox needs.
+> Canonical index: `docs/README.md`.
+
 # Admin Web — Required Backend Contract
 
 Author: AI #4 (Admin Operations) · Date: 2026-09-05 · Status: **proposed, awaiting AI #1 / AI #2 sign-off**

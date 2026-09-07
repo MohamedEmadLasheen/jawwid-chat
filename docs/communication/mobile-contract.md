@@ -1,3 +1,6 @@
+> **STATUS: REFERENCE** (Phase 0, 2026-09-07). The endpoint shapes are current; the `X-Actor-Id` auth seam is DEPRECATED and the contract of record is `docs/contracts/API-CONTRACT.md`.
+> Canonical index: `docs/README.md`.
+
 # Mobile contract (AI #3)
 
 Everything the Parent and Teacher apps need. You should not need to read the

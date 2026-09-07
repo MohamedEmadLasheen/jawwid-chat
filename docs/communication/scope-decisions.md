@@ -1,3 +1,6 @@
+> **STATUS: REFERENCE** (Phase 0, 2026-09-07). D-2 ("chat.thread is kept") is SUPERSEDED by OD-01 (`20260905094000`): chat.thread no longer exists. Other decisions stand.
+> Canonical index: `docs/README.md`.
+
 # Scope and design decisions
 
 Every decision here was forced by a conflict between two sources, or by a gap

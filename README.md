@@ -1,13 +1,25 @@
 # Jawwid Chat
 
-Customer Success operating system for Jawwid. Replaces WhatsApp for the CS team.
+A communication platform for Jawwid Online Quran & Arabic Academy: parents,
+teachers, supervisors (admins) and managers communicate safely around families
+and learners, with ownership, permissions, moderation, privacy, realtime,
+notifications and auditability enforced by the platform.
 
-The authoritative product contract is the **Project Brief** (`docs/brief/JAWWID_CHAT_BRIEF.md`).
-Every number in it is a `config` default, not a constant.
+The authoritative product direction is `docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md`
+(with `docs/product/jawwid-chat-prd-v0.1.md` for requirements). The
+documentation index is `docs/README.md`. The integration branch is
+`integration/recovery` (Phase 0, 2026-09-07).
+
+> The paragraph that used to sit here described a "Customer Success operating
+> system" built from the PDF brief. That direction is superseded; see
+> `docs/recovery/PHASE-0-BRANCH-LEDGER.md` for how the repository was reconciled.
 
 ## The one rule
 
-One Family -> One Primary Owner. The system, not the employee, owns the family's history.
+BR-1: a teacher and a parent never share a direct channel; they communicate
+only inside the official Student Group with a live admin present. Enforced in
+`AuthorizationService` and by database triggers. And: one family, one current
+supervisor — the system, not the employee, owns the family's history.
 
 ## Layout
 

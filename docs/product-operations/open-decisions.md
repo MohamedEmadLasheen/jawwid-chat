@@ -1,3 +1,6 @@
+> **STATUS: HISTORICAL** (Phase 0, 2026-09-07). OD-06's recommendation (no super_admin, no CRITICAL) is overruled by PRD §3 / `docs/architecture/AUTHORIZATION-MODEL.md` (PD-5).
+> Canonical index: `docs/README.md`.
+
 # Jawwid Chat — Open Product Decisions
 
 **Owner:** AI #8 · **Date:** 2026-09-05

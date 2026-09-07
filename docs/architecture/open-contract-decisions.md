@@ -1,3 +1,6 @@
+> **STATUS: HISTORICAL** (Phase 0, 2026-09-07). Teacher identity is now decided in `IDENTITY-MODEL.md` §2.1; Core authentication remains an external unknown, handled per `IDENTITY-MODEL.md` §4.1.
+> Canonical index: `docs/README.md`.
+
 # Open contract decisions
 
 Plans and blockers only. **Nothing in this document is implemented**, and nothing

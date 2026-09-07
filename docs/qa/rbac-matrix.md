@@ -1,3 +1,6 @@
+> **STATUS: SUPERSEDED** (Phase 0, 2026-09-07). Role vocabulary is KNOWN WRONG (no `super_admin`, `coverage` instead of `coverage_admin`, department roles). Superseded by `docs/architecture/AUTHORIZATION-MODEL.md`. The BR-1 matrix rows remain a valid test inventory.
+> Canonical index: `docs/README.md`.
+
 # Jawwid Chat — RBAC & Communication Authorization Matrix
 
 Date: 2026-09-05 · Owner: AI #5

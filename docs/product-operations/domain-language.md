@@ -1,3 +1,6 @@
+> **STATUS: REFERENCE** (Phase 0, 2026-09-07). Superseded as the vocabulary of record by `docs/contracts/DOMAIN-VOCABULARY.md`; its teacher/coverage findings are incorporated.
+> Canonical index: `docs/README.md`.
+
 # Domain Language Audit
 
 **Owner:** AI #8 · **Date:** 2026-09-05

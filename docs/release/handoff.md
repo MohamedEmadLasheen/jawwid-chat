@@ -1,3 +1,6 @@
+> **STATUS: HISTORICAL** (Phase 0, 2026-09-07). The freeze it describes was executed by Phase 0; see `docs/recovery/PHASE-0-BRANCH-LEDGER.md` and `PHASE-0-REPORT.md`.
+> Canonical index: `docs/README.md`.
+
 # Jawwid Chat — AI #10 Handoff
 
 Date: 2026-09-06 · Owner: AI #10 (Release & Integration Commander)
