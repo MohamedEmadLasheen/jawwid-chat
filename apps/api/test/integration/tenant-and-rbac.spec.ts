@@ -149,6 +149,86 @@ describe('tenant isolation', () => {
 });
 
 // -------------------------------------------------------------------------
+describe('M-2: natural keys are scoped to the organization', () => {
+  it('a push token identifies a device within ONE organization', async () => {
+    const token = `push-${randomUUID()}`;
+
+    // The same token string registered in each organization: two rows, each
+    // belonging to its own tenant. Globally unique would have made the second
+    // registration CAPTURE the first, which is a cross-tenant notification
+    // hijack -- and a push token is not a secret.
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.device_token (actor_id, token, platform, organization_id)
+       values ('${s.parentId}'::uuid, '${token}', 'ios', chat.default_organization_id())`,
+    );
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.device_token (actor_id, token, platform, organization_id)
+       values ('${alienParentId}'::uuid, '${token}', 'ios', '${OTHER_ORG}'::uuid)`,
+    );
+
+    const rows = await g.prisma.deviceToken.findMany({ where: { token } });
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map((r) => r.organizationId)).size).toBe(2);
+  });
+
+  it('and the same token cannot be registered twice within one organization', async () => {
+    const token = `push-${randomUUID()}`;
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.device_token (actor_id, token, platform, organization_id)
+       values ('${s.parentId}'::uuid, '${token}', 'ios', chat.default_organization_id())`,
+    );
+    await expect(
+      g.prisma.$executeRawUnsafe(
+        `insert into chat.device_token (actor_id, token, platform, organization_id)
+         values ('${s.ownerId}'::uuid, '${token}', 'ios', chat.default_organization_id())`,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('a push token cannot be moved across the organization boundary', async () => {
+    const token = `push-${randomUUID()}`;
+    const row = await g.prisma.deviceToken.create({
+      data: { actorId: s.parentId, token, platform: 'ios' },
+    });
+    await expect(
+      g.prisma.$executeRawUnsafe(
+        `update chat.device_token set organization_id = '${OTHER_ORG}'::uuid where id = '${row.id}'`,
+      ),
+    ).rejects.toThrow(/may not move between organizations/);
+  });
+
+  it('registering an existing token hands the device over, and records that it did', async () => {
+    const token = `push-${randomUUID()}`;
+    await g.notifications.registerDevice({ actorId: s.parentId, token, platform: 'ios' });
+    await g.notifications.registerDevice({ actorId: s.otherParentId, token, platform: 'ios' });
+
+    const rows = await g.prisma.deviceToken.findMany({ where: { token } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].actorId).toBe(s.otherParentId);
+  });
+
+  it('a call room name and a notification dedupe key are unique per organization', async () => {
+    const [room] = await g.prisma.$queryRawUnsafe<Array<{ n: string }>>(
+      `select indexname as n from pg_indexes
+        where schemaname='chat' and indexname='call_room_name_per_organization_key'`,
+    );
+    const [dedupe] = await g.prisma.$queryRawUnsafe<Array<{ n: string }>>(
+      `select indexname as n from pg_indexes
+        where schemaname='chat' and indexname='notification_dedupe_key_per_organization_key'`,
+    );
+    expect(room?.n).toBeTruthy();
+    expect(dedupe?.n).toBeTruthy();
+
+    // And the global uniqueness they replaced is gone.
+    const global = await g.prisma.$queryRawUnsafe<Array<{ n: string }>>(
+      `select indexname as n from pg_indexes
+        where schemaname='chat' and indexname in ('call_room_name_key','notification_dedupe_key_key','device_token_token_key')`,
+    );
+    expect(global).toEqual([]);
+  });
+});
+
+// -------------------------------------------------------------------------
 describe('the permission model in the database and its TypeScript mirror', () => {
   it('the vocabulary matches, key for key', async () => {
     const rows = await g.prisma.permission.findMany({ select: { key: true } });

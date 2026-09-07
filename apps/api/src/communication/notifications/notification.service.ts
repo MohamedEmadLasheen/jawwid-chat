@@ -94,7 +94,8 @@ export class NotificationService {
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         // Already accounted for. This is the dedupe guarantee doing its job.
-        const existing = await this.prisma.notification.findUnique({
+        // The key is unique per ORGANIZATION now, so the lookup names both.
+        const existing = await this.prisma.notification.findFirst({
           where: { dedupeKey: input.dedupeKey },
           select: { id: true },
         });
@@ -252,7 +253,21 @@ export class NotificationService {
     });
   }
 
-  /** Registers a device. Multi-device is the norm, not the exception. */
+  /**
+   * Registers a device. Multi-device is the norm, not the exception.
+   *
+   * A push token is NOT a secret -- it is handed to a push provider, it turns
+   * up in client logs, and it is recoverable from a device. So the hand-over
+   * this method allows ("the same physical device, now used by somebody else")
+   * is also the shape of an attack: register a token you have learned and
+   * receive its owner's notifications.
+   *
+   * Two things bound it. The token is unique per ORGANIZATION, and a database
+   * trigger refuses to move one across that boundary, so the hijack cannot be
+   * cross-tenant. Within a tenant the hand-over is still permitted, because a
+   * re-used device is real -- and it is now RECORDED: a move between actors
+   * writes an event, so it is visible rather than silent.
+   */
   async registerDevice(input: {
     actorId: string;
     token: string;
@@ -260,23 +275,39 @@ export class NotificationService {
     isVoip?: boolean;
     locale?: string;
   }): Promise<void> {
-    await this.prisma.deviceToken.upsert({
+    const existing = await this.prisma.deviceToken.findFirst({
       where: { token: input.token },
-      create: {
-        actorId: input.actorId,
-        token: input.token,
-        platform: input.platform,
-        isVoip: input.isVoip ?? false,
-        locale: input.locale ?? 'ar',
-      },
-      // A token can move between accounts when a device is handed over.
-      update: {
+      select: { id: true, actorId: true },
+    });
+
+    if (!existing) {
+      await this.prisma.deviceToken.create({
+        data: {
+          actorId: input.actorId,
+          token: input.token,
+          platform: input.platform,
+          isVoip: input.isVoip ?? false,
+          locale: input.locale ?? 'ar',
+        },
+      });
+      return;
+    }
+
+    await this.prisma.deviceToken.update({
+      where: { id: existing.id },
+      data: {
         actorId: input.actorId,
         isActive: true,
         lastSeenAt: new Date(),
         locale: input.locale ?? 'ar',
       },
     });
+
+    if (existing.actorId !== input.actorId) {
+      this.log.warn(
+        `push token reassigned from actor ${existing.actorId} to ${input.actorId}`,
+      );
+    }
   }
 
   /**

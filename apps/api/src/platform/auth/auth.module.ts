@@ -3,6 +3,7 @@ import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { AuthService } from './auth.service';
 import { AccountService } from './account.service';
 import { SessionService } from './session.service';
+import { ThrottleService } from './throttle.service';
 import { AuthGuard } from './auth.guard';
 import { AuthController, MeController } from './auth.controller';
 import { ActorContextInterceptor } from './actor-context.interceptor';
@@ -27,9 +28,10 @@ import { ActorContextInterceptor } from './actor-context.interceptor';
     AuthService,
     AccountService,
     SessionService,
+    ThrottleService,
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_INTERCEPTOR, useClass: ActorContextInterceptor },
   ],
-  exports: [AuthService, AccountService, SessionService],
+  exports: [AuthService, AccountService, SessionService, ThrottleService],
 })
 export class AuthModule {}

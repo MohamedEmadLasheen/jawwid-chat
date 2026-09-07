@@ -189,8 +189,50 @@ export class RealtimeGateway
     // disconnects the socket when the session or the principal has gone.
     const actor = await this.liveActor(client);
     if (!actor) return { ok: false };
+    await this.revokeLostSubscriptions(client, actor);
     await this.presence.heartbeat(actor.actorId, client.id);
     return { ok: true };
+  }
+
+  /**
+   * Remove the socket from any conversation it may no longer read.
+   *
+   * WHY THIS EXISTS SEPARATELY FROM liveActor(). liveActor answers "is this
+   * person still who they were, and are they still allowed in at all" -- it
+   * catches a revoked session, a suspended account, an offboarded colleague.
+   * It does NOT catch a change of SCOPE, and scope is the thing that moves in
+   * normal operation: a family is reassigned, a cover window ends, and the
+   * previous supervisor is still holding a socket joined to that conversation's
+   * room. Every subsequent message would be delivered to them.
+   *
+   * Authorization on `subscribe` is not enough for the same reason a token
+   * check at login is not enough: it establishes a fact at one instant and the
+   * connection outlives it.
+   *
+   * Exposure is therefore bounded by the heartbeat interval rather than by the
+   * lifetime of the connection. The rooms are re-checked with exactly the
+   * predicate canRead uses, so there is no second definition of access to keep
+   * in step.
+   */
+  private async revokeLostSubscriptions(client: AuthedSocket, actor: Actor): Promise<void> {
+    const joined = [...client.rooms].filter((r) => r.startsWith('conversation:'));
+    for (const roomName of joined) {
+      const conversationId = roomName.slice('conversation:'.length);
+      const check = await this.authorize(actor, conversationId);
+      if (check.ok) continue;
+
+      await client.leave(roomName);
+      client.emit(CommEvent.ACCESS_REVOKED, {
+        conversationId,
+        reason:
+          check.code === 'COMM.OUT_OF_SCOPE'
+            ? 'out_of_scope'
+            : check.code === 'COMM.NOT_CONVERSATION_MEMBER'
+              ? 'not_a_member'
+              : 'session_ended',
+      });
+      this.log.log(`access revoked: actor=${actor.actorId} conversation=${conversationId}`);
+    }
   }
 
   /** The client confirms it has the message on device. */

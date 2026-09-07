@@ -15,6 +15,8 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { AuthGuard } from '@platform/auth/auth.guard';
+import type { AuthError } from '@platform/auth/auth.errors';
 import {
   assertAuthSecretsConfigured,
   AuthSecretsMissing,
@@ -114,5 +116,60 @@ describe('authentication refuses to start unconfigured', () => {
       expect(e).toBeInstanceOf(AuthSecretsMissing);
       expect((e as AuthSecretsMissing).problems).toHaveLength(2);
     }
+  });
+});
+
+/**
+ * The runtime half of the same guarantee.
+ *
+ * The greps above prove the seam is not in the source. These prove the guard
+ * BEHAVES that way for a request shaped exactly like the one the Flutter client
+ * still sends in debug builds -- `x-actor-id` and no bearer token. The mobile
+ * app has not been changed (no Dart toolchain here), so the compatibility
+ * question is answered from the server side: the header is inert, and a client
+ * that sends it is simply unauthenticated.
+ *
+ * See docs/mobile/AUTH-CONTRACT.md for what the client must send instead.
+ */
+describe('the server does not trust a legacy mobile client', () => {
+  const guard = new AuthGuard(
+    { authenticate: async () => null } as never,
+    { getAllAndOverride: () => false } as never,
+  );
+
+  const requestWith = (headers: Record<string, string>) =>
+    ({
+      getType: () => 'http',
+      getHandler: () => undefined,
+      getClass: () => undefined,
+      switchToHttp: () => ({ getRequest: () => ({ headers }) }),
+    }) as never;
+
+  it('refuses a request carrying only x-actor-id', async () => {
+    const attempt = guard.canActivate(
+      requestWith({ 'x-actor-id': '00000000-0000-0000-0000-000000000001' }),
+    );
+    await expect(attempt).rejects.toMatchObject({ code: 'AUTH.MISSING_TOKEN' });
+  });
+
+  it('refuses it identically to a request carrying no headers at all', async () => {
+    const withHeader = await guard
+      .canActivate(requestWith({ 'x-actor-id': 'anything' }))
+      .catch((e: AuthError) => e.code);
+    const without = await guard.canActivate(requestWith({})).catch((e: AuthError) => e.code);
+    expect(withHeader).toBe(without);
+  });
+
+  it('does not attach an actor to the request from the header', async () => {
+    const request = { headers: { 'x-actor-id': 'anything' } } as Record<string, unknown>;
+    await guard
+      .canActivate({
+        getType: () => 'http',
+        getHandler: () => undefined,
+        getClass: () => undefined,
+        switchToHttp: () => ({ getRequest: () => request }),
+      } as never)
+      .catch(() => undefined);
+    expect(request.actor).toBeUndefined();
   });
 });

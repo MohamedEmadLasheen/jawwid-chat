@@ -53,6 +53,18 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'auth.max_failed_attempts': 10,
   'auth.lockout_seconds': 900,
   'auth.min_password_length': 12,
+
+  // --- Authentication abuse protection (Phase 1 closure) --------------------
+  // Two axes: per SOURCE (bounds one address) and per TARGET (bounds attempts
+  // against one subject from anywhere, which address rotation cannot avoid).
+  // See docs/security/AUTH-THROTTLING.md for what this does and does not cover.
+  'auth.throttle.window_seconds': 900,
+  'auth.throttle.block_seconds': 900,
+  'auth.throttle.login_per_ip': 30,
+  'auth.throttle.login_per_subject': 10,
+  'auth.throttle.reset_request_per_ip': 10,
+  'auth.throttle.reset_request_per_subject': 5,
+  'auth.throttle.reset_redeem_per_ip': 10,
 } as const;
 
 export type CommunicationConfigKey = keyof typeof COMMUNICATION_CONFIG_DEFAULTS;

@@ -31,3 +31,7 @@ apps/api/test/unit/auth/credentials-and-tokens.spec.ts	30	Phase 1: password hash
 db/tests/assignment_invariants.sql	20	Phase 1: one live primary supervisor per family, bounded cover, guarded reassignment, scope follows the assignment
 db/tests/rls_enforcement.sql	20	Phase 1: RLS is a live control -- proved with the application bypassed, as the authenticated role
 apps/api/test/integration/disclosure-and-privilege.spec.ts	12	A-7/RT-012 receipt roster is viewer-scoped; A-8/RT-006 signed URLs cannot escape their conversation; delete-for-everyone is a permission key, not a role name
+apps/api/test/integration/runtime-rls.spec.ts	25	Phase 1 closure: the API's connection is least-privileged and RLS actually constrains it -- proved by running the real services as chat_app
+apps/api/test/integration/security-regression.spec.ts	40	Phase 1 closure: forged and tampered tokens, revoked sessions, privilege escalation, IDOR, supervisor scope, cross-tenant access
+apps/api/test/integration/auth-throttling.spec.ts	20	Phase 1 closure: login and password-recovery abuse protection, and that the throttle is not itself an enumeration oracle
+apps/api/test/integration/realtime-revocation.spec.ts	20	Phase 1 closure: a socket that loses scope stops receiving the conversation, and one whose session ends is dropped

@@ -409,7 +409,7 @@ describe('notification and reminder engine', () => {
       recipientId: s.parentId, scheduledAt: atNight, respectQuietHours: true,
     });
 
-    const row = await g.prisma.notification.findUnique({ where: { dedupeKey: 'quiet:1' } });
+    const row = await g.prisma.notification.findFirst({ where: { dedupeKey: 'quiet:1' } });
     expect(row!.scheduledAt.toISOString()).toBe('2026-09-11T08:00:00.000Z');
   });
 
@@ -422,7 +422,7 @@ describe('notification and reminder engine', () => {
       dedupeKey: 'quiet:2', templateKey: 'incoming_call', eventType: 'call_started',
       recipientId: s.parentId, scheduledAt: atNight, respectQuietHours: false,
     });
-    const row = await g.prisma.notification.findUnique({ where: { dedupeKey: 'quiet:2' } });
+    const row = await g.prisma.notification.findFirst({ where: { dedupeKey: 'quiet:2' } });
     expect(row!.scheduledAt.toISOString()).toBe(atNight.toISOString());
   });
 
@@ -443,7 +443,7 @@ describe('notification and reminder engine', () => {
 
     await g.notifications.dispatchDue(new Date());
 
-    const row = await g.prisma.notification.findUnique({ where: { dedupeKey: 'dispatch:1' } });
+    const row = await g.prisma.notification.findFirst({ where: { dedupeKey: 'dispatch:1' } });
     expect(row!.status).toBe('sent');
     expect(row!.deliveredAt).toBeNull();
   });

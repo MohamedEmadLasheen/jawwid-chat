@@ -29,6 +29,14 @@ beforeAll(async () => {
   }
 });
 
+beforeEach(async () => {
+  // This suite makes a great many deliberately-failed logins, which the Phase 1
+  // closure throttle now counts. Cleared between tests so that a suite about
+  // credentials is not silently testing rate limiting -- and so that adding a
+  // test here can never make an unrelated one flake.
+  await g.prisma.$executeRawUnsafe('delete from chat.auth_throttle');
+});
+
 afterAll(async () => {
   await g.prisma.$disconnect();
 });

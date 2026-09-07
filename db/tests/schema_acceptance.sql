@@ -273,6 +273,87 @@ begin
 end $$;
 
 \echo ''
+\echo '=== Phase 1 closure: the runtime role, throttling and tenant natural keys ==='
+select pg_temp.want_table('auth_throttle');
+
+-- The two connection roles, and what each of them must and must not be.
+do $$
+declare r record;
+begin
+  for r in select * from (values ('chat_app', false), ('chat_service', true)) as v(name, bypass)
+  loop
+    if not exists (select 1 from pg_roles where rolname = r.name) then
+      raise exception 'MISSING ROLE % -- the API and the worker have nothing to connect as', r.name;
+    end if;
+    if (select rolbypassrls from pg_roles where rolname = r.name) <> r.bypass then
+      raise exception 'ROLE % has the wrong BYPASSRLS setting (expected %)', r.name, r.bypass;
+    end if;
+    if not (select rolinherit from pg_roles where rolname = r.name) then
+      raise exception 'ROLE % is NOINHERIT -- it would match no policy written `to authenticated`', r.name;
+    end if;
+    if (select rolsuper from pg_roles where rolname = r.name) then
+      raise exception 'ROLE % is a superuser', r.name;
+    end if;
+  end loop;
+
+  -- Membership has to be INHERITED, not merely held: a policy `to authenticated`
+  -- is matched with pg_has_role(..., 'USAGE'), which a non-inheriting member
+  -- fails. Getting this wrong makes the application see zero rows everywhere.
+  if not exists (
+    select 1 from pg_auth_members m
+      join pg_roles member on member.oid = m.member
+      join pg_roles role   on role.oid   = m.roleid
+     where member.rolname = 'chat_app' and role.rolname = 'authenticated'
+       and m.inherit_option) then
+    raise exception 'chat_app does not INHERIT authenticated -- every policy would fail closed';
+  end if;
+
+  if (select pg_get_userbyid(nspowner) from pg_namespace where nspname = 'chat') = 'chat_app' then
+    raise exception 'chat_app owns the chat schema -- an owner bypasses every policy';
+  end if;
+  if has_schema_privilege('chat_app', 'chat', 'create') then
+    raise exception 'chat_app may CREATE in the chat schema';
+  end if;
+
+  raise notice 'roles     chat_app is least-privileged and inherits authenticated';
+end $$;
+
+-- The application must be able to do its job as chat_app, or least privilege
+-- is a configuration that takes the product down.
+do $$
+declare v_missing text;
+begin
+  select string_agg(t, ', ' order by t) into v_missing
+    from unnest(array['conversation','conversation_member','message','message_receipt',
+                      'message_approval','call','call_participant','notification',
+                      'device_token','outbox_event','event_log','audit_log',
+                      'session','device','account','account_credential','account_token']) as t
+   where not has_table_privilege('chat_app', 'chat.' || t, 'insert');
+  if v_missing is not null then
+    raise exception 'chat_app cannot INSERT into chat.%s -- the application would fail closed', v_missing;
+  end if;
+  raise notice 'grants    chat_app can write everything the application writes';
+end $$;
+
+-- Tenancy M-2: the natural keys that identify tenant-owned rows.
+do $$
+begin
+  if exists (select 1 from pg_indexes where schemaname='chat'
+              and indexname in ('device_token_token_key','call_room_name_key',
+                                'notification_dedupe_key_key')) then
+    raise exception 'a tenant-owned natural key is still GLOBALLY unique (TENANCY-MODEL M-2)';
+  end if;
+  perform 1 from pg_indexes where schemaname='chat'
+    and indexname = 'device_token_token_per_organization_key';
+  if not found then
+    raise exception 'MISSING device_token_token_per_organization_key';
+  end if;
+  raise notice 'tenancy   push tokens, call rooms and dedupe keys are per organization';
+end $$;
+
+select pg_temp.want_trigger('device_token_handover_is_guarded', 'device_token');
+
+\echo ''
 \echo '=== isolation: no Jawwid Core and no Second School objects may be required ==='
 do $$
 declare v_foreign text;

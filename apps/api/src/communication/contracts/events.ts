@@ -29,6 +29,16 @@ export const CommEvent = {
   CALL_PARTICIPANT_JOINED: 'call.participant_joined',
   CALL_PARTICIPANT_LEFT: 'call.participant_left',
   NOTIFICATION_CREATED: 'notification.created',
+  /**
+   * The socket has lost access to a conversation it was subscribed to.
+   *
+   * Emitted to ONE socket, not to the room: by the time it is sent the socket
+   * has already been removed from that room, so a room broadcast would not
+   * reach it. The removal is the security act; this event is how the client
+   * learns to close the screen instead of showing a thread that has quietly
+   * stopped updating.
+   */
+  ACCESS_REVOKED: 'conversation.access_revoked',
 } as const;
 
 export type CommEventName = (typeof CommEvent)[keyof typeof CommEvent];
@@ -139,6 +149,12 @@ export interface NotificationCreatedPayload {
   conversationId: string | null;
 }
 
+export interface AccessRevokedPayload {
+  conversationId: string;
+  /** A stable code, not prose: the client branches on it. */
+  reason: 'out_of_scope' | 'not_a_member' | 'session_ended';
+}
+
 export interface CommEventPayloads {
   [CommEvent.MESSAGE_CREATED]: MessageCreatedPayload;
   [CommEvent.MESSAGE_DELETED]: MessageDeletedPayload;
@@ -159,7 +175,9 @@ export interface CommEventPayloads {
   [CommEvent.CALL_PARTICIPANT_JOINED]: CallParticipantPayload;
   [CommEvent.CALL_PARTICIPANT_LEFT]: CallParticipantPayload;
   [CommEvent.NOTIFICATION_CREATED]: NotificationCreatedPayload;
+  [CommEvent.ACCESS_REVOKED]: AccessRevokedPayload;
 }
+
 
 /** Rooms a socket may join. Never a client-supplied raw string. */
 export const room = {

@@ -1,6 +1,6 @@
 # Phase 1 — Identity, Security & Core Foundation — Report
 
-Status: **COMPLETE, with the deferrals named in §7** · 2026-09-07
+Status: **COMPLETE — the §7 deferrals are closed by the closure pass (§10)** · 2026-09-07
 Branch: `phase1/identity-security-foundation`
 Companions (all now implemented rather than planned): `../architecture/IDENTITY-MODEL.md`,
 `../architecture/AUTHORIZATION-MODEL.md`, `../architecture/SUPERVISOR-OWNERSHIP.md`,
@@ -419,3 +419,157 @@ failed a migration that applies cleanly from empty.
 | Sensitive authentication data protected | done |
 | Database/RLS protections reviewed | done; **runtime enforcement pending the connection-role change** (§7.1) |
 | Tests, typecheck, build, migrations pass; no unrelated regressions | done (§8) |
+
+---
+
+# 10. Closure pass — 2026-09-07
+
+Everything §7 left open, and what became of it. Where an item was closed, the
+proof is named; where something remains, it is stated with the exact action
+required.
+
+## 10.1 Every §7 item, resolved
+
+| § | Item | Final status |
+|---|---|---|
+| 7.1 | The API connects as the database owner | **CLOSED in code; one deployment step remains.** `chat_app` now holds exactly the privileges the application uses, owns nothing, cannot create, cannot bypass RLS. Every authenticated request runs inside that actor's transaction-local context. `runtime-rls.spec.ts` runs the REAL services through that role and proves both halves. The process **refuses to start** on an over-privileged connection outside `local \| test \| ci`, and `/health/ready` drains the instance if the connection changes under it. Remaining: point `DATABASE_URL` at `chat_app` (§10.6) |
+| 7.2 | Mobile not changed | **UNCHANGED, and now specified.** `docs/mobile/AUTH-CONTRACT.md` is the full client contract. Server-side compatibility is asserted: a request carrying `x-actor-id` and no bearer is refused identically to one carrying nothing |
+| 7.3 | Admin Web's non-auth surface does not exist | **Unchanged, out of scope.** A Phase 0 gap this phase neither widened nor closed |
+| 7.4 | Coverage engine deprecated but present | **Unchanged, by design (PD-3).** `on_duty()` remains the interim routing input to `canSend` and is not an authorization input |
+| 7.5 | No rate limiting on `/auth/login` | **CLOSED.** Per-source and per-target throttling on login, forgot-password and reset redemption. `docs/security/AUTH-THROTTLING.md` |
+| 7.6 | Tenancy M-2 | **CLOSED.** Push tokens, call room names and notification dedupe keys are unique per organization, with a trigger against cross-tenant hand-over |
+| 7.7 | `conversation.access_revoked` not emitted | **CLOSED, and it was a real gap.** The existing mechanisms covered identity, not SCOPE |
+
+## 10.2 The runtime security model, and where each layer is enforced
+
+```
+Authentication   AuthGuard (APP_GUARD)          signature + live session + active principal,
+                                                re-read from the database on EVERY request
+      ↓
+Session          chat.session                   revocable; checked per request, so logout,
+                                                suspension and reset are immediate
+      ↓
+Identity         IdentityService                actor resolved from the session, never the request
+      ↓
+Tenant           Actor.organizationId           set at authentication; RESTRICTIVE RLS policies AND
+                                                with every permissive one, so a mismatch removes rows
+      ↓
+Role             chat.staff.role                the canonical four; a department is an attribute
+      ↓
+Permission       chat.role_permission           + per-account ALLOW/DENY; DENY beats ALLOW beats role
+                 + account_permission_override
+      ↓
+Scope            ScopeService                   read LIVE from chat.family_assignment; `undefined`
+                 chat.staff_in_scope()          denies; list endpoints build their WHERE from it
+      ↓
+Resource         AuthorizationService           the single decision point: canRead / canSend /
+                                                canCall / canApprove / can(permission)
+      ↓
+RLS              chat_app, NOBYPASSRLS          the catch, not the decision: a missing WHERE returns
+                 + ActorContextInterceptor      nothing instead of everything
+```
+
+Two properties of that stack are worth stating because they are what make it a
+stack rather than a list:
+
+* **Each layer fails closed on its own.** An unresolvable scope denies; an
+  unresolvable actor context makes the database return zero rows; a missing
+  permission set holds nothing. No layer's failure is another layer's default.
+* **The database layer is never the reason a request is allowed.** It is the
+  reason a buggy query returns less than it asked for. An unexpectedly empty
+  result on a write path is treated as an authorization failure.
+
+## 10.3 What the closure pass built
+
+**Least privilege (`20260907120000`).** `chat_app` with explicit DML on the 19
+tables the application writes and SELECT on the reference tables it reads.
+Identity tables (`account`, `account_credential`, `session`, `device`,
+`account_token`) are reachable by `chat_app` alone and by no policy for
+`authenticated` — because authentication cannot be policed by the mechanism it
+bootstraps, and that concession is bounded rather than hidden. Write policies
+mirroring `canRead` on every domain table.
+
+**Request-scoped actor context.** `PrismaService.runWithActor()` +
+`withRequestScopedTransaction()` + `ActorContextInterceptor`. Services were not
+changed: an `AsyncLocalStorage` carries the transaction, and a proxy routes
+every query into it. Nested `$transaction` calls are flattened into the
+request's, which is what those call sites already wanted.
+
+**Throttling (`20260907120100`).** `chat.auth_throttle` with a single-statement
+counter. Per-source and per-target, counted before the credential is examined
+and identically for unknown subjects.
+
+**Tenant natural keys (`20260907120200`).** M-2, plus the cross-tenant
+assignment defect below.
+
+**Realtime revocation.** `revokeLostSubscriptions()` on `presence.heartbeat`.
+
+## 10.4 Defects found by the closure pass
+
+| # | Defect | Severity | Fix |
+|---|---|---|---|
+| 1 | **A family could be assigned to a supervisor in another organization.** `guard_family_assignment()` compared the assignment's organization to the family's, and never to the STAFF member's. The supervisor then held full, legitimate scope over another academy's family | **High** — the one cross-tenant path RLS could not catch, because every row was correctly stamped and only the *relationship* crossed the boundary | trigger compares all three organizations (`20260907120200` §4) |
+| 2 | **A push token could be captured across tenants.** `device_token.token` was globally unique and `registerDevice` moves the row to the caller on conflict. A push token is not a secret | **High** — redirects a victim's notifications | unique per organization + a hand-over trigger |
+| 3 | **Membership additions were unvalidated.** `setMembership` wrote a client-supplied `actorId`/`actorKind` with no check that the actor exists, is active, is the kind claimed, or belongs to this family | **Medium** — an in-scope supervisor could pull an out-of-scope contact into a conversation, or smuggle a contact in as a `teacher` past the BR-1 kind checks | `assertAddable()` |
+| 4 | `chat_app` and `chat_service` were created **NOINHERIT**, so membership of `authenticated` conferred neither its grants nor its policies (`pg_has_role(..., 'USAGE')` is false for a non-inheriting member). The application would have seen zero rows everywhere | **Would have blocked the deployment**, fail-closed | `alter role ... inherit` + re-grant; asserted by `schema_acceptance.sql` |
+| 5 | `INSERT ... RETURNING` fails when a table's SELECT policy re-reads the row being inserted. `conversation`'s policy called `can_read_conversation()`, so every conversation creation failed under a NOBYPASSRLS role | **Would have blocked the deployment** | policy expressed against the row's own columns; `notification` and the two logs insert without `RETURNING` |
+| 6 | RLS policies inherited from Phase 0 assumed a STAFF reader: a parent could not read their own `chat.contact` row, so every request from a family device failed `unknown actor` | **Would have blocked the deployment** | narrow self/co-member read policies |
+
+## 10.5 Verification — fresh results, 2026-09-07
+
+Run against a database built from empty in an isolated worktree and container.
+
+| Gate | Result |
+|---|---|
+| Migrations from empty | **31 applied, 0 errors** |
+| `db/tests/schema_acceptance.sql` | **pass** |
+| `db/tests/br1_invariants.sql` | **pass** |
+| `db/tests/od01_conversation_model.sql` | **pass** |
+| `db/tests/tenant_isolation.sql` | **pass** |
+| `db/tests/assignment_invariants.sql` | **pass** |
+| `db/tests/rls_enforcement.sql` | **pass** |
+| API unit + integration | **394 passed, 23 suites** (was 322) |
+| — of which `runtime-rls.spec.ts` | **17 passed** — least privilege proved end to end |
+| — of which `security-regression.spec.ts` | **25 passed** |
+| — of which `auth-throttling.spec.ts` | **12 passed** |
+| — of which `realtime-revocation.spec.ts` | **10 passed** |
+| API typecheck / build / `prisma validate` | **pass / pass / valid** |
+| Admin Web tests / typecheck / build | **76 passed / pass / pass** |
+| Protected-tests gate | **pass**, 21 files |
+| `check-env.sh local` | **pass**, 64 variables |
+| `scan-secrets.sh` | **clean** |
+| Lint | **no lint script exists** in either package; linting in this repository is Dart-only (`analysis_options.yaml`) and Dart is not installed |
+| Mobile (`flutter analyze/test`) | **NOT RUN — no Dart toolchain on this machine** |
+
+## 10.6 The one remaining action, and what it is
+
+**Point the API at `chat_app`.** Everything else is done.
+
+```sql
+-- once, per environment, from the secret store's provisioning path
+ALTER ROLE chat_app     LOGIN PASSWORD '<from the secret store>';
+ALTER ROLE chat_service LOGIN PASSWORD '<from the secret store>';
+GRANT CONNECT ON DATABASE <db> TO chat_app, chat_service;
+```
+
+```
+DATABASE_URL          = postgres://chat_app:...@host/db      # API only
+DATABASE_SERVICE_URL  = postgres://chat_service:...@host/db  # worker, migrations
+```
+
+The roles are created NOLOGIN by migration because a migration must never carry
+a credential. `scripts/db/integration-db.sh` does exactly this for the test
+database, so the shape is exercised on every run.
+
+**Does it block production?** It blocks *deploying with RLS as a live control* —
+and the application enforces that itself: outside `local | test | ci` the
+process **will not start** on an owner, superuser, creator or BYPASSRLS
+connection. There is no configuration in which the gap is silent.
+
+## 10.7 Verdict
+
+**PHASE 1 — PRODUCTION READY**, subject to §10.6, which the application refuses
+to let anyone skip. The two genuinely open items are a mobile client that cannot
+yet sign in (a feature gap, not a security one — the server is safe against the
+legacy client) and edge-level volume protection, which no application-level
+limiter can provide and which `AUTH-THROTTLING.md` §5 states rather than implies.

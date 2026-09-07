@@ -6,7 +6,12 @@ import { CommErrorFilter } from './communication/api/http-exception.filter';
 import { applyInfrastructure } from './infra/http/bootstrap';
 import { InfraIoAdapter } from './infra/realtime/io-adapter';
 import { readBuildInfo } from './infra/build-info';
-import { assertAuthSecretsConfigured } from './platform/auth/startup';
+import {
+  assertAuthSecretsConfigured,
+  assertRuntimeRoleAcceptable,
+  type RuntimeRoleReport,
+} from './platform/auth/startup';
+import { PrismaService } from './platform/prisma.service';
 import { RealtimeRelay } from './infra/realtime/realtime-relay.service';
 
 /**
@@ -54,6 +59,19 @@ async function bootstrap(): Promise<void> {
   const ioAdapter = new InfraIoAdapter(app);
   await ioAdapter.connectToRedis(process.env.REDIS_URL);
   app.useWebSocketAdapter(ioAdapter);
+
+  // The second authorization layer is only a layer if the connection cannot
+  // ignore it. Checked here, before the first request, because a process that
+  // discovers this from a leak has discovered it too late.
+  const [role] = await app
+    .get(PrismaService)
+    .$queryRaw<RuntimeRoleReport[]>`select * from chat.runtime_role_report()`;
+  assertRuntimeRoleAcceptable(role);
+  log.log(
+    `database role=${role.role_name} ` +
+      `rls=${role.bypasses_rls ? 'BYPASSED' : 'enforced'} ` +
+      `owner=${role.owns_schema}`,
+  );
 
   // Subscribes to the channel the worker publishes realtime events on (D-2).
   // Started before listen() so no event can arrive while nothing is relaying.

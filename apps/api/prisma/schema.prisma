@@ -387,7 +387,8 @@ model DeviceToken {
   actorId    String   @map("actor_id") @db.Uuid
   deviceId   String?  @map("device_id") @db.Uuid
   device     Device?  @relation(fields: [deviceId], references: [id])
-  token      String   @unique
+  /// Unique per ORGANIZATION, not globally (TENANCY-MODEL.md M-2).
+  token      String
   platform   String
   isVoip     Boolean  @map("is_voip") @default(false)
   locale     String   @default("ar")
@@ -395,6 +396,7 @@ model DeviceToken {
   lastSeenAt DateTime @map("last_seen_at") @db.Timestamptz @default(now())
   createdAt  DateTime @map("created_at") @db.Timestamptz @default(now())
 
+  @@unique([organizationId, token], map: "device_token_token_per_organization_key")
   @@map("device_token")
   @@schema("chat")
 }
@@ -440,8 +442,8 @@ model Notification {
   /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
   organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   id          String  @id @default(uuid()) @db.Uuid
-  /// THE deduplication guarantee.
-  dedupeKey   String  @unique @map("dedupe_key")
+  /// THE deduplication guarantee, per organization (TENANCY-MODEL.md M-2).
+  dedupeKey   String  @map("dedupe_key")
   ruleKey     String? @map("rule_key")
   rule        NotificationRule? @relation(fields: [ruleKey], references: [key])
   templateKey String  @map("template_key")
@@ -466,6 +468,7 @@ model Notification {
   attempts    Int       @default(0)
   createdAt   DateTime  @map("created_at") @db.Timestamptz @default(now())
 
+  @@unique([organizationId, dedupeKey], map: "notification_dedupe_key_per_organization_key")
   @@map("notification")
   @@schema("chat")
 }
@@ -493,7 +496,8 @@ model Call {
   initiatorId     String       @map("initiator_id") @db.Uuid
   type            String
   /// Server-minted. A client-supplied room name is never trusted.
-  roomName        String       @unique @map("room_name")
+  /// Unique per organization (TENANCY-MODEL.md M-2).
+  roomName        String       @map("room_name")
   status          String       @default("ringing")
   outcome         String?
   startedAt       DateTime     @map("started_at") @db.Timestamptz @default(now())
@@ -504,6 +508,7 @@ model Call {
 
   participants CallParticipant[]
 
+  @@unique([organizationId, roomName], map: "call_room_name_per_organization_key")
   @@map("call")
   @@schema("chat")
 }

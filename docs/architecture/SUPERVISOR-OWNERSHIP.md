@@ -1,7 +1,7 @@
 # Jawwid Chat — Supervisor Ownership (Family → Supervisor Assignment)
 
 Status: **CANONICAL** · Locked in Phase 0 (2026-09-07) · **IMPLEMENTED in Phase 1** (2026-09-07)
-What actually landed, and what did not: `../recovery/PHASE-1-REPORT.md`. The one item still open is the realtime `conversation.access_revoked` event (section 3.3).
+What actually landed, and what did not: `../recovery/PHASE-1-REPORT.md`. The realtime `conversation.access_revoked` event (section 3.3) is implemented: the gateway re-checks every joined conversation on `presence.heartbeat`, removes the socket from any it may no longer read, and emits the event to it.
 Product decision PD-3 is CLOSED (§4); the record is `../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4.
 Companions: `AUTHORIZATION-MODEL.md` §6, `IDENTITY-MODEL.md` §5, `../contracts/API-CONTRACT.md` §3.3.
 Product basis: PRD §5 (BR-4 "one family, one primary owner"; reassignment by a manager with a reason and audit; deactivation blocked until every family is reassigned; coverage admins act with the owner's permissions "and nothing more").

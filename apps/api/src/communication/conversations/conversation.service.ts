@@ -452,6 +452,8 @@ export class ConversationService {
     const decision = this.authz.canManageMembership(actor, await this.scopeFor(actor, conv));
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
+    if (action === 'add') await this.assertAddable(conv, spec);
+
     await this.prisma.$transaction(async (tx) => {
       if (action === 'add') {
         await tx.conversationMember.create({
@@ -486,6 +488,64 @@ export class ConversationService {
         removed: action === 'remove' ? [spec.actorId] : [],
       });
     });
+  }
+
+  /**
+   * The actor being ADDED is a client-supplied id, and adding somebody to a
+   * conversation grants them everything in it.
+   *
+   * The permission check above asks whether the CALLER may change membership.
+   * It says nothing about WHO they may add -- and without this, a supervisor
+   * acting entirely within their own scope could add a contact from another
+   * family, or a bare uuid, and thereby hand a conversation to somebody the
+   * scope rules would never have let in. The database backstops the
+   * constitutional part (BR-1 participant sets, family scope) but not this.
+   *
+   * Three things are required of the id, and each closes a different hole:
+   *   1. it resolves to a real, ACTIVE principal -- not a guess, not somebody
+   *      offboarded;
+   *   2. its kind is the kind the caller claimed, so `actorKind` cannot be used
+   *      to smuggle a contact in as a teacher and past the BR-1 checks;
+   *   3. a family contact belongs to THIS conversation's family, and everyone
+   *      belongs to this organization.
+   */
+  private async assertAddable(
+    conv: Pick<Conversation, 'id' | 'familyId' | 'organizationId'>,
+    spec: MemberSpec,
+  ): Promise<void> {
+    const member = await this.identity.resolveActor(spec.actorId);
+    if (!member || !member.isActive) {
+      throw new CommError(
+        CommErrorCode.INVALID_PARTICIPANTS,
+        'the actor being added does not exist or is not active',
+      );
+    }
+    if (member.kind !== spec.actorKind) {
+      throw new CommError(
+        CommErrorCode.INVALID_PARTICIPANTS,
+        `actorKind '${spec.actorKind}' does not match this actor`,
+      );
+    }
+    if (
+      member.organizationId &&
+      conv.organizationId &&
+      member.organizationId !== conv.organizationId
+    ) {
+      throw new CommError(
+        CommErrorCode.CROSS_TENANT,
+        'this actor belongs to another organization',
+      );
+    }
+    if (
+      member.kind === ActorKind.CONTACT &&
+      conv.familyId !== null &&
+      member.familyId !== conv.familyId
+    ) {
+      throw new CommError(
+        CommErrorCode.INVALID_PARTICIPANTS,
+        'a family contact may only be added to their own family\'s conversation',
+      );
+    }
   }
 
   // ------------------------------------------------------------------

@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import Redis from 'ioredis';
 import { PrismaService } from '../../platform/prisma.service';
+import {
+  isLeastPrivileged,
+  OWNER_CONNECTION_ALLOWED_ENVIRONMENTS,
+  type RuntimeRoleReport,
+} from '../../platform/auth/startup';
 import { BuildInfo, readBuildInfo } from '../build-info';
 
 export type ProbeStatus = 'up' | 'down' | 'skipped';
@@ -21,16 +26,21 @@ export interface HealthReport {
   readonly uptimeSeconds: number;
   readonly checks: Record<string, ProbeResult>;
   /**
-   * Whether the database role this process connects as BYPASSES row-level
-   * security.
+   * Whether row-level security actually applies to this process's connection.
    *
-   * RLS-STRATEGY.md 7, acceptance item 1: RLS may only be described as a live
-   * control once this is false in the environment being described. Reported
-   * rather than asserted because it is a deployment fact, and a probe that
-   * hides it would let "RLS is enabled" stay true on paper while every query
-   * ran as the owner. It names no role and no connection string.
+   * RLS-STRATEGY.md 7, acceptance item 1. Reported rather than merely asserted
+   * at boot because it is a deployment fact that can change under the process
+   * (a failover onto a differently-configured replica, a rotated secret that
+   * points somewhere else), and a probe that hid it would let "RLS is enabled"
+   * stay true on paper while every query ran as the owner.
+   *
+   * It names no connection string. `databaseRole` is the role NAME only, which
+   * an operator needs in order to act on a false here.
    */
   readonly rlsEnforced: boolean | null;
+  readonly databaseRole: string | null;
+  /** True only when the role is not a superuser, owner, creator or BYPASSRLS. */
+  readonly leastPrivileged: boolean | null;
 }
 
 /**
@@ -97,30 +107,45 @@ export class HealthService {
    * make this instance unable to serve the requests that do not touch Core.
    */
   async readiness(): Promise<HealthReport> {
-    const [database, redis, rlsEnforced] = await Promise.all([
+    const [database, redis, role] = await Promise.all([
       this.database(),
       this.redisProbe(),
-      this.rlsEnforcedProbe(),
+      this.runtimeRoleProbe(),
     ]);
     const checks = { database, redis };
     const blocking = Object.values(checks).filter((c) => c.status === 'down');
+
+    // Outside local, an over-privileged connection makes this instance
+    // UNREADY. The process already refuses to start on one; this covers the
+    // case where the connection changes under a running process -- a failover
+    // onto a differently configured host, or a rotated secret pointing
+    // elsewhere. Draining is the right response: the instance is serving
+    // requests with one of its two authorization layers switched off.
+    const roleAcceptable =
+      role === null ||
+      OWNER_CONNECTION_ALLOWED_ENVIRONMENTS.has(
+        (process.env.APP_ENV ?? 'local').trim().toLowerCase(),
+      ) ||
+      isLeastPrivileged(role);
+
     return {
-      status: blocking.length === 0 ? 'ok' : 'degraded',
+      status: blocking.length === 0 && roleAcceptable ? 'ok' : 'degraded',
       build: this.build,
       uptimeSeconds: Math.round((Date.now() - this.startedAt) / 1000),
       checks,
-      rlsEnforced,
+      rlsEnforced: role === null ? null : !role.bypasses_rls,
+      databaseRole: role?.role_name ?? null,
+      leastPrivileged: role === null ? null : isLeastPrivileged(role),
     };
   }
 
-  /** null when it cannot be determined; never a reason to fail readiness. */
-  private async rlsEnforcedProbe(): Promise<boolean | null> {
+  /** null when it cannot be determined; never on its own a reason to fail. */
+  private async runtimeRoleProbe(): Promise<RuntimeRoleReport | null> {
     try {
-      const rows = await this.prisma.$queryRaw<Array<{ bypass: boolean | null }>>`
-        select rolbypassrls as bypass from pg_roles where rolname = current_user
+      const rows = await this.prisma.$queryRaw<RuntimeRoleReport[]>`
+        select * from chat.runtime_role_report()
       `;
-      const bypass = rows[0]?.bypass;
-      return typeof bypass === 'boolean' ? !bypass : null;
+      return rows[0] ?? null;
     } catch {
       return null;
     }

@@ -379,3 +379,86 @@ create policy conversation_readable_in_scope on chat.conversation
         exists (select 1 from chat.current_actor_ids() a where chat.is_live_member(id, a))
     end
   );
+
+-- ---------------------------------------------------------------------------
+-- 6. Resolving a principal
+-- ---------------------------------------------------------------------------
+--
+-- Under a NOBYPASSRLS role, IdentityService's very first query is subject to
+-- policy -- and the policies inherited from Phase 0 assumed a STAFF reader:
+-- chat.contact and chat.learner were visible only through
+-- chat.staff_can_see_family(), so a parent could not read their OWN contact row
+-- and every request from a family device failed with `unknown actor`.
+--
+-- Two reads have to work for anybody, and they are narrow:
+--
+--   1. YOUR OWN principal row. It is how the server learns who you are, and it
+--      is your own record.
+--   2. The principal rows of people you SHARE A CONVERSATION with. A group
+--      needs names on its roster, and the C-4 admin-presence check has to
+--      resolve whether the admin in the group is still active -- evaluated when
+--      a parent or a teacher posts, so it is their query that must succeed.
+--
+-- Neither widens what anyone can reach: a co-member is somebody whose messages
+-- you can already read, and these tables carry no contact channel by
+-- construction (BR-2).
+
+create or replace function chat.shares_a_conversation(p_actor_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = chat, pg_temp
+as $$
+  select exists (
+    select 1
+      from chat.conversation_member m
+     where m.actor_id = p_actor_id
+       and m.left_at is null
+       and chat.can_read_conversation(m.conversation_id))
+$$;
+
+comment on function chat.shares_a_conversation is
+  'Is this actor a live member of a conversation the caller may read? The '
+  'question a group roster asks, and the narrowest form of "you may see this '
+  'person exists".';
+
+drop policy if exists contact_visible_to_self_or_co_member on chat.contact;
+create policy contact_visible_to_self_or_co_member on chat.contact
+  for select to authenticated
+  using (account_id = chat.current_account_id() or chat.shares_a_conversation(id));
+
+drop policy if exists staff_visible_to_co_member on chat.staff;
+create policy staff_visible_to_co_member on chat.staff
+  for select to authenticated
+  using (account_id = chat.current_account_id() or chat.shares_a_conversation(id));
+
+drop policy if exists teacher_visible_to_self_or_co_member on chat.teacher;
+create policy teacher_visible_to_self_or_co_member on chat.teacher
+  for select to authenticated
+  using (account_id = chat.current_account_id() or chat.shares_a_conversation(id));
+
+-- A family reads its own record and its own learners; a teacher reads the
+-- learners they teach. Both are additive to the staff policy, which is
+-- assignment-scoped.
+drop policy if exists family_visible_to_its_own_people on chat.family;
+create policy family_visible_to_its_own_people on chat.family
+  for select to authenticated
+  using (id in (select chat.current_family_ids()));
+
+drop policy if exists learner_visible_to_its_own_people on chat.learner;
+create policy learner_visible_to_its_own_people on chat.learner
+  for select to authenticated
+  using (
+    family_id in (select chat.current_family_ids())
+    or teacher_id in (select t.id from chat.teacher t
+                       where t.account_id = chat.current_account_id() and t.is_active)
+  );
+
+-- chat.config carries the thresholds every engine reads (page sizes, call token
+-- TTL, the device limit). It is not secret -- the client is shown these numbers
+-- -- and the read policy was staff-only, which stopped a parent's own send from
+-- resolving its page size.
+drop policy if exists config_readable_by_staff on chat.config;
+create policy config_readable_by_authenticated on chat.config
+  for select to authenticated using (true);

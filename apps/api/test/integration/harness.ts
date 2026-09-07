@@ -7,6 +7,7 @@ import { ScopeService } from '@platform/scope.service';
 import { AuthService } from '@platform/auth/auth.service';
 import { AccountService } from '@platform/auth/account.service';
 import { SessionService } from '@platform/auth/session.service';
+import { ThrottleService } from '@platform/auth/throttle.service';
 import { FamilyService } from '@platform/families/family.service';
 import { UserAdminService } from '@platform/users/user-admin.service';
 import { PrismaAuditService } from '@platform/audit.service';
@@ -78,7 +79,8 @@ export function buildGraphOn(prisma: PrismaService) {
   const scope = new ScopeService(prisma);
   const sessions = new SessionService(prisma, config, audit);
   const accounts = new AccountService(prisma, config, sessions, audit);
-  const auth = new AuthService(prisma, config, sessions, accounts, identity, audit);
+  const throttle = new ThrottleService(prisma, config);
+  const auth = new AuthService(prisma, config, sessions, accounts, throttle, identity, audit);
   const families = new FamilyService(prisma, authz, scope, audit);
   const userAdmin = new UserAdminService(prisma, authz, accounts, sessions, audit);
 
@@ -97,7 +99,7 @@ export function buildGraphOn(prisma: PrismaService) {
   return {
     prisma, coverage, identity, authz, scope, conversations, messages, approvals,
     attachments, notifications, reminders, templates, quietHours, calls,
-    config, sessions, accounts, auth, families, userAdmin,
+    config, sessions, accounts, auth, throttle, families, userAdmin,
   };
 }
 

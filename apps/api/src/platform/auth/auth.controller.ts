@@ -101,8 +101,8 @@ export class AuthController {
    */
   @Public()
   @Post('forgot-password')
-  async forgotPassword(@Body() body: { subject?: string }) {
-    const issued = await this.auth.beginPasswordReset(String(body?.subject ?? ''));
+  async forgotPassword(@Body() body: { subject?: string }, @Ip() ip?: string) {
+    const issued = await this.auth.beginPasswordReset(String(body?.subject ?? ''), { ip });
     const developmentOnly =
       issued && !['production', 'staging'].includes((process.env.APP_ENV ?? 'local').toLowerCase());
     return {
@@ -115,8 +115,15 @@ export class AuthController {
   /** Complete a reset. Every session for the account is invalidated. */
   @Public()
   @Post('reset-password')
-  async resetPassword(@Body() body: { token?: string; password?: string }) {
-    await this.auth.completePasswordReset(String(body?.token ?? ''), String(body?.password ?? ''));
+  async resetPassword(
+    @Body() body: { token?: string; password?: string },
+    @Ip() ip?: string,
+  ) {
+    await this.auth.completePasswordReset(
+      String(body?.token ?? ''),
+      String(body?.password ?? ''),
+      { ip },
+    );
     return { ok: true };
   }
 

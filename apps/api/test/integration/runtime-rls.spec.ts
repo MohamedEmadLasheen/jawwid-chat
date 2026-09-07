@@ -243,9 +243,18 @@ describe('the application still works through the least-privileged role', () => 
     expect(mine.map((c) => c.id)).toEqual([myConversationId]);
   });
 
-  it('refuses an out-of-scope send with the service\'s own error, not a database one', async () => {
-    // The service still decides. RLS never had to intervene here, which is
-    // exactly the intended division of labour.
+  it('refuses an out-of-scope send -- and under RLS it never learns the row exists', async () => {
+    // Note the STRONGER answer than the owner connection gives.
+    //
+    // Against the owner, the service loads the conversation, evaluates scope,
+    // and refuses with COMM.OUT_OF_SCOPE. Against chat_app the row is not
+    // visible at all, so the load itself finds nothing and the request is
+    // refused as NOT FOUND -- which is what a by-id route should say anyway:
+    // an out-of-scope id and an invented one become indistinguishable.
+    //
+    // This is exactly the discipline RLS-STRATEGY.md asks for: an unexpectedly
+    // empty result on a write path is an authorization failure, never
+    // "nothing to do".
     await expect(
       asActor(s.ownerId, () =>
         g.messages.send({
@@ -254,7 +263,7 @@ describe('the application still works through the least-privileged role', () => 
           body: 'reaching across',
         }),
       ),
-    ).rejects.toMatchObject({ code: CommErrorCode.OUT_OF_SCOPE });
+    ).rejects.toMatchObject({ code: CommErrorCode.CONVERSATION_NOT_FOUND });
   });
 
   it('registers a device token and marks a notification, both scoped to the actor', async () => {

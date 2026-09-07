@@ -27,6 +27,8 @@ DATABASE_URL	database	yes	req	req	req
 DATABASE_STATEMENT_TIMEOUT_MS	database	no	opt	req	req
 DATABASE_POOL_MAX	database	no	opt	req	req
 DATABASE_SERVICE_URL	database	yes	opt	req	req
+DATABASE_TRANSACTION_TIMEOUT_MS	database	no	opt	opt	opt
+DATABASE_TRANSACTION_MAX_WAIT_MS	database	no	opt	opt	opt
 REDIS_URL	redis	yes	req	req	req
 QUEUE_PREFIX	redis	no	req	req	req
 WORKER_CONCURRENCY	redis	no	opt	req	req

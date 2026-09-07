@@ -1,7 +1,21 @@
 # Jawwid Chat — Tenancy Model
 
-Status: **CANONICAL** · Decided in Phase 0 (2026-09-07) · **EXTENDED in Phase 1** (2026-09-07)
-M-1 and the `account.subject` half of M-2 are closed; M-4 is closed in code and pending a deployment change. See `../recovery/PHASE-1-REPORT.md`.
+Status: **CANONICAL** · Decided in Phase 0 · **EXTENDED and CLOSED in Phase 1** (2026-09-07)
+M-1, M-2 and M-4 are closed; M-3 was removed with the coverage machinery's `thread` dependency; M-5 stands by design (a second tenant is a deliberate migration). See `../recovery/PHASE-1-REPORT.md`.
+
+**M-2 as closed.** `device_token.token`, `call.room_name` and
+`notification.dedupe_key` are unique **per organization**, and a trigger refuses
+to move a push token across the boundary. The push token mattered most: it is
+not a secret, and `registerDevice` hands a device over on conflict — globally
+unique meant anyone who learned a token could take delivery of its owner's
+notifications, across tenants. `core_*` identifiers stay globally unique on
+purpose: they are issued by Jawwid Core, which is one system.
+
+**Also closed by the closure audit:** `chat.guard_family_assignment()` compared
+the assignment's organization to the family's but never to the SUPERVISOR's, so
+a family could be assigned to a supervisor in another academy — the one
+cross-tenant path RLS could not catch, because every row was correctly stamped
+and only the relationship crossed the boundary.
 Product basis: PRD §2.3 — *"Not multi-tenant, but the data model carries an `organization_id` on every root entity from day one so a future SaaS conversion is a migration, not a rewrite."*
 Reference (not adopted as-is): `organization-model.md` and the org-scoped RLS/keys on `archive/phase0/feat/core-integration-boundary`; `docs/integration/backend-decision-memo.md` §3 (the executed comparison).
 

@@ -1,15 +1,22 @@
 # Jawwid Chat — Row-Level Security Strategy
 
-Status: **CANONICAL** · Decided in Phase 0 (2026-09-07) · **ENGAGED in Phase 1** (2026-09-07)
+Status: **CANONICAL** · Decided in Phase 0 · **ENGAGED and ENFORCED in Phase 1 closure** (2026-09-07)
 
-> **Acceptance item 1 (section 7) is NOT yet true in any deployed environment.**
-> RLS is enabled on every table, the policies are proved live by
-> `db/tests/rls_enforcement.sql`, and the API sets the actor context per
-> transaction -- but the API still connects as the database owner until
-> `DATABASE_URL` points at `chat_app`. `/health/ready` reports `rlsEnforced` so
-> the state is visible. Until it is true, `AuthorizationService` is the only
-> authorization boundary, and every review must treat it as such.
-> See `../recovery/PHASE-1-REPORT.md` section 7.1.
+> **Acceptance item 1 (section 7) is satisfied in code, and enforced by a gate.**
+> `chat_app` holds exactly the privileges the application uses, owns nothing,
+> and cannot bypass RLS; `ActorContextInterceptor` runs every authenticated
+> request inside that actor's transaction-local context; and
+> `apps/api/test/integration/runtime-rls.spec.ts` proves both halves by running
+> the REAL services through that role — RLS constrains, and the application
+> still works.
+>
+> The remaining step is a deployment one: point `DATABASE_URL` at `chat_app`
+> (created NOLOGIN by `20260907120000`; deployment grants LOGIN and a password
+> from the secret store) and the worker at `chat_service`. Until then the
+> process **refuses to start** outside `local | test | ci`
+> (`assertRuntimeRoleAcceptable`), and `/health/ready` reports `rlsEnforced`,
+> `databaseRole` and `leastPrivileged` and drains the instance if the
+> connection changes under it. See `../recovery/PHASE-1-REPORT.md` §7.1.
 Companions: `../architecture/AUTHORIZATION-MODEL.md`, `../architecture/IDENTITY-MODEL.md`,
 `../architecture/TENANCY-MODEL.md`, `../recovery/PHASE-0-DATABASE-RECONCILIATION.md` §3.5.
 

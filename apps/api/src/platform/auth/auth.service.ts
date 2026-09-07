@@ -14,6 +14,7 @@ import {
   SessionContext,
   SessionService,
 } from './session.service';
+import { ThrottleScope, ThrottleService } from './throttle.service';
 
 export interface LoginResult {
   readonly accessToken: string;
@@ -65,6 +66,7 @@ export class AuthService {
     private readonly config: AppConfigService,
     private readonly sessions: SessionService,
     private readonly accounts: AccountService,
+    private readonly throttle: ThrottleService,
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
   ) {}
@@ -103,6 +105,12 @@ export class AuthService {
     device?: DeviceDescriptor,
     context: SessionContext = {},
   ): Promise<LoginResult> {
+    // Recorded BEFORE the credential is examined, and for an unknown subject
+    // exactly as for a known one -- otherwise the throttle itself would answer
+    // the question the uniform 401 exists to refuse.
+    await this.throttle.hit(ThrottleScope.LOGIN_IP, context.ip);
+    await this.throttle.hit(ThrottleScope.LOGIN_SUBJECT, subject);
+
     const account = await this.prisma.account.findFirst({
       where: { subject },
       include: { credential: true },
@@ -159,6 +167,11 @@ export class AuthService {
       where: { accountId: account.id },
       data: { failedAttempts: 0, lockedUntil: null },
     });
+    // A person who mistypes twice and then signs in carries no counter.
+    await this.throttle.clear([
+      [ThrottleScope.LOGIN_IP, context.ip],
+      [ThrottleScope.LOGIN_SUBJECT, subject],
+    ]);
 
     const issued = await this.sessions.issue(account.id, device, context);
 
@@ -340,7 +353,16 @@ export class AuthService {
    * be surfaced) rather than delivered here: chat.account carries no contact
    * channel by design, so there is nothing in this schema to send it to.
    */
-  async beginPasswordReset(subject: string): Promise<{ token: string; expiresAt: Date } | null> {
+  async beginPasswordReset(
+    subject: string,
+    context: SessionContext = {},
+  ): Promise<{ token: string; expiresAt: Date } | null> {
+    // Both counters are incremented for an unknown subject too. A
+    // forgot-password endpoint that throttled only real subjects would tell an
+    // attacker which subjects are real by the shape of its refusals.
+    await this.throttle.hit(ThrottleScope.RESET_REQUEST_IP, context.ip);
+    await this.throttle.hit(ThrottleScope.RESET_REQUEST_SUBJECT, subject);
+
     const account = await this.prisma.account.findFirst({
       where: { subject },
       select: { id: true, status: true },
@@ -356,7 +378,15 @@ export class AuthService {
    * reset whose whole purpose is to recover a compromised account has not
    * recovered it while the intruder's token still works.
    */
-  async completePasswordReset(token: string, newPassword: string): Promise<void> {
+  async completePasswordReset(
+    token: string,
+    newPassword: string,
+    context: SessionContext = {},
+  ): Promise<void> {
+    // A reset token is the one secret that takes an account over without
+    // knowing anything about it, so guessing one is bounded hardest.
+    await this.throttle.hit(ThrottleScope.RESET_REDEEM_IP, context.ip);
+
     const accountId = await this.accounts.consumeToken(token, TokenPurpose.PASSWORD_RESET);
     if (!accountId) {
       throw new AuthError(
