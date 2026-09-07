@@ -1,4 +1,5 @@
 import '../../../core/data/repositories.dart';
+import '../data/call_media.dart';
 
 /// What the call UI is doing right now.
 ///
@@ -43,6 +44,7 @@ class CallSession {
     this.grant,
     this.errorCode,
     this.isMuted = false,
+    this.media = MediaState.idle,
   });
 
   final CallPhase phase;
@@ -60,6 +62,21 @@ class CallSession {
   final String? errorCode;
   final bool isMuted;
 
+  /// What the AUDIO is doing, which is not what the CALL is doing.
+  ///
+  /// A call is `active` server-side the moment somebody answers; this device's
+  /// transport may still be negotiating, or may have dropped and be
+  /// re-establishing. Keeping them separate is what lets the screen say
+  /// "reconnecting" instead of either lying about being connected or falsely
+  /// ending a call that is still running for everybody else.
+  final MediaState media;
+
+  /// Audio is flowing, as far as this device knows.
+  bool get hasAudio => media == MediaState.connected;
+
+  /// The transport dropped and is being re-established. The call is NOT over.
+  bool get isReconnecting => media == MediaState.reconnecting;
+
   bool get isActive => phase != CallPhase.idle && phase != CallPhase.ended;
 
   /// Whether to show the recording indicator.
@@ -76,6 +93,7 @@ class CallSession {
     CallGrant? grant,
     String? errorCode,
     bool? isMuted,
+    MediaState? media,
     bool clearIncoming = false,
     bool clearError = false,
   }) =>
@@ -86,6 +104,7 @@ class CallSession {
         grant: grant ?? this.grant,
         errorCode: clearError ? null : (errorCode ?? this.errorCode),
         isMuted: isMuted ?? this.isMuted,
+        media: media ?? this.media,
       );
 
   static const idle = CallSession();

@@ -254,5 +254,6 @@
   "storiesTitle": "المستجدات",
   "storiesEmpty": "لا يوجد جديد الآن.",
   "storyExpired": "انتهت صلاحية هذا التحديث.",
-  "storyFrom": "من جوّيد"
+  "storyFrom": "من جوّيد",
+  "callAudioFailed": "تعذّر توصيل الصوت."
 }

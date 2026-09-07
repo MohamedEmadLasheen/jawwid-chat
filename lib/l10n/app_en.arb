@@ -261,5 +261,6 @@
   "storiesTitle": "Updates",
   "storiesEmpty": "Nothing new right now.",
   "storyExpired": "This update has expired.",
-  "storyFrom": "From Jawwid"
+  "storyFrom": "From Jawwid",
+  "callAudioFailed": "Audio could not connect."
 }

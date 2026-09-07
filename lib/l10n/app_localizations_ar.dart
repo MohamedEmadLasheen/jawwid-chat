@@ -596,4 +596,7 @@ class L10nAr extends L10n {
 
   @override
   String get storyFrom => 'من جوّيد';
+
+  @override
+  String get callAudioFailed => 'تعذّر توصيل الصوت.';
 }

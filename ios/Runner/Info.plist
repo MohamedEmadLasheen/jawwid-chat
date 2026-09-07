@@ -59,6 +59,21 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<!-- Voice calling. Without NSMicrophoneUsageDescription iOS TERMINATES the
+	     app the instant the microphone is requested, so a call would crash the
+	     app rather than fail; the string is what the parent is shown when they
+	     are asked. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Jawwid uses your microphone for voice calls with the academy and your child's teacher.</string>
+	<!-- `audio` keeps the call alive when the app is backgrounded mid-call,
+	     which is what happens every time somebody looks at another app while
+	     talking. Without it iOS suspends the process and the audio stops.
+	     `voip` is what lets a VoIP push wake the app for an INCOMING call. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+		<string>voip</string>
+	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

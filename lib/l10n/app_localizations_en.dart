@@ -593,4 +593,7 @@ class L10nEn extends L10n {
 
   @override
   String get storyFrom => 'From Jawwid';
+
+  @override
+  String get callAudioFailed => 'Audio could not connect.';
 }

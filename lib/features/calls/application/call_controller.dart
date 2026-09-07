@@ -7,6 +7,7 @@ import '../../../core/data/wire/wire_phase5.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/realtime/realtime_client.dart';
 import '../../../core/realtime/realtime_events.dart';
+import '../data/call_media.dart';
 import '../domain/call_session.dart';
 
 /// The call screen's state machine, on the client side.
@@ -35,22 +36,64 @@ class CallController extends Notifier<CallSession> {
   CallController({
     required CallRepository calls,
     RealtimeClient? realtime,
+    CallMedia? media,
   })  : _calls = calls,
-        _realtime = realtime;
+        _realtime = realtime,
+        _media = media;
 
   final CallRepository _calls;
   final RealtimeClient? _realtime;
 
+  /// The media transport. Optional so a test can exercise the LIFECYCLE
+  /// without a media stack, which is the whole reason it is a seam.
+  final CallMedia? _media;
+
   Timer? _ringTimeout;
+  StreamSubscription<MediaState>? _mediaEvents;
 
   @override
   CallSession build() {
     final subscription = _realtime?.events.listen(_onEvent);
+    _mediaEvents = _media?.state.listen(_onMediaState);
     ref.onDispose(() {
       _ringTimeout?.cancel();
       unawaited(subscription?.cancel());
+      unawaited(_mediaEvents?.cancel());
+      // The room is torn down with the controller. A microphone left publishing
+      // after the screen is gone is the worst bug this feature can have.
+      unawaited(_media?.disconnect());
     });
     return CallSession.idle;
+  }
+
+  /// Media moved. The CALL's state is still the server's to decide.
+  ///
+  /// A dropped transport is NOT an ended call: LiveKit reconnects, and the
+  /// other participant is still there. So this surfaces the media state for the
+  /// UI to show "reconnecting", and asks the SERVER what the call is rather
+  /// than concluding anything from a socket.
+  void _onMediaState(MediaState media) {
+    if (!state.isActive) return;
+    state = state.copyWith(media: media);
+
+    if (media == MediaState.disconnected || media == MediaState.failed) {
+      unawaited(reconcile());
+    }
+  }
+
+  /// Attach the media transport for a grant the server just issued.
+  ///
+  /// Failing to connect media does NOT end the call server-side: the call is a
+  /// real, authorized record and the other party may still be in it. The screen
+  /// reports the media failure and leaves the lifecycle alone.
+  Future<void> _attachMedia(CallGrant grant) async {
+    final media = _media;
+    if (media == null) return;
+    try {
+      await media.connect(grant);
+    } on Exception {
+      state = state.copyWith(media: MediaState.failed);
+    }
   }
 
   // --- Outgoing -------------------------------------------------------------
@@ -76,6 +119,10 @@ class CallController extends Notifier<CallSession> {
         clearError: true,
       );
       _armRingTimeout(call);
+      // The CALLER joins the room immediately. LiveKit rooms are empty until
+      // somebody is in them, and a caller who only attached on answer would
+      // miss the first moment of speech while their transport negotiated.
+      await _attachMedia(grant);
     } on AppError catch (error) {
       state = CallSession(phase: CallPhase.ended, errorCode: error.code);
     }
@@ -94,6 +141,7 @@ class CallController extends Notifier<CallSession> {
         clearError: true,
       );
       _armRingTimeout(call);
+      await _attachMedia(grant);
     } on AppError catch (error) {
       state = CallSession(phase: CallPhase.ended, errorCode: error.code);
     }
@@ -148,6 +196,7 @@ class CallController extends Notifier<CallSession> {
         grant: grant,
         clearIncoming: true,
       );
+      await _attachMedia(grant);
     } on AppError catch (error) {
       // The commonest cause is legitimate: somebody else answered, or the call
       // timed out while the ring screen was up. The refusal is the server
@@ -160,6 +209,9 @@ class CallController extends Notifier<CallSession> {
     final callId = state.incoming?.callId ?? state.call?.id;
     if (callId == null) return;
     _ringTimeout?.cancel();
+    // The microphone is released BEFORE the network call. A decline that
+    // failed to reach the server must still stop this device transmitting.
+    await _media?.disconnect();
     // Optimistic: the screen closes immediately. Declining is idempotent
     // server-side, so a failure here costs nothing and a retry is safe.
     state = const CallSession(phase: CallPhase.ended);
@@ -181,10 +233,14 @@ class CallController extends Notifier<CallSession> {
   Future<void> hangUp({bool failed = false}) async {
     final call = state.call;
     if (call == null) {
+      await _media?.disconnect();
       state = const CallSession(phase: CallPhase.ended);
       return;
     }
     _ringTimeout?.cancel();
+    // Released before the request, for the same reason decline does: hanging up
+    // must stop this device transmitting even if the network call fails.
+    await _media?.disconnect();
 
     try {
       final updated = call.status == CallStatus.ringing && !failed
@@ -199,10 +255,20 @@ class CallController extends Notifier<CallSession> {
     }
   }
 
-  void toggleMute() => state = state.copyWith(isMuted: !state.isMuted);
+  /// Mute this device's microphone.
+  ///
+  /// Local and immediate. The server is never told, because mute is not call
+  /// state -- a mute that round-tripped would be a control that stops working
+  /// exactly when the network does, which is when people reach for it.
+  Future<void> toggleMute() async {
+    final next = !state.isMuted;
+    state = state.copyWith(isMuted: next);
+    await _media?.setMuted(next);
+  }
 
   void dismiss() {
     _ringTimeout?.cancel();
+    unawaited(_media?.disconnect());
     state = CallSession.idle;
   }
 
@@ -217,6 +283,7 @@ class CallController extends Notifier<CallSession> {
     try {
       final call = await _calls.callById(callId);
       if (!call.isLive) {
+        await _media?.disconnect();
         state = state.copyWith(phase: CallPhase.ended, call: call, clearIncoming: true);
         return;
       }
@@ -262,6 +329,9 @@ class CallController extends Notifier<CallSession> {
         if (callId != null &&
             (callId == state.call?.id || callId == state.incoming?.callId)) {
           _ringTimeout?.cancel();
+          // The other side ended it. Release the microphone here rather than
+          // waiting for the user to close the screen.
+          unawaited(_media?.disconnect());
           state = state.copyWith(phase: CallPhase.ended, clearIncoming: true);
         }
     }

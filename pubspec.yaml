@@ -23,6 +23,16 @@ dependencies:
   dio: ^5.11.1
   web_socket_channel: ^3.0.3
 
+  # Voice calling media. The backend has minted correctly signed LiveKit tokens
+  # since Phase 5; this is the client that actually presents one and carries
+  # audio. LiveKit is the SFU chosen in the PRD (§11), and its official Flutter
+  # SDK is the reason that choice was made over building raw WebRTC.
+  #
+  # Media transport ONLY. Every authorization decision stays on the server:
+  # this package is handed a room and a short-lived token it cannot mint, and
+  # it never learns who may call whom.
+  livekit_client: ^2.12.0
+
   # Realtime. The backend's gateway is Socket.IO (@nestjs/platform-socket.io),
   # and Engine.IO's handshake, upgrade and framing are a protocol on top of a
   # websocket rather than a convention over one -- so web_socket_channel alone
@@ -44,6 +54,20 @@ dependencies:
   connectivity_plus: ^7.3.1
   device_info_plus: ^13.2.0
   package_info_plus: ^10.2.1
+  # Push. firebase_messaging is the only supported way to receive an FCM
+  # message on Android and to bridge APNs on iOS -- unlike the SERVER side,
+  # where sending is one signed JWT and one POST and firebase-admin would have
+  # been an enormous tree for it, there is no hand-rollable equivalent for the
+  # receiving end. It sits behind the PushMessaging interface so the app's own
+  # logic is testable without a Firebase project, and so a build with no
+  # `google-services.json` degrades to no push rather than refusing to start.
+  firebase_core: ^4.14.0
+  firebase_messaging: ^16.6.0
+
+  # Attachment selection. ONE picker, covering images, video, audio and
+  # documents: image_picker plus a separate document picker would be two
+  # overlapping frameworks and two permission stories for one affordance.
+  file_picker: ^12.2.0
 
 dev_dependencies:
   flutter_test:

@@ -11,6 +11,7 @@ import '../core/data/http/http_call_repository.dart';
 import '../core/data/http/http_conversation_repository.dart';
 import '../core/data/http/http_group_repository.dart';
 import '../core/data/http/http_message_repository.dart';
+import '../core/data/http/http_notification_repository.dart';
 import '../core/data/http/http_story_repository.dart';
 import '../core/errors/app_error.dart';
 import '../core/network/actor_identity.dart';
@@ -23,9 +24,15 @@ import '../core/storage/secure_token_store.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/domain/auth_state.dart';
 import '../features/calls/application/call_controller.dart';
+import '../features/calls/data/call_media.dart';
+import '../features/calls/data/livekit_call_media.dart';
 import '../features/messages/application/outbox_drain_policy.dart';
+import '../features/notifications/notification_navigator.dart';
+import '../features/notifications/push_messaging.dart';
+import '../features/notifications/push_registrar.dart';
 import '../shared/models/user_role.dart';
 import 'providers.dart';
+import 'router.dart';
 
 /// Which data source this build talks to.
 enum DataSource {
@@ -62,7 +69,91 @@ Future<List<Override>> bootstrap({
     // Left unoverridden; outboxCourierProvider falls back to memory.
   }
 
+  // Push, if this build was given a Firebase configuration. It cannot be
+  // committed -- `google-services.json` and `GoogleService-Info.plist` carry a
+  // real project's identifiers -- so a build without them degrades to no push
+  // rather than refusing to launch. An app that will not start because
+  // notifications are unconfigured is a worse failure than one without
+  // notifications.
+  if (ApiConfig.isConfigured && await FirebasePushMessaging.initialize()) {
+    overrides.add(pushMessagingProvider.overrideWithValue(FirebasePushMessaging()));
+  }
+
   return overrides;
+}
+
+/// Wire notifications into the application's lifecycle.
+///
+/// THIS IS THE STEP THAT WAS MISSING. `NotificationNavigator` and
+/// `PushPayload` were written, correct and tested, and instantiated by nothing
+/// but their own test -- so tapping a notification did what it did before any
+/// of it existed: opened the app wherever it happened to be. Code existing is
+/// not a feature existing.
+///
+/// Everything below reuses what is already there: the existing router, the
+/// existing navigator, the existing authentication state, and the server's
+/// existing authorization on the route it lands on. No second navigation
+/// architecture.
+Future<void> startNotifications(ProviderContainer container) async {
+  final messaging = container.read(pushMessagingProvider);
+  final router = container.read(routerProvider);
+
+  final navigator = NotificationNavigator(
+    go: (location) async => router.go(location),
+    isSignedIn: () => container.read(authControllerProvider).isAuthenticated,
+    logger: container.read(loggerProvider),
+  );
+
+  final registrar = PushRegistrar(
+    messaging: messaging,
+    // Read lazily: on a build with no push this is never called, so the
+    // repository's "must be overridden" default is never reached.
+    repository: () => container.read(notificationRepositoryProvider),
+    isSignedIn: () => container.read(authControllerProvider).isAuthenticated,
+    logger: container.read(loggerProvider),
+  );
+
+  // WARM AND BACKGROUND: a tap while the process is alive.
+  messaging.taps.listen((data) => unawaited(navigator.onTapped(data)));
+
+  // FOREGROUND: the conversation is already on screen and updating over the
+  // socket, so nothing is raised here. Subscribed anyway so the stream has a
+  // listener and its events are not buffered indefinitely.
+  messaging.foregroundMessages.listen((_) {});
+
+  container.listen(authControllerProvider, (previous, next) {
+    final wasSignedIn = previous?.isAuthenticated ?? false;
+    if (!wasSignedIn && next.isAuthenticated) {
+      // A token usually arrives BEFORE sign-in -- the platform hands it over at
+      // launch while the user is still at the login screen -- so registration
+      // waits for a session to attach it to.
+      unawaited(registrar.onSignedIn());
+      // And a destination held from a cold start can now be honoured.
+      unawaited(navigator.onReady());
+    }
+    if (wasSignedIn && !next.isAuthenticated) {
+      // A push token identifies a DEVICE, not a person. Left registered after a
+      // sign-out it keeps delivering one account's notifications, previews
+      // included, to whoever signs in next on this handset.
+      unawaited(registrar.forget());
+      // And a destination tapped by the previous user must not navigate the
+      // next one into their conversation.
+      navigator.clear();
+    }
+  });
+
+  await registrar.start();
+
+  // COLD START: the tap that launched the process. It is not an event -- by the
+  // time anything can subscribe it has already happened -- so it is asked for.
+  final launchedBy = await messaging.initialTap();
+  if (launchedBy != null) await navigator.onTapped(launchedBy);
+
+  // Release anything held, if the session is already known. When it is not, the
+  // listener above releases it the moment authentication resolves.
+  if (container.read(authControllerProvider).isAuthenticated) {
+    await navigator.onReady();
+  }
 }
 
 /// Restore the queue and begin draining it.
@@ -146,6 +237,8 @@ List<Override> _httpOverrides({required String debugActorId}) {
     ),
   );
 
+  final livekitMedia = LiveKitCallMedia();
+
   final realtime = SocketIoRealtimeClient(
     baseUrl: config.baseUrl,
     accessToken: () async => (await tokenStore.read())?.accessToken,
@@ -168,6 +261,9 @@ List<Override> _httpOverrides({required String debugActorId}) {
     groupRepositoryProvider.overrideWithValue(
       HttpGroupRepository(client: client),
     ),
+    notificationRepositoryProvider.overrideWithValue(
+      HttpNotificationRepository(client: client),
+    ),
     // Phase 5. The call controller is built here rather than left unimplemented
     // because it needs the realtime client, and this is the only place both it
     // and the repository exist.
@@ -177,10 +273,16 @@ List<Override> _httpOverrides({required String debugActorId}) {
     storyRepositoryProvider.overrideWithValue(
       HttpStoryRepository(client: client),
     ),
+    // The REAL media layer for any build that talks to a backend. One instance,
+    // held for the app's lifetime: a device is in at most one call, and a
+    // per-call instance would leak a room whenever a screen was disposed
+    // mid-connection.
+    callMediaProvider.overrideWithValue(livekitMedia),
     callControllerProvider.overrideWith(
       () => CallController(
         calls: HttpCallRepository(client: client),
         realtime: realtime,
+        media: livekitMedia,
       ),
     ),
     authControllerProvider.overrideWith(
@@ -216,10 +318,14 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
     groupRepositoryProvider.overrideWithValue(FakeGroupRepository(backend)),
     callRepositoryProvider.overrideWithValue(FakeCallRepository(backend)),
     storyRepositoryProvider.overrideWithValue(const FakeStoryRepository()),
+    // No backend means no token and no room to present one to, so the fixture
+    // build carries no audio and says so rather than failing.
+    callMediaProvider.overrideWithValue(SilentCallMedia()),
     callControllerProvider.overrideWith(
       () => CallController(
         calls: FakeCallRepository(backend),
         realtime: null,
+        media: SilentCallMedia(),
       ),
     ),
     authControllerProvider.overrideWith(

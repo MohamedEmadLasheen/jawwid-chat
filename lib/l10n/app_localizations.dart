@@ -1188,6 +1188,12 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'From Jawwid'**
   String get storyFrom;
+
+  /// No description provided for @callAudioFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio could not connect.'**
+  String get callAudioFailed;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

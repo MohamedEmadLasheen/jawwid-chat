@@ -5,6 +5,7 @@ import '../../../app/providers.dart';
 import '../../../core/data/repositories.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
+import '../data/call_media.dart';
 import '../domain/call_session.dart';
 
 /// The one call surface: it rings, it connects, it ends.
@@ -29,13 +30,22 @@ class CallScreen extends ConsumerWidget {
     final controller = ref.read(callControllerProvider.notifier);
     final theme = Theme.of(context);
 
+    // The MEDIA state outranks the phase for the connected case, and only for
+    // that case. A call is `connected` the moment the server says somebody
+    // answered; telling the user "Connected" while their transport is
+    // re-establishing is the screen lying about whether they can be heard.
     final title = switch (session.phase) {
       CallPhase.incoming => session.incoming?.isClassCall == true
           ? l10n.callClassWaitingTitle
           : l10n.callIncomingTitle,
       CallPhase.dialling || CallPhase.ringing => l10n.callRinging,
       CallPhase.connecting => l10n.callConnecting,
-      CallPhase.connected => l10n.callConnected,
+      CallPhase.connected => switch (session.media) {
+          MediaState.reconnecting => l10n.callReconnecting,
+          MediaState.connecting => l10n.callConnecting,
+          MediaState.failed => l10n.callAudioFailed,
+          _ => l10n.callConnected,
+        },
       CallPhase.ended || CallPhase.idle => l10n.callEnded,
     };
 
@@ -95,7 +105,7 @@ class CallScreen extends ConsumerWidget {
                 onAccept: controller.accept,
                 onDecline: controller.decline,
                 onHangUp: () => controller.hangUp(),
-                onToggleMute: controller.toggleMute,
+                onToggleMute: () => controller.toggleMute(),
                 onDismiss: controller.dismiss,
               ),
               const SizedBox(height: Spacing.spacing6),
