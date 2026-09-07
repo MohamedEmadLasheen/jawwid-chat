@@ -13,6 +13,8 @@ import { GroupDetailPage } from '@/features/groups/GroupDetailPage'
 import { LabelsPage } from '@/features/labels/LabelsPage'
 import { StoriesPage } from '@/features/stories/StoriesPage'
 import { BroadcastPage } from '@/features/broadcast/BroadcastPage'
+import { AttentionPage } from '@/features/assistant/AttentionPage'
+import { KnowledgePage } from '@/features/assistant/KnowledgePage'
 import { ForbiddenPage } from './ForbiddenPage'
 import type { ReactElement } from 'react'
 
@@ -67,6 +69,11 @@ export function AppRoutes() {
         {/* Phase 5 -- publication and outbound communication. */}
         <Route path="/stories" element={<Area area="stories"><StoriesPage /></Area>} />
         <Route path="/broadcasts" element={<Area area="broadcast"><BroadcastPage /></Area>} />
+
+        {/* Phase 7 -- the assistant. Both pages are additive: no existing route
+            changes, and the console's own paths are untouched. */}
+        <Route path="/attention" element={<Area area="attention"><AttentionPage /></Area>} />
+        <Route path="/knowledge" element={<Area area="knowledge"><KnowledgePage /></Area>} />
 
         <Route path="/forbidden" element={<ForbiddenPage />} />
         {/*

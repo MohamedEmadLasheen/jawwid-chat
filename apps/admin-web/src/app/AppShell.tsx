@@ -12,6 +12,8 @@ const AREA_PATH: Record<NavArea, string> = {
   labels: '/labels',
   stories: '/stories',
   broadcast: '/broadcasts',
+  attention: '/attention',
+  knowledge: '/knowledge',
   inbox: '/inbox',
   families: '/families',
   tasks: '/tasks',

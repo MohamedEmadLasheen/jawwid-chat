@@ -43,6 +43,12 @@ describe('role → navigation', () => {
     // management only — so the expected set is no longer the same for all
     // roles, and the loop below is split accordingly rather than relaxed into
     // a `toContain`.
+    //
+    // PHASE 7 adds `attention` and `knowledge` for every operator role. Both
+    // are narrowed server-side -- the attention queue by family scope, and the
+    // knowledge page by `knowledge.approve`, which an admin does not hold and
+    // which hides the approve control rather than the page. So the rail
+    // offering them grants nothing, exactly as this file's header says.
     for (const role of ROLES) {
       const areas = visibleAreas(role)
       expect(areas).toEqual([
@@ -52,6 +58,8 @@ describe('role → navigation', () => {
         'labels',
         'stories',
         ...(isManager(role) ? ['broadcast'] : []),
+        'attention',
+        'knowledge',
       ])
       for (const frozen of ['inbox', 'families', 'tasks', 'coverage', 'dashboard', 'settings'] as const) {
         expect(areas).not.toContain(frozen)
@@ -69,6 +77,22 @@ describe('role → navigation', () => {
     expect(canOpenArea('coverage_admin', 'broadcast')).toBe(false)
     expect(canOpenArea('manager', 'broadcast')).toBe(true)
     expect(canOpenArea('super_admin', 'broadcast')).toBe(true)
+  })
+
+  it('gives every operator role ATTENTION and KNOWLEDGE, and departments neither', () => {
+    // The attention queue is narrowed to the actor's own families by
+    // ScopeService on every request, so showing a supervisor the page is not
+    // showing them anybody else's risks. Knowledge is the same shape stories
+    // uses: an admin drafts, only `knowledge.approve` publishes, and the page
+    // hides the approve control instead of hiding itself.
+    for (const role of ROLES) {
+      expect(canOpenArea(role, 'attention')).toBe(true)
+      expect(canOpenArea(role, 'knowledge')).toBe(true)
+    }
+    // A departmental staff member takes no part in family communication (PD-5)
+    // and gets no assistant surface either.
+    expect(canOpenArea('admin', 'attention', 'finance')).toBe(false)
+    expect(canOpenArea('admin', 'knowledge', 'finance')).toBe(false)
   })
 
   it('gives every operator role STORIES, including one that cannot publish', () => {

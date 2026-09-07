@@ -332,3 +332,99 @@
   .rail { inline-size: 64px; flex-basis: 64px; }
   .rail__title, .rail__item span:not(.rail__count) { display: none; }
 }
+
+/* ---------------------------------------------------------------------------
+   Phase 7 -- the AI marker.
+
+   Phase 7 §34 asks for a clear visual distinction between what a human wrote
+   and what a model produced. It is done with a container -- a left rule, a
+   tint, and a standing label -- rather than with an icon or a word in the copy,
+   because a container cannot be edited away while somebody is rewording a
+   draft, and it survives being read quickly.
+
+   The three kinds are tinted differently because they ask for different things:
+   a suggestion asks to be checked, a summary to be read, an attention flag to
+   be acted on.
+   --------------------------------------------------------------------------- */
+
+.ai-block {
+  border: 1px solid var(--border, #d8dce3);
+  border-inline-start: 3px solid var(--ai-accent, #6b5bd6);
+  border-radius: 6px;
+  background: var(--ai-tint, #f7f6fd);
+  margin-block: 0.75rem;
+  padding: 0.75rem 0.9rem;
+}
+
+.ai-block--suggestion { --ai-accent: #6b5bd6; --ai-tint: #f7f6fd; }
+.ai-block--summary    { --ai-accent: #3c7a8c; --ai-tint: #f2f8fa; }
+.ai-block--attention  { --ai-accent: #b8791f; --ai-tint: #fdf8f0; }
+
+.ai-block__label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ai-accent);
+  margin-block-end: 0.5rem;
+}
+
+/* Repeated on every block, deliberately. A manager scanning a long thread
+   should never have to remember which parts are machine-written. */
+.ai-block__caveat {
+  font-weight: 400;
+  font-size: 0.72rem;
+  color: var(--text-muted, #6b7280);
+}
+
+.ai-block__body { font-size: 0.92rem; line-height: 1.5; }
+
+.ai-block__actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-block-start: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.assistant__summary { display: grid; grid-template-columns: max-content 1fr; gap: 0.3rem 0.8rem; margin: 0; }
+.assistant__summary dt { font-weight: 600; color: var(--text-muted, #6b7280); }
+.assistant__summary dd { margin: 0; }
+
+/* Rendered apart from the four sections, and labelled. A hedge folded into the
+   prose is a hedge a hurried reader skims past (§13). */
+.assistant__inferences {
+  margin-block-start: 0.6rem;
+  padding-block-start: 0.5rem;
+  border-block-start: 1px dashed var(--border, #d8dce3);
+  font-size: 0.85rem;
+  color: var(--text-muted, #6b7280);
+}
+
+.assistant__editor { width: 100%; font: inherit; padding: 0.5rem; }
+.assistant__draft { white-space: pre-wrap; margin: 0; }
+.assistant__error { color: var(--danger, #b42318); font-size: 0.85rem; }
+.assistant__ok { color: var(--ok, #067647); font-size: 0.85rem; }
+.assistant__muted { color: var(--text-muted, #6b7280); font-size: 0.85rem; }
+
+.attention__list { list-style: none; padding: 0; margin: 0; }
+.attention__row {
+  display: flex; gap: 0.6rem; align-items: baseline; width: 100%;
+  text-align: start; padding: 0.6rem; border: 1px solid transparent;
+  background: none; cursor: pointer; border-radius: 6px;
+}
+.attention__row.is-selected { border-color: var(--ai-accent, #6b5bd6); background: #f7f6fd; }
+.attention__row--high .attention__severity { color: #b42318; font-weight: 600; }
+.attention__type { flex: 1; }
+.attention__severity, .attention__source { font-size: 0.78rem; color: var(--text-muted, #6b7280); }
+.attention__reasonTitle { font-weight: 600; margin: 0 0 0.25rem; }
+.attention__reason { margin: 0; }
+.attention__resolution { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-block-start: 1rem; }
+
+.knowledge__form { display: grid; gap: 0.5rem; max-width: 42rem; margin-block: 1rem; }
+.knowledge__list { list-style: none; padding: 0; }
+.knowledge__item { display: flex; justify-content: space-between; gap: 1rem; padding: 0.75rem 0; border-block-end: 1px solid var(--border, #d8dce3); }
+.knowledge__version { font-size: 0.75rem; color: var(--text-muted, #6b7280); margin-inline-start: 0.4rem; }
+.knowledge__q { font-size: 0.85rem; color: var(--text-muted, #6b7280); margin: 0.3rem 0 0; }
+.knowledge__a { margin: 0.2rem 0 0; }

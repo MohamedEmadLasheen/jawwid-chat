@@ -34,6 +34,10 @@ export type NavArea =
   // Phase 5 -- publication and outbound communication.
   | 'stories'
   | 'broadcast'
+  // Phase 7 -- the assistant. `attention` is the risk queue; `knowledge` is the
+  // approved content the assistant is allowed to ground an answer on.
+  | 'attention'
+  | 'knowledge'
   // Frozen brief-era areas. Still typed so the frozen pages compile; removed
   // from the rail and from the route table (PHASE-0-ADMIN-WEB-RECONCILIATION
   // §2.7), and deleted with their features in a later phase.
@@ -114,6 +118,17 @@ export function visibleAreas(role: StaffRole, department?: Department | null): N
   // reaches the page by URL and the server serves them -- narrowed to their own
   // scope by the audience resolver. The rail is navigation, not a boundary.
   if (isManager(role)) areas.push('broadcast')
+
+  // Phase 7. ATTENTION is open to every operator role -- a supervisor should
+  // see the risks on their own families, and the queue is narrowed to their
+  // scope server-side, so the rail showing it grants nothing.
+  areas.push('attention')
+
+  // KNOWLEDGE is open to every operator too: an admin drafts articles, and
+  // only `knowledge.approve` -- manager and super_admin -- can publish one. The
+  // page hides the approve control accordingly rather than hiding itself, the
+  // same shape stories uses for publishing.
+  areas.push('knowledge')
 
   return areas
 }
