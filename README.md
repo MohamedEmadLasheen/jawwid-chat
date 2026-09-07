@@ -28,7 +28,7 @@ supervisor — the system, not the employee, owns the family's history.
 | `apps/admin-web` | AI #4 | Internal Admin Web application (React + TS + Vite) |
 | `docs/admin` | AI #4 | Admin architecture, workflows, testing, backend dependencies |
 | `docs/architecture` | AI #1 | Backend core, data model, RBAC, coverage engine |
-| `docs/communication` | AI #2 | Thread/message/case/task/handoff, realtime, automation |
+| `docs/communication` | AI #2 | Conversations, messages, approvals, calls, realtime, notifications |
 | `docs/design` | AI #6 | Product UX, design system, terminology, screen specs, handoffs |
 
 ## Admin Web
