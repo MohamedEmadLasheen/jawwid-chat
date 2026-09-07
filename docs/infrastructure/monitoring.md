@@ -1,9 +1,11 @@
 # Monitoring, Logging and Alerting
 
-Owner: AI #7 · Date: 2026-09-05
-Status: **specification.** No monitoring backend is provisioned (BLOCKER-3).
-The application-side seams — health endpoints, build identity, sanitised probe
-errors — exist and are verified.
+Owner: AI #7 · Date: 2026-09-05 · Logging implemented in Phase 8 (2026-09-08)
+Status: **partly implemented.** Structured JSON logging and per-request
+correlation now exist and are tested (§3). Everything that needs a BACKEND —
+error tracking, metrics, dashboards, alerts — remains unprovisioned
+(BLOCKER-3). The application-side seams — health endpoints, build identity,
+sanitised probe errors — exist and are verified.
 
 ## 1. Stack
 
@@ -12,7 +14,7 @@ errors — exist and are verified.
 | Errors | Sentry (`SENTRY_DSN`) | variable defined, SDK not wired |
 | Traces / metrics | OpenTelemetry → OTLP (`OTEL_EXPORTER_OTLP_ENDPOINT`) | variable defined, not wired |
 | Dashboards / alerts | Grafana (or the hosting platform's built-in) | not provisioned |
-| Logs | structured JSON to stdout, collected by the platform | format specified below |
+| Logs | structured JSON to stdout, collected by the platform | **implemented and tested** (§3) |
 | Health | `/health/live`, `/health/ready`, `/health` | **implemented and tested** |
 | Uptime | external HTTP check against `/health/live` | not provisioned |
 
@@ -62,6 +64,43 @@ customer data not needed to diagnose the entry. Identify people by opaque id.
 Phone privacy is a product rule (PRD BR / role assignment §1), and logs are one
 of the places it is most easily broken — a phone number in a log line is exposed
 to everyone with log access and every downstream log processor.
+
+### How that rule is actually enforced (Phase 8)
+
+Implementation: `src/infra/observability/json-logger.ts`,
+`src/infra/observability/request-log.interceptor.ts`.
+Tests: `test/unit/observability/`.
+
+Two controls, and it matters which is which — conflating them is how the weaker
+one ends up trusted:
+
+**1. A field allowlist — this is the real control.** `JsonLogger` writes a fixed
+set of declared fields and silently drops everything else, and the request
+interceptor never reads a body, a query string or a header at all. Content
+cannot leak through a channel that never carries content. Somebody attaching
+`{ body }` to a log call "to help with debugging" gets nothing in the output.
+
+**2. Pattern redaction — a backstop, and only that.** Free-form messages are
+scrubbed for bearer tokens, JWTs, `secret`/`password`/`token`/`api_key`
+assignments, passwords inside connection strings, and phone numbers. It
+recognises the shapes it knows and no others, so it is **never** a licence to log
+something sensitive on the grounds that the logger will catch it.
+
+The redaction is deliberately narrow. A scrubber that rewrote anything long and
+alphanumeric would destroy the UUIDs and commit hashes that make a log
+correlatable, and a log nobody can follow is not safer — it is useless as well as
+leaky. UUIDs, commit hashes and route patterns pass through untouched.
+
+Routes are logged as **patterns** (`POST /conversations/:id/messages`), never as
+resolved URLs. That aggregates for latency queries, and it keeps user-controlled
+text out of the log store: a search term, a filename or an id arrives in the path
+or the query string, and unmatched requests — 404s and guard refusals, which is
+what a scan produces — have their identifier segments masked.
+
+Actor identity is logged as `actor_kind` only (STAFF / TEACHER / FAMILY). That
+answers "are family users seeing these errors?", which is what logs get asked,
+without accumulating a record of which individual did what. Audit answers that
+question deliberately, in a place with access controls on it.
 
 ## 4. Correlation
 

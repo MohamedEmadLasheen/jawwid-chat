@@ -13,6 +13,8 @@ import {
 } from './platform/auth/startup';
 import { PrismaService } from './platform/prisma.service';
 import { RealtimeRelay } from './infra/realtime/realtime-relay.service';
+import { JsonLogger } from './infra/observability/json-logger';
+import { RequestLogInterceptor } from './infra/observability/request-log.interceptor';
 
 /**
  * API entrypoint.
@@ -34,12 +36,22 @@ async function bootstrap(): Promise<void> {
   // report itself healthy.
   assertAuthSecretsConfigured();
 
+  // Structured JSON to stdout, one object per line, in the format
+  // docs/infrastructure/monitoring.md §3 specifies. Constructed BEFORE the
+  // application so the lines Nest writes while wiring modules are in the same
+  // format as everything after -- a startup failure is exactly when a log has
+  // to be machine-readable, and it is the one moment a logger installed later
+  // would miss.
+  const logger = new JsonLogger('api', build);
+
   const app = await NestFactory.create(AppModule, {
-    // Nest's default logger writes to stdout, which is where the platform
-    // collects it. Structured JSON logging is a separate piece of work
-    // (docs/infrastructure/monitoring.md §3) and is deliberately not faked here.
-    logger: ['error', 'warn', 'log'],
+    logger,
   });
+
+  // One line per request: route pattern, status, latency, request id. It logs
+  // no body, no query string and no headers -- the privacy rule is enforced by
+  // never touching content, not by scrubbing it afterwards.
+  app.useGlobalInterceptors(new RequestLogInterceptor(logger));
 
   // /api/v1 matches the base URL Admin Web and the mobile clients are built
   // against. Health is excluded: a load balancer probes /health/live, and
