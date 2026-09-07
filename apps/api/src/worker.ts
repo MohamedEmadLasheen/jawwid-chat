@@ -6,6 +6,9 @@ import { OutboxWorker } from './communication/outbox/outbox.worker';
 import { NotificationService } from './communication/notifications/notification.service';
 import { BroadcastWorker } from './communication/broadcast/broadcast.worker';
 import { CallSweeper } from './communication/calls/call-sweeper';
+import { AutomationSweeper } from './ai/automation/automation.sweeper';
+import { RiskSweeper } from './ai/risk/risk.sweeper';
+import { ModerationSweeper } from './communication/moderation/moderation.sweeper';
 import { readBuildInfo } from './infra/build-info';
 
 /**
@@ -51,6 +54,18 @@ async function bootstrap(): Promise<void> {
   const notifications = app.get(NotificationService);
   const broadcasts = app.get(BroadcastWorker);
   const sweeper = app.get(CallSweeper);
+  // Phase 7. Both are idempotent by construction -- the automation engine
+  // claims each occurrence with a unique insert before acting, and a duplicate
+  // attention flag is refused by a partial unique index -- so several worker
+  // replicas running them costs a little work and corrupts nothing.
+  const automation = app.get(AutomationSweeper);
+  const risk = app.get(RiskSweeper);
+  // Phase 6. Driven on the SAME cadence as the Phase 5 sweeps rather than on a
+  // scheduler of its own: escalation is a deadline sweep like the others, and
+  // the only cost of the shared interval is that an item is escalated up to
+  // SWEEP_MS after its threshold -- imperceptible against a threshold measured
+  // in hours.
+  const moderationSweeper = app.get(ModerationSweeper);
 
   let running = true;
   let draining = false;
@@ -119,6 +134,34 @@ async function bootstrap(): Promise<void> {
         await sweeper.sweep();
       } catch (e) {
         log.error(`sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`);
+      }
+
+      // Phase 7, wrapped separately for the same reason every subsystem above
+      // is: AI is an ENHANCEMENT, and an enhancement that can stop the outbox
+      // draining or the missed-call sweep running is a single point of failure
+      // wearing a different hat (§28).
+      try {
+        await automation.sweep();
+      } catch (e) {
+        log.error(`automation sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`);
+      }
+
+      try {
+        await risk.sweep();
+      } catch (e) {
+        log.error(`risk sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`);
+      }
+
+      // Its own try, for the same reason every other subsystem here has one: a
+      // moderation queue that cannot escalate must not be why missed calls stop
+      // being marked. (ModerationSweeper already swallows its own errors; this
+      // is the belt to that braces.)
+      try {
+        await moderationSweeper.sweep();
+      } catch (e) {
+        log.error(
+          `moderation sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`,
+        );
       }
     }
 

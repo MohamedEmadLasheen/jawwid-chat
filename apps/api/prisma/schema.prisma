@@ -204,6 +204,9 @@ model Conversation {
   lastActivityAt        DateTime  @map("last_activity_at") @db.Timestamptz @default(now())
   resolvedAt            DateTime? @map("resolved_at") @db.Timestamptz
   archivedAt            DateTime? @map("archived_at") @db.Timestamptz
+  /// Phase 7.6. When a supervisor said they would come back to this. Null
+  /// means no follow-up is outstanding. Read by the FOLLOW_UP_DUE trigger.
+  followUpAt            DateTime? @map("follow_up_at") @db.Timestamptz
   createdAt             DateTime  @map("created_at") @db.Timestamptz @default(now())
   updatedAt             DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
@@ -1340,5 +1343,60 @@ model AttentionFlag {
 
   @@index([familyId, createdAt(sort: Desc)])
   @@map("attention_flag")
+  @@schema("chat")
+}
+
+/// Phase 7.6/7.7. Trigger -> condition -> action, as DATA. Adding an
+/// automation is an INSERT, not a deployment.
+model AutomationRule {
+  /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
+  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  key         String @id
+  name        String
+  description String @default("")
+
+  triggerType  String @map("trigger_type")
+  conditions   Json   @default("[]")
+  actionType   String @map("action_type")
+  actionConfig Json   @map("action_config") @default("{}")
+
+  enabled   Boolean  @default(true)
+  createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
+  updatedAt DateTime @map("updated_at") @db.Timestamptz @default(now())
+
+  runs AutomationRun[]
+
+  @@map("automation_rule")
+  @@schema("chat")
+}
+
+/// Phase 7.6/7.7. One row per (rule, subject, occurrence). The unique
+/// constraint IS the idempotency guarantee: a second run of the same sweep
+/// cannot insert a second row, so it cannot send a second reminder.
+model AutomationRun {
+  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id             String @id @default(uuid()) @db.Uuid
+
+  ruleKey     String         @map("rule_key")
+  rule        AutomationRule @relation(fields: [ruleKey], references: [key], onDelete: Cascade)
+  triggerType String         @map("trigger_type")
+
+  subjectId     String @map("subject_id")
+  /// Which FIRING this is -- a due date, a class start, a flag id. A subject
+  /// alone is not enough: the same conversation legitimately becomes
+  /// follow-up-due on many different days.
+  occurrenceKey String @map("occurrence_key")
+
+  outcome String
+  detail  String @default("")
+
+  conversationId String? @map("conversation_id") @db.Uuid
+  familyId       String? @map("family_id") @db.Uuid
+
+  createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
+
+  @@unique([ruleKey, subjectId, occurrenceKey])
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@map("automation_run")
   @@schema("chat")
 }

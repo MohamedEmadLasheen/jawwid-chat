@@ -15,6 +15,10 @@ import { RiskDetectionService } from './risk/risk-detection.service';
 import { AttentionService } from './risk/attention.service';
 import { RiskSweeper } from './risk/risk.sweeper';
 import { AttentionController } from './api/attention.controller';
+import { ConditionEvaluator } from './automation/condition.evaluator';
+import { AutomationEngine } from './automation/automation.engine';
+import { TriggerSource } from './automation/trigger-source';
+import { AutomationSweeper } from './automation/automation.sweeper';
 
 /**
  * The AI intelligence layer.
@@ -46,7 +50,11 @@ import { AttentionController } from './api/attention.controller';
     RiskDetectionService,
     AttentionService,
     RiskSweeper,
+    ConditionEvaluator,
+    AutomationEngine,
+    TriggerSource,
+    AutomationSweeper,
   ],
-  exports: [AI_PROVIDER, AiInvocationService, KnowledgeService, FaqService, SuggestionService, SummaryService, RiskDetectionService, AttentionService, RiskSweeper],
+  exports: [AI_PROVIDER, AiInvocationService, KnowledgeService, FaqService, SuggestionService, SummaryService, RiskDetectionService, AttentionService, RiskSweeper, AutomationEngine, AutomationSweeper],
 })
 export class AiModule {}
