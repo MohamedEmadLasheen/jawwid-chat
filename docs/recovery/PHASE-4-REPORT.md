@@ -3,6 +3,12 @@
 **STATUS: CANONICAL.** What Phase 4 actually built, what it deliberately did
 not, the defects found on the way, and the verification record.
 
+**Closed on 2026-09-07 after a closure audit and a completion pass.** §12 below
+records what the audit found still missing, and what closing it required. The
+sections before it describe the first pass and are left as written, because a
+report that quietly edits its own history is worth less than one that shows the
+correction.
+
 Read with `recovery/PHASE-2-REPORT.md`, whose realtime and storage work this
 completes without changing.
 
@@ -491,3 +497,108 @@ thing and needs a running stack.
 The gateway now emits `presence.changed` and the mobile client forwards it, but
 no screen renders an online indicator. The event is real and observable; the UI
 for it was not in scope.
+
+
+---
+
+## 12. Closure audit, and the completion pass
+
+The first pass reported itself complete on the strength of a green suite. A
+strict audit against the original requirements found three things that a green
+suite could not see, and one requirement that had been read too narrowly.
+
+### F-1 — the notification pipeline had no production caller
+
+`src/worker.ts` ran exactly one loop, `outbox.drain()`. Nothing called
+`NotificationService.dispatchDue()`. Notifications were scheduled into
+`chat.notification` and never dispatched: **no push would have been sent even
+with FCM and APNs fully credentialed.** Every unit was tested; the pipeline was
+not connected.
+
+The dispatch loop now exists, added by Phase 5's broadcast commit `55d97af`. It
+was deliberately NOT reimplemented — a second loop would give two processes a
+claim on the same rows. What Phase 4 owes instead is the coverage whose absence
+let the gap survive, and that is `phase4-notification-pipeline.spec.ts`: a real
+message walking send → drain → schedule → dispatch → provider, and a parse of
+`worker.ts` asserting a real call expression named `dispatchDue`.
+
+**This is a cross-phase dependency and is recorded as one.** Phase 4's
+notification delivery is production-reachable *because of* Phase 5's worker.
+
+### F-2 — the deep-link navigator was dead code
+
+`NotificationNavigator` and `PushPayload` were correct, tested, and instantiated
+by nothing but their own test. There was no path from a notification to them, so
+tapping one did what it did before any of it existed.
+
+Closed by `startNotifications`, which reuses the existing router, navigator,
+authentication state and route authorization. Warm and background taps arrive on
+a stream; the cold-start tap is asked for and held until authentication
+resolves; sign-out retires the device token and discards any held destination.
+
+`notification_activation_test.dart` drives the real activation against a real
+router and asserts the router's LOCATION changes. That guard earns its place:
+the wiring was deleted once during this pass by a concurrent agent unwinding an
+accidental sweep, and nothing failed.
+
+### F-3 — duplicate connection prevention did not hold
+
+`connect()` guarded on `_socket != null` and then awaited the token read before
+assigning it. The audit measured the race directly: two concurrent callers both
+passed the guard. `MessagesController._attachRealtime()` calls `connect()` once
+per chat screen, so two conversations opened inside the keychain read window
+produced two sockets, the first orphaned — still connected, still receiving,
+unreferenced.
+
+Callers now share one in-flight future, and a generation counter stops a
+superseded attempt from installing a socket after a `disconnect()`.
+
+### Mobile attachments — the requirement read too narrowly
+
+The first pass treated the backend as the deliverable and deferred the client.
+The canonical phase map has no Phase 4 at all, so the brief governs, and it
+states the verification as `select attachment → upload → …`. "Select" is a
+client action. The audit's conclusion was that this was **incomplete**, and it
+was right.
+
+The client now picks, validates, uploads and sends, and renders received
+attachments. The ordering matters and is the design: **the bytes reach object
+storage before the message is queued.** The outbox can persist a few hundred
+bytes of metadata across a restart; it cannot persist a 100 MB video. The
+consequence is stated rather than hidden — an attachment cannot be composed
+offline, and the user is told the upload failed and offered a retry instead of
+being shown a queued bubble for bytes that never left the device.
+
+### Verification after the completion pass
+
+Clean worktree at this phase's HEAD, database built from the migration set at
+that commit.
+
+| Gate | Result |
+|---|---|
+| API typecheck / build | PASS |
+| API suite | **876/876, 54 suites** |
+| Flutter analyze | PASS (1 pre-existing info on a `docs/` file) |
+| Flutter tests | **395/395** (15 skipped: the live-backend suite) |
+
+The API total includes Phase 5's suites, because Phase 4's completion now sits
+on top of Phase 5's commits and its own pipeline test depends on Phase 5's
+worker. All six Phase 4 suites pass.
+
+### What is still not true
+
+* **Push does not reach a device.** All application code exists — providers,
+  routing, registration, taps, platform permissions and intent filters. What is
+  missing is a Firebase project (`google-services.json`,
+  `GoogleService-Info.plist`), an Apple Developer team, an APNs `.p8` key and
+  the `aps-environment` entitlement. This is an EXTERNAL blocker, not missing
+  code, and the build degrades to no push rather than failing to launch.
+* **No test drives a real socket, or a real MinIO, end to end.** Each half is
+  tested against the other's contract; nothing exercises both at once.
+  Carried forward from Phase 2.
+* **Attachments cannot be composed offline**, by design, as above.
+* **Thumbnails are not generated.** The schema and the signing path carry them;
+  nothing produces one. Images render from the full object, which is correct
+  and heavier than it needs to be on a slow connection.
+* **No preferences UI** in either client; the API exists.
+* **Calls deep-link to the conversation**, because there is no call screen.
