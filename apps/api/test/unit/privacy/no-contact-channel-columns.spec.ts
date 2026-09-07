@@ -37,10 +37,39 @@ function stripComments(src: string, kind: 'sql' | 'prisma'): string {
   return s;
 }
 
+/**
+ * Blank out quoted string LITERALS before matching (Phase 6).
+ *
+ * WHY THIS IS A NARROWING AND NOT A WEAKENING. The control this test guards is
+ * "no entity carries a contact channel", and a contact channel is a COLUMN or a
+ * FIELD. A column is never written inside quotes: `phone text not null` is a
+ * declaration, `'phone_number'` is a value. The distinction is total, so
+ * ignoring quoted text cannot hide a single declaration -- and the test at the
+ * bottom of this file proves exactly that, on the four shapes that matter.
+ *
+ * What it stops hiding behind an ALLOWED entry: Phase 6's moderation vocabulary
+ * has a CATEGORY called 'phone_number', because detecting a phone number in a
+ * message is how the academy stops one being shared. Adding that string to
+ * ALLOWED would have exempted every line containing it -- including a real
+ * `phone_number text` column -- which is how a tripwire quietly stops working.
+ * ALLOWED stays empty, as designed.
+ *
+ * `''` is SQL's escape for a quote inside a literal, so it is neutralised first
+ * or the pairing goes wrong halfway through a migration and the rest of the
+ * file stops being scanned at all.
+ */
+function stripStringLiterals(src: string): string {
+  return src
+    .replace(/''/g, '\u0000')
+    .replace(/'[^'\n]*'/g, "''")
+    .replace(/"[^"\n]*"/g, '""')
+    .replace(/\u0000/g, '');
+}
+
 function offendingLines(src: string, kind: 'sql' | 'prisma'): string[] {
   return stripComments(src, kind)
     .split('\n')
-    .filter((l) => FORBIDDEN.test(l) && !ALLOWED.some((a) => l.includes(a)))
+    .filter((l) => FORBIDDEN.test(stripStringLiterals(l)) && !ALLOWED.some((a) => l.includes(a)))
     .map((l) => l.trim());
 }
 
@@ -63,6 +92,39 @@ describe('phone privacy is enforced structurally (G-07 / PP-13)', () => {
   it('the Actor seam exposes no contact channel', () => {
     const src = readFileSync(join(REPO, 'apps/api/src/platform/types.ts'), 'utf8');
     expect(offendingLines(src, 'prisma')).toEqual([]);
+  });
+
+  /**
+   * THE TRIPWIRE ITSELF IS TESTED (Phase 6).
+   *
+   * `stripStringLiterals` above made the match narrower, and a guard nobody
+   * checks is a guard that has already stopped working. These are the shapes a
+   * contact channel would actually arrive in; every one must still fire.
+   */
+  it('still catches a contact-channel declaration in every shape it could arrive in', () => {
+    const declarations = [
+      'phone text not null,',
+      '  phone_number  text,',
+      'add column if not exists mobile_number text,',
+      'whatsapp   String?  @map("whatsapp")',
+      'phoneNumber: string;',
+      'alter table chat.contact add column telephone text;',
+    ];
+    for (const line of declarations) {
+      expect({ line, caught: offendingLines(line, 'sql').length }).toEqual({ line, caught: 1 });
+    }
+  });
+
+  it('does not fire on a quoted value, which is never a column', () => {
+    // Phase 6's moderation category, and the prose beside it.
+    const values = [
+      "check (category in ('phone_number', 'email_address')),",
+      "('Egyptian mobile number', 'phone_number', 'high', 'regex',",
+      "'a phone number is a contact channel outside Jawwid'),",
+    ];
+    for (const line of values) {
+      expect({ line, caught: offendingLines(line, 'sql').length }).toEqual({ line, caught: 0 });
+    }
   });
 
   it('the client-facing DTO and event contracts expose no contact channel', () => {

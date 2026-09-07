@@ -24,6 +24,15 @@ export const CommEvent = {
   MEMBERSHIP_CHANGED: 'conversation.membership_changed',
   APPROVAL_REQUESTED: 'approval.requested',
   APPROVAL_DECIDED: 'approval.decided',
+  /**
+   * Phase 6. A pending moderation item passed moderation.escalation_hours
+   * without a decision and is now a manager's.
+   *
+   * Emitted to the ESCALATED-TO manager's actor room, not to the conversation:
+   * the people in the conversation are the sender and the family, and neither
+   * is entitled to learn that the academy's moderation queue is running late.
+   */
+  MODERATION_ESCALATED: 'moderation.escalated',
   CALL_INCOMING: 'call.incoming',
   CALL_ACCEPTED: 'call.accepted',
   CALL_DECLINED: 'call.declined',
@@ -147,6 +156,17 @@ export interface ApprovalRequestedPayload {
   messageId: string;
   approvalId: string;
   requestedBy: string;
+  /**
+   * Phase 6, both optional so the payload stays backward-compatible with the
+   * Phase 2 clients that already consume this event.
+   *
+   * CATEGORIES, never excerpts. "a phone number and a cancellation phrase" is
+   * what a queue badge needs; the matched text is held content and is read
+   * through the queue, which is permission-checked.
+   */
+  trigger?: string;
+  categories?: string[];
+  highestSeverity?: string | null;
 }
 
 export interface ApprovalDecidedPayload {
@@ -155,6 +175,24 @@ export interface ApprovalDecidedPayload {
   approvalId: string;
   decision: string;
   rejectionReason: string | null;
+  /** Phase 6: the decision was EDIT THEN SEND rather than a plain approval. */
+  edited?: boolean;
+}
+
+/**
+ * A held message has waited too long.
+ *
+ * Carries no body and no excerpt. The manager opens the queue to read the
+ * message; an event that carried the text would put held content into a
+ * transport whose audience is a room rather than a permission check.
+ */
+export interface ModerationEscalatedPayload {
+  conversationId: string;
+  messageId: string;
+  approvalId: string;
+  escalatedTo: string;
+  highestSeverity: string | null;
+  pendingSinceMs: number;
 }
 
 export interface CallPayload {
@@ -266,6 +304,7 @@ export interface CommEventPayloads {
   [CommEvent.MEMBERSHIP_CHANGED]: MembershipChangedPayload;
   [CommEvent.APPROVAL_REQUESTED]: ApprovalRequestedPayload;
   [CommEvent.APPROVAL_DECIDED]: ApprovalDecidedPayload;
+  [CommEvent.MODERATION_ESCALATED]: ModerationEscalatedPayload;
   [CommEvent.CALL_INCOMING]: CallPayload;
   [CommEvent.CALL_ACCEPTED]: CallParticipantPayload;
   [CommEvent.CALL_DECLINED]: CallParticipantPayload;

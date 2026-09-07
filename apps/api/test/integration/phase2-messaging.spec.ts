@@ -601,8 +601,9 @@ describe('edit', () => {
 
   it('refuses to edit a message still awaiting approval', async () => {
     const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
+    // Phase 6: flagged content, because a group no longer holds every message.
     const held = await g.messages.send({
-      conversationId: group.id, senderId: s.parentId, body: 'held for review',
+      conversationId: group.id, senderId: s.parentId, body: 'reach me on +201012345678',
     });
     expect(held.moderation).toBe(Moderation.PENDING);
 
@@ -914,8 +915,9 @@ describe('forwarding', () => {
   it('refuses to forward a message still awaiting approval', async () => {
     const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
     const destination = await familyChannel();
+    // Phase 6: flagged content, because a group no longer holds every message.
     const held = await g.messages.send({
-      conversationId: group.id, senderId: s.parentId, body: 'held',
+      conversationId: group.id, senderId: s.parentId, body: 'reach me on +201012345678',
     });
 
     await expect(
@@ -1076,7 +1078,12 @@ describe('search', () => {
     await g.messages.deleteForMe(hidden.id, s.parentId);
 
     const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
-    await g.messages.send({ conversationId: group.id, senderId: s.parentId, body: 'marker pending' });
+    // Phase 6: the marker has to be FLAGGED to be held, so it carries a phone
+    // number -- and 'marker' is still the search term, so the assertion that a
+    // pending message never reaches search is unchanged.
+    await g.messages.send({
+      conversationId: group.id, senderId: s.parentId, body: 'marker pending +201012345678',
+    });
 
     const hits = await g.messages.search({ actorId: s.parentId, query: 'marker' });
     expect(hits.hits.map((h) => h.message.body)).toEqual([]);

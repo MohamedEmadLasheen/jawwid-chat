@@ -46,6 +46,22 @@ export const qk = {
   stories: ['stories'] as const,
   broadcasts: ['broadcasts'] as const,
 
+  // --- Phase 6 (moderation, Command Center) --------------------------------
+  // ADDITIVE ONLY, as Phase 3's and Phase 5's keys were. The queue is keyed by
+  // its FILTER so switching to "escalated only" is a different query rather
+  // than a refetch of the same one, and the two `*All` prefixes exist so a
+  // realtime event can invalidate everything moderation-shaped without knowing
+  // which filter happens to be open.
+  moderationAll: ['moderation'] as const,
+  moderationQueue: (filter: Record<string, unknown>) => ['moderation', 'queue', filter] as const,
+  moderationRules: ['moderation', 'rules'] as const,
+
+  commandCenterAll: ['command-center'] as const,
+  commandCenterKpis: ['command-center', 'kpis'] as const,
+  commandCenterSupervisors: ['command-center', 'supervisors'] as const,
+  commandCenterAttention: (staffId?: string) =>
+    ['command-center', 'attention', staffId ?? 'all'] as const,
+
   // --- Frozen (brief-era CRM). Unrouted; see PHASE-0-ADMIN-WEB-RECONCILIATION.
 
   duty: ['me', 'duty'] as const,

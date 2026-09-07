@@ -307,3 +307,86 @@ export const NotificationStatus = {
 export type NotificationStatus = (typeof NotificationStatus)[keyof typeof NotificationStatus];
 
 export type Locale = 'ar' | 'en';
+
+// --- Smart moderation (Phase 6) --------------------------------------------
+
+/**
+ * What kind of thing a rule detects. Mirrors the CHECK on
+ * chat.moderation_rule.category.
+ *
+ * The category is what a moderator READS on the queue card ("a phone number");
+ * severity is what ORDERS the queue. They are separate because collapsing them
+ * would make every phone number as urgent as every other, which is the
+ * flattening that makes an operator stop reading the queue.
+ */
+export const ModerationCategory = {
+  PHONE_NUMBER: 'phone_number',
+  EMAIL_ADDRESS: 'email_address',
+  URL: 'url',
+  FORBIDDEN_WORD: 'forbidden_word',
+  FORBIDDEN_PHRASE: 'forbidden_phrase',
+  CANCELLATION: 'cancellation',
+  RESIGNATION: 'resignation',
+  /** Anything the academy defines that the seven above do not describe. */
+  CUSTOM: 'custom',
+} as const;
+export type ModerationCategory =
+  (typeof ModerationCategory)[keyof typeof ModerationCategory];
+
+/** Mirrors the CHECK on chat.moderation_rule.severity. */
+export const ModerationSeverity = {
+  LOW: 'low',
+  MEDIUM: 'medium',
+  HIGH: 'high',
+  CRITICAL: 'critical',
+} as const;
+export type ModerationSeverity =
+  (typeof ModerationSeverity)[keyof typeof ModerationSeverity];
+
+/**
+ * Ordered, so "which of these two matches is worse" has one answer.
+ *
+ * Severity is NOT a UI label. It picks the approval row's highest_severity,
+ * which orders the queue, and it is what an escalation report is grouped by.
+ */
+export const SEVERITY_RANK: Readonly<Record<string, number>> = {
+  [ModerationSeverity.LOW]: 0,
+  [ModerationSeverity.MEDIUM]: 1,
+  [ModerationSeverity.HIGH]: 2,
+  [ModerationSeverity.CRITICAL]: 3,
+};
+
+/** Mirrors the CHECK on chat.moderation_rule.match_type. */
+export const MatchType = {
+  /** The token, on word boundaries that understand Arabic as well as Latin. */
+  WORD: 'word',
+  /** The whole sequence, whitespace-normalised. */
+  PHRASE: 'phrase',
+  /** A JavaScript regular expression, compiled and shape-checked when written. */
+  REGEX: 'regex',
+} as const;
+export type MatchType = (typeof MatchType)[keyof typeof MatchType];
+
+/**
+ * Per-role moderation policy for one conversation. Mirrors the CHECK on
+ * chat.conversation.{teacher,parent}_moderation.
+ *
+ * `all` is the pre-Phase-6 behaviour and is retained deliberately: "hold
+ * everything from this role in this conversation" is a real operational need
+ * (a group under review, a teacher on probation) and Phase 6 must not remove
+ * the only control that expressed it.
+ */
+export const ModerationMode = {
+  OFF: 'off',
+  SMART: 'smart',
+  ALL: 'all',
+} as const;
+export type ModerationMode = (typeof ModerationMode)[keyof typeof ModerationMode];
+
+/** What a scan concluded. Never a bare boolean -- see ContentScanner. */
+export const ScanStatus = { SAFE: 'safe', FLAGGED: 'flagged' } as const;
+export type ScanStatus = (typeof ScanStatus)[keyof typeof ScanStatus];
+
+/** Why an approval row exists. Mirrors chat.message_approval.trigger_source. */
+export const ApprovalTrigger = { POLICY: 'policy', SCAN: 'scan' } as const;
+export type ApprovalTrigger = (typeof ApprovalTrigger)[keyof typeof ApprovalTrigger];

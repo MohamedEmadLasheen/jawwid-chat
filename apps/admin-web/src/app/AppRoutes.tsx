@@ -13,6 +13,9 @@ import { GroupDetailPage } from '@/features/groups/GroupDetailPage'
 import { LabelsPage } from '@/features/labels/LabelsPage'
 import { StoriesPage } from '@/features/stories/StoriesPage'
 import { BroadcastPage } from '@/features/broadcast/BroadcastPage'
+import { ModerationQueuePage } from '@/features/moderation/ModerationQueuePage'
+import { RulesPage } from '@/features/moderation/RulesPage'
+import { CommandCenterPage } from '@/features/command-center/CommandCenterPage'
 import { AttentionPage } from '@/features/assistant/AttentionPage'
 import { KnowledgePage } from '@/features/assistant/KnowledgePage'
 import { ForbiddenPage } from './ForbiddenPage'
@@ -69,6 +72,23 @@ export function AppRoutes() {
         {/* Phase 5 -- publication and outbound communication. */}
         <Route path="/stories" element={<Area area="stories"><StoriesPage /></Area>} />
         <Route path="/broadcasts" element={<Area area="broadcast"><BroadcastPage /></Area>} />
+
+        {/*
+          Phase 6 -- smart moderation and the Manager Command Center.
+
+          `/moderation` is the queue the approvals design reserved a seam for:
+          the API has served it since Phase 2 and the console did not surface
+          it. Adding it is a Route here plus a nav entry, exactly as that note
+          predicted -- no refactor.
+
+          The frozen `/dashboard` route is NOT revived. Its page is brief-era
+          CRM, every query behind it calls an endpoint the API does not serve,
+          and Phase 0 scheduled its deletion to a later removal migration. The
+          Command Center is a new surface on live data, not that page repaired.
+        */}
+        <Route path="/moderation" element={<Area area="moderation"><ModerationQueuePage /></Area>} />
+        <Route path="/moderation/rules" element={<Area area="moderation"><RulesPage /></Area>} />
+        <Route path="/command-center" element={<Area area="command"><CommandCenterPage /></Area>} />
 
         {/* Phase 7 -- the assistant. Both pages are additive: no existing route
             changes, and the console's own paths are untouched. */}

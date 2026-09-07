@@ -14,7 +14,7 @@
 # guards is closed by design (the state is unrepresentable), never to make a
 # build green. Migrating a file? Update the path here in the same commit.
 apps/api/test/unit/authorization/jc005-jc006-regression.spec.ts	14	JC-005 assist/escalation bypass, JC-006 deactivated-actor internal notes
-apps/api/test/unit/privacy/no-contact-channel-columns.spec.ts	4	G-07 phone privacy enforced structurally
+apps/api/test/unit/privacy/no-contact-channel-columns.spec.ts	6	G-07 phone privacy enforced structurally; floor raised in Phase 6 when the detector was narrowed to ignore quoted VALUES (a column is never quoted) and self-tests were added proving it still catches a declaration in every shape
 apps/api/test/unit/authorization/br1-conformance.spec.ts	3	BR-1 matrix + current-state tripwires
 apps/api/test/integration/schema-invariants.spec.ts	9	BR-1 DB backstop, append-only logs, JC-010
 apps/api/test/unit/red-team/authz-attacks.spec.ts	19	RT-002/003/004 inverted guards: participant-set authorization, on_behalf_mode attribution

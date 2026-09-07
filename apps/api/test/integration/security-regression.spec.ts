@@ -334,10 +334,12 @@ describe('SUPERVISOR SCOPE, and what a reassignment does to it', () => {
 
   it('the moderation queue never carries another supervisor\'s held message', async () => {
     const group = await g.conversations.ensureStudentGroup(s.learnerId);
+    // Phase 6: flagged content, so the message is actually held. A group now
+    // holds only what the content scanner matches.
     await g.messages.send({
       conversationId: group.id,
       senderId: s.teacherId,
-      body: 'held for approval',
+      body: 'call me on +201012345678',
     });
     expect((await g.approvals.listPending(s.ownerId)).length).toBeGreaterThan(0);
     expect(await g.approvals.listPending(s.otherAdminId)).toEqual([]);

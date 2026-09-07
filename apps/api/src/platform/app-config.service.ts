@@ -81,6 +81,42 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   /** a guard against an audience clause that accidentally means everyone */
   'broadcast.max_recipients': 5000,
 
+  // --- Smart moderation and the Command Center (Phase 6) ---------------------
+  // Mirrors the rows inserted by 2026090717*.sql. As everywhere else in this
+  // file, the ROW is authoritative and these are the fallbacks a fresh database
+  // starts from.
+  /**
+   * Hours a moderation item may stay pending before it is escalated.
+   *
+   * The figure is the Phase 6 brief's own ("3-4 hours"). The PRD lists
+   * escalation as post-MVP and states no duration, so there was no existing
+   * policy to reconcile against -- which is exactly why it is a config row.
+   * Escalation changes who is ACCOUNTABLE for an item; it never sends, rejects
+   * or expires the message.
+   */
+  'moderation.escalation_hours': 3,
+  'moderation.queue_page_size': 200,
+  'moderation.escalation_sweep_batch': 200,
+  'moderation.max_pattern_length': 512,
+  /** A scan that exceeds this fails CLOSED -- the message is held. */
+  'moderation.scan_budget_ms': 250,
+
+  // Supervisor overload. TWO thresholds per axis rather than one, because
+  // "over the line" and "about to be" need different treatment on the board:
+  // a manager acts on the first and watches the second.
+  //
+  // NOT DERIVED FROM THE FROZEN WORKLOAD ENGINE. `workload_*` is deprecated
+  // machinery (PD-3, Phase 0) and nothing new may depend on it. These count
+  // real, live facts -- conversations awaiting a reply, items awaiting a
+  // moderation decision -- and they are INITIAL HYPOTHESES, set here so the
+  // academy can tune them without a deploy.
+  'command_center.overload_unanswered_warning': 6,
+  'command_center.overload_unanswered_high': 12,
+  'command_center.overload_pending_warning': 3,
+  'command_center.overload_pending_high': 6,
+  /** The trailing window the call and missed-class-call KPIs are counted over. */
+  'command_center.window_hours': 24,
+
   // --- Authentication and sessions (Phase 1) ---------------------------------
   // ONE source of truth for session policy. Nothing in the auth code may
   // hardcode these numbers, and changing the device limit is a config change,

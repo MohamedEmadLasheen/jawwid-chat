@@ -11,6 +11,10 @@ import {
 import { ConversationService } from './conversations/conversation.service';
 import { MessageService } from './messages/message.service';
 import { ApprovalService } from './approvals/approval.service';
+import { ModerationRuleService } from './moderation/moderation-rule.service';
+import { ModerationService } from './moderation/moderation.service';
+import { ModerationSweeper } from './moderation/moderation.sweeper';
+import { CommandCenterService } from './command-center/command-center.service';
 import { CallService } from './calls/call.service';
 import { RecordingService } from './calls/recording.service';
 import { CallSweeper } from './calls/call-sweeper';
@@ -47,6 +51,8 @@ import { RealtimeRelay } from '../infra/realtime/realtime-relay.service';
 import { ConversationController } from './api/conversation.controller';
 import { MessageController, SearchController } from './api/message.controller';
 import { ApprovalController } from './api/approval.controller';
+import { ModerationController } from './api/moderation.controller';
+import { CommandCenterController } from './api/command-center.controller';
 import { CallController } from './api/call.controller';
 import { RecordingController } from './api/recording.controller';
 import { EgressWebhookController } from './api/egress-webhook.controller';
@@ -61,6 +67,8 @@ import { NotificationController } from './api/notification.controller';
     MessageController,
     SearchController,
     ApprovalController,
+    ModerationController,
+    CommandCenterController,
     CallController,
     RecordingController,
     EgressWebhookController,
@@ -73,6 +81,10 @@ import { NotificationController } from './api/notification.controller';
     ConversationService,
     MessageService,
     ApprovalService,
+    ModerationRuleService,
+    ModerationService,
+    ModerationSweeper,
+    CommandCenterService,
     CallService,
     RecordingService,
     CallSweeper,
@@ -145,6 +157,10 @@ import { NotificationController } from './api/notification.controller';
     ConversationService,
     MessageService,
     ApprovalService,
+    ModerationRuleService,
+    ModerationService,
+    ModerationSweeper,
+    CommandCenterService,
     CallService,
     RecordingService,
     CallSweeper,

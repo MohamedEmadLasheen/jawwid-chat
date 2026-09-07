@@ -10,20 +10,45 @@ import {
   ConversationType,
   MemberRole,
   Moderation,
+  ModerationMode,
   OnBehalfMode,
   ORGANIZATION_WIDE_STAFF_ROLES,
   Visibility,
 } from '../communication/contracts/vocab';
 
 export type Decision =
-  | { allowed: true; onBehalfMode: string | null; moderation: string }
+  | {
+      allowed: true;
+      onBehalfMode: string | null;
+      /**
+       * The moderation state this message takes IF NOTHING ELSE HAPPENS.
+       *
+       * It is deliberately the PESSIMISTIC answer under `smart`: a moderated
+       * role's message is `pending` here, and only the content scan can
+       * downgrade it to `published` (MessageService.send). A caller that forgot
+       * to scan therefore holds the message instead of publishing it, which is
+       * the direction a moderation bug must fail in.
+       */
+      moderation: string;
+      /**
+       * Phase 6. off | smart | all -- what this conversation does with this
+       * role's messages. `smart` is the one value that means "the answer above
+       * is provisional; run the scanner".
+       */
+      moderationMode: ModerationMode;
+    }
   | { allowed: false; code: CommErrorCode; reason: string };
 
 const deny = (code: CommErrorCode, reason: string): Decision => ({ allowed: false, code, reason });
-const allow = (onBehalfMode: string | null = null, moderation: string = Moderation.PUBLISHED): Decision => ({
+const allow = (
+  onBehalfMode: string | null = null,
+  moderation: string = Moderation.PUBLISHED,
+  moderationMode: ModerationMode = ModerationMode.OFF,
+): Decision => ({
   allowed: true,
   onBehalfMode,
   moderation,
+  moderationMode,
 });
 
 /**
@@ -79,7 +104,14 @@ type Conv = Pick<
   | 'teacherRequiresApproval'
   | 'parentRequiresApproval'
   | 'archivedAt'
->;
+> &
+  // Phase 6, optional on purpose. The two booleans above remain a live mirror
+  // of these (chat.sync_conversation_moderation), so a caller that built its
+  // Conv before Phase 6 -- an older test, a partial select -- still gets a
+  // correct OFF / not-OFF decision, and merely loses the smart/all distinction.
+  // normalizeMode() resolves the missing value to `all`, which holds the
+  // message rather than releasing it.
+  Partial<Pick<Conversation, 'teacherModeration' | 'parentModeration'>>;
 
 type Member = Pick<ConversationMember, 'actorId' | 'actorKind' | 'memberRole' | 'isSilent' | 'leftAt'>;
 
@@ -399,7 +431,11 @@ export class AuthorizationService {
       }
       const presence = this.requireAdminPresence(conv, liveMembers, participantKinds);
       if (presence) return presence;
-      return allow(null, this.moderationFor(conv, MemberRole.PARENT));
+      return allow(
+        null,
+        this.moderationFor(conv, MemberRole.PARENT),
+        this.moderationModeFor(conv, MemberRole.PARENT),
+      );
     }
 
     // --- teacher ---
@@ -426,7 +462,11 @@ export class AuthorizationService {
       }
       const presence = this.requireAdminPresence(conv, liveMembers, participantKinds);
       if (presence) return presence;
-      return allow(null, this.moderationFor(conv, MemberRole.TEACHER));
+      return allow(
+        null,
+        this.moderationFor(conv, MemberRole.TEACHER),
+        this.moderationModeFor(conv, MemberRole.TEACHER),
+      );
     }
 
     // --- staff ---
@@ -572,13 +612,45 @@ export class AuthorizationService {
     return null;
   }
 
-  private moderationFor(conv: Conv, role: string): string {
+  /**
+   * THE per-conversation, per-role moderation policy.
+   *
+   * Phase 6 replaced the two booleans this used to read with a MODE, because
+   * "moderate this role" now has two meanings that behave differently:
+   *
+   *   off    never held here. Approval applies to GROUPS only -- a 1:1 is
+   *          between a family and their own supervisor and has never been
+   *          moderated.
+   *   smart  scan the body; hold only what a rule matched.
+   *   all    hold everything from this role, unread. The pre-Phase-6
+   *          behaviour, retained for a group under review or a teacher on
+   *          probation.
+   *
+   * The booleans are still the source read here, through the database's own
+   * mirror (chat.sync_conversation_moderation): `teacher_requires_approval`
+   * remains exactly `teacher_moderation <> 'off'`, so a caller that constructs
+   * a Conv from the old columns alone still gets a correct OFF/not-OFF answer.
+   */
+  private moderationModeFor(conv: Conv, role: string): ModerationMode {
     if (conv.type !== ConversationType.STUDENT_GROUP && conv.type !== ConversationType.CLASS_GROUP) {
-      return Moderation.PUBLISHED;
+      return ModerationMode.OFF;
     }
-    if (role === MemberRole.TEACHER && conv.teacherRequiresApproval) return Moderation.PENDING;
-    if (role === MemberRole.PARENT && conv.parentRequiresApproval) return Moderation.PENDING;
-    return Moderation.PUBLISHED;
+    if (role === MemberRole.TEACHER) {
+      if (!conv.teacherRequiresApproval) return ModerationMode.OFF;
+      return normalizeMode(conv.teacherModeration);
+    }
+    if (role === MemberRole.PARENT) {
+      if (!conv.parentRequiresApproval) return ModerationMode.OFF;
+      return normalizeMode(conv.parentModeration);
+    }
+    return ModerationMode.OFF;
+  }
+
+  /** The provisional state for a mode. `smart` is pessimistic -- see Decision. */
+  private moderationFor(conv: Conv, role: string): string {
+    return this.moderationModeFor(conv, role) === ModerationMode.OFF
+      ? Moderation.PUBLISHED
+      : Moderation.PENDING;
   }
 
   /**
@@ -830,4 +902,18 @@ export class AuthorizationService {
 
     return allow();
   }
+}
+
+/**
+ * An unrecognised mode is treated as `all`, not as `off`.
+ *
+ * The only way to reach this is a database row written outside the CHECK
+ * constraint. Reading it as "no moderation" would turn a corrupt row into an
+ * open channel; reading it as "hold everything" turns it into a visible queue
+ * somebody investigates.
+ */
+function normalizeMode(mode: string | null | undefined): ModerationMode {
+  if (mode === ModerationMode.OFF) return ModerationMode.OFF;
+  if (mode === ModerationMode.SMART) return ModerationMode.SMART;
+  return ModerationMode.ALL;
 }

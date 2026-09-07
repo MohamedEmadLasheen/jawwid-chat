@@ -73,14 +73,35 @@ function registerHandlers(socket: Socket, qc: QueryClient): void {
     // stale as well as the row.
     void qc.invalidateQueries({ queryKey: qk.conversation(conversationId) })
     void qc.invalidateQueries({ queryKey: qk.conversations })
+    // Phase 6: this event carries `needsReply` and the resolved state, which is
+    // exactly what the unanswered / open / closed KPIs count. A board that did
+    // not refresh here would be stale in the one way that matters.
+    void qc.invalidateQueries({ queryKey: qk.commandCenterAll })
   })
 
   on('conversation.membership_changed', ({ conversationId }) => {
     void qc.invalidateQueries({ queryKey: qk.conversation(conversationId) })
   })
 
-  on('approval.requested', ({ conversationId }) => messagesChanged({ conversationId }))
-  on('approval.decided', ({ conversationId }) => messagesChanged({ conversationId }))
+  /**
+   * Moderation events move the queue AND the Command Center's counters, so both
+   * are invalidated. The two `*All` prefixes are used rather than the specific
+   * keys because the queue's key carries its filter: a manager watching
+   * "escalated only" must still see a new arrival land.
+   *
+   * Signals, not state, as everywhere else here: the payload deliberately
+   * carries categories rather than the held text, and the console refetches
+   * through the permission-checked read path.
+   */
+  const moderationChanged = ({ conversationId }: { conversationId: string }) => {
+    messagesChanged({ conversationId })
+    void qc.invalidateQueries({ queryKey: qk.moderationAll })
+    void qc.invalidateQueries({ queryKey: qk.commandCenterAll })
+  }
+
+  on('approval.requested', moderationChanged)
+  on('approval.decided', moderationChanged)
+  on('moderation.escalated', moderationChanged)
 
   // Presence and typing are transient: they belong to component state, not to
   // the query cache, so they invalidate nothing. Components subscribe to them

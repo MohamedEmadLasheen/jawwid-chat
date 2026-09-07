@@ -44,6 +44,14 @@ describe('role → navigation', () => {
     // roles, and the loop below is split accordingly rather than relaxed into
     // a `toContain`.
     //
+    // PHASE 6 adds `moderation` for every operator role, and `command` for
+    // management only. The split is not arbitrary: the moderation queue is
+    // scoped server-side to conversations the actor could already read, so
+    // offering it grants nothing -- whereas every figure on the Command Center
+    // is an aggregate over the WHOLE organization, including families an admin
+    // has no scope for, and there is no way to narrow a total to one
+    // supervisor's families and have it still mean what it says.
+    //
     // PHASE 7 adds `attention` and `knowledge` for every operator role. Both
     // are narrowed server-side -- the attention queue by family scope, and the
     // knowledge page by `knowledge.approve`, which an admin does not hold and
@@ -58,6 +66,8 @@ describe('role → navigation', () => {
         'labels',
         'stories',
         ...(isManager(role) ? ['broadcast'] : []),
+        'moderation',
+        ...(isManager(role) ? ['command'] : []),
         'attention',
         'knowledge',
       ])

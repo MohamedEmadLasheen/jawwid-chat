@@ -189,6 +189,12 @@ model Conversation {
 
   state String @default("open")
 
+  /// Phase 6: THE per-role moderation policy -- off | smart | all.
+  /// The two booleans below are a trigger-maintained MIRROR of these
+  /// (chat.sync_conversation_moderation), kept so that every pre-Phase-6
+  /// reader and writer of the boolean keeps working unchanged.
+  teacherModeration       String  @map("teacher_moderation") @default("smart")
+  parentModeration        String  @map("parent_moderation")  @default("smart")
   teacherRequiresApproval Boolean @map("teacher_requires_approval") @default(true)
   parentRequiresApproval  Boolean @map("parent_requires_approval") @default(true)
 
@@ -294,6 +300,8 @@ model Message {
   hiddenFor   MessageHiddenFor[]
   revisions   MessageRevision[]
   approval    MessageApproval?
+  /// Phase 6: why this message was held, one row per matched rule.
+  moderationFlags MessageModerationFlag[]
   /// Phase 5: the broadcast delivery this message satisfied, if any.
   broadcastDeliveries BroadcastRecipient[]
 
@@ -409,6 +417,18 @@ model MessageApproval {
   rejectionReason String?      @map("rejection_reason")
   createdAt       DateTime     @map("created_at") @db.Timestamptz @default(now())
   decidedAt       DateTime?    @map("decided_at") @db.Timestamptz
+
+  /// Phase 6. policy = this conversation holds every message from the role.
+  /// scan   = the content scanner matched at least one enabled rule.
+  triggerSource   String       @map("trigger_source") @default("policy")
+  /// Denormalised from the flags so the queue can be ORDERED by urgency.
+  highestSeverity String?      @map("highest_severity")
+  escalatedAt     DateTime?    @map("escalated_at") @db.Timestamptz
+  escalatedTo     String?      @map("escalated_to") @db.Uuid
+  /// Set when an approver used EDIT THEN SEND. The body they replaced is
+  /// chat.message_revision revision 1; the body they sent is on the message.
+  editedAt        DateTime?    @map("edited_at") @db.Timestamptz
+  editedBy        String?      @map("edited_by") @db.Uuid
 
   @@map("message_approval")
   @@schema("chat")
@@ -1193,6 +1213,63 @@ model AiInvocation {
   @@index([organizationId, feature, createdAt(sort: Desc)])
   @@index([conversationId, createdAt(sort: Desc)])
   @@map("ai_invocation")
+  @@schema("chat")
+}
+
+// =====================================================================
+// Phase 6 -- smart moderation.
+// DDL lives in supabase/migrations/20260907170000_chat_phase6_moderation.sql;
+// this is the mapping.
+// =====================================================================
+
+/// A moderation rule. Data, not code: adding a detection category is an INSERT
+/// a manager makes through Rule Management, not a deploy. Built-in rules may be
+/// disabled and retuned but never deleted -- chat_app holds no DELETE privilege.
+model ModerationRule {
+  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id         String   @id @default(uuid()) @db.Uuid
+  name       String
+  /// phone_number | email_address | url | forbidden_word | forbidden_phrase |
+  /// cancellation | resignation | custom
+  category   String
+  /// low | medium | high | critical
+  severity   String
+  /// word | phrase | regex
+  matchType  String   @map("match_type")
+  pattern    String
+  isBuiltin  Boolean  @map("is_builtin") @default(false)
+  isEnabled  Boolean  @map("is_enabled") @default(true)
+  notes      String?
+  createdBy  String?  @map("created_by") @db.Uuid
+  updatedBy  String?  @map("updated_by") @db.Uuid
+  createdAt  DateTime @map("created_at") @db.Timestamptz @default(now())
+  updatedAt  DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  flags MessageModerationFlag[]
+
+  @@map("moderation_rule")
+  @@schema("chat")
+}
+
+/// Why a message was held: one row per matched rule, carrying the rule's name,
+/// category and severity AS THEY WERE AT SCAN TIME. Append-only in the database,
+/// so retuning a rule never rewrites the reason an earlier message was held.
+model MessageModerationFlag {
+  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id             String          @id @default(uuid()) @db.Uuid
+  messageId      String          @map("message_id") @db.Uuid
+  message        Message         @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  /// Nullable: removing a rule must not take the history of every message it
+  /// flagged with it. The denormalised columns below are what survive.
+  ruleId         String?         @map("rule_id") @db.Uuid
+  rule           ModerationRule? @relation(fields: [ruleId], references: [id])
+  ruleName       String          @map("rule_name")
+  category       String
+  severity       String
+  matchedExcerpt String?         @map("matched_excerpt")
+  createdAt      DateTime        @map("created_at") @db.Timestamptz @default(now())
+
+  @@map("message_moderation_flag")
   @@schema("chat")
 }
 

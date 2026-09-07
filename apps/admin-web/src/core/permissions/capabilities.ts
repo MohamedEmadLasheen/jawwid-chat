@@ -34,6 +34,9 @@ export type NavArea =
   // Phase 5 -- publication and outbound communication.
   | 'stories'
   | 'broadcast'
+  // Phase 6 -- smart moderation and the manager's operational board.
+  | 'moderation'
+  | 'command'
   // Phase 7 -- the assistant. `attention` is the risk queue; `knowledge` is the
   // approved content the assistant is allowed to ground an answer on.
   | 'attention'
@@ -118,6 +121,23 @@ export function visibleAreas(role: StaffRole, department?: Department | null): N
   // reaches the page by URL and the server serves them -- narrowed to their own
   // scope by the audience resolver. The rail is navigation, not a boundary.
   if (isManager(role)) areas.push('broadcast')
+
+  // Phase 6. MODERATION is open to every operator role, mirroring
+  // `messages.moderate`: an admin decides the approvals for their own families,
+  // and the queue is scoped server-side to conversations they could already
+  // read. The Rules page inside it renders READ-ONLY for them rather than being
+  // hidden -- an approver has to be able to see the rule that held a message,
+  // or the queue's "reason" is a name they cannot check. Same shape stories
+  // uses for publishing.
+  areas.push('moderation')
+
+  // The COMMAND CENTER is management-only, and here the rail and the server
+  // agree for a reason that is not merely a permission key: every figure on it
+  // is an aggregate over the WHOLE organization, including families an admin
+  // has no scope for. There is no way to narrow a total to one supervisor's
+  // families and have it still mean what it says, so the surface is
+  // organization-wide or it is nothing.
+  if (isManager(role)) areas.push('command')
 
   // Phase 7. ATTENTION is open to every operator role -- a supervisor should
   // see the risks on their own families, and the queue is narrowed to their

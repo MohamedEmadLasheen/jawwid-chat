@@ -100,6 +100,15 @@ export interface ServerEvents {
     messageId: string
     approvalId: string
     requestedBy: string
+    /**
+     * Phase 6, all optional so the payload stays backward-compatible with the
+     * Phase 2 clients already consuming this event. CATEGORIES, never excerpts:
+     * a badge needs "a phone number", and the matched text is held content read
+     * through the permission-checked queue.
+     */
+    trigger?: 'policy' | 'scan'
+    categories?: string[]
+    highestSeverity?: string | null
   }
   'approval.decided': {
     conversationId: string
@@ -107,6 +116,24 @@ export interface ServerEvents {
     approvalId: string
     decision: string
     rejectionReason: string | null
+    /** Phase 6: the decision was EDIT THEN SEND rather than a plain approval. */
+    edited?: boolean
+  }
+  /**
+   * Phase 6. A held message passed `moderation.escalation_hours` without a
+   * decision and is now a manager's.
+   *
+   * Carries no body and no excerpt: the manager opens the queue to read the
+   * message, and an event that carried the text would put held content into a
+   * transport whose audience is a room rather than a permission check.
+   */
+  'moderation.escalated': {
+    conversationId: string
+    messageId: string
+    approvalId: string
+    escalatedTo: string
+    highestSeverity: string | null
+    pendingSinceMs: number
   }
   'notification.created': {
     notificationId: string

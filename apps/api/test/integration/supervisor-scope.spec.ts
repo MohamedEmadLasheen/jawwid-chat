@@ -255,10 +255,13 @@ describe('scoping applies to every surface', () => {
 
   it('MODERATION: the pending queue contains nothing from another supervisor\'s family', async () => {
     const group = await g.conversations.ensureStudentGroup(s.learnerId);
+    // Phase 6: a group holds only what the scanner flags, so the body carries a
+    // phone number. That is a better fixture than the old inert one -- it is
+    // the case the queue exists for, and it needs no configuration change.
     await g.messages.send({
       conversationId: group.id,
       senderId: s.teacherId,
-      body: 'held for approval',
+      body: 'call me on +201012345678',
     });
 
     const ownerQueue = await g.approvals.listPending(s.ownerId);
@@ -389,7 +392,9 @@ describe('IDOR: changing an id in a request never grants access', () => {
     const held = await g.messages.send({
       conversationId: group.id,
       senderId: s.teacherId,
-      body: 'held',
+      // Phase 6: flagged content, so the message is held and there is an
+      // approval to attempt the IDOR against.
+      body: 'call me on +201012345678',
     });
     const approval = await g.prisma.messageApproval.findUnique({
       where: { messageId: held.id },

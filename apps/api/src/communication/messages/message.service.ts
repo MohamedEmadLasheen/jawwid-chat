@@ -26,14 +26,19 @@ import {
   ActorKind,
   ALLOWED_REACTIONS,
   ApprovalDecision,
+  ApprovalTrigger,
   MessageType,
   Moderation,
+  ModerationMode,
   OnBehalfMode,
   Origin,
   RECEIPT_RANK,
   ReceiptState,
+  ScanStatus,
   Visibility,
 } from '../contracts/vocab';
+import { ModerationService } from '../moderation/moderation.service';
+import { SAFE, type ModerationScan } from '../moderation/content-scanner';
 
 export interface AttachmentInput {
   kind: string;
@@ -127,6 +132,7 @@ export class MessageService {
     private readonly outbox: OutboxService,
     private readonly config: AppConfigService,
     private readonly attachments: AttachmentService,
+    private readonly moderation: ModerationService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
   ) {}
 
@@ -208,7 +214,34 @@ export class MessageService {
     const body = await this.normalizeBody(type, input.body ?? null, input.attachments?.length ?? 0);
     await this.validateReplyTarget(actor, conv.id, input.replyToMessageId ?? null);
 
-    const moderation = decision.moderation;
+    // THE CONTENT SCAN, at the one trust boundary every send passes through.
+    //
+    // It is here rather than in a controller, a client or a database trigger,
+    // and each of those was considered:
+    //
+    //   a CLIENT cannot be the boundary -- the mobile app, the console and any
+    //   direct API call all reach this method, and only two of the three run
+    //   our code;
+    //   a CONTROLLER would be one of several entry points (send, forward, the
+    //   broadcast fan-out) and would have to be remembered in each;
+    //   a TRIGGER cannot hold the rule cache, cannot fail closed usefully, and
+    //   would run after the row already exists.
+    //
+    // `decision.moderation` is already PENDING under `smart` (see Decision), so
+    // this only ever RELAXES the outcome, and only on a scan that came back
+    // safe. A throw here propagates: a scan that could not run at all is not
+    // an excuse to send.
+    const scanned: ModerationScan =
+      decision.moderationMode === ModerationMode.SMART
+        ? await this.moderation.scanBody(actor, body)
+        : SAFE;
+
+    const moderation =
+      decision.moderationMode === ModerationMode.SMART
+        ? scanned.status === ScanStatus.FLAGGED
+          ? Moderation.PENDING
+          : Moderation.PUBLISHED
+        : decision.moderation;
     const isPending = moderation === Moderation.PENDING;
     const stickyMinutes = await this.config.get('handoff.grace_minutes');
     const activeHandler = await this.conversations.activeHandler(conv, now);
@@ -294,6 +327,12 @@ export class MessageService {
         if (isPending) {
           // Held for approval. No receipts are created and no message.created
           // event is broadcast, so the message cannot leak to the group.
+          //
+          // `trigger_source` distinguishes the two reasons a message can be
+          // here: the conversation holds everything from this role, or the
+          // scanner found something. Without it the queue -- and every report
+          // built on it -- cannot tell a routine hold from a suspicious one.
+          const flagged = scanned.status === ScanStatus.FLAGGED;
           const approval = await tx.messageApproval.create({
             data: {
               messageId: message.id,
@@ -301,13 +340,24 @@ export class MessageService {
               requestedBy: actor.actorId,
               approverId: activeHandler,
               decision: ApprovalDecision.PENDING,
+              triggerSource: flagged ? ApprovalTrigger.SCAN : ApprovalTrigger.POLICY,
+              highestSeverity: scanned.highestSeverity,
             },
           });
+          // In the SAME transaction as the message and the approval: a held
+          // message whose reasons were written separately could exist without
+          // them, and a queue card with no reason is one a moderator cannot act
+          // on.
+          await this.moderation.recordFlags(tx, message.id, scanned, conv.organizationId);
+
           await this.outbox.enqueue(tx, CommEvent.APPROVAL_REQUESTED, {
             conversationId: conv.id,
             messageId: message.id,
             approvalId: approval.id,
             requestedBy: actor.actorId,
+            trigger: flagged ? ApprovalTrigger.SCAN : ApprovalTrigger.POLICY,
+            categories: [...scanned.reasons],
+            highestSeverity: scanned.highestSeverity,
           });
         } else {
           if (recipients.length > 0) {

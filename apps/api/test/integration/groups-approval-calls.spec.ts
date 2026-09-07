@@ -119,9 +119,33 @@ describe('student groups', () => {
 });
 
 // -------------------------------------------------------------------------
+/**
+ * The APPROVAL WORKFLOW -- hold, queue, decide -- exercised through the
+ * `all` moderation mode.
+ *
+ * PHASE 6 NOTE. These tests are about the hold MECHANISM, not about what
+ * triggers it, and that mechanism is unchanged. What changed is the default:
+ * a group now holds only what the content scanner flags (`smart`), so
+ * "homework for tomorrow" sails through where it used to wait.
+ *
+ * The group is therefore put into `all` -- the pre-Phase-6 behaviour, retained
+ * deliberately for a group under review -- so every assertion below still
+ * describes a real, supported configuration and none of this coverage is lost.
+ * The scan-triggered hold has its own suite, phase6-moderation.spec.ts.
+ */
 describe('message approval', () => {
-  async function groupWithPendingTeacherMessage() {
+  /** Hold everything from teachers and parents, as every group used to. */
+  async function moderatedGroup() {
     const group = await g.conversations.ensureStudentGroup(s.learnerId);
+    await g.prisma.conversation.update({
+      where: { id: group.id },
+      data: { teacherModeration: 'all', parentModeration: 'all' },
+    });
+    return group;
+  }
+
+  async function groupWithPendingTeacherMessage() {
+    const group = await moderatedGroup();
     const msg = await g.messages.send({
       conversationId: group.id, senderId: s.teacherId, body: 'homework for tomorrow',
     });
@@ -283,7 +307,10 @@ describe('message approval', () => {
   });
 
   it('an admin message in the group is published immediately', async () => {
-    const group = await g.conversations.ensureStudentGroup(s.learnerId);
+    // The group holds EVERYTHING from teachers and parents, so an admin message
+    // going straight out is the assertion. Against a `smart` group this test
+    // would pass without exercising anything.
+    const group = await moderatedGroup();
     const msg = await g.messages.send({
       conversationId: group.id, senderId: s.ownerId, body: 'admin announcement',
     });
@@ -292,7 +319,7 @@ describe('message approval', () => {
   });
 
   it('a pending message does not make the conversation look answered', async () => {
-    const group = await g.conversations.ensureStudentGroup(s.learnerId);
+    const group = await moderatedGroup();
     await g.messages.send({ conversationId: group.id, senderId: s.parentId, body: 'question' });
     const conv = await g.prisma.conversation.findUnique({ where: { id: group.id } });
     // Held for approval, so the customer clock has not started.

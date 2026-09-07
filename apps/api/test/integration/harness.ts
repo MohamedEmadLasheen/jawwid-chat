@@ -18,6 +18,10 @@ import type { CoverageService } from '@platform/coverage.service';
 import { ConversationService } from '@communication/conversations/conversation.service';
 import { MessageService } from '@communication/messages/message.service';
 import { ApprovalService } from '@communication/approvals/approval.service';
+import { ModerationRuleService } from '@communication/moderation/moderation-rule.service';
+import { ModerationService } from '@communication/moderation/moderation.service';
+import { ModerationSweeper } from '@communication/moderation/moderation.sweeper';
+import { CommandCenterService } from '@communication/command-center/command-center.service';
 import { AttachmentService } from '@communication/attachments/attachment.service';
 import { SignedLocalObjectStorage } from '@communication/attachments/object-storage';
 import { OutboxService } from '@communication/outbox/outbox.service';
@@ -137,8 +141,20 @@ export function buildGraphOn(prisma: PrismaService) {
   const groups = new GroupService(prisma, authz, scope, audit);
   const labels = new LabelService(prisma, authz, scope, audit);
   const attachments = new AttachmentService(prisma, authz, conversations, storage);
-  const messages = new MessageService(prisma, authz, conversations, outbox, config, attachments, audit);
-  const approvals = new ApprovalService(prisma, authz, scope, conversations, outbox, audit);
+  // Phase 6. The rule catalogue and the pipeline are shared BY CONSTRUCTION, as
+  // the audience resolver is below: MessageService's scan and ApprovalService's
+  // re-scan on edit must be the SAME engine reading the SAME cache, or a test
+  // could pass against two different rule sets.
+  const moderationRules = new ModerationRuleService(prisma, config, conversations, audit);
+  const moderation = new ModerationService(prisma, config, moderationRules, outbox, audit);
+  const messages = new MessageService(
+    prisma, authz, conversations, outbox, config, attachments, moderation, audit,
+  );
+  const approvals = new ApprovalService(
+    prisma, authz, scope, conversations, outbox, moderation, config, identity, audit,
+  );
+  const commandCenter = new CommandCenterService(prisma, config, conversations);
+  const moderationSweeper = new ModerationSweeper(moderation);
   const templates = new TemplateService(prisma);
   const quietHours = new QuietHoursService(prisma);
   const preferences = new NotificationPreferenceService(prisma);
@@ -176,6 +192,8 @@ export function buildGraphOn(prisma: PrismaService) {
     groups, labels,
     audience, recordings, stories, broadcasts, broadcastWorker, sweeper, storage,
     recorder,
+    // Phase 6.
+    moderation, moderationRules, moderationSweeper, commandCenter,
   };
 }
 
@@ -284,4 +302,24 @@ export async function truncate(prisma: PrismaService): Promise<void> {
              chat.account_credential, chat.account_permission_override,
              chat.account, chat.event_log, chat.audit_log
     restart identity cascade`);
+
+  // PHASE 6. chat.moderation_rule is SEED DATA, not fixture data: the built-in
+  // detectors are inserted by 20260907170000 and truncating them would leave
+  // every suite scanning against an empty catalogue -- which is `safe` for
+  // everything and would quietly stop testing moderation at all.
+  //
+  // It is RESTORED instead. Without this, a rule one test creates (or disables)
+  // leaks into every test that runs after it, in file order, and the failure
+  // shows up somewhere unrelated -- which is exactly how a corrupt rule left by
+  // the fail-closed test came to flag every message in the suite.
+  //
+  // The two statements mirror the migration's own seed: non-built-ins are
+  // removed, and the built-ins go back to enabled for the STRUCTURAL detectors
+  // and disabled for the POLICY categories the academy has not confirmed.
+  await prisma.$executeRawUnsafe(`delete from chat.moderation_rule where is_builtin = false`);
+  await prisma.$executeRawUnsafe(`
+    update chat.moderation_rule
+       set is_enabled = category in ('phone_number', 'email_address', 'url'),
+           updated_by = null
+     where is_builtin`);
 }

@@ -63,6 +63,20 @@ export enum CommErrorCode {
   APPROVAL_REASON_REQUIRED = 'COMM.APPROVAL_REASON_REQUIRED',
   GROUP_ALREADY_EXISTS = 'COMM.GROUP_ALREADY_EXISTS',
 
+  // --- Smart moderation (Phase 6) ---
+  /** The rule exists, or would, but the request describes an unusable one. */
+  MODERATION_RULE_INVALID = 'COMM.MODERATION_RULE_INVALID',
+  /** No such rule, OR one belonging to another organization. Never distinguished. */
+  MODERATION_RULE_NOT_FOUND = 'COMM.MODERATION_RULE_NOT_FOUND',
+  /**
+   * An approver's edit produced a body that the scanner flags again.
+   *
+   * Refused rather than sent: an approver who accidentally leaves the phone
+   * number in must not be the one path that puts unscanned content in front of
+   * a family.
+   */
+  MODERATION_EDIT_STILL_FLAGGED = 'COMM.MODERATION_EDIT_STILL_FLAGGED',
+
   // --- Calling ---
   CALL_NOT_FOUND = 'COMM.CALL_NOT_FOUND',
   CALL_ALREADY_ENDED = 'COMM.CALL_ALREADY_ENDED',
