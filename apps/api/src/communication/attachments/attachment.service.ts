@@ -46,7 +46,12 @@ export class AttachmentService {
     const conv = await this.conversations.requireConversation(params.conversationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
 
-    const decision = this.authz.canRead(actor, conv, membership);
+    const decision = this.authz.canRead(
+      actor,
+      conv,
+      membership,
+      await this.conversations.scopeFor(actor, conv),
+    );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
     this.validate(params.kind, params.mimeType, params.byteSize);

@@ -33,6 +33,7 @@ import { CallIntent } from '@platform/authorization.service';
 import type { LiveMember } from '@platform/authorization.service';
 import { CommErrorCode } from '@platform/errors';
 import {
+  IN_SCOPE,
   admin,
   authzWithOnDuty,
   conversation,
@@ -72,6 +73,7 @@ describe('PD-2 — who may START a Student Group call', () => {
     const p = parent();
     const d = await authz.canCall(
       p, studentGroup(), member(p), PARTICIPANTS, NOW, null, LIVE_GROUP, CallIntent.INITIATE,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.PARENT_CANNOT_START_GROUP_CALL);
@@ -88,6 +90,7 @@ describe('PD-2 — who may START a Student Group call', () => {
       null,
       LIVE_GROUP,
       CallIntent.INITIATE,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.PARENT_CANNOT_START_GROUP_CALL);
@@ -98,6 +101,8 @@ describe('PD-2 — who may START a Student Group call', () => {
     const p = parent();
     const d = await authz.canCall(
       p, studentGroup(), member(p), PARTICIPANTS, NOW, null, LIVE_GROUP,
+      undefined,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.PARENT_CANNOT_START_GROUP_CALL);
@@ -107,6 +112,7 @@ describe('PD-2 — who may START a Student Group call', () => {
     const p = parent();
     const d = await authz.canCall(
       p, studentGroup(), member(p), PARTICIPANTS, NOW, null, LIVE_GROUP, CallIntent.JOIN,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(true);
   });
@@ -115,6 +121,7 @@ describe('PD-2 — who may START a Student Group call', () => {
     const t = teacher();
     const d = await authz.canCall(
       t, studentGroup(), member(t), PARTICIPANTS, NOW, null, LIVE_GROUP, CallIntent.INITIATE,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(true);
   });
@@ -127,6 +134,7 @@ describe('PD-2 — who may START a Student Group call', () => {
     const onDuty = authzWithOnDuty(a.actorId);
     const d = await onDuty.canCall(
       a, studentGroup(), member(a), PARTICIPANTS, NOW, null, LIVE_GROUP, CallIntent.INITIATE,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(true);
   });
@@ -135,6 +143,7 @@ describe('PD-2 — who may START a Student Group call', () => {
     const m = manager();
     const d = await authz.canCall(
       m, studentGroup(), member(m), PARTICIPANTS, NOW, null, LIVE_GROUP, CallIntent.INITIATE,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(true);
   });
@@ -152,6 +161,7 @@ describe('PD-2 — who may START a Student Group call', () => {
       null,
       [asMember('contact', 'parent'), asMember('staff', 'admin', true)],
       CallIntent.INITIATE,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(true);
   });
@@ -162,6 +172,7 @@ describe('PD-2 — who may START a Student Group call', () => {
     const noAdmin: LiveMember[] = [asMember('teacher', 'teacher'), asMember('contact', 'parent')];
     const d = await authz.canCall(
       p, studentGroup(), member(p), PARTICIPANTS, NOW, null, noAdmin, CallIntent.INITIATE,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_ADMIN_PRESENCE_REQUIRED);
@@ -178,6 +189,7 @@ describe('PD-2 — who may START a Student Group call', () => {
       null,
       LIVE_GROUP,
       CallIntent.INITIATE,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.MEMBER_IS_SILENT);

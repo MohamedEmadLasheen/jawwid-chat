@@ -9,7 +9,15 @@ import { ConversationService } from '../conversations/conversation.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
 import { toMessageDto, MessageDto } from '../contracts/dto';
-import { ActorKind, ApprovalDecision, Moderation, ReceiptState, Visibility } from '../contracts/vocab';
+import {
+  ActorKind,
+  ApprovalDecision,
+  Moderation,
+  ORGANIZATION_WIDE_STAFF_ROLES,
+  ReceiptState,
+  Visibility,
+} from '../contracts/vocab';
+import { ScopeService } from '../../platform/scope.service';
 
 export interface PendingApprovalDto {
   approvalId: string;
@@ -36,23 +44,38 @@ export class ApprovalService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly authz: AuthorizationService,
+    private readonly scope: ScopeService,
     private readonly conversations: ConversationService,
     private readonly outbox: OutboxService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
   ) {}
 
-  /** The approval queue, scoped to what this actor is allowed to decide. */
+  /**
+   * The approval queue, scoped BY CONSTRUCTION.
+   *
+   * What this used to do (red-team A-2): with no `conversationId` it returned
+   * every pending approval IN THE SYSTEM -- held messages from families the
+   * caller does not supervise, with their full body, to any family-facing
+   * staff member. Moderation was the one queue nobody had scoped.
+   *
+   * It now filters on the same conversation predicate every list uses, so a
+   * held message can only appear to somebody who could have read it anyway.
+   */
   async listPending(actorId: string, conversationId?: string): Promise<PendingApprovalDto[]> {
     const actor = await this.conversations.requireActor(actorId);
+    // Non-staff never see the queue at all. The scope argument is omitted
+    // deliberately: this is the ROLE gate, and the records are narrowed below.
     const decision = this.authz.canApprove(actor, actor.actorId);
-    if (!decision.allowed && actor.staffRole !== 'manager') {
-      // Non-staff never see the queue at all.
+    if (!decision.allowed && !ORGANIZATION_WIDE_STAFF_ROLES.has(actor.staffRole ?? '')) {
       throw new CommError(decision.code, decision.reason);
     }
+
+    const visible = await this.scope.conversationWhere(actor);
 
     const rows = await this.prisma.messageApproval.findMany({
       where: {
         decision: ApprovalDecision.PENDING,
+        conversation: visible,
         ...(conversationId ? { conversationId } : {}),
       },
       include: { message: { include: { attachments: true, reactions: true, receipts: true } } },
@@ -134,7 +157,11 @@ export class ApprovalService {
     // coverage engine - coverage logic is never duplicated here.
     const activeHandler = await this.conversations.activeHandler(conv);
 
-    const permitted = this.authz.canApprove(actor, activeHandler);
+    const permitted = this.authz.canApprove(
+      actor,
+      activeHandler,
+      await this.conversations.scopeFor(actor, conv),
+    );
     if (!permitted.allowed) throw new CommError(permitted.code, permitted.reason);
 
     const now = new Date();
@@ -222,7 +249,12 @@ export class ApprovalService {
     const actor = await this.conversations.requireActor(actorId);
     const conv = await this.conversations.requireConversation(conversationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
-    const readable = this.authz.canRead(actor, conv, membership);
+    const readable = this.authz.canRead(
+      actor,
+      conv,
+      membership,
+      await this.conversations.scopeFor(actor, conv),
+    );
     if (!readable.allowed) throw new CommError(readable.code, readable.reason);
     if (!this.authz.canReadInternal(actor)) {
       throw new CommError(CommErrorCode.CANNOT_APPROVE, 'approval history is staff-only');

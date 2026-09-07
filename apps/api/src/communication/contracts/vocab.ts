@@ -14,25 +14,50 @@ export const ActorKind = {
 } as const;
 export type ActorKind = (typeof ActorKind)[keyof typeof ActorKind];
 
+/**
+ * The canonical staff roles (PD-5, closed 2026-09-07). The brief-era vocabulary
+ * `coverage | finance | technical | academic` is gone: `coverage` was renamed,
+ * and the other three were never roles -- they are DEPARTMENTS.
+ *
+ * Mirrors the CHECK on chat.staff.role.
+ */
 export const StaffRole = {
-  ADMIN: 'admin',
-  COVERAGE: 'coverage',
+  SUPER_ADMIN: 'super_admin',
   MANAGER: 'manager',
+  ADMIN: 'admin',
+  COVERAGE_ADMIN: 'coverage_admin',
+} as const;
+export type StaffRole = (typeof StaffRole)[keyof typeof StaffRole];
+
+/** Roles that see the whole organization rather than an assigned scope. */
+export const ORGANIZATION_WIDE_STAFF_ROLES: ReadonlySet<string> = new Set([
+  StaffRole.MANAGER,
+  StaffRole.SUPER_ADMIN,
+]);
+
+/**
+ * A routing attribute for task work, never a role. A staff member carrying one
+ * completes tasks and takes no part in family communication.
+ */
+export const Department = {
   FINANCE: 'finance',
   TECHNICAL: 'technical',
   ACADEMIC: 'academic',
 } as const;
-export type StaffRole = (typeof StaffRole)[keyof typeof StaffRole];
+export type Department = (typeof Department)[keyof typeof Department];
 
 /**
  * Staff roles that may take part in family communication at all.
- * finance / technical / academic staff complete tasks; they never message
- * families.
+ *
+ * Holding one of these is NECESSARY, never sufficient: a departmental staff
+ * member is excluded by isFamilyFacingStaff(), and scope decides which families
+ * are reachable. See AUTHORIZATION-MODEL.md 2.
  */
 export const FAMILY_FACING_STAFF_ROLES: ReadonlySet<string> = new Set([
-  StaffRole.ADMIN,
-  StaffRole.COVERAGE,
+  StaffRole.SUPER_ADMIN,
   StaffRole.MANAGER,
+  StaffRole.ADMIN,
+  StaffRole.COVERAGE_ADMIN,
 ]);
 
 export const ConversationType = {

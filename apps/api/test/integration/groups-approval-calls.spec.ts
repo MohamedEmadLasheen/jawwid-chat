@@ -232,9 +232,34 @@ describe('message approval', () => {
     });
   });
 
-  it('an admin who is not the active handler cannot decide', async () => {
+  /**
+   * PHASE 1: two separate reasons an admin cannot decide, and they are checked
+   * in this order on purpose.
+   *
+   * Scope comes first -- an admin who does not supervise the family never
+   * reaches the handler question at all -- so the test asserts both: the
+   * out-of-scope admin is refused for scope, and an admin who IS in scope but
+   * is not the handler is still refused for the original reason. Asserting only
+   * the first would let the handler rule rot behind the scope rule.
+   */
+  it('an admin outside the family\'s scope cannot decide', async () => {
     const { msg } = await groupWithPendingTeacherMessage();
     const approval = await g.prisma.messageApproval.findUnique({ where: { messageId: msg.id } });
+    await expect(g.approvals.approve(approval!.id, s.otherAdminId)).rejects.toMatchObject({
+      code: CommErrorCode.OUT_OF_SCOPE,
+    });
+  });
+
+  it('an admin who is in scope but is not the active handler cannot decide', async () => {
+    const { msg } = await groupWithPendingTeacherMessage();
+    const approval = await g.prisma.messageApproval.findUnique({ where: { messageId: msg.id } });
+    // Temporary cover puts the other admin inside the family's scope without
+    // making them its handler.
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.family_assignment (family_id, staff_id, kind, ends_at, reason)
+       values ('${s.familyId}'::uuid, '${s.otherAdminId}'::uuid, 'temporary',
+               now() + interval '1 day', 'test: cover')`,
+    );
     await expect(g.approvals.approve(approval!.id, s.otherAdminId)).rejects.toMatchObject({
       code: CommErrorCode.CANNOT_APPROVE,
     });
@@ -467,7 +492,10 @@ describe('calling', () => {
     // all digits (e.g. "206f67036934"), which made this assertion flaky while
     // the behaviour was always correct. Assert the structure instead.
     expect(claims.sub).toMatch(/^[0-9a-f-]{36}$/);
-    expect(claims.name).toBe('Teacher');
+    // PHASE 1: a real name from chat.teacher. It used to be the literal string
+    // 'Teacher' for every teacher alive, because teacher identity did not
+    // exist -- the name was synthesised beside a uuid taken off a learner row.
+    expect(claims.name).toBe('teacher_c');
     expect(Object.keys(claims)).not.toContain(
       expect.stringMatching(/phone|tel|msisdn|email|mobile/i),
     );

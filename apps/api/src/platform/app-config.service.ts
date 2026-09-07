@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 
+/** What happens when an account reaches its device limit (SessionService). */
+export type DeviceLimitPolicy = 'revoke_oldest' | 'reject_new';
+
 /**
  * Brief section 1: "All thresholds/weights/windows live in a config table."
  * Brief section 12: "Every number in this brief is treated as a config default
@@ -34,6 +37,22 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'call.ring_timeout_seconds': 45,
   /** initial hypothesis - notification delivery retry budget */
   'notification.max_attempts': 5,
+
+  // --- Authentication and sessions (Phase 1) ---------------------------------
+  // ONE source of truth for session policy. Nothing in the auth code may
+  // hardcode these numbers, and changing the device limit is a config change,
+  // not a deploy.
+  /** initial hypothesis - maximum concurrent active sessions (devices) per account */
+  'auth.max_active_devices': 5,
+  /** revoke_oldest | reject_new -- what happens when the device limit is reached */
+  'auth.device_limit_policy': 'revoke_oldest' as DeviceLimitPolicy,
+  'auth.access_token_ttl_seconds': 900,
+  'auth.refresh_token_ttl_seconds': 2592000,
+  'auth.reset_token_ttl_seconds': 3600,
+  'auth.verification_token_ttl_seconds': 86400,
+  'auth.max_failed_attempts': 10,
+  'auth.lockout_seconds': 900,
+  'auth.min_password_length': 12,
 } as const;
 
 export type CommunicationConfigKey = keyof typeof COMMUNICATION_CONFIG_DEFAULTS;

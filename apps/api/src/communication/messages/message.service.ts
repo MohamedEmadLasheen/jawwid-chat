@@ -135,6 +135,7 @@ export class MessageService {
       // C-4: admin presence is evaluated at post time, not only as committed
       // membership state.
       await this.conversations.liveMembersOf(conv.id),
+      await this.conversations.scopeFor(actor, conv, now),
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
@@ -374,7 +375,12 @@ export class MessageService {
     const conv = await this.conversations.requireConversation(input.conversationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
 
-    const decision = this.authz.canRead(actor, conv, membership);
+    const decision = this.authz.canRead(
+      actor,
+      conv,
+      membership,
+      await this.conversations.scopeFor(actor, conv),
+    );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
     const maxLimit = await this.config.get('communication.page_size_max');
@@ -465,7 +471,12 @@ export class MessageService {
     const actor = await this.conversations.requireActor(actorId);
     const conv = await this.conversations.requireConversation(conversationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
-    const decision = this.authz.canRead(actor, conv, membership);
+    const decision = this.authz.canRead(
+      actor,
+      conv,
+      membership,
+      await this.conversations.scopeFor(actor, conv),
+    );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
     const target = BigInt(seq);
@@ -605,7 +616,12 @@ export class MessageService {
     const conv = await this.conversations.requireConversation(message.conversationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
 
-    const decision = this.authz.canRead(actor, conv, membership);
+    const decision = this.authz.canRead(
+      actor,
+      conv,
+      membership,
+      await this.conversations.scopeFor(actor, conv),
+    );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
     // A message the actor may not see must look absent, not forbidden.

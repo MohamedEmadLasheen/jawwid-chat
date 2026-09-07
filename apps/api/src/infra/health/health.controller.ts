@@ -1,5 +1,6 @@
 import { Controller, Get, Header, ServiceUnavailableException } from '@nestjs/common';
 import { HealthService } from './health.service';
+import { Public } from '../../platform/auth/auth.guard';
 
 /**
  * Health endpoints. Owner: AI #7 (infrastructure).
@@ -12,6 +13,7 @@ import { HealthService } from './health.service';
  * Mount by importing HealthModule in the root module. Nothing else is required.
  */
 @Controller('health')
+@Public()
 export class HealthController {
   constructor(private readonly health: HealthService) {}
 

@@ -28,6 +28,8 @@ import { CommErrorCode } from '@platform/errors';
 import type { Actor } from '@platform/types';
 import type { CoverageService } from '@platform/coverage.service';
 import { ActorKind, ConversationType, OnBehalfMode, StaffRole, Visibility } from '@communication/contracts/vocab';
+import { AuthzRole, ROLE_PERMISSIONS } from '@platform/rbac/permissions';
+import { IN_SCOPE } from '../../support/fixtures';
 
 const OWNER = 'staff_owner_a';
 const INTRUDER = 'staff_admin_b';
@@ -36,9 +38,17 @@ const NOW = new Date('2026-09-06T12:00:00Z');
 
 const dutyOf = (id: string | null): CoverageService => ({ onDuty: async () => id });
 
+// Phase 1: an actor carries its effective permission set. The synthetic staff
+// member here holds exactly its role's defaults -- the point of these tests is
+// that a permission the role DOES grant still does not widen authority.
 const staff = (actorId: string, staffRole: string, over: Partial<Actor> = {}): Actor => ({
   actorId, kind: ActorKind.STAFF, displayName: 'synthetic', locale: 'ar',
-  staffRole: staffRole as Actor['staffRole'], isActive: true, ...over,
+  staffRole: staffRole as Actor['staffRole'], isActive: true,
+  department: null,
+  organizationId: 'org-jawwid',
+  accountId: `account-${actorId}`,
+  permissions: new Set<string>(ROLE_PERMISSIONS[staffRole as AuthzRole] ?? []),
+  ...over,
 });
 
 const conv = {
@@ -57,7 +67,7 @@ describe('JC-005 — a client-supplied on_behalf_mode must never widen authority
   const intruder = staff(INTRUDER, StaffRole.ADMIN);
 
   it('denies a not-on-duty admin with no requested mode', async () => {
-    const d = await svc.canSend(intruder, conv, null, { visibility: Visibility.CUSTOMER }, NOW, OWNER);
+    const d = await svc.canSend(intruder, conv, null, { visibility: Visibility.CUSTOMER }, NOW, OWNER, undefined, undefined, IN_SCOPE);
     expect(d.allowed).toBe(false);
   });
 
@@ -65,6 +75,9 @@ describe('JC-005 — a client-supplied on_behalf_mode must never widen authority
     const d = await svc.canSend(
       intruder, conv, null,
       { visibility: Visibility.CUSTOMER, requestedMode: OnBehalfMode.ASSIST }, NOW, OWNER,
+      undefined,
+      undefined,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.ASSIST_NOT_PERMITTED);
@@ -74,6 +87,9 @@ describe('JC-005 — a client-supplied on_behalf_mode must never widen authority
     const d = await svc.canSend(
       intruder, conv, null,
       { visibility: Visibility.CUSTOMER, requestedMode: OnBehalfMode.ESCALATION }, NOW, OWNER,
+      undefined,
+      undefined,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.ESCALATION_NOT_PERMITTED);
@@ -84,6 +100,9 @@ describe('JC-005 — a client-supplied on_behalf_mode must never widen authority
       const d = await svc.canSend(
         intruder, conv, null,
         { visibility: Visibility.CUSTOMER, requestedMode: mode }, NOW, OWNER,
+        undefined,
+        undefined,
+        IN_SCOPE,
       );
       expect({ mode, allowed: d.allowed }).toEqual({ mode, allowed: false });
     }
@@ -124,6 +143,9 @@ describe('legitimate access must survive the fail-closed fix', () => {
     const d = await svc.canSend(
       staff(OWNER, StaffRole.ADMIN), conv, null,
       { visibility: Visibility.CUSTOMER }, NOW, OWNER,
+      undefined,
+      undefined,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(true);
   });
@@ -133,6 +155,9 @@ describe('legitimate access must survive the fail-closed fix', () => {
     const d = await svc.canSend(
       staff('staff_mgr', StaffRole.MANAGER), conv, null,
       { visibility: Visibility.CUSTOMER }, NOW, OWNER,
+      undefined,
+      undefined,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(true);
   });
@@ -142,6 +167,9 @@ describe('legitimate access must survive the fail-closed fix', () => {
     const d = await svc.canSend(
       staff(INTRUDER, StaffRole.ADMIN), conv, null,
       { visibility: Visibility.INTERNAL }, NOW, OWNER,
+      undefined,
+      undefined,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(true);
   });

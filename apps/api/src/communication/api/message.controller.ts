@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
 import { MessageService } from '../messages/message.service';
 import { AttachmentService } from '../attachments/attachment.service';
-import { ActorId } from './actor.decorator';
+import { ActorId } from '../../platform/auth/current-actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
 import { ReceiptState } from '../contracts/vocab';
 

@@ -20,7 +20,15 @@
  */
 import { CommErrorCode } from '@platform/errors';
 import type { LiveMember } from '@platform/authorization.service';
-import { admin, authzWithOnDuty, member, parent, studentGroup, teacher } from '../../support/fixtures';
+import {
+  IN_SCOPE,
+  admin,
+  authzWithOnDuty,
+  member,
+  parent,
+  studentGroup,
+  teacher,
+} from '../../support/fixtures';
 
 const NOW = new Date('2026-09-06T10:00:00Z');
 
@@ -49,6 +57,7 @@ describe('C-4 — required admin presence on the MESSAGE path', () => {
     const d = await authz.canSend(
       t, studentGroup(), member(t), { visibility: 'customer' }, NOW, null,
       ['teacher', 'contact'], TEACHER_AND_PARENT,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_ADMIN_PRESENCE_REQUIRED);
@@ -59,6 +68,7 @@ describe('C-4 — required admin presence on the MESSAGE path', () => {
     const d = await authz.canSend(
       p, studentGroup(), member(p), { visibility: 'customer' }, NOW, null,
       ['teacher', 'contact'], TEACHER_AND_PARENT,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_ADMIN_PRESENCE_REQUIRED);
@@ -69,6 +79,7 @@ describe('C-4 — required admin presence on the MESSAGE path', () => {
     const d = await authz.canSend(
       t, studentGroup(), member(t), { visibility: 'customer' }, NOW, null,
       ['teacher', 'contact'], WITH_DEACTIVATED_ADMIN,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_ADMIN_PRESENCE_REQUIRED);
@@ -79,6 +90,7 @@ describe('C-4 — required admin presence on the MESSAGE path', () => {
     const d = await authz.canSend(
       t, studentGroup(), member(t), { visibility: 'customer' }, NOW, null,
       ['teacher', 'contact'], [],
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_ADMIN_PRESENCE_REQUIRED);
@@ -89,6 +101,7 @@ describe('C-4 — required admin presence on the MESSAGE path', () => {
     const d = await authz.canSend(
       t, studentGroup(), member(t), { visibility: 'customer' }, NOW, null,
       ['teacher', 'contact'], WITH_LIVE_ADMIN,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(true);
   });
@@ -98,6 +111,7 @@ describe('C-4 — required admin presence on the MESSAGE path', () => {
     const d = await authz.canSend(
       p, studentGroup(), member(p), { visibility: 'customer' }, NOW, null,
       ['teacher', 'contact'], WITH_LIVE_ADMIN,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(true);
   });
@@ -107,6 +121,7 @@ describe('C-4 — required admin presence on the MESSAGE path', () => {
     const d = await authz.canSend(
       p, studentGroup(), member(p), { visibility: 'customer' }, NOW, null,
       ['contact'], [asMember('contact', 'parent')],
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(true);
   });
@@ -122,6 +137,7 @@ describe('C-4 — required admin presence on the MESSAGE path', () => {
     const d = await onDutyAuthz.canSend(
       a, studentGroup(), member(a), { visibility: 'customer' }, NOW, null,
       ['teacher', 'contact'], TEACHER_AND_PARENT,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(true);
   });
@@ -135,6 +151,8 @@ describe('C-4 — required admin presence on the CALL path', () => {
     const t = teacher();
     const d = await authz.canCall(
       t, studentGroup(), member(t), participants, NOW, null, TEACHER_AND_PARENT,
+      undefined,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_ADMIN_PRESENCE_REQUIRED);
@@ -144,6 +162,8 @@ describe('C-4 — required admin presence on the CALL path', () => {
     const p = parent();
     const d = await authz.canCall(
       p, studentGroup(), member(p), participants, NOW, null, TEACHER_AND_PARENT,
+      undefined,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_ADMIN_PRESENCE_REQUIRED);
@@ -153,6 +173,8 @@ describe('C-4 — required admin presence on the CALL path', () => {
     const t = teacher();
     const d = await authz.canCall(
       t, studentGroup(), member(t), participants, NOW, null, WITH_DEACTIVATED_ADMIN,
+      undefined,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_ADMIN_PRESENCE_REQUIRED);
@@ -162,6 +184,8 @@ describe('C-4 — required admin presence on the CALL path', () => {
     const t = teacher();
     const d = await authz.canCall(
       t, studentGroup(), member(t), participants, NOW, null, [],
+      undefined,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_ADMIN_PRESENCE_REQUIRED);
@@ -171,6 +195,8 @@ describe('C-4 — required admin presence on the CALL path', () => {
     const t = teacher();
     const d = await authz.canCall(
       t, studentGroup(), member(t), participants, NOW, null, WITH_LIVE_ADMIN,
+      undefined,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(true);
   });
@@ -180,9 +206,12 @@ describe('C-4 — required admin presence on the CALL path', () => {
     const send = await authz.canSend(
       t, studentGroup(), member(t), { visibility: 'customer' }, NOW, null,
       ['teacher', 'contact'], TEACHER_AND_PARENT,
+      IN_SCOPE,
     );
     const call = await authz.canCall(
       t, studentGroup(), member(t), participants, NOW, null, TEACHER_AND_PARENT,
+      undefined,
+      IN_SCOPE,
     );
     expect(call.allowed).toBe(send.allowed);
   });

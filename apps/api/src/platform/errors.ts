@@ -22,6 +22,12 @@ export enum CommErrorCode {
   TEACHER_CANNOT_WRITE_INTERNAL = 'COMM.TEACHER_CANNOT_WRITE_INTERNAL',
   MEMBER_IS_SILENT = 'COMM.MEMBER_IS_SILENT',
   ACTOR_INACTIVE = 'COMM.ACTOR_INACTIVE',
+  /** The record exists, but it is outside this actor's authorized scope. */
+  OUT_OF_SCOPE = 'COMM.OUT_OF_SCOPE',
+  /** The actor's effective permissions do not include the required key. */
+  PERMISSION_DENIED = 'COMM.PERMISSION_DENIED',
+  /** The record belongs to a different organization. */
+  CROSS_TENANT = 'COMM.CROSS_TENANT',
   CANNOT_MANAGE_MEMBERSHIP = 'COMM.CANNOT_MANAGE_MEMBERSHIP',
   CANNOT_APPROVE = 'COMM.CANNOT_APPROVE',
   NOT_MESSAGE_AUTHOR = 'COMM.NOT_MESSAGE_AUTHOR',

@@ -10,8 +10,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { AuthorizationService } from '../../platform/authorization.service';
-import { IDENTITY_SERVICE } from '../../platform/tokens';
-import type { IdentityService } from '../../platform/identity.service';
+import { AuthService } from '../../platform/auth/auth.service';
 import { Actor } from '../../platform/types';
 import { CommEvent, CommEventName, CommEventPayloads, room } from '../contracts/events';
 import { RealtimePublisher } from './realtime.publisher';
@@ -23,7 +22,22 @@ import { ReceiptState } from '../contracts/vocab';
 
 interface AuthedSocket extends Socket {
   actor?: Actor;
+  sessionId?: string;
+  /** When the socket's identity was last re-validated against the database. */
+  revalidatedAt?: number;
 }
+
+/**
+ * How stale a socket's identity may be.
+ *
+ * A socket lives for hours; a revocation must not. Re-validating on every frame
+ * would put a query on the typing indicator, so the identity is re-read at most
+ * this often, on the frames that matter (subscribe, heartbeat). RT-009: the
+ * actor used to be resolved once at connect and cached for the socket's entire
+ * lifetime, so a deactivated person kept receiving messages until they
+ * reconnected.
+ */
+const REVALIDATE_AFTER_MS = 30_000;
 
 /**
  * Socket.IO gateway. Horizontal scaling uses the Redis adapter (wired in main.ts),
@@ -48,26 +62,57 @@ export class RealtimeGateway
     private readonly typing: TypingService,
     private readonly presence: PresenceService,
     private readonly messages: MessageService,
-    @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
+    private readonly auth: AuthService,
   ) {}
 
+  /**
+   * The socket authenticates exactly as an HTTP request does.
+   *
+   * Before Phase 1 the client named its own actor in `handshake.auth.actorId`
+   * (RT-001 / NF-08) and nothing verified it. It now presents the same bearer
+   * access token, verified by the same AuthService, so a socket can never reach
+   * an identity an HTTP request could not.
+   */
   async handleConnection(client: AuthedSocket): Promise<void> {
-    // DEPRECATED SEAM (RT-001): the client names its own actor. Phase 1 verifies
-    // a token from handshake.auth.token instead; the shape -- a resolved Actor on
-    // the socket -- does not change. src/platform/identity-seam.ts keeps the
-    // process from starting outside a local environment while this stands.
-    const actorId = String(client.handshake.auth?.actorId ?? '');
-    const actor = actorId ? await this.identity.resolveActor(actorId) : null;
+    const token = String(
+      client.handshake.auth?.token ??
+        (client.handshake.headers?.authorization ?? '').toString().replace(/^Bearer /, ''),
+    );
+    const authenticated = token ? await this.auth.authenticate(token) : null;
 
-    if (!actor || !actor.isActive) {
+    if (!authenticated || !authenticated.actor.isActive) {
       client.disconnect(true);
       return;
     }
 
-    client.actor = actor;
+    client.actor = authenticated.actor;
+    client.sessionId = authenticated.claims.sid;
+    client.revalidatedAt = Date.now();
     // Every socket joins its own actor room, so multi-device fan-out is free.
-    await client.join(room.actor(actor.actorId));
-    await this.presence.online(actor.actorId, client.id);
+    await client.join(room.actor(authenticated.actor.actorId));
+    await this.presence.online(authenticated.actor.actorId, client.id);
+  }
+
+  /**
+   * Re-read the socket's identity if it has gone stale, and drop the socket if
+   * the session or the principal is no longer valid.
+   *
+   * This is what makes "log this device out", a suspension and an offboarding
+   * take effect on a connection that is already open.
+   */
+  private async liveActor(client: AuthedSocket): Promise<Actor | null> {
+    if (!client.actor) return null;
+    if (Date.now() - (client.revalidatedAt ?? 0) < REVALIDATE_AFTER_MS) return client.actor;
+
+    const token = String(client.handshake.auth?.token ?? '');
+    const authenticated = token ? await this.auth.authenticate(token) : null;
+    if (!authenticated || !authenticated.actor.isActive) {
+      client.disconnect(true);
+      return null;
+    }
+    client.actor = authenticated.actor;
+    client.revalidatedAt = Date.now();
+    return client.actor;
   }
 
   async handleDisconnect(client: AuthedSocket): Promise<void> {
@@ -80,7 +125,7 @@ export class RealtimeGateway
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody() body: { conversationId?: string },
   ): Promise<{ ok: boolean; code?: string }> {
-    const actor = client.actor;
+    const actor = await this.liveActor(client);
     if (!actor || !body?.conversationId) return { ok: false, code: 'COMM.UNKNOWN_ACTOR' };
 
     const check = await this.authorize(actor, body.conversationId);
@@ -140,8 +185,11 @@ export class RealtimeGateway
 
   @SubscribeMessage('presence.heartbeat')
   async heartbeat(@ConnectedSocket() client: AuthedSocket): Promise<{ ok: boolean }> {
-    if (!client.actor) return { ok: false };
-    await this.presence.heartbeat(client.actor.actorId, client.id);
+    // RT-009: the heartbeat is where a revoked session is noticed. liveActor()
+    // disconnects the socket when the session or the principal has gone.
+    const actor = await this.liveActor(client);
+    if (!actor) return { ok: false };
+    await this.presence.heartbeat(actor.actorId, client.id);
     return { ok: true };
   }
 
@@ -170,7 +218,14 @@ export class RealtimeGateway
     try {
       const conv = await this.conversations.requireConversation(conversationId);
       const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
-      const decision = this.authz.canRead(actor, conv, membership);
+      // The socket inherits supervisor scope from the same predicate the REST
+      // path uses: subscribing to a conversation is reading it.
+      const decision = this.authz.canRead(
+        actor,
+        conv,
+        membership,
+        await this.conversations.scopeFor(actor, conv),
+      );
       return decision.allowed ? { ok: true } : { ok: false, code: decision.code };
     } catch {
       return { ok: false, code: 'COMM.CONVERSATION_NOT_FOUND' };

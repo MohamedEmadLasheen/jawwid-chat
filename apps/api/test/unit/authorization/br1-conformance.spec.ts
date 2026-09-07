@@ -15,10 +15,12 @@
 import { CommErrorCode } from '@platform/errors';
 import { isFamilyFacingStaff } from '@platform/types';
 import {
+  IN_SCOPE,
   academicStaff,
   admin,
   authzWithOnDuty,
   conversation,
+  coverageAdmin,
   financeStaff,
   manager,
   member,
@@ -33,13 +35,13 @@ describe('BR-1 — forbidden 1:1 channels', () => {
   const authz = authzWithOnDuty();
 
   it('BR1-01 teacher opens a 1:1 with a parent -> DENY', () => {
-    const d = authz.canOpenDirect(teacher(), parent());
+    const d = authz.canOpenDirect(teacher(), parent(), IN_SCOPE);
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_TEACHER_PARENT_DIRECT);
   });
 
   it('BR1-02 parent opens a 1:1 with a teacher -> DENY (order does not matter)', () => {
-    const d = authz.canOpenDirect(parent(), teacher());
+    const d = authz.canOpenDirect(parent(), teacher(), IN_SCOPE);
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_TEACHER_PARENT_DIRECT);
   });
@@ -55,6 +57,8 @@ describe('BR-1 — forbidden 1:1 channels', () => {
       null,
       // The participant set is what BR-1 is decided on: a contact is present.
       ['teacher', 'contact'],
+      undefined,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_TEACHER_PARENT_DIRECT);
@@ -68,6 +72,10 @@ describe('BR-1 — forbidden 1:1 channels', () => {
       member(t),
       [teacher(), parent()],
       NOW,
+      undefined,
+      undefined,
+      undefined,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_TEACHER_PARENT_DIRECT);
@@ -75,25 +83,25 @@ describe('BR-1 — forbidden 1:1 channels', () => {
 
   it('BR1-06 group co-members cannot open a 1:1 with each other', () => {
     // Sharing a student group grants no direct channel whatsoever.
-    const d = authz.canOpenDirect(teacher('teacher-in-group'), parent('parent-in-group'));
+    const d = authz.canOpenDirect(teacher('teacher-in-group'), parent('parent-in-group'), IN_SCOPE);
     expect(d.allowed).toBe(false);
   });
 
   it('teacher-to-teacher direct messaging is off by default', () => {
-    const d = authz.canOpenDirect(teacher('t1'), teacher('t2'));
+    const d = authz.canOpenDirect(teacher('t1'), teacher('t2'), IN_SCOPE);
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.TEACHER_TEACHER_DISABLED);
   });
 
   it('two family contacts cannot open a channel', () => {
-    expect(authz.canOpenDirect(parent('p1'), parent('p2')).allowed).toBe(false);
+    expect(authz.canOpenDirect(parent('p1'), parent('p2'), IN_SCOPE).allowed).toBe(false);
   });
 
   it('back-office staff may never take part in family communication', () => {
     expect(isFamilyFacingStaff(financeStaff())).toBe(false);
     expect(isFamilyFacingStaff(academicStaff())).toBe(false);
     for (const role of [financeStaff(), academicStaff()]) {
-      const d = authz.canOpenDirect(role, parent());
+      const d = authz.canOpenDirect(role, parent(), IN_SCOPE);
       expect(d.allowed).toBe(false);
       if (!d.allowed) expect(d.code).toBe(CommErrorCode.ROLE_CANNOT_MESSAGE_FAMILY);
     }
@@ -101,7 +109,7 @@ describe('BR-1 — forbidden 1:1 channels', () => {
 
   it('an unknown actor pairing is denied by default rather than allowed by accident', () => {
     const alien = { ...parent(), kind: 'martian' as never };
-    expect(authz.canOpenDirect(alien, parent('p2')).allowed).toBe(false);
+    expect(authz.canOpenDirect(alien, parent('p2'), IN_SCOPE).allowed).toBe(false);
   });
 });
 
@@ -109,15 +117,15 @@ describe('BR-1 — permitted channels', () => {
   const authz = authzWithOnDuty();
 
   it('parent <-> admin 1:1 -> ALLOW', () => {
-    expect(authz.canOpenDirect(parent(), admin()).allowed).toBe(true);
+    expect(authz.canOpenDirect(parent(), admin(), IN_SCOPE).allowed).toBe(true);
   });
 
   it('teacher <-> admin 1:1 -> ALLOW', () => {
-    expect(authz.canOpenDirect(teacher(), admin()).allowed).toBe(true);
+    expect(authz.canOpenDirect(teacher(), admin(), IN_SCOPE).allowed).toBe(true);
   });
 
   it('coverage admin counts as family-facing', () => {
-    expect(authz.canOpenDirect(parent(), admin('cov-1', 'coverage')).allowed).toBe(true);
+    expect(authz.canOpenDirect(parent(), coverageAdmin('cov-1'), IN_SCOPE).allowed).toBe(true);
   });
 
   it('a teacher may post in a Teacher<->Admin 1:1: no contact is present', async () => {
@@ -130,6 +138,8 @@ describe('BR-1 — permitted channels', () => {
       NOW,
       null,
       ['teacher', 'staff'],
+      undefined,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(true);
   });
@@ -140,13 +150,13 @@ describe('BR-1 — the permitted case: teacher and parent inside the student gro
 
   it('a teacher may post in the student group', async () => {
     const t = teacher();
-    const d = await authz.canSend(t, studentGroup(), member(t), { visibility: 'customer' }, NOW);
+    const d = await authz.canSend(t, studentGroup(), member(t), { visibility: 'customer' }, NOW, undefined, undefined, undefined, IN_SCOPE);
     expect(d.allowed).toBe(true);
   });
 
   it('a parent may post in the student group', async () => {
     const p = parent();
-    const d = await authz.canSend(p, studentGroup(), member(p), { visibility: 'customer' }, NOW);
+    const d = await authz.canSend(p, studentGroup(), member(p), { visibility: 'customer' }, NOW, undefined, undefined, undefined, IN_SCOPE);
     expect(d.allowed).toBe(true);
   });
 
@@ -170,12 +180,14 @@ describe('BR-1 — the permitted case: teacher and parent inside the student gro
         { actorId: 'parent-1', actorKind: 'contact', memberRole: 'parent' },
         { actorId: 'admin-1', actorKind: 'staff', memberRole: 'admin', isActive: true },
       ],
+      undefined,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(true);
   });
 
   it('a teacher who is not a member of the group cannot post in it', async () => {
-    const d = await authz.canSend(teacher('outsider'), studentGroup(), null, { visibility: 'customer' }, NOW);
+    const d = await authz.canSend(teacher('outsider'), studentGroup(), null, { visibility: 'customer' }, NOW, undefined, undefined, undefined, IN_SCOPE);
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.NOT_CONVERSATION_MEMBER);
   });
@@ -188,6 +200,10 @@ describe('BR-1 — the permitted case: teacher and parent inside the student gro
       member(t, { leftAt: new Date('2026-09-01T00:00:00Z') }),
       { visibility: 'customer' },
       NOW,
+      undefined,
+      undefined,
+      undefined,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(false);
   });
@@ -200,6 +216,10 @@ describe('BR-1 — the permitted case: teacher and parent inside the student gro
       member(t, { isSilent: true }),
       { visibility: 'customer' },
       NOW,
+      undefined,
+      undefined,
+      undefined,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.MEMBER_IS_SILENT);
@@ -210,18 +230,18 @@ describe('BR-1 — membership management cannot be used to route around the rule
   const authz = authzWithOnDuty();
 
   it('BR1-07/08 a teacher may not change membership', () => {
-    const d = authz.canManageMembership(teacher());
+    const d = authz.canManageMembership(teacher(), IN_SCOPE);
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.CANNOT_MANAGE_MEMBERSHIP);
   });
 
   it('BR1-10 a parent may not change membership', () => {
-    expect(authz.canManageMembership(parent()).allowed).toBe(false);
+    expect(authz.canManageMembership(parent(), IN_SCOPE).allowed).toBe(false);
   });
 
   it('an admin may change membership', () => {
-    expect(authz.canManageMembership(admin()).allowed).toBe(true);
-    expect(authz.canManageMembership(manager()).allowed).toBe(true);
+    expect(authz.canManageMembership(admin(), IN_SCOPE).allowed).toBe(true);
+    expect(authz.canManageMembership(manager(), IN_SCOPE).allowed).toBe(true);
   });
 });
 
@@ -235,6 +255,10 @@ describe('BR-1 — archived conversations accept nothing', () => {
       member(p),
       { visibility: 'customer' },
       NOW,
+      undefined,
+      undefined,
+      undefined,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.CONVERSATION_ARCHIVED);

@@ -2,7 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { Conversation, ConversationMember, Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
-import type { LiveMember } from '../../platform/authorization.service';
+import type { LiveMember, ScopeState } from '../../platform/authorization.service';
+import { ScopeService } from '../../platform/scope.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
 import { AUDIT_SERVICE, COVERAGE_SERVICE, IDENTITY_SERVICE } from '../../platform/tokens';
 import type { IdentityService } from '../../platform/identity.service';
@@ -32,6 +33,7 @@ export class ConversationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly authz: AuthorizationService,
+    private readonly scope: ScopeService,
     private readonly outbox: OutboxService,
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
     @Inject(COVERAGE_SERVICE) private readonly coverage: CoverageService,
@@ -47,6 +49,46 @@ export class ConversationService {
   async requireConversation(id: string): Promise<Conversation> {
     const conv = await this.prisma.conversation.findUnique({ where: { id } });
     if (!conv) {
+      throw new CommError(CommErrorCode.CONVERSATION_NOT_FOUND, 'conversation not found', 404);
+    }
+    return conv;
+  }
+
+  /**
+   * Resolve the scope facts AuthorizationService needs for this conversation.
+   *
+   * Every decision path calls this, so "is this family mine right now" is
+   * computed in one place (ScopeService), read live from chat.family_assignment,
+   * and cannot be answered differently by two endpoints. A reassignment is
+   * therefore effective on the next request with nothing to invalidate.
+   */
+  async scopeFor(
+    actor: Actor,
+    conv: Pick<Conversation, 'familyId' | 'organizationId'>,
+    now = new Date(),
+  ): Promise<ScopeState> {
+    return {
+      familyInScope: await this.scope.canAccessFamily(actor, conv.familyId, now),
+      sameOrganization:
+        !actor.organizationId || !conv.organizationId
+          ? true
+          : actor.organizationId === conv.organizationId,
+    };
+  }
+
+  /**
+   * Load a conversation the actor is allowed to read, or refuse.
+   *
+   * IDOR defence for every by-id route: a conversation the actor may not read
+   * is reported as NOT FOUND, not FORBIDDEN, so probing ids yields no signal
+   * about which ones exist.
+   */
+  async requireForActor(conversationId: string, actorId: string): Promise<Conversation> {
+    const actor = await this.requireActor(actorId);
+    const conv = await this.requireConversation(conversationId);
+    const membership = await this.membershipOf(conv.id, actor.actorId);
+    const decision = this.authz.canRead(actor, conv, membership, await this.scopeFor(actor, conv));
+    if (!decision.allowed) {
       throw new CommError(CommErrorCode.CONVERSATION_NOT_FOUND, 'conversation not found', 404);
     }
     return conv;
@@ -107,7 +149,18 @@ export class ConversationService {
     const a = await this.requireActor(requesterId);
     const b = await this.requireActor(otherId);
 
-    const decision = this.authz.canOpenDirect(a, b);
+    // The family context is whichever side is a family contact; that is the
+    // family whose scope the staff side must be inside.
+    const contactSide = a.kind === ActorKind.CONTACT ? a : b.kind === ActorKind.CONTACT ? b : null;
+    const staffSide = a.kind === ActorKind.STAFF ? a : b.kind === ActorKind.STAFF ? b : null;
+    const scope: ScopeState = {
+      familyInScope:
+        contactSide && staffSide
+          ? await this.scope.canAccessFamily(staffSide, contactSide.familyId ?? null)
+          : true,
+    };
+
+    const decision = this.authz.canOpenDirect(a, b, scope);
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
     const key = ConversationService.directKey(a.actorId, b.actorId);
@@ -259,7 +312,7 @@ export class ConversationService {
    * left_at rather than deleted, and every change writes a system message so the
    * group can see what happened.
    */
-  async syncStudentGroup(learnerId: string): Promise<Conversation | null> {
+  async syncStudentGroup(learnerId: string, requesterId?: string): Promise<Conversation | null> {
     const learner = await this.prisma.learner.findUnique({
       where: { id: learnerId },
       include: { family: { include: { contacts: { where: { isActive: true } } } } },
@@ -270,6 +323,19 @@ export class ConversationService {
       where: { learnerId, type: ConversationType.STUDENT_GROUP, archivedAt: null },
     });
     if (!conv) return null;
+
+    // A caller reconciling a group is changing its membership, and is held to
+    // the same permission and scope as any other membership change. Omitted
+    // only for the system paths (Core ingestion, the worker) that pass no
+    // requester and are already trusted to act for nobody.
+    if (requesterId !== undefined) {
+      const requester = await this.requireActor(requesterId);
+      const decision = this.authz.canManageMembership(
+        requester,
+        await this.scopeFor(requester, conv),
+      );
+      if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+    }
 
     const desired = new Map<string, MemberSpec>();
     for (const c of learner.family.contacts.filter((c) => c.canMessage)) {
@@ -381,10 +447,10 @@ export class ConversationService {
     reason: string,
   ): Promise<void> {
     const actor = await this.requireActor(requesterId);
-    const decision = this.authz.canManageMembership(actor);
-    if (!decision.allowed) throw new CommError(decision.code, decision.reason);
-
     const conv = await this.requireConversation(conversationId);
+
+    const decision = this.authz.canManageMembership(actor, await this.scopeFor(actor, conv));
+    if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
     await this.prisma.$transaction(async (tx) => {
       if (action === 'add') {
@@ -439,31 +505,24 @@ export class ConversationService {
     return this.coverage.onDuty(conv.familyId, now);
   }
 
-  /** RBAC-scoped chat list. A contact or teacher only ever sees their own. */
+  /**
+   * The chat list, scoped BY CONSTRUCTION.
+   *
+   * What this used to do for staff: `findMany({ take: 200 })` -- the 200 most
+   * recently active conversations IN THE SYSTEM, for any family-facing role
+   * (red-team A-1 / RT-011). The role check passed, so nothing looked wrong.
+   *
+   * It now builds its WHERE from ScopeService, which is the same predicate
+   * canRead consults. A list endpoint that filters after the fact is one
+   * forgotten `where` away from leaking; a list endpoint whose query cannot
+   * name an out-of-scope row is not.
+   */
   async listForActor(actorId: string): Promise<Conversation[]> {
     const actor = await this.requireActor(actorId);
-
-    if (actor.kind === ActorKind.STAFF) {
-      const probe = this.authz.canRead(actor, {
-        id: '',
-        type: ConversationType.DIRECT,
-        familyId: null,
-        stickyHandlerId: null,
-        stickyUntil: null,
-        teacherRequiresApproval: false,
-        parentRequiresApproval: false,
-        archivedAt: null,
-      }, null);
-      if (!probe.allowed) throw new CommError(probe.code, probe.reason);
-
-      return this.prisma.conversation.findMany({
-        orderBy: { lastActivityAt: 'desc' },
-        take: 200,
-      });
-    }
+    const where = await this.scope.conversationWhere(actor);
 
     return this.prisma.conversation.findMany({
-      where: { members: { some: { actorId: actor.actorId, leftAt: null } } },
+      where,
       orderBy: { lastActivityAt: 'desc' },
       take: 200,
     });
@@ -478,7 +537,7 @@ export class ConversationService {
     const actor = await this.requireActor(actorId);
     const conv = await this.requireConversation(conversationId);
     const membership = await this.membershipOf(conv.id, actor.actorId);
-    const decision = this.authz.canRead(actor, conv, membership);
+    const decision = this.authz.canRead(actor, conv, membership, await this.scopeFor(actor, conv));
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
     const patch = {

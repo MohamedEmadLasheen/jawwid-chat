@@ -224,9 +224,28 @@ describe('message immutability and deletion', () => {
     expect(audits).toBe(1);
   });
 
-  it('a non-author cannot delete for everyone', async () => {
+  /**
+   * PHASE 1: an admin outside the family's scope cannot even see the message,
+   * so they are refused before authorship is considered. Both halves are
+   * asserted -- otherwise the authorship rule would be untested the moment
+   * scope refused first.
+   */
+  it('an out-of-scope admin cannot delete another actor\'s message', async () => {
     const conv = await parentAdminConversation();
     const m = await g.messages.send({ conversationId: conv.id, senderId: s.parentId, body: 'mine' });
+    await expect(g.messages.deleteForEveryone(m.id, s.otherAdminId, 'no reason')).rejects.toMatchObject({
+      code: CommErrorCode.OUT_OF_SCOPE,
+    });
+  });
+
+  it('a non-author in scope still cannot delete for everyone', async () => {
+    const conv = await parentAdminConversation();
+    const m = await g.messages.send({ conversationId: conv.id, senderId: s.parentId, body: 'mine' });
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.family_assignment (family_id, staff_id, kind, ends_at, reason)
+       values ('${s.familyId}'::uuid, '${s.otherAdminId}'::uuid, 'temporary',
+               now() + interval '1 day', 'test: cover')`,
+    );
     await expect(g.messages.deleteForEveryone(m.id, s.otherAdminId, 'no reason')).rejects.toMatchObject({
       code: CommErrorCode.NOT_MESSAGE_AUTHOR,
     });

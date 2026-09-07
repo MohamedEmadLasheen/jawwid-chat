@@ -2,7 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { Conversation, ConversationMember } from '@prisma/client';
 import { COVERAGE_SERVICE } from './tokens';
 import type { CoverageService } from './coverage.service';
-import { Actor, isFamilyFacingStaff } from './types';
+import { Actor, actorHasPermission, isFamilyFacingStaff } from './types';
+import { Permission } from './rbac/permissions';
 import { CommErrorCode } from './errors';
 import {
   ActorKind,
@@ -10,6 +11,7 @@ import {
   MemberRole,
   Moderation,
   OnBehalfMode,
+  ORGANIZATION_WIDE_STAFF_ROLES,
   Visibility,
 } from '../communication/contracts/vocab';
 
@@ -23,6 +25,26 @@ const allow = (onBehalfMode: string | null = null, moderation: string = Moderati
   onBehalfMode,
   moderation,
 });
+
+/**
+ * The caller's resolved answer to "is this conversation's family inside this
+ * actor's scope right now?".
+ *
+ * Supplied rather than fetched, for the same reason familyOwnerId,
+ * participantKinds and liveMembers are: this service stays pure and
+ * synchronously testable, and the one place scope is COMPUTED is
+ * ScopeService. What this service owns is what scope MEANS for a decision.
+ *
+ * `undefined` is not "no restriction" -- it is "not established", and every
+ * path below treats it as a denial for staff. A caller that cannot say whether
+ * a family is in scope has not earned an allow.
+ */
+export interface ScopeState {
+  readonly familyInScope: boolean;
+  /** The actor's organization matches the record's. Defaults to true when the
+   *  caller does not distinguish tenants (single-tenant paths). */
+  readonly sameOrganization?: boolean;
+}
 
 export interface SendIntent {
   visibility: string;
@@ -99,6 +121,40 @@ export class AuthorizationService {
   constructor(@Inject(COVERAGE_SERVICE) private readonly coverage: CoverageService) {}
 
   // ------------------------------------------------------------------
+  // Permission keys
+  // ------------------------------------------------------------------
+
+  /**
+   * The generic permission check -- THE single entry point for every surface
+   * that is not a conversation decision (families, assignment, staff, audit,
+   * config, user management).
+   *
+   * Controllers call this. They never compare roles: `actor.staffRole ===
+   * 'manager'` scattered through controllers is how a role rename becomes a
+   * privilege escalation, and how a per-person exception becomes impossible to
+   * express. The effective set already has the account's ALLOW/DENY overrides
+   * applied (rbac/permissions.ts), so a DENY here really does restrict a
+   * permission the role grants.
+   */
+  can(actor: Actor, permission: Permission | string): Decision {
+    if (!actor.isActive) {
+      return deny(CommErrorCode.ACTOR_INACTIVE, 'actor is inactive');
+    }
+    if (!actorHasPermission(actor, permission)) {
+      return deny(
+        CommErrorCode.PERMISSION_DENIED,
+        `this actor does not hold ${permission}`,
+      );
+    }
+    return allow();
+  }
+
+  /** Convenience for call sites that only need the boolean. */
+  hasPermission(actor: Actor, permission: Permission | string): boolean {
+    return this.can(actor, permission).allowed;
+  }
+
+  // ------------------------------------------------------------------
   // Opening a 1:1 channel
   // ------------------------------------------------------------------
 
@@ -107,7 +163,7 @@ export class AuthorizationService {
    * is denied, so a new actor kind is denied by default rather than allowed by
    * accident.
    */
-  canOpenDirect(a: Actor, b: Actor): Decision {
+  canOpenDirect(a: Actor, b: Actor, scope?: ScopeState): Decision {
     if (!a.isActive || !b.isActive) {
       return deny(CommErrorCode.ACTOR_INACTIVE, 'one of the participants is inactive');
     }
@@ -149,9 +205,32 @@ export class AuthorizationService {
     if (!isFamilyFacingStaff(staff)) {
       return deny(
         CommErrorCode.ROLE_CANNOT_MESSAGE_FAMILY,
-        `role ${staff.staffRole} may never take part in family communication`,
+        staff.department
+          ? `departmental staff (${staff.department}) never take part in family communication`
+          : `role ${staff.staffRole} may never take part in family communication`,
       );
     }
+
+    // Tenancy. Two people in different organizations are not colleagues.
+    if (a.organizationId && b.organizationId && a.organizationId !== b.organizationId) {
+      return deny(
+        CommErrorCode.CROSS_TENANT,
+        'these actors belong to different organizations',
+      );
+    }
+
+    // Scope. Opening a channel with a family contact is reaching that family;
+    // a supervisor may only do it for a family they supervise. Checked here
+    // rather than only on the first message, because creating the channel is
+    // already an act against that family.
+    const contact = a.kind === ActorKind.CONTACT ? a : b.kind === ActorKind.CONTACT ? b : null;
+    if (contact && scope?.familyInScope !== true) {
+      return deny(
+        CommErrorCode.OUT_OF_SCOPE,
+        'this family is not within the actor\'s authorized scope',
+      );
+    }
+
     return allow();
   }
 
@@ -159,23 +238,74 @@ export class AuthorizationService {
   // Reading
   // ------------------------------------------------------------------
 
-  canRead(actor: Actor, conv: Conv, membership: Member | null): Decision {
+  /**
+   * SCOPE BEFORE ROLE.
+   *
+   * What this used to be: `if (staff) return allow()`. Any family-facing staff
+   * member could read any conversation of any family in the system (red-team
+   * A-1 / RT-011). A role is a statement about what KIND of action someone may
+   * take; it has never been a statement about which records, and treating it
+   * as one is how a supervisor of eight families reads eight hundred.
+   *
+   * What it is now, in order:
+   *   1. the actor is active;
+   *   2. the actor holds `conversations.read`;
+   *   3. staff: the conversation's family is inside their CURRENT scope --
+   *      or, for a family-less conversation (Teacher <-> Admin direct), they are
+   *      a live member of it;
+   *   4. everyone else: they are a live member.
+   *
+   * `scope` is supplied by the caller and `undefined` means NOT ESTABLISHED,
+   * which denies. A conversation that names a family the caller could not
+   * resolve is not readable on the strength of a job title.
+   */
+  canRead(actor: Actor, conv: Conv, membership: Member | null, scope?: ScopeState): Decision {
     if (!actor.isActive) return deny(CommErrorCode.ACTOR_INACTIVE, 'actor is inactive');
     if (actor.kind === ActorKind.SYSTEM) return allow();
 
-    // Family-facing staff may open any family conversation. A teacher or a
-    // parent must be an actual member.
+    if (actor.permissions && !actor.permissions.has(Permission.CONVERSATIONS_READ)) {
+      return deny(
+        CommErrorCode.PERMISSION_DENIED,
+        'this actor does not hold conversations.read',
+      );
+    }
+
+    if (scope?.sameOrganization === false) {
+      return deny(CommErrorCode.CROSS_TENANT, 'this record belongs to another organization');
+    }
+
+    const live = membership !== null && membership.leftAt === null;
+
     if (actor.kind === ActorKind.STAFF) {
       if (!isFamilyFacingStaff(actor)) {
         return deny(
           CommErrorCode.ROLE_CANNOT_MESSAGE_FAMILY,
-          `role ${actor.staffRole} may not access conversations`,
+          actor.department
+            ? `departmental staff (${actor.department}) may not access conversations`
+            : `role ${actor.staffRole} may not access conversations`,
+        );
+      }
+      if (conv.familyId === null) {
+        // No family to be in scope of. Membership is the only thing that can
+        // make a staff-to-staff or teacher-to-admin channel theirs.
+        if (!live) {
+          return deny(
+            CommErrorCode.NOT_CONVERSATION_MEMBER,
+            'actor is not a member of this conversation',
+          );
+        }
+        return allow();
+      }
+      if (scope?.familyInScope !== true) {
+        return deny(
+          CommErrorCode.OUT_OF_SCOPE,
+          'this family is not within the actor\'s authorized scope',
         );
       }
       return allow();
     }
 
-    if (!membership || membership.leftAt !== null) {
+    if (!live) {
       return deny(CommErrorCode.NOT_CONVERSATION_MEMBER, 'actor is not a member of this conversation');
     }
     return allow();
@@ -209,8 +339,10 @@ export class AuthorizationService {
     /** Live membership with roles and resolved activity, for the C-4
      *  admin-presence check. When empty the check cannot run and says so. */
     liveMembers: LiveMember[] = [],
+    /** Supervisor scope, resolved by the caller. Undefined denies for staff. */
+    scope?: ScopeState,
   ): Promise<Decision> {
-    const readable = this.canRead(actor, conv, membership);
+    const readable = this.canRead(actor, conv, membership, scope);
     if (!readable.allowed) return readable;
 
     if (conv.archivedAt) {
@@ -218,6 +350,28 @@ export class AuthorizationService {
     }
 
     if (actor.kind === ActorKind.SYSTEM) return allow(null, Moderation.PUBLISHED);
+
+    // The permission key for speaking to a family, checked for every kind of
+    // actor. Role defaults with the account's ALLOW/DENY overrides already
+    // applied, so a DENY on messages.send silences one person without
+    // inventing a role for them.
+    //
+    // Only the CUSTOMER-visibility key is checked here. Internal notes are
+    // checked inside each branch below, so a contact or a teacher attempting
+    // one still gets the specific, documented code
+    // (CONTACT_CANNOT_WRITE_INTERNAL / TEACHER_CANNOT_WRITE_INTERNAL) rather
+    // than a generic permission denial: the client renders those differently,
+    // and a vaguer error is not a safer one.
+    if (
+      intent.visibility !== Visibility.INTERNAL &&
+      actor.permissions &&
+      !actor.permissions.has(Permission.MESSAGES_SEND)
+    ) {
+      return deny(
+        CommErrorCode.PERMISSION_DENIED,
+        `this actor does not hold ${Permission.MESSAGES_SEND}`,
+      );
+    }
 
     // --- family contact (parent) ---
     if (actor.kind === ActorKind.CONTACT) {
@@ -263,8 +417,19 @@ export class AuthorizationService {
     }
 
     // --- staff ---
-    // Internal notes: any family-facing admin, any family, any time. The
-    // capacity is still derived from facts, never asserted by the client.
+    if (
+      intent.visibility === Visibility.INTERNAL &&
+      actor.permissions &&
+      !actor.permissions.has(Permission.MESSAGES_INTERNAL)
+    ) {
+      return deny(
+        CommErrorCode.PERMISSION_DENIED,
+        `this actor does not hold ${Permission.MESSAGES_INTERNAL}`,
+      );
+    }
+
+    // Internal notes: any family-facing admin, on a family in scope, any time.
+    // The capacity is still derived from facts, never asserted by the client.
     if (intent.visibility === Visibility.INTERNAL) {
       const mode = await this.deriveMode(actor, conv, familyOwnerId, now);
       return allow(mode, Moderation.PUBLISHED);
@@ -272,7 +437,7 @@ export class AuthorizationService {
 
     // A manager may act on anything, but may not choose their own attribution:
     // only assist/escalation are honourable requests, everything else is derived.
-    if (actor.staffRole === 'manager') {
+    if (ORGANIZATION_WIDE_STAFF_ROLES.has(actor.staffRole ?? '')) {
       const mode = await this.deriveMode(actor, conv, familyOwnerId, now, intent.requestedMode);
       return allow(mode, Moderation.PUBLISHED);
     }
@@ -439,19 +604,42 @@ export class AuthorizationService {
    * Teachers and parents can never change a group's membership. Managers can;
    * so can the family's admins. The client is never the source of truth.
    */
-  canManageMembership(actor: Actor): Decision {
+  canManageMembership(actor: Actor, scope?: ScopeState): Decision {
+    if (!actor.isActive) return deny(CommErrorCode.ACTOR_INACTIVE, 'actor is inactive');
     if (!isFamilyFacingStaff(actor)) {
       return deny(CommErrorCode.CANNOT_MANAGE_MEMBERSHIP, 'only Jawwid admins may change membership');
+    }
+    if (actor.permissions && !actor.permissions.has(Permission.CONVERSATIONS_MANAGE)) {
+      return deny(CommErrorCode.PERMISSION_DENIED, 'this actor does not hold conversations.manage');
+    }
+    // Changing who is in a family's group is an act against that family.
+    if (scope !== undefined && !scope.familyInScope) {
+      return deny(
+        CommErrorCode.OUT_OF_SCOPE,
+        'this family is not within the actor\'s authorized scope',
+      );
     }
     return allow();
   }
 
   /** The approver is the family's active handler, or any manager. */
-  canApprove(actor: Actor, activeHandlerId: string | null): Decision {
+  canApprove(actor: Actor, activeHandlerId: string | null, scope?: ScopeState): Decision {
+    if (!actor.isActive) return deny(CommErrorCode.ACTOR_INACTIVE, 'actor is inactive');
     if (!isFamilyFacingStaff(actor)) {
       return deny(CommErrorCode.CANNOT_APPROVE, 'only Jawwid admins may decide approvals');
     }
-    if (actor.staffRole === 'manager') return allow();
+    if (actor.permissions && !actor.permissions.has(Permission.MESSAGES_MODERATE)) {
+      return deny(CommErrorCode.PERMISSION_DENIED, 'this actor does not hold messages.moderate');
+    }
+    // A manager's reach is the organization, but it is still a scope: a
+    // manager of one academy does not moderate another's.
+    if (scope !== undefined && !scope.familyInScope) {
+      return deny(
+        CommErrorCode.OUT_OF_SCOPE,
+        'this family is not within the actor\'s authorized scope',
+      );
+    }
+    if (ORGANIZATION_WIDE_STAFF_ROLES.has(actor.staffRole ?? '')) return allow();
     if (activeHandlerId && activeHandlerId === actor.actorId) return allow();
     return deny(CommErrorCode.CANNOT_APPROVE, 'only the active handler or a manager may decide');
   }
@@ -474,6 +662,8 @@ export class AuthorizationService {
     /** PD-2: starting a group call is not the same permission as joining one.
      *  Defaults to the stricter INITIATE. */
     intent: CallIntent = CallIntent.INITIATE,
+    /** Supervisor scope, resolved by the caller. Undefined denies for staff. */
+    scope?: ScopeState,
   ): Promise<Decision> {
     const sendable = await this.canSend(
       actor,
@@ -484,8 +674,15 @@ export class AuthorizationService {
       familyOwnerId,
       participants.map((p) => p.kind),
       liveMembers,
+      scope,
     );
     if (!sendable.allowed) return sendable;
+
+    const requiredCallKey =
+      intent === CallIntent.INITIATE ? Permission.CALLS_START : Permission.CALLS_ACCEPT;
+    if (actor.permissions && !actor.permissions.has(requiredCallKey)) {
+      return deny(CommErrorCode.PERMISSION_DENIED, `this actor does not hold ${requiredCallKey}`);
+    }
 
     const kinds = new Set(participants.map((p) => p.kind));
     if (conv.type === ConversationType.DIRECT && kinds.has(ActorKind.TEACHER) && kinds.has(ActorKind.CONTACT)) {

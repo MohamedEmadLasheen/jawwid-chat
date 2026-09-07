@@ -80,6 +80,7 @@ export class CallService {
       // PD-2: this is the START path. A parent is refused here and allowed on
       // the join path below.
       CallIntent.INITIATE,
+      await this.conversations.scopeFor(initiator, conv, now),
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
@@ -193,6 +194,7 @@ export class CallService {
       // PD-2: minting a media token is JOINING an existing call, which a parent
       // may do. The call was already started by a teacher or an admin.
       CallIntent.JOIN,
+      await this.conversations.scopeFor(actor, conv, now),
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
@@ -290,7 +292,12 @@ export class CallService {
     const actor = await this.conversations.requireActor(actorId);
     const conv = await this.conversations.requireConversation(conversationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
-    const readable = this.authz.canRead(actor, conv, membership);
+    const readable = this.authz.canRead(
+      actor,
+      conv,
+      membership,
+      await this.conversations.scopeFor(actor, conv),
+    );
     if (!readable.allowed) throw new CommError(readable.code, readable.reason);
 
     const calls = await this.prisma.call.findMany({

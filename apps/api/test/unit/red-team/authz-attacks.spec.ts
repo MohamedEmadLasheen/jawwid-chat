@@ -9,9 +9,11 @@
  */
 import { CommErrorCode } from '@platform/errors';
 import {
+  IN_SCOPE,
   admin,
   authzWithOnDuty,
   conversation,
+  coverageAdmin,
   manager,
   member,
   parent,
@@ -34,6 +36,9 @@ describe('RT-003 (fixed) · on_behalf_mode cannot be asserted by the client', ()
       { ...customer, requestedMode: 'owner' },
       NOW,
       OWNER, // the real owner is somebody else
+      undefined,
+      undefined,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(true);
     if (d.allowed) expect(d.onBehalfMode).not.toBe('owner');
@@ -42,15 +47,15 @@ describe('RT-003 (fixed) · on_behalf_mode cannot be asserted by the client', ()
   it('the real owner is attributed as OWNER without asking', async () => {
     const authz = authzWithOnDuty(OWNER);
     const owner = admin(OWNER);
-    const d = await authz.canSend(owner, conversation(), member(owner), customer, NOW, OWNER);
+    const d = await authz.canSend(owner, conversation(), member(owner), customer, NOW, OWNER, undefined, undefined, IN_SCOPE);
     expect(d.allowed).toBe(true);
     if (d.allowed) expect(d.onBehalfMode).toBe('owner');
   });
 
   it('an on-duty admin who is not the owner is attributed COVERAGE, not OWNER', async () => {
-    const cov = admin('coverage-admin', 'coverage');
+    const cov = coverageAdmin('coverage-admin');
     const authz = authzWithOnDuty('coverage-admin');
-    const d = await authz.canSend(cov, conversation(), member(cov), customer, NOW, OWNER);
+    const d = await authz.canSend(cov, conversation(), member(cov), customer, NOW, OWNER, undefined, undefined, IN_SCOPE);
     expect(d.allowed).toBe(true);
     if (d.allowed) expect(d.onBehalfMode).toBe('coverage');
   });
@@ -65,6 +70,9 @@ describe('RT-003 (fixed) · on_behalf_mode cannot be asserted by the client', ()
         { ...customer, requestedMode: requested },
         NOW,
         OWNER,
+        undefined,
+        undefined,
+        IN_SCOPE,
       );
       expect(d.allowed).toBe(true);
       if (d.allowed) expect(['assist', 'escalation']).toContain(d.onBehalfMode);
@@ -76,7 +84,7 @@ describe('RT-004 (fixed) · COVERAGE is never asserted without a coverage assign
   it('an internal note by an off-duty non-owner is attributed ASSIST, not COVERAGE', async () => {
     const a = admin('bystander');
     const authz = authzWithOnDuty('somebody-else');
-    const d = await authz.canSend(a, conversation(), member(a), internal, NOW, OWNER);
+    const d = await authz.canSend(a, conversation(), member(a), internal, NOW, OWNER, undefined, undefined, IN_SCOPE);
     expect(d.allowed).toBe(true);
     if (d.allowed) expect(d.onBehalfMode).toBe('assist');
   });
@@ -84,7 +92,7 @@ describe('RT-004 (fixed) · COVERAGE is never asserted without a coverage assign
   it('an internal note by the owner is attributed OWNER', async () => {
     const authz = authzWithOnDuty(null);
     const owner = admin(OWNER);
-    const d = await authz.canSend(owner, conversation(), member(owner), internal, NOW, OWNER);
+    const d = await authz.canSend(owner, conversation(), member(owner), internal, NOW, OWNER, undefined, undefined, IN_SCOPE);
     if (d.allowed) expect(d.onBehalfMode).toBe('owner');
   });
 });
@@ -93,28 +101,28 @@ describe('RT-002 (fixed) · authorization is a function of the participant set, 
   const authz = authzWithOnDuty();
 
   it('a teacher cannot read a group they are not a member of', () => {
-    const d = authz.canRead(teacher('outsider'), studentGroup(), null);
+    const d = authz.canRead(teacher('outsider'), studentGroup(), null, IN_SCOPE);
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.NOT_CONVERSATION_MEMBER);
   });
 
   it('a parent cannot read a group they are not a member of', () => {
-    expect(authz.canRead(parent('other-parent'), studentGroup(), null).allowed).toBe(false);
+    expect(authz.canRead(parent('other-parent'), studentGroup(), null, IN_SCOPE).allowed).toBe(false);
   });
 
   it('membership, not family, is what admits a teacher', () => {
     const t = teacher();
-    expect(authz.canRead(t, studentGroup(), member(t)).allowed).toBe(true);
+    expect(authz.canRead(t, studentGroup(), member(t), IN_SCOPE).allowed).toBe(true);
   });
 
   it('a departed member loses read access', () => {
     const t = teacher();
-    const d = authz.canRead(t, studentGroup(), member(t, { leftAt: NOW }));
+    const d = authz.canRead(t, studentGroup(), member(t, { leftAt: NOW }), IN_SCOPE);
     expect(d.allowed).toBe(false);
   });
 
   it('control: family-facing staff may still open any family conversation', () => {
-    expect(authz.canRead(admin(), studentGroup(), null).allowed).toBe(true);
+    expect(authz.canRead(admin(), studentGroup(), null, IN_SCOPE).allowed).toBe(true);
   });
 });
 
@@ -125,6 +133,8 @@ describe('conversation-type confusion', () => {
     const t = teacher();
     const d = await authz.canSend(
       t, conversation({ type: 'direct' }), member(t), customer, NOW, null, ['teacher', 'contact'],
+      undefined,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_TEACHER_PARENT_DIRECT);

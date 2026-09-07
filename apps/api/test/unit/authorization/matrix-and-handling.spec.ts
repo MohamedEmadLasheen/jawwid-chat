@@ -4,6 +4,7 @@
  */
 import { CommErrorCode } from '@platform/errors';
 import {
+  IN_SCOPE,
   admin,
   authzWithOnDuty,
   conversation,
@@ -22,7 +23,7 @@ describe('staff replies are gated on on_duty()', () => {
   it('the family owner replying on duty is attributed OWNER', async () => {
     const a = admin('admin-on-duty');
     const authz = authzWithOnDuty('admin-on-duty');
-    const d = await authz.canSend(a, conversation(), member(a), customer, NOW, 'admin-on-duty');
+    const d = await authz.canSend(a, conversation(), member(a), customer, NOW, 'admin-on-duty', undefined, undefined, IN_SCOPE);
     expect(d.allowed).toBe(true);
     if (d.allowed) expect(d.onBehalfMode).toBe('owner');
   });
@@ -30,7 +31,7 @@ describe('staff replies are gated on on_duty()', () => {
   it('a covering admin on duty is attributed COVERAGE, not OWNER', async () => {
     const a = admin('admin-on-duty');
     const authz = authzWithOnDuty('admin-on-duty');
-    const d = await authz.canSend(a, conversation(), member(a), customer, NOW, 'a-different-owner');
+    const d = await authz.canSend(a, conversation(), member(a), customer, NOW, 'a-different-owner', undefined, undefined, IN_SCOPE);
     expect(d.allowed).toBe(true);
     if (d.allowed) expect(d.onBehalfMode).toBe('coverage');
   });
@@ -38,7 +39,7 @@ describe('staff replies are gated on on_duty()', () => {
   it('an off-duty admin may NOT reply to the customer', async () => {
     const a = admin('admin-off-duty');
     const authz = authzWithOnDuty('someone-else');
-    const d = await authz.canSend(a, conversation(), member(a), customer, NOW);
+    const d = await authz.canSend(a, conversation(), member(a), customer, NOW, undefined, undefined, undefined, IN_SCOPE);
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.NOT_ON_DUTY);
   });
@@ -46,13 +47,13 @@ describe('staff replies are gated on on_duty()', () => {
   it('an off-duty admin may still write an internal note on any family', async () => {
     const a = admin('admin-off-duty');
     const authz = authzWithOnDuty('someone-else');
-    const d = await authz.canSend(a, conversation(), member(a), internal, NOW);
+    const d = await authz.canSend(a, conversation(), member(a), internal, NOW, undefined, undefined, undefined, IN_SCOPE);
     expect(d.allowed).toBe(true);
   });
 
   it('a manager may act on anything', async () => {
     const authz = authzWithOnDuty('someone-else');
-    const d = await authz.canSend(manager(), conversation(), null, customer, NOW);
+    const d = await authz.canSend(manager(), conversation(), null, customer, NOW, undefined, undefined, undefined, IN_SCOPE);
     expect(d.allowed).toBe(true);
   });
 
@@ -68,6 +69,10 @@ describe('staff replies are gated on on_duty()', () => {
       member(a),
       customer,
       NOW,
+      undefined,
+      undefined,
+      undefined,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(true);
   });
@@ -84,6 +89,10 @@ describe('staff replies are gated on on_duty()', () => {
       member(a),
       customer,
       NOW,
+      undefined,
+      undefined,
+      undefined,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(false);
   });
@@ -95,11 +104,11 @@ describe('staff replies are gated on on_duty()', () => {
     const a = admin('helper');
     const authz = authzWithOnDuty('someone-else');
 
-    const assist = await authz.canSend(a, conversation(), member(a), { ...customer, requestedMode: 'assist' }, NOW);
+    const assist = await authz.canSend(a, conversation(), member(a), { ...customer, requestedMode: 'assist' }, NOW, undefined, undefined, undefined, IN_SCOPE);
     expect(assist.allowed).toBe(false);
     if (!assist.allowed) expect(assist.code).toBe(CommErrorCode.ASSIST_NOT_PERMITTED);
 
-    const esc = await authz.canSend(a, conversation(), member(a), { ...customer, requestedMode: 'escalation' }, NOW);
+    const esc = await authz.canSend(a, conversation(), member(a), { ...customer, requestedMode: 'escalation' }, NOW, undefined, undefined, undefined, IN_SCOPE);
     expect(esc.allowed).toBe(false);
     if (!esc.allowed) expect(esc.code).toBe(CommErrorCode.ESCALATION_NOT_PERMITTED);
   });
@@ -108,7 +117,7 @@ describe('staff replies are gated on on_duty()', () => {
     const a = admin('off-duty');
     const authz = authzWithOnDuty('someone-else');
     // owner/coverage are derived from on_duty(), never taken from the request.
-    const d = await authz.canSend(a, conversation(), member(a), { ...customer, requestedMode: 'owner' }, NOW);
+    const d = await authz.canSend(a, conversation(), member(a), { ...customer, requestedMode: 'owner' }, NOW, undefined, undefined, undefined, IN_SCOPE);
     expect(d.allowed).toBe(false);
   });
 });
@@ -118,28 +127,28 @@ describe('contacts', () => {
 
   it('a contact without can_message cannot post', async () => {
     const p = { ...parent(), canMessage: false };
-    const d = await authz.canSend(p, conversation(), member(p), customer, NOW);
+    const d = await authz.canSend(p, conversation(), member(p), customer, NOW, undefined, undefined, undefined, IN_SCOPE);
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.CONTACT_CANNOT_MESSAGE);
   });
 
   it('a contact can never write an internal note', async () => {
     const p = parent();
-    const d = await authz.canSend(p, conversation(), member(p), internal, NOW);
+    const d = await authz.canSend(p, conversation(), member(p), internal, NOW, undefined, undefined, undefined, IN_SCOPE);
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.CONTACT_CANNOT_WRITE_INTERNAL);
   });
 
   it('an inactive actor is refused', async () => {
     const p = { ...parent(), isActive: false };
-    const d = await authz.canSend(p, conversation(), member(p), customer, NOW);
+    const d = await authz.canSend(p, conversation(), member(p), customer, NOW, undefined, undefined, undefined, IN_SCOPE);
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.ACTOR_INACTIVE);
   });
 
   it('a teacher can never write an internal note', async () => {
     const t = teacher();
-    const d = await authz.canSend(t, studentGroup(), member(t), internal, NOW);
+    const d = await authz.canSend(t, studentGroup(), member(t), internal, NOW, undefined, undefined, undefined, IN_SCOPE);
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.TEACHER_CANNOT_WRITE_INTERNAL);
   });
@@ -150,20 +159,20 @@ describe('group approval policy', () => {
 
   it('a teacher message is held when teacher approval is on', async () => {
     const t = teacher();
-    const d = await authz.canSend(t, studentGroup({ teacherRequiresApproval: true }), member(t), customer, NOW);
+    const d = await authz.canSend(t, studentGroup({ teacherRequiresApproval: true }), member(t), customer, NOW, undefined, undefined, undefined, IN_SCOPE);
     expect(d.allowed).toBe(true);
     if (d.allowed) expect(d.moderation).toBe('pending');
   });
 
   it('a parent message is held when parent approval is on', async () => {
     const p = parent();
-    const d = await authz.canSend(p, studentGroup({ parentRequiresApproval: true }), member(p), customer, NOW);
+    const d = await authz.canSend(p, studentGroup({ parentRequiresApproval: true }), member(p), customer, NOW, undefined, undefined, undefined, IN_SCOPE);
     if (d.allowed) expect(d.moderation).toBe('pending');
   });
 
   it('approval can be switched off per group', async () => {
     const t = teacher();
-    const d = await authz.canSend(t, studentGroup({ teacherRequiresApproval: false }), member(t), customer, NOW);
+    const d = await authz.canSend(t, studentGroup({ teacherRequiresApproval: false }), member(t), customer, NOW, undefined, undefined, undefined, IN_SCOPE);
     if (d.allowed) expect(d.moderation).toBe('published');
   });
 
@@ -175,6 +184,10 @@ describe('group approval policy', () => {
       member(a),
       customer,
       NOW,
+      undefined,
+      undefined,
+      undefined,
+      IN_SCOPE,
     );
     expect(d.allowed).toBe(true);
     if (d.allowed) expect(d.moderation).toBe('published');
@@ -182,7 +195,7 @@ describe('group approval policy', () => {
 
   it('a 1:1 parent message is never held: approval applies to groups only', async () => {
     const p = parent();
-    const d = await authz.canSend(p, conversation({ type: 'direct' }), member(p), customer, NOW);
+    const d = await authz.canSend(p, conversation({ type: 'direct' }), member(p), customer, NOW, undefined, undefined, undefined, IN_SCOPE);
     if (d.allowed) expect(d.moderation).toBe('published');
   });
 });
@@ -191,25 +204,25 @@ describe('who may decide an approval', () => {
   const authz = authzWithOnDuty();
 
   it('the active handler may decide', () => {
-    expect(authz.canApprove(admin('handler'), 'handler').allowed).toBe(true);
+    expect(authz.canApprove(admin('handler'), 'handler', IN_SCOPE).allowed).toBe(true);
   });
 
   it('an admin who is not the active handler may not decide', () => {
-    const d = authz.canApprove(admin('bystander'), 'handler');
+    const d = authz.canApprove(admin('bystander'), 'handler', IN_SCOPE);
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.CANNOT_APPROVE);
   });
 
   it('a manager may always decide', () => {
-    expect(authz.canApprove(manager(), 'someone-else').allowed).toBe(true);
+    expect(authz.canApprove(manager(), 'someone-else', IN_SCOPE).allowed).toBe(true);
   });
 
   it('a teacher may never decide, even on their own message', () => {
-    expect(authz.canApprove(teacher(), 'teacher-1').allowed).toBe(false);
+    expect(authz.canApprove(teacher(), 'teacher-1', IN_SCOPE).allowed).toBe(false);
   });
 
   it('a parent may never decide', () => {
-    expect(authz.canApprove(parent(), 'parent-1').allowed).toBe(false);
+    expect(authz.canApprove(parent(), 'parent-1', IN_SCOPE).allowed).toBe(false);
   });
 });
 

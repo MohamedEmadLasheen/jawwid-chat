@@ -5,6 +5,7 @@ import { SqlCoverageService } from './coverage.service';
 import { PrismaAuditService } from './audit.service';
 import { AuthorizationService } from './authorization.service';
 import { AppConfigService } from './app-config.service';
+import { ScopeService } from './scope.service';
 import { AUDIT_SERVICE, COVERAGE_SERVICE, IDENTITY_SERVICE } from './tokens';
 
 /**
@@ -19,6 +20,7 @@ import { AUDIT_SERVICE, COVERAGE_SERVICE, IDENTITY_SERVICE } from './tokens';
   providers: [
     PrismaService,
     AppConfigService,
+    ScopeService,
     AuthorizationService,
     { provide: IDENTITY_SERVICE, useClass: PrismaIdentityService },
     { provide: COVERAGE_SERVICE, useClass: SqlCoverageService },
@@ -27,6 +29,7 @@ import { AUDIT_SERVICE, COVERAGE_SERVICE, IDENTITY_SERVICE } from './tokens';
   exports: [
     PrismaService,
     AppConfigService,
+    ScopeService,
     AuthorizationService,
     IDENTITY_SERVICE,
     COVERAGE_SERVICE,

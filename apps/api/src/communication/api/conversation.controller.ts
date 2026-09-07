@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
 import { ConversationService } from '../conversations/conversation.service';
 import { toConversationDto } from '../contracts/dto';
-import { ActorId } from './actor.decorator';
+import { ActorId } from '../../platform/auth/current-actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
 
 @Controller('conversations')
@@ -33,15 +33,26 @@ export class ConversationController {
     return toConversationDto(conv);
   }
 
+  /**
+   * Reconcile a group's membership with current Core relationships.
+   *
+   * This route took NO actor before Phase 1: anyone who could reach the API
+   * could rewrite any learner's group membership. It is now authenticated like
+   * everything else and requires the same permission and scope as any other
+   * membership change.
+   */
   @Post('student-group/:learnerId/sync')
-  async sync(@Param('learnerId') learnerId: string) {
-    const conv = await this.conversations.syncStudentGroup(learnerId);
+  async sync(@ActorId() actorId: string, @Param('learnerId') learnerId: string) {
+    const conv = await this.conversations.syncStudentGroup(learnerId, actorId);
     return conv ? toConversationDto(conv) : { synced: false };
   }
 
   @Get(':id')
   async get(@ActorId() actorId: string, @Param('id') id: string) {
-    const conv = await this.conversations.requireConversation(id);
+    // Explicit read authorization. It used to rely on setPreferences() running
+    // the check as a side effect, which is true but invisible -- and one
+    // refactor away from an unauthorized read.
+    const conv = await this.conversations.requireForActor(id, actorId);
     await this.conversations.setPreferences(id, actorId, {});
     return toConversationDto(conv);
   }

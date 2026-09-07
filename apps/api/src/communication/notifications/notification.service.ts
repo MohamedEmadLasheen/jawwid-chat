@@ -214,9 +214,17 @@ export class NotificationService {
   }
 
   /** Called by a client or a provider webhook. Never inferred. */
-  async markDelivered(notificationId: string): Promise<void> {
+  /**
+   * The recipient confirms delivery.
+   *
+   * `recipientId` is part of the WHERE clause, not a check afterwards. Before
+   * Phase 1 this endpoint took no actor at all, so any caller could mark any
+   * notification id delivered -- and, by watching which ids changed state,
+   * enumerate notifications belonging to other families.
+   */
+  async markDelivered(notificationId: string, actorId: string): Promise<void> {
     await this.prisma.notification.updateMany({
-      where: { id: notificationId, status: NotificationStatus.SENT },
+      where: { id: notificationId, recipientId: actorId, status: NotificationStatus.SENT },
       data: { status: NotificationStatus.DELIVERED, deliveredAt: new Date() },
     });
   }
@@ -259,9 +267,16 @@ export class NotificationService {
     });
   }
 
-  async unregisterDevice(token: string): Promise<void> {
+  /**
+   * Retire a push token.
+   *
+   * Scoped to the caller's own tokens. Before Phase 1 this route took no actor,
+   * so anybody who learned (or guessed) a push token could silence another
+   * person's notifications.
+   */
+  async unregisterDevice(token: string, actorId: string): Promise<void> {
     await this.prisma.deviceToken.updateMany({
-      where: { token },
+      where: { token, actorId },
       data: { isActive: false },
     });
   }

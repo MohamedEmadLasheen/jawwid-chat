@@ -6,7 +6,7 @@ import { CommErrorFilter } from './communication/api/http-exception.filter';
 import { applyInfrastructure } from './infra/http/bootstrap';
 import { InfraIoAdapter } from './infra/realtime/io-adapter';
 import { readBuildInfo } from './infra/build-info';
-import { assertHeaderIdentitySeamAllowed } from './platform/identity-seam';
+import { assertAuthSecretsConfigured } from './platform/auth/startup';
 import { RealtimeRelay } from './infra/realtime/realtime-relay.service';
 
 /**
@@ -22,10 +22,12 @@ async function bootstrap(): Promise<void> {
   const log = new Logger('Bootstrap');
   const build = readBuildInfo();
 
-  // RT-001 containment (Phase 0). Identity is still the x-actor-id /
-  // handshake.auth.actorId seam; a build carrying it may only start in a local
-  // environment. Phase 1 removes the seam and this call with it.
-  assertHeaderIdentitySeamAllowed();
+  // Phase 1. The x-actor-id / handshake.auth.actorId seam is gone, and with it
+  // the guard that kept a build carrying it out of a real network (RT-001).
+  // What replaces it is the opposite check: authentication must be configured
+  // before the process serves anything, or it would issue forgeable tokens and
+  // report itself healthy.
+  assertAuthSecretsConfigured();
 
   const app = await NestFactory.create(AppModule, {
     // Nest's default logger writes to stdout, which is where the platform

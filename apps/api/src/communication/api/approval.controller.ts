@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
 import { ApprovalService } from '../approvals/approval.service';
-import { ActorId } from './actor.decorator';
+import { ActorId } from '../../platform/auth/current-actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
 
 @Controller('approvals')
