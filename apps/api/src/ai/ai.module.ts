@@ -11,6 +11,10 @@ import { FaqController, KnowledgeController } from './api/knowledge.controller';
 import { SuggestionService } from './suggestions/suggestion.service';
 import { SuggestionController, SummaryController } from './api/suggestion.controller';
 import { SummaryService } from './summaries/summary.service';
+import { RiskDetectionService } from './risk/risk-detection.service';
+import { AttentionService } from './risk/attention.service';
+import { RiskSweeper } from './risk/risk.sweeper';
+import { AttentionController } from './api/attention.controller';
 
 /**
  * The AI intelligence layer.
@@ -24,7 +28,7 @@ import { SummaryService } from './summaries/summary.service';
   // CommunicationModule, and never the other way round. The assistant reaches
   // the send pipeline; the send pipeline knows nothing about the assistant.
   imports: [PlatformModule, CommunicationModule],
-  controllers: [KnowledgeController, FaqController, SuggestionController, SummaryController],
+  controllers: [KnowledgeController, FaqController, SuggestionController, SummaryController, AttentionController],
   providers: [
     // The real provider when the environment supplies a key, an honestly
     // disabled one otherwise -- the same pattern as OBJECT_STORAGE and
@@ -39,7 +43,10 @@ import { SummaryService } from './summaries/summary.service';
     FaqService,
     SuggestionService,
     SummaryService,
+    RiskDetectionService,
+    AttentionService,
+    RiskSweeper,
   ],
-  exports: [AI_PROVIDER, AiInvocationService, KnowledgeService, FaqService, SuggestionService, SummaryService],
+  exports: [AI_PROVIDER, AiInvocationService, KnowledgeService, FaqService, SuggestionService, SummaryService, RiskDetectionService, AttentionService, RiskSweeper],
 })
 export class AiModule {}

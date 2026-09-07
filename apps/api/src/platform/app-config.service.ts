@@ -135,6 +135,23 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
    * manager who sends it is replying to a message that is no longer last.
    */
   'ai.suggestion_stale_minutes': 120,
+
+  /**
+   * The DETERMINISTIC risk thresholds. Arithmetic over message timestamps, and
+   * deliberately not a model's judgement: "the family has waited 41 hours" is a
+   * fact the database holds exactly, and asking a model would be slower, dearer
+   * and sometimes wrong (Phase 7 §20).
+   */
+  'attention.unanswered_hours': 24,
+  'attention.unanswered_severe_hours': 72,
+  /** initial hypothesis - conversations one risk sweep examines */
+  'attention.sweep_batch': 100,
+  /**
+   * initial hypothesis - a conversation is not classified until the family has
+   * said at least this much. One message is not a pattern, and classifying it
+   * is how a queue of false positives gets manufactured.
+   */
+  'attention.classify_min_customer_messages': 2,
 } as const;
 
 export type CommunicationConfigKey = keyof typeof COMMUNICATION_CONFIG_DEFAULTS;

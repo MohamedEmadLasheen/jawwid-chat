@@ -1310,3 +1310,35 @@ model ConversationSummary {
   @@map("conversation_summary")
   @@schema("chat")
 }
+
+/// Phase 7.5. A request for a manager to look at a conversation. NOT a
+/// business action: nothing in billing, subscriptions, assignment or lifecycle
+/// reads this table (Phase 7 §18).
+model AttentionFlag {
+  /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
+  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id             String @id @default(uuid()) @db.Uuid
+
+  conversationId String  @map("conversation_id") @db.Uuid
+  familyId       String? @map("family_id") @db.Uuid
+
+  riskType String  @map("risk_type")
+  severity String
+  /// Null for a deterministic flag: arithmetic has no confidence to report.
+  confidence Decimal? @db.Decimal(3, 2)
+  reason     String
+  /// 'sweep' or 'ai' -- so a manager can tell a clock from a judgement.
+  detectedBy String @map("detected_by") @default("ai")
+
+  status          String @default("open")
+  detectedUpToSeq BigInt @map("detected_up_to_seq") @default(0)
+
+  resolvedBy     String?   @map("resolved_by") @db.Uuid
+  resolvedAt     DateTime? @map("resolved_at") @db.Timestamptz
+  resolutionNote String?   @map("resolution_note")
+  createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
+
+  @@index([familyId, createdAt(sort: Desc)])
+  @@map("attention_flag")
+  @@schema("chat")
+}

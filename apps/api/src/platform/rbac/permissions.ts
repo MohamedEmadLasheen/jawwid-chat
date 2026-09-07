@@ -54,6 +54,10 @@ export const Permission = {
    * every family, so publishing one is a manager's act.
    */
   KNOWLEDGE_APPROVE: 'knowledge.approve',
+  /** Phase 7: see the attention flags raised on conversations in scope. */
+  ATTENTION_READ: 'attention.read',
+  /** Phase 7: acknowledge, resolve or dismiss an attention flag. */
+  ATTENTION_RESOLVE: 'attention.resolve',
   AUDIT_READ: 'audit.read',
   SETTINGS_MANAGE: 'settings.manage',
   USERS_MANAGE: 'users.manage',
@@ -120,6 +124,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     // Phase 7. Staff only: every assistant surface helps somebody answer a
     // family, and a family's own questions are answered by a person.
     P.AI_USE, P.KNOWLEDGE_READ, P.KNOWLEDGE_MANAGE,
+    P.ATTENTION_READ, P.ATTENTION_RESOLVE,
   ],
   [AuthzRole.COVERAGE_ADMIN]: [
     P.CONVERSATIONS_READ, P.CONVERSATIONS_MANAGE, P.MESSAGES_READ, P.MESSAGES_SEND,
@@ -136,6 +141,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     // Phase 7. Staff only: every assistant surface helps somebody answer a
     // family, and a family's own questions are answered by a person.
     P.AI_USE, P.KNOWLEDGE_READ, P.KNOWLEDGE_MANAGE,
+    P.ATTENTION_READ, P.ATTENTION_RESOLVE,
   ],
   [AuthzRole.MANAGER]: [
     P.CONVERSATIONS_READ, P.CONVERSATIONS_MANAGE, P.MESSAGES_READ, P.MESSAGES_SEND,
@@ -149,6 +155,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     // Phase 7. Staff only: every assistant surface helps somebody answer a
     // family, and a family's own questions are answered by a person.
     P.AI_USE, P.KNOWLEDGE_READ, P.KNOWLEDGE_MANAGE, P.KNOWLEDGE_APPROVE,
+    P.ATTENTION_READ, P.ATTENTION_RESOLVE,
   ],
   [AuthzRole.SUPER_ADMIN]: [
     P.CONVERSATIONS_READ, P.CONVERSATIONS_MANAGE, P.MESSAGES_READ, P.MESSAGES_SEND,
@@ -162,6 +169,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     // Phase 7. Staff only: every assistant surface helps somebody answer a
     // family, and a family's own questions are answered by a person.
     P.AI_USE, P.KNOWLEDGE_READ, P.KNOWLEDGE_MANAGE, P.KNOWLEDGE_APPROVE,
+    P.ATTENTION_READ, P.ATTENTION_RESOLVE,
   ],
 };
 
