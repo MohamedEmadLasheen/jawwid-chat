@@ -113,7 +113,47 @@ export class RealtimeGateway
     client.revalidatedAt = Date.now();
     // Every socket joins its own actor room, so multi-device fan-out is free.
     await client.join(room.actor(authenticated.actor.actorId));
-    await this.presence.online(authenticated.actor.actorId, client.id);
+
+    // Only the 0 -> 1 transition is announced. Opening the app on a second
+    // device is not a presence change, and treating it as one would fan an
+    // event out to every conversation the person is in on every reconnect of
+    // every device -- which, on a mobile network, is often.
+    if (await this.presence.online(authenticated.actor.actorId, client.id)) {
+      await this.announcePresence(authenticated.actor.actorId, 'online');
+    }
+  }
+
+  /**
+   * Tell the people who may know that somebody came or went.
+   *
+   * WHO IS TOLD, and why it is not simpler. Presence was written to Redis by
+   * every connect and disconnect and read by NOTHING: `presence.changed` was in
+   * the event contract and forwarded by the mobile client, and no code path in
+   * this repository ever emitted it. Presence existed as a key nobody looked at.
+   *
+   * The audience is the conversations the actor is an ACTIVE MEMBER of -- not
+   * the rooms this socket happens to have joined, which is a per-socket
+   * subscription that changes as the user opens and closes screens, and not
+   * everybody, because "is this parent at their phone right now" is not public
+   * information about them. Membership is the same predicate that decides who
+   * may read the conversation at all.
+   *
+   * It is one query on connect and one on disconnect -- events that happen
+   * orders of magnitude less often than messages -- and it is deliberately NOT
+   * on the heartbeat path, which runs every twenty seconds per socket.
+   */
+  private async announcePresence(actorId: string, state: 'online' | 'offline'): Promise<void> {
+    const memberships = await this.conversations.activeConversationIds(actorId);
+    if (memberships.length === 0) return;
+
+    const lastSeenAt = (await this.presence.lastSeen(actorId))?.toISOString() ?? null;
+    for (const conversationId of memberships) {
+      this.server?.to(room.conversation(conversationId)).emit(CommEvent.PRESENCE_CHANGED, {
+        actorId,
+        state,
+        lastSeenAt,
+      });
+    }
   }
 
   /**
@@ -173,7 +213,12 @@ export class RealtimeGateway
       }
     }
 
-    await this.presence.offline(actor.actorId, client.id);
+    // False when another device is still connected: closing one of two open
+    // sessions must not announce somebody as offline while they are reading on
+    // the other.
+    if (await this.presence.offline(actor.actorId, client.id)) {
+      await this.announcePresence(actor.actorId, 'offline');
+    }
   }
 
   @SubscribeMessage('conversation.subscribe')
@@ -205,7 +250,24 @@ export class RealtimeGateway
     @MessageBody() body: { conversationId?: string },
   ): Promise<{ ok: boolean }> {
     if (!body?.conversationId) return { ok: false };
-    await client.leave(room.conversation(body.conversationId));
+    const conversationId = body.conversationId;
+
+    // Clear typing BEFORE leaving, for the same reason handleDisconnect does:
+    // somebody who closes a conversation mid-word is not typing in it any more,
+    // and leaving the entry to expire shows every other participant a
+    // "typing…" for somebody who has left the screen. Leaving first would also
+    // mean `client.to(room)` no longer reaches the room.
+    await client.authenticated;
+    const actor = client.actor;
+    if (actor && (await this.typing.stop(conversationId, actor.actorId))) {
+      client.to(room.conversation(conversationId)).emit(CommEvent.TYPING_STOPPED, {
+        conversationId,
+        actorId: actor.actorId,
+        displayName: actor.displayName,
+      });
+    }
+
+    await client.leave(room.conversation(conversationId));
     return { ok: true };
   }
 

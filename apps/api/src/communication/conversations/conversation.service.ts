@@ -104,6 +104,30 @@ export class ConversationService {
   }
 
   /**
+   * Every conversation this actor is currently a member of.
+   *
+   * The audience for a presence change (§6). MEMBERSHIP, not scope: a
+   * supervisor can READ conversations they are not a member of, and telling
+   * every one of those threads that a supervisor's phone woke up would both
+   * leak a staff work pattern and, for a supervisor covering a large roster,
+   * turn one reconnect into a large fan-out. Membership is the narrower and
+   * more honest answer to "who is in this conversation with me".
+   *
+   * Bounded, because the fan-out is per-conversation and a runaway would be a
+   * connect-time cost paid on every flaky-network reconnect. The cap is high
+   * enough that no real person reaches it and low enough that nobody can make
+   * a reconnect expensive by joining conversations.
+   */
+  async activeConversationIds(actorId: string, limit = 200): Promise<string[]> {
+    const rows = await this.prisma.conversationMember.findMany({
+      where: { actorId, leftAt: null },
+      select: { conversationId: true },
+      take: limit,
+    });
+    return rows.map((r) => r.conversationId);
+  }
+
+  /**
    * Live membership with resolved activity, for the C-4 admin-presence check.
    *
    * Only staff-admin members have their identity resolved: they are the only
