@@ -91,13 +91,24 @@ export class AttachmentService {
   }
 
   /** Signed URLs are minted per read and expire; they are never stored. */
+  /**
+   * Mint short-lived read URLs for the attachments of messages the caller has
+   * ALREADY been authorized to read.
+   *
+   * RT-006 / A-8: this function performs no authorization of its own, and a
+   * function that hands out signed object URLs must not be able to hand out one
+   * the caller never asked for. `conversationId` is therefore part of the
+   * query, not an assumption about the caller: a message id from another
+   * conversation slipped into the list matches nothing and yields no URL.
+   */
   async signUrlsForMessages(
     messageIds: string[],
+    conversationId: string,
   ): Promise<Map<string, { url: string; thumbnailUrl: string | null }>> {
     const out = new Map<string, { url: string; thumbnailUrl: string | null }>();
     if (messageIds.length === 0) return out;
     const attachments = await this.prisma.messageAttachment.findMany({
-      where: { messageId: { in: messageIds } },
+      where: { messageId: { in: messageIds }, message: { conversationId } },
     });
     const ttl = Number(process.env.STORAGE_SIGNED_URL_TTL_SECONDS ?? 300);
     for (const a of attachments) {

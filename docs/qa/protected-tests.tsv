@@ -30,3 +30,4 @@ apps/api/test/unit/authorization/rbac-permissions.spec.ts	35	Phase 1: role defau
 apps/api/test/unit/auth/credentials-and-tokens.spec.ts	30	Phase 1: password hashing and JWT verification -- algorithm confusion, tampering and expiry all refused
 db/tests/assignment_invariants.sql	20	Phase 1: one live primary supervisor per family, bounded cover, guarded reassignment, scope follows the assignment
 db/tests/rls_enforcement.sql	20	Phase 1: RLS is a live control -- proved with the application bypassed, as the authenticated role
+apps/api/test/integration/disclosure-and-privilege.spec.ts	12	A-7/RT-012 receipt roster is viewer-scoped; A-8/RT-006 signed URLs cannot escape their conversation; delete-for-everyone is a permission key, not a role name

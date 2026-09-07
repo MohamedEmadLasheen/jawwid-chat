@@ -149,9 +149,29 @@ type MessageWithRelations = Message & {
   receipts?: MessageReceipt[];
 };
 
+/**
+ * Who is being served this message.
+ *
+ * RT-012 / A-7: the receipt roster is a list of WHICH staff member read the
+ * message and WHEN. Serving it to a family contact hands them Jawwid's internal
+ * actor ids and the reading habits of the people handling them -- neither of
+ * which they asked for or need. A parent needs one fact: has my message been
+ * read at all.
+ *
+ * The default is the restrictive one. A caller that does not say who is looking
+ * gets no roster, because the safe direction for a forgotten argument is less
+ * disclosure rather than more.
+ */
+export interface MessageViewer {
+  actorId: string;
+  /** True only for family-facing staff, who need the roster to do the job. */
+  seesFullRoster: boolean;
+}
+
 export function toMessageDto(
   m: MessageWithRelations,
   signedUrls: Map<string, { url: string; thumbnailUrl: string | null }> = new Map(),
+  viewer?: MessageViewer,
 ): MessageDto {
   const hidden = m.deletedForAll;
   return {
@@ -180,12 +200,14 @@ export function toMessageDto(
           return toAttachmentDto(a, signed?.url ?? null, signed?.thumbnailUrl ?? null);
         }),
     reactions: (m.reactions ?? []).map((r) => ({ actorId: r.actorId, emoji: r.emoji })),
-    receipts: (m.receipts ?? []).map((r) => ({
-      actorId: r.actorId,
-      state: r.state,
-      deliveredAt: r.deliveredAt?.toISOString() ?? null,
-      readAt: r.readAt?.toISOString() ?? null,
-    })),
+    receipts: (m.receipts ?? [])
+      .filter((r) => viewer?.seesFullRoster === true || r.actorId === viewer?.actorId)
+      .map((r) => ({
+        actorId: r.actorId,
+        state: r.state,
+        deliveredAt: r.deliveredAt?.toISOString() ?? null,
+        readAt: r.readAt?.toISOString() ?? null,
+      })),
   };
 }
 

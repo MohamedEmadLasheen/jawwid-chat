@@ -8,7 +8,7 @@ import type { AuditService } from '../../platform/audit.service';
 import { ConversationService } from '../conversations/conversation.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
-import { toMessageDto, MessageDto } from '../contracts/dto';
+import { toMessageDto, type MessageViewer, MessageDto } from '../contracts/dto';
 import {
   ActorKind,
   ApprovalDecision,
@@ -18,6 +18,8 @@ import {
   Visibility,
 } from '../contracts/vocab';
 import { ScopeService } from '../../platform/scope.service';
+import { isFamilyFacingStaff } from '../../platform/types';
+import type { Actor } from '../../platform/types';
 
 export interface PendingApprovalDto {
   approvalId: string;
@@ -90,7 +92,7 @@ export class ApprovalService {
       requestedBy: r.requestedBy,
       approverId: r.approverId,
       createdAt: r.createdAt.toISOString(),
-      message: toMessageDto(r.message),
+      message: toMessageDto(r.message, undefined, viewerOf(actor)),
     }));
   }
 
@@ -110,7 +112,7 @@ export class ApprovalService {
       requestedBy: r.requestedBy,
       approverId: r.approverId,
       createdAt: r.createdAt.toISOString(),
-      message: toMessageDto(r.message),
+      message: toMessageDto(r.message, undefined, viewerOf(actor)),
     }));
   }
 
@@ -276,4 +278,13 @@ export class ApprovalService {
       decidedAt: r.decidedAt?.toISOString() ?? null,
     }));
   }
+}
+
+/**
+ * RT-012 / A-7. A held message carries the same receipt roster as any other,
+ * and the sender of a held message is usually a teacher or a parent -- exactly
+ * the people who must not be handed Jawwid's internal actor ids.
+ */
+function viewerOf(actor: Actor): MessageViewer {
+  return { actorId: actor.actorId, seesFullRoster: isFamilyFacingStaff(actor) };
 }

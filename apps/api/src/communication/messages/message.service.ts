@@ -3,15 +3,22 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
 import { AppConfigService } from '../../platform/app-config.service';
+import { Permission } from '../../platform/rbac/permissions';
 import { CommError, CommErrorCode } from '../../platform/errors';
 import { AUDIT_SERVICE } from '../../platform/tokens';
 import type { AuditService } from '../../platform/audit.service';
-import { Actor } from '../../platform/types';
+import { Actor, isFamilyFacingStaff } from '../../platform/types';
 import { ConversationService } from '../conversations/conversation.service';
 import { AttachmentService } from '../attachments/attachment.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
-import { MessageDto, toMessageDto, needsReply, conversationState } from '../contracts/dto';
+import {
+  MessageDto,
+  type MessageViewer,
+  toMessageDto,
+  needsReply,
+  conversationState,
+} from '../contracts/dto';
 import {
   ActorKind,
   ApprovalDecision,
@@ -300,7 +307,7 @@ export class MessageService {
         return message;
       });
 
-      return toMessageDto(created);
+      return toMessageDto(created, undefined, this.viewerOf(actor));
     } catch (e) {
       // Concurrent duplicate submission of the same client_message_id.
       if (
@@ -312,6 +319,7 @@ export class MessageService {
           conv.id,
           actor.actorId,
           input.clientMessageId,
+          this.viewerOf(actor),
         );
         if (existing) return existing;
       }
@@ -323,12 +331,23 @@ export class MessageService {
     conversationId: string,
     authorId: string,
     clientMessageId: string,
+    viewer?: MessageViewer,
   ): Promise<MessageDto | null> {
     const found = await this.prisma.message.findFirst({
       where: { conversationId, authorId, clientMessageId },
       include: { attachments: true, reactions: true, receipts: true },
     });
-    return found ? toMessageDto(found) : null;
+    return found ? toMessageDto(found, undefined, viewer) : null;
+  }
+
+  /**
+   * Who is being served a message, for the receipt roster (RT-012 / A-7).
+   *
+   * Only family-facing staff see who else read a message and when. Everybody
+   * else sees their own receipt and nothing more.
+   */
+  private viewerOf(actor: Actor): MessageViewer {
+    return { actorId: actor.actorId, seesFullRoster: isFamilyFacingStaff(actor) };
   }
 
   private validateContent(type: string, input: SendMessageInput): void {
@@ -396,9 +415,14 @@ export class MessageService {
     });
 
     // Signed URLs are minted per read, scoped to messages this actor is already
-    // permitted to see, and they expire.
-    const signed = await this.attachments.signUrlsForMessages(rows.map((m) => m.id));
-    const messages = rows.map((m) => toMessageDto(m, signed));
+    // permitted to see, and they expire. The conversation id is passed so the
+    // signer itself cannot mint a URL for an attachment outside the set this
+    // read authorized (RT-006 / A-8).
+    const signed = await this.attachments.signUrlsForMessages(
+      rows.map((m) => m.id),
+      conv.id,
+    );
+    const messages = rows.map((m) => toMessageDto(m, signed, this.viewerOf(actor)));
     const nextBefore =
       !ascending && rows.length === limit ? (rows[rows.length - 1].seq?.toString() ?? null) : null;
 
@@ -566,13 +590,16 @@ export class MessageService {
     const windowMinutes = await this.config.get(
       'communication.delete_for_everyone_window_minutes',
     );
-    const isManager = actor.kind === ActorKind.STAFF && actor.staffRole === 'manager';
+    // The PERMISSION KEY, not the role name. `staffRole === 'manager'` was
+    // wrong twice over: it excluded super_admin, who holds messages.delete, and
+    // it could not see a per-account DENY on that key.
+    const mayDeleteAnyone = this.authz.hasPermission(actor, Permission.MESSAGES_DELETE);
     const isAuthor = message.authorId === actor.actorId;
 
-    if (!isAuthor && !isManager) {
+    if (!isAuthor && !mayDeleteAnyone) {
       throw new CommError(CommErrorCode.NOT_MESSAGE_AUTHOR, 'not the author of this message');
     }
-    if (isAuthor && !isManager) {
+    if (isAuthor && !mayDeleteAnyone) {
       const ageMs = Date.now() - message.createdAt.getTime();
       if (ageMs > windowMinutes * 60_000) {
         throw new CommError(
