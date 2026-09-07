@@ -11,7 +11,13 @@ import { ConversationService } from './conversations/conversation.service';
 import { MessageService } from './messages/message.service';
 import { ApprovalService } from './approvals/approval.service';
 import { CallService } from './calls/call.service';
+import { RecordingService } from './calls/recording.service';
+import { CallSweeper } from './calls/call-sweeper';
 import { LiveKitTokenIssuer } from './calls/media-token';
+import { AudienceResolverService } from './audience/audience-resolver.service';
+import { StoryService } from './stories/story.service';
+import { BroadcastService } from './broadcast/broadcast.service';
+import { BroadcastWorker } from './broadcast/broadcast.worker';
 import { AttachmentService } from './attachments/attachment.service';
 import { SignedLocalObjectStorage } from './attachments/object-storage';
 import { S3ObjectStorage } from './attachments/s3-object-storage';
@@ -40,6 +46,9 @@ import { ConversationController } from './api/conversation.controller';
 import { MessageController, SearchController } from './api/message.controller';
 import { ApprovalController } from './api/approval.controller';
 import { CallController } from './api/call.controller';
+import { RecordingController } from './api/recording.controller';
+import { StoryController } from './api/story.controller';
+import { BroadcastController } from './api/broadcast.controller';
 import { NotificationController } from './api/notification.controller';
 
 @Module({
@@ -50,6 +59,9 @@ import { NotificationController } from './api/notification.controller';
     SearchController,
     ApprovalController,
     CallController,
+    RecordingController,
+    StoryController,
+    BroadcastController,
     NotificationController,
   ],
   providers: [
@@ -58,8 +70,15 @@ import { NotificationController } from './api/notification.controller';
     MessageService,
     ApprovalService,
     CallService,
+    RecordingService,
+    CallSweeper,
+    AudienceResolverService,
+    StoryService,
+    BroadcastService,
+    BroadcastWorker,
     AttachmentService,
     OutboxService,
+    NotificationPreferenceService,
     OutboxWorker,
     NotificationService,
     ReminderService,
@@ -112,6 +131,12 @@ import { NotificationController } from './api/notification.controller';
     MessageService,
     ApprovalService,
     CallService,
+    RecordingService,
+    CallSweeper,
+    AudienceResolverService,
+    StoryService,
+    BroadcastService,
+    BroadcastWorker,
     NotificationService,
     ReminderService,
     OutboxWorker,

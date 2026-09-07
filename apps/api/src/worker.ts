@@ -3,6 +3,9 @@ import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { OutboxWorker } from './communication/outbox/outbox.worker';
+import { NotificationService } from './communication/notifications/notification.service';
+import { BroadcastWorker } from './communication/broadcast/broadcast.worker';
+import { CallSweeper } from './communication/calls/call-sweeper';
 import { readBuildInfo } from './infra/build-info';
 
 /**
@@ -24,6 +27,18 @@ const POLL_MS = Number(process.env.OUTBOX_POLL_MS ?? 1000);
 const BATCH = Number(process.env.OUTBOX_BATCH_SIZE ?? 100);
 const IDLE_BACKOFF_MS = Number(process.env.OUTBOX_IDLE_BACKOFF_MS ?? 5000);
 
+/**
+ * How often the Phase 5 TIME-DRIVEN sweeps run: missed calls, recording
+ * retention, story expiry.
+ *
+ * Much less often than the outbox drain, because these are deadline sweeps
+ * rather than a queue -- nothing is waiting on them, and the only cost of a
+ * longer interval is that a missed call is marked missed up to this long after
+ * its ring timeout. Ten seconds keeps that imperceptible while leaving the
+ * database alone the rest of the time.
+ */
+const SWEEP_MS = Number(process.env.CALL_SWEEP_MS ?? 10_000);
+
 async function bootstrap(): Promise<void> {
   const log = new Logger('Worker');
   const build = readBuildInfo();
@@ -33,9 +48,13 @@ async function bootstrap(): Promise<void> {
     logger: ['error', 'warn', 'log'],
   });
   const outbox = app.get(OutboxWorker);
+  const notifications = app.get(NotificationService);
+  const broadcasts = app.get(BroadcastWorker);
+  const sweeper = app.get(CallSweeper);
 
   let running = true;
   let draining = false;
+  let lastSweep = 0;
 
   const stop = (signal: string) => {
     if (!running) return;
@@ -65,21 +84,49 @@ async function bootstrap(): Promise<void> {
   );
 
   while (running) {
-    let published = 0;
+    let worked = 0;
     draining = true;
     try {
-      published = await outbox.drain(BATCH);
+      worked += await outbox.drain(BATCH);
     } catch (e) {
       // Never exit on a drain failure: the row stays pending and is retried.
       // A worker that dies on one bad event stops delivering every other event.
       log.error(`drain failed: ${e instanceof Error ? e.message : 'unknown error'}`);
-    } finally {
-      draining = false;
     }
+
+    // Each of the three below is wrapped separately, for the same reason the
+    // outbox drain is: one failing subsystem must not stop the others. A wedged
+    // broadcast fan-out must not be why nobody's notifications are going out.
+    try {
+      worked += await notifications.dispatchDue();
+    } catch (e) {
+      log.error(`notification dispatch failed: ${e instanceof Error ? e.message : 'unknown error'}`);
+    }
+
+    try {
+      // Phase 5. Leased exactly like the outbox, so several worker replicas
+      // take disjoint batches and one that dies releases its rows.
+      worked += await broadcasts.drain();
+    } catch (e) {
+      log.error(`broadcast fan-out failed: ${e instanceof Error ? e.message : 'unknown error'}`);
+    }
+
+    if (Date.now() - lastSweep >= SWEEP_MS) {
+      lastSweep = Date.now();
+      try {
+        // Idempotent and concurrency-safe by construction (see CallSweeper), so
+        // several replicas running it costs a little work and corrupts nothing.
+        await sweeper.sweep();
+      } catch (e) {
+        log.error(`sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`);
+      }
+    }
+
+    draining = false;
     if (!running) break;
     // Back off when there is nothing to do, so an idle deployment is not
     // hammering the database once a second for no reason.
-    await sleep(published > 0 ? POLL_MS : IDLE_BACKOFF_MS);
+    await sleep(worked > 0 ? POLL_MS : IDLE_BACKOFF_MS);
   }
 }
 

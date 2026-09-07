@@ -213,6 +213,8 @@ model Conversation {
   participants ConversationParticipantState[]
   calls        Call[]
   notifications Notification[]
+  /// Phase 5: broadcast deliveries that landed in this thread.
+  broadcastDeliveries BroadcastRecipient[]
 
   @@map("conversation")
   @@schema("chat")
@@ -289,6 +291,8 @@ model Message {
   hiddenFor   MessageHiddenFor[]
   revisions   MessageRevision[]
   approval    MessageApproval?
+  /// Phase 5: the broadcast delivery this message satisfied, if any.
+  broadcastDeliveries BroadcastRecipient[]
 
   @@map("message")
   @@schema("chat")
@@ -571,6 +575,15 @@ model Call {
   roomName        String       @map("room_name")
   status          String       @default("ringing")
   outcome         String?
+  /// Phase 5: normal = never recorded. follow_up = MAY be recorded, and only by
+  /// an actor holding calls.record. Fixed at creation, never a per-request flag.
+  mode            String       @default("normal")
+  /// Phase 5: when an unanswered call becomes a missed call. The missed-call
+  /// sweeper's entire predicate, so missing a call does not depend on a client
+  /// being awake to report it.
+  ringExpiresAt   DateTime?    @map("ring_expires_at") @db.Timestamptz
+  endedBy         String?      @map("ended_by") @db.Uuid
+  endReason       String?      @map("end_reason")
   startedAt       DateTime     @map("started_at") @db.Timestamptz @default(now())
   answeredAt      DateTime?    @map("answered_at") @db.Timestamptz
   endedAt         DateTime?    @map("ended_at") @db.Timestamptz
@@ -578,6 +591,7 @@ model Call {
   createdAt       DateTime     @map("created_at") @db.Timestamptz @default(now())
 
   participants CallParticipant[]
+  recording    CallRecording?
 
   @@unique([organizationId, roomName], map: "call_room_name_per_organization_key")
   @@map("call")
@@ -590,12 +604,214 @@ model CallParticipant {
   call      Call      @relation(fields: [callId], references: [id], onDelete: Cascade)
   actorId   String    @map("actor_id") @db.Uuid
   actorKind String    @map("actor_kind")
-  invitedAt DateTime  @map("invited_at") @db.Timestamptz @default(now())
-  joinedAt  DateTime? @map("joined_at") @db.Timestamptz
-  leftAt    DateTime? @map("left_at") @db.Timestamptz
+  /// Phase 5: per-invitee lifecycle, independent of the call's. A group call
+  /// does not end because one invitee refused. Before this, a refusal could
+  /// only be recorded as leftAt, indistinguishable from joined-then-hung-up.
+  state      String    @default("invited")
+  invitedAt  DateTime  @map("invited_at") @db.Timestamptz @default(now())
+  joinedAt   DateTime? @map("joined_at") @db.Timestamptz
+  declinedAt DateTime? @map("declined_at") @db.Timestamptz
+  leftAt     DateTime? @map("left_at") @db.Timestamptz
 
   @@unique([callId, actorId])
   @@map("call_participant")
+  @@schema("chat")
+}
+
+/// Phase 5. Metadata ONLY -- the audio lives in private object storage under
+/// objectKey and is reachable solely through an authorized, audited,
+/// short-lived signed URL. No column ever holds a URL, because a stored URL is
+/// a bearer credential that outlives the check that minted it.
+model CallRecording {
+  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id                 String    @id @default(uuid()) @db.Uuid
+  /// One recording per call: a second artefact with equal claim to be "the
+  /// recording" has no answer to which one retention or playback means.
+  callId             String    @unique @map("call_id") @db.Uuid
+  call               Call      @relation(fields: [callId], references: [id], onDelete: Cascade)
+  objectKey          String?   @map("object_key")
+  status             String    @default("pending")
+  durationSeconds    Int?      @map("duration_seconds")
+  byteSize           BigInt?   @map("byte_size")
+  mimeType           String?   @map("mime_type")
+  startedAt          DateTime  @map("started_at") @db.Timestamptz @default(now())
+  completedAt        DateTime? @map("completed_at") @db.Timestamptz
+  failureCode        String?   @map("failure_code")
+  /// Every AVAILABLE recording carries one; a CHECK constraint refuses a row
+  /// without it, so nothing is retained indefinitely by omission.
+  retentionExpiresAt DateTime? @map("retention_expires_at") @db.Timestamptz
+  deletedAt          DateTime? @map("deleted_at") @db.Timestamptz
+  deletedReason      String?   @map("deleted_reason")
+  startedBy          String    @map("started_by") @db.Uuid
+  createdAt          DateTime  @map("created_at") @db.Timestamptz @default(now())
+
+  @@map("call_recording")
+  @@schema("chat")
+}
+
+// =====================================================================
+// Phase 5 -- stories and broadcast.
+// DDL lives in supabase/migrations/2026090715*.sql; this is the mapping.
+// =====================================================================
+
+/// A short-lived publication to a resolved audience. Publishing needs
+/// stories.publish; the audience is resolved server-side into StoryRecipient,
+/// so a client never states who may see a story and never filters a feed.
+model Story {
+  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
+  title          String?
+  body           String?
+  /// Reuses the Phase 2 object-storage seam: a key into private storage, read
+  /// through a short-lived signed URL. There is no second upload pipeline.
+  mediaObjectKey String?   @map("media_object_key")
+  mediaKind      String?   @map("media_kind")
+  mediaMime      String?   @map("media_mime")
+  state          String    @default("draft")
+  publishedAt    DateTime? @map("published_at") @db.Timestamptz
+  expiresAt      DateTime? @map("expires_at") @db.Timestamptz
+  createdBy      String    @map("created_by") @db.Uuid
+  publishedBy    String?   @map("published_by") @db.Uuid
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+  deletedReason  String?   @map("deleted_reason")
+  createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
+  updatedAt      DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  audiences  StoryAudience[]
+  recipients StoryRecipient[]
+  views      StoryView[]
+
+  @@map("story")
+  @@schema("chat")
+}
+
+/// The audience as AUTHORED. Kept alongside the resolved recipients, because
+/// "this went to 412 people" is not an answer to "who did you send this to?".
+model StoryAudience {
+  id        String   @id @default(uuid()) @db.Uuid
+  storyId   String   @map("story_id") @db.Uuid
+  story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  kind      String
+  /// Null exactly for the kinds that name no particular record. Deliberately
+  /// NOT a foreign key: it points into four tables depending on kind, and the
+  /// resolver validates it against the right one under the author's scope.
+  refId     String?  @map("ref_id") @db.Uuid
+  createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
+
+  @@map("story_audience")
+  @@schema("chat")
+}
+
+/// The audience RESOLVED, once, server-side. The composite primary key IS the
+/// deduplication guarantee for overlapping audiences.
+model StoryRecipient {
+  storyId     String   @map("story_id") @db.Uuid
+  story       Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  actorId     String   @map("actor_id") @db.Uuid
+  matchedKind String   @map("matched_kind")
+  createdAt   DateTime @map("created_at") @db.Timestamptz @default(now())
+
+  @@id([storyId, actorId])
+  @@map("story_recipient")
+  @@schema("chat")
+}
+
+/// Idempotent by construction: viewing twice is viewing.
+model StoryView {
+  storyId  String   @map("story_id") @db.Uuid
+  story    Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  actorId  String   @map("actor_id") @db.Uuid
+  viewedAt DateTime @map("viewed_at") @db.Timestamptz @default(dbgenerated("clock_timestamp()"))
+
+  @@id([storyId, actorId])
+  @@map("story_view")
+  @@schema("chat")
+}
+
+/// A durable fan-out job. The creating request resolves the audience and
+/// returns; a leased worker delivers. partial_failure is a first-class terminal
+/// state -- successful deliveries are never rolled back because some failed.
+model Broadcast {
+  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
+  title          String?
+  body           String
+  createdBy      String    @map("created_by") @db.Uuid
+  state          String    @default("draft")
+  /// Client-supplied. A retried POST returns the first broadcast rather than
+  /// sending the announcement twice; a UNIQUE index is the real guarantee.
+  idempotencyKey String?   @map("idempotency_key")
+
+  /// Denormalised summary, recomputable from the ledger. The status surface is
+  /// polled during a large fan-out, and counting the ledger per poll to render
+  /// a progress bar is a cost with no purpose.
+  recipientCount Int @map("recipient_count") @default(0)
+  sentCount      Int @map("sent_count") @default(0)
+  deliveredCount Int @map("delivered_count") @default(0)
+  failedCount    Int @map("failed_count") @default(0)
+
+  queuedAt     DateTime? @map("queued_at") @db.Timestamptz
+  startedAt    DateTime? @map("started_at") @db.Timestamptz
+  completedAt  DateTime? @map("completed_at") @db.Timestamptz
+  cancelledAt  DateTime? @map("cancelled_at") @db.Timestamptz
+  cancelReason String?   @map("cancel_reason")
+  lastError    String?   @map("last_error")
+  createdAt    DateTime  @map("created_at") @db.Timestamptz @default(now())
+  updatedAt    DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  audiences  BroadcastAudience[]
+  recipients BroadcastRecipient[]
+
+  @@map("broadcast")
+  @@schema("chat")
+}
+
+model BroadcastAudience {
+  id          String    @id @default(uuid()) @db.Uuid
+  broadcastId String    @map("broadcast_id") @db.Uuid
+  broadcast   Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  kind        String
+  refId       String?   @map("ref_id") @db.Uuid
+  createdAt   DateTime  @map("created_at") @db.Timestamptz @default(now())
+
+  @@map("broadcast_audience")
+  @@schema("chat")
+}
+
+/// One row per person: the unit of work, of retry, and of truth about delivery.
+/// SENT means a message row was written and a notification scheduled;
+/// DELIVERED is set only by a real client or provider acknowledgement.
+model BroadcastRecipient {
+  id          String    @id @default(uuid()) @db.Uuid
+  broadcastId String    @map("broadcast_id") @db.Uuid
+  broadcast   Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  actorId     String    @map("actor_id") @db.Uuid
+  matchedKind String    @map("matched_kind")
+  conversationId String?       @map("conversation_id") @db.Uuid
+  conversation   Conversation? @relation(fields: [conversationId], references: [id])
+
+  status         String  @default("pending")
+  /// The idempotency anchor: a redelivered lease finds the message already
+  /// written and completes instead of writing a second one.
+  messageId      String?  @map("message_id") @db.Uuid
+  message        Message? @relation(fields: [messageId], references: [id])
+  notificationId String?  @map("notification_id") @db.Uuid
+
+  attempts     Int       @default(0)
+  /// The lease. Claiming pushes this forward; a worker that dies lets it lapse.
+  availableAt  DateTime  @map("available_at") @db.Timestamptz @default(now())
+  claimedAt    DateTime? @map("claimed_at") @db.Timestamptz
+  claimedBy    String?   @map("claimed_by")
+
+  lastError    String?   @map("last_error")
+  failureCode  String?   @map("failure_code")
+  sentAt       DateTime? @map("sent_at") @db.Timestamptz
+  deliveredAt  DateTime? @map("delivered_at") @db.Timestamptz
+  failedAt     DateTime? @map("failed_at") @db.Timestamptz
+  createdAt    DateTime  @map("created_at") @db.Timestamptz @default(now())
+
+  @@unique([broadcastId, actorId], map: "broadcast_recipient_unique")
+  @@map("broadcast_recipient")
   @@schema("chat")
 }
 
