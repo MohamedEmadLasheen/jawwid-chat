@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/core/realtime/realtime_events.dart';
 import 'package:jawwid_chat/core/realtime/socket_io_realtime_client.dart';

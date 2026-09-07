@@ -23,6 +23,14 @@
          device list on the Play Store for nothing. -->
     <uses-feature android:name="android.hardware.microphone" android:required="false"/>
 
+    <!--
+        Phase 4: notifications. Android 13 (API 33) made this a RUNTIME
+        permission; without it the system silently drops every notification and
+        nothing reports an error. `firebase_messaging` requests it via
+        PushMessaging.start().
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
     <application
         android:label="jawwid_chat"
         android:name="${applicationName}"
@@ -47,6 +55,19 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <!--
+                Phase 4: what makes a notification tap reach Flutter.
+
+                The server sets `android.notification.click_action` to this exact
+                string (FcmPushProvider.payload), and without a matching filter
+                the tap opens the launcher activity with no payload attached, so
+                `onMessageOpenedApp` never fires and the deep link has nothing to
+                route on. The two halves have to agree; this is the other half.
+            -->
+            <intent-filter>
+                <action android:name="FLUTTER_NOTIFICATION_CLICK"/>
+                <category android:name="android.intent.category.DEFAULT"/>
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.

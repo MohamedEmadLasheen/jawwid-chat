@@ -31,6 +31,11 @@ Future<void> main() async {
   // and a slow disk must not delay the app appearing.
   unawaited(startOutbox(container));
 
+  // Notifications: register this device, and route a tap to the conversation it
+  // names. Not awaited -- a cold-start destination is held by the navigator
+  // until authentication resolves, so nothing here gates the first frame.
+  unawaited(startNotifications(container));
+
   runApp(
     UncontrolledProviderScope(
       container: container,

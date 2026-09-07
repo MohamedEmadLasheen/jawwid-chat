@@ -393,6 +393,29 @@ abstract interface class MessageRepository {
   Future<void> setTyping(String conversationId, {required bool isTyping});
 }
 
+/// Device push tokens, against `apps/api/src/communication/api/notification.controller.ts`.
+///
+/// | Method | Path | Body |
+/// |---|---|---|
+/// | POST | `/notifications/devices` | `{ token, platform, isVoip?, locale? }` |
+/// | DELETE | `/notifications/devices/:token` | — |
+///
+/// Both are scoped to the authenticated caller by the server: registration
+/// binds the token to the bearer's actor, and de-registration only matches the
+/// caller's own rows. There is no route that touches somebody else's device.
+abstract interface class NotificationRepository {
+  Future<void> registerDevice({
+    required String token,
+    required String platform,
+    bool isVoip,
+    String? locale,
+  });
+
+  /// Retire a token. Called at sign-out, so the next person to use this handset
+  /// does not receive the previous account's notifications.
+  Future<void> unregisterDevice(String token);
+}
+
 abstract interface class GroupRepository {
   Future<StudentGroup> group(String conversationId);
 }

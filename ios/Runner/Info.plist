@@ -73,6 +73,11 @@
 	<array>
 		<string>audio</string>
 		<string>voip</string>
+		<!-- Phase 4: lets APNs wake the app for a message notification so the
+		     payload is available when the user taps it. Without it a tap on a
+		     notification received while the app was terminated arrives with no
+		     data and the deep link has nothing to route on. -->
+		<string>remote-notification</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>

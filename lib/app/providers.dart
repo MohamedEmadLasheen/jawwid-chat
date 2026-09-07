@@ -15,8 +15,8 @@ import '../features/calls/application/call_controller.dart';
 import '../features/calls/data/call_media.dart';
 import '../features/calls/domain/call_session.dart';
 import '../features/messages/application/outbox_courier.dart';
-import '../features/notifications/push_messaging.dart';
 import '../features/messages/data/outbox_store.dart';
+import '../features/notifications/push_messaging.dart';
 import '../shared/models/user_role.dart';
 
 /// Composition root.
