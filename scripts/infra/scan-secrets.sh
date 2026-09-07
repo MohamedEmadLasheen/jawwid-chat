@@ -48,6 +48,22 @@ RULES=(
 # Files that legitimately describe secrets without containing them.
 EXCLUDE_PATH='^(docs/infrastructure/|infra/env/|scripts/infra/scan-secrets\.sh$|docs/JAWWID_CHAT_BRIEF)'
 
+# Rules that match a secret-shaped NAME rather than credential MATERIAL.
+#
+# `LIVEKIT_API_SECRET = "<any 8+ characters>"` is a leak in shipping code and a
+# fixture in a test -- a call test cannot exercise token signing without setting
+# a signing secret, and the value it sets is invented. Flagging those trains
+# people to ignore this scanner, which is the failure mode the RULES comment
+# above is written against.
+#
+# Exemption is per-rule and applies ONLY to these heuristics. The rules that
+# match real credential material -- key blocks, provider tokens, service-account
+# JSON, a DSN with a password -- are NEVER exempted, in a test or anywhere else:
+# a real key pasted into a spec file is still a real key. This is the same line
+# ci.yml already draws for its JWT-shaped heuristic (G-18).
+HEURISTIC_RULES='^(livekit secret assignment)$'
+TEST_PATH='(^|/)(test|tests)/|\.spec\.ts$|\.test\.ts$|_test\.dart$'
+
 # Matches that are credentials in form but not in substance: a connection
 # string pointing at localhost or at a compose service name is a development
 # default, and flagging it trains people to ignore this scanner. Applied to the
@@ -60,6 +76,9 @@ for rule in "${RULES[@]}"; do
   while IFS=: read -r file _; do
     [ -n "$file" ] || continue
     printf '%s' "$file" | grep -Eq "$EXCLUDE_PATH" && continue
+    if printf '%s' "$name" | grep -Eq "$HEURISTIC_RULES"; then
+      printf '%s' "$file" | grep -Eq "$TEST_PATH" && continue
+    fi
     report "$name" "$file"
   # -e is required: patterns beginning with "-" would otherwise be parsed by
   # git grep as options and silently match nothing.
