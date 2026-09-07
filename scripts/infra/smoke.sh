@@ -47,6 +47,30 @@ else
   [ -s /tmp/smoke-ready.json ] && sed 's/^/        /' /tmp/smoke-ready.json
 fi
 
+# --- 2b. the runtime database role -------------------------------------------
+# THE PHASE 1 DEPLOYMENT PREREQUISITE, asserted from outside the process.
+#
+# Every row-level security policy in this schema is inert for a connection that
+# owns the schema, is a superuser, or has BYPASSRLS. The application refuses to
+# start on one outside local/test/ci -- but a deployment that never restarted,
+# or a failover onto a differently configured host, can put a running instance
+# in that state. /health/ready reports it, so the smoke test asserts it.
+#
+# `leastPrivileged` is null when the probe could not determine it (an
+# unreachable database, an older build). Treated as a FAILURE here rather than
+# a pass: "we could not tell" is not "it is fine".
+least="$(sed -n 's/.*"leastPrivileged":\([a-z]*\).*/\1/p' /tmp/smoke-ready.json 2>/dev/null)"
+rls="$(sed -n 's/.*"rlsEnforced":\([a-z]*\).*/\1/p' /tmp/smoke-ready.json 2>/dev/null)"
+role="$(sed -n 's/.*"databaseRole":"\([^"]*\)".*/\1/p' /tmp/smoke-ready.json 2>/dev/null)"
+
+if [ "$least" = "true" ] && [ "$rls" = "true" ]; then
+  ok "database role is least-privileged and RLS is enforced (role ${role:-unknown})"
+else
+  bad "database role is NOT least-privileged (leastPrivileged=${least:-unknown}, rlsEnforced=${rls:-unknown}, role=${role:-unknown})"
+  echo "        The API is connecting as an owner, superuser or BYPASSRLS role."
+  echo "        Point DATABASE_URL at chat_app. See docs/recovery/PHASE-1-REPORT.md 11."
+fi
+
 # --- 3. release identity ------------------------------------------------------
 # "What is running?" must be answerable from the outside. A deployment that
 # reports commit=unknown cannot be correlated with a rollback decision.

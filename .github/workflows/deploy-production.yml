@@ -120,7 +120,9 @@ jobs:
         # be undone by redeploying the previous image.
         env:
           APP_ENV: production
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          # The owner credential: pg_dump of a schema chat_app does not own
+          # would silently produce an incomplete backup.
+          DATABASE_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
         run: scripts/infra/backup-db.sh --out ./backups --schema chat
 
       - name: Upload the pre-deployment backup
@@ -131,10 +133,22 @@ jobs:
           retention-days: 30
 
       - name: Apply database migrations
+        # DATABASE_MIGRATION_URL, not DATABASE_URL.
+        #
+        # Migrations need DDL, so they run as the schema OWNER. The API runs as
+        # chat_app, which owns nothing and cannot bypass RLS -- that is the
+        # whole of the Phase 1 deployment prerequisite. Using one secret for
+        # both would force a choice between "migrations fail" and "the
+        # application runs as owner and every RLS policy is inert", and the
+        # second failure is silent.
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_MIGRATION_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
         run: |
-          PSQL="psql -v ON_ERROR_STOP=1 $DATABASE_URL" scripts/db/apply.sh
+          test -n "$DATABASE_MIGRATION_URL" || {
+            echo "::error title=Missing migration credential::secrets.DATABASE_MIGRATION_URL is not set. It is the schema owner; DATABASE_URL is chat_app and cannot run DDL. See docs/recovery/PHASE-1-REPORT.md section 11."
+            exit 1
+          }
+          PSQL="psql -v ON_ERROR_STOP=1 $DATABASE_MIGRATION_URL" scripts/db/apply.sh
 
       - name: Release
         env:

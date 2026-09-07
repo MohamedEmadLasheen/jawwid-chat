@@ -25,6 +25,7 @@ import { randomUUID } from 'node:crypto';
 import { PrismaService, withRequestScopedTransaction } from '@platform/prisma.service';
 import { buildGraphOn, seed, truncate, Scenario, appDatabaseUrl } from './harness';
 import { CommErrorCode } from '@platform/errors';
+import { HealthService } from '../../src/infra/health/health.service';
 
 const owner = new PrismaService();
 
@@ -144,6 +145,50 @@ describe('the connection is least-privileged', () => {
     await expect(
       app.$executeRawUnsafe(`select * from chat.schema_migrations`),
     ).rejects.toThrow(/permission denied/i);
+  });
+
+  it('/health/ready reports the state, and drains the instance when it is wrong', async () => {
+    // The gate at startup covers a process that is STARTED wrongly. This covers
+    // a process that becomes wrong underneath -- a failover onto a differently
+    // configured host, a rotated secret pointing elsewhere. Draining is the
+    // right response: the instance is serving requests with one of its two
+    // authorization layers switched off.
+    const onAppRole = new HealthService(connection);
+    const healthy = await onAppRole.readiness();
+    expect(healthy.databaseRole).toBe('chat_app');
+    expect(healthy.rlsEnforced).toBe(true);
+    expect(healthy.leastPrivileged).toBe(true);
+
+    const onOwner = new HealthService(owner);
+    const previous = process.env.APP_ENV;
+    process.env.APP_ENV = 'production';
+    try {
+      const degraded = await onOwner.readiness();
+      expect(degraded.leastPrivileged).toBe(false);
+      expect(degraded.rlsEnforced).toBe(false);
+      // Not merely reported: the instance takes itself out of the pool.
+      expect(degraded.status).toBe('degraded');
+    } finally {
+      process.env.APP_ENV = previous;
+      await onAppRole.onModuleDestroy();
+      await onOwner.onModuleDestroy();
+    }
+  });
+
+  it('and in local development an owner connection is tolerated, deliberately', async () => {
+    // Migrations, `prisma db push` and the fixtures need DDL. The allow-list is
+    // local, test and ci, and nothing else.
+    const onOwner = new HealthService(owner);
+    const previous = process.env.APP_ENV;
+    process.env.APP_ENV = 'local';
+    try {
+      const report = await onOwner.readiness();
+      expect(report.leastPrivileged).toBe(false);
+      expect(report.status).toBe('ok');
+    } finally {
+      process.env.APP_ENV = previous;
+      await onOwner.onModuleDestroy();
+    }
   });
 
   it('the OWNER connection, by contrast, does bypass RLS -- which is the whole point', async () => {

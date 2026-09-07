@@ -35,3 +35,4 @@ apps/api/test/integration/runtime-rls.spec.ts	25	Phase 1 closure: the API's conn
 apps/api/test/integration/security-regression.spec.ts	40	Phase 1 closure: forged and tampered tokens, revoked sessions, privilege escalation, IDOR, supervisor scope, cross-tenant access
 apps/api/test/integration/auth-throttling.spec.ts	20	Phase 1 closure: login and password-recovery abuse protection, and that the throttle is not itself an enumeration oracle
 apps/api/test/integration/realtime-revocation.spec.ts	20	Phase 1 closure: a socket that loses scope stops receiving the conversation, and one whose session ends is dropped
+apps/api/test/unit/auth/runtime-role-gate.spec.ts	15	Phase 1 deployment closure: the process refuses to start on an owner, superuser, creator or BYPASSRLS connection -- the four ways RLS is silently switched off

@@ -15,6 +15,22 @@
 # so that "temporarily enable it to debug prod" is a deliberate change to this
 # file and its review, not a console edit nobody sees.
 #
+# WHOSE ENVIRONMENT THIS DESCRIBES: the API process. check-env.sh is invoked
+# for it and for nothing else (.github/workflows/deploy-*.yml). That is why the
+# two privileged database URLs below are FORBIDDEN rather than required --
+#
+#   DATABASE_URL            the API's own connection: `chat_app`, which owns
+#                           nothing and cannot bypass RLS.
+#   DATABASE_SERVICE_URL    `chat_service`, which BYPASSES RLS. It belongs to
+#                           the worker's environment. An API process holding it
+#                           has both authorization layers available to any bug
+#                           that picks the wrong client (RLS-STRATEGY.md 6).
+#   DATABASE_MIGRATION_URL  the owner/DDL credential. It belongs to CI, for the
+#                           length of one migration step, and nowhere else.
+#
+# The worker's environment is not validated by anything today. That gap is
+# named in docs/recovery/PHASE-1-REPORT.md 11.
+#
 #NAME	GROUP	SECRET	LOCAL	STAGING	PROD
 NODE_ENV	application	no	req	req	req
 APP_ENV	application	no	req	req	req
@@ -26,7 +42,8 @@ SHUTDOWN_GRACE_MS	application	no	opt	req	req
 DATABASE_URL	database	yes	req	req	req
 DATABASE_STATEMENT_TIMEOUT_MS	database	no	opt	req	req
 DATABASE_POOL_MAX	database	no	opt	req	req
-DATABASE_SERVICE_URL	database	yes	opt	req	req
+DATABASE_SERVICE_URL	database	yes	opt	forbid	forbid
+DATABASE_MIGRATION_URL	database	yes	opt	forbid	forbid
 DATABASE_TRANSACTION_TIMEOUT_MS	database	no	opt	opt	opt
 DATABASE_TRANSACTION_MAX_WAIT_MS	database	no	opt	opt	opt
 REDIS_URL	redis	yes	req	req	req

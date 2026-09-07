@@ -10,13 +10,18 @@ Status: **CANONICAL** · Decided in Phase 0 · **ENGAGED and ENFORCED in Phase 1
 > the REAL services through that role — RLS constrains, and the application
 > still works.
 >
-> The remaining step is a deployment one: point `DATABASE_URL` at `chat_app`
-> (created NOLOGIN by `20260907120000`; deployment grants LOGIN and a password
-> from the secret store) and the worker at `chat_service`. Until then the
-> process **refuses to start** outside `local | test | ci`
-> (`assertRuntimeRoleAcceptable`), and `/health/ready` reports `rlsEnforced`,
-> `databaseRole` and `leastPrivileged` and drains the instance if the
-> connection changes under it. See `../recovery/PHASE-1-REPORT.md` §7.1.
+> The remaining step is a deployment one, and there is **no environment to
+> perform it in yet**: both deploy workflows still fail at their Release step
+> because no hosting has been provisioned. The exact checklist, the three
+> distinct database credentials it needs, and what each is for, are in
+> `../recovery/PHASE-1-REPORT.md` §11.
+>
+> Until it is done the process **refuses to start** outside `local | test | ci`
+> (`assertRuntimeRoleAcceptable`, all four cases pinned by
+> `test/unit/auth/runtime-role-gate.spec.ts`), `/health/ready` reports
+> `rlsEnforced`, `databaseRole` and `leastPrivileged` and drains the instance if
+> the connection changes under it, and `scripts/infra/smoke.sh` fails the
+> deployment if the state is wrong -- or unknown.
 Companions: `../architecture/AUTHORIZATION-MODEL.md`, `../architecture/IDENTITY-MODEL.md`,
 `../architecture/TENANCY-MODEL.md`, `../recovery/PHASE-0-DATABASE-RECONCILIATION.md` §3.5.
 
@@ -66,8 +71,9 @@ Two connection roles, one per process kind:
 
 | Role | Used by | RLS | Purpose |
 |---|---|---|---|
-| `chat_app` (LOGIN, NOBYPASSRLS, member of `authenticated`) | API request path | enforced | every request runs with the actor's context |
-| `chat_service` (LOGIN, member of `service_role`, BYPASSRLS) | worker (outbox drain, reminders), migrations, integration ingestion, backups | bypassed | system work that acts for no user; audited by the event it processes |
+| `chat_app` (LOGIN, NOBYPASSRLS, INHERITs `authenticated`) | API request path | enforced | every request runs with the actor's context |
+| `chat_service` (LOGIN, INHERITs `service_role`, BYPASSRLS) | worker: outbox drain, reminders, Core ingestion | bypassed | system work that acts for no user; audited by the event it processes |
+| the schema **owner** | migrations and `pg_dump --schema`, in CI only | bypassed | `chat_service` deliberately holds no CREATE on the schema, so it cannot run DDL. This row was missing from the original design, and the omission had one secret doing three jobs -- `../recovery/PHASE-1-REPORT.md` 11.2 |
 
 `DATABASE_URL` (API) points at `chat_app`; `DATABASE_SERVICE_URL` (worker,
 migrations) at `chat_service`. The owner role is used by nothing at runtime.

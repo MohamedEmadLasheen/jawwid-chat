@@ -1,6 +1,6 @@
 # Phase 1 — Identity, Security & Core Foundation — Report
 
-Status: **COMPLETE — the §7 deferrals are closed by the closure pass (§10)** · 2026-09-07
+Status: **CODE CLOSED — one external deployment action remains (§11)** · 2026-09-07
 Branch: `phase1/identity-security-foundation`
 Companions (all now implemented rather than planned): `../architecture/IDENTITY-MODEL.md`,
 `../architecture/AUTHORIZATION-MODEL.md`, `../architecture/SUPERVISOR-OWNERSHIP.md`,
@@ -574,3 +574,152 @@ to let anyone skip. The two genuinely open items are a mobile client that cannot
 yet sign in (a feature gap, not a security one — the server is safe against the
 legacy client) and edge-level volume protection, which no application-level
 limiter can provide and which `AUTH-THROTTLING.md` §5 states rather than implies.
+
+---
+
+# 11. Deployment closure — 2026-09-07
+
+## 11.1 Can the deployment step be completed from this repository?
+
+**No, and not because of a missing credential — because there is nothing to
+deploy to.** Both deployment workflows fail deliberately at their Release step:
+
+```
+.github/workflows/deploy-production.yml:143
+  "NOT YET IMPLEMENTED -- no production hosting has been provisioned."
+  exit 1
+.github/workflows/deploy-staging.yml:177   (the same, for staging)
+```
+
+There is no staging or production database, no secret store entry, and no host.
+Verification of a runtime `DATABASE_URL` therefore **cannot be performed here
+and has not been faked**. What was verified is everything that does exist: the
+role, the policies, the application's behaviour through that role, and the gates
+that refuse the wrong configuration.
+
+## 11.2 Two blockers found in the repository's own deployment path
+
+Both would have made the required deployment **impossible to perform
+correctly**, and both are fixed.
+
+**1. One credential was doing three jobs.** Both workflows ran
+`scripts/db/apply.sh` — which needs DDL — with `secrets.DATABASE_URL`, the same
+variable the API uses. Setting `DATABASE_URL` to `chat_app` as required would
+have broken every migration; leaving it as the owner would have left the
+application bypassing RLS. There was no value that satisfied both.
+
+There are **three** database identities, and they are now distinct:
+
+| Credential | Role | Who holds it | Why |
+|---|---|---|---|
+| `DATABASE_MIGRATION_URL` | schema owner | CI, for the length of one migration step | Migrations and `pg_dump --schema` need DDL and ownership |
+| `DATABASE_URL` | `chat_app` | the API | Owns nothing, cannot bypass RLS. **This is the Phase 1 requirement** |
+| `DATABASE_SERVICE_URL` | `chat_service` | the worker | BYPASSRLS: it acts for the system, not for a user |
+
+**2. The env manifest demanded of the API a credential it must never hold.**
+The closure pass had marked `DATABASE_SERVICE_URL` required in staging and
+production. `check-env.sh` validates the **API** process, so that entry both
+failed the gate (`MISSING DATABASE_SERVICE_URL`) and asked the API to carry a
+BYPASSRLS credential — the opposite of RLS-STRATEGY §6. Both privileged URLs are
+now `forbid` for the API, and the gate refuses a deployment that includes
+either.
+
+## 11.3 What was verified, freshly, and how
+
+| Requirement | How it was verified | Result |
+|---|---|---|
+| `chat_app` is not owner / superuser / creator / BYPASSRLS | `chat.runtime_role_report()` executed **as `chat_app`** against the live database | `chat_app` — false, false, false, false |
+| The owner, for contrast | the same query as `postgres` | `postgres` — true, true, true, true |
+| RLS actually constrains the runtime connection | `runtime-rls.spec.ts` — the **real service graph** on a `chat_app` connection | 19 passed |
+| — tenant isolation | a manager of one organization sees none of another's | ✓ |
+| — supervisor scope | supervisor A sees family A, not family B; reassignment moves it | ✓ |
+| — unauthorized access denied | naming an out-of-scope id returns nothing, not a refusal | ✓ |
+| — authorized access still works | send, read, list, register a device, reassign — all through `chat_app` | ✓ |
+| — no actor context ⇒ no rows | a query that escaped the interceptor sees nothing | ✓ |
+| Fail-closed startup, all four cases | `runtime-role-gate.spec.ts` (new, protected) | 15 assertions |
+| `/health/ready` reports and enforces | `HealthService` on both connections, in production and local `APP_ENV` | reports `chat_app`/`true`/`true`; `degraded` on an owner in production; `ok` in local |
+| The env gate refuses a privileged API config | `check-env.sh production` with each URL present | both `FORBIDDEN` |
+| The smoke test asserts it post-deploy | `scripts/infra/smoke.sh` reads `leastPrivileged` / `rlsEnforced` | fails the deploy when either is not `true`, and when it cannot tell |
+
+Note the last one: an unknown state is a **failure**, not a pass. "We could not
+tell" is not "it is fine".
+
+## 11.4 The exact deployment action that remains
+
+To be performed once per environment, by whoever provisions the database. The
+first four steps are prerequisites that do not exist yet (§11.1).
+
+```
+1.  PROVISION the environment.
+    A managed PostgreSQL 17 instance and a host for the API and worker.
+    Neither exists; both Release steps still exit 1 by design.
+
+2.  MIGRATE, as the owner.
+      DATABASE_MIGRATION_URL=postgres://<owner>:<pw>@<host>/<db>?sslmode=require
+      PSQL="psql -v ON_ERROR_STOP=1 $DATABASE_MIGRATION_URL" scripts/db/apply.sh
+    This creates chat_app and chat_service, NOLOGIN and without a password --
+    a migration must never contain a credential.
+
+3.  GIVE THE TWO ROLES A LOGIN, as the owner, once:
+      ALTER ROLE chat_app     LOGIN PASSWORD '<generated, >= 32 chars>';
+      ALTER ROLE chat_service LOGIN PASSWORD '<generated, >= 32 chars>';
+      GRANT CONNECT ON DATABASE <db> TO chat_app, chat_service;
+    Generate both with a CSPRNG. Do not reuse the owner's password.
+
+4.  STORE three secrets, not one:
+      DATABASE_MIGRATION_URL  -> the OWNER      (CI only)
+      DATABASE_URL            -> chat_app       (API only)
+      DATABASE_SERVICE_URL    -> chat_service   (worker only)
+    All three with ?sslmode=require: check-env.sh refuses a URL that disables
+    TLS. The API's environment must contain ONLY DATABASE_URL -- the manifest
+    marks the other two `forbid`, and the deploy will refuse otherwise.
+
+5.  DEPLOY / RESTART the API and the worker.
+    The API refuses to start if DATABASE_URL is an owner, superuser, creator or
+    BYPASSRLS role, and names the fix in the failure.
+
+6.  VERIFY, from outside:
+      curl -s https://<api>/health/ready | jq '{status, databaseRole, rlsEnforced, leastPrivileged}'
+    Expected:
+      { "status": "ok", "databaseRole": "chat_app",
+        "rlsEnforced": true, "leastPrivileged": true }
+    Anything else means the API is still connecting as an owner. The instance
+    reports `degraded` and drains itself.
+
+7.  SMOKE TEST -- already wired into both deploy workflows:
+      scripts/infra/smoke.sh https://<api> --web https://<admin>
+    It asserts step 6 and fails the deployment if the state is wrong or unknown.
+
+8.  AUTHORIZATION SMOKE TESTS, once real accounts exist:
+      - sign in as a supervisor; GET /api/v1/families returns only their families
+      - GET /api/v1/families/<another supervisor's family id> returns 404
+      - sign in as a parent; GET /api/v1/conversations returns only their own
+      - revoke a session; the next request returns 401
+    These are the runtime shape of what runtime-rls.spec.ts already proves.
+```
+
+**Rollback.** Point `DATABASE_URL` back at the owner and set `APP_ENV=local`
+— which is a deliberate, visible downgrade, not a quiet one, and is why the
+allow-list is exactly `local | test | ci`.
+
+## 11.5 Remaining limitations
+
+* **No hosting exists.** §11.4 steps 1–5 are blocked on provisioning, not on
+  this repository. `docs/infrastructure/production-readiness.md` BLOCKER-1.
+* **The worker's environment is validated by nothing.** `check-env.sh` is run
+  for the API only, so `DATABASE_SERVICE_URL` being present and correct for the
+  worker is currently a matter of deployment discipline. A worker manifest is
+  the fix, and it is not Phase 1 work.
+* **Mobile cannot sign in yet** — a feature gap, not a security one
+  (`docs/mobile/AUTH-CONTRACT.md`).
+* **Edge-level volume protection** is not configured by this repository
+  (`docs/security/AUTH-THROTTLING.md` §5).
+
+## 11.6 Verdict
+
+**PHASE 1 — CODE CLOSED / DEPLOYMENT ACTION REQUIRED.**
+
+No code work remains for Phase 1. The single remaining action is external:
+point the API's `DATABASE_URL` at `chat_app` in an environment that does not yet
+exist (§11.4). Until it is done the application will not start outside
+`local | test | ci`, so the gap cannot be shipped silently.
