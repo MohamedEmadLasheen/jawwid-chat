@@ -1282,3 +1282,31 @@ model AiSuggestion {
   @@map("ai_suggestion")
   @@schema("chat")
 }
+
+/// Phase 7.4. A cached, structured summary of one conversation up to a known
+/// message seq. Readable exactly by those who may read the conversation.
+model ConversationSummary {
+  /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
+  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id             String @id @default(uuid()) @db.Uuid
+
+  conversationId String  @map("conversation_id") @db.Uuid
+  generatedBy    String? @map("generated_by") @db.Uuid
+
+  problem          String
+  whatWasDone      String @map("what_was_done")
+  pendingAction    String @map("pending_action")
+  importantHistory String @map("important_history")
+  /// Phase 7 §13. What the model INFERRED rather than read, kept structurally
+  /// apart from the sections so a hedge cannot be skimmed past.
+  inferences       String[]
+
+  /// The last message.seq included: the cache key and the staleness test.
+  upToSeq   BigInt   @map("up_to_seq")
+  model     String?
+  createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
+
+  @@index([conversationId, upToSeq(sort: Desc), createdAt(sort: Desc)])
+  @@map("conversation_summary")
+  @@schema("chat")
+}

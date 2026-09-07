@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Query, UseFilters } from '@nestjs/c
 import { ActorId } from '../../platform/auth/current-actor.decorator';
 import { CommErrorFilter } from '../../communication/api/http-exception.filter';
 import { SuggestionService } from '../suggestions/suggestion.service';
+import { SummaryService } from '../summaries/summary.service';
 
 /**
  * Suggested replies.
@@ -49,5 +50,34 @@ export class SuggestionController {
   @Post(':id/dismiss')
   async dismiss(@ActorId() actorId: string, @Param('id') id: string) {
     return this.suggestions.dismiss(actorId, id);
+  }
+}
+
+/**
+ * Conversation summaries.
+ *
+ * Mounted next to suggestions because they share one property: both are
+ * gated by the CONVERSATION's authorization, resolved server-side, and neither
+ * accepts a hint from the client about who is asking (§14, §32).
+ */
+@Controller('ai/summaries')
+@UseFilters(CommErrorFilter)
+export class SummaryController {
+  constructor(private readonly summaries: SummaryService) {}
+
+  /**
+   * Summarise. Returns `summary: null` when the assistant is unavailable or
+   * returned an incomplete answer -- the conversation itself is still there to
+   * read, which is the graceful degradation §28 asks for.
+   *
+   * `refresh=true` bypasses the cache; without it, a repeat request on an
+   * unchanged conversation costs nothing.
+   */
+  @Post()
+  async summarize(
+    @ActorId() actorId: string,
+    @Body() body: { conversationId: string; refresh?: boolean },
+  ) {
+    return this.summaries.summarize(actorId, body.conversationId, { refresh: body.refresh });
   }
 }
