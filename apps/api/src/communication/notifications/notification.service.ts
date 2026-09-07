@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { hostname } from 'node:os';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
@@ -41,6 +42,13 @@ export interface ScheduleInput {
 @Injectable()
 export class NotificationService {
   private readonly log = new Logger(NotificationService.name);
+
+  /**
+   * Identifies this process in `claimed_by`. Diagnostics only: the lease is
+   * enforced by `scheduled_at` and fenced by `claimed_at`, never by comparing
+   * this string, so it carries no authority.
+   */
+  private readonly workerId = `${hostname()}/${process.pid}`;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -105,28 +113,52 @@ export class NotificationService {
     }
   }
 
-  /** Claims and delivers everything due. Safe to run concurrently. */
+  /**
+   * Claims and delivers everything due. Safe to run concurrently.
+   *
+   * ## The claim is a LEASE, not a completion
+   *
+   * This used to claim a row by writing `status = 'sent'` and only then call the
+   * push provider. That is a correct mutual exclusion and an incorrect claim:
+   * two workers never both took the row, but a worker killed between the two
+   * statements left a notification marked `sent` that was sent to nobody, with
+   * a terminal status and a `sent_at` stamp. Nothing rescans such a row, because
+   * nothing has any reason to. The notification was not late; it was gone.
+   *
+   * The lease keeps the row `scheduled` -- which is TRUE while an attempt is in
+   * flight -- and pushes `scheduled_at`, the due time, forward by the lease.
+   * A crashed worker's row simply becomes due again when the lease expires.
+   *
+   * `claimed_by` carries the FENCE: a token unique to this claim of this row.
+   * Requiring it to be unchanged before writing `sent` means a worker returning
+   * late from a slow provider call cannot stamp a row another worker has since
+   * taken. (A `claimed_at` fence would not work: `timestamptz` is
+   * microsecond-precision in PostgreSQL and millisecond-precision in JavaScript,
+   * so it would be truncated on the way out and never match on the way back.)
+   *
+   * The guarantee is at-least-once. Crashing after the provider accepted the
+   * push but before the status write redelivers on the next claim; the client's
+   * collapse/thread identifier (`NotificationPayload.collapseId`) makes that a
+   * replaced notification rather than a second one on the lock screen.
+   */
   async dispatchDue(now = new Date(), batchSize = 100): Promise<number> {
-    const due = await this.prisma.notification.findMany({
-      where: { status: NotificationStatus.SCHEDULED, scheduledAt: { lte: now } },
-      orderBy: { scheduledAt: 'asc' },
-      take: batchSize,
-    });
+    const leaseSeconds = await this.leaseSeconds();
+    const claimed = await this.claim(now, batchSize, leaseSeconds);
 
     let delivered = 0;
-    for (const n of due) {
-      // Claim it first. If another worker got there, updateMany reports 0 and
-      // this worker moves on without double-sending.
-      const claimed = await this.prisma.notification.updateMany({
-        where: { id: n.id, status: NotificationStatus.SCHEDULED },
-        data: { status: NotificationStatus.SENT, sentAt: now, attempts: { increment: 1 } },
-      });
-      if (claimed.count === 0) continue;
-
+    for (const n of claimed) {
+      if (n.attempts > 1) {
+        this.log.warn(
+          `notification ${n.id} redispatched; attempt ${n.attempts} ` +
+            `(a previous attempt failed or its worker did not return)`,
+        );
+      }
       try {
-        const ok = await this.deliver(n.id);
+        const ok = await this.deliver(n.id, n.claimToken);
         if (ok) delivered += 1;
-      } catch (err) {
+      } catch {
+        // Never the error object: a provider rejection can echo the device
+        // token it rejected, and a token is a routing capability.
         await this.fail(n.id, 'DISPATCH_ERROR');
         this.log.warn(`notification ${n.id} failed to dispatch`);
       }
@@ -134,7 +166,46 @@ export class NotificationService {
     return delivered;
   }
 
-  private async deliver(notificationId: string): Promise<boolean> {
+  /**
+   * Take a dispatch lease on up to `batchSize` due notifications.
+   *
+   * `for update skip locked` so concurrent dispatchers take disjoint batches,
+   * and `returning` so `attempts` is the post-increment value -- the previous
+   * version computed its backoff from the value it had read BEFORE incrementing,
+   * so every retry backed off as though it were one attempt younger.
+   */
+  private async claim(
+    now: Date,
+    batchSize: number,
+    leaseSeconds: number,
+  ): Promise<Array<{ id: string; attempts: number; claimToken: string }>> {
+    const claimToken = `${this.workerId}#${randomUUID()}`;
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; attempts: number }>>(Prisma.sql`
+      update chat.notification as n
+         set scheduled_at = now() + make_interval(secs => ${leaseSeconds}::double precision),
+             attempts     = n.attempts + 1,
+             claimed_at   = now(),
+             claimed_by   = ${claimToken}
+       where n.id in (
+         select d.id
+           from chat.notification as d
+          where d.status = 'scheduled'
+            and d.scheduled_at <= ${now}
+          order by d.scheduled_at asc
+            for update skip locked
+          limit ${batchSize}
+       )
+      returning n.id, n.attempts
+    `);
+    return rows.map((r) => ({ id: r.id, attempts: r.attempts, claimToken }));
+  }
+
+  private async leaseSeconds(): Promise<number> {
+    const value = await this.config.get('notification.lease_seconds' as never);
+    return typeof value === 'number' && Number.isFinite(value) ? value : 120;
+  }
+
+  private async deliver(notificationId: string, claimToken: string): Promise<boolean> {
     const n = await this.prisma.notification.findUnique({ where: { id: notificationId } });
     if (!n) return false;
 
@@ -150,7 +221,10 @@ export class NotificationService {
 
     if (n.channel === 'in_app') {
       // In-app notifications are delivered over the realtime channel by the
-      // outbox worker; there is nothing to push.
+      // outbox worker; there is nothing to push. The row still has to leave the
+      // scheduled state, or its lease would expire and it would be reclaimed
+      // for ever.
+      await this.markSent(notificationId, claimToken);
       return true;
     }
 
@@ -177,10 +251,15 @@ export class NotificationService {
       });
       if (result.ok) anyOk = true;
       if (result.tokenInvalid) {
+        // The provider says this token is permanently gone -- the app was
+        // uninstalled, or the token was reissued. Retiring it here is what stops
+        // every future notification for this person spending an attempt on a
+        // device that no longer exists.
         await this.prisma.deviceToken.update({
           where: { id: t.id },
           data: { isActive: false },
         });
+        this.log.log(`device token retired: id=${t.id} platform=${t.platform}`);
       }
     }
 
@@ -189,11 +268,39 @@ export class NotificationService {
       return false;
     }
 
-    // Status stays SENT. It is NOT promoted to DELIVERED: no platform
-    // acknowledgement has been received, and fabricating one would make the
-    // delivery metrics lie. DELIVERED/OPENED are set only by markDelivered /
-    // markOpened, driven by a real client or provider callback.
+    // ONLY here: the row becomes `sent` after a provider accepted it, never
+    // before. Fenced on the claim, so a worker returning late from a slow
+    // provider cannot overwrite a row another worker has since taken.
+    //
+    // It is NOT promoted to DELIVERED: no platform acknowledgement has been
+    // received, and fabricating one would make the delivery metrics lie.
+    // DELIVERED/OPENED are set only by markDelivered / markOpened, driven by a
+    // real client or provider callback.
+    await this.markSent(notificationId, claimToken);
     return true;
+  }
+
+  /** Close a claim successfully. A no-op if the lease is no longer ours. */
+  private async markSent(notificationId: string, claimToken: string): Promise<void> {
+    const written = await this.prisma.notification.updateMany({
+      where: {
+        id: notificationId,
+        status: NotificationStatus.SCHEDULED,
+        claimedBy: claimToken,
+      },
+      data: {
+        status: NotificationStatus.SENT,
+        sentAt: new Date(),
+        claimedAt: null,
+        claimedBy: null,
+      },
+    });
+    if (written.count === 0) {
+      this.log.warn(
+        `notification ${notificationId} was pushed but its lease had already ` +
+          `expired; another worker owns it and may push it again`,
+      );
+    }
   }
 
   private async fail(notificationId: string, code: string): Promise<void> {
@@ -208,13 +315,22 @@ export class NotificationService {
           status: NotificationStatus.FAILED,
           failedAt: new Date(),
           failureCode: code,
+          claimedAt: null,
+          claimedBy: null,
         },
       });
+      this.log.error(
+        `notification ${notificationId} parked as failed after ${n.attempts} attempts: ${code}`,
+      );
       return;
     }
 
-    // Retry with exponential backoff. The dedupe key is unchanged, so a retry
-    // can never become a second delivery.
+    // Retry with exponential backoff, which also REPLACES the lease: the row is
+    // due at the backoff time rather than at the lease expiry, and clearing the
+    // claim is what makes it re-claimable there. `attempts` is already the
+    // post-increment value, so the backoff grows with the real attempt count.
+    // The dedupe key is unchanged, so a retry can never become a second
+    // notification.
     const backoffMs = Math.min(2 ** n.attempts * 30_000, 30 * 60_000);
     await this.prisma.notification.update({
       where: { id: notificationId },
@@ -222,6 +338,8 @@ export class NotificationService {
         status: NotificationStatus.SCHEDULED,
         scheduledAt: new Date(Date.now() + backoffMs),
         failureCode: code,
+        claimedAt: null,
+        claimedBy: null,
       },
     });
   }

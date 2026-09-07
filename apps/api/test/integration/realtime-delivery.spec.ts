@@ -5,14 +5,26 @@
  * The defect: RealtimeGateway.toThread() emits with `this.server?.to(...)`.
  * The standalone worker (createApplicationContext) has no Socket.IO server, so
  * `server` was undefined and the optional chain made every emit a silent no-op.
- * OutboxWorker.drain() claims the row as `published` up front and only reverts
- * it when publish() THROWS -- and a no-op does not throw. Every realtime event
- * was recorded as delivered and delivered to nobody.
+ * OutboxWorker.drain() claims the row and only reverts it when publish()
+ * THROWS -- and a no-op does not throw. Every realtime event was recorded as
+ * delivered and delivered to nobody.
+ *
+ * Phase 4 changed the claim itself from "write the terminal state" to a LEASE,
+ * so the assertions here now read against `pending` after a released claim
+ * rather than against a reverted `published`. What is being asserted is
+ * unchanged and is still D-2: a row may only reach `published` if publication
+ * actually happened. See phase4-outbox-crash-safety.spec.ts for the crash
+ * window this test never covered.
  *
  * Requires Redis (REDIS_URL) and the migrated database (DATABASE_URL).
  */
 import { randomUUID } from 'node:crypto';
 import Redis from 'ioredis';
+// Imported for its environment defaults. This suite builds its own
+// PrismaService rather than the harness graph, and so used to depend on the
+// shell having exported DATABASE_URL -- which made it pass under
+// scripts/db/integration-db.sh and fail under a bare `jest`.
+import './harness';
 import { PrismaService } from '@platform/prisma.service';
 import { OutboxWorker } from '@communication/outbox/outbox.worker';
 import { RelayRealtimePublisher } from '../../src/infra/realtime/relay.publisher';

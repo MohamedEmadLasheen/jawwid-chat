@@ -417,6 +417,11 @@ model OutboxEvent {
   availableAt DateTime  @map("available_at") @db.Timestamptz @default(now())
   createdAt   DateTime  @map("created_at") @db.Timestamptz @default(now())
   publishedAt DateTime? @map("published_at") @db.Timestamptz
+  /// Phase 4: the drain claims a row under a LEASE rather than by writing its
+  /// terminal state, so a worker that dies mid-publish releases the row instead
+  /// of losing the event. available_at holds the lease expiry.
+  claimedAt   DateTime? @map("claimed_at") @db.Timestamptz
+  claimedBy   String?   @map("claimed_by")
 
   @@map("outbox_event")
   @@schema("chat")
@@ -509,6 +514,10 @@ model Notification {
   failureCode String?   @map("failure_code")
   attempts    Int       @default(0)
   createdAt   DateTime  @map("created_at") @db.Timestamptz @default(now())
+  /// Phase 4: the dispatch lease. scheduled_at holds its expiry, so a claim is
+  /// a visibility timeout rather than a premature "sent".
+  claimedAt   DateTime? @map("claimed_at") @db.Timestamptz
+  claimedBy   String?   @map("claimed_by")
 
   @@unique([organizationId, dedupeKey], map: "notification_dedupe_key_per_organization_key")
   @@map("notification")
