@@ -44,8 +44,28 @@ ids="$(node "$HERE/seed.mjs")"
 echo "$ids"
 
 echo
+echo "== attachment storage =="
+# Skipped when no bucket is reachable: a developer without MinIO should still
+# get the rest of the smoke, and the API falls back to the local signer in
+# exactly that case. STORAGE_* is REQUIRED in staging and production, so a
+# deployment never takes this branch.
+if curl -fsS --max-time 2 "${STORAGE_ENDPOINT:-http://127.0.0.1:9000}/minio/health/live" >/dev/null 2>&1; then
+  node "$HERE/storage.mjs"
+else
+  echo "SKIP  no MinIO at ${STORAGE_ENDPOINT:-http://127.0.0.1:9000} — storage checks not run"
+fi
+
+echo
 echo "== HTTP =="
 node "$HERE/http.mjs" "$ids"
+
+echo
+echo "== attachments end to end =="
+if curl -fsS --max-time 2 "${STORAGE_ENDPOINT:-http://127.0.0.1:9000}/minio/health/live" >/dev/null 2>&1; then
+  node "$HERE/attachments.mjs" "$ids"
+else
+  echo "SKIP  no MinIO — the attachment path was not exercised"
+fi
 
 echo
 echo "== realtime (Family -> Supervisor) =="

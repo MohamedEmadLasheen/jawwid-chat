@@ -121,10 +121,28 @@ class _MessageComposerState extends State<MessageComposer> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 if (widget.onAttach != null)
-                  IconButton(
-                    onPressed: widget.onAttach,
-                    icon: const Icon(Icons.attach_file),
-                    tooltip: l10n.composerAttach,
+                  // The attach affordance.
+                  //
+                  // ENABLED, and honest about what it does. Phase 2's
+                  // attachment work is server-side — real object storage and
+                  // object-level authorization on signed reads
+                  // (architecture §2.5) — and the phase map gives this client
+                  // the realtime client, not a picker. So the entry point
+                  // exists and says attachments are not available yet.
+                  //
+                  // A DISABLED button would have been worse: it reads as "this
+                  // is broken" or "you are not allowed", and neither is true.
+                  // An absent one reads as "the product cannot do this", which
+                  // is also untrue — the storage and the schema are built.
+                  Semantics(
+                    button: true,
+                    label: l10n.composerAttach,
+                    hint: l10n.composerAttachUnavailable,
+                    child: IconButton(
+                      onPressed: widget.onAttach,
+                      icon: const Icon(Icons.attach_file),
+                      tooltip: l10n.composerAttach,
+                    ),
                   ),
                 Expanded(
                   child: TextField(

@@ -14,6 +14,7 @@ import { CallService } from './calls/call.service';
 import { LiveKitTokenIssuer } from './calls/media-token';
 import { AttachmentService } from './attachments/attachment.service';
 import { SignedLocalObjectStorage } from './attachments/object-storage';
+import { S3ObjectStorage } from './attachments/s3-object-storage';
 import { OutboxService } from './outbox/outbox.service';
 import { OutboxWorker } from './outbox/outbox.worker';
 import { NotificationService } from './notifications/notification.service';
@@ -60,7 +61,15 @@ import { NotificationController } from './api/notification.controller';
     TypingService,
     PresenceService,
     RealtimeGateway,
-    { provide: OBJECT_STORAGE, useClass: SignedLocalObjectStorage },
+    // Real object storage when the environment supplies it, the local signer
+    // otherwise (Phase 2, architecture §2.5). `infra/env/manifest.tsv` marks
+    // every STORAGE_* variable REQUIRED for staging and production, so a
+    // deployment always gets S3/MinIO; a developer with no MinIO running gets
+    // the reference signer rather than a boot failure.
+    {
+      provide: OBJECT_STORAGE,
+      useClass: S3ObjectStorage.isConfigured() ? S3ObjectStorage : SignedLocalObjectStorage,
+    },
     { provide: PUSH_PROVIDER, useClass: LoggingPushProvider },
     { provide: MEDIA_TOKEN_ISSUER, useClass: LiveKitTokenIssuer },
     // AI #7 (D-2). The gateway ALONE cannot be the publisher: in the worker
