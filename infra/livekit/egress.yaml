@@ -1,0 +1,32 @@
+# Jawwid Chat — LiveKit Egress, local development.
+#
+# Egress is the component that actually RECORDS. The API asks it to record a
+# room; it joins as a hidden participant, mixes the audio, and writes the file
+# to S3-compatible storage directly — the file never passes through this API,
+# exactly as an attachment upload never does.
+#
+# It is a SEPARATE SERVICE from the LiveKit server, and it needs Redis to
+# receive job requests, because that is how the LiveKit server and Egress talk.
+# That is why `redis_host` below points at the same Redis this stack already
+# runs for BullMQ and the Socket.IO adapter.
+
+redis:
+  address: redis:6379
+
+api_key: devkey
+api_secret: devsecret-local-only
+ws_url: ws://livekit:7880
+
+# The default destination. The API overrides bucket and key per request (see
+# LiveKitEgressRecorder), so this is a fallback and a statement of intent
+# rather than the operative configuration.
+s3:
+  access_key: jawwid-dev
+  secret: jawwid-dev-secret
+  region: auto
+  endpoint: http://minio:9000
+  bucket: jawwid-chat-attachments
+  force_path_style: true
+
+logging:
+  level: info

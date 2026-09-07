@@ -1,0 +1,48 @@
+# Jawwid Chat — LiveKit server, local development.
+#
+# WHY THIS FILE EXISTS. `.env.example` has pointed LIVEKIT_URL at
+# ws://localhost:7880 since calling was specified, `infra/env/manifest.tsv`
+# marks LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET **required** in every
+# environment, and the API refuses to mint a call token without them — but
+# nothing in this repository ever ran a LiveKit server. A developer following
+# the setup got a correctly signed token for a room that did not exist on any
+# host, which fails as a connection timeout rather than as a missing service.
+#
+# THE KEY PAIR IS A LOCAL DEVELOPMENT CREDENTIAL AND NOTHING ELSE. It matches
+# `.env.example` so the stack works out of the box. Staging and production
+# inject their own from the secret store (see the deploy workflows); the
+# manifest marks both SECRET, and `infra/env/*.env.example` carries them as
+# blanks with an "inject from the secret store" note rather than a value.
+
+port: 7880
+# The TCP fallback for networks that block UDP. Without it, a parent on a
+# restrictive mobile network cannot establish media at all — which is the
+# commonest real-world failure and the least visible one, because everything
+# else about the call works.
+rtc:
+  tcp_port: 7881
+  # A narrow UDP range so docker-compose can publish it explicitly. The default
+  # is the whole ephemeral range, which Docker Desktop cannot map.
+  port_range_start: 50000
+  port_range_end: 50019
+  use_external_ip: false
+
+keys:
+  # LOCAL DEVELOPMENT ONLY. Mirrors LIVEKIT_API_KEY / LIVEKIT_API_SECRET in
+  # .env.example. Anyone who can read this repository can mint a token for a
+  # LOCAL server, which is the point: it is a development fixture, and it is
+  # why the same value must never appear in a deployed environment.
+  devkey: devsecret-local-only
+
+logging:
+  level: info
+  json: false
+
+# No room auto-creation from the client side is needed: the API mints a token
+# whose `roomJoin` grant names one server-chosen room, and LiveKit creates the
+# room on first join. `roomCreate` is false in every token this API issues, so
+# a client still cannot name a room of its own.
+room:
+  auto_create: true
+  empty_timeout: 300
+  departure_timeout: 20

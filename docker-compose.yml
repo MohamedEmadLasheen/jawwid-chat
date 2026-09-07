@@ -110,6 +110,62 @@ services:
       "
     restart: "no"
 
+  # ------------------------------------------------------------------------
+  # Calling. The API has minted correctly signed LiveKit tokens since Phase 5;
+  # until now nothing in this repository ran a server for them to be presented
+  # to, so a developer's call connected to nothing and failed as a timeout
+  # rather than as a missing service.
+  # ------------------------------------------------------------------------
+  livekit:
+    image: ${LIVEKIT_IMAGE:-livekit/livekit-server:v1.8}
+    container_name: jawwid-chat-livekit
+    restart: unless-stopped
+    command: ["--config", "/etc/livekit.yaml"]
+    volumes:
+      - ./infra/livekit/livekit.yaml:/etc/livekit.yaml:ro
+    ports:
+      - "${LIVEKIT_PORT:-7880}:7880"
+      # The TCP media fallback. Without it a client on a UDP-blocking network
+      # cannot establish media at all.
+      - "${LIVEKIT_TCP_PORT:-7881}:7881"
+      # The UDP media range, narrowed in livekit.yaml so it can be published
+      # explicitly — Docker Desktop cannot map the default ephemeral range.
+      - "50000-50019:50000-50019/udp"
+    healthcheck:
+      # LiveKit's own readiness endpoint. `wget` is present in the image.
+      test: ["CMD", "wget", "-qO-", "http://localhost:7880/"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # The component that ACTUALLY RECORDS. It joins a room as a hidden
+  # participant, mixes the audio and writes the file to S3-compatible storage
+  # itself — the file never passes through the API, exactly as an attachment
+  # upload never does.
+  #
+  # Optional locally: it is a heavy container (it ships a headless Chrome), and
+  # a developer working on messaging has no reason to run it. Started with
+  # `docker compose --profile recording up`. Nothing else in the stack depends
+  # on it, and the API degrades honestly without it — a recording request fails
+  # and the recording row is marked `failed` rather than sitting pending
+  # forever.
+  egress:
+    image: ${LIVEKIT_EGRESS_IMAGE:-livekit/egress:v1.9}
+    container_name: jawwid-chat-egress
+    restart: unless-stopped
+    profiles: ["recording"]
+    environment:
+      EGRESS_CONFIG_FILE: /etc/egress.yaml
+    volumes:
+      - ./infra/livekit/egress.yaml:/etc/egress.yaml:ro
+    # Egress needs to reach the LiveKit server it records from, and Redis is
+    # the channel the two use to exchange jobs.
+    depends_on:
+      livekit:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
 volumes:
   postgres-data:
   redis-data:
