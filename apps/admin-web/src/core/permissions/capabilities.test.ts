@@ -27,14 +27,20 @@ describe('role → navigation', () => {
     expect(ROLES).not.toContain('coverage')
   })
 
-  it('gives every family-facing role the console, and nothing frozen', () => {
+  it('gives every family-facing role the console and the Phase 3 areas, and nothing frozen', () => {
     // Phase 2: the Communication Operations Console is THE operator surface.
     // The brief-era areas are frozen and unrouted — a role that could "open"
     // one would reach a page whose every query hits an endpoint the API does
     // not serve, which is a worse experience than not offering it.
+    //
+    // PHASE 3 adds three live areas (directory, groups, labels) on the
+    // canonical contract. The exact-equality below was written when the console
+    // was the only live area; it is widened to the live SET rather than
+    // loosened, so a frozen area re-entering the rail still fails here — which
+    // is the assertion that was actually load-bearing.
     for (const role of ROLES) {
       const areas = visibleAreas(role)
-      expect(areas).toEqual(['console'])
+      expect(areas).toEqual(['console', 'directory', 'groups', 'labels'])
       for (const frozen of ['inbox', 'families', 'tasks', 'coverage', 'dashboard', 'settings'] as const) {
         expect(areas).not.toContain(frozen)
       }

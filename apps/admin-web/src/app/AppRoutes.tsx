@@ -6,6 +6,11 @@ import { LoadingState } from '@/shared/components/States'
 import { AppShell } from './AppShell'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { ConsolePage } from '@/features/conversations/ConsolePage'
+import { DirectoryPage } from '@/features/directory/DirectoryPage'
+import { FamilyDetailPage } from '@/features/directory/FamilyDetailPage'
+import { GroupsPage } from '@/features/groups/GroupsPage'
+import { GroupDetailPage } from '@/features/groups/GroupDetailPage'
+import { LabelsPage } from '@/features/labels/LabelsPage'
 import { ForbiddenPage } from './ForbiddenPage'
 import type { ReactElement } from 'react'
 
@@ -43,6 +48,20 @@ export function AppRoutes() {
           path="/console/:conversationId"
           element={<Area area="console"><ConsolePage /></Area>}
         />
+        {/*
+          Phase 3 — the business model. New routes alongside the console; the
+          frozen brief-era `/families` route is NOT revived, and nothing here
+          touches the console's own paths.
+        */}
+        <Route path="/directory" element={<Area area="directory"><DirectoryPage /></Area>} />
+        <Route
+          path="/directory/:familyId"
+          element={<Area area="directory"><FamilyDetailPage /></Area>}
+        />
+        <Route path="/groups" element={<Area area="groups"><GroupsPage /></Area>} />
+        <Route path="/groups/:groupId" element={<Area area="groups"><GroupDetailPage /></Area>} />
+        <Route path="/labels" element={<Area area="labels"><LabelsPage /></Area>} />
+
         <Route path="/forbidden" element={<ForbiddenPage />} />
         {/*
           The brief-era routes (/inbox, /families, /tasks, /coverage,

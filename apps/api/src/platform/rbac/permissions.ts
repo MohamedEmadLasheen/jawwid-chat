@@ -20,6 +20,15 @@ export const Permission = {
   MESSAGES_INTERNAL: 'messages.internal',
   FAMILIES_READ: 'families.read',
   FAMILIES_ASSIGN: 'families.assign',
+  /** Phase 3: family/student profile and lifecycle, and filing a family under a label. */
+  FAMILIES_MANAGE: 'families.manage',
+  /** Phase 3: assign or transfer the teacher of a student. */
+  LEARNERS_ASSIGN_TEACHER: 'learners.assign_teacher',
+  GROUPS_READ: 'groups.read',
+  GROUPS_MANAGE: 'groups.manage',
+  LABELS_READ: 'labels.read',
+  /** Phase 3: curating the label VOCABULARY, which every supervisor shares. */
+  LABELS_MANAGE: 'labels.manage',
   CONTACTS_VIEW_PRIVATE: 'contacts.view_private',
   CALLS_START: 'calls.start',
   CALLS_ACCEPT: 'calls.accept',
@@ -63,16 +72,26 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
   [AuthzRole.TEACHER]: [
     P.CONVERSATIONS_READ, P.MESSAGES_READ, P.MESSAGES_SEND, P.FAMILIES_READ,
     P.CALLS_START, P.CALLS_ACCEPT, P.SESSIONS_MANAGE,
+    // A teacher sees the groups they teach and nothing else about groups. The
+    // roster policy narrows even that to their own groups.
+    P.GROUPS_READ,
   ],
   [AuthzRole.ADMIN]: [
     P.CONVERSATIONS_READ, P.CONVERSATIONS_MANAGE, P.MESSAGES_READ, P.MESSAGES_SEND,
     P.MESSAGES_MODERATE, P.MESSAGES_INTERNAL, P.FAMILIES_READ,
     P.CALLS_START, P.CALLS_ACCEPT, P.SESSIONS_MANAGE,
+    // Phase 3. Note the absence of LABELS_MANAGE: an admin files their own
+    // families under an existing label, but renaming or deleting one changes
+    // what every other supervisor sees, so curation is a manager's act.
+    P.FAMILIES_MANAGE, P.LEARNERS_ASSIGN_TEACHER,
+    P.GROUPS_READ, P.GROUPS_MANAGE, P.LABELS_READ,
   ],
   [AuthzRole.COVERAGE_ADMIN]: [
     P.CONVERSATIONS_READ, P.CONVERSATIONS_MANAGE, P.MESSAGES_READ, P.MESSAGES_SEND,
     P.MESSAGES_MODERATE, P.MESSAGES_INTERNAL, P.FAMILIES_READ,
     P.CALLS_START, P.CALLS_ACCEPT, P.SESSIONS_MANAGE,
+    P.FAMILIES_MANAGE, P.LEARNERS_ASSIGN_TEACHER,
+    P.GROUPS_READ, P.GROUPS_MANAGE, P.LABELS_READ,
   ],
   [AuthzRole.MANAGER]: [
     P.CONVERSATIONS_READ, P.CONVERSATIONS_MANAGE, P.MESSAGES_READ, P.MESSAGES_SEND,
@@ -80,6 +99,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     P.FAMILIES_READ, P.FAMILIES_ASSIGN, P.CONTACTS_VIEW_PRIVATE,
     P.CALLS_START, P.CALLS_ACCEPT, P.BROADCASTS_SEND, P.AUDIT_READ,
     P.SETTINGS_MANAGE, P.SESSIONS_MANAGE,
+    P.FAMILIES_MANAGE, P.LEARNERS_ASSIGN_TEACHER,
+    P.GROUPS_READ, P.GROUPS_MANAGE, P.LABELS_READ, P.LABELS_MANAGE,
   ],
   [AuthzRole.SUPER_ADMIN]: [
     P.CONVERSATIONS_READ, P.CONVERSATIONS_MANAGE, P.MESSAGES_READ, P.MESSAGES_SEND,
@@ -87,6 +108,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<AuthzRole, readonly Permission[]>
     P.FAMILIES_READ, P.FAMILIES_ASSIGN, P.CONTACTS_VIEW_PRIVATE,
     P.CALLS_START, P.CALLS_ACCEPT, P.BROADCASTS_SEND, P.AUDIT_READ,
     P.SETTINGS_MANAGE, P.USERS_MANAGE, P.SESSIONS_MANAGE,
+    P.FAMILIES_MANAGE, P.LEARNERS_ASSIGN_TEACHER,
+    P.GROUPS_READ, P.GROUPS_MANAGE, P.LABELS_READ, P.LABELS_MANAGE,
   ],
 };
 

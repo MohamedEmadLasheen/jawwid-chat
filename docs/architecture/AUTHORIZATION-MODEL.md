@@ -75,6 +75,12 @@ Family-facing staff (may take part in family conversations): `admin`,
 | `messages.internal` | read/write internal (staff-only) notes | | | ● | ● | ● | ● |
 | `families.read` | read family, learners, contacts (no channels) | own³ | via groups³ | ● | ●¹ | ● | ● |
 | `families.assign` | assign / reassign the supervisor | | | | | ● | ● |
+| `families.manage` | family/student profile and lifecycle; file a family under a label | | | ● | ● | ● | ● |
+| `learners.assign_teacher` | assign or transfer a student's teacher | | | ● | ● | ● | ● |
+| `groups.read` | list and read groups within scope | | ● | ● | ● | ● | ● |
+| `groups.manage` | create/edit groups, members, teachers, close, archive, replace | | | ● | ● | ● | ● |
+| `labels.read` | read the label vocabulary | | | ● | ● | ● | ● |
+| `labels.manage` | create, rename, delete labels themselves | | | | | ● | ● |
 | `contacts.view_private` | reserved for future private fields; nothing today | | | | | ● | ● |
 | `calls.start` | start a call in a readable conversation | ●⁴ | ● | ● | ●¹ | ● | ● |
 | `calls.accept` | join/answer a call one is invited to | ● | ● | ● | ● | ● | ● |

@@ -27,6 +27,10 @@ import type { Department, StaffRole } from '@/shared/types/domain'
 export type NavArea =
   // The Communication Operations Console — the canonical operator surface.
   | 'console'
+  // Phase 3 — the business model: families and students, groups, labels.
+  | 'directory'
+  | 'groups'
+  | 'labels'
   // Frozen brief-era areas. Still typed so the frozen pages compile; removed
   // from the rail and from the route table (PHASE-0-ADMIN-WEB-RECONCILIATION
   // §2.7), and deleted with their features in a later phase.
@@ -88,7 +92,10 @@ export function isSuperAdmin(role: StaffRole, department?: Department | null): b
  */
 export function visibleAreas(role: StaffRole, department?: Department | null): NavArea[] {
   if (isDepartment(role, department)) return []
-  if (isOperator(role, department)) return ['console']
+  // Phase 3 areas are open to every operator role. Which FAMILIES, STUDENTS and
+  // GROUPS they then see is scope, decided server-side per request -- so the
+  // rail showing an area grants nothing, exactly as this file's header says.
+  if (isOperator(role, department)) return ['console', 'directory', 'groups', 'labels']
   return []
 }
 

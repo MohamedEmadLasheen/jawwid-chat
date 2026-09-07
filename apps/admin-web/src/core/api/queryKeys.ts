@@ -16,6 +16,28 @@ export const qk = {
   conversationSearch: (q: string) => ['conversations', 'search', q] as const,
   messageSearch: (input: Record<string, unknown>) => ['search', 'messages', input] as const,
 
+  // --- Phase 3 business model (directory, groups, labels) ------------------
+  // ADDITIVE ONLY. Nothing above is edited or reordered: the console's keys and
+  // the realtime invalidation that depends on them are untouched. Phase 3 emits
+  // no realtime events, so these keys are invalidated by mutations alone.
+  directory: ['directory'] as const,
+  directoryFamilies: (filters: Record<string, unknown>) => ['directory', 'families', filters] as const,
+  directoryFamily: (id: string) => ['directory', 'families', id] as const,
+  familyLearners: (id: string) => ['directory', 'families', id, 'learners'] as const,
+  familyAssignments: (id: string) => ['directory', 'families', id, 'assignments'] as const,
+  familyLifecycle: (id: string) => ['directory', 'families', id, 'history'] as const,
+  familyLabels: (id: string) => ['directory', 'families', id, 'labels'] as const,
+  learnerTeacherHistory: (id: string) => ['directory', 'learners', id, 'teacher-history'] as const,
+
+  groups: (includeArchived: boolean) => ['groups', { includeArchived }] as const,
+  groupsAll: ['groups'] as const,
+  group: (id: string) => ['groups', id] as const,
+  groupMembers: (id: string) => ['groups', id, 'members'] as const,
+  groupTeachers: (id: string) => ['groups', id, 'teachers'] as const,
+  groupHistory: (id: string) => ['groups', id, 'history'] as const,
+
+  labels: ['labels'] as const,
+
   // --- Frozen (brief-era CRM). Unrouted; see PHASE-0-ADMIN-WEB-RECONCILIATION.
 
   duty: ['me', 'duty'] as const,

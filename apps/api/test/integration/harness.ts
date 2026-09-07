@@ -9,6 +9,9 @@ import { AccountService } from '@platform/auth/account.service';
 import { SessionService } from '@platform/auth/session.service';
 import { ThrottleService } from '@platform/auth/throttle.service';
 import { FamilyService } from '@platform/families/family.service';
+import { LearnerService } from '@platform/learners/learner.service';
+import { GroupService } from '@platform/groups/group.service';
+import { LabelService } from '@platform/labels/label.service';
 import { UserAdminService } from '@platform/users/user-admin.service';
 import { PrismaAuditService } from '@platform/audit.service';
 import type { CoverageService } from '@platform/coverage.service';
@@ -81,10 +84,15 @@ export function buildGraphOn(prisma: PrismaService) {
   const accounts = new AccountService(prisma, config, sessions, audit);
   const throttle = new ThrottleService(prisma, config);
   const auth = new AuthService(prisma, config, sessions, accounts, throttle, identity, audit);
-  const families = new FamilyService(prisma, authz, scope, audit);
   const userAdmin = new UserAdminService(prisma, authz, accounts, sessions, audit);
 
   const conversations = new ConversationService(prisma, authz, scope, outbox, identity, coverage, audit);
+  // Phase 3: FamilyService re-syncs student groups after a supervisor transfer
+  // (defect P3-1), so it is constructed after the conversation engine it uses.
+  const families = new FamilyService(prisma, authz, scope, conversations, audit);
+  const learners = new LearnerService(prisma, authz, scope, conversations, audit);
+  const groups = new GroupService(prisma, authz, scope, audit);
+  const labels = new LabelService(prisma, authz, scope, audit);
   const attachments = new AttachmentService(prisma, authz, conversations, storage);
   const messages = new MessageService(prisma, authz, conversations, outbox, config, attachments, audit);
   const approvals = new ApprovalService(prisma, authz, scope, conversations, outbox, audit);
@@ -99,7 +107,8 @@ export function buildGraphOn(prisma: PrismaService) {
   return {
     prisma, coverage, identity, authz, scope, conversations, messages, approvals,
     attachments, notifications, reminders, templates, quietHours, calls,
-    config, sessions, accounts, auth, throttle, families, userAdmin,
+    config, sessions, accounts, auth, throttle, families, userAdmin, learners,
+    groups, labels,
   };
 }
 
@@ -196,7 +205,10 @@ export async function truncate(prisma: PrismaService): Promise<void> {
              chat.message_approval, chat.call_participant,
              chat.call, chat.notification, chat.outbox_event,
              chat.conversation_participant_state, chat.conversation_member,
-             chat.message, chat.conversation, chat.learner,
+             chat.message, chat.conversation,
+             chat.group_member, chat.group_teacher, chat.group,
+             chat.family_label, chat.label,
+             chat.learner_teacher_assignment, chat.learner,
              chat.family_assignment, chat.contact, chat.family, chat.teacher,
              chat.staff, chat.session, chat.device, chat.account_token,
              chat.account_credential, chat.account_permission_override,

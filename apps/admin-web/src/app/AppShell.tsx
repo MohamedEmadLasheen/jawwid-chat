@@ -7,6 +7,9 @@ import { visibleAreas, type NavArea } from '@/core/permissions/capabilities'
 
 const AREA_PATH: Record<NavArea, string> = {
   console: '/console',
+  directory: '/directory',
+  groups: '/groups',
+  labels: '/labels',
   inbox: '/inbox',
   families: '/families',
   tasks: '/tasks',

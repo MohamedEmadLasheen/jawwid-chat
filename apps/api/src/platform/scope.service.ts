@@ -115,9 +115,30 @@ export class ScopeService {
     actor: Actor,
     now: Date = new Date(),
   ): Promise<Prisma.ConversationWhereInput> {
-    const membership: Prisma.ConversationWhereInput = {
-      members: { some: { actorId: actor.actorId, leftAt: null } },
-    };
+    // MEMBERSHIP NARROWS, IT DOES NOT WIDEN (defect P3-2).
+    //
+    // This disjunct exists for ONE case: a Teacher <-> Admin direct conversation
+    // carries no family_id, so neither participant could otherwise see it. It
+    // was previously unconditional, which made it a second, weaker route to
+    // family conversations -- a member row survives a supervisor reassignment,
+    // so a FORMER supervisor kept seeing the family's conversations in their
+    // list (title, last message preview, resolved member names) even though
+    // canRead correctly refused to open them. Historical relationship was
+    // granting current visibility, which is exactly what Phase 3 forbids.
+    //
+    // For staff the disjunct is therefore restricted to conversations with no
+    // family: anything family-scoped must come from live scope and nothing else.
+    // Contacts and teachers are unaffected -- their access IS membership, and
+    // they hold no assignment-derived scope to escape.
+    const membership: Prisma.ConversationWhereInput =
+      actor.kind === ActorKind.STAFF
+        ? {
+            AND: [
+              { familyId: null },
+              { members: { some: { actorId: actor.actorId, leftAt: null } } },
+            ],
+          }
+        : { members: { some: { actorId: actor.actorId, leftAt: null } } };
 
     if (!actor.isActive) {
       // An impossible predicate rather than an empty one: `{}` would match

@@ -41,6 +41,7 @@ model Staff {
   updatedAt      DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
   ownedFamilies  Family[]        @relation("FamilyOwner")
+  ownedGroups    Group[]         @relation("GroupOwner")
   stickyOf       Conversation[]  @relation("ConversationStickyHandler")
   assignments    FamilyAssignment[] @relation("AssignmentStaff")
 
@@ -66,6 +67,7 @@ model Family {
   learners      Learner[]
   conversations Conversation[]
   assignments   FamilyAssignment[]
+  labels        FamilyLabel[]
 
   @@map("family")
   @@schema("chat")
@@ -109,10 +111,17 @@ model Learner {
   teacherId   String?   @map("teacher_id") @db.Uuid
   teacher     Teacher?  @relation(fields: [teacherId], references: [id])
   nextClassAt DateTime? @map("next_class_at") @db.Timestamptz
+  /// Phase 3 lifecycle. A learner is never deleted; deactivation preserves the
+  /// family relationship, the teacher history and every conversation.
+  isActive           Boolean   @map("is_active") @default(true)
+  deactivatedAt      DateTime? @map("deactivated_at") @db.Timestamptz
+  deactivatedReason  String?   @map("deactivated_reason")
   createdAt   DateTime  @map("created_at") @db.Timestamptz @default(now())
   updatedAt   DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
-  conversations Conversation[]
+  conversations       Conversation[]
+  teacherAssignments  LearnerTeacherAssignment[]
+  groupMemberships    GroupMember[]
 
   @@map("learner")
   @@schema("chat")
@@ -699,7 +708,9 @@ model Teacher {
   createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
   updatedAt      DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
-  learners Learner[]
+  learners      Learner[]
+  assignments   LearnerTeacherAssignment[]
+  groupTeaching GroupTeacher[]
 
   @@map("teacher")
   @@schema("chat")
@@ -725,6 +736,142 @@ model FamilyAssignment {
   createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
 
   @@map("family_assignment")
+  @@schema("chat")
+}
+
+// =====================================================================
+// Phase 3 -- families, students, groups, supervisors and labels.
+// DDL lives in supabase/migrations/2026090713*.sql; this is the mapping.
+// =====================================================================
+
+/// Who teaches which student, WITH HISTORY. At most one live row per learner.
+/// chat.learner.teacher_id is a trigger-maintained mirror of the live row, so
+/// every pre-Phase-3 reader keeps working unchanged.
+model LearnerTeacherAssignment {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  learnerId      String    @map("learner_id") @db.Uuid
+  learner        Learner   @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  teacherId      String    @map("teacher_id") @db.Uuid
+  teacher        Teacher   @relation(fields: [teacherId], references: [id])
+  /// Written by the DATABASE (clock_timestamp()), never by the app clock:
+  /// a window boundary must not depend on which host stamped it.
+  startedAt      DateTime  @map("started_at") @db.Timestamptz @default(dbgenerated("clock_timestamp()"))
+  assignedBy     String?   @map("assigned_by") @db.Uuid
+  reason         String
+  endedAt        DateTime? @map("ended_at") @db.Timestamptz
+  endedBy        String?   @map("ended_by") @db.Uuid
+  endedReason    String?   @map("ended_reason")
+  /// Reconstructed at the Phase 3 cutover: `startedAt` is a backfilled
+  /// baseline, not a known historical start date.
+  isBackfilled   Boolean   @map("is_backfilled") @default(false)
+  createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
+
+  @@map("learner_teacher_assignment")
+  @@schema("chat")
+}
+
+/// A durable BUSINESS entity: which students are taught together, and by whom.
+/// NOT a conversation -- Phase 3 creates none and there is no conversationId.
+/// The id is stable across rename, teacher change, membership change, closure
+/// and archival; a replacement is a different row with its own id.
+model Group {
+  id                String    @id @default(uuid()) @db.Uuid
+  organizationId    String    @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  name              String
+  ownerId           String    @map("owner_id") @db.Uuid
+  owner             Staff     @relation("GroupOwner", fields: [ownerId], references: [id])
+  /// active | closed | archived. One way only; enforced by trigger.
+  state             String    @default("active")
+  replacedByGroupId String?   @map("replaced_by_group_id") @db.Uuid
+  replacedBy        Group?    @relation("GroupReplacement", fields: [replacedByGroupId], references: [id])
+  replaces          Group[]   @relation("GroupReplacement")
+  closedAt          DateTime? @map("closed_at") @db.Timestamptz
+  closedReason      String?   @map("closed_reason")
+  archivedAt        DateTime? @map("archived_at") @db.Timestamptz
+  archivedReason    String?   @map("archived_reason")
+  createdBy         String?   @map("created_by") @db.Uuid
+  createdAt         DateTime  @map("created_at") @db.Timestamptz @default(now())
+  updatedAt         DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  members  GroupMember[]
+  teachers GroupTeacher[]
+
+  @@map("group")
+  @@schema("chat")
+}
+
+/// Which students are in a group, WITH HISTORY. A departure is `leftAt` on the
+/// row, never a deleted row.
+model GroupMember {
+  id             String    @id @default(uuid()) @db.Uuid
+  groupId        String    @map("group_id") @db.Uuid
+  group          Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  learnerId      String    @map("learner_id") @db.Uuid
+  learner        Learner   @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  /// Database-written; see LearnerTeacherAssignment.startedAt.
+  joinedAt       DateTime  @map("joined_at") @db.Timestamptz @default(dbgenerated("clock_timestamp()"))
+  addedBy        String?   @map("added_by") @db.Uuid
+  leftAt         DateTime? @map("left_at") @db.Timestamptz
+  removedBy      String?   @map("removed_by") @db.Uuid
+  removedReason  String?   @map("removed_reason")
+
+  @@map("group_member")
+  @@schema("chat")
+}
+
+/// Which teachers teach a group, WITH HISTORY. Several may be current at once,
+/// which is why this is not a column on Group.
+model GroupTeacher {
+  id             String    @id @default(uuid()) @db.Uuid
+  groupId        String    @map("group_id") @db.Uuid
+  group          Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  teacherId      String    @map("teacher_id") @db.Uuid
+  teacher        Teacher   @relation(fields: [teacherId], references: [id])
+  /// Database-written; see LearnerTeacherAssignment.startedAt.
+  startedAt      DateTime  @map("started_at") @db.Timestamptz @default(dbgenerated("clock_timestamp()"))
+  addedBy        String?   @map("added_by") @db.Uuid
+  endedAt        DateTime? @map("ended_at") @db.Timestamptz
+  removedBy      String?   @map("removed_by") @db.Uuid
+  removedReason  String?   @map("removed_reason")
+
+  @@map("group_teacher")
+  @@schema("chat")
+}
+
+/// Reusable organizational metadata attached to families. NOTHING in
+/// authorization, scope or messaging reads a label. Deletion is SOFT.
+model Label {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  name           String
+  color          String?
+  description    String?
+  createdBy      String?   @map("created_by") @db.Uuid
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+  deletedBy      String?   @map("deleted_by") @db.Uuid
+  deletedReason  String?   @map("deleted_reason")
+  createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
+  updatedAt      DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  families FamilyLabel[]
+
+  @@map("label")
+  @@schema("chat")
+}
+
+/// Many-to-many. The composite primary key makes repeated application
+/// idempotent with no application-level guard.
+model FamilyLabel {
+  labelId  String   @map("label_id") @db.Uuid
+  label    Label    @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  familyId String   @map("family_id") @db.Uuid
+  family   Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  addedBy  String?  @map("added_by") @db.Uuid
+  addedAt  DateTime @map("added_at") @db.Timestamptz @default(dbgenerated("clock_timestamp()"))
+
+  @@id([labelId, familyId])
+  @@map("family_label")
   @@schema("chat")
 }
 
