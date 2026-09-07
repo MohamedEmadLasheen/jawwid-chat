@@ -44,6 +44,8 @@ export enum CommErrorCode {
   CALL_NOT_FOUND = 'COMM.CALL_NOT_FOUND',
   CALL_ALREADY_ENDED = 'COMM.CALL_ALREADY_ENDED',
   CALL_NOT_A_PARTICIPANT = 'COMM.CALL_NOT_A_PARTICIPANT',
+  /** PD-2: a family contact may join a Student Group call but never start one. */
+  PARENT_CANNOT_START_GROUP_CALL = 'COMM.PARENT_CANNOT_START_GROUP_CALL',
 }
 
 export class CommError extends Error {

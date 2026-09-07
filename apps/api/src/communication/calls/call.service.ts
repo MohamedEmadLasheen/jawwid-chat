@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../platform/prisma.service';
-import { AuthorizationService } from '../../platform/authorization.service';
+import { AuthorizationService, CallIntent } from '../../platform/authorization.service';
 import { AppConfigService } from '../../platform/app-config.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
 import { AUDIT_SERVICE, IDENTITY_SERVICE, MEDIA_TOKEN_ISSUER } from '../../platform/tokens';
@@ -77,6 +77,9 @@ export class CallService {
       // C-4: the call path runs the same admin-presence check as the message
       // path. Calling is never more permissive than messaging.
       await this.conversations.liveMembersOf(conv.id),
+      // PD-2: this is the START path. A parent is refused here and allowed on
+      // the join path below.
+      CallIntent.INITIATE,
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
@@ -187,6 +190,9 @@ export class CallService {
       // C-4: the call path runs the same admin-presence check as the message
       // path. Calling is never more permissive than messaging.
       await this.conversations.liveMembersOf(conv.id),
+      // PD-2: minting a media token is JOINING an existing call, which a parent
+      // may do. The call was already started by a teacher or an admin.
+      CallIntent.JOIN,
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 

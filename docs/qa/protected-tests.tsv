@@ -22,3 +22,4 @@ apps/api/test/unit/red-team/storage-and-integrity-attacks.spec.ts	16	RT-005/007/
 db/tests/br1_invariants.sql	20	RT-024/025 BR-1 structural backstop, proven against the database with the application bypassed
 db/tests/schema_acceptance.sql	61	RT-023 fresh-database acceptance: every table, FK, trigger and index a running system needs
 apps/api/test/unit/auth/identity-seam.spec.ts	6	RT-001 containment: the x-actor-id identity seam cannot start outside local/test/ci
+apps/api/test/unit/authorization/pd002-group-call-initiation.spec.ts	15	PD-2 a parent may join a Student Group call but never start one; BR-1/C-4 still take precedence

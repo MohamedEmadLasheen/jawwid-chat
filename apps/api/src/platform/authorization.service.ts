@@ -30,6 +30,23 @@ export interface SendIntent {
   requestedMode?: string;
 }
 
+/**
+ * Why the actor is being authorized for a call.
+ *
+ * Product decision PD-2 (closed 2026-09-07): a parent may JOIN a Student Group
+ * call but may never START one. Starting is reserved for a teacher or
+ * authorized staff. The two paths therefore need different verdicts for the
+ * same actor, conversation and participant set.
+ *
+ * The default is INITIATE, the stricter of the two, so a caller that does not
+ * state its intent is denied rather than allowed.
+ */
+export const CallIntent = {
+  INITIATE: 'initiate',
+  JOIN: 'join',
+} as const;
+export type CallIntent = (typeof CallIntent)[keyof typeof CallIntent];
+
 type Conv = Pick<
   Conversation,
   | 'id'
@@ -454,6 +471,9 @@ export class AuthorizationService {
      *  Calling is never more permissive than messaging, so it runs the same
      *  check with the same data. */
     liveMembers: LiveMember[] = [],
+    /** PD-2: starting a group call is not the same permission as joining one.
+     *  Defaults to the stricter INITIATE. */
+    intent: CallIntent = CallIntent.INITIATE,
   ): Promise<Decision> {
     const sendable = await this.canSend(
       actor,
@@ -474,6 +494,27 @@ export class AuthorizationService {
         'BR-1: a teacher and a parent may not share a 1:1 call',
       );
     }
+
+    /**
+     * PD-2 (closed 2026-09-07). A group call is the official Teacher <-> Parent
+     * channel (PRD section 9), and it is opened by Jawwid, not by the family: a
+     * parent may join a Student Group or Class Group call but may never start
+     * one. Evaluated AFTER the BR-1 checks above so that a constitutional
+     * violation always reports its own code rather than this policy one.
+     *
+     * The parent's 1:1 call to their handler (PRD section 9, "1:1 call |
+     * Parent | Parent <-> Admin") is untouched: this rule is scoped to group
+     * conversations.
+     */
+    const isGroup =
+      conv.type === ConversationType.STUDENT_GROUP || conv.type === ConversationType.CLASS_GROUP;
+    if (intent === CallIntent.INITIATE && isGroup && actor.kind === ActorKind.CONTACT) {
+      return deny(
+        CommErrorCode.PARENT_CANNOT_START_GROUP_CALL,
+        'PD-2: a parent may join a group call but may not start one; a teacher or admin starts it',
+      );
+    }
+
     return allow();
   }
 }
