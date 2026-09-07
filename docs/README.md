@@ -33,6 +33,7 @@ no other document may restate or reinterpret them.
 | `recovery/` | [PHASE-0-ADMIN-WEB-RECONCILIATION.md](recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md) | Admin Web classified; vocabulary/contract migration; console direction |
 | `recovery/` | [PHASE-0-REPORT.md](recovery/PHASE-0-REPORT.md) | the Phase 0 final report and Phase 1 readiness |
 | `recovery/` | [PHASE-1-REPORT.md](recovery/PHASE-1-REPORT.md) | **what Phase 1 actually built and what it deliberately did not** — authentication, sessions, identity, RBAC, scope, tenancy, RLS; the five defects found on the way; the verification record |
+| `recovery/` | [PHASE-2-REPORT.md](recovery/PHASE-2-REPORT.md) | **what Phase 2 actually built and what it deliberately did not** — conversations, messaging, realtime delivery, status, reply/quote, edit, delete, reactions, forwarding, search, typing, and the mobile client; the seven defects found on the way; the verification record |
 | `qa/` | [protected-tests.tsv](qa/protected-tests.tsv) | the protected security tests (JC-011 guard) — canonical list |
 | `red-team/` | [findings.md](red-team/findings.md) | the security findings register (RT-xxx) — canonical status of each finding |
 
