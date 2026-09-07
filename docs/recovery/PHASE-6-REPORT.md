@@ -406,7 +406,7 @@ mid-run.
 | Check | Command | Result |
 |---|---|---|
 | API typecheck | `npm run typecheck` (apps/api) | **pass**, clean |
-| API unit | `npm run test:unit` | **pass** — 326/326, 22 suites |
+| API unit | `npm run test:unit` | **pass** — 375/375, 26 suites |
 | API integration | `npm run test:int` | 723/737 — see below |
 | Phase 6 suites | `--testPathPattern phase6` | **pass** — 96/96, 3 suites |
 | Admin Web typecheck | `npm run typecheck` | **pass**, clean |
@@ -435,11 +435,37 @@ pending/rejected rendering is untouched.
   which pass.
 - **2 — `tenant-and-rbac.spec.ts`: `automation.manage` is in the database but not
   in the TypeScript mirror.** That permission belongs to a **peer's in-flight
-  Phase 7 work** in the same working tree (migration
-  `20260907180500_chat_phase7_automation.sql`). Phase 6's own
-  `moderation_rules.manage` is present on **both** sides and does not appear in
-  the diff. Not fixed here: it is another agent's file and another phase's
-  change.
+  Phase 7 work** (migration `20260907180500_chat_phase7_automation.sql`, committed;
+  the mirror entry was still uncommitted in the shared tree at the time of
+  writing). Phase 6's own `moderation_rules.manage` is present on **both** sides
+  and does not appear in the diff. Not fixed here: it is another agent's file
+  and another phase's change.
+
+Both were re-confirmed from a **detached worktree checked out at the Phase 6
+commit**, so they are properties of the committed tree and not of a dirty shared
+working directory.
+
+---
+
+## 6a. Provenance, and one thing this phase does not own
+
+This repository is worked by several agents in ONE shared working tree, and that
+had two consequences worth recording rather than hiding:
+
+1. **`apps/api/src/worker.ts` is not in the Phase 6 commit.** The three-line
+   change that drives `ModerationSweeper` from the existing worker loop was swept
+   into a peer's Phase 7 commit (`86b43a8`) by an over-broad `git add` before
+   Phase 6 was committed. The code is correct and present; its provenance is
+   simply wrong. It was left there rather than extracted, because rewriting
+   another agent's commit is the destructive act this project's shared-tree
+   protocol forbids.
+
+2. **Everything else was verified out of the index, not off disk.** The peer's
+   uncommitted `AUTOMATION_MANAGE` line lives in `permissions.ts` beside Phase
+   6's own addition. It was excluded from the commit by staging a version built
+   from `HEAD` plus only the Phase 6 hunks, and then restoring the peer's line to
+   the working tree. `git show --name-only` on the Phase 6 commit contains no
+   Phase 7, AI, automation, knowledge, suggestion or summary file.
 
 ---
 
