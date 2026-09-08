@@ -10,6 +10,8 @@ import { ModerationSweeper } from './communication/moderation/moderation.sweeper
 import { AutomationSweeper } from './ai/automation/automation.sweeper';
 import { RiskSweeper } from './ai/risk/risk.sweeper';
 import { readBuildInfo } from './infra/build-info';
+import { createErrorTracker } from './infra/observability/error-tracker';
+import { installProcessErrorHandlers, flushErrorTracker } from './infra/observability/process-errors';
 
 /**
  * Background worker entrypoint. Same image as the API, different command
@@ -46,6 +48,14 @@ async function bootstrap(): Promise<void> {
   const log = new Logger('Worker');
   const build = readBuildInfo();
 
+  // The worker needs this MORE than the API does, not less. An API fault
+  // surfaces as a 500 somebody sees; a worker fault is a reminder that silently
+  // never went out, and the loop below deliberately swallows every subsystem
+  // error to keep the other subsystems running (§28). Without a tracker those
+  // swallowed errors are a log line on a machine nobody is watching.
+  const errors = createErrorTracker('worker', build);
+  installProcessErrorHandlers(errors);
+
   // No HTTP server: this process serves no traffic and must not hold a port.
   const app = await NestFactory.createApplicationContext(AppModule, {
     logger: ['error', 'warn', 'log'],
@@ -81,7 +91,9 @@ async function bootstrap(): Promise<void> {
     const wait = setInterval(() => {
       if (!draining) {
         clearInterval(wait);
-        void app.close().then(() => process.exit(0));
+        void flushErrorTracker(errors)
+          .then(() => app.close())
+          .then(() => process.exit(0));
       }
     }, 100);
     // Backstop, so a wedged batch cannot block the deployment forever.
@@ -107,6 +119,7 @@ async function bootstrap(): Promise<void> {
       // Never exit on a drain failure: the row stays pending and is retried.
       // A worker that dies on one bad event stops delivering every other event.
       log.error(`drain failed: ${e instanceof Error ? e.message : 'unknown error'}`);
+      errors.captureException(e, { component: 'worker', route: 'outbox.drain' });
     }
 
     // Each of the three below is wrapped separately, for the same reason the
@@ -116,6 +129,7 @@ async function bootstrap(): Promise<void> {
       worked += await notifications.dispatchDue();
     } catch (e) {
       log.error(`notification dispatch failed: ${e instanceof Error ? e.message : 'unknown error'}`);
+        errors.captureException(e, { component: 'worker', route: 'notifications.dispatchDue' });
     }
 
     try {
@@ -124,6 +138,7 @@ async function bootstrap(): Promise<void> {
       worked += await broadcasts.drain();
     } catch (e) {
       log.error(`broadcast fan-out failed: ${e instanceof Error ? e.message : 'unknown error'}`);
+        errors.captureException(e, { component: 'worker', route: 'broadcast.drain' });
     }
 
     if (Date.now() - lastSweep >= SWEEP_MS) {
@@ -134,6 +149,7 @@ async function bootstrap(): Promise<void> {
         await sweeper.sweep();
       } catch (e) {
         log.error(`sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`);
+        errors.captureException(e, { component: 'worker', route: 'calls.sweep' });
       }
 
       // Phase 7, wrapped separately for the same reason every subsystem above
@@ -144,12 +160,14 @@ async function bootstrap(): Promise<void> {
         await automation.sweep();
       } catch (e) {
         log.error(`automation sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`);
+        errors.captureException(e, { component: 'worker', route: 'automation.sweep' });
       }
 
       try {
         await risk.sweep();
       } catch (e) {
         log.error(`risk sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`);
+        errors.captureException(e, { component: 'worker', route: 'risk.sweep' });
       }
 
       // Its own try, for the same reason every other subsystem here has one: a

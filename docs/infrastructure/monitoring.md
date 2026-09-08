@@ -11,7 +11,7 @@ sanitised probe errors — exist and are verified.
 
 | Concern | Tool | Status |
 |---|---|---|
-| Errors | Sentry (`SENTRY_DSN`) | variable defined, SDK not wired |
+| Errors | Sentry (`SENTRY_DSN`) | **implemented and tested** (§7) |
 | Traces / metrics | OpenTelemetry → OTLP (`OTEL_EXPORTER_OTLP_ENDPOINT`) | variable defined, not wired |
 | Dashboards / alerts | Grafana (or the hosting platform's built-in) | not provisioned |
 | Logs | structured JSON to stdout, collected by the platform | **implemented and tested** (§3) |
@@ -158,3 +158,51 @@ on retry.
   bootstrap, which does not exist yet.
 - No SLOs agreed. Suggested starting point: API availability 99.5% monthly,
   p95 latency < 500 ms, message-send success > 99.9%.
+
+---
+
+## 7. Error tracking (implemented 2026-09-08)
+
+Closes blocker **B-4** for errors. `SENTRY_DSN` was `req` in staging and
+production while nothing read it -- an operator obliged to supply a credential
+that no code consumed, and "detection = a person noticing" in the meantime.
+
+**The seam.** Nothing in the application imports Sentry; it imports
+`ErrorTracker`. `createErrorTracker()` returns the real one when `SENTRY_DSN`
+is set and `NoopErrorTracker` when it is not -- the same shape as
+`OBJECT_STORAGE`, `PUSH_PROVIDER`, `CALL_RECORDER` and `AI_PROVIDER`. The SDK is
+reached through a lazy `require`, so a process without a DSN never loads it.
+
+**What is reported.** 5xx responses, plus `unhandledRejection` and
+`uncaughtException` in both the API and the worker, plus every subsystem error
+the worker loop deliberately swallows -- those are the ones that would otherwise
+be a log line on a machine nobody is watching. A 4xx is **not** reported: a 403
+from the authorization service is the system working, and reporting every
+correct refusal would bury the one real fault of the day.
+
+**What is never transmitted.** The privacy rule is that conversation content
+does not leave the systems that govern it, and an error tracker is the easiest
+place to break that rule by accident. Three layers, and the third does not trust
+the other two:
+
+1. the `Console`, `LocalVariables`, `RequestData`, `Http` and `NodeFetch`
+   integrations are not loaded. `LocalVariables` is the most dangerous default
+   in the SDK for this application -- in this codebase a stack-frame local is
+   routinely a message body or a drafted reply;
+2. `sendDefaultPii` is false and `tracesSampleRate` is 0;
+3. `beforeSend` deletes `request`, `user`, `breadcrumbs` and `server_name`
+   outright, strips `vars` and source context from every frame, and runs the
+   message, every exception value and every `extra` string through the **same**
+   `redact()` the log store uses -- so the two can never disagree about what a
+   secret looks like.
+
+The request is deleted rather than filtered on purpose: an allowlist of safe
+request fields is a list somebody eventually adds `body` to.
+
+Tags carry the route **pattern** (`POST /conversations/:id/messages`, never a
+resolved URL), `actor_kind`, status and component; `extra` carries the request
+id, so an event joins the log line that recorded the same failure.
+
+Verified by `test/unit/observability/error-tracker.spec.ts` (12 assertions),
+which tests `scrubEvent` directly rather than through a live SDK, so every claim
+above about what does not leave this process is executable.

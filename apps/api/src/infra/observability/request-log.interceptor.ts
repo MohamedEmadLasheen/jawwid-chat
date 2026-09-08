@@ -2,6 +2,7 @@ import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nes
 import { Observable, tap } from 'rxjs';
 import { randomUUID } from 'node:crypto';
 import { JsonLogger } from './json-logger';
+import { NoopErrorTracker, type ErrorTracker } from './error-tracker';
 import type { Actor } from '../../platform/types';
 
 interface LoggableRequest {
@@ -42,7 +43,14 @@ interface LoggableResponse {
  */
 @Injectable()
 export class RequestLogInterceptor implements NestInterceptor {
-  constructor(private readonly logger: JsonLogger) {}
+  /**
+   * The tracker defaults to the inert one, so every existing construction site
+   * -- and every test -- keeps working unchanged and reports nothing.
+   */
+  constructor(
+    private readonly logger: JsonLogger,
+    private readonly errors: ErrorTracker = new NoopErrorTracker(),
+  ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     if (context.getType() !== 'http') return next.handle();
@@ -81,6 +89,20 @@ export class RequestLogInterceptor implements NestInterceptor {
           // "error" level would merge them back together.
           const status = statusOf(e);
           emit(status, status >= 500 ? 'error' : 'warn');
+
+          // Only 5xx reaches the error tracker. A 403 from the authorization
+          // service is the system WORKING -- refusals are the most common
+          // outcome on several of these routes -- and reporting them would bury
+          // the one real fault of the day under ten thousand correct denials.
+          if (status >= 500) {
+            this.errors.captureException(e, {
+              route,
+              requestId,
+              actorKind: request.actor?.kind,
+              status,
+              component: 'api',
+            });
+          }
         },
       }),
     );
