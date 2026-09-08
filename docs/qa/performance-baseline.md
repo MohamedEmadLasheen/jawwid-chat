@@ -48,12 +48,16 @@ on-duty check, the BR-1 database trigger, receipt rows and the outbox event.
 | Scenario | n | p50 ms | p95 ms | p99 ms | max ms | ops/sec |
 |---|---:|---:|---:|---:|---:|---:|
 | message send (sequential, 1 actor) | 200 | 61.49 | 92.94 | 101.37 | 112.21 | 16.8 |
-| message send (20 concurrent) | 200 | 129.62 | 254.52 | 417.38 | 465.04 | **84.5** |
+| message send (20 concurrent) | 200 | 129.62 | 254.52 | 417.38 | 465.04 | 84.5 † |
 | message history (page of 50) | 100 | 20.77 | 37.86 | 45.06 | 51.67 | 46.8 |
 | unread count | 100 | 10.46 | 11.30 | 17.92 | 23.84 | 92.9 |
 | conversation resolve + membership | 100 | 3.25 | 4.42 | 5.13 | 11.81 | 288.2 |
 | login (verify + session issue) | 20 | 70.20 | 74.64 | 75.51 | 75.51 | 14.2 |
 | action throttle check (added by Phase 8) | 200 | 1.50 | 2.83 | 3.31 | 3.54 | 597.0 |
+
+† The ops/sec figures in this table are single measurements. §2a shows the
+concurrent one varies by roughly ±30% between runs on this machine; treat every
+throughput number here as indicative and none as a capacity claim.
 
 ### 2a. The concurrency curve — **measured 2026-09-08 (closure pass)**
 
@@ -71,26 +75,39 @@ database, so they are comparable with each other; they are not comparable with
 | 50 | 250 | 406.9 | 939.2 | 1068.3 | 67.5 |
 | 100 | 500 | 709.7 | 1474.8 | 1668.6 | 78.3 |
 
-**This corrects an over-reading in the first version of this document.** That
-version said "concurrency helps, which is the important result… a 5x gain",
-comparing 20 concurrent against the *sequential* baseline. Measured across a
-range, the real shape is different and more useful:
+**This section has now been wrong twice, in opposite directions, and the third
+measurement is what settles it.**
 
-- **Throughput is flat.** It sits in a 47–78 ops/sec band across a tenfold
-  increase in concurrency, with no trend — the ordering (47.2 at 20 being lower
-  than 63.4 at 10) is run-to-run noise on a laptop, not a curve. Do not read
-  meaning into the ordering; read the band.
-- **Latency grows linearly.** p50 tracks roughly 7–8 ms × concurrent senders,
-  monotonically, across every step. That signal is clean.
+Version 1 of this document said "concurrency helps — a 5x gain", from a single
+20-concurrent point compared against the sequential baseline. Version 2 replaced
+that with "throughput is flat; the service saturates by ~10 concurrent", from one
+four-point run. Running the same curve twice more, on the same machine and the
+same database, shows the second claim was as over-read as the first:
 
-Flat throughput plus linearly rising latency is the signature of a **saturated**
-service: the ceiling is already reached by about ten concurrent senders, and
-concurrency beyond it buys queueing, not work. The 1→10 gain is real; the
-implication that it continues is not.
+| concurrent | run 1 ops/sec | run 2 ops/sec | run 3 ops/sec | p50 run 1 | p50 run 2 | p50 run 3 |
+|---:|---:|---:|---:|---:|---:|---:|
+| 10 | 63.4 | 62.5 | 69.1 | 88.7 | 79.5 | 73.8 |
+| 20 | 47.2 | 70.9 | 98.3 | 209.0 | 131.4 | 108.8 |
+| 50 | 67.5 | 120.0 | 116.8 | 406.9 | 233.4 | 245.0 |
+| 100 | 78.3 | 126.0 | 103.1 | 709.7 | 447.2 | 550.0 |
 
-So the honest statement is: **on this machine the message-send path tops out at
-roughly 50–80 messages per second**, and that is a property of one Node process
-against one local Postgres, not a capacity figure for a deployed system.
+**Throughput is not reliably measurable on this machine.** At 100 concurrent the
+three runs give 78, 126 and 103 ops/sec — a spread of about ±30% — and the
+*trend* itself flips: run 1 looks flat-to-declining, runs 2 and 3 look rising.
+A laptop running Docker, a test runner and whatever else the developer has open
+is not an instrument that can resolve a throughput curve. **Do not quote a
+throughput number from this document, and do not claim the system does or does
+not scale on the strength of it.**
+
+**Latency growth is the one signal that survives.** p50 rises monotonically with
+concurrency in every run, roughly linearly, in all three. That is consistent and
+is the useful local result: adding concurrent senders adds queueing delay per
+message. Whether it also adds aggregate throughput is a question this
+environment cannot answer.
+
+What that leaves is a regression tripwire, not a capacity model: if p50 at 20
+concurrent becomes 800 ms on this same machine, something changed. That is worth
+having, and it is all §2a is.
 
 ### What is worth noticing
 
