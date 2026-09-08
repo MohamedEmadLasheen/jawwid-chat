@@ -14,7 +14,7 @@
  */
 import { buildGraph, seed, truncate, Scenario } from './harness';
 import { AuthError, AuthErrorCode } from '@platform/auth/auth.errors';
-import { ActionScope } from '@platform/auth/throttle.service';
+import { ActionScope, ThrottleScope } from '@platform/auth/throttle.service';
 
 const g = buildGraph();
 let s: Scenario;
@@ -199,5 +199,63 @@ describe('authenticated action throttling', () => {
     for (const scope of Object.values(ActionScope)) {
       expect(await codeOf(() => g.throttle.hitAction(scope, s.ownerId))).toBe('NO_ERROR');
     }
+  });
+});
+
+/**
+ * The database must accept EVERY scope the application can produce.
+ *
+ * This exists because it caught a real one. `chat.auth_throttle.scope` is
+ * governed by a CHECK constraint that each new migration RESTATES in full --
+ * `drop constraint if exists` then `add constraint` with a retyped list. Omit
+ * one entry and the migration does not merely fail to add it, it REMOVES it,
+ * and the two ways that surfaces are both bad:
+ *
+ *   * on a database where anyone has ever used forgot-password, ADD CONSTRAINT
+ *     fails outright ("is violated by some row") and the migration aborts;
+ *   * on a fresh one it applies cleanly, and then the first forgot-password
+ *     request raises a check violation from inside chat.record_auth_attempt.
+ *
+ * `reset_request_subject` was dropped exactly that way. It is the per-TARGET
+ * axis -- the one address rotation cannot avoid (AUTH-THROTTLING.md §2) -- so
+ * losing it silently removes the control that makes password spraying
+ * expensive.
+ *
+ * Iterating the ENUMS rather than a hand-written list is the point: a scope
+ * added in TypeScript and forgotten in SQL fails here, at the boundary where
+ * the two descriptions disagree, instead of in production.
+ */
+describe('the throttle vocabulary in code and in the database agree', () => {
+  it('accepts every unauthenticated scope', async () => {
+    for (const scope of Object.values(ThrottleScope)) {
+      expect(await codeOf(() => g.throttle.hit(scope, `probe-${scope}`))).toBe('NO_ERROR');
+    }
+  });
+
+  it('accepts every authenticated action scope', async () => {
+    for (const scope of Object.values(ActionScope)) {
+      expect(await codeOf(() => g.throttle.hitAction(scope, s.ownerId))).toBe('NO_ERROR');
+    }
+  });
+
+  it('covers the whole constraint, so a scope in SQL but not in code is also visible', async () => {
+    // The other direction. If SQL permits a scope no enum names, either the
+    // enum is missing one or the migration is carrying a dead value -- both are
+    // worth knowing, and neither is visible from the code alone.
+    const rows = await g.prisma.$queryRawUnsafe<Array<{ def: string }>>(`
+      select pg_get_constraintdef(oid) as def
+        from pg_constraint
+       where conname = 'auth_throttle_scope_check'
+    `);
+    expect(rows).toHaveLength(1);
+
+    const inSql = new Set((rows[0].def.match(/'[a-z_]+'/g) ?? []).map((q) => q.slice(1, -1)));
+    const inCode = new Set<string>([
+      ...Object.values(ThrottleScope),
+      ...Object.values(ActionScope),
+    ]);
+
+    expect([...inCode].filter((s) => !inSql.has(s))).toEqual([]);
+    expect([...inSql].filter((s) => !inCode.has(s))).toEqual([]);
   });
 });
