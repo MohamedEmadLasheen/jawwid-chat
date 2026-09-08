@@ -268,6 +268,21 @@ jobs:
           echo "restored chat.config rows: $rows"
           [ "$rows" -gt 0 ] || { echo "::error::G-41 FAIL — restored database has no config rows"; exit 1; }
 
+          # AND the application must be able to USE it. This is the check that
+          # found the last two recovery defects, and neither was visible to
+          # anything above: a restore can pass all six suites and every row
+          # count while chat_app has no USAGE on the schema and cannot read a
+          # single row. table-level has_table_privilege() does not depend on
+          # schema USAGE, so the suites are blind to it by construction.
+          psql -v ON_ERROR_STOP=1 "$recovered" -c \
+            "alter role chat_app login password 'ci-drill-only'; grant connect on database jawwid_chat_recovered to chat_app;"
+          app_url="postgres://chat_app:ci-drill-only@localhost:5432/jawwid_chat_recovered"
+          app_rows=$(psql -tAX "$app_url" -c 'select count(*) from chat.config') || {
+            echo "::error::G-41 FAIL — the application role cannot read the restored database"; exit 1; }
+          echo "chat_app read $app_rows config rows from the restored database"
+          [ "$app_rows" = "$rows" ] || {
+            echo "::error::G-41 FAIL — chat_app sees $app_rows of $rows rows"; exit 1; }
+
   # ------------------------------------------------------------------- images
   # AI #7. Deployment artifacts must build, and must not run privileged.
   images:

@@ -156,6 +156,21 @@ host_url() {
                           -e 's|@127\.0\.0\.1:|@host.docker.internal:|'
 }
 
+# Read ONE value from the target. Separate from target_sql because that one
+# prints psql's table formatting -- headers, rules, "(1 row)" -- which is fine
+# for a statement whose output is discarded and useless for a comparison. Using
+# it for one made this script refuse every restore, on the grounds that a brand
+# new empty database already had the schema.
+target_scalar() {
+  if command -v psql >/dev/null 2>&1; then
+    psql -tAq -v ON_ERROR_STOP=1 -d "$TARGET" -c "$1"
+  else
+    docker run --rm --network host --add-host=host.docker.internal:host-gateway \
+      "${PG_IMAGE:-postgres:17-alpine}" \
+      psql -tAq -v ON_ERROR_STOP=1 -d "$(host_url "$TARGET")" -c "$1"
+  fi
+}
+
 # Run one statement against the target, using local psql if present.
 target_sql() {
   if command -v psql >/dev/null 2>&1; then
@@ -198,7 +213,7 @@ target_sql() {
 # its ACL, and an existing one would make that CREATE fail under --exit-on-error.
 # Refusing early with the remedy beats failing half way through a restore.
 if [ -n "$SCHEMA" ]; then
-  if [ "$(target_sql "select count(*) from pg_namespace where nspname = '$SCHEMA'" | tr -d '[:space:]')" != "0" ]; then
+  if [ "$(target_scalar "select count(*) from pg_namespace where nspname = '$SCHEMA'" | tr -d '[:space:]')" != "0" ]; then
     cat >&2 <<MSG
 refusing: schema "$SCHEMA" already exists on the target.
 
