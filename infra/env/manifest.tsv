@@ -102,8 +102,19 @@ CORE_WEBHOOK_SECRET	core	yes	opt	req	req
 CORE_TIMEOUT_MS	core	no	opt	req	req
 CORE_RETRY_MAX	core	no	opt	req	req
 SENTRY_DSN	observability	yes	opt	req	req
-OTEL_SERVICE_NAME	observability	no	opt	req	req
-OTEL_EXPORTER_OTLP_ENDPOINT	observability	no	opt	req	req
+# OTEL_* are `opt` EVERYWHERE, and that is a correction rather than a relaxation.
+# They were `req` in staging and production while NO CODE READ THEM -- there is
+# no OpenTelemetry SDK in apps/api/package.json and no `OTEL_` reference in
+# src/. A deployment was therefore refused unless an operator supplied an
+# endpoint that nothing would ever export to, which teaches people that this
+# file's requirements are decorative -- the opposite of what `forbid` above is
+# for. SENTRY_DSN stays `req`: it IS consumed now (infra/observability/
+# sentry-error-tracker.ts).
+#
+# Flip these back to `req` in the same commit that wires an OTLP exporter, not
+# before. Tracked as B-4 in docs/recovery/PHASE-8-CLOSURE.md.
+OTEL_SERVICE_NAME	observability	no	opt	opt	opt
+OTEL_EXPORTER_OTLP_ENDPOINT	observability	no	opt	opt	opt
 OTEL_TRACES_SAMPLER_ARG	observability	no	opt	opt	opt
 HEALTH_PROBE_TIMEOUT_MS	observability	no	opt	opt	opt
 GIT_COMMIT	release	no	opt	req	req
