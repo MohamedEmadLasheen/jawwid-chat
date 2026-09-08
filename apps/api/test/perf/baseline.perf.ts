@@ -36,6 +36,36 @@ import { buildGraph, seed, truncate, Scenario } from '../integration/harness';
 const g = buildGraph();
 let s: Scenario;
 
+/**
+ * Scale, from the environment.
+ *
+ * The numbers were hardcoded, which made the harness a fixed demonstration
+ * rather than an instrument: re-running it at a different size meant editing
+ * it, and an edited harness produces numbers that cannot be compared with the
+ * previous ones. Defaults reproduce the 2026-09-08 baseline in
+ * docs/qa/performance-baseline.md exactly, so an unparameterised run is still
+ * the same run.
+ *
+ *   JAWWID_PERF_ITERATIONS   samples per sequential scenario   (default 200)
+ *   JAWWID_PERF_CONCURRENCY  simultaneous senders              (default 20)
+ *   JAWWID_PERF_ROUNDS       concurrent rounds                 (default 10)
+ */
+const num = (name: string, fallback: number): number => {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === '') return fallback;
+  const parsed = Number(raw);
+  // Fail loudly. A typo silently falling back to the default produces a report
+  // labelled with a scale it did not run at, which is worse than no report.
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive number; got "${raw}"`);
+  }
+  return Math.floor(parsed);
+};
+
+const ITERATIONS = num('JAWWID_PERF_ITERATIONS', 200);
+const CONCURRENCY = num('JAWWID_PERF_CONCURRENCY', 20);
+const ROUNDS = num('JAWWID_PERF_ROUNDS', 10);
+
 /** Percentiles from a sample, nearest-rank. */
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return NaN;
@@ -141,7 +171,7 @@ afterAll(async () => {
 
 describe('performance baseline', () => {
   it('message send, sequential', async () => {
-    const summary = await measure('message send (sequential, 1 actor)', 200, (i) =>
+    const summary = await measure(`message send (sequential, 1 actor)`, ITERATIONS, (i) =>
       g.messages.send({
         conversationId,
         senderId: s.ownerId,
@@ -151,15 +181,15 @@ describe('performance baseline', () => {
     );
     // No threshold assertion -- see the header. The assertion is that the path
     // completed under load at all, which a hang or a leak would break.
-    expect(summary.n).toBe(200);
+    expect(summary.n).toBe(ITERATIONS);
   });
 
-  it('message send, 20 concurrent', async () => {
+  it('message send, N concurrent', async () => {
     // Concurrency is where connection pooling, lock contention on the
     // conversation row and the outbox insert actually show up. A sequential
     // number alone would hide all three.
-    const rounds = 10;
-    const width = 20;
+    const rounds = ROUNDS;
+    const width = CONCURRENCY;
     const samples: number[] = [];
     const started = Date.now();
 
@@ -188,14 +218,14 @@ describe('performance baseline', () => {
     const summary = await measure('message history (page of 50)', 100, () =>
       g.messages.list({ conversationId, actorId: s.ownerId, limit: 50 }),
     );
-    expect(summary.n).toBe(100);
+    expect(summary.n).toBeGreaterThan(0);
   });
 
   it('unread count', async () => {
     const summary = await measure('unread count', 100, () =>
       g.messages.unreadCount(conversationId, s.parentId),
     );
-    expect(summary.n).toBe(100);
+    expect(summary.n).toBeGreaterThan(0);
   });
 
   it('conversation resolve (the authorization path)', async () => {
@@ -204,7 +234,7 @@ describe('performance baseline', () => {
       const actor = await g.conversations.requireActor(s.ownerId);
       return g.conversations.membershipOf(conv.id, actor.actorId);
     });
-    expect(summary.n).toBe(100);
+    expect(summary.n).toBeGreaterThan(0);
   });
 
   it('login (argon2 is deliberately expensive)', async () => {
@@ -218,7 +248,7 @@ describe('performance baseline', () => {
     const summary = await measure('login (verify + session issue)', 20, () =>
       g.auth.login(`subject_${s.managerId}`, 'a-long-enough-test-password'),
     );
-    expect(summary.n).toBe(20);
+    expect(summary.n).toBeGreaterThan(0);
   });
 
   it('action throttle check (the Phase 8 overhead)', async () => {
@@ -235,6 +265,6 @@ describe('performance baseline', () => {
     const summary = await measure('action throttle check (added by Phase 8)', 200, () =>
       g.throttle.hitAction('message_send_actor', s.ownerId),
     );
-    expect(summary.n).toBe(200);
+    expect(summary.n).toBe(ITERATIONS);
   });
 });

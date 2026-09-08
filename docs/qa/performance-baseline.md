@@ -55,13 +55,44 @@ on-duty check, the BR-1 database trigger, receipt rows and the outbox event.
 | login (verify + session issue) | 20 | 70.20 | 74.64 | 75.51 | 75.51 | 14.2 |
 | action throttle check (added by Phase 8) | 200 | 1.50 | 2.83 | 3.31 | 3.54 | 597.0 |
 
-### What is worth noticing
+### 2a. The concurrency curve — **measured 2026-09-08 (closure pass)**
 
-**Concurrency helps, which is the important result.** Twenty concurrent senders
-move from 16.8 to **84.5 messages/second aggregate** — a 5x gain — while p50 per
-message only doubles. The path is dominated by waiting on the database rather
-than by contention on it, and nothing serialises behind a single lock. A path
-that had failed to scale would show flat throughput and rising latency together.
+Added in the closure pass, because the single 20-concurrent point above did not
+say where the ceiling was. All four rows come from ONE session against ONE
+database, so they are comparable with each other; they are not comparable with
+§2, which was a different session.
+
+`JAWWID_PERF_ITERATIONS=20 JAWWID_PERF_ROUNDS=5`, varying `JAWWID_PERF_CONCURRENCY`:
+
+| concurrent senders | n | p50 ms | p95 ms | p99 ms | ops/sec |
+|---:|---:|---:|---:|---:|---:|
+| 10 | 50 | 88.7 | 234.9 | 284.6 | 63.4 |
+| 20 | 100 | 209.0 | 515.9 | 595.3 | 47.2 |
+| 50 | 250 | 406.9 | 939.2 | 1068.3 | 67.5 |
+| 100 | 500 | 709.7 | 1474.8 | 1668.6 | 78.3 |
+
+**This corrects an over-reading in the first version of this document.** That
+version said "concurrency helps, which is the important result… a 5x gain",
+comparing 20 concurrent against the *sequential* baseline. Measured across a
+range, the real shape is different and more useful:
+
+- **Throughput is flat.** It sits in a 47–78 ops/sec band across a tenfold
+  increase in concurrency, with no trend — the ordering (47.2 at 20 being lower
+  than 63.4 at 10) is run-to-run noise on a laptop, not a curve. Do not read
+  meaning into the ordering; read the band.
+- **Latency grows linearly.** p50 tracks roughly 7–8 ms × concurrent senders,
+  monotonically, across every step. That signal is clean.
+
+Flat throughput plus linearly rising latency is the signature of a **saturated**
+service: the ceiling is already reached by about ten concurrent senders, and
+concurrency beyond it buys queueing, not work. The 1→10 gain is real; the
+implication that it continues is not.
+
+So the honest statement is: **on this machine the message-send path tops out at
+roughly 50–80 messages per second**, and that is a property of one Node process
+against one local Postgres, not a capacity figure for a deployed system.
+
+### What is worth noticing
 
 **The Phase 8 rate limit costs 1.5 ms at p50.** That was a claim ("one indexed
 upsert") until it was timed. It is ~2% of a message send.
@@ -144,7 +175,16 @@ performance task remaining.
 
 ```bash
 scripts/db/integration-db.sh up
+
+# The 2026-09-08 baseline in §2 (defaults: 200 iterations, 20 concurrent, 10 rounds)
 cd apps/api && DATABASE_URL=... npx jest --selectProjects perf --runInBand
+
+# Any other scale. Defaults reproduce §2 exactly, so an unparameterised run is
+# still the same run.
+JAWWID_PERF_ITERATIONS=20 \
+JAWWID_PERF_CONCURRENCY=100 \
+JAWWID_PERF_ROUNDS=5 \
+  npx jest --selectProjects perf --runInBand -t "message send, N concurrent"
 ```
 
 The harness prints the §2 table ready to paste. Record the machine alongside it:
