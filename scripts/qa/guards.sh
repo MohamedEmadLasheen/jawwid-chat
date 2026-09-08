@@ -87,9 +87,18 @@ g20() {
 
 # -- G-31..G-35 ---------------------------------------------------------------
 # Advisory scan. Fails only on unmistakable Phase 2 feature wiring.
+#
+# -w, NOT \b. `git grep -E` does not honour \b -- it matches NOTHING, silently,
+# on tracked and untracked files alike. This gate was converted from GNU
+# `grep -rInE` (where \b works) and was therefore dead from that commit until a
+# negative probe caught it. -w applies the word boundary to the whole
+# alternation, which is what \b(...)\b was written to mean.
+#
+# Nothing else here relies on \b; the G-18 patterns are anchored by their own
+# shape (AKIA…, -----BEGIN…, eyJhbGciOi…).
 g31() {
-  ! git grep -InE --untracked \
-    '\b(videoCall|enableVideo|startVideo|broadcastToAll|aiScore|aiSuggest|draftWithAI)\b' \
+  ! git grep -InEw --untracked \
+    '(videoCall|enableVideo|startVideo|broadcastToAll|aiScore|aiSuggest|draftWithAI)' \
     -- '*.ts' '*.dart' '*.tsx' "${GATE_DEFS[@]}"
 }
 
@@ -120,11 +129,12 @@ check "Secret scan — worktree and history"         bash scripts/infra/scan-sec
 check "Server secrets not in a client bundle"      bash scripts/infra/check-web-env.sh
 check "The local environment example is valid"     bash scripts/infra/check-env.sh local --file .env.example
 check "Environment templates match the manifest"   templates
+check "No migration narrows an earlier CHECK constraint"  bash scripts/qa/check-constraint-narrowing.sh
 
 echo
 if [ "$failed" -eq 0 ]; then
-  echo "guards: PASS (8/8)"
+  echo "guards: PASS (9/9)"
 else
-  echo "guards: FAIL ($failed of 8)"
+  echo "guards: FAIL ($failed of 9)"
   exit 1
 fi
