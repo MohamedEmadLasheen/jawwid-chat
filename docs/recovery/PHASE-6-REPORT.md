@@ -1,7 +1,8 @@
 # Phase 6 — Smart Moderation and the Manager Command Center
 
 **Status: CANONICAL.** What Phase 6 actually built, what it deliberately did
-not, the three defects found on the way, and the verification record.
+not, the four defects found (three during implementation, one by the acceptance
+audit), and the verification record.
 
 Read with `product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` (what the product is),
 `architecture/AUTHORIZATION-MODEL.md` (who may do what) and
@@ -322,7 +323,7 @@ conversation in the organization.
 
 ---
 
-## 4. The three defects found on the way
+## 4. The four defects found
 
 ### P6-1 · The scanner could not read its own rules (fail-OPEN) — **fixed**
 
@@ -369,6 +370,37 @@ surfaced somewhere unrelated.
 **Fix:** `truncate()` now restores the catalogue to the migration's seeded state —
 non-built-ins removed, built-ins re-enabled for the structural detectors and
 disabled for the unconfirmed policy categories.
+
+### P6-4 · An EDIT bypassed the scanner (found by the ACCEPTANCE AUDIT) — **fixed**
+
+`send()` scanned. `edit()` did not. So the boundary had a second door:
+
+```
+teacher sends "Great work today."       -> scanned, safe, published, delivered
+teacher edits it, inside the 15-minute
+window, to "call me on +201012345678"   -> published, 0 flags, 0 approvals,
+                                           and the parent reads the number
+```
+
+This defeated the requirement the phase exists to satisfy — moderation must not
+be bypassable through another pathway — and it defeated the leak PRD BR-2 is
+actually about. Every implementation-phase suite passed, because they all
+exercised `send()`.
+
+`forward()` was checked at the same time and was **not** affected: it routes
+through `send()`, and a forwarded leak is correctly held.
+
+**Fix (commit `ae67dfb`):** `edit()` now resolves the same per-role moderation
+mode through `AuthorizationService.moderationModeForActor` and re-scans the new
+body, REFUSING a flagged edit. Refusing rather than holding, for the reason an
+approver's still-flagged edit is already refused: the author is present and can
+fix it now, and pulling an already-delivered message back into `pending` would
+retract something the recipients have read. Conversations that do not moderate a
+role are untouched. Four regression tests cover it.
+
+**The lesson worth keeping:** "the scanner is at the trust boundary" was verified
+for the path the phase was thinking about. The audit's job was to ask which
+*other* paths write a body, and there were two — one safe, one not.
 
 ---
 
