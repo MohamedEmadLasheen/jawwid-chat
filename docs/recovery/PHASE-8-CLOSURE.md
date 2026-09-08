@@ -134,7 +134,7 @@ edits): **438 unit · 762 integration · 111 web · 52 migrations · 6/6 DB suit
 | **B-4a** | — | Observability | **CLOSED.** Error tracking wired; `SENTRY_DSN` consumed and `OTEL_*` downgraded to `opt`, so the manifest no longer requires a credential nothing reads | `0054ae9`, `6d70846`, manifest §observability | — | — | — | — |
 | **B-5** | P1 | Staging | Nothing has been deployed or smoke-tested anywhere | No environment | Every "Locally Verified" row above is unproven under a real topology | Deploy to staging; run `scripts/infra/smoke.sh` | Clears with B-2 | B-2 |
 | **B-6** | P1 | Realtime | Multi-instance realtime unproven (RISK-4) | Redis adapter is a declared dependency, never a demonstrated behaviour | Two instances without a working adapter silently deliver events to only one | Run two API instances on staging and assert cross-instance delivery | AI #2 | B-5 |
-| **B-7** | P2 | Backup | Archives are unencrypted at rest | `backup-db.sh` writes plain `pg_dump` output | A backup is a complete copy of every family's messages | Encrypt, or store in an encrypted bucket | AI #7 | B-2 |
+| **B-7** | P2 | Backup | **CLOSED.** `backup-db.sh` encrypts at rest (`aes-256-cbc`/PBKDF2) and REFUSES an unencrypted dump when `APP_ENV` is staging or production, before dumping | `7b8851e`; an `APP_ENV=production` encrypted dump restored into a scratch database passing 6/6 integrity suites; wrong and missing passphrase both refused | — | Provider-side backups still need B-2 | AI #7 | — |
 | **B-8** | P2 | Mobile | `integration_test` is **not a dependency** | absent from `pubspec.yaml` | On-device journey automation cannot be written as-is; device testing stays manual | Add `integration_test`, port the journeys | AI #3 | B-3 |
 | **B-9** | P2 | Performance | No measurement at production data volume or topology | §4 of the baseline | Query plans chosen over hundreds of rows may not hold over millions | Seed production-shaped data; re-run §3 of the baseline | AI #5 | B-5 |
 | **B-10** | P2 | Security | No third-party penetration test | — | Internal tests find what we thought to test for | Commission one | Product owner | B-2 |
@@ -279,7 +279,7 @@ Ordered by dependency. Nothing below is done.
 | 14 | CRM/Core: **nothing to do** — `chat.core_event` has no writer yet | n/a | — |
 | 15 | Sentry wired; OTLP still unwired and `OTEL_*` downgraded to `opt` accordingly (B-4) | ☑ | 5 |
 | 16 | Alerts defined and actionable | ☐ | 15 |
-| 17 | Provider backups enabled; `pg_dump` copies **encrypted** (B-7) | ☐ | 7 |
+| 17 | `pg_dump` copies **encrypted** (B-7) ☑; provider backups still need hosting | ◐ | 7 |
 | 18 | **Restore drill against staging**, including the one step never covered: an application instance pointed at the restored database reaching `/health/ready` = 200 | ☐ | 17 |
 | 19 | RPO/RTO **measured** by that drill, not assumed | ☐ | 18 |
 | 20 | Staging deployed; smoke test passes | ☐ | 6–13 |
