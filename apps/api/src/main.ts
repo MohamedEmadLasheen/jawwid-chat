@@ -15,6 +15,8 @@ import { PrismaService } from './platform/prisma.service';
 import { RealtimeRelay } from './infra/realtime/realtime-relay.service';
 import { JsonLogger } from './infra/observability/json-logger';
 import { RequestLogInterceptor } from './infra/observability/request-log.interceptor';
+import { createErrorTracker } from './infra/observability/error-tracker';
+import { installProcessErrorHandlers } from './infra/observability/process-errors';
 
 /**
  * API entrypoint.
@@ -44,6 +46,13 @@ async function bootstrap(): Promise<void> {
   // would miss.
   const logger = new JsonLogger('api', build);
 
+  // Phase 8, blocker B-4. Constructed alongside the logger and for the same
+  // reason: a failure during wiring is exactly the one worth reporting, and a
+  // tracker installed after the application would miss it. Inert without
+  // SENTRY_DSN, which is every developer machine.
+  const errors = createErrorTracker('api', build);
+  installProcessErrorHandlers(errors, logger);
+
   const app = await NestFactory.create(AppModule, {
     logger,
   });
@@ -51,7 +60,7 @@ async function bootstrap(): Promise<void> {
   // One line per request: route pattern, status, latency, request id. It logs
   // no body, no query string and no headers -- the privacy rule is enforced by
   // never touching content, not by scrubbing it afterwards.
-  app.useGlobalInterceptors(new RequestLogInterceptor(logger));
+  app.useGlobalInterceptors(new RequestLogInterceptor(logger, errors));
 
   // /api/v1 matches the base URL Admin Web and the mobile clients are built
   // against. Health is excluded: a load balancer probes /health/live, and
@@ -95,6 +104,7 @@ async function bootstrap(): Promise<void> {
   // healthcheck.
   await app.listen(port, '0.0.0.0');
 
+  log.log(`error tracking: ${errors.isEnabled() ? errors.name : 'disabled (no SENTRY_DSN)'}`);
   log.log(
     `Jawwid Chat API listening on :${port} ` +
       `[env=${build.environment} commit=${build.commit} version=${build.version}]`,
