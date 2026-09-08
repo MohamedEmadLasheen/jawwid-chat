@@ -1,6 +1,23 @@
 # Phase 8 — Freeze and Handoff
 
-Date: 2026-09-08 · Branch: `phase7/ai-and-automation` · Frozen at: **`32e0350`**
+Date: 2026-09-08 · Branch: `phase7/ai-and-automation`
+
+**Verified HEAD:** `7806434c9fb966498da2ecbcb575e2d41639736d`
+
+Every gate in §2 was executed in a clean detached worktree at that exact commit.
+
+**On the relationship to the branch tip.** A document cannot name the hash of
+the commit that introduces it, so the tip will always be one commit ahead of the
+hash written here — that commit being this correction, which touches this file
+and nothing else. The claim is therefore stated as something a reader can check
+rather than asserted:
+
+```
+git diff --name-status 7806434c9fb966498da2ecbcb575e2d41639736d..HEAD
+```
+
+If that returns anything outside `docs/`, the verification below no longer
+describes the tip and must be re-run. If it returns only this file, it does.
 Verification evidence: [PHASE-8-EXTERNAL-GATE.md](PHASE-8-EXTERNAL-GATE.md) (authoritative for the
 readiness verdict) and [PHASE-8-CLOSURE.md](PHASE-8-CLOSURE.md) (the blocker register).
 
@@ -68,16 +85,57 @@ those events, with no deployment.
 | `pg_dump` copies **encrypted at rest** | **COMPLETE** | `7b8851e`. Refused before dumping when `APP_ENV` is staging/production without a passphrase. An `APP_ENV=production` encrypted dump restored into a scratch database passing **6/6** integrity suites |
 | Provider-side / PITR backups | **EXTERNAL BLOCKER** | Needs a managed provider |
 
+### Two kinds of external blocker, which are not the same thing
+
+Collapsing these into one list is how a release plan goes wrong, because they
+block different things and clear in a different order.
+
+**Capability blockers** — a named feature cannot be finished. Everything else in
+the system works without it.
+
+| ID | Capability | Needs |
+|---|---|---|
+| B-4 (metrics half) | OTLP metrics, then dashboards and alerts | An authoritative OTLP endpoint and a hosting decision |
+| — | Live Anthropic round-trip | A real API credential, safely supplied |
+
+**Release dependencies** — nothing can be deployed or proven under a real
+topology until these clear, whatever the code says. They are still active.
+
+| ID | Dependency | Blocks | Clears |
+|---|---|---|---|
+| **B-1** | No git remote; no CI run has ever executed | Every gate is proven only on one machine | Product owner creates the remote |
+| **B-2** | No hosting, domain, TLS, managed Postgres/Redis/bucket, or secret store | Deployment, staging verification, the metrics backend, provider-side backups | Product owner provisions |
+| **B-3** | No Flutter/Dart/JDK toolchain here; 30 Dart test files have never executed anywhere | Both mobile apps are untested by construction | Clears with B-1 (CI runs the mobile job) |
+
+B-1 is the one to move first: it is the cheapest, and it converts every
+"verified locally" row in the closure evidence matrix into something a pipeline
+has actually re-executed.
+
 ---
 
 ## 2. Verified at the freeze commit
 
-Run in a clean detached worktree at `32e0350`, so every number belongs to
-committed code rather than to a tree carrying other agents' edits.
+Run in a clean detached worktree at **`7806434`** — the current branch HEAD —
+so every number belongs to committed code rather than to a tree carrying four
+other agents' edits.
+
+An earlier draft named `32e0350` as the verified commit while the branch had
+already advanced to `7806434`, leaving two different hashes in one report. That
+is resolved by re-running every gate at `7806434` rather than by reasoning about
+the gap, so the numbers below are measurements and not inferences.
+
+For the record, the gap was one commit and it was this document plus its index
+entry — `git diff --name-status 32e0350..7806434` returns exactly
+`M docs/README.md` and `A docs/recovery/PHASE-8-FREEZE.md`, and the git tree
+objects for `apps`, `supabase`, `infra`, `scripts`, `.github`, `db`, `lib`,
+`test`, `android` and `ios` are byte-identical between the two. So no source,
+migration, configuration, worker, bootstrap or test change separated them. The
+re-run confirms that empirically: every number below is unchanged.
 
 | Gate | Result |
 |---|---|
 | Migration replay from empty | **52 applied**; re-apply a no-op |
+| API integration, second run at the tip | **750 passed** + **12** schema-invariants |
 | API typecheck | PASS |
 | API build | PASS |
 | API unit | **450 passed**, 34 suites |
