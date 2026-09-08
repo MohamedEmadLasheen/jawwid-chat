@@ -2,6 +2,12 @@
 
 Date: 2026-09-08 · Branch: `phase7/ai-and-automation` · Baseline HEAD: `549c67e`
 
+> **Superseded verdict.** This report concluded NOT PRODUCTION READY. A closure
+> pass on the same day fixed the remaining engineering defects and re-classified
+> the system **PRODUCTION CANDIDATE — EXTERNAL BLOCKERS**. The findings and
+> reasoning below stand; the verdict and the matrix are superseded by
+> [PHASE-8-CLOSURE.md](PHASE-8-CLOSURE.md), which is authoritative.
+
 ---
 
 # PRODUCTION READINESS REPORT
