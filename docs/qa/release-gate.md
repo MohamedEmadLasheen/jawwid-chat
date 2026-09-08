@@ -36,8 +36,9 @@ and are idempotent, verified 2026-09-08.
 
 ## 1a. Phase 8 re-verification — measured 2026-09-08
 
-Full detail and evidence: `docs/recovery/PHASE-8-CLOSURE.md` (authoritative;
-`PHASE-8-REPORT.md` records how the findings were reached).
+Full detail and evidence: `docs/recovery/PHASE-8-EXTERNAL-GATE.md` (authoritative;
+`PHASE-8-CLOSURE.md` and
+`PHASE-8-REPORT.md` record how the findings were reached).
 
 Current classification: **PRODUCTION CANDIDATE — EXTERNAL BLOCKERS.** Every
 remaining blocker needs a remote, a host, a mobile toolchain or a third party;

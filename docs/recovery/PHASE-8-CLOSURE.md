@@ -4,6 +4,12 @@ Date: 2026-09-08 · Branch: `phase7/ai-and-automation`
 Verification HEAD: `ae67dfb` (measured) · Closure commits through `d735aaa`
 Supersedes nothing in [PHASE-8-REPORT.md](PHASE-8-REPORT.md); extends it.
 
+> **The verdict here was re-gated on 2026-09-08 at `7e3225e`.** The
+> classification is unchanged (PRODUCTION CANDIDATE — EXTERNAL BLOCKERS) but
+> that gate found three further live defects and re-verified everything;
+> [PHASE-8-EXTERNAL-GATE.md](PHASE-8-EXTERNAL-GATE.md) is authoritative for
+> the matrix, the blocker register and the owner's next actions.
+
 > ## FINAL CLASSIFICATION
 > # PRODUCTION CANDIDATE — EXTERNAL BLOCKERS
 >
