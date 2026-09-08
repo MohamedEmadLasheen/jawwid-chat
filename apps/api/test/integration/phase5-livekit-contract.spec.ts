@@ -40,16 +40,55 @@ async function livekitReachable(): Promise<boolean> {
 
 let reachable = false;
 
+/**
+ * Whether an unreachable server is a skip or a failure.
+ *
+ * The skip below was described as "loud", and it is not: each test does
+ * `if (!reachable) return`, so Jest prints a green tick either way and the run
+ * with no server is INDISTINGUISHABLE from the run that actually validated a
+ * token against LiveKit 1.8.4. A console.warn scrolls past; a tick is what gets
+ * believed. That is the same "green while doing nothing" shape Phase 8 removed
+ * from the mobile CI job.
+ *
+ * Making it fail unconditionally would be wrong -- most developers have no
+ * LiveKit, and a suite that fails on every laptop gets deleted. So the choice is
+ * explicit instead: set JAWWID_REQUIRE_LIVEKIT=1 wherever the verification is
+ * meant to be real (a release gate that starts the server first), and absence
+ * becomes a failure rather than a silent pass.
+ */
+const REQUIRED = process.env.JAWWID_REQUIRE_LIVEKIT === '1';
+
 beforeAll(async () => {
   reachable = await livekitReachable();
   if (!reachable) {
-    // Loud, so a green run is never mistaken for a verified one.
     // eslint-disable-next-line no-console
     console.warn(
       `SKIPPING the LiveKit contract suite: no server at ${LIVEKIT_HTTP}. ` +
         'Start one with `docker compose up -d livekit`.',
     );
   }
+});
+
+describe('the contract suite must actually have run', () => {
+  it('reached a real LiveKit server, or is explicitly allowed not to', () => {
+    if (REQUIRED) {
+      // The assertion carries the remedy: a failure here means the server was
+      // not started, not that the token format is wrong.
+      expect(
+        reachable
+          ? 'reached LiveKit'
+          : `JAWWID_REQUIRE_LIVEKIT=1 but no server at ${LIVEKIT_HTTP} -- start one with \`docker compose up -d livekit\``,
+      ).toBe('reached LiveKit');
+    }
+    // Not required: record which of the two runs this was, so the log says
+    // whether the ticks below mean anything.
+    // eslint-disable-next-line no-console
+    console.log(
+      reachable
+        ? 'LiveKit contract: VERIFIED against a real server'
+        : 'LiveKit contract: NOT VERIFIED (no server) -- the passes below assert nothing',
+    );
+  });
 });
 
 function issuer(): LiveKitTokenIssuer {
