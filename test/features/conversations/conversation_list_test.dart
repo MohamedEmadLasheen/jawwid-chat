@@ -29,7 +29,7 @@ void main() {
   }
 
   const ahmed = LearnerRef(id: 'l_ahmed', displayName: 'أحمد');
-  const mariam = LearnerRef(id: 'l_mariam', displayName: 'مريم');
+  const sara = LearnerRef(id: 'l_sara', displayName: 'سارة');
 
   group('parent layout', () {
     test('the Jawwid support thread leads the list', () {
@@ -55,12 +55,12 @@ void main() {
         role: UserRole.parent,
         conversations: [
           conv(id: 'g_ahmed', kind: ConversationKind.studentGroup, learner: ahmed, minutesAgo: 10),
-          conv(id: 'g_mariam', kind: ConversationKind.studentGroup, learner: mariam, minutesAgo: 5),
+          conv(id: 'g_sara', kind: ConversationKind.studentGroup, learner: sara, minutesAgo: 5),
         ],
       );
 
-      expect(sections.map((s) => s.key), ['learner:l_mariam', 'learner:l_ahmed']);
-      expect(sections.first.learner?.displayName, 'مريم');
+      expect(sections.map((s) => s.key), ['learner:l_sara', 'learner:l_ahmed']);
+      expect(sections.first.learner?.displayName, 'سارة');
     });
 
     test('the child with the most recent activity is listed first', () {
@@ -68,7 +68,7 @@ void main() {
         role: UserRole.parent,
         conversations: [
           conv(id: 'a1', kind: ConversationKind.studentGroup, learner: ahmed, minutesAgo: 60),
-          conv(id: 'm1', kind: ConversationKind.studentGroup, learner: mariam, minutesAgo: 90),
+          conv(id: 'm1', kind: ConversationKind.studentGroup, learner: sara, minutesAgo: 90),
           conv(id: 'a2', kind: ConversationKind.studentGroup, learner: ahmed, minutesAgo: 2),
         ],
       );
@@ -109,7 +109,7 @@ void main() {
         role: UserRole.teacher,
         conversations: [
           conv(id: 'g1', kind: ConversationKind.studentGroup, learner: ahmed),
-          conv(id: 'g2', kind: ConversationKind.studentGroup, learner: mariam),
+          conv(id: 'g2', kind: ConversationKind.studentGroup, learner: sara),
         ],
       );
 

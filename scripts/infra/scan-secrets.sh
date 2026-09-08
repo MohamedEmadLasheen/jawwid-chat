@@ -46,7 +46,10 @@ RULES=(
 )
 
 # Files that legitimately describe secrets without containing them.
-EXCLUDE_PATH='^(docs/infrastructure/|infra/env/|scripts/infra/scan-secrets\.sh$|docs/JAWWID_CHAT_BRIEF)'
+# scripts/qa/guards.sh joins this list for the same reason this file is on it:
+# a gate definition has to contain the patterns it searches for, so a scanner
+# that did not exempt gate definitions could never pass.
+EXCLUDE_PATH='^(docs/infrastructure/|infra/env/|scripts/infra/scan-secrets\.sh$|scripts/qa/guards\.sh$|docs/JAWWID_CHAT_BRIEF)'
 
 # Rules that match a secret-shaped NAME rather than credential MATERIAL.
 #

@@ -35,78 +35,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        # The guards need history: scan-secrets.sh --history walks every commit
+        # for a .env that was added and later deleted, which a shallow clone
+        # cannot see. Without this the secret gate silently checks less than it
+        # claims to.
+        with:
+          fetch-depth: 0
 
-      - name: G-18 · no secrets committed
-        run: |
-          set -uo pipefail
-          # Hard patterns: never legitimate anywhere in the tree.
-          if grep -rInE '(AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----)' \
-               --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist . ; then
-            echo "::error::G-18 FAIL — credential material committed"; exit 1
-          fi
-          # JWT-shaped strings, excluding test files. A synthetic token inside a
-          # redaction test is the control working, not a leak (AI #3's
-          # redacting_logger_test.dart asserts such a token never reaches a log),
-          # so test paths are exempt from this heuristic only.
-          if grep -rInE 'eyJhbGciOi[A-Za-z0-9_-]{10,}' \
-               --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist \
-               --exclude-dir=test --exclude-dir=tests \
-               --exclude='*_test.dart' --exclude='*.spec.ts' --exclude='*.test.ts' . ; then
-            echo "::error::G-18 FAIL — JWT-shaped credential committed outside a test"; exit 1
-          fi
-          if git ls-files | grep -E '(^|/)\.env$|(^|/)\.env\.(local|production)$' ; then
-            echo "::error::G-18 FAIL — a real .env file is tracked"; exit 1
-          fi
-          echo "G-18 pass"
-
-      - name: G-20 · no real employee names in source, tests or seed data
-        run: |
-          set -uo pipefail
-          # The product brief names real staff. They are acceptable in docs/,
-          # never in code, fixtures or seed data (system-inventory.md §4).
-          hits=$(grep -rIl $'رحاب\|زينب\|دينا\|أسماء\|مريم\|رضوى\|رقيه' \
-            --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=docs . || true)
-          if [ -n "$hits" ]; then
-            echo "::error::G-20 FAIL — real employee names outside docs/:"; echo "$hits"; exit 1
-          fi
-          echo "G-20 pass"
-
-      - name: JC-011 · protected regression tests must not be deleted or gutted
-        run: bash scripts/qa/check-protected-tests.sh
-
-      - name: G-31..G-35 · Phase 2 functionality must not ship in MVP
-        run: |
-          set -uo pipefail
-          # Advisory scan. Fails only on unmistakable Phase 2 feature wiring.
-          if grep -rInE '\b(videoCall|enableVideo|startVideo|broadcastToAll|aiScore|aiSuggest|draftWithAI)\b' \
-               --include='*.ts' --include='*.dart' --include='*.tsx' \
-               --exclude-dir=node_modules --exclude-dir=dist . ; then
-            echo "::error::G-31..G-35 FAIL — Phase 2 capability referenced in MVP code"; exit 1
-          fi
-          echo "G-31..G-35 pass"
-
-      # ---- infrastructure guardrails (AI #7) --------------------------------
-      # Complementary to G-18 above, not a replacement: G-18 catches credential
-      # material anywhere; these catch this project's specific failure modes.
-
-      - name: Secret scan — worktree and history
-        run: scripts/infra/scan-secrets.sh --history
-
-      - name: Server secrets must not be reachable from a client bundle
-        run: scripts/infra/check-web-env.sh
-
-      - name: The local environment example is valid
-        run: scripts/infra/check-env.sh local --file .env.example
-
-      - name: Environment templates match the manifest
-        # The templates are generated from infra/env/manifest.tsv. A
-        # hand-edited template drifts from the checker that deployments run,
-        # and the drift is only discovered by a failed release.
-        run: |
-          scripts/infra/render-env-template.sh staging    > /tmp/staging.env.example
-          scripts/infra/render-env-template.sh production > /tmp/production.env.example
-          diff -u infra/env/staging.env.example    /tmp/staging.env.example
-          diff -u infra/env/production.env.example /tmp/production.env.example
+      # ONE step, calling ONE script, which is also the script a developer runs
+      # before committing. This used to be eight inline steps -- a second copy
+      # of the gate that nobody could execute, because there is no remote and
+      # this pipeline has never run. Two copies of a gate drift, and the copy
+      # that drifts is always the one not being run.
+      #
+      # Making it runnable immediately found three things the inline copy had
+      # been hiding: the environment templates were stale again, a real employee
+      # name from the product brief was shipping in lib/core/data/fake_backend.dart,
+      # and G-20 matched ci.yml ITSELF -- so this job could never have passed.
+      - name: Release-gate guards (G-18, G-20, G-31..35, JC-011, secrets, env)
+        run: scripts/qa/guards.sh
 
   # ------------------------------------------------------------------ backend
   api:
