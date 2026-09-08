@@ -101,6 +101,16 @@ CORE_API_KEY	core	yes	opt	req	req
 CORE_WEBHOOK_SECRET	core	yes	opt	req	req
 CORE_TIMEOUT_MS	core	no	opt	req	req
 CORE_RETRY_MAX	core	no	opt	req	req
+# Phase 8, blocker B-7. A backup is a complete copy of every family's messages,
+# so backup-db.sh REFUSES to write an unencrypted one when APP_ENV is staging or
+# production -- before it dumps, not after, so a plaintext copy never touches
+# disk. `opt` locally, where a developer restoring last Tuesday onto a laptop
+# should not have to invent a passphrase.
+#
+# It belongs to the BACKUP JOB's environment, not the API's; check-env.sh runs
+# against the API, so `opt` there is correct and the requirement is enforced by
+# the script itself, which is the thing that would otherwise write the file.
+BACKUP_ENCRYPTION_PASSPHRASE	backup	yes	opt	opt	opt
 SENTRY_DSN	observability	yes	opt	req	req
 # OTEL_* are `opt` EVERYWHERE, and that is a correction rather than a relaxation.
 # They were `req` in staging and production while NO CODE READ THEM -- there is

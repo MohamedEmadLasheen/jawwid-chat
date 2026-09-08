@@ -205,6 +205,28 @@ rather than assumed.
 - No provider backups exist, because no managed database exists.
 - Retention, PITR window and restore speed are unmeasured.
 - Object storage backup is a policy, not yet a configuration.
-- Backup **encryption at rest** for the `pg_dump` copies is not implemented; the
-  archives are unencrypted on whatever disk they land on. Before any real dump
-  leaves a managed environment, encrypt it or store it in an encrypted bucket.
+- Backup **encryption at rest** is implemented (2026-09-08, blocker B-7). Set
+  `BACKUP_ENCRYPTION_PASSPHRASE` and `backup-db.sh` writes `.dump.enc`
+  (`aes-256-cbc`, PBKDF2, 600k iterations) and removes the plaintext;
+  `restore-db.sh` decrypts transparently and deletes the plaintext on any exit,
+  including a failed restore.
+
+  With `APP_ENV=staging` or `production` and no passphrase, the backup is
+  **refused before the dump runs** rather than after — dumping and then deleting
+  would put an unencrypted copy of every family's messages on disk for the
+  duration, which is the thing being prevented. `--allow-plaintext` records that
+  the decision was deliberate, for the case where the archive goes straight into
+  an encrypted bucket.
+
+  `openssl enc` rather than `age` or `gpg` because neither is installed on a
+  stock macOS or a slim CI image, and a backup step that depends on a tool the
+  host does not have is a backup that silently does not happen. It gives
+  confidentiality but **not** authentication; the `.sha256` beside the archive is
+  an integrity check, not a keyed one, so a managed encrypted bucket remains the
+  stronger answer where one exists.
+
+  Verified end to end on 2026-09-08: an `APP_ENV=production` encrypted dump,
+  restored into a scratch database, passing **6/6** integrity suites; a wrong
+  passphrase and a missing passphrase both refused; and the containerised
+  `pg_restore` path exercised, which is what caught the first version decrypting
+  into a directory Docker does not share.

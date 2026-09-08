@@ -33,6 +33,19 @@ done
 [ -n "$FILE" ] && [ -f "$FILE" ] || { echo "--file is required and must exist" >&2; exit 64; }
 [ -n "$TARGET" ] || { echo "--into is required (no default target, by design)" >&2; exit 64; }
 
+# DECRYPTION, before the checksum.
+#
+# The checksum describes the stored artefact -- the .enc -- so it is verified
+# first, against the file as it sits on disk, and only then decrypted. Verifying
+# the plaintext instead would check something the backup process never recorded.
+#
+# The plaintext lands in a private temp file that is removed on ANY exit,
+# including a failure part-way through the restore: an unencrypted copy of every
+# family's messages must not survive a crashed drill.
+DECRYPTED=""
+cleanup_decrypted() { [ -n "$DECRYPTED" ] && rm -f "$DECRYPTED"; }
+trap cleanup_decrypted EXIT INT TERM
+
 # Verify integrity before touching the target. Restoring a truncated dump on top
 # of a live database is worse than not restoring at all.
 if [ -f "$FILE.sha256" ]; then
@@ -48,6 +61,39 @@ if [ -f "$FILE.sha256" ]; then
 else
   echo "  no .sha256 alongside the dump; integrity unverified"
 fi
+
+case "$FILE" in
+  *.enc)
+    : "${BACKUP_ENCRYPTION_PASSPHRASE:?this archive is encrypted; BACKUP_ENCRYPTION_PASSPHRASE is required}"
+    command -v openssl >/dev/null 2>&1 || {
+      echo "the archive is encrypted but openssl is not installed" >&2; exit 1; }
+    echo "Decrypting..."
+    # BESIDE THE ARCHIVE, not in the system temp directory.
+    #
+    # The containerised pg_restore fallback mounts the dump's own directory into
+    # the container, and on macOS /tmp and /var/folders are NOT shared with the
+    # Docker VM -- so a decrypted file in mktemp's directory is invisible to
+    # pg_restore and the restore fails with "no such file". The archive's
+    # directory is by construction one the host can reach, and for a dump taken
+    # by backup-db.sh it is one Docker shares, because that is where the dump
+    # itself was written.
+    DECRYPTED="$(dirname "$FILE")/.jawwid-restore-$$.dump"
+    if ! (umask 077 && : > "$DECRYPTED"); then
+      echo "cannot write the decrypted copy next to the archive: $(dirname "$FILE")" >&2
+      echo "Copy the archive somewhere writable and re-run." >&2
+      exit 1
+    fi
+    if ! openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
+          -in "$FILE" -out "$DECRYPTED" -pass env:BACKUP_ENCRYPTION_PASSPHRASE 2>/dev/null; then
+      # A wrong passphrase and a corrupt archive are indistinguishable to
+      # openssl, and saying so is more useful than reporting one of them.
+      echo "DECRYPTION FAILED -- wrong passphrase, or the archive is corrupt" >&2
+      exit 1
+    fi
+    FILE="$DECRYPTED"
+    echo "  decrypted"
+    ;;
+esac
 
 case "$TARGET" in
   *prod*|*production*)
@@ -67,8 +113,35 @@ MSG
 esac
 
 ARGS=(--no-owner --exit-on-error --verbose)
-[ -n "$SCHEMA" ] && ARGS+=(--schema="$SCHEMA")
 [ "$NO_PRIVILEGES" -eq 1 ] && ARGS+=(--no-privileges)
+
+# --schema is NOT passed to pg_restore, and that is the second half of a fix
+# whose first half was not enough.
+#
+# pg_dump records the schema's own entries with the namespace "-", not "chat":
+#
+#     6;    2615 16385 SCHEMA - chat postgres
+#     5289; 0    0     ACL    - SCHEMA chat postgres
+#
+# `pg_restore --schema=chat` keeps only entries whose namespace is "chat", so it
+# discards BOTH. The first omission was loud -- the restore died on its first
+# object with `schema "chat" does not exist` -- and pre-creating the schema
+# silenced it. The second is silent and worse: the restored schema carries NO
+# ACL, so chat_app has no USAGE on it and the application cannot read one row,
+# while all six integrity suites still PASS, because table-level
+# has_table_privilege() does not depend on schema USAGE.
+#
+# That is the same failure shape as the --no-privileges defect: a recovery that
+# looks complete and is unusable. Verified: with --schema the restored schema
+# has "(no ACL)" and `select from chat.config` as chat_app is "permission denied
+# for schema chat"; without it the ACL is
+# `authenticated=U | service_role=U | chat_app=U | chat_service=U` and the same
+# query returns every row.
+#
+# Dropping the flag costs nothing, because backup-db.sh already scopes the dump
+# with pg_dump --schema. Restoring one schema out of a FULL-cluster dump is the
+# only case the flag would serve, and it is not a case this project's own
+# archives produce.
 
 # --no-privileges is no longer passed by default, and that is the fix for a
 # restore that looked like it worked. GRANTs in this schema name chat_app,
@@ -121,9 +194,24 @@ target_sql() {
 #    unconditionally so a target carrying the older, wrong attributes is
 #    corrected rather than left broken. If this ever diverges, the migrations
 #    win -- and db/tests/schema_acceptance.sql is what catches the divergence.
+# The schema is NOT pre-created any more: the archive creates it together with
+# its ACL, and an existing one would make that CREATE fail under --exit-on-error.
+# Refusing early with the remedy beats failing half way through a restore.
 if [ -n "$SCHEMA" ]; then
-  echo "Preparing target: schema \"$SCHEMA\""
-  target_sql "create schema if not exists \"$SCHEMA\"" >/dev/null
+  if [ "$(target_sql "select count(*) from pg_namespace where nspname = '$SCHEMA'" | tr -d '[:space:]')" != "0" ]; then
+    cat >&2 <<MSG
+refusing: schema "$SCHEMA" already exists on the target.
+
+The archive creates it, together with the USAGE grants the application needs, so
+restoring onto a database that already has it would fail part way through. Drop
+it first -- on a scratch target:
+
+  drop schema "$SCHEMA" cascade;
+
+Never on a database whose contents you have not already backed up.
+MSG
+    exit 1
+  fi
 fi
 
 if [ "$NO_PRIVILEGES" -eq 0 ]; then

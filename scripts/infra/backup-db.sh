@@ -15,17 +15,45 @@
 #
 # Requires pg_dump. If it is not installed, the script runs it from the Postgres
 # container image instead, so a developer with only Docker can still take one.
+#
+# ENCRYPTION. A backup is a complete copy of every family's messages, so it is
+# encrypted at rest when BACKUP_ENCRYPTION_PASSPHRASE is set, and REFUSED
+# unencrypted when APP_ENV is staging or production. Everywhere else it is a
+# loud warning rather than a refusal, so a developer restoring last Tuesday onto
+# a laptop is not forced to invent a passphrase.
 set -euo pipefail
 
 OUT_DIR="./backups"
 SCHEMA=""
+ALLOW_PLAINTEXT=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --out)    OUT_DIR="${2:-}"; shift 2 ;;
     --schema) SCHEMA="${2:-}"; shift 2 ;;
-    *) echo "usage: $0 [--out dir] [--schema name]" >&2; exit 64 ;;
+    --allow-plaintext) ALLOW_PLAINTEXT=1; shift ;;
+    *) echo "usage: $0 [--out dir] [--schema name] [--allow-plaintext]" >&2; exit 64 ;;
   esac
 done
+
+# REFUSED BEFORE THE DUMP, not after it.
+#
+# The check has to come first. Dumping and then deleting would put an
+# unencrypted copy of every family's messages on disk for the duration -- which
+# is the exact thing being prevented -- and on a failure part-way through it
+# would leave one there.
+if [ -z "${BACKUP_ENCRYPTION_PASSPHRASE:-}" ] && [ "$ALLOW_PLAINTEXT" -ne 1 ]; then
+  case "${APP_ENV:-local}" in
+    production|staging)
+      cat >&2 <<'MSG'
+refusing: this would write an UNENCRYPTED copy of every family's messages.
+
+APP_ENV is staging or production and BACKUP_ENCRYPTION_PASSPHRASE is not set.
+Set it, or store the archive in an encrypted bucket and re-run with
+--allow-plaintext to record that the decision was deliberate.
+MSG
+      exit 1 ;;
+  esac
+fi
 
 : "${DATABASE_URL:?DATABASE_URL is required}"
 mkdir -p "$OUT_DIR"
@@ -119,6 +147,42 @@ fi
 # Recorded against the BASENAME, from inside the directory: a checksum file
 # that embeds the path it was created with cannot be verified after the dump is
 # copied anywhere else -- which is the entire point of taking one.
+# ENCRYPTION, before the checksum.
+#
+# The order is deliberate: the checksum must describe the artefact that is
+# actually stored, or "verify before you restore" checks a file that no longer
+# exists. restore-db.sh decrypts first and verifies against the same artefact.
+#
+# openssl enc rather than age or gpg because neither is installed on a stock
+# macOS or a slim CI image, and a backup step that depends on a tool the host
+# does not have is a backup that silently does not happen. It gives
+# confidentiality but not authentication; the .sha256 beside it is an integrity
+# check, not a keyed one, so a managed encrypted bucket remains the better
+# answer where one exists (backup-recovery.md).
+if [ -n "${BACKUP_ENCRYPTION_PASSPHRASE:-}" ]; then
+  command -v openssl >/dev/null 2>&1 || {
+    echo "BACKUP_ENCRYPTION_PASSPHRASE is set but openssl is not installed" >&2
+    exit 1
+  }
+  echo "  encrypting (aes-256-cbc, pbkdf2)"
+  # The passphrase is passed by environment, never as an argument: an argument
+  # is visible in this host's process list to every other user on it.
+  if ! openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -salt \
+        -in "$FILE" -out "$FILE.enc" -pass env:BACKUP_ENCRYPTION_PASSPHRASE; then
+    echo "encryption FAILED -- removing the plaintext dump" >&2
+    rm -f "$FILE" "$FILE.enc"
+    exit 1
+  fi
+  # The plaintext must not outlive the encrypted copy. Removed only after
+  # openssl succeeded, so a failure never destroys the only copy.
+  rm -f "$FILE"
+  FILE="$FILE.enc"
+elif [ "$ALLOW_PLAINTEXT" -eq 1 ]; then
+  echo "  WARNING: writing an UNENCRYPTED backup because --allow-plaintext was given"
+else
+  echo "  WARNING: unencrypted. Set BACKUP_ENCRYPTION_PASSPHRASE to encrypt at rest."
+fi
+
 BASE="$(basename "$FILE")"
 if command -v shasum >/dev/null 2>&1; then
   (cd "$OUT_DIR" && shasum -a 256 "$BASE" > "$BASE.sha256")
