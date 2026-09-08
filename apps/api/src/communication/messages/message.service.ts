@@ -955,6 +955,33 @@ export class MessageService {
       return this.byIdForViewer(message.id, actor);
     }
 
+    // AN EDIT IS A SECOND WAY A BODY REACHES A FAMILY, SO IT IS SCANNED TOO.
+    //
+    // The defect this closes (audit P6-4): send() scanned, edit() did not. A
+    // teacher could post "Great work today", have it published and delivered,
+    // and then -- inside communication.edit_window_minutes -- rewrite it into a
+    // phone number. The edited text reached the family with no scan, no flag
+    // and no queue entry, which is precisely the "bypass through another
+    // pathway" the moderation boundary exists to prevent.
+    //
+    // REFUSED RATHER THAN HELD, for the same reason an approver's still-flagged
+    // edit is refused: the author is present and can fix it now, and pulling an
+    // already-delivered message back into `pending` would retract something the
+    // recipients have already read.
+    //
+    // The mode is asked of AuthorizationService rather than restated here, so
+    // this path and the send path cannot drift apart.
+    if (this.authz.moderationModeForActor(actor, conv) !== ModerationMode.OFF) {
+      const rescan = await this.moderation.scanBody(actor, body);
+      if (rescan.status === ScanStatus.FLAGGED) {
+        throw new CommError(
+          CommErrorCode.MODERATION_EDIT_STILL_FLAGGED,
+          `this edit matches ${rescan.reasons.join(', ')} and cannot be applied`,
+          409,
+        );
+      }
+    }
+
     const now = new Date();
     await this.prisma.$transaction(async (tx) => {
       // Revision 1 is the body it was SENT with, written lazily on the first

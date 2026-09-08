@@ -646,6 +646,31 @@ export class AuthorizationService {
     return ModerationMode.OFF;
   }
 
+  /**
+   * THE moderation mode that governs THIS actor in THIS conversation.
+   *
+   * Public because `send` is not the only way a body reaches a family: an
+   * author may EDIT a published message, and that edit has to be governed by
+   * the same policy the send was. Exposing the resolved mode is what lets
+   * MessageService.edit ask the question rather than restate the answer -- a
+   * second copy of this rule is how the two paths would drift apart.
+   *
+   * Roles are mapped from the ACTOR KIND, not from a membership row: a teacher
+   * is a teacher whatever their member_role says, and moderation follows the
+   * kind of person speaking.
+   */
+  moderationModeForActor(actor: Actor, conv: Conv): ModerationMode {
+    if (actor.kind === ActorKind.TEACHER) {
+      return this.moderationModeFor(conv, MemberRole.TEACHER);
+    }
+    if (actor.kind === ActorKind.CONTACT) {
+      return this.moderationModeFor(conv, MemberRole.PARENT);
+    }
+    // Staff and system messages have never been moderated, and this does not
+    // change that.
+    return ModerationMode.OFF;
+  }
+
   /** The provisional state for a mode. `smart` is pessimistic -- see Decision. */
   private moderationFor(conv: Conv, role: string): string {
     return this.moderationModeFor(conv, role) === ModerationMode.OFF

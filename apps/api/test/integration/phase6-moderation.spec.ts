@@ -159,6 +159,67 @@ describe('the send path', () => {
     expect(msg.moderation).toBe(Moderation.PENDING);
   });
 
+  /**
+   * REGRESSION, audit defect P6-4.
+   *
+   * send() scanned and edit() did not, so a teacher could publish a benign
+   * message and then rewrite it into a phone number inside the edit window.
+   * The edited text reached the family with no scan, no flag and no queue
+   * entry. These four assertions are the ones that failed before the fix.
+   */
+  describe('an EDIT is scanned too -- the send path is not the only way in', () => {
+    it('refuses an edit that turns a published message into a leak', async () => {
+      const conv = await group();
+      const msg = await g.messages.send({
+        conversationId: conv.id, senderId: s.teacherId, body: SAFE_BODY,
+      });
+      expect(msg.moderation).toBe(Moderation.PUBLISHED);
+
+      await expect(
+        g.messages.edit({ messageId: msg.id, actorId: s.teacherId, body: PHONE_BODY }),
+      ).rejects.toMatchObject({ code: CommErrorCode.MODERATION_EDIT_STILL_FLAGGED });
+
+      // The family still sees the original, and nothing was rewritten.
+      const after = await prisma.message.findUnique({ where: { id: msg.id } });
+      expect(after!.body).toBe(SAFE_BODY);
+      expect(after!.editCount).toBe(0);
+    });
+
+    it('refuses it for a PARENT as well as a teacher', async () => {
+      const conv = await group();
+      const msg = await g.messages.send({
+        conversationId: conv.id, senderId: s.parentId, body: SAFE_BODY,
+      });
+      await expect(
+        g.messages.edit({ messageId: msg.id, actorId: s.parentId, body: 'mail me at a@b.com' }),
+      ).rejects.toMatchObject({ code: CommErrorCode.MODERATION_EDIT_STILL_FLAGGED });
+    });
+
+    it('still allows an ordinary correction, which is what the window is for', async () => {
+      const conv = await group();
+      const msg = await g.messages.send({
+        conversationId: conv.id, senderId: s.teacherId, body: 'Grate work today.',
+      });
+      const fixed = await g.messages.edit({
+        messageId: msg.id, actorId: s.teacherId, body: 'Great work today.',
+      });
+      expect(fixed.body).toBe('Great work today.');
+    });
+
+    it('does not scan an edit where the conversation does not moderate that role', async () => {
+      // A 1:1 with the family's own supervisor was never moderated, and this
+      // change must not quietly start moderating it.
+      const direct = await g.conversations.getOrCreateDirect(s.ownerId, s.parentId);
+      const msg = await g.messages.send({
+        conversationId: direct.id, senderId: s.parentId, body: 'hello',
+      });
+      const edited = await g.messages.edit({
+        messageId: msg.id, actorId: s.parentId, body: PHONE_BODY,
+      });
+      expect(edited.body).toBe(PHONE_BODY);
+    });
+  });
+
   it('an admin message is never held, whatever it says', async () => {
     // Staff moderation was never the policy, and the scan does not change it:
     // a supervisor sharing the academy's own number is doing their job.
