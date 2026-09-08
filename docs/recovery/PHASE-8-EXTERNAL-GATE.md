@@ -1,7 +1,33 @@
-# Phase 8 — Final External Readiness Gate
+# Phase 8 — Final External Readiness Gate · IMMUTABLE SIGN-OFF
 
-Date: 2026-09-08 · Branch: `phase7/ai-and-automation` · Verified tip: **`7e3225e`**
-Authoritative for the readiness verdict. Extends [PHASE-8-CLOSURE.md](PHASE-8-CLOSURE.md).
+Date: 2026-09-08 · Branch: `phase7/ai-and-automation`
+**Verified HEAD: `32e0350` — every number in this document was reproduced at that
+commit, in a clean detached worktree.**
+
+Authoritative for the readiness verdict, superseding
+[PHASE-8-CLOSURE.md](PHASE-8-CLOSURE.md) and
+[PHASE-8-REPORT.md](PHASE-8-REPORT.md), which record how the findings were
+reached. **Where any Phase 8 document disagrees with this one, this one is
+correct.**
+
+> **SHA reconciliation — read this before comparing commits.** An earlier draft
+> said "Verified tip `7e3225e`"; the measurements were taken there, and `32e0350`
+> then added this document. Everything below was **re-run in full at `32e0350`**
+> rather than carried over.
+>
+> **HEAD moves after a sign-off without invalidating it, provided the delta is
+> documentation.** Phase 8 closes with several docs-only commits — this gate, the
+> closure record, the freeze record — each advancing HEAD without touching a line
+> of code. So the check that matters is not "is HEAD still X" but:
+>
+> ```bash
+> git diff --name-only <verified-sha>..HEAD | grep -vE '^docs/'
+> ```
+>
+> **Empty output means these numbers still describe HEAD.** It was empty for
+> `7e3225e..32e0350` (4 docs files, 0 code files) and empty again for the
+> docs-only commits after it. **The last commit to touch code is `90aa0c7`**
+> (the restore ACL fix); everything since is documentation.
 
 ---
 
@@ -22,25 +48,30 @@ real topology.
 
 # Current verified state
 
-Measured at `7e3225e` in a **clean detached worktree**, so every number belongs
-to committed code rather than to a tree carrying other agents' edits.
+Reproduced at **`32e0350`** in a **clean detached worktree** (`git status`
+empty), so every number belongs to committed code rather than to a tree carrying
+other agents' edits. Nothing here is carried over from an earlier run.
 
 | Check | Result |
 |---|---|
 | API typecheck | PASS |
-| API unit | **450 passed** |
-| API integration | **762 passed** (with `JAWWID_REQUIRE_LIVEKIT=1` and a real LiveKit 1.8.4) |
+| API unit | **450 passed** (34 suites) |
+| API integration | **762 passed** (42 suites), with `JAWWID_REQUIRE_LIVEKIT=1` and a real LiveKit 1.8.4 |
 | Admin Web typecheck | PASS |
-| Admin Web tests | **111 passed** |
-| Migrations, fresh install | **52 applied**, re-apply a no-op |
-| Migrations, **upgrade path** | 51 applied → all 10 scopes seeded with live rows → 52nd applied clean |
+| Admin Web tests | **111 passed** (15 files) |
+| Migrations — fresh install | **52 applied**; re-apply a no-op; 80 tables |
+| Migrations — **upgrade path** | 51 applied → live counter rows seeded for all 10 scopes → 52nd applied onto the populated database, clean |
+| Throttle vocabulary | code enums **11** = database CHECK **11**, exact both directions |
 | Database integrity suites | **6/6** on fresh, upgraded **and** restored databases |
-| Release-gate guards | **9/9**, with **12/12 negative probes caught** |
-| Secret scanner | clean; **9/9 negative probes** behave correctly |
-| Backup + restore drill | bare cluster, encrypted archive, full parity, application read access proven |
+| Release-gate guards | **9/9** clean; **13/13 negative probes** caught, each returning to clean |
+| Secret scanner | clean; **9/9 probes** behave correctly (hard rules fire in test paths; the one heuristic stays exempt) |
+| Constraint-narrowing guard | clean (3 restatements compared); catches C-1 when reintroduced verbatim |
+| Backup + restore drill | encrypted archive → bare cluster (0 roles) → exact parity → 6/6 suites → **application role READ and WRITE** |
+| LiveKit gate | all three modes correct (up+required, down+default, down+required→FAIL) |
 
 Counts moved since the closure pass (438 → 450 unit) because a peer wired error
-tracking (`0054ae9`) and added its tests. Integration and web are unchanged.
+tracking (`0054ae9`, `6d70846`) and added its tests. Integration and web are
+unchanged.
 
 ---
 
@@ -191,12 +222,37 @@ model.
 | Request correlation (`X-Request-Id`) | Implemented + Locally Verified |
 | Health: liveness / readiness / dependency | Implemented + Locally Verified; liveness never touches a dependency |
 | Error tracking | **Implemented (code) + Locally Verified** — `@sentry/node` wired, `SENTRY_DSN` consumed, 5xx only. **NOT operational**: no Sentry project exists and no event has ever been received |
-| Metrics | **NOT IMPLEMENTED** — nothing emitted |
-| Alerts | **NOT IMPLEMENTED** — detection means a person noticing |
+| Metrics | **NOT IMPLEMENTED — REMAINING ENGINEERING WORK (repository)** |
+| Alerts | **NOT IMPLEMENTED — EXTERNAL / OPERATIONAL BLOCKER** |
 
 **Code readiness and operational readiness are different things here**, and the
 distinction is load-bearing: error tracking is code-ready and operationally
 absent.
+
+### Metrics and alerts are NOT the same kind of gap
+
+An earlier draft filed both as one external blocker. That was wrong, and the
+difference decides who has to act.
+
+**Metrics require work in THIS repository.** Verified directly: there is no
+`/metrics` endpoint, no `prom-client`, no OTLP meter, and no instrument anywhere
+under `apps/api/src` — a search for `prom-client|/metrics|MeterProvider|
+createHistogram|OTLPMetric` returns nothing. No backend can scrape what is not
+emitted, so provisioning one changes nothing until code exists. The minimal
+implementation is an authenticated `/metrics` endpoint (or an OTLP meter)
+exporting the golden signals `monitoring.md` §2 already specifies: request rate,
+error rate by class, latency histogram, WebSocket connections, queue depth and
+oldest-job age. → **REMAINING ENGINEERING WORK.**
+
+**Alerts do not.** There are no alert definitions in the repository and, per
+`monitoring.md` §1, none are meant to be: they belong to the dashboards/alerting
+tool. They are also doubly gated — on metrics existing, and on a backend to
+evaluate them. → **EXTERNAL / OPERATIONAL BLOCKER**, behind metrics.
+
+Neither is a correctness defect, and neither blocks the classification below:
+metrics cannot become *operational* without B-2 regardless. But metrics is
+repository work and is listed as such rather than parked as somebody else's
+problem.
 
 ---
 
@@ -216,7 +272,13 @@ encryption, and it found E-2.
 | Role attributes + memberships | `chat_app` INHERIT, `chat_service` BYPASSRLS, both memberships restored |
 | Schema `USAGE` | **`chat_app USAGE = true`** (this was the defect) |
 | Six integrity suites on the copy | **6/6** |
-| **Application read access as `chat_app`** | **128 rows** |
+| **Application READ as `chat_app`** | **128 config rows** |
+| **Application WRITE as `chat_app`** | INSERT + DELETE on `chat.auth_throttle` succeeded |
+
+The last two rows are the point. A restore is not a recovery because parity
+matches and the suites pass — twice in this phase it did both and the
+application could not open the database. The chain is only complete when the
+application role itself reads and writes.
 
 ```
 RPO — NOT MEASURED
@@ -247,7 +309,8 @@ environment. They are not estimated here.
 | **B-1** | P0 | Git remote / CI | No remote; no workflow has ever run | `git remote -v` empty | Create remote, push branch | Product owner | — | CI run appears | All 7 jobs green on a runner |
 | **B-2** | P0 | Hosting | Nothing provisioned; no IaC in repo | only `docker-compose.yml` (local) | Provision host, DNS, TLS, managed Postgres/Redis/bucket | Product owner | — | `check-env.sh production` against the real env | Passes; `/health/ready` = 200 |
 | **B-3** | P0 | Mobile toolchain | No Flutter/Dart/JDK here | `command -v flutter` → absent | Run the CI mobile job | — | B-1 | CI job output | analyze + 29 tests + APK green |
-| **B-4** | P1 | Metrics & alerts | Not implemented | nothing emitted | Provision a metrics backend; define alerts | AI #7 | B-2 | Dashboard receives data | Alerts fire on a synthetic fault |
+| **B-4a** | P1 | Metrics *(repository work, not external)* | Nothing emits metrics | no `/metrics`, no exporter, no instrument in `src/` | **Write the emitter** — golden signals per `monitoring.md` §2 | AI #7 | none (code) | `curl /metrics` returns series | Golden signals exported |
+| **B-4b** | P1 | Alerts | Not defined | no alert config; none intended in-repo | Provision a backend; define actionable rules | AI #7 | B-4a + B-2 | Trigger a synthetic fault | Alert fires and is actionable |
 | **B-5** | P1 | Staging | Does not exist | — | Deploy staging | Product owner | B-2 | `scripts/infra/smoke.sh` | Smoke passes |
 | **B-6** | P1 | Multi-instance realtime | Unproven (RISK-4) | Redis adapter declared, never demonstrated | Run two API instances | AI #2 | B-5 | Message on node 1 → subscriber on node 2 | Event delivered cross-instance |
 | **B-7** | P2 | Error tracking operational | Code wired, no project | no DSN, no event received | Create Sentry project, set `SENTRY_DSN` | AI #7 | B-2 | Trigger a 5xx | Event visible in Sentry |
@@ -267,7 +330,8 @@ environment. They are not estimated here.
 **None is blocking.** Everything here is either downstream of an external
 blocker or a recorded, non-urgent improvement.
 
-1. **Wire OTLP metrics** and flip `OTEL_*` back to `req` in the same commit (B-4).
+1. **Emit metrics** — the one genuinely repository-side gap left (B-4a). Flip
+   `OTEL_*` back to `req` in the same commit if OTLP is the chosen transport.
 2. **Add `integration_test`** and port the five journeys to on-device automation (B-8).
 3. **Write a staging load harness** — the current one cannot leave the process (B-11).
 4. **Re-measure query plans at production data volume**; §3 of the baseline proves there is no N+1 at *small* scale only.
@@ -303,6 +367,39 @@ STEP 15  Commission a penetration test (B-14).
 STEP 16  Re-run this gate against the real environment. ONLY THEN evaluate
          Production Ready.
 ```
+
+---
+
+# The one authoritative set of numbers
+
+Every Phase 8 document that quotes a figure is either this one or a superseded
+record. These are the figures; where an older document disagrees, it is stale by
+design and carries a supersession banner.
+
+| Quantity | Value |
+|---|---|
+| Verified code commit | **`90aa0c7`** (last commit touching code); measured at `32e0350` |
+| API unit tests | **450** (34 suites) |
+| API integration tests | **762** (42 suites) |
+| Admin Web tests | **111** (15 files) |
+| Migrations | **52** |
+| `chat` tables | **80** |
+| Database integrity suites | **6** — all passing on fresh, upgraded and restored |
+| Release-gate guards | **9** |
+| Guard negative probes | **13**, all caught |
+| Secret-scanner probes | **9**, all correct |
+| Throttle scopes (code = database) | **11** |
+| Restore parity | 80 tables · 52 migrations · 128 config rows · 186 `chat_app` grants |
+| Classification | **PRODUCTION CANDIDATE — EXTERNAL BLOCKERS** |
+
+Documents that quote older figures, and why they are allowed to:
+
+| Document | Figures | Status |
+|---|---|---|
+| `PHASE-8-REPORT.md` | 415 unit · 752 integration · 51 migrations · guards 8/8 | superseded, banner at top |
+| `PHASE-8-CLOSURE.md` | 438 unit · 762 integration · 52 migrations · guards 8/8 | superseded, banner at top |
+| `PHASE-8-FREEZE.md` | defers to this document | current |
+| `docs/qa/release-gate.md` §1a | 762 · 52 migrations | current |
 
 ---
 

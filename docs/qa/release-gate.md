@@ -12,7 +12,7 @@ treated identically: an untested control is not a control.
 > It was last edited on 2026-09-05, before Phases 1–7 landed. It records P0
 > defects that are **fixed and regression-tested** (JC-008 and JC-010 both have
 > passing assertions in `schema-invariants.spec.ts`), and it records gates as
-> UNVERIFIED that are now covered by 752 passing integration tests. It is left
+> UNVERIFIED that are now covered by 762 passing integration tests. It is left
 > in place rather than rewritten because it is AI #5's artefact and rewriting
 > another owner's gate table from outside is how a gate quietly loosens.
 >
@@ -31,7 +31,7 @@ anywhere.
 
 *Superseded reasons, kept for the record:* the two unmerged migration lineages
 and the working tree's inability to build a database on its own are **resolved** —
-`supabase/migrations` is the single authority and 51 migrations apply from empty
+`supabase/migrations` is the single authority and 52 migrations apply from empty
 and are idempotent, verified 2026-09-08.
 
 ## 1a. Phase 8 re-verification — measured 2026-09-08
@@ -47,7 +47,7 @@ no engineering blocker remains open in the backend or web application.
 | Gate | 2026-09-05 | 2026-09-08 | Evidence |
 |---|---|---|---|
 | G-01 BR-1 enforced server-side | FAIL (JC-008) | **PASS** | `schema-invariants.spec.ts` asserts a GROUP→DIRECT conversion is rejected; `br1_invariants.sql` green |
-| G-45 one migration lineage, no divergent objects | FAIL (JC-010) | **PASS** | `exactly one actor column exists, and it is not both` passes; 51 migrations apply from empty |
+| G-45 one migration lineage, no divergent objects | FAIL (JC-010) | **PASS** | `exactly one actor column exists, and it is not both` passes; 52 migrations apply from empty |
 | G-19 migrations apply + idempotent | PARTIAL | **PASS** | Applied from empty on a clean container; re-apply is a no-op |
 | G-09 no cross-family/group access; IDOR sweep | UNVERIFIED | **PASS** | `security-regression`, `authz-attacks`, `tenant_isolation.sql`, `phase3-group-roster-security` |
 | G-10 realtime delivers only in-scope events | UNVERIFIED | **PASS** | `phase4-realtime`, `realtime-revocation` — subscribe by id, never by naming a room |
