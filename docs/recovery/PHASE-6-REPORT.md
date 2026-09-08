@@ -504,6 +504,43 @@ had two consequences worth recording rather than hiding:
 
 ---
 
+## 6b. CLOSURE — accepted, and the register of what was deliberately left open
+
+**Status: PHASE 6 ACCEPTED WITH NON-BLOCKING FOLLOW-UPS** (independent
+acceptance audit, 2026-09-08).
+
+The audit re-verified every claim in this document against the repository as it
+then stood rather than against this document, and found one defect that the
+implementation phase had missed — **P6-4**, the edit-path bypass, recorded in §4
+and fixed in `ae67dfb`. No production blocker remains.
+
+Final verification at the post-fix HEAD, from a clean detached worktree:
+API unit 438/438 · API integration 762/762 · Admin Web 111/111 · Admin Web
+typecheck and build pass · migrations from empty, G-19 idempotency, schema
+acceptance, BR-1 invariants and JC-011 all pass · zero blanket RLS policies.
+
+### The follow-up register
+
+None of these blocks production. They are recorded here so that "we knew" is
+checkable rather than remembered, and so that nobody re-discovers them as
+defects. **Each needs a decision before it needs code**, which is why none was
+actioned at closure.
+
+| # | Follow-up | Kind | Notes |
+|---|---|---|---|
+| F-1 | Arabic for the Command Center, moderation queue and rule-management **page bodies** | Product | The nav is already bilingual; the bodies are English. A real gap for an Arabic-first operations team, and the first thing to close. Deliberately NOT done at closure. |
+| F-2 | Decide whether `conversation_needs_reply_idx` is retained | Engineering | Measured at 40k conversations: the planner chooses a sequential scan (5% selectivity, and the index does not cover the `last_staff_message_at` comparison). Performance is acceptable — KPI header 49ms, drill-down 28ms, supervisor rollup 84ms — so this is a question about a redundant index, not about speed. This report's earlier claim that no index was speculative was slightly overstated. |
+| F-3 | Author-edit behaviour under `all` moderation mode | Product | Under `all` the conversation holds every message from a role for human review. Since P6-4, an author's edit **is** scanned, so this is not a content leak — but an author may still change approved text without a second review. Whether that needs re-approval is a policy decision. |
+| F-4 | Organization-level rule seeding, if multi-organization support arrives | Engineering | A second organization would have no moderation rules. Note this is a **pre-existing, system-wide seeding characteristic** — `chat.notification_template` behaves identically — and there is no application path that creates an organization. Not Phase 6-specific. |
+| F-5 | Activation of the cancellation and resignation rules | **Operations** | Ships as 5 enabled (3 phone, e-mail, URL) and 4 disabled (cancellation ×2, resignation ×2). A fresh production database **does** moderate contact-channel leakage out of the box; the disabled four carry starter patterns that need the academy's actual wording. |
+| F-6 | Confirmation of the escalation and overload thresholds | **Operations** | `moderation.escalation_hours = 3`; `command_center.overload_unanswered_warning/high = 6/12`; `overload_pending_warning/high = 3/6`; `window_hours = 24`. All are config rows labelled INITIAL HYPOTHESIS and changeable without a deploy. |
+
+F-5 and F-6 are the two that want an answer from operations rather than from
+engineering. Everything else can wait for a phase that has a reason to touch
+this code.
+
+---
+
 ## 7. What Phase 6 deliberately did not do
 
 - **It did not invent the academy's word lists.** The cancellation, resignation,
