@@ -30,7 +30,7 @@ closed, and two were mis-stated.
 | P8-05 | Mobile unverified — Flutter/Dart/JDK unavailable | **BLOCKED BY INFRASTRUCTURE** | Still absent on this host. CI is now genuinely wired to run it (§4) |
 | P8-06 | Rate limiting | **FIXED + VERIFIED** | 6 action scopes + WS frame budget. 13 assertions on a real database |
 | P8-07 | DB security suites not gated | **FIXED + VERIFIED** | All 6 gated in `ci.yml`; all 6 pass on a fresh DB at HEAD |
-| P8-08 | Observability | **PARTIALLY VERIFIED** | Structured logging + health checks implemented and tested (27 assertions). Error tracking, metrics and alerts still absent |
+| P8-08 | Observability | **PARTIALLY VERIFIED** | Structured logging + health checks implemented and tested (27 assertions). **Error tracking wired and tested (12 assertions, `0054ae9`/`6d70846`).** Metrics and alerts still absent |
 | P8-09 | No production-scale load test | **PARTIALLY VERIFIED** | Local baseline + a full concurrency curve now exist. Production scale still **BLOCKED — NO STAGING** |
 | P8-10 | Documentation / release gate | **FIXED** | Release gate carries an execution-backed §1a; readiness doc corrected; runbook gained backup/restore/rotation |
 
@@ -103,7 +103,7 @@ edits): **438 unit · 762 integration · 111 web · 52 migrations · 6/6 DB suit
 | Notifications | ✅ | ✅ FCM 503, APNs 410/400/503, dedupe, quiet hours | ✗ | ✗ | ✗ | **Locally Verified** |
 | CRM sync | ⚠️ dormant | — | ✗ | ✗ | ✗ | **NOT APPLICABLE — by design.** `chat.core_event` is an ingestion boundary with **no writer**; Jawwid Core delivers nothing yet |
 | Logging | ✅ | ✅ 27 assertions; field allowlist + redaction, both directions | ✗ | ✗ | ✗ | **Locally Verified** |
-| Error tracking | ❌ | — | ✗ | ✗ | ✗ | **NOT IMPLEMENTED.** `SENTRY_DSN` is `req` in staging/production in the manifest, and **no SDK is installed** — a variable an operator must supply that nothing reads |
+| Error tracking | ✅ | ✅ 12 assertions on `scrubEvent` and the 5xx/4xx boundary; inert without a DSN | ✗ | ✗ | ✗ | **Locally Verified.** `SENTRY_DSN` is consumed by `infra/observability/sentry-error-tracker.ts`. No event has been transmitted to a real Sentry project — there is no project |
 | Metrics | ❌ | — | ✗ | ✗ | ✗ | **NOT IMPLEMENTED.** Same for `OTEL_*` |
 | Alerts | ❌ | — | ✗ | ✗ | ✗ | **NOT IMPLEMENTED.** Detection today = a person noticing |
 | Health checks | ✅ | ✅ liveness never touches a dependency; readiness reports `degraded`; probe errors sanitised; reports `rlsEnforced` | ✗ | ✗ | ✗ | **Locally Verified** |
@@ -130,7 +130,8 @@ edits): **438 unit · 762 integration · 111 web · 52 migrations · 6/6 DB suit
 | **B-1** | P0 | CI/CD | No git remote; no workflow has ever executed | `git remote -v` is empty | Every gate is unproven. The pipeline was red twice in one day and only manual runs found it | Create the remote, push, run CI, fix what the first real run finds | Product owner | — |
 | **B-2** | P0 | Hosting | No environment, domain, TLS, managed Postgres/Redis/bucket, push credentials, LiveKit project | No IaC of any kind in the repo; Release steps fail deliberately | Nothing can be deployed | Provision hosting and a secret store | Product owner | — |
 | **B-3** | P0 | Mobile | 30 Dart test files have never executed anywhere | No `flutter`, `dart` or JDK on this host | Both apps are untested by construction | Run the CI mobile job (§4) | Clears with B-1 | B-1 |
-| **B-4** | P1 | Observability | No error tracking, metrics or alerts. `SENTRY_DSN`/`OTEL_*` are **required in production** by the manifest but **no SDK consumes them** | `grep sentry apps/api/package.json` → nothing; manifest marks them `req` | Detection means a person noticing; and an operator is required to supply a credential that nothing reads | Wire the SDKs, or downgrade the vars to `opt` until they are wired. Do not leave both | AI #7 | B-2 |
+| **B-4** | P1 | Observability | **Metrics and alerts** remain absent. Error tracking is now wired | `grep -r OTEL_ apps/api/src` → nothing | No metrics pipeline, so saturation and queue-depth signals do not exist; alerting has nothing to alert on | Wire an OTLP exporter, and flip `OTEL_*` back to `req` in the same commit | AI #7 | B-2 |
+| **B-4a** | — | Observability | **CLOSED.** Error tracking wired; `SENTRY_DSN` consumed and `OTEL_*` downgraded to `opt`, so the manifest no longer requires a credential nothing reads | `0054ae9`, `6d70846`, manifest §observability | — | — | — | — |
 | **B-5** | P1 | Staging | Nothing has been deployed or smoke-tested anywhere | No environment | Every "Locally Verified" row above is unproven under a real topology | Deploy to staging; run `scripts/infra/smoke.sh` | Clears with B-2 | B-2 |
 | **B-6** | P1 | Realtime | Multi-instance realtime unproven (RISK-4) | Redis adapter is a declared dependency, never a demonstrated behaviour | Two instances without a working adapter silently deliver events to only one | Run two API instances on staging and assert cross-instance delivery | AI #2 | B-5 |
 | **B-7** | P2 | Backup | Archives are unencrypted at rest | `backup-db.sh` writes plain `pg_dump` output | A backup is a complete copy of every family's messages | Encrypt, or store in an encrypted bucket | AI #7 | B-2 |
@@ -276,7 +277,7 @@ Ordered by dependency. Nothing below is done.
 | 12 | APNs + FCM credentials; a real push delivered end to end | ☐ | 5 |
 | 13 | LiveKit project; `JAWWID_REQUIRE_LIVEKIT=1` in the release gate | ☐ | 5 |
 | 14 | CRM/Core: **nothing to do** — `chat.core_event` has no writer yet | n/a | — |
-| 15 | Sentry + OTLP wired **or** the manifest downgraded to `opt` (B-4) | ☐ | 5 |
+| 15 | Sentry wired; OTLP still unwired and `OTEL_*` downgraded to `opt` accordingly (B-4) | ☑ | 5 |
 | 16 | Alerts defined and actionable | ☐ | 15 |
 | 17 | Provider backups enabled; `pg_dump` copies **encrypted** (B-7) | ☐ | 7 |
 | 18 | **Restore drill against staging**, including the one step never covered: an application instance pointed at the restored database reaching `/health/ready` = 200 | ☐ | 17 |
