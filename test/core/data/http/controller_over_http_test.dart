@@ -30,6 +30,13 @@ void main() {
   late TestServer server;
   late ProviderContainer container;
 
+  /// Held for the test's lifetime so the auto-disposing provider is not torn
+  /// down between bare reads. This mirrors the chat screen, which keeps the
+  /// controller alive by watching it while the conversation is open. Taken
+  /// lazily, on first access, so the provider is still built at exactly the
+  /// moment the test first touches it.
+  ProviderSubscription<MessagesState>? retained;
+
   Map<String, Object?> messageDto({
     required String id,
     required String seq,
@@ -57,6 +64,7 @@ void main() {
 
   setUp(() async {
     server = await TestServer.start();
+    retained = null;
     container = ProviderContainer(
       overrides: [
         messageRepositoryProvider.overrideWithValue(
@@ -78,9 +86,15 @@ void main() {
     await server.stop();
   });
 
-  MessagesController controller() =>
-      container.read(messagesControllerProvider('c1').notifier);
-  MessagesState read() => container.read(messagesControllerProvider('c1'));
+  MessagesController controller() {
+    retained ??= container.listen(messagesControllerProvider('c1'), (_, _) {});
+    return container.read(messagesControllerProvider('c1').notifier);
+  }
+
+  MessagesState read() {
+    retained ??= container.listen(messagesControllerProvider('c1'), (_, _) {});
+    return container.read(messagesControllerProvider('c1'));
+  }
 
   /// Wait for a condition rather than sleeping a fixed amount.
   ///

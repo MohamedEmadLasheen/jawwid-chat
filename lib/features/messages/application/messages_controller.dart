@@ -815,6 +815,6 @@ class MessagesController extends Notifier<MessagesState> {
 }
 
 final messagesControllerProvider =
-    NotifierProvider.family<MessagesController, MessagesState, String>(
+    NotifierProvider.autoDispose.family<MessagesController, MessagesState, String>(
   MessagesController.new,
 );

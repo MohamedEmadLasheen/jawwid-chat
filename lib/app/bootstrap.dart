@@ -241,7 +241,10 @@ List<Override> _httpOverrides({required String debugActorId}) {
   final livekitMedia = LiveKitCallMedia();
 
   final realtime = SocketIoRealtimeClient(
-    baseUrl: config.baseUrl,
+    // The socket takes the ORIGIN, never the API base: Socket.IO reads a
+    // trailing path as a namespace, and `/api/v1` is one the gateway does not
+    // serve. See ApiConfig.realtimeUrl.
+    baseUrl: config.realtimeUrl,
     accessToken: () async => (await tokenStore.read())?.accessToken,
   );
 

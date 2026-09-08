@@ -187,10 +187,22 @@ void main() {
   late FakeRealtimeClient realtime;
   late ProviderContainer container;
 
+  /// Held for the test's lifetime so the auto-disposing provider is not torn
+  /// down between bare reads. This mirrors the chat screen, which keeps the
+  /// controller alive by watching it while the conversation is open.
+  ///
+  /// Taken LAZILY, on first access, rather than in `setUp`: subscribing builds
+  /// the provider, which schedules `loadInitial()`, and several tests below
+  /// seed `repository.history_` after `setUp` but before they touch the
+  /// controller. Subscribing early would run the first load against an empty
+  /// repository and change what those tests are asserting.
+  ProviderSubscription<MessagesState>? retained;
+
   setUp(() {
     repository = _RecordingMessageRepository();
     conversations = _RecordingConversationRepository();
     realtime = FakeRealtimeClient();
+    retained = null;
     container = ProviderContainer(
       overrides: [
         messageRepositoryProvider.overrideWithValue(repository),
@@ -202,10 +214,15 @@ void main() {
 
   tearDown(() => container.dispose());
 
-  MessagesController controller() =>
-      container.read(messagesControllerProvider('c1').notifier);
+  MessagesController controller() {
+    retained ??= container.listen(messagesControllerProvider('c1'), (_, _) {});
+    return container.read(messagesControllerProvider('c1').notifier);
+  }
 
-  MessagesState read() => container.read(messagesControllerProvider('c1'));
+  MessagesState read() {
+    retained ??= container.listen(messagesControllerProvider('c1'), (_, _) {});
+    return container.read(messagesControllerProvider('c1'));
+  }
 
   /// Let the microtask queue and any zero-length timers run.
   Future<void> settle() => Future<void>.delayed(const Duration(milliseconds: 10));
