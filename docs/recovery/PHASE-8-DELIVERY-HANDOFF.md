@@ -55,7 +55,7 @@ git diff --name-only 90aa0c7..HEAD | grep -vE '^docs/'   # empty ⇒ numbers sti
 | **B-3** Mobile toolchain/runtime | EXTERNAL BLOCKER | No | CI runner + devices | **YES** for mobile | CI mobile job green; device matrix executed |
 | **B-4a** Metrics emission | **REPOSITORY ENGINEERING** | **YES** | Backend only to *consume* | Not for staging | `/metrics` (or OTLP) serves the golden signals; tests assert counters move |
 | **B-4b** Alerts | EXTERNAL BLOCKER | No | Metrics backend + routing | No | An alert fires on a synthetic fault |
-| **B-4c** `CORE_*` required but unconsumed | **REPOSITORY ENGINEERING** | **YES** | None | Blocks a *clean* deploy | `check-env.sh production` passes without Core credentials |
+| **B-4c** `CORE_*` required but unconsumed | **COMPLETE** | Done | None | No | `check-env.sh production` passes with zero Core config — verified: 5 blocking `MISSING` → 0 errors |
 | **B-5** Staging | EXTERNAL BLOCKER | No | Hosting | **YES** | Smoke test passes |
 | **B-6** Multi-instance realtime | DOWNSTREAM | No | Two instances | No | Message on node 1 → subscriber on node 2 |
 | **B-7** Error tracking operational | DOWNSTREAM | No | Sentry project | No | A real 5xx appears in Sentry |
@@ -75,24 +75,33 @@ git diff --name-only 90aa0c7..HEAD | grep -vE '^docs/'   # empty ⇒ numbers sti
 | Jawwid Core / CRM integration | **NOT REQUIRED** | No | Core delivering events | No | Deferred by design — `chat.core_event` has no writer |
 | Everything in `PHASE-8-FREEZE.md` §COMPLETE | COMPLETE | — | — | No | Already executed here |
 
-### B-4c — a new finding from this audit, and it removes an external dependency
+### B-4c — found by this audit, and now CLOSED
 
 `CORE_BASE_URL`, `CORE_API_KEY`, `CORE_WEBHOOK_SECRET`, `CORE_TIMEOUT_MS` and
-`CORE_RETRY_MAX` are **`req` in production**, three of them secrets. Verified
-this pass: **not one of them is referenced anywhere in `apps/` or `lib/`**, and
-no Core client class exists. `chat.core_event` is documented as dormant —
-nothing writes it.
+`CORE_RETRY_MAX` **were `req` in staging and production**, three of them secrets
+— while **not one is referenced anywhere in `apps/` or `lib/`**, no Core client
+class exists, and `chat.core_event` has no writer.
 
-So a production deploy is currently refused unless the operator supplies an API
-key and a webhook secret for an integration the code does not perform. This is
-exactly the pattern already corrected for `OTEL_*` (commit `e9666e3`), and it is
-**repository work, not an external dependency** — filing it as "provision Jawwid
-Core" would put a false prerequisite on the owner's list.
+A production deploy was therefore refused unless the operator supplied an API key
+and a webhook secret for an integration the code does not perform: the same
+pattern corrected for `OTEL_*` in `e9666e3`, and worse here because it sat on the
+launch path. It was **repository work, not an external dependency** — filing it
+as "provision Jawwid Core" would have put a false prerequisite on the owner's
+critical path.
 
-**Not fixed in this task**, per the handoff's no-code-changes rule: it is
-pre-existing, not a regression introduced after the sign-off. Recommended fix is
-one line per row in `infra/env/manifest.tsv` (`req` → `opt`, regenerate the
-templates), to be flipped back in the same commit that implements a Core client.
+**CLOSED.** The owner has ruled that **Jawwid Core integration is not in the
+current launch scope**. The five rows are now `opt` in local, staging and
+production, with the decision and the flip-back condition recorded in the
+manifest itself. Verified against a synthetic production environment carrying
+**zero** `CORE_*` values: previously five blocking
+`MISSING … required in production` errors, now **zero errors** and two
+informational notes ("unset; the feature it enables is off").
+
+The rows were kept rather than deleted because the boundary is designed and
+documented — `chat.core_event` exists, and `trigger-source.ts` describes how
+events would flow — so this is deferral, not abandonment. They flip back to
+`req` in the same commit that lands a Core client and a writer for
+`chat.core_event`, and not before.
 
 ---
 
@@ -191,8 +200,9 @@ a generic checklist.
 
 **Explicitly NOT required to stand staging up:**
 
-- **Jawwid Core / CRM.** Required by the manifest, consumed by nothing (B-4c).
-  Do not provision an endpoint or mint credentials for it to run staging.
+- **Jawwid Core / CRM.** Out of launch scope by decision, and the manifest no
+  longer asks for it (B-4c, closed). Do not provision an endpoint or mint
+  credentials for it.
 - **A metrics backend.** Nothing emits metrics yet (B-4a).
 - **An alerting stack.** Downstream of metrics (B-4b).
 - **Kubernetes, a service mesh, a message broker, a CDN.** The repository
@@ -324,9 +334,9 @@ nothing.
 8. **Provision a metrics/alerting backend** — *after* B-4a lands.
 9. **Provide encrypted off-host backup storage** (B-12).
 10. **Commission a penetration test** (B-14).
-11. **Decide** whether Jawwid Core integration is in scope for launch. If not,
-    B-4c is simply a manifest correction; if yes, it is a new feature and a new
-    phase.
+11. ~~Decide whether Jawwid Core integration is in scope for launch.~~
+    **DECIDED: out of scope.** B-4c is corrected; Core needs no provisioning,
+    no credentials and no place on the launch path.
 
 ### CLAUDE ACTIONS — each waits on a named prerequisite
 
@@ -334,7 +344,6 @@ nothing.
 |---|---|
 | Fix the first real CI run's failures | B-1, and a run existing |
 | **Implement B-4a metrics** (§4) | B-5 staging, so it can be verified against something |
-| **Correct B-4c** — `CORE_*` `req` → `opt`, regenerate templates | Owner decision (11) |
 | Write a staging-capable load harness and run A–G | B-5 |
 | Add `integration_test` and port the journeys (B-8) | B-3 devices |
 | Run the staging restore drill; record RPO/RTO | B-5 |
@@ -400,13 +409,9 @@ penetration test. **B-1 and B-2 are the two that gate all the others.**
 Exactly two items, neither blocking staging:
 
 1. **B-4a — metrics emission.** Genuinely repository work; four instrument seams
-   already exist. Should follow staging so it can be verified against a real
-   collector rather than assumed.
-2. **B-4c — `CORE_*` required but unconsumed.** A manifest correction,
-   contingent on the owner's decision at OWNER ACTION 11. It is listed here
-   rather than on the owner's list because it is repository work, and filing it
-   as "provision Jawwid Core" would invent an external dependency the code does
-   not have.
+   already exist. Deferred until staging exists, so it can be verified against a
+   real collector rather than assumed.
 
-Nothing else. **No further engineering phase is warranted; the next evidence must
+That is the whole list. B-4c is closed: Core was ruled out of launch scope and
+the manifest no longer demands credentials for it. **No further engineering phase is warranted; the next evidence must
 come from the delivery environment.**

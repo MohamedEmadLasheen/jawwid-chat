@@ -96,11 +96,31 @@ AI_TIMEOUT_MS	ai	no	opt	opt	opt
 AI_MAX_RETRIES	ai	no	opt	opt	opt
 AI_MAX_INPUT_CHARS	ai	no	opt	opt	opt
 AI_MAX_OUTPUT_TOKENS	ai	no	opt	opt	opt
-CORE_BASE_URL	core	no	req	req	req
-CORE_API_KEY	core	yes	opt	req	req
-CORE_WEBHOOK_SECRET	core	yes	opt	req	req
-CORE_TIMEOUT_MS	core	no	opt	req	req
-CORE_RETRY_MAX	core	no	opt	req	req
+# JAWWID CORE INTEGRATION IS NOT IN THE CURRENT LAUNCH SCOPE.
+#
+# These five were `req` in staging and production. Nothing reads them: there
+# is no reference to any CORE_* variable anywhere in apps/ or lib/, no Core
+# client class exists, and chat.core_event -- the ingestion boundary -- has no
+# writer (see the DORMANT note in src/ai/automation/trigger-source.ts).
+#
+# check-env.sh runs on every deployment, so `req` meant a release was REFUSED
+# unless an operator produced a base URL, an API key and a webhook secret for
+# an integration the code does not perform. Two of those are secrets somebody
+# would have had to mint. That is the same false requirement corrected for
+# OTEL_* in e9666e3, and it is worse here because it was on the launch path.
+#
+# They are kept as `opt` rather than deleted: the boundary is designed and
+# documented (docs/architecture/decisions.md, chat.core_event), it is deferred
+# rather than abandoned, and deleting the rows would lose that design.
+#
+# Flip them back to `req` in the SAME commit that lands a Core client and a
+# writer for chat.core_event -- not before. Until then, a deployment without
+# Core configured is correct, not degraded.
+CORE_BASE_URL	core	no	opt	opt	opt
+CORE_API_KEY	core	yes	opt	opt	opt
+CORE_WEBHOOK_SECRET	core	yes	opt	opt	opt
+CORE_TIMEOUT_MS	core	no	opt	opt	opt
+CORE_RETRY_MAX	core	no	opt	opt	opt
 # Phase 8, blocker B-7. A backup is a complete copy of every family's messages,
 # so backup-db.sh REFUSES to write an unencrypted one when APP_ENV is staging or
 # production -- before it dumps, not after, so a plaintext copy never touches
