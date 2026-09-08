@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
 import type { AiSuggestion } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
@@ -10,6 +10,8 @@ import type { IdentityService } from '../../platform/identity.service';
 import type { AuditService } from '../../platform/audit.service';
 import { ConversationService } from '../../communication/conversations/conversation.service';
 import { MessageService } from '../../communication/messages/message.service';
+import { ModerationService } from '../../communication/moderation/moderation.service';
+import { ScanStatus } from '../../communication/contracts/vocab';
 import { IdentityAwareService } from '../identity-aware.service';
 import { AiInvocationService } from '../ai-invocation.service';
 import { AiFeature } from '../provider/ai-provider';
@@ -64,12 +66,15 @@ const SYSTEM = [
  */
 @Injectable()
 export class SuggestionService extends IdentityAwareService {
+  private readonly log = new Logger(SuggestionService.name);
+
   constructor(
     prisma: PrismaService,
     @Inject(IDENTITY_SERVICE) identity: IdentityService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
     private readonly conversations: ConversationService,
     private readonly messages: MessageService,
+    private readonly moderation: ModerationService,
     private readonly knowledge: KnowledgeService,
     private readonly ai: AiInvocationService,
     private readonly config: AppConfigService,
@@ -140,6 +145,41 @@ export class SuggestionService extends IdentityAwareService {
     // supplied means the draft is not grounded in what we think it is.
     const cited = [...new Set(out.usedSources)].filter((n) => n >= 1 && n <= articles.length);
     if (cited.length !== new Set(out.usedSources).size) return null;
+
+    /**
+     * THE CONTENT CHECK, and it is Phase 6's, not a second one.
+     *
+     * A staff member sending in a family conversation is not moderated -- that
+     * is Phase 6's deliberate policy, and Phase 7 does not get to change it. So
+     * `MessageService.send` will NOT scan this draft on its way out, and
+     * without the check below the assistant would be the one path by which
+     * unreviewed text reaches a family with no rule ever applied to it.
+     *
+     * The realistic failure is not a jailbreak. It is a model helpfully
+     * drafting "call us on 0100 123 4567" -- a contact channel outside Jawwid,
+     * which is exactly what the organization's own moderation rules already
+     * detect, and which defeats the point of an audited communication product.
+     *
+     * So the scan runs HERE, where Phase 7 owns the decision, and the decision
+     * is not to offer the draft at all. Holding it for approval would be the
+     * wrong shape: there is no message yet and nobody is waiting on one, and a
+     * manager writing their own sentence is a better outcome than a moderator
+     * reviewing a machine's.
+     *
+     * Note this is reuse, not a parallel system: same ContentScanner, same
+     * chat.moderation_rule rows, same categories. A rule an operator adds for
+     * people applies to the assistant on the next request, with no Phase 7
+     * change at all.
+     */
+    const scan = await this.moderation.scanBody(actor, out.reply.trim());
+    if (scan.status === ScanStatus.FLAGGED) {
+      // Categories, never the text: the draft is a function of somebody's
+      // conversation and does not belong in a log (§31).
+      this.log.warn(
+        `[suggestion] discarded a draft flagged by moderation rules: ${scan.reasons.join(', ')}`,
+      );
+      return null;
+    }
 
     // Supersede this requester's older pending drafts on this conversation, so
     // a console never shows two competing "next replies".

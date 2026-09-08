@@ -43,6 +43,13 @@ export const ActionScope = {
   BROADCAST_SEND: 'broadcast_send_actor',
   STORY_PUBLISH: 'story_publish_actor',
   CALL_START: 'call_start_actor',
+  /**
+   * Phase 7 audit fix. ONE scope for every route that consults the model --
+   * FAQ, suggested replies and summaries share it, because what is rationed is
+   * provider spend and a caller who exhausts their budget on summaries should
+   * not still have a full budget for suggestions.
+   */
+  AI_GENERATE: 'ai_generate_actor',
 } as const;
 export type ActionScope = (typeof ActionScope)[keyof typeof ActionScope];
 

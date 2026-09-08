@@ -14,7 +14,9 @@ import { CommErrorCode } from '../../../src/platform/errors';
 
 const CONV = { id: 'conv-1', familyId: 'fam-1', organizationId: 'org-1' };
 
-function build(opts: { output?: unknown; failure?: boolean; sendThrows?: Error } = {}) {
+function build(opts: {
+  output?: unknown; failure?: boolean; sendThrows?: Error; scanFlagged?: boolean;
+} = {}) {
   const created: unknown[] = [];
   const suggestionRow = {
     id: 'sug-1',
@@ -51,6 +53,14 @@ function build(opts: { output?: unknown; failure?: boolean; sendThrows?: Error }
     }),
   };
   const conversations = { requireForActor: jest.fn().mockResolvedValue(CONV) };
+  // Phase 6's scanner, reused. SAFE unless a test says otherwise.
+  const moderation = {
+    scanBody: jest.fn().mockResolvedValue(
+      opts.scanFlagged
+        ? { status: 'flagged', matches: [], highestSeverity: 'high', reasons: ['phone_number'], errors: [] }
+        : { status: 'safe', matches: [], highestSeverity: null, reasons: [], errors: [] },
+    ),
+  };
   const knowledge = { searchApproved: jest.fn().mockResolvedValue([]) };
   const ai = {
     isEnabled: jest.fn().mockResolvedValue(true),
@@ -80,10 +90,10 @@ function build(opts: { output?: unknown; failure?: boolean; sendThrows?: Error }
 
   const service = new SuggestionService(
     prisma as never, identity as never, audit as never,
-    conversations as never, messages as never, knowledge as never,
-    ai as never, config as never,
+    conversations as never, messages as never, moderation as never,
+    knowledge as never, ai as never, config as never,
   );
-  return { service, prisma, messages, conversations, ai, audit, identity };
+  return { service, prisma, messages, conversations, ai, audit, identity, moderation };
 }
 
 const GOOD = { hasSuggestion: true, reply: 'نعتذر عن التأخير.', confidence: 0.85, usedSources: [] };
@@ -200,6 +210,27 @@ describe('suggested replies never send themselves', () => {
     });
     expect(await service.generate('staff-1', 'conv-1')).toBeNull();
     expect(prisma.aiSuggestion.create).not.toHaveBeenCalled();
+  });
+
+  it('discards a draft the organization\'s own moderation rules flag', async () => {
+    // The realistic failure is not a jailbreak: it is a model helpfully
+    // drafting "call us on 0100 123 4567". A staff send is NOT scanned on its
+    // way out (Phase 6's policy), so without this check the assistant would be
+    // the one path by which unreviewed text reaches a family.
+    const { service, prisma, moderation } = build({ output: GOOD, scanFlagged: true });
+
+    expect(await service.generate('staff-1', 'conv-1')).toBeNull();
+    expect(moderation.scanBody).toHaveBeenCalled();
+    expect(prisma.aiSuggestion.create).not.toHaveBeenCalled();
+  });
+
+  it('scans the DRAFTED text, using Phase 6\'s scanner rather than a second one', async () => {
+    const { service, moderation } = build({ output: GOOD });
+    await service.generate('staff-1', 'conv-1');
+    expect(moderation.scanBody).toHaveBeenCalledWith(
+      expect.objectContaining({ actorId: 'staff-1' }),
+      'نعتذر عن التأخير.',
+    );
   });
 
   it('keeps internal staff notes out of a draft meant for a family', async () => {

@@ -141,14 +141,6 @@ async function bootstrap(): Promise<void> {
       // draining or the missed-call sweep running is a single point of failure
       // wearing a different hat (§28).
       try {
-        await moderationSweeper.sweep();
-      } catch (e) {
-        log.error(
-          `moderation sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`,
-        );
-      }
-
-      try {
         await automation.sweep();
       } catch (e) {
         log.error(`automation sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`);
@@ -161,6 +153,16 @@ async function bootstrap(): Promise<void> {
       }
 
       // Its own try, for the same reason every other subsystem here has one: a
+      // moderation queue that cannot escalate must not be why missed calls stop
+      // being marked. (ModerationSweeper already swallows its own errors; this
+      // is the belt to that braces.)
+      try {
+        await moderationSweeper.sweep();
+      } catch (e) {
+        log.error(
+          `moderation sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`,
+        );
+      }
     }
 
     draining = false;

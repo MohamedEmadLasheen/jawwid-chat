@@ -41,6 +41,7 @@ describe('AI suggestion requesting an unauthorized action', () => {
     const service = new SuggestionService(
       prisma as never, identity as never, { audit: jest.fn() } as never,
       { requireForActor: jest.fn() } as never, messages as never,
+      { scanBody: jest.fn() } as never,
       { searchApproved: jest.fn() } as never, {} as never, { get: jest.fn() } as never,
     );
     return { service, messages, prisma };
@@ -96,6 +97,7 @@ describe('AI attempting to send as another user', () => {
     const service = new SuggestionService(
       prisma as never, identity as never, { audit: jest.fn() } as never,
       { requireForActor: jest.fn() } as never, messages as never,
+      { scanBody: jest.fn() } as never,
       { searchApproved: jest.fn() } as never, {} as never, { get: jest.fn() } as never,
     );
 

@@ -1,6 +1,8 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseFilters } from '@nestjs/common';
 import { ActorId } from '../../platform/auth/current-actor.decorator';
 import { CommErrorFilter } from '../../communication/api/http-exception.filter';
+import { RateLimited } from '../../platform/auth/action-throttle.guard';
+import { ActionScope } from '../../platform/auth/throttle.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
 import { FaqService } from '../knowledge/faq.service';
 
@@ -106,6 +108,7 @@ export class FaqController {
    * that had to distinguish an HTTP failure from a refusal to guess would get
    * it wrong in the direction of showing nothing.
    */
+  @RateLimited(ActionScope.AI_GENERATE)
   @Post()
   async ask(
     @ActorId() actorId: string,

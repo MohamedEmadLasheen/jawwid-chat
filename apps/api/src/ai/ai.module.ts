@@ -19,6 +19,8 @@ import { ConditionEvaluator } from './automation/condition.evaluator';
 import { AutomationEngine } from './automation/automation.engine';
 import { TriggerSource } from './automation/trigger-source';
 import { AutomationSweeper } from './automation/automation.sweeper';
+import { AutomationAdminService } from './automation/automation-admin.service';
+import { AutomationController } from './api/automation.controller';
 
 /**
  * The AI intelligence layer.
@@ -32,7 +34,14 @@ import { AutomationSweeper } from './automation/automation.sweeper';
   // CommunicationModule, and never the other way round. The assistant reaches
   // the send pipeline; the send pipeline knows nothing about the assistant.
   imports: [PlatformModule, CommunicationModule],
-  controllers: [KnowledgeController, FaqController, SuggestionController, SummaryController, AttentionController],
+  controllers: [
+    KnowledgeController,
+    FaqController,
+    SuggestionController,
+    SummaryController,
+    AttentionController,
+    AutomationController,
+  ],
   providers: [
     // The real provider when the environment supplies a key, an honestly
     // disabled one otherwise -- the same pattern as OBJECT_STORAGE and
@@ -54,7 +63,21 @@ import { AutomationSweeper } from './automation/automation.sweeper';
     AutomationEngine,
     TriggerSource,
     AutomationSweeper,
+    AutomationAdminService,
   ],
-  exports: [AI_PROVIDER, AiInvocationService, KnowledgeService, FaqService, SuggestionService, SummaryService, RiskDetectionService, AttentionService, RiskSweeper, AutomationEngine, AutomationSweeper],
+  exports: [
+    AI_PROVIDER,
+    AiInvocationService,
+    KnowledgeService,
+    FaqService,
+    SuggestionService,
+    SummaryService,
+    RiskDetectionService,
+    AttentionService,
+    RiskSweeper,
+    AutomationEngine,
+    AutomationSweeper,
+    AutomationAdminService,
+  ],
 })
 export class AiModule {}

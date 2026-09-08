@@ -168,6 +168,12 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   /** initial hypothesis - each one mints a media token and reserves a room */
   'abuse.throttle.call_start_actor': 20,
   /**
+   * initial hypothesis - AI generations per actor per window, shared across
+   * FAQ, suggestions and summaries. Lower than message_send because each one
+   * costs a third-party charge rather than a database round trip.
+   */
+  'abuse.throttle.ai_generate_actor': 30,
+  /**
    * Inbound WebSocket frames one socket may send per minute before it is
    * disconnected. Enforced in the gateway IN MEMORY rather than through the
    * throttle table: a typing indicator fires per keystroke, and a database

@@ -251,3 +251,68 @@ describe('the policies CONSTRAIN, with the service layer removed', () => {
     ).rejects.toThrow();
   });
 });
+
+describe('the approval boundary, and the duplicate guard', () => {
+  it('an ADMIN may draft but may not approve; a MANAGER may approve', async () => {
+    // Authoring and approving are different permissions because an approved
+    // article is what the academy says to every family. Proved here through
+    // chat_app, so it is the POLICY being tested and not the service's own
+    // check -- both must hold, and only one of them is in TypeScript.
+    await owner.$executeRawUnsafe(`select set_config('chat.knowledge_change_reason','seed',false)`);
+    const draft = await owner.knowledgeArticle.create({
+      data: { title: 'Refunds', question: 'هل يوجد استرداد؟', answer: 'راجع الإدارة.', status: 'draft' },
+    });
+
+    await asActor(s.ownerId, () =>
+      app.$executeRawUnsafe(`select set_config('chat.knowledge_change_reason','edit',true)`),
+    );
+
+    // The admin holds knowledge.manage and not knowledge.approve.
+    await expect(
+      asActor(s.ownerId, async () => {
+        await app.$executeRawUnsafe(`select set_config('chat.knowledge_change_reason','publish',true)`);
+        return app.knowledgeArticle.update({
+          where: { id: draft.id },
+          data: { status: 'approved', approvedBy: s.ownerId, approvedAt: new Date() },
+        });
+      }),
+    ).rejects.toThrow();
+
+    // The manager holds it.
+    const approved = await asActor(s.managerId, async () => {
+      await app.$executeRawUnsafe(`select set_config('chat.knowledge_change_reason','publish',true)`);
+      return app.knowledgeArticle.update({
+        where: { id: draft.id },
+        data: { status: 'approved', approvedBy: s.managerId, approvedAt: new Date() },
+      });
+    });
+    expect(approved.status).toBe('approved');
+  });
+
+  it('the same open risk cannot be raised twice, and may recur once resolved', async () => {
+    const flag = {
+      conversationId, familyId: s.familyId, riskType: 'cancellation_intent',
+      severity: 'high', reason: 'mentioned stopping twice', detectedBy: 'ai', status: 'open',
+    };
+    await owner.attentionFlag.create({ data: flag });
+
+    // The sweep runs on several worker replicas; two of them classifying the
+    // same conversation in the same second is the NORMAL case. The partial
+    // unique index refuses the second insert, so the engine does not have to
+    // win a race it cannot see.
+    await expect(owner.attentionFlag.create({ data: flag })).rejects.toThrow();
+
+    // A different risk on the same conversation is a different concern.
+    await expect(
+      owner.attentionFlag.create({ data: { ...flag, riskType: 'frustrated_parent' } }),
+    ).resolves.toBeTruthy();
+
+    // Once handled, the same risk recurring weeks later is a NEW event and
+    // deserves to be raised again -- which is why the index excludes resolved.
+    await owner.attentionFlag.updateMany({
+      where: { riskType: 'cancellation_intent' },
+      data: { status: 'resolved', resolvedBy: s.managerId, resolvedAt: new Date() },
+    });
+    await expect(owner.attentionFlag.create({ data: flag })).resolves.toBeTruthy();
+  });
+});

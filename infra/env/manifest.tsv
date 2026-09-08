@@ -78,6 +78,24 @@ LIVEKIT_URL	calling	no	req	req	req
 LIVEKIT_API_KEY	calling	yes	req	req	req
 LIVEKIT_API_SECRET	calling	yes	req	req	req
 LIVEKIT_TOKEN_TTL_SECONDS	calling	no	opt	req	req
+
+# Phase 7 -- the AI assistant. Every one of these is OPTIONAL in every
+# environment, including production, and that is the design rather than an
+# oversight: with no key the provider seam resolves to DisabledAiProvider and
+# the product behaves exactly as it did before Phase 7 (Phase 7 SS28). Marking
+# the key `req` in prod would make a deployment without the assistant a failed
+# deployment, which inverts the relationship -- AI is an enhancement to the
+# communication engine, not a dependency of it.
+#
+# The kill switch is NOT here. `ai.enabled` lives in chat.config so it can be
+# turned off at 2am without a deployment; an environment variable would need
+# one.
+ANTHROPIC_API_KEY	ai	yes	opt	opt	opt
+AI_MODEL	ai	no	opt	opt	opt
+AI_TIMEOUT_MS	ai	no	opt	opt	opt
+AI_MAX_RETRIES	ai	no	opt	opt	opt
+AI_MAX_INPUT_CHARS	ai	no	opt	opt	opt
+AI_MAX_OUTPUT_TOKENS	ai	no	opt	opt	opt
 CORE_BASE_URL	core	no	req	req	req
 CORE_API_KEY	core	yes	opt	req	req
 CORE_WEBHOOK_SECRET	core	yes	opt	req	req
