@@ -33,6 +33,7 @@ jobs:
   guards:
     name: Release-gate guards (fast)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         # The guards need history: scan-secrets.sh --history walks every commit
@@ -59,6 +60,7 @@ jobs:
   api:
     name: API · typecheck + unit
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: guards
     defaults:
       run:
@@ -81,6 +83,7 @@ jobs:
   admin-web:
     name: Admin Web · typecheck + tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: guards
     defaults:
       run:
@@ -111,6 +114,7 @@ jobs:
   migrations:
     name: G-19 · migrations apply and are idempotent
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: guards
     services:
       postgres:
@@ -191,8 +195,31 @@ jobs:
           cache: npm
           cache-dependency-path: apps/api/package-lock.json
 
+      # Journey 4's token contract is the only test that validates a minted token
+      # against a REAL server rather than against our own assumptions about
+      # LiveKit's format. Without a server it SKIPS -- and until Phase 8 it
+      # skipped while reporting a green tick, indistinguishable from a real run.
+      # LiveKit is a container, so there is no reason for CI to be the
+      # environment that cannot verify it.
+      - name: Start LiveKit (for the token contract)
+        run: |
+          docker run -d --name jawwid-ci-livekit -p 7880:7880 \
+            -v "$GITHUB_WORKSPACE/infra/livekit/livekit.yaml:/etc/livekit.yaml:ro" \
+            livekit/livekit-server:v1.8 --config /etc/livekit.yaml
+          for _ in $(seq 1 30); do
+            [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 http://localhost:7880)" = "200" ] && break
+            sleep 1
+          done
+          curl -sf -o /dev/null http://localhost:7880 || {
+            echo "::error::LiveKit did not become reachable"; docker logs jawwid-ci-livekit; exit 1; }
+
       - name: Integration suite
         working-directory: apps/api
+        env:
+          # MANDATORY here. The suite is allowed to skip on a developer laptop;
+          # in CI a skip would be a silent gap in exactly the check that exists
+          # because our assumptions about the token format might be wrong.
+          JAWWID_REQUIRE_LIVEKIT: '1'
         run: |
           npm ci
           npx prisma generate
@@ -246,6 +273,7 @@ jobs:
   images:
     name: Container images build and run unprivileged
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: guards
     steps:
       - uses: actions/checkout@v4
@@ -274,6 +302,7 @@ jobs:
   dependencies:
     name: Dependency audit (advisory)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: guards
     steps:
       - uses: actions/checkout@v4
@@ -305,6 +334,7 @@ jobs:
   mobile:
     name: Mobile · analyze + test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: guards
     steps:
       - uses: actions/checkout@v4
