@@ -34,6 +34,7 @@ failed=0
 
 check() {
   local name="$1"; shift
+  total=$(( ${total:-0} + 1 ))
   printf '  %-52s ' "$name"
   if "$@" >/tmp/jawwid-guard.out 2>&1; then
     echo "PASS"
@@ -164,11 +165,12 @@ check "The local environment example is valid"     bash scripts/infra/check-env.
 check "Environment templates match the manifest"   templates
 check "Manifest SECRET flags agree across components"  manifest_secrets
 check "No migration narrows an earlier CHECK constraint"  bash scripts/qa/check-constraint-narrowing.sh
+check "Deployment workflows match the env contract"  bash scripts/qa/check-deploy-env.sh
 
 echo
 if [ "$failed" -eq 0 ]; then
-  echo "guards: PASS (10/10)"
+  echo "guards: PASS ($total/$total)"
 else
-  echo "guards: FAIL ($failed of 10)"
+  echo "guards: FAIL ($failed of $total)"
   exit 1
 fi
