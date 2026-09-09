@@ -108,16 +108,49 @@ g31() {
 # checker deployments actually run -- and the drift is otherwise discovered by a
 # failed release. This is the check that regressed twice on 2026-09-08.
 templates() {
-  local rc=0
-  for env in staging production; do
-    if ! scripts/infra/render-env-template.sh "$env" \
-         | diff -u "infra/env/${env}.env.example" - ; then
-      echo "infra/env/${env}.env.example is stale -- regenerate it:"
-      echo "  scripts/infra/render-env-template.sh ${env} > infra/env/${env}.env.example"
-      rc=1
-    fi
+  local rc=0 env component file
+  local -a args
+  for component in api worker; do
+    for env in staging production; do
+      if [ "$component" = "api" ]; then
+        file="infra/env/${env}.env.example"
+        args=("$env")
+      else
+        file="infra/env/worker.${env}.env.example"
+        args=("$env" --component worker)
+      fi
+      if ! scripts/infra/render-env-template.sh "${args[@]}" | diff -u "$file" - ; then
+        echo "$file is stale -- regenerate it:"
+        echo "  scripts/infra/render-env-template.sh ${args[*]} > $file"
+        rc=1
+      fi
+    done
   done
   return $rc
+}
+
+# The two manifests state deliberately OPPOSITE req/opt/forbid rules for the
+# same database variables -- that is the whole reason there are two. But whether
+# a value is a SECRET is a property of the value, not of the process reading it,
+# so a variable classified differently in the two files is always a mistake, and
+# the mistake it produces is a credential rendered into a committed template.
+# This is the one axis on which the duplication must not drift.
+manifest_secrets() {
+  awk -F'\t' '
+    /^#/ || NF < 6 { next }
+    FILENAME ~ /worker\.manifest\.tsv$/ { worker[$1] = $3; next }
+    { api[$1] = $3 }
+    END {
+      rc = 0
+      for (name in worker)
+        if (name in api && api[name] != worker[name]) {
+          printf "%s: SECRET=%s in the API manifest, SECRET=%s in the worker manifest\n", \
+                 name, api[name], worker[name]
+          rc = 1
+        }
+      exit rc
+    }
+  ' infra/env/manifest.tsv infra/env/worker.manifest.tsv
 }
 
 echo "Release-gate guards (docs/qa/release-gate.md)"
@@ -129,12 +162,13 @@ check "Secret scan — worktree and history"         bash scripts/infra/scan-sec
 check "Server secrets not in a client bundle"      bash scripts/infra/check-web-env.sh
 check "The local environment example is valid"     bash scripts/infra/check-env.sh local --file .env.example
 check "Environment templates match the manifest"   templates
+check "Manifest SECRET flags agree across components"  manifest_secrets
 check "No migration narrows an earlier CHECK constraint"  bash scripts/qa/check-constraint-narrowing.sh
 
 echo
 if [ "$failed" -eq 0 ]; then
-  echo "guards: PASS (9/9)"
+  echo "guards: PASS (10/10)"
 else
-  echo "guards: FAIL ($failed of 9)"
+  echo "guards: FAIL ($failed of 10)"
   exit 1
 fi

@@ -73,7 +73,7 @@ APNS_KEY_ID	push	no	opt	req	req
 APNS_TEAM_ID	push	no	opt	req	req
 APNS_BUNDLE_ID	push	no	opt	req	req
 APNS_PRIVATE_KEY	push	yes	opt	req	req
-APNS_PRODUCTION	push	no	opt	req	req
+APNS_ENVIRONMENT	push	no	opt	req	req
 LIVEKIT_URL	calling	no	req	req	req
 LIVEKIT_API_KEY	calling	yes	req	req	req
 LIVEKIT_API_SECRET	calling	yes	req	req	req

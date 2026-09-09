@@ -3,6 +3,13 @@
 # Owner: AI #7 (infrastructure).
 #
 #   scripts/infra/render-env-template.sh staging    > infra/env/staging.env.example
+#   scripts/infra/render-env-template.sh staging --component worker \
+#                                                 > infra/env/worker.staging.env.example
+#
+# Two components, two manifests. The API is the default so that every existing
+# invocation renders exactly what it rendered before; the worker's contract is a
+# separate file because the two processes need opposite rules for the same
+# database variables (see infra/env/worker.manifest.tsv).
 #
 # Templates are GENERATED, never hand-edited. Hand-maintained per-environment
 # files drift from the manifest the checker validates against, and the drift is
@@ -14,26 +21,57 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-MANIFEST="$ROOT/infra/env/manifest.tsv"
 ENVIRONMENT="${1:-}"
+COMPONENT="api"
+shift || true
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --component) COMPONENT="${2:-}"; shift 2 ;;
+    *) echo "unknown argument: $1" >&2; exit 64 ;;
+  esac
+done
+
+USAGE="usage: $0 {staging|production} [--component {api|worker}]"
 
 case "$ENVIRONMENT" in
   staging|production) : ;;
-  *) echo "usage: $0 {staging|production}" >&2; exit 64 ;;
+  *) echo "$USAGE" >&2; exit 64 ;;
 esac
 
+# The component is stated, never inferred from which variables happen to be
+# present -- the same rule the runtime follows (platform/database-role.ts).
+# `api` is the default because it is the RLS-enforced side: anything that has
+# not said otherwise gets the least-privileged contract.
+case "$COMPONENT" in
+  api)
+    MANIFEST="$ROOT/infra/env/manifest.tsv"
+    TITLE="${ENVIRONMENT} environment template"
+    ARGS="${ENVIRONMENT}"
+    TEMPLATE="infra/env/${ENVIRONMENT}.env.example"
+    ;;
+  worker)
+    MANIFEST="$ROOT/infra/env/worker.manifest.tsv"
+    TITLE="${ENVIRONMENT} WORKER environment template"
+    ARGS="${ENVIRONMENT} --component worker"
+    TEMPLATE="infra/env/worker.${ENVIRONMENT}.env.example"
+    ;;
+  *) echo "$USAGE" >&2; exit 64 ;;
+esac
+
+[ -f "$MANIFEST" ] || { echo "manifest not found: $MANIFEST" >&2; exit 66; }
+
 cat <<HEADER
-# Jawwid Chat — ${ENVIRONMENT} environment template.
+# Jawwid Chat — ${TITLE}.
 #
 # GENERATED FILE. Do not edit by hand.
-#   scripts/infra/render-env-template.sh ${ENVIRONMENT} > infra/env/${ENVIRONMENT}.env.example
+#   scripts/infra/render-env-template.sh ${ARGS} > ${TEMPLATE}
 #
 # Every variable marked SECRET is supplied at deploy time from the secret store
 # (docs/infrastructure/secrets.md). It is never written here, never committed,
 # and never printed by a build log.
 #
 # Validate a real environment before deploying:
-#   scripts/infra/check-env.sh ${ENVIRONMENT}
+#   scripts/infra/check-env.sh ${ARGS}
 HEADER
 
 current_group=""

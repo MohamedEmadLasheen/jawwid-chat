@@ -5,17 +5,30 @@ Owner: AI #7 · Date: 2026-09-05
 Every variable Jawwid Chat reads, what it is for, whether it is a secret, and
 whether it is required in each environment.
 
-**The machine-readable source of truth is `infra/env/manifest.tsv`**, not this
-page. The tables below are derived from it. Three things consume the manifest:
+**The machine-readable source of truth is the manifests**, not this page. The
+tables below are derived from them. There are two, because there are two
+processes with deliberately opposite database rules (see *The two processes*):
+
+| Manifest | Process | Command |
+|---|---|---|
+| `infra/env/manifest.tsv` | the API — `node dist/main.js` | *(default)* |
+| `infra/env/worker.manifest.tsv` | the worker — `node dist/worker.js` | `--component worker` |
+
+Three things consume them:
 
 | Tool | Purpose |
 |---|---|
-| `scripts/infra/check-env.sh <env>` | Validates a real environment. Runs in CI and as the first step of every deployment. |
-| `scripts/infra/render-env-template.sh <env>` | Generates `infra/env/<env>.env.example`. |
-| CI `guardrails` job | Fails if a committed template no longer matches the manifest. |
+| `scripts/infra/check-env.sh <env> [--component worker]` | Validates a real environment. Runs in CI and as the first step of every deployment. |
+| `scripts/infra/render-env-template.sh <env> [--component worker]` | Generates `infra/env/<env>.env.example` and `infra/env/worker.<env>.env.example`. |
+| CI `guardrails` job | Fails if a committed template no longer matches its manifest, or if a variable in both manifests disagrees about being a secret. |
 
-Add a variable by editing the manifest and regenerating the templates. Editing a
-template by hand will fail CI (ADR-008).
+The component is always stated and never inferred. Guessing it from which
+variables happen to be present would grade an API environment against the
+worker's contract the moment one shared env file leaked `DATABASE_SERVICE_URL`
+into it — and the worker's contract *requires* a BYPASSRLS credential.
+
+Add a variable by editing the manifest that owns it and regenerating the
+templates. Editing a template by hand will fail CI (ADR-008).
 
 ## Rules
 
@@ -41,12 +54,17 @@ template by hand will fail CI (ADR-008).
 
 and in production specifically:
 
-- `CORS_ALLOWED_ORIGINS` set to `*` — wildcard CORS on a credentialed API;
-- `NODE_ENV` not equal to `production`;
-- `DATABASE_URL` containing `sslmode=disable`;
-- `APNS_PRODUCTION` not `true` — the APNs sandbox gateway accepts production
-  device tokens and delivers nothing, so this fails as "iOS push stopped
-  working" with no error anywhere.
+- `NODE_ENV` not equal to `production` — **both components**;
+- `APNS_ENVIRONMENT` not `production` — **both components**. The APNs sandbox
+  gateway accepts production device tokens and delivers nothing, so this fails
+  as "iOS push stopped working" with no error anywhere. The worker is checked
+  too because the worker is the process that actually sends;
+- TLS disabled on the connection **that component opens** — `sslmode=disable` in
+  `DATABASE_URL` for the API, in `DATABASE_SERVICE_URL` for the worker. The
+  check follows the component, because each forbids the other's variable;
+- `CORS_ALLOWED_ORIGINS` set to `*` — wildcard CORS on a credentialed API.
+  **API only:** the worker serves no HTTP, so it has no CORS policy to get
+  wrong, and grading it on a variable it must not hold would be theatre.
 
 ## Client applications
 
@@ -61,7 +79,48 @@ credentials, the LiveKit API secret, or Core credentials.
 
 ---
 
+## The two processes
+
+The API and the worker run the **same image** (ADR-004) and build the same
+module graph, but they must never connect to the database as the same role.
+
+| | API | Worker |
+|---|---|---|
+| Command | `node dist/main.js` | `node dist/worker.js` |
+| Connects as | `chat_app` — **NOBYPASSRLS** | `chat_service` — **BYPASSRLS** |
+| Through | `DATABASE_URL` — **required** | `DATABASE_SERVICE_URL` — **required** |
+| Must not hold | `DATABASE_SERVICE_URL` — **forbidden** | `DATABASE_URL` — **forbidden** in staging/production |
+| Serves HTTP | yes — `PORT`, `CORS_ALLOWED_ORIGINS` | no — neither variable belongs to it |
+
+**Why the API is forbidden the service credential.** `chat_service` ignores every
+row-level security policy in the schema. An API process that merely *has* the
+variable gives any bug that picks the wrong client both authorization layers at
+once (`RLS-STRATEGY.md` §6).
+
+**Why the worker is forbidden the API credential.** Connected as `chat_app` the
+worker still *claims* outbox rows — that table carries a blanket policy — but
+every read it needs in order to route what it claimed returns nothing, because
+it has no actor context to satisfy the policies with. It marks each row
+`published` and delivers it to nobody, at full throughput, with no error in any
+log. The runtime refuses to fall back (`platform/database-role.ts`); forbidding
+the variable means there is nothing to fall back *to*.
+
+`DATABASE_MIGRATION_URL` is forbidden for both. It is the owner/DDL credential,
+and it belongs to CI for the length of one migration step and nowhere else.
+
+**`QUEUE_PREFIX` must be byte-identical in both processes.** It namespaces the
+Redis pub/sub channel, and pub/sub is global to the Redis *server* rather than
+to the selected database. A mismatch is silent: the worker publishes to a
+channel no API instance is listening on, so events are "delivered" and nobody
+receives them. No gate can catch this — the two values are supplied
+independently at deploy time — so it is stated here and in both manifests.
+
+---
+
 ## Variables
+
+Unless a section says otherwise, these are the **API** process's variables. The
+worker's are listed separately under *Worker variables*.
 
 ### Application
 
@@ -80,6 +139,8 @@ credentials, the LiveKit API secret, or Core credentials.
 | Variable | Secret | Local | Staging | Production |
 |---|---|---|---|---|
 | `DATABASE_URL` | **yes** | req | req | req |
+| `DATABASE_SERVICE_URL` | **yes** | opt | **forbid** | **forbid** |
+| `DATABASE_MIGRATION_URL` | **yes** | opt | **forbid** | **forbid** |
 | `DATABASE_STATEMENT_TIMEOUT_MS` | no | opt | req | req |
 | `DATABASE_POOL_MAX` | no | opt | req | req |
 
@@ -125,7 +186,7 @@ credentials, the LiveKit API secret, or Core credentials.
 | `APNS_TEAM_ID` | no | opt | req | req |
 | `APNS_BUNDLE_ID` | no | opt | req | req |
 | `APNS_PRIVATE_KEY` | **yes** | opt | req | req |
-| `APNS_PRODUCTION` | no | opt | req | req |
+| `APNS_ENVIRONMENT` | no | opt | req | req |
 
 ### Calling
 
@@ -174,6 +235,64 @@ credentials, the LiveKit API secret, or Core credentials.
 | `USE_MOCK_PUSH` | no | opt | forbid | forbid |
 | `USE_MOCK_CORE` | no | opt | forbid | forbid |
 | `ALLOW_INSECURE_TLS` | no | forbid | forbid | forbid |
+
+---
+
+## Worker variables
+
+Source: `infra/env/worker.manifest.tsv`. Validate with
+`scripts/infra/check-env.sh <env> --component worker`.
+
+| Variable | Group | Secret | Local | Staging | Production |
+|---|---|---|---|---|---|
+| `NODE_ENV` | application | no | req | req | req |
+| `APP_ENV` | application | no | req | req | req |
+| `SHUTDOWN_GRACE_MS` | application | no | opt | req | req |
+| `DATABASE_SERVICE_URL` | database | **yes** | req | req | req |
+| `DATABASE_URL` | database | **yes** | opt | **forbid** | **forbid** |
+| `DATABASE_MIGRATION_URL` | database | **yes** | opt | **forbid** | **forbid** |
+| `REDIS_URL` | redis | **yes** | req | req | req |
+| `QUEUE_PREFIX` | redis | no | req | req | req |
+| `OUTBOX_POLL_MS` | worker | no | opt | opt | opt |
+| `OUTBOX_BATCH_SIZE` | worker | no | opt | opt | opt |
+| `OUTBOX_IDLE_BACKOFF_MS` | worker | no | opt | opt | opt |
+| `CALL_SWEEP_MS` | worker | no | opt | opt | opt |
+| `STORAGE_ENDPOINT` | storage | no | req | req | req |
+| `STORAGE_REGION` | storage | no | opt | req | req |
+| `STORAGE_BUCKET` | storage | no | req | req | req |
+| `STORAGE_ACCESS_KEY` | storage | **yes** | req | req | req |
+| `STORAGE_SECRET_KEY` | storage | **yes** | req | req | req |
+| `STORAGE_SIGNED_URL_TTL_SECONDS` | storage | no | opt | req | req |
+| `STORAGE_SIGNING_SECRET` | storage | **yes** | req | req | req |
+| `FCM_SERVICE_ACCOUNT_JSON` | push | **yes** | opt | req | req |
+| `APNS_KEY_ID` | push | no | opt | req | req |
+| `APNS_TEAM_ID` | push | no | opt | req | req |
+| `APNS_BUNDLE_ID` | push | no | opt | req | req |
+| `APNS_PRIVATE_KEY` | push | **yes** | opt | req | req |
+| `APNS_ENVIRONMENT` | push | no | opt | req | req |
+| `SENTRY_DSN` | observability | **yes** | opt | req | req |
+| `GIT_COMMIT` | release | no | opt | req | req |
+
+**Why storage is required for a process that uploads nothing.** The worker
+builds the whole module graph, so Nest constructs the object-storage provider
+whether or not the worker ever calls it. With the four S3 variables set it
+builds the S3 client; without them it builds the local signer, whose field
+initializer throws unless `STORAGE_SIGNING_SECRET` is at least 32 characters.
+Either way the process does not start unless one of those branches is satisfied.
+
+**Why push credentials matter more here than in the API.** The worker is the
+process that actually sends: `NotificationService.dispatchDue()` runs in its
+loop, not in a request.
+
+**What is deliberately absent.** `PORT` and `CORS_ALLOWED_ORIGINS` (no HTTP
+server; `PORT` is omitted rather than forbidden because some platforms inject it
+into every component); `JWT_*` (read only inside auth methods the worker never
+calls); `LIVEKIT_*` (read with a default, never used here);
+`DATABASE_TRANSACTION_*` (read inside `runWithActor`, whose only caller is the
+HTTP actor interceptor); and every variable that no code reads — including
+`WORKER_CONCURRENCY`, which despite its name configures nothing: the worker loop
+is sequential, and the only real concurrency control is the database-backed
+`broadcast.fanout_concurrency`.
 
 ---
 

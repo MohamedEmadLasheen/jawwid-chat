@@ -1,0 +1,111 @@
+# Jawwid Chat WORKER environment-variable manifest. Owner: AI #7 (infrastructure).
+#
+# The machine-readable source of truth for the environment of the BACKGROUND
+# WORKER (`node dist/worker.js`), which is a different process from the API and
+# must not be given the API's environment. Consumed by
+# scripts/infra/check-env.sh --component worker.
+#
+# Columns are exactly those of infra/env/manifest.tsv (tab-separated):
+#   NAME     variable name
+#   GROUP    documentation grouping
+#   SECRET   yes = must come from the secret store, never from a tracked file
+#   LOCAL    req | opt | forbid
+#   STAGING  req | opt | forbid
+#   PROD     req | opt | forbid   -- forbid = deployment is refused if present
+#
+# WHY THIS FILE EXISTS AT ALL
+# infra/env/manifest.tsv declares itself to describe the API process, and its
+# six columns have no axis on which to say "required for the worker, forbidden
+# for the API". Both processes need that sentence said about the same variable
+# in opposite directions, so the contract is two files rather than one column
+# that cannot exist. Named as the fix in docs/recovery/PHASE-1-REPORT.md 11.5.
+#
+# THE INVERSION, AND WHY IT IS THE WHOLE POINT
+#
+#   API     DATABASE_URL          chat_app      NOBYPASSRLS  (required)
+#           DATABASE_SERVICE_URL                             (FORBIDDEN)
+#
+#   worker  DATABASE_SERVICE_URL  chat_service  BYPASSRLS    (required)
+#           DATABASE_URL                                     (FORBIDDEN)
+#
+# The worker acts for the SYSTEM: it drains the outbox and runs the deadline
+# sweeps, and there is no actor whose context it could adopt. Connected as
+# chat_app it still CLAIMS outbox rows -- that table carries a blanket policy --
+# but every read it needs in order to route what it claimed returns nothing, so
+# it marks each row published and delivers it to nobody, with no error anywhere.
+# DATABASE_URL is therefore forbidden rather than merely unrequired: the runtime
+# refuses to fall back (platform/database-role.ts), and a variable that cannot
+# be present cannot be fallen back to.
+#
+# DATABASE_MIGRATION_URL is forbidden here for the same reason it is forbidden
+# for the API: the owner/DDL credential belongs to CI, for the length of one
+# migration step, and nowhere else.
+#
+# QUEUE_PREFIX MUST BE BYTE-IDENTICAL TO THE API'S. It namespaces the Redis
+# pub/sub channel (infra/realtime/realtime-channel.ts), and pub/sub is global to
+# the Redis SERVER rather than to the selected database. A mismatch is silent:
+# the worker publishes to a channel no API instance is listening on, so events
+# are "delivered" and nobody receives them. No gate can catch it -- the two
+# values are supplied independently at deploy time -- so it is stated here.
+#
+# WHAT IS DELIBERATELY ABSENT, AND WHY
+#   PORT, CORS_ALLOWED_ORIGINS   the worker starts no HTTP server and must not
+#                                hold a port (worker.ts). PORT is omitted rather
+#                                than forbidden because some platforms inject it
+#                                into every component, and a gate that fails on
+#                                the platform's own variable is a gate nobody
+#                                trusts.
+#   JWT_*                        read only inside auth methods the worker never
+#                                calls.
+#   LIVEKIT_*                    read with `?? ''`; never throw, never used here.
+#   DATABASE_TRANSACTION_*       read inside PrismaService.runWithActor, whose
+#                                only caller is the HTTP actor interceptor.
+#   ATTACHMENT_MAX_BYTES_*       defaulted, and used by the API's attachment
+#                                endpoints rather than by any worker path.
+#   WORKER_CONCURRENCY           read by nothing. Despite the name it does not
+#                                configure this process: the loop is sequential,
+#                                and the only real concurrency control is the
+#                                database-backed `broadcast.fanout_concurrency`.
+#   FCM_PROJECT_ID               read by nothing; the project id comes from
+#                                inside FCM_SERVICE_ACCOUNT_JSON.
+#   LOG_LEVEL, REQUEST_TIMEOUT_MS, DATABASE_POOL_MAX,
+#   DATABASE_STATEMENT_TIMEOUT_MS, JWT_REFRESH_TTL
+#                                read by nothing. A new contract must not be
+#                                born requiring values no code reads.
+#
+# WHY STORAGE IS REQUIRED FOR A PROCESS THAT UPLOADS NOTHING
+# The worker builds the whole AppModule, so Nest constructs OBJECT_STORAGE
+# whether or not the worker calls it. With the four S3 variables set it builds
+# S3ObjectStorage; without them it builds the local signer, whose field
+# initializer throws unless STORAGE_SIGNING_SECRET is at least 32 characters.
+# Either way the worker does not start unless one of those branches is
+# satisfied, so both are required here.
+#
+#NAME	GROUP	SECRET	LOCAL	STAGING	PROD
+NODE_ENV	application	no	req	req	req
+APP_ENV	application	no	req	req	req
+SHUTDOWN_GRACE_MS	application	no	opt	req	req
+DATABASE_SERVICE_URL	database	yes	req	req	req
+DATABASE_URL	database	yes	opt	forbid	forbid
+DATABASE_MIGRATION_URL	database	yes	opt	forbid	forbid
+REDIS_URL	redis	yes	req	req	req
+QUEUE_PREFIX	redis	no	req	req	req
+OUTBOX_POLL_MS	worker	no	opt	opt	opt
+OUTBOX_BATCH_SIZE	worker	no	opt	opt	opt
+OUTBOX_IDLE_BACKOFF_MS	worker	no	opt	opt	opt
+CALL_SWEEP_MS	worker	no	opt	opt	opt
+STORAGE_ENDPOINT	storage	no	req	req	req
+STORAGE_REGION	storage	no	opt	req	req
+STORAGE_BUCKET	storage	no	req	req	req
+STORAGE_ACCESS_KEY	storage	yes	req	req	req
+STORAGE_SECRET_KEY	storage	yes	req	req	req
+STORAGE_SIGNED_URL_TTL_SECONDS	storage	no	opt	req	req
+STORAGE_SIGNING_SECRET	storage	yes	req	req	req
+FCM_SERVICE_ACCOUNT_JSON	push	yes	opt	req	req
+APNS_KEY_ID	push	no	opt	req	req
+APNS_TEAM_ID	push	no	opt	req	req
+APNS_BUNDLE_ID	push	no	opt	req	req
+APNS_PRIVATE_KEY	push	yes	opt	req	req
+APNS_ENVIRONMENT	push	no	opt	req	req
+SENTRY_DSN	observability	yes	opt	req	req
+GIT_COMMIT	release	no	opt	req	req
