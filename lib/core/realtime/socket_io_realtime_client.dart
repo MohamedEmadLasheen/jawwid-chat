@@ -103,6 +103,19 @@ class SocketIoRealtimeClient implements RealtimeClient {
   /// connection and would get one anyway.
   int _generation = 0;
 
+  /// Backoff for re-establishing after a TERMINAL disconnect.
+  ///
+  /// Doubles from 2s to a 60s ceiling and resets on a successful connect. It is
+  /// bounded because the disconnect that motivates it is an AUTHORIZATION
+  /// answer: the gateway drops a socket whose handshake token no longer
+  /// authenticates, and for a genuinely revoked session that answer will not
+  /// change. An unbounded retry would be a client hammering a gateway that has
+  /// already said no.
+  static const _retryFloor = Duration(seconds: 2);
+  static const _retryCeiling = Duration(seconds: 60);
+  Duration _retryDelay = _retryFloor;
+  Timer? _retry;
+
   @override
   Stream<RealtimeEnvelope> get events => _events.stream;
 
@@ -164,6 +177,15 @@ class SocketIoRealtimeClient implements RealtimeClient {
           // query parameter on an ordinary GET, where it lands in access logs
           // and proxy caches.
           .setTransports(['websocket'])
+          // Never reuse the cached Manager/Socket for this origin. `io()` keys
+          // its cache on scheme://host:port, and for an origin-only URL its
+          // `sameNamespace` check compares the empty path against a socket
+          // registered under '/', so the check never matches and the FIRST
+          // Socket is handed back on every later call -- with `auth` frozen at
+          // construction. A reconnect after a token refresh would therefore
+          // present the ORIGINAL, now-expired token and be rejected forever,
+          // which is exactly what the retry below spent its life doing.
+          .enableForceNew()
           .disableAutoConnect()
           .enableReconnection()
           .setReconnectionDelay(1000)
@@ -174,6 +196,12 @@ class SocketIoRealtimeClient implements RealtimeClient {
 
     socket.onConnect((_) {
       _hasConnectedBefore = true;
+      // A good connection forgives the backoff: the next terminal disconnect
+      // starts from the floor again rather than inheriting a long delay from
+      // an outage that is now over.
+      _retryDelay = _retryFloor;
+      _retry?.cancel();
+      _retry = null;
       _moveTo(RealtimeStatus.connected);
       // Re-subscribe. On a first connect this is a no-op; on a reconnect it is
       // the difference between a live conversation and a silent one.
@@ -183,8 +211,33 @@ class SocketIoRealtimeClient implements RealtimeClient {
       _startHeartbeat();
     });
 
-    socket.onDisconnect((_) {
+    socket.onDisconnect((reason) {
       _stopHeartbeat();
+
+      // A SERVER-initiated disconnect is TERMINAL. socket_io_client calls
+      // `destroy()` before emitting this reason — "reconnections don't get
+      // triggered for this" — so the library will never bring this socket back,
+      // and `enableReconnection()` does not apply.
+      //
+      // The gateway issues one whenever the handshake token stops
+      // authenticating, which for a live socket is simply the access token
+      // expiring. Left in place, the dead object made `connect()` a permanent
+      // no-op — `_socket != null` reads as "connected" — and the app went
+      // silent for the rest of the process while still looking healthy.
+      //
+      // `_wanted` is deliberately KEPT: the conversations this client is in are
+      // still the ones it wants, and the next `onConnect` re-sends them. Only
+      // an explicit `disconnect()` forgets them.
+      if (reason == 'io server disconnect' && identical(_socket, socket)) {
+        socket.dispose();
+        _socket = null;
+        _moveTo(RealtimeStatus.reconnecting);
+        _scheduleRetry();
+        return;
+      }
+
+      // Everything else is a transport drop, which the library reconnects by
+      // itself. Touching `_socket` here would take that away.
       _moveTo(_hasConnectedBefore ? RealtimeStatus.reconnecting : RealtimeStatus.disconnected);
     });
 
@@ -236,6 +289,27 @@ class SocketIoRealtimeClient implements RealtimeClient {
   void _stopHeartbeat() {
     _heartbeat?.cancel();
     _heartbeat = null;
+  }
+
+  /// Re-establish after a terminal disconnect.
+  ///
+  /// Routed through [connect] rather than building a socket here, so the
+  /// single-attempt guard, the generation guard and a FRESH token read all
+  /// still apply — the expired token that caused the disconnect is never
+  /// replayed. The generation is captured when the retry is scheduled and
+  /// re-checked when it fires, so a `disconnect()` in between cannot be undone
+  /// by a timer that was already in flight.
+  void _scheduleRetry() {
+    _retry?.cancel();
+    final generation = _generation;
+    _retry = Timer(_retryDelay, () {
+      _retry = null;
+      if (generation != _generation) return;
+      unawaited(connect());
+    });
+
+    final next = _retryDelay * 2;
+    _retryDelay = next > _retryCeiling ? _retryCeiling : next;
   }
 
   @override
@@ -303,6 +377,12 @@ class SocketIoRealtimeClient implements RealtimeClient {
     // cannot install its socket after this returns.
     _generation += 1;
     _stopHeartbeat();
+    // A pending terminal-disconnect retry must not resurrect a client the
+    // caller has just shut down. The generation bump above already makes the
+    // timer a no-op if it fires; cancelling it means it does not fire at all.
+    _retry?.cancel();
+    _retry = null;
+    _retryDelay = _retryFloor;
     _socket?.dispose();
     _socket = null;
     _wanted.clear();
