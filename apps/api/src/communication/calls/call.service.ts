@@ -111,12 +111,17 @@ export class CallService {
     private readonly config: AppConfigService,
     private readonly reminders: ReminderService,
     /**
-     * Optional, and injected rather than imported for one reason: RecordingService
-     * already depends on ConversationService, and making the dependency mandatory
-     * in both directions would be a cycle. A call can always end; stopping a
-     * recorder it may not have is best-effort.
+     * Injected rather than imported because RecordingService already depends on
+     * ConversationService; the dependency runs one way only, so there is no cycle.
+     * A call can always end; stopping a recorder that was never started is
+     * best-effort, which is why the call site still guards before using it.
+     *
+     * The type must name exactly one runtime class. A `RecordingService |
+     * undefined` union makes TypeScript emit `Object` for `design:paramtypes`,
+     * and Nest cannot resolve a provider for that -- which stopped the process
+     * booting at all.
      */
-    private readonly recordings: RecordingService | undefined,
+    private readonly recordings: RecordingService,
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
     @Inject(MEDIA_TOKEN_ISSUER) private readonly media: MediaTokenIssuer,
