@@ -12,6 +12,9 @@ import { RiskSweeper } from './ai/risk/risk.sweeper';
 import { readBuildInfo } from './infra/build-info';
 import { createErrorTracker } from './infra/observability/error-tracker';
 import { installProcessErrorHandlers, flushErrorTracker } from './infra/observability/process-errors';
+import { declareDatabaseRole } from './platform/database-role';
+import { assertWorkerRuntimeRole, type RuntimeRoleReport } from './platform/auth/startup';
+import { PrismaService } from './platform/prisma.service';
 
 /**
  * Background worker entrypoint. Same image as the API, different command
@@ -56,10 +59,32 @@ async function bootstrap(): Promise<void> {
   const errors = createErrorTracker('worker', build);
   installProcessErrorHandlers(errors);
 
+  // BEFORE the container is built, because the Prisma provider factory reads
+  // this while constructing the client and DI runs inside createApplicationContext
+  // below. The worker states the one fact only it knows -- the same way it
+  // already names itself to the error tracker above -- so that nothing has to
+  // GUESS the role from the environment. See platform/database-role.ts.
+  declareDatabaseRole('worker');
+
   // No HTTP server: this process serves no traffic and must not hold a port.
   const app = await NestFactory.createApplicationContext(AppModule, {
     logger: ['error', 'warn', 'log'],
   });
+
+  // The connection is now open. Verify the role it actually resolved to before
+  // a single event is drained.
+  //
+  // Setting DATABASE_SERVICE_URL proves a variable is present, not that it
+  // points anywhere useful: one pointed at chat_app connects perfectly, claims
+  // outbox rows, reads nothing it needs to route them, and reports every event
+  // published while delivering none. Only the database can say which role this
+  // really is, so we ask it -- exactly as main.ts does for the API, and with
+  // the opposite expectation.
+  const [role] = await app
+    .get(PrismaService)
+    .$queryRaw<RuntimeRoleReport[]>`select * from chat.runtime_role_report()`;
+  assertWorkerRuntimeRole(role);
+  log.log(`database role=${role.role_name} rls=bypassed (system actor)`);
   const outbox = app.get(OutboxWorker);
   const notifications = app.get(NotificationService);
   const broadcasts = app.get(BroadcastWorker);

@@ -123,3 +123,68 @@ export function assertRuntimeRoleAcceptable(
   if (OWNER_CONNECTION_ALLOWED_ENVIRONMENTS.has(appEnv)) return;
   if (!isLeastPrivileged(report)) throw new RuntimeRoleTooPrivileged(report);
 }
+
+/** The one role the worker may run as. Named, not merely characterised. */
+export const WORKER_DATABASE_ROLE = 'chat_service';
+
+export class WorkerRuntimeRoleWrong extends Error {
+  constructor(readonly report: RuntimeRoleReport) {
+    const fault =
+      report.role_name !== WORKER_DATABASE_ROLE
+        ? `it connects as '${report.role_name}', not '${WORKER_DATABASE_ROLE}'`
+        : 'it does not bypass row-level security';
+    super(
+      `refusing to start: DATABASE_SERVICE_URL is wrong for the worker -- ${fault}.\n` +
+        'The worker acts for the SYSTEM and adopts no actor context, so every ' +
+        'RLS policy evaluates against an empty one. On any role that does not ' +
+        'bypass RLS it can still CLAIM outbox rows, but the message, members ' +
+        'and recipients it must read in order to route them are invisible -- ' +
+        'so it marks every event published and delivers none of them, and ' +
+        'nothing raises. That is the failure this check exists to prevent, and ' +
+        'it is why the role is verified rather than the variable merely being ' +
+        `present.\nPoint DATABASE_SERVICE_URL at ${WORKER_DATABASE_ROLE}.`,
+    );
+    this.name = 'WorkerRuntimeRoleWrong';
+  }
+}
+
+/**
+ * Refuses to start the WORKER on anything but chat_service.
+ *
+ * The exact inverse of assertRuntimeRoleAcceptable, and deliberately a separate
+ * function rather than a flag on it: the API must refuse a role that bypasses
+ * RLS, and the worker must refuse one that does not. Sharing one function
+ * between the two would make the difference a parameter, and a parameter is
+ * something a caller can get backwards. `assertRuntimeRoleAcceptable(report)`
+ * would REJECT chat_service, which is precisely the role the worker needs.
+ *
+ * Both conditions are required. `bypasses_rls` alone would admit a superuser or
+ * the schema owner -- roles that would work, and would silently hand the worker
+ * far more than it needs. The name alone would admit a chat_service whose
+ * BYPASSRLS attribute had been revoked, which reintroduces the original defect
+ * under the right name.
+ *
+ * Unlike the API's check there is no local exemption: a developer running the
+ * worker against a single-role database gets the same silent no-op delivery as
+ * production would, and that is exactly the bug that stayed invisible for a
+ * whole phase. Local development sets DATABASE_SERVICE_URL like every other
+ * environment (scripts/db/integration-db.sh already grants chat_service a
+ * LOGIN), so there is nothing here for an exemption to rescue.
+ */
+export function assertWorkerRuntimeRole(report: RuntimeRoleReport | undefined): void {
+  // An empty result means chat.runtime_role_report() answered nothing, so the
+  // role is UNKNOWN. Unknown is not permission to continue: fail with a report
+  // that says so rather than a TypeError from reading a field off undefined.
+  if (!report) {
+    throw new WorkerRuntimeRoleWrong({
+      role_name: '(unknown: chat.runtime_role_report() returned no row)',
+      is_superuser: false,
+      bypasses_rls: false,
+      owns_schema: false,
+      can_create_in_schema: false,
+    });
+  }
+  if (report.role_name !== WORKER_DATABASE_ROLE || !report.bypasses_rls) {
+    throw new WorkerRuntimeRoleWrong(report);
+  }
+}

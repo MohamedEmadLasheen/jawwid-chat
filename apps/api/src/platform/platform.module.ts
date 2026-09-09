@@ -1,5 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 import { PrismaService, withRequestScopedTransaction } from './prisma.service';
+import { datasourceUrlForRole } from './database-role';
 import { PrismaIdentityService } from './identity.service';
 import { SqlCoverageService } from './coverage.service';
 import { PrismaAuditService } from './audit.service';
@@ -26,9 +27,22 @@ import { AUDIT_SERVICE, COVERAGE_SERVICE, IDENTITY_SERVICE } from './tokens';
     //
     // runWithActor is always bound to the real client, so the interceptor
     // opening a transaction through the proxy does not flatten it into itself.
+    //
+    // THE CONNECTION is chosen here and nowhere else, because this factory is
+    // the only place in the application that constructs a Prisma client. The
+    // API passes no override and therefore uses the schema's DATABASE_URL
+    // (chat_app, RLS enforced); the worker, which declared itself before the
+    // container was built, gets DATABASE_SERVICE_URL (chat_service, BYPASSRLS)
+    // and throws here rather than falling back. See platform/database-role.ts
+    // for why the process declares this rather than anything inferring it.
     {
       provide: PrismaService,
-      useFactory: () => withRequestScopedTransaction(new PrismaService()),
+      useFactory: () => {
+        const url = datasourceUrlForRole();
+        return withRequestScopedTransaction(
+          new PrismaService(url ? { datasources: { db: { url } } } : undefined),
+        );
+      },
     },
     AppConfigService,
     ScopeService,
