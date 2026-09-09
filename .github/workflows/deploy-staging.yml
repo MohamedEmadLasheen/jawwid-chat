@@ -132,13 +132,14 @@ jobs:
           STORAGE_ACCESS_KEY: ${{ secrets.STORAGE_ACCESS_KEY }}
           STORAGE_SECRET_KEY: ${{ secrets.STORAGE_SECRET_KEY }}
           STORAGE_SIGNED_URL_TTL_SECONDS: '300'
+          STORAGE_SIGNING_SECRET: ${{ secrets.STORAGE_SIGNING_SECRET }}
           FCM_PROJECT_ID: ${{ vars.FCM_PROJECT_ID }}
           FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
           APNS_KEY_ID: ${{ vars.APNS_KEY_ID }}
           APNS_TEAM_ID: ${{ vars.APNS_TEAM_ID }}
           APNS_BUNDLE_ID: ${{ vars.APNS_BUNDLE_ID }}
           APNS_PRIVATE_KEY: ${{ secrets.APNS_PRIVATE_KEY }}
-          APNS_PRODUCTION: 'false'
+          APNS_ENVIRONMENT: sandbox
           LIVEKIT_URL: ${{ vars.LIVEKIT_URL }}
           LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
           LIVEKIT_API_SECRET: ${{ secrets.LIVEKIT_API_SECRET }}
