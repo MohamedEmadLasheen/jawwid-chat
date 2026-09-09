@@ -61,10 +61,80 @@ jobs:
             exit 1
           fi
 
+  build:
+    name: Verify the API image
+    runs-on: ubuntu-latest
+    needs: [preflight]
+    # Read-only, and deliberately so. Resolving a digest READS a manifest;
+    # nothing is pushed from this workflow. A run that can migrate and release
+    # production must not also be able to overwrite the image it deploys.
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      api_digest: ${{ steps.api.outputs.api_digest }}
+    env:
+      # Job-scoped on purpose. The workflow-level env is inherited by the
+      # validation steps and graded against the application manifests
+      # (scripts/qa/check-deploy-env.sh); a PIPELINE variable declared up there
+      # would be read as an application variable that no manifest names, and
+      # the contract guard would reject it -- correctly.
+      REGISTRY: ghcr.io
+    steps:
+      # The commit under deployment, not the default ref. This job must reason
+      # about the tag being released and nothing else.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.image_tag }}
+
+      - name: Log in to the registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: api
+        name: Resolve the API image to an immutable digest
+        # The API image is PROMOTED, never rebuilt here. Its identity is supplied
+        # at RUNTIME -- GIT_COMMIT, BUILD_VERSION and BUILD_TIME are required
+        # manifest rows read by build-info.ts, and apps/api/Dockerfile declares
+        # no ARG for any of them -- so one image is environment-independent, and
+        # the bytes production runs are the bytes staging tested. Rebuilding
+        # would produce a different artifact from the same source and quietly
+        # give up that guarantee.
+        #
+        # It also asks a question this pipeline never asked: does the image
+        # exist at all? Until now production would back up and MIGRATE the
+        # database on the way to releasing a tag nobody had checked was built.
+        # A tag is mutable; a digest is not, so what the release step receives
+        # cannot change under it between here and the deploy.
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          IMAGE="${REGISTRY}/${GITHUB_REPOSITORY,,}/api"
+          digest="$(docker buildx imagetools inspect "$IMAGE:$IMAGE_TAG" \
+                      --format '{{.Manifest.Digest}}' 2>/dev/null || true)"
+          # One failure path for "no such image", "no such tag", an auth failure
+          # and an unexpected output shape alike. An empty or malformed digest
+          # must never reach the release step as though it were a real one.
+          #
+          # [[ =~ ]] and not grep: grep anchors per LINE, so output carrying a
+          # warning above or below the digest would pass, and the whole
+          # multi-line string would then be written as api_digest=... -- which is
+          # malformed for $GITHUB_OUTPUT and can inject a second output. Bash
+          # anchors ^ and $ to the whole string, so any newline fails closed.
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "::error title=API image not found::No image at $IMAGE:$IMAGE_TAG. Production promotes an image staging already built and tested; build it on staging first."
+            exit 1
+          }
+          echo "api_digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "$IMAGE:$IMAGE_TAG resolves to $digest"
+
   deploy:
     name: Deploy to production
     runs-on: ubuntu-latest
-    needs: [preflight]
+    needs: [preflight, build]
     environment:
       name: production
       url: ${{ vars.PRODUCTION_API_BASE_URL }}
@@ -208,6 +278,7 @@ jobs:
       - name: Release
         env:
           IMAGE_TAG: ${{ inputs.image_tag }}
+          API_DIGEST: ${{ needs.build.outputs.api_digest }}
         run: |
           # ------------------------------------------------------------------
           # NOT YET IMPLEMENTED -- no production hosting has been provisioned.
@@ -231,6 +302,7 @@ jobs:
             echo "| field | value |"
             echo "|---|---|"
             echo "| commit | \`${{ inputs.image_tag }}\` |"
+            echo "| api image | \`${{ needs.build.outputs.api_digest }}\` |"
             echo "| run | ${{ github.run_number }} |"
             echo "| deployed by | ${{ github.actor }} |"
             echo "| at | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
