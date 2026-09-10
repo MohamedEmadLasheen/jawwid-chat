@@ -97,7 +97,7 @@ docker_host_url() {
                           -e 's|@127\.0\.0\.1:|@host.docker.internal:|'
 }
 
-LOG="$(mktemp -t jawwid-backup-log)"
+LOG="$(mktemp -t jawwid-backup-log.XXXXXX)"
 trap 'rm -f "$LOG"' EXIT
 
 echo "Backing up ${LABEL} -> ${FILE}"

@@ -66,7 +66,7 @@ PLACEHOLDER_PATTERNS='localhost|127\.0\.0\.1|changeme|placeholder|not-a-real-key
 
 # Snapshot the configuration source into NAME<TAB>VALUE lines so lookups are
 # uniform whether they came from a file or from the process environment.
-SNAPSHOT="$(mktemp -t jawwid-env-check)"
+SNAPSHOT="$(mktemp -t jawwid-env-check.XXXXXX)"
 trap 'rm -f "$SNAPSHOT"' EXIT
 
 if [ -n "$ENV_FILE" ]; then

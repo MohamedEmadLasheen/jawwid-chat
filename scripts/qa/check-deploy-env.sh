@@ -82,7 +82,7 @@ _st_ins() { # file RUNCMD LINE : add an env entry to that step
 
 self_test() {
   local base out rc pass=0 fail=0 n
-  base="$(mktemp -d -t jawwid-deploy-selftest)"
+  base="$(mktemp -d -t jawwid-deploy-selftest.XXXXXX)"
   echo "Self-test — nine synthetic mutations on temporary copies"
   echo "  source: $WORKFLOWS"
   echo "  copies: $base   (the repository is never modified)"
@@ -140,7 +140,7 @@ self_test() {
 
 if [ "$SELFTEST" -eq 1 ]; then self_test; exit $?; fi
 
-TMP="$(mktemp -d -t jawwid-deploy-env)"
+TMP="$(mktemp -d -t jawwid-deploy-env.XXXXXX)"
 trap 'rm -rf "$TMP"' EXIT
 
 findings=0
