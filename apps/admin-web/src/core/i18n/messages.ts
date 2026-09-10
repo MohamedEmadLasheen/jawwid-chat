@@ -307,6 +307,22 @@ export const messages = {
     'common.close': 'Close',
     'common.showAll': 'Show all ({count})',
 
+    // --- Authentication ----------------------------------------------------
+    // The console had no auth strings at all, so `LoginPage` hard-coded
+    // English labels — an Arabic-first product whose front door was English.
+    'auth.welcome': 'Welcome back',
+    'auth.tagline': 'The communication console for Jawwid Online Quran & Arabic Academy.',
+    'auth.username': 'Username',
+    // BR-2: the login identifier is an opaque subject, not a contact channel.
+    'auth.usernameHint': 'The username your supervisor issued you.',
+    'auth.password': 'Password',
+    'auth.signIn': 'Sign in',
+    'auth.signingIn': 'Signing in…',
+    'auth.showPassword': 'Show password',
+    'auth.hidePassword': 'Hide password',
+    'auth.staffOnly': 'For academy staff. Families use the Jawwid app.',
+    'common.required': 'required',
+
   },
 
   ar: {
@@ -607,6 +623,19 @@ export const messages = {
 
     'common.close': 'إغلاق',
     'common.showAll': 'عرض الكل ({count})',
+
+    // --- تسجيل الدخول ------------------------------------------------------
+    'auth.welcome': 'أهلاً بعودتك',
+    'auth.tagline': 'منصة التواصل في أكاديمية جَوِّد لتعليم القرآن والعربية.',
+    'auth.username': 'اسم المستخدم',
+    'auth.usernameHint': 'اسم المستخدم الذي أصدرته لك المشرفة.',
+    'auth.password': 'كلمة المرور',
+    'auth.signIn': 'تسجيل الدخول',
+    'auth.signingIn': 'جارٍ تسجيل الدخول…',
+    'auth.showPassword': 'إظهار كلمة المرور',
+    'auth.hidePassword': 'إخفاء كلمة المرور',
+    'auth.staffOnly': 'خاص بالعاملين في الأكاديمية. تستخدم العائلات تطبيق جَوِّد.',
+    'common.required': 'مطلوب',
 
   },
 } as const

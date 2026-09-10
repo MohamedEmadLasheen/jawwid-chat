@@ -40,6 +40,9 @@ export type IconName =
   | 'shield'
   | 'clock'
   | 'lock'
+  | 'eye'
+  | 'eye-off'
+  | 'check'
 
 /** Glyphs that describe a direction in the reading flow, and so mirror in RTL. */
 const MIRRORED: ReadonlySet<IconName> = new Set<IconName>(['back', 'send', 'reply'])
@@ -67,6 +70,9 @@ const PATHS: Record<IconName, string> = {
   shield: 'M12 3 4.5 6v6.2c0 4.2 3.1 7.9 7.5 8.8 4.4-.9 7.5-4.6 7.5-8.8V6L12 3Z',
   clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7v5l3 2',
   lock: 'M6 10.5h12V21H6V10.5ZM8.5 10.5V7a3.5 3.5 0 1 1 7 0v3.5',
+  eye: 'M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
+  'eye-off': 'M4 4l16 16M9.9 5.8A9.4 9.4 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-3.3 4M6.3 8A17 17 0 0 0 2.5 12S6 18.5 12 18.5c1.2 0 2.3-.2 3.3-.6M10 10a3 3 0 0 0 4 4',
+  check: 'M5 12.5 9.5 17 19 7.5',
 }
 
 export function Icon({

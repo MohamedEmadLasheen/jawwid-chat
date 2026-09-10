@@ -214,7 +214,12 @@
 .conv-row--selected,
 .conv-row--selected:hover {
   background: var(--color-brand-subtle);
-  border-inline-start-color: var(--color-brand-primary);
+  /* Gold, matching the rail's selected tick. "Where you are" is one idea and
+     it gets one colour across navigation and lists; teal stays the colour of
+     brand and action rather than of position. The teal wash behind it is what
+     carries the state for anyone who cannot separate the gold from it, and
+     `aria-current` is what carries it to assistive tech. */
+  border-inline-start-color: var(--color-accent-line);
 }
 
 .conv-row__body {
@@ -1049,7 +1054,7 @@
 }
 .composer__box:focus-within {
   border-color: var(--color-border-focus);
-  box-shadow: 0 0 0 1px var(--color-border-focus);
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-halo);
 }
 .composer--internal .composer__box {
   border-color: var(--color-message-internal-border);
@@ -1092,8 +1097,18 @@
   color: var(--color-brand-on-primary);
   transition: background var(--motion-fast) var(--easing-standard);
 }
+.composer__send {
+  box-shadow: var(--elevation-brand-sm);
+}
 .composer__send:hover:not(:disabled) {
   background: var(--color-brand-primary-hover);
+}
+.composer__send:active:not(:disabled) {
+  background: var(--color-brand-primary-pressed);
+  transform: translateY(1px);
+}
+.composer__send:disabled {
+  box-shadow: none;
 }
 .composer__send:disabled {
   background: var(--color-surface-muted);
@@ -1179,7 +1194,7 @@ html[dir='rtl'] .composer__send-icon {
   gap: var(--space-3);
   font-size: var(--type-caption);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--tracking-caps);
   font-weight: 600;
   color: var(--color-text-muted);
   margin: 0 0 var(--space-4);
@@ -1295,7 +1310,7 @@ html[dir='rtl'] .composer__send-icon {
   padding: var(--space-3) var(--space-5);
   font-size: var(--type-caption);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--tracking-caps);
   color: var(--color-text-muted);
   font-weight: 600;
 }
@@ -1360,9 +1375,19 @@ html[dir='rtl'] .composer__send-icon {
   );
   animation: skeleton-shimmer 1.2s infinite;
 }
+/* The sheen travels along the READING direction. Sweeping left-to-right under
+   Arabic text runs against the way the eye is already moving. */
+html[dir='rtl'] .skeleton::after {
+  animation-name: skeleton-shimmer-rtl;
+}
 @keyframes skeleton-shimmer {
   100% {
     transform: translateX(100%);
+  }
+}
+@keyframes skeleton-shimmer-rtl {
+  100% {
+    transform: translateX(-200%);
   }
 }
 .skeleton-row {

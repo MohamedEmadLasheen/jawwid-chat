@@ -58,9 +58,14 @@
   --primary-700: #084b46;
   --primary-800: #063733;
 
+  --accent-50: #fdf8f0;
   --accent-100: #fbeedc;
+  --accent-200: #f2dcb8;
+  --accent-300: #e5c288;
+  --accent-400: #d9a44c; /* the logo's gold — fills and rules, never text */
   --accent-500: #c57a1e;
-  --accent-700: #8a5310;
+  --accent-600: #a9660f;
+  --accent-700: #8a5310; /* the only gold that may carry text on light */
 
   --red-100: #fbe9e7;
   --red-500: #c4362c;
@@ -104,6 +109,19 @@
   --color-brand-on-primary: var(--neutral-0);
   --color-brand-subtle: var(--primary-50);
   --color-accent: var(--accent-500);
+  /*
+   * Gold has four jobs and they are not interchangeable. `-strong` is the only
+   * one that clears 4.5:1 on a light surface, so it is the only one allowed to
+   * carry text; `-line` is the logo's own gold and is for rules, indicators and
+   * fills, where contrast is a visibility question rather than a legibility
+   * one. Naming them apart is what stops gold spreading from an accent into a
+   * second brand colour.
+   */
+  --color-accent-strong: var(--accent-700);
+  --color-accent-line: var(--accent-400);
+  --color-accent-border: var(--accent-200);
+  --color-accent-subtle: var(--accent-100);
+  --color-accent-wash: var(--accent-50);
 
   --color-status-success-fg: var(--green-600);
   --color-status-success-bg: var(--green-100);
@@ -142,10 +160,27 @@
     'SF Arabic', 'Segoe UI', Roboto, 'Noto Sans Arabic', 'Noto Naskh Arabic', sans-serif;
   --font-family-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
 
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /*
+   * Tracking for the uppercase overlines (`.rail__title`, `.panel__title`,
+   * table headers). It is a TOKEN rather than a literal because Arabic zeroes
+   * it: `letter-spacing` on Arabic pulls apart glyphs that are meant to join,
+   * and `text-transform: uppercase` — the reason the tracking exists — does
+   * nothing to Arabic in the first place. The Arabic block below sets it to 0,
+   * so every overline in the product loses it in one place rather than each
+   * rule having to remember.
+   */
+  --tracking-caps: 0.06em;
+
   --type-display: 28px;
   --type-h1: 22px;
   --type-h2: 18px;
   --type-h3: 16px;
+  --type-h4: 15px;
   --type-body-lg: 17px;
   --type-body: 15px;
   --type-body-sm: 13px;
@@ -161,6 +196,7 @@
   --lh-h1: 30px;
   --lh-h2: 26px;
   --lh-h3: 24px;
+  --lh-h4: 22px;
   --lh-body-lg: 26px;
   --lh-body: 24px;
   --lh-body-sm: 20px;
@@ -198,6 +234,17 @@
   --elevation-1: 0 1px 2px rgba(26, 24, 21, 0.06), 0 1px 3px rgba(26, 24, 21, 0.08);
   --elevation-2: 0 4px 12px rgba(26, 24, 21, 0.1);
   --elevation-3: 0 12px 32px rgba(26, 24, 21, 0.16);
+  /* Brand-tinted depth for the surfaces that carry the identity — the auth
+     card, primary buttons. Shadow inherits the teal rather than greying it. */
+  --elevation-brand: 0 10px 30px rgba(6, 50, 46, 0.12), 0 2px 6px rgba(6, 50, 46, 0.08);
+  --elevation-brand-sm: 0 1px 2px rgba(6, 50, 46, 0.14);
+
+  /* Focus. §20 wants one visible ring everywhere; the halo is the inner glow
+     inputs get so a focused field reads as focused without a second border. */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --color-focus-halo: rgba(15, 122, 114, 0.16);
+  --color-accent-halo: rgba(217, 164, 76, 0.22);
 
   /* ----------------------------------------------------------- §5 motion */
   --motion-instant: 0ms;
@@ -212,6 +259,9 @@
   --rail-w-collapsed: 64px;
   --list-w: 380px;
   --panel-w: 400px;
+  /* §20 touch targets. The 36px controls are correct for a mouse and too small
+     for a thumb, so the mobile blocks raise controls to this. */
+  --tap-target-min: 44px;
 
   /* ---------------------------------------------------------------------
      LEGACY ALIASES.
@@ -287,11 +337,15 @@ html[lang='ar'] {
   --lh-h1: 34px;
   --lh-h2: 30px;
   --lh-h3: 28px;
+  --lh-h4: 26px;
   --lh-body-lg: 30px;
   --lh-body: 28px;
   --lh-body-sm: 24px;
   --lh-label: 22px;
   --lh-caption: 20px;
+
+  /* Arabic is cursive: tracking separates letters that should join. */
+  --tracking-caps: 0;
 }
 
 * {
@@ -332,8 +386,8 @@ h4 {
 }
 
 :focus-visible {
-  outline: 2px solid var(--color-border-focus);
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--color-border-focus);
+  outline-offset: var(--focus-ring-offset);
   border-radius: var(--radius-sm);
 }
 

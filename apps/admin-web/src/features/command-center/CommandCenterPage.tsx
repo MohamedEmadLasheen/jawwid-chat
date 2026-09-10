@@ -10,6 +10,7 @@ import {
 import { qk } from '@/core/api/queryKeys'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { QueryBoundary } from '@/shared/components/States'
+import { PageHeader } from '@/shared/components/PageHeader'
 import { Badge } from '@/shared/components/Badge'
 
 /**
@@ -65,14 +66,17 @@ export function CommandCenterPage() {
 
   return (
     <div className="page">
-      <header className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <h1 className="page__title">Command Center</h1>
-        {k && (
-          <span className="muted">
-            as of {new Date(k.asOf).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </span>
-        )}
-      </header>
+      <PageHeader
+        title="Command Center"
+        actions={
+          k && (
+            <span className="muted">
+              as of{' '}
+              {new Date(k.asOf).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )
+        }
+      />
 
       {/* ---------------------------------------------------- what needs action */}
       <QueryBoundary

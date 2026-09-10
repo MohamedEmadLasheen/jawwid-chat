@@ -5,6 +5,7 @@ import { useSession } from '@/core/auth/SessionProvider'
 import { useRealtime } from '@/core/realtime/RealtimeProvider'
 import { visibleAreas, type NavArea } from '@/core/permissions/capabilities'
 import { Avatar } from '@/shared/components/Avatar'
+import { Brand } from '@/shared/components/Brand'
 import { Icon, type IconName } from '@/shared/components/Icon'
 
 const AREA_PATH: Record<NavArea, string> = {
@@ -137,10 +138,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="shell">
       <header className="header">
+        {/*
+          The genuine lockup, plus the Arabic product name as text. The artwork
+          carries the Latin wordmark only, so the two together are what makes
+          the header read as Jawwid to an operator working in Arabic.
+        */}
         <div className="header__brand">
-          <span className="header__mark" aria-hidden="true">
-            ج
-          </span>
+          <Brand size="sm" />
           {t('app.title')}
         </div>
         <div className="header__spacer" />

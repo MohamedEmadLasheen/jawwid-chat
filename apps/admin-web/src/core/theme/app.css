@@ -47,6 +47,11 @@
   padding-inline: var(--space-5);
   background: var(--color-surface-default);
   border-block-end: 1px solid var(--color-border-subtle);
+  /* A hairline of brand under the header: the whole bar in teal would make the
+     app a dashboard, and nothing at all leaves the header floating. */
+  box-shadow: inset 0 -3px 0 -2px var(--color-brand-subtle);
+  /* The header never compresses when the workspace below it is wide. */
+  flex: 0 0 auto;
 }
 
 .header__brand {
@@ -112,7 +117,7 @@
   font-size: var(--type-caption);
   line-height: var(--lh-caption);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--tracking-caps);
   color: var(--color-text-muted);
   padding-inline: var(--space-3);
   margin-block-end: var(--space-2);
@@ -133,16 +138,47 @@
   text-decoration: none;
   font-size: var(--type-body-sm);
   line-height: var(--lh-body-sm);
-  transition: background var(--motion-fast) var(--easing-standard);
+  /* Containing block for the selected tick below. */
+  position: relative;
+  transition: background var(--motion-fast) var(--easing-standard),
+    color var(--motion-fast) var(--easing-standard);
 }
 .rail__item:hover {
   background: var(--color-surface-muted);
   color: var(--color-text-primary);
 }
+
+/*
+ * The selected item.
+ *
+ * A teal wash plus a GOLD tick on the reading-start edge. This is the accent's
+ * primary job in the product (§4, §26): the one mark an operator's eye returns
+ * to, in the one colour nothing else in the interface uses. It is 3px wide.
+ *
+ * `inset-inline-start` rather than `left`, so the tick moves to the right edge
+ * in Arabic along with the rest of the rail, with no RTL override anywhere.
+ *
+ * Weight and colour change too — the tick is the brand signal, but it must not
+ * be the ONLY signal, because a 3px bar is not a state to a screen reader or
+ * to anyone who cannot separate gold from the surface behind it. The real
+ * state is `aria-current`, which react-router sets.
+ */
 .rail__item[aria-current='page'] {
   background: var(--color-brand-subtle);
   color: var(--primary-700);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
+}
+.rail__item[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block: 20%;
+  inline-size: 3px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent-line);
+}
+.rail__item[aria-current='page'] .rail__icon {
+  color: var(--color-brand-primary);
 }
 
 /* The icon is a glyph slot, not decoration: at the 64px collapsed rail it is
@@ -348,9 +384,37 @@
   background: var(--color-brand-subtle);
   color: var(--primary-700);
 }
+.badge--brand {
+  background: var(--color-brand-subtle);
+  color: var(--primary-700);
+}
+/* Gold badge: a distinction, not a status. Reserved for brand-level marks. */
+.badge--accent {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent-strong);
+}
+/* Outline badge for counts and neutral metadata that should not read as a
+   state at all. */
+.badge--outline {
+  background: transparent;
+  border: 1px solid var(--color-border-default);
+  color: var(--color-text-secondary);
+}
 
 /* --------------------------------------------------------------- controls */
 
+/*
+ * THE BUTTON SYSTEM.
+ *
+ * Six variants, six states each. The variants are a HIERARCHY, not a palette:
+ * exactly one primary per view, secondary for the alternative, ghost for
+ * anything repeated per row. `--accent` is deliberately not a general-purpose
+ * variant — see its own note below.
+ *
+ * `transform` on :active is what makes a control feel like a control. It is
+ * 1px, it lasts 120ms, and `prefers-reduced-motion` takes the transition off
+ * in tokens.css while leaving the state itself legible.
+ */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -363,31 +427,63 @@
   background: var(--color-surface-default);
   color: var(--color-text-primary);
   font-size: var(--type-button-sm);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
+  /* Labels are one line: an Arabic button that wraps changes the row height of
+     every control beside it. */
+  white-space: nowrap;
+  position: relative;
   transition: background var(--motion-fast) var(--easing-standard),
-    border-color var(--motion-fast) var(--easing-standard);
+    border-color var(--motion-fast) var(--easing-standard),
+    box-shadow var(--motion-fast) var(--easing-standard),
+    transform var(--motion-fast) var(--easing-standard);
 }
 .btn:hover:not(:disabled) {
   background: var(--color-surface-muted);
   border-color: var(--color-border-strong);
 }
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
 .btn:disabled {
   opacity: 0.5;
+  /* Disabled must not also read as pressed. */
+  transform: none;
+  box-shadow: none;
 }
+
 .btn--primary {
   background: var(--color-brand-primary);
   border-color: var(--color-brand-primary);
   color: var(--color-brand-on-primary);
+  box-shadow: var(--elevation-brand-sm);
 }
 .btn--primary:hover:not(:disabled) {
   background: var(--color-brand-primary-hover);
   border-color: var(--color-brand-primary-hover);
 }
+.btn--primary:active:not(:disabled) {
+  background: var(--color-brand-primary-pressed);
+  border-color: var(--color-brand-primary-pressed);
+}
+
+/* Secondary is the default `.btn` given an explicit name, so a caller can say
+   which of the two it meant instead of relying on the absence of a modifier. */
+.btn--secondary {
+  background: var(--color-surface-default);
+  border-color: var(--color-border-default);
+  color: var(--color-text-primary);
+}
+
 .btn--danger {
   background: var(--color-status-danger-fg);
   border-color: var(--color-status-danger-fg);
   color: var(--color-text-inverse);
 }
+.btn--danger:hover:not(:disabled) {
+  background: var(--red-700);
+  border-color: var(--red-700);
+}
+
 .btn--ghost {
   border-color: transparent;
   background: transparent;
@@ -396,11 +492,84 @@
 .btn--ghost:hover:not(:disabled) {
   background: var(--color-surface-muted);
   border-color: transparent;
+  color: var(--color-text-primary);
 }
+
+/*
+ * The gold button.
+ *
+ * It exists for BRAND moments — the one call to action on an unauthenticated
+ * screen — and not as a second primary. Gold on teal is the identity; gold
+ * everywhere is a theme. If a view already has a primary button, this is the
+ * wrong control (§26).
+ */
+.btn--accent {
+  background: var(--color-accent-strong);
+  border-color: var(--color-accent-strong);
+  color: var(--color-text-inverse);
+}
+.btn--accent:hover:not(:disabled) {
+  background: var(--accent-600);
+  border-color: var(--accent-600);
+}
+
+/* A square control whose whole content is one glyph. Below the pointer
+   breakpoint it grows to the touch minimum along with everything else. */
+.btn--icon {
+  inline-size: 36px;
+  min-inline-size: 36px;
+  padding: 0;
+}
+
 .btn--sm {
   min-block-size: 28px;
   padding: var(--space-1) var(--space-3);
   font-size: var(--type-caption);
+}
+.btn--sm.btn--icon {
+  inline-size: 28px;
+  min-inline-size: 28px;
+}
+.btn--lg {
+  min-block-size: 44px;
+  padding: var(--space-3) var(--space-7);
+  font-size: var(--type-button);
+}
+.btn--block {
+  inline-size: 100%;
+}
+
+/*
+ * Loading.
+ *
+ * The label stays in the DOM and is hidden with `visibility`, so the button
+ * does not change width when it starts working — a button that resizes
+ * mid-click moves the thing the pointer is over. The spinner is centred over
+ * the space the label vacated.
+ */
+.btn.is-loading {
+  color: transparent;
+  pointer-events: none;
+}
+.btn.is-loading::after {
+  content: '';
+  position: absolute;
+  inline-size: 16px;
+  block-size: 16px;
+  border-radius: var(--radius-full);
+  border: 2px solid currentColor;
+  border-block-start-color: transparent;
+  animation: jw-spin 600ms linear infinite;
+  color: var(--color-brand-on-primary);
+}
+.btn.is-loading:not(.btn--primary):not(.btn--danger):not(.btn--accent)::after {
+  color: var(--color-brand-primary);
+}
+
+@keyframes jw-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .field {
@@ -411,8 +580,17 @@
   display: block;
   font-size: var(--type-label);
   line-height: var(--lh-label);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   margin-block-end: var(--space-2);
+  color: var(--color-text-primary);
+}
+
+/* Required is marked in TEXT, not by a bare asterisk in a colour: §20 forbids
+   colour as the only carrier, and a screen reader announces the word. */
+.field__required {
+  color: var(--color-status-danger-fg);
+  margin-inline-start: var(--space-1);
+  font-weight: var(--weight-regular);
 }
 .field__hint {
   font-size: var(--type-caption);
@@ -443,13 +621,67 @@
   font: inherit;
   font-size: var(--type-body-sm);
 }
+.input::placeholder,
+.textarea::placeholder,
+.field__input::placeholder {
+  color: var(--color-text-muted);
+  /* Placeholders are a hint, never a label. Keeping them lighter than the
+     value is what stops a filled field and an empty one looking alike. */
+  opacity: 1;
+}
+.input:hover:not(:disabled),
+.select:hover:not(:disabled),
+.textarea:hover:not(:disabled),
+.field__input:hover:not(:disabled) {
+  border-color: var(--color-border-strong);
+}
 .input:focus,
 .select:focus,
 .textarea:focus,
 .field__input:focus {
-  outline: 2px solid var(--color-border-focus);
-  outline-offset: -1px;
+  outline: none;
   border-color: var(--color-border-focus);
+  /* Ring plus halo. The ring is the accessible focus indicator; the halo is
+     what makes the focused field the obvious centre of the form. */
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-halo);
+}
+.input:disabled,
+.select:disabled,
+.textarea:disabled,
+.field__input:disabled {
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+/* Invalid carries a colour AND a border weight change, so the state survives
+   greyscale and colour-blindness; the message below it carries the words. */
+.input[aria-invalid='true'],
+.textarea[aria-invalid='true'],
+.field__input[aria-invalid='true'] {
+  border-color: var(--color-status-danger-fg);
+}
+.input[aria-invalid='true']:focus,
+.textarea[aria-invalid='true']:focus,
+.field__input[aria-invalid='true']:focus {
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--red-100);
+}
+
+.textarea {
+  min-block-size: 80px;
+  resize: vertical;
+  line-height: var(--lh-body);
+}
+
+/* Checkbox and radio: the browser default is the one control that cannot be
+   restyled into the system, so it is only re-tinted and given the same ring. */
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--color-brand-primary);
+  inline-size: 16px;
+  block-size: 16px;
+  margin: 0;
+  cursor: pointer;
 }
 
 select {
@@ -471,7 +703,7 @@ select {
 .panel__title {
   font-size: var(--type-caption);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--tracking-caps);
   color: var(--color-text-muted);
   margin: 0 0 var(--space-3);
 }
@@ -505,7 +737,7 @@ select {
 .table th {
   font-size: var(--type-caption);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--tracking-caps);
   color: var(--color-text-muted);
   font-weight: 600;
 }
@@ -523,26 +755,97 @@ select {
 
 /* ------------------------------------------------------- states & dialogs */
 
+/*
+ * EMPTY, LOADING AND ERROR.
+ *
+ * §22: these are part of the product, not the absence of it. One layout serves
+ * all three — a mark, a title, a line of help, an optional action — so an
+ * operator meets the same shape whether a list is empty, loading or broken,
+ * and only the words change.
+ */
 .state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
   padding: var(--space-10) var(--space-5);
   text-align: center;
   color: var(--color-text-secondary);
   font-size: var(--type-body-sm);
+  line-height: var(--lh-body-sm);
 }
 .state__title {
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   font-size: var(--type-h3);
   line-height: var(--lh-h3);
   color: var(--color-text-primary);
-  margin-block-end: var(--space-2);
+  margin-block-end: 0;
+}
+.state__hint {
+  max-inline-size: 46ch;
+  color: var(--color-text-muted);
+}
+.state__actions {
+  margin-block-start: var(--space-3);
+  display: flex;
+  gap: var(--space-3);
 }
 
+/*
+ * The mark.
+ *
+ * A tinted brand disc holding the area's own icon. It is what makes an empty
+ * list look considered rather than unfinished, and it is `aria-hidden` at the
+ * component — the title beside it is the real message.
+ */
+.state__mark {
+  display: grid;
+  place-items: center;
+  inline-size: 48px;
+  block-size: 48px;
+  border-radius: var(--radius-full);
+  background: var(--color-brand-subtle);
+  color: var(--color-brand-primary);
+  margin-block-end: var(--space-1);
+}
+.state--danger .state__mark {
+  background: var(--color-status-danger-bg);
+  color: var(--color-status-danger-fg);
+}
+
+/* The spinner, as a standalone element rather than a button pseudo-element. */
+.spinner {
+  inline-size: 20px;
+  block-size: 20px;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--color-border-default);
+  border-block-start-color: var(--color-brand-primary);
+  animation: jw-spin 600ms linear infinite;
+}
+
+/*
+ * Skeletons live in `console.css`, which defined them first and whose
+ * `.skeleton-row` / `.skeleton-line` shapes the console already uses. A second
+ * `.skeleton` here silently overrode that one — same specificity, later in the
+ * cascade — so this file adds nothing to it and the RTL fix goes there instead.
+ */
+
+/*
+ * BANNERS AND ALERTS.
+ *
+ * A tint plus a rule on the reading-start edge. The rule is what lets the tone
+ * be read at a glance in peripheral vision without the tint having to be
+ * strong enough to fight the text sitting on it.
+ */
 .banner {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-5);
   font-size: var(--type-body-sm);
+  line-height: var(--lh-body-sm);
+  border-inline-start: 3px solid currentColor;
 }
 .banner--warn {
   background: var(--color-status-warning-bg);
@@ -555,6 +858,52 @@ select {
 .banner--info {
   background: var(--color-status-info-bg);
   color: var(--color-status-info-fg);
+}
+.banner--success {
+  background: var(--color-status-success-bg);
+  color: var(--color-status-success-fg);
+}
+/* Standalone alert — a banner that sits inside page content rather than
+   spanning the workspace. */
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-sm);
+  border-inline-start: 3px solid currentColor;
+  font-size: var(--type-body-sm);
+  line-height: var(--lh-body-sm);
+  margin-block-end: var(--space-5);
+}
+.alert--warn {
+  background: var(--color-status-warning-bg);
+  color: var(--amber-700);
+}
+.alert--danger {
+  background: var(--color-status-danger-bg);
+  color: var(--color-status-danger-fg);
+}
+.alert--info {
+  background: var(--color-status-info-bg);
+  color: var(--color-status-info-fg);
+}
+.alert--success {
+  background: var(--color-status-success-bg);
+  color: var(--color-status-success-fg);
+}
+.alert__body {
+  flex: 1;
+  min-inline-size: 0;
+  color: var(--color-text-primary);
+}
+.alert__title {
+  /* Block, so the title sits on its own line instead of running into the
+     sentence after it. */
+  display: block;
+  font-weight: var(--weight-semibold);
+  color: inherit;
+  margin-block-end: var(--space-1);
 }
 
 .dialog-backdrop {
@@ -574,6 +923,23 @@ select {
   max-block-size: 85vh;
   overflow-y: auto;
   padding: var(--space-7);
+  /* Enters from 8px below at 200ms. Enough to read as arriving, not enough to
+     make the operator wait for it. Killed by `prefers-reduced-motion`. */
+  animation: jw-dialog-in var(--motion-base) var(--easing-standard);
+}
+@keyframes jw-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.dialog-backdrop {
+  animation: jw-fade-in var(--motion-fast) var(--easing-standard);
+}
+@keyframes jw-fade-in {
+  from {
+    opacity: 0;
+  }
 }
 .dialog__title {
   margin: 0 0 var(--space-4);
@@ -621,18 +987,149 @@ select {
   inline-size: 100%;
 }
 .page__title {
+  /* Standalone titles keep their own spacing; inside `.page__header` the
+     header owns it and this resets to 0 below. Seven pages still render a bare
+     title, and they must not lose the gap under it. */
   margin: 0 0 var(--space-5);
   font-size: var(--type-h1);
   line-height: var(--lh-h1);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
+  /* Arabic headings at Latin tracking look loose; at Latin leading they clip.
+     The leading is handled by the `html[lang=ar]` block in tokens.css. */
+  letter-spacing: -0.01em;
 }
+
+/*
+ * PAGE HEADER — title, optional subtitle, optional actions.
+ *
+ * Every product page was opening with a bare `<h1>` and its own ad-hoc row of
+ * buttons, which is why no two of them aligned. This is that row, once.
+ */
+.page__header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  margin-block-end: var(--space-6);
+  padding-block-end: var(--space-5);
+  border-block-end: 1px solid var(--color-border-subtle);
+}
+.page__headings {
+  flex: 1;
+  min-inline-size: 0;
+}
+.page__header .page__title {
+  margin-block-end: 0;
+}
+
+/*
+ * Any heading inside a page header is an H1 on the canonical scale.
+ *
+ * Seven routed pages (Directory, FamilyDetail, Groups, GroupDetail, Labels,
+ * Stories, Broadcast) open with `.page__header` and a bare `<h1>` that never
+ * received `.page__title`, so they resolved to the browser's 26px rather than
+ * the 22px token — visibly out of step with the pages that do use it.
+ *
+ * A descendant rule rather than seven file edits, and it deliberately restates
+ * `.page__title`'s own values rather than inventing new ones: where both apply
+ * they agree, so `.page__title` keeps working exactly as before.
+ */
+.page__header h1 {
+  font-size: var(--type-h1);
+  line-height: var(--lh-h1);
+  font-weight: var(--weight-bold);
+  letter-spacing: -0.01em;
+  color: var(--color-text-primary);
+}
+.page__subtitle {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-body-sm);
+  line-height: var(--lh-body-sm);
+  max-inline-size: 68ch;
+}
+.page__actions {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  flex-wrap: wrap;
+}
+/*
+ * THE CARD.
+ *
+ * One border, one small shadow, one radius. §11 is mostly a list of things not
+ * to do, and the restraint is the point: the hierarchy inside a card should
+ * come from its type and spacing, not from how far it floats.
+ */
 .card {
   background: var(--color-surface-default);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-md);
   box-shadow: var(--elevation-1);
-  padding: var(--space-5);
+  padding: var(--space-6);
   margin-block-end: var(--space-5);
+}
+
+/* Only for a card that is genuinely a control — one that navigates or opens
+   something. A hover lift on a static card is motion that promises nothing. */
+.card--interactive {
+  display: block;
+  inline-size: 100%;
+  text-align: start;
+  cursor: pointer;
+  transition: border-color var(--motion-fast) var(--easing-standard),
+    box-shadow var(--motion-fast) var(--easing-standard);
+}
+.card--interactive:hover {
+  border-color: var(--color-border-strong);
+  box-shadow: var(--elevation-2);
+}
+
+/* The brand card: the auth panel and anything else that is a brand moment. */
+.card--brand {
+  border-color: var(--color-border-subtle);
+  box-shadow: var(--elevation-brand);
+  border-radius: var(--radius-lg);
+}
+
+/* Title and meta share a row when both are present, so a card's identity and
+   its timestamp do not stack into two lines of near-identical weight. */
+.card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-block-end: var(--space-3);
+}
+.card__head .card__title {
+  margin-block-end: 0;
+}
+
+.card__title {
+  font-size: var(--type-h4);
+  line-height: var(--lh-h4);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-2);
+}
+.card__meta {
+  font-size: var(--type-caption);
+  line-height: var(--lh-caption);
+  color: var(--color-text-muted);
+}
+.card__body {
+  font-size: var(--type-body-sm);
+  line-height: var(--lh-body-sm);
+  color: var(--color-text-secondary);
+}
+.card__footer {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  align-items: center;
+  margin-block-start: var(--space-5);
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--color-border-subtle);
 }
 .grid {
   display: grid;
@@ -896,4 +1393,557 @@ select {
 }
 .knowledge__a {
   margin: var(--space-1) 0 0;
+}
+
+/* ===========================================================================
+   RESPONSIVE — TABLET AND PHONE.
+
+   The console brought its own story down to one pane (`console.css` §9.1); what
+   had none was the SHELL around it and the nine product pages inside it. Below
+   768 the rail stops being a rail: a 64px vertical column on a 390px screen
+   spends a sixth of the width on navigation the operator uses once a session.
+   It becomes a horizontal strip under the header instead, scrolling in the
+   reading direction, and the workspace gets the whole width back.
+
+   Everything here is logical-property, so the Arabic layout mirrors with no
+   second set of rules — including the selected tick, which moves from the
+   reading-start edge to the bottom edge because the rail changed axis.
+   =========================================================================== */
+
+/* ------------------------------------------------------------ tablet */
+@media (max-width: 1023px) {
+  .page {
+    padding: var(--space-5);
+  }
+  .page__header {
+    margin-block-end: var(--space-5);
+    padding-block-end: var(--space-4);
+  }
+  /* A three-column metric grid at 900px gives each metric 280px and its label
+     two lines. Two columns keeps the number and its label on one line each. */
+  .grid--metrics {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  }
+  .column--panel {
+    inline-size: 320px;
+    flex-basis: 320px;
+  }
+}
+
+/* -------------------------------------------------------------- phone */
+@media (max-width: 767px) {
+  .shell__body {
+    flex-direction: column;
+  }
+
+  /*
+   * The rail, horizontal.
+   *
+   * `flex: 0 0 auto` rather than a height, so the strip is exactly as tall as
+   * its items. `overscroll-behavior-inline: contain` stops a sideways flick
+   * that runs out of rail from turning into a browser back-navigation.
+   */
+  .rail {
+    inline-size: 100%;
+    flex: 0 0 auto;
+    padding: var(--space-2) var(--space-3);
+    border-inline-end: 0;
+    border-block-end: 1px solid var(--color-border-subtle);
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+  .rail::-webkit-scrollbar {
+    display: none;
+  }
+  .rail__group {
+    flex-direction: row;
+    gap: var(--space-2);
+  }
+  .rail__item {
+    /* Square, thumb-sized, and it must not be squeezed by the items after it
+       — without `flex-shrink: 0` sixteen areas compress into unhittable
+       slivers instead of scrolling. */
+    flex: 0 0 auto;
+    inline-size: var(--tap-target-min);
+    min-block-size: var(--tap-target-min);
+    justify-content: center;
+    padding: var(--space-2);
+  }
+  /*
+   * The count becomes a corner badge.
+   *
+   * In the vertical rail it is pushed to the end of the row by `margin-inline-
+   * start: auto`; in a 44px square there is no row to push it along, so it
+   * overflowed the item. Absolute in the top-outer corner is the pattern the
+   * operator already knows from every phone they own.
+   */
+  .rail__count {
+    position: absolute;
+    inset-block-start: 1px;
+    inset-inline-end: 1px;
+    margin-inline-start: 0;
+    min-inline-size: 16px;
+    padding-inline: var(--space-2);
+    line-height: 16px;
+  }
+
+  /* The tick follows the axis: a vertical bar on the start edge means nothing
+     on a horizontal strip, so it becomes an underline on the block-end edge. */
+  .rail__item[aria-current='page']::before {
+    inset-inline: 25%;
+    inset-block: auto 0;
+    inline-size: auto;
+    block-size: 3px;
+  }
+
+  .header {
+    padding-inline: var(--space-4);
+    gap: var(--space-3);
+  }
+  /* The operator's own name is the first thing to go: they know who they are,
+     and the avatar beside it still identifies the session. */
+  .header__duty strong {
+    display: none;
+  }
+
+  .page {
+    padding: var(--space-4);
+  }
+  .card {
+    padding: var(--space-5);
+    margin-block-end: var(--space-4);
+  }
+
+  /*
+   * Tables scroll inside themselves rather than widening the page.
+   *
+   * `display: block` on the table keeps the internal table box intact — the
+   * columns still align — while giving the element something to scroll. This
+   * is the rule that keeps the §19 promise of no horizontal page overflow on
+   * the directory, groups and moderation tables.
+   */
+  .table {
+    display: block;
+    max-inline-size: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .dialog-backdrop {
+    padding: var(--space-3);
+    /* Align to the bottom: on a phone the reachable half of the screen is the
+       bottom half, and a centred dialog puts its actions under the thumb's
+       reach. */
+    align-items: end;
+  }
+  .dialog {
+    inline-size: 100%;
+    max-block-size: 88vh;
+    padding: var(--space-5);
+  }
+  .dialog__actions {
+    /* Stacked and full-width: two 36px buttons side by side on a 390px screen
+       are two small targets with a gutter nobody can hit. */
+    flex-direction: column-reverse;
+  }
+  .dialog__actions .btn {
+    inline-size: 100%;
+  }
+
+  .grid--metrics {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: var(--space-4);
+  }
+  .metric__value {
+    font-size: var(--type-h1);
+    line-height: var(--lh-h1);
+  }
+
+  .page__header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-4);
+  }
+}
+
+/* ---------------------------------------------------------- touch input
+   Keyed on the INPUT, not the width: a 1280px tablet has the same thumb as a
+   390px phone. §20's 44px minimum, applied to every control the operator taps
+   rather than to a list of them. */
+@media (pointer: coarse) {
+  .btn,
+  .input,
+  .select,
+  .textarea,
+  .field__input,
+  select {
+    min-block-size: var(--tap-target-min);
+  }
+  .btn--sm {
+    /* Small buttons stay visually small but gain a hit area, so a row of row-
+       level actions does not become a row of misses. */
+    min-block-size: 36px;
+  }
+  .btn--icon {
+    inline-size: var(--tap-target-min);
+    min-inline-size: var(--tap-target-min);
+  }
+  .rail__item {
+    min-block-size: var(--tap-target-min);
+  }
+  input[type='checkbox'],
+  input[type='radio'] {
+    inline-size: 20px;
+    block-size: 20px;
+  }
+  /* iOS zooms the page when a focused input's text is under 16px. Raising the
+     font is the only thing that prevents it, and a zoomed-in RTL form is the
+     most disorienting version of that bug. */
+  .input,
+  .select,
+  .textarea,
+  .field__input,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* ===========================================================================
+   THE BRAND LOCKUP.
+
+   `Brand.tsx` is the only component that renders the identity, and this is the
+   only place its size is decided. `inline-size: auto` against a fixed
+   `block-size` is not a detail: it is what makes it IMPOSSIBLE to distort the
+   logo by asking for a size — the asset scales on one axis and the other
+   follows its own aspect ratio, whatever artwork is dropped in.
+   =========================================================================== */
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-text-primary);
+}
+/*
+ * The supplied artwork occupies 127 of its canvas's 425 pixels of height —
+ * 18.4% of the area, padded 29.4% above and 40.7% below. So the box is sized
+ * from the height the ARTWORK should read at, multiplied by that canvas ratio.
+ * Stated as a variable so a trimmed asset later means changing one number
+ * rather than re-deriving three.
+ */
+.brand {
+  --brand-canvas-scale: 3.346; /* 425 ÷ 127 */
+  --brand-artwork-h: 16px;
+}
+.brand--sm {
+  /*
+   * 15px is the CEILING here, not a choice: the box is 3.346× the artwork, so
+   * 15px artwork already paints a 50px-tall image inside a 56px header. The
+   * padding is white-on-white and therefore invisible, which is the only
+   * reason a box that nearly fills the header does not look crowded — but it
+   * also means the wordmark cannot be made larger without a trimmed asset.
+   */
+  --brand-artwork-h: 15px;
+}
+.brand--lg {
+  --brand-artwork-h: 40px;
+}
+
+.brand__logo {
+  display: block;
+  /* `inline-size: auto` against a fixed `block-size` makes distorting the
+     artwork impossible: one axis is set, the other follows the file's own
+     aspect ratio. No radius, no shadow, no filter — it is artwork, not a UI
+     surface. */
+  inline-size: auto;
+  block-size: calc(var(--brand-artwork-h) * var(--brand-canvas-scale));
+  /* The canvas is 40.7% empty below the artwork and 29.4% above. Left alone
+     that dead space pushes everything after it down by more than the logo is
+     tall. The negative block margins remove the SPACE, not the image: every
+     pixel of the file is still painted, and because its ground is the same
+     white as the surface under it, nothing is visibly clipped. */
+  margin-block: calc(var(--brand-artwork-h) * -0.98) calc(var(--brand-artwork-h) * -1.36);
+  /*
+   * The same correction on the inline axis. The canvas is padded 19.0% left
+   * and 19.4% right, so with the box flush to the card's edge the ARTWORK
+   * still sat ~34px inside it and read as misaligned against the heading
+   * below. Box width is 4.465 × artwork height, so 19% of it is 0.848 ×
+   * artwork height. Again: this removes empty space, not image — the file is
+   * painted in full, on a ground identical to the surface behind it.
+   */
+  margin-inline: calc(var(--brand-artwork-h) * -0.848) calc(var(--brand-artwork-h) * -0.868);
+}
+
+.brand__wordmark {
+  font-weight: var(--weight-bold);
+  font-size: var(--type-h3);
+  line-height: var(--lh-h3);
+  white-space: nowrap;
+}
+.brand--sm .brand__wordmark {
+  font-size: var(--type-body-sm);
+  line-height: var(--lh-body-sm);
+}
+.brand--lg .brand__wordmark {
+  font-size: var(--type-display);
+  line-height: var(--lh-display);
+}
+.brand--inverse {
+  color: var(--color-text-inverse);
+}
+
+/* ===========================================================================
+   AUTHENTICATION.
+
+   Two panels. The brand side is the ONE saturated teal surface in the product
+   — everywhere else teal is an accent on a warm neutral ground — so signing in
+   reads as arriving somewhere rather than unlocking a tool. The form side
+   stays on the same page background as the rest of the app, which is what
+   keeps the login part of the product instead of a separate landing page.
+
+   §17: the only ornament is a soft off-canvas warm glow and a 48px gold rule.
+   No pattern, no calligraphy, no mosque geometry — the brand should be felt
+   before it is noticed.
+   =========================================================================== */
+
+.auth {
+  min-block-size: 100vh;
+  /* `dvh` where supported: on iOS Safari `100vh` is taller than the visible
+     viewport, which pushes the submit button under the browser chrome. */
+  min-block-size: 100dvh;
+  display: grid;
+  grid-template-columns: 1fr;
+  background: var(--color-background-page);
+}
+
+.auth__brand {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: var(--space-8) var(--space-7);
+  background: linear-gradient(160deg, var(--primary-600), var(--primary-800));
+  color: var(--color-text-inverse);
+  overflow: hidden;
+  isolation: isolate;
+}
+/* The warm glow. Off-canvas, low-alpha, and behind everything — it should read
+   as light in the corner of the panel, never as a shape. */
+.auth__brand::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset-inline-end: -18%;
+  inset-block-start: -28%;
+  inline-size: 68%;
+  aspect-ratio: 1;
+  border-radius: var(--radius-full);
+  background: radial-gradient(circle, var(--color-accent-halo), transparent 70%);
+  pointer-events: none;
+}
+.auth__brandInner {
+  inline-size: min(360px, 100%);
+  text-align: start;
+}
+
+/* The product name, set as type. This is a heading — the genuine lockup lives
+   on the card beside it, and nothing here stands in for the logo. */
+.auth__brandName {
+  margin: 0;
+  font-size: var(--type-display);
+  line-height: var(--lh-display);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-inverse);
+}
+
+.auth__logo {
+  /*
+   * A FLEX container, and that is the whole fix.
+   *
+   * `.brand` is `inline-flex`. Inside a block wrapper it is an inline-level
+   * box, so it joins a line box and aligns on its baseline — and because the
+   * image carries a large negative block-end margin, that baseline sits far
+   * above the artwork's visible bottom, leaving ~60px of line space reserved
+   * underneath it. The measured gap to the heading was 84px against an
+   * intended 24px.
+   *
+   * A flex container blockifies its children, so there is no line box and no
+   * baseline to align to. The wrapper then measures exactly the lockup, and
+   * the 24px below it is `margin-block-end` doing the only spacing job here.
+   *
+   * `flex-start` keeps the lockup at the reading-start edge in both scripts.
+   */
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  margin-block-end: var(--space-7);
+}
+
+.auth__tagline {
+  position: relative;
+  margin: var(--space-7) 0 0;
+  padding-block-start: var(--space-6);
+  font-size: var(--type-body-lg);
+  line-height: var(--lh-body-lg);
+  /* Not pure white: the tagline supports the lockup, it does not compete. */
+  color: var(--primary-100);
+  max-inline-size: 34ch;
+}
+/* The gold rule — 48px, 2px, and the single most deliberate use of the accent
+   in the product. It sits at the reading-start edge in both scripts. */
+.auth__tagline::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  inline-size: 48px;
+  block-size: 2px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent-line);
+}
+
+.auth__main {
+  display: grid;
+  place-items: center;
+  padding: var(--space-7) var(--space-5);
+}
+.auth__card {
+  inline-size: min(400px, 100%);
+  background: var(--color-surface-default);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--elevation-brand);
+  padding: var(--space-8);
+}
+.auth__title {
+  font-size: var(--type-h1);
+  line-height: var(--lh-h1);
+  font-weight: var(--weight-bold);
+  margin: 0;
+}
+.auth__subtitle {
+  margin: var(--space-2) 0 var(--space-7);
+  color: var(--color-text-secondary);
+  font-size: var(--type-body-sm);
+  line-height: var(--lh-body-sm);
+}
+.auth__submit {
+  margin-block-start: var(--space-5);
+}
+
+@media (min-width: 900px) {
+  .auth {
+    /* The form column is the wider of the two: it holds the work. */
+    grid-template-columns: minmax(0, 42%) minmax(0, 58%);
+  }
+  .auth__brand {
+    padding: var(--space-11) var(--space-9);
+  }
+  .auth__card {
+    padding: var(--space-9);
+  }
+}
+
+/* Below the two-panel breakpoint the brand becomes a band, not a screen. */
+@media (max-width: 899px) {
+  /*
+   * The brand band is sized by its CONTENT, not by a share of the screen.
+   * Without this the two auto rows stretch to fill `100dvh` and the band takes
+   * a third of a phone before the operator sees a field.
+   */
+  .auth {
+    grid-template-rows: auto 1fr;
+  }
+  .auth__brand {
+    padding: var(--space-7) var(--space-5);
+    place-items: start;
+  }
+  /* A long product name must wrap here rather than overflow a 375px screen. */
+  .auth__brand .brand__wordmark {
+    white-space: normal;
+    font-size: var(--type-h1);
+    line-height: var(--lh-h1);
+  }
+  .auth__brandInner {
+    inline-size: 100%;
+  }
+  .auth__tagline {
+    margin-block-start: var(--space-5);
+    padding-block-start: var(--space-4);
+    font-size: var(--type-body);
+    line-height: var(--lh-body);
+  }
+  .auth__card {
+    /* The card stops being a card on a phone: a bordered box inset from the
+       screen edge wastes the width the form needs. */
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+    padding: var(--space-6) 0;
+  }
+  .auth__main {
+    padding: var(--space-5);
+    align-items: start;
+    /* Pure white, not the warm page ground: the logo's own white background
+       has to have something identical behind it, or its edges show. */
+    background: var(--color-surface-default);
+  }
+  .auth__brandName {
+    font-size: var(--type-h1);
+    line-height: var(--lh-h1);
+  }
+}
+
+/* ---------------------------------------------------------- input affix
+   A control that lives inside the input box — the password reveal, and any
+   future clear/search control. `inset-inline-end` puts it on the trailing edge
+   in both scripts with no RTL rule, and the input reserves room for it so the
+   value never runs underneath. */
+.input-affix {
+  position: relative;
+  display: block;
+}
+.input-affix .input {
+  padding-inline-end: var(--space-9);
+}
+.input-affix__btn {
+  position: absolute;
+  inset-inline-end: var(--space-2);
+  inset-block-start: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  inline-size: 32px;
+  block-size: 32px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+}
+.input-affix__btn:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-text-primary);
+}
+
+/* ---------------------------------------------------------- forced colours
+   Windows High Contrast Mode discards `box-shadow` and background colours. The
+   focused input's indicator is a tinted halo plus a teal border, and BOTH are
+   erased there — which would leave a keyboard user with no focus indicator at
+   all. The outline is restored for that mode only; `currentColor` lets the
+   system palette pick the colour it wants. */
+@media (forced-colors: active) {
+  .input:focus,
+  .select:focus,
+  .textarea:focus,
+  .field__input:focus,
+  .composer__box:focus-within {
+    outline: 2px solid currentColor;
+    outline-offset: 1px;
+  }
+  /* The selected-nav tick is a background, so it disappears too. The border
+     is drawn from the system's own highlight colour instead. */
+  .rail__item[aria-current='page'] {
+    border-inline-start: 3px solid currentColor;
+  }
 }
