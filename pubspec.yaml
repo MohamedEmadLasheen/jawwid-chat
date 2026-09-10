@@ -83,3 +83,17 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   generate: true
+
+  # Brand assets. Explicit file paths rather than a directory, so adding a file
+  # to `assets/brand/` is a deliberate act and the bundle never grows by
+  # accident. These are the owner-approved production derivatives of the
+  # official source artwork (which stays out of the app bundle — it is an opaque
+  # JPEG and unusable on a dark canvas).
+  assets:
+    - assets/brand/jawwid-lockup-derived.png
+    # Dark-theme variant of the same lockup: identical geometry and alpha, with
+    # the teal lifted to #2A94AD (5.01:1 on the dark canvas, against 2.19:1) and
+    # the white edge matte removed. Light and dark are a PAIR — neither replaces
+    # the other, because each ink only clears contrast on its own background.
+    - assets/brand/jawwid-lockup-dark-derived.png
+    - assets/brand/jawwid-mark-derived.png
