@@ -159,7 +159,20 @@ Limits are configurable; current defaults are 10 MB image, 100 MB video,
 16 MB voice, 25 MB file. Over-limit returns `COMM.ATTACHMENT_TOO_LARGE`
 **before** the user waits for an upload.
 
-Voice notes: you own recording, playback and speed. Send `durationMs`.
+The upload signature **binds the MIME type and the byte size** it was issued for.
+Send exactly the `content-type` the authorization returned in `headers`, and
+exactly the number of bytes you declared; anything else is refused with `403`.
+An authorization taken out for a small note cannot be spent uploading a large
+file.
+
+`GET` on a signed read URL supports `Range`, so a player streams a voice note
+and starts on the first chunk rather than downloading the whole file. Read URLs
+are minted per read and expire — do not cache or persist one.
+
+Voice notes: you own recording, playback and speed. Send `durationMs`. It is
+bounded server-side (default ten minutes) because the server never decodes the
+audio to check it; keep the client's own recording ceiling below that so a long
+take is stopped rather than refused after the fact.
 
 ### Approvals (Teacher and Parent apps)
 

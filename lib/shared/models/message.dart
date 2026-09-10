@@ -51,7 +51,9 @@ class Attachment {
     required this.kind,
     this.fileName,
     this.byteSize,
+    this.url,
     this.thumbnailUrl,
+    this.mimeType,
     this.durationMs,
     this.waveform = const [],
   });
@@ -61,10 +63,27 @@ class Attachment {
   final String? fileName;
   final int? byteSize;
 
-  /// Short-lived, backend-issued. Never a permanent storage URL (§22).
+  /// Short-lived, backend-issued. Never a permanent storage URL (§22), and never
+  /// persisted or cached — when it expires the message is re-fetched instead.
+  ///
+  /// While a voice note is still in the outbox this holds the *local* file path
+  /// of the recording, so the sender can replay their own note before it has
+  /// finished uploading.
+  final String? url;
+
   final String? thumbnailUrl;
+  final String? mimeType;
+
+  /// Server-stored, so a list of voice notes renders its durations without
+  /// decoding a single file (handoff §9).
   final int? durationMs;
+
   final List<double> waveform;
+
+  Duration? get duration => durationMs == null ? null : Duration(milliseconds: durationMs!);
+
+  /// A local recording that has not been uploaded yet.
+  bool get isLocal => url != null && !url!.startsWith('http');
 }
 
 /// A quoted message shown above a reply.

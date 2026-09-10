@@ -1,8 +1,12 @@
+import 'dart:io';
+
 import '../../../shared/models/message.dart';
 import '../../errors/app_error.dart';
 import '../../network/api_client.dart';
 import '../repositories.dart';
 import '../wire/wire_mappers.dart';
+import '../wire/wire_vocab.dart';
+import 'attachment_uploader.dart';
 
 /// `MessageRepository` over the published REST contract.
 ///
@@ -13,6 +17,7 @@ import '../wire/wire_mappers.dart';
 /// |---|---|---|
 /// | GET | `?before=&after=&limit=` | `{ messages: MessageDto[], nextBefore: string \| null }` |
 /// | POST | `` | `MessageDto` |
+/// | POST | `/attachments/authorize` | `{ objectKey, uploadUrl, method, headers, expiresAt }` |
 /// | POST | `/:messageId/reactions` | `{ ok: true }` |
 /// | DELETE | `/:messageId/reactions` | `{ ok: true }` |
 ///
@@ -30,10 +35,21 @@ class HttpMessageRepository implements MessageRepository {
   HttpMessageRepository({
     required ApiClient client,
     required String Function() viewerActorId,
+    AttachmentUploader? uploads,
   })  : _client = client,
-        _viewerActorId = viewerActorId;
+        _viewerActorId = viewerActorId,
+        _uploads = uploads ?? DioAttachmentUploader();
 
   final ApiClient _client;
+
+  /// Deliberately NOT [ApiClient].
+  ///
+  /// The upload URL is signed and self-authorizing, and in production it points
+  /// at object storage rather than at this API. Sending it through the
+  /// authenticated client would attach the user's bearer token to a request
+  /// bound for a third-party host — handing a session credential to storage that
+  /// has no business holding one.
+  final AttachmentUploader _uploads;
 
   /// Needed to decide `isMine` and which reactions are the viewer's. Ownership is decided by
   /// actor id, never by role.
@@ -89,6 +105,17 @@ class HttpMessageRepository implements MessageRepository {
         // the server returns the original message rather than creating a second one.
         'clientMessageId': message.clientMessageId,
         'replyToMessageId': ?message.replyToMessageId,
+        if (message.attachments.isNotEmpty)
+          'attachments': [
+            for (final a in message.attachments)
+              {
+                'kind': _wireType(a.kind),
+                'objectKey': a.objectKey,
+                'mimeType': a.mimeType,
+                'byteSize': a.byteSize,
+                'durationMs': ?a.durationMs,
+              },
+          ],
       },
       // Marks the POST replayable, since it carries an idempotency key (§48).
       options: ApiClient.idempotent(message.clientMessageId),
@@ -114,6 +141,74 @@ class HttpMessageRepository implements MessageRepository {
     return confirmed.clientMessageId == message.clientMessageId
         ? confirmed
         : confirmed.withClientMessageId(message.clientMessageId);
+  }
+
+  @override
+  Future<UploadedAttachment> uploadVoiceNote({
+    required String conversationId,
+    required PendingVoiceNote note,
+  }) async {
+    // 1. Authorize. The backend re-checks conversation membership and enforces
+    //    the MIME and size limits here, so an over-limit note is refused before
+    //    the user spends a single byte of mobile data on it.
+    final authorized = await _client.post<Map<String, Object?>>(
+      '${_base(conversationId)}/attachments/authorize',
+      data: {
+        'kind': Wire.messageVoice,
+        'mimeType': note.mimeType,
+        'byteSize': note.byteSize,
+      },
+    );
+
+    final grant = authorized.data;
+    final objectKey = grant?['objectKey'] as String?;
+    final uploadUrl = grant?['uploadUrl'] as String?;
+    if (objectKey == null || uploadUrl == null) {
+      throw const AppError(
+        AppErrorKind.server,
+        code: 'malformed_upload_authorization',
+        debugDetail: 'authorize response carried no objectKey or uploadUrl',
+      );
+    }
+
+    final bytes = await File(note.filePath).readAsBytes();
+    // The authorization bound the size it signed for. Sending a different length
+    // would be refused by storage, so fail here with something diagnosable
+    // rather than as an opaque 403.
+    if (bytes.length != note.byteSize) {
+      throw const AppError(
+        AppErrorKind.server,
+        code: 'voice_note_size_changed',
+        debugDetail: 'the recording changed size between authorization and upload',
+      );
+    }
+
+    // 2. PUT the bytes to the signed URL.
+    await _uploads.put(
+      uploadUrl,
+      bytes: bytes,
+      headers: _stringHeaders(grant?['headers']),
+    );
+
+    // 3. The caller sends the message with this reference.
+    return UploadedAttachment(
+      kind: MessageKind.voice,
+      objectKey: objectKey,
+      mimeType: note.mimeType,
+      byteSize: note.byteSize,
+      durationMs: note.duration.inMilliseconds,
+    );
+  }
+
+  /// The headers the authorization told us to send — chiefly the content type,
+  /// which storage signed and therefore verifies.
+  static Map<String, String> _stringHeaders(Object? raw) {
+    final out = <String, String>{};
+    if (raw is! Map) return out;
+    raw.forEach((key, value) {
+      if (key is String && value is String) out[key] = value;
+    });
+    return out;
   }
 
   @override

@@ -14,6 +14,7 @@ import { CallService } from './calls/call.service';
 import { LiveKitTokenIssuer } from './calls/media-token';
 import { AttachmentService } from './attachments/attachment.service';
 import { SignedLocalObjectStorage } from './attachments/object-storage';
+import { LocalFsBlobStore } from './attachments/blob-store';
 import { OutboxService } from './outbox/outbox.service';
 import { OutboxWorker } from './outbox/outbox.worker';
 import { NotificationService } from './notifications/notification.service';
@@ -33,6 +34,7 @@ import { MessageController } from './api/message.controller';
 import { ApprovalController } from './api/approval.controller';
 import { CallController } from './api/call.controller';
 import { NotificationController } from './api/notification.controller';
+import { StorageController } from './api/storage.controller';
 
 @Module({
   imports: [PlatformModule],
@@ -42,6 +44,7 @@ import { NotificationController } from './api/notification.controller';
     ApprovalController,
     CallController,
     NotificationController,
+    StorageController,
   ],
   providers: [
     redisProvider,
@@ -59,6 +62,7 @@ import { NotificationController } from './api/notification.controller';
     TypingService,
     PresenceService,
     RealtimeGateway,
+    LocalFsBlobStore,
     { provide: OBJECT_STORAGE, useClass: SignedLocalObjectStorage },
     { provide: PUSH_PROVIDER, useClass: LoggingPushProvider },
     { provide: MEDIA_TOKEN_ISSUER, useClass: LiveKitTokenIssuer },

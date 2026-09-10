@@ -6,6 +6,7 @@ import { CommError, CommErrorCode } from '../../platform/errors';
 import { AUDIT_SERVICE } from '../../platform/tokens';
 import type { AuditService } from '../../platform/audit.service';
 import { ConversationService } from '../conversations/conversation.service';
+import { AttachmentService } from '../attachments/attachment.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
 import { toMessageDto, MessageDto } from '../contracts/dto';
@@ -37,6 +38,7 @@ export class ApprovalService {
     private readonly prisma: PrismaService,
     private readonly authz: AuthorizationService,
     private readonly conversations: ConversationService,
+    private readonly attachments: AttachmentService,
     private readonly outbox: OutboxService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
   ) {}
@@ -60,15 +62,7 @@ export class ApprovalService {
       take: 200,
     });
 
-    return rows.map((r) => ({
-      approvalId: r.id,
-      conversationId: r.conversationId,
-      messageId: r.messageId,
-      requestedBy: r.requestedBy,
-      approverId: r.approverId,
-      createdAt: r.createdAt.toISOString(),
-      message: toMessageDto(r.message),
-    }));
+    return this.withSignedAttachments(rows);
   }
 
   /** What the sender sees: their own pending/rejected messages with status. */
@@ -80,6 +74,26 @@ export class ApprovalService {
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
+    return this.withSignedAttachments(rows);
+  }
+
+  /**
+   * A held message is reviewed before it is published, so its attachments have
+   * to be playable here: an approver cannot judge a voice note they cannot
+   * hear. URLs are minted per read and expire, exactly as on the list path.
+   */
+  private async withSignedAttachments(
+    rows: Array<{
+      id: string;
+      conversationId: string;
+      messageId: string;
+      requestedBy: string;
+      approverId: string | null;
+      createdAt: Date;
+      message: Parameters<typeof toMessageDto>[0];
+    }>,
+  ): Promise<PendingApprovalDto[]> {
+    const signed = await this.attachments.signUrlsForMessages(rows.map((r) => r.messageId));
     return rows.map((r) => ({
       approvalId: r.id,
       conversationId: r.conversationId,
@@ -87,7 +101,7 @@ export class ApprovalService {
       requestedBy: r.requestedBy,
       approverId: r.approverId,
       createdAt: r.createdAt.toISOString(),
-      message: toMessageDto(r.message),
+      message: toMessageDto(r.message, signed),
     }));
   }
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -83,6 +84,10 @@ class MessagesController extends Notifier<MessagesState> {
   /// The payload for each queued client id. Held beside the outbox so a retry re-sends the
   /// original body rather than reconstructing it.
   final _pendingBodies = <String, OutgoingMessage>{};
+
+  /// Temp recordings still owned by the outbox, so a sent or abandoned voice note
+  /// does not leave audio in the cache directory.
+  final _pendingVoiceFiles = <String, String>{};
 
   Timer? _drainTimer;
 
@@ -185,26 +190,85 @@ class MessagesController extends Notifier<MessagesState> {
       replyTo: replyTo,
     );
 
+    _enqueue(
+      echo: echo,
+      outgoing: OutgoingMessage(
+        clientMessageId: clientMessageId,
+        conversationId: conversationId,
+        kind: MessageKind.text,
+        body: body,
+        replyToMessageId: replyTo?.messageId,
+      ),
+      now: now,
+    );
+    return clientMessageId;
+  }
+
+  /// Enqueue a finished recording.
+  ///
+  /// It takes exactly the path a text message takes — same outbox, same
+  /// idempotency key, same ordering, same retry — with one extra step inside
+  /// [drain]: the bytes go to storage before the message is sent. Nothing about
+  /// voice needs a second send pipeline.
+  ///
+  /// The echo's attachment points at the *local* file, so the sender can replay
+  /// what they just recorded while it is still uploading.
+  String sendVoice(PendingVoiceNote note, {ReplyPreview? replyTo}) {
+    final clientMessageId = _uuid.v4();
+    final now = DateTime.now();
+
+    final echo = Message(
+      clientMessageId: clientMessageId,
+      conversationId: conversationId,
+      kind: MessageKind.voice,
+      createdAt: now,
+      deliveryState: DeliveryState.queued,
+      isMine: true,
+      replyTo: replyTo,
+      attachments: [
+        Attachment(
+          id: clientMessageId,
+          kind: MessageKind.voice,
+          url: note.filePath,
+          mimeType: note.mimeType,
+          byteSize: note.byteSize,
+          durationMs: note.duration.inMilliseconds,
+        ),
+      ],
+    );
+
+    _pendingVoiceFiles[clientMessageId] = note.filePath;
+    _enqueue(
+      echo: echo,
+      outgoing: OutgoingMessage(
+        clientMessageId: clientMessageId,
+        conversationId: conversationId,
+        kind: MessageKind.voice,
+        replyToMessageId: replyTo?.messageId,
+        voiceNote: note,
+      ),
+      now: now,
+    );
+    return clientMessageId;
+  }
+
+  void _enqueue({
+    required Message echo,
+    required OutgoingMessage outgoing,
+    required DateTime now,
+  }) {
     state = state.copyWith(log: state.log.merge([echo]));
 
     _outbox.enqueue(
       OutboxEntry(
-        clientMessageId: clientMessageId,
+        clientMessageId: outgoing.clientMessageId,
         conversationId: conversationId,
         enqueuedAt: now,
       ),
     );
-    _pendingBodies[clientMessageId] =
-        OutgoingMessage(
-      clientMessageId: clientMessageId,
-      conversationId: conversationId,
-      kind: MessageKind.text,
-      body: body,
-      replyToMessageId: replyTo?.messageId,
-    );
+    _pendingBodies[outgoing.clientMessageId] = outgoing;
 
     unawaited(drain());
-    return clientMessageId;
   }
 
   /// Release whatever the outbox says is ready, one head per conversation.
@@ -233,10 +297,26 @@ class MessagesController extends Notifier<MessagesState> {
     );
 
     try {
-      final confirmed = await _messages.send(outgoing);
+      var outbound = outgoing;
+
+      // Upload first, then send. Storing the result back into the queue is what
+      // makes a retry cheap: the second attempt re-sends an object key instead
+      // of pushing the same bytes again.
+      if (outbound.needsUpload) {
+        final uploaded = await _messages.uploadVoiceNote(
+          conversationId: conversationId,
+          note: outbound.voiceNote!,
+        );
+        if (!_alive) return;
+        outbound = outbound.withUploaded(uploaded);
+        _pendingBodies[entry.clientMessageId] = outbound;
+      }
+
+      final confirmed = await _messages.send(outbound);
 
       _outbox.markSent(entry.clientMessageId);
       _pendingBodies.remove(entry.clientMessageId);
+      _discardRecording(entry.clientMessageId);
 
       if (!_alive) return;
       // Reconciled by client id, so the echo is replaced rather than duplicated.
@@ -304,6 +384,7 @@ class MessagesController extends Notifier<MessagesState> {
   void discard(String clientMessageId) {
     _outbox.discard(clientMessageId);
     _pendingBodies.remove(clientMessageId);
+    _discardRecording(clientMessageId);
     state = state.copyWith(
       log: state.log.updateOne(
         clientMessageId,
@@ -335,6 +416,18 @@ class MessagesController extends Notifier<MessagesState> {
         isOffline: ErrorMapper.map(error).kind == AppErrorKind.network,
       );
     }
+  }
+
+  /// Delete a temp recording the outbox no longer needs.
+  ///
+  /// Failure is ignored on purpose: an undeleted file in the OS cache directory
+  /// is not worth surfacing an error for, and never worth failing a send over.
+  void _discardRecording(String clientMessageId) {
+    final path = _pendingVoiceFiles.remove(clientMessageId);
+    if (path == null) return;
+    unawaited(
+      File(path).delete().catchError((Object _) => File(path)),
+    );
   }
 
   /// Apply a realtime arrival. Events are signals: the message is merged, and identity by

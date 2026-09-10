@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/message.dart';
+import '../application/voice_composer_controller.dart';
+import 'voice_recorder_bar.dart';
 
 /// The message composer.
 ///
@@ -18,6 +20,12 @@ class MessageComposer extends StatefulWidget {
     this.onCancelReply,
     this.onAttach,
     this.onStartRecording,
+    this.voice,
+    this.conversationId = '',
+    this.onStopRecording,
+    this.onCancelRecording,
+    this.onSendRecording,
+    this.onDismissVoiceFailure,
     this.isReadOnly = false,
     this.requiresApproval = false,
     this.maxCharacters = 4000,
@@ -28,6 +36,16 @@ class MessageComposer extends StatefulWidget {
   final VoidCallback? onCancelReply;
   final VoidCallback? onAttach;
   final VoidCallback? onStartRecording;
+
+  /// Recording state, when the screen has wired voice notes up. Null leaves the
+  /// composer exactly as it was.
+  final VoiceComposerState? voice;
+
+  final String conversationId;
+  final VoidCallback? onStopRecording;
+  final VoidCallback? onCancelRecording;
+  final VoidCallback? onSendRecording;
+  final VoidCallback? onDismissVoiceFailure;
 
   /// The user can no longer post here — removed from the group, or archived server-side.
   final bool isReadOnly;
@@ -84,6 +102,9 @@ class _MessageComposerState extends State<MessageComposer> {
       return _Notice(text: l10n.composerReadOnly, icon: Icons.lock_outline);
     }
 
+    final voice = widget.voice;
+    final failure = voice?.failure;
+
     return SafeArea(
       top: false,
       child: Column(
@@ -91,11 +112,28 @@ class _MessageComposerState extends State<MessageComposer> {
         children: [
           if (widget.requiresApproval)
             _Notice(text: l10n.groupApprovalNotice, icon: Icons.verified_outlined),
+          if (failure != null)
+            VoiceFailureNotice(
+              failure: failure,
+              onDismiss: widget.onDismissVoiceFailure ?? () {},
+            ),
           if (widget.replyingTo != null)
             _ReplyBanner(
               reply: widget.replyingTo!,
               onCancel: widget.onCancelReply,
             ),
+          // While a recording is live or under review it owns the input row.
+          // Leaving the text field visible alongside it is how a user ends up
+          // sending the wrong one.
+          if (voice != null && voice.isActive)
+            VoiceRecorderBar(
+              conversationId: widget.conversationId,
+              state: voice,
+              onStop: widget.onStopRecording ?? () {},
+              onCancel: widget.onCancelRecording ?? () {},
+              onSend: widget.onSendRecording ?? () {},
+            )
+          else
           Container(
             padding: const EdgeInsets.symmetric(
               horizontal: Spacing.spacing3,

@@ -1,6 +1,7 @@
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Badge } from '@/shared/components/Badge'
 import type { Message } from '@/shared/types/domain'
+import { VoiceMessage, isVoiceAttachment } from './VoiceMessage'
 
 /**
  * One continuous thread per family (brief §8). Three kinds of entry must never
@@ -14,6 +15,9 @@ import type { Message } from '@/shared/types/domain'
  */
 function MessageItem({ message }: { message: Message }) {
   const { t, time } = useI18n()
+
+  const voice = message.attachments.filter(isVoiceAttachment)
+  const others = message.attachments.filter((a) => !isVoiceAttachment(a))
 
   const kind =
     message.visibility === 'internal' ? 'internal'
@@ -29,7 +33,19 @@ function MessageItem({ message }: { message: Message }) {
         </div>
       )}
 
-      <div className="msg__bubble">{message.body}</div>
+      {/*
+        A voice note is the message, not a decoration on it, so it renders inside
+        the bubble. The bubble itself is unchanged: same surface, same radius,
+        same author and time meta below.
+      */}
+      {(message.body || voice.length === 0) && (
+        <div className="msg__bubble">{message.body}</div>
+      )}
+      {voice.map((attachment) => (
+        <div className="msg__bubble" key={attachment.id}>
+          <VoiceMessage attachment={attachment} />
+        </div>
+      ))}
 
       <div className="msg__meta">
         {message.author_name && <span>{message.author_name}</span>}
@@ -43,7 +59,8 @@ function MessageItem({ message }: { message: Message }) {
             {t(`handling.${message.on_behalf_mode}` as const)}
           </Badge>
         )}
-        {message.attachments.length > 0 && <span>📎 {message.attachments.length}</span>}
+        {/* Voice notes have their own player above; only other files are counted. */}
+        {others.length > 0 && <span>📎 {others.length}</span>}
       </div>
     </article>
   )

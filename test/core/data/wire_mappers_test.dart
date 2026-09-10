@@ -281,4 +281,86 @@ void main() {
       expect(conversation.isReadOnly, isTrue);
     });
   });
+
+  group('voice attachments carry everything the player needs', () {
+    Map<String, Object?> voiceMessage(Map<String, Object?> attachment) => {
+          'id': 'srv_1',
+          'conversationId': 'conv_1',
+          'seq': '7',
+          'authorKind': 'staff',
+          'authorId': 'actor_staff',
+          'type': 'voice',
+          'body': null,
+          'moderation': 'published',
+          'createdAt': '2026-09-05T12:00:00.000Z',
+          'attachments': [attachment],
+          'reactions': const [],
+          'receipts': const [],
+        };
+
+    test('the signed URL is mapped, not dropped', () {
+      final message = WireMappers.message(
+        voiceMessage({
+          'id': 'att_1',
+          'kind': 'voice',
+          'mimeType': 'audio/mpeg',
+          'byteSize': 20480,
+          'durationMs': 4200,
+          'url': 'https://storage.invalid/signed',
+          'thumbnailUrl': null,
+        }),
+        viewerActorId: 'actor_parent',
+      );
+
+      final attachment = message.attachments.single;
+      expect(message.kind, MessageKind.voice);
+      expect(attachment.kind, MessageKind.voice);
+      // Without the url there is nothing to play; this is the field whose
+      // absence made a voice message unplayable.
+      expect(attachment.url, 'https://storage.invalid/signed');
+      expect(attachment.mimeType, 'audio/mpeg');
+      expect(attachment.byteSize, 20480);
+      expect(attachment.durationMs, 4200);
+      expect(attachment.duration, const Duration(milliseconds: 4200));
+    });
+
+    test('a signed URL is recognised as remote, a local path as not', () {
+      final remote = WireMappers.attachment(const {
+        'id': 'att_1',
+        'kind': 'voice',
+        'url': 'https://storage.invalid/signed',
+      });
+      expect(remote.isLocal, isFalse);
+
+      const pending = Attachment(
+        id: 'draft',
+        kind: MessageKind.voice,
+        url: '/tmp/voice_1.ogg',
+      );
+      expect(pending.isLocal, isTrue);
+    });
+
+    test('a voice message with no duration still maps rather than throwing', () {
+      final message = WireMappers.message(
+        voiceMessage({'id': 'att_1', 'kind': 'voice'}),
+        viewerActorId: 'actor_parent',
+      );
+
+      final attachment = message.attachments.single;
+      expect(attachment.url, isNull);
+      expect(attachment.durationMs, isNull);
+      expect(attachment.duration, isNull);
+    });
+
+    test('a deleted voice message keeps no attachment to play', () {
+      final message = WireMappers.message(
+        {...voiceMessage({'id': 'att_1', 'kind': 'voice'}), 'deletedForAll': true,
+          'attachments': const []},
+        viewerActorId: 'actor_parent',
+      );
+
+      expect(message.isDeleted, isTrue);
+      expect(message.attachments, isEmpty);
+    });
+  });
 }

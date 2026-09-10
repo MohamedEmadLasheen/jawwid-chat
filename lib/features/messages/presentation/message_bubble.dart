@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 
 import '../../../design/tokens.dart';
@@ -5,6 +6,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/message.dart';
 import '../../../shared/utils/relative_time.dart';
 import '../../../shared/utils/text_direction.dart';
+import 'voice_message_player.dart';
 
 /// A single message bubble.
 ///
@@ -55,6 +57,14 @@ class MessageBubble extends StatelessWidget {
     // A withheld message is visually de-emphasised so its sender can see at a glance that
     // it has not reached anyone yet.
     final withheld = message.approvalState.isWithheld;
+
+    // A voice message carries exactly one audio attachment. Reading it here
+    // rather than switching on `message.kind` means a malformed voice message
+    // with no attachment falls back to its body instead of rendering an empty
+    // player.
+    final voiceAttachment = message.attachments
+        .where((a) => a.kind == MessageKind.voice)
+        .firstOrNull;
 
     return Align(
       alignment: mine ? AlignmentDirectional.centerEnd : AlignmentDirectional.centerStart,
@@ -110,17 +120,32 @@ class MessageBubble extends StatelessWidget {
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   )
-                else
+                else ...[
+                  // A voice note replaces the body rather than sitting under it:
+                  // the recording *is* the message. A note sent with a caption
+                  // renders both, player first.
+                  if (voiceAttachment != null)
+                    VoiceMessagePlayer(
+                      conversationId: message.conversationId,
+                      attachment: voiceAttachment,
+                      foreground: foreground,
+                    ),
                   // Message bodies resolve their own base direction, so a mixed
                   // Arabic/English message reads correctly either way (§4).
                   //
                   // This used to pass `textDirection: null`, which reads like auto-detection
                   // and is not: null means "inherit the ambient direction". An Arabic
                   // message in an English UI therefore put its full stop on the left.
-                  ContentText(
-                    message.body,
-                    style: theme.textTheme.bodyLarge?.copyWith(color: foreground),
-                  ),
+                  //
+                  // The emptiness guard is for voice notes: they carry no body, and
+                  // rendering an empty ContentText would add a stray blank line
+                  // under the player.
+                  if (message.body.isNotEmpty)
+                    ContentText(
+                      message.body,
+                      style: theme.textTheme.bodyLarge?.copyWith(color: foreground),
+                    ),
+                ],
                 const SizedBox(height: Spacing.spacing1),
                 _StatusLine(message: message, onRetry: onRetry, onDiscard: onDiscard),
               ],

@@ -11,6 +11,7 @@ import '../../../shared/models/message.dart';
 import '../../../shared/utils/relative_time.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../application/messages_controller.dart';
+import '../application/voice_composer_controller.dart';
 import 'message_bubble.dart';
 import 'message_composer.dart';
 
@@ -116,6 +117,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ref.read(messagesControllerProvider(widget.conversationId).notifier);
     final state = ref.watch(messagesControllerProvider(widget.conversationId));
 
+    final voice = ref.watch(voiceComposerProvider(widget.conversationId));
+    final voiceController =
+        ref.read(voiceComposerProvider(widget.conversationId).notifier);
+
     // Count arrivals while the user is reading history, so the pill can say there is
     // something new without ever moving the viewport under them.
     final length = state.log.length;
@@ -196,6 +201,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             },
             replyingTo: _replyingTo,
             onCancelReply: () => setState(() => _replyingTo = null),
+            conversationId: widget.conversationId,
+            voice: voice,
+            onStartRecording: voiceController.start,
+            onStopRecording: voiceController.stop,
+            onCancelRecording: voiceController.cancel,
+            onDismissVoiceFailure: voiceController.acknowledgeFailure,
+            onSendRecording: () {
+              // takeDraft() clears the draft as it hands it over, so a second
+              // press cannot enqueue the same recording twice.
+              final draft = voiceController.takeDraft();
+              if (draft == null) return;
+              controller.sendVoice(draft, replyTo: _replyingTo);
+              setState(() => _replyingTo = null);
+              if (_isAwayFromBottom) _jumpToNewest();
+            },
             isReadOnly: widget.isReadOnly,
             requiresApproval: widget.requiresApproval,
           ),

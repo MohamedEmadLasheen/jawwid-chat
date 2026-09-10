@@ -66,7 +66,7 @@ export class MessageController {
     },
   ) {
     for (const a of body.attachments ?? []) {
-      this.attachments.validate(a.kind, a.mimeType, a.byteSize);
+      this.attachments.validate(a.kind, a.mimeType, a.byteSize, a.durationMs);
     }
     return this.messages.send({
       conversationId,
@@ -86,7 +86,7 @@ export class MessageController {
   async authorizeUpload(
     @ActorId() actorId: string,
     @Param('conversationId') conversationId: string,
-    @Body() body: { kind: string; mimeType: string; byteSize: number },
+    @Body() body: { kind: string; mimeType: string; byteSize: number; visibility?: string },
   ) {
     return this.attachments.authorizeUpload({
       conversationId,
@@ -94,6 +94,7 @@ export class MessageController {
       kind: body.kind,
       mimeType: body.mimeType,
       byteSize: body.byteSize,
+      visibility: body.visibility,
     });
   }
 

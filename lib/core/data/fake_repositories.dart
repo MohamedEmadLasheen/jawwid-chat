@@ -130,6 +130,13 @@ class FakeMessageRepository implements MessageRepository {
   Future<Message> send(OutgoingMessage message) async => backend.send(message);
 
   @override
+  Future<UploadedAttachment> uploadVoiceNote({
+    required String conversationId,
+    required PendingVoiceNote note,
+  }) async =>
+      backend.uploadVoiceNote(conversationId, note);
+
+  @override
   Future<void> react(String messageId, String emoji) async {}
 
   @override

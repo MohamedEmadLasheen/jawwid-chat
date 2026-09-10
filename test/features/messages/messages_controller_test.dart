@@ -15,6 +15,12 @@ class _RecordingMessageRepository implements MessageRepository {
   int failuresRemaining = 0;
   int _sequence = 0;
 
+  /// Every voice note this repository was asked to upload, so a test can prove
+  /// a retry did not push the same bytes twice.
+  final uploads = <PendingVoiceNote>[];
+  AppError? uploadFailure;
+  int uploadFailuresRemaining = 0;
+
   @override
   Future<Page<Message>> history(
     String conversationId, {
@@ -51,12 +57,44 @@ class _RecordingMessageRepository implements MessageRepository {
       sequence: _sequence,
       kind: message.kind,
       body: message.body,
+      attachments: [
+        for (final a in message.attachments)
+          Attachment(
+            id: 'att_${a.objectKey}',
+            kind: a.kind,
+            mimeType: a.mimeType,
+            byteSize: a.byteSize,
+            durationMs: a.durationMs,
+            url: 'https://signed.invalid/${a.objectKey}',
+          ),
+      ],
       createdAt: DateTime.utc(2026, 9, 5, 12, _sequence),
       deliveryState: DeliveryState.sent,
       isMine: true,
     );
     history_.add(confirmed);
     return confirmed;
+  }
+
+  @override
+  Future<UploadedAttachment> uploadVoiceNote({
+    required String conversationId,
+    required PendingVoiceNote note,
+  }) async {
+    uploads.add(note);
+
+    if (uploadFailuresRemaining > 0) {
+      uploadFailuresRemaining--;
+      throw uploadFailure ?? const AppError(AppErrorKind.network);
+    }
+
+    return UploadedAttachment(
+      kind: MessageKind.voice,
+      objectKey: 'conversations/$conversationId/voice_${uploads.length}',
+      mimeType: note.mimeType,
+      byteSize: note.byteSize,
+      durationMs: note.duration.inMilliseconds,
+    );
   }
 
   @override
