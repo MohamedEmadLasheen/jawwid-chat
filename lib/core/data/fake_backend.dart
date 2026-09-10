@@ -81,7 +81,7 @@ class FakeBackend {
       );
       _addGroup(
         conversationId: 'c_group_2',
-        learner: const LearnerRef(id: 'l_2', displayName: 'مريم'),
+        learner: const LearnerRef(id: 'l_2', displayName: 'ليلى'),
         includeParent: true,
       );
     } else {
