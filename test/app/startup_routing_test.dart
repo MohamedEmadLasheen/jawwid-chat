@@ -141,7 +141,7 @@ void main() {
   });
 
   group('signed-in path', () {
-    testWidgets('signing in lands on parent home, not the splash', (tester) async {
+    testWidgets('signing in lands on Chats, not the splash', (tester) async {
       await pumpApp(tester);
       await controller().restore();
       await settle(tester);
@@ -151,10 +151,15 @@ void main() {
       await settle(tester);
 
       expect(container.read(authControllerProvider), isA<AuthAuthenticated>());
-      expect(currentLocation(), Routes.home);
+      expect(
+        currentLocation(),
+        Routes.chats,
+        reason: 'login goes straight to the conversations — there is no dashboard '
+            'in between, and Chats is the only home this app has',
+      );
     });
 
-    testWidgets('a warm start with a stored session goes straight to home',
+    testWidgets('a warm start with a stored session goes straight to Chats',
         (tester) async {
       // A session already in storage, as on a relaunch. restore() must verify it against
       // the backend and land on home without the user seeing sign-in.
@@ -171,7 +176,24 @@ void main() {
       await settle(tester);
 
       expect(container.read(authControllerProvider), isA<AuthAuthenticated>());
-      expect(currentLocation(), Routes.home);
+      expect(currentLocation(), Routes.chats);
+    });
+
+    testWidgets('the retired Home and Groups links forward into Chats',
+        (tester) async {
+      // Notifications, saved links and earlier installs still point at these. They must
+      // land on the list that absorbed them rather than on an error page.
+      await pumpApp(tester);
+      await controller().restore();
+      await controller().signIn(username: 'parent', password: 'secret');
+      await settle(tester);
+
+      for (final retired in [Routes.retiredHome, Routes.retiredGroups]) {
+        router().go(retired);
+        await settle(tester);
+        expect(currentLocation(), Routes.chats, reason: '$retired must forward');
+      }
+      expect(tester.takeException(), isNull);
     });
   });
 
@@ -182,7 +204,7 @@ void main() {
       await controller().restore();
       await controller().signIn(username: 'parent', password: 'secret');
       await settle(tester);
-      expect(currentLocation(), Routes.home);
+      expect(currentLocation(), Routes.chats);
 
       // signOut() cancels the session-revocation subscription. Cancelling a
       // broadcast-stream subscription completes on the root zone, which the
