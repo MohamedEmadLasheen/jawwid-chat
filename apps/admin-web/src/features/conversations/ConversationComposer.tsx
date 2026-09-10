@@ -2,23 +2,31 @@ import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { ApiError } from '@/core/api/errors'
 import { useRealtime } from '@/core/realtime/RealtimeProvider'
+import { Icon } from '@/shared/components/Icon'
 import type { Message } from '@/shared/types/conversation'
 import { useMessageActions } from './hooks'
 
 /**
- * The operator's composer.
+ * THE COMPOSER.
  *
- * Two modes with deliberately different affordances, carried over from the
- * composer this replaces: an internal note is always available, because any
- * family-facing admin may write one on any conversation in scope; a
- * customer-visible reply may be refused, and when it is we say WHY rather than
- * hiding the control — an off-duty admin should understand she is off duty
- * instead of thinking the console is broken.
+ * Two modes with deliberately different affordances: an internal note is
+ * always available, because any family-facing admin may write one on any
+ * conversation in scope; a customer-visible reply may be refused, and when it
+ * is we say WHY rather than hiding the control — an off-duty admin should
+ * understand she is off duty instead of thinking the console is broken (DD-10).
  *
- * The change from the previous version: "why you cannot reply" now comes from
- * the SEND ERROR's code rather than from a `capabilities` flag the API does not
- * serve. That is more honest as well as simpler — the server's refusal is the
- * authority, and the console renders it instead of predicting it.
+ * "Why you cannot reply" comes from the SEND ERROR's code rather than from a
+ * `capabilities` flag the API does not serve. That is more honest as well as
+ * simpler: the server's refusal is the authority, and the console renders it
+ * instead of predicting it.
+ *
+ * ## What the redesign changed
+ *
+ * Switching to an internal note recolours the ENTIRE composer, not just a tab.
+ * The single most expensive mistake available on this screen is sending an
+ * internal note to a family, and a violet field the operator can see from the
+ * corner of their eye is worth more than a label they have already stopped
+ * reading. It is the same violet, and the same rule, as the note itself.
  */
 export function ConversationComposer({
   conversationId,
@@ -34,6 +42,7 @@ export function ConversationComposer({
   const [visibility, setVisibility] = useState<'customer' | 'internal'>('customer')
   const [body, setBody] = useState('')
   const { send } = useMessageActions(conversationId)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
 
   const isInternal = visibility === 'internal'
 
@@ -61,6 +70,26 @@ export function ConversationComposer({
     return stopTyping
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId])
+
+  // A new conversation is a new draft. Carrying the previous one across is how
+  // a reply meant for one family reaches another.
+  useEffect(() => {
+    setBody('')
+    setVisibility('customer')
+  }, [conversationId])
+
+  /**
+   * The field grows with the message, up to the cap in CSS.
+   *
+   * Reset to `auto` first: `scrollHeight` never shrinks below the current
+   * height, so measuring without the reset makes a field that only ever grows.
+   */
+  useEffect(() => {
+    const element = inputRef.current
+    if (!element) return
+    element.style.height = 'auto'
+    element.style.height = `${element.scrollHeight}px`
+  }, [body])
 
   const onChanged = (value: string) => {
     setBody(value)
@@ -104,20 +133,26 @@ export function ConversationComposer({
         : null
 
   return (
-    <div className="composer">
+    <div className={isInternal ? 'composer composer--internal' : 'composer'}>
       {replyingTo && (
         <div className="composer__reply">
-          <div>
+          <Icon name="reply" size={16} />
+          <span className="composer__reply-text">
             <span className="composer__reply-label">{t('message.replyingTo')}</span>
             <span className="composer__reply-body">{replyingTo.body}</span>
-          </div>
-          <button type="button" className="btn btn--sm" onClick={onCancelReply}>
-            {t('common.cancel')}
+          </span>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label={t('common.cancel')}
+            onClick={onCancelReply}
+          >
+            <Icon name="close" size={16} />
           </button>
         </div>
       )}
 
-      <div className="composer__tabs">
+      <div className="composer__modes">
         <button
           type="button"
           className="composer__tab"
@@ -132,24 +167,39 @@ export function ConversationComposer({
           aria-pressed={isInternal}
           onClick={() => setVisibility('internal')}
         >
+          <Icon name="lock" size={12} />
           {t('composer.internal')}
         </button>
       </div>
 
-      <textarea
-        className={isInternal ? 'composer__input composer__input--internal' : 'composer__input'}
-        value={body}
-        onChange={(event) => onChanged(event.target.value)}
-        placeholder={isInternal ? t('composer.internalPlaceholder') : t('composer.placeholder')}
-        aria-label={isInternal ? t('composer.internal') : t('composer.customer')}
-        onKeyDown={(event) => {
-          // Enter sends; Shift+Enter is a newline. The obvious productivity win.
-          if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault()
-            submit()
-          }
-        }}
-      />
+      <div className="composer__box">
+        <textarea
+          ref={inputRef}
+          className="composer__input"
+          rows={1}
+          value={body}
+          onChange={(event) => onChanged(event.target.value)}
+          placeholder={isInternal ? t('composer.internalPlaceholder') : t('composer.placeholder')}
+          aria-label={isInternal ? t('composer.internal') : t('composer.customer')}
+          onKeyDown={(event) => {
+            // Enter sends; Shift+Enter is a newline. The obvious productivity win.
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault()
+              submit()
+            }
+          }}
+        />
+        <button
+          type="button"
+          className="composer__send"
+          disabled={!body.trim() || send.isPending}
+          aria-label={send.isPending ? t('composer.sending') : t('composer.send')}
+          title={send.isPending ? t('composer.sending') : t('composer.send')}
+          onClick={submit}
+        >
+          <Icon name="send" size={20} className="composer__send-icon" />
+        </button>
+      </div>
 
       {refusal && (
         <div className="field__error" role="alert">
@@ -157,16 +207,11 @@ export function ConversationComposer({
         </div>
       )}
 
-      <div className="composer__actions">
-        <button
-          type="button"
-          className="btn btn--primary"
-          disabled={!body.trim() || send.isPending}
-          onClick={submit}
-        >
-          {send.isPending ? t('composer.sending') : t('composer.send')}
-        </button>
-        <span className="composer__hint">Enter ⏎</span>
+      <div className="composer__footer">
+        {isInternal && <span>{t('composer.internalPlaceholder')}</span>}
+        <span className="composer__hint">
+          <span className="composer__kbd">Enter</span> {t('composer.send')}
+        </span>
       </div>
     </div>
   )

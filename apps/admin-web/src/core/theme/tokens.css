@@ -1,146 +1,371 @@
 /*
- * Jawwid Operations — design tokens.
+ * JAWWID — DESIGN TOKENS.
  *
- * Principles (role brief §79, §81):
- *  - A professional operations workspace, not an alarm panel. Only the NOW
- *    bucket is allowed to be loud.
- *  - Attention is never colour-only: every state also carries a text label and
- *    a shape, so it survives colour-blindness and greyscale.
- *  - All spacing/positioning uses LOGICAL properties so RTL is a real mirror
- *    of the layout rather than a set of overrides.
+ * `docs/design/design-system.md` §2–§5, materialised. This file is the ONLY
+ * place in Admin Web allowed to contain a hex value, a raw spacing number, a
+ * radius or a font size — exactly the rule `lib/design/tokens.dart` holds on
+ * the Flutter side, so the two clients read one brand from two files that say
+ * the same thing.
+ *
+ * ## Why the palette changed
+ *
+ * The previous values were a blue-grey operations console of their own
+ * invention; the mobile app already shipped the approved identity (warm
+ * neutrals, deep teal). Two visual systems for one product is the thing the
+ * brand direction was approved to end, so these tokens are now the design
+ * system's, and the Flutter values are their twin.
+ *
+ * ## Light only
+ *
+ * §2.7 / DD-13: Admin Web is light-only in MVP. Staff work in daylight offices,
+ * and a dark theme doubles the contrast QA surface for no operational gain. The
+ * dark values exist in the design system and in the mobile app — where parents
+ * genuinely read at night — and are deliberately not wired up here rather than
+ * being half-carried.
+ *
+ * ## Legacy aliases
+ *
+ * The nine surfaces outside the console still name the old variables. They are
+ * kept below, re-pointed at the canonical tokens, so the whole app inherits the
+ * approved identity without a single one of those pages being rewritten in a
+ * change that is scoped to the console.
  */
 :root {
   color-scheme: light;
 
-  --bg: #f6f7f9;
-  --surface: #ffffff;
-  --surface-sunken: #f0f2f5;
-  --surface-hover: #eef1f5;
-  --border: #dfe3e8;
-  --border-strong: #c4cad2;
+  /* ------------------------------------------------- §2.1 raw ramps
+     Referenced only by the semantic block below. Never used directly. */
+  --neutral-0: #ffffff;
+  --neutral-25: #fbfaf8;
+  --neutral-50: #f5f3f0;
+  --neutral-100: #ebe8e3;
+  --neutral-200: #dcd7d0;
+  --neutral-300: #c2bbb2;
+  --neutral-400: #9c948a;
+  --neutral-500: #776e64;
+  --neutral-600: #5a534b;
+  --neutral-700: #423c36;
+  --neutral-800: #2b2823;
+  --neutral-900: #1a1815;
 
-  --text: #16202c;
-  --text-muted: #5b6875;
-  --text-subtle: #8a94a0;
-  --text-inverse: #ffffff;
+  --primary-50: #e7f2f1;
+  --primary-100: #c3dfdc;
+  --primary-200: #97c6c1;
+  --primary-300: #66aba4;
+  --primary-400: #2f8e85;
+  --primary-500: #0f7a72; /* brand */
+  --primary-600: #0b635c;
+  --primary-700: #084b46;
+  --primary-800: #063733;
 
-  --accent: #1f6feb;
-  --accent-hover: #1a5fd0;
-  --accent-soft: #e8f0fe;
+  --accent-100: #fbeedc;
+  --accent-500: #c57a1e;
+  --accent-700: #8a5310;
 
-  /* Attention. NOW is the only saturated one. */
-  --now: #c2371f;
-  --now-soft: #fdecea;
-  --today: #b26a00;
-  --today-soft: #fdf3e3;
-  --waiting: #4b6a8a;
-  --waiting-soft: #eef2f7;
-  --quiet: #6b7684;
-  --quiet-soft: #f1f3f5;
+  --red-100: #fbe9e7;
+  --red-500: #c4362c;
+  --red-600: #b3261e;
+  --red-700: #8c1d17;
+  --amber-100: #fcf1dc;
+  --amber-600: #9a6100;
+  --amber-700: #7a4d00;
+  --green-100: #e4f2ea;
+  --green-600: #1e7a46;
+  --green-700: #176037;
+  --blue-100: #e8f2f7;
+  --blue-600: #14607f;
+  --blue-700: #0f4a62;
+  --violet-100: #f2eefa;
+  --violet-600: #6b4fa8;
+  --violet-700: #543c85;
 
-  --ok: #1f7a4d;
-  --ok-soft: #e7f4ed;
-  --danger: #c2371f;
-  --danger-soft: #fdecea;
+  /* ------------------------------------------------- §2.2 semantic colour */
+  --color-background-page: var(--neutral-25);
+  --color-background-sunken: var(--neutral-50);
+  --color-surface-default: var(--neutral-0);
+  --color-surface-raised: var(--neutral-0);
+  --color-surface-muted: var(--neutral-50);
+  --color-surface-inverse: var(--neutral-800);
 
-  --internal: #6b4fbb;
-  --internal-soft: #f1edfb;
+  --color-text-primary: var(--neutral-900);
+  --color-text-secondary: var(--neutral-600);
+  --color-text-muted: var(--neutral-500);
+  --color-text-inverse: var(--neutral-0);
+  --color-text-link: var(--primary-600);
 
-  --radius-sm: 4px;
-  --radius: 8px;
-  --radius-lg: 12px;
+  --color-border-subtle: var(--neutral-100);
+  --color-border-default: var(--neutral-200);
+  --color-border-strong: var(--neutral-300);
+  --color-border-focus: var(--primary-500);
 
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 32px;
+  --color-brand-primary: var(--primary-500);
+  --color-brand-primary-hover: var(--primary-600);
+  --color-brand-primary-pressed: var(--primary-700);
+  --color-brand-on-primary: var(--neutral-0);
+  --color-brand-subtle: var(--primary-50);
+  --color-accent: var(--accent-500);
 
-  --font: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', sans-serif;
-  --font-ar: 'Segoe UI', 'Noto Naskh Arabic', 'Tahoma', system-ui, sans-serif;
+  --color-status-success-fg: var(--green-600);
+  --color-status-success-bg: var(--green-100);
+  --color-status-warning-fg: var(--amber-600);
+  --color-status-warning-bg: var(--amber-100);
+  --color-status-danger-fg: var(--red-600);
+  --color-status-danger-bg: var(--red-100);
+  --color-status-info-fg: var(--blue-600);
+  --color-status-info-bg: var(--blue-100);
+  --color-status-neutral-fg: var(--neutral-600);
+  --color-status-neutral-bg: var(--neutral-100);
 
-  --fs-xs: 11px;
-  --fs-sm: 12px;
-  --fs-md: 13px;
-  --fs-lg: 15px;
-  --fs-xl: 18px;
+  /* --------------------------------------- §2.6 message and internal note
+     The violet family exists ONLY for internal content. Nothing else in the
+     product is violet, and that exclusivity is the safety mechanism: an
+     internal note cannot be mistaken for anything a family can read. */
+  --color-message-incoming-bg: var(--neutral-0);
+  --color-message-incoming-text: var(--color-text-primary);
+  --color-message-outgoing-bg: var(--primary-50);
+  --color-message-outgoing-text: #06322e;
+  --color-message-internal-bg: var(--violet-100);
+  --color-message-internal-border: var(--violet-600);
+  --color-message-internal-text: var(--violet-700);
+  --color-message-system-bg: var(--neutral-50);
+  --color-message-system-text: var(--color-text-secondary);
+  --color-message-pending-bg: var(--neutral-50);
+  --color-message-failed-border: var(--red-600);
 
-  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
-  --shadow: 0 4px 12px rgba(16, 24, 40, 0.1);
+  /* -------------------------------------------------------- §3 typography
+     IBM Plex Sans Arabic: one family with genuinely matched Arabic and Latin
+     designs, so «الدرس يبدأ 3:00 PM» sits on one baseline in one colour of
+     ink. The fallbacks are mandatory, not decorative — Arabic must render
+     correctly before the web font loads, and it must render correctly if the
+     font never loads at all. */
+  --font-family-base: 'IBM Plex Sans Arabic', 'IBM Plex Sans', -apple-system,
+    'SF Arabic', 'Segoe UI', Roboto, 'Noto Sans Arabic', 'Noto Naskh Arabic', sans-serif;
+  --font-family-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
 
-  --header-h: 52px;
-  --rail-w: 200px;
+  --type-display: 28px;
+  --type-h1: 22px;
+  --type-h2: 18px;
+  --type-h3: 16px;
+  --type-body-lg: 17px;
+  --type-body: 15px;
+  --type-body-sm: 13px;
+  --type-label: 13px;
+  --type-caption: 12px;
+  --type-button: 15px;
+  --type-button-sm: 13px;
+
+  /* Latin leading. The Arabic block below raises every one of them: Arabic at
+     Latin leading clips diacritics against the line above, and it is the most
+     visible Arabic-first mistake there is. */
+  --lh-display: 36px;
+  --lh-h1: 30px;
+  --lh-h2: 26px;
+  --lh-h3: 24px;
+  --lh-body-lg: 26px;
+  --lh-body: 24px;
+  --lh-body-sm: 20px;
+  --lh-label: 18px;
+  --lh-caption: 18px;
+
+  /* --------------------------------------------- §4 spacing, radius, shadow */
+  --space-0: 0;
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 16px;
+  --space-6: 20px;
+  --space-7: 24px;
+  --space-8: 32px;
+  --space-9: 40px;
+  --space-10: 48px;
+  --space-11: 64px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 999px;
+  --radius-bubble-tail: 4px;
+
+  /* The three translucent values in the system. They live here with every
+     other colour, so `app.css` and `console.css` keep the property that no
+     hex or rgba appears outside this file. */
+  --color-scrim: rgba(26, 24, 21, 0.48);
+  --color-quote-tint: rgba(15, 122, 114, 0.06);
+  --color-skeleton-sheen: rgba(255, 255, 255, 0.6);
+
+  --elevation-1: 0 1px 2px rgba(26, 24, 21, 0.06), 0 1px 3px rgba(26, 24, 21, 0.08);
+  --elevation-2: 0 4px 12px rgba(26, 24, 21, 0.1);
+  --elevation-3: 0 12px 32px rgba(26, 24, 21, 0.16);
+
+  /* ----------------------------------------------------------- §5 motion */
+  --motion-instant: 0ms;
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --easing-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  /* ------------------------------------------------- §9.1 shell dimensions */
+  --header-h: 56px;
+  --rail-w: 240px;
+  --rail-w-collapsed: 64px;
   --list-w: 380px;
-  --panel-w: 340px;
+  --panel-w: 400px;
+
+  /* ---------------------------------------------------------------------
+     LEGACY ALIASES.
+
+     The nine surfaces this change does not touch still name these. They are
+     re-pointed rather than removed so those pages inherit the approved
+     identity without being rewritten here — and so no page silently loses its
+     colours because a variable stopped existing.
+     --------------------------------------------------------------------- */
+  --bg: var(--color-background-page);
+  --surface: var(--color-surface-default);
+  --surface-sunken: var(--color-background-sunken);
+  --surface-2: var(--color-surface-muted);
+  --surface-hover: var(--neutral-50);
+  --border: var(--color-border-default);
+  --border-strong: var(--color-border-strong);
+
+  --text: var(--color-text-primary);
+  --text-muted: var(--color-text-secondary);
+  --text-subtle: var(--color-text-muted);
+  --text-inverse: var(--color-text-inverse);
+
+  --accent: var(--color-brand-primary);
+  --accent-hover: var(--color-brand-primary-hover);
+  --accent-soft: var(--color-brand-subtle);
+
+  --now: var(--red-600);
+  --now-soft: var(--red-100);
+  --today: var(--amber-600);
+  --today-soft: var(--amber-100);
+  --waiting: var(--blue-600);
+  --waiting-soft: var(--blue-100);
+  --quiet: var(--neutral-500);
+  --quiet-soft: var(--neutral-50);
+
+  --ok: var(--color-status-success-fg);
+  --ok-soft: var(--color-status-success-bg);
+  --danger: var(--color-status-danger-fg);
+  --danger-soft: var(--color-status-danger-bg);
+
+  --internal: var(--violet-600);
+  --internal-soft: var(--violet-100);
+
+  --radius: var(--radius-md);
+  --shadow-sm: var(--elevation-1);
+  --shadow: var(--elevation-2);
+
+  --font: var(--font-family-base);
+  --font-ar: var(--font-family-base);
+
+  --fs-xs: var(--type-caption);
+  --fs-sm: var(--type-body-sm);
+  --fs-md: var(--type-body-sm);
+  --fs-lg: var(--type-h3);
+  --fs-xl: var(--type-h2);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    color-scheme: dark;
-    --bg: #12161c;
-    --surface: #1a1f27;
-    --surface-sunken: #151a21;
-    --surface-hover: #232935;
-    --border: #2b323d;
-    --border-strong: #3b434f;
-    --text: #e6eaf0;
-    --text-muted: #a3adba;
-    --text-subtle: #78828f;
-    --accent: #5a9bff;
-    --accent-soft: #16273f;
-    --now: #ff7a63;
-    --now-soft: #3a1d18;
-    --today: #e0a256;
-    --today-soft: #33260f;
-    --waiting: #8fb0d0;
-    --waiting-soft: #1b2530;
-    --quiet: #8b95a1;
-    --quiet-soft: #1d222a;
-    --ok: #57c288;
-    --ok-soft: #14291f;
-    --danger: #ff7a63;
-    --danger-soft: #3a1d18;
-    --internal: #a992f0;
-    --internal-soft: #241f38;
-  }
+/*
+ * §3.2 — Arabic leading.
+ *
+ * Set on the document rather than per component so a component never has to
+ * remember it, and so a mixed-script screen cannot end up with two leadings.
+ */
+html[dir='rtl'] {
+  /* Read by `Icon.tsx`: glyphs that describe a direction in the READING flow
+     mirror, glyphs that describe the physical world never do. Declared once
+     here rather than as a rule per icon. */
+  --icon-mirror: -1;
 }
 
-* { box-sizing: border-box; }
+html[lang='ar'] {
+  --lh-display: 40px;
+  --lh-h1: 34px;
+  --lh-h2: 30px;
+  --lh-h3: 28px;
+  --lh-body-lg: 30px;
+  --lh-body: 28px;
+  --lh-body-sm: 24px;
+  --lh-label: 22px;
+  --lh-caption: 20px;
+}
 
-html, body, #root { height: 100%; }
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font);
-  font-size: var(--fs-md);
-  line-height: 1.5;
+  background: var(--color-background-page);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+  font-size: var(--type-body-sm);
+  line-height: var(--lh-body-sm);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-html[lang='ar'] body { font-family: var(--font-ar); }
+/*
+ * Western digits in BOTH locales (`terminology.md` §8.2, DD-09), and numbers
+ * are LTR runs even inside Arabic text. Stated once here so no component has
+ * to remember it.
+ */
+:root {
+  font-variant-numeric: lining-nums;
+}
 
-/* Arabic needs a little more line height to stay readable at small sizes. */
-html[lang='ar'] { line-height: 1.7; }
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+}
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--color-border-focus);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
 
-button { font: inherit; cursor: pointer; }
-button:disabled { cursor: not-allowed; opacity: 0.55; }
+button {
+  font: inherit;
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+}
 
 /* Screen-reader-only text: how non-colour meaning reaches assistive tech. */
 .sr-only {
   position: absolute;
-  width: 1px; height: 1px;
-  padding: 0; margin: -1px;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* §5 — every motion collapses to instant when the platform asks for it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -20,7 +20,14 @@ interface I18nValue {
 const I18nContext = createContext<I18nValue | null>(null)
 
 const STORAGE_KEY = 'jawwid.locale'
-const LOCALE_TAG: Record<Locale, string> = { ar: 'ar-EG', en: 'en-GB' }
+/**
+ * `-u-nu-latn` is not decoration: `terminology.md` §8.2 and DD-09 require
+ * WESTERN digits 0–9 in both locales, and plain `ar-EG` gives `Intl` the
+ * Arabic-Indic set (٠١٢٣) for every number, duration and time it formats. The
+ * mobile app renders «قبل 5 دقائق» with Latin digits, and a console that wrote
+ * «قبل ٥ دقائق» beside it would be a second numeral system in one product.
+ */
+const LOCALE_TAG: Record<Locale, string> = { ar: 'ar-EG-u-nu-latn', en: 'en-GB' }
 
 function readStoredLocale(): Locale {
   try {

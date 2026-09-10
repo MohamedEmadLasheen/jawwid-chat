@@ -1,0 +1,1514 @@
+/*
+ * THE CONSOLE — a communication workspace.
+ *
+ * This file styles one screen: the three-zone operator surface
+ * `conversation list | conversation | family context`. It is separate from
+ * `app.css` for the same reason the console's types are separate from the
+ * brief-era ones — the two describe different products, and interleaving them
+ * under shared names is what produced the drift this replaces (the markup
+ * named `.workspace`, `.conv-row`, `.msg__quote`; the stylesheet had never
+ * heard of any of them, so the most important screen in the product rendered
+ * as an unstyled bulleted list).
+ *
+ * THE RULE THIS FILE IS WRITTEN TO: communication is the primary experience,
+ * and operations are layered around it. The middle zone is the product; the
+ * two flanking zones exist to make a reply better informed. Anything that
+ * would turn the middle zone back into a data grid belongs somewhere else.
+ *
+ * Logical properties only. The layout mirrors under `dir="rtl"` because it is
+ * described in start/end terms, not because a second set of rules overrides
+ * the first.
+ */
+
+/* ============================================================== the shell */
+
+.workspace {
+  display: flex;
+  flex: 1;
+  min-inline-size: 0;
+  min-block-size: 0;
+  background: var(--color-background-sunken);
+}
+
+/* ======================================================== zone 1: the list */
+
+.conv-list {
+  inline-size: var(--list-w);
+  flex: 0 0 var(--list-w);
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+  background: var(--color-surface-default);
+  border-inline-end: 1px solid var(--color-border-subtle);
+}
+
+.conv-list__header {
+  padding: var(--space-4) var(--space-5) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  border-block-end: 1px solid var(--color-border-subtle);
+}
+
+.conv-list__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--type-h2);
+  line-height: var(--lh-h2);
+  font-weight: 700;
+}
+
+.conv-list__count {
+  font-size: var(--type-caption);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The search field. A leading magnifier that mirrors with the reading
+   direction, because a search icon describes the reading flow. */
+.conv-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.conv-search__icon {
+  position: absolute;
+  inset-inline-start: var(--space-4);
+  display: grid;
+  place-items: center;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+.conv-search__input {
+  inline-size: 100%;
+  min-block-size: 38px;
+  padding-block: var(--space-2);
+  padding-inline: var(--space-9) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--type-body-sm);
+}
+.conv-search__input::placeholder {
+  color: var(--color-text-muted);
+}
+.conv-search__input:focus {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: -1px;
+  background: var(--color-surface-default);
+}
+.conv-search__clear {
+  position: absolute;
+  inset-inline-end: var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  padding: var(--space-2);
+  border-radius: var(--radius-full);
+  line-height: 1;
+}
+.conv-search__clear:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-text-primary);
+}
+
+/* Segmented control. Two sections, both always visible with their count: a
+   section that disappears when it empties reads as a bug (`admin-inbox.md`
+   §9), and the count is the operator's whole workload at a glance. */
+.segmented {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-sm);
+}
+.segmented__option {
+  flex: 1;
+  min-block-size: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: 0;
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--type-body-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background var(--motion-fast) var(--easing-standard);
+}
+.segmented__option:hover {
+  color: var(--color-text-primary);
+}
+.segmented__option[aria-selected='true'] {
+  background: var(--color-surface-default);
+  color: var(--primary-700);
+  font-weight: 600;
+  box-shadow: var(--elevation-1);
+}
+.segmented__badge {
+  min-inline-size: 20px;
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
+  font-size: var(--type-caption);
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+}
+.segmented__option[aria-selected='true'] .segmented__badge {
+  background: var(--color-brand-subtle);
+  color: var(--primary-700);
+}
+
+.conv-list__scroll {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.conv-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* --------------------------------------------------------- the list item */
+
+.conv-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  inline-size: 100%;
+  padding: var(--space-4) var(--space-5);
+  border: 0;
+  border-inline-start: 3px solid transparent;
+  background: transparent;
+  color: inherit;
+  text-align: start;
+  position: relative;
+  /* §5: a list never animates. A realtime re-bucket is an instant swap. */
+  transition: background var(--motion-fast) var(--easing-standard);
+}
+.conv-row::after {
+  /* A hairline that stops short of the avatar, so the list reads as one
+     column of names rather than a stack of boxes. */
+  content: '';
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline-start: calc(var(--space-5) + 40px + var(--space-4));
+  inset-inline-end: 0;
+  border-block-end: 1px solid var(--color-border-subtle);
+}
+.conv-rows li:last-child .conv-row::after {
+  border-block-end-color: transparent;
+}
+.conv-row:hover {
+  background: var(--color-surface-muted);
+}
+.conv-row--selected,
+.conv-row--selected:hover {
+  background: var(--color-brand-subtle);
+  border-inline-start-color: var(--color-brand-primary);
+}
+
+.conv-row__body {
+  flex: 1;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.conv-row__line1 {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+/*
+ * `unicode-bidi: plaintext` is the fix for a truncation that hid the first
+ * participant.
+ *
+ * An untitled conversation is named after the people in it, and that string is
+ * often Latin ("parent_smoke، manager_smoke") sitting inside an RTL row. With
+ * the row's own direction imposed on it, the overflow was clipped from the
+ * START and the row read «…t_smoke، manager_smoke» — the ellipsis eating the
+ * one name that identifies the conversation. Letting the name carry its own
+ * paragraph direction means it ellipsizes at its logical END, so the beginning
+ * always survives. The full string stays in `title` and in the accessible
+ * name, and the naming logic itself is untouched.
+ */
+.conv-row__name {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  unicode-bidi: plaintext;
+  text-align: start;
+  font-size: var(--type-body);
+  line-height: var(--lh-body);
+  font-weight: 400;
+  color: var(--color-text-primary);
+}
+.conv-row--unread .conv-row__name {
+  font-weight: 600;
+}
+
+.conv-row__time {
+  flex: 0 0 auto;
+  font-size: var(--type-caption);
+  line-height: var(--lh-caption);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+.conv-row--unread .conv-row__time {
+  color: var(--color-brand-primary);
+  font-weight: 600;
+}
+
+.conv-row__line2 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* The preview is what the SERVER decided this operator may see. It is one
+   line, and it truncates — a preview that wraps turns the list into prose. */
+.conv-row__preview {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--type-body-sm);
+  line-height: var(--lh-body-sm);
+  color: var(--color-text-secondary);
+  unicode-bidi: plaintext;
+  text-align: start;
+}
+.conv-row--unread .conv-row__preview {
+  color: var(--color-text-primary);
+}
+
+.conv-row__unread {
+  flex: 0 0 auto;
+  min-inline-size: 20px;
+  block-size: 20px;
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-brand-primary);
+  color: var(--color-brand-on-primary);
+  font-size: var(--type-caption);
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+}
+
+/* Line 3. Up to three chips, omitted entirely when there is nothing to say —
+   `admin-inbox.md` §4. A fourth chip is how a list becomes unreadable. */
+.conv-row__line3 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block-start: var(--space-1);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  block-size: 20px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
+  font-size: var(--type-caption);
+  font-weight: 500;
+  white-space: nowrap;
+  max-inline-size: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chip--brand {
+  background: var(--color-brand-subtle);
+  color: var(--primary-700);
+}
+.chip--warning {
+  background: var(--color-status-warning-bg);
+  color: var(--amber-700);
+}
+.chip--danger {
+  background: var(--color-status-danger-bg);
+  color: var(--color-status-danger-fg);
+}
+.chip--internal {
+  background: var(--color-message-internal-bg);
+  color: var(--color-message-internal-text);
+}
+
+/* ---------------------------------------------------------------- avatar */
+
+.avatar {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  inline-size: 40px;
+  block-size: 40px;
+  border-radius: var(--radius-full);
+  background: var(--color-brand-subtle);
+  color: var(--primary-700);
+  font-size: var(--type-body-sm);
+  font-weight: 600;
+  user-select: none;
+  overflow: hidden;
+}
+.avatar--sm {
+  inline-size: 28px;
+  block-size: 28px;
+  font-size: var(--type-caption);
+}
+.avatar--lg {
+  inline-size: 48px;
+  block-size: 48px;
+  font-size: var(--type-h3);
+}
+/* A group is a different KIND of conversation, not a differently-coloured
+   one: the square-ish radius says so before the badge does. */
+.avatar--group {
+  border-radius: var(--radius-md);
+  background: var(--accent-100);
+  color: var(--accent-700);
+}
+.avatar--muted {
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
+}
+
+/* ==================================================== zone 2: the chat */
+
+.chat {
+  flex: 1;
+  min-inline-size: 0;
+  min-block-size: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-background-sunken);
+}
+
+.chat__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-5);
+  min-block-size: 64px;
+  background: var(--color-surface-default);
+  border-block-end: 1px solid var(--color-border-subtle);
+}
+
+.chat__identity {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.chat__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-inline-size: 0;
+  font-size: var(--type-h3);
+  line-height: var(--lh-h3);
+  font-weight: 600;
+}
+/* Same rule as the list row, for the same string: the header names the
+   conversation, so it truncates at the identity's own end. Ellipsis lives on
+   this span rather than on the flex container above, where it never worked. */
+.chat__title-name {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  unicode-bidi: plaintext;
+  text-align: start;
+}
+
+/*
+ * The responsibility line.
+ *
+ * `design-system.md` §7.7 / DD-02: the Primary Owner is a permanent line, and
+ * anyone else handling the conversation JOINS it rather than replacing it.
+ * That is the one mechanism that stops coverage reading as a transfer of
+ * ownership, so it is a standing part of the header and never a hover.
+ */
+.chat__responsibility {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-block-start: 2px;
+  font-size: var(--type-caption);
+  line-height: var(--lh-caption);
+  color: var(--color-text-secondary);
+}
+.chat__responsibility strong {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+.chat__responsibility-sep {
+  color: var(--color-border-strong);
+}
+
+.chat__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* ------------------------------------------------------------ the thread */
+
+.thread {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-5) var(--space-7);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  /*
+   * A very quiet paper texture behind the messages. Two flat dot layers, no
+   * image and no gradient — enough to separate the thread from the panes
+   * beside it, not enough to compete with a bubble.
+   */
+  background-color: var(--color-background-sunken);
+  background-image: radial-gradient(var(--neutral-100) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.thread__more {
+  align-self: center;
+  margin-block-end: var(--space-3);
+}
+
+/* A day divider, and the "unread from here" rule, are the same shape: a
+   centred label on a hairline. */
+.thread__divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-block: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--type-caption);
+  font-weight: 500;
+}
+.thread__divider::before,
+.thread__divider::after {
+  content: '';
+  flex: 1;
+  border-block-start: 1px solid var(--color-border-default);
+}
+.thread__divider-label {
+  padding: var(--space-1) var(--space-4);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-default);
+  border: 1px solid var(--color-border-subtle);
+}
+
+.thread__typing {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  margin-block-start: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--type-caption);
+}
+
+/* ------------------------------------------------------------- a message */
+
+.msg__row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  max-inline-size: 100%;
+}
+.msg__row--contact {
+  justify-content: flex-start;
+}
+.msg__row--staff {
+  justify-content: flex-end;
+}
+/* System cards and internal notes are full-width by definition: neither is a
+   bubble, and neither belongs to a side of the conversation. */
+.msg__row--system,
+.msg__row--internal,
+.msg__row--deleted {
+  justify-content: center;
+}
+.msg__row--internal {
+  justify-content: stretch;
+}
+
+.msg {
+  min-inline-size: 0;
+  max-inline-size: min(620px, 78%);
+  display: flex;
+  flex-direction: column;
+}
+.msg--internal,
+.msg--system {
+  max-inline-size: 100%;
+}
+.msg--internal {
+  inline-size: 100%;
+}
+
+.msg__author {
+  font-size: var(--type-caption);
+  line-height: var(--lh-caption);
+  font-weight: 600;
+  color: var(--color-brand-primary);
+  margin-block-end: 2px;
+  padding-inline: var(--space-2);
+}
+
+.msg__bubble {
+  position: relative;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-message-incoming-bg);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-message-incoming-text);
+  box-shadow: var(--elevation-1);
+  font-size: var(--type-body);
+  line-height: var(--lh-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  /* A mixed-script body must not scramble: an Arabic message containing an
+     English name, a URL or a time renders as its own paragraph direction. */
+  unicode-bidi: plaintext;
+  text-align: start;
+}
+
+/* The tail: the one corner nearest the author (§4, radius.bubbleTail). It is
+   an inline-start/end corner, so it follows the reading direction. */
+.msg--contact .msg__bubble {
+  border-start-start-radius: var(--radius-bubble-tail);
+}
+.msg--staff .msg__bubble {
+  background: var(--color-message-outgoing-bg);
+  border-color: transparent;
+  color: var(--color-message-outgoing-text);
+  border-start-end-radius: var(--radius-bubble-tail);
+}
+
+/*
+ * An internal note is NOT a bubble (DD-05, `terminology.md` §2).
+ *
+ * Full width, violet block, 3px leading edge on the reading-start side, and an
+ * explicit label row. Four independent signals — width, hue, edge, words — so
+ * it survives greyscale, colour-blindness and a hurried glance. Violet appears
+ * nowhere else in the product; that exclusivity is the safety mechanism.
+ */
+.msg--internal .msg__bubble {
+  background: var(--color-message-internal-bg);
+  border: 1px solid var(--violet-100);
+  border-inline-start: 3px solid var(--color-message-internal-border);
+  border-radius: var(--radius-md);
+  color: var(--color-message-internal-text);
+  box-shadow: none;
+}
+
+.msg__internal-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--type-caption);
+  font-weight: 600;
+  color: var(--color-message-internal-text);
+  margin-block-end: var(--space-2);
+}
+
+/* A system event is a card: centred, no author, no avatar (§7.7). */
+.msg--system .msg__bubble {
+  background: var(--color-message-system-bg);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-full);
+  color: var(--color-message-system-text);
+  text-align: center;
+  font-size: var(--type-caption);
+  line-height: var(--lh-caption);
+  padding: var(--space-2) var(--space-5);
+  box-shadow: none;
+}
+
+.msg--deleted .msg__bubble {
+  background: transparent;
+  border: 1px dashed var(--color-border-strong);
+  color: var(--color-text-muted);
+  font-style: italic;
+  box-shadow: none;
+}
+
+/* A message held for approval is muted and labelled — never the outgoing
+   colour, because it has not gone anywhere (§2.6, `message.pending.bg`). */
+.msg--pending .msg__bubble {
+  background: var(--color-message-pending-bg);
+  border: 1px dashed var(--color-border-strong);
+  color: var(--color-text-secondary);
+  box-shadow: none;
+}
+
+.msg__quote {
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-inline-start: 3px solid var(--color-brand-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-quote-tint);
+  font-size: var(--type-body-sm);
+  line-height: var(--lh-body-sm);
+  unicode-bidi: plaintext;
+}
+.msg__quote-author {
+  display: block;
+  font-weight: 600;
+  color: var(--color-brand-primary);
+  font-size: var(--type-caption);
+}
+.msg__quote-body {
+  display: block;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.msg__quote-body--gone {
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+
+/*
+ * The forwarded indicator is a LABEL on the message, not the first words of
+ * it. As an inline box it shared a line with a short body and read as one run
+ * — «↩ مُعاد توجيهها وعليكم السلام» — which is a sentence the sender never
+ * wrote. `flex` on its own line, sized to its content, keeps it compact and
+ * WhatsApp-like while making it unmistakably not the message.
+ */
+.msg__forwarded {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  font-size: var(--type-caption);
+  line-height: var(--lh-caption);
+  font-style: italic;
+  color: var(--color-text-muted);
+  margin-block-end: var(--space-2);
+}
+
+.msg__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block-start: var(--space-1);
+  padding-inline: var(--space-2);
+  font-size: var(--type-caption);
+  line-height: var(--lh-caption);
+  color: var(--color-text-muted);
+}
+.msg__row--staff .msg__meta {
+  justify-content: flex-end;
+}
+.msg__time {
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+}
+.msg__edited {
+  font-style: italic;
+}
+
+/* Ticks are a physical mark, not a direction in the reading flow: they do not
+   mirror (§6). Read is the only state that takes the brand colour, and it is
+   never colour alone — every tick carries an accessible label. */
+.msg__receipt {
+  direction: ltr;
+  letter-spacing: -2px;
+  font-size: var(--type-body-sm);
+}
+.msg__receipt--read {
+  color: var(--color-brand-primary);
+}
+
+.msg__reactions {
+  display: flex;
+  gap: var(--space-2);
+  margin-block-start: -10px;
+  margin-inline-start: var(--space-4);
+  z-index: 1;
+}
+.msg__row--staff .msg__reactions {
+  margin-inline: 0 var(--space-4);
+  justify-content: flex-end;
+}
+.reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-default);
+  border: 1px solid var(--color-border-subtle);
+  box-shadow: var(--elevation-1);
+  font-size: var(--type-caption);
+}
+.reaction--mine {
+  border-color: var(--color-brand-primary);
+  background: var(--color-brand-subtle);
+}
+
+/* Hover actions. They sit beside the bubble rather than over it, so they never
+   cover the text an operator is deciding about. */
+.msg__tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-default);
+  border: 1px solid var(--color-border-subtle);
+  box-shadow: var(--elevation-2);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-fast) var(--easing-standard);
+}
+.msg__row:hover .msg__tools,
+.msg__row:focus-within .msg__tools,
+/* An OPEN menu stays visible even when the pointer wanders off the row.
+   Tying it to :hover alone means the menu vanishes mid-decision the moment
+   the mouse travels the few pixels between the trigger and the item. */
+.msg__tools--open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.icon-btn {
+  display: grid;
+  place-items: center;
+  inline-size: 28px;
+  block-size: 28px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--type-body-sm);
+  line-height: 1;
+}
+.icon-btn:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+  color: var(--color-text-primary);
+}
+.icon-btn--danger:hover:not(:disabled) {
+  background: var(--color-status-danger-bg);
+  color: var(--color-status-danger-fg);
+}
+
+/* The action popover, opened from a message's ⋯ */
+.msg__actions {
+  position: absolute;
+  z-index: 20;
+  inset-block-start: calc(100% + 4px);
+  inset-inline-end: 0;
+  min-inline-size: 200px;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  box-shadow: var(--elevation-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.msg__actions-anchor {
+  position: relative;
+}
+.msg__reaction-picker {
+  display: flex;
+  gap: var(--space-1);
+  padding-block-end: var(--space-2);
+  margin-block-end: var(--space-1);
+  border-block-end: 1px solid var(--color-border-subtle);
+}
+.reaction-btn {
+  inline-size: 32px;
+  block-size: 32px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  font-size: var(--type-h3);
+  line-height: 1;
+}
+.reaction-btn:hover {
+  background: var(--color-surface-muted);
+}
+.reaction-btn--on {
+  background: var(--color-brand-subtle);
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  inline-size: 100%;
+  min-block-size: 32px;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: var(--type-body-sm);
+  text-align: start;
+}
+.menu-item:hover {
+  background: var(--color-surface-muted);
+}
+.menu-item--danger {
+  color: var(--color-status-danger-fg);
+}
+.menu-item--danger:hover {
+  background: var(--color-status-danger-bg);
+}
+
+/* --------------------------------------------- in-context moderation strip
+
+   Approved direction: a moderation event is part of the conversation, not a
+   destination. What is held, why, and the decision all sit above the composer
+   in the conversation the message belongs to — the operator never leaves the
+   thread to understand or act on it. The queue page keeps its own existence
+   for working a backlog; the permissions and the endpoints are unchanged. */
+
+.mod-strip {
+  border-block-start: 1px solid var(--amber-100);
+  background: var(--color-status-warning-bg);
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.mod-strip__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--type-body-sm);
+  font-weight: 600;
+  color: var(--amber-700);
+}
+.mod-strip__count {
+  margin-inline-start: auto;
+  font-weight: 500;
+  font-size: var(--type-caption);
+  color: var(--amber-700);
+}
+.mod-item {
+  background: var(--color-surface-default);
+  border: 1px solid var(--amber-100);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.mod-item__reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+/* Never truncated, never collapsed: you cannot approve what you cannot read. */
+.mod-item__body {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-inline-start: 3px solid var(--color-border-strong);
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-sm);
+  font-size: var(--type-body-sm);
+  line-height: var(--lh-body-sm);
+  white-space: pre-wrap;
+  unicode-bidi: plaintext;
+  max-block-size: 14rem;
+  overflow-y: auto;
+}
+.mod-item__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+.mod-item__reason-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* ---------------------------------------------------------- the composer */
+
+.composer {
+  border-block-start: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-default);
+  padding: var(--space-4) var(--space-5) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Writing an internal note recolours the WHOLE composer, not just a label:
+   you should be able to see what kind of thing you are writing before you
+   send it, from the corner of your eye. */
+.composer--internal {
+  background: var(--color-message-internal-bg);
+  border-block-start-color: var(--color-message-internal-border);
+}
+
+.composer__reply {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  border-inline-start: 3px solid var(--color-brand-primary);
+  background: var(--color-brand-subtle);
+}
+.composer__reply-text {
+  flex: 1;
+  min-inline-size: 0;
+}
+.composer__reply-label {
+  display: block;
+  font-size: var(--type-caption);
+  font-weight: 600;
+  color: var(--primary-700);
+}
+.composer__reply-body {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--type-body-sm);
+  color: var(--color-text-secondary);
+  unicode-bidi: plaintext;
+}
+
+.composer__modes {
+  display: flex;
+  gap: var(--space-2);
+}
+.composer__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 30px;
+  padding: var(--space-1) var(--space-4);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--type-caption);
+  font-weight: 600;
+}
+.composer__tab:hover {
+  background: var(--color-surface-muted);
+}
+.composer__tab[aria-pressed='true'] {
+  background: var(--color-brand-subtle);
+  color: var(--primary-700);
+  border-color: var(--color-brand-primary);
+}
+.composer__tab--internal[aria-pressed='true'] {
+  background: var(--violet-100);
+  color: var(--color-message-internal-text);
+  border-color: var(--color-message-internal-border);
+}
+
+.composer__box {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-default);
+}
+.composer__box:focus-within {
+  border-color: var(--color-border-focus);
+  box-shadow: 0 0 0 1px var(--color-border-focus);
+}
+.composer--internal .composer__box {
+  border-color: var(--color-message-internal-border);
+}
+
+.composer__input {
+  flex: 1;
+  min-inline-size: 0;
+  min-block-size: 40px;
+  max-block-size: 200px;
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--type-body);
+  line-height: var(--lh-body);
+  resize: none;
+  unicode-bidi: plaintext;
+}
+.composer__input:focus {
+  outline: none;
+}
+.composer__input::placeholder {
+  color: var(--color-text-muted);
+}
+
+/* The send control. A circle, brand-filled, at the reading END of the box —
+   the arrow mirrors with the reading direction because it points at where the
+   message is going (§6). */
+.composer__send {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  inline-size: 40px;
+  block-size: 40px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--color-brand-primary);
+  color: var(--color-brand-on-primary);
+  transition: background var(--motion-fast) var(--easing-standard);
+}
+.composer__send:hover:not(:disabled) {
+  background: var(--color-brand-primary-hover);
+}
+.composer__send:disabled {
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+.composer--internal .composer__send:not(:disabled) {
+  background: var(--color-message-internal-border);
+}
+.composer__send-icon {
+  inline-size: 20px;
+  block-size: 20px;
+}
+html[dir='rtl'] .composer__send-icon {
+  transform: scaleX(-1);
+}
+
+.composer__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--type-caption);
+  color: var(--color-text-muted);
+}
+.composer__hint {
+  margin-inline-start: auto;
+}
+.composer__kbd {
+  display: inline-block;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-default);
+  border-block-end-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  font-size: var(--type-caption);
+  font-family: var(--font-family-mono);
+}
+
+/* ================================================ zone 3: family context */
+
+.context {
+  inline-size: var(--panel-w);
+  flex: 0 0 var(--panel-w);
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+  background: var(--color-surface-default);
+  border-inline-start: 1px solid var(--color-border-subtle);
+}
+
+.context__scroll {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.context__hero {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border-block-end: 1px solid var(--color-border-subtle);
+}
+.context__hero-name {
+  font-size: var(--type-h3);
+  line-height: var(--lh-h3);
+  font-weight: 600;
+}
+.context__hero-sub {
+  font-size: var(--type-caption);
+  color: var(--color-text-secondary);
+}
+
+.context__section {
+  padding: var(--space-5);
+  border-block-end: 1px solid var(--color-border-subtle);
+}
+.context__section:last-child {
+  border-block-end: 0;
+}
+.context__section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--type-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-4);
+}
+
+.context__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-block: var(--space-2);
+  font-size: var(--type-body-sm);
+  line-height: var(--lh-body-sm);
+}
+.context__key {
+  flex: 0 0 auto;
+  color: var(--color-text-secondary);
+}
+.context__value {
+  text-align: end;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+  font-weight: 500;
+}
+
+.context__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.context__card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-default);
+}
+.context__card--inactive {
+  opacity: 0.6;
+}
+.context__card-title {
+  font-size: var(--type-body-sm);
+  font-weight: 600;
+}
+.context__card-sub {
+  font-size: var(--type-caption);
+  color: var(--color-text-secondary);
+}
+
+.context__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.context__empty {
+  font-size: var(--type-body-sm);
+  color: var(--color-text-muted);
+}
+
+/*
+ * RESERVED, NOT INVENTED.
+ *
+ * Payment, subscription and renewal, the next class, and open tasks are all
+ * Jawwid Core's to answer, and Core is out of launch scope. The panel keeps
+ * their place and says plainly that the integration is not in scope yet —
+ * a dash, a zero or a plausible-looking value would each be a number an
+ * operator could act on, and there is no number to give them.
+ *
+ * Hatched, muted, non-interactive: it reads as reserved space, not as a
+ * section that failed to load.
+ */
+.context__pending {
+  padding: var(--space-4);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: repeating-linear-gradient(
+    135deg,
+    var(--color-surface-muted),
+    var(--color-surface-muted) 6px,
+    var(--color-surface-default) 6px,
+    var(--color-surface-default) 12px
+  );
+}
+.context__pending-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--type-body-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+.context__pending-note {
+  margin-block-start: var(--space-2);
+  font-size: var(--type-caption);
+  line-height: var(--lh-caption);
+  color: var(--color-text-muted);
+}
+
+/* ======================================================== search results */
+
+.search-results {
+  padding: var(--space-3) 0;
+}
+.search-results__heading {
+  margin: 0;
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--type-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+.search-hit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  inline-size: 100%;
+  padding: var(--space-3) var(--space-5);
+  border: 0;
+  background: transparent;
+  text-align: start;
+  color: inherit;
+}
+.search-hit:hover {
+  background: var(--color-surface-muted);
+}
+.search-hit__title {
+  font-size: var(--type-body-sm);
+  font-weight: 600;
+}
+.search-hit__excerpt {
+  font-size: var(--type-body-sm);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  unicode-bidi: plaintext;
+}
+.search-hit__meta {
+  display: flex;
+  gap: var(--space-3);
+  font-size: var(--type-caption);
+  color: var(--color-text-muted);
+}
+
+/* ======================================================= states, skeletons */
+
+/*
+ * A skeleton is shape-matched to the content it replaces (§7.10). A spinner is
+ * only ever acceptable inside a button — a list that flashes a spinner tells
+ * an operator nothing about what is arriving.
+ */
+.skeleton {
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-sm);
+  position: relative;
+  overflow: hidden;
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--color-skeleton-sheen),
+    transparent
+  );
+  animation: skeleton-shimmer 1.2s infinite;
+}
+@keyframes skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+.skeleton-row {
+  display: flex;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  align-items: center;
+}
+.skeleton-row__avatar {
+  inline-size: 40px;
+  block-size: 40px;
+  border-radius: var(--radius-full);
+  flex: 0 0 40px;
+}
+.skeleton-row__lines {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.skeleton-line {
+  block-size: 10px;
+}
+
+/* The centre zone with nothing selected. Calm, and it says what to do — an
+   empty state with an action button here would be an action that does not
+   exist: the operator picks a conversation, they do not create one. */
+.chat-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-10);
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+.chat-empty__mark {
+  display: grid;
+  place-items: center;
+  inline-size: 72px;
+  block-size: 72px;
+  border-radius: var(--radius-full);
+  background: var(--color-brand-subtle);
+  color: var(--color-brand-primary);
+}
+.chat-empty__title {
+  font-size: var(--type-h2);
+  line-height: var(--lh-h2);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.chat-empty__hint {
+  max-inline-size: 42ch;
+  font-size: var(--type-body-sm);
+  line-height: var(--lh-body-sm);
+}
+
+/* ============================================================ responsive
+   §9.1. Three panes ≥ 1280. 1024–1279 the context panel becomes a drawer,
+   toggled from the conversation header. < 1024 one pane at a time, with push
+   navigation between the list and the conversation. */
+
+@media (min-width: 1920px) {
+  .context {
+    --panel-w: 420px;
+  }
+}
+
+/* Below the full-rail breakpoint the flanking zones give up a little more, so
+   the thread keeps the majority of the width at every size that still shows
+   three panes. */
+@media (max-width: 1599px) {
+  .conv-list {
+    --list-w: 360px;
+  }
+  .context {
+    --panel-w: 360px;
+  }
+}
+
+@media (max-width: 1279px) {
+  /* The panel becomes an overlay drawer on the reading-END side, over the
+     conversation rather than beside it. */
+  .context {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: 0;
+    z-index: 30;
+    inline-size: 360px;
+    flex-basis: 360px;
+    box-shadow: var(--elevation-3);
+  }
+  /* The drawer's closed state. Scoped to this breakpoint deliberately: above
+     it the same element is a permanent pane, and a globally-applied `hidden`
+     would take the panel away from the three-pane layout it belongs to. */
+  .context--drawer-closed {
+    display: none;
+  }
+  .workspace {
+    position: relative;
+  }
+  .context__close {
+    display: inline-flex;
+  }
+}
+
+@media (min-width: 1280px) {
+  /* Above the drawer breakpoint the panel is permanent, so its close control
+     and the header's toggle have nothing to do. */
+  .context__close,
+  .chat__context-toggle {
+    display: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  .conv-list {
+    inline-size: 100%;
+    flex-basis: 100%;
+    border-inline-end: 0;
+  }
+  .context {
+    inline-size: 100%;
+    flex-basis: 100%;
+  }
+  /* One pane at a time: the list IS the screen until a conversation is
+     opened, and opening one pushes. */
+  .workspace--has-selection .conv-list {
+    display: none;
+  }
+  .workspace:not(.workspace--has-selection) .chat {
+    display: none;
+  }
+  .thread {
+    padding-inline: var(--space-4);
+  }
+  .msg {
+    max-inline-size: 88%;
+  }
+}
+
+@media (min-width: 1024px) {
+  /* The back affordance exists only in the one-pane layout. */
+  .chat__back {
+    display: none;
+  }
+}

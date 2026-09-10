@@ -59,11 +59,21 @@ export function MessageActions({
   conversation,
   viewerActorId,
   locale,
+  onClose,
 }: {
   message: Message
   conversation: Conversation
   viewerActorId: string | null
   locale: 'ar' | 'en'
+  /**
+   * Dismiss the popover this renders inside.
+   *
+   * The trigger owns the open state, so every terminal action here reports
+   * back rather than leaving a menu hanging open over the thread. A dialog
+   * this opens is NOT a terminal action: the menu closes when the dialog does,
+   * because closing it first would move the focus the dialog is about to take.
+   */
+  onClose?: () => void
 }) {
   const { t } = useI18n()
   const actions = useMessageActions(conversation.id)
@@ -76,11 +86,14 @@ export function MessageActions({
   const [forwarding, setForwarding] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const run = async (work: Promise<unknown>) => {
+  const run = async (work: Promise<unknown>, closeOnSuccess = false) => {
     setError(null)
     try {
       await work
+      if (closeOnSuccess) onClose?.()
     } catch (cause) {
+      // The menu stays OPEN on failure: the error belongs beside the control
+      // that produced it, and a menu that vanishes takes its message with it.
       setError(cause instanceof ApiError ? cause.localized(locale) : t('common.offline'))
     }
   }
@@ -88,7 +101,7 @@ export function MessageActions({
   const myReaction = message.reactions.find((r) => r.actorId === viewerActorId)
 
   return (
-    <div className="msg__actions">
+    <div className="msg__actions" role="menu">
       {can.canReact && (
         <div className="msg__reaction-picker">
           {REACTION_EMOJI.map((emoji) => (
@@ -108,6 +121,7 @@ export function MessageActions({
                     messageId: message.id,
                     emoji: myReaction?.emoji === emoji ? null : emoji,
                   }),
+                  true,
                 )
               }
             >
@@ -118,20 +132,26 @@ export function MessageActions({
       )}
 
       {can.canEdit && (
-        <button type="button" className="btn btn--sm" onClick={() => setEditing(true)}>
+        <button type="button" className="menu-item" role="menuitem" onClick={() => setEditing(true)}>
           {t('message.edit')}
         </button>
       )}
       {can.canForward && (
-        <button type="button" className="btn btn--sm" onClick={() => setForwarding(true)}>
+        <button
+          type="button"
+          className="menu-item"
+          role="menuitem"
+          onClick={() => setForwarding(true)}
+        >
           {t('message.forward')}
         </button>
       )}
       {can.canDeleteForMe && (
         <button
           type="button"
-          className="btn btn--sm"
-          onClick={() => void run(actions.deleteForMe.mutateAsync(message.id))}
+          className="menu-item"
+          role="menuitem"
+          onClick={() => void run(actions.deleteForMe.mutateAsync(message.id), true)}
         >
           {t('message.deleteForMe')}
         </button>
@@ -139,7 +159,8 @@ export function MessageActions({
       {can.canDeleteForEveryone && (
         <button
           type="button"
-          className="btn btn--sm btn--danger"
+          className="menu-item menu-item--danger"
+          role="menuitem"
           onClick={() => setConfirmingDelete(true)}
         >
           {t('message.deleteForEveryone')}
@@ -153,7 +174,7 @@ export function MessageActions({
       )}
 
       {editing && (
-        <Dialog title={t('message.edit')} onClose={() => setEditing(false)}>
+        <Dialog title={t('message.edit')} onClose={() => { setEditing(false); onClose?.() }}>
           <textarea
             className="composer__input"
             value={draft}
@@ -173,6 +194,7 @@ export function MessageActions({
                   actions.edit.mutateAsync({ messageId: message.id, body: draft.trim() }),
                 )
                 setEditing(false)
+                onClose?.()
               }}
             >
               {t('common.save')}
@@ -184,7 +206,13 @@ export function MessageActions({
       {confirmingDelete && (
         // Confirmed, unlike delete-for-me: this changes what other people see,
         // cannot be undone, and the API requires a reason it will audit.
-        <Dialog title={t('message.deleteForEveryone')} onClose={() => setConfirmingDelete(false)}>
+        <Dialog
+          title={t('message.deleteForEveryone')}
+          onClose={() => {
+            setConfirmingDelete(false)
+            onClose?.()
+          }}
+        >
           <p>{t('message.deleteForEveryoneWarning')}</p>
           <label className="field">
             <span className="field__label">{t('common.reason')}</span>
@@ -210,6 +238,7 @@ export function MessageActions({
                   }),
                 )
                 setConfirmingDelete(false)
+                onClose?.()
               }}
             >
               {t('message.deleteForEveryone')}
@@ -222,12 +251,16 @@ export function MessageActions({
         <ForwardDialog
           message={message}
           sourceConversationId={conversation.id}
-          onClose={() => setForwarding(false)}
+          onClose={() => {
+            setForwarding(false)
+            onClose?.()
+          }}
           onForward={async (ids) => {
             await run(
               actions.forward.mutateAsync({ messageId: message.id, toConversationIds: ids }),
             )
             setForwarding(false)
+            onClose?.()
           }}
         />
       )}

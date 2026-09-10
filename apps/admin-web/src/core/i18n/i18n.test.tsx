@@ -50,6 +50,17 @@ describe('localisation', () => {
     expect(screen.getByTestId('number')).toHaveTextContent('1,234')
   })
 
+  it('formats every number with Western digits in Arabic too (DD-09)', () => {
+    // Arabic-Indic digits would be a second numeral system inside one product:
+    // the mobile app renders Western digits, and these two clients sit side by
+    // side on the same operator's desk.
+    renderWithProviders(<Probe />, { locale: 'ar' })
+    const arabicIndic = /[\u0660-\u0669]/
+    expect(screen.getByTestId('duration').textContent).not.toMatch(arabicIndic)
+    expect(screen.getByTestId('number').textContent).not.toMatch(arabicIndic)
+    expect(screen.getByTestId('number').textContent).toMatch(/1[,٬]?234/)
+  })
+
   it('has an Arabic string for every English key — Arabic is not an afterthought', () => {
     const englishKeys = Object.keys(messages.en).sort()
     const arabicKeys = Object.keys(messages.ar).sort()

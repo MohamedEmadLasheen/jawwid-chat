@@ -187,6 +187,126 @@ export const messages = {
     'search.messages': 'Messages',
     'search.none': 'Nothing matched',
 
+    // --- The console workspace (redesign) ----------------------------------
+    // Vocabulary is `docs/design/terminology.md`: one concept, one word, one
+    // translation. "Family", "Student", "Primary Owner" and "Internal note"
+    // are the PRD's own terms; the forbidden ones (ticket, agent, queue,
+    // assigned to, priority, SLA) appear nowhere in this file.
+    'console.title': 'Conversations',
+    'console.searchPlaceholder': 'Search families and messages',
+    'console.searchClear': 'Clear search',
+    'console.empty.title': 'Pick a conversation',
+    'console.empty.hint':
+      'Your families and student groups are on the right. Open one to read it and reply.',
+    'console.listEmpty.needsReply': 'Nothing is waiting for a reply.',
+    'console.listEmpty.waiting': 'No families are waiting on us.',
+    'console.listEmpty.hint': 'New conversations appear here as they arrive.',
+    'console.back': 'Back to conversations',
+    'console.contextOpen': 'Family details',
+    'console.contextClose': 'Close family details',
+    'console.error.list': "We couldn't load your conversations.",
+    'console.error.conversation': "We couldn't load this conversation.",
+
+    'conversation.you': 'You',
+    'conversation.direct': 'Family',
+    'conversation.classGroup': 'Class group',
+    'conversation.official': 'Official',
+    'conversation.members': '{count} participants',
+    'conversation.emptyHint': 'Start the conversation, or add an internal note.',
+
+    'responsibility.primaryOwner': 'Primary Owner',
+    'responsibility.unassigned': 'Not recorded',
+
+    'thread.today': 'Today',
+    'thread.yesterday': 'Yesterday',
+    'thread.newer': 'Newer messages',
+
+    'message.actions': 'Message actions',
+    'message.more': 'More',
+    'message.system': 'System',
+    // --- System events -----------------------------------------------------
+    // The API records WHAT HAPPENED as `{ kind, ...payload }` and each client
+    // says it in the reader's language (`terminology.md` §8.6). These are the
+    // sentences; `features/conversations/systemMessage.ts` is the mapping.
+    // Counts are rendered as `label: number` rather than as a counted noun,
+    // because Arabic has six plural forms and this i18n layer has no ICU
+    // plural selection — a glued `n + noun` would be wrong in five of them.
+    'system.groupCreated': 'Student group created for {learner}.',
+    'system.groupCreatedUnnamed': 'Student group created.',
+    'system.membersChanged': 'Group members updated.',
+    'system.membersChangedAdded': 'Group members updated — added: {added}',
+    'system.membersChangedRemoved': 'Group members updated — left: {removed}',
+    'system.membersChangedBoth': 'Group members updated — added: {added} · left: {removed}',
+    'system.groupArchived': 'This group was archived.',
+    'system.groupArchivedReason': 'This group was archived. Reason: {reason}',
+    'system.classCallStarted': 'A call started in {group} — {teacher}',
+    'system.classCallStartedNoGroup': 'A call started — {teacher}',
+    'system.callStarted': 'A call started.',
+    'system.unknown': 'Conversation update.',
+    // `terminology.md` §1: on a MESSAGE the mode is a one-word label. The
+    // `handling.*` strings are full sentences written for a family header
+    // ("You are covering this family") and reading one inside a message
+    // footer turns a label into a paragraph.
+    'mode.coverage': 'Covering',
+    'mode.assist': 'Assist',
+    'mode.escalation': 'Escalated',
+
+    'moderation.inContext': 'Held for approval in this conversation',
+    'moderation.approve': 'Approve and send',
+    'moderation.reject': 'Do not send',
+    'moderation.rejectReason': 'Reason — the sender reads this, so write it to them',
+    'moderation.policyHold': "Held by this group's policy",
+    'moderation.waiting': 'Held {duration}',
+    'moderation.by': 'Written by {name}',
+    'moderation.openQueue': 'Open the approvals list',
+    'moderation.decided': 'Decision recorded.',
+
+    'context.title': 'Family and student',
+    'context.family': 'Family',
+    'context.state': 'Status',
+    'context.tier': 'Tier',
+    'context.language': 'Language',
+    'language.ar': 'Arabic',
+    'language.en': 'English',
+    'context.labels': 'Labels',
+    'context.students': 'Students',
+    'context.participants': 'Participants',
+    'context.noFamily': 'This conversation is not linked to a family.',
+    'context.noFamilyHint': 'Class groups belong to the academy, not to one family.',
+    'context.noStudents': 'No students recorded.',
+    'context.noLabels': 'No labels.',
+    'context.error': "We couldn't load this family.",
+    'context.unavailableTitle': 'Comes from Jawwid Core',
+    'context.unavailableNote':
+      'Jawwid Core is not in launch scope yet, so this console has no source for these. Nothing is shown rather than a number nobody can act on.',
+    'context.unavailable.payment': 'Payment status',
+    'context.unavailable.subscription': 'Subscription and renewal',
+    'context.unavailable.nextClass': 'Course and next class',
+    'context.unavailable.tasks': 'Open tasks',
+
+    'family.tier.priority': 'Priority',
+    'family.tier.standard': 'Standard',
+    'family.state.onboarding': 'Onboarding',
+    'family.state.active': 'Active',
+    'family.state.at_risk': 'At risk',
+    'family.state.renewal_due': 'Renewal due',
+    'family.state.paused': 'Paused',
+    'family.state.churned': 'Left',
+
+    'learner.teacher': 'Teacher',
+    'learner.noTeacher': 'No teacher assigned',
+    'learner.noLevel': 'No level recorded',
+    'learner.inactive': 'Inactive',
+
+    'member.parent': 'Parent',
+    'member.teacher': 'Teacher',
+    'member.admin': 'Admin',
+    'member.observer': 'Observer',
+    'member.silent': 'Silent',
+
+    'common.close': 'Close',
+    'common.showAll': 'Show all ({count})',
+
   },
 
   ar: {
@@ -368,6 +488,125 @@ export const messages = {
     'search.conversations': 'ابحث في المحادثات',
     'search.messages': 'الرسائل',
     'search.none': 'لا توجد نتائج',
+
+    // --- لوحة التواصل (إعادة التصميم) --------------------------------------
+    // المصطلحات من `docs/design/terminology.md`: مفهوم واحد، كلمة واحدة،
+    // ترجمة واحدة. «الأسرة» و«الطالب» و«المسؤول الأساسي» و«ملاحظة داخلية» هي
+    // مصطلحات وثيقة المنتج نفسها، والكلمات الممنوعة (تذكرة، وكيل، أولوية)
+    // لا ترد هنا إطلاقًا.
+    'console.title': 'المحادثات',
+    'console.searchPlaceholder': 'ابحث في الأسر والرسائل',
+    'console.searchClear': 'مسح البحث',
+    'console.empty.title': 'اختر محادثة',
+    'console.empty.hint': 'الأسر ومجموعات الطلاب في القائمة المجاورة. افتح إحداها لقراءتها والرد عليها.',
+    'console.listEmpty.needsReply': 'لا توجد محادثة بانتظار الرد.',
+    'console.listEmpty.waiting': 'لا توجد أسرة بانتظارنا.',
+    'console.listEmpty.hint': 'تظهر المحادثات الجديدة هنا فور وصولها.',
+    'console.back': 'العودة إلى المحادثات',
+    'console.contextOpen': 'بيانات الأسرة',
+    'console.contextClose': 'إغلاق بيانات الأسرة',
+    'console.error.list': 'تعذّر تحميل المحادثات.',
+    'console.error.conversation': 'تعذّر تحميل هذه المحادثة.',
+
+    'conversation.you': 'أنت',
+    'conversation.direct': 'أسرة',
+    'conversation.classGroup': 'مجموعة حلقة',
+    'conversation.official': 'قناة رسمية',
+    'conversation.members': '{count} مشاركين',
+    'conversation.emptyHint': 'ابدأ المحادثة، أو أضف ملاحظة داخلية.',
+
+    'responsibility.primaryOwner': 'المسؤول الأساسي',
+    'responsibility.unassigned': 'غير مسجَّل',
+
+    'thread.today': 'اليوم',
+    'thread.yesterday': 'أمس',
+    'thread.newer': 'الرسائل الأحدث',
+
+    'message.actions': 'إجراءات الرسالة',
+    'message.more': 'المزيد',
+    'message.system': 'النظام',
+    // --- أحداث النظام ------------------------------------------------------
+    // تسجّل الواجهة الخلفية ما حدث على هيئة `{ kind, ...payload }`، ويقولها كل
+    // عميل بلغة قارئه (`terminology.md` §8.6). هذه هي الجُمل، والربط في
+    // `features/conversations/systemMessage.ts`.
+    // تُعرض الأعداد بصيغة «تسمية: رقم» لا كاسم معدود، لأن للعربية ستّ صيغ جمع
+    // ولا يملك هذا النظام اختيارًا صرفيًا للجمع — ولصق «رقم + اسم» يكون خطأ في
+    // خمس منها. والأفعال هنا تعود على الحدث لا على الشخص، تفاديًا للتذكير
+    // والتأنيث (§8.1).
+    'system.groupCreated': 'تم إنشاء مجموعة الطالب {learner}.',
+    'system.groupCreatedUnnamed': 'تم إنشاء مجموعة الطالب.',
+    'system.membersChanged': 'تم تحديث أعضاء المجموعة.',
+    'system.membersChangedAdded': 'تم تحديث أعضاء المجموعة — إضافة: {added}',
+    'system.membersChangedRemoved': 'تم تحديث أعضاء المجموعة — مغادرة: {removed}',
+    'system.membersChangedBoth': 'تم تحديث أعضاء المجموعة — إضافة: {added} · مغادرة: {removed}',
+    'system.groupArchived': 'تمت أرشفة هذه المجموعة.',
+    'system.groupArchivedReason': 'تمت أرشفة هذه المجموعة. السبب: {reason}',
+    'system.classCallStarted': 'بدأت مكالمة في {group} — {teacher}',
+    'system.classCallStartedNoGroup': 'بدأت مكالمة — {teacher}',
+    'system.callStarted': 'بدأت مكالمة.',
+    'system.unknown': 'تحديث في المحادثة.',
+    // `terminology.md` §1: على الرسالة يكون النمط كلمة واحدة. صيغ `handling.*`
+    // جُمَل كُتبت لرأس صفحة الأسرة، وقراءتها داخل تذييل رسالة تحوّل التسمية
+    // إلى فقرة.
+    'mode.coverage': 'تغطية',
+    'mode.assist': 'مساندة',
+    'mode.escalation': 'تصعيد',
+
+    'moderation.inContext': 'رسائل بانتظار الاعتماد في هذه المحادثة',
+    'moderation.approve': 'اعتماد وإرسال',
+    'moderation.reject': 'عدم الإرسال',
+    'moderation.rejectReason': 'السبب — يقرأه كاتب الرسالة، فاكتبه له',
+    'moderation.policyHold': 'محجوزة بموجب سياسة هذه المجموعة',
+    'moderation.waiting': 'مُعلَّقة {duration}',
+    'moderation.by': 'كتبها {name}',
+    'moderation.openQueue': 'فتح قائمة الاعتمادات',
+    'moderation.decided': 'تم تسجيل القرار.',
+
+    'context.title': 'الأسرة والطالب',
+    'context.family': 'الأسرة',
+    'context.state': 'الحالة',
+    'context.tier': 'الفئة',
+    'context.language': 'لغة التواصل',
+    'language.ar': 'العربية',
+    'language.en': 'الإنجليزية',
+    'context.labels': 'التصنيفات',
+    'context.students': 'الطلاب',
+    'context.participants': 'المشاركون',
+    'context.noFamily': 'هذه المحادثة غير مرتبطة بأسرة.',
+    'context.noFamilyHint': 'مجموعات الحلقات تتبع الأكاديمية، لا أسرة بعينها.',
+    'context.noStudents': 'لا يوجد طلاب مسجّلون.',
+    'context.noLabels': 'لا توجد تصنيفات.',
+    'context.error': 'تعذّر تحميل بيانات هذه الأسرة.',
+    'context.unavailableTitle': 'تأتي من جَوِّد الأساسي',
+    'context.unavailableNote':
+      'تكامل «جَوِّد الأساسي» خارج نطاق الإطلاق حاليًا، ولا مصدر لهذه البيانات في هذه اللوحة. نترك المكان محجوزًا ولا نعرض رقمًا لا يمكن الاعتماد عليه.',
+    'context.unavailable.payment': 'حالة السداد',
+    'context.unavailable.subscription': 'الاشتراك والتجديد',
+    'context.unavailable.nextClass': 'المقرر والحصة القادمة',
+    'context.unavailable.tasks': 'المهام المفتوحة',
+
+    'family.tier.priority': 'أولوية',
+    'family.tier.standard': 'عادية',
+    'family.state.onboarding': 'بداية الاشتراك',
+    'family.state.active': 'نشطة',
+    'family.state.at_risk': 'معرّضة للخطر',
+    'family.state.renewal_due': 'التجديد مستحق',
+    'family.state.paused': 'موقوفة مؤقتًا',
+    'family.state.churned': 'منتهية',
+
+    'learner.teacher': 'المعلم',
+    'learner.noTeacher': 'لا يوجد معلم مسنَد',
+    'learner.noLevel': 'المستوى غير مسجَّل',
+    'learner.inactive': 'غير نشط',
+
+    'member.parent': 'ولي الأمر',
+    'member.teacher': 'المعلم',
+    'member.admin': 'مشرف',
+    'member.observer': 'مراقب',
+    'member.silent': 'صامت',
+
+    'common.close': 'إغلاق',
+    'common.showAll': 'عرض الكل ({count})',
 
   },
 } as const
