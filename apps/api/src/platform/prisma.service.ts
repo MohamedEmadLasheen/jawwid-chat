@@ -6,7 +6,8 @@ import type { Actor } from './types';
 /** What every query inside one request runs against. */
 interface ActorContext {
   readonly tx: Prisma.TransactionClient;
-  readonly actorId: string;
+  /** Null inside a subject-only context: the actor is what is being resolved. */
+  readonly actorId: string | null;
 }
 
 /**
@@ -81,6 +82,39 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     );
   }
 
+  /**
+   * Run a unit of work with only the ACCOUNT's subject visible to PostgreSQL.
+   *
+   * Authentication has a chicken-and-egg problem: a principal row (chat.staff,
+   * chat.teacher, chat.contact) is readable only to the account it belongs to,
+   * and resolving that principal is exactly what login, token authentication and
+   * refresh are doing. This declares the identity the caller has ALREADY PROVEN
+   * -- the password verified, or the signature and session checked -- and
+   * nothing more.
+   *
+   * `chat.actor_kind` and `chat.actor_id` are deliberately NOT set: they are
+   * what is being resolved. `chat.actor_organization` is deliberately NOT set
+   * either, so that `chat.current_organization_id()` derives the tenant from the
+   * subject's own account rather than trusting an asserted one -- organization
+   * isolation is SATISFIED here, never waived.
+   */
+  async runAsSubject<T>(subject: string, work: () => Promise<T>): Promise<T> {
+    // Already inside a context: join it rather than opening a second
+    // transaction, which Prisma forbids.
+    if (actorContext.getStore()) return work();
+
+    return this.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`select set_config('chat.actor_subject', ${subject}, true)`;
+        return actorContext.run({ tx, actorId: null }, work);
+      },
+      {
+        timeout: Number(process.env.DATABASE_TRANSACTION_TIMEOUT_MS ?? 15_000),
+        maxWait: Number(process.env.DATABASE_TRANSACTION_MAX_WAIT_MS ?? 5_000),
+      },
+    );
+  }
+
   /** The transaction the current request is running in, if any. */
   static currentTransaction(): Prisma.TransactionClient | null {
     return actorContext.getStore()?.tx ?? null;
@@ -134,6 +168,7 @@ export function withRequestScopedTransaction(base: PrismaService): PrismaService
         property === '$connect' ||
         property === '$disconnect' ||
         property === 'runWithActor' ||
+        property === 'runAsSubject' ||
         property === 'onModuleInit' ||
         property === 'onModuleDestroy'
       ) {

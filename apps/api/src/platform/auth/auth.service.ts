@@ -154,7 +154,11 @@ export class AuthService {
       throw invalidCredentials();
     }
 
-    const actor = await this.identity.resolveByAccount(account.id);
+    // The credential is proven; declare that identity to PostgreSQL so the
+    // principal row -- readable only to its own account -- can be resolved.
+    const actor = await this.prisma.runAsSubject(subject, () =>
+      this.identity.resolveByAccount(account.id),
+    );
     if (!actor || !actor.isActive) {
       // The credential was right but the person is not active -- offboarded
       // staff, a departed contact. Same answer as a wrong password: whether a
@@ -173,17 +177,34 @@ export class AuthService {
       [ThrottleScope.LOGIN_SUBJECT, subject],
     ]);
 
-    const issued = await this.sessions.issue(account.id, device, context);
+    // ONE transaction, inside the actor's context, for everything that follows.
+    //
+    // The context is what lets the audit row be written at all: chat.audit_log
+    // carries a RESTRICTIVE organization policy, and on this PUBLIC route no
+    // interceptor has established one -- so the insert was refused and login
+    // failed after the session had already been handed out.
+    //
+    // The single boundary is the other half. Issuance used to commit before the
+    // audit ran, so any later failure left a live session the caller never
+    // received and could not revoke -- enough of them lock the account out on
+    // the device limit. Now login either completes or leaves nothing behind.
+    const issued = await this.prisma.runWithActor(actor, subject, async () => {
+      const session = await this.sessions.issue(account.id, device, context);
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.account.update({ where: { id: account.id }, data: { lastLoginAt: new Date() } });
-      await this.audit.audit(tx, {
-        actorId: actor.actorId,
-        action: 'auth.login',
-        entity: 'session',
-        entityId: issued.sessionId,
-        reason: 'password login',
+      // The proxy flattens this into the transaction runWithActor opened, so
+      // `tx` IS that transaction rather than a second one.
+      await this.prisma.$transaction(async (tx) => {
+        await tx.account.update({ where: { id: account.id }, data: { lastLoginAt: new Date() } });
+        await this.audit.audit(tx, {
+          actorId: actor.actorId,
+          action: 'auth.login',
+          entity: 'session',
+          entityId: session.sessionId,
+          reason: 'password login',
+        });
       });
+
+      return session;
     });
 
     return this.result(account.id, actor, issued.sessionId, issued.refreshToken);
@@ -241,7 +262,9 @@ export class AuthService {
     // Re-resolved from the database on every request: role, tenant, permissions
     // and activity are current, never whatever they were when the token was
     // minted.
-    const actor = await this.identity.resolveByAccount(claims.sub);
+    const actor = await this.prisma.runAsSubject(account.subject, () =>
+      this.identity.resolveByAccount(claims.sub),
+    );
     if (!actor || !actor.isActive) return null;
     if (actor.actorId !== claims.act) return null;
 
@@ -268,7 +291,9 @@ export class AuthService {
       throw new AuthError(AuthErrorCode.SESSION_INVALID, 'session is not valid');
     }
 
-    const actor = await this.identity.resolveByAccount(session.accountId);
+    const actor = await this.prisma.runAsSubject(session.account.subject, () =>
+      this.identity.resolveByAccount(session.accountId),
+    );
     if (!actor || !actor.isActive) {
       await this.sessions.revoke(session.id, 'principal not active');
       throw new AuthError(AuthErrorCode.SESSION_INVALID, 'session is not valid');
