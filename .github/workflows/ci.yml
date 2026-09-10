@@ -203,6 +203,12 @@ jobs:
       - name: G-19 · fresh-database schema acceptance
         run: psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f db/tests/schema_acceptance.sql
 
+      # BR-2 and the identity foundation. 20260905090050 cited this file as the
+      # guard on chat.account acquiring a contact channel; until PR-A it did not
+      # exist, so the control was named in a comment and enforced nowhere.
+      - name: Identity invariants (BR-2, teacher identity, connection roles)
+        run: psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f db/tests/invariants.sql
+
       # RT-024 / RT-025. The BR-1 backstop, proven against the database with the
       # application entirely out of the picture. Do not weaken an assertion in
       # db/tests/br1_invariants.sql to make a change pass.
