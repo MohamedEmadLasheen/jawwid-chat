@@ -31,6 +31,13 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   APP_ENV: staging
+  # ONE definition, inherited by both validation steps below. The worker
+  # manifest requires it BYTE-IDENTICAL to the API's: it namespaces the Redis
+  # pub/sub channel, pub/sub is global to the Redis SERVER rather than to the
+  # selected database, and a mismatch is silent -- the worker publishes to a
+  # channel no API instance is listening on, so events are "delivered" and
+  # nobody receives them. Defined once so the two cannot drift.
+  QUEUE_PREFIX: jawwid-chat-staging
 
 jobs:
   build:
@@ -120,7 +127,6 @@ jobs:
           DATABASE_STATEMENT_TIMEOUT_MS: '15000'
           DATABASE_POOL_MAX: '10'
           REDIS_URL: ${{ secrets.REDIS_URL }}
-          QUEUE_PREFIX: jawwid-chat-staging
           WORKER_CONCURRENCY: '5'
           JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
           JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
@@ -132,13 +138,14 @@ jobs:
           STORAGE_ACCESS_KEY: ${{ secrets.STORAGE_ACCESS_KEY }}
           STORAGE_SECRET_KEY: ${{ secrets.STORAGE_SECRET_KEY }}
           STORAGE_SIGNED_URL_TTL_SECONDS: '300'
+          STORAGE_SIGNING_SECRET: ${{ secrets.STORAGE_SIGNING_SECRET }}
           FCM_PROJECT_ID: ${{ vars.FCM_PROJECT_ID }}
           FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
           APNS_KEY_ID: ${{ vars.APNS_KEY_ID }}
           APNS_TEAM_ID: ${{ vars.APNS_TEAM_ID }}
           APNS_BUNDLE_ID: ${{ vars.APNS_BUNDLE_ID }}
           APNS_PRIVATE_KEY: ${{ secrets.APNS_PRIVATE_KEY }}
-          APNS_PRODUCTION: 'false'
+          APNS_ENVIRONMENT: sandbox
           LIVEKIT_URL: ${{ vars.LIVEKIT_URL }}
           LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
           LIVEKIT_API_SECRET: ${{ secrets.LIVEKIT_API_SECRET }}
@@ -155,6 +162,52 @@ jobs:
           BUILD_VERSION: staging-${{ github.run_number }}
           BUILD_TIME: ${{ github.event.repository.updated_at }}
         run: scripts/infra/check-env.sh staging
+
+      - name: Validate the worker configuration
+        # The worker is a DIFFERENT process with a DIFFERENT contract
+        # (infra/env/worker.manifest.tsv). The two manifests state OPPOSITE
+        # rules for the same database variables, so the component is STATED
+        # rather than inferred -- grading the worker against the API's contract
+        # would demand a credential it must not hold, and grading the API
+        # against the worker's would demand a BYPASSRLS one.
+        #
+        # DATABASE_SERVICE_URL (chat_service, BYPASSRLS), never DATABASE_URL.
+        # Connected as chat_app the worker still CLAIMS outbox rows -- that
+        # table carries a blanket policy -- but every read it needs in order to
+        # route what it claimed returns nothing, so it marks each row published
+        # and delivers it to nobody, with no error anywhere. DATABASE_URL and
+        # DATABASE_MIGRATION_URL are both FORBIDDEN here, which is why neither
+        # appears below; the runtime refuses to fall back (platform/database-role.ts)
+        # and then asks the database which role it really got.
+        #
+        # No PORT and no CORS_ALLOWED_ORIGINS: this process starts no HTTP
+        # server and must not hold a port. No WORKER_CONCURRENCY: despite the
+        # name it configures nothing here -- the loop is sequential.
+        #
+        # QUEUE_PREFIX is INHERITED from the workflow env above rather than
+        # restated, so the API's value and the worker's cannot drift.
+        env:
+          NODE_ENV: production
+          APP_ENV: staging
+          SHUTDOWN_GRACE_MS: '15000'
+          DATABASE_SERVICE_URL: ${{ secrets.DATABASE_SERVICE_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          STORAGE_ENDPOINT: ${{ vars.STORAGE_ENDPOINT }}
+          STORAGE_REGION: auto
+          STORAGE_BUCKET: ${{ vars.STORAGE_BUCKET }}
+          STORAGE_ACCESS_KEY: ${{ secrets.STORAGE_ACCESS_KEY }}
+          STORAGE_SECRET_KEY: ${{ secrets.STORAGE_SECRET_KEY }}
+          STORAGE_SIGNED_URL_TTL_SECONDS: '300'
+          STORAGE_SIGNING_SECRET: ${{ secrets.STORAGE_SIGNING_SECRET }}
+          FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
+          APNS_KEY_ID: ${{ vars.APNS_KEY_ID }}
+          APNS_TEAM_ID: ${{ vars.APNS_TEAM_ID }}
+          APNS_BUNDLE_ID: ${{ vars.APNS_BUNDLE_ID }}
+          APNS_PRIVATE_KEY: ${{ secrets.APNS_PRIVATE_KEY }}
+          APNS_ENVIRONMENT: sandbox
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          GIT_COMMIT: ${{ github.sha }}
+        run: scripts/infra/check-env.sh staging --component worker
 
       - name: Back up the database before migrating
         env:

@@ -4,6 +4,15 @@
 #
 #   scripts/infra/check-env.sh local                  # validate the process env
 #   scripts/infra/check-env.sh production --file x.env
+#   scripts/infra/check-env.sh staging --component worker
+#
+# Two components, two manifests: the API's infra/env/manifest.tsv and the
+# worker's infra/env/worker.manifest.tsv. They state OPPOSITE rules for the same
+# database variables -- the API requires DATABASE_URL (chat_app) and forbids
+# DATABASE_SERVICE_URL; the worker requires DATABASE_SERVICE_URL (chat_service,
+# BYPASSRLS) and forbids DATABASE_URL -- which is why the contract is two files
+# rather than one. `api` is the default, so every existing invocation is
+# unaffected.
 #
 # Runs in CI and as the first step of every deployment. A deployment that fails
 # this check never starts, which is the point: a missing STORAGE_SECRET_KEY
@@ -17,23 +26,37 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-MANIFEST="$ROOT/infra/env/manifest.tsv"
 
 ENVIRONMENT="${1:-}"
 ENV_FILE=""
+COMPONENT="api"
 shift || true
 while [ $# -gt 0 ]; do
   case "$1" in
     --file) ENV_FILE="${2:-}"; shift 2 ;;
+    --component) COMPONENT="${2:-}"; shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 64 ;;
   esac
 done
+
+USAGE="usage: $0 {local|staging|production} [--file path] [--component {api|worker}]"
 
 case "$ENVIRONMENT" in
   local)      COLUMN=local ;;
   staging)    COLUMN=staging ;;
   production) COLUMN=production ;;
-  *) echo "usage: $0 {local|staging|production} [--file path]" >&2; exit 64 ;;
+  *) echo "$USAGE" >&2; exit 64 ;;
+esac
+
+# The component is STATED, never inferred. "DATABASE_SERVICE_URL is present, so
+# this must be the worker" would silently grade an API environment against the
+# worker's contract the moment one shared env file leaked that variable in --
+# and grading the API against a contract that REQUIRES a BYPASSRLS credential is
+# the opposite of the control this gate exists to be.
+case "$COMPONENT" in
+  api)    MANIFEST="$ROOT/infra/env/manifest.tsv" ;;
+  worker) MANIFEST="$ROOT/infra/env/worker.manifest.tsv" ;;
+  *) echo "$USAGE" >&2; exit 64 ;;
 esac
 
 [ -f "$MANIFEST" ] || { echo "manifest not found: $MANIFEST" >&2; exit 66; }
@@ -74,7 +97,7 @@ errors=0
 warnings=0
 checked=0
 
-printf 'Validating %s configuration from %s\n\n' "$ENVIRONMENT" "$SOURCE"
+printf 'Validating %s %s configuration from %s\n\n' "$COMPONENT" "$ENVIRONMENT" "$SOURCE"
 
 while IFS=$'\t' read -r name group secret r_local r_staging r_prod || [ -n "${name:-}" ]; do
   case "$name" in ''|'#'*) continue ;; esac
@@ -120,23 +143,37 @@ done < "$MANIFEST"
 
 # Production-only structural checks that a per-variable rule cannot express.
 if [ "$ENVIRONMENT" = "production" ]; then
-  if [ "$(lookup CORS_ALLOWED_ORIGINS)" = "*" ]; then
-    echo "  FORBIDDEN   CORS_ALLOWED_ORIGINS is '*' -- wildcard CORS on a credentialed API"
-    errors=$((errors + 1))
+  # API only: the worker starts no HTTP server, so it has no CORS policy to get
+  # wrong. Copying this check onto it would be grading a variable it must not
+  # have.
+  if [ "$COMPONENT" = "api" ]; then
+    if [ "$(lookup CORS_ALLOWED_ORIGINS)" = "*" ]; then
+      echo "  FORBIDDEN   CORS_ALLOWED_ORIGINS is '*' -- wildcard CORS on a credentialed API"
+      errors=$((errors + 1))
+    fi
   fi
   if [ "$(lookup NODE_ENV)" != "production" ]; then
     echo "  FORBIDDEN   NODE_ENV must be 'production' in the production environment"
     errors=$((errors + 1))
   fi
-  case "$(lookup DATABASE_URL)" in
-    *sslmode=disable*)
-      echo "  FORBIDDEN   DATABASE_URL disables TLS"; errors=$((errors + 1)) ;;
+  # TLS on the connection THIS process actually opens. The two components reach
+  # the same database as different roles through different variables, so the
+  # check has to follow the component or it grades a variable that is forbidden
+  # here and absent by design.
+  case "$COMPONENT" in
+    worker) DB_URL_VAR=DATABASE_SERVICE_URL ;;
+    *)      DB_URL_VAR=DATABASE_URL ;;
   esac
-  # APNS_PRODUCTION=false points the client at Apple's sandbox gateway, which
+  case "$(lookup "$DB_URL_VAR")" in
+    *sslmode=disable*)
+      echo "  FORBIDDEN   $DB_URL_VAR disables TLS"; errors=$((errors + 1)) ;;
+  esac
+  # APNS_ENVIRONMENT=sandbox points the client at Apple's sandbox gateway, which
   # silently accepts production device tokens and delivers nothing. It fails as
-  # "push stopped working for iOS" with no error anywhere.
-  if [ "$(lookup APNS_PRODUCTION)" != "true" ]; then
-    echo "  FORBIDDEN   APNS_PRODUCTION must be 'true' -- sandbox APNs drops production tokens"
+  # "push stopped working for iOS" with no error anywhere. The runtime reads
+  # this variable (apns.provider.ts) and refuses any value but sandbox|production.
+  if [ "$(lookup APNS_ENVIRONMENT)" != "production" ]; then
+    echo "  FORBIDDEN   APNS_ENVIRONMENT must be 'production' -- sandbox APNs drops production tokens"
     errors=$((errors + 1))
   fi
 fi
