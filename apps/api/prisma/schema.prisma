@@ -79,6 +79,8 @@ model Contact {
   canManageBilling  Boolean  @map("can_manage_billing")
   canManageContacts Boolean  @map("can_manage_contacts")
   canCancel         Boolean  @map("can_cancel")
+  accountId         String?  @map("account_id") @db.Uuid
+  account           Account? @relation(fields: [accountId], references: [id])
   isActive          Boolean  @map("is_active") @default(true)
   createdAt         DateTime @map("created_at") @db.Timestamptz @default(now())
   updatedAt         DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
@@ -95,8 +97,10 @@ model Learner {
   family      Family    @relation(fields: [familyId], references: [id])
   name        String
   level       String?
-  /// AI #1 owns teacher identity (correction C-1). Bare uuid until it lands.
+  /// Now a real relationship: chat.teacher landed in the PR-A identity
+  /// foundation and learner.teacher_id is a foreign key to it.
   teacherId   String?   @map("teacher_id") @db.Uuid
+  teacher     Teacher?  @relation(fields: [teacherId], references: [id])
   nextClassAt DateTime? @map("next_class_at") @db.Timestamptz
   createdAt   DateTime  @map("created_at") @db.Timestamptz @default(now())
   updatedAt   DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
@@ -518,5 +522,130 @@ model Organization {
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@map("organization")
+  @@schema("chat")
+}
+
+// =====================================================================
+// Identity foundation (PR-A).
+//
+// docs/architecture/IDENTITY-MODEL.md is canonical; the SQL migrations
+// 20260910120000/120100 own the DDL. Nothing here is exposed through a DTO:
+// AccountCredential and Session hold authentication material and must never
+// leave the auth service, and the mappers in
+// src/communication/contracts/dto.ts enumerate their fields explicitly, so a
+// model added here cannot leak into a response by accident.
+// =====================================================================
+
+/// The login identity. Carries an opaque subject and never a contact channel
+/// (BR-2, guarded by db/tests/invariants.sql).
+model Account {
+  /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
+  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
+  subject        String    @unique
+  /// staff | family | teacher
+  kind           String
+  /// provisioned | active | suspended | deactivated
+  status         String    @default("active")
+  isActive       Boolean   @map("is_active") @default(true)
+  deactivatedAt  DateTime? @map("deactivated_at") @db.Timestamptz
+  deactivatedBy  String?   @map("deactivated_by") @db.Uuid
+  lastLoginAt    DateTime? @map("last_login_at") @db.Timestamptz
+  createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
+  updatedAt      DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  credential AccountCredential?
+  sessions   Session[]
+  devices    Device[]
+  teacher    Teacher?
+  contacts   Contact[]
+
+  @@map("account")
+  @@schema("chat")
+}
+
+/// Password material. One row per account; absence means the account cannot
+/// log in with a password. Never selected outside the login path.
+model AccountCredential {
+  accountId         String    @id @map("account_id") @db.Uuid
+  account           Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  passwordHash      String    @map("password_hash")
+  passwordChangedAt DateTime  @map("password_changed_at") @db.Timestamptz @default(now())
+  failedAttempts    Int       @map("failed_attempts") @default(0)
+  lockedUntil       DateTime? @map("locked_until") @db.Timestamptz
+  updatedAt         DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  @@map("account_credential")
+  @@schema("chat")
+}
+
+/// One row per login. The access token carries this row's id as `sid`, so
+/// revoking the row ends the session on the next request.
+model Session {
+  organizationId   String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id               String    @id @default(uuid()) @db.Uuid
+  accountId        String    @map("account_id") @db.Uuid
+  account          Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  deviceId         String?   @map("device_id") @db.Uuid
+  device           Device?   @relation(fields: [deviceId], references: [id])
+  /// Hashed. The refresh token itself is never stored.
+  refreshTokenHash String    @unique @map("refresh_token_hash")
+  createdAt        DateTime  @map("created_at") @db.Timestamptz @default(now())
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz
+  lastSeenAt       DateTime? @map("last_seen_at") @db.Timestamptz
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz
+  revokedBy        String?   @map("revoked_by") @db.Uuid
+  revokedReason    String?   @map("revoked_reason")
+  /// Hashed, never the raw address.
+  ipHash           String?   @map("ip_hash")
+  userAgent        String?   @map("user_agent")
+
+  @@map("session")
+  @@schema("chat")
+}
+
+/// A device an account signs in on. `name` is a label such as "iPhone" and is
+/// never a phone number.
+model Device {
+  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id           String   @id @default(uuid()) @db.Uuid
+  accountId    String   @map("account_id") @db.Uuid
+  account      Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  /// ios | android | web
+  platform     String
+  appVersion   String?  @map("app_version")
+  name         String?
+  firstSeenAt  DateTime @map("first_seen_at") @db.Timestamptz @default(now())
+  lastSeenAt   DateTime @map("last_seen_at") @db.Timestamptz @default(now())
+  createdAt    DateTime @map("created_at") @db.Timestamptz @default(now())
+  updatedAt    DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  sessions Session[]
+
+  @@map("device")
+  @@schema("chat")
+}
+
+/// Teacher identity. Not a staff role: `staff.role` deliberately has no
+/// teacher, because the family-facing role set would then decide whether a
+/// teacher may communicate (domain-reconciliation.md C).
+model Teacher {
+  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id            String    @id @default(uuid()) @db.Uuid
+  /// Null until a login is provisioned; such a teacher can never authenticate.
+  accountId     String?   @unique @map("account_id") @db.Uuid
+  account       Account?  @relation(fields: [accountId], references: [id])
+  name          String
+  /// Set when Jawwid Core gains a teacher entity.
+  coreTeacherId String?   @unique @map("core_teacher_id") @db.Uuid
+  syncedAt      DateTime? @map("synced_at") @db.Timestamptz
+  isActive      Boolean   @map("is_active") @default(true)
+  leftAt        DateTime? @map("left_at") @db.Timestamptz
+  createdAt     DateTime  @map("created_at") @db.Timestamptz @default(now())
+  updatedAt     DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  learners Learner[]
+
+  @@map("teacher")
   @@schema("chat")
 }

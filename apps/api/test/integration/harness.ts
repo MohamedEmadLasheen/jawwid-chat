@@ -92,6 +92,14 @@ export async function seed(prisma: PrismaService): Promise<Scenario> {
        ('${ids.otherAdminId}'::uuid, 'admin_b', 'admin', true),
        ('${ids.managerId}'::uuid, 'manager_c', 'manager', true)`,
   );
+  // chat.learner.teacher_id is a foreign key to chat.teacher since the PR-A
+  // identity foundation, so the teachers must exist before the learners do.
+  // Active, because these two stand in for provisioned teachers.
+  await prisma.$executeRawUnsafe(
+    `insert into chat.teacher (id, name, is_active) values
+       ('${ids.teacherId}'::uuid, 'teacher_c', true),
+       ('${ids.newTeacherId}'::uuid, 'teacher_d', true)`,
+  );
   await prisma.$executeRawUnsafe(
     `insert into chat.family (id, display_name, owner_id, language)
      values ('${ids.familyId}'::uuid, 'family_x', '${ids.ownerId}'::uuid, 'ar')`,
@@ -121,6 +129,7 @@ export async function truncate(prisma: PrismaService): Promise<void> {
              chat.call, chat.notification, chat.outbox_event,
              chat.conversation_participant_state, chat.conversation_member,
              chat.message, chat.conversation, chat.learner,
-             chat.contact, chat.family, chat.staff, chat.event_log, chat.audit_log
+             chat.contact, chat.family, chat.staff, chat.teacher,
+             chat.event_log, chat.audit_log
     restart identity cascade`);
 }
