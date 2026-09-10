@@ -4,12 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import '../features/auth/domain/auth_state.dart';
 import '../features/auth/presentation/sign_in_screen.dart';
-import '../features/conversations/presentation/conversations_screen.dart';
-import '../features/conversations/presentation/groups_screen.dart';
-import '../features/home/presentation/home_screen.dart';
+import '../features/calls/presentation/calls_screen.dart';
+import '../features/conversations/presentation/chats_screen.dart';
 import '../features/messages/presentation/chat_screen_route.dart';
+import '../features/profile/presentation/profile_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
-import '../shared/models/user_role.dart';
 import 'providers.dart';
 import 'shells/app_shell.dart';
 
@@ -17,12 +16,26 @@ import 'shells/app_shell.dart';
 abstract final class Routes {
   static const splash = '/';
   static const signIn = '/sign-in';
-  static const home = '/home';
   static const chats = '/chats';
-  static const groups = '/groups';
+  static const calls = '/calls';
   static const settings = '/settings';
 
+  /// Retired destinations. They are not routes any more — Home and Groups both dissolved
+  /// into Chats — but they are kept named here because notifications, saved links and
+  /// earlier installs still point at them, and a stale link must land somewhere sensible
+  /// rather than on a 404.
+  static const retiredHome = '/home';
+  static const retiredGroups = '/groups';
+
   static String conversation(String id) => '/chats/$id';
+
+  /// A person's profile, or a group's info. Reached only by tapping an avatar or a name —
+  /// there is no Profile tab, and there never will be.
+  static String conversationProfile(String id) => '/chats/$id/info';
+
+  /// The signed-in user's own account. Deliberately under Settings rather than alongside
+  /// the profiles above: "my account" and "someone else's profile" are different things.
+  static const myAccount = '/settings/account';
 }
 
 /// Rebuilds on every authentication change, so a session ending immediately evicts every
@@ -51,16 +64,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
         routes: [
           GoRoute(
-            path: Routes.home,
-            builder: (context, state) => const HomeScreen(),
-          ),
-          GoRoute(
             path: Routes.chats,
-            builder: (context, state) => const ConversationsScreen(),
+            builder: (context, state) => const ChatsScreen(),
           ),
           GoRoute(
-            path: Routes.groups,
-            builder: (context, state) => const GroupsScreen(),
+            path: Routes.calls,
+            builder: (context, state) => const CallsScreen(),
           ),
           GoRoute(
             path: Routes.settings,
@@ -76,6 +85,29 @@ final routerProvider = Provider<GoRouter>((ref) {
           conversationId: state.pathParameters['conversationId']!,
         ),
       ),
+      // The profile sits outside the tab shell, like the conversation it belongs to: it is
+      // pushed on top, keeps a back button, and never highlights a tab.
+      GoRoute(
+        path: '${Routes.chats}/:conversationId/info',
+        builder: (context, state) => ConversationProfileScreen(
+          conversationId: state.pathParameters['conversationId']!,
+        ),
+      ),
+      GoRoute(
+        path: Routes.myAccount,
+        builder: (context, state) => const MyAccountScreen(),
+      ),
+      // The two retired destinations, registered purely to forward. Declared as real routes
+      // rather than left to the top-level redirect so that an old link is *matched* and
+      // forwarded, instead of falling through to an error page.
+      GoRoute(
+        path: Routes.retiredHome,
+        redirect: (context, state) => Routes.chats,
+      ),
+      GoRoute(
+        path: Routes.retiredGroups,
+        redirect: (context, state) => Routes.chats,
+      ),
     ],
   );
 });
@@ -83,7 +115,8 @@ final routerProvider = Provider<GoRouter>((ref) {
 /// Where an unauthenticated or undecided session may go.
 ///
 /// A deep link's target id is *not* validated here — the backend remains the authority on
-/// whether this user may see that conversation (§52). This only decides signed-in vs not.
+/// whether this user may see that conversation (§52). This only decides signed-in vs not,
+/// and forwards the two retired destinations.
 String? _redirect(Ref ref, String location) {
   final auth = ref.read(authControllerProvider);
 
@@ -101,12 +134,18 @@ String? _redirect(Ref ref, String location) {
   if (!auth.isAuthenticated) {
     return location == Routes.signIn ? null : Routes.signIn;
   }
-  if (atEntry) return Routes.home;
 
-  // A teacher has no Jawwid tab; landing on it via a stale deep link goes home rather than
-  // rendering a tab their shell does not contain.
-  final role = ref.read(currentRoleProvider);
-  if (role == UserRole.teacher && location == Routes.chats) return Routes.home;
+  // Signing in lands on the conversations, with nothing in between. "I opened Jawwid Chat,
+  // so I see my chats" is the whole mental model, and a dashboard stop on the way would
+  // undo it on every single launch.
+  if (atEntry) return Routes.chats;
+
+  // Home and Groups are gone. Both were views of the same conversations, so both forward
+  // to the list that now holds them; Groups arrives at Chats, where the Groups chip is one
+  // tap away.
+  if (location == Routes.retiredHome || location == Routes.retiredGroups) {
+    return Routes.chats;
+  }
 
   return null;
 }

@@ -11,8 +11,8 @@ import 'package:jawwid_chat/core/data/fake_repositories.dart';
 import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/features/conversations/application/conversations_controller.dart';
-import 'package:jawwid_chat/features/conversations/presentation/conversations_screen.dart';
-import 'package:jawwid_chat/features/conversations/presentation/groups_screen.dart';
+import 'package:jawwid_chat/features/conversations/domain/chat_feed.dart';
+import 'package:jawwid_chat/features/conversations/presentation/chats_screen.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/user_role.dart';
 
@@ -63,7 +63,7 @@ void main() {
   group('BR-1: no teacher/parent direct affordance exists', () {
     testWidgets('a teacher sees no message or call action for a parent', (tester) async {
       await tester.pumpWidget(
-        harness(role: UserRole.teacher, child: const GroupsScreen()),
+        harness(role: UserRole.teacher, child: const ChatsScreen(initialFilter: ChatFilter.groups)),
       );
       await tester.pumpAndSettle();
 
@@ -76,7 +76,7 @@ void main() {
 
     testWidgets('a parent sees no message or call action for a teacher', (tester) async {
       await tester.pumpWidget(
-        harness(role: UserRole.parent, child: const GroupsScreen()),
+        harness(role: UserRole.parent, child: const ChatsScreen(initialFilter: ChatFilter.groups)),
       );
       await tester.pumpAndSettle();
 
@@ -87,7 +87,7 @@ void main() {
 
     testWidgets('neither role gets a group-membership editing affordance', (tester) async {
       for (final role in UserRole.values) {
-        await tester.pumpWidget(harness(role: role, child: const GroupsScreen()));
+        await tester.pumpWidget(harness(role: role, child: const ChatsScreen(initialFilter: ChatFilter.groups)));
         await tester.pumpAndSettle();
 
         // Membership belongs to the backend (§24).
@@ -104,7 +104,7 @@ void main() {
     testWidgets('the chat list renders no phone-shaped string', (tester) async {
       for (final role in UserRole.values) {
         await tester.pumpWidget(
-          harness(role: role, child: const ConversationsScreen()),
+          harness(role: role, child: const ChatsScreen()),
         );
         await tester.pumpAndSettle();
 
@@ -138,7 +138,7 @@ void main() {
 
       for (final role in UserRole.values) {
         await tester.pumpWidget(
-          harness(role: role, child: const ConversationsScreen(), locale: const Locale('en')),
+          harness(role: role, child: const ChatsScreen(), locale: const Locale('en')),
         );
         await tester.pumpAndSettle();
 
@@ -154,40 +154,42 @@ void main() {
     });
   });
 
-  group('role-aware navigation shells', () {
-    testWidgets('a parent gets four tabs including Jawwid', (tester) async {
-      await tester.pumpWidget(
-        harness(
-          role: UserRole.parent,
-          child: AppShell(
-            role: UserRole.parent,
-            currentRoute: '/home',
-            onDestinationSelected: (_) {},
-            child: const SizedBox.shrink(),
+  group('navigation shell', () {
+    testWidgets('both roles get exactly Chats, Calls and Settings', (tester) async {
+      // Three destinations, and no fourth. Home, Jawwid and Groups were all views of the
+      // same conversations; keeping them as destinations is what made "where are my
+      // chats?" a question with three answers.
+      for (final role in UserRole.values) {
+        await tester.pumpWidget(
+          harness(
+            role: role,
+            child: AppShell(
+              role: role,
+              currentRoute: '/chats',
+              onDestinationSelected: (_) {},
+              child: const SizedBox.shrink(),
+            ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
 
-      expect(find.byType(NavigationDestination), findsNWidgets(4));
+        expect(find.byType(NavigationDestination), findsNWidgets(3));
+      }
+
+      expect(
+        Shells.destinations.map((d) => d.route),
+        ['/chats', '/calls', '/settings'],
+      );
     });
 
-    testWidgets('a teacher gets three tabs and no Jawwid tab', (tester) async {
-      await tester.pumpWidget(
-        harness(
-          role: UserRole.teacher,
-          child: AppShell(
-            role: UserRole.teacher,
-            currentRoute: '/home',
-            onDestinationSelected: (_) {},
-            child: const SizedBox.shrink(),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.byType(NavigationDestination), findsNWidgets(3));
-      expect(Shells.teacher.any((d) => d.route == '/chats'), isFalse);
+    testWidgets('no retired destination survives in the shell', (tester) async {
+      for (final route in ['/home', '/groups']) {
+        expect(
+          Shells.destinations.any((d) => d.route == route),
+          isFalse,
+          reason: '$route is not a destination any more',
+        );
+      }
     });
 
     testWidgets('every tab shows a label, never icon-only', (tester) async {
@@ -197,7 +199,7 @@ void main() {
             role: role,
             child: AppShell(
               role: role,
-              currentRoute: '/home',
+              currentRoute: '/chats',
               onDestinationSelected: (_) {},
               child: const SizedBox.shrink(),
             ),
@@ -242,7 +244,7 @@ void main() {
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
-            home: const ConversationsScreen(),
+            home: const ChatsScreen(),
           ),
         ),
       );

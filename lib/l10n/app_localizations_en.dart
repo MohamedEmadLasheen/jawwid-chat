@@ -52,42 +52,7 @@ class L10nEn extends L10n {
   String get tabChats => 'Chats';
 
   @override
-  String get tabHome => 'Home';
-
-  @override
-  String get tabGroups => 'Groups';
-
-  @override
-  String get homeYourChildren => 'Your children';
-
-  @override
-  String get homeMessageJawwid => 'Message Jawwid';
-
-  @override
-  String get homeNeedsReply => 'Needs a reply';
-
-  @override
   String get tabCalls => 'Calls';
-
-  @override
-  String get tabNotifications => 'Updates';
-
-  @override
-  String get tabProfile => 'Profile';
-
-  @override
-  String get sectionJawwid => 'Jawwid';
-
-  @override
-  String get sectionStaff => 'Jawwid team';
-
-  @override
-  String get sectionMyGroups => 'My groups';
-
-  @override
-  String sectionLearner(String name) {
-    return '$name';
-  }
 
   @override
   String handledBy(String name) {
@@ -118,12 +83,6 @@ class L10nEn extends L10n {
     );
     return '$_temp0';
   }
-
-  @override
-  String get pinAction => 'Pin';
-
-  @override
-  String get unpinAction => 'Unpin';
 
   @override
   String get muteAction => 'Mute';
@@ -418,4 +377,114 @@ class L10nEn extends L10n {
 
   @override
   String get yesterdayLabel => 'Yesterday';
+
+  @override
+  String get filterAll => 'All';
+
+  @override
+  String get filterUnread => 'Unread';
+
+  @override
+  String get filterGroups => 'Groups';
+
+  @override
+  String get filterFavorites => 'Favourites';
+
+  @override
+  String get filterEmptyUnread => 'Nothing unread';
+
+  @override
+  String get filterEmptyUnreadBody =>
+      'You have read everything. New messages will appear here.';
+
+  @override
+  String get filterEmptyGroups => 'No student groups yet';
+
+  @override
+  String get filterEmptyFavorites => 'No favourites yet';
+
+  @override
+  String get filterEmptyFavoritesBody =>
+      'Press and hold a conversation to add it to your favourites.';
+
+  @override
+  String get favoriteAction => 'Add to favourites';
+
+  @override
+  String get unfavoriteAction => 'Remove from favourites';
+
+  @override
+  String get favoriteLabel => 'Favourite';
+
+  @override
+  String get searchClear => 'Clear search';
+
+  @override
+  String get searchEmptyBody => 'Search covers conversation and group names.';
+
+  @override
+  String get archivedShow => 'Show archived';
+
+  @override
+  String get archivedHide => 'Hide archived';
+
+  @override
+  String get callHistoryEmptyBody => 'Calls you take part in will appear here.';
+
+  @override
+  String get callsUnavailableTitle => 'Calls are not available yet';
+
+  @override
+  String get callsUnavailableBody =>
+      'Calling has not been switched on for this app yet. Nothing is missing from your account.';
+
+  @override
+  String get conversationActionsTitle => 'Conversation options';
+
+  @override
+  String get groupInfoTitle => 'Group info';
+
+  @override
+  String get groupLearnerLabel => 'Student';
+
+  @override
+  String get groupMemberUnresolved => 'Member';
+
+  @override
+  String get myAccountTitle => 'My account';
+
+  @override
+  String get childrenTitle => 'Children';
+
+  @override
+  String get childGroupLabel => 'Group';
+
+  @override
+  String get childTeacherLabel => 'Teacher';
+
+  @override
+  String get childLevelLabel => 'Level';
+
+  @override
+  String get childSubscriptionLabel => 'Subscription';
+
+  @override
+  String get childScheduleLabel => 'Schedule';
+
+  @override
+  String get childrenEmpty => 'No children are linked to your account yet.';
+
+  @override
+  String get contactInfoTitle => 'Contact information';
+
+  @override
+  String get contactInfoUnavailable =>
+      'Jawwid does not hold phone numbers or email addresses in this app yet.';
+
+  @override
+  String get fieldNotAvailableYet => 'Not available yet';
+
+  @override
+  String get profileNoDirectContact =>
+      'You can reach the teacher in your child\'s group.';
 }
