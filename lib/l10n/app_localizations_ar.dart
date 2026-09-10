@@ -422,7 +422,7 @@ class L10nAr extends L10n {
   String get searchClear => 'مسح البحث';
 
   @override
-  String get searchEmptyBody => 'يشمل البحث أسماء المحادثات والمجموعات.';
+  String get searchEmptyBody => 'يشمل البحث عناوين المحادثات والمجموعات.';
 
   @override
   String get archivedShow => 'عرض المؤرشفة';

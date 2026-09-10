@@ -42,11 +42,11 @@ void main() {
     learner: const LearnerRef(id: 'l_1', displayName: 'أحمد'),
     unread: 1,
   );
-  final maryam = conversation(
+  final sara = conversation(
     id: 'c_group_2',
     kind: ConversationKind.studentGroup,
-    title: 'مريم · جَوِّد',
-    learner: const LearnerRef(id: 'l_2', displayName: 'مريم'),
+    title: 'سارة · جَوِّد',
+    learner: const LearnerRef(id: 'l_2', displayName: 'سارة'),
   );
   final staff = conversation(
     id: 'c_admin',
@@ -56,7 +56,7 @@ void main() {
 
   List<ConversationSection> sections() => ConversationListBuilder.build(
         role: UserRole.parent,
-        conversations: [support, ahmed, maryam, staff],
+        conversations: [support, ahmed, sara, staff],
       );
 
   List<String> ids(List<Conversation> conversations) =>
@@ -139,7 +139,7 @@ void main() {
       final feed = ChatFeed.build(
         sections: sections(),
         filter: ChatFilter.all,
-        query: 'مريم',
+        query: 'سارة',
       );
 
       expect(ids(feed), ['c_group_2']);
@@ -151,7 +151,7 @@ void main() {
       final feed = ChatFeed.build(
         sections: sections(),
         filter: ChatFilter.unread,
-        query: 'مريم',
+        query: 'سارة',
       );
 
       expect(feed, isEmpty);

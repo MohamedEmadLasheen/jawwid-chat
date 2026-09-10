@@ -24,7 +24,7 @@ void main() {
 
     test('taa marbuta and haa are interchangeable', () {
       expect(SearchText.matches('فاطمة', 'فاطمه'), isTrue);
-      expect(SearchText.matches('مريمه', 'مريمة'), isTrue);
+      expect(SearchText.matches('خديجه', 'خديجة'), isTrue);
     });
 
     test('alef maqsura and yaa are interchangeable', () {
@@ -43,7 +43,7 @@ void main() {
 
     test('folding does not make different names collide', () {
       expect(SearchText.matches('أحمد', 'محمد'), isFalse);
-      expect(SearchText.matches('مريم', 'كريم'), isFalse);
+      expect(SearchText.matches('حسن', 'حسين'), isFalse);
     });
   });
 
