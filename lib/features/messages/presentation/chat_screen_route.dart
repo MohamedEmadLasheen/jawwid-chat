@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/providers.dart';
+import '../../../app/router.dart';
 import '../../../core/errors/error_presenter.dart';
 import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
@@ -52,6 +54,8 @@ class ChatScreenRoute extends ConsumerWidget {
       AsyncData(:final value) => ChatScreen(
           conversationId: conversationId,
           title: value.title,
+          onOpenProfile: () =>
+              context.push(Routes.conversationProfile(conversationId)),
           // "Handled by …" comes from the backend verbatim; the client never derives it and
           // never shows an internal handler id (decision D3).
           subtitle: value.handledByLabel == null

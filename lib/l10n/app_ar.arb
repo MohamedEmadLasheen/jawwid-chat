@@ -13,25 +13,7 @@
   "signOutAction": "تسجيل الخروج",
   "signOutConfirm": "هل تريد تسجيل الخروج من جَوِّد على هذا الجهاز؟",
   "tabChats": "المحادثات",
-  "tabHome": "الرئيسية",
-  "tabGroups": "المجموعات",
-  "homeYourChildren": "أبناؤك",
-  "homeMessageJawwid": "مراسلة جَوِّد",
-  "homeNeedsReply": "بانتظار ردك",
   "tabCalls": "المكالمات",
-  "tabNotifications": "المستجدات",
-  "tabProfile": "حسابي",
-  "sectionJawwid": "جَوِّد",
-  "sectionStaff": "فريق جَوِّد",
-  "sectionMyGroups": "مجموعاتي",
-  "sectionLearner": "{name}",
-  "@sectionLearner": {
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
   "handledBy": "بمتابعة {name}",
   "@handledBy": {
     "placeholders": {
@@ -52,8 +34,6 @@
       }
     }
   },
-  "pinAction": "تثبيت",
-  "unpinAction": "إلغاء التثبيت",
   "muteAction": "كتم",
   "unmuteAction": "إلغاء الكتم",
   "archiveAction": "أرشفة",
@@ -217,5 +197,40 @@
   "errorNotFoundTitle": "غير موجود",
   "errorNotFoundBody": "لم يعد هذا متاحًا.",
   "todayLabel": "اليوم",
-  "yesterdayLabel": "أمس"
+  "yesterdayLabel": "أمس",
+  "filterAll": "الكل",
+  "filterUnread": "غير المقروءة",
+  "filterGroups": "المجموعات",
+  "filterFavorites": "المفضلة",
+  "filterEmptyUnread": "لا توجد رسائل غير مقروءة",
+  "filterEmptyUnreadBody": "قرأت كل شيء. ستظهر الرسائل الجديدة هنا.",
+  "filterEmptyGroups": "لا توجد مجموعات طلاب بعد",
+  "filterEmptyFavorites": "لا توجد محادثات مفضلة",
+  "filterEmptyFavoritesBody": "اضغط مطوّلًا على محادثة لإضافتها إلى المفضلة.",
+  "favoriteAction": "إضافة إلى المفضلة",
+  "unfavoriteAction": "إزالة من المفضلة",
+  "favoriteLabel": "مفضلة",
+  "searchClear": "مسح البحث",
+  "searchEmptyBody": "يشمل البحث عناوين المحادثات والمجموعات.",
+  "archivedShow": "عرض المؤرشفة",
+  "archivedHide": "إخفاء المؤرشفة",
+  "callHistoryEmptyBody": "ستظهر هنا المكالمات التي تشارك فيها.",
+  "callsUnavailableTitle": "المكالمات غير متاحة بعد",
+  "callsUnavailableBody": "لم يتم تفعيل المكالمات في هذا التطبيق بعد. لا ينقص حسابك شيء.",
+  "conversationActionsTitle": "خيارات المحادثة",
+  "groupInfoTitle": "معلومات المجموعة",
+  "groupLearnerLabel": "الطالب",
+  "groupMemberUnresolved": "عضو",
+  "myAccountTitle": "حسابي",
+  "childrenTitle": "الأبناء",
+  "childGroupLabel": "المجموعة",
+  "childTeacherLabel": "المعلم",
+  "childLevelLabel": "المستوى",
+  "childSubscriptionLabel": "الاشتراك",
+  "childScheduleLabel": "المواعيد",
+  "childrenEmpty": "لا يوجد أبناء مرتبطون بحسابك بعد.",
+  "contactInfoTitle": "معلومات التواصل",
+  "contactInfoUnavailable": "لا يحتفظ التطبيق بأرقام هواتف أو عناوين بريد إلكتروني بعد.",
+  "fieldNotAvailableYet": "غير متاح بعد",
+  "profileNoDirectContact": "يمكنك التواصل مع المعلم داخل مجموعة ابنك."
 }

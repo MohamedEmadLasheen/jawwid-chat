@@ -52,42 +52,7 @@ class L10nAr extends L10n {
   String get tabChats => 'المحادثات';
 
   @override
-  String get tabHome => 'الرئيسية';
-
-  @override
-  String get tabGroups => 'المجموعات';
-
-  @override
-  String get homeYourChildren => 'أبناؤك';
-
-  @override
-  String get homeMessageJawwid => 'مراسلة جَوِّد';
-
-  @override
-  String get homeNeedsReply => 'بانتظار ردك';
-
-  @override
   String get tabCalls => 'المكالمات';
-
-  @override
-  String get tabNotifications => 'المستجدات';
-
-  @override
-  String get tabProfile => 'حسابي';
-
-  @override
-  String get sectionJawwid => 'جَوِّد';
-
-  @override
-  String get sectionStaff => 'فريق جَوِّد';
-
-  @override
-  String get sectionMyGroups => 'مجموعاتي';
-
-  @override
-  String sectionLearner(String name) {
-    return '$name';
-  }
 
   @override
   String handledBy(String name) {
@@ -122,12 +87,6 @@ class L10nAr extends L10n {
     );
     return '$_temp0';
   }
-
-  @override
-  String get pinAction => 'تثبيت';
-
-  @override
-  String get unpinAction => 'إلغاء التثبيت';
 
   @override
   String get muteAction => 'كتم';
@@ -484,4 +443,113 @@ class L10nAr extends L10n {
 
   @override
   String get yesterdayLabel => 'أمس';
+
+  @override
+  String get filterAll => 'الكل';
+
+  @override
+  String get filterUnread => 'غير المقروءة';
+
+  @override
+  String get filterGroups => 'المجموعات';
+
+  @override
+  String get filterFavorites => 'المفضلة';
+
+  @override
+  String get filterEmptyUnread => 'لا توجد رسائل غير مقروءة';
+
+  @override
+  String get filterEmptyUnreadBody => 'قرأت كل شيء. ستظهر الرسائل الجديدة هنا.';
+
+  @override
+  String get filterEmptyGroups => 'لا توجد مجموعات طلاب بعد';
+
+  @override
+  String get filterEmptyFavorites => 'لا توجد محادثات مفضلة';
+
+  @override
+  String get filterEmptyFavoritesBody =>
+      'اضغط مطوّلًا على محادثة لإضافتها إلى المفضلة.';
+
+  @override
+  String get favoriteAction => 'إضافة إلى المفضلة';
+
+  @override
+  String get unfavoriteAction => 'إزالة من المفضلة';
+
+  @override
+  String get favoriteLabel => 'مفضلة';
+
+  @override
+  String get searchClear => 'مسح البحث';
+
+  @override
+  String get searchEmptyBody => 'يشمل البحث عناوين المحادثات والمجموعات.';
+
+  @override
+  String get archivedShow => 'عرض المؤرشفة';
+
+  @override
+  String get archivedHide => 'إخفاء المؤرشفة';
+
+  @override
+  String get callHistoryEmptyBody => 'ستظهر هنا المكالمات التي تشارك فيها.';
+
+  @override
+  String get callsUnavailableTitle => 'المكالمات غير متاحة بعد';
+
+  @override
+  String get callsUnavailableBody =>
+      'لم يتم تفعيل المكالمات في هذا التطبيق بعد. لا ينقص حسابك شيء.';
+
+  @override
+  String get conversationActionsTitle => 'خيارات المحادثة';
+
+  @override
+  String get groupInfoTitle => 'معلومات المجموعة';
+
+  @override
+  String get groupLearnerLabel => 'الطالب';
+
+  @override
+  String get groupMemberUnresolved => 'عضو';
+
+  @override
+  String get myAccountTitle => 'حسابي';
+
+  @override
+  String get childrenTitle => 'الأبناء';
+
+  @override
+  String get childGroupLabel => 'المجموعة';
+
+  @override
+  String get childTeacherLabel => 'المعلم';
+
+  @override
+  String get childLevelLabel => 'المستوى';
+
+  @override
+  String get childSubscriptionLabel => 'الاشتراك';
+
+  @override
+  String get childScheduleLabel => 'المواعيد';
+
+  @override
+  String get childrenEmpty => 'لا يوجد أبناء مرتبطون بحسابك بعد.';
+
+  @override
+  String get contactInfoTitle => 'معلومات التواصل';
+
+  @override
+  String get contactInfoUnavailable =>
+      'لا يحتفظ التطبيق بأرقام هواتف أو عناوين بريد إلكتروني بعد.';
+
+  @override
+  String get fieldNotAvailableYet => 'غير متاح بعد';
+
+  @override
+  String get profileNoDirectContact =>
+      'يمكنك التواصل مع المعلم داخل مجموعة ابنك.';
 }

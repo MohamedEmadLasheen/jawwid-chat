@@ -5,6 +5,7 @@ import { CommError, CommErrorCode } from '../../platform/errors';
 import { OBJECT_STORAGE } from '../../platform/tokens';
 import type { ObjectStorage, UploadAuthorization } from './object-storage';
 import { ConversationService } from '../conversations/conversation.service';
+import { Visibility } from '../contracts/vocab';
 
 /** Configurable limits. Read from env so ops can tune without a deploy. */
 const MAX_BYTES: Record<string, number> = {
@@ -41,6 +42,20 @@ export class AttachmentService {
    * Upload authorization is granted only to an actor who may write to the
    * thread, so an object key can never be minted for a conversation the caller
    * has no access to.
+   *
+   * SEND AUTHORITY, NOT READ AUTHORITY. This gate used to be `canRead`, which
+   * admits anyone who may *open* the thread -- a member of an archived
+   * conversation, a silenced member, a contact whose can_message is false. Those
+   * actors cannot post the resulting message, but with a working
+   * `PUT /storage/:objectKey` they could still write bytes into storage, over
+   * and over, for a message that would never exist. The gate is the same
+   * `canSend` the send path uses, evaluated over the same facts, so there is one
+   * source of truth for who may write to a conversation rather than a second
+   * authorization model owned by attachments.
+   *
+   * `MessageService.send` still re-runs `canSend` with the real visibility and
+   * re-validates every attachment, so this is a gate on spending storage, never
+   * a substitute for the decision made at send time.
    */
   async authorizeUpload(params: {
     conversationId: string;
@@ -48,12 +63,39 @@ export class AttachmentService {
     kind: string;
     mimeType: string;
     byteSize: number;
+    /** The visibility the attachment is destined for. Staff may write internal
+     *  notes off duty, so an upload for one must be judged as an internal send.
+     *  A contact or teacher asking for INTERNAL is denied by canSend, exactly as
+     *  their message would be. */
+    visibility?: string;
   }): Promise<UploadAuthorization> {
+    const now = new Date();
     const actor = await this.conversations.requireActor(params.actorId);
     const conv = await this.conversations.requireConversation(params.conversationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
 
-    const decision = this.authz.canRead(actor, conv, membership);
+    // The same inputs MessageService.send gathers. canSend derives owner and
+    // coverage from these; none of them is taken from the request.
+    const family = conv.familyId
+      ? await this.prisma.family.findUnique({
+          where: { id: conv.familyId },
+          select: { ownerId: true },
+        })
+      : null;
+    const members = await this.prisma.conversationMember.findMany({
+      where: { conversationId: conv.id, leftAt: null },
+    });
+
+    const decision = await this.authz.canSend(
+      actor,
+      conv,
+      membership,
+      { visibility: params.visibility ?? Visibility.CUSTOMER },
+      now,
+      family?.ownerId ?? null,
+      members.map((m) => m.actorKind),
+      await this.conversations.liveMembersOf(conv.id),
+    );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
     this.validate(params.kind, params.mimeType, params.byteSize);

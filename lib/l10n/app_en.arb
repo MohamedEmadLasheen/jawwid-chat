@@ -13,25 +13,7 @@
   "signOutAction": "Sign out",
   "signOutConfirm": "Sign out of Jawwid on this device?",
   "tabChats": "Chats",
-  "tabHome": "Home",
-  "tabGroups": "Groups",
-  "homeYourChildren": "Your children",
-  "homeMessageJawwid": "Message Jawwid",
-  "homeNeedsReply": "Needs a reply",
   "tabCalls": "Calls",
-  "tabNotifications": "Updates",
-  "tabProfile": "Profile",
-  "sectionJawwid": "Jawwid",
-  "sectionStaff": "Jawwid team",
-  "sectionMyGroups": "My groups",
-  "sectionLearner": "{name}",
-  "@sectionLearner": {
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
   "handledBy": "Handled by {name}",
   "@handledBy": {
     "placeholders": {
@@ -52,8 +34,6 @@
       }
     }
   },
-  "pinAction": "Pin",
-  "unpinAction": "Unpin",
   "muteAction": "Mute",
   "unmuteAction": "Unmute",
   "archiveAction": "Archive",
@@ -217,5 +197,40 @@
   "errorNotFoundTitle": "Not found",
   "errorNotFoundBody": "This is no longer available.",
   "todayLabel": "Today",
-  "yesterdayLabel": "Yesterday"
+  "yesterdayLabel": "Yesterday",
+  "filterAll": "All",
+  "filterUnread": "Unread",
+  "filterGroups": "Groups",
+  "filterFavorites": "Favourites",
+  "filterEmptyUnread": "Nothing unread",
+  "filterEmptyUnreadBody": "You have read everything. New messages will appear here.",
+  "filterEmptyGroups": "No student groups yet",
+  "filterEmptyFavorites": "No favourites yet",
+  "filterEmptyFavoritesBody": "Press and hold a conversation to add it to your favourites.",
+  "favoriteAction": "Add to favourites",
+  "unfavoriteAction": "Remove from favourites",
+  "favoriteLabel": "Favourite",
+  "searchClear": "Clear search",
+  "searchEmptyBody": "Search covers conversation and group names.",
+  "archivedShow": "Show archived",
+  "archivedHide": "Hide archived",
+  "callHistoryEmptyBody": "Calls you take part in will appear here.",
+  "callsUnavailableTitle": "Calls are not available yet",
+  "callsUnavailableBody": "Calling has not been switched on for this app yet. Nothing is missing from your account.",
+  "conversationActionsTitle": "Conversation options",
+  "groupInfoTitle": "Group info",
+  "groupLearnerLabel": "Student",
+  "groupMemberUnresolved": "Member",
+  "myAccountTitle": "My account",
+  "childrenTitle": "Children",
+  "childGroupLabel": "Group",
+  "childTeacherLabel": "Teacher",
+  "childLevelLabel": "Level",
+  "childSubscriptionLabel": "Subscription",
+  "childScheduleLabel": "Schedule",
+  "childrenEmpty": "No children are linked to your account yet.",
+  "contactInfoTitle": "Contact information",
+  "contactInfoUnavailable": "Jawwid does not hold phone numbers or email addresses in this app yet.",
+  "fieldNotAvailableYet": "Not available yet",
+  "profileNoDirectContact": "You can reach the teacher in your child's group."
 }

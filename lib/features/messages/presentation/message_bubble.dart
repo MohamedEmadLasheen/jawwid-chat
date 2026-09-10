@@ -5,6 +5,7 @@ import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/message.dart';
 import '../../../shared/utils/relative_time.dart';
+import '../../../shared/utils/text_direction.dart';
 import 'voice_message_player.dart';
 
 /// A single message bubble.
@@ -102,7 +103,7 @@ class MessageBubble extends StatelessWidget {
                 if (showAuthor && !mine)
                   Padding(
                     padding: const EdgeInsets.only(bottom: Spacing.spacing1),
-                    child: Text(
+                    child: ContentText(
                       message.authorName,
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.primary,
@@ -121,19 +122,27 @@ class MessageBubble extends StatelessWidget {
                   )
                 else ...[
                   // A voice note replaces the body rather than sitting under it:
-                  // the recording *is* the message.
+                  // the recording *is* the message. A note sent with a caption
+                  // renders both, player first.
                   if (voiceAttachment != null)
                     VoiceMessagePlayer(
                       conversationId: message.conversationId,
                       attachment: voiceAttachment,
                       foreground: foreground,
                     ),
-                  // Message bodies resolve their own base direction per paragraph, so a
-                  // mixed Arabic/English message reads correctly either way (§4).
+                  // Message bodies resolve their own base direction, so a mixed
+                  // Arabic/English message reads correctly either way (§4).
+                  //
+                  // This used to pass `textDirection: null`, which reads like auto-detection
+                  // and is not: null means "inherit the ambient direction". An Arabic
+                  // message in an English UI therefore put its full stop on the left.
+                  //
+                  // The emptiness guard is for voice notes: they carry no body, and
+                  // rendering an empty ContentText would add a stray blank line
+                  // under the player.
                   if (message.body.isNotEmpty)
-                    Text(
+                    ContentText(
                       message.body,
-                      textDirection: null,
                       style: theme.textTheme.bodyLarge?.copyWith(color: foreground),
                     ),
                 ],
@@ -335,14 +344,14 @@ class _QuotedMessage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          ContentText(
             reply.authorName,
             style: theme.textTheme.labelSmall?.copyWith(
               color: theme.colorScheme.primary,
               fontWeight: FontWeight.w700,
             ),
           ),
-          Text(
+          ContentText(
             reply.excerpt,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -381,7 +390,7 @@ class _SystemMessage extends StatelessWidget {
             color: tokens.colorMessageSystemBg,
             borderRadius: Radii.card,
           ),
-          child: Text(
+          child: ContentText(
             message.body,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodySmall?.copyWith(

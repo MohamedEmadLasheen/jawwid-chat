@@ -175,77 +175,11 @@ abstract class L10n {
   /// **'Chats'**
   String get tabChats;
 
-  /// No description provided for @tabHome.
-  ///
-  /// In en, this message translates to:
-  /// **'Home'**
-  String get tabHome;
-
-  /// No description provided for @tabGroups.
-  ///
-  /// In en, this message translates to:
-  /// **'Groups'**
-  String get tabGroups;
-
-  /// No description provided for @homeYourChildren.
-  ///
-  /// In en, this message translates to:
-  /// **'Your children'**
-  String get homeYourChildren;
-
-  /// No description provided for @homeMessageJawwid.
-  ///
-  /// In en, this message translates to:
-  /// **'Message Jawwid'**
-  String get homeMessageJawwid;
-
-  /// No description provided for @homeNeedsReply.
-  ///
-  /// In en, this message translates to:
-  /// **'Needs a reply'**
-  String get homeNeedsReply;
-
   /// No description provided for @tabCalls.
   ///
   /// In en, this message translates to:
   /// **'Calls'**
   String get tabCalls;
-
-  /// No description provided for @tabNotifications.
-  ///
-  /// In en, this message translates to:
-  /// **'Updates'**
-  String get tabNotifications;
-
-  /// No description provided for @tabProfile.
-  ///
-  /// In en, this message translates to:
-  /// **'Profile'**
-  String get tabProfile;
-
-  /// No description provided for @sectionJawwid.
-  ///
-  /// In en, this message translates to:
-  /// **'Jawwid'**
-  String get sectionJawwid;
-
-  /// No description provided for @sectionStaff.
-  ///
-  /// In en, this message translates to:
-  /// **'Jawwid team'**
-  String get sectionStaff;
-
-  /// No description provided for @sectionMyGroups.
-  ///
-  /// In en, this message translates to:
-  /// **'My groups'**
-  String get sectionMyGroups;
-
-  /// No description provided for @sectionLearner.
-  ///
-  /// In en, this message translates to:
-  /// **'{name}'**
-  String sectionLearner(String name);
 
   /// No description provided for @handledBy.
   ///
@@ -282,18 +216,6 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'{count, plural, =1{1 unread message} other{{count} unread messages}}'**
   String unreadCount(int count);
-
-  /// No description provided for @pinAction.
-  ///
-  /// In en, this message translates to:
-  /// **'Pin'**
-  String get pinAction;
-
-  /// No description provided for @unpinAction.
-  ///
-  /// In en, this message translates to:
-  /// **'Unpin'**
-  String get unpinAction;
 
   /// No description provided for @muteAction.
   ///
@@ -966,6 +888,216 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Yesterday'**
   String get yesterdayLabel;
+
+  /// No description provided for @filterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get filterAll;
+
+  /// No description provided for @filterUnread.
+  ///
+  /// In en, this message translates to:
+  /// **'Unread'**
+  String get filterUnread;
+
+  /// No description provided for @filterGroups.
+  ///
+  /// In en, this message translates to:
+  /// **'Groups'**
+  String get filterGroups;
+
+  /// No description provided for @filterFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Favourites'**
+  String get filterFavorites;
+
+  /// No description provided for @filterEmptyUnread.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing unread'**
+  String get filterEmptyUnread;
+
+  /// No description provided for @filterEmptyUnreadBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You have read everything. New messages will appear here.'**
+  String get filterEmptyUnreadBody;
+
+  /// No description provided for @filterEmptyGroups.
+  ///
+  /// In en, this message translates to:
+  /// **'No student groups yet'**
+  String get filterEmptyGroups;
+
+  /// No description provided for @filterEmptyFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'No favourites yet'**
+  String get filterEmptyFavorites;
+
+  /// No description provided for @filterEmptyFavoritesBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Press and hold a conversation to add it to your favourites.'**
+  String get filterEmptyFavoritesBody;
+
+  /// No description provided for @favoriteAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to favourites'**
+  String get favoriteAction;
+
+  /// No description provided for @unfavoriteAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from favourites'**
+  String get unfavoriteAction;
+
+  /// No description provided for @favoriteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Favourite'**
+  String get favoriteLabel;
+
+  /// No description provided for @searchClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear search'**
+  String get searchClear;
+
+  /// No description provided for @searchEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Search covers conversation and group names.'**
+  String get searchEmptyBody;
+
+  /// No description provided for @archivedShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Show archived'**
+  String get archivedShow;
+
+  /// No description provided for @archivedHide.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide archived'**
+  String get archivedHide;
+
+  /// No description provided for @callHistoryEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Calls you take part in will appear here.'**
+  String get callHistoryEmptyBody;
+
+  /// No description provided for @callsUnavailableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Calls are not available yet'**
+  String get callsUnavailableTitle;
+
+  /// No description provided for @callsUnavailableBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Calling has not been switched on for this app yet. Nothing is missing from your account.'**
+  String get callsUnavailableBody;
+
+  /// No description provided for @conversationActionsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation options'**
+  String get conversationActionsTitle;
+
+  /// No description provided for @groupInfoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Group info'**
+  String get groupInfoTitle;
+
+  /// No description provided for @groupLearnerLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Student'**
+  String get groupLearnerLabel;
+
+  /// No description provided for @groupMemberUnresolved.
+  ///
+  /// In en, this message translates to:
+  /// **'Member'**
+  String get groupMemberUnresolved;
+
+  /// No description provided for @myAccountTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'My account'**
+  String get myAccountTitle;
+
+  /// No description provided for @childrenTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Children'**
+  String get childrenTitle;
+
+  /// No description provided for @childGroupLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Group'**
+  String get childGroupLabel;
+
+  /// No description provided for @childTeacherLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Teacher'**
+  String get childTeacherLabel;
+
+  /// No description provided for @childLevelLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Level'**
+  String get childLevelLabel;
+
+  /// No description provided for @childSubscriptionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscription'**
+  String get childSubscriptionLabel;
+
+  /// No description provided for @childScheduleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Schedule'**
+  String get childScheduleLabel;
+
+  /// No description provided for @childrenEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No children are linked to your account yet.'**
+  String get childrenEmpty;
+
+  /// No description provided for @contactInfoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact information'**
+  String get contactInfoTitle;
+
+  /// No description provided for @contactInfoUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Jawwid does not hold phone numbers or email addresses in this app yet.'**
+  String get contactInfoUnavailable;
+
+  /// No description provided for @fieldNotAvailableYet.
+  ///
+  /// In en, this message translates to:
+  /// **'Not available yet'**
+  String get fieldNotAvailableYet;
+
+  /// No description provided for @profileNoDirectContact.
+  ///
+  /// In en, this message translates to:
+  /// **'You can reach the teacher in your child\'s group.'**
+  String get profileNoDirectContact;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

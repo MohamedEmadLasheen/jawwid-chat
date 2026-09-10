@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/error_presenter.dart';
 import '../../../design/tokens.dart';
+import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/conversation.dart';
 import '../../../shared/models/message.dart';
 import '../../../shared/utils/relative_time.dart';
+import '../../../shared/utils/text_direction.dart';
 import '../application/messages_controller.dart';
 import '../application/voice_composer_controller.dart';
 import 'message_bubble.dart';
@@ -28,6 +30,7 @@ class ChatScreen extends ConsumerStatefulWidget {
     this.requiresApproval = false,
     this.isReadOnly = false,
     this.onOpenMembers,
+    this.onOpenProfile,
   });
 
   final String conversationId;
@@ -40,6 +43,10 @@ class ChatScreen extends ConsumerStatefulWidget {
   final bool requiresApproval;
   final bool isReadOnly;
   final VoidCallback? onOpenMembers;
+
+  /// Tapping the header — avatar or name — opens the profile, or group info for a
+  /// student group. The same gesture people already use in every other chat app.
+  final VoidCallback? onOpenProfile;
 
   @override
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
@@ -124,22 +131,48 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-            if (widget.subtitle != null)
-              Text(
-                widget.subtitle!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context)
-                    .textTheme
-                    .labelSmall
-                    ?.copyWith(color: tokens.colorTextSecondary),
-              ),
-          ],
+        titleSpacing: 0,
+        title: InkWell(
+          onTap: widget.onOpenProfile,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: Spacing.spacing3,
+              vertical: Spacing.spacing2,
+            ),
+            child: Row(
+              children: [
+                JawwidAvatar(
+                  displayName: widget.title,
+                  size: Sizes.avatarSm,
+                ),
+                const SizedBox(width: Spacing.spacing3),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ContentText(
+                        widget.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      if (widget.subtitle != null)
+                        ContentText(
+                          widget.subtitle!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelSmall
+                              ?.copyWith(color: tokens.colorTextSecondary),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
         actions: [
           if (widget.onOpenMembers != null)

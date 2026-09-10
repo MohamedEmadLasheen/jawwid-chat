@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../design/tokens.dart';
+import '../../features/conversations/application/conversations_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../shared/models/user_role.dart';
 
@@ -22,29 +23,32 @@ class ShellDestination {
   final String Function(L10n) label;
 }
 
-/// The parent and teacher shells are deliberately **different** (`decisions.md` DD-08): a
-/// parent's centre of gravity is "my children", a teacher's is "my groups". They are not
-/// unified to save a widget.
+/// **Chats · Calls · Settings**, for both roles.
+///
+/// The shells used to differ (`decisions.md` DD-08): a parent got Home · Jawwid · Groups ·
+/// Settings and a teacher got Home · Groups · Settings, on the reasoning that a parent's
+/// centre of gravity is "my children" and a teacher's is "my groups".
+///
+/// That reasoning holds — and it is satisfied *inside* Chats, by the order the list is
+/// already built in, not by giving the two roles different maps of the app. What the split
+/// actually produced was three destinations that all led to conversations, so "where is my
+/// child's group?" had three plausible answers: Home, Jawwid, or Groups. One list, filtered,
+/// answers it once. Groups is now a filter chip; the Jawwid thread is the first row.
 abstract final class Shells {
-  /// Home · Jawwid · Groups · Settings.
-  static const parent = <ShellDestination>[
+  static const chats = ShellDestination(
+    route: '/chats',
+    icon: Icons.chat_bubble_outline,
+    selectedIcon: Icons.chat_bubble,
+    label: _chatsLabel,
+  );
+
+  static const destinations = <ShellDestination>[
+    chats,
     ShellDestination(
-      route: '/home',
-      icon: Icons.home_outlined,
-      selectedIcon: Icons.home,
-      label: _homeLabel,
-    ),
-    ShellDestination(
-      route: '/chats',
-      icon: Icons.chat_bubble_outline,
-      selectedIcon: Icons.chat_bubble,
-      label: _jawwidLabel,
-    ),
-    ShellDestination(
-      route: '/groups',
-      icon: Icons.groups_outlined,
-      selectedIcon: Icons.groups,
-      label: _groupsLabel,
+      route: '/calls',
+      icon: Icons.phone_outlined,
+      selectedIcon: Icons.phone,
+      label: _callsLabel,
     ),
     ShellDestination(
       route: '/settings',
@@ -54,36 +58,12 @@ abstract final class Shells {
     ),
   ];
 
-  /// Home · Groups · Settings.
-  static const teacher = <ShellDestination>[
-    ShellDestination(
-      route: '/home',
-      icon: Icons.home_outlined,
-      selectedIcon: Icons.home,
-      label: _homeLabel,
-    ),
-    ShellDestination(
-      route: '/groups',
-      icon: Icons.groups_outlined,
-      selectedIcon: Icons.groups,
-      label: _groupsLabel,
-    ),
-    ShellDestination(
-      route: '/settings',
-      icon: Icons.settings_outlined,
-      selectedIcon: Icons.settings,
-      label: _settingsLabel,
-    ),
-  ];
+  /// Kept as a function because the shell is still handed a role: if a destination ever has
+  /// to differ again, this is where it belongs rather than in a widget.
+  static List<ShellDestination> forRole(UserRole role) => destinations;
 
-  static List<ShellDestination> forRole(UserRole role) => switch (role) {
-        UserRole.parent => parent,
-        UserRole.teacher => teacher,
-      };
-
-  static String _homeLabel(L10n l10n) => l10n.tabHome;
-  static String _jawwidLabel(L10n l10n) => l10n.sectionJawwid;
-  static String _groupsLabel(L10n l10n) => l10n.tabGroups;
+  static String _chatsLabel(L10n l10n) => l10n.tabChats;
+  static String _callsLabel(L10n l10n) => l10n.callHistoryTitle;
   static String _settingsLabel(L10n l10n) => l10n.settingsTitle;
 }
 
@@ -111,6 +91,10 @@ class AppShell extends ConsumerWidget {
     final tokens = JawwidTokens.of(context);
     final destinations = Shells.forRole(role);
 
+    // Real, from the loaded conversations — the same number the Unread chip shows. Zero
+    // renders no badge at all rather than a "0".
+    final unread = ref.watch(totalUnreadProvider);
+
     // An unrecognised route (a deep link into a detail screen) selects nothing rather than
     // falsely highlighting the first tab.
     final selected = destinations.indexWhere(
@@ -130,13 +114,24 @@ class AppShell extends ConsumerWidget {
           destinations: [
             for (final destination in destinations)
               NavigationDestination(
-                icon: Icon(destination.icon),
-                selectedIcon: Icon(destination.selectedIcon),
+                icon: _badged(destination, destination.icon, unread),
+                // Badged in the selected state too: the count is about the whole list,
+                // not about which tab you happen to be looking at, and a number that
+                // vanishes when you tap the tab reads as a bug.
+                selectedIcon:
+                    _badged(destination, destination.selectedIcon, unread),
                 label: destination.label(l10n),
               ),
           ],
         ),
       ),
     );
+  }
+
+  /// The unread count rides the Chats tab only, and only when it is non-zero — a badge
+  /// showing "0" is noise.
+  static Widget _badged(ShellDestination destination, IconData icon, int unread) {
+    if (destination.route != Shells.chats.route || unread <= 0) return Icon(icon);
+    return Badge.count(count: unread, child: Icon(icon));
   }
 }
