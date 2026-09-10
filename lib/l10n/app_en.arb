@@ -67,6 +67,39 @@
   "composerRecording": "Recording",
   "composerSlideToCancel": "Slide to cancel",
   "composerReadOnly": "You can no longer send messages here.",
+  "voiceRecordingInProgress": "Recording a voice message",
+  "voiceRecordingElapsed": "{duration} recorded",
+  "@voiceRecordingElapsed": {
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "voiceStopRecording": "Stop recording",
+  "voiceDeleteRecording": "Delete recording",
+  "voiceReviewTitle": "Review your voice message",
+  "voiceSendRecording": "Send voice message",
+  "voicePlay": "Play",
+  "voicePause": "Pause",
+  "voiceReplay": "Play again",
+  "voiceMessageLabel": "Voice message",
+  "voiceMessageDuration": "Voice message, {duration}",
+  "@voiceMessageDuration": {
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "voiceLoading": "Loading audio…",
+  "voicePlaybackFailed": "This voice message could not be played.",
+  "voiceUploading": "Sending voice message",
+  "voicePermissionDeniedTitle": "Microphone access is off",
+  "voicePermissionDeniedBody": "Allow microphone access in your device settings to record a voice message.",
+  "voiceUnsupported": "This device cannot record voice messages.",
+  "voiceTooShort": "Hold longer to record a voice message.",
+  "voiceRecordingFailed": "The recording could not be completed. Please try again.",
   "messageStateSending": "Sending",
   "messageStateSent": "Sent",
   "messageStateDelivered": "Delivered",

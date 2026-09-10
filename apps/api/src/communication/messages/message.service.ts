@@ -110,7 +110,7 @@ export class MessageService {
     // Size and MIME limits are enforced here, on the path every caller takes,
     // not only on the upload-authorization endpoint.
     for (const a of input.attachments ?? []) {
-      this.attachments.validate(a.kind, a.mimeType, a.byteSize);
+      this.attachments.validate(a.kind, a.mimeType, a.byteSize, a.durationMs);
     }
 
     const family = conv.familyId
@@ -299,7 +299,10 @@ export class MessageService {
         return message;
       });
 
-      return toMessageDto(created);
+      // Sign this message's attachment URLs too. Without it a sender's own
+      // voice note comes back with url: null and is unplayable until the thread
+      // is re-fetched -- the message is there, but it cannot be heard.
+      return toMessageDto(created, await this.attachments.signUrlsForMessages([created.id]));
     } catch (e) {
       // Concurrent duplicate submission of the same client_message_id.
       if (
@@ -327,7 +330,10 @@ export class MessageService {
       where: { conversationId, authorId, clientMessageId },
       include: { attachments: true, reactions: true, receipts: true },
     });
-    return found ? toMessageDto(found) : null;
+    // The idempotent-replay path returns the original message, so it must carry
+    // the same playable URLs a first send does.
+    if (!found) return null;
+    return toMessageDto(found, await this.attachments.signUrlsForMessages([found.id]));
   }
 
   private validateContent(type: string, input: SendMessageInput): void {

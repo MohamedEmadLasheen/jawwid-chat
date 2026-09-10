@@ -271,6 +271,19 @@ class FakeBackend {
           : ParticipantRole.teacher,
       kind: outgoing.kind,
       body: outgoing.body,
+      attachments: [
+        for (final a in outgoing.attachments)
+          Attachment(
+            id: 'att_${_sequence}_${a.objectKey.hashCode}',
+            kind: a.kind,
+            byteSize: a.byteSize,
+            mimeType: a.mimeType,
+            durationMs: a.durationMs,
+            // Stands in for the short-lived signed URL the real backend mints
+            // per read. Not a real address; nothing in a fixture build plays.
+            url: 'https://fixtures.invalid/${a.objectKey}',
+          ),
+      ],
       createdAt: _now,
       deliveryState: DeliveryState.sent,
       approvalState: approval,
@@ -279,6 +292,32 @@ class FakeBackend {
 
     _messages.putIfAbsent(outgoing.conversationId, () => []).add(message);
     return message;
+  }
+
+  /// Stand in for authorize + PUT.
+  ///
+  /// It refuses exactly what the real backend refuses — an empty recording, and
+  /// one past the 16 MB voice ceiling — so the tests exercise the app's failure
+  /// handling rather than a fake that accepts anything.
+  UploadedAttachment uploadVoiceNote(String conversationId, PendingVoiceNote note) {
+    _maybeFail();
+    conversationById(conversationId);
+
+    const maxVoiceBytes = 16 * 1024 * 1024;
+    if (note.byteSize <= 0 || note.byteSize > maxVoiceBytes) {
+      throw const AppError(
+        AppErrorKind.server,
+        code: 'COMM.ATTACHMENT_TOO_LARGE',
+      );
+    }
+
+    return UploadedAttachment(
+      kind: MessageKind.voice,
+      objectKey: 'conversations/$conversationId/voice_${++_sequence}',
+      mimeType: note.mimeType,
+      byteSize: note.byteSize,
+      durationMs: note.duration.inMilliseconds,
+    );
   }
 
   StudentGroup group(String conversationId) {

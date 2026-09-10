@@ -66,7 +66,7 @@ export class MessageController {
     },
   ) {
     for (const a of body.attachments ?? []) {
-      this.attachments.validate(a.kind, a.mimeType, a.byteSize);
+      this.attachments.validate(a.kind, a.mimeType, a.byteSize, a.durationMs);
     }
     return this.messages.send({
       conversationId,

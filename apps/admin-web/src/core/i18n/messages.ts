@@ -68,6 +68,13 @@ export const messages = {
     'composer.assistBlocked': 'You cannot reply here: {reason}',
     'composer.notOnDuty': 'You are not on duty for this family. You can still add an internal note.',
 
+    'voice.message': 'Voice message',
+    'voice.messageWithDuration': 'Voice message, {duration}',
+    'voice.play': 'Play voice message',
+    'voice.pause': 'Pause voice message',
+    'voice.seek': 'Playback position',
+    'voice.failed': 'This voice message could not be played.',
+
     'action.newCase': 'New case',
     'action.followUp': 'Follow-up',
     'action.task': 'Internal task',
@@ -200,6 +207,13 @@ export const messages = {
     'composer.replyAndSnooze': 'رد وتأجيل',
     'composer.assistBlocked': 'لا يمكنك الرد هنا: {reason}',
     'composer.notOnDuty': 'لستِ على النوبة لهذه العائلة. ما زال بإمكانك إضافة ملاحظة داخلية.',
+
+    'voice.message': 'رسالة صوتية',
+    'voice.messageWithDuration': 'رسالة صوتية، {duration}',
+    'voice.play': 'تشغيل الرسالة الصوتية',
+    'voice.pause': 'إيقاف الرسالة الصوتية مؤقتًا',
+    'voice.seek': 'موضع التشغيل',
+    'voice.failed': 'تعذّر تشغيل هذه الرسالة الصوتية.',
 
     'action.newCase': 'حالة جديدة',
     'action.followUp': 'متابعة',

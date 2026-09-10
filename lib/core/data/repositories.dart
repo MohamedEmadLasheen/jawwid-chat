@@ -103,6 +103,43 @@ class DeviceSession {
   final bool isCurrent;
 }
 
+/// A recording sitting on disk that has not been uploaded yet.
+///
+/// Held separately from [UploadedAttachment] because the two are at different
+/// stages of the same journey, and confusing them is how a retry re-uploads the
+/// same bytes.
+class PendingVoiceNote {
+  const PendingVoiceNote({
+    required this.filePath,
+    required this.mimeType,
+    required this.byteSize,
+    required this.duration,
+  });
+
+  final String filePath;
+  final String mimeType;
+  final int byteSize;
+  final Duration duration;
+}
+
+/// An attachment whose bytes are already in storage, addressed by the object key
+/// the backend minted. This is what a message is sent with.
+class UploadedAttachment {
+  const UploadedAttachment({
+    required this.kind,
+    required this.objectKey,
+    required this.mimeType,
+    required this.byteSize,
+    this.durationMs,
+  });
+
+  final MessageKind kind;
+  final String objectKey;
+  final String mimeType;
+  final int byteSize;
+  final int? durationMs;
+}
+
 /// Draft of an outgoing message, handed to the transport layer.
 class OutgoingMessage {
   const OutgoingMessage({
@@ -111,7 +148,8 @@ class OutgoingMessage {
     required this.kind,
     this.body = '',
     this.replyToMessageId,
-    this.attachmentIds = const [],
+    this.attachments = const [],
+    this.voiceNote,
   });
 
   /// Generated once at compose time and reused on every retry (§16, §17).
@@ -120,7 +158,25 @@ class OutgoingMessage {
   final MessageKind kind;
   final String body;
   final String? replyToMessageId;
-  final List<String> attachmentIds;
+
+  /// Already in storage; safe to re-send verbatim on a retry.
+  final List<UploadedAttachment> attachments;
+
+  /// Still on disk. Non-null only until the upload succeeds.
+  final PendingVoiceNote? voiceNote;
+
+  bool get needsUpload => voiceNote != null;
+
+  /// Promote a finished upload. The recording is dropped, so a later retry
+  /// re-sends the object key rather than pushing the bytes a second time.
+  OutgoingMessage withUploaded(UploadedAttachment attachment) => OutgoingMessage(
+        clientMessageId: clientMessageId,
+        conversationId: conversationId,
+        kind: kind,
+        body: body,
+        replyToMessageId: replyToMessageId,
+        attachments: [...attachments, attachment],
+      );
 }
 
 // ---------------------------------------------------------------------------------------
@@ -183,6 +239,18 @@ abstract interface class MessageRepository {
   Future<List<Message>> since(String conversationId, {required int afterSequence});
 
   Future<Message> send(OutgoingMessage message);
+
+  /// Put a recording into storage and return the reference to attach to a
+  /// message.
+  ///
+  /// Two steps behind one call, matching the published contract: authorize —
+  /// which is where the backend enforces MIME and size *before* the user waits
+  /// for a transfer — then PUT the bytes to the returned signed URL. The bytes
+  /// never pass through the API.
+  Future<UploadedAttachment> uploadVoiceNote({
+    required String conversationId,
+    required PendingVoiceNote note,
+  });
 
   Future<void> react(String messageId, String emoji);
 

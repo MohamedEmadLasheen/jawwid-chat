@@ -188,8 +188,12 @@ abstract final class WireMappers {
       kind: messageKind(json['kind'] as String?),
       fileName: json['originalName'] as String?,
       byteSize: (json['byteSize'] as num?)?.toInt(),
-      // Short-lived signed URL from the backend, never a permanent storage URL (§22).
+      // Short-lived signed URLs from the backend, never permanent storage URLs (§22).
+      // `url` is what makes a voice note playable at all; dropping it here was
+      // why the client could model a voice message but never hear one.
+      url: json['url'] as String?,
       thumbnailUrl: json['thumbnailUrl'] as String?,
+      mimeType: json['mimeType'] as String?,
       durationMs: (json['durationMs'] as num?)?.toInt(),
     );
   }

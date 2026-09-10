@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { createHmac, randomUUID } from 'node:crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 
 /**
  * PLATFORM SEAM. Binary content never touches Postgres.
@@ -14,6 +14,19 @@ export interface UploadAuthorization {
   method: 'PUT';
   headers: Record<string, string>;
   expiresAt: string;
+}
+
+/**
+ * What an upload signature commits the uploader to.
+ *
+ * Without this the signature says only "you may write to this key", so an
+ * authorization taken out for a 20 KB voice note could be spent uploading a
+ * 100 MB file: every limit `AttachmentService.validate` enforces would be
+ * advisory, checked at authorization time and unenforceable at write time.
+ */
+export interface UploadBinding {
+  mimeType: string;
+  byteSize: number;
 }
 
 export interface ObjectStorage {
@@ -59,10 +72,13 @@ export class SignedLocalObjectStorage implements ObjectStorage {
   }): Promise<UploadAuthorization> {
     const objectKey = `${params.prefix}/${randomUUID()}`;
     const expires = Math.floor(Date.now() / 1000) + this.ttl;
-    const sig = this.sign(objectKey, expires, 'PUT');
+    const binding: UploadBinding = { mimeType: params.mimeType, byteSize: params.byteSize };
+    const sig = this.sign(objectKey, expires, 'PUT', binding);
     return {
       objectKey,
-      uploadUrl: `${this.base}/${encodeURIComponent(objectKey)}?expires=${expires}&sig=${sig}`,
+      uploadUrl:
+        `${this.base}/${encodeURIComponent(objectKey)}` +
+        `?expires=${expires}&size=${params.byteSize}&sig=${sig}`,
       method: 'PUT',
       headers: { 'content-type': params.mimeType },
       expiresAt: new Date(expires * 1000).toISOString(),
@@ -75,14 +91,48 @@ export class SignedLocalObjectStorage implements ObjectStorage {
     return `${this.base}/${encodeURIComponent(objectKey)}?expires=${expires}&sig=${sig}`;
   }
 
-  verify(objectKey: string, expires: number, method: string, sig: string): boolean {
-    if (expires * 1000 < Date.now()) return false;
-    return this.sign(objectKey, expires, method) === sig;
+  /**
+   * A PUT is verifiable only against the MIME type and byte size it was
+   * authorized for. Omitting the binding is not "unbound PUT" -- it is a
+   * failure, because no such signature is ever issued.
+   */
+  verify(
+    objectKey: string,
+    expires: number,
+    method: string,
+    sig: string,
+    binding?: UploadBinding,
+  ): boolean {
+    if (!Number.isFinite(expires) || expires * 1000 < Date.now()) return false;
+    if (method === 'PUT' && !binding) return false;
+    return SignedLocalObjectStorage.constantTimeEquals(
+      this.sign(objectKey, expires, method, binding),
+      sig,
+    );
   }
 
-  private sign(objectKey: string, expires: number, method: string): string {
-    return createHmac('sha256', this.secret)
-      .update(`${method}:${objectKey}:${expires}`)
-      .digest('hex');
+  /**
+   * Comparing HMACs with `===` leaks their contents: it returns on the first
+   * differing byte, so response time reveals how long a guessed prefix was
+   * correct and a signature can be recovered byte by byte.
+   */
+  private static constantTimeEquals(expected: string, actual: string): boolean {
+    const a = Buffer.from(expected, 'utf8');
+    const b = Buffer.from(actual ?? '', 'utf8');
+    if (a.length !== b.length) return false;
+    return timingSafeEqual(a, b);
+  }
+
+  private sign(
+    objectKey: string,
+    expires: number,
+    method: string,
+    binding?: UploadBinding,
+  ): string {
+    const payload =
+      binding && method === 'PUT'
+        ? `${method}:${objectKey}:${expires}:${binding.mimeType}:${binding.byteSize}`
+        : `${method}:${objectKey}:${expires}`;
+    return createHmac('sha256', this.secret).update(payload).digest('hex');
   }
 }

@@ -1,9 +1,11 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/message.dart';
 import '../../../shared/utils/relative_time.dart';
+import 'voice_message_player.dart';
 
 /// A single message bubble.
 ///
@@ -54,6 +56,14 @@ class MessageBubble extends StatelessWidget {
     // A withheld message is visually de-emphasised so its sender can see at a glance that
     // it has not reached anyone yet.
     final withheld = message.approvalState.isWithheld;
+
+    // A voice message carries exactly one audio attachment. Reading it here
+    // rather than switching on `message.kind` means a malformed voice message
+    // with no attachment falls back to its body instead of rendering an empty
+    // player.
+    final voiceAttachment = message.attachments
+        .where((a) => a.kind == MessageKind.voice)
+        .firstOrNull;
 
     return Align(
       alignment: mine ? AlignmentDirectional.centerEnd : AlignmentDirectional.centerStart,
@@ -109,14 +119,24 @@ class MessageBubble extends StatelessWidget {
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   )
-                else
+                else ...[
+                  // A voice note replaces the body rather than sitting under it:
+                  // the recording *is* the message.
+                  if (voiceAttachment != null)
+                    VoiceMessagePlayer(
+                      conversationId: message.conversationId,
+                      attachment: voiceAttachment,
+                      foreground: foreground,
+                    ),
                   // Message bodies resolve their own base direction per paragraph, so a
                   // mixed Arabic/English message reads correctly either way (§4).
-                  Text(
-                    message.body,
-                    textDirection: null,
-                    style: theme.textTheme.bodyLarge?.copyWith(color: foreground),
-                  ),
+                  if (message.body.isNotEmpty)
+                    Text(
+                      message.body,
+                      textDirection: null,
+                      style: theme.textTheme.bodyLarge?.copyWith(color: foreground),
+                    ),
+                ],
                 const SizedBox(height: Spacing.spacing1),
                 _StatusLine(message: message, onRetry: onRetry, onDiscard: onDiscard),
               ],

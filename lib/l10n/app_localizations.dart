@@ -373,6 +373,120 @@ abstract class L10n {
   /// **'You can no longer send messages here.'**
   String get composerReadOnly;
 
+  /// No description provided for @voiceRecordingInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Recording a voice message'**
+  String get voiceRecordingInProgress;
+
+  /// No description provided for @voiceRecordingElapsed.
+  ///
+  /// In en, this message translates to:
+  /// **'{duration} recorded'**
+  String voiceRecordingElapsed(String duration);
+
+  /// No description provided for @voiceStopRecording.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop recording'**
+  String get voiceStopRecording;
+
+  /// No description provided for @voiceDeleteRecording.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete recording'**
+  String get voiceDeleteRecording;
+
+  /// No description provided for @voiceReviewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Review your voice message'**
+  String get voiceReviewTitle;
+
+  /// No description provided for @voiceSendRecording.
+  ///
+  /// In en, this message translates to:
+  /// **'Send voice message'**
+  String get voiceSendRecording;
+
+  /// No description provided for @voicePlay.
+  ///
+  /// In en, this message translates to:
+  /// **'Play'**
+  String get voicePlay;
+
+  /// No description provided for @voicePause.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get voicePause;
+
+  /// No description provided for @voiceReplay.
+  ///
+  /// In en, this message translates to:
+  /// **'Play again'**
+  String get voiceReplay;
+
+  /// No description provided for @voiceMessageLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice message'**
+  String get voiceMessageLabel;
+
+  /// No description provided for @voiceMessageDuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice message, {duration}'**
+  String voiceMessageDuration(String duration);
+
+  /// No description provided for @voiceLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading audio…'**
+  String get voiceLoading;
+
+  /// No description provided for @voicePlaybackFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'This voice message could not be played.'**
+  String get voicePlaybackFailed;
+
+  /// No description provided for @voiceUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending voice message'**
+  String get voiceUploading;
+
+  /// No description provided for @voicePermissionDeniedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Microphone access is off'**
+  String get voicePermissionDeniedTitle;
+
+  /// No description provided for @voicePermissionDeniedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow microphone access in your device settings to record a voice message.'**
+  String get voicePermissionDeniedBody;
+
+  /// No description provided for @voiceUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'This device cannot record voice messages.'**
+  String get voiceUnsupported;
+
+  /// No description provided for @voiceTooShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Hold longer to record a voice message.'**
+  String get voiceTooShort;
+
+  /// No description provided for @voiceRecordingFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The recording could not be completed. Please try again.'**
+  String get voiceRecordingFailed;
+
   /// No description provided for @messageStateSending.
   ///
   /// In en, this message translates to:

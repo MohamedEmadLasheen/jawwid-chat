@@ -67,6 +67,39 @@
   "composerRecording": "جارٍ التسجيل",
   "composerSlideToCancel": "اسحب للإلغاء",
   "composerReadOnly": "لم يعد بإمكانك إرسال رسائل هنا.",
+  "voiceRecordingInProgress": "جارٍ تسجيل رسالة صوتية",
+  "voiceRecordingElapsed": "تم تسجيل {duration}",
+  "@voiceRecordingElapsed": {
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "voiceStopRecording": "إيقاف التسجيل",
+  "voiceDeleteRecording": "حذف التسجيل",
+  "voiceReviewTitle": "راجعي رسالتك الصوتية",
+  "voiceSendRecording": "إرسال الرسالة الصوتية",
+  "voicePlay": "تشغيل",
+  "voicePause": "إيقاف مؤقت",
+  "voiceReplay": "تشغيل من جديد",
+  "voiceMessageLabel": "رسالة صوتية",
+  "voiceMessageDuration": "رسالة صوتية، {duration}",
+  "@voiceMessageDuration": {
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "voiceLoading": "جارٍ تحميل الصوت…",
+  "voicePlaybackFailed": "تعذّر تشغيل هذه الرسالة الصوتية.",
+  "voiceUploading": "جارٍ إرسال الرسالة الصوتية",
+  "voicePermissionDeniedTitle": "الوصول إلى الميكروفون معطّل",
+  "voicePermissionDeniedBody": "اسمحي بالوصول إلى الميكروفون من إعدادات جهازك لتسجيل رسالة صوتية.",
+  "voiceUnsupported": "لا يمكن لهذا الجهاز تسجيل رسائل صوتية.",
+  "voiceTooShort": "استمرّي بالضغط مدة أطول لتسجيل رسالة صوتية.",
+  "voiceRecordingFailed": "تعذّر إكمال التسجيل. يُرجى المحاولة مرة أخرى.",
   "messageStateSending": "جارٍ الإرسال",
   "messageStateSent": "تم الإرسال",
   "messageStateDelivered": "تم التسليم",

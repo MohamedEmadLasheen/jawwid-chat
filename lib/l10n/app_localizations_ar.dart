@@ -169,6 +169,69 @@ class L10nAr extends L10n {
   String get composerReadOnly => 'لم يعد بإمكانك إرسال رسائل هنا.';
 
   @override
+  String get voiceRecordingInProgress => 'جارٍ تسجيل رسالة صوتية';
+
+  @override
+  String voiceRecordingElapsed(String duration) {
+    return 'تم تسجيل $duration';
+  }
+
+  @override
+  String get voiceStopRecording => 'إيقاف التسجيل';
+
+  @override
+  String get voiceDeleteRecording => 'حذف التسجيل';
+
+  @override
+  String get voiceReviewTitle => 'راجعي رسالتك الصوتية';
+
+  @override
+  String get voiceSendRecording => 'إرسال الرسالة الصوتية';
+
+  @override
+  String get voicePlay => 'تشغيل';
+
+  @override
+  String get voicePause => 'إيقاف مؤقت';
+
+  @override
+  String get voiceReplay => 'تشغيل من جديد';
+
+  @override
+  String get voiceMessageLabel => 'رسالة صوتية';
+
+  @override
+  String voiceMessageDuration(String duration) {
+    return 'رسالة صوتية، $duration';
+  }
+
+  @override
+  String get voiceLoading => 'جارٍ تحميل الصوت…';
+
+  @override
+  String get voicePlaybackFailed => 'تعذّر تشغيل هذه الرسالة الصوتية.';
+
+  @override
+  String get voiceUploading => 'جارٍ إرسال الرسالة الصوتية';
+
+  @override
+  String get voicePermissionDeniedTitle => 'الوصول إلى الميكروفون معطّل';
+
+  @override
+  String get voicePermissionDeniedBody =>
+      'اسمحي بالوصول إلى الميكروفون من إعدادات جهازك لتسجيل رسالة صوتية.';
+
+  @override
+  String get voiceUnsupported => 'لا يمكن لهذا الجهاز تسجيل رسائل صوتية.';
+
+  @override
+  String get voiceTooShort => 'استمرّي بالضغط مدة أطول لتسجيل رسالة صوتية.';
+
+  @override
+  String get voiceRecordingFailed =>
+      'تعذّر إكمال التسجيل. يُرجى المحاولة مرة أخرى.';
+
+  @override
   String get messageStateSending => 'جارٍ الإرسال';
 
   @override

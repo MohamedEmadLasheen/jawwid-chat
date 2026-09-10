@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/audio/voice_player.dart';
+import '../core/audio/voice_recorder.dart';
 import '../core/data/fake_backend.dart';
 import '../core/data/repositories.dart';
 import '../core/logging/redacting_logger.dart';
@@ -41,6 +43,26 @@ final groupRepositoryProvider = Provider<GroupRepository>((ref) {
 
 final callRepositoryProvider = Provider<CallRepository>((ref) {
   throw UnimplementedError('callRepositoryProvider must be overridden');
+});
+
+/// The device's microphone.
+///
+/// Unlike the repositories this has a real default, because it is a device
+/// capability rather than backend data: there is no contract to be missing, and
+/// a build that reached a user's phone certainly has a microphone seam. Tests
+/// override it with a fake so no suite ever touches a platform channel.
+final voiceRecorderProvider = Provider<VoiceRecorder>((ref) {
+  final recorder = PluginVoiceRecorder();
+  ref.onDispose(() => recorder.dispose());
+  return recorder;
+});
+
+/// Audio playback. Like the recorder, a device capability with a real default;
+/// tests override it so no suite opens a platform audio session.
+final voicePlayerProvider = Provider<VoicePlayer>((ref) {
+  final player = JustAudioVoicePlayer();
+  ref.onDispose(() => player.dispose());
+  return player;
 });
 
 /// Clears every cache that would outlive a session. Overridden once the sqlite layer is

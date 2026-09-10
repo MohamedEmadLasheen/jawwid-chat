@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Voice notes. Requested at the moment the user first presses record, never
+         at launch: a permission prompt with no visible cause is the one users deny. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <application
         android:label="jawwid_chat"
         android:name="${applicationName}"

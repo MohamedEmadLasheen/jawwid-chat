@@ -14,6 +14,13 @@ const MAX_BYTES: Record<string, number> = {
   file: Number(process.env.ATTACHMENT_MAX_BYTES_FILE ?? 25 * 1024 * 1024),
 };
 
+/**
+ * Voice notes are the one kind whose duration is meaningful to the UI: it is
+ * rendered before a byte is fetched. It is also entirely client-asserted, so it
+ * is bounded here rather than trusted.
+ */
+const MAX_VOICE_DURATION_MS = Number(process.env.ATTACHMENT_MAX_VOICE_DURATION_MS ?? 10 * 60 * 1000);
+
 const ALLOWED_MIME: Record<string, RegExp> = {
   image: /^image\/(jpeg|png|webp|heic|gif)$/,
   video: /^video\/(mp4|quicktime|webm)$/,
@@ -58,7 +65,7 @@ export class AttachmentService {
     });
   }
 
-  validate(kind: string, mimeType: string, byteSize: number): void {
+  validate(kind: string, mimeType: string, byteSize: number, durationMs?: number | null): void {
     const key = kind as string;
     const max = MAX_BYTES[key];
     const allowed = ALLOWED_MIME[key];
@@ -80,6 +87,29 @@ export class AttachmentService {
       throw new CommError(
         CommErrorCode.ATTACHMENT_TOO_LARGE,
         `attachment exceeds the ${max} byte limit for ${kind}`,
+        400,
+      );
+    }
+    this.validateDuration(kind, durationMs);
+  }
+
+  /**
+   * A duration is a display value the client asserts, and the server never
+   * decodes the audio to check it. Bounding it stops a sender from writing a
+   * negative, non-finite or absurd length that every recipient's player then
+   * has to render.
+   */
+  private validateDuration(kind: string, durationMs?: number | null): void {
+    if (durationMs === undefined || durationMs === null) return;
+    const invalid =
+      !Number.isFinite(durationMs) ||
+      !Number.isInteger(durationMs) ||
+      durationMs < 0 ||
+      (kind === 'voice' && durationMs > MAX_VOICE_DURATION_MS);
+    if (invalid) {
+      throw new CommError(
+        CommErrorCode.ATTACHMENT_TYPE_NOT_ALLOWED,
+        `durationMs ${durationMs} is not a valid duration for ${kind}`,
         400,
       );
     }

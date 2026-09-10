@@ -165,6 +165,69 @@ class L10nEn extends L10n {
   String get composerReadOnly => 'You can no longer send messages here.';
 
   @override
+  String get voiceRecordingInProgress => 'Recording a voice message';
+
+  @override
+  String voiceRecordingElapsed(String duration) {
+    return '$duration recorded';
+  }
+
+  @override
+  String get voiceStopRecording => 'Stop recording';
+
+  @override
+  String get voiceDeleteRecording => 'Delete recording';
+
+  @override
+  String get voiceReviewTitle => 'Review your voice message';
+
+  @override
+  String get voiceSendRecording => 'Send voice message';
+
+  @override
+  String get voicePlay => 'Play';
+
+  @override
+  String get voicePause => 'Pause';
+
+  @override
+  String get voiceReplay => 'Play again';
+
+  @override
+  String get voiceMessageLabel => 'Voice message';
+
+  @override
+  String voiceMessageDuration(String duration) {
+    return 'Voice message, $duration';
+  }
+
+  @override
+  String get voiceLoading => 'Loading audio…';
+
+  @override
+  String get voicePlaybackFailed => 'This voice message could not be played.';
+
+  @override
+  String get voiceUploading => 'Sending voice message';
+
+  @override
+  String get voicePermissionDeniedTitle => 'Microphone access is off';
+
+  @override
+  String get voicePermissionDeniedBody =>
+      'Allow microphone access in your device settings to record a voice message.';
+
+  @override
+  String get voiceUnsupported => 'This device cannot record voice messages.';
+
+  @override
+  String get voiceTooShort => 'Hold longer to record a voice message.';
+
+  @override
+  String get voiceRecordingFailed =>
+      'The recording could not be completed. Please try again.';
+
+  @override
   String get messageStateSending => 'Sending';
 
   @override
