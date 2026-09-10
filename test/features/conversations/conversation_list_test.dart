@@ -29,7 +29,7 @@ void main() {
   }
 
   const ahmed = LearnerRef(id: 'l_ahmed', displayName: 'أحمد');
-  const mariam = LearnerRef(id: 'l_mariam', displayName: 'مريم');
+  const mariam = LearnerRef(id: 'l_mariam', displayName: 'ليلى');
 
   group('parent layout', () {
     test('the Jawwid support thread leads the list', () {
@@ -60,7 +60,7 @@ void main() {
       );
 
       expect(sections.map((s) => s.key), ['learner:l_mariam', 'learner:l_ahmed']);
-      expect(sections.first.learner?.displayName, 'مريم');
+      expect(sections.first.learner?.displayName, 'ليلى');
     });
 
     test('the child with the most recent activity is listed first', () {

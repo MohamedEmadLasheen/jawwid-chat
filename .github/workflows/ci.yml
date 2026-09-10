@@ -64,12 +64,24 @@ jobs:
           set -uo pipefail
           # The product brief names real staff. They are acceptable in docs/,
           # never in code, fixtures or seed data (system-inventory.md §4).
+          #
+          # .github is excluded because the forbidden list is declared on the very
+          # next line: without it the guard matches itself and can never pass, no
+          # matter how clean the source tree is. The exclusion is the definition
+          # site only -- application and test sources are still scanned.
           hits=$(grep -rIl $'رحاب\|زينب\|دينا\|أسماء\|مريم\|رضوى\|رقيه' \
-            --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=docs . || true)
+            --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist \
+            --exclude-dir=docs --exclude-dir=.github . || true)
           if [ -n "$hits" ]; then
             echo "::error::G-20 FAIL — real employee names outside docs/:"; echo "$hits"; exit 1
           fi
           echo "G-20 pass"
+
+      # A guard that cannot pass is as useless as one that cannot fail. G-20 was
+      # red on every commit because it matched its own definition, which took the
+      # whole pipeline down with it; this proves both directions still hold.
+      - name: G-20 meta-guard · the employee-name guard can pass, and can still fail
+        run: bash scripts/qa/check-employee-name-guard.sh
 
       - name: JC-011 · protected regression tests must not be deleted or gutted
         run: bash scripts/qa/check-protected-tests.sh
