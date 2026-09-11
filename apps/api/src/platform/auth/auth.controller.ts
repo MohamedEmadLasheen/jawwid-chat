@@ -47,29 +47,29 @@ export class AuthController {
     const password = asString(body?.password);
     if (!username || !password) throw new AuthError(AuthErrorCode.INVALID_CREDENTIALS);
 
-    // BEFORE the service, and therefore before Argon2id. A caller who is
-    // already over the limit must not be able to spend 19 MiB and ~200 ms of
-    // this process per request just by continuing to ask.
-    await this.rateLimit.assertWithinLimit(username, ip);
+    // RESERVE FIRST, and therefore before Argon2id. The slot is consumed and
+    // checked in one atomic step, so a concurrent burst cannot all pass the
+    // check before any of them is counted -- the defect that let 120 requests
+    // through a limit of 10. A refused caller never reaches the password check,
+    // so this bounds CPU and memory as well as guessing.
+    //
+    // EVERY attempt spends a unit, not just a wrong password: counting only
+    // INVALID_CREDENTIALS would leave a disabled or locked account as an
+    // unmetered oracle for probing which of those an account is, and would let
+    // credential stuffing with valid passwords run unbounded.
+    await this.rateLimit.reserve(username, sourceOf(ip));
 
-    try {
-      const pair = await this.auth.login(username, password, {
-        userAgent,
-        ip,
-        device: asDevice(body?.device),
-      });
-      // Only the identifier budget is cleared. The source budget survives a
-      // success on purpose: otherwise an attacker holding one valid account
-      // could reset their spray counter between bursts.
-      await this.rateLimit.clearIdentifier(username);
-      return toTokenPairDto(pair);
-    } catch (error) {
-      // EVERY refusal spends a unit, not just a wrong password. Counting only
-      // INVALID_CREDENTIALS would leave a disabled or locked account as an
-      // unmetered oracle for probing which of those an account is.
-      if (error instanceof AuthError) await this.rateLimit.recordFailure(username, ip);
-      throw error;
-    }
+    const pair = await this.auth.login(username, password, {
+      userAgent,
+      ip,
+      device: asDevice(body?.device),
+    });
+
+    // Only the identifier budget is released. The source budget survives a
+    // success on purpose: otherwise an attacker holding one valid account could
+    // reset their spray counter between bursts.
+    await this.rateLimit.clearIdentifier(username);
+    return toTokenPairDto(pair);
   }
 
   @Public()
@@ -119,6 +119,42 @@ export class MeController {
     if (!request.actor) throw new AuthError(AuthErrorCode.UNAUTHENTICATED);
     return toActorDto(request.actor);
   }
+}
+
+/**
+ * The address the SOURCE budget is charged against.
+ *
+ * !! KNOWN LIMITATION, DELIBERATELY NOT PAPERED OVER !!
+ *
+ * This is Express's `req.ip`. Express `trust proxy` is not configured, so it is
+ * the SOCKET PEER -- which behind a reverse proxy is the proxy, identically for
+ * every client. The source budget therefore collapses into ONE GLOBAL BUDGET in
+ * any deployment that terminates TLS ahead of the API, which turns this control
+ * into a denial of service: ~30 failures from one attacker would refuse login
+ * to every user.
+ *
+ * It is not fixed here because it CANNOT be fixed correctly from what the
+ * repository documents:
+ *
+ *   - `docs/infrastructure/architecture.md` marks the reverse proxy PLANNED and
+ *     says "TLS terminates at the proxy **or platform edge**" -- two different
+ *     topologies with different hop counts;
+ *   - `decisions.md` leaves the host an open recommendation ("Fly.io or
+ *     Render") and states "the pipeline cannot deploy today";
+ *   - no document specifies a hop count, a trusted proxy range, or which header
+ *     the edge sets, and `infra/env/manifest.tsv` declares no variable for one.
+ *
+ * Guessing would be WORSE than the current state. `trust proxy: true` would let
+ * any caller forge X-Forwarded-For and choose their own source identity --
+ * evading the budget entirely, or poisoning another client's to lock them out.
+ * A guessed hop count is wrong on at least one candidate platform.
+ *
+ * So the address stays unspoofable (nothing anywhere in this codebase reads a
+ * forwarded header) and the limitation is reported rather than hidden. The
+ * IDENTIFIER budget is unaffected and remains fully effective.
+ */
+function sourceOf(ip: string | undefined): string | undefined {
+  return ip;
 }
 
 function asString(value: unknown): string {

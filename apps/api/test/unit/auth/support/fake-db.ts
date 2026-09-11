@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { PrismaService } from '@platform/prisma.service';
 import type { IdentityService, ResolvableAccount } from '@platform/identity.service';
 import type { AuditService, AuditWriteInput, EventWriteInput, Tx } from '@platform/audit.service';
-import type { RateLimitStore } from '@platform/auth/login-rate-limit';
+import type { RateLimitStore, ReserveResult } from '@platform/auth/login-rate-limit';
 import type { Actor } from '@platform/types';
 import { AuthService } from '@platform/auth/auth.service';
 import { hashPassword } from '@platform/auth/password';
@@ -331,40 +331,59 @@ export class FakeAudit implements AuditService {
 /** The two auth values 20260912090000 adds. */
 const EVENT_TYPES = new Set(['auth.login_failed', 'auth.refresh_reuse_detected']);
 
-/** An in-memory RateLimitStore with the same semantics as the Redis commands. */
+/**
+ * An in-memory RateLimitStore.
+ *
+ * Single-threaded JavaScript makes `reserve` here atomic for free -- nothing
+ * can interleave inside a synchronous body. That is NOT what proves the real
+ * implementation is atomic: the Redis Lua script is exercised under genuine
+ * concurrency by test/integration/auth-rate-limit.spec.ts. This double exists
+ * so the POLICY (limits, which budget trips, fail-closed, release-on-success)
+ * can be tested without a server.
+ */
 export class FakeRateLimitStore implements RateLimitStore {
   private readonly counts = new Map<string, number>();
   private readonly expiries = new Map<string, number>();
   /** Set to make every command throw, to exercise the fail-closed path. */
   broken = false;
+  /** Every reserve() call, so a test can prove the budgets actually charged. */
+  readonly reservations: Array<readonly string[]> = [];
 
-  async get(key: string): Promise<string | null> {
-    this.fail();
-    const v = this.counts.get(key);
-    return v === undefined ? null : String(v);
-  }
-  async ttl(key: string): Promise<number> {
-    this.fail();
-    return this.expiries.get(key) ?? -2;
-  }
-  async incr(key: string): Promise<number> {
-    this.fail();
-    const next = (this.counts.get(key) ?? 0) + 1;
-    this.counts.set(key, next);
-    return next;
-  }
-  async expire(key: string, seconds: number): Promise<unknown> {
-    this.fail();
-    if (seconds === 0) {
-      this.counts.delete(key);
-      this.expiries.delete(key);
-      return 1;
-    }
-    this.expiries.set(key, seconds);
-    return 1;
-  }
-  private fail(): void {
+  async reserve(
+    keys: readonly string[],
+    limits: readonly number[],
+    windowSeconds: number,
+  ): Promise<ReserveResult> {
     if (this.broken) throw new Error('ECONNREFUSED');
+    this.reservations.push(keys);
+
+    for (let i = 0; i < keys.length; i++) {
+      const count = (this.counts.get(keys[i]) ?? 0) + 1;
+      this.counts.set(keys[i], count);
+      if (count === 1) this.expiries.set(keys[i], windowSeconds);
+
+      if (count > limits[i]) {
+        return { exceeded: i + 1, retryAfterSeconds: this.expiries.get(keys[i]) ?? windowSeconds };
+      }
+    }
+    return { exceeded: 0, retryAfterSeconds: 0 };
+  }
+
+  async drop(key: string): Promise<void> {
+    if (this.broken) throw new Error('ECONNREFUSED');
+    this.counts.delete(key);
+    this.expiries.delete(key);
+  }
+
+  /** Test introspection only. */
+  countOf(key: string): number {
+    return this.counts.get(key) ?? 0;
+  }
+
+  /** Models the window lapsing in Redis. */
+  lapse(key: string): void {
+    this.counts.delete(key);
+    this.expiries.delete(key);
   }
 }
 

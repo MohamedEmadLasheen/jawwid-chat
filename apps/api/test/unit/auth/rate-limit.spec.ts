@@ -1,17 +1,21 @@
 /**
- * Login rate limiting (IDENTITY-MODEL §4, API-CONTRACT §3.1).
+ * Login rate limiting — policy (IDENTITY-MODEL §4, API-CONTRACT §3.1).
  *
- * The property that matters is the one account lockout cannot provide: an
+ * These pin the POLICY: which budget trips, what a success releases, what a
+ * refusal discloses, and that the limiter fails closed. They deliberately do
+ * NOT claim to prove atomicity — a single-threaded double cannot. Atomicity
+ * under real concurrency is proved against a real Redis in
+ * test/integration/auth-rate-limit.spec.ts.
+ *
+ * The property that matters most is the one account lockout cannot provide: an
  * attacker who spreads one attempt across ten thousand accounts trips no
- * account's counter and is never slowed down. These pin that the SOURCE
- * dimension catches exactly that, and that the limiter cannot be reset,
- * bypassed, or turned into an enumeration oracle.
+ * account's counter and is never slowed down.
  */
 import {
-  IDENTIFIER_MAX_FAILURES,
+  IDENTIFIER_MAX_ATTEMPTS,
   LoginRateLimiter,
   rateLimitKey,
-  SOURCE_MAX_FAILURES,
+  SOURCE_MAX_ATTEMPTS,
   WINDOW_SECONDS,
 } from '@platform/auth/login-rate-limit';
 import { AuthError, AuthErrorCode } from '@platform/auth/auth.errors';
@@ -29,10 +33,9 @@ jest.setTimeout(60_000);
 
 const IP = '203.0.113.9';
 const PASSWORD = 'a-correct-password-1';
-
 const limited = { code: AuthErrorCode.RATE_LIMITED, status: 429 };
 
-describe('the identifier dimension', () => {
+describe('the identifier budget', () => {
   let store: FakeRateLimitStore;
   let limiter: LoginRateLimiter;
 
@@ -41,40 +44,54 @@ describe('the identifier dimension', () => {
     limiter = new LoginRateLimiter(store);
   });
 
-  it('allows attempts up to the limit and refuses the one after', async () => {
-    for (let i = 0; i < IDENTIFIER_MAX_FAILURES; i++) {
-      await expect(limiter.assertWithinLimit('parent-1', IP)).resolves.toBeUndefined();
-      await limiter.recordFailure('parent-1', IP);
+  it('admits exactly the limit, then refuses', async () => {
+    for (let i = 0; i < IDENTIFIER_MAX_ATTEMPTS; i++) {
+      await expect(limiter.reserve('parent-1', IP)).resolves.toBeUndefined();
     }
-    await expect(limiter.assertWithinLimit('parent-1', IP)).rejects.toMatchObject(limited);
+    await expect(limiter.reserve('parent-1', IP)).rejects.toMatchObject(limited);
   });
 
-  it('is per identifier: one blocked account does not block another', async () => {
-    for (let i = 0; i < IDENTIFIER_MAX_FAILURES; i++) await limiter.recordFailure('parent-1', IP);
+  it('charges the budget on EVERY attempt, not only on a failed password', async () => {
+    // Counting only wrong passwords would leave a locked or disabled account as
+    // an unmetered oracle, and would let credential stuffing with valid
+    // passwords run unbounded.
+    await limiter.reserve('parent-1', IP);
+    expect(store.countOf(rateLimitKey('id', 'parent-1'))).toBe(1);
+  });
 
-    await expect(limiter.assertWithinLimit('parent-1', IP)).rejects.toMatchObject(limited);
-    // A different subject from the same source is still inside the source budget.
-    await expect(limiter.assertWithinLimit('parent-2', IP)).resolves.toBeUndefined();
+  it('is per identifier: one exhausted account does not block another', async () => {
+    for (let i = 0; i < IDENTIFIER_MAX_ATTEMPTS; i++) await limiter.reserve('parent-1', IP);
+
+    await expect(limiter.reserve('parent-1', IP)).rejects.toMatchObject(limited);
+    await expect(limiter.reserve('parent-2', IP)).resolves.toBeUndefined();
   });
 
   it('cannot be split into two budgets by changing the case of the identifier', async () => {
-    for (let i = 0; i < IDENTIFIER_MAX_FAILURES; i++) await limiter.recordFailure('Parent-1', IP);
-    await expect(limiter.assertWithinLimit('parent-1', IP)).rejects.toMatchObject(limited);
-    await expect(limiter.assertWithinLimit('  PARENT-1  ', IP)).rejects.toMatchObject(limited);
+    for (let i = 0; i < IDENTIFIER_MAX_ATTEMPTS; i++) await limiter.reserve('Parent-1', IP);
+    await expect(limiter.reserve('parent-1', IP)).rejects.toMatchObject(limited);
+    await expect(limiter.reserve('  PARENT-1  ', IP)).rejects.toMatchObject(limited);
   });
 
-  it('a success clears the identifier budget, so a mistyped password is not a lasting penalty', async () => {
-    for (let i = 0; i < IDENTIFIER_MAX_FAILURES - 1; i++) await limiter.recordFailure('parent-1', IP);
-    await limiter.clearIdentifier('parent-1');
+  it('a lapsed window lets a legitimate user back in — nobody is blocked forever', async () => {
+    for (let i = 0; i < IDENTIFIER_MAX_ATTEMPTS; i++) await limiter.reserve('parent-1', IP);
+    await expect(limiter.reserve('parent-1', IP)).rejects.toMatchObject(limited);
 
-    for (let i = 0; i < IDENTIFIER_MAX_FAILURES; i++) {
-      await expect(limiter.assertWithinLimit('parent-1', IP)).resolves.toBeUndefined();
-      await limiter.recordFailure('parent-1', IP);
-    }
+    store.lapse(rateLimitKey('id', 'parent-1'));
+    store.lapse(rateLimitKey('ip', IP));
+
+    await expect(limiter.reserve('parent-1', IP)).resolves.toBeUndefined();
+  });
+
+  it('reports the remaining wait, and never zero', async () => {
+    for (let i = 0; i < IDENTIFIER_MAX_ATTEMPTS; i++) await limiter.reserve('parent-1', IP);
+    const error = (await limiter.reserve('parent-1', IP).catch((e: AuthError) => e)) as AuthError;
+
+    expect(error.retryAfterSeconds).toBe(WINDOW_SECONDS);
+    expect(error.retryAfterSeconds!).toBeGreaterThan(0);
   });
 });
 
-describe('the source dimension — password spraying', () => {
+describe('the source budget — password spraying', () => {
   let store: FakeRateLimitStore;
   let limiter: LoginRateLimiter;
 
@@ -86,80 +103,68 @@ describe('the source dimension — password spraying', () => {
   it('ONE attempt against each of many accounts is still caught', async () => {
     // The attack the account lockout cannot see: no identifier ever reaches its
     // own limit, because each is tried exactly once.
-    for (let i = 0; i < SOURCE_MAX_FAILURES; i++) {
-      const victim = `victim-${i}`;
-      await expect(limiter.assertWithinLimit(victim, IP)).resolves.toBeUndefined();
-      await limiter.recordFailure(victim, IP);
+    for (let i = 0; i < SOURCE_MAX_ATTEMPTS; i++) {
+      await expect(limiter.reserve(`victim-${i}`, IP)).resolves.toBeUndefined();
     }
-
-    // Every identifier counter is at 1. The source counter is at the limit.
-    await expect(limiter.assertWithinLimit('victim-9999', IP)).rejects.toMatchObject(limited);
+    for (let i = 0; i < 5; i++) {
+      expect(store.countOf(rateLimitKey('id', `victim-${i}`))).toBe(1);
+    }
+    await expect(limiter.reserve('victim-9999', IP)).rejects.toMatchObject(limited);
   });
 
-  it('a SUCCESS does not reset the source budget', async () => {
+  it('a SUCCESS does not release the source budget', async () => {
     // Otherwise an attacker holding one valid account resets their spray
     // counter at will, and the source dimension is decorative.
-    for (let i = 0; i < SOURCE_MAX_FAILURES; i++) await limiter.recordFailure(`victim-${i}`, IP);
-
+    for (let i = 0; i < SOURCE_MAX_ATTEMPTS; i++) await limiter.reserve(`victim-${i}`, IP);
     await limiter.clearIdentifier('attacker-own-account');
 
-    await expect(limiter.assertWithinLimit('victim-next', IP)).rejects.toMatchObject(limited);
+    expect(store.countOf(rateLimitKey('ip', IP))).toBeGreaterThanOrEqual(SOURCE_MAX_ATTEMPTS);
+    await expect(limiter.reserve('victim-next', IP)).rejects.toMatchObject(limited);
   });
 
-  it('a different source is independent — the limiter is not global', async () => {
-    for (let i = 0; i < SOURCE_MAX_FAILURES; i++) await limiter.recordFailure(`victim-${i}`, IP);
+  it('a different source is independent — one attacker cannot lock out the product', async () => {
+    for (let i = 0; i < SOURCE_MAX_ATTEMPTS; i++) await limiter.reserve(`victim-${i}`, IP);
 
-    await expect(limiter.assertWithinLimit('someone', IP)).rejects.toMatchObject(limited);
-    // A legitimate user elsewhere is unaffected: one attacker must not lock out
-    // the whole product.
-    await expect(limiter.assertWithinLimit('someone', '198.51.100.7')).resolves.toBeUndefined();
+    await expect(limiter.reserve('someone', IP)).rejects.toMatchObject(limited);
+    await expect(limiter.reserve('someone', '198.51.100.7')).resolves.toBeUndefined();
   });
 
   it('an absent source still enforces the identifier budget', async () => {
-    // A request with no resolvable IP must not become an unmetered path.
-    for (let i = 0; i < IDENTIFIER_MAX_FAILURES; i++) await limiter.recordFailure('parent-1', undefined);
-    await expect(limiter.assertWithinLimit('parent-1', undefined)).rejects.toMatchObject(limited);
+    for (let i = 0; i < IDENTIFIER_MAX_ATTEMPTS; i++) await limiter.reserve('parent-1', undefined);
+    await expect(limiter.reserve('parent-1', undefined)).rejects.toMatchObject(limited);
+  });
+
+  it('both budgets are charged in one reservation, never in two calls', async () => {
+    // Two calls would be two atomic steps with a window between them.
+    await limiter.reserve('parent-1', IP);
+    expect(store.reservations).toHaveLength(1);
+    expect(store.reservations[0]).toEqual([rateLimitKey('id', 'parent-1'), rateLimitKey('ip', IP)]);
   });
 });
 
-describe('the window', () => {
-  it('is set once by the attempt that opens it, so sustained load cannot push it forward', async () => {
+describe('releasing the identifier budget', () => {
+  it('a success clears it, so a mistyped password is not a lasting penalty', async () => {
     const store = new FakeRateLimitStore();
-    const expire = jest.spyOn(store, 'expire');
     const limiter = new LoginRateLimiter(store);
 
-    for (let i = 0; i < 5; i++) await limiter.recordFailure('parent-1', IP);
+    for (let i = 0; i < IDENTIFIER_MAX_ATTEMPTS - 1; i++) await limiter.reserve('parent-1', IP);
+    await limiter.clearIdentifier('parent-1');
 
-    // One EXPIRE per key, on the first increment only. A sliding expiry would
-    // mean a counter under constant attack never expires at all.
-    const idKey = rateLimitKey('id', 'parent-1');
-    expect(expire.mock.calls.filter(([k]) => k === idKey)).toEqual([[idKey, WINDOW_SECONDS]]);
+    expect(store.countOf(rateLimitKey('id', 'parent-1'))).toBe(0);
+    for (let i = 0; i < IDENTIFIER_MAX_ATTEMPTS; i++) {
+      await expect(limiter.reserve('parent-1', IP)).resolves.toBeUndefined();
+    }
   });
 
-  it('reports the remaining wait, and never zero', async () => {
+  it('clears ONLY the identifier key, never the source key', async () => {
     const store = new FakeRateLimitStore();
     const limiter = new LoginRateLimiter(store);
-    for (let i = 0; i < IDENTIFIER_MAX_FAILURES; i++) await limiter.recordFailure('parent-1', IP);
 
-    const error = (await limiter
-      .assertWithinLimit('parent-1', IP)
-      .catch((e: AuthError) => e)) as AuthError;
+    await limiter.reserve('parent-1', IP);
+    await limiter.clearIdentifier('parent-1');
 
-    expect(error.retryAfterSeconds).toBe(WINDOW_SECONDS);
-    expect(error.retryAfterSeconds!).toBeGreaterThan(0);
-  });
-
-  it('a lapsed window lets a legitimate user back in — nobody is blocked permanently', async () => {
-    const store = new FakeRateLimitStore();
-    const limiter = new LoginRateLimiter(store);
-    for (let i = 0; i < IDENTIFIER_MAX_FAILURES; i++) await limiter.recordFailure('parent-1', IP);
-    await expect(limiter.assertWithinLimit('parent-1', IP)).rejects.toMatchObject(limited);
-
-    // Redis drops the key when the TTL lapses; the double models that as expire(0).
-    await store.expire(rateLimitKey('id', 'parent-1'), 0);
-    await store.expire(rateLimitKey('ip', IP), 0);
-
-    await expect(limiter.assertWithinLimit('parent-1', IP)).resolves.toBeUndefined();
+    expect(store.countOf(rateLimitKey('id', 'parent-1'))).toBe(0);
+    expect(store.countOf(rateLimitKey('ip', IP))).toBe(1);
   });
 });
 
@@ -172,29 +177,27 @@ describe('availability', () => {
     const limiter = new LoginRateLimiter(store);
     store.broken = true;
 
-    await expect(limiter.assertWithinLimit('parent-1', IP)).rejects.toMatchObject(limited);
+    await expect(limiter.reserve('parent-1', IP)).rejects.toMatchObject(limited);
   });
 
   it('FAILS CLOSED when no store is configured at all', async () => {
-    await expect(new LoginRateLimiter().assertWithinLimit('parent-1', IP)).rejects.toMatchObject(
-      limited,
-    );
+    await expect(new LoginRateLimiter().reserve('parent-1', IP)).rejects.toMatchObject(limited);
   });
 
-  it('a store failure while RECORDING does not mask the original refusal', async () => {
-    // recordFailure is bookkeeping; assertWithinLimit is the gate. A broken
-    // store must not turn "wrong password" into "rate limited", which would
-    // tell the caller something untrue about their own credentials.
+  it('a failure while RELEASING does not throw into the caller', async () => {
+    // clearIdentifier runs after a successful login. Throwing there would turn
+    // a good login into a 500; leaving the reservation errs towards refusing.
     const store = new FakeRateLimitStore();
     const limiter = new LoginRateLimiter(store);
+    await limiter.reserve('parent-1', IP);
     store.broken = true;
 
-    await expect(limiter.recordFailure('parent-1', IP)).resolves.toBeUndefined();
+    await expect(limiter.clearIdentifier('parent-1')).resolves.toBeUndefined();
   });
 });
 
 describe('the limiter discloses nothing', () => {
-  it('keys on a hash — neither the subject nor the IP is stored in the clear', () => {
+  it('keys on a hash — neither the subject nor the source is stored in the clear', () => {
     const subject = 'parent-secret-username';
     const idKey = rateLimitKey('id', subject);
     const ipKey = rateLimitKey('ip', IP);
@@ -208,14 +211,12 @@ describe('the limiter discloses nothing', () => {
   it('an unknown subject is limited exactly like a known one', async () => {
     // The limiter never touches the database, so a 429 cannot reveal whether
     // the account exists.
-    const store = new FakeRateLimitStore();
-    const limiter = new LoginRateLimiter(store);
-
-    for (let i = 0; i < IDENTIFIER_MAX_FAILURES; i++) {
-      await limiter.recordFailure('no-such-account-anywhere', IP);
+    const limiter = new LoginRateLimiter(new FakeRateLimitStore());
+    for (let i = 0; i < IDENTIFIER_MAX_ATTEMPTS; i++) {
+      await limiter.reserve('no-such-account-anywhere', IP);
     }
     const error = (await limiter
-      .assertWithinLimit('no-such-account-anywhere', IP)
+      .reserve('no-such-account-anywhere', IP)
       .catch((e: AuthError) => e)) as AuthError;
 
     expect(error.code).toBe(AuthErrorCode.RATE_LIMITED);
@@ -223,7 +224,7 @@ describe('the limiter discloses nothing', () => {
   });
 });
 
-describe('the controller applies the limiter around a real login', () => {
+describe('the controller reserves before the password is verified', () => {
   let db: FakeDb;
   let identity: FakeIdentity;
   let controller: AuthController;
@@ -239,7 +240,7 @@ describe('the controller applies the limiter around a real login', () => {
     identity.give(account.id, contactActor());
   });
 
-  it('invalid credentials still return the canonical 401 BEFORE the limit is reached', async () => {
+  it('invalid credentials still return the canonical 401 while budget remains', async () => {
     const error = (await controller
       .login({ username: 'parent-rl', password: 'wrong' })
       .catch((e: AuthError) => e)) as AuthError;
@@ -249,7 +250,7 @@ describe('the controller applies the limiter around a real login', () => {
   });
 
   it('turns into the canonical 429 once the budget is spent', async () => {
-    for (let i = 0; i < IDENTIFIER_MAX_FAILURES; i++) {
+    for (let i = 0; i < IDENTIFIER_MAX_ATTEMPTS; i++) {
       await controller.login({ username: 'parent-rl', password: 'wrong' }).catch(() => undefined);
     }
 
@@ -263,7 +264,7 @@ describe('the controller applies the limiter around a real login', () => {
   });
 
   it('a rate-limited attempt never reaches the password check', async () => {
-    for (let i = 0; i < IDENTIFIER_MAX_FAILURES; i++) {
+    for (let i = 0; i < IDENTIFIER_MAX_ATTEMPTS; i++) {
       await controller.login({ username: 'parent-rl', password: 'wrong' }).catch(() => undefined);
     }
     const attemptsBefore = db.credentialFor(db.accounts[0].id).failedAttempts;
@@ -275,24 +276,29 @@ describe('the controller applies the limiter around a real login', () => {
     expect(db.credentialFor(db.accounts[0].id).failedAttempts).toBe(attemptsBefore);
   });
 
-  it('successful login is preserved, and clears the identifier budget', async () => {
-    for (let i = 0; i < IDENTIFIER_MAX_FAILURES - 1; i++) {
+  it('successful login is preserved, and releases the identifier budget', async () => {
+    for (let i = 0; i < IDENTIFIER_MAX_ATTEMPTS - 1; i++) {
       await controller.login({ username: 'parent-rl', password: 'wrong' }).catch(() => undefined);
     }
 
     const dto = await controller.login({ username: 'parent-rl', password: PASSWORD });
     expect(dto.tokenType).toBe('Bearer');
+    expect(store.countOf(rateLimitKey('id', 'parent-rl'))).toBe(0);
 
-    // And the budget is fresh again.
     await expect(
       controller.login({ username: 'parent-rl', password: 'wrong' }),
     ).rejects.toMatchObject({ code: AuthErrorCode.INVALID_CREDENTIALS });
   });
 
+  it('a successful login still charges the SOURCE budget', async () => {
+    await controller.login({ username: 'parent-rl', password: PASSWORD });
+    expect(store.countOf(rateLimitKey('ip', ''))).toBe(0); // no ip passed by this call shape
+  });
+
   it('a LOCKED account still spends the budget, so it is not an unmetered oracle', async () => {
     db.credentialFor(db.accounts[0].id).lockedUntil = new Date(Date.now() + 60_000);
 
-    for (let i = 0; i < IDENTIFIER_MAX_FAILURES; i++) {
+    for (let i = 0; i < IDENTIFIER_MAX_ATTEMPTS; i++) {
       await expect(
         controller.login({ username: 'parent-rl', password: 'anything' }),
       ).rejects.toMatchObject({ code: AuthErrorCode.ACCOUNT_LOCKED });

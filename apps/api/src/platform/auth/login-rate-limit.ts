@@ -13,6 +13,20 @@ import { AuthError, AuthErrorCode } from './auth.errors';
  * `handoff-ai5.md` §4 says "the values are yours to set" -- so the numbers
  * below are chosen here and named.
  *
+ * RESERVATION, NOT CHECK-THEN-COUNT
+ * ---------------------------------
+ * The first version of this file read the counter, decided, ran the login, and
+ * incremented afterwards. The window between the read and the increment spanned
+ * the whole handler including a ~200ms Argon2id verification, so a concurrent
+ * burst all read the same count, all passed, and all ran Argon2id: 120 of 120
+ * requests got past a limit of 10, in 626ms.
+ *
+ * So a slot is now RESERVED -- incremented and checked in one atomic step --
+ * before the password is verified. Every attempt consumes its unit up front,
+ * which is what makes the limit hold under concurrency. A single Redis Lua
+ * script does it, and Redis executes a script atomically, so no interleaving is
+ * possible between the increment and the comparison.
+ *
  * WHY THIS IS NOT THE ACCOUNT LOCKOUT
  * -----------------------------------
  * chat.account_credential already locks one account after 10 failures. That
@@ -20,16 +34,22 @@ import { AuthError, AuthErrorCode } from './auth.errors';
  * spraying -- one attempt against each of ten thousand accounts never trips any
  * account's counter, and the attacker is never slowed down.
  *
- * The dimension that catches spraying is the SOURCE. So this limiter counts on
- * two keys at once:
+ * The dimension that catches spraying is the SOURCE. So this limiter reserves
+ * on two keys at once:
  *
  *   identifier  stops repeated guessing at one account (defence in depth with
  *               the lockout, which it deliberately matches at 10)
- *   source IP   stops one origin spreading its attempts across many accounts
+ *   source      stops one origin spreading its attempts across many accounts
  *
- * and the source budget is deliberately NOT reset by a success. Resetting it
+ * and the source budget is deliberately NOT released by a success. Releasing it
  * would hand an attacker who controls one valid account a free counter reset
  * between spray bursts.
+ *
+ * !! THE SOURCE DIMENSION IS ONLY AS GOOD AS THE ADDRESS IT IS GIVEN !!
+ * `login-rate-limit` does not decide what "the source" is; the caller passes
+ * it. Deriving a real client address behind a reverse proxy is an unsolved
+ * deployment question in this repository -- see auth.controller.ts and the PR
+ * description. This class is correct for whatever address it is handed.
  *
  * WHY REDIS, NOT MEMORY
  * ---------------------
@@ -52,32 +72,49 @@ import { AuthError, AuthErrorCode } from './auth.errors';
  * also, on its own, the cheapest denial-of-service amplifier in the system.
  */
 
-/** Failures per identifier per window. Matches the account lockout threshold so
+/** Attempts per identifier per window. Matches the account lockout threshold so
  *  the two controls agree rather than one silently masking the other. */
-export const IDENTIFIER_MAX_FAILURES = 10;
+export const IDENTIFIER_MAX_ATTEMPTS = 10;
 
-/** Failures per source per window. 30 in 15 minutes is 2/min sustained from one
+/** Attempts per source per window. 30 in 15 minutes is 2/min sustained from one
  *  origin -- far above a person mistyping, far below a spray worth running. */
-export const SOURCE_MAX_FAILURES = 30;
+export const SOURCE_MAX_ATTEMPTS = 30;
 
 export const WINDOW_SECONDS = 900; // 15 minutes
 
 const KEY_PREFIX = 'ratelimit:login';
 
-/** The slice of ioredis this needs. Keeps the unit tests off a real socket
- *  without letting them substitute different BEHAVIOUR -- the integration suite
- *  runs the same code against a real server. */
+/** Which budget refused the attempt. 0 = none. */
+export const ALLOWED = 0;
+
+export interface ReserveResult {
+  /** 0 when the attempt is allowed; otherwise the 1-based index of the budget
+   *  that was exceeded. */
+  readonly exceeded: number;
+  /** Seconds until that budget frees up. Only meaningful when exceeded > 0. */
+  readonly retryAfterSeconds: number;
+}
+
+/**
+ * The storage contract.
+ *
+ * Deliberately expressed as RESERVE, not as get/incr/expire. A store cannot
+ * implement this interface non-atomically without lying about it, and the
+ * limiter above therefore cannot be made racy by a future refactor of the
+ * transport: the atomicity requirement is part of the type.
+ */
 export interface RateLimitStore {
-  get(key: string): Promise<string | null>;
-  ttl(key: string): Promise<number>;
-  incr(key: string): Promise<number>;
-  expire(key: string, seconds: number): Promise<unknown>;
+  /** Consume one unit from EVERY budget, atomically, and report the first that
+   *  is now over its limit. */
+  reserve(keys: readonly string[], limits: readonly number[], windowSeconds: number): Promise<ReserveResult>;
+  /** Release a whole budget (used only for the identifier, only on success). */
+  drop(key: string): Promise<void>;
 }
 
 export const RATE_LIMIT_STORE = Symbol('LoginRateLimitStore');
 
 /**
- * Neither the login identifier nor the IP is ever stored in the clear.
+ * Neither the login identifier nor the source is ever stored in the clear.
  *
  * The identifier is `chat.account.subject`, which IS the login credential half
  * of the pair; a Redis key naming it would turn a cache dump into a list of
@@ -96,104 +133,66 @@ export class LoginRateLimiter {
   constructor(@Optional() @Inject(RATE_LIMIT_STORE) private readonly store?: RateLimitStore) {}
 
   /**
-   * Refuses the attempt if either budget is already spent.
+   * Reserves a slot, or refuses.
    *
-   * Called BEFORE the password is verified, so a blocked caller never reaches
-   * Argon2id -- otherwise the limiter would stop the guessing but not the CPU
-   * burn it exists to bound.
+   * MUST be called before the password is verified. A refused caller never
+   * reaches Argon2id -- otherwise the limiter would bound the guessing but not
+   * the CPU and memory burn it also exists to bound.
    *
    * Identical for an existing and a non-existing subject: the identifier key is
    * a hash of whatever was submitted, and nothing consults the database first.
    * A 429 therefore reveals nothing about whether the account exists.
    */
-  async assertWithinLimit(subject: string, ip: string | undefined): Promise<void> {
+  async reserve(subject: string, source: string | undefined): Promise<void> {
     if (!this.store) {
       // No store configured at all is a deployment error, not a quiet bypass.
       throw new AuthError(AuthErrorCode.RATE_LIMITED, WINDOW_SECONDS);
     }
 
-    const keys: Array<[string, number]> = [
-      [rateLimitKey('id', normalizeSubject(subject)), IDENTIFIER_MAX_FAILURES],
-    ];
-    if (ip) keys.push([rateLimitKey('ip', ip), SOURCE_MAX_FAILURES]);
-
-    for (const [key, limit] of keys) {
-      let count: number;
-      try {
-        count = Number((await this.store.get(key)) ?? 0);
-      } catch (error) {
-        // FAIL CLOSED. See the file header: the instance is being drained
-        // anyway, and an unmetered Argon2id endpoint is the worse outcome.
-        this.log.error(
-          `login rate limiter could not reach its store; refusing login: ${errorName(error)}`,
-        );
-        throw new AuthError(AuthErrorCode.RATE_LIMITED, WINDOW_SECONDS);
-      }
-
-      if (count >= limit) {
-        throw new AuthError(AuthErrorCode.RATE_LIMITED, await this.retryAfter(key));
-      }
-    }
-  }
-
-  /**
-   * Spends one unit of both budgets.
-   *
-   * Called on EVERY refused login, whatever the reason -- wrong password, no
-   * such subject, disabled, locked. Counting only "invalid credentials" would
-   * leave a disabled or locked account as an unmetered oracle, and would let an
-   * attacker probe which of those an account is for free.
-   */
-  async recordFailure(subject: string, ip: string | undefined): Promise<void> {
-    if (!this.store) return;
-
     const keys = [rateLimitKey('id', normalizeSubject(subject))];
-    if (ip) keys.push(rateLimitKey('ip', ip));
+    const limits = [IDENTIFIER_MAX_ATTEMPTS];
+    if (source) {
+      keys.push(rateLimitKey('ip', source));
+      limits.push(SOURCE_MAX_ATTEMPTS);
+    }
 
-    for (const key of keys) {
-      try {
-        const count = await this.store.incr(key);
-        // Fixed window: the expiry is set by whichever attempt opened it, so
-        // the window runs from the first failure rather than sliding forward
-        // with every new one (which would never expire under sustained load).
-        if (count === 1) await this.store.expire(key, WINDOW_SECONDS);
-      } catch (error) {
-        // A failure to RECORD is not a reason to refuse the request that already
-        // failed for its own reason. assertWithinLimit is the gate; this is
-        // bookkeeping, and it fails closed on the next attempt anyway because
-        // that call cannot read the store either.
-        this.log.error(`login rate limiter could not record a failure: ${errorName(error)}`);
-      }
+    let result: ReserveResult;
+    try {
+      result = await this.store.reserve(keys, limits, WINDOW_SECONDS);
+    } catch (error) {
+      // FAIL CLOSED. See the file header: the instance is being drained anyway,
+      // and an unmetered Argon2id endpoint is the worse outcome.
+      this.log.error(
+        `login rate limiter could not reach its store; refusing login: ${errorName(error)}`,
+      );
+      throw new AuthError(AuthErrorCode.RATE_LIMITED, WINDOW_SECONDS);
+    }
+
+    if (result.exceeded !== ALLOWED) {
+      throw new AuthError(
+        AuthErrorCode.RATE_LIMITED,
+        result.retryAfterSeconds > 0 ? result.retryAfterSeconds : WINDOW_SECONDS,
+      );
     }
   }
 
   /**
-   * Clears the IDENTIFIER budget after a successful login, so a person who
+   * Releases the IDENTIFIER budget after a successful login, so a person who
    * mistyped their password four times is not still penalised once they get it
    * right.
    *
-   * The SOURCE budget is deliberately left alone. Clearing it would let an
+   * The SOURCE budget is deliberately left alone. Releasing it would let an
    * attacker who holds one valid account reset their spray counter at will,
-   * which is exactly the attack this limiter exists to stop.
+   * which is exactly the attack that dimension exists to stop.
    */
   async clearIdentifier(subject: string): Promise<void> {
     if (!this.store) return;
     try {
-      await this.store.expire(rateLimitKey('id', normalizeSubject(subject)), 0);
+      await this.store.drop(rateLimitKey('id', normalizeSubject(subject)));
     } catch (error) {
-      this.log.error(`login rate limiter could not clear an identifier: ${errorName(error)}`);
-    }
-  }
-
-  private async retryAfter(key: string): Promise<number> {
-    try {
-      const ttl = await this.store!.ttl(key);
-      // -1 = no expiry, -2 = no key. Neither should happen for a key we just
-      // read a count from; fall back to the full window rather than to 0, which
-      // would invite an immediate retry.
-      return ttl > 0 ? ttl : WINDOW_SECONDS;
-    } catch {
-      return WINDOW_SECONDS;
+      // Bookkeeping, not a gate. Failing here leaves the reservation in place,
+      // which errs towards refusing rather than towards allowing.
+      this.log.error(`login rate limiter could not release an identifier: ${errorName(error)}`);
     }
   }
 }

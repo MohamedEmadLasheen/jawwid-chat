@@ -6,6 +6,7 @@ import { AuthenticatedGuard } from './auth.guard';
 import { AuthController, MeController } from './auth.controller';
 import { AuthErrorFilter } from './auth.errors';
 import { LoginRateLimiter, RATE_LIMIT_STORE, type RateLimitStore } from './login-rate-limit';
+import { RedisRateLimitStore } from './redis-rate-limit.store';
 
 /**
  * Runtime authentication (PR-B).
@@ -68,7 +69,7 @@ export const loginRateLimitStoreProvider = {
       // Never the message: an ioredis error can embed the connection string.
       new Logger('LoginRateLimiter').debug(`redis: ${e.name}`),
     );
-    return client;
+    return new RedisRateLimitStore(client);
   },
 };
 
