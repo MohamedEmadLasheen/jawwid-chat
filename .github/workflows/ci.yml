@@ -157,6 +157,24 @@ jobs:
         # dump from a server newer than itself, so a distro client that lags the
         # service turns the backup/restore drill below into a version error that
         # reads like a broken script.
+        #
+        # Installing the package is not sufficient, and this step used to prove
+        # that on every run without anyone acting on it: the runner image already
+        # carries a PostgreSQL 16 client, /usr/bin/{psql,pg_dump,pg_restore} are
+        # postgresql-common wrappers that multiplex across installed versions, and
+        # after `postgresql-client-17` landed they still resolved to
+        #
+        #     psql     17.11        <- happened to pick the new one
+        #     pg_dump  16.15        <- did not
+        #
+        # G-41 then failed with "aborting because of server version mismatch"
+        # against the 17.11 service container. Pinning the PACKAGE does not pin
+        # the BINARY a bare name resolves to, so the versioned directory goes on
+        # PATH ahead of /usr/bin.
+        #
+        # GITHUB_PATH, not `export`: an export dies with this step, and the
+        # consumer is G-41 several steps later. The local export is only so the
+        # assertions below test the resolution those steps will actually get.
         run: |
           sudo apt-get update
           sudo apt-get install -y curl ca-certificates
@@ -166,7 +184,30 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
           sudo apt-get update
           sudo apt-get install -y postgresql-client-17
-          psql --version && pg_dump --version
+
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+          export PATH="/usr/lib/postgresql/17/bin:$PATH"
+
+          # Asserted rather than printed. The old line printed the mismatch on
+          # every run and failed nothing, so the first thing that noticed was a
+          # backup three minutes later. pg_restore is checked too: it has the
+          # same resolution and reads an archive this major version wrote.
+          failed=0
+          for bin in psql pg_dump pg_restore; do
+            resolved="$(command -v "$bin" || true)"
+            if [ -z "$resolved" ]; then
+              echo "::error::$bin is not on PATH after installing postgresql-client-17"
+              failed=1
+              continue
+            fi
+            version="$("$bin" --version | awk '{print $3}')"
+            printf '  %-11s %-34s %s\n' "$bin" "$resolved" "$version"
+            if [ "${version%%.*}" != "17" ]; then
+              echo "::error::$bin resolves to PostgreSQL ${version%%.*} at $resolved, not 17 -- it cannot work against the 17.x service container (G-41)"
+              failed=1
+            fi
+          done
+          [ "$failed" -eq 0 ] || exit 1
 
       # RT-023. There is no branch composition and no Core/identity stub any
       # more: supabase/migrations is the single SQL authority and builds an
