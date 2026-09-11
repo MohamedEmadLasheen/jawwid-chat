@@ -43,7 +43,15 @@ done
 # including a failure part-way through the restore: an unencrypted copy of every
 # family's messages must not survive a crashed drill.
 DECRYPTED=""
-cleanup_decrypted() { [ -n "$DECRYPTED" ] && rm -f "$DECRYPTED"; }
+#
+# It returns success explicitly. This runs on the EXIT trap, and a trap whose
+# last command fails REPLACES the script's exit status -- so with no plaintext
+# to remove, `[ -n "$DECRYPTED" ]` was false and every successful UNENCRYPTED
+# restore exited 1, after printing that it had finished.
+cleanup_decrypted() {
+  if [ -n "$DECRYPTED" ]; then rm -f "$DECRYPTED"; fi
+  return 0
+}
 trap cleanup_decrypted EXIT INT TERM
 
 # Verify integrity before touching the target. Restoring a truncated dump on top
