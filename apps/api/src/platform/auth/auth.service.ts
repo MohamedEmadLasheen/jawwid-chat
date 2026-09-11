@@ -1,7 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { IDENTITY_SERVICE } from '../tokens';
+import { AUDIT_SERVICE, IDENTITY_SERVICE } from '../tokens';
 import type { IdentityService } from '../identity.service';
+import type { AuditService, Tx } from '../audit.service';
 import type { Actor } from '../types';
 import { AuthError, AuthErrorCode } from './auth.errors';
 import { AuthConfig, loadAuthConfig } from './auth.config';
@@ -14,6 +15,23 @@ import {
   verifyAccessToken,
 } from './jwt';
 import { hashPassword, spendComparableTime, verifyPassword } from './password';
+import { subjectHash } from './subject-hash';
+
+/**
+ * The canonical event and action names (API-CONTRACT §3.1). Constants so a
+ * typo cannot silently write an event nobody queries -- and because the
+ * chat.event_log CHECK constraint admits exactly these two auth values
+ * (20260912090000), a wrong string fails at the database rather than at review.
+ */
+export const AUTH_EVENT = {
+  LOGIN_FAILED: 'auth.login_failed',
+  REFRESH_REUSE_DETECTED: 'auth.refresh_reuse_detected',
+} as const;
+
+export const AUDIT_ACTION = {
+  SESSION_CREATED: 'session.created',
+  SESSION_REVOKED: 'session.revoked',
+} as const;
 
 /** Lockout policy. Beside the credential row, not in Redis: a lockout that
  *  disappears when the cache restarts is not a lockout. */
@@ -22,6 +40,9 @@ const LOCKOUT_MINUTES = 15;
 
 /** Statuses that may hold a session. Anything else is refused everywhere. */
 const ACTIVE_STATUS = 'active';
+
+/** The revocation reason a reuse sweep writes. Read back by the audit tests. */
+export const REUSE_REASON = 'refresh reuse detected';
 
 export interface DeviceInput {
   readonly platform?: string;
@@ -76,6 +97,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
+    @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
   ) {}
 
   /**
@@ -111,6 +133,7 @@ export class AuthService {
       // Spend a real Argon2id verification so an unknown subject costs the same
       // as a known one. Without this the response time enumerates accounts.
       await spendComparableTime(password);
+      await this.recordLoginFailure(null, subject, 'invalid_credentials');
       throw new AuthError(AuthErrorCode.INVALID_CREDENTIALS);
     }
 
@@ -118,11 +141,20 @@ export class AuthService {
     // free password oracle, and checking it first also stops the attempt
     // counter from being pushed further by an attacker who is already locked.
     if (account.credential.lockedUntil && account.credential.lockedUntil > new Date()) {
+      await this.recordLoginFailure(account.id, subject, 'account_locked');
       throw new AuthError(AuthErrorCode.ACCOUNT_LOCKED);
     }
 
+    // OUTSIDE any transaction, deliberately. Argon2id at m=19456 takes ~200ms;
+    // holding a pooled database connection for that would turn the login path
+    // into a connection-pool exhaustion vector under load.
     if (!(await verifyPassword(password, account.credential.passwordHash))) {
-      await this.recordFailure(account.id, account.credential.failedAttempts);
+      await this.recordLoginFailure(
+        account.id,
+        subject,
+        'invalid_credentials',
+        account.credential.failedAttempts,
+      );
       throw new AuthError(AuthErrorCode.INVALID_CREDENTIALS);
     }
 
@@ -132,6 +164,7 @@ export class AuthService {
     // manager -- and the client needs it to show a terminal message (§7).
     if (!account.isActive || account.status !== ACTIVE_STATUS) {
       await this.clearFailures(account.id);
+      await this.recordLoginFailure(account.id, subject, 'account_disabled');
       throw new AuthError(AuthErrorCode.ACCOUNT_DISABLED);
     }
 
@@ -141,33 +174,59 @@ export class AuthService {
       // not a client error. Logged with the account id only -- never the
       // subject, which is the login identifier.
       this.log.error(`account ${account.id} authenticated but resolves to no principal`);
+      await this.recordLoginFailure(account.id, subject, 'no_principal');
       throw new AuthError(AuthErrorCode.ACCOUNT_DISABLED);
     }
     if (!actor.isActive) {
+      await this.recordLoginFailure(account.id, subject, 'principal_inactive');
       throw new AuthError(AuthErrorCode.ACCOUNT_DISABLED);
     }
 
-    await this.clearFailures(account.id);
-    await this.prisma.account.update({
-      where: { id: account.id },
-      data: { lastLoginAt: new Date() },
-    });
-
-    const deviceId = await this.upsertDevice(account.id, account.organizationId, context.device);
-    return this.issue(account, actor, { ...context, deviceId });
+    return this.issue(account, actor, context, 'login');
   }
 
-  private async recordFailure(accountId: string, previousAttempts: number): Promise<void> {
-    const attempts = previousAttempts + 1;
-    await this.prisma.accountCredential.update({
-      where: { accountId },
-      data: {
-        failedAttempts: attempts,
-        lockedUntil:
-          attempts >= MAX_FAILED_ATTEMPTS
-            ? new Date(Date.now() + LOCKOUT_MINUTES * 60_000)
-            : null,
-      },
+  /**
+   * The failed-login record (API-CONTRACT §3.1).
+   *
+   * ONE TRANSACTION with the attempt counter it increments, so a lockout can
+   * never advance without the event that explains it, and an event can never
+   * claim an increment that rolled back.
+   *
+   * The payload carries a HASH of the submitted identifier and a reason code,
+   * never the raw subject and never anything derived from the password. An
+   * unknown subject is recorded too -- that is precisely the row that shows a
+   * spray -- but with accountId null, because there is no account to name.
+   */
+  private async recordLoginFailure(
+    accountId: string | null,
+    subject: string,
+    reason: string,
+    previousAttempts?: number,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      if (accountId !== null && previousAttempts !== undefined) {
+        const attempts = previousAttempts + 1;
+        await tx.accountCredential.update({
+          where: { accountId },
+          data: {
+            failedAttempts: attempts,
+            lockedUntil:
+              attempts >= MAX_FAILED_ATTEMPTS
+                ? new Date(Date.now() + LOCKOUT_MINUTES * 60_000)
+                : null,
+          },
+        });
+      }
+
+      await this.audit.event(tx, {
+        // `system`: a failed login has no authenticated principal by
+        // definition, and event_log.actor_type admits only
+        // contact|staff|teacher|system.
+        actorKind: 'system',
+        actorId: null,
+        type: AUTH_EVENT.LOGIN_FAILED,
+        payload: { subjectHash: subjectHash(subject), reason, accountId },
+      });
     });
   }
 
@@ -187,6 +246,7 @@ export class AuthService {
    * channel (BR-2).
    */
   private async upsertDevice(
+    tx: Tx,
     accountId: string,
     organizationId: string,
     device?: DeviceInput,
@@ -194,20 +254,20 @@ export class AuthService {
     if (!device?.platform || !PLATFORMS.has(device.platform)) return null;
 
     const name = device.name?.slice(0, 120) ?? null;
-    const existing = await this.prisma.device.findFirst({
+    const existing = await tx.device.findFirst({
       where: { accountId, platform: device.platform, name },
       select: { id: true },
     });
 
     if (existing) {
-      await this.prisma.device.update({
+      await tx.device.update({
         where: { id: existing.id },
         data: { lastSeenAt: new Date(), appVersion: device.appVersion?.slice(0, 40) ?? null },
       });
       return existing.id;
     }
 
-    const created = await this.prisma.device.create({
+    const created = await tx.device.create({
       data: {
         // SET EXPLICITLY, not left to the column default. The default is
         // chat.default_organization_id(), which is the DEFAULT tenant -- not
@@ -226,28 +286,73 @@ export class AuthService {
     return created.id;
   }
 
+  /**
+   * Mints a session. ONE TRANSACTION covering the device row, the session row,
+   * the lastLoginAt stamp, the cleared failure counter and the audit entry.
+   *
+   * IDENTITY-MODEL §6: the audit entry belongs "in the same transaction" as the
+   * action it records. If the audit write fails, the session is not created --
+   * which is the correct direction to fail. A session nobody can account for is
+   * worse than a login that has to be retried.
+   *
+   * The token is signed AFTER the transaction commits, from the row it
+   * returned, so a token can never reference a session that was rolled back.
+   */
   private async issue(
     account: { id: string; organizationId: string; subject: string },
     actor: Actor,
     context: LoginContext & { deviceId?: string | null },
+    reason: 'login' | 'refresh',
   ): Promise<TokenPair> {
     const config = this.config();
     const refreshToken = newRefreshToken();
 
-    const session = await this.prisma.session.create({
-      data: {
-        // Explicit, for the reason given in upsertDevice: the column default is
-        // the DEFAULT organization, not this account's.
-        organizationId: account.organizationId,
-        accountId: account.id,
-        deviceId: context.deviceId ?? null,
-        refreshTokenHash: hashRefreshToken(refreshToken, config.refreshSecret),
-        expiresAt: new Date(Date.now() + config.refreshTtlSeconds * 1000),
-        lastSeenAt: new Date(),
-        ipHash: hashIp(context.ip, config.refreshSecret),
-        userAgent: context.userAgent?.slice(0, 200) ?? null,
-      },
-      select: { id: true, createdAt: true },
+    const session = await this.prisma.$transaction(async (tx) => {
+      if (reason === 'login') {
+        await tx.accountCredential.update({
+          where: { accountId: account.id },
+          data: { failedAttempts: 0, lockedUntil: null },
+        });
+        await tx.account.update({
+          where: { id: account.id },
+          data: { lastLoginAt: new Date() },
+        });
+      }
+
+      const deviceId =
+        context.deviceId ??
+        (await this.upsertDevice(tx, account.id, account.organizationId, context.device));
+
+      const created = await tx.session.create({
+        data: {
+          // Explicit, for the reason given in upsertDevice: the column default is
+          // the DEFAULT organization, not this account's.
+          organizationId: account.organizationId,
+          accountId: account.id,
+          deviceId: deviceId ?? null,
+          refreshTokenHash: hashRefreshToken(refreshToken, config.refreshSecret),
+          expiresAt: new Date(Date.now() + config.refreshTtlSeconds * 1000),
+          lastSeenAt: new Date(),
+          ipHash: hashIp(context.ip, config.refreshSecret),
+          userAgent: context.userAgent?.slice(0, 200) ?? null,
+        },
+        select: { id: true, createdAt: true },
+      });
+
+      // API-CONTRACT §3.1: audit_log {action:'session.created', entity:'session',
+      // entityId, actorId, reason:'login'}.
+      await this.audit.audit(tx, {
+        actorId: actor.actorId,
+        action: AUDIT_ACTION.SESSION_CREATED,
+        entity: 'session',
+        entityId: created.id,
+        // No token, no hash, no subject. Only what an incident review needs to
+        // place the session: who, as what, on what kind of device.
+        after: { accountId: account.id, actorKind: actor.kind, deviceId: deviceId ?? null },
+        reason,
+      });
+
+      return created;
     });
 
     const accessToken = signAccessToken(
@@ -374,10 +479,7 @@ export class AuthService {
       // the account, not just this one -- the attacker may already have rotated
       // into a session of their own.
       if (session.revokedReason === 'rotated') {
-        this.log.warn(
-          `refresh reuse detected on session ${session.id}; revoking all sessions for the account`,
-        );
-        await this.revokeAllForAccount(session.accountId, 'refresh reuse detected');
+        await this.handleRefreshReuse(session.id, session.accountId);
       }
       throw new AuthError(AuthErrorCode.SESSION_REVOKED);
     }
@@ -396,8 +498,58 @@ export class AuthService {
       throw new AuthError(AuthErrorCode.ACCOUNT_DISABLED);
     }
 
-    await this.revoke(session.id, 'rotated');
-    return this.issue(account, actor, { ...context, deviceId: session.deviceId });
+    // Retire the presented session and mint its successor. Two transactions,
+    // each internally atomic: the rotation is recorded before the new session
+    // exists, so an interruption between them leaves the caller logged out
+    // rather than holding two live sessions.
+    await this.revoke(session.id, 'rotated', undefined, actor.actorId);
+    return this.issue(account, actor, { ...context, deviceId: session.deviceId }, 'refresh');
+  }
+
+  /**
+   * Refresh-token reuse: the single most important thing this service records.
+   *
+   * Two parties presented the same rotated token, so one of them stole it.
+   * ONE TRANSACTION revokes every live session on the account AND writes the
+   * canonical `auth.refresh_reuse_detected` event plus an audit row. If the
+   * event cannot be written the revocation rolls back -- because a mass
+   * revocation nobody can explain is an incident that has already been lost.
+   *
+   * Before PR-B's audit work this was a Logger.warn and nothing else: the theft
+   * was detected, acted on, and then forgotten.
+   */
+  private async handleRefreshReuse(sessionId: string, accountId: string): Promise<void> {
+    this.log.warn(
+      `refresh reuse detected on session ${sessionId}; revoking all sessions for the account`,
+    );
+
+    await this.prisma.$transaction(async (tx) => {
+      const revoked = await tx.session.updateMany({
+        where: { accountId, revokedAt: null },
+        data: {
+          revokedAt: new Date(),
+          revokedReason: REUSE_REASON,
+        },
+      });
+
+      await this.audit.event(tx, {
+        actorKind: 'system',
+        actorId: null,
+        type: AUTH_EVENT.REFRESH_REUSE_DETECTED,
+        // No token and no hash of one: the replayed value is a live credential
+        // for as long as it is written down anywhere.
+        payload: { accountId, sessionId, revokedSessions: revoked.count },
+      });
+
+      await this.audit.audit(tx, {
+        actorId: null,
+        action: AUDIT_ACTION.SESSION_REVOKED,
+        entity: 'account',
+        entityId: accountId,
+        after: { revokedSessions: revoked.count, trigger: sessionId },
+        reason: REUSE_REASON,
+      });
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -409,23 +561,62 @@ export class AuthService {
    * null))`, so a reason is not optional -- the database refuses a revocation
    * that does not say why.
    */
-  async revoke(sessionId: string, reason: string, revokedBy?: string): Promise<void> {
-    await this.prisma.session.updateMany({
-      where: { id: sessionId, revokedAt: null },
-      data: { revokedAt: new Date(), revokedReason: reason, revokedBy: revokedBy ?? null },
+  async revoke(
+    sessionId: string,
+    reason: string,
+    revokedBy?: string,
+    actorId?: string,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const result = await tx.session.updateMany({
+        where: { id: sessionId, revokedAt: null },
+        data: { revokedAt: new Date(), revokedReason: reason, revokedBy: revokedBy ?? null },
+      });
+
+      // IDEMPOTENT, AND HONESTLY SO. A second logout finds nothing live and
+      // writes NO audit row, because nothing changed -- an audit trail that
+      // records a revocation that did not happen is worse than one that is
+      // quiet. API-CONTRACT §3.1 keeps the response {ok:true} either way.
+      if (result.count === 0) return;
+
+      await this.audit.audit(tx, {
+        actorId: actorId ?? revokedBy ?? null,
+        action: AUDIT_ACTION.SESSION_REVOKED,
+        entity: 'session',
+        entityId: sessionId,
+        after: { revokedBy: revokedBy ?? null },
+        reason,
+      });
     });
   }
 
   async revokeAllForAccount(accountId: string, reason: string): Promise<void> {
-    await this.prisma.session.updateMany({
-      where: { accountId, revokedAt: null },
-      data: { revokedAt: new Date(), revokedReason: reason },
+    await this.prisma.$transaction(async (tx) => {
+      const result = await tx.session.updateMany({
+        where: { accountId, revokedAt: null },
+        data: { revokedAt: new Date(), revokedReason: reason },
+      });
+      if (result.count === 0) return;
+
+      await this.audit.audit(tx, {
+        actorId: null,
+        action: AUDIT_ACTION.SESSION_REVOKED,
+        entity: 'account',
+        entityId: accountId,
+        after: { revokedSessions: result.count },
+        reason,
+      });
     });
   }
 
-  /** Idempotent by nature: a second call finds nothing live and still succeeds. */
-  async logout(sessionId: string): Promise<void> {
-    await this.revoke(sessionId, 'logout');
+  /**
+   * Idempotent by nature: a second call finds nothing live and still succeeds.
+   *
+   * API-CONTRACT §3.1: audit_log {action:'session.revoked', entity:'session',
+   * entityId, reason:'logout'}.
+   */
+  async logout(sessionId: string, actorId?: string): Promise<void> {
+    await this.revoke(sessionId, 'logout', undefined, actorId);
   }
 
   // -------------------------------------------------------------------------

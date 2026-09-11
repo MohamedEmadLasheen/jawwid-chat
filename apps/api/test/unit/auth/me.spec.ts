@@ -11,11 +11,13 @@ import { AuthError, AuthErrorCode } from '@platform/auth/auth.errors';
 import { PERMISSIONS_DEFERRED, toActorDto, toTokenPairDto } from '@platform/auth/auth.dto';
 import type { AuthService } from '@platform/auth/auth.service';
 import type { Actor } from '@platform/types';
+import { LoginRateLimiter } from '@platform/auth/login-rate-limit';
 import {
   buildAuth,
   contactActor,
   FakeDb,
   FakeIdentity,
+  FakeRateLimitStore,
   ORG_A,
   staffActor,
   teacherActor,
@@ -150,7 +152,7 @@ describe('the login response', () => {
     db = new FakeDb();
     identity = new FakeIdentity();
     auth = buildAuth(db, identity);
-    controller = new AuthController(auth);
+    controller = new AuthController(auth, new LoginRateLimiter(new FakeRateLimitStore()));
     const account = await db.addAccount({ subject: 'parent-dto' }, PASSWORD);
     identity.give(account.id, contactActor());
   });

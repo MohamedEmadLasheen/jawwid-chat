@@ -88,15 +88,29 @@ describe('account enumeration by timing', () => {
   it('is within the same order of magnitude as verifying a real hash', async () => {
     const hash = await hashPassword('a-real-password');
 
-    const t0 = process.hrtime.bigint();
-    await verifyPassword('a-wrong-password', hash);
-    const real = Number(process.hrtime.bigint() - t0) / 1e6;
+    // MEDIAN OF SEVEN, not a single sample. Jest runs suites in parallel and
+    // Argon2id is CPU- and memory-bound, so any one measurement can be
+    // arbitrarily stretched by a neighbouring worker. A security test that
+    // fails at random gets muted, which costs more than the property it
+    // guards -- and the property is about the TYPICAL cost, not the worst case.
+    const median = (xs: number[]): number => xs.slice().sort((a, b) => a - b)[Math.floor(xs.length / 2)];
+    const time = async (fn: () => Promise<unknown>): Promise<number> => {
+      const started = process.hrtime.bigint();
+      await fn();
+      return Number(process.hrtime.bigint() - started) / 1e6;
+    };
 
-    const t1 = process.hrtime.bigint();
-    await spendComparableTime('a-wrong-password');
-    const decoy = Number(process.hrtime.bigint() - t1) / 1e6;
+    const real: number[] = [];
+    const decoy: number[] = [];
+    for (let i = 0; i < 7; i++) {
+      real.push(await time(() => verifyPassword('a-wrong-password', hash)));
+      decoy.push(await time(() => spendComparableTime('a-wrong-password')));
+    }
 
-    expect(decoy).toBeGreaterThan(real / 5);
-    expect(decoy).toBeLessThan(real * 5);
+    // The bound stays wide on purpose: this asserts "the unknown-subject path
+    // does comparable work", not a constant-time guarantee, which is not
+    // achievable in a Node process and is not what the defence relies on.
+    expect(median(decoy)).toBeGreaterThan(median(real) / 5);
+    expect(median(decoy)).toBeLessThan(median(real) * 5);
   });
 });

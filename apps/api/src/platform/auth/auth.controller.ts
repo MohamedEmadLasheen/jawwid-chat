@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Headers, HttpCode, Ip, Post, Req } from '@nestjs/common';
 import { AuthService, DeviceInput } from './auth.service';
+import { LoginRateLimiter } from './login-rate-limit';
 import { Public, type AuthenticatedRequest } from './auth.guard';
 import { AuthError, AuthErrorCode } from './auth.errors';
 import { toActorDto, toTokenPairDto, type ActorDto, type TokenPairDto } from './auth.dto';
@@ -26,7 +27,10 @@ interface RefreshBody {
  */
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly rateLimit: LoginRateLimiter,
+  ) {}
 
   @Public()
   @Post('login')
@@ -43,12 +47,29 @@ export class AuthController {
     const password = asString(body?.password);
     if (!username || !password) throw new AuthError(AuthErrorCode.INVALID_CREDENTIALS);
 
-    const pair = await this.auth.login(username, password, {
-      userAgent,
-      ip,
-      device: asDevice(body?.device),
-    });
-    return toTokenPairDto(pair);
+    // BEFORE the service, and therefore before Argon2id. A caller who is
+    // already over the limit must not be able to spend 19 MiB and ~200 ms of
+    // this process per request just by continuing to ask.
+    await this.rateLimit.assertWithinLimit(username, ip);
+
+    try {
+      const pair = await this.auth.login(username, password, {
+        userAgent,
+        ip,
+        device: asDevice(body?.device),
+      });
+      // Only the identifier budget is cleared. The source budget survives a
+      // success on purpose: otherwise an attacker holding one valid account
+      // could reset their spray counter between bursts.
+      await this.rateLimit.clearIdentifier(username);
+      return toTokenPairDto(pair);
+    } catch (error) {
+      // EVERY refusal spends a unit, not just a wrong password. Counting only
+      // INVALID_CREDENTIALS would leave a disabled or locked account as an
+      // unmetered oracle for probing which of those an account is.
+      if (error instanceof AuthError) await this.rateLimit.recordFailure(username, ip);
+      throw error;
+    }
   }
 
   @Public()
@@ -74,7 +95,9 @@ export class AuthController {
   @Post('logout')
   @HttpCode(200)
   async logout(@Req() request: AuthenticatedRequest): Promise<{ ok: true }> {
-    if (request.sessionId) await this.auth.logout(request.sessionId);
+    // The actor is passed so the audit row names who ended the session, which
+    // chat.audit_log.actor_id exists to record.
+    if (request.sessionId) await this.auth.logout(request.sessionId, request.actor?.actorId);
     return { ok: true };
   }
 }

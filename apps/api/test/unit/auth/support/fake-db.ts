@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { PrismaService } from '@platform/prisma.service';
 import type { IdentityService, ResolvableAccount } from '@platform/identity.service';
+import type { AuditService, AuditWriteInput, EventWriteInput, Tx } from '@platform/audit.service';
+import type { RateLimitStore } from '@platform/auth/login-rate-limit';
 import type { Actor } from '@platform/types';
 import { AuthService } from '@platform/auth/auth.service';
 import { hashPassword } from '@platform/auth/password';
@@ -221,6 +223,39 @@ export class FakeDb {
     },
   };
 
+  /**
+   * Interactive transactions, with REAL rollback semantics.
+   *
+   * Every mutation the callback performs is journalled; if the callback throws,
+   * the journal is replayed backwards and the arrays are restored. That is what
+   * lets the audit tests assert the property that matters -- "the session is
+   * not created when the audit write fails" -- instead of assuming it.
+   */
+  async $transaction<T>(fn: (tx: unknown) => Promise<T>): Promise<T> {
+    const snapshot = {
+      accounts: this.accounts.map((r) => ({ ...r })),
+      credentials: this.credentials.map((r) => ({ ...r })),
+      sessions: this.sessions.map((r) => ({ ...r })),
+      devices: this.devices.map((r) => ({ ...r })),
+      auditLogs: this.auditLogs.slice(),
+      eventLogs: this.eventLogs.slice(),
+    };
+    try {
+      return await fn(this);
+    } catch (error) {
+      replace(this.accounts, snapshot.accounts);
+      replace(this.credentials, snapshot.credentials);
+      replace(this.sessions, snapshot.sessions);
+      replace(this.devices, snapshot.devices);
+      replace(this.auditLogs, snapshot.auditLogs);
+      replace(this.eventLogs, snapshot.eventLogs);
+      throw error;
+    }
+  }
+
+  readonly auditLogs: AuditWriteInput[] = [];
+  readonly eventLogs: EventWriteInput[] = [];
+
   // -- helpers ------------------------------------------------------------
 
   async addAccount(
@@ -257,6 +292,79 @@ export class FakeDb {
 
   asPrisma(): PrismaService {
     return this as unknown as PrismaService;
+  }
+}
+
+function replace<T>(target: T[], next: T[]): void {
+  target.length = 0;
+  target.push(...next);
+}
+
+/**
+ * Writes into the same FakeDb arrays the transaction journal restores, so an
+ * audit row written inside a rolled-back transaction disappears with it.
+ */
+export class FakeAudit implements AuditService {
+  constructor(private readonly db: FakeDb) {}
+
+  async audit(_tx: Tx, input: AuditWriteInput): Promise<void> {
+    if (!input.reason || input.reason.trim().length === 0) {
+      // chat.audit_log has `check (length(btrim(reason)) > 0)`.
+      throw new Error('check constraint violated: audit_log_reason_check');
+    }
+    this.db.auditLogs.push(input);
+  }
+
+  async event(_tx: Tx, input: EventWriteInput): Promise<void> {
+    if (!EVENT_TYPES.has(input.type)) {
+      // chat.event_log has a closed `type` CHECK. The double enforces it so a
+      // unit test cannot pass with a name the database would reject.
+      throw new Error(`check constraint violated: event_log_type_check (${input.type})`);
+    }
+    if (!['contact', 'staff', 'teacher', 'system'].includes(input.actorKind)) {
+      throw new Error('check constraint violated: event_log_actor_type_check');
+    }
+    this.db.eventLogs.push(input);
+  }
+}
+
+/** The two auth values 20260912090000 adds. */
+const EVENT_TYPES = new Set(['auth.login_failed', 'auth.refresh_reuse_detected']);
+
+/** An in-memory RateLimitStore with the same semantics as the Redis commands. */
+export class FakeRateLimitStore implements RateLimitStore {
+  private readonly counts = new Map<string, number>();
+  private readonly expiries = new Map<string, number>();
+  /** Set to make every command throw, to exercise the fail-closed path. */
+  broken = false;
+
+  async get(key: string): Promise<string | null> {
+    this.fail();
+    const v = this.counts.get(key);
+    return v === undefined ? null : String(v);
+  }
+  async ttl(key: string): Promise<number> {
+    this.fail();
+    return this.expiries.get(key) ?? -2;
+  }
+  async incr(key: string): Promise<number> {
+    this.fail();
+    const next = (this.counts.get(key) ?? 0) + 1;
+    this.counts.set(key, next);
+    return next;
+  }
+  async expire(key: string, seconds: number): Promise<unknown> {
+    this.fail();
+    if (seconds === 0) {
+      this.counts.delete(key);
+      this.expiries.delete(key);
+      return 1;
+    }
+    this.expiries.set(key, seconds);
+    return 1;
+  }
+  private fail(): void {
+    if (this.broken) throw new Error('ECONNREFUSED');
   }
 }
 
@@ -311,7 +419,7 @@ export function withAuthEnv(extra: NodeJS.ProcessEnv = {}): void {
 }
 
 export function buildAuth(db: FakeDb, identity: FakeIdentity): AuthService {
-  return new AuthService(db.asPrisma(), identity);
+  return new AuthService(db.asPrisma(), identity, new FakeAudit(db));
 }
 
 export function contactActor(overrides: Partial<Actor> = {}): Actor {

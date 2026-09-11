@@ -21,6 +21,14 @@ export enum AuthErrorCode {
   SESSION_REVOKED = 'AUTH.SESSION_REVOKED',
   /** 403. Authenticated, but lacks the permission key. */
   FORBIDDEN = 'AUTH.FORBIDDEN',
+  /**
+   * 429. Too many login attempts from this identifier or this source.
+   *
+   * A COMMON.* code rather than an AUTH.* one because that is what
+   * API-CONTRACT §2 names, and §3.1 lists it among POST /auth/login's errors.
+   * It is served through this filter because login is where it is raised.
+   */
+  RATE_LIMITED = 'COMMON.RATE_LIMITED',
 }
 
 /**
@@ -38,6 +46,12 @@ const MESSAGES: Record<AuthErrorCode, string> = {
   [AuthErrorCode.ACCOUNT_LOCKED]: 'too many attempts; try again later',
   [AuthErrorCode.SESSION_REVOKED]: 'session is no longer valid',
   [AuthErrorCode.FORBIDDEN]: 'not permitted',
+  // Deliberately the same wording the design system already specifies for this
+  // state (docs/design/screens/auth.md §8: "Too many attempts. Try again in a
+  // few minutes."), and deliberately identical whether the account exists or
+  // not -- a rate-limit response that differs would enumerate accounts just as
+  // effectively as a login response that differs.
+  [AuthErrorCode.RATE_LIMITED]: 'too many attempts; try again later',
 };
 
 const STATUS: Record<AuthErrorCode, number> = {
@@ -47,6 +61,7 @@ const STATUS: Record<AuthErrorCode, number> = {
   [AuthErrorCode.ACCOUNT_LOCKED]: 403,
   [AuthErrorCode.SESSION_REVOKED]: 401,
   [AuthErrorCode.FORBIDDEN]: 403,
+  [AuthErrorCode.RATE_LIMITED]: 429,
 };
 
 /**
@@ -59,7 +74,16 @@ const STATUS: Record<AuthErrorCode, number> = {
 export class AuthError extends Error {
   readonly status: number;
 
-  constructor(readonly code: AuthErrorCode) {
+  /**
+   * Seconds until the caller may retry. Serialised as the `Retry-After` header,
+   * which API-CONTRACT §2 requires for COMMON.RATE_LIMITED ("Includes
+   * `Retry-After`") and which the design system consumes as a visible countdown
+   * (docs/design/screens/auth.md §8). Undefined for every other code.
+   */
+  constructor(
+    readonly code: AuthErrorCode,
+    readonly retryAfterSeconds?: number,
+  ) {
     super(MESSAGES[code]);
     this.name = 'AuthError';
     this.status = STATUS[code];
@@ -71,6 +95,14 @@ export class AuthError extends Error {
 export class AuthErrorFilter implements ExceptionFilter {
   catch(exception: AuthError, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<Response>();
+
+    // The header carries the wait; the BODY does not. A body field counting
+    // down per-account would leak which accounts are under attack, and the
+    // header is what API-CONTRACT §2 specifies.
+    if (exception.retryAfterSeconds !== undefined) {
+      response.setHeader('Retry-After', String(Math.max(1, Math.ceil(exception.retryAfterSeconds))));
+    }
+
     response.status(exception.status).json({
       error: { code: exception.code, message: exception.message },
     });

@@ -26,3 +26,5 @@ apps/api/test/unit/authorization/pd002-group-call-initiation.spec.ts	15	PD-2 a p
 apps/api/test/unit/auth/identity-security.spec.ts	24	RT-001/NF-08 closed: a forged x-actor-id, body or query actorId cannot influence identity; cross-principal, cross-family and cross-organization impersonation refused
 apps/api/test/unit/auth/jwt.spec.ts	30	RT-001 token forgery: alg confusion, alg=none, unknown kid, foreign issuer/audience, expiry and tampering are each refused
 apps/api/test/unit/auth/session.spec.ts	36	Session revocation is immediate (logout, manager revoke, deactivation) and a replayed refresh token revokes every session on the account
+apps/api/test/unit/auth/rate-limit.spec.ts	34	Login rate limiting (IDENTITY-MODEL 4, API-CONTRACT 3.1): password spraying across many accounts is caught by the source budget, which account lockout cannot see; the limiter fails closed and cannot be reset by a success
+apps/api/test/unit/auth/audit.spec.ts	48	Authentication audit trail (IDENTITY-MODEL 6): every login, refresh, logout and revocation is recorded in the same transaction as the state change, and refresh-reuse detection cannot revoke sessions without persisting why

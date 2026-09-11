@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '@platform/prisma.service';
 import { PrismaIdentityService } from '@platform/identity.service';
+import { PrismaAuditService } from '@platform/audit.service';
 import { AuthService } from '@platform/auth/auth.service';
 import { AuthErrorCode } from '@platform/auth/auth.errors';
 import { ARGON2ID_PREFIX } from '@platform/auth/password';
@@ -25,7 +26,7 @@ const PASSWORD = 'an-integration-password-1';
 
 describe('authentication against Postgres', () => {
   const prisma = new PrismaService();
-  const auth = new AuthService(prisma, new PrismaIdentityService(prisma));
+  const auth = new AuthService(prisma, new PrismaIdentityService(prisma), new PrismaAuditService());
 
   const org = randomUUID();
   const ids = {
