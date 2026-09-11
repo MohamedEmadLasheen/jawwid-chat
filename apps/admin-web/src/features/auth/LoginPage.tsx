@@ -11,21 +11,17 @@ import { Icon } from '@/shared/components/Icon'
 /**
  * THE FRONT DOOR.
  *
- * Two panels: the brand on the reading-start side, the form on the other. The
- * brand panel is the one deep-teal surface in the product — everywhere else
- * teal is an accent on a warm neutral ground, and reserving the saturated
- * version for the unauthenticated screen is what makes signing in feel like
- * arriving somewhere rather than unlocking a tool.
+ * ONE column: the card, centred, on the same page ground as the rest of the
+ * app. There is no brand panel beside it. The genuine lockup at the top of the
+ * card is the whole brand statement here — a half-screen field of teal beside
+ * it competed with the artwork rather than framing it, and on a phone it was
+ * a band the account holder had to scroll past to reach the only thing they
+ * came for. Removing it leaves the ground the product already uses; nothing
+ * was substituted in its place.
  *
- * Below 900px the panel becomes a compact band above the card: on a phone the
- * form is the only thing the operator came for, and a half-screen of brand is
- * a half-screen they have to scroll past.
- *
- * Behaviour is unchanged from the previous revision — same `signIn(subject,
- * password)` mutation, same opaque-subject identifier, same error surface.
- * What changed is that the labels are now translated (they were hard-coded
- * English on an Arabic-first product) and the submit button says "Sign in"
- * rather than repeating the application's own title.
+ * Behaviour is unchanged — same `signIn(subject, password)` mutation, same
+ * opaque-subject identifier, same error surface, same fields in the same
+ * order.
  */
 export function LoginPage() {
   const { t, locale } = useI18n()
@@ -49,26 +45,12 @@ export function LoginPage() {
 
   return (
     <div className="auth">
-      {/*
-        The teal panel carries a typographic brand statement, not the logo.
-        The supplied asset is a JPEG with an opaque white background, so on this
-        surface it would render as a white rectangle. The genuine lockup sits on
-        the light card instead, where its own white ground is invisible.
-      */}
-      <section className="auth__brand">
-        <div className="auth__brandInner">
-          <p className="auth__brandName">{t('app.title')}</p>
-          <p className="auth__tagline">{t('auth.tagline')}</p>
-        </div>
-      </section>
-
       <main className="auth__main">
         <div className="auth__card">
           <div className="auth__logo">
             <Brand size="lg" />
           </div>
           <h1 className="auth__title">{t('auth.welcome')}</h1>
-          <p className="auth__subtitle">{t('auth.staffOnly')}</p>
 
           <form onSubmit={onSubmit} noValidate>
             {/*
@@ -76,7 +58,7 @@ export function LoginPage() {
               chat.account carries no contact channel by design (BR-2). Typed as
               plain text so a browser does not validate it as an address.
             */}
-            <Field label={t('auth.username')} hint={t('auth.usernameHint')} required>
+            <Field label={t('auth.username')} required>
               <input
                 className="input"
                 type="text"

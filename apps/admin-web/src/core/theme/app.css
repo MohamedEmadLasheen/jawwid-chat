@@ -1697,15 +1697,13 @@ select {
 /* ===========================================================================
    AUTHENTICATION.
 
-   Two panels. The brand side is the ONE saturated teal surface in the product
-   — everywhere else teal is an accent on a warm neutral ground — so signing in
-   reads as arriving somewhere rather than unlocking a tool. The form side
-   stays on the same page background as the rest of the app, which is what
-   keeps the login part of the product instead of a separate landing page.
+   ONE column: the card, centred, on the same page background as the rest of
+   the app — which is what keeps the login part of the product instead of a
+   separate landing page. There is no brand panel and no ornament beside it.
 
-   §17: the only ornament is a soft off-canvas warm glow and a 48px gold rule.
-   No pattern, no calligraphy, no mosque geometry — the brand should be felt
-   before it is noticed.
+   §17: the brand should be felt before it is noticed, and here the genuine
+   lockup on the card is the entire statement. No field of colour, no pattern,
+   no calligraphy, no mosque geometry.
    =========================================================================== */
 
 .auth {
@@ -1714,47 +1712,9 @@ select {
      viewport, which pushes the submit button under the browser chrome. */
   min-block-size: 100dvh;
   display: grid;
+  /* A single column at every width. The card centres inside it. */
   grid-template-columns: 1fr;
   background: var(--color-background-page);
-}
-
-.auth__brand {
-  position: relative;
-  display: grid;
-  place-items: center;
-  padding: var(--space-8) var(--space-7);
-  background: linear-gradient(160deg, var(--primary-600), var(--primary-800));
-  color: var(--color-text-inverse);
-  overflow: hidden;
-  isolation: isolate;
-}
-/* The warm glow. Off-canvas, low-alpha, and behind everything — it should read
-   as light in the corner of the panel, never as a shape. */
-.auth__brand::after {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  inset-inline-end: -18%;
-  inset-block-start: -28%;
-  inline-size: 68%;
-  aspect-ratio: 1;
-  border-radius: var(--radius-full);
-  background: radial-gradient(circle, var(--color-accent-halo), transparent 70%);
-  pointer-events: none;
-}
-.auth__brandInner {
-  inline-size: min(360px, 100%);
-  text-align: start;
-}
-
-/* The product name, set as type. This is a heading — the genuine lockup lives
-   on the card beside it, and nothing here stands in for the logo. */
-.auth__brandName {
-  margin: 0;
-  font-size: var(--type-display);
-  line-height: var(--lh-display);
-  font-weight: var(--weight-bold);
-  color: var(--color-text-inverse);
 }
 
 .auth__logo {
@@ -1772,35 +1732,15 @@ select {
    * baseline to align to. The wrapper then measures exactly the lockup, and
    * the 24px below it is `margin-block-end` doing the only spacing job here.
    *
-   * `flex-start` keeps the lockup at the reading-start edge in both scripts.
+   * `center` rather than the reading-start edge: aligned to the edge the lockup
+   * read as one more item in the form's column. Centred, it reads as the
+   * screen's brand identity with the heading and fields hanging beneath it —
+   * and centring is direction-neutral, so Arabic and English match exactly.
    */
   display: flex;
   align-items: flex-start;
-  justify-content: flex-start;
+  justify-content: center;
   margin-block-end: var(--space-7);
-}
-
-.auth__tagline {
-  position: relative;
-  margin: var(--space-7) 0 0;
-  padding-block-start: var(--space-6);
-  font-size: var(--type-body-lg);
-  line-height: var(--lh-body-lg);
-  /* Not pure white: the tagline supports the lockup, it does not compete. */
-  color: var(--primary-100);
-  max-inline-size: 34ch;
-}
-/* The gold rule — 48px, 2px, and the single most deliberate use of the accent
-   in the product. It sits at the reading-start edge in both scripts. */
-.auth__tagline::before {
-  content: '';
-  position: absolute;
-  inset-block-start: 0;
-  inset-inline-start: 0;
-  inline-size: 48px;
-  block-size: 2px;
-  border-radius: var(--radius-full);
-  background: var(--color-accent-line);
 }
 
 .auth__main {
@@ -1820,7 +1760,10 @@ select {
   font-size: var(--type-h1);
   line-height: var(--lh-h1);
   font-weight: var(--weight-bold);
-  margin: 0;
+  /* The subtitle beneath used to carry the gap down to the form. With it gone
+     the heading owns that spacing, so the rhythm into the first field is
+     unchanged rather than collapsing. */
+  margin: 0 0 var(--space-7);
 }
 .auth__subtitle {
   margin: var(--space-2) 0 var(--space-7);
@@ -1833,47 +1776,12 @@ select {
 }
 
 @media (min-width: 900px) {
-  .auth {
-    /* The form column is the wider of the two: it holds the work. */
-    grid-template-columns: minmax(0, 42%) minmax(0, 58%);
-  }
-  .auth__brand {
-    padding: var(--space-11) var(--space-9);
-  }
   .auth__card {
     padding: var(--space-9);
   }
 }
 
-/* Below the two-panel breakpoint the brand becomes a band, not a screen. */
 @media (max-width: 899px) {
-  /*
-   * The brand band is sized by its CONTENT, not by a share of the screen.
-   * Without this the two auto rows stretch to fill `100dvh` and the band takes
-   * a third of a phone before the operator sees a field.
-   */
-  .auth {
-    grid-template-rows: auto 1fr;
-  }
-  .auth__brand {
-    padding: var(--space-7) var(--space-5);
-    place-items: start;
-  }
-  /* A long product name must wrap here rather than overflow a 375px screen. */
-  .auth__brand .brand__wordmark {
-    white-space: normal;
-    font-size: var(--type-h1);
-    line-height: var(--lh-h1);
-  }
-  .auth__brandInner {
-    inline-size: 100%;
-  }
-  .auth__tagline {
-    margin-block-start: var(--space-5);
-    padding-block-start: var(--space-4);
-    font-size: var(--type-body);
-    line-height: var(--lh-body);
-  }
   .auth__card {
     /* The card stops being a card on a phone: a bordered box inset from the
        screen edge wastes the width the form needs. */
@@ -1885,13 +1793,10 @@ select {
   .auth__main {
     padding: var(--space-5);
     align-items: start;
-    /* Pure white, not the warm page ground: the logo's own white background
-       has to have something identical behind it, or its edges show. */
+    /* Pure white, not the warm page ground: the card goes transparent here, so
+       the logo's own white background has to have something identical behind
+       it or its edges show. */
     background: var(--color-surface-default);
-  }
-  .auth__brandName {
-    font-size: var(--type-h1);
-    line-height: var(--lh-h1);
   }
 }
 
