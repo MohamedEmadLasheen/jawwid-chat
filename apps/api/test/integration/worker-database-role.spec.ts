@@ -1,6 +1,6 @@
 import { PrismaService } from '@platform/prisma.service';
 import { assertWorkerRuntimeRole, type RuntimeRoleReport } from '@platform/auth/startup';
-import { appDatabaseUrl } from './harness';
+import { appDatabaseUrl, buildGraph, seed, truncate } from './harness';
 
 /**
  * C-1/C-2 against a real database: the roles the two processes actually get.
@@ -33,9 +33,51 @@ const roleOf = async (c: PrismaService): Promise<RuntimeRoleReport> => {
   return row;
 };
 
+/**
+ * The fixture, and why it is built on a THIRD connection.
+ *
+ * The reads below are only a proof if the rows exist: with an empty table both
+ * roles return zero and the regression this file exists for is invisible, which
+ * is what `toBeGreaterThan(0)` is guarding against. Something therefore has to
+ * create a conversation and a message.
+ *
+ * It cannot be either connection under test. chat_app is the role that must see
+ * nothing, and chat_service seeing its own writes would prove nothing about
+ * BYPASSRLS. So the fixture is built through the OWNER, exactly as
+ * runtime-rls.spec.ts does it -- fixtures are not the thing under test.
+ *
+ * Through the real services rather than INSERTs, because the rows have to be a
+ * legitimate conversation: getOrCreateDirect writes chat.conversation_member,
+ * and send() writes chat.message, with the memberships and family context the
+ * policies are written against. Hand-inserted rows would satisfy the count and
+ * still not be the thing the worker was failing to read.
+ *
+ * The suite used to assert against whatever the previously-run spec happened to
+ * leave behind. That held on a developer's long-lived database and never held on
+ * a freshly migrated one, which is why it had never passed in CI.
+ */
+const owner = buildGraph();
+
+beforeAll(async () => {
+  await truncate(owner.prisma);
+  const s = await seed(owner.prisma);
+  // canSend places the supervisor on duty for the family channel; without it
+  // the send is refused and the fixture is silently empty.
+  owner.coverage.onDutyId = s.ownerId;
+  owner.config.invalidate();
+
+  const conversation = await owner.conversations.getOrCreateDirect(s.parentId, s.ownerId);
+  await owner.messages.send({
+    conversationId: conversation.id,
+    senderId: s.ownerId,
+    body: 'fixture: the routing read the worker was losing',
+  });
+});
+
 afterAll(async () => {
   await apiConnection.$disconnect();
   await workerConnection.$disconnect();
+  await owner.prisma.$disconnect();
 });
 
 describe('the two processes get the two roles', () => {
