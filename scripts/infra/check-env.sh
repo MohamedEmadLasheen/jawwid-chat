@@ -43,7 +43,11 @@ PLACEHOLDER_PATTERNS='localhost|127\.0\.0\.1|changeme|placeholder|not-a-real-key
 
 # Snapshot the configuration source into NAME<TAB>VALUE lines so lookups are
 # uniform whether they came from a file or from the process environment.
-SNAPSHOT="$(mktemp -t jawwid-env-check)"
+# `mktemp -t NAME` is a BSD idiom: macOS appends the random suffix itself, but
+# GNU coreutils treats NAME as the template and refuses it -- "too few X's in
+# template" -- so this failed on every Linux runner while passing locally.
+# An explicit template works identically on both, and honours TMPDIR as -t did.
+SNAPSHOT="$(mktemp "${TMPDIR:-/tmp}/jawwid-env-check.XXXXXX")"
 trap 'rm -f "$SNAPSHOT"' EXIT
 
 if [ -n "$ENV_FILE" ]; then
