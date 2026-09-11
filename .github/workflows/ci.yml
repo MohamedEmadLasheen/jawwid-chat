@@ -126,6 +126,27 @@ jobs:
         options: >-
           --health-cmd pg_isready --health-interval 5s
           --health-timeout 5s --health-retries 20
+      # The integration suite needs Redis, and until now the job did not provide
+      # one. The cost was not a failure but a HANG: realtime-delivery.spec.ts
+      # opens ioredis with `maxRetriesPerRequest: null`, so an unreachable server
+      # is retried for ever instead of erroring. Jest finished all 44 suites in
+      # 181s, printed "Jest did not exit one second after the test run has
+      # completed", and then sat there logging a reconnect every two seconds
+      # until the job timeout killed it 26 minutes later. A run without the
+      # timeout stayed alive for the full 6-hour ceiling, which is why the fix
+      # belongs here rather than in the timeout.
+      #
+      # 6410 because that is `realtime-delivery.spec.ts`'s own default, and it is
+      # deliberately neither Redis's 6379 nor compose's 6380 -- a port nobody
+      # else answers on is what stops a stray local Redis from standing in for
+      # the one the suite is meant to exercise. Honouring the default keeps that
+      # isolation and needs no change to the test.
+      redis:
+        image: redis:7-alpine
+        ports: ['6410:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 5s --health-retries 20
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/jawwid_chat_test
     steps:
@@ -189,6 +210,27 @@ jobs:
       - name: OD-01 · conversation model invariants
         run: psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f db/tests/od01_conversation_model.sql
 
+      # The runtime-RLS suites connect as chat_app, and worker-database-role as
+      # chat_service, because asserting that RLS is enforced is only meaningful
+      # from a role that cannot bypass it. The migrations create both NOLOGIN on
+      # purpose -- a migration must never carry a credential -- so something has
+      # to grant the login, and in a deployment that something is the secret
+      # store. Locally it is scripts/db/integration-db.sh's grant_runtime_roles;
+      # that script cannot run here because it starts and `docker exec`s its own
+      # container on 55433, so this is the same three statements applied to the
+      # service container this job already has.
+      #
+      # Without it the suites fall back to their 55433 default and fail: the
+      # last run logged 170 "Can't reach database server at `localhost:55433`".
+      # These passwords are throwaway values for an ephemeral CI database that
+      # is destroyed with the job; the same convention G-41 already uses below.
+      - name: Grant the runtime roles a login (CI-only credentials)
+        run: |
+          psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -c \
+            "alter role chat_app     login password 'ci-integration-only';
+             alter role chat_service login password 'ci-integration-only';
+             grant connect on database jawwid_chat_test to chat_app, chat_service;"
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -220,6 +262,12 @@ jobs:
           # in CI a skip would be a silent gap in exactly the check that exists
           # because our assumptions about the token format might be wrong.
           JAWWID_REQUIRE_LIVEKIT: '1'
+          # The harness and worker-database-role.spec.ts both default to the
+          # local integration database on 55433. Overriding them here points the
+          # suite at the service container this job already migrated, which is
+          # what the overrides exist for -- no test source changes.
+          DATABASE_APP_URL: postgres://chat_app:ci-integration-only@localhost:5432/jawwid_chat_test
+          DATABASE_SERVICE_URL: postgres://chat_service:ci-integration-only@localhost:5432/jawwid_chat_test
         run: |
           npm ci
           npx prisma generate
