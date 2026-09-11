@@ -177,6 +177,13 @@ jobs:
     name: G-19 · migrations apply and are idempotent
     runs-on: ubuntu-latest
     needs: guards
+    # The DB gates take ~45s and the integration suite about a minute. This is
+    # deliberate headroom, not a guess: its job is to bound a hung service, and
+    # a hang is exactly what happened here -- realtime-delivery.spec.ts opens
+    # ioredis with `maxRetriesPerRequest: null`, so an unreachable Redis retries
+    # forever rather than failing, and with no timeout the job sat until the
+    # 6-hour default.
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:17
@@ -186,6 +193,22 @@ jobs:
         ports: ['5432:5432']
         options: >-
           --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 20
+      # redis:7-alpine matches docker-compose.yml, so CI and local development
+      # run the same server.
+      #
+      # Mapped to 6410 because that is the endpoint realtime-delivery.spec.ts
+      # asks for. That port is the test's own default and is deliberately
+      # neither Redis's 6379 nor compose's 6380: it keeps a developer's own
+      # Redis from quietly answering for the one the suite is supposed to
+      # exercise. Honouring it here keeps that isolation instead of pointing the
+      # suite at a shared port -- which is how this hang stayed invisible, since
+      # it passed locally against an unrelated container listening on 6410.
+      redis:
+        image: redis:7-alpine
+        ports: ['6410:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
           --health-timeout 5s --health-retries 20
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/jawwid_chat_test
