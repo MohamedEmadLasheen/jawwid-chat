@@ -78,7 +78,7 @@ comment on table chat.device is
   'constraint guessed now would prejudge it.';
 
 comment on column chat.device.name is
-  'A human label such as "iPhone". Never a phone number, and never derived '
+  'A human label such as "iPhone". Never a contact channel, and never derived '
   'from one (BR-2).';
 
 create index if not exists device_account_idx      on chat.device (account_id);
