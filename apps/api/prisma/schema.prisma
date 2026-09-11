@@ -32,6 +32,11 @@ model Staff {
   lastActivityAt DateTime? @map("last_activity_at") @db.Timestamptz
   isActive       Boolean   @map("is_active") @default(true)
   leftAt         DateTime? @map("left_at") @db.Timestamptz
+  /// The login this staff member authenticates as. The column has existed in
+  /// SQL since 20260905090200 (`account_id uuid unique references chat.account`);
+  /// only this model was missing it, which is why PR-B adds a field and no DDL.
+  accountId      String?   @unique @map("account_id") @db.Uuid
+  account        Account?  @relation(fields: [accountId], references: [id])
   createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
   updatedAt      DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
@@ -559,6 +564,7 @@ model Account {
   devices    Device[]
   teacher    Teacher?
   contacts   Contact[]
+  staff      Staff?
 
   @@map("account")
   @@schema("chat")
