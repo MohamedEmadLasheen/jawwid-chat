@@ -45,7 +45,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
-    final theme = Theme.of(context);
     final state = ref.watch(authControllerProvider);
     final isBusy = state is AuthSigningIn;
 
@@ -61,22 +60,12 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _Brand(name: l10n.appName),
+                    const _Brand(),
+                    // The lockup is the only thing that names the product on
+                    // this screen; a heading under it repeated in words what
+                    // the artwork already says. The spacing it used to carry
+                    // stays here so the fields keep the same rhythm.
                     const SizedBox(height: Spacing.spacing8),
-                    Text(
-                      l10n.signInTitle,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: Spacing.spacing2),
-                    Text(
-                      l10n.signInSubtitle,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: Spacing.spacing7),
 
                     if (state is AuthSignedOut) _SignInNotice(state: state),
 
@@ -188,9 +177,7 @@ class _SignInNotice extends StatelessWidget {
 }
 
 class _Brand extends StatelessWidget {
-  const _Brand({required this.name});
-
-  final String name;
+  const _Brand();
 
   /// The approved production lockup, trimmed to its artwork and carrying real
   /// transparency, so it sits on the page background rather than on a white tile.
@@ -210,24 +197,25 @@ class _Brand extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The lockup replaces the former `ج` placeholder mark. The Arabic product
-    // name stays below it: the artwork carries the LATIN wordmark only, and this
-    // is an Arabic-first product, so the two together are what make the screen
-    // read as Jawwid. Layout and spacing are unchanged from the placeholder.
+    // The lockup is the ONLY brand identification on this screen now: the
+    // standalone wordmark that used to sit beneath it has been removed, because
+    // the artwork already carries the wordmark and the sign-in heading already
+    // names the product in words.
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    // Still a Column, deliberately. The parent lays its children out with
+    // `CrossAxisAlignment.stretch`, so a bare Image would be stretched to the
+    // form's full width. The Column keeps the lockup centred at its own size.
     return Column(
       children: [
         Image.asset(
           isDark ? _lockupDark : _lockup,
           height: _lockupHeight,
           fit: BoxFit.contain,
-          // The product name is rendered as real text directly below, so the
-          // artwork would otherwise be announced twice (§53).
+          // Decorative: the sign-in heading below names the product in words,
+          // so announcing the artwork too would say it twice (§53).
           excludeFromSemantics: true,
         ),
-        const SizedBox(height: Spacing.spacing4),
-        Text(name, style: Theme.of(context).textTheme.titleLarge),
       ],
     );
   }
