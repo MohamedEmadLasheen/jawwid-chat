@@ -49,7 +49,11 @@ docker_host_url() {
                           -e 's|@127\.0\.0\.1:|@host.docker.internal:|'
 }
 
-LOG="$(mktemp -t jawwid-backup-log)"
+# `mktemp -t NAME` is a BSD idiom: macOS appends the random suffix itself, but
+# GNU coreutils treats NAME as the template and refuses it -- "too few X's in
+# template". With `set -e` that aborts the backup before it starts, on every
+# Linux runner and every deployment host.
+LOG="$(mktemp "${TMPDIR:-/tmp}/jawwid-backup-log.XXXXXX")"
 trap 'rm -f "$LOG"' EXIT
 
 echo "Backing up ${LABEL} -> ${FILE}"
