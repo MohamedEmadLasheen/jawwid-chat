@@ -467,7 +467,12 @@ describe('calling', () => {
     // all digits (e.g. "206f67036934"), which made this assertion flaky while
     // the behaviour was always correct. Assert the structure instead.
     expect(claims.sub).toMatch(/^[0-9a-f-]{36}$/);
-    expect(claims.name).toBe('Teacher');
+    // PR-B resolves teachers from chat.teacher, so this is the teacher's REAL
+    // name rather than the hard-coded literal 'Teacher' the old synthesis
+    // returned for any uuid that appeared in learner.teacher_id. The privacy
+    // property the test exists for is unchanged: a display name, never a
+    // contact channel.
+    expect(claims.name).toBe('teacher_c');
     expect(Object.keys(claims)).not.toContain(
       expect.stringMatching(/phone|tel|msisdn|email|mobile/i),
     );

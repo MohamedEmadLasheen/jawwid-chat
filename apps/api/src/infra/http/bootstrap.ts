@@ -1,4 +1,5 @@
 import { INestApplication, Logger } from '@nestjs/common';
+import { readClientAddressPolicy } from '../../platform/auth/client-address';
 
 /**
  * Infrastructure concerns applied to the HTTP application at startup.
@@ -24,6 +25,10 @@ interface ResponseLike {
   setHeader(name: string, value: string): void;
 }
 type NextFn = () => void;
+/** Express's `set`, reached through the adapter so this file imports no Express type. */
+interface SettableApp {
+  set(key: string, value: unknown): void;
+}
 
 export interface InfrastructureOptions {
   /** Defaults to CORS_ALLOWED_ORIGINS, comma-separated. */
@@ -36,6 +41,7 @@ export function applyInfrastructure(
   app: INestApplication,
   options: InfrastructureOptions = {},
 ): void {
+  applyTrustedProxy(app);
   applySecurityHeaders(app);
   applyCors(app, options.allowedOrigins ?? parseOrigins(process.env.CORS_ALLOWED_ORIGINS));
   applyGracefulShutdown(app, options.shutdownGraceMs ?? Number(process.env.SHUTDOWN_GRACE_MS ?? 15000));
@@ -46,6 +52,42 @@ export function parseOrigins(raw: string | undefined): string[] {
     .split(',')
     .map((o) => o.trim())
     .filter((o) => o.length > 0);
+}
+
+/**
+ * How far to trust `X-Forwarded-For`, and therefore what `req.ip` means.
+ *
+ * DEFAULT: NOT AT ALL. Express's own default is `trust proxy: false`, and that
+ * is left alone unless TRUSTED_PROXY_HOPS states a topology. An unconfigured
+ * deployment therefore reads the socket peer and never a forwarded header, so a
+ * client cannot choose its own address by sending one.
+ *
+ * This is set here, before anything else, because it changes the meaning of
+ * `req.ip` for the whole application -- and the login rate limiter's source
+ * dimension (platform/auth/client-address.ts) keys on exactly that value. The
+ * two read ONE variable so they can never disagree about whether a client is
+ * identifiable.
+ *
+ * See client-address.ts for why guessing a hop count is worse than abstaining.
+ */
+function applyTrustedProxy(app: INestApplication): void {
+  const logger = new Logger('TrustedProxy');
+  const policy = readClientAddressPolicy();
+
+  // Only ever narrows or matches Express's default; never `true`, which would
+  // trust any X-Forwarded-For a caller cares to send.
+  (app.getHttpAdapter().getInstance() as SettableApp).set('trust proxy', policy.trustProxy);
+
+  if (!policy.sourceDimensionEnabled) {
+    logger.warn(
+      'TRUSTED_PROXY_HOPS is not set: req.ip is the socket peer and the login ' +
+        'source-IP rate limit is DISABLED. Per-account rate limiting is unaffected. ' +
+        'Set it to the number of trusted proxies in front of this process (0 if none) ' +
+        'to enable cross-account spray protection.',
+    );
+  } else {
+    logger.log(`trust proxy = ${String(policy.trustProxy)}; login source-IP rate limit enabled`);
+  }
 }
 
 function applySecurityHeaders(app: INestApplication): void {

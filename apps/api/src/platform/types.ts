@@ -25,6 +25,13 @@ export interface Actor {
   familyId?: string;
   /** chat.contact.can_message capability flag. */
   canMessage?: boolean;
+
+  /**
+   * The principal's organization (PR-B). Set by IdentityService from the
+   * principal row, never from a request field, so it cannot be used to cross a
+   * tenant boundary. Optional because SYSTEM_ACTOR belongs to no organization.
+   */
+  organizationId?: string;
 }
 
 export const SYSTEM_ACTOR: Actor = {

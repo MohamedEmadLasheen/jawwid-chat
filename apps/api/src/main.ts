@@ -6,7 +6,8 @@ import { CommErrorFilter } from './communication/api/http-exception.filter';
 import { applyInfrastructure } from './infra/http/bootstrap';
 import { InfraIoAdapter } from './infra/realtime/io-adapter';
 import { readBuildInfo } from './infra/build-info';
-import { assertHeaderIdentitySeamAllowed } from './platform/identity-seam';
+import { assertHandshakeIdentitySeamAllowed } from './platform/identity-seam';
+import { loadAuthConfig } from './platform/auth/auth.config';
 import { RealtimeRelay } from './infra/realtime/realtime-relay.service';
 
 /**
@@ -22,10 +23,19 @@ async function bootstrap(): Promise<void> {
   const log = new Logger('Bootstrap');
   const build = readBuildInfo();
 
-  // RT-001 containment (Phase 0). Identity is still the x-actor-id /
-  // handshake.auth.actorId seam; a build carrying it may only start in a local
-  // environment. Phase 1 removes the seam and this call with it.
-  assertHeaderIdentitySeamAllowed();
+  // Authentication configuration, resolved before anything can serve a request.
+  // Fail-closed: a missing or short JWT secret stops the boot with a named
+  // cause, rather than surfacing as a 500 on the first login (IDENTITY-MODEL
+  // §4, RT-005). Nothing is generated or defaulted -- a signing key nobody
+  // configured is a signing key an attacker can guess.
+  loadAuthConfig();
+
+  // RT-001 containment, NARROWED by PR-B. HTTP identity is now a verified
+  // bearer token, so the x-actor-id header no longer gates the boot. The
+  // WebSocket handshake still names its own actor, and until the realtime PR
+  // verifies a token there, a build carrying that seam may only start in a
+  // local environment.
+  assertHandshakeIdentitySeamAllowed();
 
   const app = await NestFactory.create(AppModule, {
     // Nest's default logger writes to stdout, which is where the platform

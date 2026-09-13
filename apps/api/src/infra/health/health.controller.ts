@@ -1,5 +1,6 @@
 import { Controller, Get, Header, ServiceUnavailableException } from '@nestjs/common';
 import { HealthService } from './health.service';
+import { Public } from '../../platform/auth/auth.guard';
 
 /**
  * Health endpoints. Owner: AI #7 (infrastructure).
@@ -9,8 +10,13 @@ import { HealthService } from './health.service';
  * carries no hostnames, no connection strings, no configuration values, and no
  * customer data.
  *
+ * @Public() is what keeps them unauthenticated now that PR-B protects every
+ * route by default. Without it a load balancer probe gets a 401 and the
+ * instance is drained out of the pool for being healthy.
+ *
  * Mount by importing HealthModule in the root module. Nothing else is required.
  */
+@Public()
 @Controller('health')
 export class HealthController {
   constructor(private readonly health: HealthService) {}

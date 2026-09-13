@@ -18,6 +18,7 @@
 #NAME	GROUP	SECRET	LOCAL	STAGING	PROD
 NODE_ENV	application	no	req	req	req
 APP_ENV	application	no	req	req	req
+TRUSTED_PROXY_HOPS	application	no	opt	req	req
 PORT	application	no	req	req	req
 LOG_LEVEL	application	no	opt	req	req
 CORS_ALLOWED_ORIGINS	application	no	req	req	req

@@ -113,7 +113,8 @@ export async function seed(prisma: PrismaService): Promise<Scenario> {
     `insert into chat.learner (id, family_id, name, teacher_id)
      values ('${ids.learnerId}'::uuid, '${ids.familyId}'::uuid, 'learner_l', '${ids.teacherId}'::uuid)`,
   );
-  // A second learner makes newTeacherId resolvable as a teacher actor.
+  // A second learner for the reassignment cases. Since PR-A both teachers are
+  // resolvable from chat.teacher in their own right, not by appearing here.
   await prisma.$executeRawUnsafe(
     `insert into chat.learner (id, family_id, name, teacher_id)
      values ('${randomUUID()}'::uuid, '${ids.familyId}'::uuid, 'learner_m', '${ids.newTeacherId}'::uuid)`,
