@@ -120,6 +120,14 @@ jobs:
           diff -u infra/env/staging.env.example    /tmp/staging.env.example
           diff -u infra/env/production.env.example /tmp/production.env.example
 
+      - name: The backup drill runs the pg_dump it is given
+        # pg_dump refuses to dump from a server newer than itself, so PG_IMAGE
+        # naming a client has to outrank whatever is on PATH. It did not: this
+        # runner installs postgresql-client 16 for psql, so the G-19 backup
+        # drill ran pg_dump 16 against the postgres:17 service and aborted,
+        # with the documented remedy already applied and silently ignored.
+        run: bash scripts/qa/check-backup-client-selection.sh
+
   # ------------------------------------------------------------------ backend
   api:
     name: API · typecheck + unit

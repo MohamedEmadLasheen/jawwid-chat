@@ -49,11 +49,34 @@ docker_host_url() {
                           -e 's|@127\.0\.0\.1:|@host.docker.internal:|'
 }
 
-LOG="$(mktemp -t jawwid-backup-log)"
+# `mktemp -t NAME` is a BSD idiom: macOS appends the random suffix itself, but
+# GNU coreutils treats NAME as the template and refuses it -- "too few X's in
+# template". With `set -e` that aborts the backup before it starts, on every
+# Linux runner and every deployment host.
+LOG="$(mktemp "${TMPDIR:-/tmp}/jawwid-backup-log.XXXXXX")"
 trap 'rm -f "$LOG"' EXIT
 
+# Which pg_dump runs is a version decision, not a convenience one: pg_dump
+# refuses to dump from a server newer than itself. `PG_IMAGE` is how this
+# repository already names a client of a known major (backup-recovery.md §3,
+# and local-development.md answers "server version mismatch" with "set
+# PG_IMAGE") -- so naming one has to win over whatever happens to be on PATH.
+#
+# Preferring PATH unconditionally made that variable inert exactly where it was
+# needed. Every GitHub runner installs postgresql-client 16 for psql, so the CI
+# backup drill picked up pg_dump 16, ignored the PG_IMAGE=postgres:17-alpine it
+# was given, and failed against the postgres:17 service.
+#
+# Unset PG_IMAGE keeps the old order: a local pg_dump if there is one, the
+# default image if there is not. Production sets a DSN, not an image, so it is
+# unaffected.
+USE_CONTAINER=0
+if [ -n "${PG_IMAGE:-}" ] || ! command -v pg_dump >/dev/null 2>&1; then
+  USE_CONTAINER=1
+fi
+
 echo "Backing up ${LABEL} -> ${FILE}"
-if command -v pg_dump >/dev/null 2>&1; then
+if [ "$USE_CONTAINER" -eq 0 ]; then
   # The URL is passed as an argument, so it is visible in this host's process
   # list for the duration. Acceptable on a build agent; on a shared host, set
   # PGPASSWORD and use discrete connection flags instead.
@@ -66,7 +89,11 @@ if command -v pg_dump >/dev/null 2>&1; then
 else
   # The image tag must match the SERVER's major version: pg_dump refuses to
   # dump from a server newer than itself.
-  echo "  pg_dump not installed; using ${PG_IMAGE:-postgres:17-alpine}"
+  if [ -n "${PG_IMAGE:-}" ]; then
+    echo "  using pg_dump from ${PG_IMAGE}"
+  else
+    echo "  pg_dump not installed; using postgres:17-alpine"
+  fi
   if ! docker run --rm --network host \
       --add-host=host.docker.internal:host-gateway \
       -e PGCONNECT_TIMEOUT=10 \
@@ -85,7 +112,7 @@ fi
 # disappears, while docker itself exits 0.
 if [ ! -f "$FILE" ]; then
   echo "backup file was not created: $FILE" >&2
-  if ! command -v pg_dump >/dev/null 2>&1; then
+  if [ "$USE_CONTAINER" -eq 1 ]; then
     echo "The containerised fallback was used. Check that --out is on a path" >&2
     echo "your Docker installation shares with the host (a directory under" >&2
     echo "your home directory normally is; /tmp often is not)." >&2
