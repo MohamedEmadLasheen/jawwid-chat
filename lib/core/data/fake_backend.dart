@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import '../../shared/models/auth.dart';
 import '../../shared/models/conversation.dart';
@@ -44,7 +45,16 @@ class FakeBackend {
   /// which a single-shot failure cannot do once retries are in play.
   AppError? persistentFailure;
 
-  void dispose() => _sessionRevoked.close();
+  void dispose() {
+    _sessionRevoked.close();
+    try {
+      _voiceStore?.deleteSync(recursive: true);
+    } catch (_) {
+      // A leftover directory under the OS temp root is not worth failing a
+      // teardown over.
+    }
+    _voiceStore = null;
+  }
 
   /// Simulate the backend ending this session (§7, §9).
   void revokeSession() => _sessionRevoked.add(null);
@@ -279,9 +289,12 @@ class FakeBackend {
             byteSize: a.byteSize,
             mimeType: a.mimeType,
             durationMs: a.durationMs,
-            // Stands in for the short-lived signed URL the real backend mints
-            // per read. Not a real address; nothing in a fixture build plays.
-            url: 'https://fixtures.invalid/${a.objectKey}',
+            // Whatever this fixture actually kept, so a note recorded here can
+            // be played back here. Only a note whose bytes never reached the
+            // store falls back to the stand-in for the short-lived signed URL
+            // the real backend mints per read, which is not a real address.
+            url: _voiceObjects[a.objectKey] ??
+                'https://fixtures.invalid/${a.objectKey}',
           ),
       ],
       createdAt: _now,
@@ -311,13 +324,58 @@ class FakeBackend {
       );
     }
 
+    final objectKey = 'conversations/$conversationId/voice_${++_sequence}';
+    _keepVoiceObject(objectKey, note.filePath);
+
     return UploadedAttachment(
       kind: MessageKind.voice,
-      objectKey: 'conversations/$conversationId/voice_${++_sequence}',
+      objectKey: objectKey,
       mimeType: note.mimeType,
       byteSize: note.byteSize,
       durationMs: note.duration.inMilliseconds,
     );
+  }
+
+  /// Where a fixture build keeps the recordings it has been handed.
+  Directory? _voiceStore;
+
+  /// Object key to the file this fixture holds for it.
+  final _voiceObjects = <String, String>{};
+
+  /// Keep the bytes, the way real storage would.
+  ///
+  /// The sender's temp file is deleted the moment a send is confirmed, so a
+  /// fixture that only minted a URL left nothing behind to play: every voice
+  /// note in a fixture build failed on the first tap of play. Copying into a
+  /// directory this fixture owns makes the round trip real — what comes back
+  /// out is the file that went in.
+  ///
+  /// A path with no file behind it is not an error: most tests hand this
+  /// fixture a name rather than a recording. Those notes keep the unroutable
+  /// URL, and the player fails on them exactly as it did before.
+  void _keepVoiceObject(String objectKey, String sourcePath) {
+    try {
+      final source = File(sourcePath);
+      if (!source.existsSync()) return;
+
+      final store = _voiceStore ??=
+          Directory.systemTemp.createTempSync('jawwid_fixture_voice');
+      // The container is identified by the extension, so a copy that drops it
+      // is a file no player can open.
+      final dot = sourcePath.lastIndexOf('.');
+      final extension = dot <= sourcePath.lastIndexOf(Platform.pathSeparator)
+          ? ''
+          : sourcePath.substring(dot);
+      final target = '${store.path}${Platform.pathSeparator}'
+          '${objectKey.replaceAll('/', '_')}$extension';
+
+      source.copySync(target);
+      _voiceObjects[objectKey] = target;
+    } catch (_) {
+      // Storage that cannot keep a note is a fixture limitation, never a send
+      // failure: the note still sends, and playback fails as it would with a
+      // URL that leads nowhere.
+    }
   }
 
   StudentGroup group(String conversationId) {
