@@ -14,6 +14,7 @@ import { AuthService } from '@platform/auth/auth.service';
 import { PrismaService } from '@platform/prisma.service';
 import { PrismaIdentityService } from '@platform/identity.service';
 import { PrismaAuditService } from '@platform/audit.service';
+import type { ClientAddressPolicy } from '@platform/auth/client-address';
 
 /**
  * Login rate limiting against a REAL Redis, under REAL concurrency.
@@ -263,7 +264,19 @@ describe('the login endpoint under a concurrent burst', () => {
     await client.connect();
 
     const auth = new AuthService(prisma, new PrismaIdentityService(prisma), new PrismaAuditService());
-    controller = new AuthController(auth, new LoginRateLimiter(new RedisRateLimitStore(client)));
+
+    // EXPLICITLY ENABLED. The source dimension is OFF unless a deployment
+    // states its topology (TRUSTED_PROXY_HOPS), so a controller built with the
+    // default policy would charge no source budget at all and the source
+    // assertions below would be vacuous. Stating it here is the same decision a
+    // deployment makes -- see client-address.ts. The OFF default is covered
+    // over real HTTP in auth-trusted-proxy.spec.ts.
+    const sourceEnabled: ClientAddressPolicy = { sourceDimensionEnabled: true, trustProxy: false };
+    controller = new AuthController(
+      auth,
+      new LoginRateLimiter(new RedisRateLimitStore(client)),
+      sourceEnabled,
+    );
 
     await prisma.$executeRawUnsafe(
       `insert into chat.organization (id, slug, display_name)

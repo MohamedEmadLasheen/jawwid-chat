@@ -1,9 +1,15 @@
-import { Body, Controller, Get, Headers, HttpCode, Ip, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Inject, Ip, Optional, Post, Req } from '@nestjs/common';
 import { AuthService, DeviceInput } from './auth.service';
 import { LoginRateLimiter } from './login-rate-limit';
 import { Public, type AuthenticatedRequest } from './auth.guard';
 import { AuthError, AuthErrorCode } from './auth.errors';
 import { toActorDto, toTokenPairDto, type ActorDto, type TokenPairDto } from './auth.dto';
+import {
+  CLIENT_ADDRESS_POLICY,
+  readClientAddressPolicy,
+  sourceAddress,
+  type ClientAddressPolicy,
+} from './client-address';
 
 interface LoginBody {
   username?: unknown;
@@ -27,10 +33,24 @@ interface RefreshBody {
  */
 @Controller('auth')
 export class AuthController {
+  /**
+   * Resolved once, at construction. A per-request read would let the source
+   * dimension be switched on or off by mutating the environment of a running
+   * process, which is not a thing a security control should permit.
+   */
+  private readonly addressPolicy: ClientAddressPolicy;
+
   constructor(
     private readonly auth: AuthService,
     private readonly rateLimit: LoginRateLimiter,
-  ) {}
+    @Optional() @Inject(CLIENT_ADDRESS_POLICY) addressPolicy?: ClientAddressPolicy,
+  ) {
+    // The fallback is for direct construction in unit tests. Under Nest the
+    // provider in auth.module.ts always supplies it, and @Optional() exists so
+    // that a missing provider degrades to reading the environment rather than
+    // failing the boot -- both paths call the same parser.
+    this.addressPolicy = addressPolicy ?? readClientAddressPolicy();
+  }
 
   @Public()
   @Post('login')
@@ -57,7 +77,7 @@ export class AuthController {
     // INVALID_CREDENTIALS would leave a disabled or locked account as an
     // unmetered oracle for probing which of those an account is, and would let
     // credential stuffing with valid passwords run unbounded.
-    await this.rateLimit.reserve(username, sourceOf(ip));
+    await this.rateLimit.reserve(username, sourceAddress(ip, this.addressPolicy));
 
     const pair = await this.auth.login(username, password, {
       userAgent,
@@ -122,40 +142,27 @@ export class MeController {
 }
 
 /**
- * The address the SOURCE budget is charged against.
+ * WHY THE SOURCE DIMENSION MAY BE OFF, AND WHY THAT IS DELIBERATE
+ * ---------------------------------------------------------------
+ * `sourceAddress()` returns undefined unless `TRUSTED_PROXY_HOPS` states this
+ * deployment's topology, and the limiter then charges NO source budget.
  *
- * !! KNOWN LIMITATION, DELIBERATELY NOT PAPERED OVER !!
+ * That means ANTI-SPRAYING IS NOT ACTIVE BY DEFAULT. It is not an oversight and
+ * it is not hidden: the alternative is worse. `req.ip` with no `trust proxy` is
+ * the socket peer, which behind a reverse proxy is the proxy -- one budget
+ * shared by every client on the internet. Charging that budget atomically (as
+ * this code now does) would refuse login to every user after ~30 failures from
+ * a single attacker. A control that becomes a product-wide outage is not a
+ * control.
  *
- * This is Express's `req.ip`. Express `trust proxy` is not configured, so it is
- * the SOCKET PEER -- which behind a reverse proxy is the proxy, identically for
- * every client. The source budget therefore collapses into ONE GLOBAL BUDGET in
- * any deployment that terminates TLS ahead of the API, which turns this control
- * into a denial of service: ~30 failures from one attacker would refuse login
- * to every user.
+ * The per-account (identifier) budget above is unaffected and is always
+ * enforced. What is absent while this is off is only the cross-account
+ * dimension.
  *
- * It is not fixed here because it CANNOT be fixed correctly from what the
- * repository documents:
- *
- *   - `docs/infrastructure/architecture.md` marks the reverse proxy PLANNED and
- *     says "TLS terminates at the proxy **or platform edge**" -- two different
- *     topologies with different hop counts;
- *   - `decisions.md` leaves the host an open recommendation ("Fly.io or
- *     Render") and states "the pipeline cannot deploy today";
- *   - no document specifies a hop count, a trusted proxy range, or which header
- *     the edge sets, and `infra/env/manifest.tsv` declares no variable for one.
- *
- * Guessing would be WORSE than the current state. `trust proxy: true` would let
- * any caller forge X-Forwarded-For and choose their own source identity --
- * evading the budget entirely, or poisoning another client's to lock them out.
- * A guessed hop count is wrong on at least one candidate platform.
- *
- * So the address stays unspoofable (nothing anywhere in this codebase reads a
- * forwarded header) and the limitation is reported rather than hidden. The
- * IDENTIFIER budget is unaffected and remains fully effective.
+ * Turning it on is one explicit decision -- see client-address.ts -- and it is
+ * a DEPLOYMENT TOPOLOGY DEPENDENCY, not an assumption this code is making on
+ * anyone's behalf.
  */
-function sourceOf(ip: string | undefined): string | undefined {
-  return ip;
-}
 
 function asString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';

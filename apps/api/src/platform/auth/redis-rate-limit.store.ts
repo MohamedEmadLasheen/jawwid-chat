@@ -1,3 +1,4 @@
+import { Injectable, type OnModuleDestroy } from '@nestjs/common';
 import type Redis from 'ioredis';
 import type { RateLimitStore, ReserveResult } from './login-rate-limit';
 
@@ -42,8 +43,26 @@ end
 return { 0, 0 }
 `;
 
-export class RedisRateLimitStore implements RateLimitStore {
+@Injectable()
+export class RedisRateLimitStore implements RateLimitStore, OnModuleDestroy {
   constructor(private readonly client: Redis) {}
+
+  /**
+   * Closes the connection when the application shuts down.
+   *
+   * `applyGracefulShutdown` in infra/http/bootstrap.ts gives the process a
+   * bounded drain and then exits; a Redis socket left open is a handle that
+   * keeps the event loop alive past it. Nest calls this only for instances it
+   * created -- a store constructed by hand owns its own client's lifetime.
+   */
+  async onModuleDestroy(): Promise<void> {
+    try {
+      await this.client.quit();
+    } catch {
+      // Already gone, or never connected. Shutdown must not fail on this.
+      this.client.disconnect();
+    }
+  }
 
   async reserve(
     keys: readonly string[],

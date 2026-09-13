@@ -6,6 +6,7 @@ import { AuthenticatedGuard } from './auth.guard';
 import { AuthController, MeController } from './auth.controller';
 import { AuthErrorFilter } from './auth.errors';
 import { LoginRateLimiter, RATE_LIMIT_STORE, type RateLimitStore } from './login-rate-limit';
+import { CLIENT_ADDRESS_POLICY, readClientAddressPolicy } from './client-address';
 import { RedisRateLimitStore } from './redis-rate-limit.store';
 
 /**
@@ -79,6 +80,10 @@ export const loginRateLimitStoreProvider = {
     AuthService,
     LoginRateLimiter,
     loginRateLimitStoreProvider,
+    // Resolved once at boot, from the same variable bootstrap.ts uses to set
+    // Express `trust proxy`, so the two can never disagree about whether a
+    // client is identifiable.
+    { provide: CLIENT_ADDRESS_POLICY, useFactory: () => readClientAddressPolicy() },
     { provide: APP_GUARD, useClass: AuthenticatedGuard },
     { provide: APP_FILTER, useClass: AuthErrorFilter },
   ],
