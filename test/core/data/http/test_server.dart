@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 /// One request as the server saw it.
 class RecordedRequest {
@@ -10,13 +11,23 @@ class RecordedRequest {
     required this.query,
     required this.headers,
     required this.body,
-  });
+    Uint8List? bodyBytes,
+  }) : bodyBytes = bodyBytes ?? Uint8List(0);
 
   final String method;
   final String path;
   final Map<String, String> query;
   final Map<String, String> headers;
   final Object? body;
+
+  /// The body exactly as it arrived, before any decoding.
+  ///
+  /// [body] is a UTF-8 view and is the right thing for the JSON routes. An
+  /// attachment upload is not text: its bytes are arbitrary, most of them are
+  /// not valid UTF-8, and a decoded view cannot say whether what arrived is
+  /// byte-for-byte what was sent. That is exactly the claim an upload test has
+  /// to make, so the raw bytes are kept alongside.
+  final Uint8List bodyBytes;
 
   Map<String, Object?> get json => (body as Map?)?.cast<String, Object?>() ?? {};
 }
@@ -96,7 +107,16 @@ class TestServer {
   Future<void> _listen() async {
     await for (final request in _server) {
       Object? body;
-      final raw = await utf8.decoder.bind(request).join();
+      final chunks = <int>[];
+      await for (final chunk in request) {
+        chunks.addAll(chunk);
+      }
+      final bodyBytes = Uint8List.fromList(chunks);
+      // `allowMalformed` so a binary body cannot throw inside this loop and
+      // leave the request unanswered while the client waits out its timeout.
+      // For the JSON routes the bytes are valid UTF-8 and this decodes
+      // identically to what it always did.
+      final raw = utf8.decode(bodyBytes, allowMalformed: true);
       if (raw.isNotEmpty) {
         try {
           body = jsonDecode(raw);
@@ -115,6 +135,7 @@ class TestServer {
           query: request.uri.queryParameters,
           headers: headers,
           body: body,
+          bodyBytes: bodyBytes,
         ),
       );
 
