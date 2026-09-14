@@ -34,6 +34,22 @@ JWT_ACCESS_SECRET	auth	yes	req	req	req
 JWT_REFRESH_SECRET	auth	yes	req	req	req
 JWT_ACCESS_TTL	auth	no	opt	req	req
 JWT_REFRESH_TTL	auth	no	opt	req	req
+# STORAGE. Two kinds of row live here, and the difference matters when reading
+# this file against the code.
+#
+# Read by the implementation that exists today: STORAGE_SIGNING_SECRET (the API
+# refuses to start without it), STORAGE_ENDPOINT, STORAGE_SIGNED_URL_TTL_SECONDS,
+# STORAGE_LOCAL_ROOT and the ATTACHMENT_MAX_* ceilings.
+#
+# Reserved for the S3-compatible backend the seam is built for: STORAGE_REGION,
+# STORAGE_BUCKET, STORAGE_ACCESS_KEY, STORAGE_SECRET_KEY. No code reads these
+# yet -- OBJECT_STORAGE is bound to the reference SignedLocalObjectStorage and no
+# adapter exists (findings.md RT-022). They stay declared because this file
+# states the deployment contract rather than the current call graph, exactly as
+# the FCM_*/APNS_* rows do while PUSH_PROVIDER is still LoggingPushProvider, and
+# because docker-compose.yml already provisions the local S3-compatible service
+# they configure. Deleting them would take the local stack and inventory.md with
+# them. No provider has been chosen; nothing here chooses one.
 STORAGE_ENDPOINT	storage	no	req	req	req
 STORAGE_REGION	storage	no	opt	req	req
 STORAGE_BUCKET	storage	no	req	req	req
@@ -41,6 +57,12 @@ STORAGE_ACCESS_KEY	storage	yes	req	req	req
 STORAGE_SECRET_KEY	storage	yes	req	req	req
 STORAGE_SIGNED_URL_TTL_SECONDS	storage	no	opt	req	req
 STORAGE_SIGNING_SECRET	storage	yes	req	req	req
+# Where the local reference blob store keeps bytes. Optional everywhere because
+# the code defaults it (blob-store.ts) -- but the default is the OS temp
+# directory, which no deployment should rely on: it is per-instance and does not
+# survive a restart. Setting this names a path; it does not make that path
+# durable or shared. Durability is a hosting decision, not a manifest one.
+STORAGE_LOCAL_ROOT	storage	no	opt	opt	opt
 OUTBOX_POLL_MS	worker	no	opt	opt	opt
 OUTBOX_BATCH_SIZE	worker	no	opt	opt	opt
 OUTBOX_IDLE_BACKOFF_MS	worker	no	opt	opt	opt
@@ -48,6 +70,9 @@ ATTACHMENT_MAX_BYTES_IMAGE	storage	no	opt	opt	opt
 ATTACHMENT_MAX_BYTES_VIDEO	storage	no	opt	opt	opt
 ATTACHMENT_MAX_BYTES_VOICE	storage	no	opt	opt	opt
 ATTACHMENT_MAX_BYTES_FILE	storage	no	opt	opt	opt
+# Ceiling on the duration a sender may claim for a voice note. The server never
+# decodes the audio, so this bounds an assertion rather than a measurement.
+ATTACHMENT_MAX_VOICE_DURATION_MS	storage	no	opt	opt	opt
 FCM_PROJECT_ID	push	no	opt	req	req
 FCM_SERVICE_ACCOUNT_JSON	push	yes	opt	req	req
 APNS_KEY_ID	push	no	opt	req	req

@@ -110,10 +110,13 @@ credentials, the LiveKit API secret, or Core credentials.
 | `STORAGE_ACCESS_KEY` | **yes** | req | req | req |
 | `STORAGE_SECRET_KEY` | **yes** | req | req | req |
 | `STORAGE_SIGNED_URL_TTL_SECONDS` | no | opt | req | req |
+| `STORAGE_SIGNING_SECRET` | **yes** | req | req | req |
+| `STORAGE_LOCAL_ROOT` | no | opt | opt | opt |
 | `ATTACHMENT_MAX_BYTES_IMAGE` | no | opt | opt | opt |
 | `ATTACHMENT_MAX_BYTES_VIDEO` | no | opt | opt | opt |
 | `ATTACHMENT_MAX_BYTES_VOICE` | no | opt | opt | opt |
 | `ATTACHMENT_MAX_BYTES_FILE` | no | opt | opt | opt |
+| `ATTACHMENT_MAX_VOICE_DURATION_MS` | no | opt | opt | opt |
 
 ### Push
 
@@ -195,8 +198,23 @@ infrastructure; the authentication design is AI #1's (see `handoff-ai1.md`).
 Rotating them invalidates issued tokens; `secrets.md` covers doing it without
 signing every user out at once.
 
-**`STORAGE_*`** — the bucket is private in every environment. Clients receive
-signed URLs valid for `STORAGE_SIGNED_URL_TTL_SECONDS`, never credentials.
+**`STORAGE_*`** — storage is private in every environment. Clients receive signed
+URLs valid for `STORAGE_SIGNED_URL_TTL_SECONDS`, never credentials.
+
+Which of these the code reads today is not the same as which the deployment
+contract reserves. `STORAGE_SIGNING_SECRET` signs those URLs and the API refuses
+to start without it (at least 32 characters). `STORAGE_ENDPOINT`,
+`STORAGE_SIGNED_URL_TTL_SECONDS` and `STORAGE_LOCAL_ROOT` configure the reference
+`SignedLocalObjectStorage`/`LocalFsBlobStore` pair that serves attachments now.
+`STORAGE_REGION`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY` and `STORAGE_SECRET_KEY`
+are the S3-compatible surface the `ObjectStorage` seam is built for: no adapter
+exists yet (`findings.md` RT-022), so no code reads them, and `docker-compose.yml`
+already runs the local service they configure. No provider has been selected.
+
+**`STORAGE_LOCAL_ROOT`** — optional because the code defaults it, but the default
+is the OS temp directory: per-instance, and gone on restart. Naming a path here
+does not make that path durable or shared, which is why this is a hosting
+decision rather than a configuration one.
 
 **`FCM_SERVICE_ACCOUNT_JSON` / `APNS_PRIVATE_KEY`** — full credential documents,
 stored as multi-line secrets. `check-env.sh` reads them with `env -0` so
