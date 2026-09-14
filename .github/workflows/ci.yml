@@ -372,6 +372,86 @@ jobs:
           [ "$app_rows" = "$rows" ] || {
             echo "::error::G-41 FAIL — chat_app sees $app_rows of $rows rows"; exit 1; }
 
+  # ------------------------------------------------------------------ storage
+  # The presigned-URL path, against a REAL S3-compatible bucket.
+  #
+  # `scripts/qa/phase2-smoke/storage.mjs` already existed and already passed,
+  # and nothing ran it -- so `S3ObjectStorage`, the implementation every
+  # deployed environment selects, was the one with no automated coverage at
+  # all. The unit tests assert the SHAPE of a SigV4 signature; only a real
+  # bucket can say whether storage ACCEPTS it, and one wrong character in the
+  # canonical request is a 403 and nothing else.
+  #
+  # MinIO runs under `docker run` rather than as a `services:` container
+  # because the official image takes `server /data` as its command and a
+  # service container cannot be given one: with no arguments it prints its
+  # usage and exits, and the job would fail on a connection refused that says
+  # nothing about storage.
+  storage:
+    name: Storage · presigned URLs against a real bucket
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: guards
+    env:
+      # CI-ONLY credentials for a container that lives for one job, in the same
+      # spirit as the `ci-drill-only` database password above. They reach no
+      # deployed bucket, and they appear in no manifest and no deploy workflow.
+      STORAGE_ENDPOINT: http://127.0.0.1:9000
+      STORAGE_BUCKET: jawwid-chat-ci
+      STORAGE_ACCESS_KEY: ci-storage-only
+      STORAGE_SECRET_KEY: ci-storage-only-secret
+      # MinIO signs against whatever region it is told; us-east-1 is the SigV4
+      # default. Each deployment sets its own provider's value.
+      STORAGE_REGION: us-east-1
+      MINIO_IMAGE: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start MinIO with a PRIVATE bucket
+        # The bucket is a directory under the server path, which is how MinIO
+        # names one -- so it is private by default and no anonymous policy is
+        # ever applied to it. ADR-005 requires that in every environment, and
+        # the smoke test asserts it by demanding 403 on an UNSIGNED read: a
+        # bucket that came up public fails this job rather than quietly
+        # weakening what the job claims to prove.
+        run: |
+          set -euo pipefail
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER="$STORAGE_ACCESS_KEY" \
+            -e MINIO_ROOT_PASSWORD="$STORAGE_SECRET_KEY" \
+            --entrypoint sh "$MINIO_IMAGE" \
+            -c "mkdir -p /data/$STORAGE_BUCKET && exec minio server /data"
+
+          for _ in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null 2>&1; then
+              echo "MinIO is ready."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::MinIO did not become ready within 40s"
+          docker logs minio
+          exit 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/api/package-lock.json
+
+      - name: Build the API
+        # The smoke test imports the COMPILED `S3ObjectStorage` from `dist`, so
+        # what it exercises is the class the deployed image runs rather than a
+        # test-time transform of the source.
+        working-directory: apps/api
+        run: |
+          npm ci
+          npx prisma generate
+          npm run build
+
+      - name: Storage smoke · presigned PUT and GET, private bucket, tamper, expiry
+        run: node scripts/qa/phase2-smoke/storage.mjs
+
   # ------------------------------------------------------------------- images
   # AI #7. Deployment artifacts must build, and must not run privileged.
   images:
