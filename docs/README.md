@@ -11,15 +11,17 @@ add canonical documents only under the five directories below and must update
 this index in the same change.
 
 **Product decisions PD-1 to PD-5 were closed on 2026-09-07**, at the Phase 0
-exit gate. `product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4 is their single record;
+exit gate; **PD-6 was closed on 2026-09-23**.
+`product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4 is their single record;
 no other document may restate or reinterpret them.
 
 ## Canonical
 
 | Directory | Document | Decides |
 |---|---|---|
-| `product/` | [JAWUID-CHAT-PRODUCT-BOUNDARY.md](product/JAWUID-CHAT-PRODUCT-BOUNDARY.md) | what Jawwid Chat is and is not; domain layering; deprecated machinery; **the closed product decisions PD-1..PD-5** (§4); phase map |
-| `product/` | [jawwid-chat-prd-v0.1.md](product/jawwid-chat-prd-v0.1.md) | product requirements (PRD v0.1, owner-approved). Read through the boundary document above. |
+| `product/` | [JAWUID-CHAT-PRODUCT-BOUNDARY.md](product/JAWUID-CHAT-PRODUCT-BOUNDARY.md) | what Jawwid Chat is and is not; domain layering; deprecated machinery; **the closed product decisions PD-1..PD-6** (§4); phase map |
+| `product/` | [jawwid-chat-prd-v0.2.md](product/jawwid-chat-prd-v0.2.md) | **PRD v0.2 (owner-approved 2026-09-23)** — re-versions §4 BR-1 and the §9 Teacher ↔ Parent calling row for PD-6. An amendment: it changes those two passages only. |
+| `product/` | [jawwid-chat-prd-v0.1.md](product/jawwid-chat-prd-v0.1.md) | product requirements (PRD v0.1, owner-approved). In force **except** the two passages v0.2 amends. Read through the boundary document above. |
 | `architecture/` | [JAWUID-CHAT-ARCHITECTURE.md](architecture/JAWUID-CHAT-ARCHITECTURE.md) | layers, boundaries, what each may/may not do; storage, realtime, notifications, outbox semantics, Core integration boundary |
 | `architecture/` | [IDENTITY-MODEL.md](architecture/IDENTITY-MODEL.md) | accounts, credentials, sessions, devices, teacher identity, lifecycle, offboarding; Phase 1 baseline |
 | `architecture/` | [AUTHORIZATION-MODEL.md](architecture/AUTHORIZATION-MODEL.md) | roles, permission keys, `AuthorizationService` decision surface, scope, known defects |
