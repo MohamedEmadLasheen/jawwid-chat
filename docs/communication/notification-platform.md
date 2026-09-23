@@ -169,3 +169,85 @@ not silently dropped.
 | `PACKAGE_LOW_BALANCE` | No package or balance entity. |
 | `PAYMENT_RECEIVED` | `chat.subscription.last_payment_status` is ingested from Jawwid Core, but no ingestion path in this repository transitions it, so there is no event. The template and rule are seeded and the type is registered; wiring is one `core_event` handler away. |
 | `TEACHER_CHANGED` | `chat.learner.teacher_id` has no write path here. |
+
+
+---
+
+# Acceptance matrix
+
+Every cell is backed by an implementation and a test. **NOT READY** means the
+capability does not exist and is not claimed.
+
+| Notification | Event producer | DB | In-app | Realtime | Push | Deep link | Preferences | E2E |
+|---|---|---|---|---|---|---|---|---|
+| New message | ✅ `message.service.ts` → outbox, in-transaction | ✅ | ✅ | ✅ | ✅ | ✅ `/chats/{c}?message={m}` | ✅ optional (`messaging`) | ✅ |
+| Voice message | ✅ same, `type = voice` | ✅ | ✅ | ✅ | ✅ | ✅ opens at the message | ✅ optional (`messaging`) | ✅ |
+| Missed call | ✅ `call.end()` **and** `expireRingingCalls()` sweep | ✅ | ✅ | ✅ | ✅ | ✅ `/chats/{c}?call={k}` | ✅ optional (`calls`) | ✅ |
+| Incoming call | ✅ `call.start()` → outbox | ✅ | ✅ | ✅ | ✅ VoIP/CallKit path | ✅ | ⛔ essential | ✅ |
+| Schedule changed | ✅ `classSchedule.reschedule()` | ✅ | ✅ | ✅ | ✅ | ⚠️ resolves to the card | ⛔ essential | ✅ |
+| Class cancelled | ✅ same, `nextClassAt = null` | ✅ | ✅ | ✅ | ✅ | ⚠️ resolves to the card | ⛔ essential | ✅ |
+| Class reminder | ✅ `scheduleReminders()`, server-side, T-24h/30m/10m | ✅ | ✅ | ✅ | ✅ | ⚠️ resolves to the card | ✅ optional (`classes`) | ✅ |
+| Academy message | ✅ `message.service.ts`, official conversation | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ optional (`messaging`) | ✅ |
+| Important announcement | ✅ `announcement.publish()` → `fanOutDue()` | ✅ | ✅ | ✅ | ✅ | ✅ `/announcements/{a}` | ✅ optional (`academy`) | ✅ |
+| Urgent announcement | ✅ same, admin/manager only | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔ essential | ✅ |
+| Approval requested / decided | ✅ `message.service.ts`, `approval.service.ts` | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔ essential | ✅ |
+| Renewal / payment reminder | ⚠️ rules + templates seeded; **no producer** | ✅ | ✅ | ✅ | ✅ | ⚠️ `/billing`, no screen | ✅ optional (`billing`) | ⛔ **NOT READY** |
+| Attendance, progress, package balance | ⛔ **NOT READY** — no domain event exists | — | — | — | — | — | — | ⛔ |
+
+**⚠️ on the class deep links** is deliberate and honest: this build has no
+class-details screen, so `NotificationDeepLink` refuses `/learners/{id}/classes`
+and the card stays untappable rather than pushing a route that would render an
+error. The card itself carries the whole story — which child, the old time and
+the new one — so nothing is lost. The route is minted and stored server-side and
+starts working the day that screen exists.
+
+**Renewal and payment** have a complete pipeline and no event to start it:
+`chat.subscription.renewal_due_at` is ingested from Jawwid Core but nothing in
+this repository transitions it. Marked NOT READY rather than claimed.
+
+## App states
+
+| State | Behaviour | Where it is proven |
+|---|---|---|
+| A · viewing the conversation | Realtime updates the thread; the push is **skipped** and recorded `RECIPIENT_ACTIVE`; the notification and badge still happen | `notification-platform.spec.ts`, `app_state_behaviour_test.dart` |
+| B · elsewhere in the app | Realtime notification, badge increments, centre grows — no refresh, no polling | `app_state_behaviour_test.dart` |
+| C · backgrounded | FCM push; `content-available` wakes the app so the badge is current | `push_lifecycle_test.dart` |
+| D · terminated | FCM push; the tap starts the process, the route is held and followed once the router exists | `push_lifecycle_test.dart` |
+| E · offline | Notification persists; on reconnect the list and unread count are refetched from the database | `app_state_behaviour_test.dart` |
+
+## Delivery semantics
+
+What each state means, and what it does **not** claim.
+
+| State | Set by | Means | Does not mean |
+|---|---|---|---|
+| `scheduled` | `schedule()` | The notification exists and is owed | Anything about delivery |
+| `processing` | `dispatchDue()` claim | A worker holds a lease on it | That it was sent |
+| `sent` | after every channel ran | The request left this system | That any device has it |
+| `delivered` | client or provider report **only** | Something acknowledged receipt | That anyone saw it |
+| `opened` | client report | The parent acted on a push | That they read it |
+| `read_at` | the parent, in the app | They saw it in the centre | That a push arrived |
+| `failed` | attempt budget exhausted | No channel succeeded | That the in-app copy is gone |
+
+Per channel, on `chat.notification_delivery`:
+
+| Channel | `sent` means | `delivered` means | Can it prove `opened`? |
+|---|---|---|---|
+| `in_app` | Published to the actor room | A client reported it | No — the centre reports `read` instead |
+| `push` | FCM accepted the request | The device reported it | Only via the tap report |
+| future email/SMS | Provider accepted | Provider webhook, if any | Depends on the provider |
+
+**`sent` is never promoted to `delivered` by inference.** FCM accepting a
+request says nothing about the handset, and fabricating an acknowledgement would
+make every delivery metric a lie — which is worse than an unknown, because an
+unknown prompts an investigation and a lie ends one.
+
+## Source of truth
+
+```
+chat.notification   →  the record. Everything else is a way of carrying it.
+realtime            →  speed. A missed event costs latency, never a notification.
+push                →  reach, when the app is not open. Best-effort by nature.
+```
+
+No screen, count or badge is derived from realtime or from push.

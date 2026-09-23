@@ -919,6 +919,84 @@ describe('the notification centre', () => {
 });
 
 // =========================================================================
+describe('the push payload the device will receive', () => {
+  /**
+   * THE CONTRACT BETWEEN THE TWO HALVES.
+   *
+   * These key names are what `PushDeepLink.resolve` in the Flutter app reads to
+   * decide where a tap goes. They are asserted here, on the sending side,
+   * because a rename would otherwise break every deep link in the product with
+   * nothing failing: the backend would keep sending, the device would keep
+   * receiving, and every tap would land on the notification centre instead of
+   * the thing the parent tapped.
+   *
+   * The mirror of this test is `push_lifecycle_test.dart`, which feeds exactly
+   * this shape to the client resolver.
+   */
+  async function capturePayload(): Promise<Record<string, string>> {
+    await g.notifications.registerDevice({
+      actorId: s.parentId, token: 'contract-device', platform: 'ios',
+    });
+    const sends: Array<Record<string, string>> = [];
+    const spy = jest.spyOn(g.push, 'send').mockImplementation(async (m) => {
+      sends.push(m.data);
+      return { ok: true };
+    });
+
+    const conversationId = await studentGroup();
+    await g.messages.send({ conversationId, senderId: s.ownerId, body: 'contract' });
+    await drain();
+    await g.notifications.dispatchDue(new Date());
+
+    spy.mockRestore();
+    return sends[0];
+  }
+
+  it('carries exactly the keys the client resolves on', async () => {
+    const payload = await capturePayload();
+
+    // Named individually rather than snapshotted: a snapshot would accept a
+    // rename by being updated, which is the failure this exists to prevent.
+    expect(payload).toHaveProperty('notificationId');
+    expect(payload).toHaveProperty('type');
+    expect(payload).toHaveProperty('category');
+    expect(payload).toHaveProperty('priority');
+    expect(payload).toHaveProperty('conversationId');
+    expect(payload).toHaveProperty('deeplink');
+  });
+
+  it('carries no key that is not an id, an enum or a route', async () => {
+    const payload = await capturePayload();
+    const allowed = new Set([
+      'notificationId', 'type', 'category', 'priority',
+      'entityType', 'entityId', 'conversationId', 'learnerId',
+      'announcementId', 'deeplink',
+    ]);
+
+    // A new key reaching a lock screen should be a deliberate decision, made
+    // here, and not something that arrives because a payload builder grew.
+    for (const key of Object.keys(payload)) {
+      expect(allowed.has(key)).toBe(true);
+    }
+  });
+
+  it('every value is a string, because FCM data payloads carry nothing else', async () => {
+    const payload = await capturePayload();
+    for (const value of Object.values(payload)) {
+      expect(typeof value).toBe('string');
+    }
+  });
+
+  it('the deeplink is one the client knows how to open', async () => {
+    const payload = await capturePayload();
+    // PushDeepLink accepts /chats/... and /announcements/..., and rebuilds from
+    // ids in preference to this string. Both must agree on the prefix.
+    expect(payload.deeplink.startsWith('/chats/')).toBe(true);
+    expect(payload.conversationId).toBeTruthy();
+  });
+});
+
+// =========================================================================
 describe('security', () => {
   it('one parent cannot read another family’s notifications', async () => {
     const conversationId = await studentGroup();
