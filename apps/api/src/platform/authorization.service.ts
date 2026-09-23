@@ -86,13 +86,26 @@ export interface LiveMember {
  * access decision. Messaging and calling both route through it, so a permission
  * can never be enforced for chat but forgotten for calls.
  *
- * BR-1 -- Teacher <-> Parent direct communication is FORBIDDEN.
- * Defended three times over:
- *   1. canOpenDirect() below refuses to create the channel.
- *   2. canSend()/canCall() refuse even if such a channel somehow existed.
+ * BR-1 (as re-versioned by PD-6, 2026-09-23) -- a teacher and a parent may
+ * share a direct 1:1 channel ONLY where an authorized relationship exists.
+ * Defended three times over, exactly as the blanket prohibition was:
+ *   1. canOpenDirect() below refuses to create an unauthorized channel.
+ *   2. canSend()/canCall() refuse an unauthorized one even if it existed.
  *   3. Database triggers (chat.enforce_direct_conversation_rules,
  *      chat.enforce_call_participant_rules) refuse the row outright, so a
  *      compromised API or a manual SQL session cannot create one either.
+ *
+ * THE RELATIONSHIP IS AN INPUT, NOT A LOOKUP. This class does not know how a
+ * relationship is established and must never find out: it receives
+ * `pairingAuthorized` as a resolved fact from RelationshipService and decides
+ * on it. That is what keeps this file -- the one place the communication
+ * matrix lives -- free of a database dependency, and what lets every test of
+ * it run without a server. See AUTHORIZATION-MODEL.md section 4.1.
+ *
+ * The parameter defaults to FALSE everywhere it appears. A caller that does
+ * not state the relationship is refused rather than trusted, so a call site
+ * that forgets to resolve it fails closed and keeps the pre-PD-6 behaviour
+ * instead of opening a channel by omission.
  */
 @Injectable()
 export class AuthorizationService {
@@ -107,7 +120,12 @@ export class AuthorizationService {
    * is denied, so a new actor kind is denied by default rather than allowed by
    * accident.
    */
-  canOpenDirect(a: Actor, b: Actor): Decision {
+  canOpenDirect(
+    a: Actor,
+    b: Actor,
+    /** PD-6: resolved by RelationshipService. Defaults to the strict value. */
+    pairingAuthorized = false,
+  ): Decision {
     if (!a.isActive || !b.isActive) {
       return deny(CommErrorCode.ACTOR_INACTIVE, 'one of the participants is inactive');
     }
@@ -117,12 +135,18 @@ export class AuthorizationService {
 
     const kinds = [a.kind, b.kind].sort().join('+');
 
-    // BR-1. The constitutional rule.
+    // BR-1, as re-versioned by PD-6. The pairing is permitted, but only for a
+    // relationship the server established. Role is not evidence: "a teacher"
+    // and "a parent" may open a channel only when they are THIS learner's
+    // teacher and THIS family's parent.
     if (kinds === 'contact+teacher') {
-      return deny(
-        CommErrorCode.BR1_TEACHER_PARENT_DIRECT,
-        'BR-1: teacher and parent may communicate only inside the official student group',
-      );
+      if (!pairingAuthorized) {
+        return deny(
+          CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
+          'no authorized relationship exists between this teacher and this parent',
+        );
+      }
+      return allow();
     }
     if (kinds === 'contact+contact') {
       return deny(CommErrorCode.INVALID_PARTICIPANTS, 'two family contacts cannot open a channel');
@@ -209,6 +233,10 @@ export class AuthorizationService {
     /** Live membership with roles and resolved activity, for the C-4
      *  admin-presence check. When empty the check cannot run and says so. */
     liveMembers: LiveMember[] = [],
+    /** PD-6: is there an authorized teacher<->parent relationship behind this
+     *  direct conversation? Resolved by RelationshipService before the call.
+     *  Defaults to false, so an un-stated relationship denies. */
+    pairingAuthorized = false,
   ): Promise<Decision> {
     const readable = this.canRead(actor, conv, membership);
     if (!readable.allowed) return readable;
@@ -230,6 +258,11 @@ export class AuthorizationService {
       if (membership?.isSilent) {
         return deny(CommErrorCode.MEMBER_IS_SILENT, 'this member is present but may not post');
       }
+      // PD-6. The parent's side of a direct teacher<->parent channel. A
+      // conversation outlives the relationship that justified it, so this is
+      // checked on every send and not only at creation.
+      const pairing = this.requireAuthorizedPairing(actor, conv, participantKinds, pairingAuthorized);
+      if (pairing) return pairing;
       const presence = this.requireAdminPresence(conv, liveMembers, participantKinds);
       if (presence) return presence;
       return allow(null, this.moderationFor(conv, MemberRole.PARENT));
@@ -240,20 +273,12 @@ export class AuthorizationService {
       if (intent.visibility === Visibility.INTERNAL) {
         return deny(CommErrorCode.TEACHER_CANNOT_WRITE_INTERNAL, 'teachers cannot write internal notes');
       }
-      // BR-1 backstop. A teacher may speak in a group, and in a 1:1 whose other
-      // side is Jawwid staff. What they may never do is share a direct channel
-      // with a family contact, so the check is on the participant set, not on
-      // the conversation type: Teacher <-> Admin is a permitted 1:1 and must
-      // not be caught here.
-      if (
-        conv.type === ConversationType.DIRECT &&
-        participantKinds.includes(ActorKind.CONTACT)
-      ) {
-        return deny(
-          CommErrorCode.BR1_TEACHER_PARENT_DIRECT,
-          'BR-1: a teacher may not message a parent outside the student group',
-        );
-      }
+      // PD-6. A teacher may speak in a group, in a 1:1 whose other side is
+      // Jawwid staff, and in a 1:1 with a parent they are AUTHORIZED to reach.
+      // The check is on the participant set, not on the conversation type:
+      // Teacher <-> Admin is a permitted 1:1 and must not be caught here.
+      const pairing = this.requireAuthorizedPairing(actor, conv, participantKinds, pairingAuthorized);
+      if (pairing) return pairing;
       if (membership?.isSilent) {
         return deny(CommErrorCode.MEMBER_IS_SILENT, 'this member is present but may not post');
       }
@@ -336,6 +361,51 @@ export class AuthorizationService {
   }
 
   /** Group approval policy. Staff messages are never held. */
+  /**
+   * PD-6. A DIRECT conversation that pairs a teacher with a family contact is
+   * permitted only for an authorized relationship.
+   *
+   * Evaluated on the participant SET, never on the conversation type alone:
+   * Teacher <-> Admin and Parent <-> Admin are direct conversations too and
+   * must not be caught here.
+   *
+   * This is deliberately one method called from three places -- the contact
+   * branch of canSend, the teacher branch of canSend, and canCall -- rather
+   * than three similar conditions. Messaging and calling must never be able to
+   * disagree about who may speak to whom, and the surest way to guarantee that
+   * is to give them one implementation to disagree about.
+   *
+   * BOTH SIDES ARE CHECKED. Before PD-6 only the teacher branch carried a BR-1
+   * test, because the channel could not exist at all and a parent could never
+   * be in one. Now it can: a conversation created while a relationship was live
+   * outlives the relationship, and the parent's next message must be refused
+   * just as the teacher's is. Checking one side only would let a revoked
+   * relationship keep half a channel open.
+   *
+   * Returns a denial, or null when the rule does not apply.
+   */
+  private requireAuthorizedPairing(
+    actor: Actor,
+    conv: Conv,
+    participantKinds: string[],
+    pairingAuthorized: boolean,
+  ): Decision | null {
+    if (conv.type !== ConversationType.DIRECT) return null;
+
+    // The actor's own kind is included: a caller that supplies an incomplete
+    // member list must not thereby escape the check.
+    const kinds = new Set([...participantKinds, actor.kind]);
+    if (!kinds.has(ActorKind.TEACHER) || !kinds.has(ActorKind.CONTACT)) return null;
+
+    if (!pairingAuthorized) {
+      return deny(
+        CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
+        'no authorized relationship exists between this teacher and this parent',
+      );
+    }
+    return null;
+  }
+
   /**
    * BR-1 required admin presence, evaluated at operation time (product decision
    * C-4, 2026-09-06).
@@ -474,6 +544,12 @@ export class AuthorizationService {
     /** PD-2: starting a group call is not the same permission as joining one.
      *  Defaults to the stricter INITIATE. */
     intent: CallIntent = CallIntent.INITIATE,
+    /** PD-6: the resolved teacher<->parent relationship. Defaults to false.
+     *
+     *  Re-resolved by the caller on BOTH the start path and the token path, so
+     *  a relationship revoked after a call was created refuses the next media
+     *  token. A call is not a standing grant. */
+    pairingAuthorized = false,
   ): Promise<Decision> {
     const sendable = await this.canSend(
       actor,
@@ -484,16 +560,23 @@ export class AuthorizationService {
       familyOwnerId,
       participants.map((p) => p.kind),
       liveMembers,
+      pairingAuthorized,
     );
     if (!sendable.allowed) return sendable;
 
-    const kinds = new Set(participants.map((p) => p.kind));
-    if (conv.type === ConversationType.DIRECT && kinds.has(ActorKind.TEACHER) && kinds.has(ActorKind.CONTACT)) {
-      return deny(
-        CommErrorCode.BR1_TEACHER_PARENT_DIRECT,
-        'BR-1: a teacher and a parent may not share a 1:1 call',
-      );
-    }
+    // PD-6. canSend already applied requireAuthorizedPairing for a direct
+    // teacher/parent conversation, so a call cannot be more permissive than a
+    // message in the same channel -- which is the property C-2 asks for and the
+    // reason calling routes through canSend at all. Restated here on the call's
+    // own participant set, because the two are supplied separately and a caller
+    // that assembles them inconsistently must not slip through.
+    const callPairing = this.requireAuthorizedPairing(
+      actor,
+      conv,
+      participants.map((p) => p.kind),
+      pairingAuthorized,
+    );
+    if (callPairing) return callPairing;
 
     /**
      * PD-2 (closed 2026-09-07). A group call is the official Teacher <-> Parent

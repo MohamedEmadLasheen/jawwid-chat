@@ -64,6 +64,9 @@ function addMember(conversationId: string, actorKind: string, memberRole: string
  * unchanged.
  */
 let FAMILY_ID = '';
+/** PD-6: a real chain, for the AUTHORIZED half of the backstop assertions. */
+let TEACHER_ID = '';
+let PARENT_ID = '';
 
 beforeAll(() => {
   // Fails fast with a clear message if the environment is not up.
@@ -75,20 +78,84 @@ beforeAll(() => {
     `insert into chat.family (display_name, owner_id)
      values ('Integration Family', '${staffId}') returning id`,
   );
+
+  // PD-6 made the backstop depend on contact -> family -> learner -> teacher,
+  // so the permitted case needs real rows. The REFUSED cases keep using
+  // gen_random_uuid(), which is exactly an actor with no relationship.
+  TEACHER_ID = sql(
+    `insert into chat.teacher (name) values ('integration_teacher') returning id`,
+  );
+  PARENT_ID = sql(
+    `insert into chat.contact (family_id, name, role_preset, can_message,
+                               can_view_progress, can_manage_schedule,
+                               can_manage_billing, can_manage_contacts, can_cancel)
+     values ('${FAMILY_ID}', 'integration_parent', 'primary_guardian',
+             true, true, true, true, true, true) returning id`,
+  );
+  sql(
+    `insert into chat.learner (family_id, name, teacher_id)
+     values ('${FAMILY_ID}', 'integration_learner', '${TEACHER_ID}')`,
+  );
 });
 
-describe('BR-1 database backstop', () => {
-  it('rejects a teacher and a family contact together in a DIRECT conversation', () => {
+describe('BR-1 database backstop (PD-6)', () => {
+  it('rejects a teacher and an UNAUTHORIZED family contact in a DIRECT conversation', () => {
+    // Re-versioned 2026-09-23. PD-6 changed WHICH pair the database refuses,
+    // not whether it refuses one with the application bypassed.
     const id = sql(
-      `insert into chat.conversation (type, state, direct_key)
-       values ('direct', 'open', gen_random_uuid()::text) returning id`,
+      `insert into chat.conversation (type, state, direct_key, family_id)
+       values ('direct', 'open', gen_random_uuid()::text, '${FAMILY_ID}') returning id`,
     );
     addMember(id, 'teacher', 'teacher');
     const err = expectRejected(
       `insert into chat.conversation_member (conversation_id, actor_kind, actor_id, member_role)
        values ('${id}', 'contact', gen_random_uuid(), 'parent')`,
     );
-    expect(err).toContain('BR-1 violation');
+    expect(err).toContain('PD-6 violation');
+  });
+
+  it('PERMITS a teacher and an AUTHORIZED family contact in a DIRECT conversation', () => {
+    // The positive control for the assertion above. Without it, that test would
+    // still pass against a database that refused every teacher/contact direct
+    // pairing -- which is the behaviour PD-6 removed.
+    const id = sql(
+      `insert into chat.conversation (type, state, direct_key, family_id)
+       values ('direct', 'open', gen_random_uuid()::text, '${FAMILY_ID}') returning id`,
+    );
+    sql(
+      `insert into chat.conversation_member (conversation_id, actor_kind, actor_id, member_role)
+       values ('${id}', 'teacher', '${TEACHER_ID}', 'teacher')`,
+    );
+    expect(
+      expectRejected(
+        `insert into chat.conversation_member (conversation_id, actor_kind, actor_id, member_role)
+         values ('${id}', 'contact', '${PARENT_ID}', 'parent')`,
+      ),
+    ).toBeNull();
+  });
+
+  it('refuses the same authorized pair once the learner link is reassigned', () => {
+    // The relationship, not the identities, is what the database is checking.
+    const otherTeacher = sql(
+      `insert into chat.teacher (name) values ('integration_teacher_other') returning id`,
+    );
+    sql(`update chat.learner set teacher_id = '${otherTeacher}' where family_id = '${FAMILY_ID}'`);
+
+    const id = sql(
+      `insert into chat.conversation (type, state, direct_key, family_id)
+       values ('direct', 'open', gen_random_uuid()::text, '${FAMILY_ID}') returning id`,
+    );
+    sql(
+      `insert into chat.conversation_member (conversation_id, actor_kind, actor_id, member_role)
+       values ('${id}', 'teacher', '${TEACHER_ID}', 'teacher')`,
+    );
+    const err = expectRejected(
+      `insert into chat.conversation_member (conversation_id, actor_kind, actor_id, member_role)
+       values ('${id}', 'contact', '${PARENT_ID}', 'parent')`,
+    );
+    expect(err).toContain('PD-6 violation');
+
+    sql(`update chat.learner set teacher_id = '${TEACHER_ID}' where family_id = '${FAMILY_ID}'`);
   });
 
   it('allows a teacher and a parent to share a GROUP conversation, with an admin present', () => {

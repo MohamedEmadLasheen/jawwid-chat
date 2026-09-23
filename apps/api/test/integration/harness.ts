@@ -18,6 +18,7 @@ import { QuietHoursService } from '@communication/notifications/quiet-hours.serv
 import { LoggingPushProvider } from '@communication/notifications/push.provider';
 import { CallService } from '@communication/calls/call.service';
 import { LiveKitTokenIssuer } from '@communication/calls/media-token';
+import { PrismaRelationshipService } from '@platform/relationship.service';
 
 process.env.DATABASE_URL ??= 'postgres://postgres:postgres@localhost:55433/jawwid_chat_int';
 
@@ -38,8 +39,13 @@ export function buildGraph() {
   const outbox = new OutboxService();
   const config = new AppConfigService(prisma);
   const storage = new SignedLocalObjectStorage();
+  // PD-6. The real implementation, against the same database: the harness must
+  // not be able to authorize a relationship the running system would refuse.
+  const relationships = new PrismaRelationshipService(prisma);
 
-  const conversations = new ConversationService(prisma, authz, outbox, identity, coverage, audit);
+  const conversations = new ConversationService(
+    prisma, authz, outbox, identity, coverage, audit, relationships,
+  );
   const attachments = new AttachmentService(prisma, authz, conversations, storage);
   const messages = new MessageService(prisma, authz, conversations, outbox, config, attachments, audit);
   const approvals = new ApprovalService(prisma, authz, conversations, attachments, outbox, audit);
@@ -54,6 +60,7 @@ export function buildGraph() {
   return {
     prisma, coverage, identity, authz, conversations, messages, approvals,
     attachments, notifications, reminders, templates, quietHours, calls,
+    relationships,
   };
 }
 
@@ -66,6 +73,11 @@ export interface Scenario {
   otherParentId: string;
   teacherId: string;
   newTeacherId: string;
+  /** PD-6: a real, active teacher who teaches NOBODY in this family, so the
+   *  pair (unrelatedTeacherId, parentId) has no authorized relationship. The
+   *  negative half of every PD-6 assertion needs a teacher that exists --
+   *  a nonexistent id would prove only that unknown ids are denied. */
+  unrelatedTeacherId: string;
   learnerId: string;
 }
 
@@ -83,6 +95,7 @@ export async function seed(prisma: PrismaService): Promise<Scenario> {
     otherParentId: randomUUID(),
     teacherId: randomUUID(),
     newTeacherId: randomUUID(),
+    unrelatedTeacherId: randomUUID(),
     learnerId: randomUUID(),
   };
 
@@ -98,7 +111,8 @@ export async function seed(prisma: PrismaService): Promise<Scenario> {
   await prisma.$executeRawUnsafe(
     `insert into chat.teacher (id, name, is_active) values
        ('${ids.teacherId}'::uuid, 'teacher_c', true),
-       ('${ids.newTeacherId}'::uuid, 'teacher_d', true)`,
+       ('${ids.newTeacherId}'::uuid, 'teacher_d', true),
+       ('${ids.unrelatedTeacherId}'::uuid, 'teacher_e', true)`,
   );
   await prisma.$executeRawUnsafe(
     `insert into chat.family (id, display_name, owner_id, language)

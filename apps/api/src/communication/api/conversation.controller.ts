@@ -18,7 +18,11 @@ export class ConversationController {
 
   /**
    * Get or create the 1:1 channel with another actor.
-   * A teacher/parent pair is refused here with COMM.BR1_TEACHER_PARENT_DIRECT.
+   *
+   * PD-6: a teacher/parent pair is permitted only where the server-resolved
+   * relationship authorizes it, and refused otherwise with
+   * COMM.TEACHER_PARENT_NOT_AUTHORIZED. `withActorId` selects the other party;
+   * it asserts nothing about the relationship with them.
    */
   @Post('direct')
   async direct(@ActorId() actorId: string, @Body() body: { withActorId: string }) {

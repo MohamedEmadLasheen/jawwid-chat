@@ -14,12 +14,13 @@
 -- Exit code 0 and a final 'ALL PD-6 RELATIONSHIP PREDICATE TESTS PASSED' is the
 -- pass condition. Any failure aborts with a non-zero exit.
 --
--- SCOPE. This file tests the predicate and nothing else. At the time it was
--- written the BR-1 triggers still enforced the OLD rule and still refused every
--- direct teacher<->parent channel; db/tests/br1_invariants.sql is what asserts
--- that, and it must keep passing alongside this file. Proving the predicate
--- before switching the decision that consumes it is the entire point of the
--- sequence -- do not merge the two files.
+-- SCOPE. This file owns the predicate: sections A-G test the function itself in
+-- isolation, and section H proves it is actually wired to the backstop.
+-- db/tests/br1_invariants.sql owns the full backstop matrix -- type
+-- immutability, required admin presence, participant ceilings, every
+-- legitimate channel -- and must keep passing alongside this file. Do not merge
+-- the two: one answers "is the predicate right", the other "is the database
+-- still guarded".
 
 \set ON_ERROR_STOP on
 set client_min_messages = notice;
@@ -440,10 +441,17 @@ end;
 $$;
 
 -- ===========================================================================
--- H · This phase changed no behaviour
+-- H · The backstop now enforces the predicate
 --
--- The BR-1 backstops must still enforce the OLD rule. If this fails, the
--- predicate migration did more than it was supposed to.
+-- RE-VERSIONED 2026-09-23 by the PD-6 authorization switch. Until that switch
+-- landed, this section asserted the OPPOSITE -- that the old BR-1 rule still
+-- refused every direct teacher<->parent conversation -- and it is what caught
+-- the switch the moment it was made. It now asserts the rule that replaced it.
+--
+-- db/tests/br1_invariants.sql carries the full backstop matrix. These two
+-- assertions exist here so that this file, which owns the predicate, also
+-- proves the predicate is actually WIRED to something. A predicate that is
+-- correct and connected to nothing enforces nothing.
 -- ===========================================================================
 
 do $$
@@ -453,19 +461,44 @@ begin
   begin
     insert into chat.conversation (id, organization_id, type, direct_key, family_id)
     values (v_conv, '00000000-0000-0000-0000-000000000001', 'direct',
-            'pd6-old-rule-probe', 'f1000000-0000-0000-0000-000000000001');
+            'pd6-authorized-probe', 'f1000000-0000-0000-0000-000000000001');
     insert into chat.conversation_member (conversation_id, actor_id, actor_kind, member_role) values
       (v_conv, '7e000000-0000-0000-0000-000000000001', 'teacher', 'teacher'),
       (v_conv, 'c0000000-0000-0000-0000-000000000001', 'contact', 'parent');
     set constraints all immediate;
+    set constraints all deferred;
+    raise notice 'pass  H1 the backstop PERMITS a direct channel for an authorized relationship';
+  exception
+    when others then
+      raise exception
+        'FAIL [H1]: the backstop REFUSED an authorized teacher/parent direct conversation: % (%)',
+        sqlerrm, sqlstate;
+  end;
+end;
+$$;
+
+do $$
+declare
+  v_conv uuid := 'cc000000-0000-0000-0000-000000000002';
+begin
+  begin
+    insert into chat.conversation (id, organization_id, type, direct_key, family_id)
+    values (v_conv, '00000000-0000-0000-0000-000000000001', 'direct',
+            'pd6-unauthorized-probe', 'f1000000-0000-0000-0000-000000000001');
+    insert into chat.conversation_member (conversation_id, actor_id, actor_kind, member_role) values
+      -- teacher_unrelated teaches nobody in this family.
+      (v_conv, '7e000000-0000-0000-0000-000000000002', 'teacher', 'teacher'),
+      (v_conv, 'c0000000-0000-0000-0000-000000000001', 'contact', 'parent');
+    set constraints all immediate;
+    set constraints all deferred;
     raise exception
-      'FAIL [H1]: a direct teacher<->parent conversation was ACCEPTED. This phase must not change behaviour -- the authorization switch is the NEXT phase.';
+      'FAIL [H2]: the backstop ACCEPTED a direct teacher/parent conversation with no authorized relationship';
   exception
     when check_violation or restrict_violation then
-      raise notice 'pass  H1 the old BR-1 rule still refuses a direct teacher<->parent conversation';
+      raise notice 'pass  H2 the backstop REFUSES a direct channel with no authorized relationship';
     when others then
-      if sqlerrm like 'FAIL [H1]%' then raise; end if;
-      raise exception 'FAIL [H1]: wrong error: % (%)', sqlerrm, sqlstate;
+      if sqlerrm like 'FAIL [H2]%' then raise; end if;
+      raise exception 'FAIL [H2]: wrong error: % (%)', sqlerrm, sqlstate;
   end;
   set constraints all deferred;
 end;

@@ -4,7 +4,13 @@ import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
 import type { LiveMember } from '../../platform/authorization.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
-import { AUDIT_SERVICE, COVERAGE_SERVICE, IDENTITY_SERVICE } from '../../platform/tokens';
+import {
+  AUDIT_SERVICE,
+  COVERAGE_SERVICE,
+  IDENTITY_SERVICE,
+  RELATIONSHIP_SERVICE,
+} from '../../platform/tokens';
+import type { RelationshipService } from '../../platform/relationship.service';
 import type { IdentityService } from '../../platform/identity.service';
 import type { CoverageService } from '../../platform/coverage.service';
 import type { AuditService } from '../../platform/audit.service';
@@ -36,7 +42,33 @@ export class ConversationService {
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
     @Inject(COVERAGE_SERVICE) private readonly coverage: CoverageService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    @Inject(RELATIONSHIP_SERVICE) private readonly relationships: RelationshipService,
   ) {}
+
+  /**
+   * PD-6. The resolved teacher<->parent relationship behind a participant set.
+   *
+   * Every service that authorizes an operation on a conversation already holds
+   * its participants, so the fact is resolved from those rather than re-read,
+   * and this one method is the only place that decides which participant is
+   * the teacher and which is the parent. Three call sites doing that
+   * separately is three chances to get the direction backwards, and a backwards
+   * lookup denies a legitimate pair silently.
+   *
+   * Exactly one live teacher and exactly one live contact is the only shape
+   * that can be a teacher/parent pairing. Anything else -- a group, a
+   * staff-only channel, a malformed set -- is false, which the policy ignores
+   * for every conversation type but `direct`.
+   */
+  async pairingAuthorizedAmong(
+    participants: ReadonlyArray<{ actorId: string; actorKind: string }>,
+  ): Promise<boolean> {
+    const teachers = participants.filter((p) => p.actorKind === ActorKind.TEACHER);
+    const contacts = participants.filter((p) => p.actorKind === ActorKind.CONTACT);
+    if (teachers.length !== 1 || contacts.length !== 1) return false;
+
+    return this.relationships.teacherParentAuthorized(teachers[0].actorId, contacts[0].actorId);
+  }
 
   async requireActor(actorId: string): Promise<Actor> {
     const actor = await this.identity.resolveActor(actorId);
@@ -107,7 +139,11 @@ export class ConversationService {
     const a = await this.requireActor(requesterId);
     const b = await this.requireActor(otherId);
 
-    const decision = this.authz.canOpenDirect(a, b);
+    // PD-6. The relationship is resolved from server-owned data BEFORE the
+    // policy runs. `otherId` selected a row; it asserted nothing about it.
+    const pairingAuthorized = await this.relationships.pairingAuthorized(a, b);
+
+    const decision = this.authz.canOpenDirect(a, b, pairingAuthorized);
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
     const key = ConversationService.directKey(a.actorId, b.actorId);

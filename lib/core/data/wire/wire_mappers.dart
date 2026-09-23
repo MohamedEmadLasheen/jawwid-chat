@@ -31,8 +31,16 @@ abstract final class WireMappers {
         Wire.conversationOfficial => ConversationKind.jawwidSupport,
         Wire.conversationStudentGroup => ConversationKind.studentGroup,
         Wire.conversationClassGroup => ConversationKind.studentGroup,
-        // A `direct` conversation from this client's perspective is always with staff: the
-        // backend refuses a teacher/parent direct channel outright (BR1).
+        // KNOWN STALE — PD-6 (2026-09-23). This mapping was correct while BR-1
+        // refused every teacher/parent direct channel, so a `direct`
+        // conversation could only be with staff. It can now be with an
+        // authorized teacher, and such a conversation is currently mislabelled
+        // `adminDirect` here.
+        //
+        // Deliberately not fixed in the authorization phase: deciding it needs
+        // the participant roles this mapper is not given, which is client model
+        // work and belongs with the call UI. Left as an explicit defect rather
+        // than a comment that claims a guarantee the server no longer makes.
         _ => ConversationKind.adminDirect,
       };
 

@@ -194,40 +194,57 @@ void main() {
         );
       });
 
-      test('BR-1 is refused by the server for a parent', () async {
-        // The client offers no such affordance; this proves the server refuses it anyway.
+      // PD-6 (2026-09-23) re-versioned BR-1. These two tests used to assert that
+      // the server refused a parent/teacher direct conversation outright. It no
+      // longer does: it refuses an UNAUTHORIZED pairing, which is what they
+      // assert now. JAWWID_LIVE_UNRELATED_TEACHER names a real, active teacher
+      // who teaches nobody in this parent's family; without it there is no way
+      // to tell a correct refusal from a broken fixture, so the pair is skipped
+      // rather than asserted against an unknown relationship.
+      test('PD-6: an UNAUTHORIZED pairing is refused by the server for a parent', () async {
+        final unrelatedTeacher = env['JAWWID_LIVE_UNRELATED_TEACHER'];
+        if (unrelatedTeacher == null) {
+          markTestSkipped('set JAWWID_LIVE_UNRELATED_TEACHER to run this');
+          return;
+        }
         final client = clientAs(parentId!);
 
         try {
           await client.post<Map<String, Object?>>(
             '/conversations/direct',
-            data: {'withActorId': teacherId},
+            data: {'withActorId': unrelatedTeacher},
           );
-          fail('the server must refuse a parent/teacher direct conversation');
+          fail('the server must refuse an unauthorized parent/teacher pairing');
         } on AppError catch (error) {
-          expect(error.code, WireErrors.br1TeacherParentDirect);
+          expect(error.code, WireErrors.teacherParentNotAuthorized);
           expect(error.kind, AppErrorKind.forbidden);
           expect(
             error.isTransient,
             isFalse,
-            reason: 'a BR-1 refusal must never enter the retry loop',
+            reason: 'an authorization refusal must never enter the retry loop',
           );
         }
       });
 
-      test('BR-1 is refused by the server for a teacher too', () async {
-        final client = clientAs(teacherId!);
+      test('PD-6: an AUTHORIZED pairing is accepted by the server, in both directions', () async {
+        // The positive half. Without it the refusal above would still pass
+        // against a server that refused every parent/teacher pairing, which is
+        // the behaviour PD-6 removed.
+        final asParent = clientAs(parentId!);
+        final asTeacher = clientAs(teacherId!);
 
-        try {
-          await client.post<Map<String, Object?>>(
-            '/conversations/direct',
-            data: {'withActorId': parentId},
-          );
-          fail('the server must refuse a teacher/parent direct conversation');
-        } on AppError catch (error) {
-          expect(error.code, WireErrors.br1TeacherParentDirect);
-          expect(error.kind, AppErrorKind.forbidden);
-        }
+        final fromParent = await asParent.post<Map<String, Object?>>(
+          '/conversations/direct',
+          data: {'withActorId': teacherId},
+        );
+        final fromTeacher = await asTeacher.post<Map<String, Object?>>(
+          '/conversations/direct',
+          data: {'withActorId': parentId},
+        );
+
+        expect(fromParent.data?['id'], isNotNull);
+        // One channel, not two: direct_key is the sorted pair.
+        expect(fromTeacher.data?['id'], fromParent.data?['id']);
       });
 
       test('an unrelated actor cannot read this conversation', () async {

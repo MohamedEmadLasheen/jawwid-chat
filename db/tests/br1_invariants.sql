@@ -1,8 +1,24 @@
 -- Jawwid Chat -- executable BR-1 invariant tests (red team, AI #9).
 --
--- Proves, against a real database built by the migration chain, that the
--- forbidden Teacher<->Parent 1:1 channel cannot be constructed by ANY route,
--- and that every legitimate channel still can.
+-- RE-VERSIONED 2026-09-23 BY PD-6. The product rule changed; this suite was
+-- not deleted and not weakened. Where it used to assert
+--
+--     teacher + parent, direct  ->  ALWAYS REFUSED
+--
+-- it now asserts the pair the product actually forbids:
+--
+--     teacher + UNAUTHORIZED parent, direct  ->  REFUSED   (A1, A3, D1)
+--     teacher + AUTHORIZED   parent, direct  ->  PERMITTED (A2, D5)
+--
+-- Every other assertion in this file is untouched and must keep passing:
+-- RT-024 type immutability (B1, B2, D2), RT-025 required admin presence on
+-- every group type (C1-C5), the participant ceilings, and every legitimate
+-- channel (E1-E7). PD-6 changed one rule, not the file.
+--
+-- Proves, against a real database built by the migration chain, that an
+-- UNAUTHORIZED Teacher<->Parent 1:1 channel cannot be constructed by ANY
+-- route, that an AUTHORIZED one can, and that every other legitimate channel
+-- still can.
 --
 -- These are structural tests: they run as the database owner with the
 -- application entirely out of the picture, which is the threat model the
@@ -83,7 +99,28 @@ insert into chat.learner (id, family_id, name) values
   ('33333333-3333-3333-3333-333333333334', '22222222-2222-2222-2222-222222222222', 'Learner Two'),
   ('33333333-3333-3333-3333-333333333335', '22222222-2222-2222-2222-222222222222', 'Learner Three');
 
--- Stable actor ids. Only actor_kind and member_role matter to BR-1.
+-- PD-6 fixtures. The old rule was decidable from actor_kind alone, so the ids
+-- above needed no backing rows. The new rule is decidable only from
+-- contact -> family -> learner -> teacher, so the AUTHORIZED cases need a real
+-- chain. The UNAUTHORIZED cases deliberately keep the synthetic ids: an id with
+-- no rows behind it has no relationship, which is exactly the state they test.
+insert into chat.teacher (id, name) values
+  ('77777777-7777-7777-7777-777777777771', 'teacher_real'),
+  ('77777777-7777-7777-7777-777777777772', 'teacher_other');
+
+insert into chat.contact (id, family_id, name, role_preset, can_message,
+                          can_view_progress, can_manage_schedule,
+                          can_manage_billing, can_manage_contacts, can_cancel) values
+  ('66666666-6666-6666-6666-666666666661', '22222222-2222-2222-2222-222222222222',
+   'parent_real', 'primary_guardian', true, true, true, true, true, true);
+
+-- The link that authorizes teacher_real <-> parent_real, and nobody else.
+insert into chat.learner (id, family_id, name, teacher_id) values
+  ('33333333-3333-3333-3333-333333333336', '22222222-2222-2222-2222-222222222222',
+   'Learner Four', '77777777-7777-7777-7777-777777777771');
+
+-- Stable actor ids. For the UNAUTHORIZED cases only actor_kind and member_role
+-- matter, exactly as before PD-6.
 \set teacher '''99999999-9999-9999-9999-999999999999'''
 \set parent  '''88888888-8888-8888-8888-888888888888'''
 \set admin   '''11111111-1111-1111-1111-111111111111'''
@@ -91,12 +128,19 @@ insert into chat.learner (id, family_id, name) values
 \set learner  '''33333333-3333-3333-3333-333333333333'''
 \set learner2 '''33333333-3333-3333-3333-333333333334'''
 \set learner3 '''33333333-3333-3333-3333-333333333335'''
+\set t_real  '''77777777-7777-7777-7777-777777777771'''
+\set t_other '''77777777-7777-7777-7777-777777777772'''
+\set p_real  '''66666666-6666-6666-6666-666666666661'''
 
 -- ===========================================================================
--- A · The forbidden channel cannot be CREATED           (the original control)
+-- A · PD-6 · Which direct teacher/parent channel may be CREATED
+--
+-- Before PD-6 this section asserted that no such channel could exist. It now
+-- asserts the boundary that replaced that rule: the relationship decides, and
+-- role does not.
 -- ===========================================================================
 select pg_temp.expect_violation(
-  'A1 direct conversation: teacher + parent is refused at creation',
+  'A1 direct conversation: teacher + UNRELATED parent is refused at creation',
   format($f$
     insert into chat.conversation (id, type, family_id, direct_key)
       values ('a0000000-0000-0000-0000-000000000001', 'direct', %L, 'rt-a1');
@@ -104,6 +148,44 @@ select pg_temp.expect_violation(
       values ('a0000000-0000-0000-0000-000000000001', 'teacher', %L, 'teacher'),
              ('a0000000-0000-0000-0000-000000000001', 'contact', %L, 'parent');
   $f$, :fam, :teacher, :parent));
+
+select pg_temp.expect_ok(
+  'A2 PD-6: direct conversation teacher + AUTHORIZED parent is PERMITTED',
+  format($f$
+    insert into chat.conversation (id, type, family_id, direct_key)
+      values ('a0000000-0000-0000-0000-00000000000a', 'direct', %L, 'pd6-a2');
+    insert into chat.conversation_member (conversation_id, actor_kind, actor_id, member_role)
+      values ('a0000000-0000-0000-0000-00000000000a', 'teacher', %L, 'teacher'),
+             ('a0000000-0000-0000-0000-00000000000a', 'contact', %L, 'parent');
+  $f$, :fam, :t_real, :p_real));
+
+select pg_temp.expect_violation(
+  'A3 PD-6: a REAL teacher with no learner in that family is still refused',
+  format($f$
+    insert into chat.conversation (id, type, family_id, direct_key)
+      values ('a0000000-0000-0000-0000-00000000000b', 'direct', %L, 'pd6-a3');
+    insert into chat.conversation_member (conversation_id, actor_kind, actor_id, member_role)
+      values ('a0000000-0000-0000-0000-00000000000b', 'teacher', %L, 'teacher'),
+             ('a0000000-0000-0000-0000-00000000000b', 'contact', %L, 'parent');
+  $f$, :fam, :t_other, :p_real));
+
+-- The relationship is not a role. A real teacher and a real parent of a real
+-- family, with the learner link pointing elsewhere, is refused.
+select pg_temp.expect_violation(
+  'A4 PD-6: revoking the learner link refuses a NEW channel for the same pair',
+  format($f$
+    update chat.learner set teacher_id = %L
+     where id = '33333333-3333-3333-3333-333333333336';
+    insert into chat.conversation (id, type, family_id, direct_key)
+      values ('a0000000-0000-0000-0000-00000000000c', 'direct', %L, 'pd6-a4');
+    insert into chat.conversation_member (conversation_id, actor_kind, actor_id, member_role)
+      values ('a0000000-0000-0000-0000-00000000000c', 'teacher', %L, 'teacher'),
+             ('a0000000-0000-0000-0000-00000000000c', 'contact', %L, 'parent');
+  $f$, :t_other, :fam, :t_real, :p_real));
+
+-- Put the relationship back for the sections below.
+update chat.learner set teacher_id = :t_real
+ where id = '33333333-3333-3333-3333-333333333336';
 
 -- ===========================================================================
 -- B · RT-024 · The forbidden channel cannot be REACHED BY MUTATION
@@ -194,7 +276,7 @@ select pg_temp.expect_violation(
 -- D · Calling -- the same invariant, by the same routes
 -- ===========================================================================
 select pg_temp.expect_violation(
-  'D1 a direct call pairing a teacher with a parent is refused',
+  'D1 a direct call pairing a teacher with an UNRELATED parent is refused',
   format($f$
     insert into chat.conversation (id, type, family_id, learner_id, title)
       values ('b0000000-0000-0000-0000-000000000001', 'student_group', %L, %L, 'RT group');
@@ -209,6 +291,56 @@ select pg_temp.expect_violation(
       values ('c0000000-0000-0000-0000-000000000001', %L, 'teacher'),
              ('c0000000-0000-0000-0000-000000000001', %L, 'contact');
   $f$, :fam, :learner, :teacher, :parent, :admin, :fam, :teacher, :teacher, :parent));
+
+select pg_temp.expect_ok(
+  'D5 PD-6: a direct call between a teacher and an AUTHORIZED parent is PERMITTED',
+  format($f$
+    insert into chat.conversation (id, type, family_id, direct_key)
+      values ('b0000000-0000-0000-0000-00000000000a', 'direct', %L, 'pd6-d5');
+    insert into chat.conversation_member (conversation_id, actor_kind, actor_id, member_role)
+      values ('b0000000-0000-0000-0000-00000000000a', 'teacher', %L, 'teacher'),
+             ('b0000000-0000-0000-0000-00000000000a', 'contact', %L, 'parent');
+    insert into chat.call (id, conversation_id, family_id, initiator_id, type, room_name)
+      values ('c0000000-0000-0000-0000-00000000000a',
+              'b0000000-0000-0000-0000-00000000000a', %L, %L, 'direct', 'pd6-room-d5');
+    insert into chat.call_participant (call_id, actor_id, actor_kind)
+      values ('c0000000-0000-0000-0000-00000000000a', %L, 'teacher'),
+             ('c0000000-0000-0000-0000-00000000000a', %L, 'contact');
+  $f$, :fam, :t_real, :p_real, :fam, :t_real, :t_real, :p_real));
+
+-- The call lifecycle must survive a relationship that changes mid-call. If the
+-- database re-checked the relationship on UPDATE, a reassignment during a call
+-- would make ending it impossible and strand the call ACTIVE forever.
+select pg_temp.expect_ok(
+  'D6 PD-6: an in-progress call can still be ENDED after the relationship is revoked',
+  format($f$
+    update chat.learner set teacher_id = %L
+     where id = '33333333-3333-3333-3333-333333333336';
+    update chat.call
+       set status = 'ended', ended_at = now(), outcome = 'answered', duration_seconds = 30
+     where id = 'c0000000-0000-0000-0000-00000000000a';
+    update chat.learner set teacher_id = %L
+     where id = '33333333-3333-3333-3333-333333333336';
+  $f$, :t_other, :t_real));
+
+-- ...but a NEW call for the revoked pair is refused.
+select pg_temp.expect_violation(
+  'D7 PD-6: a NEW direct call is refused once the relationship is revoked',
+  format($f$
+    update chat.learner set teacher_id = %L
+     where id = '33333333-3333-3333-3333-333333333336';
+    insert into chat.conversation (id, type, family_id, direct_key)
+      values ('b0000000-0000-0000-0000-00000000000b', 'direct', %L, 'pd6-d7');
+    insert into chat.call (id, conversation_id, family_id, initiator_id, type, room_name)
+      values ('c0000000-0000-0000-0000-00000000000b',
+              'b0000000-0000-0000-0000-00000000000b', %L, %L, 'direct', 'pd6-room-d7');
+    insert into chat.call_participant (call_id, actor_id, actor_kind)
+      values ('c0000000-0000-0000-0000-00000000000b', %L, 'teacher'),
+             ('c0000000-0000-0000-0000-00000000000b', %L, 'contact');
+  $f$, :t_other, :fam, :fam, :t_real, :t_real, :p_real));
+
+update chat.learner set teacher_id = :t_real
+ where id = '33333333-3333-3333-3333-333333333336';
 
 select pg_temp.expect_violation(
   'D2 RT-024: a group call cannot be promoted to type=direct',

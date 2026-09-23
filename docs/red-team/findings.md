@@ -101,6 +101,14 @@ a record. No gaps, no duplicates.
 RT-001 and RT-026 are CONFIRMED (static). An earlier verbal summary of this audit
 said "four proven by execution" — that was wrong; the figure is three.
 
+> **RT-029 added 2026-09-23** (P2, section A) during the PD-6 authorization
+> switch. It is a containment gap, not a leak: the cross-organization row is
+> storable but authorizes nothing, and two independent controls prove it.
+> Deliberately **not** fixed in that phase — attaching a trigger to
+> `chat.learner` is tenancy work, not authorization work, and widening a
+> security-critical migration to carry an unrelated fix makes the review of both
+> worse. The control to add is named in the row.
+
 ### Verification anchor
 
 > **All statuses below were re-verified at commit `b634fe8` on 2026-09-06**, with
@@ -144,6 +152,7 @@ this register records what closed it.
 |---|---|---|---|---|---|---|
 | **RT-023** | **P0** | Apply the committed migration series to an empty database. | **Original:** `ERROR: relation "chat.family" does not exist` at `20260905093000`; five tables referenced by FK and created by nothing. **Closed:** the 13 platform migrations were brought onto the integration branch from `feat/backend-foundation`, and `20260905091150_chat_application_roles` creates the three role names the RLS policies are written against (`ERROR: role "authenticated" does not exist` was the last remaining break). Verified on a bare `postgres:17`: **20 migrations apply from empty, re-apply is 20 skip**, `db/tests/schema_acceptance.sql` passes 58 structural assertions including zero non-`chat` tables and no `auth` schema. Branch composition, the Core shim and the identity stub are removed from CI and from `integration-db.sh`. | `supabase/migrations/*`, CI gate G-19 | **RESOLVED · verified on an empty database** | No |
 | **RT-010** | P1 | None — architectural fork. | **Half closed.** `schema.prisma:18` is now `schemas = ["chat"]`, so the duplicate `public`-schema model is gone and the two definitions no longer disagree. **Unchanged:** `20260905090000_chat_foundation.sql:3-7` still states Jawwid Chat "lives in the `chat` schema inside the Jawwid Core Supabase database", which contradicts `docs/qa/authoritative-scope.md` §2. | schema, infra | **OPEN (partial)** · CONFIRMED (static) — *schema divergence resolved; the tenancy question is not* | No |
+| **RT-029** | P2 | Insert a `chat.learner` row in organization A whose `teacher_id` points at a teacher in organization B. | **CONFIRMED (runtime), 2026-09-23, found during the PD-6 authorization switch.** `chat.enforce_same_organization()` exists and is attached to the family-scoped tables, but **not to `chat.learner`**, so the cross-organization row is accepted rather than refused at write time. **Not currently exploitable:** `chat.teacher_parent_authorized()` requires `learner.organization_id = contact.organization_id = teacher.organization_id`, so a bridged row authorizes nothing, and `PrismaRelationshipService` carries the same term independently. Both are asserted — `db/tests/relationship_predicate.sql` D4, and "cross-tenant data cannot satisfy the predicate even through a learner row" in `apps/api/test/integration/relationship-predicate.spec.ts`. The defect is that the invalid row is storable at all, which leaves the tenant boundary resting on every reader restating it rather than on the data being well-formed. **Appropriate control:** a `chat.enforce_same_organization('teacher', 'teacher_id')` trigger on `chat.learner`, plus the same audit for every other FK that crosses a root entity. | `chat.learner`, `chat.enforce_same_organization()` | **OPEN** · CONFIRMED (runtime) — *contained by the PD-6 predicate; not a live leak* | No |
 
 ### B · Authorization failures
 

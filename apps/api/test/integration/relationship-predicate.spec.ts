@@ -17,10 +17,11 @@
  * The database's own structural suite is db/tests/relationship_predicate.sql,
  * which proves the SQL half with this process out of the picture entirely.
  *
- * SCOPE. This phase adds the predicate and does not consume it. The old BR-1
- * denials are still in force in canOpenDirect / canSend / canCall, and the last
- * describe block in this file asserts that they are. The authorization switch
- * is the next phase.
+ * The last describe block goes further: it drives the real services end to end
+ * to prove the WIRING -- that ConversationService, MessageService and
+ * CallService each actually resolve the relationship and pass it to the policy.
+ * A policy that decides correctly on a fact it never receives is not a rule
+ * anybody is enforcing.
  */
 import { randomUUID } from 'node:crypto';
 import { PrismaRelationshipService } from '@platform/relationship.service';
@@ -407,71 +408,211 @@ describe('PD-6 predicate — client-supplied ids are never evidence', () => {
 });
 
 // -------------------------------------------------------------------------
-describe('this phase changed NO authorization behaviour', () => {
+describe('PD-6 — the authorization switch, end to end', () => {
   /**
-   * The predicate is additive. Until the next phase switches the decisions that
-   * consume it, an authorized teacher and parent must STILL be refused a direct
-   * channel — by the policy and by the database alike.
+   * RE-VERSIONED 2026-09-23. This block previously asserted that nothing
+   * consumed the predicate and that the old BR-1 denials still stood. Phase 4
+   * switched the decisions, so the assertions are inverted here deliberately,
+   * in the same commit that made the switch.
    *
-   * These assertions are expected to be inverted in the next phase, deliberately
-   * and with PD-6 cited. Failing here today means the switch was made early.
+   * These go through the real services -- ConversationService, MessageService,
+   * CallService -- not through AuthorizationService directly, because the thing
+   * under test is the WIRING: that each call site actually resolves the
+   * relationship and passes it in. A policy that decides correctly on a fact it
+   * never receives is not an enforced rule.
    */
-  it('canOpenDirect still refuses an authorized teacher/parent pair', async () => {
-    const authorized = await relationships.teacherParentAuthorized(w.teacherAssigned, w.parentOk);
-    expect(authorized).toBe(true); // the relationship is real…
+  const openChannel = () =>
+    g.conversations.getOrCreateDirect(w.teacherAssigned, w.parentOk);
 
-    const decision = g.authz.canOpenDirect(
-      teacherActor(w.teacherAssigned),
-      parentActor(w.parentOk, w.familyOne),
-    );
+  const revokeRelationship = () =>
+    g.prisma.learner.update({
+      where: { id: w.learnerOne },
+      data: { teacherId: w.teacherUnrelated },
+    });
 
-    // …and the old rule still refuses it, because nothing consumes the predicate yet.
-    expect(decision.allowed).toBe(false);
-    if (!decision.allowed) {
-      expect(decision.code).toBe(CommErrorCode.BR1_TEACHER_PARENT_DIRECT);
-    }
+  it('1. authorized relationship → direct conversation is allowed, in both directions', async () => {
+    const fromTeacher = await openChannel();
+    const fromParent = await g.conversations.getOrCreateDirect(w.parentOk, w.teacherAssigned);
+    expect(fromTeacher.id).toBe(fromParent.id);
+    expect(fromTeacher.type).toBe('direct');
   });
 
-  it('the database still refuses a direct teacher/parent conversation for an authorized pair', async () => {
-    const conversationId = randomUUID();
+  it('1b. unauthorized relationship → direct conversation is denied, in both directions', async () => {
     await expect(
-      g.prisma.$transaction(async (tx) => {
-        await tx.$executeRawUnsafe(
-          `insert into chat.conversation (id, organization_id, type, direct_key, family_id)
-           values ('${conversationId}'::uuid, '${ORG_A}'::uuid, 'direct',
-                   'pd6-probe-${conversationId}', '${w.familyOne}'::uuid)`,
-        );
-        await tx.$executeRawUnsafe(
-          `insert into chat.conversation_member (conversation_id, actor_id, actor_kind, member_role) values
-             ('${conversationId}'::uuid, '${w.teacherAssigned}'::uuid, 'teacher', 'teacher'),
-             ('${conversationId}'::uuid, '${w.parentOk}'::uuid, 'contact', 'parent')`,
-        );
-      }),
-    ).rejects.toThrow(/BR-1 violation/);
+      g.conversations.getOrCreateDirect(w.teacherUnrelated, w.parentOk),
+    ).rejects.toMatchObject({ code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED });
+    await expect(
+      g.conversations.getOrCreateDirect(w.parentOk, w.teacherUnrelated),
+    ).rejects.toMatchObject({ code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED });
   });
 
-  it('the predicate is registered but consumed by nobody: no call site reads it yet', () => {
-    // A grep-shaped assertion, deliberately. The guarantee this phase offers is
-    // "nothing changed", and the cheapest honest proof is that the only files
-    // naming the service are its own definition, the DI wiring, and this test.
+  it('2. authorized relationship → messaging is allowed, both ways, published immediately', async () => {
+    const conv = await openChannel();
+
+    const fromTeacher = await g.messages.send({ conversationId: conv.id, senderId: w.teacherAssigned, body: 'assalamu alaykum' });
+    const fromParent = await g.messages.send({ conversationId: conv.id, senderId: w.parentOk, body: 'wa alaykum assalam' });
+
+    // PD-6: no admin approval on this channel. Both publish immediately (BR-6).
+    expect(fromTeacher.moderation).toBe('published');
+    expect(fromParent.moderation).toBe('published');
+  });
+
+  it('3. authorized relationship → a direct call is allowed, started from either side', async () => {
+    const conv = await openChannel();
+
+    const byTeacher = await g.calls.start(conv.id, w.teacherAssigned);
+    expect(byTeacher.callId).toBeTruthy();
+    // The room is server-minted and unguessable; the client never names one.
+    expect(byTeacher.roomName).toMatch(new RegExp(`^jawwid-${conv.id}-`));
+    await g.calls.end(byTeacher.callId, w.teacherAssigned);
+
+    // PD-2 restricts a parent from starting a GROUP call. A direct call to an
+    // authorized teacher is not a group call and is not restricted.
+    const byParent = await g.calls.start(conv.id, w.parentOk);
+    expect(byParent.callId).toBeTruthy();
+    await g.calls.end(byParent.callId, w.parentOk);
+  });
+
+  it('3b. an authorized participant can obtain a media token', async () => {
+    const conv = await openChannel();
+    const { callId } = await g.calls.start(conv.id, w.teacherAssigned);
+
+    const token = await g.calls.issueToken(callId, w.parentOk);
+    expect(token.token.split('.')).toHaveLength(3);
+
+    // The grant is scoped to this one room and nothing else.
+    const claims = JSON.parse(Buffer.from(token.token.split('.')[1], 'base64').toString());
+    expect(claims.video.room).toBe(token.roomName);
+    expect(claims.video.roomCreate).toBe(false);
+  });
+
+  it('4. relationship revoked → a NEW message is denied', async () => {
+    const conv = await openChannel();
+    await g.messages.send({ conversationId: conv.id, senderId: w.teacherAssigned, body: 'before' });
+
+    await revokeRelationship();
+
+    // Both directions close, not just the teacher's.
+    await expect(
+      g.messages.send({ conversationId: conv.id, senderId: w.teacherAssigned, body: 'after' }),
+    ).rejects.toMatchObject({ code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED });
+    await expect(
+      g.messages.send({ conversationId: conv.id, senderId: w.parentOk, body: 'after' }),
+    ).rejects.toMatchObject({ code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED });
+  });
+
+  it('5. relationship revoked → a NEW call is denied', async () => {
+    const conv = await openChannel();
+    await revokeRelationship();
+
+    await expect(g.calls.start(conv.id, w.teacherAssigned)).rejects.toMatchObject({
+      code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
+    });
+    await expect(g.calls.start(conv.id, w.parentOk)).rejects.toMatchObject({
+      code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
+    });
+  });
+
+  it('6. relationship revoked MID-CALL → media token issuance is denied', async () => {
+    // The case that matters most. The call was authorized when it was created,
+    // and a token minted from that fact alone would keep the audio path open
+    // for the life of the call. Tokens are short-lived precisely so that the
+    // relationship is re-asked; this proves it actually is.
+    const conv = await openChannel();
+    const { callId } = await g.calls.start(conv.id, w.teacherAssigned);
+
+    // It works while the relationship stands...
+    await expect(g.calls.issueToken(callId, w.parentOk)).resolves.toMatchObject({
+      roomName: expect.any(String),
+    });
+
+    await revokeRelationship();
+
+    // ...and stops the moment it does not, for both parties.
+    await expect(g.calls.issueToken(callId, w.parentOk)).rejects.toMatchObject({
+      code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
+    });
+    await expect(g.calls.issueToken(callId, w.teacherAssigned)).rejects.toMatchObject({
+      code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
+    });
+  });
+
+  it('6b. a call whose relationship was revoked can still be ENDED — no call is stranded', async () => {
+    // The corollary of re-checking on the token path: revocation must not make
+    // the call un-endable, or a revoked relationship would leave calls ACTIVE
+    // forever. Ending is a lifecycle write, not a new authorization.
+    const conv = await openChannel();
+    const { callId } = await g.calls.start(conv.id, w.teacherAssigned);
+    await g.calls.accept(callId, w.parentOk);
+
+    await revokeRelationship();
+
+    await expect(g.calls.end(callId, w.teacherAssigned)).resolves.toBeUndefined();
+    const call = await g.prisma.call.findUnique({ where: { id: callId } });
+    expect(call?.status).toBe('ended');
+  });
+
+  it('7. revocation does not delete history: past messages and calls remain', async () => {
+    const conv = await openChannel();
+    const msg = await g.messages.send({ conversationId: conv.id, senderId: w.teacherAssigned, body: 'kept' });
+    const { callId } = await g.calls.start(conv.id, w.teacherAssigned);
+    await g.calls.end(callId, w.teacherAssigned);
+
+    await revokeRelationship();
+
+    // The rows survive untouched.
+    expect(await g.prisma.message.findUnique({ where: { id: msg.id } })).not.toBeNull();
+    expect(await g.prisma.call.findUnique({ where: { id: callId } })).not.toBeNull();
+    expect(await g.prisma.conversation.findUnique({ where: { id: conv.id } })).not.toBeNull();
+
+    // And reading is governed by the ordinary read rules, which PD-6 did not
+    // touch: a member may still read the conversation they were part of.
+    const history = await g.calls.history(conv.id, w.teacherAssigned);
+    expect(history).toHaveLength(1);
+    expect(history[0].id).toBe(callId);
+  });
+
+  it('the channel survives revocation as a record, but not as a channel', async () => {
+    // Both halves of the previous two tests stated together, because the pair
+    // is the actual product requirement and each alone reads as a bug.
+    const conv = await openChannel();
+    await revokeRelationship();
+
+    expect(await g.prisma.conversation.findUnique({ where: { id: conv.id } })).not.toBeNull();
+    await expect(
+      g.messages.send({ conversationId: conv.id, senderId: w.teacherAssigned, body: 'nope' }),
+    ).rejects.toMatchObject({ code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED });
+  });
+
+  it('anti-bypass: an unauthorized teacher cannot reach an authorized pair\'s conversation', async () => {
+    // A conversation id is not a capability. Holding one -- by guessing it, or
+    // by having been in it once -- does not authorize an actor the relationship
+    // does not cover.
+    const conv = await openChannel();
+
+    await expect(
+      g.messages.send({ conversationId: conv.id, senderId: w.teacherUnrelated, body: 'intruder' }),
+    ).rejects.toMatchObject({ code: CommErrorCode.NOT_CONVERSATION_MEMBER });
+
+    await expect(g.calls.start(conv.id, w.teacherUnrelated)).rejects.toMatchObject({
+      code: CommErrorCode.NOT_CONVERSATION_MEMBER,
+    });
+  });
+
+  it('the deprecated BR1_TEACHER_PARENT_DIRECT code is raised by nothing in src/', () => {
+    // PD-6 keeps the constant for shipped clients that treat it as terminal.
+    // Nothing in the running system may still emit it.
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { execSync } = require('node:child_process') as typeof import('node:child_process');
     const hits = execSync(
-      "grep -rl 'RelationshipService\\|teacherParentAuthorized\\|pairingAuthorized' src test || true",
+      "grep -rn 'BR1_TEACHER_PARENT_DIRECT' src || true",
       { cwd: `${__dirname}/../..`, encoding: 'utf8' },
     )
       .split('\n')
       .filter(Boolean)
-      .sort();
+      // The enum declaration itself is the one legitimate mention.
+      .filter((line) => !line.startsWith('src/platform/errors.ts'));
 
-    expect(hits).toEqual([
-      'src/platform/platform.module.ts', // DI registration
-      'src/platform/relationship.service.ts', // the definition
-      'src/platform/tokens.ts', // the DI symbol
-      'test/integration/relationship-predicate.spec.ts', // this file
-    ]);
-    // In particular: NOT authorization.service.ts, NOT conversation.service.ts,
-    // NOT call.service.ts. When the next phase adds those three, this list
-    // changes in the same commit that inverts the two assertions above.
+    expect(hits).toEqual([]);
   });
 });

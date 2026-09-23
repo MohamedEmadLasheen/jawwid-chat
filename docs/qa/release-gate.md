@@ -25,7 +25,25 @@ passing, 1 failing, and that failure is JC-008 rather than a test defect.
 
 | # | Gate | Status |
 |---|---|---|
-| **G-01** | **BR-1 (PD-6): a Teacher↔Parent 1:1 conversation or call exists ONLY for an authorized relationship — enforced server-side AND independently in the database, verified with client-side policy disabled** | **RE-VERSIONED 2026-09-23.** The gate is not retired: its pass condition changed with the product rule. Old condition ("no such channel exists") is recorded below. Pass requires: authorized pair → ALLOW; unauthorized pair → DENY at both layers; relationship revoked → DENY on the next check; client-supplied ids → never sufficient. JC-008's `type`-mutation hole stays closed (RT-024). **Status: UNVERIFIED** until the policy migration's suite runs. |
+| **G-01** | **BR-1 (PD-6): a Teacher↔Parent 1:1 conversation or call exists ONLY for an authorized relationship — enforced server-side AND independently in the database, verified with client-side policy disabled** | **PASS — verified 2026-09-23.** All five proofs below execute. The gate was re-versioned, not weakened: it gained the positive half it never had. Old condition recorded beneath this table. |
+
+**G-01 pass condition, and where each half is proven.** No client is involved in
+any of it; every assertion drives the server decision or the database directly,
+which is what "with client-side policy disabled" means.
+
+| # | Must prove | Proven by |
+|---|---|---|
+| 1 | Authorized Parent ↔ Teacher direct communication is **allowed** | `relationship-predicate.spec.ts` §"authorization switch" 1, 2, 3, 3b · `br1_invariants.sql` A2, D5 · `schema-invariants.spec.ts` "PERMITS…" |
+| 2 | Unauthorized Parent ↔ Teacher direct communication is **denied** | `br1-conformance.spec.ts` BR1-01/02/03/04 · `relationship-predicate.spec.ts` 1b · `communication-engine.spec.ts` "refuses…" · `br1_invariants.sql` A1, A3, A4, D1, D7 |
+| 3 | **Application** authorization enforces the relationship | `br1-conformance.spec.ts` (the policy, in isolation) + the end-to-end block driving `ConversationService`, `MessageService` and `CallService`, which proves each call site actually resolves and passes the fact |
+| 4 | **Database** backstop enforces the relationship | `br1_invariants.sql` A1–A4, D1, D5–D7 · `relationship_predicate.sql` H1, H2 · `communication-engine.spec.ts` and `schema-invariants.spec.ts`, both of which write through raw SQL with the API bypassed |
+| 5 | Client-side policy **cannot** bypass server or database | Every assertion under 1–4 is server-side or SQL-side. Specifically: `authz-attacks.spec.ts` "a client cannot widen its own authority" (no request field reaches the resolved fact), `relationship-predicate.spec.ts` "client-supplied ids are never evidence" and "anti-bypass", and the raw-SQL inserts in 4, which have no client at all |
+
+Additionally proven, because a gate that only tested the happy direction would
+not be testing a boundary: the relationship is re-checked at **media-token
+issue**, so revoking it mid-call denies the next token (`relationship-predicate.spec.ts` 6)
+while still allowing the call to be **ended** (6b, and `br1_invariants.sql` D6) —
+no call is stranded by a revocation.
 | **G-02** | Student Groups implemented, with membership derived from Jawwid Core and BR-1 enforced at creation **and** every membership mutation | **FAIL — JC-001** |
 | **G-03** | Teacher is a first-class authenticated actor with Teacher↔Admin and group access | **FAIL — JC-003** |
 | G-04 | One centralized authorization policy governs messaging **and** calling; no second matrix; **no client-supplied field widens authority** | **PASS (messaging)** — JC-005 fixed, regression-tested. Calling unverified. |

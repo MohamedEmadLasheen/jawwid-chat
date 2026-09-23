@@ -5,6 +5,25 @@
  */
 export enum CommErrorCode {
   // --- BR-1 and the communication matrix ---
+  /**
+   * PD-6 (2026-09-23). A teacher and a parent would share a direct 1:1
+   * conversation or call with NO authorized relationship between them.
+   *
+   * "Authorized" is the relationship predicate: a learner in the contact's
+   * family, taught by that teacher, both sides live, one organization. It is
+   * resolved from Jawwid Core data and never from anything the client sent.
+   */
+  TEACHER_PARENT_NOT_AUTHORIZED = 'COMM.TEACHER_PARENT_NOT_AUTHORIZED',
+  /**
+   * DEPRECATED by PD-6. The server no longer emits this for any authorization
+   * decision: the blanket teacher<->parent prohibition it named is gone, and
+   * an unauthorized pairing now reports TEACHER_PARENT_NOT_AUTHORIZED above.
+   *
+   * Kept, not deleted, for exactly one reason: shipped clients treat this code
+   * as terminal (never retried), and removing the constant would delete the
+   * contract those builds were written against. Nothing in src/ raises it.
+   * Asserted by test/unit/authorization/br1-conformance.spec.ts.
+   */
   BR1_TEACHER_PARENT_DIRECT = 'COMM.BR1_TEACHER_PARENT_DIRECT',
   BR1_ADMIN_PRESENCE_REQUIRED = 'COMM.BR1_ADMIN_PRESENCE_REQUIRED',
   ROLE_CANNOT_MESSAGE_FAMILY = 'COMM.ROLE_CANNOT_MESSAGE_FAMILY',

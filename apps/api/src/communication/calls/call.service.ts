@@ -80,6 +80,9 @@ export class CallService {
       // PD-2: this is the START path. A parent is refused here and allowed on
       // the join path below.
       CallIntent.INITIATE,
+      // PD-6: the teacher<->parent relationship, resolved from the conversation
+      // membership rather than from anything the caller sent.
+      await this.conversations.pairingAuthorizedAmong(members),
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
@@ -193,6 +196,13 @@ export class CallService {
       // PD-2: minting a media token is JOINING an existing call, which a parent
       // may do. The call was already started by a teacher or an admin.
       CallIntent.JOIN,
+      // PD-6, and this is the important one. The relationship is re-resolved
+      // HERE, at token issue, not inherited from the moment the call was
+      // created. A call is not a standing grant: if the learner was reassigned,
+      // the contact deactivated or the teacher offboarded in the seconds since
+      // `start`, this token is refused. Tokens are short-lived precisely so
+      // that this check recurs for the life of the call.
+      await this.conversations.pairingAuthorizedAmong(call.participants),
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 

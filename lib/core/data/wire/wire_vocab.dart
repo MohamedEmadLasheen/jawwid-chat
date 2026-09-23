@@ -56,9 +56,15 @@ abstract final class Wire {
 /// Mirrors `apps/api/src/platform/errors.ts`. Everything else falls through to the generic
 /// mapping by HTTP status.
 abstract final class WireErrors {
-  /// The rule: a teacher and a parent may never hold a 1:1. The client does not offer this,
-  /// so seeing it means something reached the API another way — it is surfaced as a plain
-  /// "not available" and never retried.
+  /// PD-6: a teacher and a parent may hold a 1:1 only where the server authorizes the
+  /// relationship. This is the refusal for every other pairing — surfaced as a plain
+  /// "not available" and never retried, because no amount of retrying creates a
+  /// relationship.
+  static const teacherParentNotAuthorized = 'COMM.TEACHER_PARENT_NOT_AUTHORIZED';
+
+  /// DEPRECATED by PD-6 (2026-09-23): the server no longer sends this. Kept, and kept
+  /// terminal, so a build that predates the change still behaves correctly against a
+  /// server that has been upgraded. Remove it only once no shipped build sends traffic.
   static const br1TeacherParentDirect = 'COMM.BR1_TEACHER_PARENT_DIRECT';
 
   static const notConversationMember = 'COMM.NOT_CONVERSATION_MEMBER';
@@ -74,6 +80,7 @@ abstract final class WireErrors {
 
   /// Codes that mean "this will never succeed, stop asking".
   static const terminal = <String>{
+    teacherParentNotAuthorized,
     br1TeacherParentDirect,
     notConversationMember,
     contactCannotMessage,

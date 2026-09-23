@@ -60,7 +60,14 @@ void main() {
       .map((t) => t.data ?? t.textSpan?.toPlainText() ?? '')
       .toList();
 
-  group('BR-1: no teacher/parent direct affordance exists', () {
+  // PD-6 (2026-09-23) re-versioned BR-1: an AUTHORIZED teacher and parent may
+  // now hold a direct conversation and call. The affordance for that is client
+  // work and has not shipped, so these assertions still hold and still pass —
+  // but they now record "the UI has not built this yet", NOT "the product
+  // forbids it". When the call UI lands, they become the sharper assertion the
+  // server already enforces: the affordance appears for an authorized pairing
+  // and is ABSENT (not disabled) for every other one.
+  group('no teacher/parent direct affordance has shipped yet (PD-6 pending UI)', () {
     testWidgets('a teacher sees no message or call action for a parent', (tester) async {
       await tester.pumpWidget(
         harness(role: UserRole.teacher, child: const ChatsScreen(initialFilter: ChatFilter.groups)),

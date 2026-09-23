@@ -95,6 +95,10 @@ export class AttachmentService {
       family?.ownerId ?? null,
       members.map((m) => m.actorKind),
       await this.conversations.liveMembersOf(conv.id),
+      // PD-6: uploading into a channel is sending into it. Authorizing the
+      // upload without the relationship check would leave a way to put content
+      // in a conversation whose relationship has been revoked.
+      await this.conversations.pairingAuthorizedAmong(members),
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 

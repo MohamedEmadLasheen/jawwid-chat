@@ -135,6 +135,10 @@ export class MessageService {
       // C-4: admin presence is evaluated at post time, not only as committed
       // membership state.
       await this.conversations.liveMembersOf(conv.id),
+      // PD-6: and so is the teacher<->parent relationship. A conversation
+      // outlives the relationship that justified opening it, so this is
+      // resolved per message rather than trusted from creation time.
+      await this.conversations.pairingAuthorizedAmong(members),
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
