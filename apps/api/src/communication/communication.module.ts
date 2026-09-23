@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PlatformModule } from '../platform/platform.module';
+import { AuthModule } from '../platform/auth/auth.module';
 import {
   MEDIA_TOKEN_ISSUER,
   OBJECT_STORAGE,
@@ -37,7 +38,10 @@ import { NotificationController } from './api/notification.controller';
 import { StorageController } from './api/storage.controller';
 
 @Module({
-  imports: [PlatformModule],
+  // AuthModule exports AuthService, which RealtimeGateway uses to verify the
+  // handshake token. The dependency runs one way only -- platform never imports
+  // communication -- so there is no cycle.
+  imports: [PlatformModule, AuthModule],
   controllers: [
     ConversationController,
     MessageController,
