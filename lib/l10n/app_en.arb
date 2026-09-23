@@ -158,7 +158,7 @@
   "callFailedMicrophone": "Jawwid needs microphone access to make calls.",
   "callFailedNotAllowed": "This call is not available.",
   "callFailedNetwork": "The call could not connect. Check your connection and try again.",
-  "notificationsTitle": "Updates",
+  "notificationsTitle": "Notifications",
   "notificationsEmpty": "You are all caught up",
   "notificationPermissionTitle": "Turn on notifications",
   "notificationPermissionBody": "Jawwid uses notifications for class reminders, messages, and calls.",
@@ -232,5 +232,54 @@
   "contactInfoTitle": "Contact information",
   "contactInfoUnavailable": "Jawwid does not hold phone numbers or email addresses in this app yet.",
   "fieldNotAvailableYet": "Not available yet",
-  "profileNoDirectContact": "You can reach the teacher in your child's group."
+  "profileNoDirectContact": "You can reach the teacher in your child's group.",
+  "notificationsWithUnread": "Notifications, {count} unread",
+  "@notificationsWithUnread": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "notificationsMarkAllRead": "Mark all read",
+  "notificationsEmptyTitle": "Nothing here yet",
+  "notificationsEmptyBody": "Messages, class changes and academy news will appear here.",
+  "notificationsAllCaughtUp": "You're all caught up.",
+  "notificationUnreadLabel": "Unread",
+  "notificationUrgentLabel": "Urgent",
+  "notificationImportantLabel": "Important",
+  "notificationGroupCount": "{count, plural, =1{1 message} other{{count} messages}}",
+  "@notificationGroupCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "notificationFilterAll": "All",
+  "notificationFilterUnread": "Unread",
+  "notificationFilterMessages": "Messages",
+  "notificationFilterClasses": "Classes",
+  "notificationFilterCalls": "Calls",
+  "notificationFilterAcademy": "Academy",
+  "notificationFilterPayments": "Payments",
+  "notificationPreferencesTitle": "Notification settings",
+  "notificationPreferencesExplainer": "Turning one off stops your phone from alerting you. The notification still arrives here, so nothing is lost.",
+  "notificationCategoryMessages": "Messages",
+  "notificationCategoryMessagesBody": "Messages from your child's teacher, your supervisor and the academy.",
+  "notificationCategoryCalls": "Calls",
+  "notificationCategoryCallsBody": "Missed calls. Incoming calls always ring.",
+  "notificationCategoryClasses": "Classes",
+  "notificationCategoryClassesBody": "Class reminders. Schedule changes and cancellations always reach you.",
+  "notificationCategoryAcademy": "Academy",
+  "notificationCategoryAcademyBody": "News from Jawwid. Urgent announcements always reach you.",
+  "notificationCategoryPayments": "Payments",
+  "notificationCategoryPaymentsBody": "Renewal and payment reminders.",
+  "notificationCategoryApprovals": "Approvals",
+  "notificationCategoryAccount": "Account",
+  "notificationCategoryAlwaysOn": "Always on.",
+  "announcementTitle": "Announcement",
+  "announcementUnavailableBody": "This announcement is no longer available.",
+  "announcementUrgentBanner": "Urgent announcement from Jawwid Academy",
+  "announcementImportantBanner": "Important announcement"
 }

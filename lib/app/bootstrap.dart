@@ -1,10 +1,12 @@
 import 'package:flutter_riverpod/misc.dart';
 
 import '../core/data/fake_backend.dart';
+import '../core/data/fake_notification_repository.dart';
 import '../core/data/fake_repositories.dart';
 import '../core/data/http/http_conversation_repository.dart';
 import '../core/data/http/http_group_repository.dart';
 import '../core/data/http/http_message_repository.dart';
+import '../core/data/http/http_notification_repository.dart';
 import '../core/data/http/unavailable_auth_repository.dart';
 import '../core/errors/app_error.dart';
 import '../core/network/actor_identity.dart';
@@ -83,6 +85,9 @@ List<Override> _httpOverrides({required String debugActorId}) {
     groupRepositoryProvider.overrideWithValue(
       HttpGroupRepository(client: client),
     ),
+    notificationRepositoryProvider.overrideWithValue(
+      HttpNotificationRepository(client: client),
+    ),
     authControllerProvider.overrideWith(
       () => AuthController(
         repository: auth,
@@ -107,6 +112,8 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
     messageRepositoryProvider.overrideWithValue(FakeMessageRepository(backend)),
     groupRepositoryProvider.overrideWithValue(FakeGroupRepository(backend)),
     callRepositoryProvider.overrideWithValue(FakeCallRepository(backend)),
+    notificationRepositoryProvider
+        .overrideWithValue(FakeNotificationRepository()),
     authControllerProvider.overrideWith(
       () => AuthController(
         repository: authRepository,

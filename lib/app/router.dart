@@ -7,6 +7,9 @@ import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/calls/presentation/calls_screen.dart';
 import '../features/conversations/presentation/chats_screen.dart';
 import '../features/messages/presentation/chat_screen_route.dart';
+import '../features/notifications/presentation/announcement_screen.dart';
+import '../features/notifications/presentation/notification_center_screen.dart';
+import '../features/notifications/presentation/notification_preferences_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import 'providers.dart';
@@ -19,6 +22,13 @@ abstract final class Routes {
   static const chats = '/chats';
   static const calls = '/calls';
   static const settings = '/settings';
+
+  /// The notification centre. Reached from the bell, and from a push that was
+  /// tapped while the app was closed.
+  static const notifications = '/notifications';
+  static const notificationPreferences = '/settings/notifications';
+
+  static String announcement(String id) => '/announcements/$id';
 
   /// Retired destinations. They are not routes any more — Home and Groups both dissolved
   /// into Chats — but they are kept named here because notifications, saved links and
@@ -96,6 +106,27 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.myAccount,
         builder: (context, state) => const MyAccountScreen(),
+      ),
+      // The notification centre sits outside the tab shell, like a conversation:
+      // it is pushed on top, keeps a back button, and highlights no tab. It is
+      // not a destination of its own -- it is somewhere you go and come back
+      // from, which is also what a push notification expects when it opens it.
+      GoRoute(
+        path: Routes.notifications,
+        builder: (context, state) => const NotificationCenterScreen(),
+      ),
+      GoRoute(
+        path: Routes.notificationPreferences,
+        builder: (context, state) => const NotificationPreferencesScreen(),
+      ),
+      // An announcement's deep link. The id is NOT validated here -- the screen
+      // fetches it and the backend decides whether this user may see it, which
+      // is the same rule every other deep link in this router follows.
+      GoRoute(
+        path: '/announcements/:announcementId',
+        builder: (context, state) => AnnouncementScreen(
+          announcementId: state.pathParameters['announcementId']!,
+        ),
       ),
       // The two retired destinations, registered purely to forward. Declared as real routes
       // rather than left to the top-level redirect so that an old link is *matched* and

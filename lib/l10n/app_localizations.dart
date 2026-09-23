@@ -694,7 +694,7 @@ abstract class L10n {
   /// No description provided for @notificationsTitle.
   ///
   /// In en, this message translates to:
-  /// **'Updates'**
+  /// **'Notifications'**
   String get notificationsTitle;
 
   /// No description provided for @notificationsEmpty.
@@ -1098,6 +1098,216 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'You can reach the teacher in your child\'s group.'**
   String get profileNoDirectContact;
+
+  /// No description provided for @notificationsWithUnread.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications, {count} unread'**
+  String notificationsWithUnread(int count);
+
+  /// No description provided for @notificationsMarkAllRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark all read'**
+  String get notificationsMarkAllRead;
+
+  /// No description provided for @notificationsEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing here yet'**
+  String get notificationsEmptyTitle;
+
+  /// No description provided for @notificationsEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages, class changes and academy news will appear here.'**
+  String get notificationsEmptyBody;
+
+  /// No description provided for @notificationsAllCaughtUp.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re all caught up.'**
+  String get notificationsAllCaughtUp;
+
+  /// No description provided for @notificationUnreadLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Unread'**
+  String get notificationUnreadLabel;
+
+  /// No description provided for @notificationUrgentLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Urgent'**
+  String get notificationUrgentLabel;
+
+  /// No description provided for @notificationImportantLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Important'**
+  String get notificationImportantLabel;
+
+  /// No description provided for @notificationGroupCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 message} other{{count} messages}}'**
+  String notificationGroupCount(int count);
+
+  /// No description provided for @notificationFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get notificationFilterAll;
+
+  /// No description provided for @notificationFilterUnread.
+  ///
+  /// In en, this message translates to:
+  /// **'Unread'**
+  String get notificationFilterUnread;
+
+  /// No description provided for @notificationFilterMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages'**
+  String get notificationFilterMessages;
+
+  /// No description provided for @notificationFilterClasses.
+  ///
+  /// In en, this message translates to:
+  /// **'Classes'**
+  String get notificationFilterClasses;
+
+  /// No description provided for @notificationFilterCalls.
+  ///
+  /// In en, this message translates to:
+  /// **'Calls'**
+  String get notificationFilterCalls;
+
+  /// No description provided for @notificationFilterAcademy.
+  ///
+  /// In en, this message translates to:
+  /// **'Academy'**
+  String get notificationFilterAcademy;
+
+  /// No description provided for @notificationFilterPayments.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments'**
+  String get notificationFilterPayments;
+
+  /// No description provided for @notificationPreferencesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Notification settings'**
+  String get notificationPreferencesTitle;
+
+  /// No description provided for @notificationPreferencesExplainer.
+  ///
+  /// In en, this message translates to:
+  /// **'Turning one off stops your phone from alerting you. The notification still arrives here, so nothing is lost.'**
+  String get notificationPreferencesExplainer;
+
+  /// No description provided for @notificationCategoryMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages'**
+  String get notificationCategoryMessages;
+
+  /// No description provided for @notificationCategoryMessagesBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages from your child\'s teacher, your supervisor and the academy.'**
+  String get notificationCategoryMessagesBody;
+
+  /// No description provided for @notificationCategoryCalls.
+  ///
+  /// In en, this message translates to:
+  /// **'Calls'**
+  String get notificationCategoryCalls;
+
+  /// No description provided for @notificationCategoryCallsBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Missed calls. Incoming calls always ring.'**
+  String get notificationCategoryCallsBody;
+
+  /// No description provided for @notificationCategoryClasses.
+  ///
+  /// In en, this message translates to:
+  /// **'Classes'**
+  String get notificationCategoryClasses;
+
+  /// No description provided for @notificationCategoryClassesBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Class reminders. Schedule changes and cancellations always reach you.'**
+  String get notificationCategoryClassesBody;
+
+  /// No description provided for @notificationCategoryAcademy.
+  ///
+  /// In en, this message translates to:
+  /// **'Academy'**
+  String get notificationCategoryAcademy;
+
+  /// No description provided for @notificationCategoryAcademyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'News from Jawwid. Urgent announcements always reach you.'**
+  String get notificationCategoryAcademyBody;
+
+  /// No description provided for @notificationCategoryPayments.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments'**
+  String get notificationCategoryPayments;
+
+  /// No description provided for @notificationCategoryPaymentsBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Renewal and payment reminders.'**
+  String get notificationCategoryPaymentsBody;
+
+  /// No description provided for @notificationCategoryApprovals.
+  ///
+  /// In en, this message translates to:
+  /// **'Approvals'**
+  String get notificationCategoryApprovals;
+
+  /// No description provided for @notificationCategoryAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get notificationCategoryAccount;
+
+  /// No description provided for @notificationCategoryAlwaysOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Always on.'**
+  String get notificationCategoryAlwaysOn;
+
+  /// No description provided for @announcementTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Announcement'**
+  String get announcementTitle;
+
+  /// No description provided for @announcementUnavailableBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This announcement is no longer available.'**
+  String get announcementUnavailableBody;
+
+  /// No description provided for @announcementUrgentBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Urgent announcement from Jawwid Academy'**
+  String get announcementUrgentBanner;
+
+  /// No description provided for @announcementImportantBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Important announcement'**
+  String get announcementImportantBanner;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

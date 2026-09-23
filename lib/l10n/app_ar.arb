@@ -158,7 +158,7 @@
   "callFailedMicrophone": "يحتاج جَوِّد إلى إذن الميكروفون لإجراء المكالمات.",
   "callFailedNotAllowed": "هذه المكالمة غير متاحة.",
   "callFailedNetwork": "تعذّر إجراء المكالمة. تحقق من اتصالك وحاول مرة أخرى.",
-  "notificationsTitle": "المستجدات",
+  "notificationsTitle": "الإشعارات",
   "notificationsEmpty": "لا يوجد جديد",
   "notificationPermissionTitle": "فعّل الإشعارات",
   "notificationPermissionBody": "يستخدم جَوِّد الإشعارات لتذكيرات الحصص والرسائل والمكالمات.",
@@ -232,5 +232,54 @@
   "contactInfoTitle": "معلومات التواصل",
   "contactInfoUnavailable": "لا يحتفظ التطبيق بأرقام هواتف أو عناوين بريد إلكتروني بعد.",
   "fieldNotAvailableYet": "غير متاح بعد",
-  "profileNoDirectContact": "يمكنك التواصل مع المعلم داخل مجموعة ابنك."
+  "profileNoDirectContact": "يمكنك التواصل مع المعلم داخل مجموعة ابنك.",
+  "notificationsWithUnread": "الإشعارات، {count} غير مقروء",
+  "@notificationsWithUnread": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "notificationsMarkAllRead": "تعليم الكل كمقروء",
+  "notificationsEmptyTitle": "لا يوجد شيء بعد",
+  "notificationsEmptyBody": "ستظهر هنا الرسائل وتغييرات الحصص وأخبار الأكاديمية.",
+  "notificationsAllCaughtUp": "لا يوجد جديد.",
+  "notificationUnreadLabel": "غير مقروء",
+  "notificationUrgentLabel": "عاجل",
+  "notificationImportantLabel": "مهم",
+  "notificationGroupCount": "{count, plural, =1{رسالة واحدة} other{{count} رسائل}}",
+  "@notificationGroupCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "notificationFilterAll": "الكل",
+  "notificationFilterUnread": "غير المقروء",
+  "notificationFilterMessages": "الرسائل",
+  "notificationFilterClasses": "الحصص",
+  "notificationFilterCalls": "المكالمات",
+  "notificationFilterAcademy": "الأكاديمية",
+  "notificationFilterPayments": "المدفوعات",
+  "notificationPreferencesTitle": "إعدادات الإشعارات",
+  "notificationPreferencesExplainer": "إيقاف أي منها يمنع تنبيه هاتفك فقط. يبقى الإشعار هنا، فلا يضيع شيء.",
+  "notificationCategoryMessages": "الرسائل",
+  "notificationCategoryMessagesBody": "رسائل معلّم طفلك والمشرف والأكاديمية.",
+  "notificationCategoryCalls": "المكالمات",
+  "notificationCategoryCallsBody": "المكالمات الفائتة. المكالمات الواردة ترنّ دائماً.",
+  "notificationCategoryClasses": "الحصص",
+  "notificationCategoryClassesBody": "تذكيرات الحصص. تغييرات المواعيد والإلغاء تصلك دائماً.",
+  "notificationCategoryAcademy": "الأكاديمية",
+  "notificationCategoryAcademyBody": "أخبار جوّيد. الإعلانات العاجلة تصلك دائماً.",
+  "notificationCategoryPayments": "المدفوعات",
+  "notificationCategoryPaymentsBody": "تذكيرات التجديد والدفع.",
+  "notificationCategoryApprovals": "الموافقات",
+  "notificationCategoryAccount": "الحساب",
+  "notificationCategoryAlwaysOn": "مفعّل دائماً.",
+  "announcementTitle": "إعلان",
+  "announcementUnavailableBody": "هذا الإعلان لم يعد متاحاً.",
+  "announcementUrgentBanner": "إعلان عاجل من أكاديمية جوّيد",
+  "announcementImportantBanner": "إعلان مهم"
 }

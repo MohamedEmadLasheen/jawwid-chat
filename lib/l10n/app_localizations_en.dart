@@ -339,7 +339,7 @@ class L10nEn extends L10n {
       'The call could not connect. Check your connection and try again.';
 
   @override
-  String get notificationsTitle => 'Updates';
+  String get notificationsTitle => 'Notifications';
 
   @override
   String get notificationsEmpty => 'You are all caught up';
@@ -550,4 +550,128 @@ class L10nEn extends L10n {
   @override
   String get profileNoDirectContact =>
       'You can reach the teacher in your child\'s group.';
+
+  @override
+  String notificationsWithUnread(int count) {
+    return 'Notifications, $count unread';
+  }
+
+  @override
+  String get notificationsMarkAllRead => 'Mark all read';
+
+  @override
+  String get notificationsEmptyTitle => 'Nothing here yet';
+
+  @override
+  String get notificationsEmptyBody =>
+      'Messages, class changes and academy news will appear here.';
+
+  @override
+  String get notificationsAllCaughtUp => 'You\'re all caught up.';
+
+  @override
+  String get notificationUnreadLabel => 'Unread';
+
+  @override
+  String get notificationUrgentLabel => 'Urgent';
+
+  @override
+  String get notificationImportantLabel => 'Important';
+
+  @override
+  String notificationGroupCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count messages',
+      one: '1 message',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get notificationFilterAll => 'All';
+
+  @override
+  String get notificationFilterUnread => 'Unread';
+
+  @override
+  String get notificationFilterMessages => 'Messages';
+
+  @override
+  String get notificationFilterClasses => 'Classes';
+
+  @override
+  String get notificationFilterCalls => 'Calls';
+
+  @override
+  String get notificationFilterAcademy => 'Academy';
+
+  @override
+  String get notificationFilterPayments => 'Payments';
+
+  @override
+  String get notificationPreferencesTitle => 'Notification settings';
+
+  @override
+  String get notificationPreferencesExplainer =>
+      'Turning one off stops your phone from alerting you. The notification still arrives here, so nothing is lost.';
+
+  @override
+  String get notificationCategoryMessages => 'Messages';
+
+  @override
+  String get notificationCategoryMessagesBody =>
+      'Messages from your child\'s teacher, your supervisor and the academy.';
+
+  @override
+  String get notificationCategoryCalls => 'Calls';
+
+  @override
+  String get notificationCategoryCallsBody =>
+      'Missed calls. Incoming calls always ring.';
+
+  @override
+  String get notificationCategoryClasses => 'Classes';
+
+  @override
+  String get notificationCategoryClassesBody =>
+      'Class reminders. Schedule changes and cancellations always reach you.';
+
+  @override
+  String get notificationCategoryAcademy => 'Academy';
+
+  @override
+  String get notificationCategoryAcademyBody =>
+      'News from Jawwid. Urgent announcements always reach you.';
+
+  @override
+  String get notificationCategoryPayments => 'Payments';
+
+  @override
+  String get notificationCategoryPaymentsBody =>
+      'Renewal and payment reminders.';
+
+  @override
+  String get notificationCategoryApprovals => 'Approvals';
+
+  @override
+  String get notificationCategoryAccount => 'Account';
+
+  @override
+  String get notificationCategoryAlwaysOn => 'Always on.';
+
+  @override
+  String get announcementTitle => 'Announcement';
+
+  @override
+  String get announcementUnavailableBody =>
+      'This announcement is no longer available.';
+
+  @override
+  String get announcementUrgentBanner =>
+      'Urgent announcement from Jawwid Academy';
+
+  @override
+  String get announcementImportantBanner => 'Important announcement';
 }

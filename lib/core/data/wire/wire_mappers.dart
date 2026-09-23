@@ -1,5 +1,6 @@
 import '../../../shared/models/conversation.dart';
 import '../../../shared/models/message.dart';
+import '../../../shared/models/notification.dart';
 import '../../../shared/models/user_role.dart';
 import '../repositories.dart';
 import 'wire_vocab.dart';
@@ -211,4 +212,114 @@ abstract final class WireMappers {
         Wire.callDeclined => CallOutcome.declined,
         _ => CallOutcome.missed,
       };
+
+  // -----------------------------------------------------------------------------------
+  // Notifications
+  // -----------------------------------------------------------------------------------
+
+  /// A notification card from the centre.
+  ///
+  /// Returns null on a row with no id rather than throwing, so one malformed
+  /// record cannot blank a whole page of a parent's history.
+  ///
+  /// `title` and `body` are taken verbatim. The server rendered them once, in
+  /// the recipient's language, and froze them so a later change cannot rewrite
+  /// what the parent was told; recomposing the sentence here would undo exactly
+  /// that guarantee.
+  static AppNotification? notification(Map<String, Object?> json) {
+    final id = json['id'] as String?;
+    if (id == null || id.isEmpty) return null;
+
+    return AppNotification(
+      id: id,
+      type: json['type'] as String?,
+      category: NotificationCategory.parse(json['category'] as String?),
+      priority: NotificationPriority.parse(json['priority'] as String?),
+      title: (json['title'] as String?) ?? '',
+      body: (json['body'] as String?) ?? '',
+      createdAt: parseTime(json['createdAt']) ?? DateTime.now(),
+      readAt: parseTime(json['readAt']),
+      isEssential: json['isEssential'] == true,
+      deeplink: json['deeplink'] as String?,
+      entityType: json['entityType'] as String?,
+      entityId: json['entityId'] as String?,
+      conversationId: json['conversationId'] as String?,
+      learnerId: json['learnerId'] as String?,
+      learnerName: json['learnerName'] as String?,
+      senderId: json['senderId'] as String?,
+      senderName: json['senderName'] as String?,
+      announcementId: json['announcementId'] as String?,
+      groupCount: (json['groupCount'] as num?)?.toInt() ?? 1,
+      imageUrl: json['imageUrl'] as String?,
+    );
+  }
+
+  /// The realtime `notification.created` payload.
+  ///
+  /// Deliberately thinner than the REST card: the event carries enough to show
+  /// a toast and move the badge, and the centre refetches for the rest. It is a
+  /// hint that something arrived, not the record of it — the same rule
+  /// `message.created` follows.
+  static AppNotification? realtimeNotification(Map<String, Object?> json) {
+    final id = json['notificationId'] as String?;
+    if (id == null || id.isEmpty) return null;
+
+    return AppNotification(
+      id: id,
+      category: NotificationCategory.unknown,
+      priority: NotificationPriority.normal,
+      title: (json['title'] as String?) ?? '',
+      body: (json['body'] as String?) ?? '',
+      createdAt: DateTime.now(),
+      conversationId: json['conversationId'] as String?,
+    );
+  }
+
+  static UnreadCounts unreadCounts(Map<String, Object?> json) {
+    final raw = json['byCategory'];
+    final byCategory = <NotificationCategory, int>{};
+
+    if (raw is Map) {
+      for (final entry in raw.entries) {
+        final category = NotificationCategory.parse(entry.key as String?);
+        // A category this build does not know still counts towards the total
+        // the server sent; it just has no tab of its own.
+        if (category == NotificationCategory.unknown) continue;
+        byCategory[category] = (entry.value as num?)?.toInt() ?? 0;
+      }
+    }
+
+    return UnreadCounts(
+      total: (json['total'] as num?)?.toInt() ?? 0,
+      byCategory: byCategory,
+    );
+  }
+
+  static NotificationPreference? notificationPreference(Map<String, Object?> json) {
+    final category = NotificationCategory.parse(json['category'] as String?);
+    if (category == NotificationCategory.unknown) return null;
+
+    return NotificationPreference(
+      category: category,
+      isOptional: json['isOptional'] == true,
+      pushEnabled: json['pushEnabled'] != false,
+    );
+  }
+
+  static Announcement? announcement(Map<String, Object?> json) {
+    final id = json['id'] as String?;
+    if (id == null || id.isEmpty) return null;
+
+    return Announcement(
+      id: id,
+      title: (json['title'] as String?) ?? '',
+      body: (json['body'] as String?) ?? '',
+      priority: (json['priority'] as String?) ?? 'normal',
+      imageUrl: json['imageUrl'] as String?,
+      actionLabel: json['actionLabel'] as String?,
+      actionUrl: json['actionUrl'] as String?,
+      publishedAt: parseTime(json['publishedAt']),
+      expiresAt: parseTime(json['expiresAt']),
+    );
+  }
 }

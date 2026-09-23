@@ -45,6 +45,10 @@ final callRepositoryProvider = Provider<CallRepository>((ref) {
   throw UnimplementedError('callRepositoryProvider must be overridden');
 });
 
+final notificationRepositoryProvider = Provider<NotificationRepository>((ref) {
+  throw UnimplementedError('notificationRepositoryProvider must be overridden');
+});
+
 /// The device's microphone.
 ///
 /// Unlike the repositories this has a real default, because it is a device

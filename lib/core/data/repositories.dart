@@ -1,6 +1,7 @@
 import '../../shared/models/auth.dart';
 import '../../shared/models/conversation.dart';
 import '../../shared/models/message.dart';
+import '../../shared/models/notification.dart';
 import '../../shared/models/user_role.dart';
 
 /// One page of a cursor-paginated list (§19).
@@ -273,4 +274,69 @@ abstract interface class CallRepository {
   Future<void> decline({required String callId});
 
   Future<Page<CallHistoryEntry>> history({String? cursor});
+}
+
+/// The notification centre and everything that feeds it.
+///
+/// THE SERVER IS THE SOURCE OF TRUTH FOR UNREAD. [unreadCounts] is a round trip
+/// rather than a sum over [history], deliberately: a client that counted the
+/// page it happened to have loaded would show a badge of thirty against four
+/// hundred unread, and would disagree with the same person's other device.
+abstract interface class NotificationRepository {
+  /// One page of history, newest first. Pass the previous page's [Page.nextCursor]
+  /// as [cursor]; a null cursor starts at the top.
+  Future<Page<AppNotification>> history({
+    NotificationCategory? category,
+    bool unreadOnly = false,
+    String? cursor,
+    int limit = 30,
+  });
+
+  Future<UnreadCounts> unreadCounts();
+
+  /// One notification, for a deep link landing on a screen that has not loaded
+  /// the list. Throws [AppErrorKind.notFound] when it is not this user's.
+  Future<AppNotification> byId(String notificationId);
+
+  /// Idempotent. Calling it twice is not an error and does not move the first
+  /// read time — which matters, because a retry on a flaky connection is the
+  /// normal case, not the exceptional one.
+  Future<void> markRead(String notificationId);
+
+  /// [category] null marks everything. Idempotent.
+  Future<void> markAllRead({NotificationCategory? category});
+
+  /// Opening a thread reads its notifications. One act, not two.
+  Future<void> markConversationRead(String conversationId);
+
+  Future<List<NotificationPreference>> preferences();
+
+  /// Refused by the server for a category the product marks essential.
+  Future<void> setPreference(NotificationCategory category, {required bool pushEnabled});
+
+  /// Register this device for push. Called on every launch and after each token
+  /// rotation; multi-device is normal, so this never unregisters anything else.
+  Future<void> registerDevice({
+    required String token,
+    required String platform,
+    bool isVoip = false,
+    String? locale,
+  });
+
+  Future<void> unregisterDevice(String token);
+
+  /// Reported honestly: the server does not infer either state, so these
+  /// reports are the only evidence it has.
+  Future<void> reportDelivered(String notificationId);
+
+  Future<void> reportOpened(String notificationId);
+
+  /// The announcement behind an academy notification, once the parent opens it.
+  Future<Announcement> announcement(String announcementId);
+
+  /// Emits when a notification arrives over the realtime channel, so the centre
+  /// and the badge update without a refresh. Realtime is for immediacy; the
+  /// database is for reliability, and this stream is explicitly not relied upon
+  /// for correctness — a missed event costs latency, not a notification.
+  Stream<AppNotification> get incoming;
 }

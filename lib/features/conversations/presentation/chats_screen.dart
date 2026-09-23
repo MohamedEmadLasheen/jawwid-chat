@@ -12,6 +12,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/conversation.dart';
 import '../../../shared/models/user_role.dart';
 import '../../../shared/utils/text_direction.dart';
+import '../../notifications/presentation/notification_bell.dart';
 import '../../stories/presentation/stories_rail.dart';
 import '../application/conversations_controller.dart';
 import '../domain/chat_feed.dart';
@@ -100,7 +101,12 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
         titleTextStyle: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w700,
             ),
-        actions: const [_OverflowMenu()],
+        // The bell, not a tab. The shell is deliberately three destinations
+        // (`decisions.md` DD-08, and the forbidden-affordances suite enforces
+        // it), and notifications are somewhere you visit and come back from
+        // rather than a place the app lives. Chats is where a parent already
+        // is, so the bell belongs here.
+        actions: const [NotificationBell(), _OverflowMenu()],
       ),
       body: Column(
         children: [

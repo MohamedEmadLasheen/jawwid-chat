@@ -343,7 +343,7 @@ class L10nAr extends L10n {
       'تعذّر إجراء المكالمة. تحقق من اتصالك وحاول مرة أخرى.';
 
   @override
-  String get notificationsTitle => 'المستجدات';
+  String get notificationsTitle => 'الإشعارات';
 
   @override
   String get notificationsEmpty => 'لا يوجد جديد';
@@ -552,4 +552,125 @@ class L10nAr extends L10n {
   @override
   String get profileNoDirectContact =>
       'يمكنك التواصل مع المعلم داخل مجموعة ابنك.';
+
+  @override
+  String notificationsWithUnread(int count) {
+    return 'الإشعارات، $count غير مقروء';
+  }
+
+  @override
+  String get notificationsMarkAllRead => 'تعليم الكل كمقروء';
+
+  @override
+  String get notificationsEmptyTitle => 'لا يوجد شيء بعد';
+
+  @override
+  String get notificationsEmptyBody =>
+      'ستظهر هنا الرسائل وتغييرات الحصص وأخبار الأكاديمية.';
+
+  @override
+  String get notificationsAllCaughtUp => 'لا يوجد جديد.';
+
+  @override
+  String get notificationUnreadLabel => 'غير مقروء';
+
+  @override
+  String get notificationUrgentLabel => 'عاجل';
+
+  @override
+  String get notificationImportantLabel => 'مهم';
+
+  @override
+  String notificationGroupCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count رسائل',
+      one: 'رسالة واحدة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get notificationFilterAll => 'الكل';
+
+  @override
+  String get notificationFilterUnread => 'غير المقروء';
+
+  @override
+  String get notificationFilterMessages => 'الرسائل';
+
+  @override
+  String get notificationFilterClasses => 'الحصص';
+
+  @override
+  String get notificationFilterCalls => 'المكالمات';
+
+  @override
+  String get notificationFilterAcademy => 'الأكاديمية';
+
+  @override
+  String get notificationFilterPayments => 'المدفوعات';
+
+  @override
+  String get notificationPreferencesTitle => 'إعدادات الإشعارات';
+
+  @override
+  String get notificationPreferencesExplainer =>
+      'إيقاف أي منها يمنع تنبيه هاتفك فقط. يبقى الإشعار هنا، فلا يضيع شيء.';
+
+  @override
+  String get notificationCategoryMessages => 'الرسائل';
+
+  @override
+  String get notificationCategoryMessagesBody =>
+      'رسائل معلّم طفلك والمشرف والأكاديمية.';
+
+  @override
+  String get notificationCategoryCalls => 'المكالمات';
+
+  @override
+  String get notificationCategoryCallsBody =>
+      'المكالمات الفائتة. المكالمات الواردة ترنّ دائماً.';
+
+  @override
+  String get notificationCategoryClasses => 'الحصص';
+
+  @override
+  String get notificationCategoryClassesBody =>
+      'تذكيرات الحصص. تغييرات المواعيد والإلغاء تصلك دائماً.';
+
+  @override
+  String get notificationCategoryAcademy => 'الأكاديمية';
+
+  @override
+  String get notificationCategoryAcademyBody =>
+      'أخبار جوّيد. الإعلانات العاجلة تصلك دائماً.';
+
+  @override
+  String get notificationCategoryPayments => 'المدفوعات';
+
+  @override
+  String get notificationCategoryPaymentsBody => 'تذكيرات التجديد والدفع.';
+
+  @override
+  String get notificationCategoryApprovals => 'الموافقات';
+
+  @override
+  String get notificationCategoryAccount => 'الحساب';
+
+  @override
+  String get notificationCategoryAlwaysOn => 'مفعّل دائماً.';
+
+  @override
+  String get announcementTitle => 'إعلان';
+
+  @override
+  String get announcementUnavailableBody => 'هذا الإعلان لم يعد متاحاً.';
+
+  @override
+  String get announcementUrgentBanner => 'إعلان عاجل من أكاديمية جوّيد';
+
+  @override
+  String get announcementImportantBanner => 'إعلان مهم';
 }
