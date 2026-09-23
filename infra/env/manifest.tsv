@@ -46,7 +46,7 @@ JWT_REFRESH_TTL	auth	no	opt	req	req
 # yet -- OBJECT_STORAGE is bound to the reference SignedLocalObjectStorage and no
 # adapter exists (findings.md RT-022). They stay declared because this file
 # states the deployment contract rather than the current call graph, exactly as
-# the FCM_*/APNS_* rows do while PUSH_PROVIDER is still LoggingPushProvider, and
+# the APNS_* rows do while FCM carries iOS through its own APNs bridge, and
 # because docker-compose.yml already provisions the local S3-compatible service
 # they configure. Deleting them would take the local stack and inventory.md with
 # them. No provider has been chosen; nothing here chooses one.
@@ -73,6 +73,11 @@ ATTACHMENT_MAX_BYTES_FILE	storage	no	opt	opt	opt
 # Ceiling on the duration a sender may claim for a voice note. The server never
 # decodes the audio, so this bounds an assertion rather than a measurement.
 ATTACHMENT_MAX_VOICE_DURATION_MS	storage	no	opt	opt	opt
+# Read by FcmPushProvider. Without both, PUSH_PROVIDER binds the logging
+# provider instead and nothing is sent -- which is why they are required outside
+# local development. FCM_SERVICE_ACCOUNT_JSON is the service-account file Google
+# hands out, pasted unmodified: taking it apart into separate variables is how
+# the PEM's newlines get mangled.
 FCM_PROJECT_ID	push	no	opt	req	req
 FCM_SERVICE_ACCOUNT_JSON	push	yes	opt	req	req
 APNS_KEY_ID	push	no	opt	req	req

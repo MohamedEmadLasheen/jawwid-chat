@@ -26,6 +26,7 @@ import { ReminderService } from './notifications/reminder.service';
 import { TemplateService } from './notifications/template.service';
 import { QuietHoursService } from './notifications/quiet-hours.service';
 import { LoggingPushProvider } from './notifications/push.provider';
+import { FcmPushProvider, fcmConfigFromEnvironment } from './notifications/fcm.provider';
 import { AnnouncementService } from './announcements/announcement.service';
 import { ClassScheduleService } from './schedule/class-schedule.service';
 import { RealtimeGateway } from './realtime/realtime.gateway';
@@ -80,7 +81,18 @@ import { StorageController } from './api/storage.controller';
     RealtimeGateway,
     LocalFsBlobStore,
     { provide: OBJECT_STORAGE, useClass: SignedLocalObjectStorage },
-    { provide: PUSH_PROVIDER, useClass: LoggingPushProvider },
+    // Real push when the service account is configured, and a provider that
+    // only logs when it is not. Selected at wiring time rather than branched on
+    // inside a service: a deployment either has credentials or it does not, and
+    // there is no runtime flag that can put a configured environment into
+    // "pretend to send" mode.
+    {
+      provide: PUSH_PROVIDER,
+      useFactory: () => {
+        const config = fcmConfigFromEnvironment();
+        return config ? new FcmPushProvider(config) : new LoggingPushProvider();
+      },
+    },
     { provide: MEDIA_TOKEN_ISSUER, useClass: LiveKitTokenIssuer },
     // AI #7 (D-2). The gateway ALONE cannot be the publisher: in the worker
     // process there is no Socket.IO server, so gateway.toThread()'s
