@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService, CallIntent } from '../../platform/authorization.service';
@@ -12,7 +12,7 @@ import { Actor } from '../../platform/types';
 import { ConversationService } from '../conversations/conversation.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
-import { CallOutcome, CallStatus, CallType, ConversationType } from '../contracts/vocab';
+import { ActorKind, CallOutcome, CallStatus, CallType, ConversationType } from '../contracts/vocab';
 
 /**
  * Calling.
@@ -26,6 +26,8 @@ import { CallOutcome, CallStatus, CallType, ConversationType } from '../contract
  */
 @Injectable()
 export class CallService {
+  private readonly log = new Logger(CallService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly authz: AuthorizationService,
@@ -283,6 +285,82 @@ export class CallService {
         payload: { callId, outcome: resolved, durationSeconds: duration },
       });
     });
+  }
+
+  /**
+   * End calls that rang out.
+   *
+   * THE GAP THIS CLOSES. A missed call only became a notification when the
+   * CALLER hung up, because `end()` was the only path to a CALL_ENDED event.
+   * A caller who walks away, whose app is killed, or whose network drops leaves
+   * the call `ringing` forever -- so the academy tried to reach a parent, the
+   * parent's phone stopped ringing, and no missed-call notification was ever
+   * produced. `call.ring_timeout_seconds` has been configured since the
+   * beginning and documented as "unanswered call becomes a missed call after
+   * this long"; nothing implemented it.
+   *
+   * A ringing call left open is also a live call: issueToken() admits a
+   * participant to any call that is not ENDED, so a stale row is an indefinite
+   * join window.
+   *
+   * Runs on the worker sweep. Idempotent and safe to run concurrently: each row
+   * is claimed with a conditional update, and the notification it produces
+   * dedupes on `missed_call:{callId}:{actorId}` regardless.
+   */
+  async expireRingingCalls(now = new Date(), batchSize = 100): Promise<number> {
+    const timeoutSeconds = await this.config.get('call.ring_timeout_seconds');
+    const cutoff = new Date(now.getTime() - timeoutSeconds * 1000);
+
+    const rangOut = await this.prisma.call.findMany({
+      where: { status: CallStatus.RINGING, startedAt: { lt: cutoff } },
+      orderBy: { startedAt: 'asc' },
+      take: batchSize,
+    });
+
+    let expired = 0;
+    for (const call of rangOut) {
+      // Claim it. A caller who answers or hangs up in this same instant wins,
+      // and this worker moves on rather than overwriting their outcome.
+      const claimed = await this.prisma.call.updateMany({
+        where: { id: call.id, status: CallStatus.RINGING },
+        data: {
+          status: CallStatus.ENDED,
+          endedAt: now,
+          outcome: CallOutcome.MISSED,
+          durationSeconds: 0,
+        },
+      });
+      if (claimed.count === 0) continue;
+
+      await this.prisma.$transaction(async (tx) => {
+        await tx.callParticipant.updateMany({
+          where: { callId: call.id, leftAt: null },
+          data: { leftAt: now },
+        });
+        // The same event the hang-up path emits, so the missed-call
+        // notification is produced by the same handler and nothing about the
+        // parent's experience depends on HOW the call ended.
+        await this.outbox.enqueue(tx, CommEvent.CALL_ENDED, {
+          callId: call.id,
+          conversationId: call.conversationId,
+          outcome: CallOutcome.MISSED,
+          durationSeconds: 0,
+        });
+        await this.audit.event(tx, {
+          familyId: call.familyId,
+          // Nobody did this; the clock did. Attributing it to the caller would
+          // put an action in the log that they did not take.
+          actorKind: ActorKind.SYSTEM,
+          actorId: null,
+          type: 'call_ended',
+          payload: { callId: call.id, outcome: CallOutcome.MISSED, reason: 'ring_timeout' },
+        });
+      });
+      expired += 1;
+    }
+
+    if (expired > 0) this.log.log(`${expired} call(s) rang out and were marked missed`);
+    return expired;
   }
 
   /** Call history. Scoped to conversations the actor may read. */

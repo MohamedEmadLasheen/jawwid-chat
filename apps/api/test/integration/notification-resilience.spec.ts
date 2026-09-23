@@ -184,6 +184,101 @@ describe('a worker that dies mid-delivery', () => {
 });
 
 // =========================================================================
+describe('a call that rings out and is never hung up', () => {
+  /**
+   * The producer gap. A missed call only became a notification when the CALLER
+   * ended it; a caller who walks away, whose app is killed, or whose network
+   * drops left the call ringing forever and the parent never learned the
+   * academy had tried to reach them.
+   */
+  it('becomes a missed call, and notifies the parent', async () => {
+    const conversationId = await studentGroup();
+    const { callId } = await g.calls.start(conversationId, s.ownerId);
+
+    // Nobody answers. Nobody hangs up. The ring timeout elapses.
+    const timeout = await g.config.get('call.ring_timeout_seconds');
+    const later = new Date(Date.now() + (timeout + 5) * 1000);
+
+    expect(await g.calls.expireRingingCalls(later)).toBe(1);
+    await drain();
+
+    const call = (await g.prisma.call.findUnique({ where: { id: callId } }))!;
+    expect(call.status).toBe('ended');
+    expect(call.outcome).toBe('missed');
+
+    const n = await g.prisma.notification.findFirst({
+      where: { recipientId: s.parentId, type: NotificationType.MISSED_CALL },
+    });
+    expect(n).not.toBeNull();
+    expect(n!.deeplink).toBe(`/chats/${conversationId}?call=${callId}`);
+  });
+
+  it('leaves a call that is still within its ring window alone', async () => {
+    const conversationId = await studentGroup();
+    await g.calls.start(conversationId, s.ownerId);
+
+    // Still ringing. Ending it now would cut off a call in progress.
+    expect(await g.calls.expireRingingCalls(new Date())).toBe(0);
+  });
+
+  it('does not touch a call somebody answered', async () => {
+    const conversationId = await studentGroup();
+    const { callId } = await g.calls.start(conversationId, s.ownerId);
+    await g.calls.accept(callId, s.parentId);
+
+    const timeout = await g.config.get('call.ring_timeout_seconds');
+    const later = new Date(Date.now() + (timeout + 5) * 1000);
+
+    // A long call is not a missed one.
+    expect(await g.calls.expireRingingCalls(later)).toBe(0);
+    expect((await g.prisma.call.findUnique({ where: { id: callId } }))!.status).toBe('active');
+  });
+
+  it('is idempotent, and safe to run from two workers at once', async () => {
+    const conversationId = await studentGroup();
+    const { callId } = await g.calls.start(conversationId, s.ownerId);
+    const timeout = await g.config.get('call.ring_timeout_seconds');
+    const later = new Date(Date.now() + (timeout + 5) * 1000);
+
+    const [a, b, c] = await Promise.all([
+      g.calls.expireRingingCalls(later),
+      g.calls.expireRingingCalls(later),
+      g.calls.expireRingingCalls(later),
+    ]);
+    expect(a + b + c).toBe(1);
+
+    await drain();
+    // One notification for the parent, whatever happened at the sweep.
+    expect(
+      await g.prisma.notification.count({
+        where: { recipientId: s.parentId, type: NotificationType.MISSED_CALL },
+      }),
+    ).toBe(1);
+
+    // And a fourth sweep finds nothing.
+    expect(await g.calls.expireRingingCalls(later)).toBe(0);
+    void callId;
+  });
+
+  it('records the clock as the actor, not the caller', async () => {
+    const conversationId = await studentGroup();
+    const { callId } = await g.calls.start(conversationId, s.ownerId);
+    const timeout = await g.config.get('call.ring_timeout_seconds');
+    await g.calls.expireRingingCalls(new Date(Date.now() + (timeout + 5) * 1000));
+
+    const event = await g.prisma.eventLog.findFirst({
+      where: { type: 'call_ended' },
+      orderBy: { at: 'desc' },
+    });
+    // Nobody did this. Attributing it to the caller would put an action in the
+    // log that they did not take.
+    expect(event!.actorKind).toBe('system');
+    expect(event!.actorId).toBeNull();
+    expect(event!.payload).toMatchObject({ callId, reason: 'ring_timeout' });
+  });
+});
+
+// =========================================================================
 describe('two workers racing', () => {
   it('claim the same notification exactly once between them', async () => {
     const conversationId = await studentGroup();

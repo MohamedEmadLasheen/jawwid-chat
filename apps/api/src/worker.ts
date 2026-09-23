@@ -7,6 +7,7 @@ import { NotificationService } from './communication/notifications/notification.
 import { DeliveryService } from './communication/notifications/delivery.service';
 import { AnnouncementService } from './communication/announcements/announcement.service';
 import { RetentionService } from './communication/notifications/retention.service';
+import { CallService } from './communication/calls/call.service';
 import { readBuildInfo } from './infra/build-info';
 
 /**
@@ -41,6 +42,7 @@ async function bootstrap(): Promise<void> {
   const deliveries = app.get(DeliveryService);
   const announcements = app.get(AnnouncementService);
   const retention = app.get(RetentionService);
+  const calls = app.get(CallService);
 
   let running = true;
   let draining = false;
@@ -93,7 +95,11 @@ async function bootstrap(): Promise<void> {
       ['retry', () => deliveries.retryDue(new Date(), BATCH)],
       // 4. Announcements whose publish time has arrived.
       ['announce', () => announcements.fanOutDue(new Date())],
-      // 5. Retention. Self-throttling -- it no-ops until its interval elapses,
+      // 5. Calls that rang out. Until this existed a missed call only became a
+      //    notification when the CALLER hung up -- so a caller who walked away
+      //    left the parent never learning the academy had tried to reach them.
+      ['ring-timeout', () => calls.expireRingingCalls(new Date())],
+      // 6. Retention. Self-throttling -- it no-ops until its interval elapses,
       //    so putting it in the same loop costs a clock comparison per pass and
       //    does not need a second scheduler. It never throws into this loop:
       //    housekeeping failing must not stop notifications being delivered.
