@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:meta/meta.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
 import '../logging/redacting_logger.dart';
@@ -40,6 +41,11 @@ class SocketIoRealtimeClient implements RealtimeClient {
   /// Replayed on every reconnect. The server's rooms do not survive a new
   /// socket, so this client must remember what it was in.
   final _subscriptions = <String>{};
+
+  /// The rooms this client will rejoin. Exposed for the reconnect-replay test,
+  /// which cannot observe it any other way without standing up a real server.
+  @visibleForTesting
+  Set<String> get debugSubscriptions => Set.unmodifiable(_subscriptions);
 
   final _events = StreamController<RealtimeEvent>.broadcast();
   final _status = StreamController<RealtimeStatus>.broadcast();

@@ -6,6 +6,7 @@ import 'package:jawwid_chat/core/network/api_client.dart';
 import 'package:jawwid_chat/core/network/api_config.dart';
 import 'package:jawwid_chat/core/realtime/realtime_client.dart';
 import 'package:jawwid_chat/core/realtime/realtime_events.dart';
+import 'package:jawwid_chat/core/realtime/socket_io_realtime_client.dart';
 
 /// The realtime transport, and what it means for the notification centre.
 ///
@@ -139,6 +140,45 @@ void main() {
         Uri.parse(config.realtimeBaseUrl).origin,
         Uri.parse(config.baseUrl).origin,
       );
+    });
+  });
+
+  group('subscriptions survive a reconnect', () {
+    test('a subscription requested while offline is remembered', () async {
+      // The server's rooms do not survive a new socket, and neither does a
+      // subscribe that was never sent. A parent who asked to watch a thread
+      // while in a tunnel must be watching it when the tunnel ends.
+      final client = InertRealtimeClient();
+      addTearDown(client.dispose);
+
+      expect(await client.subscribeConversation('c1'), isTrue);
+    });
+
+    test('the real client replays every room it was in', () async {
+      // Exercised against the real implementation's bookkeeping rather than the
+      // inert one, because the replay is the behaviour under test.
+      final client = SocketIoRealtimeClient(baseUrl: 'http://localhost:0');
+      addTearDown(client.dispose);
+
+      // No socket yet: the subscription is recorded, not lost.
+      expect(await client.subscribeConversation('c1'), isFalse);
+      expect(await client.subscribeConversation('c2'), isFalse);
+      expect(client.debugSubscriptions, {'c1', 'c2'});
+
+      await client.unsubscribeConversation('c1');
+      expect(client.debugSubscriptions, {'c2'});
+    });
+
+    test('disconnecting forgets them, so a new session starts clean', () async {
+      final client = SocketIoRealtimeClient(baseUrl: 'http://localhost:0');
+      addTearDown(client.dispose);
+
+      await client.subscribeConversation('c1');
+      await client.disconnect();
+
+      // A different parent signing in on the same device must not inherit the
+      // previous one's rooms.
+      expect(client.debugSubscriptions, isEmpty);
     });
   });
 

@@ -14,6 +14,16 @@ import {
   NotificationType,
 } from '../contracts/notifications';
 
+/**
+ * How long a delivery attempt may be in flight before it is treated as
+ * abandoned.
+ *
+ * Generous relative to a push, which takes milliseconds: the cost of being
+ * wrong in this direction is a duplicate push, and the cost of being wrong in
+ * the other is a stranded row that is never retried and never terminal.
+ */
+const ABANDONED_DELIVERY_MS = 5 * 60_000;
+
 /** A notification row, narrowed to what delivery needs. */
 export interface DeliverableNotification {
   id: string;
@@ -307,7 +317,7 @@ export class DeliveryService {
   ): Promise<{ id: string } | null> {
     const existing = await this.prisma.notificationDelivery.findFirst({
       where: { notificationId: notification.id, channel, deviceTokenId },
-      select: { id: true, status: true, attempts: true },
+      select: { id: true, status: true, attempts: true, updatedAt: true },
     });
 
     if (existing) {
@@ -321,8 +331,32 @@ export class DeliveryService {
       ) {
         return null;
       }
+
+      // An ABANDONED attempt: a worker claimed this row and died before writing
+      // an outcome. Without this branch the row sat in `processing` forever --
+      // never retried, never terminal, and invisible to the operations view as
+      // anything but "still going".
+      //
+      // THE TRADE, stated because it is a real one. The crash may have happened
+      // AFTER the provider accepted the push, in which case re-attempting sends
+      // a second one. Delivery is therefore AT-LEAST-ONCE, not exactly-once,
+      // and cannot be exactly-once: "the provider accepted it" and "we recorded
+      // that it accepted it" are two writes to two systems with no transaction
+      // across them. Given the choice between a parent occasionally seeing a
+      // duplicate push and a parent silently not being told their child's class
+      // was cancelled, this product takes the duplicate.
+      const abandonedBefore = new Date(Date.now() - ABANDONED_DELIVERY_MS);
       const claimed = await this.prisma.notificationDelivery.updateMany({
-        where: { id: existing.id, status: DeliveryStatus.PENDING },
+        where: {
+          id: existing.id,
+          OR: [
+            { status: DeliveryStatus.PENDING },
+            {
+              status: DeliveryStatus.PROCESSING,
+              updatedAt: { lt: abandonedBefore },
+            },
+          ],
+        },
         data: { status: DeliveryStatus.PROCESSING, attempts: { increment: 1 } },
       });
       return claimed.count === 1 ? { id: existing.id } : null;

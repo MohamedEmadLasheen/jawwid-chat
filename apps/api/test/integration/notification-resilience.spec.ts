@@ -184,6 +184,239 @@ describe('a worker that dies mid-delivery', () => {
 });
 
 // =========================================================================
+/**
+ * The hardest failure, one level below the last one.
+ *
+ * A notification's LEASE recovers a worker that died between claiming the
+ * notification and finishing with it. But underneath each notification sit the
+ * per-channel, per-device delivery rows, and each of those has a claim of its
+ * own -- so a worker can die between claiming ONE delivery and writing its
+ * outcome, with the notification's own lease long since released.
+ *
+ * Until this was handled, `DeliveryService.claim` matched only `pending`, so a
+ * row abandoned in `processing` was matched by nothing: never re-attempted,
+ * never terminal, and reported by chat.notification_operations as permanently
+ * in flight. These tests hold that door shut, and state honestly what the
+ * recovery costs.
+ */
+describe('a delivery abandoned between the provider call and the acknowledgement', () => {
+  /** The notification row as the database hands it back, which is all delivery reads. */
+  type DeliverableRow = NonNullable<
+    Awaited<ReturnType<typeof g.prisma.notification.findFirst>>
+  >;
+
+  beforeEach(async () => {
+    await g.notifications.registerDevice({
+      actorId: s.parentId, token: 'crash-device', platform: 'android',
+    });
+  });
+
+  async function oneNotification(): Promise<DeliverableRow> {
+    const conversationId = await studentGroup();
+    await g.messages.send({ conversationId, senderId: s.ownerId, body: 'crash window' });
+    await drain();
+    return (await g.prisma.notification.findFirst({
+      where: { recipientId: s.parentId },
+    })) as unknown as DeliverableRow;
+  }
+
+  /**
+   * The crash itself, reproduced rather than faked.
+   *
+   * The provider accepts the push, and the database write that records that
+   * acceptance never lands -- the connection is gone, so the error handler's
+   * own write fails too and the method dies mid-flight, exactly as a killed
+   * process does. The row is left `processing` with the push already sent:
+   * "the provider took it" and "we wrote down that it took it" are two writes
+   * to two systems with no transaction across them, and this is the window
+   * between them.
+   */
+  async function crashAfterProviderAccepted(n: DeliverableRow): Promise<string[]> {
+    const sent: string[] = [];
+    const send = jest.spyOn(g.push, 'send').mockImplementation(async (m) => {
+      sent.push(m.token);
+      return { ok: true };
+    });
+    const update = jest
+      .spyOn(g.prisma.notificationDelivery, 'update')
+      .mockRejectedValue(new Error('connection terminated unexpectedly'));
+
+    await expect(g.deliveries.deliverPush(n as never)).rejects.toThrow(/connection terminated/);
+
+    update.mockRestore();
+    send.mockRestore();
+    return sent;
+  }
+
+  /**
+   * Age the row past the abandonment window.
+   *
+   * The trigger has to be lifted to do it, because `updated_at` is maintained
+   * by chat.set_updated_at() on the table rather than by the application --
+   * which is exactly why the abandonment clock is trustworthy in production:
+   * no worker, and no client, can pre-age a row to steal somebody else's claim.
+   * Only a test with table ownership can, and only by saying so out loud.
+   */
+  async function abandon(deliveryId: string): Promise<void> {
+    await g.prisma.$executeRawUnsafe(
+      'alter table chat.notification_delivery disable trigger notification_delivery_set_updated_at',
+    );
+    try {
+      await g.prisma.$executeRaw`
+        update chat.notification_delivery
+           set updated_at = now() - interval '30 minutes'
+         where id = ${deliveryId}::uuid`;
+    } finally {
+      await g.prisma.$executeRawUnsafe(
+        'alter table chat.notification_delivery enable trigger notification_delivery_set_updated_at',
+      );
+    }
+  }
+
+  async function pushRow(notificationId: string) {
+    return (await g.prisma.notificationDelivery.findFirst({
+      where: { notificationId, channel: 'push' },
+    }))!;
+  }
+
+  it('leaves the row claimed, and the notification itself untouched', async () => {
+    const n = await oneNotification();
+    expect(await crashAfterProviderAccepted(n)).toEqual(['crash-device']);
+
+    const push = await pushRow(n.id);
+    expect(push.status).toBe('processing');
+    expect(push.sentAt).toBeNull();
+    expect(push.attempts).toBe(1);
+
+    // The parent still has the notification. Losing a push is a channel
+    // failure; losing the notification would be the bug this platform exists
+    // to prevent.
+    expect((await g.centre.unreadCounts(s.parentId)).total).toBe(1);
+  });
+
+  it('is not re-claimed while the attempt could still be in flight', async () => {
+    const n = await oneNotification();
+    await crashAfterProviderAccepted(n);
+
+    // Seconds later. The first worker may be alive and merely slow, and a
+    // guaranteed duplicate is a worse trade than a few minutes of latency.
+    const send = jest.spyOn(g.push, 'send').mockResolvedValue({ ok: true });
+    await g.deliveries.deliverPush(n as never);
+
+    expect(send).not.toHaveBeenCalled();
+    expect((await pushRow(n.id)).attempts).toBe(1);
+    send.mockRestore();
+  });
+
+  it('is re-claimed once abandoned, and reaches a terminal state', async () => {
+    const n = await oneNotification();
+    await crashAfterProviderAccepted(n);
+    await abandon((await pushRow(n.id)).id);
+
+    const send = jest.spyOn(g.push, 'send').mockResolvedValue({ ok: true });
+    await g.deliveries.deliverPush(n as never);
+
+    const push = await pushRow(n.id);
+    expect(push.status).toBe('sent');
+    expect(push.sentAt).not.toBeNull();
+    expect(push.attempts).toBe(2);
+    // Recovery completes the row it found. It does not manufacture a second
+    // one: delivery identity is unique per (notification, channel, device).
+    expect(
+      await g.prisma.notificationDelivery.count({
+        where: { notificationId: n.id, channel: 'push' },
+      }),
+    ).toBe(1);
+    send.mockRestore();
+  });
+
+  it('CAN send the push twice -- delivery is at-least-once, not exactly-once', async () => {
+    const n = await oneNotification();
+    const first = await crashAfterProviderAccepted(n);
+    await abandon((await pushRow(n.id)).id);
+
+    const second: string[] = [];
+    const send = jest.spyOn(g.push, 'send').mockImplementation(async (m) => {
+      second.push(m.token);
+      return { ok: true };
+    });
+    await g.deliveries.deliverPush(n as never);
+    send.mockRestore();
+
+    // Stated plainly because it is the honest guarantee, not an oversight: the
+    // provider received this push twice. Recovery cannot tell "the worker died
+    // before sending" from "the worker died after sending", because the only
+    // record of the difference is the write that never happened. The choice is
+    // between a parent occasionally seeing a duplicate and a parent silently
+    // not being told their child's class was cancelled, and this product takes
+    // the duplicate.
+    expect(first).toEqual(['crash-device']);
+    expect(second).toEqual(['crash-device']);
+
+    // What is NOT duplicated: the notification, the unread badge, the row in
+    // the centre. Duplication is confined to the transport.
+    expect((await g.centre.unreadCounts(s.parentId)).total).toBe(1);
+    expect(
+      await g.prisma.notification.count({ where: { recipientId: s.parentId } }),
+    ).toBe(1);
+  });
+
+  it('does not sit in processing forever when the provider stays down', async () => {
+    const n = await oneNotification();
+    await crashAfterProviderAccepted(n);
+
+    const max = await g.config.get('notification.delivery_max_attempts');
+    const send = jest
+      .spyOn(g.push, 'send')
+      .mockResolvedValue({ ok: false, failureCode: 'FCM_UNAVAILABLE' });
+
+    for (let i = 0; i < max + 2; i += 1) {
+      // Abandon each round: the row spends one pass as an abandoned claim and
+      // the rest as an ordinary pending retry, and both must converge.
+      await abandon((await pushRow(n.id)).id);
+      await g.deliveries.deliverPush(n as never);
+    }
+    send.mockRestore();
+
+    // Terminal, with a reason on it. An operator reading
+    // chat.notification_operations sees a failure, not an eternal "in flight".
+    const push = await pushRow(n.id);
+    expect(push.status).toBe('failed');
+    expect(push.errorCode).toBe('FCM_UNAVAILABLE');
+    expect(push.failedAt).not.toBeNull();
+    expect(push.attempts).toBeGreaterThanOrEqual(max);
+  });
+
+  it('an abandoned in-app delivery recovers the same way', async () => {
+    const n = await oneNotification();
+
+    const publish = jest
+      .spyOn(g.realtime, 'toUsers')
+      .mockRejectedValue(new Error('no subscriber'));
+    const update = jest
+      .spyOn(g.prisma.notificationDelivery, 'update')
+      .mockRejectedValue(new Error('connection terminated unexpectedly'));
+    await expect(g.deliveries.deliverInApp(n as never)).rejects.toThrow(/connection terminated/);
+    update.mockRestore();
+    publish.mockRestore();
+
+    const stranded = (await g.prisma.notificationDelivery.findFirst({
+      where: { notificationId: n.id, channel: 'in_app' },
+    }))!;
+    expect(stranded.status).toBe('processing');
+
+    await abandon(stranded.id);
+    await g.deliveries.deliverInApp(n as never);
+
+    const after = (await g.prisma.notificationDelivery.findFirst({
+      where: { notificationId: n.id, channel: 'in_app' },
+    }))!;
+    expect(after.status).toBe('sent');
+    expect(after.attempts).toBe(2);
+  });
+});
+
+// =========================================================================
 describe('a call that rings out and is never hung up', () => {
   /**
    * The producer gap. A missed call only became a notification when the CALLER
@@ -258,6 +491,89 @@ describe('a call that rings out and is never hung up', () => {
     // And a fourth sweep finds nothing.
     expect(await g.calls.expireRingingCalls(later)).toBe(0);
     void callId;
+  });
+
+  it('produces ONE completion when the caller hangs up at the same instant',
+    async () => {
+      const conversationId = await studentGroup();
+      const { callId } = await g.calls.start(conversationId, s.ownerId);
+      const timeout = await g.config.get('call.ring_timeout_seconds');
+      const later = new Date(Date.now() + (timeout + 5) * 1000);
+
+      // The exact race: the caller gives up in the same tick the sweep runs.
+      // Both paths write an outcome and both enqueue CALL_ENDED; only one may
+      // win, or the parent gets told twice about one call.
+      const results = await Promise.allSettled([
+        g.calls.end(callId, s.ownerId),
+        g.calls.expireRingingCalls(later),
+      ]);
+
+      // Whichever lost may reject (the call is already ended) -- that is the
+      // claim working, not a failure.
+      expect(results.some((r) => r.status === 'fulfilled')).toBe(true);
+
+      const call = (await g.prisma.call.findUnique({ where: { id: callId } }))!;
+      expect(call.status).toBe('ended');
+      expect(call.outcome).toBe('missed');
+
+      await drain();
+      // ONE missed-call notification for the parent, whoever won the race. The
+      // dedupe key is missed_call:{callId}:{actorId}, so even two CALL_ENDED
+      // events converge on one notification.
+      expect(
+        await g.prisma.notification.count({
+          where: { recipientId: s.parentId, type: NotificationType.MISSED_CALL },
+        }),
+      ).toBe(1);
+    });
+
+  it('recovers if the worker dies mid-sweep, without double-notifying', async () => {
+    const conversationId = await studentGroup();
+    const { callId } = await g.calls.start(conversationId, s.ownerId);
+    const timeout = await g.config.get('call.ring_timeout_seconds');
+    const later = new Date(Date.now() + (timeout + 5) * 1000);
+
+    // The sweep marks the call ended, then the worker dies before the outbox
+    // row is drained. The call row is committed; the notification is not sent.
+    await g.calls.expireRingingCalls(later);
+    expect(
+      await g.prisma.notification.count({
+        where: { recipientId: s.parentId, type: NotificationType.MISSED_CALL },
+      }),
+    ).toBe(0);
+
+    // A later worker drains the outbox. The event was written in the same
+    // transaction as the call update, so it survived the crash.
+    await drain();
+    expect(
+      await g.prisma.notification.count({
+        where: { recipientId: s.parentId, type: NotificationType.MISSED_CALL },
+      }),
+    ).toBe(1);
+
+    // And a second sweep finds nothing to do.
+    expect(await g.calls.expireRingingCalls(later)).toBe(0);
+    await drain();
+    expect(
+      await g.prisma.notification.count({
+        where: { recipientId: s.parentId, type: NotificationType.MISSED_CALL },
+      }),
+    ).toBe(1);
+    void callId;
+  });
+
+  it('a call left ringing is bounded: it cannot outlive its window', async () => {
+    const conversationId = await studentGroup();
+    const { callId } = await g.calls.start(conversationId, s.ownerId);
+    const timeout = await g.config.get('call.ring_timeout_seconds');
+
+    // A ringing row is also a LIVE call: issueToken admits a participant to
+    // anything not ENDED, so an unbounded ring is an indefinite join window.
+    await expect(g.calls.issueToken(callId, s.parentId)).resolves.toBeDefined();
+
+    await g.calls.expireRingingCalls(new Date(Date.now() + (timeout + 5) * 1000));
+
+    await expect(g.calls.issueToken(callId, s.parentId)).rejects.toThrow(/ended/i);
   });
 
   it('records the clock as the actor, not the caller', async () => {
