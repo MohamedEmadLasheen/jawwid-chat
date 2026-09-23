@@ -105,8 +105,17 @@ comment on policy notification_own_read_state on chat.notification is
 -- A recipient may mark their own notification read or opened, and nothing else.
 -- Without this, notification_own_read_state would let them rewrite their own
 -- notification's title, priority or deep link.
+--
+-- `status` and `delivered_at` are deliberately NOT granted, even though they
+-- also describe this recipient's own notification. They are the system's record
+-- of what the pipeline did, and a client that could write them could report a
+-- delivery that never happened -- which would make the operational record, the
+-- thing support reads back when a parent says "I never got it", forgeable by
+-- the one party with a reason to forge it. Client-reported delivery goes
+-- through POST /notifications/:id/delivered, which the API writes as the
+-- system after checking the notification is theirs.
 revoke update on chat.notification from authenticated;
-grant update (read_at, opened_at, status, delivered_at) on chat.notification to authenticated;
+grant update (read_at, opened_at) on chat.notification to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Deliveries -- readable, never writable

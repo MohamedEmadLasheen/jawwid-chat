@@ -5,9 +5,9 @@ import type { IdentityService } from '../../platform/identity.service';
 import type { RealtimePublisher } from '../realtime/realtime.publisher';
 import { CommEvent, CommEventName } from '../contracts/events';
 import { NotificationService } from '../notifications/notification.service';
-import { RecipientResolver, ResolvedRecipient } from '../notifications/recipient-resolver.service';
+import { RecipientResolver } from '../notifications/recipient-resolver.service';
 import { PresenceService } from '../realtime/presence.service';
-import { ActorKind, CallOutcome, MemberRole, Visibility } from '../contracts/vocab';
+import { ActorKind, CallOutcome, Visibility } from '../contracts/vocab';
 import { NotificationType, messageNotificationType } from '../contracts/notifications';
 
 /**
@@ -398,10 +398,5 @@ export class OutboxWorker {
     } catch {
       return false;
     }
-  }
-
-  /** Unused today; kept so the type stays exercised by the compiler. */
-  private static memberIsParent(member: ResolvedRecipient): boolean {
-    return member.memberRole === MemberRole.PARENT;
   }
 }

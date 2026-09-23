@@ -248,14 +248,6 @@
   "notificationUnreadLabel": "غير مقروء",
   "notificationUrgentLabel": "عاجل",
   "notificationImportantLabel": "مهم",
-  "notificationGroupCount": "{count, plural, =1{رسالة واحدة} other{{count} رسائل}}",
-  "@notificationGroupCount": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "notificationFilterAll": "الكل",
   "notificationFilterUnread": "غير المقروء",
   "notificationFilterMessages": "الرسائل",

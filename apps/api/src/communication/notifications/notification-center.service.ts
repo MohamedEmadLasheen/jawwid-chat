@@ -25,8 +25,6 @@ export interface NotificationCard {
   senderId: string | null;
   senderName: string | null;
   announcementId: string | null;
-  /** >1 when this card stands for a collapsed burst. */
-  groupCount: number;
   imageUrl: string | null;
 }
 
@@ -57,6 +55,14 @@ const MAX_LIMIT = 100;
  * Read paths only. Nothing here creates a notification -- creation is the
  * engine's, driven by system events, and a centre that could create would be a
  * way for a client to write into its own history.
+ *
+ * GROUPING IS NOT APPLIED HERE. A burst from one sender is collapsed at the
+ * PUSH -- one buzz, not five -- and the centre keeps every notification,
+ * because the centre is the record: a parent looking for what they were told
+ * about Tuesday's class needs the notification, not a count of its siblings.
+ * Collapsing here would also need a window function partitioned over the whole
+ * history to find the newest of each group, which is a full scan per page and
+ * is precisely the query this service must not have at a million rows.
  *
  * EVERY QUERY IS SCOPED BY recipient_id, AND recipient_id COMES FROM THE
  * AUTHENTICATED ACTOR, never from a parameter. There is no endpoint, filter or
@@ -117,7 +123,6 @@ export class NotificationCenterService {
     const page = hasMore ? rows.slice(0, limit) : rows;
 
     const senderNames = await this.senderNames(page.map((r) => r.senderId));
-    const groupCounts = await this.groupCounts(actorId, page);
 
     const items = page.map((r) => ({
       id: r.id,
@@ -138,7 +143,6 @@ export class NotificationCenterService {
       senderId: r.senderId,
       senderName: r.senderId ? (senderNames.get(r.senderId) ?? null) : null,
       announcementId: r.announcementId,
-      groupCount: r.groupKey ? (groupCounts.get(r.groupKey) ?? 1) : 1,
       imageUrl: r.announcement?.imageUrl ?? null,
     }));
 
@@ -245,7 +249,6 @@ export class NotificationCenterService {
    * is not found, so a guessed id yields nothing.
    */
   async byId(actorId: string, notificationId: string): Promise<NotificationCard> {
-    const page = await this.list(actorId, { limit: 1 });
     const direct = await this.prisma.notification.findFirst({
       where: { id: notificationId, recipientId: actorId },
       include: {
@@ -262,7 +265,6 @@ export class NotificationCenterService {
     }
 
     const senderNames = await this.senderNames([direct.senderId]);
-    void page;
 
     return {
       id: direct.id,
@@ -283,33 +285,11 @@ export class NotificationCenterService {
       senderId: direct.senderId,
       senderName: direct.senderId ? (senderNames.get(direct.senderId) ?? null) : null,
       announcementId: direct.announcementId,
-      groupCount: 1,
       imageUrl: direct.announcement?.imageUrl ?? null,
     };
   }
 
   // -- internals ------------------------------------------------------------
-
-  /**
-   * How many unread notifications each visible group stands for.
-   *
-   * Computed for the page being rendered only, never for the whole history: a
-   * rollup count is a display detail and must not turn a page read into a scan.
-   */
-  private async groupCounts(
-    actorId: string,
-    rows: Array<{ groupKey: string | null }>,
-  ): Promise<Map<string, number>> {
-    const keys = [...new Set(rows.map((r) => r.groupKey).filter((k): k is string => !!k))];
-    if (keys.length === 0) return new Map();
-
-    const grouped = await this.prisma.notification.groupBy({
-      by: ['groupKey'],
-      where: { recipientId: actorId, groupKey: { in: keys }, readAt: null },
-      _count: { _all: true },
-    });
-    return new Map(grouped.map((g) => [g.groupKey as string, g._count._all]));
-  }
 
   /**
    * Sender display names.

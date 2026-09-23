@@ -32,7 +32,6 @@ void main() {
     String? learnerName,
     String? conversationId,
     String? deeplink,
-    int groupCount = 1,
   }) =>
       AppNotification(
         id: id,
@@ -45,7 +44,6 @@ void main() {
         learnerName: learnerName,
         conversationId: conversationId,
         deeplink: deeplink,
-        groupCount: groupCount,
       );
 
   Widget harness({
@@ -147,18 +145,23 @@ void main() {
       expect(find.text('أحمد'), findsOneWidget);
     });
 
-    testWidgets('shows how many messages a collapsed card stands for',
+    testWidgets('shows every notification in a burst, not a rollup',
         (tester) async {
       await tester.pumpWidget(
         harness(
-          repository: repo([notification(id: 'n1', groupCount: 5)]),
+          repository: repo([
+            notification(id: 'n1'),
+            notification(id: 'n2'),
+            notification(id: 'n3'),
+          ]),
           child: const NotificationCenterScreen(),
         ),
       );
       await tester.pumpAndSettle();
 
-      final l10n = await L10n.delegate.load(const Locale('ar'));
-      expect(find.text(l10n.notificationGroupCount(5)), findsOneWidget);
+      // The burst is collapsed at the push -- one buzz, not three -- and not in
+      // the history a parent scrolls back through.
+      expect(find.byType(NotificationCard), findsNWidgets(3));
     });
 
     testWidgets('marks urgent, and does not mark ordinary', (tester) async {

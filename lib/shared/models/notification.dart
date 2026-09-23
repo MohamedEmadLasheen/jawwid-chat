@@ -84,7 +84,6 @@ class AppNotification {
     this.senderId,
     this.senderName,
     this.announcementId,
-    this.groupCount = 1,
     this.imageUrl,
   });
 
@@ -123,13 +122,9 @@ class AppNotification {
   final String? senderId;
   final String? senderName;
   final String? announcementId;
-
-  /// How many notifications this card stands for when a burst was collapsed.
-  final int groupCount;
   final String? imageUrl;
 
   bool get isUnread => readAt == null;
-  bool get isGrouped => groupCount > 1;
 
   AppNotification copyWith({DateTime? readAt}) => AppNotification(
         id: id,
@@ -150,7 +145,6 @@ class AppNotification {
         senderId: senderId,
         senderName: senderName,
         announcementId: announcementId,
-        groupCount: groupCount,
         imageUrl: imageUrl,
       );
 }

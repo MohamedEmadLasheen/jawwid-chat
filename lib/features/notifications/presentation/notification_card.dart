@@ -189,13 +189,6 @@ class _Chips extends StatelessWidget {
           foreground: tokens.colorTextSecondary,
           background: tokens.colorSurfaceMuted,
         ),
-      if (notification.isGrouped)
-        _Chip(
-          label: l10n.notificationGroupCount(notification.groupCount),
-          icon: Icons.layers_outlined,
-          foreground: tokens.colorTextSecondary,
-          background: tokens.colorSurfaceMuted,
-        ),
       // Only high and urgent are marked. Marking everything marks nothing.
       if (notification.priority == NotificationPriority.urgent)
         _Chip(

@@ -581,17 +581,6 @@ class L10nAr extends L10n {
   String get notificationImportantLabel => 'مهم';
 
   @override
-  String notificationGroupCount(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count رسائل',
-      one: 'رسالة واحدة',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get notificationFilterAll => 'الكل';
 
   @override

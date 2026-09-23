@@ -1147,12 +1147,6 @@ abstract class L10n {
   /// **'Important'**
   String get notificationImportantLabel;
 
-  /// No description provided for @notificationGroupCount.
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{1 message} other{{count} messages}}'**
-  String notificationGroupCount(int count);
-
   /// No description provided for @notificationFilterAll.
   ///
   /// In en, this message translates to:

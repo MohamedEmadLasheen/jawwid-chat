@@ -579,17 +579,6 @@ class L10nEn extends L10n {
   String get notificationImportantLabel => 'Important';
 
   @override
-  String notificationGroupCount(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count messages',
-      one: '1 message',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get notificationFilterAll => 'All';
 
   @override

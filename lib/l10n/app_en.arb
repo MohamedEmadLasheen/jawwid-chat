@@ -248,14 +248,6 @@
   "notificationUnreadLabel": "Unread",
   "notificationUrgentLabel": "Urgent",
   "notificationImportantLabel": "Important",
-  "notificationGroupCount": "{count, plural, =1{1 message} other{{count} messages}}",
-  "@notificationGroupCount": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "notificationFilterAll": "All",
   "notificationFilterUnread": "Unread",
   "notificationFilterMessages": "Messages",

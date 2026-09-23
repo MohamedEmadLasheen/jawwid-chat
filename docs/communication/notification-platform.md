@@ -133,10 +133,26 @@ authority, and a deleted or now-forbidden target renders a fallback.
 
 ## 6. Grouping and spam control
 
-`group_key` collapses same-sender message bursts in the notification centre and
-in the push rollup (`5 new messages`). Grouping is **refused** for
-`CLASS_SCHEDULE_CHANGED`, `CLASS_CANCELLED`, `MISSED_CALL` and any `urgent`
-priority: collapsing those would hide the information that makes them matter.
+Grouping is applied **at the push, not in the centre**.
+
+A teacher typing five short messages in a row buzzes a parent's phone once. The
+first notification in a group pushes; the rest inside
+`notification.group_window_seconds` are recorded `skipped` with reason
+`GROUPED`. All five in-app notifications land, the badge counts five, and the
+centre holds five. Once the parent has read one, the burst is over and the next
+message buzzes again — a group key does not swallow a notification because of a
+sibling that was already read.
+
+The obvious alternative — one card per group in the centre, "5 new messages" —
+was rejected on two grounds. Finding the newest of each group needs a window
+function partitioned over the recipient's whole history, which is a full scan
+per page and is exactly the query this system must not have at a million rows.
+And the centre is the **record**: a parent looking for what they were told about
+Tuesday's class needs the notification, not a count of its siblings.
+
+Grouping is **refused outright** for `CLASS_SCHEDULE_CHANGED`,
+`CLASS_CANCELLED`, `MISSED_CALL` and anything `urgent` — they carry no group key
+at all, so a burst of them buzzes every time.
 
 When the recipient is **actively viewing the conversation** (realtime presence
 in the conversation room), a message notification is created in-app and its

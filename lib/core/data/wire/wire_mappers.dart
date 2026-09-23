@@ -249,7 +249,6 @@ abstract final class WireMappers {
       senderId: json['senderId'] as String?,
       senderName: json['senderName'] as String?,
       announcementId: json['announcementId'] as String?,
-      groupCount: (json['groupCount'] as num?)?.toInt() ?? 1,
       imageUrl: json['imageUrl'] as String?,
     );
   }

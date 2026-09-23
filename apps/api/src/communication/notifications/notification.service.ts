@@ -179,9 +179,12 @@ export class NotificationService {
           templateKey,
           recipientId: input.recipientId,
           locale,
-          // Retained for the rule/report surface that still reads it. Per-channel
-          // truth lives in chat.notification_delivery.
-          channel: DeliveryChannel.PUSH,
+          // The channel set that was REQUESTED. Per-channel truth -- what was
+          // actually attempted, to which device, and how it went -- lives on
+          // chat.notification_delivery; this stays because the rule and report
+          // surfaces read it, and it must not claim 'push' for a rule that
+          // asked for in-app only.
+          channel: input.inAppOnly ? DeliveryChannel.IN_APP : DeliveryChannel.PUSH,
           title,
           body,
           entityType: def.entityType,
@@ -266,14 +269,16 @@ export class NotificationService {
     });
     if (alreadySkipped) return true;
 
-    const pushed = await this.deliveries.deliverPush(n);
+    await this.deliveries.deliverPush(n);
 
-    // A push that could not go out is NOT a failed notification. The parent has
-    // it, in the app, with an unread badge, the moment they open it. Marking
-    // the notification failed here would turn "their phone is off" into "we
-    // lost it", and would retry a notification that has already been delivered
-    // by the channel that matters.
-    return pushed || true;
+    // Deliberately ignores whether the push went out. A push that could not be
+    // sent is NOT a failed notification: the parent has it, in the app, with an
+    // unread badge, the moment they open it. Treating a failed push as a failed
+    // notification would turn "their phone is off" into "we lost it", and would
+    // re-dispatch something already delivered by the channel that matters. The
+    // push's own outcome is recorded per device on chat.notification_delivery,
+    // which is where that question belongs.
+    return true;
   }
 
   private async recordSuppression(
@@ -312,6 +317,11 @@ export class NotificationService {
     // A cancelled class reaches a parent who is muted, asleep and mid-chat.
     if (essential) return;
 
+    if (await this.isBurst(notificationId, input, def)) {
+      await this.deliveries.skip(stub, DeliveryChannel.PUSH, SkipReason.GROUPED);
+      return;
+    }
+
     if (input.recipientIsActive) {
       // They are looking at the conversation. A push would buzz a phone that is
       // already open on the message. The in-app notification and the unread
@@ -328,6 +338,64 @@ export class NotificationService {
     if (!(await this.preferences.allowsPush(input.recipientId, def))) {
       await this.deliveries.skip(stub, DeliveryChannel.PUSH, SkipReason.PREFERENCE_OFF);
     }
+  }
+
+  /**
+   * GROUPING, applied where notification spam actually hurts: the push.
+   *
+   * A teacher typing five short messages in a row should buzz a parent's phone
+   * once, not five times. So the first notification in a group pushes and the
+   * rest within the grouping window do not -- they are recorded as skipped with
+   * reason GROUPED, and their in-app notifications land as normal, so the
+   * centre still holds all five and the badge still counts all five.
+   *
+   * WHY NOT COLLAPSE THE CENTRE TOO. The obvious alternative -- one card per
+   * group, "5 new messages" -- was rejected on two grounds. It needs a window
+   * function partitioned over the recipient's whole history to find the newest
+   * of each group, which is a full scan per page and is exactly the query this
+   * system must not have at a million rows. And the centre is the RECORD: a
+   * parent looking for the message about Tuesday's class needs the message,
+   * not a count of its siblings. History stays whole; the phone stays quiet.
+   *
+   * Only groupable types reach this. Schedule changes, cancellations, missed
+   * calls and anything urgent carry no group key at all, so a burst of those
+   * buzzes every time -- which is the correct behaviour for each of them.
+   */
+  private async isBurst(
+    notificationId: string,
+    input: ScheduleInput,
+    def: ReturnType<typeof definitionOf>,
+  ): Promise<boolean> {
+    if (!def.groupable) return false;
+
+    const groupKey = def.groupKey?.({
+      conversationId: input.conversationId,
+      messageId: input.messageId,
+      callId: input.callId,
+      learnerId: input.learnerId,
+      announcementId: input.announcementId,
+      senderId: input.senderId,
+    });
+    if (!groupKey) return false;
+
+    const windowSeconds = await this.config.get('notification.group_window_seconds');
+    const since = new Date(Date.now() - windowSeconds * 1000);
+
+    // An UNREAD sibling inside the window. Unread matters: once the parent has
+    // opened the thread the burst is over, and the next message should buzz
+    // again rather than be swallowed because of one that arrived an hour ago.
+    const sibling = await this.prisma.notification.findFirst({
+      where: {
+        recipientId: input.recipientId,
+        groupKey,
+        readAt: null,
+        createdAt: { gte: since },
+        id: { not: notificationId },
+      },
+      select: { id: true },
+    });
+
+    return sibling !== null;
   }
 
   private entityIdFor(input: ScheduleInput, entityType: string): string | null {

@@ -851,12 +851,15 @@ describe('the notification centre', () => {
     expect(counts.byCategory.classes).toBe(0);
   });
 
-  it('shows how many messages a collapsed card stands for', async () => {
+  it('keeps every notification, because the centre is the record', async () => {
     await fill(5);
     const page = await g.centre.list(s.parentId);
-    // Five messages from one sender in one thread share a group key.
-    expect(page.items[0].groupCount).toBe(5);
+    // Five messages are five notifications here. The burst is collapsed at the
+    // push -- one buzz, not five -- and not in the history a parent scrolls
+    // back through looking for what they were actually told.
+    expect(page.items).toHaveLength(5);
     expect(new Set(page.items.map((i) => i.id)).size).toBe(5);
+    expect((await g.centre.unreadCounts(s.parentId)).total).toBe(5);
   });
 
   it('names the child and the sender on the card', async () => {
@@ -1037,6 +1040,109 @@ describe('preferences', () => {
         where: { actorId: s.parentId, category: 'billing' },
       }),
     ).toBe(1);
+  });
+});
+
+// =========================================================================
+describe('grouping', () => {
+  it('a burst from one sender buzzes once, and all of it reaches the centre',
+    async () => {
+      await g.notifications.registerDevice({
+        actorId: s.parentId, token: 'burst-device', platform: 'ios',
+      });
+      const conversationId = await studentGroup();
+
+      for (let i = 0; i < 5; i += 1) {
+        await g.messages.send({ conversationId, senderId: s.ownerId, body: `m${i}` });
+      }
+      await drain();
+      await g.notifications.dispatchDue(new Date());
+
+      const notifications = await g.prisma.notification.findMany({
+        where: { recipientId: s.parentId },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      // Five notifications, five unread, nothing lost.
+      expect(notifications).toHaveLength(5);
+      expect((await g.centre.unreadCounts(s.parentId)).total).toBe(5);
+
+      // One push attempted; the other four recorded as deliberately skipped.
+      const pushes = await g.prisma.notificationDelivery.findMany({
+        where: { recipientId: s.parentId, channel: 'push' },
+      });
+      expect(pushes.filter((p) => p.status !== 'skipped')).toHaveLength(1);
+      expect(pushes.filter((p) => p.skipReason === 'GROUPED')).toHaveLength(4);
+
+      // And every one of them still got its in-app delivery.
+      const inApp = await g.prisma.notificationDelivery.findMany({
+        where: { recipientId: s.parentId, channel: 'in_app' },
+      });
+      expect(inApp).toHaveLength(5);
+    });
+
+  it('buzzes again once the parent has caught up', async () => {
+    await g.notifications.registerDevice({
+      actorId: s.parentId, token: 'burst-device-2', platform: 'ios',
+    });
+    const conversationId = await studentGroup();
+
+    await g.messages.send({ conversationId, senderId: s.ownerId, body: 'first' });
+    await drain();
+    // They read it, so the burst is over.
+    await g.centre.markAllRead(s.parentId);
+
+    await g.messages.send({ conversationId, senderId: s.ownerId, body: 'second' });
+    await drain();
+    await g.notifications.dispatchDue(new Date());
+
+    const pushes = await g.prisma.notificationDelivery.findMany({
+      where: { recipientId: s.parentId, channel: 'push' },
+    });
+    // Swallowing this one because of a message they already read would be a
+    // notification silently lost.
+    expect(pushes.filter((p) => p.skipReason === 'GROUPED')).toHaveLength(0);
+  });
+
+  it('never groups a schedule change, however many arrive', async () => {
+    await g.notifications.registerDevice({
+      actorId: s.parentId, token: 'sched-device', platform: 'ios',
+    });
+    await g.prisma.learner.update({
+      where: { id: s.learnerId },
+      data: { nextClassAt: new Date('2026-09-29T14:00:00Z') },
+    });
+    const admin = {
+      actorId: s.ownerId, kind: 'staff' as const, displayName: 'admin_a',
+      locale: 'ar' as const, isActive: true, staffRole: 'admin' as const,
+    };
+
+    await g.classSchedule.reschedule(admin, {
+      learnerId: s.learnerId,
+      nextClassAt: new Date('2026-09-29T15:00:00Z'),
+      reason: 'first',
+    });
+    await g.classSchedule.reschedule(admin, {
+      learnerId: s.learnerId,
+      nextClassAt: new Date('2026-09-29T16:00:00Z'),
+      reason: 'second',
+    });
+    await g.notifications.dispatchDue(new Date());
+
+    const changes = await g.prisma.notification.findMany({
+      where: { recipientId: s.parentId, type: NotificationType.CLASS_SCHEDULE_CHANGED },
+    });
+    expect(changes).toHaveLength(2);
+    // Both carry no group key at all, so neither can ever be swallowed.
+    expect(changes.every((c) => c.groupKey === null)).toBe(true);
+
+    const pushes = await g.prisma.notificationDelivery.findMany({
+      where: {
+        channel: 'push',
+        notificationId: { in: changes.map((c) => c.id) },
+      },
+    });
+    expect(pushes.filter((p) => p.skipReason === 'GROUPED')).toHaveLength(0);
   });
 });
 
