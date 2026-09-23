@@ -10,14 +10,26 @@
  * the read path signs, and that fetching through that signature returns the
  * bytes that were sent.
  *
- * Every hop is the production implementation. The two storage hops go through
- * `StorageController` with request/response doubles, which is how the storage
- * route is exercised everywhere in this repository -- the API has no HTTP
- * integration harness, and standing one up would mean booting the whole
- * AppModule (auth, Redis, realtime) for two calls. The signature is still
- * parsed out of the minted URL and verified by the real storage, and the bytes
- * still travel through `LocalFsBlobStore`: nothing reads the filesystem behind
- * the controller's back.
+ * Every hop is the production implementation. This follows the established
+ * approach for the communication domain: the service graph from `harness.ts`,
+ * and `StorageController` driven through request/response doubles the way
+ * `test/unit/attachments/voice-storage.spec.ts` drives it.
+ *
+ * The repository does also have a real HTTP integration precedent --
+ * `auth-trusted-proxy.spec.ts` boots selected Nest modules into an application
+ * listening on 127.0.0.1 and exercises genuine socket behaviour. So the scope
+ * note here is narrow and deliberate: this test does NOT reach
+ * `StorageController` over a socket. A test that did would need a small
+ * application of its own, because `CommunicationModule` -- where the controller
+ * lives -- carries Socket.IO, Redis-adapter and BullMQ handles whose teardown
+ * does not survive repeated boots in one process, which is the same reason that
+ * auth test leaves the module out. Building that harness is its own piece of
+ * work and is not in scope here.
+ *
+ * What this test does guarantee is that nothing is faked behind the controller:
+ * the signature is parsed out of the minted URL and verified by the real
+ * storage, and the bytes travel through `LocalFsBlobStore` rather than being
+ * read from the temp directory directly.
  */
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
