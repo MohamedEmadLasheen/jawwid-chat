@@ -121,6 +121,8 @@ export type CallOutcome = (typeof CallOutcome)[keyof typeof CallOutcome];
 
 export const NotificationStatus = {
   SCHEDULED: 'scheduled',
+  /** A worker holds a lease on it. Abandoned once the lease expires. */
+  PROCESSING: 'processing',
   SENT: 'sent',
   DELIVERED: 'delivered',
   OPENED: 'opened',

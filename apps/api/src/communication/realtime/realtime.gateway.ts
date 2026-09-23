@@ -1,4 +1,4 @@
-import { Inject, Logger } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
@@ -10,8 +10,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { AuthorizationService } from '../../platform/authorization.service';
-import { IDENTITY_SERVICE } from '../../platform/tokens';
-import type { IdentityService } from '../../platform/identity.service';
+import { AuthService } from '../../platform/auth/auth.service';
 import { Actor } from '../../platform/types';
 import { CommEvent, CommEventName, CommEventPayloads, room } from '../contracts/events';
 import { RealtimePublisher } from './realtime.publisher';
@@ -20,14 +19,28 @@ import { PresenceService } from './presence.service';
 import { MessageService } from '../messages/message.service';
 import { ConversationService } from '../conversations/conversation.service';
 import { ReceiptState } from '../contracts/vocab';
+import { bearerToken } from '../../platform/auth/auth.guard';
 
 interface AuthedSocket extends Socket {
   actor?: Actor;
+  /** chat.session.id behind this connection. Revoking it ends the socket. */
+  sessionId?: string;
 }
 
 /**
  * Socket.IO gateway. Horizontal scaling uses the Redis adapter (wired in main.ts),
  * so a message sent on one node reaches sockets held by every other node.
+ *
+ * AUTHENTICATION: the handshake carries `auth: { token }` -- the SAME access
+ * token the HTTP Authorization header carries -- and it is verified by the SAME
+ * AuthService.authenticate() the global HTTP guard uses. There is one verifier
+ * in this codebase and one definition of who a caller is; a socket-specific
+ * copy would be a second place for those two answers to drift apart.
+ *
+ * This replaces the RT-001 seam, in which the client named its own actor id and
+ * the server believed it. That seam is why platform/identity-seam.ts refused to
+ * let the process start outside a local environment -- which also meant realtime
+ * notifications could never reach a parent in production. Both are now closed.
  *
  * AUTHORIZATION: a client never joins a room by naming it. It asks to subscribe
  * to a conversationId, the server runs the same AuthorizationService the REST
@@ -48,26 +61,52 @@ export class RealtimeGateway
     private readonly typing: TypingService,
     private readonly presence: PresenceService,
     private readonly messages: MessageService,
-    @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
+    private readonly auth: AuthService,
   ) {}
 
   async handleConnection(client: AuthedSocket): Promise<void> {
-    // DEPRECATED SEAM (RT-001): the client names its own actor. Phase 1 verifies
-    // a token from handshake.auth.token instead; the shape -- a resolved Actor on
-    // the socket -- does not change. src/platform/identity-seam.ts keeps the
-    // process from starting outside a local environment while this stands.
-    const actorId = String(client.handshake.auth?.actorId ?? '');
-    const actor = actorId ? await this.identity.resolveActor(actorId) : null;
+    // The same credential and the same verifier as HTTP. authenticate() checks
+    // the signature, the issuer, the audience and the expiry, then re-resolves
+    // the actor from the database and refuses if the token's claim and the
+    // database disagree -- so a revoked session or a deactivated account cannot
+    // open a socket even with a syntactically valid token.
+    const token = RealtimeGateway.handshakeToken(client);
+    const authenticated = token ? await this.auth.authenticate(token) : null;
 
-    if (!actor || !actor.isActive) {
+    if (!authenticated) {
+      // No reason is sent back. A client that can distinguish "expired" from
+      // "revoked" from "no such session" learns which session ids are real.
       client.disconnect(true);
       return;
     }
 
-    client.actor = actor;
-    // Every socket joins its own actor room, so multi-device fan-out is free.
-    await client.join(room.actor(actor.actorId));
-    await this.presence.online(actor.actorId, client.id);
+    client.actor = authenticated.actor;
+    client.sessionId = authenticated.sessionId;
+    // Every socket joins its own actor room, so multi-device fan-out is free:
+    // one emit reaches the parent's phone, their tablet and their browser.
+    await client.join(room.actor(authenticated.actor.actorId));
+    await this.presence.online(authenticated.actor.actorId, client.id);
+    void this.auth.touchSession(authenticated.sessionId);
+  }
+
+  /**
+   * The handshake credential.
+   *
+   * `auth.token` is the documented place (API-CONTRACT §4). The Authorization
+   * header is accepted too because a browser cannot set arbitrary headers on a
+   * WebSocket upgrade but CAN on the Socket.IO polling transport, and a client
+   * that falls back to polling must not silently lose its identity.
+   *
+   * A query parameter is deliberately NOT accepted: query strings end up in
+   * access logs and proxy logs, and an access token in a log file is a
+   * credential leak that outlives the session.
+   */
+  static handshakeToken(client: Socket): string | null {
+    const fromAuth = client.handshake.auth?.token;
+    if (typeof fromAuth === 'string' && fromAuth.length > 0) return fromAuth;
+
+    const header = client.handshake.headers?.authorization;
+    return bearerToken(header);
   }
 
   async handleDisconnect(client: AuthedSocket): Promise<void> {

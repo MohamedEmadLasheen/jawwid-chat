@@ -44,6 +44,8 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'notification.delivery_retention_days': 400,
   /** the academy's record of what it told families, kept far longer */
   'notification.announcement_retention_days': 730,
+  /** how long a worker may hold a notification before the claim is abandoned */
+  'notification.dispatch_lease_seconds': 120,
 } as const;
 
 export type CommunicationConfigKey = keyof typeof COMMUNICATION_CONFIG_DEFAULTS;

@@ -485,6 +485,10 @@ model Notification {
   announcement   Announcement? @relation(fields: [announcementId], references: [id], onDelete: Cascade)
 
   status      String    @default("scheduled")
+  /// Held only while a worker is delivering. Past its expiry the claim is
+  /// abandoned and the notification becomes dispatchable again.
+  leaseExpiresAt DateTime? @map("lease_expires_at") @db.Timestamptz
+  claimedBy      String?   @map("claimed_by")
   scheduledAt DateTime  @map("scheduled_at") @db.Timestamptz
   sentAt      DateTime? @map("sent_at") @db.Timestamptz
   deliveredAt DateTime? @map("delivered_at") @db.Timestamptz

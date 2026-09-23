@@ -6,6 +6,7 @@ import { OutboxWorker } from './communication/outbox/outbox.worker';
 import { NotificationService } from './communication/notifications/notification.service';
 import { DeliveryService } from './communication/notifications/delivery.service';
 import { AnnouncementService } from './communication/announcements/announcement.service';
+import { RetentionService } from './communication/notifications/retention.service';
 import { readBuildInfo } from './infra/build-info';
 
 /**
@@ -39,6 +40,7 @@ async function bootstrap(): Promise<void> {
   const notifications = app.get(NotificationService);
   const deliveries = app.get(DeliveryService);
   const announcements = app.get(AnnouncementService);
+  const retention = app.get(RetentionService);
 
   let running = true;
   let draining = false;
@@ -91,6 +93,11 @@ async function bootstrap(): Promise<void> {
       ['retry', () => deliveries.retryDue(new Date(), BATCH)],
       // 4. Announcements whose publish time has arrived.
       ['announce', () => announcements.fanOutDue(new Date())],
+      // 5. Retention. Self-throttling -- it no-ops until its interval elapses,
+      //    so putting it in the same loop costs a clock comparison per pass and
+      //    does not need a second scheduler. It never throws into this loop:
+      //    housekeeping failing must not stop notifications being delivered.
+      ['retention', async () => (await retention.runDue()).notificationsDeleted],
     ] as const) {
       if (!running) break;
       try {

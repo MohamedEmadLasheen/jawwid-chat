@@ -22,6 +22,7 @@ import { NotificationCenterService } from './notifications/notification-center.s
 import { DeliveryService } from './notifications/delivery.service';
 import { PreferenceService } from './notifications/preference.service';
 import { RecipientResolver } from './notifications/recipient-resolver.service';
+import { RetentionService } from './notifications/retention.service';
 import { ReminderService } from './notifications/reminder.service';
 import { TemplateService } from './notifications/template.service';
 import { QuietHoursService } from './notifications/quiet-hours.service';
@@ -71,6 +72,7 @@ import { StorageController } from './api/storage.controller';
     DeliveryService,
     PreferenceService,
     RecipientResolver,
+    RetentionService,
     AnnouncementService,
     ClassScheduleService,
     ReminderService,
@@ -114,6 +116,7 @@ import { StorageController } from './api/storage.controller';
     DeliveryService,
     PreferenceService,
     RecipientResolver,
+    RetentionService,
     AnnouncementService,
     ClassScheduleService,
     ReminderService,

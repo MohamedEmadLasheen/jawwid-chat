@@ -223,28 +223,60 @@ export class NotificationService {
   }
 
   /**
-   * Claim and deliver everything due. Safe to run concurrently.
+   * Claim and deliver everything dispatchable. Safe to run concurrently, and
+   * safe to CRASH during.
    *
-   * The claim is a conditional UPDATE: if another worker got there first,
-   * updateMany reports 0 rows and this worker moves on without double-sending.
+   * A claim takes a LEASE -- `processing` plus an expiry -- rather than
+   * declaring success up front. The version this replaced set `status = 'sent'`
+   * before delivering, which stopped two workers sending the same notification
+   * and, when a worker died between the claim and the send, left the
+   * notification permanently marked sent with nothing delivered anywhere.
+   * Nothing looked at it again. The parent was never told.
+   *
+   * Two rows are picked up here:
+   *   - `scheduled` and due;
+   *   - `processing` whose lease has expired, i.e. a claim whose worker is gone.
+   *
+   * Recovery cannot double-send. Delivery identity is deterministic --
+   * chat.notification_delivery is unique per (notification, channel, device) and
+   * a row already sent, delivered, failed or skipped is never re-attempted -- so
+   * a recovered notification completes only the channels the crash left undone.
    */
   async dispatchDue(now = new Date(), batchSize = 100): Promise<number> {
-    const due = await this.prisma.notification.findMany({
-      where: { status: NotificationStatus.SCHEDULED, scheduledAt: { lte: now } },
+    const leaseSeconds = await this.config.get('notification.dispatch_lease_seconds');
+
+    const dispatchable = await this.prisma.notification.findMany({
+      where: {
+        OR: [
+          { status: NotificationStatus.SCHEDULED, scheduledAt: { lte: now } },
+          // An abandoned claim. Recovery is driven by the clock, never by
+          // asking whether a process is still alive -- that answer is precisely
+          // what is unavailable after a crash.
+          { status: NotificationStatus.PROCESSING, leaseExpiresAt: { lt: now } },
+        ],
+      },
       orderBy: { scheduledAt: 'asc' },
       take: batchSize,
     });
 
     let delivered = 0;
-    for (const n of due) {
-      const claimed = await this.prisma.notification.updateMany({
-        where: { id: n.id, status: NotificationStatus.SCHEDULED },
-        data: { status: NotificationStatus.SENT, sentAt: now, attempts: { increment: 1 } },
-      });
-      if (claimed.count === 0) continue;
+    for (const n of dispatchable) {
+      if (!(await this.claim(n.id, n.status, now, leaseSeconds))) continue;
 
       try {
-        if (await this.deliver(n as unknown as DeliverableNotification)) delivered += 1;
+        await this.deliver(n as unknown as DeliverableNotification);
+        // Only NOW is it sent, and the lease is released in the same statement
+        // so the row can never be both sent and claimed.
+        await this.prisma.notification.updateMany({
+          where: { id: n.id, status: NotificationStatus.PROCESSING },
+          data: {
+            status: NotificationStatus.SENT,
+            sentAt: new Date(),
+            leaseExpiresAt: null,
+            claimedBy: null,
+          },
+        });
+        delivered += 1;
       } catch {
         await this.fail(n.id, 'DISPATCH_ERROR');
         this.log.warn(`notification ${n.id} failed to dispatch`);
@@ -252,6 +284,40 @@ export class NotificationService {
     }
     return delivered;
   }
+
+  /**
+   * Take the lease, or report that somebody else has it.
+   *
+   * One conditional UPDATE, matching on the status the row was read in. Two
+   * workers racing on the same row produce one winner and one `count === 0`;
+   * a worker trying to steal a live lease matches nothing, because the row is
+   * no longer in the state it was read in.
+   */
+  private async claim(
+    notificationId: string,
+    readStatus: string,
+    now: Date,
+    leaseSeconds: number,
+  ): Promise<boolean> {
+    const claimed = await this.prisma.notification.updateMany({
+      where:
+        readStatus === NotificationStatus.PROCESSING
+          ? // Recovering an abandoned claim: the expiry must STILL be past at
+            // the moment of the update, or another worker renewed it first.
+            { id: notificationId, status: NotificationStatus.PROCESSING, leaseExpiresAt: { lt: now } }
+          : { id: notificationId, status: NotificationStatus.SCHEDULED },
+      data: {
+        status: NotificationStatus.PROCESSING,
+        leaseExpiresAt: new Date(now.getTime() + leaseSeconds * 1000),
+        claimedBy: NotificationService.workerId,
+        attempts: { increment: 1 },
+      },
+    });
+    return claimed.count === 1;
+  }
+
+  /** Diagnostics only. Recovery never asks who holds a lease, only whether it expired. */
+  static readonly workerId = `${process.env.HOSTNAME ?? 'worker'}:${process.pid}`;
 
   /**
    * Deliver one notification across its channels.
@@ -427,6 +493,11 @@ export class NotificationService {
           status: NotificationStatus.FAILED,
           failedAt: new Date(),
           failureCode: code,
+          // The lease goes with the status. A row carrying both would violate
+          // notification_lease_check, which is the database refusing to hold a
+          // state that means nothing.
+          leaseExpiresAt: null,
+          claimedBy: null,
         },
       });
       return;
@@ -441,6 +512,8 @@ export class NotificationService {
         status: NotificationStatus.SCHEDULED,
         scheduledAt: new Date(Date.now() + backoffMs),
         failureCode: code,
+        leaseExpiresAt: null,
+        claimedBy: null,
       },
     });
   }

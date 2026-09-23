@@ -6,7 +6,6 @@ import { CommErrorFilter } from './communication/api/http-exception.filter';
 import { applyInfrastructure } from './infra/http/bootstrap';
 import { InfraIoAdapter } from './infra/realtime/io-adapter';
 import { readBuildInfo } from './infra/build-info';
-import { assertHandshakeIdentitySeamAllowed } from './platform/identity-seam';
 import { loadAuthConfig } from './platform/auth/auth.config';
 import { RealtimeRelay } from './infra/realtime/realtime-relay.service';
 
@@ -30,12 +29,13 @@ async function bootstrap(): Promise<void> {
   // configured is a signing key an attacker can guess.
   loadAuthConfig();
 
-  // RT-001 containment, NARROWED by PR-B. HTTP identity is now a verified
-  // bearer token, so the x-actor-id header no longer gates the boot. The
-  // WebSocket handshake still names its own actor, and until the realtime PR
-  // verifies a token there, a build carrying that seam may only start in a
-  // local environment.
-  assertHandshakeIdentitySeamAllowed();
+  // RT-001 is CLOSED. The boot guard that used to stand here refused to start
+  // outside a local environment because the WebSocket handshake still named its
+  // own actor. The handshake now carries the same access token as HTTP and is
+  // verified by the same AuthService.authenticate(), so there is no seam left
+  // to contain -- and realtime notifications can reach a parent in production,
+  // which they could not while that guard stood.
+  // test/unit/auth/identity-seam.spec.ts pins both halves shut.
 
   const app = await NestFactory.create(AppModule, {
     // Nest's default logger writes to stdout, which is where the platform

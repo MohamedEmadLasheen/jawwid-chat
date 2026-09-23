@@ -21,7 +21,7 @@ apps/api/test/unit/red-team/authz-attacks.spec.ts	19	RT-002/003/004 inverted gua
 apps/api/test/unit/red-team/storage-and-integrity-attacks.spec.ts	16	RT-005/007/008 inverted guards: signing secret, attachment validation, SYSTEM-message forgery
 db/tests/br1_invariants.sql	20	RT-024/025 BR-1 structural backstop, proven against the database with the application bypassed
 db/tests/schema_acceptance.sql	61	RT-023 fresh-database acceptance: every table, FK, trigger and index a running system needs
-apps/api/test/unit/auth/identity-seam.spec.ts	12	RT-001 containment: PR-B closed the HTTP half (no source reads x-actor-id); the WebSocket handshake seam still cannot start outside local/test/ci
+apps/api/test/unit/auth/identity-seam.spec.ts	13	RT-001 closed on BOTH halves: no source reads x-actor-id or handshake.auth.actorId, the gateway authenticates through the shared verifier, and each identity has exactly one writer
 apps/api/test/unit/authorization/pd002-group-call-initiation.spec.ts	15	PD-2 a parent may join a Student Group call but never start one; BR-1/C-4 still take precedence
 apps/api/test/unit/auth/identity-security.spec.ts	24	RT-001/NF-08 closed: a forged x-actor-id, body or query actorId cannot influence identity; cross-principal, cross-family and cross-organization impersonation refused
 apps/api/test/unit/auth/jwt.spec.ts	30	RT-001 token forgery: alg confusion, alg=none, unknown kid, foreign issuer/audience, expiry and tampering are each refused

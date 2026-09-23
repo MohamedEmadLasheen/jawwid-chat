@@ -18,6 +18,7 @@ import { DeliveryService } from '@communication/notifications/delivery.service';
 import { PreferenceService } from '@communication/notifications/preference.service';
 import { RecipientResolver } from '@communication/notifications/recipient-resolver.service';
 import { AnnouncementService } from '@communication/announcements/announcement.service';
+import { RetentionService } from '@communication/notifications/retention.service';
 import { ClassScheduleService } from '@communication/schedule/class-schedule.service';
 import { NoopRealtimePublisher } from '@communication/realtime/realtime.publisher';
 import type { PresenceService } from '@communication/realtime/presence.service';
@@ -66,6 +67,7 @@ export function buildGraph() {
   const announcements = new AnnouncementService(prisma, notifications, recipients, audit);
   const classSchedule = new ClassScheduleService(prisma, notifications, recipients, audit);
   const reminders = new ReminderService(prisma, notifications);
+  const retention = new RetentionService(prisma);
   // Presence is Redis-backed. The integration graph is deliberately
   // Redis-free, so the worker gets a stub that always answers "not viewing" --
   // the safe direction, which pushes rather than suppressing. The suppression
@@ -84,7 +86,7 @@ export function buildGraph() {
     prisma, coverage, identity, authz, conversations, messages, approvals,
     attachments, notifications, reminders, templates, quietHours, calls,
     deliveries, preferences, centre, recipients, announcements, classSchedule,
-    push, realtime, outbox, outboxWorker, presence, audit, config,
+    push, realtime, outbox, outboxWorker, presence, audit, config, retention,
   };
 }
 
