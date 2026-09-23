@@ -99,6 +99,45 @@ export class ConversationService {
    * else is returned with isActive undefined, which the policy reads as
    * "not resolved", never as "inactive".
    */
+  /**
+   * A conversation plus its membership, for a caller who may read it.
+   *
+   * PD-6 made the participant set load-bearing for the client: since a `direct`
+   * conversation may now be Parent<->Admin, Teacher<->Admin or Parent<->Teacher,
+   * the type alone no longer says which, and the client classifies from
+   * `actorKind`. API-CONTRACT section 3.4 already required `GET
+   * /conversations/:id` to carry `members[]`; this is what supplies it.
+   *
+   * The read is authorized HERE and explicitly. `GET /conversations/:id`
+   * previously leaned on setPreferences() to throw for a non-member -- true,
+   * but incidental, and it is not a property to rely on while widening what the
+   * endpoint returns. A membership list must be reachable only by a member.
+   */
+  async readWithMembers(
+    conversationId: string,
+    actorId: string,
+  ): Promise<{ conversation: Conversation; members: ConversationMember[] }> {
+    const actor = await this.requireActor(actorId);
+    const conversation = await this.requireConversation(conversationId);
+    const membership = await this.membershipOf(conversation.id, actor.actorId);
+
+    const decision = this.authz.canRead(actor, conversation, membership);
+    if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+
+    const members = await this.prisma.conversationMember.findMany({
+      where: { conversationId: conversation.id, leftAt: null },
+    });
+    return { conversation, members };
+  }
+
+  /** The live membership of a conversation, for a caller that has already been
+   *  authorized to see it (the direct get-or-create path). */
+  async membersOf(conversationId: string): Promise<ConversationMember[]> {
+    return this.prisma.conversationMember.findMany({
+      where: { conversationId, leftAt: null },
+    });
+  }
+
   async liveMembersOf(conversationId: string): Promise<LiveMember[]> {
     const rows = await this.prisma.conversationMember.findMany({
       where: { conversationId, leftAt: null },

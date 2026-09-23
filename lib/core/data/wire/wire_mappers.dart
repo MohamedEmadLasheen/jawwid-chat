@@ -27,22 +27,86 @@ abstract final class WireMappers {
   static DateTime? parseTime(Object? raw) =>
       raw is String ? DateTime.tryParse(raw)?.toLocal() : null;
 
-  static ConversationKind conversationKind(String? type) => switch (type) {
+  /// Classify a conversation from its wire payload.
+  ///
+  /// Before PD-6 the type alone decided this: a `direct` conversation could only be with
+  /// staff, because BR-1 refused every other 1:1. Since PD-6 a `direct` conversation may be
+  /// Parent <-> Admin, Teacher <-> Admin **or** Parent <-> Teacher, and the type no longer
+  /// distinguishes them.
+  ///
+  /// So the participants decide, and only the participants the payload actually states.
+  ///
+  /// WHAT THIS IS NOT. This is not an authorization decision and cannot become one. The
+  /// server authorizes the channel and refuses anything else with
+  /// `COMM.TEACHER_PARENT_NOT_AUTHORIZED`; classifying a row as
+  /// [ConversationKind.teacherParentDirect] grants the viewer nothing they did not already
+  /// have. It decides how the row is presented, nothing more.
+  ///
+  /// WHY `actorKind` AND NOT `memberRole`. `memberRole` is a label on the membership row
+  /// and a teacher can carry `member_role: 'admin'` — red-team RT-025 C5 is exactly that
+  /// attack against the server. `actorKind` is the identity's own kind and is the field the
+  /// server's own rules are written against, so it is the field to read here too.
+  ///
+  /// FAILING CLOSED. Anything other than exactly one `contact` and exactly one `teacher` is
+  /// [ConversationKind.unknownDirect] — no members (the list endpoint sends none, by
+  /// contract), an empty list, a malformed entry, or a set this client does not recognise.
+  /// Guessing [ConversationKind.teacherParentDirect] from a type, a title or an id is the
+  /// one mistake this function exists to make impossible.
+  static ConversationKind conversationKind(
+    String? type, {
+    Object? members,
+  }) =>
+      switch (type) {
         Wire.conversationOfficial => ConversationKind.jawwidSupport,
         Wire.conversationStudentGroup => ConversationKind.studentGroup,
         Wire.conversationClassGroup => ConversationKind.studentGroup,
-        // KNOWN STALE — PD-6 (2026-09-23). This mapping was correct while BR-1
-        // refused every teacher/parent direct channel, so a `direct`
-        // conversation could only be with staff. It can now be with an
-        // authorized teacher, and such a conversation is currently mislabelled
-        // `adminDirect` here.
-        //
-        // Deliberately not fixed in the authorization phase: deciding it needs
-        // the participant roles this mapper is not given, which is client model
-        // work and belongs with the call UI. Left as an explicit defect rather
-        // than a comment that claims a guarantee the server no longer makes.
+        Wire.conversationDirect => _directKind(members),
+        // An unknown type is not a direct conversation this client understands.
+        // adminDirect remains the pre-PD-6 default for backward compatibility;
+        // what matters is that it is never teacherParentDirect.
         _ => ConversationKind.adminDirect,
       };
+
+  /// The participant shapes of a `direct` conversation. Order is irrelevant: a set is a set.
+  static ConversationKind _directKind(Object? members) {
+    if (members is! List) return ConversationKind.unknownDirect;
+
+    var contacts = 0;
+    var teachers = 0;
+    var staff = 0;
+    var unrecognised = 0;
+
+    for (final entry in members) {
+      if (entry is! Map) {
+        unrecognised += 1;
+        continue;
+      }
+      switch (entry['actorKind']) {
+        case Wire.actorContact:
+          contacts += 1;
+        case Wire.actorTeacher:
+          teachers += 1;
+        case Wire.actorStaff:
+          staff += 1;
+        default:
+          unrecognised += 1;
+      }
+    }
+
+    if (unrecognised > 0) return ConversationKind.unknownDirect;
+
+    // Exactly one of each, and nobody else present. A third participant means this is not
+    // the 1:1 the server's two-participant ceiling describes, so it is not classified.
+    if (contacts == 1 && teachers == 1 && staff == 0) {
+      return ConversationKind.teacherParentDirect;
+    }
+    // Parent <-> Admin and Teacher <-> Admin: one staff member and one counterpart.
+    if (staff == 1 && contacts + teachers == 1) {
+      return ConversationKind.adminDirect;
+    }
+
+    return ConversationKind.unknownDirect;
+  }
 
   static ParticipantRole memberRole(String? role) => switch (role) {
         Wire.memberParent => ParticipantRole.parent,
@@ -118,7 +182,7 @@ abstract final class WireMappers {
 
     return Conversation(
       id: json['id']! as String,
-      kind: conversationKind(json['type'] as String?),
+      kind: conversationKind(json['type'] as String?, members: json['members']),
       title: (json['title'] as String?) ?? '',
       learner: learner,
       updatedAt: lastActivity,

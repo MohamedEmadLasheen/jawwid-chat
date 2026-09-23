@@ -27,7 +27,10 @@ export class ConversationController {
   @Post('direct')
   async direct(@ActorId() actorId: string, @Body() body: { withActorId: string }) {
     const conv = await this.conversations.getOrCreateDirect(actorId, body.withActorId);
-    return toConversationDto(conv);
+    // PD-6: members[] so the client can tell a Parent<->Teacher channel from a
+    // Parent<->Admin one. The caller was just authorized into this conversation
+    // by getOrCreateDirect, so no second read check is needed.
+    return toConversationDto(conv, await this.conversations.membersOf(conv.id));
   }
 
   /** The official group for a learner, created from Core relationships. */
@@ -43,11 +46,19 @@ export class ConversationController {
     return conv ? toConversationDto(conv) : { synced: false };
   }
 
+  /**
+   * One conversation, with its membership.
+   *
+   * `members[]` is required here by API-CONTRACT section 3.4 and is what lets a
+   * client classify a `direct` conversation after PD-6. readWithMembers()
+   * authorizes the read explicitly rather than leaving it to the preferences
+   * upsert below to throw.
+   */
   @Get(':id')
   async get(@ActorId() actorId: string, @Param('id') id: string) {
-    const conv = await this.conversations.requireConversation(id);
+    const { conversation, members } = await this.conversations.readWithMembers(id, actorId);
     await this.conversations.setPreferences(id, actorId, {});
-    return toConversationDto(conv);
+    return toConversationDto(conversation, members);
   }
 
   /** Membership mutations are staff-only, and always carry a reason. */

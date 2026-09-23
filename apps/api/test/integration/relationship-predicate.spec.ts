@@ -599,6 +599,40 @@ describe('PD-6 — the authorization switch, end to end', () => {
     });
   });
 
+  it('readWithMembers returns the participant set a client needs to classify the channel', async () => {
+    // PD-6 made the participant set load-bearing for the client: a `direct`
+    // conversation may be Parent<->Admin, Teacher<->Admin or Parent<->Teacher,
+    // and the type no longer says which. API-CONTRACT section 3.4 requires
+    // GET /conversations/:id to carry members[]; this is the service behind it.
+    const conv = await openChannel();
+
+    const { members } = await g.conversations.readWithMembers(conv.id, w.parentOk);
+    const kinds = members.map((m) => m.actorKind).sort();
+
+    expect(kinds).toEqual(['contact', 'teacher']);
+    // actorKind, not memberRole, is what the client must classify on -- a
+    // teacher can carry member_role 'admin' (RT-025 C5). Both are present, so
+    // the client can read the right one.
+    expect(members.every((m) => typeof m.actorKind === 'string')).toBe(true);
+  });
+
+  it('readWithMembers refuses a non-member: a membership list is not public', async () => {
+    // The endpoint that carries members[] used to lean on a preferences upsert
+    // to throw for a non-member. That was true but incidental, and not a
+    // property to rely on while widening what the endpoint returns.
+    const conv = await openChannel();
+
+    await expect(
+      g.conversations.readWithMembers(conv.id, w.teacherUnrelated),
+    ).rejects.toMatchObject({ code: CommErrorCode.NOT_CONVERSATION_MEMBER });
+  });
+
+  it('a Parent<->Admin direct reports a different participant set, so the client can tell them apart', async () => {
+    const withAdmin = await g.conversations.getOrCreateDirect(w.parentOk, w.adminA);
+    const { members } = await g.conversations.readWithMembers(withAdmin.id, w.parentOk);
+    expect(members.map((m) => m.actorKind).sort()).toEqual(['contact', 'staff']);
+  });
+
   it('the deprecated BR1_TEACHER_PARENT_DIRECT code is raised by nothing in src/', () => {
     // PD-6 keeps the constant for shipped clients that treat it as terminal.
     // Nothing in the running system may still emit it.

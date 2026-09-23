@@ -49,15 +49,189 @@ void main() {
       );
     });
 
-    test('direct is a staff conversation', () {
-      expect(WireMappers.conversationKind('direct'), ConversationKind.adminDirect);
-    });
-
     test('an unknown type does not become a student group', () {
       expect(
         WireMappers.conversationKind('something_new'),
         ConversationKind.adminDirect,
       );
+    });
+  });
+
+  /// PD-6 (2026-09-23). A `direct` conversation may be Parent <-> Admin,
+  /// Teacher <-> Admin or Parent <-> Teacher, so the type no longer decides it and the
+  /// participants do.
+  ///
+  /// `actorKind` is what these read, never `memberRole`: a teacher can carry
+  /// `member_role: 'admin'` on their membership row — red-team RT-025 C5 is that attack
+  /// against the server — so the role label is not an identity.
+  ///
+  /// None of this authorizes anything. The server refuses an unauthorized pairing with
+  /// COMM.TEACHER_PARENT_NOT_AUTHORIZED whatever this mapper decides.
+  group('PD-6 direct conversation classification', () {
+    Map<String, Object?> member(String actorKind, {String? role}) => {
+          'actorId': 'actor-$actorKind',
+          'actorKind': actorKind,
+          'memberRole': role ?? actorKind,
+          'isSilent': false,
+        };
+
+    test('1. Parent <-> Admin direct is an admin direct', () {
+      expect(
+        WireMappers.conversationKind(
+          'direct',
+          members: [member('contact', role: 'parent'), member('staff', role: 'admin')],
+        ),
+        ConversationKind.adminDirect,
+      );
+    });
+
+    test('2. Teacher <-> Admin direct is an admin direct', () {
+      expect(
+        WireMappers.conversationKind(
+          'direct',
+          members: [member('teacher'), member('staff', role: 'admin')],
+        ),
+        ConversationKind.adminDirect,
+      );
+    });
+
+    test('3. Parent <-> Teacher direct is a teacher-parent direct', () {
+      expect(
+        WireMappers.conversationKind(
+          'direct',
+          members: [member('contact', role: 'parent'), member('teacher')],
+        ),
+        ConversationKind.teacherParentDirect,
+      );
+    });
+
+    test('4. participant order does not change the classification', () {
+      final forward = WireMappers.conversationKind(
+        'direct',
+        members: [member('contact', role: 'parent'), member('teacher')],
+      );
+      final reversed = WireMappers.conversationKind(
+        'direct',
+        members: [member('teacher'), member('contact', role: 'parent')],
+      );
+      expect(reversed, forward);
+      expect(reversed, ConversationKind.teacherParentDirect);
+    });
+
+    group('5. anything ambiguous fails closed, never to teacherParentDirect', () {
+      final ambiguous = <String, Object?>{
+        'members absent entirely (the list endpoint sends none)': null,
+        'members empty': <Object?>[],
+        'members not a list': 'contact,teacher',
+        'a single participant': [member('contact', role: 'parent')],
+        'three participants': [
+          member('contact', role: 'parent'),
+          member('teacher'),
+          member('staff', role: 'admin'),
+        ],
+        'two contacts': [member('contact'), member('contact')],
+        'two teachers': [member('teacher'), member('teacher')],
+        'an unrecognised actorKind alongside a valid pair': [
+          member('contact', role: 'parent'),
+          member('teacher'),
+          {'actorId': 'x', 'actorKind': 'future_kind'},
+        ],
+        'a malformed member entry': [member('contact'), 'not-an-object'],
+        'a member with no actorKind at all': [
+          member('contact', role: 'parent'),
+          {'actorId': 'y', 'memberRole': 'teacher'},
+        ],
+      };
+
+      ambiguous.forEach((description, members) {
+        test(description, () {
+          expect(
+            WireMappers.conversationKind('direct', members: members),
+            ConversationKind.unknownDirect,
+            reason: 'must not be classified as an authorized teacher-parent channel',
+          );
+        });
+      });
+
+      test('memberRole alone can never produce teacherParentDirect', () {
+        // The RT-025 C5 shape: a teacher wearing member_role 'admin', and a staff
+        // member wearing 'teacher'. Reading roles instead of kinds would invert both.
+        expect(
+          WireMappers.conversationKind(
+            'direct',
+            members: [
+              {'actorId': 'a', 'actorKind': 'staff', 'memberRole': 'teacher'},
+              {'actorId': 'b', 'actorKind': 'staff', 'memberRole': 'parent'},
+            ],
+          ),
+          isNot(ConversationKind.teacherParentDirect),
+        );
+      });
+    });
+
+    test('6. group conversations are unchanged by members being present', () {
+      for (final type in ['student_group', 'class_group']) {
+        expect(
+          WireMappers.conversationKind(
+            type,
+            members: [member('contact', role: 'parent'), member('teacher')],
+          ),
+          ConversationKind.studentGroup,
+          reason: '$type must not be reclassified by its participants',
+        );
+      }
+    });
+
+    test('7. non-direct types are unchanged, with or without members', () {
+      expect(WireMappers.conversationKind('official'), ConversationKind.jawwidSupport);
+      expect(
+        WireMappers.conversationKind('official', members: [member('contact'), member('teacher')]),
+        ConversationKind.jawwidSupport,
+      );
+      expect(
+        WireMappers.conversationKind('something_new', members: [member('teacher')]),
+        ConversationKind.adminDirect,
+      );
+    });
+
+    test('every direct shape reports isDirect, so no row can fall out of the list', () {
+      const shapes = [
+        ConversationKind.adminDirect,
+        ConversationKind.teacherParentDirect,
+        ConversationKind.unknownDirect,
+      ];
+      for (final kind in shapes) {
+        expect(kind.isDirect, isTrue, reason: '$kind must group with the other 1:1 rows');
+      }
+      expect(ConversationKind.studentGroup.isDirect, isFalse);
+      expect(ConversationKind.jawwidSupport.isDirect, isFalse);
+    });
+
+    test('the full conversation mapper carries members through', () {
+      final conversation = WireMappers.conversation(
+        {
+          'id': 'c1',
+          'type': 'direct',
+          'title': 'Ustadh Mohamed',
+          'lastActivityAt': '2026-09-23T10:00:00Z',
+          'members': [member('contact', role: 'parent'), member('teacher')],
+        },
+        viewerRole: UserRole.parent,
+      );
+      expect(conversation.kind, ConversationKind.teacherParentDirect);
+    });
+
+    test('the full conversation mapper fails closed when the payload omits members', () {
+      final conversation = WireMappers.conversation(
+        {
+          'id': 'c2',
+          'type': 'direct',
+          'title': 'Jawwid',
+          'lastActivityAt': '2026-09-23T10:00:00Z',
+        },
+        viewerRole: UserRole.parent,
+      );
+      expect(conversation.kind, ConversationKind.unknownDirect);
     });
   });
 
