@@ -118,6 +118,29 @@ class MessageLog {
 
   Message? byClientId(String clientMessageId) => _byKey[clientMessageId];
 
+  /// Find a message by its **server** id.
+  ///
+  /// The log is keyed by client id, so this is a scan — which is what it should
+  /// be: it is used to resolve a reply's quote and to jump to a search hit, both
+  /// of which happen on a user gesture over a page-sized list, never per frame.
+  Message? byServerId(String messageId) {
+    for (final message in messages) {
+      if (message.id == messageId) return message;
+    }
+    return null;
+  }
+
+  /// Replace one message keyed by its **server** id.
+  ///
+  /// Reactions, deletions and receipts all address a message the way the server
+  /// does. Routing them through [updateOne] would need the client id, which a
+  /// message received from another device does not have a meaningful one of.
+  MessageLog updateByServerId(String messageId, Message Function(Message) update) {
+    final target = byServerId(messageId);
+    if (target == null) return this;
+    return updateOne(_keyOf(target), update);
+  }
+
   /// The highest sequence we hold, used as the resync watermark after a reconnect (§49).
   int? get highestSequence {
     int? highest;

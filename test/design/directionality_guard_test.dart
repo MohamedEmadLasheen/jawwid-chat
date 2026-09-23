@@ -25,11 +25,19 @@ void main() {
     for (final file in dartFiles()) {
       if (skip != null && skip(file.path)) continue;
 
+      // Matched against the whole file, not line by line.
+      //
+      // A line-at-a-time scan cannot see a constructor whose arguments are
+      // wrapped -- and `EdgeInsets.only(` with its `left:` on the next line is
+      // exactly what the formatter produces once there are three arguments. So
+      // the guard was blind to the shape it is most likely to meet, and a
+      // physical padding went in under it.
+      final source = file.readAsStringSync();
       final lines = file.readAsLinesSync();
-      for (var i = 0; i < lines.length; i++) {
-        if (pattern.hasMatch(lines[i])) {
-          found.add('${file.path}:${i + 1}  ${lines[i].trim()}');
-        }
+
+      for (final match in pattern.allMatches(source)) {
+        final line = '\n'.allMatches(source.substring(0, match.start)).length;
+        found.add('${file.path}:${line + 1}  ${lines[line].trim()}');
       }
     }
     return found;

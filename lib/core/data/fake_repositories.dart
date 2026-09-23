@@ -137,10 +137,41 @@ class FakeMessageRepository implements MessageRepository {
       backend.uploadVoiceNote(conversationId, note);
 
   @override
-  Future<void> react(String messageId, String emoji) async {}
+  Future<UploadedAttachment> uploadAttachment({
+    required String conversationId,
+    required PendingAttachment attachment,
+  }) async =>
+      backend.uploadAttachment(conversationId, attachment);
 
   @override
-  Future<void> removeReaction(String messageId, String emoji) async {}
+  Future<void> react({
+    required String conversationId,
+    required String messageId,
+    required String emoji,
+  }) async =>
+      backend.react(conversationId, messageId, emoji);
+
+  @override
+  Future<void> removeReaction({
+    required String conversationId,
+    required String messageId,
+    required String emoji,
+  }) async =>
+      backend.removeReaction(conversationId, messageId, emoji);
+
+  @override
+  Future<void> deleteForMe({
+    required String conversationId,
+    required String messageId,
+  }) async =>
+      backend.deleteForMe(conversationId, messageId);
+
+  @override
+  Future<void> deleteForEveryone({
+    required String conversationId,
+    required String messageId,
+  }) async =>
+      backend.deleteForEveryone(conversationId, messageId);
 
   @override
   Future<void> setTyping(String conversationId, {required bool isTyping}) async {}

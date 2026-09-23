@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/core/data/http/http_conversation_repository.dart';
 import 'package:jawwid_chat/core/data/http/http_message_repository.dart';
@@ -761,6 +763,192 @@ void main() {
     test('the seam is inert unless enabled', () async {
       const identity = DebugActorHeaderIdentity(actorId: 'actor-1');
       expect(await identity.headers(), isEmpty);
+    });
+  });
+
+  group('message actions hit the routes the contract publishes', () {
+    // Every message route is nested under its conversation
+    // (`@Controller('conversations/:conversationId/messages')`). The client
+    // used to post reactions to `/messages/:id/reactions`, which is not a route
+    // the API has -- so the first caller would have got a 404. These assert the
+    // paths, because a wrong path is exactly the kind of defect that unit tests
+    // against a fake repository cannot see.
+
+    test('a reaction is nested under its conversation', () async {
+      server.on('POST', '/conversations/c1/messages/srv_1/reactions', [
+        const Reply.ok({'ok': true}),
+      ]);
+
+      await messages(clientWith(_NoTokens())).react(
+        conversationId: 'c1',
+        messageId: 'srv_1',
+        emoji: '❤️',
+      );
+
+      final request = server.requests.single;
+      expect(request.method, 'POST');
+      expect(request.path, '/conversations/c1/messages/srv_1/reactions');
+      expect(request.json['emoji'], '❤️');
+    });
+
+    test('removing a reaction sends ?emoji=, ahead of the server reading it',
+        () async {
+      // API-CONTRACT §3.5 makes the query required in Phase 1 and a no-op
+      // before it. Sending it now is what stops this call silently removing the
+      // wrong reaction the day the server starts honouring it.
+      server.on('DELETE', '/conversations/c1/messages/srv_1/reactions', [
+        const Reply.ok({'ok': true}),
+      ]);
+
+      await messages(clientWith(_NoTokens())).removeReaction(
+        conversationId: 'c1',
+        messageId: 'srv_1',
+        emoji: '👍',
+      );
+
+      final request = server.requests.single;
+      expect(request.method, 'DELETE');
+      expect(request.query['emoji'], '👍');
+    });
+
+    test('delete for me is the /me sub-route, not the retraction', () async {
+      server.on('DELETE', '/conversations/c1/messages/srv_1/me', [
+        const Reply.ok({'ok': true}),
+      ]);
+
+      await messages(clientWith(_NoTokens()))
+          .deleteForMe(conversationId: 'c1', messageId: 'srv_1');
+
+      expect(server.requests.single.path, '/conversations/c1/messages/srv_1/me');
+    });
+
+    test('delete for everyone sends no invented reason', () async {
+      // The route defaults `reason` to "deleted by author". Supplying one on the
+      // user's behalf would put words this parent never said into an audit log.
+      server.on('DELETE', '/conversations/c1/messages/srv_1', [
+        const Reply.ok({'ok': true}),
+      ]);
+
+      await messages(clientWith(_NoTokens()))
+          .deleteForEveryone(conversationId: 'c1', messageId: 'srv_1');
+
+      final request = server.requests.single;
+      expect(request.path, '/conversations/c1/messages/srv_1');
+      expect(request.query, isNot(contains('reason')));
+    });
+
+    test('a refused retraction surfaces as a policy refusal, never a retry',
+        () async {
+      server.on('DELETE', '/conversations/c1/messages/srv_1', [
+        Reply.commError(403, 'COMM.DELETE_WINDOW_EXPIRED'),
+      ]);
+
+      await expectLater(
+        messages(clientWith(_NoTokens()))
+            .deleteForEveryone(conversationId: 'c1', messageId: 'srv_1'),
+        throwsA(
+          isA<AppError>()
+              .having((e) => e.kind, 'kind', AppErrorKind.forbidden)
+              .having((e) => e.isTransient, 'isTransient', isFalse),
+        ),
+      );
+    });
+
+    test('a retraction of somebody else\'s message is refused by the server',
+        () async {
+      server.on('DELETE', '/conversations/c1/messages/srv_1', [
+        Reply.commError(403, 'COMM.NOT_MESSAGE_AUTHOR'),
+      ]);
+
+      await expectLater(
+        messages(clientWith(_NoTokens()))
+            .deleteForEveryone(conversationId: 'c1', messageId: 'srv_1'),
+        throwsA(
+          isA<AppError>().having((e) => e.kind, 'kind', AppErrorKind.forbidden),
+        ),
+      );
+    });
+  });
+
+  group('attachments take the published two-step', () {
+    test('a photo is authorized before a single byte is uploaded', () async {
+      final file = File(
+        '${Directory.systemTemp.createTempSync('jawwid_http_attach').path}'
+        '${Platform.pathSeparator}photo.jpg',
+      )..writeAsBytesSync(List<int>.filled(1024, 9));
+      addTearDown(() => file.parent.deleteSync(recursive: true));
+
+      server.on('POST', '/conversations/c1/messages/attachments/authorize', [
+        Reply.ok({
+          'objectKey': 'conversations/c1/img_1',
+          'uploadUrl': '${server.baseUrl}/storage/conversations/c1/img_1',
+          'method': 'PUT',
+          'headers': {'content-type': 'image/jpeg'},
+          'expiresAt': '2026-09-05T12:05:00.000Z',
+        }),
+      ]);
+      server.on('PUT', '/storage/conversations/c1/img_1', [
+        const Reply.ok({'ok': true}),
+      ]);
+
+      final uploaded = await messages(clientWith(_NoTokens())).uploadAttachment(
+        conversationId: 'c1',
+        attachment: PendingAttachment(
+          filePath: file.path,
+          kind: MessageKind.image,
+          mimeType: 'image/jpeg',
+          byteSize: 1024,
+          fileName: 'photo.jpg',
+        ),
+      );
+
+      expect(uploaded.objectKey, 'conversations/c1/img_1');
+
+      final authorize = server.requests.first;
+      expect(authorize.path, '/conversations/c1/messages/attachments/authorize');
+      expect(authorize.json['kind'], Wire.messageImage);
+      expect(
+        authorize.json['byteSize'],
+        1024,
+        reason: 'the size is declared up front so an over-limit file is '
+            'refused before the user pays for the transfer',
+      );
+
+      final put = server.requests.last;
+      expect(put.method, 'PUT');
+      expect(put.bodyBytes, hasLength(1024));
+    });
+
+    test('an over-limit file is refused at authorize, before any transfer',
+        () async {
+      final file = File(
+        '${Directory.systemTemp.createTempSync('jawwid_http_big').path}'
+        '${Platform.pathSeparator}big.pdf',
+      )..writeAsBytesSync(List<int>.filled(64, 1));
+      addTearDown(() => file.parent.deleteSync(recursive: true));
+
+      server.on('POST', '/conversations/c1/messages/attachments/authorize', [
+        Reply.commError(400, 'COMM.ATTACHMENT_TOO_LARGE'),
+      ]);
+
+      await expectLater(
+        messages(clientWith(_NoTokens())).uploadAttachment(
+          conversationId: 'c1',
+          attachment: PendingAttachment(
+            filePath: file.path,
+            kind: MessageKind.file,
+            mimeType: 'application/pdf',
+            byteSize: 64,
+          ),
+        ),
+        throwsA(isA<AppError>()),
+      );
+
+      expect(
+        server.requests,
+        hasLength(1),
+        reason: 'nothing is PUT when authorization was refused',
+      );
     });
   });
 

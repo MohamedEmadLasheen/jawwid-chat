@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:collection/collection.dart';
+
 import '../../shared/models/auth.dart';
 import '../../shared/models/conversation.dart';
 import '../../shared/models/message.dart';
@@ -194,6 +196,29 @@ class FakeBackend {
     return message;
   }
 
+  /// Append a message from the other side, the way an arrival would.
+  ///
+  /// Exists so a test can create the one state that matters for unread: a
+  /// message that landed while the reader was looking somewhere else.
+  Message appendIncoming(String conversationId, String body) =>
+      _appendServerMessage(
+        conversationId: conversationId,
+        body: body,
+        authorName: 'جَوِّد',
+        authorRole: ParticipantRole.admin,
+        at: _now,
+      );
+
+  /// The newest sequence this fixture has issued for a conversation.
+  int? highestSequence(String conversationId) {
+    int? highest;
+    for (final message in _messages[conversationId] ?? const <Message>[]) {
+      final seq = message.sequence;
+      if (seq != null && (highest == null || seq > highest)) highest = seq;
+    }
+    return highest;
+  }
+
   void _maybeFail() {
     final persistent = persistentFailure;
     if (persistent != null) throw persistent;
@@ -281,11 +306,13 @@ class FakeBackend {
           : ParticipantRole.teacher,
       kind: outgoing.kind,
       body: outgoing.body,
+      replyToMessageId: outgoing.replyToMessageId,
       attachments: [
         for (final a in outgoing.attachments)
           Attachment(
             id: 'att_${_sequence}_${a.objectKey.hashCode}',
             kind: a.kind,
+            fileName: _objectNames[a.objectKey],
             byteSize: a.byteSize,
             mimeType: a.mimeType,
             durationMs: a.durationMs,
@@ -376,6 +403,126 @@ class FakeBackend {
       // failure: the note still sends, and playback fails as it would with a
       // URL that leads nowhere.
     }
+  }
+
+  /// Stand in for authorize + PUT for a photo or a document.
+  ///
+  /// Refuses exactly what the real backend refuses — an empty file, and one past
+  /// the per-kind ceiling — so the tests exercise the app's failure handling
+  /// rather than a fake that accepts anything.
+  UploadedAttachment uploadAttachment(
+    String conversationId,
+    PendingAttachment attachment,
+  ) {
+    _maybeFail();
+    conversationById(conversationId);
+
+    final ceiling = attachment.kind == MessageKind.image
+        ? 10 * 1024 * 1024
+        : 25 * 1024 * 1024;
+    if (attachment.byteSize <= 0 || attachment.byteSize > ceiling) {
+      throw const AppError(
+        AppErrorKind.server,
+        code: 'COMM.ATTACHMENT_TOO_LARGE',
+      );
+    }
+
+    final objectKey =
+        'conversations/$conversationId/${attachment.kind.name}_${++_sequence}';
+    // Kept the way real storage would keep it, so a photo sent in a fixture
+    // build is still there to open after the sender's temp file is cleaned up.
+    _keepVoiceObject(objectKey, attachment.filePath);
+    _objectNames[objectKey] = attachment.fileName;
+
+    return UploadedAttachment(
+      kind: attachment.kind,
+      objectKey: objectKey,
+      mimeType: attachment.mimeType,
+      byteSize: attachment.byteSize,
+    );
+  }
+
+  /// Original file names, by object key — storage metadata, not message state.
+  final _objectNames = <String, String?>{};
+
+  /// One reaction per actor per message, as the server upserts it: a second
+  /// emoji **replaces** the first rather than adding to it.
+  void react(String conversationId, String messageId, String emoji) {
+    _maybeFail();
+    _updateMessage(conversationId, messageId, (m) {
+      final others = m.reactions.where((r) => !r.mine).toList();
+      final existing = others.indexWhere((r) => r.emoji == emoji);
+      if (existing >= 0) {
+        others[existing] = others[existing]
+            .copyWith(count: others[existing].count + 1, mine: true);
+        return m.copyWith(reactions: others);
+      }
+      return m.copyWith(
+        reactions: [...others, Reaction(emoji: emoji, count: 1, mine: true)],
+      );
+    });
+  }
+
+  void removeReaction(String conversationId, String messageId, String emoji) {
+    _maybeFail();
+    _updateMessage(conversationId, messageId, (m) {
+      final next = <Reaction>[];
+      for (final reaction in m.reactions) {
+        if (!reaction.mine || reaction.emoji != emoji) {
+          next.add(reaction);
+          continue;
+        }
+        if (reaction.count > 1) {
+          next.add(reaction.copyWith(count: reaction.count - 1, mine: false));
+        }
+      }
+      return m.copyWith(reactions: next);
+    });
+  }
+
+  /// Hidden for this reader only. The row is untouched for everyone else, which
+  /// a single-user fixture cannot demonstrate — so it simply disappears here.
+  void deleteForMe(String conversationId, String messageId) {
+    _maybeFail();
+    final messages = _messages[conversationId];
+    if (messages == null) return;
+    messages.removeWhere((m) => m.id == messageId);
+  }
+
+  /// Retracted for everyone. The row stays, and is served without its body or
+  /// attachments from now on — exactly what `deletedForAll` does server-side.
+  void deleteForEveryone(String conversationId, String messageId) {
+    _maybeFail();
+
+    final message = (_messages[conversationId] ?? const <Message>[])
+        .where((m) => m.id == messageId)
+        .firstOrNull;
+    if (message == null) {
+      throw const AppError(AppErrorKind.notFound, code: 'COMM.MESSAGE_NOT_FOUND');
+    }
+    if (!message.isMine) {
+      throw const AppError(
+        AppErrorKind.forbidden,
+        code: 'COMM.NOT_MESSAGE_AUTHOR',
+      );
+    }
+
+    _updateMessage(conversationId, messageId, (m) => m.copyWith(isDeleted: true));
+  }
+
+  void _updateMessage(
+    String conversationId,
+    String messageId,
+    Message Function(Message) update,
+  ) {
+    final messages = _messages[conversationId];
+    if (messages == null) return;
+
+    final index = messages.indexWhere((m) => m.id == messageId);
+    if (index < 0) {
+      throw const AppError(AppErrorKind.notFound, code: 'COMM.MESSAGE_NOT_FOUND');
+    }
+    messages[index] = update(messages[index]);
   }
 
   StudentGroup group(String conversationId) {

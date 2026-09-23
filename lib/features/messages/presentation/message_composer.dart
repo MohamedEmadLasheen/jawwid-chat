@@ -151,7 +151,11 @@ class _MessageComposerState extends State<MessageComposer> {
                 if (widget.onAttach != null)
                   IconButton(
                     onPressed: widget.onAttach,
-                    icon: const Icon(Icons.attach_file),
+                    // A plus, not a paperclip. §7 asks for `[ + ]` and it is the
+                    // better sign for this audience anyway: a paperclip means
+                    // "attachment" to people who have used email, and a plus
+                    // means "more" to everyone.
+                    icon: const Icon(Icons.add),
                     tooltip: l10n.composerAttach,
                   ),
                 Expanded(
@@ -289,3 +293,40 @@ class _ReplyBanner extends StatelessWidget {
     );
   }
 }
+
+/// The `+` menu: a photo, or a file.
+///
+/// Two entries and no third. §1 puts photo and file one interaction away and
+/// everything else further back, and a menu that grows past what fits on one
+/// glance has stopped being a shortcut.
+Future<AttachmentSource?> showAttachmentMenu(BuildContext context) {
+  return showModalBottomSheet<AttachmentSource>(
+    context: context,
+    useRootNavigator: true,
+    showDragHandle: true,
+    builder: (sheetContext) {
+      final l10n = L10n.of(sheetContext);
+
+      return SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_outlined),
+              title: Text(l10n.attachPhoto),
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(AttachmentSource.photo),
+            ),
+            ListTile(
+              leading: const Icon(Icons.insert_drive_file_outlined),
+              title: Text(l10n.attachFile),
+              onTap: () => Navigator.of(sheetContext).pop(AttachmentSource.file),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+enum AttachmentSource { photo, file }
