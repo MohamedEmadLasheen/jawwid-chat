@@ -333,7 +333,29 @@ export class AnnouncementService {
     const announcement = await this.prisma.announcement.findUnique({
       where: { id: announcementId },
     });
-    if (!announcement || announcement.status !== 'published') {
+    if (!announcement) {
+      throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'announcement not found', 404);
+    }
+
+    // GONE, not MISSING. Authorization is already settled above -- a
+    // notification addressed to this parent exists, so the academy did tell
+    // them about this -- which means 404 would be a lie in the one direction
+    // that matters: it would say "there is no such announcement" to the person
+    // holding the notification for it. 410 says it existed and is over, which
+    // is what the screen needs in order to say so rather than showing the
+    // generic not-found copy.
+    //
+    // Nothing is lost either way: the notification card carries the
+    // announcement's own title and body, frozen at creation, so a parent who
+    // lands here has already read what they were told.
+    if (announcement.status === 'cancelled') {
+      throw new CommError(
+        CommErrorCode.MESSAGE_NOT_FOUND,
+        'this announcement was withdrawn',
+        410,
+      );
+    }
+    if (announcement.status !== 'published') {
       throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'announcement not found', 404);
     }
     if (announcement.expiresAt && announcement.expiresAt <= new Date()) {

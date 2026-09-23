@@ -217,8 +217,18 @@ class _PushDeepLinkNavigatorState extends ConsumerState<PushDeepLinkNavigator> {
     if (!ref.read(authControllerProvider).isAuthenticated) return;
 
     final link = registrar.takePendingDeepLink();
-    if (link != null && mounted) GoRouter.of(context).push(link.route);
+    if (link != null && mounted) _router.push(link.route);
   }
+
+  /// The router, from the provider that owns it rather than from the context.
+  ///
+  /// NOT `GoRouter.of(context)`. This widget is mounted in
+  /// `MaterialApp.router`'s builder, which wraps the Router and is therefore an
+  /// ANCESTOR of the `InheritedGoRouter` that `GoRouter.of` looks up -- so that
+  /// call throws "No GoRouter found in context" at the exact moment a parent
+  /// taps a notification, which is the one moment this widget exists for.
+  /// `routerProvider` holds the same instance and is reachable from here.
+  GoRouter get _router => ref.read(routerProvider);
 
   @override
   Widget build(BuildContext context) {
@@ -228,7 +238,7 @@ class _PushDeepLinkNavigatorState extends ConsumerState<PushDeepLinkNavigator> {
       if (link == null || !mounted) return;
       if (!ref.read(authControllerProvider).isAuthenticated) return;
       ref.read(pushRegistrarProvider).takePendingDeepLink();
-      GoRouter.of(context).push(link.route);
+      _router.push(link.route);
     });
 
     // Signing in drains anything held from a tap taken while signed out.
