@@ -3,6 +3,9 @@ import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { OutboxWorker } from './communication/outbox/outbox.worker';
+import { NotificationService } from './communication/notifications/notification.service';
+import { DeliveryService } from './communication/notifications/delivery.service';
+import { AnnouncementService } from './communication/announcements/announcement.service';
 import { readBuildInfo } from './infra/build-info';
 
 /**
@@ -33,6 +36,9 @@ async function bootstrap(): Promise<void> {
     logger: ['error', 'warn', 'log'],
   });
   const outbox = app.get(OutboxWorker);
+  const notifications = app.get(NotificationService);
+  const deliveries = app.get(DeliveryService);
+  const announcements = app.get(AnnouncementService);
 
   let running = true;
   let draining = false;
@@ -65,21 +71,42 @@ async function bootstrap(): Promise<void> {
   );
 
   while (running) {
-    let published = 0;
+    let worked = 0;
     draining = true;
-    try {
-      published = await outbox.drain(BATCH);
-    } catch (e) {
-      // Never exit on a drain failure: the row stays pending and is retried.
-      // A worker that dies on one bad event stops delivering every other event.
-      log.error(`drain failed: ${e instanceof Error ? e.message : 'unknown error'}`);
-    } finally {
-      draining = false;
+
+    // Four sweeps, each independently guarded. A failure in one must not stop
+    // the others: an announcement fan-out that throws cannot be allowed to stop
+    // class reminders going out, and a dead push provider cannot be allowed to
+    // stop the outbox draining.
+    for (const [name, sweep] of [
+      // 1. Events -> notifications. Must run first; the others act on its output.
+      ['outbox', () => outbox.drain(BATCH)],
+      // 2. Due notifications -> channels. This is what makes a class reminder
+      //    fire while the parent's phone is off and the app has been closed for
+      //    a week: the reminder is a row with a scheduled_at, and this sweep is
+      //    what notices the time has come. Nothing about it depends on a client.
+      ['dispatch', () => notifications.dispatchDue(new Date(), BATCH)],
+      // 3. Deliveries whose backoff has elapsed. Bounded retries; a delivery
+      //    that has exhausted its budget is failed, not retried forever.
+      ['retry', () => deliveries.retryDue(new Date(), BATCH)],
+      // 4. Announcements whose publish time has arrived.
+      ['announce', () => announcements.fanOutDue(new Date())],
+    ] as const) {
+      if (!running) break;
+      try {
+        worked += await sweep();
+      } catch (e) {
+        log.error(
+          `${name} sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`,
+        );
+      }
     }
+
+    draining = false;
     if (!running) break;
     // Back off when there is nothing to do, so an idle deployment is not
     // hammering the database once a second for no reason.
-    await sleep(published > 0 ? POLL_MS : IDLE_BACKOFF_MS);
+    await sleep(worked > 0 ? POLL_MS : IDLE_BACKOFF_MS);
   }
 }
 

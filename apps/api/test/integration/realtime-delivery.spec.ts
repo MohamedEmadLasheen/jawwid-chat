@@ -124,10 +124,15 @@ describe('D-2 · a failed publish returns the event to the outbox', () => {
         throw new Error('reached no API instance (0 subscribers)');
       },
     };
-    const notifications = { onMessageCreated: async () => undefined } as never;
+    const notifications = { schedule: async () => ({ notificationId: '', created: false }) } as never;
     const identity = { resolveActor: async () => null } as never;
+    const recipients = { forConversation: async () => [] } as never;
+    // Presence is Redis-backed; the worker must not depend on it to publish.
+    const presence = { isViewing: async () => false } as never;
 
-    const worker = new OutboxWorker(prisma, notifications, alwaysFails as never, identity);
+    const worker = new OutboxWorker(
+      prisma, notifications, recipients, presence, alwaysFails as never, identity,
+    );
     await worker.drain(50);
 
     const after = await prisma.outboxEvent.findUnique({ where: { id: event.id } });

@@ -3,6 +3,7 @@
  * calling — against the real migrated database.
  */
 import { CommErrorCode } from '@platform/errors';
+import { NotificationType } from '@communication/contracts/notifications';
 import { QuietHoursService } from '@communication/notifications/quiet-hours.service';
 import { TemplateService } from '@communication/notifications/template.service';
 import { ReminderService } from '@communication/notifications/reminder.service';
@@ -280,15 +281,21 @@ describe('notification and reminder engine', () => {
   it('the same dedupe key never produces two notifications', async () => {
     const key = 'class_reminder_t30m:session_1:parent_1';
     const first = await g.notifications.schedule({
-      dedupeKey: key, templateKey: 'class_reminder', eventType: 'class_scheduled',
+      dedupeKey: key, type: NotificationType.CLASS_REMINDER,
+      templateKey: 'class_reminder', eventType: 'class_scheduled',
       recipientId: s.parentId, scheduledAt: new Date(),
     });
     const second = await g.notifications.schedule({
-      dedupeKey: key, templateKey: 'class_reminder', eventType: 'class_scheduled',
+      dedupeKey: key, type: NotificationType.CLASS_REMINDER,
+      templateKey: 'class_reminder', eventType: 'class_scheduled',
       recipientId: s.parentId, scheduledAt: new Date(),
     });
 
-    expect(second).toBe(first);
+    expect(second.notificationId).toBe(first.notificationId);
+    // The second call reports that it created nothing, so a caller that needs
+    // to know the difference (the grouping path) can tell.
+    expect(first.created).toBe(true);
+    expect(second.created).toBe(false);
     expect(await g.prisma.notification.count({ where: { dedupeKey: key } })).toBe(1);
   });
 
@@ -297,12 +304,13 @@ describe('notification and reminder engine', () => {
     const ids = await Promise.all(
       Array.from({ length: 6 }, () =>
         g.notifications.schedule({
-          dedupeKey: key, templateKey: 'renewal_reminder', eventType: 'renewal_due',
+          dedupeKey: key, type: NotificationType.RENEWAL_REMINDER,
+          templateKey: 'renewal_reminder', eventType: 'renewal_due',
           recipientId: s.parentId, scheduledAt: new Date(),
         }),
       ),
     );
-    expect(new Set(ids).size).toBe(1);
+    expect(new Set(ids.map((r) => r.notificationId)).size).toBe(1);
     expect(await g.prisma.notification.count({ where: { dedupeKey: key } })).toBe(1);
   });
 
@@ -318,9 +326,12 @@ describe('notification and reminder engine', () => {
     await g.reminders.scheduleForEvent('class_scheduled', ctx);
 
     const rows = await g.prisma.notification.findMany({ where: { eventType: 'class_scheduled' } });
-    // Two rules (T-24h and T-30m), one recipient, scheduled twice -> still two rows.
-    expect(rows).toHaveLength(2);
-    expect(new Set(rows.map((r) => r.dedupeKey)).size).toBe(2);
+    // Three rules (T-24h, T-30m, T-10m), one recipient, scheduled twice ->
+    // still three rows. The count follows chat.notification_rule, which is data:
+    // it moved from two to three when the T-10m rule was seeded, and the
+    // property under test is the deduplication, not the number of rules.
+    expect(rows).toHaveLength(3);
+    expect(new Set(rows.map((r) => r.dedupeKey)).size).toBe(3);
   });
 
   it('schedules each rule at its configured offset', async () => {
@@ -335,6 +346,7 @@ describe('notification and reminder engine', () => {
     });
     expect(rows[0].scheduledAt.toISOString()).toBe('2026-09-09T09:00:00.000Z'); // T-24h
     expect(rows[1].scheduledAt.toISOString()).toBe('2026-09-10T08:30:00.000Z'); // T-30m
+    expect(rows[2].scheduledAt.toISOString()).toBe('2026-09-10T08:50:00.000Z'); // T-10m
   });
 
   it('cancelling a subject leaves already-sent history alone', async () => {
@@ -343,7 +355,7 @@ describe('notification and reminder engine', () => {
       recipients: [{ actorId: s.parentId, locale: 'ar', role: 'parent' }],
     });
     const cancelled = await g.reminders.cancelForSubject('session_44');
-    expect(cancelled).toBe(2);
+    expect(cancelled).toBe(3);
 
     const rows = await g.prisma.notification.findMany({ where: { eventType: 'class_scheduled' } });
     expect(rows.every((r) => r.status === 'cancelled')).toBe(true);
@@ -380,8 +392,9 @@ describe('notification and reminder engine', () => {
 
     const atNight = new Date('2026-09-10T23:00:00Z'); // inside 22:00-08:00
     await g.notifications.schedule({
-      dedupeKey: 'quiet:1', templateKey: 'renewal_reminder', eventType: 'renewal_due',
-      recipientId: s.parentId, scheduledAt: atNight, respectQuietHours: true,
+      dedupeKey: 'quiet:1', type: NotificationType.RENEWAL_REMINDER,
+      templateKey: 'renewal_reminder', eventType: 'renewal_due',
+      recipientId: s.parentId, scheduledAt: atNight, bypassQuietHours: false,
     });
 
     const row = await g.prisma.notification.findUnique({ where: { dedupeKey: 'quiet:1' } });
@@ -394,8 +407,9 @@ describe('notification and reminder engine', () => {
     });
     const atNight = new Date('2026-09-10T23:00:00Z');
     await g.notifications.schedule({
-      dedupeKey: 'quiet:2', templateKey: 'incoming_call', eventType: 'call_started',
-      recipientId: s.parentId, scheduledAt: atNight, respectQuietHours: false,
+      dedupeKey: 'quiet:2', type: NotificationType.INCOMING_CALL,
+      templateKey: 'incoming_call', eventType: 'call_started',
+      recipientId: s.parentId, scheduledAt: atNight, bypassQuietHours: true,
     });
     const row = await g.prisma.notification.findUnique({ where: { dedupeKey: 'quiet:2' } });
     expect(row!.scheduledAt.toISOString()).toBe(atNight.toISOString());
@@ -412,7 +426,8 @@ describe('notification and reminder engine', () => {
       actorId: s.parentId, token: 'device-token-1', platform: 'android',
     });
     await g.notifications.schedule({
-      dedupeKey: 'dispatch:1', templateKey: 'renewal_reminder', eventType: 'renewal_due',
+      dedupeKey: 'dispatch:1', type: NotificationType.RENEWAL_REMINDER,
+      templateKey: 'renewal_reminder', eventType: 'renewal_due',
       recipientId: s.parentId, scheduledAt: new Date(Date.now() - 1000),
     });
 

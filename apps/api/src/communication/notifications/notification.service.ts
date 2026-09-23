@@ -1,12 +1,19 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AppConfigService } from '../../platform/app-config.service';
-import { PUSH_PROVIDER } from '../../platform/tokens';
-import type { PushProvider } from './push.provider';
 import { TemplateService } from './template.service';
 import { QuietHoursService } from './quiet-hours.service';
+import { PreferenceService } from './preference.service';
+import { DeliveryService, DeliverableNotification } from './delivery.service';
 import { NotificationStatus } from '../contracts/vocab';
+import {
+  DeliveryChannel,
+  NotificationType,
+  SkipReason,
+  definitionOf,
+  templateKeyFor,
+} from '../contracts/notifications';
 
 export interface ScheduleInput {
   /**
@@ -14,28 +21,82 @@ export interface ScheduleInput {
    * e.g. class_reminder_t30m:session_123:contact_45
    */
   dedupeKey: string;
-  ruleKey?: string | null;
-  templateKey: string;
+  /** Registry type. Everything else about the notification is derived from it. */
+  type: NotificationType;
+  /** The SYSTEM EVENT that produced it. Not the same thing as `type`. */
   eventType: string;
   recipientId: string;
+
+  ruleKey?: string | null;
+  /** Overrides the registry's template. Used by rule-driven reminders. */
+  templateKey?: string | null;
   locale?: string;
-  channel?: string;
-  priority?: string;
+  /** Overrides the registry's priority. Used by rule-driven reminders. */
+  priority?: string | null;
+
   familyId?: string | null;
   conversationId?: string | null;
+  messageId?: string | null;
+  callId?: string | null;
+  announcementId?: string | null;
+  /** The child this is about, from the recipient's point of view. */
+  learnerId?: string | null;
+  learnerName?: string | null;
+  senderId?: string | null;
+
   variables?: Record<string, unknown>;
   scheduledAt: Date;
-  respectQuietHours?: boolean;
+  expiresAt?: Date | null;
+  /**
+   * A rule's own quiet-hours exemption, from
+   * chat.notification_rule.respect_quiet_hours. Overrides the registry so that
+   * retuning a reminder schedule stays an UPDATE rather than a deploy -- which
+   * is the whole reason reminder rules are rows. Absent means the type decides.
+   */
+  bypassQuietHours?: boolean | null;
+  /** A rule asking for in-app only (chat.notification_rule.channel = 'in_app'). */
+  inAppOnly?: boolean;
+  /** Rendering is skipped and these are stored verbatim. Announcements use it. */
+  renderedTitle?: string | null;
+  renderedBody?: string | null;
+  /**
+   * Set when the recipient is demonstrably looking at the thing already. The
+   * notification is still created; only the push is skipped, and the skip is
+   * recorded.
+   */
+  recipientIsActive?: boolean;
+  /** Conversation-level mute, which is not the same as a category preference. */
+  conversationMuted?: boolean;
+}
+
+export interface ScheduleResult {
+  notificationId: string;
+  /** False when the dedupe key already existed. */
+  created: boolean;
 }
 
 /**
- * The notification engine.
+ * THE NOTIFICATION ENGINE.
  *
- * DEDUPLICATION is the central guarantee: chat.notification.dedupe_key is
- * UNIQUE, and schedule() treats a duplicate key as success rather than as an
- * error. That makes the whole pipeline safe to retry - worker restarts, replayed
- * outbox events, re-run reminder sweeps and duplicate source events all
- * converge on exactly one delivery.
+ * One pipeline, used by every feature. A feature that wants to notify somebody
+ * calls schedule() and decides none of: the category, the priority, whether it
+ * is essential, which template renders it, whether it groups, where it deep
+ * links, or which channels it takes. All of that is the registry's, so the
+ * fiftieth notification type behaves like the first.
+ *
+ * TWO GUARANTEES HOLD THE WHOLE THING UP:
+ *
+ * DEDUPLICATION. chat.notification.dedupe_key is UNIQUE and schedule() treats a
+ * duplicate as success rather than as an error. Worker restarts, replayed
+ * outbox events, re-run reminder sweeps, a browser refresh, a mobile reconnect
+ * and a duplicate webhook all converge on exactly one notification. The engine
+ * is safe to run over the same event any number of times.
+ *
+ * FROZEN TEXT. Title and body are rendered ONCE, at creation, in the
+ * recipient's own locale, and never re-rendered. This is what makes "moved from
+ * 5:00 PM to 6:00 PM" still true after the class moves a second time -- the
+ * alternative, re-rendering from live data, silently rewrites history in the
+ * one place a parent goes to check what they were told.
  */
 @Injectable()
 export class NotificationService {
@@ -46,39 +107,105 @@ export class NotificationService {
     private readonly templates: TemplateService,
     private readonly quietHours: QuietHoursService,
     private readonly config: AppConfigService,
-    @Inject(PUSH_PROVIDER) private readonly push: PushProvider,
+    private readonly preferences: PreferenceService,
+    private readonly deliveries: DeliveryService,
   ) {}
 
   /**
-   * Idempotent. Returns the notification id whether it was created now or
-   * already existed.
+   * Create a notification. Idempotent: returns the existing id when the dedupe
+   * key has been seen before, and reports `created: false` so a caller that
+   * cares (the grouping path) can tell.
    */
-  async schedule(input: ScheduleInput): Promise<string> {
+  async schedule(input: ScheduleInput): Promise<ScheduleResult> {
+    const def = definitionOf(input.type);
+    const locale = input.locale ?? 'ar';
+
+    // Quiet hours are a property of the TYPE, or of the RULE that scheduled it.
+    // They are never a free-form flag a feature passes: a caller that could opt
+    // out at will would eventually opt out of everything.
+    const bypassQuietHours = input.bypassQuietHours ?? def.bypassQuietHours;
     const scheduledAt = await this.quietHours.adjust(
       input.recipientId,
       input.scheduledAt,
-      input.respectQuietHours ?? true,
+      !bypassQuietHours,
     );
+
+    const hasChild = Boolean(input.learnerName);
+    const templateKey = input.templateKey ?? templateKeyFor(def, hasChild);
+
+    const variables: Record<string, unknown> = {
+      ...(input.variables ?? {}),
+      ...(input.learnerName ? { student_name: input.learnerName } : {}),
+    };
+
+    // Rendered here, frozen on the row. A render failure must not produce a
+    // notification with no text -- a blank row in the centre is worse than a
+    // recorded failure, because the parent sees an unread badge for nothing.
+    let title = input.renderedTitle ?? null;
+    let body = input.renderedBody ?? null;
+    if (title === null || body === null) {
+      const rendered = await this.templates.render(templateKey, locale, variables);
+      if (!rendered) {
+        this.log.error(`template ${templateKey}/${locale} is missing; nothing was created`);
+        throw new Error(`notification template not found: ${templateKey}/${locale}`);
+      }
+      title = rendered.title;
+      body = rendered.body;
+    }
+
+    const entityId = this.entityIdFor(input, def.entityType);
+    const linkContext = {
+      conversationId: input.conversationId,
+      messageId: input.messageId,
+      callId: input.callId,
+      learnerId: input.learnerId,
+      announcementId: input.announcementId,
+    };
+
+    const groupKey = def.groupable
+      ? (def.groupKey?.({ ...linkContext, senderId: input.senderId }) ?? null)
+      : null;
 
     try {
       const created = await this.prisma.notification.create({
         data: {
           dedupeKey: input.dedupeKey,
-          ruleKey: input.ruleKey ?? null,
-          templateKey: input.templateKey,
+          type: def.type,
           eventType: input.eventType,
+          category: def.category,
+          priority: input.priority ?? def.priority,
+          isEssential: def.essential,
+          ruleKey: input.ruleKey ?? null,
+          templateKey,
           recipientId: input.recipientId,
-          locale: input.locale ?? 'ar',
-          channel: input.channel ?? 'push',
-          priority: input.priority ?? 'normal',
+          locale,
+          // Retained for the rule/report surface that still reads it. Per-channel
+          // truth lives in chat.notification_delivery.
+          channel: DeliveryChannel.PUSH,
+          title,
+          body,
+          entityType: def.entityType,
+          entityId,
+          deeplink: def.deepLink(linkContext),
           familyId: input.familyId ?? null,
           conversationId: input.conversationId ?? null,
-          variables: (input.variables ?? {}) as Prisma.InputJsonValue,
+          learnerId: input.learnerId ?? null,
+          senderId: input.senderId ?? null,
+          announcementId: input.announcementId ?? null,
+          groupKey,
+          variables: variables as Prisma.InputJsonValue,
           status: NotificationStatus.SCHEDULED,
           scheduledAt,
+          expiresAt: input.expiresAt ?? null,
         },
       });
-      return created.id;
+
+      // Record the push suppression NOW, against the notification that caused
+      // it, rather than discovering at dispatch time that we do not remember
+      // why we did not push.
+      await this.recordSuppression(created.id, input, def.essential);
+
+      return { notificationId: created.id, created: true };
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         // Already accounted for. This is the dedupe guarantee doing its job.
@@ -86,13 +213,18 @@ export class NotificationService {
           where: { dedupeKey: input.dedupeKey },
           select: { id: true },
         });
-        if (existing) return existing.id;
+        if (existing) return { notificationId: existing.id, created: false };
       }
       throw e;
     }
   }
 
-  /** Claims and delivers everything due. Safe to run concurrently. */
+  /**
+   * Claim and deliver everything due. Safe to run concurrently.
+   *
+   * The claim is a conditional UPDATE: if another worker got there first,
+   * updateMany reports 0 rows and this worker moves on without double-sending.
+   */
   async dispatchDue(now = new Date(), batchSize = 100): Promise<number> {
     const due = await this.prisma.notification.findMany({
       where: { status: NotificationStatus.SCHEDULED, scheduledAt: { lte: now } },
@@ -102,8 +234,6 @@ export class NotificationService {
 
     let delivered = 0;
     for (const n of due) {
-      // Claim it first. If another worker got there, updateMany reports 0 and
-      // this worker moves on without double-sending.
       const claimed = await this.prisma.notification.updateMany({
         where: { id: n.id, status: NotificationStatus.SCHEDULED },
         data: { status: NotificationStatus.SENT, sentAt: now, attempts: { increment: 1 } },
@@ -111,9 +241,8 @@ export class NotificationService {
       if (claimed.count === 0) continue;
 
       try {
-        const ok = await this.deliver(n.id);
-        if (ok) delivered += 1;
-      } catch (err) {
+        if (await this.deliver(n as unknown as DeliverableNotification)) delivered += 1;
+      } catch {
         await this.fail(n.id, 'DISPATCH_ERROR');
         this.log.warn(`notification ${n.id} failed to dispatch`);
       }
@@ -121,66 +250,101 @@ export class NotificationService {
     return delivered;
   }
 
-  private async deliver(notificationId: string): Promise<boolean> {
-    const n = await this.prisma.notification.findUnique({ where: { id: notificationId } });
-    if (!n) return false;
+  /**
+   * Deliver one notification across its channels.
+   *
+   * In-app ALWAYS runs: the notification centre is the source of truth and it
+   * is never opted out of. Push runs unless something already recorded a
+   * decision not to.
+   */
+  async deliver(n: DeliverableNotification): Promise<boolean> {
+    await this.deliveries.deliverInApp(n);
 
-    const rendered = await this.templates.render(
-      n.templateKey,
-      n.locale,
-      (n.variables ?? {}) as Record<string, unknown>,
-    );
-    if (!rendered) {
-      await this.fail(notificationId, 'TEMPLATE_MISSING');
-      return false;
-    }
-
-    if (n.channel === 'in_app') {
-      // In-app notifications are delivered over the realtime channel by the
-      // outbox worker; there is nothing to push.
-      return true;
-    }
-
-    const tokens = await this.prisma.deviceToken.findMany({
-      where: { actorId: n.recipientId, isActive: true },
+    const alreadySkipped = await this.prisma.notificationDelivery.findFirst({
+      where: { notificationId: n.id, channel: DeliveryChannel.PUSH, status: 'skipped' },
+      select: { id: true },
     });
-    if (tokens.length === 0) {
-      await this.fail(notificationId, 'NO_DEVICE_TOKEN');
-      return false;
+    if (alreadySkipped) return true;
+
+    const pushed = await this.deliveries.deliverPush(n);
+
+    // A push that could not go out is NOT a failed notification. The parent has
+    // it, in the app, with an unread badge, the moment they open it. Marking
+    // the notification failed here would turn "their phone is off" into "we
+    // lost it", and would retry a notification that has already been delivered
+    // by the channel that matters.
+    return pushed || true;
+  }
+
+  private async recordSuppression(
+    notificationId: string,
+    input: ScheduleInput,
+    essential: boolean,
+  ): Promise<void> {
+    const def = definitionOf(input.type);
+    const stub: DeliverableNotification = {
+      id: notificationId,
+      recipientId: input.recipientId,
+      type: def.type,
+      eventType: input.eventType,
+      category: def.category,
+      priority: input.priority ?? def.priority,
+      title: null,
+      body: null,
+      deeplink: null,
+      entityType: def.entityType,
+      entityId: null,
+      conversationId: input.conversationId ?? null,
+      learnerId: input.learnerId ?? null,
+      announcementId: input.announcementId ?? null,
+      groupKey: null,
+      createdAt: new Date(),
+    };
+
+    // A rule that asked for in-app only is honoured before anything else: it is
+    // an explicit operational decision, not a heuristic.
+    if (input.inAppOnly) {
+      await this.deliveries.skip(stub, DeliveryChannel.PUSH, SkipReason.RULE_IN_APP_ONLY);
+      return;
     }
 
-    let anyOk = false;
-    for (const t of tokens) {
-      const result = await this.push.send({
-        token: t.token,
-        title: rendered.title,
-        body: rendered.body,
-        data: {
-          eventType: n.eventType,
-          notificationId: n.id,
-          ...(n.conversationId ? { conversationId: n.conversationId } : {}),
-        },
-        isVoip: t.isVoip,
-      });
-      if (result.ok) anyOk = true;
-      if (result.tokenInvalid) {
-        await this.prisma.deviceToken.update({
-          where: { id: t.id },
-          data: { isActive: false },
-        });
-      }
+    // An essential notification pushes regardless of every suppression below.
+    // A cancelled class reaches a parent who is muted, asleep and mid-chat.
+    if (essential) return;
+
+    if (input.recipientIsActive) {
+      // They are looking at the conversation. A push would buzz a phone that is
+      // already open on the message. The in-app notification and the unread
+      // badge still happen.
+      await this.deliveries.skip(stub, DeliveryChannel.PUSH, SkipReason.RECIPIENT_ACTIVE);
+      return;
     }
 
-    if (!anyOk) {
-      await this.fail(notificationId, 'PUSH_REJECTED');
-      return false;
+    if (input.conversationMuted) {
+      await this.deliveries.skip(stub, DeliveryChannel.PUSH, SkipReason.CONVERSATION_MUTED);
+      return;
     }
 
-    // Status stays SENT. It is NOT promoted to DELIVERED: no platform
-    // acknowledgement has been received, and fabricating one would make the
-    // delivery metrics lie. DELIVERED/OPENED are set only by markDelivered /
-    // markOpened, driven by a real client or provider callback.
-    return true;
+    if (!(await this.preferences.allowsPush(input.recipientId, def))) {
+      await this.deliveries.skip(stub, DeliveryChannel.PUSH, SkipReason.PREFERENCE_OFF);
+    }
+  }
+
+  private entityIdFor(input: ScheduleInput, entityType: string): string | null {
+    switch (entityType) {
+      case 'message':
+        return input.messageId ?? input.conversationId ?? null;
+      case 'call':
+        return input.callId ?? null;
+      case 'learner':
+        return input.learnerId ?? null;
+      case 'announcement':
+        return input.announcementId ?? null;
+      case 'conversation':
+        return input.conversationId ?? null;
+      default:
+        return null;
+    }
   }
 
   private async fail(notificationId: string, code: string): Promise<void> {
@@ -201,7 +365,7 @@ export class NotificationService {
     }
 
     // Retry with exponential backoff. The dedupe key is unchanged, so a retry
-    // can never become a second delivery.
+    // can never become a second notification.
     const backoffMs = Math.min(2 ** n.attempts * 30_000, 30 * 60_000);
     await this.prisma.notification.update({
       where: { id: notificationId },
@@ -214,13 +378,19 @@ export class NotificationService {
   }
 
   /** Called by a client or a provider webhook. Never inferred. */
-  async markDelivered(notificationId: string): Promise<void> {
+  async markDelivered(notificationId: string, actorId: string): Promise<void> {
     await this.prisma.notification.updateMany({
-      where: { id: notificationId, status: NotificationStatus.SENT },
+      where: { id: notificationId, recipientId: actorId, status: NotificationStatus.SENT },
       data: { status: NotificationStatus.DELIVERED, deliveredAt: new Date() },
     });
+    await this.deliveries.markDelivered(notificationId, actorId);
   }
 
+  /**
+   * The user acted on a push. This is not the same as having read it in the
+   * app, and it does not set read_at -- opening a push and then backgrounding
+   * the app without looking is a real thing people do.
+   */
   async markOpened(notificationId: string, actorId: string): Promise<void> {
     await this.prisma.notification.updateMany({
       where: {
@@ -249,7 +419,8 @@ export class NotificationService {
         isVoip: input.isVoip ?? false,
         locale: input.locale ?? 'ar',
       },
-      // A token can move between accounts when a device is handed over.
+      // A token can move between accounts when a device is handed over, and it
+      // must follow the new owner or their pushes go to the previous one.
       update: {
         actorId: input.actorId,
         isActive: true,
@@ -259,9 +430,14 @@ export class NotificationService {
     });
   }
 
-  async unregisterDevice(token: string): Promise<void> {
+  /**
+   * Sign-out on one device. Scoped to the caller: a token belonging to somebody
+   * else is left alone, so knowing a token string is not enough to silence
+   * another person's phone.
+   */
+  async unregisterDevice(token: string, actorId: string): Promise<void> {
     await this.prisma.deviceToken.updateMany({
-      where: { token },
+      where: { token, actorId },
       data: { isActive: false },
     });
   }

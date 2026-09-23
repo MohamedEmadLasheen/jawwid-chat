@@ -24,24 +24,24 @@ datasource db {
 
 model Staff {
   /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
-  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  organizationId String    @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   id             String    @id @default(uuid()) @db.Uuid
   name           String
   role           String
   presence       String    @default("offline")
   lastActivityAt DateTime? @map("last_activity_at") @db.Timestamptz
-  isActive       Boolean   @map("is_active") @default(true)
+  isActive       Boolean   @default(true) @map("is_active")
   leftAt         DateTime? @map("left_at") @db.Timestamptz
   /// The login this staff member authenticates as. The column has existed in
   /// SQL since 20260905090200 (`account_id uuid unique references chat.account`);
   /// only this model was missing it, which is why PR-B adds a field and no DDL.
   accountId      String?   @unique @map("account_id") @db.Uuid
   account        Account?  @relation(fields: [accountId], references: [id])
-  createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
-  updatedAt      DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  ownedFamilies  Family[]        @relation("FamilyOwner")
-  stickyOf       Conversation[]  @relation("ConversationStickyHandler")
+  ownedFamilies Family[]       @relation("FamilyOwner")
+  stickyOf      Conversation[] @relation("ConversationStickyHandler")
 
   @@map("staff")
   @@schema("chat")
@@ -49,7 +49,7 @@ model Staff {
 
 model Family {
   /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
-  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  organizationId   String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   id               String   @id @default(uuid()) @db.Uuid
   displayName      String   @map("display_name")
   ownerId          String   @map("owner_id") @db.Uuid
@@ -58,8 +58,8 @@ model Family {
   tier             String   @default("standard")
   state            String   @default("onboarding")
   language         String   @default("ar")
-  createdAt        DateTime @map("created_at") @db.Timestamptz @default(now())
-  updatedAt        DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   contacts      Contact[]
   learners      Learner[]
@@ -71,14 +71,14 @@ model Family {
 
 model Contact {
   /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
-  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  organizationId    String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   id                String   @id @default(uuid()) @db.Uuid
   familyId          String   @map("family_id") @db.Uuid
   family            Family   @relation(fields: [familyId], references: [id])
   name              String
   relationship      String?
   rolePreset        String   @map("role_preset")
-  canMessage        Boolean  @map("can_message") @default(false)
+  canMessage        Boolean  @default(false) @map("can_message")
   canViewProgress   Boolean  @map("can_view_progress")
   canManageSchedule Boolean  @map("can_manage_schedule")
   canManageBilling  Boolean  @map("can_manage_billing")
@@ -86,9 +86,9 @@ model Contact {
   canCancel         Boolean  @map("can_cancel")
   accountId         String?  @map("account_id") @db.Uuid
   account           Account? @relation(fields: [accountId], references: [id])
-  isActive          Boolean  @map("is_active") @default(true)
-  createdAt         DateTime @map("created_at") @db.Timestamptz @default(now())
-  updatedAt         DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   @@map("contact")
   @@schema("chat")
@@ -96,21 +96,22 @@ model Contact {
 
 model Learner {
   /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
-  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
-  id          String    @id @default(uuid()) @db.Uuid
-  familyId    String    @map("family_id") @db.Uuid
-  family      Family    @relation(fields: [familyId], references: [id])
-  name        String
-  level       String?
+  organizationId String    @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
+  familyId       String    @map("family_id") @db.Uuid
+  family         Family    @relation(fields: [familyId], references: [id])
+  name           String
+  level          String?
   /// Now a real relationship: chat.teacher landed in the PR-A identity
   /// foundation and learner.teacher_id is a foreign key to it.
-  teacherId   String?   @map("teacher_id") @db.Uuid
-  teacher     Teacher?  @relation(fields: [teacherId], references: [id])
-  nextClassAt DateTime? @map("next_class_at") @db.Timestamptz
-  createdAt   DateTime  @map("created_at") @db.Timestamptz @default(now())
-  updatedAt   DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+  teacherId      String?   @map("teacher_id") @db.Uuid
+  teacher        Teacher?  @relation(fields: [teacherId], references: [id])
+  nextClassAt    DateTime? @map("next_class_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   conversations Conversation[]
+  notifications Notification[]
 
   @@map("learner")
   @@schema("chat")
@@ -120,7 +121,7 @@ model Config {
   key       String   @id
   value     Json
   scope     String   @default("global")
-  updatedAt DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   @@map("config")
   @@schema("chat")
@@ -134,7 +135,7 @@ model EventLog {
   actorId   String?  @map("actor_id") @db.Uuid
   type      String
   payload   Json     @default("{}")
-  at        DateTime @db.Timestamptz @default(now())
+  at        DateTime @default(now()) @db.Timestamptz
 
   @@map("event_log")
   @@schema("chat")
@@ -150,7 +151,7 @@ model AuditLog {
   before   Json?
   after    Json?
   reason   String
-  at       DateTime @db.Timestamptz @default(now())
+  at       DateTime @default(now()) @db.Timestamptz
 
   @@map("audit_log")
   @@schema("chat")
@@ -162,43 +163,43 @@ model AuditLog {
 
 model Conversation {
   /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
-  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
-  id        String  @id @default(uuid()) @db.Uuid
-  type      String
-  familyId  String? @map("family_id") @db.Uuid
-  family    Family? @relation(fields: [familyId], references: [id])
-  learnerId String? @map("learner_id") @db.Uuid
-  learner   Learner? @relation(fields: [learnerId], references: [id])
-  title     String?
+  organizationId String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id             String   @id @default(uuid()) @db.Uuid
+  type           String
+  familyId       String?  @map("family_id") @db.Uuid
+  family         Family?  @relation(fields: [familyId], references: [id])
+  learnerId      String?  @map("learner_id") @db.Uuid
+  learner        Learner? @relation(fields: [learnerId], references: [id])
+  title          String?
 
   /// Canonical id of a 1:1 channel; makes a duplicate direct conversation impossible.
   directKey String? @unique @map("direct_key")
 
   state String @default("open")
 
-  teacherRequiresApproval Boolean @map("teacher_requires_approval") @default(true)
-  parentRequiresApproval  Boolean @map("parent_requires_approval") @default(true)
+  teacherRequiresApproval Boolean @default(true) @map("teacher_requires_approval")
+  parentRequiresApproval  Boolean @default(true) @map("parent_requires_approval")
 
   stickyHandlerId String?   @map("sticky_handler_id") @db.Uuid
   stickyHandler   Staff?    @relation("ConversationStickyHandler", fields: [stickyHandlerId], references: [id])
   stickyUntil     DateTime? @map("sticky_until") @db.Timestamptz
 
   /// Server-assigned monotonic message counter.
-  lastSeq BigInt @map("last_seq") @default(0)
+  lastSeq BigInt @default(0) @map("last_seq")
 
   lastCustomerMessageAt DateTime? @map("last_customer_message_at") @db.Timestamptz
   lastStaffMessageAt    DateTime? @map("last_staff_message_at") @db.Timestamptz
-  lastActivityAt        DateTime  @map("last_activity_at") @db.Timestamptz @default(now())
+  lastActivityAt        DateTime  @default(now()) @map("last_activity_at") @db.Timestamptz
   resolvedAt            DateTime? @map("resolved_at") @db.Timestamptz
   archivedAt            DateTime? @map("archived_at") @db.Timestamptz
-  createdAt             DateTime  @map("created_at") @db.Timestamptz @default(now())
-  updatedAt             DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  members      ConversationMember[]
-  messages     Message[]
-  approvals    MessageApproval[]
-  participants ConversationParticipantState[]
-  calls        Call[]
+  members       ConversationMember[]
+  messages      Message[]
+  approvals     MessageApproval[]
+  participants  ConversationParticipantState[]
+  calls         Call[]
   notifications Notification[]
 
   @@map("conversation")
@@ -213,9 +214,9 @@ model ConversationMember {
   actorKind      String       @map("actor_kind")
   actorId        String       @map("actor_id") @db.Uuid
   memberRole     String       @map("member_role")
-  isSilent       Boolean      @map("is_silent") @default(false)
+  isSilent       Boolean      @default(false) @map("is_silent")
   addedBy        String?      @map("added_by") @db.Uuid
-  joinedAt       DateTime     @map("joined_at") @db.Timestamptz @default(now())
+  joinedAt       DateTime     @default(now()) @map("joined_at") @db.Timestamptz
   leftAt         DateTime?    @map("left_at") @db.Timestamptz
 
   @@map("conversation_member")
@@ -224,7 +225,7 @@ model ConversationMember {
 
 model Message {
   /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
-  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  organizationId String        @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   id             String        @id @default(uuid()) @db.Uuid
   conversationId String?       @map("conversation_id") @db.Uuid
   conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -233,11 +234,11 @@ model Message {
   authorId     String? @map("author_id") @db.Uuid
   onBehalfMode String? @map("on_behalf_mode")
 
-  type       String @default("text")
+  type       String  @default("text")
   body       String?
   visibility String
-  moderation String @default("published")
-  origin     String @default("user")
+  moderation String  @default("published")
+  origin     String  @default("user")
 
   seq BigInt?
 
@@ -249,13 +250,13 @@ model Message {
 
   deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
   deletedBy      String?   @map("deleted_by") @db.Uuid
-  deletedForAll  Boolean   @map("deleted_for_all") @default(false)
+  deletedForAll  Boolean   @default(false) @map("deleted_for_all")
   redactedReason String?   @map("redacted_reason")
 
   /// Superseded by MessageAttachment; kept because AI #1 defined it NOT NULL.
-  attachmentsJson Json @map("attachments") @default("[]")
+  attachmentsJson Json @default("[]") @map("attachments")
 
-  createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   attachments MessageAttachment[]
   reactions   MessageReaction[]
@@ -281,7 +282,7 @@ model MessageAttachment {
   width              Int?
   height             Int?
   thumbnailObjectKey String?  @map("thumbnail_object_key")
-  createdAt          DateTime @map("created_at") @db.Timestamptz @default(now())
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   @@map("message_attachment")
   @@schema("chat")
@@ -293,7 +294,7 @@ model MessageReaction {
   message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
   actorId   String   @map("actor_id") @db.Uuid
   emoji     String
-  createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   @@unique([messageId, actorId])
   @@map("message_reaction")
@@ -306,7 +307,7 @@ model MessageReceipt {
   message     Message   @relation(fields: [messageId], references: [id], onDelete: Cascade)
   actorId     String    @map("actor_id") @db.Uuid
   state       String    @default("sent")
-  sentAt      DateTime  @map("sent_at") @db.Timestamptz @default(now())
+  sentAt      DateTime  @default(now()) @map("sent_at") @db.Timestamptz
   deliveredAt DateTime? @map("delivered_at") @db.Timestamptz
   readAt      DateTime? @map("read_at") @db.Timestamptz
 
@@ -319,7 +320,7 @@ model MessageHiddenFor {
   messageId String   @map("message_id") @db.Uuid
   message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
   actorId   String   @map("actor_id") @db.Uuid
-  hiddenAt  DateTime @map("hidden_at") @db.Timestamptz @default(now())
+  hiddenAt  DateTime @default(now()) @map("hidden_at") @db.Timestamptz
 
   @@id([messageId, actorId])
   @@map("message_hidden_for")
@@ -331,11 +332,11 @@ model ConversationParticipantState {
   conversationId String       @map("conversation_id") @db.Uuid
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   actorId        String       @map("actor_id") @db.Uuid
-  lastReadSeq    BigInt       @map("last_read_seq") @default(0)
+  lastReadSeq    BigInt       @default(0) @map("last_read_seq")
   archivedAt     DateTime?    @map("archived_at") @db.Timestamptz
   mutedUntil     DateTime?    @map("muted_until") @db.Timestamptz
   pinnedAt       DateTime?    @map("pinned_at") @db.Timestamptz
-  updatedAt      DateTime     @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+  updatedAt      DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   @@unique([conversationId, actorId])
   @@map("conversation_participant_state")
@@ -344,7 +345,7 @@ model ConversationParticipantState {
 
 model MessageApproval {
   /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
-  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  organizationId  String       @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   id              String       @id @default(uuid()) @db.Uuid
   messageId       String       @unique @map("message_id") @db.Uuid
   message         Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
@@ -354,7 +355,7 @@ model MessageApproval {
   approverId      String?      @map("approver_id") @db.Uuid
   decision        String       @default("pending")
   rejectionReason String?      @map("rejection_reason")
-  createdAt       DateTime     @map("created_at") @db.Timestamptz @default(now())
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz
   decidedAt       DateTime?    @map("decided_at") @db.Timestamptz
 
   @@map("message_approval")
@@ -368,8 +369,8 @@ model OutboxEvent {
   status      String    @default("pending")
   attempts    Int       @default(0)
   lastError   String?   @map("last_error")
-  availableAt DateTime  @map("available_at") @db.Timestamptz @default(now())
-  createdAt   DateTime  @map("created_at") @db.Timestamptz @default(now())
+  availableAt DateTime  @default(now()) @map("available_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
   publishedAt DateTime? @map("published_at") @db.Timestamptz
 
   @@map("outbox_event")
@@ -378,16 +379,18 @@ model OutboxEvent {
 
 model DeviceToken {
   /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
-  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
-  id         String   @id @default(uuid()) @db.Uuid
-  actorId    String   @map("actor_id") @db.Uuid
-  token      String   @unique
-  platform   String
-  isVoip     Boolean  @map("is_voip") @default(false)
-  locale     String   @default("ar")
-  isActive   Boolean  @map("is_active") @default(true)
-  lastSeenAt DateTime @map("last_seen_at") @db.Timestamptz @default(now())
-  createdAt  DateTime @map("created_at") @db.Timestamptz @default(now())
+  organizationId String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id             String   @id @default(uuid()) @db.Uuid
+  actorId        String   @map("actor_id") @db.Uuid
+  token          String   @unique
+  platform       String
+  isVoip         Boolean  @default(false) @map("is_voip")
+  locale         String   @default("ar")
+  isActive       Boolean  @default(true) @map("is_active")
+  lastSeenAt     DateTime @default(now()) @map("last_seen_at") @db.Timestamptz
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  deliveries NotificationDelivery[]
 
   @@map("device_token")
   @@schema("chat")
@@ -395,15 +398,15 @@ model DeviceToken {
 
 model NotificationTemplate {
   /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
-  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
-  id        String   @id @default(uuid()) @db.Uuid
-  key       String
-  locale    String
-  version   Int      @default(1)
-  title     String
-  body      String
-  isActive  Boolean  @map("is_active") @default(true)
-  createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
+  organizationId String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id             String   @id @default(uuid()) @db.Uuid
+  key            String
+  locale         String
+  version        Int      @default(1)
+  title          String
+  body           String
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   @@unique([key, locale, version])
   @@map("notification_template")
@@ -412,17 +415,17 @@ model NotificationTemplate {
 
 model NotificationRule {
   /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
-  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  organizationId    String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   key               String   @id
   eventType         String   @map("event_type")
-  offsetSeconds     Int      @map("offset_seconds") @default(0)
+  offsetSeconds     Int      @default(0) @map("offset_seconds")
   templateKey       String   @map("template_key")
   recipientRole     String   @map("recipient_role")
   channel           String   @default("push")
   priority          String   @default("normal")
-  respectQuietHours Boolean  @map("respect_quiet_hours") @default(true)
+  respectQuietHours Boolean  @default(true) @map("respect_quiet_hours")
   enabled           Boolean  @default(true)
-  updatedAt         DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   notifications Notification[]
 
@@ -432,46 +435,178 @@ model NotificationRule {
 
 model Notification {
   /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
-  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
-  id          String  @id @default(uuid()) @db.Uuid
+  organizationId String            @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id             String            @id @default(uuid()) @db.Uuid
   /// THE deduplication guarantee.
-  dedupeKey   String  @unique @map("dedupe_key")
-  ruleKey     String? @map("rule_key")
-  rule        NotificationRule? @relation(fields: [ruleKey], references: [key])
-  templateKey String  @map("template_key")
-  eventType   String  @map("event_type")
-  recipientId String  @map("recipient_id") @db.Uuid
-  locale      String  @default("ar")
-  channel     String  @default("push")
-  priority    String  @default("normal")
+  dedupeKey      String            @unique @map("dedupe_key")
+  ruleKey        String?           @map("rule_key")
+  rule           NotificationRule? @relation(fields: [ruleKey], references: [key])
+  templateKey    String            @map("template_key")
+  eventType      String            @map("event_type")
+  recipientId    String            @map("recipient_id") @db.Uuid
+  locale         String            @default("ar")
+  channel        String            @default("push")
+  priority       String            @default("normal")
 
   familyId       String?       @map("family_id") @db.Uuid
   conversationId String?       @map("conversation_id") @db.Uuid
   conversation   Conversation? @relation(fields: [conversationId], references: [id])
-  variables      Json    @default("{}")
+  variables      Json          @default("{}")
+
+  /// The NOTIFICATION type (MESSAGE_RECEIVED). `eventType` above is the SYSTEM
+  /// EVENT that produced it (message_published). Two different facts.
+  type     String?
+  category String  @default("messaging")
+
+  /// Rendered once, at creation, and frozen. A second reschedule must not be
+  /// able to rewrite what the parent was told the first time.
+  title String?
+  body  String?
+
+  /// Deep link. The entity pair is durable; `deeplink` is the client route
+  /// derived from it, stored so an older client need not know a newer route.
+  entityType String? @map("entity_type")
+  entityId   String? @map("entity_id") @db.Uuid
+  deeplink   String?
+
+  /// WHICH CHILD. A parent must never have to guess.
+  learnerId String?  @map("learner_id") @db.Uuid
+  learner   Learner? @relation(fields: [learnerId], references: [id])
+  /// WHO it is about. An actor id, never a contact channel.
+  senderId  String?  @map("sender_id") @db.Uuid
+
+  /// Collapses a burst from one sender. NULL means "never group this".
+  groupKey String? @map("group_key")
+
+  /// Bypasses category muting. Set from the type registry, never by a caller.
+  isEssential Boolean @default(false) @map("is_essential")
+
+  announcementId String?       @map("announcement_id") @db.Uuid
+  announcement   Announcement? @relation(fields: [announcementId], references: [id], onDelete: Cascade)
 
   status      String    @default("scheduled")
   scheduledAt DateTime  @map("scheduled_at") @db.Timestamptz
   sentAt      DateTime? @map("sent_at") @db.Timestamptz
   deliveredAt DateTime? @map("delivered_at") @db.Timestamptz
   openedAt    DateTime? @map("opened_at") @db.Timestamptz
+  /// READ is the user having seen it in the app. Not delivery, and not opened.
+  readAt      DateTime? @map("read_at") @db.Timestamptz
+  expiresAt   DateTime? @map("expires_at") @db.Timestamptz
   failedAt    DateTime? @map("failed_at") @db.Timestamptz
   failureCode String?   @map("failure_code")
   attempts    Int       @default(0)
-  createdAt   DateTime  @map("created_at") @db.Timestamptz @default(now())
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  deliveries NotificationDelivery[]
 
   @@map("notification")
   @@schema("chat")
 }
 
+/// DELIVERY, which is not the notification. One notification may have three
+/// deliveries: in-app, a push to a phone, a push to a tablet.
+model NotificationDelivery {
+  id             String        @id @default(uuid()) @db.Uuid
+  /// Nullable: retention purges a notification while keeping its delivery
+  /// record, which outlives it for support.
+  notificationId String?       @map("notification_id") @db.Uuid
+  notification   Notification? @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  recipientId    String        @map("recipient_id") @db.Uuid
+  channel        String
+  /// NULL for in_app: the channel is the account, not a device.
+  deviceTokenId  String?       @map("device_token_id") @db.Uuid
+  deviceToken    DeviceToken?  @relation(fields: [deviceTokenId], references: [id])
+  platform       String?
+
+  status        String    @default("pending")
+  /// A suppressed push is a recorded decision, not a missing row.
+  skipReason    String?   @map("skip_reason")
+  attempts      Int       @default(0)
+  sentAt        DateTime? @map("sent_at") @db.Timestamptz
+  deliveredAt   DateTime? @map("delivered_at") @db.Timestamptz
+  failedAt      DateTime? @map("failed_at") @db.Timestamptz
+  nextAttemptAt DateTime? @map("next_attempt_at") @db.Timestamptz
+  errorCode     String?   @map("error_code")
+  errorMessage  String?   @map("error_message")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("notification_delivery")
+  @@schema("chat")
+}
+
+/// The taxonomy. `isOptional = false` means the category cannot be muted.
+model NotificationCategoryRow {
+  organizationId String  @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  key            String  @id
+  isOptional     Boolean @default(true) @map("is_optional")
+  displayOrder   Int     @default(100) @map("display_order")
+
+  preferences NotificationPreference[]
+
+  @@map("notification_category")
+  @@schema("chat")
+}
+
+/// Push only. In-app notifications are never disableable -- the centre is the
+/// record of what happened, and a setting that loses it is a bug.
+model NotificationPreference {
+  actorId     String                  @map("actor_id") @db.Uuid
+  category    String
+  categoryRow NotificationCategoryRow @relation(fields: [category], references: [key])
+  pushEnabled Boolean                 @default(true) @map("push_enabled")
+  updatedAt   DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@id([actorId, category])
+  @@map("notification_preference")
+  @@schema("chat")
+}
+
+/// Academy announcements are an entity, not a special kind of push. Publishing
+/// one produces ordinary notifications through the ordinary engine.
+model Announcement {
+  organizationId String  @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id             String  @id @default(uuid()) @db.Uuid
+  titleAr        String  @map("title_ar")
+  bodyAr         String  @map("body_ar")
+  titleEn        String? @map("title_en")
+  bodyEn         String? @map("body_en")
+
+  priority   String   @default("normal")
+  targetType String   @map("target_type")
+  targetIds  String[] @map("target_ids") @db.Uuid
+
+  imageUrl      String? @map("image_url")
+  actionLabelAr String? @map("action_label_ar")
+  actionLabelEn String? @map("action_label_en")
+  actionUrl     String? @map("action_url")
+
+  status    String    @default("draft")
+  publishAt DateTime  @default(now()) @map("publish_at") @db.Timestamptz
+  expiresAt DateTime? @map("expires_at") @db.Timestamptz
+
+  createdBy      String    @map("created_by") @db.Uuid
+  publishedAt    DateTime? @map("published_at") @db.Timestamptz
+  fannedOutAt    DateTime? @map("fanned_out_at") @db.Timestamptz
+  recipientCount Int?      @map("recipient_count")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  notifications Notification[]
+
+  @@map("announcement")
+  @@schema("chat")
+}
+
 model QuietHours {
   /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
-  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
-  actorId     String  @id @map("actor_id") @db.Uuid
-  timezone    String  @default("Africa/Cairo")
-  startMinute Int     @map("start_minute") @default(1320)
-  endMinute   Int     @map("end_minute") @default(480)
-  enabled     Boolean @default(true)
+  organizationId String  @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  actorId        String  @id @map("actor_id") @db.Uuid
+  timezone       String  @default("Africa/Cairo")
+  startMinute    Int     @default(1320) @map("start_minute")
+  endMinute      Int     @default(480) @map("end_minute")
+  enabled        Boolean @default(true)
 
   @@map("quiet_hours")
   @@schema("chat")
@@ -479,7 +614,7 @@ model QuietHours {
 
 model Call {
   /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
-  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  organizationId  String       @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   id              String       @id @default(uuid()) @db.Uuid
   conversationId  String       @map("conversation_id") @db.Uuid
   conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -490,11 +625,11 @@ model Call {
   roomName        String       @unique @map("room_name")
   status          String       @default("ringing")
   outcome         String?
-  startedAt       DateTime     @map("started_at") @db.Timestamptz @default(now())
+  startedAt       DateTime     @default(now()) @map("started_at") @db.Timestamptz
   answeredAt      DateTime?    @map("answered_at") @db.Timestamptz
   endedAt         DateTime?    @map("ended_at") @db.Timestamptz
   durationSeconds Int?         @map("duration_seconds")
-  createdAt       DateTime     @map("created_at") @db.Timestamptz @default(now())
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz
 
   participants CallParticipant[]
 
@@ -508,7 +643,7 @@ model CallParticipant {
   call      Call      @relation(fields: [callId], references: [id], onDelete: Cascade)
   actorId   String    @map("actor_id") @db.Uuid
   actorKind String    @map("actor_kind")
-  invitedAt DateTime  @map("invited_at") @db.Timestamptz @default(now())
+  invitedAt DateTime  @default(now()) @map("invited_at") @db.Timestamptz
   joinedAt  DateTime? @map("joined_at") @db.Timestamptz
   leftAt    DateTime? @map("left_at") @db.Timestamptz
 
@@ -519,12 +654,12 @@ model CallParticipant {
 
 /// Tenant root (PRD 2.3). DDL lives in supabase/migrations/20260906120000_chat_organization.sql.
 model Organization {
-  id           String   @id @default(uuid()) @db.Uuid
-  slug         String   @unique
-  displayName  String   @map("display_name")
-  isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id          String   @id @default(uuid()) @db.Uuid
+  slug        String   @unique
+  displayName String   @map("display_name")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@map("organization")
   @@schema("chat")
@@ -545,19 +680,19 @@ model Organization {
 /// (BR-2, guarded by db/tests/invariants.sql).
 model Account {
   /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
-  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  organizationId String    @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   id             String    @id @default(uuid()) @db.Uuid
   subject        String    @unique
   /// staff | family | teacher
   kind           String
   /// provisioned | active | suspended | deactivated
   status         String    @default("active")
-  isActive       Boolean   @map("is_active") @default(true)
+  isActive       Boolean   @default(true) @map("is_active")
   deactivatedAt  DateTime? @map("deactivated_at") @db.Timestamptz
   deactivatedBy  String?   @map("deactivated_by") @db.Uuid
   lastLoginAt    DateTime? @map("last_login_at") @db.Timestamptz
-  createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
-  updatedAt      DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   credential AccountCredential?
   sessions   Session[]
@@ -576,10 +711,10 @@ model AccountCredential {
   accountId         String    @id @map("account_id") @db.Uuid
   account           Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
   passwordHash      String    @map("password_hash")
-  passwordChangedAt DateTime  @map("password_changed_at") @db.Timestamptz @default(now())
-  failedAttempts    Int       @map("failed_attempts") @default(0)
+  passwordChangedAt DateTime  @default(now()) @map("password_changed_at") @db.Timestamptz
+  failedAttempts    Int       @default(0) @map("failed_attempts")
   lockedUntil       DateTime? @map("locked_until") @db.Timestamptz
-  updatedAt         DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   @@map("account_credential")
   @@schema("chat")
@@ -588,7 +723,7 @@ model AccountCredential {
 /// One row per login. The access token carries this row's id as `sid`, so
 /// revoking the row ends the session on the next request.
 model Session {
-  organizationId   String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  organizationId   String    @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   id               String    @id @default(uuid()) @db.Uuid
   accountId        String    @map("account_id") @db.Uuid
   account          Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
@@ -596,7 +731,7 @@ model Session {
   device           Device?   @relation(fields: [deviceId], references: [id])
   /// Hashed. The refresh token itself is never stored.
   refreshTokenHash String    @unique @map("refresh_token_hash")
-  createdAt        DateTime  @map("created_at") @db.Timestamptz @default(now())
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
   expiresAt        DateTime  @map("expires_at") @db.Timestamptz
   lastSeenAt       DateTime? @map("last_seen_at") @db.Timestamptz
   revokedAt        DateTime? @map("revoked_at") @db.Timestamptz
@@ -613,18 +748,18 @@ model Session {
 /// A device an account signs in on. `name` is a label such as "iPhone" and is
 /// never a phone number.
 model Device {
-  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
-  id           String   @id @default(uuid()) @db.Uuid
-  accountId    String   @map("account_id") @db.Uuid
-  account      Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  organizationId String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id             String   @id @default(uuid()) @db.Uuid
+  accountId      String   @map("account_id") @db.Uuid
+  account        Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
   /// ios | android | web
-  platform     String
-  appVersion   String?  @map("app_version")
-  name         String?
-  firstSeenAt  DateTime @map("first_seen_at") @db.Timestamptz @default(now())
-  lastSeenAt   DateTime @map("last_seen_at") @db.Timestamptz @default(now())
-  createdAt    DateTime @map("created_at") @db.Timestamptz @default(now())
-  updatedAt    DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+  platform       String
+  appVersion     String?  @map("app_version")
+  name           String?
+  firstSeenAt    DateTime @default(now()) @map("first_seen_at") @db.Timestamptz
+  lastSeenAt     DateTime @default(now()) @map("last_seen_at") @db.Timestamptz
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   sessions Session[]
 
@@ -636,19 +771,19 @@ model Device {
 /// teacher, because the family-facing role set would then decide whether a
 /// teacher may communicate (domain-reconciliation.md C).
 model Teacher {
-  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
-  id            String    @id @default(uuid()) @db.Uuid
+  organizationId String    @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
   /// Null until a login is provisioned; such a teacher can never authenticate.
-  accountId     String?   @unique @map("account_id") @db.Uuid
-  account       Account?  @relation(fields: [accountId], references: [id])
-  name          String
+  accountId      String?   @unique @map("account_id") @db.Uuid
+  account        Account?  @relation(fields: [accountId], references: [id])
+  name           String
   /// Set when Jawwid Core gains a teacher entity.
-  coreTeacherId String?   @unique @map("core_teacher_id") @db.Uuid
-  syncedAt      DateTime? @map("synced_at") @db.Timestamptz
-  isActive      Boolean   @map("is_active") @default(true)
-  leftAt        DateTime? @map("left_at") @db.Timestamptz
-  createdAt     DateTime  @map("created_at") @db.Timestamptz @default(now())
-  updatedAt     DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+  coreTeacherId  String?   @unique @map("core_teacher_id") @db.Uuid
+  syncedAt       DateTime? @map("synced_at") @db.Timestamptz
+  isActive       Boolean   @default(true) @map("is_active")
+  leftAt         DateTime? @map("left_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   learners Learner[]
 

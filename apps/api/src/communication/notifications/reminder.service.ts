@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../platform/prisma.service';
 import { NotificationService } from './notification.service';
+import { ruleEventNotificationType } from '../contracts/notifications';
 
 export interface ReminderContext {
   /** Stable id of the thing being reminded about: a session, an invoice, a subscription. */
@@ -10,6 +11,9 @@ export interface ReminderContext {
   recipients: Array<{ actorId: string; locale?: string; role: string }>;
   familyId?: string | null;
   conversationId?: string | null;
+  /** The child this reminder is about. Carried so the copy can name them. */
+  learnerId?: string | null;
+  learnerName?: string | null;
   variables?: Record<string, unknown>;
 }
 
@@ -44,6 +48,13 @@ export class ReminderService {
       where: { eventType, enabled: true },
     });
 
+    // A rule says WHEN; the registry says WHAT. A rule naming an event this
+    // product has no notification type for is skipped rather than guessed at:
+    // an operator who enables a rule for an event nobody produces should get
+    // nothing, not a notification with invented semantics.
+    const type = ruleEventNotificationType(eventType);
+    if (!type) return 0;
+
     let count = 0;
     for (const rule of rules) {
       const scheduledAt = new Date(ctx.anchorAt.getTime() + rule.offsetSeconds * 1000);
@@ -56,18 +67,22 @@ export class ReminderService {
 
         await this.notifications.schedule({
           dedupeKey: ReminderService.dedupeKey(rule.key, ctx.subjectId, recipient.actorId),
+          type,
           ruleKey: rule.key,
           templateKey: rule.templateKey,
           eventType,
           recipientId: recipient.actorId,
           locale: recipient.locale ?? 'ar',
-          channel: rule.channel,
           priority: rule.priority,
           familyId: ctx.familyId ?? null,
           conversationId: ctx.conversationId ?? null,
+          learnerId: ctx.learnerId ?? null,
+          learnerName: ctx.learnerName ?? null,
           variables: ctx.variables ?? {},
           scheduledAt,
-          respectQuietHours: rule.respectQuietHours,
+          // The rule's own exemptions, which are data by design.
+          bypassQuietHours: !rule.respectQuietHours,
+          inAppOnly: rule.channel === 'in_app',
         });
         count += 1;
       }

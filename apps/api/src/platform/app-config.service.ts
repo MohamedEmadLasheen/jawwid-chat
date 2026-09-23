@@ -34,6 +34,16 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'call.ring_timeout_seconds': 45,
   /** initial hypothesis - notification delivery retry budget */
   'notification.max_attempts': 5,
+  /** per-channel delivery retry budget; bounds one push, not the notification */
+  'notification.delivery_max_attempts': 5,
+  /** initial hypothesis - messages from one sender inside this window collapse */
+  'notification.group_window_seconds': 300,
+  /** how long a READ notification stays in a parent's history */
+  'notification.retention_days': 180,
+  /** the per-channel delivery record outlives the notification, for support */
+  'notification.delivery_retention_days': 400,
+  /** the academy's record of what it told families, kept far longer */
+  'notification.announcement_retention_days': 730,
 } as const;
 
 export type CommunicationConfigKey = keyof typeof COMMUNICATION_CONFIG_DEFAULTS;

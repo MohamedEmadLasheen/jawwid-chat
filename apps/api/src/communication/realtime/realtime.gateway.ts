@@ -73,6 +73,9 @@ export class RealtimeGateway
   async handleDisconnect(client: AuthedSocket): Promise<void> {
     if (!client.actor) return;
     await this.presence.offline(client.actor.actorId, client.id);
+    // A closed socket is not viewing anything. Without this, a backgrounded app
+    // would keep suppressing its own pushes until the TTL expired.
+    await this.presence.leaveConversation(client.actor.actorId, client.id);
   }
 
   @SubscribeMessage('conversation.subscribe')
@@ -87,6 +90,9 @@ export class RealtimeGateway
     if (!check.ok) return check;
 
     await client.join(room.conversation(body.conversationId));
+    // Remember WHICH thread this socket is on, so a message arriving in it does
+    // not also buzz the phone the parent is already reading it on.
+    await this.presence.enterConversation(actor.actorId, body.conversationId, client.id);
     return { ok: true };
   }
 
@@ -97,6 +103,7 @@ export class RealtimeGateway
   ): Promise<{ ok: boolean }> {
     if (!body?.conversationId) return { ok: false };
     await client.leave(room.conversation(body.conversationId));
+    if (client.actor) await this.presence.leaveConversation(client.actor.actorId, client.id);
     return { ok: true };
   }
 

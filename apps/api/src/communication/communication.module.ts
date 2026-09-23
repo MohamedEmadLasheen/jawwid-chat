@@ -18,10 +18,16 @@ import { LocalFsBlobStore } from './attachments/blob-store';
 import { OutboxService } from './outbox/outbox.service';
 import { OutboxWorker } from './outbox/outbox.worker';
 import { NotificationService } from './notifications/notification.service';
+import { NotificationCenterService } from './notifications/notification-center.service';
+import { DeliveryService } from './notifications/delivery.service';
+import { PreferenceService } from './notifications/preference.service';
+import { RecipientResolver } from './notifications/recipient-resolver.service';
 import { ReminderService } from './notifications/reminder.service';
 import { TemplateService } from './notifications/template.service';
 import { QuietHoursService } from './notifications/quiet-hours.service';
 import { LoggingPushProvider } from './notifications/push.provider';
+import { AnnouncementService } from './announcements/announcement.service';
+import { ClassScheduleService } from './schedule/class-schedule.service';
 import { RealtimeGateway } from './realtime/realtime.gateway';
 import { TypingService } from './realtime/typing.service';
 import { PresenceService } from './realtime/presence.service';
@@ -34,6 +40,8 @@ import { MessageController } from './api/message.controller';
 import { ApprovalController } from './api/approval.controller';
 import { CallController } from './api/call.controller';
 import { NotificationController } from './api/notification.controller';
+import { AnnouncementController } from './api/announcement.controller';
+import { ClassScheduleController } from './api/class-schedule.controller';
 import { StorageController } from './api/storage.controller';
 
 @Module({
@@ -44,6 +52,8 @@ import { StorageController } from './api/storage.controller';
     ApprovalController,
     CallController,
     NotificationController,
+    AnnouncementController,
+    ClassScheduleController,
     StorageController,
   ],
   providers: [
@@ -56,6 +66,12 @@ import { StorageController } from './api/storage.controller';
     OutboxService,
     OutboxWorker,
     NotificationService,
+    NotificationCenterService,
+    DeliveryService,
+    PreferenceService,
+    RecipientResolver,
+    AnnouncementService,
+    ClassScheduleService,
     ReminderService,
     TemplateService,
     QuietHoursService,
@@ -82,6 +98,12 @@ import { StorageController } from './api/storage.controller';
     ApprovalService,
     CallService,
     NotificationService,
+    NotificationCenterService,
+    DeliveryService,
+    PreferenceService,
+    RecipientResolver,
+    AnnouncementService,
+    ClassScheduleService,
     ReminderService,
     OutboxWorker,
     RealtimeRelay,

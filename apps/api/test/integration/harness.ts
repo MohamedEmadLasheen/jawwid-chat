@@ -12,6 +12,13 @@ import { AttachmentService } from '@communication/attachments/attachment.service
 import { SignedLocalObjectStorage } from '@communication/attachments/object-storage';
 import { OutboxService } from '@communication/outbox/outbox.service';
 import { NotificationService } from '@communication/notifications/notification.service';
+import { NotificationCenterService } from '@communication/notifications/notification-center.service';
+import { DeliveryService } from '@communication/notifications/delivery.service';
+import { PreferenceService } from '@communication/notifications/preference.service';
+import { RecipientResolver } from '@communication/notifications/recipient-resolver.service';
+import { AnnouncementService } from '@communication/announcements/announcement.service';
+import { ClassScheduleService } from '@communication/schedule/class-schedule.service';
+import { NoopRealtimePublisher } from '@communication/realtime/realtime.publisher';
 import { ReminderService } from '@communication/notifications/reminder.service';
 import { TemplateService } from '@communication/notifications/template.service';
 import { QuietHoursService } from '@communication/notifications/quiet-hours.service';
@@ -45,7 +52,17 @@ export function buildGraph() {
   const approvals = new ApprovalService(prisma, authz, conversations, attachments, outbox, audit);
   const templates = new TemplateService(prisma);
   const quietHours = new QuietHoursService(prisma);
-  const notifications = new NotificationService(prisma, templates, quietHours, config, new LoggingPushProvider());
+  const preferences = new PreferenceService(prisma);
+  const realtime = new NoopRealtimePublisher();
+  const push = new LoggingPushProvider();
+  const deliveries = new DeliveryService(prisma, config, push, realtime);
+  const notifications = new NotificationService(
+    prisma, templates, quietHours, config, preferences, deliveries,
+  );
+  const centre = new NotificationCenterService(prisma);
+  const recipients = new RecipientResolver(prisma, identity);
+  const announcements = new AnnouncementService(prisma, notifications, recipients, audit);
+  const classSchedule = new ClassScheduleService(prisma, notifications, recipients, audit);
   const reminders = new ReminderService(prisma, notifications);
   const calls = new CallService(
     prisma, authz, conversations, outbox, config, identity, audit, new LiveKitTokenIssuer(),
@@ -54,6 +71,8 @@ export function buildGraph() {
   return {
     prisma, coverage, identity, authz, conversations, messages, approvals,
     attachments, notifications, reminders, templates, quietHours, calls,
+    deliveries, preferences, centre, recipients, announcements, classSchedule,
+    push, realtime, outbox, audit, config,
   };
 }
 
