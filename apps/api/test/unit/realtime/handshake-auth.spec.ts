@@ -397,4 +397,44 @@ describe('joining a conversation room', () => {
 
     expect((await gateway.subscribe(client as never, {})).ok).toBe(false);
   });
+
+  it('a reconnect starts with no conversation rooms, only the actor’s own',
+    async () => {
+      // The room membership belongs to the SOCKET. A reconnect is a new socket,
+      // so the server remembers nothing -- which is why the client keeps its own
+      // list and replays it (see `realtime_test.dart`, "the real client replays
+      // every room it was in"). If the server pretended to remember, a parent
+      // whose authorization changed while they were disconnected would be
+      // silently re-admitted to a thread they had been removed from.
+      const first = await connectedSocket();
+      const firstGateway = (first as unknown as { gateway: RealtimeGateway }).gateway;
+      await firstGateway.subscribe(first as never, { conversationId: 'c-9' });
+      expect(first.joined).toContain('conversation:c-9');
+
+      // The tunnel ends. A new socket for the same parent, same token.
+      const second = await connectedSocket();
+      expect(second.joined).toEqual([room.actor(parent.actorId)]);
+      expect(second.joined).not.toContain('conversation:c-9');
+    });
+
+  it('a replayed subscribe after reconnect is re-authorized, not trusted',
+    async () => {
+      const first = await connectedSocket();
+      const firstGateway = (first as unknown as { gateway: RealtimeGateway }).gateway;
+      await firstGateway.subscribe(first as never, { conversationId: 'c-9' });
+
+      // Between the two sockets, they were removed from the group.
+      allowed = false;
+
+      const second = await connectedSocket();
+      const secondGateway = (second as unknown as { gateway: RealtimeGateway }).gateway;
+      const result = await secondGateway.subscribe(second as never, {
+        conversationId: 'c-9',
+      });
+
+      // The client replaying its own list is a REQUEST, not a fact. Every
+      // replayed room goes through the same check as the first join.
+      expect(result.ok).toBe(false);
+      expect(second.joined).not.toContain('conversation:c-9');
+    });
 });
