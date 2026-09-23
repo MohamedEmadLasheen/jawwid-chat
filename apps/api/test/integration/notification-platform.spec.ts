@@ -12,7 +12,7 @@ import { randomUUID } from 'node:crypto';
 import { buildGraph, seed, truncate, Scenario } from './harness';
 import { NotificationType } from '@communication/contracts/notifications';
 import { CommEvent } from '@communication/contracts/events';
-import { MessageType, Visibility } from '@communication/contracts/vocab';
+import { MessageType, NotificationStatus, Visibility } from '@communication/contracts/vocab';
 import { formatDate, formatTime } from '@communication/schedule/class-schedule.service';
 
 const g = buildGraph();
@@ -1259,6 +1259,187 @@ describe('reading on one device tells the others', () => {
     ).not.toBeNull();
     spy.mockRestore();
   });
+});
+
+// =========================================================================
+/**
+ * FROZEN CONTENT, THE EXACT REGRESSION.
+ *
+ * The class moves from 5:00 to 6:00. Then it moves again, from 6:00 to 7:00.
+ * The first notification must still say five-to-six, forever.
+ *
+ * This is the property that makes the notification centre a RECORD rather than
+ * a view. The tempting implementation -- render the title and body from live
+ * data when the list is read -- passes every test written on a single change
+ * and silently rewrites history on the second one: the parent opens the centre
+ * to check what they were told, and finds a notification that now says
+ * six-to-seven, dated to the day they were told five-to-six. There is no
+ * recovering from that, because nothing records that it happened.
+ */
+describe('a class that moves twice', () => {
+  const admin = () => ({
+    actorId: s.ownerId,
+    kind: 'staff' as const,
+    displayName: 'admin_a',
+    locale: 'ar' as const,
+    isActive: true,
+    staffRole: 'admin' as const,
+  });
+
+  // 14:00, 15:00 and 16:00 UTC are 5, 6 and 7 in the evening in Riyadh.
+  const five = new Date('2026-09-29T14:00:00Z');
+  const six = new Date('2026-09-29T15:00:00Z');
+  const seven = new Date('2026-09-29T16:00:00Z');
+
+  beforeEach(async () => {
+    await g.prisma.quietHours.create({
+      data: { actorId: s.parentId, timezone: 'Asia/Riyadh', enabled: false },
+    });
+    await g.prisma.learner.update({
+      where: { id: s.learnerId },
+      data: { nextClassAt: five },
+    });
+  });
+
+  async function move(to: Date, reason: string): Promise<void> {
+    await g.classSchedule.reschedule(admin(), {
+      learnerId: s.learnerId,
+      nextClassAt: to,
+      reason,
+    });
+  }
+
+  async function changes() {
+    return g.prisma.notification.findMany({
+      where: { recipientId: s.parentId, type: NotificationType.CLASS_SCHEDULE_CHANGED },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  it('leaves the first notification saying five to six, after the second move', async () => {
+    await move(six, 'first move');
+    const [first] = await changes();
+    const firstTitle = first.title;
+    const firstBody = first.body;
+    const firstVars = first.variables as Record<string, string>;
+
+    // What the parent was told the first time, in their own timezone.
+    expect(firstVars.old_time).toBe(formatTime(five, 'Asia/Riyadh', 'ar'));
+    expect(firstVars.new_time).toBe(formatTime(six, 'Asia/Riyadh', 'ar'));
+    expect(firstBody).toContain(firstVars.old_time);
+    expect(firstBody).toContain(firstVars.new_time);
+
+    await move(seven, 'second move');
+
+    const rows = await changes();
+    expect(rows).toHaveLength(2);
+    const [again, second] = rows;
+
+    // Byte for byte. Not "still mentions five" -- unchanged.
+    expect(again.id).toBe(first.id);
+    expect(again.title).toBe(firstTitle);
+    expect(again.body).toBe(firstBody);
+    expect(again.variables).toEqual(firstVars);
+
+    // And the second one says six to seven, which is what actually happened.
+    const secondVars = second.variables as Record<string, string>;
+    expect(secondVars.old_time).toBe(formatTime(six, 'Asia/Riyadh', 'ar'));
+    expect(secondVars.new_time).toBe(formatTime(seven, 'Asia/Riyadh', 'ar'));
+    expect(second.body).toContain(secondVars.new_time);
+  });
+
+  it('the centre reads back both, each still saying what it said', async () => {
+    await move(six, 'first move');
+    await move(seven, 'second move');
+
+    // Through the read path the app actually uses, not straight off the table:
+    // a re-render would happen HERE if it happened anywhere.
+    const page = await g.centre.list(s.parentId);
+    const cards = page.items.filter(
+      (i) => i.type === NotificationType.CLASS_SCHEDULE_CHANGED,
+    );
+    expect(cards).toHaveLength(2);
+
+    const bodies = cards.map((c) => c.body);
+    const fiveText = formatTime(five, 'Asia/Riyadh', 'ar');
+    const sevenText = formatTime(seven, 'Asia/Riyadh', 'ar');
+
+    // One card mentions five and the other does not mention it at all. If the
+    // centre re-rendered from live data, both would say the same thing.
+    expect(bodies.filter((b) => b.includes(fiveText))).toHaveLength(1);
+    expect(bodies.filter((b) => b.includes(sevenText))).toHaveLength(1);
+  });
+
+  it('a third move does not disturb either of the first two', async () => {
+    await move(six, 'first');
+    await move(seven, 'second');
+    const before = (await changes()).map((r) => ({ id: r.id, body: r.body }));
+
+    await move(new Date('2026-09-29T17:00:00Z'), 'third');
+
+    const after = await changes();
+    expect(after).toHaveLength(3);
+    for (const row of before) {
+      expect(after.find((r) => r.id === row.id)!.body).toBe(row.body);
+    }
+  });
+
+  it('cancelling after two moves still says what the cancellation cancelled', async () => {
+    await move(six, 'first');
+    await move(seven, 'second');
+    await g.classSchedule.reschedule(admin(), {
+      learnerId: s.learnerId, nextClassAt: null, reason: 'teacher is unwell',
+    });
+
+    const cancelled = (await g.prisma.notification.findFirst({
+      where: { recipientId: s.parentId, type: NotificationType.CLASS_CANCELLED },
+    }))!;
+    const vars = cancelled.variables as Record<string, string>;
+
+    // The class that was cancelled was the SEVEN o'clock one -- the last state
+    // it was in, not the original five.
+    expect(vars.old_time).toBe(formatTime(seven, 'Asia/Riyadh', 'ar'));
+
+    // And the two changes are still there, still saying what they said.
+    expect(await changes()).toHaveLength(2);
+  });
+
+  it('the reminders for the old time are cancelled, and the old notices are not',
+    async () => {
+      const soon = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+      await g.prisma.learner.update({
+        where: { id: s.learnerId },
+        data: { nextClassAt: soon },
+      });
+      await g.classSchedule.scheduleReminders(
+        s.learnerId,
+        await g.recipients.forLearner(s.learnerId),
+        soon,
+      );
+
+      await move(new Date(soon.getTime() + 3600_000), 'moved an hour later');
+
+      // Reminders are PROMISES about a future moment, so a wrong one is
+      // withdrawn. Notices are RECORDS of a past one, so they stay. The
+      // distinction is the whole of the freezing rule.
+      const stale = await g.prisma.notification.count({
+        where: {
+          learnerId: s.learnerId,
+          eventType: 'class_scheduled',
+          status: NotificationStatus.CANCELLED,
+        },
+      });
+      expect(stale).toBeGreaterThan(0);
+      expect(
+        await g.prisma.notification.count({
+          where: {
+            recipientId: s.parentId,
+            type: NotificationType.CLASS_SCHEDULE_CHANGED,
+            status: NotificationStatus.CANCELLED,
+          },
+        }),
+      ).toBe(0);
+    });
 });
 
 // =========================================================================

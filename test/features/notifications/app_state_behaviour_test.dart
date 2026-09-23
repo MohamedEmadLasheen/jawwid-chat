@@ -294,6 +294,75 @@ void main() {
       // pull-to-refresh tries again.
       expect(h.container.read(notificationsControllerProvider), isNotNull);
     });
+
+    test('a read that happened elsewhere during the gap is picked up too', () async {
+      final h = harness([
+        notification(id: 'n1', conversationId: 'c1'),
+        notification(id: 'n2', conversationId: 'c1'),
+      ]);
+      final connection = h.container.read(realtimeConnectionProvider)..start();
+      addTearDown(connection.dispose);
+      await h.container.read(notificationsControllerProvider.future);
+      expect((await h.container.read(unreadCountsProvider.future)).total, 2);
+
+      // In the tunnel. The parent clears one on their tablet at home, and the
+      // notification.read event has no socket to arrive on.
+      h.realtime.setStatus(RealtimeStatus.disconnected);
+      h.repository.readElsewhere(notificationId: 'n1');
+      await Future<void>.delayed(Duration.zero);
+
+      // Signal returns. The gap is closed by refetching, not by replaying
+      // events nobody kept -- which is why a missed read costs latency and not
+      // a permanently wrong badge.
+      h.realtime.setStatus(RealtimeStatus.connected);
+      await Future<void>.delayed(Duration.zero);
+      await h.container.read(notificationsControllerProvider.future);
+
+      expect((await h.container.read(unreadCountsProvider.future)).total, 1);
+    });
+
+    test('a read attempted while offline rolls back rather than lying', () async {
+      final h = harness([notification(id: 'n1', conversationId: 'c1')]);
+      await h.container.read(notificationsControllerProvider.future);
+
+      // There is no offline write queue, deliberately: a queued read that
+      // silently fails is worse than one that visibly does not happen. So the
+      // optimistic update is rolled back and the count stays honest.
+      h.repository.persistentFailure = const AppError(AppErrorKind.network);
+      await expectLater(
+        h.container.read(notificationsControllerProvider.notifier).markRead('n1'),
+        throwsA(isA<AppError>()),
+      );
+
+      h.repository.persistentFailure = null;
+      final items = h.container.read(notificationsControllerProvider).value!.items;
+      expect(items.single.isUnread, isTrue);
+      expect((await h.container.read(unreadCountsProvider.future)).total, 1);
+    });
+
+    test('nothing is duplicated by a reconnect, however many times it happens',
+        () async {
+      final h = harness([notification(id: 'n1', conversationId: 'c1')]);
+      final connection = h.container.read(realtimeConnectionProvider)..start();
+      addTearDown(connection.dispose);
+      await h.container.read(notificationsControllerProvider.future);
+
+      // A flapping connection: three gaps in a row, three re-syncs.
+      for (var i = 0; i < 3; i += 1) {
+        h.realtime.setStatus(RealtimeStatus.disconnected);
+        h.realtime.setStatus(RealtimeStatus.connected);
+        await Future<void>.delayed(Duration.zero);
+      }
+      await h.container.read(notificationsControllerProvider.future);
+
+      // The re-sync REPLACES the page rather than appending to it, so a parent
+      // on a train does not watch their centre fill with copies.
+      expect(
+        h.container.read(notificationsControllerProvider).value!.items.map((n) => n.id),
+        ['n1'],
+      );
+      expect((await h.container.read(unreadCountsProvider.future)).total, 1);
+    });
   });
 
   // =======================================================================

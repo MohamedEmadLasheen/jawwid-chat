@@ -843,6 +843,137 @@ describe('authorization revoked after the notification was sent', () => {
 });
 
 // =========================================================================
+/**
+ * A PARENT WITH NO SOCKET.
+ *
+ * Offline is not an error state, it is the normal state of a phone. The rule
+ * the server has to hold: a parent who is unreachable right now is not a failed
+ * delivery, they are a parent who will read it later -- and everything that
+ * happened while they were gone must be waiting, exactly once, when they come
+ * back.
+ */
+describe('a parent who is offline', () => {
+  it('a realtime publish that reaches nobody is SENT, not failed', async () => {
+    const conversationId = await studentGroup();
+    await g.messages.send({ conversationId, senderId: s.ownerId, body: 'nobody home' });
+    await drain();
+    const n = (await g.prisma.notification.findFirst({
+      where: { recipientId: s.parentId },
+    }))!;
+
+    await g.notifications.dispatchDue(new Date());
+
+    // No socket is open. The publish went out and reached nobody, which is
+    // "they are offline", not "we failed" -- the notification is in the
+    // database and will be there when they reconnect. Recording it failed
+    // would put it in a retry queue to solve a problem that is not a problem.
+    const inApp = (await g.deliveries.trace(n.id)).find((d) => d.channel === 'in_app');
+    expect(inApp!.status).toBe('sent');
+    expect(inApp!.errorCode).toBeNull();
+  });
+
+  it('the notification is complete and unread when they come back', async () => {
+    const conversationId = await studentGroup();
+    for (const body of ['one', 'two', 'three']) {
+      await g.messages.send({ conversationId, senderId: s.ownerId, body });
+    }
+    await drain();
+    await g.notifications.dispatchDue(new Date());
+
+    // What their app fetches on reconnect is the same list it would have shown
+    // live: nothing was consumed by the publish that reached nobody.
+    const page = await g.centre.list(s.parentId);
+    expect(page.items).toHaveLength(3);
+    expect(page.items.every((i) => i.readAt === null)).toBe(true);
+    expect((await g.centre.unreadCounts(s.parentId)).total).toBe(3);
+    for (const item of page.items) {
+      expect(item.title).toBeTruthy();
+      expect(item.body).toBeTruthy();
+      expect(item.deeplink).toBeTruthy();
+    }
+  });
+
+  it('re-fetching on reconnect creates nothing and duplicates nothing', async () => {
+    const conversationId = await studentGroup();
+    await g.messages.send({ conversationId, senderId: s.ownerId, body: 'once' });
+    await drain();
+    await g.notifications.dispatchDue(new Date());
+
+    // The app re-syncs on every reconnect, and a flapping connection does it
+    // repeatedly. Reading is a read.
+    for (let i = 0; i < 5; i += 1) {
+      await g.centre.list(s.parentId);
+      await g.centre.unreadCounts(s.parentId);
+    }
+
+    expect(
+      await g.prisma.notification.count({ where: { recipientId: s.parentId } }),
+    ).toBe(1);
+    expect(
+      await g.prisma.notificationDelivery.count({
+        where: { recipientId: s.parentId, channel: 'in_app' },
+      }),
+    ).toBe(1);
+  });
+
+  it('a relay that refuses the publish IS retried, because that one is our fault',
+    async () => {
+      await g.notifications.registerDevice({
+        actorId: s.parentId, token: 'offline-device', platform: 'android',
+      });
+      const spy = jest
+        .spyOn(g.realtime, 'toUsers')
+        .mockRejectedValue(new Error('no instance accepted the publish'));
+
+      const conversationId = await studentGroup();
+      await g.messages.send({ conversationId, senderId: s.ownerId, body: 'relay down' });
+      await drain();
+      await g.notifications.dispatchDue(new Date());
+      spy.mockRestore();
+
+      const n = (await g.prisma.notification.findFirst({
+        where: { recipientId: s.parentId },
+      }))!;
+      const trace = await g.deliveries.trace(n.id);
+
+      // The distinction that matters: "nobody was listening" is offline and is
+      // final; "the relay would not take it" is a fault on our side and is
+      // retried. Confusing the two either retries every offline parent forever
+      // or silently drops a genuine outage.
+      const inApp = trace.find((d) => d.channel === 'in_app')!;
+      expect(inApp.status).toBe('pending');
+      expect(inApp.errorCode).toBe('REALTIME_PUBLISH_FAILED');
+
+      // And the push went anyway: the two channels fail independently, which is
+      // the entire reason there are two.
+      expect(trace.find((d) => d.channel === 'push')!.status).toBe('sent');
+      // The parent has it regardless.
+      expect((await g.centre.unreadCounts(s.parentId)).total).toBe(1);
+    });
+
+  it('everything queued while they were away is dispatched in one sweep', async () => {
+    await g.notifications.registerDevice({
+      actorId: s.parentId, token: 'return-device', platform: 'android',
+    });
+    const conversationId = await studentGroup();
+    for (const body of ['a', 'b', 'c', 'd']) {
+      await g.messages.send({ conversationId, senderId: s.ownerId, body });
+    }
+    await drain();
+
+    // The dispatch sweep does not care whether anyone is connected -- which is
+    // the point. Nothing waits for the parent to come back.
+    await g.notifications.dispatchDue(new Date());
+
+    const rows = await g.prisma.notification.findMany({
+      where: { recipientId: s.parentId },
+    });
+    expect(rows).toHaveLength(4);
+    expect(rows.every((r) => r.status === NotificationStatus.SENT)).toBe(true);
+  });
+});
+
+// =========================================================================
 describe('retention as an operation', () => {
   async function ancientRead(count: number): Promise<void> {
     const ancient = new Date('2020-01-01T00:00:00Z');

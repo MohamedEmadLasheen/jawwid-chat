@@ -125,10 +125,19 @@ export class DeliveryService {
         data: { status: DeliveryStatus.SENT, sentAt: new Date() },
       });
     } catch (error) {
-      // The relay throws when no instance received the publish. That is worth
-      // retrying -- a node may be restarting -- but it is not worth losing the
-      // notification over, and the notification itself is already persisted.
-      await this.fail(delivery.id, 'REALTIME_PUBLISH_FAILED', error);
+      // The relay throws when no instance ACCEPTED the publish -- a node
+      // restarting, Redis unreachable -- which is a fault on our side and is
+      // worth another attempt. It is NOT the same as "the publish went out and
+      // nobody was listening": that is a parent who is offline, and it is
+      // recorded `sent` above, because the notification is in the database and
+      // will be there when they reconnect.
+      //
+      // Confusing the two either retries every offline parent forever or
+      // silently writes off a genuine relay outage. This used to call fail()
+      // directly, which was the second of those, and disagreed with the comment
+      // that sat here saying it was worth retrying.
+      const maxAttempts = await this.config.get('notification.delivery_max_attempts');
+      await this.retryOrFail(delivery.id, 'REALTIME_PUBLISH_FAILED', maxAttempts, error);
     }
   }
 
