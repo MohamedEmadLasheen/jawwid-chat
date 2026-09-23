@@ -61,6 +61,7 @@ migrate() {
 verify() {
   psql_q -v ON_ERROR_STOP=1 -q < "$ROOT/db/tests/schema_acceptance.sql"
   psql_q -v ON_ERROR_STOP=1 -q < "$ROOT/db/tests/br1_invariants.sql"
+  psql_q -v ON_ERROR_STOP=1 -q < "$ROOT/db/tests/relationship_predicate.sql"
 }
 
 case "${1:-up}" in

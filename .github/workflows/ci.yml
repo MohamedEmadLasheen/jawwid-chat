@@ -258,6 +258,15 @@ jobs:
       - name: G-01 · BR-1 structural invariants (RT-024, RT-025)
         run: psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f db/tests/br1_invariants.sql
 
+      # PD-6. The relationship predicate is the security boundary for the direct
+      # teacher<->parent channel, so it is proven against the database with the
+      # application out of the picture, exactly as BR-1 is above. While the
+      # authorization switch is still pending, this suite ALSO asserts that the
+      # old BR-1 denials remain in force -- so the two gates above and below
+      # cannot silently diverge.
+      - name: G-01 · PD-6 relationship predicate
+        run: psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f db/tests/relationship_predicate.sql
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
