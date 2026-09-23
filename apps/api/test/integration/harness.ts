@@ -11,6 +11,7 @@ import { ApprovalService } from '@communication/approvals/approval.service';
 import { AttachmentService } from '@communication/attachments/attachment.service';
 import { SignedLocalObjectStorage } from '@communication/attachments/object-storage';
 import { OutboxService } from '@communication/outbox/outbox.service';
+import { OutboxWorker } from '@communication/outbox/outbox.worker';
 import { NotificationService } from '@communication/notifications/notification.service';
 import { NotificationCenterService } from '@communication/notifications/notification-center.service';
 import { DeliveryService } from '@communication/notifications/delivery.service';
@@ -19,6 +20,7 @@ import { RecipientResolver } from '@communication/notifications/recipient-resolv
 import { AnnouncementService } from '@communication/announcements/announcement.service';
 import { ClassScheduleService } from '@communication/schedule/class-schedule.service';
 import { NoopRealtimePublisher } from '@communication/realtime/realtime.publisher';
+import type { PresenceService } from '@communication/realtime/presence.service';
 import { ReminderService } from '@communication/notifications/reminder.service';
 import { TemplateService } from '@communication/notifications/template.service';
 import { QuietHoursService } from '@communication/notifications/quiet-hours.service';
@@ -64,6 +66,16 @@ export function buildGraph() {
   const announcements = new AnnouncementService(prisma, notifications, recipients, audit);
   const classSchedule = new ClassScheduleService(prisma, notifications, recipients, audit);
   const reminders = new ReminderService(prisma, notifications);
+  // Presence is Redis-backed. The integration graph is deliberately
+  // Redis-free, so the worker gets a stub that always answers "not viewing" --
+  // the safe direction, which pushes rather than suppressing. The suppression
+  // path itself is tested by overriding this stub.
+  const presence = {
+    isViewing: async (_actorId: string, _conversationId: string) => false,
+  } as unknown as PresenceService;
+  const outboxWorker = new OutboxWorker(
+    prisma, notifications, recipients, presence, realtime, identity,
+  );
   const calls = new CallService(
     prisma, authz, conversations, outbox, config, identity, audit, new LiveKitTokenIssuer(),
   );
@@ -72,7 +84,7 @@ export function buildGraph() {
     prisma, coverage, identity, authz, conversations, messages, approvals,
     attachments, notifications, reminders, templates, quietHours, calls,
     deliveries, preferences, centre, recipients, announcements, classSchedule,
-    push, realtime, outbox, audit, config,
+    push, realtime, outbox, outboxWorker, presence, audit, config,
   };
 }
 
@@ -146,7 +158,9 @@ export async function truncate(prisma: PrismaService): Promise<void> {
   await prisma.$executeRawUnsafe(`
     truncate chat.message_receipt, chat.message_reaction, chat.message_attachment,
              chat.message_hidden_for, chat.message_approval, chat.call_participant,
-             chat.call, chat.notification, chat.outbox_event,
+             chat.call, chat.notification_delivery, chat.notification,
+             chat.notification_preference, chat.announcement,
+             chat.device_token, chat.quiet_hours, chat.outbox_event,
              chat.conversation_participant_state, chat.conversation_member,
              chat.message, chat.conversation, chat.learner,
              chat.contact, chat.family, chat.staff, chat.teacher,

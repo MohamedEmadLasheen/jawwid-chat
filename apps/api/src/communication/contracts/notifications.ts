@@ -281,11 +281,20 @@ export const NOTIFICATION_REGISTRY: Readonly<
 
   // NEVER grouped. "3 missed calls" from two different teachers about two
   // different children is exactly the information a parent needs kept apart.
+  //
+  // NOT essential, deliberately, and this is the subtle one. `essential` means
+  // "ignore the parent's preference", and the Calls category exists in settings
+  // precisely so a parent can say "don't buzz me about missed calls". If this
+  // were essential that switch would do nothing, which is worse than not
+  // offering it. Nothing is lost by honouring it: in-app delivery is never
+  // disableable, so the missed call still lands in the centre, still increments
+  // the badge, and still stays in the history forever. Only the buzz is the
+  // parent's to decline.
   [NotificationType.MISSED_CALL]: define({
     type: NotificationType.MISSED_CALL,
     category: NotificationCategory.CALLS,
     priority: NotificationPriority.HIGH,
-    essential: true,
+    essential: false,
     pushCarriesContent: true,
     bypassQuietHours: false,
     groupable: false,
