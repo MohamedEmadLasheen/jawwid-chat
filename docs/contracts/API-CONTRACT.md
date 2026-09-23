@@ -50,7 +50,8 @@ Source of truth: `apps/api/src/platform/errors.ts`. Default HTTP status of a `Co
 
 | Code | HTTP | Raised when |
 |---|---|---|
-| `COMM.BR1_TEACHER_PARENT_DIRECT` | 403 | A teacher and a parent would share a 1:1 conversation or call (`canOpenDirect`, `canSend`, `canCall`). Never retry. |
+| `COMM.TEACHER_PARENT_NOT_AUTHORIZED` | 403 | A teacher and a parent would share a 1:1 conversation or call **without an authorized relationship** (`canOpenDirect`, `canSend`, `canCall`; PD-6). Never retry. |
+| `COMM.BR1_TEACHER_PARENT_DIRECT` | 403 | **DEPRECATED (PD-6, 2026-09-23).** No longer emitted: the blanket teacher↔parent 1:1 prohibition was re-versioned. Clients keep treating it as terminal so older builds behave correctly. |
 | `COMM.BR1_ADMIN_PRESENCE_REQUIRED` | 403 | Teacher and parent in a group with no live Jawwid admin member (C-4), or presence could not be established (fail closed). |
 | `COMM.ROLE_CANNOT_MESSAGE_FAMILY` | 403 | Staff role is finance / technical / academic. |
 | `COMM.TEACHER_TEACHER_DISABLED` | 403 | Teacher ↔ teacher direct. |
@@ -388,9 +389,9 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 - Audit / Realtime: none.
 
 **POST /conversations/direct** — EXISTS (`getOrCreateDirect`)
-- Auth: required. Permission: `conversations.read` (opening one's own channel) + `AuthorizationService.canOpenDirect`. Scope: allowed pairs only: contact ↔ family-facing staff, teacher ↔ family-facing staff.
+- Auth: required. Permission: `conversations.read` (opening one's own channel) + `AuthorizationService.canOpenDirect`. Scope: allowed pairs only: contact ↔ family-facing staff, teacher ↔ family-facing staff, and **contact ↔ teacher when the relationship predicate authorizes it** (PD-6; `AUTHORIZATION-MODEL.md` §4.1). The relationship is resolved server-side from Jawwid Core data — `withActorId` is a lookup key, never evidence.
 - Request: `{ withActorId: string }`. Response: `200 ConversationDto` (existing or created; `familyId` = the contact's family; `directKey` is the sorted pair, so the pair is unique).
-- Errors: `COMM.UNKNOWN_ACTOR` 401 (either side) · `COMM.ACTOR_INACTIVE` · `COMM.INVALID_PARTICIPANTS` · `COMM.BR1_TEACHER_PARENT_DIRECT` · `COMM.TEACHER_TEACHER_DISABLED` · `COMM.STAFF_STAFF_DISABLED` · `COMM.ROLE_CANNOT_MESSAGE_FAMILY` (all 403).
+- Errors: `COMM.UNKNOWN_ACTOR` 401 (either side) · `COMM.ACTOR_INACTIVE` · `COMM.INVALID_PARTICIPANTS` · `COMM.TEACHER_PARENT_NOT_AUTHORIZED` · `COMM.TEACHER_TEACHER_DISABLED` · `COMM.STAFF_STAFF_DISABLED` · `COMM.ROLE_CANNOT_MESSAGE_FAMILY` (all 403).
 - Idempotency: natural (get-or-create; unique `direct_key`, P2002 re-read).
 - Audit: `event_log` `{type:'conversation_created', familyId, actorKind, actorId, payload:{conversationId, type:'direct'}}` on create only.
 - Realtime: none (no outbox row on create).
@@ -526,14 +527,14 @@ CallHistoryDto { id, conversationId, type: 'direct'|'group', status: 'ringing'|'
 ```
 
 **POST /calls** — EXISTS
-- Auth: required. Permission: `calls.start`. Scope: `canCall(intent = initiate)` = `canSend` (customer visibility) + BR-1 participant-set check + **PD-2**. Participants = live, active, non-silent members (server-derived; never client-supplied). Room name minted server-side.
+- Auth: required. Permission: `calls.start`. Scope: `canCall(intent = initiate)` = `canSend` (customer visibility) + the authorized-relationship check on a direct teacher/parent pair (**PD-6**) + C-4 + **PD-2**. Participants = live, active, non-silent members (server-derived; never client-supplied). Room name minted server-side.
 - **PD-2:** a family contact may not start a `student_group` or `class_group` call. A parent's 1:1 call to their handler is unaffected.
 - Request: `{ conversationId: string }`. Response: `{ callId, roomName }`.
-- Errors: matrix codes; `COMM.BR1_TEACHER_PARENT_DIRECT` 403; `COMM.PARENT_CANNOT_START_GROUP_CALL` 403.
+- Errors: matrix codes; `COMM.TEACHER_PARENT_NOT_AUTHORIZED` 403; `COMM.PARENT_CANNOT_START_GROUP_CALL` 403.
 - Audit: `event_log` `call_started`. Realtime: `call.incoming { callId, conversationId, type, initiatorId, initiatorName, roomName }` to the conversation room.
 
 **POST /calls/:id/token** — EXISTS
-- Auth: required. Permission: `calls.accept`. Scope: recorded participant, call not ended, still a member, `canCall(intent = join)` re-evaluated (a revoked permission takes effect on the next join). This is the JOIN path, so a parent is allowed here (**PD-2**). Response: `{ token, url, roomName, expiresAt }`; TTL `call.token_ttl_seconds` (120); `canPublish = !isSilent`.
+- Auth: required. Permission: `calls.accept`. Scope: recorded participant, call not ended, still a member, `canCall(intent = join)` re-evaluated — including the PD-6 relationship predicate, so a teacher–parent relationship revoked in Jawwid Core refuses the next join even mid-call. This is the JOIN path, so a parent is allowed here (**PD-2**). Response: `{ token, url, roomName, expiresAt }`; TTL `call.token_ttl_seconds` (120); `canPublish = !isSilent`.
 - Errors: `COMM.CALL_NOT_FOUND` 404 · `COMM.CALL_ALREADY_ENDED` 409 · `COMM.CALL_NOT_A_PARTICIPANT` 403 · matrix codes. Audit / Realtime: none.
 
 **POST /calls/:id/accept** — EXISTS · Permission `calls.accept` · Scope participant. `joinedAt` set; `ringing → active` with `answeredAt`. Response `{ ok: true }`. Realtime: **`call.participant_joined { callId, actorId }`** (not `call.accepted`). Audit: none.

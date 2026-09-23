@@ -23,12 +23,17 @@
 
 ## 1. Role and purpose
 
-**Roles:** parent ↔ Jawwid · teacher ↔ Jawwid · **group calls within a Student Group** ·
-admin → family.
+**Roles:** parent ↔ Jawwid · teacher ↔ Jawwid · **parent ↔ authorized teacher, 1:1** ·
+**group calls within a Student Group** · admin → family.
 
-**Never teacher ↔ parent 1:1, in either direction** — this is **BR-1**, and it covers calling
-exactly as it covers messaging. It must be **enforced server-side**; the interface's only job is
-never to suggest the path exists (`docs/qa/authoritative-scope.md` §3).
+> **Updated 2026-09-23 by PD-6.** An earlier revision of this spec read *"Never teacher ↔ parent
+> 1:1, in either direction"*. That was correct under PRD v0.1 BR-1 and is now superseded.
+
+**Teacher ↔ parent 1:1 calling is allowed — and only — where the backend authorizes the
+relationship** (PRD v0.2 BR-1; `architecture/AUTHORIZATION-MODEL.md` §4.1). The rule is
+**enforced server-side**; the interface's only job is to render the affordance exactly where the
+backend authorizes it and nowhere else. The client never decides the relationship and never
+caches the answer.
 
 **Purpose:** *"talk, when typing is the wrong tool."*
 
@@ -70,8 +75,12 @@ for non-hosts in MVP.
 ## 4. Permissions *(UX affordances only)*
 
 The call button renders **only** where the backend authorizes a call for that conversation
-`[BE]`. In a Student Group, a member profile has **no call action at all** — teacher ↔ parent
-1:1 calling must not be suggested any more than teacher ↔ parent messaging is
+`[BE]`. This is unchanged by PD-6 and matters more, not less: the set of authorized pairs is now
+data rather than a constant, so the client must never infer it. Where the backend does not
+authorize the pairing, the affordance is **absent, not disabled**.
+
+In a Student Group, a member profile still has **no call action** — a direct call is reached from
+the parent's or teacher's own 1:1 conversation, not from a group roster
 (`screens/student-group.md` §1).
 
 ## 5. Call history

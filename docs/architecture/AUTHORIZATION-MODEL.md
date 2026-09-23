@@ -1,7 +1,8 @@
 # Jawwid Chat — Authorization Model (roles, permissions, scope)
 
 Status: **CANONICAL** · Locked in Phase 0 (2026-09-07) · Implemented in Phase 1
-Product decisions PD-2, PD-3 and PD-5 are CLOSED; the record is `../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4.
+Product decisions PD-2, PD-3, PD-5 and **PD-6** are CLOSED; the record is `../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4.
+**PD-6 (2026-09-23) re-versioned BR-1**: direct Parent ↔ Teacher chat and calls are allowed for an *authorized relationship*. See §4.1.
 Companions: `IDENTITY-MODEL.md`, `SUPERVISOR-OWNERSHIP.md`, `TENANCY-MODEL.md`,
 `../security/RLS-STRATEGY.md`, `../contracts/API-CONTRACT.md` §1.2.
 Supersedes: `docs/qa/rbac-matrix.md` role vocabulary (known wrong — no `super_admin`),
@@ -43,7 +44,7 @@ restored.
 |---|---|---|---|---|
 | `parent` | contact | mobile | A family contact who may message (`contact.can_message`) | member_role `parent` |
 | `student` | context only | — | Exists as a learner record; no login in MVP | — |
-| `teacher` | teacher | mobile | Teaches learners; communicates with families **only** inside Student Groups with a live admin (BR-1) | synthesized (fixed in Phase 1) |
+| `teacher` | teacher | mobile | Teaches learners; communicates with a family inside Student Groups (live admin required, C-4) **and** 1:1 with an *authorized* parent (BR-1 as re-versioned by PD-6, §4.1) | synthesized (fixed in Phase 1) |
 | `admin` | staff | web + mobile | A **supervisor**: the assigned owner of families; answers their conversations; moderates their groups | `staff.role='admin'` |
 | `coverage_admin` | staff | web + mobile | A supervisor acting for others for the duration of an explicit temporary assignment (PD-3), with the owner's permissions on that family and nothing more | `staff.role='coverage'` → **rename** |
 | `manager` | staff | web | Runs the operation: assigns supervisors, reads audit, edits settings, sees every family in the organization | `staff.role='manager'` |
@@ -98,18 +99,65 @@ for UX, and asserts the TypeScript mirror equals the table in a protected test.
 
 | Method | Exists | Decides | Extended in Phase 1 by |
 |---|---|---|---|
-| `canOpenDirect(a, b)` | ✔ | closed allow-list of direct pairs (Parent↔Admin, Teacher↔Admin, staff↔staff); Teacher↔Parent refused (BR-1) | tenancy check |
+| `canOpenDirect(a, b, pairing)` | ✔ | closed allow-list of direct pairs (Parent↔Admin, Teacher↔Admin); Teacher↔Parent allowed **only** when `pairing` says the relationship is authorized (PD-6, §4.1) | tenancy check |
 | `canRead(actor, conv, membership)` | ✔ | contacts/teachers must be live members; staff must be family-facing | **scope**: staff must be within supervisor scope of `conv.familyId` (§6); managers see the organization |
 | `canReadInternal(actor)` | ✔ | staff only | unchanged |
 | `canSend(actor, conv, membership, intent, now, familyOwnerId, participantKinds, liveMembers)` | ✔ | read → silence → C-4 admin presence → moderation policy for parents/teachers; ownership/coverage/stickiness → on-behalf mode for staff; assist/escalation fail closed (JC-005) | routing reads the **assignment** rather than `family.owner_id` + `on_duty()` (see `SUPERVISOR-OWNERSHIP.md` §6) |
 | `canManageMembership(actor)` | ✔ | staff only | scope + permission key |
 | `canApprove(actor, activeHandlerId)` | ✔ | active handler or manager | queue **listing** must also be scoped (§6) — today `approval.service.ts:45-61` lists every pending approval in the system |
-| `canCall(actor, conv, membership, participants, now, familyOwnerId, liveMembers, intent)` | ✔ | read + BR-1 participant set + C-4 + **PD-2** (a parent may join a group call, never start one) | scope; the PD-2 rule is already implemented |
+| `canCall(actor, conv, membership, participants, now, familyOwnerId, liveMembers, intent, pairing)` | ✔ | read + authorized-relationship check on a direct teacher/parent pair (PD-6) + C-4 + **PD-2** (a parent may join a group call, never start one) | scope; the PD-2 rule is already implemented |
 | `can(actor, permission, scope)` | ✘ | generic permission-key check for the new admin surface (families, assignment, staff, audit, config) | **new** — the single entry point for Phase 1 controllers |
 | `visibleFamilies(actor)` / `visibleConversationsWhere(actor)` | ✘ | the *query predicate* for lists, so every list endpoint is scoped by construction | **new** |
 
 Contract rule: every new endpoint calls exactly one of these; controllers never
 compare roles.
+
+### 4.1 The teacher–parent relationship predicate (PD-6)
+
+BR-1 used to be decidable from two `Actor` objects: `contact + teacher` was
+refused, full stop. Since PD-6 the decision depends on a *relationship*, which
+lives in the database. That would ordinarily force `AuthorizationService` to
+take a database dependency and destroy the property that makes it testable —
+every one of its unit tests runs without a database.
+
+It does not, because the relationship is resolved **before** the policy runs and
+handed in as a plain fact:
+
+```
+RelationshipService.teacherParentAuthorized(teacherId, contactId) : boolean
+        │   reads chat.contact → chat.family → chat.learner → chat.teacher
+        ▼
+ConversationService / CallService            (resolve the fact)
+        ▼
+AuthorizationService.canOpenDirect / canSend / canCall   (decide on the fact)
+```
+
+The predicate:
+
+```
+authorized(contact C, teacher T) :=
+  ∃ learner L :  L.family_id  = C.family_id
+              ∧  L.teacher_id = T.id
+              ∧  C.is_active ∧ C.can_message
+              ∧  T.is_active ∧ T.left_at IS NULL
+              ∧  C.organization_id = T.organization_id
+```
+
+Three properties this design has to keep, each with a test:
+
+1. **Client input is never evidence.** `parent_id`, `teacher_id` and
+   `conversation_id` from a request are lookup keys. The predicate reads only
+   rows synchronized from Jawwid Core.
+2. **It is re-evaluated, not cached.** Every send, every call start and every
+   media-token issue resolves it again, so a relationship revoked in Core is
+   refused on the next operation even mid-call.
+3. **The database enforces it independently.** `chat.teacher_parent_authorized()`
+   is the same rule in SQL, reached by the existing deferred constraint
+   triggers, and holds with the application entirely bypassed.
+
+`AuthorizationService` itself gains no database access, no Prisma import and no
+`async` work of its own. Fail-closed still applies: an unresolvable relationship
+is `false`, which denies.
 
 ---
 
@@ -166,6 +214,6 @@ broadcast audiences) and the realtime `conversation.subscribe` check. Solving
 |---|---|---|
 | Guard (Phase 1) | authenticates, attaches `Actor` | seam contained |
 | `AuthorizationService` | decides role + scope | role decisions exist; scope missing |
-| Database triggers | BR-1, immutable type, admin presence, family scope, org isolation | complete and tested |
+| Database triggers | BR-1 as re-versioned (authorized relationship), immutable type, admin presence, family scope, org isolation | complete and tested |
 | RLS | defence in depth once the API sets the actor context | defined, inert (see `RLS-STRATEGY.md`) |
 | Clients | UX affordances only | Admin Web has one client-only rule to move server-side |

@@ -49,9 +49,16 @@ Follow-ups · Manager Dashboard · Audit logging · Jawwid Core integration.
 
 ### The critical communication rule (BR-1)
 
-**Teacher ↔ Parent direct 1:1 communication is FORBIDDEN** — messaging and
+> **SUPERSEDED ON THIS POINT, 2026-09-23, by PD-6.** The paragraph below is the
+> rule as it stood from 2026-09-05 and is kept for the record. The rule in force
+> is PRD **v0.2** BR-1: a teacher and a parent may hold a direct 1:1 conversation
+> and call **when an authorized relationship exists**, and never otherwise.
+> Canonical record: `docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4 PD-6.
+> The required-admin-presence rule for Student Groups (C-4) is **unchanged**.
+
+~~**Teacher ↔ Parent direct 1:1 communication is FORBIDDEN** — messaging and
 calling alike. Teacher↔Parent communication happens **only** through the
-official Student Group, with the required admin presence/authorization.
+official Student Group, with the required admin presence/authorization.~~
 
 **This must be enforced server-side.** A UI restriction is not an
 implementation of this rule; it is a cosmetic. See `release-gate.md` G-01.

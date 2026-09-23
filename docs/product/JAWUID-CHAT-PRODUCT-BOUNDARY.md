@@ -1,7 +1,7 @@
 # Jawwid Chat — Product Boundary
 
 Status: **CANONICAL** · Locked in Phase 0 (2026-09-07)
-Authority order: this document → `jawwid-chat-prd-v0.1.md` (product requirements) → everything else.
+Authority order: this document → `jawwid-chat-prd-v0.1.md` (product requirements, **v0.2**) → everything else.
 Supersedes as product direction: `docs/JAWWID_CHAT_BRIEF.{pdf,txt}` (Customer Success brief — **HISTORICAL**),
 `docs/architecture/decisions.md` ADR-001 ("build the brief" — **SUPERSEDED**),
 `docs/admin/backend-contract-required.md` (brief-derived — **HISTORICAL**).
@@ -117,12 +117,13 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-5 — CLOSED
+## 4. Product decisions PD-1 to PD-6 — CLOSED
 
-All five were closed by the product owner on **2026-09-07**, at the Phase 0 exit
-gate, before `main` was baselined. This section is the canonical record. Any
-document that contradicts it is superseded on that point, whatever its own
-status banner says.
+PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
+exit gate, before `main` was baselined. **PD-6 was closed by the product owner
+on 2026-09-23** and re-versions a rule the PRD calls constitutional; it follows
+the same six-field form. This section is the canonical record. Any document that
+contradicts it is superseded on that point, whatever its own status banner says.
 
 | ID | Subject | Status |
 |---|---|---|
@@ -131,6 +132,7 @@ status banner says.
 | PD-3 | Coverage model | **CLOSED** — explicit temporary assignment |
 | PD-4 | Representation of system-generated events | **CLOSED** — system messages |
 | PD-5 | Role model | **CLOSED** — `super_admin` exists from day one |
+| **PD-6** | **Direct Parent ↔ Teacher communication** | **CLOSED** — allowed for an authorized relationship; re-versions BR-1 |
 
 ---
 
@@ -304,9 +306,89 @@ not govern whether the role exists.
 
 ---
 
-### Decisions still open after PD-1 to PD-5
+---
 
-None from the Phase 0 set. Any new product question is recorded here with a new
+### PD-6 · Direct Parent ↔ Teacher communication
+
+**Closed by the product owner on 2026-09-23.** This decision re-versions **BR-1**,
+which PRD §4 calls a rule of "the constitution of the product". PRD §4 requires
+that such a rule change only by being "explicitly changed and re-versioned
+here"; that is what this decision does. The PRD moves to **v0.2** and preserves
+the v0.1 wording in its Appendix A.
+
+**Final decision.** Authorized Parent ↔ Teacher **direct 1:1 messaging and
+direct 1:1 voice calling are ALLOWED**, in both directions. An unauthorized
+pairing stays forbidden. This is not a general parent↔teacher permission: the
+relationship is the whole of the authorization.
+
+**Canonical rule.**
+
+```
+authorized(contact C, teacher T) :=
+  ∃ learner L :  L.family_id  = C.family_id
+              ∧  L.teacher_id = T.id
+              ∧  C.is_active ∧ C.can_message
+              ∧  T.is_active ∧ T.left_at IS NULL
+              ∧  C.organization_id = T.organization_id
+
+parent  + authorized teacher + direct chat/call = ALLOW
+teacher + authorized parent  + direct chat/call = ALLOW
+parent  + any other teacher  + direct chat/call = DENY (COMM.TEACHER_PARENT_NOT_AUTHORIZED)
+teacher + any other parent   + direct chat/call = DENY (COMM.TEACHER_PARENT_NOT_AUTHORIZED)
+```
+
+Every term is read from server-owned data synchronized from Jawwid Core. A
+client-supplied `parent_id`, `teacher_id` or `conversation_id` is a lookup key
+and **never** evidence of a relationship.
+
+**Reason.** Teachers and parents need to reach each other about the child's
+learning without an admin having to relay. The v0.1 rule achieved supervision by
+removing the channel entirely, which put the academy's operational cost and the
+parent's experience on the wrong side of the trade. PD-6 keeps the control that
+mattered — the academy decides who may speak to whom, from its own records — and
+drops the blanket prohibition. Supervision moves from "no channel exists" to
+"every channel is authorized, audited and retained".
+
+**Implementation phase.** Immediately, as a policy migration executed before any
+calling feature work, in this order: documents → predicate → database backstop →
+application authorization → tests and gate → verification.
+
+**Consequences.**
+- A new `RelationshipService` resolves the predicate from Prisma. `AuthorizationService` receives the **resolved fact** and gains no database access, so its database-free unit-test architecture is preserved.
+- `canOpenDirect` becomes asynchronous at its call sites, taking the resolved pairing.
+- The three decision sites change: `canOpenDirect`, `canSend` (teacher branch), `canCall`. Nothing else in the matrix moves.
+- A new database function `chat.teacher_parent_authorized(uuid, uuid)` enforces the same rule independently. The four BR-1 assertion functions are redirected onto it; the deferred constraint triggers and the `type`-immutability triggers are retained exactly as they are.
+- New stable error code `COMM.TEACHER_PARENT_NOT_AUTHORIZED`, HTTP 403. `COMM.BR1_TEACHER_PARENT_DIRECT` is **deprecated** — retained as a constant and still treated as terminal by clients, but no longer emitted by the server.
+- Release gate **G-01** is re-versioned; it is not retired.
+- Messages on the new direct channel **publish immediately**. No per-message admin approval is introduced. Audit logging, administrative visibility under existing permissions, moderation/reporting and the ability of an authorized admin to intervene are all unchanged.
+- The database backstop now joins real `chat.contact` / `chat.learner` / `chat.teacher` rows, so `db/tests/br1_invariants.sql` needs real relationship fixtures where it previously used synthetic actor ids.
+
+**Migration impact.** No historical migration is edited; one new forward
+migration carries the change. No data migration is required — the predicate
+reads relationships that already exist. Existing Student Groups, existing direct
+conversations and existing call history are untouched. The change is
+behaviour-widening for authorized pairs and behaviour-preserving for every other
+pairing, so no row becomes invalid under the new rule.
+
+**Explicitly NOT changed by this decision.**
+- **PD-2** stands: a parent may join a Student Group call but may never initiate one. The direct channel and the group channel are separate authorization models and must not be merged.
+- **C-4** stands: a Student Group pairing a teacher and a parent still requires a live Jawwid admin member.
+- RT-024 type-immutability, the two-participant ceiling on direct conversations and calls, tenant isolation, BR-2 (no phone numbers), BR-5 (history belongs to Jawwid), and every unrelated matrix denial — `contact+contact`, `teacher+teacher`, `staff+staff`, `ROLE_CANNOT_MESSAGE_FAMILY`.
+
+**Deprecated or conflicting behaviour.** PRD v0.1 BR-1 and its matrix rows are
+superseded and preserved in PRD Appendix A. `docs/qa/authoritative-scope.md`
+§3's BR-1 paragraph is superseded on this point. `docs/design/screens/call.md`
+§1/§4 and `docs/design/screens/student-group.md` §1, which required the
+affordance to be absent unconditionally, are superseded: the affordance is now
+conditional on backend authorization. Red-team findings **RT-024 and RT-025 are
+not retracted** — they are valid findings about the rule as it stood, and the
+controls they produced remain in force.
+
+---
+
+### Decisions still open after PD-1 to PD-6
+
+None. PD-6 is closed. Any new product question is recorded here with a new
 `PD-n` and the same six fields: decision, canonical rule, implementation phase,
 consequences, deprecated behaviour, and the date it was closed.
 

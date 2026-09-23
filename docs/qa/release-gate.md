@@ -1,7 +1,8 @@
 # Jawwid Chat — Release Gate
 
-Date: 2026-09-05 · Owner: AI #5
-Authoritative scope: `docs/qa/authoritative-scope.md` (PRD v0.1)
+Date: 2026-09-05 · Owner: AI #5 · **G-01 re-versioned 2026-09-23 (PD-6)**
+Authoritative scope: `docs/qa/authoritative-scope.md` (PRD v0.1) → superseded on BR-1 by **PRD v0.2 / PD-6**
+(`docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4)
 
 A release is **BLOCKED** if any gate is failing **or unverified**. The two are
 treated identically: an untested control is not a control.
@@ -24,7 +25,7 @@ passing, 1 failing, and that failure is JC-008 rather than a test defect.
 
 | # | Gate | Status |
 |---|---|---|
-| **G-01** | **BR-1: no Teacher↔Parent 1:1 messaging or calling exists, enforced server-side, verified with client-side policy disabled (BR1-19)** | **FAIL — JC-008.** Materially improved: BR-1 is now a DB constraint trigger and blocks the member path (verified). It does **not** guard `conversation.type`, so a group converts to a forbidden 1:1 by `UPDATE` (reproduced). |
+| **G-01** | **BR-1 (PD-6): a Teacher↔Parent 1:1 conversation or call exists ONLY for an authorized relationship — enforced server-side AND independently in the database, verified with client-side policy disabled** | **RE-VERSIONED 2026-09-23.** The gate is not retired: its pass condition changed with the product rule. Old condition ("no such channel exists") is recorded below. Pass requires: authorized pair → ALLOW; unauthorized pair → DENY at both layers; relationship revoked → DENY on the next check; client-supplied ids → never sufficient. JC-008's `type`-mutation hole stays closed (RT-024). **Status: UNVERIFIED** until the policy migration's suite runs. |
 | **G-02** | Student Groups implemented, with membership derived from Jawwid Core and BR-1 enforced at creation **and** every membership mutation | **FAIL — JC-001** |
 | **G-03** | Teacher is a first-class authenticated actor with Teacher↔Admin and group access | **FAIL — JC-003** |
 | G-04 | One centralized authorization policy governs messaging **and** calling; no second matrix; **no client-supplied field widens authority** | **PASS (messaging)** — JC-005 fixed, regression-tested. Calling unverified. |
@@ -33,6 +34,19 @@ passing, 1 failing, and that failure is JC-008 rather than a test defect.
 | G-07 | **No phone number** in any API response, realtime event, push payload, call setup/metadata/history, search result, log, cache or export | PARTIAL — structural control now **guarded in CI** (`no-contact-channel-columns.spec.ts`: schema, migrations, Actor seam, DTO/event contracts). Runtime surfaces still unverified. |
 | G-08 | Internal notes unreachable by any parent or teacher through any surface | PARTIAL — contacts and deactivated actors denied (verified, JC-006 fixed); other surfaces unverified |
 | G-09 | No cross-family or cross-group access; IDOR sweep clean across every entity id | UNVERIFIED |
+
+> **G-01 — superseded pass condition (in force 2026-09-05 → 2026-09-23).**
+> Preserved so the gate's history is auditable, per PD-6.
+>
+> > **BR-1: no Teacher↔Parent 1:1 messaging or calling exists, enforced
+> > server-side, verified with client-side policy disabled (BR1-19)** —
+> > *FAIL — JC-008. Materially improved: BR-1 is now a DB constraint trigger and
+> > blocks the member path (verified). It does not guard `conversation.type`, so
+> > a group converts to a forbidden 1:1 by `UPDATE` (reproduced).*
+>
+> The JC-008 finding was closed by the RT-024 type-immutability triggers, which
+> PD-6 retains unchanged. What PD-6 changed is *which end state is forbidden*,
+> not whether the database is allowed to be bypassed.
 | G-10 | Realtime delivers only in-scope events; re-authorized on reconnect and on permission change | UNVERIFIED |
 | G-11 | Manager-only actions unreachable by admin, coverage, teacher, parent or internal staff | UNVERIFIED |
 | **G-44** | `on_duty()` is the sole authority for acting on a family; assist and escalation are gated by server-evaluated preconditions | **FAIL — JC-007**: now fail-closed (not bypassable) but the real predicate is not implemented |
