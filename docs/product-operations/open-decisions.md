@@ -1,4 +1,5 @@
 > **STATUS: HISTORICAL** (Phase 0, 2026-09-07). OD-06's recommendation (no super_admin, no CRITICAL) is overruled by PRD §3 / `docs/architecture/AUTHORIZATION-MODEL.md` (PD-5).
+> **OD-04 is CLOSED and OD-03 is PARTLY CLOSED by PD-6 (2026-09-23)**; the record is `../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4 and `decision-log.md` DEC-17.
 > Canonical index: `docs/README.md`.
 
 # Jawwid Chat — Open Product Decisions
@@ -43,12 +44,26 @@ Where a decision is technical-ambiguity-only, AI #5 already owns it in
   decision and must be corrected.
 - **Owner of execution.** AI #1, sequenced by AI #10.
 
-## OD-03 · What does "required admin presence" in a Student Group mean?
-- **Status:** **BLOCKING · MUST NOT BE GUESSED** (= AI #5 AMB-9)
-- **Conformance tag:** **UNVERIFIED — PRD SOURCE NOT PRESENT.**
-- **Current assumption:** none may be adopted. The product owner has instructed that AMB-9
-  remains unresolved and must not be guessed. **The recommendation previously offered here by
-  AI #8 is withdrawn.**
+## OD-03 · What does "required admin presence" in a Student Group mean? — **PARTLY CLOSED 2026-09-23**
+- **Status:** **DECIDED on the BR-1 permitted path — see `decision-log.md` DEC-17 and `../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4 PD-6.** The Student Group admin-presence question itself remains **BLOCKING · MUST NOT BE GUESSED** (= AI #5 AMB-9).
+- **Decision (PD-6).** The condition under which teacher↔parent communication **is** allowed is
+  now defined, and it is defined **outside** the Student Group rather than by relaxing it. A
+  teacher may communicate directly with a parent contact when **all** of these hold at the
+  moment of the action: the teacher is assigned to at least one learner in that contact's
+  family; `teacher.is_active`; `teacher.left_at IS NULL`; `contact.is_active`;
+  `contact.can_message = true`; and teacher, learner and contact share one `organization_id`.
+  **One qualifying learner is sufficient.** Anything else denies. No admin participation is
+  required in that direct channel.
+- **What this does and does not settle.** It settles the *permitted path* that was blocking
+  AI #5's BR1-09/SG-12 and the teacher surfaces: there is now a specified, testable condition.
+  It does **not** answer what "required admin presence" means **inside a Student Group** —
+  must an admin be a member of every group, must they be on duty, does a group become invalid
+  if its admin is offboarded, does approval substitute for presence. Those questions are
+  untouched by PD-6, still owned by the product owner, and **still must not be guessed**.
+  C-4 continues to govern the group unchanged.
+- **Superseded assumption:** the note below that no assumption may be adopted applied to the
+  permitted path and is discharged for it only. **The recommendation previously offered here by
+  AI #8 remains withdrawn** — PD-6 is the product owner's decision, not that recommendation.
 - **Why it matters.** This is the load-bearing condition of BR-1's *permitted* case. BR-1's
   prohibition is now enforced in the database (`chat.enforce_direct_conversation_rules()`),
   but the condition under which teacher↔parent communication **is** allowed is undefined, so
@@ -62,10 +77,32 @@ Where a decision is technical-ambiguity-only, AI #5 already owns it in
   workflow substitute for presence, or complement it?
 - **Owner.** Product owner. **Deadline:** before any Student Group membership rule is written.
 
-## OD-04 · Who is authoritative for the teacher↔learner assignment?
-- **Status:** **BLOCKING**
-- **Current assumption:** none. `chat.learner.teacher_id` is a bare uuid, and its own
-  migration comment says *"Jawwid Core has no teacher entity today."*
+## OD-04 · Who is authoritative for the teacher↔learner assignment? — **CLOSED 2026-09-23**
+- **Status:** **DECIDED — see `decision-log.md` DEC-17 and `../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4 PD-6.**
+- **Decision (PD-6), option (1).** The **academy's scheduling / assignment system (Jawwid
+  Core)** is the authoritative business owner of the Teacher ↔ Learner assignment. **Jawwid
+  Chat consumes that assignment state and must never become an independent business authority
+  for it.** Chat may hold a local representation for communication authorization; that
+  representation is a **read model**, not the source of truth.
+- **`chat.learner.teacher_id` is that read model.** It is Chat's local representation of an
+  assignment the academy owns. It is **not** the business source of truth, and no future
+  change may treat it as one — in particular, no Chat-side product surface may create or edit a
+  teaching assignment as though Chat owned it.
+- **Transitional state, stated plainly — the integration does not exist yet.** As of
+  2026-09-23 there is **no Core assignment feed in this repository**:
+  `chat.ingest_core_learner()` carries learner identity and schedule fields and does **not**
+  carry `teacher_id`; no migration and no application code writes `chat.learner.teacher_id`;
+  `conversation.service.ts` only ever reads it. The column is therefore unpopulated in
+  practice. PD-6's predicate reads it because it is the designated read model — which means
+  **PD-6 cannot authorize anybody until that feed exists**. That is an integration dependency,
+  not a policy gap, and it must not be closed by inventing a Chat-side writer.
+- **What must be built, and in which order.** A named producer across the Core boundary
+  (DEC-14) that populates and maintains `chat.learner.teacher_id`, including reassignment and
+  removal, before PD-6's authorization switch can grant anything. Group membership must follow
+  the assignment automatically — a teacher change that does not update the group is a privacy
+  incident, not a data gap.
+- **Historical context below is retained.** Original framing: `chat.learner.teacher_id` is a
+  bare uuid, and its own migration comment says *"Jawwid Core has no teacher entity today."*
 - **Options:** (1) Core owns it and Chat mirrors; (2) Chat owns it; (3) Chat owns
   communication membership, Core owns the academic assignment.
 - **Recommendation [AI #8]:** (1) if Core will have teachers before launch, otherwise (2)
@@ -177,14 +214,16 @@ Where a decision is technical-ambiguity-only, AI #5 already owns it in
 
 ## Blocking summary
 
-OD-02 is closed. Six blocking decisions remain, plus OD-03 which is blocking **and**
-explicitly not to be guessed.
+OD-02 is closed. **OD-04 is closed and OD-03 is partly closed (2026-09-23, DEC-17 / PD-6).**
+Five blocking decisions remain, plus the surviving half of OD-03 — what "required admin
+presence" means **inside a Student Group** — which is blocking **and** explicitly not to be
+guessed.
 
 | ID | Topic | Blocks |
 |---|---|---|
 | OD-01 | conversation model | every schema and authorization decision |
-| OD-03 | admin presence in groups | BR-1's permitted case; AI #5 BR1-09/SG-12 |
-| OD-04 | teacher assignment authority | group membership sync, teacher app |
+| OD-03 | admin presence **inside a Student Group** (the BR-1 permitted path is now defined by PD-6) | AI #5 BR1-09/SG-12 |
+| ~~OD-04~~ | teacher assignment authority | **CLOSED by PD-6** — Core owns assignment, Chat consumes it; the Core feed is an open *integration dependency*, not an open decision |
 | OD-05 | `adminDirect` for parents | mobile chat list, attention, ownership |
 | OD-11 | approver when owner is off duty | approval workflow |
 | OD-13 | class-schedule signal | attention engine calibration |

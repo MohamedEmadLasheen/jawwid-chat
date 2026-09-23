@@ -7,6 +7,7 @@ import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/calls/presentation/calls_screen.dart';
 import '../features/conversations/presentation/chats_screen.dart';
 import '../features/messages/presentation/chat_screen_route.dart';
+import '../features/messages/presentation/conversation_media_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import 'providers.dart';
@@ -32,6 +33,10 @@ abstract final class Routes {
   /// A person's profile, or a group's info. Reached only by tapping an avatar or a name —
   /// there is no Profile tab, and there never will be.
   static String conversationProfile(String id) => '/chats/$id/info';
+
+  /// What has been shared in one conversation. Secondary navigation, reached only from
+  /// conversation info — never a section of the app (§29).
+  static String conversationMedia(String id) => '/chats/$id/media';
 
   /// The signed-in user's own account. Deliberately under Settings rather than alongside
   /// the profiles above: "my account" and "someone else's profile" are different things.
@@ -90,6 +95,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '${Routes.chats}/:conversationId/info',
         builder: (context, state) => ConversationProfileScreen(
+          conversationId: state.pathParameters['conversationId']!,
+        ),
+      ),
+      GoRoute(
+        path: '${Routes.chats}/:conversationId/media',
+        builder: (context, state) => ConversationMediaScreen(
           conversationId: state.pathParameters['conversationId']!,
         ),
       ),

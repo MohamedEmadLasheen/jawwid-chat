@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -88,6 +89,15 @@ class MessagesController extends Notifier<MessagesState> {
   /// Temp recordings still owned by the outbox, so a sent or abandoned voice note
   /// does not leave audio in the cache directory.
   final _pendingVoiceFiles = <String, String>{};
+
+  /// Photos and documents still in flight.
+  ///
+  /// Tracked separately from [_pendingVoiceFiles] because these files are
+  /// **not ours to delete**: a recording lives in our own cache directory, but a
+  /// picked photo is the user's, sitting in their library or in a system-owned
+  /// staging copy. Deleting it on send is how an app removes a photo the user
+  /// still has. So this map exists only so a retry can find the bytes again.
+  final _pendingAttachmentFiles = <String, String>{};
 
   Timer? _drainTimer;
 
@@ -252,6 +262,59 @@ class MessagesController extends Notifier<MessagesState> {
     return clientMessageId;
   }
 
+  /// Enqueue a chosen photo or document.
+  ///
+  /// Identical to [sendVoice] in every respect that matters — same outbox, same
+  /// idempotency key, same ordering, same retry, same upload-then-send step in
+  /// [drain]. A photo is not a different kind of sending.
+  ///
+  /// The echo's attachment points at the **local** file, so the bubble shows the
+  /// actual photo while it uploads rather than a grey box.
+  String sendAttachment(
+    PendingAttachment attachment, {
+    String body = '',
+    ReplyPreview? replyTo,
+  }) {
+    final clientMessageId = _uuid.v4();
+    final now = DateTime.now();
+
+    final echo = Message(
+      clientMessageId: clientMessageId,
+      conversationId: conversationId,
+      kind: attachment.kind,
+      body: body,
+      createdAt: now,
+      deliveryState: DeliveryState.queued,
+      isMine: true,
+      replyTo: replyTo,
+      attachments: [
+        Attachment(
+          id: clientMessageId,
+          kind: attachment.kind,
+          url: attachment.filePath,
+          fileName: attachment.fileName,
+          mimeType: attachment.mimeType,
+          byteSize: attachment.byteSize,
+        ),
+      ],
+    );
+
+    _pendingAttachmentFiles[clientMessageId] = attachment.filePath;
+    _enqueue(
+      echo: echo,
+      outgoing: OutgoingMessage(
+        clientMessageId: clientMessageId,
+        conversationId: conversationId,
+        kind: attachment.kind,
+        body: body,
+        replyToMessageId: replyTo?.messageId,
+        pendingAttachment: attachment,
+      ),
+      now: now,
+    );
+    return clientMessageId;
+  }
+
   void _enqueue({
     required Message echo,
     required OutgoingMessage outgoing,
@@ -303,10 +366,18 @@ class MessagesController extends Notifier<MessagesState> {
       // makes a retry cheap: the second attempt re-sends an object key instead
       // of pushing the same bytes again.
       if (outbound.needsUpload) {
-        final uploaded = await _messages.uploadVoiceNote(
-          conversationId: conversationId,
-          note: outbound.voiceNote!,
-        );
+        final note = outbound.voiceNote;
+        final attachment = outbound.pendingAttachment;
+
+        final uploaded = note != null
+            ? await _messages.uploadVoiceNote(
+                conversationId: conversationId,
+                note: note,
+              )
+            : await _messages.uploadAttachment(
+                conversationId: conversationId,
+                attachment: attachment!,
+              );
         if (!_alive) return;
         outbound = outbound.withUploaded(uploaded);
         _pendingBodies[entry.clientMessageId] = outbound;
@@ -423,11 +494,188 @@ class MessagesController extends Notifier<MessagesState> {
   /// Failure is ignored on purpose: an undeleted file in the OS cache directory
   /// is not worth surfacing an error for, and never worth failing a send over.
   void _discardRecording(String clientMessageId) {
+    // A picked photo or document is the user's own file. Forget the reference;
+    // never delete the bytes.
+    _pendingAttachmentFiles.remove(clientMessageId);
+
     final path = _pendingVoiceFiles.remove(clientMessageId);
     if (path == null) return;
     unawaited(
       File(path).delete().catchError((Object _) => File(path)),
     );
+  }
+
+  // --- Acting on a message --------------------------------------------------------------
+  //
+  // All four apply optimistically and roll back on refusal. That is the right
+  // trade for this audience: on the networks these parents are on, waiting a
+  // round trip before a heart appears reads as a tap that did not register, and
+  // every one of these is cheap to undo. The server stays the authority — a
+  // rollback is not an error the app hides, it is re-thrown for the screen to
+  // announce.
+
+  /// Add or replace the viewer's reaction.
+  ///
+  /// One reaction per person per message, because that is what the server
+  /// stores: reacting again with a different emoji **replaces** the first. The
+  /// optimistic update mirrors that upsert rather than inventing a second one.
+  Future<void> react(Message message, String emoji) async {
+    final messageId = message.id;
+    if (messageId == null) return;
+
+    final snapshot = state.log;
+    state = state.copyWith(
+      log: state.log.updateByServerId(
+        messageId,
+        (m) => m.copyWith(reactions: _withReaction(m.reactions, emoji)),
+      ),
+    );
+
+    try {
+      await _messages.react(
+        conversationId: conversationId,
+        messageId: messageId,
+        emoji: emoji,
+      );
+    } catch (error) {
+      if (_alive) state = state.copyWith(log: snapshot);
+      throw ErrorMapper.map(error);
+    }
+  }
+
+  /// Take the viewer's reaction back off a message.
+  Future<void> removeReaction(Message message, String emoji) async {
+    final messageId = message.id;
+    if (messageId == null) return;
+
+    final snapshot = state.log;
+    state = state.copyWith(
+      log: state.log.updateByServerId(
+        messageId,
+        (m) => m.copyWith(reactions: _withoutReaction(m.reactions, emoji)),
+      ),
+    );
+
+    try {
+      await _messages.removeReaction(
+        conversationId: conversationId,
+        messageId: messageId,
+        emoji: emoji,
+      );
+    } catch (error) {
+      if (_alive) state = state.copyWith(log: snapshot);
+      throw ErrorMapper.map(error);
+    }
+  }
+
+  /// Toggle: react if the viewer has not, replace if they reacted differently,
+  /// remove if they tap the one they already chose.
+  Future<void> toggleReaction(Message message, String emoji) {
+    final mine = message.reactions.where((r) => r.mine).firstOrNull;
+    return mine?.emoji == emoji
+        ? removeReaction(message, emoji)
+        : react(message, emoji);
+  }
+
+  /// Hide a message for this user alone.
+  ///
+  /// A message that never reached the server has no server id — it is still in
+  /// the outbox, so deleting it means discarding the queued entry, not calling
+  /// an endpoint about a message nobody else has.
+  Future<void> deleteForMe(Message message) async {
+    final messageId = message.id;
+    if (messageId == null) {
+      discard(message.clientMessageId);
+      return;
+    }
+
+    final snapshot = state.log;
+    state = state.copyWith(
+      log: state.log.updateByServerId(
+        messageId,
+        (m) => m.copyWith(isDeleted: true),
+      ),
+    );
+
+    try {
+      await _messages.deleteForMe(
+        conversationId: conversationId,
+        messageId: messageId,
+      );
+    } catch (error) {
+      if (_alive) state = state.copyWith(log: snapshot);
+      throw ErrorMapper.map(error);
+    }
+  }
+
+  /// Retract a message for everyone.
+  ///
+  /// The server decides: the author may do this only inside a window whose
+  /// length is on no DTO this client can read. So a refusal here is a normal
+  /// outcome, not a bug — the bubble comes back and the screen says why.
+  Future<void> deleteForEveryone(Message message) async {
+    final messageId = message.id;
+    if (messageId == null) {
+      discard(message.clientMessageId);
+      return;
+    }
+
+    final snapshot = state.log;
+    state = state.copyWith(
+      log: state.log.updateByServerId(
+        messageId,
+        (m) => m.copyWith(isDeleted: true),
+      ),
+    );
+
+    try {
+      await _messages.deleteForEveryone(
+        conversationId: conversationId,
+        messageId: messageId,
+      );
+    } catch (error) {
+      if (_alive) state = state.copyWith(log: snapshot);
+      throw ErrorMapper.map(error);
+    }
+  }
+
+  /// The viewer's reaction, applied as an upsert.
+  static List<Reaction> _withReaction(List<Reaction> current, String emoji) {
+    // Whatever they had before is gone, because the server replaces it.
+    final cleared = _withoutMine(current);
+
+    final index = cleared.indexWhere((r) => r.emoji == emoji);
+    if (index < 0) {
+      return [...cleared, Reaction(emoji: emoji, count: 1, mine: true)];
+    }
+
+    final existing = cleared[index];
+    return [
+      ...cleared.take(index),
+      existing.copyWith(count: existing.count + 1, mine: true),
+      ...cleared.skip(index + 1),
+    ];
+  }
+
+  static List<Reaction> _withoutReaction(List<Reaction> current, String emoji) {
+    return [
+      for (final reaction in current)
+        if (!reaction.mine || reaction.emoji != emoji)
+          reaction
+        else if (reaction.count > 1)
+          reaction.copyWith(count: reaction.count - 1, mine: false),
+    ];
+  }
+
+  /// Strip the viewer from every reaction, dropping any that was theirs alone.
+  static List<Reaction> _withoutMine(List<Reaction> current) {
+    return [
+      for (final reaction in current)
+        if (!reaction.mine)
+          reaction
+        else if (reaction.count > 1)
+          reaction.copyWith(count: reaction.count - 1, mine: false),
+    ];
   }
 
   /// Apply a realtime arrival. Events are signals: the message is merged, and identity by

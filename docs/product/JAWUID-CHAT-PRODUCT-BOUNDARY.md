@@ -117,10 +117,11 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-5 — CLOSED
+## 4. Product decisions PD-1 to PD-6 — CLOSED
 
-All five were closed by the product owner on **2026-09-07**, at the Phase 0 exit
-gate, before `main` was baselined. This section is the canonical record. Any
+PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
+exit gate, before `main` was baselined. **PD-6 was closed on 2026-09-23** and is
+recorded here in the same form. This section is the canonical record. Any
 document that contradicts it is superseded on that point, whatever its own
 status banner says.
 
@@ -131,6 +132,7 @@ status banner says.
 | PD-3 | Coverage model | **CLOSED** — explicit temporary assignment |
 | PD-4 | Representation of system-generated events | **CLOSED** — system messages |
 | PD-5 | Role model | **CLOSED** — `super_admin` exists from day one |
+| PD-6 | Teacher–Parent direct communication | **CLOSED** — permitted while the relationship is authorized |
 
 ---
 
@@ -304,9 +306,115 @@ not govern whether the role exists.
 
 ---
 
-### Decisions still open after PD-1 to PD-5
+### PD-6 · Teacher–Parent direct communication
 
-None from the Phase 0 set. Any new product question is recorded here with a new
+**Closed 2026-09-23.**
+
+**Final decision.** An active teacher **may** directly message and directly call
+a parent contact **while the Teacher–Parent relationship is authorized**. This is
+an **additional** capability. It does not replace the Student Group, which
+remains the official shared channel, and it does not weaken it.
+
+Direct communication between a teacher and a parent who are **not** in an
+authorized relationship remains **forbidden**, exactly as before.
+
+**Canonical rule.** A Teacher–Parent relationship is authorized when, and only
+when, **all** of the following hold at the moment of the action:
+
+```
+authorized(teacher, contact) =
+      teacher is assigned to >= 1 learner in the contact's family   (A)
+  AND teacher.is_active                                             (B)
+  AND teacher.left_at IS NULL                                       (C)
+  AND contact.is_active                                             (D)
+  AND contact.can_message = true                                    (E)
+  AND teacher, learner and contact share one organization_id        (F)
+
+ONE qualifying learner is sufficient.                               (G)
+Anything else = DENY.
+```
+
+The authorization is **relationship-derived**. It is not conferred by two
+accounts existing, by shared organization membership, by family membership
+alone, by `role_preset`, by an existing conversation, by past communication, by
+a previous authorization, or by group membership. Any missing, invalid,
+inactive, ambiguous or cross-organization condition **fails closed**.
+
+**One qualifying learner is sufficient.** If family F has learner A taught by
+teacher X and learner B taught by teacher Y, then X may communicate directly
+with F's parent contacts *because of A*, and Y may communicate directly with the
+same contacts *because of B*. Neither teacher's authorization depends on the
+other's learner.
+
+**Communication authorization is not data authorization.** Being authorized to
+*communicate* with a parent grants **no** access to any learner's data. If X is
+authorized because X teaches learner A, that does not authorize X to read
+learner B's grades, attendance, package or balance, lessons, complaints, or any
+other learner-specific record. Learner-data access continues to be governed by
+its own authorization rules, unchanged by this decision.
+
+**Revocation is immediate.** Authorization is evaluated **at the time of each
+protected action**, never cached and never granted ahead of time. It ends the
+moment the qualifying relationship ends — when the learner is reassigned to
+another teacher, when the teacher's `left_at` is set, when the teacher is
+deactivated, when the contact is deactivated, or when `can_message` is withdrawn.
+
+**Revocation is not deletion.** Ending authorization ends *new* protected
+actions only. Existing conversation history is retained; messages are never
+deleted because an authorization lapsed. The teacher simply cannot send a new
+direct message or start a new direct call while unauthorized.
+
+**One relationship definition, two capabilities.** Direct 1:1 messaging and
+direct 1:1 calling share the **same** relationship definition. There are not two
+definitions. The relationship decides *whether*; the action decides *what*.
+
+**Admin oversight.** An admin is **not** required to be a participant in a direct
+Teacher–Parent conversation or call. This decision introduces no admin-presence
+requirement of its own. Existing moderation, audit and administrative
+capabilities are unchanged and continue to be governed by their own rules. The
+C-4 live-admin presence rule continues to govern the **Student Group**, which
+PD-6 does not touch.
+
+**No grant table.** This policy introduces **no** Teacher–Parent authorization or
+grant table, no permanent grants, no time-bounded grants, and no manual
+per-parent teacher authorization records. Authorization is derived from the live
+Teacher ↔ Learner ↔ Family relationship. Introducing any of those mechanisms
+would require a new product decision.
+
+**Implementation phase.** The policy is closed **now**; the implementation is
+**not** done and is explicitly staged. Until each stage lands, the prohibition
+stands as built:
+
+1. the relationship predicate, at the application and database layers, proven on its own;
+2. the authorization switch (`canOpenDirect`, and the calling path that shares it);
+3. re-versioned authorization tests;
+4. the database backstop migration, which must permit the authorized case without weakening the unauthorized one.
+
+No BR-1 structural backstop, and no BR-1 security test, may be weakened before
+its stage. The permitted case must be **added**; the prohibited case must remain
+exactly as strongly enforced as it is today.
+
+**Consequences.**
+- `AuthorizationService.canOpenDirect` gains an authorized Teacher↔Parent pair as a permitted direct pair. Unauthorized pairs keep returning `COMM.BR1_TEACHER_PARENT_DIRECT`.
+- The same predicate governs the direct calling path; PRD §9's 1:1 matrix row changes with it (PRD v0.2).
+- `chat.enforce_direct_conversation_rules()` and `chat.assert_conversation_br1()` must learn the authorized case. Today they make a teacher+contact `direct` conversation unrepresentable, which is what closes RT-024/RT-025; that strength must survive for unauthorized pairs.
+- Revocation being evaluated per action means no authorization may be cached in a session, a socket, or a conversation row.
+- Student Group membership, C-4 admin presence, PD-1 and PD-2 are unaffected.
+
+**Deprecated or conflicting behaviour.** PRD v0.1 §4 BR-1 ("No direct
+Teacher ↔ Parent communication") and its §9 calling-matrix row
+("Teacher ↔ Parent — Rejected server-side") are **re-versioned by PRD v0.2** and
+no longer state the whole rule. `decision-log.md` **DEC-03** is superseded in
+part — its prohibition of *authorized* direct communication no longer holds; its
+prohibition of *unauthorized* direct communication is retained and is now the
+whole of DEC-03's surviving force. Nothing here permits a teacher to reach a
+parent they do not teach.
+
+---
+
+### Decisions still open after PD-1 to PD-6
+
+None. Any new product question is recorded here with a new
 `PD-n` and the same six fields: decision, canonical rule, implementation phase,
 consequences, deprecated behaviour, and the date it was closed.
 

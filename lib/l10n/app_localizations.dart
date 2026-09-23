@@ -1098,6 +1098,222 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'You can reach the teacher in your child\'s group.'**
   String get profileNoDirectContact;
+
+  /// Header of the long-press sheet on a message.
+  ///
+  /// In en, this message translates to:
+  /// **'Message options'**
+  String get messageActionsTitle;
+
+  /// Opens the choice between deleting for me and for everyone.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get deleteAction;
+
+  /// Hides a message for this user only.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete for me'**
+  String get deleteForMeAction;
+
+  /// Retracts a message for every member of the conversation.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete for everyone'**
+  String get deleteForEveryoneAction;
+
+  /// Explains that delete-for-me is private to this reader.
+  ///
+  /// In en, this message translates to:
+  /// **'It stays visible to everyone else.'**
+  String get deleteForMeExplainer;
+
+  /// Explains that delete-for-everyone retracts the message.
+  ///
+  /// In en, this message translates to:
+  /// **'Removed from the conversation for everyone.'**
+  String get deleteForEveryoneExplainer;
+
+  /// Brief confirmation after copying a message.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get copiedConfirmation;
+
+  /// Opens an attachment.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get openAction;
+
+  /// Saves an attachment to the device.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get saveAction;
+
+  /// Attachment menu entry for the photo library.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo'**
+  String get attachPhoto;
+
+  /// Attachment menu entry for a document.
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get attachFile;
+
+  /// Stands in for a photo where a message has no text.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo'**
+  String get attachmentPhotoLabel;
+
+  /// Stands in for a document where a message has no text.
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get attachmentFileLabel;
+
+  /// Stands in for a voice note where a message has no text.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice message'**
+  String get attachmentVoiceLabel;
+
+  /// Header of the preview shown before an attachment is sent.
+  ///
+  /// In en, this message translates to:
+  /// **'Send this?'**
+  String get attachmentSendTitle;
+
+  /// Shown when a chosen file is over the size the academy accepts.
+  ///
+  /// In en, this message translates to:
+  /// **'That file is too large to send.'**
+  String get attachmentTooLarge;
+
+  /// Shown when a chosen file is not an accepted type.
+  ///
+  /// In en, this message translates to:
+  /// **'That kind of file can\'t be sent here.'**
+  String get attachmentTypeNotAllowed;
+
+  /// Shown when the photo or file picker fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t open that. Please try again.'**
+  String get attachmentPickFailed;
+
+  /// Shown when photo-library permission was refused.
+  ///
+  /// In en, this message translates to:
+  /// **'Jawwid needs permission to open your photos. You can allow it in Settings.'**
+  String get attachmentPermissionDenied;
+
+  /// Shown when the device has no picker.
+  ///
+  /// In en, this message translates to:
+  /// **'This device can\'t pick files.'**
+  String get attachmentUnsupported;
+
+  /// Shown on a bubble whose attachment failed to upload.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to send the file. Please try again.'**
+  String get attachmentUploadFailed;
+
+  /// Shown while an attachment is uploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending…'**
+  String get attachmentUploading;
+
+  /// Stands in for a quoted message that has not been loaded yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Original message'**
+  String get replyOriginalUnavailable;
+
+  /// Opens the shared photos, files and voice notes of a conversation.
+  ///
+  /// In en, this message translates to:
+  /// **'Media & files'**
+  String get mediaAndFilesTitle;
+
+  /// Tab of shared photos.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos'**
+  String get mediaPhotosTab;
+
+  /// Tab of shared files.
+  ///
+  /// In en, this message translates to:
+  /// **'Files'**
+  String get mediaFilesTab;
+
+  /// Tab of shared voice messages.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice'**
+  String get mediaVoiceTab;
+
+  /// Empty state of the media and files screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing shared here yet'**
+  String get mediaEmpty;
+
+  /// Explains what the media screen will hold.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos, files and voice messages from this conversation appear here.'**
+  String get mediaEmptyBody;
+
+  /// Pages further back through a conversation to find more shared items.
+  ///
+  /// In en, this message translates to:
+  /// **'Load older'**
+  String get mediaLoadOlder;
+
+  /// State of a muted conversation. Messages still arrive.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications muted'**
+  String get notificationsMuted;
+
+  /// Clarifies that muting only silences notifications.
+  ///
+  /// In en, this message translates to:
+  /// **'You still receive messages.'**
+  String get notificationsMutedExplainer;
+
+  /// Screen-reader label for a reaction chip.
+  ///
+  /// In en, this message translates to:
+  /// **'{emoji}, {count} reactions'**
+  String reactionCountSemantics(String emoji, int count);
+
+  /// Screen-reader label for a reaction chip the viewer is part of.
+  ///
+  /// In en, this message translates to:
+  /// **'{emoji}, including yours'**
+  String reactionYoursSemantics(String emoji);
+
+  /// File size in kilobytes.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} KB'**
+  String fileSizeKb(String size);
+
+  /// File size in megabytes.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} MB'**
+  String fileSizeMb(String size);
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

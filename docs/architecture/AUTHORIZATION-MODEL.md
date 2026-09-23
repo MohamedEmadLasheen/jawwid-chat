@@ -1,7 +1,10 @@
 # Jawwid Chat — Authorization Model (roles, permissions, scope)
 
 Status: **CANONICAL** · Locked in Phase 0 (2026-09-07) · Implemented in Phase 1
-Product decisions PD-2, PD-3 and PD-5 are CLOSED; the record is `../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4.
+Product decisions PD-2, PD-3, PD-5 and **PD-6** are CLOSED; the record is `../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4.
+**PD-6 (2026-09-23) changes the Teacher↔Parent rows below.** It is policy, not delivery: the decision
+surface described here is the one that is *implemented today*, and it still refuses every direct
+Teacher↔Parent pair. The PD-6 target is marked inline. Do not read those marks as built.
 Companions: `IDENTITY-MODEL.md`, `SUPERVISOR-OWNERSHIP.md`, `TENANCY-MODEL.md`,
 `../security/RLS-STRATEGY.md`, `../contracts/API-CONTRACT.md` §1.2.
 Supersedes: `docs/qa/rbac-matrix.md` role vocabulary (known wrong — no `super_admin`),
@@ -43,7 +46,7 @@ restored.
 |---|---|---|---|---|
 | `parent` | contact | mobile | A family contact who may message (`contact.can_message`) | member_role `parent` |
 | `student` | context only | — | Exists as a learner record; no login in MVP | — |
-| `teacher` | teacher | mobile | Teaches learners; communicates with families **only** inside Student Groups with a live admin (BR-1) | synthesized (fixed in Phase 1) |
+| `teacher` | teacher | mobile | Teaches learners. **Implemented today:** communicates with families **only** inside Student Groups with a live admin (BR-1). **PD-6 target:** additionally, direct 1:1 messaging and calling with a parent contact **while the relationship is authorized** (PD-6 §Canonical rule); the Student Group remains the official shared channel | synthesized (fixed in Phase 1) |
 | `admin` | staff | web + mobile | A **supervisor**: the assigned owner of families; answers their conversations; moderates their groups | `staff.role='admin'` |
 | `coverage_admin` | staff | web + mobile | A supervisor acting for others for the duration of an explicit temporary assignment (PD-3), with the owner's permissions on that family and nothing more | `staff.role='coverage'` → **rename** |
 | `manager` | staff | web | Runs the operation: assigns supervisors, reads audit, edits settings, sees every family in the organization | `staff.role='manager'` |
@@ -98,7 +101,7 @@ for UX, and asserts the TypeScript mirror equals the table in a protected test.
 
 | Method | Exists | Decides | Extended in Phase 1 by |
 |---|---|---|---|
-| `canOpenDirect(a, b)` | ✔ | closed allow-list of direct pairs (Parent↔Admin, Teacher↔Admin, staff↔staff); Teacher↔Parent refused (BR-1) | tenancy check |
+| `canOpenDirect(a, b)` | ✔ | closed allow-list of direct pairs (Parent↔Admin, Teacher↔Admin, staff↔staff); Teacher↔Parent refused (BR-1) — **unchanged and still refusing every pair** | tenancy check; **PD-6:** admit a Teacher↔Parent pair **only** when the relationship predicate authorizes it, leaving the refusal (`COMM.BR1_TEACHER_PARENT_DIRECT`) in place for every other pair. Not implemented |
 | `canRead(actor, conv, membership)` | ✔ | contacts/teachers must be live members; staff must be family-facing | **scope**: staff must be within supervisor scope of `conv.familyId` (§6); managers see the organization |
 | `canReadInternal(actor)` | ✔ | staff only | unchanged |
 | `canSend(actor, conv, membership, intent, now, familyOwnerId, participantKinds, liveMembers)` | ✔ | read → silence → C-4 admin presence → moderation policy for parents/teachers; ownership/coverage/stickiness → on-behalf mode for staff; assist/escalation fail closed (JC-005) | routing reads the **assignment** rather than `family.owner_id` + `on_duty()` (see `SUPERVISOR-OWNERSHIP.md` §6) |

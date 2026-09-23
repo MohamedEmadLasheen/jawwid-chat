@@ -148,16 +148,65 @@ class HttpMessageRepository implements MessageRepository {
     required String conversationId,
     required PendingVoiceNote note,
   }) async {
-    // 1. Authorize. The backend re-checks conversation membership and enforces
-    //    the MIME and size limits here, so an over-limit note is refused before
-    //    the user spends a single byte of mobile data on it.
+    final objectKey = await _authorizeAndPut(
+      conversationId: conversationId,
+      kind: Wire.messageVoice,
+      filePath: note.filePath,
+      mimeType: note.mimeType,
+      byteSize: note.byteSize,
+      sizeChangedCode: 'voice_note_size_changed',
+    );
+
+    return UploadedAttachment(
+      kind: MessageKind.voice,
+      objectKey: objectKey,
+      mimeType: note.mimeType,
+      byteSize: note.byteSize,
+      durationMs: note.duration.inMilliseconds,
+    );
+  }
+
+  @override
+  Future<UploadedAttachment> uploadAttachment({
+    required String conversationId,
+    required PendingAttachment attachment,
+  }) async {
+    final objectKey = await _authorizeAndPut(
+      conversationId: conversationId,
+      kind: _wireType(attachment.kind),
+      filePath: attachment.filePath,
+      mimeType: attachment.mimeType,
+      byteSize: attachment.byteSize,
+      sizeChangedCode: 'attachment_size_changed',
+    );
+
+    return UploadedAttachment(
+      kind: attachment.kind,
+      objectKey: objectKey,
+      mimeType: attachment.mimeType,
+      byteSize: attachment.byteSize,
+    );
+  }
+
+  /// Authorize, then PUT. Returns the object key the message is sent with.
+  ///
+  /// Two steps behind one call, as the contract publishes them:
+  ///
+  /// 1. **Authorize.** The backend re-checks conversation membership and
+  ///    enforces the MIME and size limits *here*, so an over-limit file is
+  ///    refused before the user spends a single byte of mobile data on it.
+  /// 2. **PUT the bytes** to the signed URL. They never pass through the API.
+  Future<String> _authorizeAndPut({
+    required String conversationId,
+    required String kind,
+    required String filePath,
+    required String mimeType,
+    required int byteSize,
+    required String sizeChangedCode,
+  }) async {
     final authorized = await _client.post<Map<String, Object?>>(
       '${_base(conversationId)}/attachments/authorize',
-      data: {
-        'kind': Wire.messageVoice,
-        'mimeType': note.mimeType,
-        'byteSize': note.byteSize,
-      },
+      data: {'kind': kind, 'mimeType': mimeType, 'byteSize': byteSize},
     );
 
     final grant = authorized.data;
@@ -171,33 +220,25 @@ class HttpMessageRepository implements MessageRepository {
       );
     }
 
-    final bytes = await File(note.filePath).readAsBytes();
+    final bytes = await File(filePath).readAsBytes();
     // The authorization bound the size it signed for. Sending a different length
     // would be refused by storage, so fail here with something diagnosable
     // rather than as an opaque 403.
-    if (bytes.length != note.byteSize) {
-      throw const AppError(
+    if (bytes.length != byteSize) {
+      throw AppError(
         AppErrorKind.server,
-        code: 'voice_note_size_changed',
-        debugDetail: 'the recording changed size between authorization and upload',
+        code: sizeChangedCode,
+        debugDetail: 'the file changed size between authorization and upload',
       );
     }
 
-    // 2. PUT the bytes to the signed URL.
     await _uploads.put(
       uploadUrl,
       bytes: bytes,
       headers: _stringHeaders(grant?['headers']),
     );
 
-    // 3. The caller sends the message with this reference.
-    return UploadedAttachment(
-      kind: MessageKind.voice,
-      objectKey: objectKey,
-      mimeType: note.mimeType,
-      byteSize: note.byteSize,
-      durationMs: note.duration.inMilliseconds,
-    );
+    return objectKey;
   }
 
   /// The headers the authorization told us to send — chiefly the content type,
@@ -212,18 +253,56 @@ class HttpMessageRepository implements MessageRepository {
   }
 
   @override
-  Future<void> react(String messageId, String emoji) async {
-    // Reactions are per conversation on the wire, but the route only needs the message id
-    // under a conversation prefix; the server re-resolves membership from the message.
+  Future<void> react({
+    required String conversationId,
+    required String messageId,
+    required String emoji,
+  }) async {
+    // Every message route is nested under its conversation. This used to post to
+    // `/messages/:id/reactions`, which is not a route the API has — so every
+    // reaction was a 404 waiting for a caller.
     await _client.post<Map<String, Object?>>(
-      '/messages/$messageId/reactions',
+      '${_base(conversationId)}/$messageId/reactions',
       data: {'emoji': emoji},
     );
   }
 
   @override
-  Future<void> removeReaction(String messageId, String emoji) async {
-    await _client.delete<Map<String, Object?>>('/messages/$messageId/reactions');
+  Future<void> removeReaction({
+    required String conversationId,
+    required String messageId,
+    required String emoji,
+  }) async {
+    // The emoji is sent even though today's server ignores it: API-CONTRACT §3.5
+    // makes `?emoji=` required, so sending it now is what stops this call
+    // becoming a silent no-op the day the server starts reading it.
+    await _client.delete<Map<String, Object?>>(
+      '${_base(conversationId)}/$messageId/reactions',
+      query: {'emoji': emoji},
+    );
+  }
+
+  @override
+  Future<void> deleteForMe({
+    required String conversationId,
+    required String messageId,
+  }) async {
+    await _client.delete<Map<String, Object?>>(
+      '${_base(conversationId)}/$messageId/me',
+    );
+  }
+
+  @override
+  Future<void> deleteForEveryone({
+    required String conversationId,
+    required String messageId,
+  }) async {
+    // No `reason` is sent. The route defaults it to "deleted by author", which
+    // is the truth for the only caller this client has; inventing a reason on
+    // the user's behalf would put words into an audit log.
+    await _client.delete<Map<String, Object?>>(
+      '${_base(conversationId)}/$messageId',
+    );
   }
 
   @override

@@ -77,7 +77,8 @@ class ApiClient {
   Future<Response<T>> patch<T>(String path, {Object? data}) =>
       _guard(() => _dio.patch<T>(path, data: data));
 
-  Future<Response<T>> delete<T>(String path) => _guard(() => _dio.delete<T>(path));
+  Future<Response<T>> delete<T>(String path, {Map<String, Object?>? query}) =>
+      _guard(() => _dio.delete<T>(path, queryParameters: query));
 
   Future<Response<T>> _guard<T>(Future<Response<T>> Function() send) async {
     try {

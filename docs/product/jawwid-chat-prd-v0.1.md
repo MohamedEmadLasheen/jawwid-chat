@@ -1,3 +1,8 @@
+> **STATUS: IN FORCE, AMENDED IN PART.** §4 **BR-1** and the §9 calling-matrix row
+> for 1:1 Teacher ↔ Parent are re-versioned by [PRD v0.2](jawwid-chat-prd-v0.2.md)
+> (PD-6, 2026-09-23). Read those two passages there. Every other section of this
+> document remains the PRD and is unchanged. Canonical index: `docs/README.md`.
+
 **Contents**
 
 1. [1Summary](https://26080e48-6fef-48c4-a1e8-65b53e9cd8f3.frame.claudeusercontent.com/_f/1788611809-11b4/?__frame_t=5fF9HJ4lW1XkqMO_T5VMg4sW.5348a617-f1a4-4062-acf4-5e9ef8f457fc.e8b18248-5c46-4b36-b359-8b3d12aa6136.1788615594&__frame_v=manifest.db4407fd1f4905d5.json#s1)

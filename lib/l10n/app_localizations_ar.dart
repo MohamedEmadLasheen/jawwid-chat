@@ -552,4 +552,124 @@ class L10nAr extends L10n {
   @override
   String get profileNoDirectContact =>
       'يمكنك التواصل مع المعلم داخل مجموعة ابنك.';
+
+  @override
+  String get messageActionsTitle => 'خيارات الرسالة';
+
+  @override
+  String get deleteAction => 'حذف';
+
+  @override
+  String get deleteForMeAction => 'حذف لدي';
+
+  @override
+  String get deleteForEveryoneAction => 'حذف لدى الجميع';
+
+  @override
+  String get deleteForMeExplainer => 'ستظل ظاهرة لبقية المشاركين.';
+
+  @override
+  String get deleteForEveryoneExplainer => 'ستُحذف من المحادثة لدى الجميع.';
+
+  @override
+  String get copiedConfirmation => 'تم النسخ';
+
+  @override
+  String get openAction => 'فتح';
+
+  @override
+  String get saveAction => 'حفظ';
+
+  @override
+  String get attachPhoto => 'صورة';
+
+  @override
+  String get attachFile => 'ملف';
+
+  @override
+  String get attachmentPhotoLabel => 'صورة';
+
+  @override
+  String get attachmentFileLabel => 'ملف';
+
+  @override
+  String get attachmentVoiceLabel => 'رسالة صوتية';
+
+  @override
+  String get attachmentSendTitle => 'إرسال هذه؟';
+
+  @override
+  String get attachmentTooLarge => 'هذا الملف أكبر من أن يُرسل.';
+
+  @override
+  String get attachmentTypeNotAllowed =>
+      'لا يمكن إرسال هذا النوع من الملفات هنا.';
+
+  @override
+  String get attachmentPickFailed => 'تعذّر فتح ذلك. برجاء المحاولة مرة أخرى.';
+
+  @override
+  String get attachmentPermissionDenied =>
+      'يحتاج جَوِّد إلى إذن للوصول إلى صورك. يمكنك السماح بذلك من الإعدادات.';
+
+  @override
+  String get attachmentUnsupported => 'لا يمكن اختيار الملفات على هذا الجهاز.';
+
+  @override
+  String get attachmentUploadFailed =>
+      'تعذّر إرسال الملف. برجاء المحاولة مرة أخرى.';
+
+  @override
+  String get attachmentUploading => 'جارٍ الإرسال…';
+
+  @override
+  String get replyOriginalUnavailable => 'الرسالة الأصلية';
+
+  @override
+  String get mediaAndFilesTitle => 'الوسائط والملفات';
+
+  @override
+  String get mediaPhotosTab => 'الصور';
+
+  @override
+  String get mediaFilesTab => 'الملفات';
+
+  @override
+  String get mediaVoiceTab => 'الصوتيات';
+
+  @override
+  String get mediaEmpty => 'لم تتم مشاركة أي شيء بعد';
+
+  @override
+  String get mediaEmptyBody =>
+      'تظهر هنا الصور والملفات والرسائل الصوتية الخاصة بهذه المحادثة.';
+
+  @override
+  String get mediaLoadOlder => 'تحميل الأقدم';
+
+  @override
+  String get notificationsMuted => 'الإشعارات مكتومة';
+
+  @override
+  String get notificationsMutedExplainer => 'ستظل تصلك الرسائل.';
+
+  @override
+  String reactionCountSemantics(String emoji, int count) {
+    return '$emoji، $count تفاعلات';
+  }
+
+  @override
+  String reactionYoursSemantics(String emoji) {
+    return '$emoji، من بينها تفاعلك';
+  }
+
+  @override
+  String fileSizeKb(String size) {
+    return '$size ك.ب';
+  }
+
+  @override
+  String fileSizeMb(String size) {
+    return '$size م.ب';
+  }
 }

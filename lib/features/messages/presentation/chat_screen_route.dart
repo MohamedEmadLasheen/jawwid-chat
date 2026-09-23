@@ -56,11 +56,27 @@ class ChatScreenRoute extends ConsumerWidget {
           title: value.title,
           onOpenProfile: () =>
               context.push(Routes.conversationProfile(conversationId)),
-          // "Handled by …" comes from the backend verbatim; the client never derives it and
-          // never shows an internal handler id (decision D3).
-          subtitle: value.handledByLabel == null
-              ? null
-              : l10n.handledBy(value.handledByLabel!),
+          // Two different things, and never invented.
+          //
+          // On the family's own thread with Jawwid: "Handled by …", supplied by
+          // the backend verbatim. The client never derives it and never shows an
+          // internal handler id (decision D3). This is what tells a parent that
+          // the Academy conversation is currently being answered by their
+          // assigned supervisor — the product has one persistent family thread,
+          // not an Academy one and a Supervisor one, and the header says which
+          // person is behind it right now.
+          //
+          // On a Student Group: which child it is about. A parent with two
+          // children must never have to work that out from a title (§27). Null
+          // when the backend has not said — `ConversationDto` carries no
+          // learner today — rather than guessed at from the title string.
+          subtitle: switch (value) {
+            Conversation(handledByLabel: final handler?) =>
+              l10n.handledBy(handler),
+            Conversation(learner: final learner?) =>
+              '${l10n.groupLearnerLabel} · ${learner.displayName}',
+            _ => null,
+          },
           kind: value.kind,
           requiresApproval: value.requiresApproval,
           isReadOnly: value.isReadOnly,
