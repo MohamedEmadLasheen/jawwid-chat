@@ -130,6 +130,7 @@ class Message {
     this.body = '',
     this.attachments = const [],
     this.replyTo,
+    this.replyToMessageId,
     this.reactions = const [],
     this.approvalState = ApprovalState.notRequired,
     this.rejectionReason,
@@ -155,7 +156,20 @@ class Message {
   final MessageKind kind;
   final String body;
   final List<Attachment> attachments;
+
+  /// The quote to render above this bubble.
+  ///
+  /// Set only on the **local echo**, where the composer already knows what the
+  /// user was replying to. Everything that came from the server carries
+  /// [replyToMessageId] instead and has its quote resolved from the loaded log,
+  /// because `MessageDto` embeds no preview — see `WireMappers.message`.
   final ReplyPreview? replyTo;
+
+  /// The message this one answers, as the server records it. Always within the
+  /// same conversation: the API refuses a cross-conversation reply target
+  /// (`COMM.REPLY_TARGET_CROSS_CONVERSATION`).
+  final String? replyToMessageId;
+
   final List<Reaction> reactions;
   final DeliveryState deliveryState;
   final ApprovalState approvalState;
@@ -190,6 +204,7 @@ class Message {
         body: body,
         attachments: attachments,
         replyTo: replyTo,
+        replyToMessageId: replyToMessageId,
         reactions: reactions,
         deliveryState: deliveryState,
         approvalState: approvalState,
@@ -222,6 +237,7 @@ class Message {
       body: body,
       attachments: attachments,
       replyTo: replyTo,
+      replyToMessageId: replyToMessageId,
       reactions: reactions ?? this.reactions,
       deliveryState: deliveryState ?? this.deliveryState,
       approvalState: approvalState ?? this.approvalState,

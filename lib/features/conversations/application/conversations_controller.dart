@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
@@ -70,6 +71,45 @@ class ConversationsController extends AsyncNotifier<List<ConversationSection>> {
             .read(conversationRepositoryProvider)
             .setArchived(conversationId, archived),
       );
+
+  /// Mark a conversation read up to [throughSequence].
+  ///
+  /// This lives here rather than on the chat screen's own controller because
+  /// **unread is a property of the list**: the row's badge and the tab badge are
+  /// both computed from it, and a screen that told only the server would leave
+  /// both showing a count for a conversation the user is currently reading.
+  ///
+  /// Failure is swallowed. Marking read is a side effect of opening a
+  /// conversation, not something the user asked for, and a parent who has just
+  /// read their messages must not be shown an error about bookkeeping — the
+  /// count simply reappears on the next load, which is the honest fallback.
+  Future<void> markRead(String conversationId, {required int throughSequence}) async {
+    final current =
+        _conversations.where((c) => c.id == conversationId).firstOrNull;
+
+    // Already read *here*, so there is nothing to clear and nothing to report.
+    // A conversation this controller has never heard of — opened straight from
+    // a notification before the list loaded — falls through deliberately: the
+    // server is still told, because the user did read the messages, and the
+    // badge they are about to see must already be gone.
+    if (current != null && current.unreadCount == 0) return;
+
+    if (current != null) {
+      _conversations = [
+        for (final c in _conversations)
+          c.id == conversationId ? c.copyWith(unreadCount: 0) : c,
+      ];
+      state = AsyncData(_sectioned());
+    }
+
+    try {
+      await ref
+          .read(conversationRepositoryProvider)
+          .markRead(conversationId, throughSequence: throughSequence);
+    } catch (_) {
+      // Deliberately silent; see above.
+    }
+  }
 
   Future<void> _optimistic(
     String conversationId,

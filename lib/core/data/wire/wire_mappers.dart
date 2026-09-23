@@ -165,7 +165,11 @@ abstract final class WireMappers {
         for (final a in (json['attachments'] as List?) ?? const [])
           if (a is Map<String, Object?>) attachment(a),
       ],
+      // No preview is embedded on the wire; the chat screen resolves the quote
+      // from the log it already holds, and shows a neutral placeholder when the
+      // original has not been paged in yet.
       replyTo: null,
+      replyToMessageId: json['replyToMessageId'] as String?,
       reactions: [
         for (final entry in byEmoji.entries)
           Reaction(

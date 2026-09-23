@@ -88,10 +88,68 @@ class _VoiceRepository implements MessageRepository {
   }
 
   @override
-  Future<void> react(String messageId, String emoji) async {}
+  Future<UploadedAttachment> uploadAttachment({
+    required String conversationId,
+    required PendingAttachment attachment,
+  }) async {
+    attachmentUploads.add(attachment);
+    return UploadedAttachment(
+      kind: attachment.kind,
+      objectKey:
+          'conversations/$conversationId/${attachment.kind.name}_${attachmentUploads.length}',
+      mimeType: attachment.mimeType,
+      byteSize: attachment.byteSize,
+    );
+  }
+
+  /// Every photo or document handed to the upload step, in order.
+  final attachmentUploads = <PendingAttachment>[];
 
   @override
-  Future<void> removeReaction(String messageId, String emoji) async {}
+  Future<void> react({
+    required String conversationId,
+    required String messageId,
+    required String emoji,
+  }) async {
+    reactions.add((messageId, emoji));
+  }
+
+  @override
+  Future<void> removeReaction({
+    required String conversationId,
+    required String messageId,
+    required String emoji,
+  }) async {
+    reactionRemovals.add((messageId, emoji));
+  }
+
+  /// (messageId, emoji) for every reaction added and removed.
+  final reactions = <(String, String)>[];
+  final reactionRemovals = <(String, String)>[];
+
+  @override
+  Future<void> deleteForMe({
+    required String conversationId,
+    required String messageId,
+  }) async {
+    deletedForMe.add(messageId);
+    if (deleteFailure != null) throw deleteFailure!;
+  }
+
+  @override
+  Future<void> deleteForEveryone({
+    required String conversationId,
+    required String messageId,
+  }) async {
+    deletedForEveryone.add(messageId);
+    if (deleteFailure != null) throw deleteFailure!;
+  }
+
+  final deletedForMe = <String>[];
+  final deletedForEveryone = <String>[];
+
+  /// Set to make either delete refuse, so the rollback path is reachable.
+  AppError? deleteFailure;
 
   @override
   Future<void> setTyping(String conversationId, {required bool isTyping}) async {}

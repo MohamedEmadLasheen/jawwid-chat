@@ -122,6 +122,35 @@ class PendingVoiceNote {
   final Duration duration;
 }
 
+/// A photo or document the user chose, sitting on disk, not yet uploaded.
+///
+/// The sibling of [PendingVoiceNote], and deliberately a separate type rather
+/// than a widened one: a voice note carries a duration and never a file name,
+/// a document carries a file name and never a duration, and collapsing them
+/// would give every call site two fields it has to remember not to read.
+class PendingAttachment {
+  const PendingAttachment({
+    required this.filePath,
+    required this.kind,
+    required this.mimeType,
+    required this.byteSize,
+    this.fileName,
+  });
+
+  final String filePath;
+
+  /// [MessageKind.image] or [MessageKind.file]. Never voice — that is
+  /// [PendingVoiceNote] — and never text or system.
+  final MessageKind kind;
+
+  final String mimeType;
+  final int byteSize;
+
+  /// What the user will see on a file bubble. Null for a photo, which is shown
+  /// rather than named.
+  final String? fileName;
+}
+
 /// An attachment whose bytes are already in storage, addressed by the object key
 /// the backend minted. This is what a message is sent with.
 class UploadedAttachment {
@@ -150,6 +179,7 @@ class OutgoingMessage {
     this.replyToMessageId,
     this.attachments = const [],
     this.voiceNote,
+    this.pendingAttachment,
   });
 
   /// Generated once at compose time and reused on every retry (§16, §17).
@@ -165,10 +195,15 @@ class OutgoingMessage {
   /// Still on disk. Non-null only until the upload succeeds.
   final PendingVoiceNote? voiceNote;
 
-  bool get needsUpload => voiceNote != null;
+  /// A photo or document still on disk. Non-null only until the upload
+  /// succeeds. Mutually exclusive with [voiceNote] — one message, one pending
+  /// payload.
+  final PendingAttachment? pendingAttachment;
 
-  /// Promote a finished upload. The recording is dropped, so a later retry
-  /// re-sends the object key rather than pushing the bytes a second time.
+  bool get needsUpload => voiceNote != null || pendingAttachment != null;
+
+  /// Promote a finished upload. The pending payload is dropped, so a later
+  /// retry re-sends the object key rather than pushing the bytes a second time.
   OutgoingMessage withUploaded(UploadedAttachment attachment) => OutgoingMessage(
         clientMessageId: clientMessageId,
         conversationId: conversationId,
@@ -252,9 +287,50 @@ abstract interface class MessageRepository {
     required PendingVoiceNote note,
   });
 
-  Future<void> react(String messageId, String emoji);
+  /// The same two steps as [uploadVoiceNote], for a photo or a document.
+  ///
+  /// Kept as its own method rather than folded into the voice one: the two take
+  /// different descriptions of what is on disk, and the voice path is covered by
+  /// its own suite that has no business changing because photos arrived.
+  Future<UploadedAttachment> uploadAttachment({
+    required String conversationId,
+    required PendingAttachment attachment,
+  });
 
-  Future<void> removeReaction(String messageId, String emoji);
+  /// [conversationId] is part of the route, not a convenience: every message
+  /// endpoint is nested under its conversation, and that is where the server
+  /// re-checks membership.
+  Future<void> react({
+    required String conversationId,
+    required String messageId,
+    required String emoji,
+  });
+
+  /// [emoji] is sent so the removal cannot race a replacement — the server
+  /// no-ops when the stored reaction is a different one.
+  Future<void> removeReaction({
+    required String conversationId,
+    required String messageId,
+    required String emoji,
+  });
+
+  /// Hide a message for the caller alone. Everyone else still sees it.
+  Future<void> deleteForMe({
+    required String conversationId,
+    required String messageId,
+  });
+
+  /// Retract a message for everyone.
+  ///
+  /// The server is the authority: the author may do this only inside its
+  /// configured window, and nobody may do it to someone else's message. The
+  /// window length is on no DTO the client can read, so this call can be
+  /// refused (`COMM.DELETE_WINDOW_EXPIRED`) after the action was offered — the
+  /// caller must present that refusal, never pre-empt it with a guess.
+  Future<void> deleteForEveryone({
+    required String conversationId,
+    required String messageId,
+  });
 
   Future<void> setTyping(String conversationId, {required bool isTyping});
 }

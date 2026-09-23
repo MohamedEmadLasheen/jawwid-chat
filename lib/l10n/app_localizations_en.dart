@@ -550,4 +550,125 @@ class L10nEn extends L10n {
   @override
   String get profileNoDirectContact =>
       'You can reach the teacher in your child\'s group.';
+
+  @override
+  String get messageActionsTitle => 'Message options';
+
+  @override
+  String get deleteAction => 'Delete';
+
+  @override
+  String get deleteForMeAction => 'Delete for me';
+
+  @override
+  String get deleteForEveryoneAction => 'Delete for everyone';
+
+  @override
+  String get deleteForMeExplainer => 'It stays visible to everyone else.';
+
+  @override
+  String get deleteForEveryoneExplainer =>
+      'Removed from the conversation for everyone.';
+
+  @override
+  String get copiedConfirmation => 'Copied';
+
+  @override
+  String get openAction => 'Open';
+
+  @override
+  String get saveAction => 'Save';
+
+  @override
+  String get attachPhoto => 'Photo';
+
+  @override
+  String get attachFile => 'File';
+
+  @override
+  String get attachmentPhotoLabel => 'Photo';
+
+  @override
+  String get attachmentFileLabel => 'File';
+
+  @override
+  String get attachmentVoiceLabel => 'Voice message';
+
+  @override
+  String get attachmentSendTitle => 'Send this?';
+
+  @override
+  String get attachmentTooLarge => 'That file is too large to send.';
+
+  @override
+  String get attachmentTypeNotAllowed =>
+      'That kind of file can\'t be sent here.';
+
+  @override
+  String get attachmentPickFailed => 'Couldn\'t open that. Please try again.';
+
+  @override
+  String get attachmentPermissionDenied =>
+      'Jawwid needs permission to open your photos. You can allow it in Settings.';
+
+  @override
+  String get attachmentUnsupported => 'This device can\'t pick files.';
+
+  @override
+  String get attachmentUploadFailed =>
+      'Unable to send the file. Please try again.';
+
+  @override
+  String get attachmentUploading => 'Sending…';
+
+  @override
+  String get replyOriginalUnavailable => 'Original message';
+
+  @override
+  String get mediaAndFilesTitle => 'Media & files';
+
+  @override
+  String get mediaPhotosTab => 'Photos';
+
+  @override
+  String get mediaFilesTab => 'Files';
+
+  @override
+  String get mediaVoiceTab => 'Voice';
+
+  @override
+  String get mediaEmpty => 'Nothing shared here yet';
+
+  @override
+  String get mediaEmptyBody =>
+      'Photos, files and voice messages from this conversation appear here.';
+
+  @override
+  String get mediaLoadOlder => 'Load older';
+
+  @override
+  String get notificationsMuted => 'Notifications muted';
+
+  @override
+  String get notificationsMutedExplainer => 'You still receive messages.';
+
+  @override
+  String reactionCountSemantics(String emoji, int count) {
+    return '$emoji, $count reactions';
+  }
+
+  @override
+  String reactionYoursSemantics(String emoji) {
+    return '$emoji, including yours';
+  }
+
+  @override
+  String fileSizeKb(String size) {
+    return '$size KB';
+  }
+
+  @override
+  String fileSizeMb(String size) {
+    return '$size MB';
+  }
 }

@@ -46,6 +46,14 @@ dependencies:
   just_audio: ^0.10.6
   path_provider: ^2.1.6
 
+  # Photos and files. Both are reached only through the seam in
+  # lib/core/media/media_picker.dart, so no test ever opens a platform picker.
+  # file_selector rather than file_picker: every package here is flutter.dev's
+  # own, which is the same bar the rest of this dependency list is held to.
+  image_picker: ^1.2.3
+  file_selector: ^1.1.0
+  url_launcher: ^6.3.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -232,5 +232,172 @@
   "contactInfoTitle": "Contact information",
   "contactInfoUnavailable": "Jawwid does not hold phone numbers or email addresses in this app yet.",
   "fieldNotAvailableYet": "Not available yet",
-  "profileNoDirectContact": "You can reach the teacher in your child's group."
+  "profileNoDirectContact": "You can reach the teacher in your child's group.",
+  "messageActionsTitle": "Message options",
+  "@messageActionsTitle": {
+    "description": "Header of the long-press sheet on a message."
+  },
+  "deleteAction": "Delete",
+  "@deleteAction": {
+    "description": "Opens the choice between deleting for me and for everyone."
+  },
+  "deleteForMeAction": "Delete for me",
+  "@deleteForMeAction": {
+    "description": "Hides a message for this user only."
+  },
+  "deleteForEveryoneAction": "Delete for everyone",
+  "@deleteForEveryoneAction": {
+    "description": "Retracts a message for every member of the conversation."
+  },
+  "deleteForMeExplainer": "It stays visible to everyone else.",
+  "@deleteForMeExplainer": {
+    "description": "Explains that delete-for-me is private to this reader."
+  },
+  "deleteForEveryoneExplainer": "Removed from the conversation for everyone.",
+  "@deleteForEveryoneExplainer": {
+    "description": "Explains that delete-for-everyone retracts the message."
+  },
+  "copiedConfirmation": "Copied",
+  "@copiedConfirmation": {
+    "description": "Brief confirmation after copying a message."
+  },
+  "openAction": "Open",
+  "@openAction": {
+    "description": "Opens an attachment."
+  },
+  "saveAction": "Save",
+  "@saveAction": {
+    "description": "Saves an attachment to the device."
+  },
+  "attachPhoto": "Photo",
+  "@attachPhoto": {
+    "description": "Attachment menu entry for the photo library."
+  },
+  "attachFile": "File",
+  "@attachFile": {
+    "description": "Attachment menu entry for a document."
+  },
+  "attachmentPhotoLabel": "Photo",
+  "@attachmentPhotoLabel": {
+    "description": "Stands in for a photo where a message has no text."
+  },
+  "attachmentFileLabel": "File",
+  "@attachmentFileLabel": {
+    "description": "Stands in for a document where a message has no text."
+  },
+  "attachmentVoiceLabel": "Voice message",
+  "@attachmentVoiceLabel": {
+    "description": "Stands in for a voice note where a message has no text."
+  },
+  "attachmentSendTitle": "Send this?",
+  "@attachmentSendTitle": {
+    "description": "Header of the preview shown before an attachment is sent."
+  },
+  "attachmentTooLarge": "That file is too large to send.",
+  "@attachmentTooLarge": {
+    "description": "Shown when a chosen file is over the size the academy accepts."
+  },
+  "attachmentTypeNotAllowed": "That kind of file can't be sent here.",
+  "@attachmentTypeNotAllowed": {
+    "description": "Shown when a chosen file is not an accepted type."
+  },
+  "attachmentPickFailed": "Couldn't open that. Please try again.",
+  "@attachmentPickFailed": {
+    "description": "Shown when the photo or file picker fails."
+  },
+  "attachmentPermissionDenied": "Jawwid needs permission to open your photos. You can allow it in Settings.",
+  "@attachmentPermissionDenied": {
+    "description": "Shown when photo-library permission was refused."
+  },
+  "attachmentUnsupported": "This device can't pick files.",
+  "@attachmentUnsupported": {
+    "description": "Shown when the device has no picker."
+  },
+  "attachmentUploadFailed": "Unable to send the file. Please try again.",
+  "@attachmentUploadFailed": {
+    "description": "Shown on a bubble whose attachment failed to upload."
+  },
+  "attachmentUploading": "Sending…",
+  "@attachmentUploading": {
+    "description": "Shown while an attachment is uploading."
+  },
+  "replyOriginalUnavailable": "Original message",
+  "@replyOriginalUnavailable": {
+    "description": "Stands in for a quoted message that has not been loaded yet."
+  },
+  "mediaAndFilesTitle": "Media & files",
+  "@mediaAndFilesTitle": {
+    "description": "Opens the shared photos, files and voice notes of a conversation."
+  },
+  "mediaPhotosTab": "Photos",
+  "@mediaPhotosTab": {
+    "description": "Tab of shared photos."
+  },
+  "mediaFilesTab": "Files",
+  "@mediaFilesTab": {
+    "description": "Tab of shared files."
+  },
+  "mediaVoiceTab": "Voice",
+  "@mediaVoiceTab": {
+    "description": "Tab of shared voice messages."
+  },
+  "mediaEmpty": "Nothing shared here yet",
+  "@mediaEmpty": {
+    "description": "Empty state of the media and files screen."
+  },
+  "mediaEmptyBody": "Photos, files and voice messages from this conversation appear here.",
+  "@mediaEmptyBody": {
+    "description": "Explains what the media screen will hold."
+  },
+  "mediaLoadOlder": "Load older",
+  "@mediaLoadOlder": {
+    "description": "Pages further back through a conversation to find more shared items."
+  },
+  "notificationsMuted": "Notifications muted",
+  "@notificationsMuted": {
+    "description": "State of a muted conversation. Messages still arrive."
+  },
+  "notificationsMutedExplainer": "You still receive messages.",
+  "@notificationsMutedExplainer": {
+    "description": "Clarifies that muting only silences notifications."
+  },
+  "reactionCountSemantics": "{emoji}, {count} reactions",
+  "@reactionCountSemantics": {
+    "description": "Screen-reader label for a reaction chip.",
+    "placeholders": {
+      "emoji": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "reactionYoursSemantics": "{emoji}, including yours",
+  "@reactionYoursSemantics": {
+    "description": "Screen-reader label for a reaction chip the viewer is part of.",
+    "placeholders": {
+      "emoji": {
+        "type": "String"
+      }
+    }
+  },
+  "fileSizeKb": "{size} KB",
+  "@fileSizeKb": {
+    "description": "File size in kilobytes.",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "fileSizeMb": "{size} MB",
+  "@fileSizeMb": {
+    "description": "File size in megabytes.",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  }
 }
