@@ -252,6 +252,30 @@ push                →  reach, when the app is not open. Best-effort by nature.
 
 No screen, count or badge is derived from realtime or from push.
 
+## When a preference is read
+
+A preference is read **at delivery**, not at creation. Every other suppression
+is recorded at creation, because every other suppression is a fact about the
+instant the event happened:
+
+| Reason | Decided at | Why there |
+|---|---|---|
+| `RULE_IN_APP_ONLY` | creation | A property of the rule that scheduled it |
+| `GROUPED` | creation | "Four arrived in the last two minutes" is about that moment |
+| `RECIPIENT_ACTIVE` | creation | They were looking at the thread when it arrived |
+| `CONVERSATION_MUTED` | creation | The thread's setting when the message landed |
+| `PREFERENCE_OFF` | **delivery** | A standing instruction, not a fact about an instant |
+
+The case that forces it: a class reminder is written today and fires at 8am
+tomorrow. If the parent mutes that category tonight, "I muted this yesterday"
+cannot be answered with "yes, but we had already decided to buzz you". The same
+holds in reverse — unmuting before it fires lets it through.
+
+For an immediate notification the two moments are milliseconds apart and nothing
+changes. The delivery record is still written either way; it is written at the
+moment the decision is actually made, so "why did this go out?" still has an
+answer.
+
 ## Deduplication: the exact key at each stage
 
 "It only happens once" is not one mechanism. It is five, each with its own

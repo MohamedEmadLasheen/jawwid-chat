@@ -739,24 +739,36 @@ describe('the push provider misbehaving', () => {
 
 // =========================================================================
 describe('preferences changing while a notification is in flight', () => {
-  it('a mute set after creation does not retroactively suppress the push', async () => {
-    await g.notifications.registerDevice({
-      actorId: s.parentId, token: 'late-mute-device', platform: 'ios',
+  it('a mute set before it is dispatched silences it, even if it was created first',
+    async () => {
+      await g.notifications.registerDevice({
+        actorId: s.parentId, token: 'late-mute-device', platform: 'ios',
+      });
+      const conversationId = await studentGroup();
+      await g.messages.send({ conversationId, senderId: s.ownerId, body: 'before the mute' });
+      await drain();
+
+      // This used to assert the opposite, on the grounds that the decision was
+      // taken at creation and re-deciding would leave "why did this go out?"
+      // unanswerable. That reasoning did not survive the queued case: a class
+      // reminder written yesterday for 8am today would buzz a parent who muted
+      // the category last night, and "we had already decided" is not an answer
+      // they would accept. The preference is a standing instruction, not a fact
+      // about the instant, so it is read when the push would actually be sent
+      // -- and the record is still written, just at that moment instead of the
+      // earlier one, so the question still has an answer.
+      await g.preferences.set(s.parentId, 'messaging', false);
+      await g.notifications.dispatchDue(new Date());
+
+      const n = (await g.prisma.notification.findFirst({
+        where: { recipientId: s.parentId },
+      }))!;
+      const push = (await g.deliveries.trace(n.id)).find((d) => d.channel === 'push');
+      expect(push!.status).toBe('skipped');
+      expect(push!.skipReason).toBe('PREFERENCE_OFF');
+      // And the notification itself is untouched: a mute never costs the record.
+      expect((await g.centre.unreadCounts(s.parentId)).total).toBe(1);
     });
-    const conversationId = await studentGroup();
-    await g.messages.send({ conversationId, senderId: s.ownerId, body: 'before the mute' });
-    await drain();
-
-    // The decision was taken and recorded at creation. Re-deciding at dispatch
-    // would make the delivery record disagree with what the system actually
-    // resolved, and "why did this one go out?" would have no answer.
-    await g.preferences.set(s.parentId, 'messaging', false);
-    await g.notifications.dispatchDue(new Date());
-
-    const n = (await g.prisma.notification.findFirst({ where: { recipientId: s.parentId } }))!;
-    const push = (await g.deliveries.trace(n.id)).find((d) => d.channel === 'push');
-    expect(push!.status).toBe('sent');
-  });
 
   it('a mute set before creation suppresses the next one', async () => {
     await g.notifications.registerDevice({

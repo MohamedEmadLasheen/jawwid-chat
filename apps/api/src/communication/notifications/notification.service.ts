@@ -9,6 +9,7 @@ import { DeliveryService, DeliverableNotification } from './delivery.service';
 import { NotificationStatus } from '../contracts/vocab';
 import {
   DeliveryChannel,
+  NotificationDefinition,
   NotificationType,
   SkipReason,
   definitionOf,
@@ -325,6 +326,16 @@ export class NotificationService {
    * In-app ALWAYS runs: the notification centre is the source of truth and it
    * is never opted out of. Push runs unless something already recorded a
    * decision not to.
+   *
+   * THE PREFERENCE IS READ HERE, not at creation. Every other suppression is a
+   * fact about the instant the event happened -- they were looking at the
+   * thread, four messages had just arrived, the rule said in-app only -- and
+   * those are settled the moment they are recorded. A preference is not: it is
+   * a standing instruction, and a class reminder written yesterday for 8am
+   * today must obey the mute the parent set last night. "I muted this
+   * yesterday" cannot be answered with "yes, but we had already decided to buzz
+   * you". For an immediate notification the two moments are milliseconds apart
+   * and nothing changes; for a queued one, the later moment is the honest one.
    */
   async deliver(n: DeliverableNotification): Promise<boolean> {
     await this.deliveries.deliverInApp(n);
@@ -334,6 +345,11 @@ export class NotificationService {
       select: { id: true },
     });
     if (alreadySkipped) return true;
+
+    if (!(await this.preferences.allowsPush(n.recipientId, this.definitionFor(n)))) {
+      await this.deliveries.skip(n, DeliveryChannel.PUSH, SkipReason.PREFERENCE_OFF);
+      return true;
+    }
 
     await this.deliveries.deliverPush(n);
 
@@ -401,8 +417,26 @@ export class NotificationService {
       return;
     }
 
-    if (!(await this.preferences.allowsPush(input.recipientId, def))) {
-      await this.deliveries.skip(stub, DeliveryChannel.PUSH, SkipReason.PREFERENCE_OFF);
+    // The preference is deliberately NOT read here. See deliver(): it is a
+    // standing instruction rather than a fact about this instant, so it is read
+    // when the push would actually be sent.
+  }
+
+  /**
+   * The registry entry for a notification being delivered.
+   *
+   * Rows written before the registry existed carry no type. They still have a
+   * category, which is all a preference lookup needs, so they get a minimal
+   * entry rather than being treated as undeliverable.
+   */
+  private definitionFor(n: DeliverableNotification): NotificationDefinition {
+    try {
+      return definitionOf(n.type as NotificationType);
+    } catch {
+      return {
+        category: n.category,
+        essential: false,
+      } as unknown as NotificationDefinition;
     }
   }
 
