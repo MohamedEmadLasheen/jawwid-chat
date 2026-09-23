@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/message.dart';
+import '../../../shared/models/user_role.dart';
 import '../../../shared/utils/byte_size_format.dart';
 import '../../../shared/utils/relative_time.dart';
 import '../../../shared/utils/text_direction.dart';
@@ -132,7 +133,7 @@ class MessageBubble extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(bottom: Spacing.spacing1),
                       child: ContentText(
-                        message.authorName,
+                        _authorLabel(message, l10n),
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: theme.colorScheme.primary,
                           fontWeight: FontWeight.w700,
@@ -209,6 +210,32 @@ class MessageBubble extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Who sent this, as a group member needs to see it.
+  ///
+  /// `MessageDto` carries `authorId` and `authorKind` but **no display name**,
+  /// and `ConversationMemberDto` has no name field either (gap O3), so over
+  /// HTTP `authorName` is empty today. This used to render that empty string:
+  /// a blank, bolded line above every incoming group message, which is worse
+  /// than saying nothing and much worse than saying something true.
+  ///
+  /// The role is the thing the client *does* have — `authorKind` is on the
+  /// DTO — and in a Student Group it is also the thing that matters: a parent
+  /// needs to know a message came from the teacher rather than from Jawwid,
+  /// more than they need the teacher's given name. The actor id is never a
+  /// fallback (§25).
+  static String _authorLabel(Message message, L10n l10n) {
+    final name = message.authorName.trim();
+    if (name.isNotEmpty) return name;
+
+    return switch (message.authorRole) {
+      ParticipantRole.teacher => l10n.groupMemberRoleTeacher,
+      ParticipantRole.admin => l10n.groupMemberRoleAdmin,
+      ParticipantRole.parent => l10n.groupMemberRoleParent,
+      ParticipantRole.system || ParticipantRole.unknown =>
+        l10n.groupMemberUnresolved,
+    };
   }
 
   /// The bubble's own box. Extracted only so the child list above stays
@@ -495,9 +522,9 @@ class _ReactionChips extends StatelessWidget {
     final locale = Localizations.localeOf(context).toLanguageTag();
 
     return Padding(
-      padding: const EdgeInsets.only(
-        left: Spacing.spacing5,
-        right: Spacing.spacing5,
+      padding: const EdgeInsetsDirectional.only(
+        start: Spacing.spacing5,
+        end: Spacing.spacing5,
         bottom: Spacing.spacing2,
       ),
       child: Wrap(

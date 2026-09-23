@@ -333,7 +333,7 @@ void main() {
       expect(group.unreadCount, 0);
     });
 
-    test('marking an already-read conversation does nothing', () async {
+    test('the same watermark is not reported twice', () async {
       final conversations =
           container.read(conversationsControllerProvider.notifier);
       await container.read(conversationsControllerProvider.future);
@@ -341,9 +341,15 @@ void main() {
       await conversations.markRead(conversationId, throughSequence: 99);
       backend.persistentFailure = const AppError(AppErrorKind.server);
 
-      // No second call, so the poisoned backend is never reached.
+      // Deduped by watermark, so the poisoned backend is never reached.
       await conversations.markRead(conversationId, throughSequence: 99);
       expect(container.read(totalUnreadProvider), 0);
     });
+
+    // That a *higher* watermark still reaches the server once the badge is
+    // already clear is asserted in mark_as_read_test.dart, which records every
+    // call the repository received. The fixture here cannot show it: its
+    // markRead does not run the failure hook, so there is nothing to observe.
+
   });
 }

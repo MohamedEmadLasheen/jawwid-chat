@@ -196,6 +196,29 @@ class FakeBackend {
     return message;
   }
 
+  /// Append a message from the other side, the way an arrival would.
+  ///
+  /// Exists so a test can create the one state that matters for unread: a
+  /// message that landed while the reader was looking somewhere else.
+  Message appendIncoming(String conversationId, String body) =>
+      _appendServerMessage(
+        conversationId: conversationId,
+        body: body,
+        authorName: 'جَوِّد',
+        authorRole: ParticipantRole.admin,
+        at: _now,
+      );
+
+  /// The newest sequence this fixture has issued for a conversation.
+  int? highestSequence(String conversationId) {
+    int? highest;
+    for (final message in _messages[conversationId] ?? const <Message>[]) {
+      final seq = message.sequence;
+      if (seq != null && (highest == null || seq > highest)) highest = seq;
+    }
+    return highest;
+  }
+
   void _maybeFail() {
     final persistent = persistentFailure;
     if (persistent != null) throw persistent;

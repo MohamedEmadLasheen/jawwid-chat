@@ -400,7 +400,177 @@ void main() {
     });
   });
 
+  group('opening a file', () {
+    testWidgets('hands over the backend signed URL, never a storage key',
+        (tester) async {
+      final onDisk = File('${scratch.path}${Platform.pathSeparator}Report.pdf')
+        ..writeAsBytesSync(List<int>.filled(2048, 1));
+
+      picker.file = PendingAttachment(
+        filePath: onDisk.path,
+        kind: MessageKind.file,
+        mimeType: 'application/pdf',
+        byteSize: 2048,
+        fileName: 'Report.pdf',
+      );
+
+      await tester.pumpWidget(harness());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('File'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.send));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Report.pdf'));
+      await tester.pumpAndSettle();
+
+      expect(opener.opened, hasLength(1));
+      expect(
+        opener.opened.single,
+        isNot(startsWith('conversations/')),
+        reason: 'an object key is not an address, and is not the parent\'s '
+            'business either (§25)',
+      );
+    });
+
+    testWidgets('a file that will not open says so, without a technical code',
+        (tester) async {
+      final onDisk = File('${scratch.path}${Platform.pathSeparator}Odd.pdf')
+        ..writeAsBytesSync(List<int>.filled(512, 1));
+
+      picker.file = PendingAttachment(
+        filePath: onDisk.path,
+        kind: MessageKind.file,
+        mimeType: 'application/pdf',
+        byteSize: 512,
+        fileName: 'Odd.pdf',
+      );
+      opener.succeeds = false;
+
+      await tester.pumpWidget(harness());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('File'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.send));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Odd.pdf'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SnackBar), findsOneWidget);
+      final shown = tester
+          .widgetList<Text>(find.descendant(
+            of: find.byType(SnackBar),
+            matching: find.byType(Text),
+          ))
+          .map((t) => t.data ?? '')
+          .join(' ');
+      expect(shown, isNot(contains('http')));
+      expect(shown, isNot(contains('403')));
+      expect(shown, isNot(contains('Exception')));
+    });
+  });
+
   group('Arabic', () {
+    /// Send a document, so the Arabic checks below have a real file bubble,
+    /// a real preview and a real reply quote to look at.
+    Future<void> sendDocument(WidgetTester tester) async {
+      final onDisk = File('${scratch.path}${Platform.pathSeparator}واجب.pdf')
+        ..writeAsBytesSync(List<int>.filled(3 * 1024 * 1024, 1));
+
+      picker.file = PendingAttachment(
+        filePath: onDisk.path,
+        kind: MessageKind.file,
+        mimeType: 'application/pdf',
+        byteSize: 3 * 1024 * 1024,
+        fileName: 'واجب.pdf',
+      );
+
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('ملف'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('the attachment preview and file bubble read right-to-left',
+        (tester) async {
+      await tester.pumpWidget(harness(locale: const Locale('ar')));
+      await tester.pumpAndSettle();
+
+      await sendDocument(tester);
+
+      // The preview, still open.
+      expect(find.text('إرسال هذه؟'), findsOneWidget);
+      expect(
+        Directionality.of(tester.element(find.text('واجب.pdf').first)),
+        TextDirection.rtl,
+      );
+
+      await tester.tap(find.byIcon(Icons.send));
+      await tester.pumpAndSettle();
+
+      // The bubble, with a localised size unit rather than an English one
+      // stuck onto the end of a right-to-left line. The digits are Latin
+      // because the app's locale is `ar` and not `ar_EG` — see ByteSizeFormat.
+      expect(find.text('واجب.pdf'), findsOneWidget);
+      expect(find.text('3.0 م.ب'), findsOneWidget);
+    });
+
+    testWidgets('a reply quote and its reactions read right-to-left',
+        (tester) async {
+      await tester.pumpWidget(harness(locale: const Locale('ar')));
+      await tester.pumpAndSettle();
+
+      await openActions(tester);
+      await tester.tap(find.text('رد'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('رد على'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), 'شكرًا لكم');
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.send));
+      await tester.pumpAndSettle();
+
+      expect(find.text('شكرًا لكم'), findsOneWidget);
+      expect(
+        Directionality.of(tester.element(find.text('شكرًا لكم'))),
+        TextDirection.rtl,
+      );
+
+      // And a reaction on top of it.
+      await openActions(tester);
+      await tester.tap(find.text('❤️'));
+      await tester.pumpAndSettle();
+      expect(find.text('❤️'), findsOneWidget);
+    });
+
+    testWidgets('nothing in the conversation scrolls sideways', (tester) async {
+      await tester.pumpWidget(harness(locale: const Locale('ar')));
+      await tester.pumpAndSettle();
+
+      await sendDocument(tester);
+      await tester.tap(find.byIcon(Icons.send));
+      await tester.pumpAndSettle();
+
+      for (final scrollable in tester.widgetList<Scrollable>(
+        find.byType(Scrollable),
+      )) {
+        expect(
+          scrollable.axisDirection,
+          isNot(anyOf(AxisDirection.left, AxisDirection.right)),
+          reason: 'a horizontally scrolling conversation is an overflow that '
+              'was papered over',
+        );
+      }
+    });
+
     testWidgets('the actions sheet reads right-to-left', (tester) async {
       await tester.pumpWidget(harness(locale: const Locale('ar')));
       await tester.pumpAndSettle();

@@ -9,9 +9,17 @@ import '../../l10n/app_localizations.dart';
 /// backend's ceilings are 10 MB and 25 MB, so nothing this app can send ever
 /// reaches a third unit.
 ///
-/// The number itself goes through [NumberFormat] for the active locale, so an
-/// Arabic UI gets Arabic-Indic digits and an Arabic decimal separator rather
-/// than Latin ones wedged into a right-to-left line (§45).
+/// The number goes through [NumberFormat] for the active locale and the unit
+/// through [L10n], so the whole string is localised rather than a translated
+/// word stuck onto a hard-coded number (§45).
+///
+/// Note what that does and does not give you today: the app's Arabic locale is
+/// `ar`, whose CLDR numbering system is Latin — so an Arabic UI renders
+/// "3.0 م.ب", not "٣٫٠ م.ب". Arabic-Indic digits would need the locale to be
+/// `ar_EG`, which is a product-wide localisation decision (it would change
+/// every number and date in the app), not something this formatter may take on
+/// its own. Routing through NumberFormat is what makes that a one-line change
+/// when it is taken.
 abstract final class ByteSizeFormat {
   static const _kb = 1024;
   static const _mb = 1024 * 1024;
