@@ -175,45 +175,118 @@ not silently dropped.
 
 # Acceptance matrix
 
-Every cell is backed by an implementation and a test. **NOT READY** means the
-capability does not exist and is not claimed.
+Every cell carries one of five states. There is no generic ✅, because "it
+works" hides the difference between a thing that has been run end to end and a
+thing that has only been read.
 
-| Notification | Event producer | DB | In-app | Realtime | Push | Deep link | Preferences | E2E |
-|---|---|---|---|---|---|---|---|---|
-| New message | ✅ `message.service.ts` → outbox, in-transaction | ✅ | ✅ | ✅ | ✅ | ✅ `/chats/{c}?message={m}` | ✅ optional (`messaging`) | ✅ |
-| Voice message | ✅ same, `type = voice` | ✅ | ✅ | ✅ | ✅ | ✅ opens at the message | ✅ optional (`messaging`) | ✅ |
-| Missed call | ✅ `call.end()` **and** `expireRingingCalls()` sweep | ✅ | ✅ | ✅ | ✅ | ✅ `/chats/{c}?call={k}` | ✅ optional (`calls`) | ✅ |
-| Incoming call | ✅ `call.start()` → outbox | ✅ | ✅ | ✅ | ✅ VoIP/CallKit path | ✅ | ⛔ essential | ✅ |
-| Schedule changed | ✅ `classSchedule.reschedule()` | ✅ | ✅ | ✅ | ✅ | ⚠️ resolves to the card | ⛔ essential | ✅ |
-| Class cancelled | ✅ same, `nextClassAt = null` | ✅ | ✅ | ✅ | ✅ | ⚠️ resolves to the card | ⛔ essential | ✅ |
-| Class reminder | ✅ `scheduleReminders()`, server-side, T-24h/30m/10m | ✅ | ✅ | ✅ | ✅ | ⚠️ resolves to the card | ✅ optional (`classes`) | ✅ |
-| Academy message | ✅ `message.service.ts`, official conversation | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ optional (`messaging`) | ✅ |
-| Important announcement | ✅ `announcement.publish()` → `fanOutDue()` | ✅ | ✅ | ✅ | ✅ | ✅ `/announcements/{a}` | ✅ optional (`academy`) | ✅ |
-| Urgent announcement | ✅ same, admin/manager only | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔ essential | ✅ |
-| Approval requested / decided | ✅ `message.service.ts`, `approval.service.ts` | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔ essential | ✅ |
-| Renewal / payment reminder | ⚠️ rules + templates seeded; **no producer** | ✅ | ✅ | ✅ | ✅ | ⚠️ `/billing`, no screen | ✅ optional (`billing`) | ⛔ **NOT READY** |
-| Attendance, progress, package balance | ⛔ **NOT READY** — no domain event exists | — | — | — | — | — | — | ⛔ |
+| State | Means |
+|---|---|
+| **PASS** | Exercised end to end by an automated test against a real Postgres, and the whole pipeline for that cell ran |
+| **CODE-VERIFIED** | The code path is implemented and unit- or integration-tested, but the last hop is outside what this environment can execute |
+| **DEVICE-E2E-PENDING** | Correct as far as the provider boundary; the FCM → device → OS → tap half has **not** been physically run. See *What has not been verified* |
+| **NOT-IMPLEMENTED** | The capability does not exist. Not claimed, not partially claimed |
+| **NOT-APPLICABLE** | The cell has no meaning for this row |
 
-**⚠️ on the class deep links** is deliberate and honest: this build has no
-class-details screen, so `NotificationDeepLink` refuses `/learners/{id}/classes`
-and the card stays untappable rather than pushing a route that would render an
-error. The card itself carries the whole story — which child, the old time and
-the new one — so nothing is lost. The route is minted and stored server-side and
-starts working the day that screen exists.
+Columns, and what each one is asserting:
 
-**Renewal and payment** have a complete pipeline and no event to start it:
-`chat.subscription.renewal_due_at` is ingested from Jawwid Core but nothing in
-this repository transitions it. Marked NOT READY rather than claimed.
+- **EVENT PRODUCER** — a real domain event exists and is written in the same
+  transaction as the change that caused it.
+- **DATABASE** — the notification row is created, deduplicated and persisted.
+- **IN-APP** — it reaches the notification centre and the unread count.
+- **REALTIME** — it is published to the recipient's actor room and the app acts
+  on it without a refresh.
+- **PUSH** — the push request is built, the provider accepts it, and the outcome
+  is recorded per device.
+- **DEEP LINK** — the minted route resolves to a screen this build has, and the
+  landing re-authorizes.
+- **PREFERENCES** — the category is muteable (or essential), and the mute is
+  honoured at delivery.
+- **MULTI-DEVICE** — every device the recipient holds is reached, and read state
+  converges across them.
+- **OFFLINE RECOVERY** — it survives having no socket and is complete on
+  reconnect.
+- **E2E VERIFIED** — the row has been driven from the producing action to the
+  recipient's centre in one test.
+
+| Notification | EVENT PRODUCER | DATABASE | IN-APP | REALTIME | PUSH | DEEP LINK | PREFERENCES | MULTI-DEVICE | OFFLINE RECOVERY | E2E VERIFIED |
+|---|---|---|---|---|---|---|---|---|---|---|
+| New message | PASS | PASS | PASS | PASS | DEVICE-E2E-PENDING | PASS | PASS | PASS | PASS | PASS |
+| Voice message | PASS | PASS | PASS | PASS | DEVICE-E2E-PENDING | PASS | PASS | PASS | PASS | PASS |
+| Media message | PASS | PASS | PASS | PASS | DEVICE-E2E-PENDING | PASS | PASS | PASS | PASS | PASS |
+| Academy message | PASS | PASS | PASS | PASS | DEVICE-E2E-PENDING | PASS | PASS | PASS | PASS | PASS |
+| Incoming call | PASS | PASS | PASS | PASS | DEVICE-E2E-PENDING | PASS | NOT-APPLICABLE (essential) | PASS | PASS | PASS |
+| Missed call | PASS | PASS | PASS | PASS | DEVICE-E2E-PENDING | PASS | PASS | PASS | PASS | PASS |
+| Class reminder | PASS | PASS | PASS | PASS | DEVICE-E2E-PENDING | NOT-IMPLEMENTED | PASS | PASS | PASS | PASS |
+| Schedule changed | PASS | PASS | PASS | PASS | DEVICE-E2E-PENDING | NOT-IMPLEMENTED | NOT-APPLICABLE (essential) | PASS | PASS | PASS |
+| Class cancelled | PASS | PASS | PASS | PASS | DEVICE-E2E-PENDING | NOT-IMPLEMENTED | NOT-APPLICABLE (essential) | PASS | PASS | PASS |
+| Academy announcement | PASS | PASS | PASS | PASS | DEVICE-E2E-PENDING | PASS | PASS | PASS | PASS | PASS |
+| Important announcement | PASS | PASS | PASS | PASS | DEVICE-E2E-PENDING | PASS | PASS | PASS | PASS | PASS |
+| Urgent announcement | PASS | PASS | PASS | PASS | DEVICE-E2E-PENDING | PASS | NOT-APPLICABLE (essential) | PASS | PASS | PASS |
+| Approval requested | PASS | PASS | PASS | PASS | DEVICE-E2E-PENDING | PASS | NOT-APPLICABLE (essential) | PASS | PASS | PASS |
+| Approval decided | PASS | PASS | PASS | PASS | DEVICE-E2E-PENDING | PASS | NOT-APPLICABLE (essential) | PASS | PASS | PASS |
+| Renewal reminder | NOT-IMPLEMENTED | CODE-VERIFIED | CODE-VERIFIED | CODE-VERIFIED | DEVICE-E2E-PENDING | NOT-IMPLEMENTED | CODE-VERIFIED | CODE-VERIFIED | CODE-VERIFIED | NOT-IMPLEMENTED |
+| Payment reminder | NOT-IMPLEMENTED | CODE-VERIFIED | CODE-VERIFIED | CODE-VERIFIED | DEVICE-E2E-PENDING | NOT-IMPLEMENTED | CODE-VERIFIED | CODE-VERIFIED | CODE-VERIFIED | NOT-IMPLEMENTED |
+| Attendance | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED |
+| Progress update | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED |
+| Package balance | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED |
+
+### Why PUSH is DEVICE-E2E-PENDING everywhere
+
+Not a hedge, and not the same for every part of the path. What **is** verified,
+by automated test: the payload is built and contains ids only; the FCM HTTP v1
+request is signed, addressed and shaped correctly; a success, a rejection, an
+invalid token and a transport error each produce the right delivery row; a
+rotated token is followed; a dead token is deactivated; retries back off and
+stop; and the app-side registrar registers, rotates, unregisters and resolves a
+tapped payload to a route.
+
+What is **not** verified: that a real FCM project accepts the request, that
+Google delivers it to a real handset, that Android or iOS renders it, and that
+tapping it wakes this app. That needs a device, a signing key and a
+`google-services.json` / APNs key, none of which exist here — see *What has not
+been verified* below for the exact per-platform position and the manual steps.
+
+### Why the class deep links are NOT-IMPLEMENTED
+
+`/learners/{id}/classes` is minted by the registry and has no screen in this
+build. Reported NOT-IMPLEMENTED rather than PASS, because a link that cannot be
+followed is not a working deep link. The decision holds against four conditions,
+each of which is asserted in `notification-deeplinks.spec.ts`:
+
+1. **Nothing is lost.** The notification carries the whole story — which child,
+   the old time, the new time — frozen on the row at creation, so its own detail
+   view is a real destination rather than a consolation prize.
+2. **It does not lie.** `NotificationDeepLink.isActionable` returns false for it,
+   so the card does not look tappable and then do nothing.
+3. **No migration is needed later.** The server keeps minting the route, so the
+   day a classes screen exists every notification already written points at it.
+   Nothing is backfilled.
+4. **It is reported honestly.** NOT-IMPLEMENTED in this matrix, not PASS.
+
+### Why renewal and payment are NOT-IMPLEMENTED
+
+The pipeline is complete and there is no event to start it:
+`chat.subscription.renewal_due_at` is ingested from Jawwid Core and nothing in
+this repository transitions it. Templates, rules, category and registry entries
+exist and are covered, which is why the middle columns read CODE-VERIFIED — but
+no producer means no notification, so the producer and the end-to-end columns
+read NOT-IMPLEMENTED. No fake producer was added to fill the row in.
+
+### Why attendance, progress and package balance are NOT-IMPLEMENTED
+
+There is no domain event for any of them anywhere in this repository. Not a
+missing template or an unwired handler — the fact itself is never recorded. A
+notification type for an event that does not exist would be a lie in a registry.
 
 ## App states
 
-| State | Behaviour | Where it is proven |
-|---|---|---|
-| A · viewing the conversation | Realtime updates the thread; the push is **skipped** and recorded `RECIPIENT_ACTIVE`; the notification and badge still happen | `notification-platform.spec.ts`, `app_state_behaviour_test.dart` |
-| B · elsewhere in the app | Realtime notification, badge increments, centre grows — no refresh, no polling | `app_state_behaviour_test.dart` |
-| C · backgrounded | FCM push; `content-available` wakes the app so the badge is current | `push_lifecycle_test.dart` |
-| D · terminated | FCM push; the tap starts the process, the route is held and followed once the router exists | `push_lifecycle_test.dart` |
-| E · offline | Notification persists; on reconnect the list and unread count are refetched from the database | `app_state_behaviour_test.dart` |
+| State | Behaviour | Proven by | State |
+|---|---|---|---|
+| A · viewing the conversation | Realtime updates the thread; the push is skipped and recorded `RECIPIENT_ACTIVE`; the notification and badge still happen | `notification-platform.spec.ts`, `app_state_behaviour_test.dart` | PASS |
+| B · elsewhere in the app | Realtime notification, badge increments, centre grows — no refresh, no polling, from any screen | `app_state_behaviour_test.dart`, `badge_independence_test.dart` | PASS |
+| C · backgrounded | FCM push; tap reports opened, marks read, and navigates | `push_lifecycle_test.dart`, `deep_link_navigation_test.dart` | CODE-VERIFIED (push transport DEVICE-E2E-PENDING) |
+| D · terminated | The tap starts the process; the route is read before the router exists, held, and followed on the first frame | `push_lifecycle_test.dart`, `deep_link_navigation_test.dart` | CODE-VERIFIED (push transport DEVICE-E2E-PENDING) |
+| E · offline | Notification persists; on reconnect the list, the unread count and reads that happened elsewhere are refetched | `app_state_behaviour_test.dart`, `notification-resilience.spec.ts` | PASS |
 
 ## Delivery semantics
 
@@ -250,7 +323,86 @@ realtime            →  speed. A missed event costs latency, never a notificati
 push                →  reach, when the app is not open. Best-effort by nature.
 ```
 
-No screen, count or badge is derived from realtime or from push.
+No screen, count or badge is derived from realtime or from push. Stated as a
+table, because "source of truth" is only useful if it says which question each
+store answers:
+
+| Question | Authority | Not the authority |
+|---|---|---|
+| Does this parent need to know? | `chat.notification` | Anything a client holds |
+| What were they told, exactly? | `title` / `body` / `variables`, frozen at creation | Live domain data — re-rendering rewrites history |
+| Is it unread? | `read_at` on the row, counted by the server | A sum over the page a client has loaded |
+| How many unread? | `GET /notifications/unread-count` | The length of any local list |
+| Did it reach a device? | `chat.notification_delivery`, per channel per device | The notification's own status |
+| Did the parent see it? | `read_at` (in-app) / `opened_at` (a reported tap) | `sent`, which only means the request left |
+| May they open the target? | The destination endpoint, re-checked on landing | The deep link, which proves nothing |
+| Is the push muted? | `chat.notification_preference`, read at delivery | Any decision recorded earlier |
+
+Three consequences worth naming, because each one is a design rule the code
+follows rather than an observation:
+
+1. **Realtime is never awaited.** Nothing waits for a publish to succeed before
+   the notification is considered delivered, and nothing is reconstructed from a
+   replay. A device that missed every event of its lifetime is correct after one
+   fetch.
+2. **The badge is server-side.** It is refetched on arrival, on a read, on a
+   read from another device, and on reconnect — never incremented locally.
+   Otherwise a parent with 400 notifications and one loaded page sees "30".
+3. **Frozen text beats live text.** The one place a parent goes to check what
+   they were told must not quietly change when the underlying fact changes. This
+   is what makes "moved from 5:00 to 6:00" still true after the class moves
+   again.
+
+## What has NOT been verified
+
+Stated per platform, because "Flutter push works" is not a result.
+
+| Hop | Android | iOS |
+|---|---|---|
+| Payload built, ids only, no content | VERIFIED (automated) | VERIFIED (automated) |
+| FCM HTTP v1 request signed and shaped | VERIFIED (automated) | VERIFIED (automated) |
+| Provider response → delivery row | VERIFIED (automated) | VERIFIED (automated) |
+| Token registration, rotation, unregister | VERIFIED (automated) | VERIFIED (automated) |
+| Tapped payload → route → navigation | VERIFIED (automated) | VERIFIED (automated) |
+| Manifest / entitlements declared | VERIFIED (by inspection) | VERIFIED (by inspection) |
+| **A real FCM project accepts the send** | **NOT VERIFIED** | **NOT VERIFIED** |
+| **The OS displays the notification** | **NOT VERIFIED** | **NOT VERIFIED** |
+| **Tapping it wakes this app** | **NOT VERIFIED** | **NOT VERIFIED** |
+| **Background / terminated wake-up** | **NOT VERIFIED** | **NOT VERIFIED** |
+
+**Why, exactly.** This is a Linux container. `flutter devices` reports only
+`Linux (desktop)`. There is no Android SDK, no `adb`, no emulator image and no
+`/dev/kvm`, so no Android device — physical or virtual — can be attached. iOS is
+further out of reach: building or running it requires macOS and Xcode, which do
+not exist on Linux at all. There is also no `google-services.json` and no APNs
+key in this repository, by design: they are per-project secrets, and
+`android/app/build.gradle.kts` applies the Google Services plugin only when the
+file is present so that a fresh clone still builds and runs without push.
+
+**What remains to be done manually**, once someone has a device and the
+credentials:
+
+1. Put `google-services.json` in `android/app/` and `GoogleService-Info.plist`
+   in `ios/Runner/`, and set the FCM service-account variables from
+   `infra/env/manifest.tsv` on the API.
+2. **Android** — `flutter run` on a physical device or an emulator with Play
+   Services. Sign in, confirm a `chat.device_token` row appears, then send a
+   message from another account and check: the notification appears on the lock
+   screen; its text is the neutral "you have a new message", NOT the message
+   body; tapping it opens the thread at that message; the badge is already
+   correct when the app opens. Repeat with the app backgrounded and then
+   force-stopped.
+3. **iOS** — on macOS with Xcode: upload the APNs key to the Firebase project,
+   run on a physical device (the simulator cannot receive remote push), and
+   repeat the same four checks. Then the VoIP path separately: an incoming call
+   push must ring through CallKit while the app is terminated.
+4. Check `chat.notification_delivery` after each: `status = 'sent'` per device,
+   and `delivered` only once the app reported it.
+
+Everything above the bold rows in that table is covered by
+`apps/api/test/unit/notifications/fcm.spec.ts`,
+`test/features/notifications/push_lifecycle_test.dart` and
+`test/features/notifications/deep_link_navigation_test.dart`.
 
 ## When a preference is read
 
