@@ -218,6 +218,80 @@ A 1:1 call between a teacher and a parent returns
 `403 COMM.BR1_TEACHER_PARENT_DIRECT`. Group calls in the Student Group are the
 supported path and include the admin.
 
+### Notifications
+
+```http
+GET    /notifications?category=&unread=&cursor=&limit=
+GET    /notifications/unread-count
+GET    /notifications/:id
+GET    /notifications/:id/deliveries
+POST   /notifications/:id/read
+POST   /notifications/read-all               { category? }
+POST   /notifications/read-conversation/:conversationId
+```
+
+`GET /notifications` is **keyset-paginated**: pass the previous page's
+`nextCursor` back as `cursor`. The cursor is opaque — a position, not an offset
+to do arithmetic on. A stale or malformed cursor returns the newest page rather
+than an error, so an old bookmark is never a red screen.
+
+A card carries everything needed to render it without a second request:
+
+```json
+{ "id", "type", "category", "priority", "title", "body", "createdAt",
+  "readAt", "isEssential", "deeplink", "entityType", "entityId",
+  "conversationId", "learnerId", "learnerName", "senderId", "senderName",
+  "announcementId", "imageUrl" }
+```
+
+**`title` and `body` are already rendered, in the recipient's language, and are
+frozen.** Do not recompose either from the other fields: they were rendered once
+at creation so that a second schedule change cannot rewrite what the parent was
+told the first time, and rebuilding the sentence client-side undoes exactly
+that.
+
+**`learnerName` is which child it is about.** Show it. A parent with three
+children must never have to guess.
+
+**`deeplink` is a route the server minted**, e.g.
+`/chats/{conversationId}?message={messageId}`. Follow it, do not construct it —
+and re-authorize on arrival: the link is a navigation hint, the backend is the
+authority, and a deleted or now-forbidden target must render a fallback rather
+than a crash.
+
+**Unread comes from the server.** `GET /notifications/unread-count` returns
+`{ total, byCategory }`. Never sum the page you happen to have loaded: it would
+show 30 against 400 and would disagree with the same person's other device.
+
+`read` is idempotent — calling it twice preserves the first read time — and so
+is `read-all`. Opening a thread should call `read-conversation`; making a parent
+dismiss the same thing twice is how people learn to ignore the badge.
+
+### Notification preferences
+
+```http
+GET    /notifications/preferences
+POST   /notifications/preferences            { category, pushEnabled }
+```
+
+Preferences control **push only**. In-app notifications are never disableable —
+the centre is the record of what happened, and a setting that erases it is a
+defect. A category with `isOptional: false` must render **locked, not hidden**;
+the server refuses to mute it, and so should the UI.
+
+An `isEssential` notification ignores preferences entirely, which is why a
+cancelled class reaches a parent who muted class reminders.
+
+### Announcements
+
+```http
+GET    /announcements/:id
+```
+
+The landing for an academy notification's deep link. Authorized by the
+notification addressed to this actor, so an old, shared or guessed id returns
+404 — and an expired one returns 410. Render both as "no longer available".
+
 ### Push
 
 ```http
@@ -229,10 +303,17 @@ POST   /notifications/:id/opened
 
 Register on every launch and after each token rotation. Register the VoIP/CallKit
 token separately with `isVoip: true`. **Multi-device is normal** — never assume
-one device per user, and never unregister another device's token.
+one device per user, and never unregister another device's token. `DELETE` is
+scoped to the caller: you cannot unregister somebody else's device by knowing
+its token.
 
 Report `delivered`/`opened` honestly: the server does not infer them, so your
 reports are the only source of those states.
+
+**A push payload carries routing ids only** — `notificationId`, `type`,
+`category`, `priority`, `entityType`, `entityId`, `conversationId`, `learnerId`,
+`announcementId`, `deeplink`. No message content reaches a lock screen for
+anything in the messaging category. Fetch the notification by id on tap.
 
 ## Offline and reconnect
 

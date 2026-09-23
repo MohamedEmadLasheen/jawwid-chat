@@ -62,7 +62,7 @@ multi-device fan-out works: all of one person's devices receive the same events.
 | `call.accepted` / `call.declined` | `{ callId, actorId }` | Conversation room |
 | `call.participant_joined` / `call.participant_left` | `{ callId, actorId }` | Conversation room |
 | `call.ended` | `{ callId, conversationId, outcome, durationSeconds }` | Conversation room |
-| `notification.created` | `{ notificationId, recipientId, eventType, title, body, conversationId }` | Actor room |
+| `notification.created` | `{ notificationId, recipientId, eventType, title, body, conversationId }` | Actor room — every device this person holds |
 
 ## Guarantees
 
@@ -75,6 +75,11 @@ multi-device fan-out works: all of one person's devices receive the same events.
   authorization path for content.
 - **A pending message emits nothing** to the conversation. It becomes visible only
   when approved.
+- **`notification.created` is immediacy, not reliability.** The notification is
+  already in `chat.notification` before this is emitted, and the notification
+  centre is the record. A missed event costs latency — the parent sees it on
+  their next load — never a lost notification. Treat it as a signal to refresh
+  the list and the unread count, not as the notification itself.
 
 ## Privacy
 
