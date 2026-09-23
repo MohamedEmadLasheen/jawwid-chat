@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/core/data/http/http_notification_repository.dart';
+import 'package:jawwid_chat/core/data/repositories.dart';
 import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/core/network/api_client.dart';
 import 'package:jawwid_chat/core/network/api_config.dart';
@@ -52,7 +53,8 @@ void main() {
       expect(RealtimeEvents.all, contains('call.ended'));
       expect(RealtimeEvents.all, contains('approval.requested'));
       expect(RealtimeEvents.all, contains('notification.created'));
-      expect(RealtimeEvents.all, hasLength(19));
+      expect(RealtimeEvents.all, contains('notification.read'));
+      expect(RealtimeEvents.all, hasLength(20));
     });
   });
 
@@ -84,6 +86,47 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(received, ['n1']);
+    });
+
+    test('a notification.read event reaches the reads stream', () async {
+      final h = harness();
+      final received = <ReadSync>[];
+      h.repository.reads.listen(received.add);
+
+      // The parent cleared this on their other device.
+      h.realtime.emit(RealtimeEvents.notificationRead, {
+        'recipientId': 'p1',
+        'notificationId': 'n1',
+        'conversationId': null,
+        'category': null,
+        'all': false,
+        'readAt': '2026-09-23T10:00:00.000Z',
+      });
+      await Future<void>.delayed(Duration.zero);
+
+      expect(received.single.notificationId, 'n1');
+      expect(received.single.all, isFalse);
+      // The server's clock, not this device's.
+      expect(
+        received.single.readAt.toUtc(),
+        DateTime.utc(2026, 9, 23, 10),
+      );
+    });
+
+    test('a read event with nothing selected is dropped, not guessed at', () async {
+      final h = harness();
+      final received = <ReadSync>[];
+      h.repository.reads.listen(received.add);
+
+      // "Something was read" with no selector leaves two plausible readings --
+      // mark nothing, mark everything -- and both are wrong.
+      h.realtime.emit(RealtimeEvents.notificationRead, {
+        'recipientId': 'p1',
+        'all': false,
+      });
+      await Future<void>.delayed(Duration.zero);
+
+      expect(received, isEmpty);
     });
 
     test('an event for another feature is ignored, not mishandled', () async {

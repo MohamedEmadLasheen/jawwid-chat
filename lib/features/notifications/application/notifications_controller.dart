@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
+import '../../../core/data/repositories.dart';
 import '../../../core/network/error_mapper.dart';
 import '../../../shared/models/notification.dart';
 
@@ -71,6 +72,7 @@ class NotificationFeed {
 class NotificationsController extends AsyncNotifier<NotificationFeed> {
   String? _cursor;
   StreamSubscription<AppNotification>? _incoming;
+  StreamSubscription<ReadSync>? _reads;
 
   @override
   Future<NotificationFeed> build() async {
@@ -83,12 +85,50 @@ class NotificationsController extends AsyncNotifier<NotificationFeed> {
       unawaited(refresh());
       ref.invalidate(unreadCountsProvider);
     });
+    // The parent read it on their other device. Applied in place rather than by
+    // refetching: the event already says what changed, and a refetch would put
+    // a spinner on a screen the parent is looking at to tell them something
+    // they did themselves a second ago on their phone.
+    _reads ??= ref.read(notificationRepositoryProvider).reads.listen(_applyRead);
     ref.onDispose(() {
       _incoming?.cancel();
       _incoming = null;
+      _reads?.cancel();
+      _reads = null;
     });
 
     return _loadFirstPage(filter);
+  }
+
+  /// Apply a read that happened elsewhere to what is already on screen.
+  void _applyRead(ReadSync read) {
+    final current = state.value;
+    if (current == null) return;
+
+    var changed = false;
+    final items = <AppNotification>[];
+    for (final item in current.items) {
+      if (item.isUnread && read.covers(item)) {
+        changed = true;
+        items.add(item.copyWith(readAt: read.readAt));
+      } else {
+        items.add(item);
+      }
+    }
+
+    // The badge is invalidated even when no loaded row matched: the parent may
+    // have read something further down their history than this page reaches,
+    // and the count is the server's answer, not a sum over what is loaded.
+    ref.invalidate(unreadCountsProvider);
+    if (!changed) return;
+
+    // The unread filter's contents change meaning when a row stops being
+    // unread, so that one is refetched rather than left showing read rows.
+    if (ref.read(notificationFilterProvider).unreadOnly) {
+      unawaited(refresh());
+      return;
+    }
+    state = AsyncData(current.copyWith(items: items));
   }
 
   Future<NotificationFeed> _loadFirstPage(NotificationFilter filter) async {
@@ -240,6 +280,15 @@ final incomingNotificationProvider = StreamProvider<AppNotification>((ref) {
   return ref.watch(notificationRepositoryProvider).incoming;
 });
 
+/// Every read that happened on another of the parent's devices.
+///
+/// Always on, for the same reason [incomingNotificationProvider] is: a parent
+/// clearing their tablet expects the phone in their pocket to agree, and the
+/// phone is almost never sitting on the notification centre when they do it.
+final readSyncProvider = StreamProvider<ReadSync>((ref) {
+  return ref.watch(notificationRepositoryProvider).reads;
+});
+
 /// The badge.
 ///
 /// From the server, never derived from the loaded page — a parent who has
@@ -250,6 +299,10 @@ final unreadCountsProvider = FutureProvider<UnreadCounts>((ref) async {
   // waiting to be invalidated by a caller is what makes this hold no matter
   // which screen is open -- including none of the notification screens at all.
   ref.watch(incomingNotificationProvider);
+  // ...and whenever one is read somewhere else, which is the same requirement
+  // in the other direction: the badge has to go DOWN without this device
+  // touching anything.
+  ref.watch(readSyncProvider);
 
   try {
     return await ref.read(notificationRepositoryProvider).unreadCounts();

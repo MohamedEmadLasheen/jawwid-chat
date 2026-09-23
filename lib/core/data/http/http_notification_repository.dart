@@ -42,9 +42,14 @@ class HttpNotificationRepository implements NotificationRepository {
     // repository takes the one it is responsible for and ignores the rest.
     // Filtering here rather than asking the transport for a notification-only
     // stream is what keeps the transport feature-agnostic.
-    _subscription = _realtime.events
-        .where((event) => event.name == RealtimeEvents.notificationCreated)
-        .listen(_onRealtimeNotification);
+    _subscription = _realtime.events.listen((event) {
+      switch (event.name) {
+        case RealtimeEvents.notificationCreated:
+          _onRealtimeNotification(event);
+        case RealtimeEvents.notificationRead:
+          _onRealtimeRead(event);
+      }
+    });
   }
 
   final ApiClient _client;
@@ -53,9 +58,13 @@ class HttpNotificationRepository implements NotificationRepository {
 
   /// Broadcast because both the bell and an open centre listen.
   final _incoming = StreamController<AppNotification>.broadcast();
+  final _reads = StreamController<ReadSync>.broadcast();
 
   @override
   Stream<AppNotification> get incoming => _incoming.stream;
+
+  @override
+  Stream<ReadSync> get reads => _reads.stream;
 
   /// A `notification.created` event.
   ///
@@ -68,9 +77,20 @@ class HttpNotificationRepository implements NotificationRepository {
     if (notification != null) _incoming.add(notification);
   }
 
+  /// A `notification.read` event: the parent cleared this on another device.
+  ///
+  /// Nothing is fetched and nothing is written back -- the read is already the
+  /// server's, and echoing it would be a round trip to learn what the event
+  /// just said.
+  void _onRealtimeRead(RealtimeEvent event) {
+    final read = WireMappers.realtimeRead(event.payload);
+    if (read != null) _reads.add(read);
+  }
+
   void dispose() {
     _subscription.cancel();
     _incoming.close();
+    _reads.close();
   }
 
   @override

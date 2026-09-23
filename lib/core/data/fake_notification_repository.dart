@@ -21,6 +21,7 @@ class FakeNotificationRepository implements NotificationRepository {
 
   final List<AppNotification> _items;
   final _incoming = StreamController<AppNotification>.broadcast();
+  final _reads = StreamController<ReadSync>.broadcast();
 
   final _preferences = <NotificationCategory, bool>{};
   final _announcements = <String, Announcement>{};
@@ -45,10 +46,46 @@ class FakeNotificationRepository implements NotificationRepository {
   /// success state. Asserting a settled error state needs this one.
   AppError? persistentFailure;
 
-  void dispose() => _incoming.close();
+  void dispose() {
+    _incoming.close();
+    _reads.close();
+  }
 
   @override
   Stream<AppNotification> get incoming => _incoming.stream;
+
+  @override
+  Stream<ReadSync> get reads => _reads.stream;
+
+  /// Simulate the parent reading something on ANOTHER device: the server marks
+  /// it and publishes to their actor room, which this device is also in.
+  ///
+  /// The write happens here too, because in production it happened on the
+  /// server before the event was published -- a fake where the event arrived
+  /// without the underlying change would let a refetch silently undo it.
+  void readElsewhere({
+    String? notificationId,
+    String? conversationId,
+    NotificationCategory? category,
+    bool all = false,
+  }) {
+    final readAt = DateTime.now();
+    final sync = ReadSync(
+      readAt: readAt,
+      notificationId: notificationId,
+      conversationId: conversationId,
+      category: category,
+      all: all,
+    );
+
+    for (var i = 0; i < _items.length; i += 1) {
+      final item = _items[i];
+      if (item.isUnread && sync.covers(item)) {
+        _items[i] = item.copyWith(readAt: readAt);
+      }
+    }
+    _reads.add(sync);
+  }
 
   /// Simulate a notification arriving over the realtime channel.
   void deliver(AppNotification notification) {

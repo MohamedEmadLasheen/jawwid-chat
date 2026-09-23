@@ -63,6 +63,7 @@ multi-device fan-out works: all of one person's devices receive the same events.
 | `call.participant_joined` / `call.participant_left` | `{ callId, actorId }` | Conversation room |
 | `call.ended` | `{ callId, conversationId, outcome, durationSeconds }` | Conversation room |
 | `notification.created` | `{ notificationId, recipientId, eventType, title, body, conversationId }` | Actor room — every device this person holds |
+| `notification.read` | `{ recipientId, notificationId, conversationId, category, all, readAt }` | Actor room — the reader's own, and no one else's |
 
 ## Guarantees
 
@@ -80,6 +81,15 @@ multi-device fan-out works: all of one person's devices receive the same events.
   centre is the record. A missed event costs latency — the parent sees it on
   their next load — never a lost notification. Treat it as a signal to refresh
   the list and the unread count, not as the notification itself.
+- **`notification.read` is cross-device sync, in the other direction.** A parent
+  with a phone and a tablet clears the badge on one; this is what tells the
+  other. Exactly one selector is meaningful — `notificationId` for a single row,
+  `conversationId` for a thread that was opened, or `all` (optionally narrowed
+  by `category`). It is emitted only when the read actually changed something,
+  so a retried read is silent, and it is published only after the read is
+  committed — a publish that fails never fails the read. `readAt` is the
+  server's timestamp: use it rather than the receiving device's clock, so two
+  devices agree on when as well as whether.
 
 ## Privacy
 

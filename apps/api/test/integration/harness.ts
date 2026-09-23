@@ -62,7 +62,7 @@ export function buildGraph() {
   const notifications = new NotificationService(
     prisma, templates, quietHours, config, preferences, deliveries,
   );
-  const centre = new NotificationCenterService(prisma);
+  const centre = new NotificationCenterService(prisma, realtime);
   const recipients = new RecipientResolver(prisma, identity);
   const announcements = new AnnouncementService(prisma, notifications, recipients, audit);
   const classSchedule = new ClassScheduleService(prisma, notifications, recipients, audit);

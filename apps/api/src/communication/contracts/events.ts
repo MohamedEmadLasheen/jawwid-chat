@@ -29,6 +29,14 @@ export const CommEvent = {
   CALL_PARTICIPANT_JOINED: 'call.participant_joined',
   CALL_PARTICIPANT_LEFT: 'call.participant_left',
   NOTIFICATION_CREATED: 'notification.created',
+  /**
+   * The recipient read something, on one of their devices.
+   *
+   * Published to the reader's OWN actor room and nowhere else, which is what
+   * makes it a cross-device sync rather than a broadcast: every device the
+   * parent is signed in on is in that room, and no one else's is.
+   */
+  NOTIFICATION_READ: 'notification.read',
 } as const;
 
 export type CommEventName = (typeof CommEvent)[keyof typeof CommEvent];
@@ -139,6 +147,26 @@ export interface NotificationCreatedPayload {
   conversationId: string | null;
 }
 
+/**
+ * A read that happened somewhere else.
+ *
+ * Exactly one of the three selectors is set, mirroring the three ways a
+ * notification can be read: one row, everything (optionally within a category),
+ * or everything belonging to a conversation the parent just opened. `readAt`
+ * lets a receiving device set the same timestamp rather than inventing its own,
+ * so two devices agree on WHEN as well as WHETHER.
+ */
+export interface NotificationReadPayload {
+  recipientId: string;
+  notificationId: string | null;
+  /** Set together with `all`, when the read was scoped to one category. */
+  category: string | null;
+  conversationId: string | null;
+  /** True when every unread row (within `category`, if given) was marked. */
+  all: boolean;
+  readAt: string;
+}
+
 export interface CommEventPayloads {
   [CommEvent.MESSAGE_CREATED]: MessageCreatedPayload;
   [CommEvent.MESSAGE_DELETED]: MessageDeletedPayload;
@@ -159,6 +187,7 @@ export interface CommEventPayloads {
   [CommEvent.CALL_PARTICIPANT_JOINED]: CallParticipantPayload;
   [CommEvent.CALL_PARTICIPANT_LEFT]: CallParticipantPayload;
   [CommEvent.NOTIFICATION_CREATED]: NotificationCreatedPayload;
+  [CommEvent.NOTIFICATION_READ]: NotificationReadPayload;
 }
 
 /** Rooms a socket may join. Never a client-supplied raw string. */

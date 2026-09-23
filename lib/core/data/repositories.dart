@@ -339,4 +339,46 @@ abstract interface class NotificationRepository {
   /// database is for reliability, and this stream is explicitly not relied upon
   /// for correctness — a missed event costs latency, not a notification.
   Stream<AppNotification> get incoming;
+
+  /// Emits when the parent reads something on ANOTHER of their devices.
+  ///
+  /// The same rule as [incoming]: a missed event costs a stale badge until the
+  /// next refetch, never a wrong record. The server publishes it to the
+  /// parent's own actor room only, so nothing another family does can appear
+  /// here.
+  Stream<ReadSync> get reads;
+}
+
+/// A read that happened on one of the parent's other devices.
+///
+/// Exactly one selector is meaningful, mirroring the three ways a notification
+/// can be read: one row, everything (optionally within a category), or
+/// everything belonging to a conversation that was opened.
+///
+/// [readAt] is the server's timestamp rather than this device's clock, so two
+/// devices agree on WHEN as well as WHETHER — a phone whose clock is four
+/// minutes fast must not make a notification look read before it arrived.
+class ReadSync {
+  const ReadSync({
+    required this.readAt,
+    this.notificationId,
+    this.category,
+    this.conversationId,
+    this.all = false,
+  });
+
+  final DateTime readAt;
+  final String? notificationId;
+  final NotificationCategory? category;
+  final String? conversationId;
+  final bool all;
+
+  /// Whether this read covers [notification], so a loaded row can be updated in
+  /// place instead of the whole page being refetched.
+  bool covers(AppNotification notification) {
+    if (notificationId != null) return notification.id == notificationId;
+    if (conversationId != null) return notification.conversationId == conversationId;
+    if (all) return category == null || notification.category == category;
+    return false;
+  }
 }

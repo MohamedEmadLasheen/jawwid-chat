@@ -1,7 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
+import { REALTIME_PUBLISHER } from '../../platform/tokens';
+import type { RealtimePublisher } from '../realtime/realtime.publisher';
+import { CommEvent } from '../contracts/events';
 import { NotificationStatus } from '../contracts/vocab';
 import { NotificationCategory } from '../contracts/notifications';
 
@@ -72,7 +75,12 @@ const MAX_LIMIT = 100;
  */
 @Injectable()
 export class NotificationCenterService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly log = new Logger(NotificationCenterService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(REALTIME_PUBLISHER) private readonly realtime: RealtimePublisher,
+  ) {}
 
   /**
    * One page of history, newest first.
@@ -201,10 +209,14 @@ export class NotificationCenterService {
    * ids are real.
    */
   async markRead(actorId: string, notificationId: string): Promise<boolean> {
+    const readAt = new Date();
     const result = await this.prisma.notification.updateMany({
       where: { id: notificationId, recipientId: actorId, readAt: null },
-      data: { readAt: new Date() },
+      data: { readAt },
     });
+    if (result.count > 0) {
+      await this.announceRead(actorId, { notificationId, readAt });
+    }
     return result.count > 0;
   }
 
@@ -216,14 +228,18 @@ export class NotificationCenterService {
    * the size of the history.
    */
   async markAllRead(actorId: string, category?: string): Promise<number> {
+    const readAt = new Date();
     const result = await this.prisma.notification.updateMany({
       where: {
         recipientId: actorId,
         readAt: null,
         ...(category ? { category } : {}),
       },
-      data: { readAt: new Date() },
+      data: { readAt },
     });
+    if (result.count > 0) {
+      await this.announceRead(actorId, { all: true, category: category ?? null, readAt });
+    }
     return result.count;
   }
 
@@ -235,11 +251,63 @@ export class NotificationCenterService {
    * teaches people to ignore the badge.
    */
   async markConversationRead(actorId: string, conversationId: string): Promise<number> {
+    const readAt = new Date();
     const result = await this.prisma.notification.updateMany({
       where: { recipientId: actorId, conversationId, readAt: null },
-      data: { readAt: new Date() },
+      data: { readAt },
     });
+    if (result.count > 0) {
+      await this.announceRead(actorId, { conversationId, readAt });
+    }
     return result.count;
+  }
+
+  /**
+   * Tell the parent's OTHER devices that this was read.
+   *
+   * A parent with a phone and a tablet clears the badge on one and expects the
+   * other to agree -- without reopening the app, without pulling to refresh,
+   * without waiting for the next notification to arrive and trigger a refetch.
+   * That is the whole of this method.
+   *
+   * It publishes to the reader's own actor room, which every device they are
+   * signed in on has already joined, and to nobody else's: this is a sync, not
+   * a broadcast, and a read is private. The room membership is the
+   * authorization -- no recipient id from a client is involved anywhere in it.
+   *
+   * BEST EFFORT, DELIBERATELY. The read is already committed by the time this
+   * runs; a realtime publish that fails must not turn a successful read into an
+   * error the parent sees, and must not roll anything back. The other device
+   * then finds out on its next refetch -- on reconnect, on opening the centre,
+   * or on the next arriving notification -- which is the same "realtime is
+   * speed, the database is truth" rule the rest of the platform follows.
+   */
+  private async announceRead(
+    recipientId: string,
+    what: {
+      notificationId?: string;
+      conversationId?: string;
+      category?: string | null;
+      all?: boolean;
+      readAt: Date;
+    },
+  ): Promise<void> {
+    try {
+      await this.realtime.toUsers([recipientId], CommEvent.NOTIFICATION_READ, {
+        recipientId,
+        notificationId: what.notificationId ?? null,
+        conversationId: what.conversationId ?? null,
+        category: what.category ?? null,
+        all: what.all ?? false,
+        readAt: what.readAt.toISOString(),
+      });
+    } catch (error) {
+      this.log.debug(
+        `read sync not published for ${recipientId}: ${
+          error instanceof Error ? error.name : 'unknown'
+        }`,
+      );
+    }
   }
 
   /**

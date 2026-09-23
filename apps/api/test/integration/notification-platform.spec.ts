@@ -1139,6 +1139,129 @@ describe('deduplication, stage by stage', () => {
 });
 
 // =========================================================================
+/**
+ * CROSS-DEVICE READ SYNC.
+ *
+ * A parent with a phone and a tablet clears the badge on one and expects the
+ * other to agree, without reopening anything. Until this existed, a read was
+ * persisted and nothing was told: the other device stayed wrong until its next
+ * refetch, which might be the next arriving notification -- so the badge went
+ * DOWN only when something new pushed it UP.
+ *
+ * The event goes to the reader's own actor room and nowhere else. That room is
+ * the authorization: every device they are signed in on is in it, no one else's
+ * is, and no recipient id from a client is involved.
+ */
+describe('reading on one device tells the others', () => {
+  async function oneUnread(): Promise<string> {
+    const conversationId = await studentGroup();
+    await g.messages.send({ conversationId, senderId: s.ownerId, body: 'read me' });
+    await drain();
+    return (await g.prisma.notification.findFirst({
+      where: { recipientId: s.parentId },
+    }))!.id;
+  }
+
+  it('publishes notification.read to the reader’s own room, and only theirs', async () => {
+    const id = await oneUnread();
+    const spy = jest.spyOn(g.realtime, 'toUsers').mockResolvedValue(undefined);
+
+    expect(await g.centre.markRead(s.parentId, id)).toBe(true);
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    const [rooms, event, payload] = spy.mock.calls[0];
+    expect(rooms).toEqual([s.parentId]);
+    expect(event).toBe(CommEvent.NOTIFICATION_READ);
+    expect(payload).toMatchObject({
+      recipientId: s.parentId,
+      notificationId: id,
+      all: false,
+      conversationId: null,
+      category: null,
+    });
+    // The server's timestamp, so two devices agree on WHEN as well as WHETHER.
+    expect(Date.parse((payload as { readAt: string }).readAt)).not.toBeNaN();
+    spy.mockRestore();
+  });
+
+  it('says nothing when the read changed nothing', async () => {
+    const id = await oneUnread();
+    await g.centre.markRead(s.parentId, id);
+
+    const spy = jest.spyOn(g.realtime, 'toUsers').mockResolvedValue(undefined);
+    // The same read again -- a retry on a flaky connection, which is the normal
+    // case. Idempotent on the server, and silent on the wire: an event that
+    // says nothing changed is noise every device has to decide to ignore.
+    expect(await g.centre.markRead(s.parentId, id)).toBe(false);
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('says nothing to anyone when the notification is not the reader’s', async () => {
+    const id = await oneUnread();
+    const spy = jest.spyOn(g.realtime, 'toUsers').mockResolvedValue(undefined);
+
+    // Another parent, with a real id, naming a real notification that is not
+    // theirs. It matches nothing, so nothing is marked and nothing is told --
+    // including nothing told to the actual owner, which would otherwise leak
+    // that somebody else touched their row.
+    expect(await g.centre.markRead(s.otherParentId, id)).toBe(false);
+    expect(spy).not.toHaveBeenCalled();
+    expect(
+      (await g.prisma.notification.findUnique({ where: { id } }))!.readAt,
+    ).toBeNull();
+    spy.mockRestore();
+  });
+
+  it('carries the category when the read was scoped to one', async () => {
+    await oneUnread();
+    const spy = jest.spyOn(g.realtime, 'toUsers').mockResolvedValue(undefined);
+
+    await g.centre.markAllRead(s.parentId, 'messaging');
+
+    expect(spy.mock.calls[0][2]).toMatchObject({
+      all: true,
+      category: 'messaging',
+      notificationId: null,
+    });
+    spy.mockRestore();
+  });
+
+  it('carries the conversation when a thread was opened', async () => {
+    const conversationId = await studentGroup();
+    await g.messages.send({ conversationId, senderId: s.ownerId, body: 'thread' });
+    await drain();
+    const spy = jest.spyOn(g.realtime, 'toUsers').mockResolvedValue(undefined);
+
+    expect(await g.centre.markConversationRead(s.parentId, conversationId)).toBe(1);
+
+    expect(spy.mock.calls[0][2]).toMatchObject({
+      conversationId,
+      all: false,
+      notificationId: null,
+    });
+    spy.mockRestore();
+  });
+
+  it('a publish that fails never fails the read', async () => {
+    const id = await oneUnread();
+    const spy = jest
+      .spyOn(g.realtime, 'toUsers')
+      .mockRejectedValue(new Error('no subscriber'));
+
+    // The read is already committed when the publish is attempted. Turning a
+    // successful read into an error because a socket relay hiccupped would
+    // make the parent tap it again -- and the second tap is the one that
+    // "fails", because the row is already read.
+    await expect(g.centre.markRead(s.parentId, id)).resolves.toBe(true);
+    expect(
+      (await g.prisma.notification.findUnique({ where: { id } }))!.readAt,
+    ).not.toBeNull();
+    spy.mockRestore();
+  });
+});
+
+// =========================================================================
 describe('the notification centre', () => {
   async function fill(count: number): Promise<void> {
     const conversationId = await studentGroup();

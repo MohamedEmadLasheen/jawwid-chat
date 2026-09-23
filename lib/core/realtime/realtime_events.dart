@@ -32,6 +32,11 @@ abstract final class RealtimeEvents {
   static const callParticipantLeft = 'call.participant_left';
   static const notificationCreated = 'notification.created';
 
+  /// The parent read something on ANOTHER of their devices. Published to their
+  /// own actor room, so it reaches every device they are signed in on and no
+  /// one else's.
+  static const notificationRead = 'notification.read';
+
   /// Every event the transport forwards. Anything outside this set is dropped
   /// rather than passed on: a server that starts emitting something new must
   /// not be able to push an unrecognised payload into this app's event stream.
@@ -55,6 +60,7 @@ abstract final class RealtimeEvents {
     callParticipantJoined,
     callParticipantLeft,
     notificationCreated,
+    notificationRead,
   };
 }
 

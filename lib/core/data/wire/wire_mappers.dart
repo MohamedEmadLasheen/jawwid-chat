@@ -274,6 +274,34 @@ abstract final class WireMappers {
     );
   }
 
+  /// A `notification.read` event: the parent read something elsewhere.
+  ///
+  /// Returns null when no selector is set. A payload that says a read happened
+  /// but not what was read would make the receiving device guess, and the two
+  /// plausible guesses -- mark nothing, mark everything -- are both wrong.
+  static ReadSync? realtimeRead(Map<String, Object?> json) {
+    final notificationId = json['notificationId'] as String?;
+    final conversationId = json['conversationId'] as String?;
+    final all = json['all'] == true;
+    if ((notificationId == null || notificationId.isEmpty) &&
+        (conversationId == null || conversationId.isEmpty) &&
+        !all) {
+      return null;
+    }
+
+    final category = NotificationCategory.parse(json['category'] as String?);
+    return ReadSync(
+      // Falling back to this device's clock only when the server sent nothing
+      // parsable: a read with no timestamp is still a read.
+      readAt: DateTime.tryParse(json['readAt'] as String? ?? '')?.toLocal() ??
+          DateTime.now(),
+      notificationId: notificationId,
+      conversationId: conversationId,
+      all: all,
+      category: category == NotificationCategory.unknown ? null : category,
+    );
+  }
+
   static UnreadCounts unreadCounts(Map<String, Object?> json) {
     final raw = json['byCategory'];
     final byCategory = <NotificationCategory, int>{};
