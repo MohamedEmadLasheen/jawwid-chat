@@ -226,3 +226,58 @@ export const staffApi = {
   offboard: (id: string, input: { mode: 'even' | 'named'; to_staff_id?: string; reason: string }) =>
     api.post<void>(`/staff/${id}/offboard`, input, newIdempotencyKey()),
 }
+
+/* ---------------------------------------------------------- announcements */
+
+/**
+ * Academy announcements.
+ *
+ * Publishing is deliberately a SECOND call rather than a flag on create: an
+ * announcement to every parent in the academy is not something to send by
+ * mistyping a form, and a draft that can be re-read before it goes out is the
+ * cheapest safeguard there is.
+ */
+export interface AnnouncementRow {
+  id: string
+  title_ar: string
+  body_ar: string
+  title_en: string | null
+  body_en: string | null
+  priority: 'normal' | 'important' | 'urgent'
+  target_type: string
+  /** A count, never the ids. An admin needs the reach, not a roster. */
+  target_count: number
+  status: 'draft' | 'published' | 'cancelled'
+  publish_at: string
+  expires_at: string | null
+  published_at: string | null
+  fanned_out_at: string | null
+  recipient_count: number | null
+  created_by: string
+  created_by_name: string | null
+  created_at: string
+}
+
+export interface CreateAnnouncementInput {
+  titleAr: string
+  bodyAr: string
+  titleEn?: string | null
+  bodyEn?: string | null
+  priority: 'normal' | 'important' | 'urgent'
+  targetType: 'all_parents' | 'all_teachers' | 'all_staff'
+  expiresAt?: string | null
+}
+
+export const announcementApi = {
+  list: (params: { status?: string; cursor?: string; limit?: number } = {}) =>
+    api.get<{ items: AnnouncementRow[]; next_cursor: string | null; has_more: boolean }>(
+      '/announcements',
+      params,
+    ),
+  create: (input: CreateAnnouncementInput) =>
+    api.post<AnnouncementRow>('/announcements', input, newIdempotencyKey()),
+  publish: (id: string) =>
+    api.post<AnnouncementRow>(`/announcements/${id}/publish`, {}, newIdempotencyKey()),
+  cancel: (id: string) =>
+    api.post<AnnouncementRow>(`/announcements/${id}/cancel`, {}, newIdempotencyKey()),
+}

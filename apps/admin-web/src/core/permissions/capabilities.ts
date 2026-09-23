@@ -24,6 +24,7 @@ export type NavArea =
   | 'tasks'
   | 'coverage'
   | 'dashboard'
+  | 'announcements'
   | 'settings'
 
 /** Roles that operate the customer relationship. */
@@ -47,14 +48,21 @@ export function isManager(role: StaffRole): boolean {
 /** Which nav areas this role may even attempt to open. */
 export function visibleAreas(role: StaffRole): NavArea[] {
   if (isManager(role)) {
-    return ['inbox', 'families', 'tasks', 'coverage', 'dashboard', 'settings']
+    return ['inbox', 'families', 'tasks', 'coverage', 'dashboard', 'announcements', 'settings']
   }
   if (isOperator(role)) {
     // No coverage configuration, no manager dashboard, no config editing.
-    return ['inbox', 'families', 'tasks']
+    //
+    // Announcements ARE here: the backend lets admin, manager and coverage read
+    // and publish, and only admin and manager may mark one urgent. That
+    // narrower rule is enforced server-side and by a database trigger; this list
+    // only decides whether the page is worth showing, and hiding it from an
+    // admin who may publish would be a UI restriction that is not a control.
+    return ['inbox', 'families', 'tasks', 'announcements']
   }
   if (isDepartment(role)) {
-    // Departments get tasks and nothing else — they may not open family records.
+    // Departments get tasks and nothing else — they may not open family records,
+    // and they certainly may not address the whole academy.
     return ['tasks']
   }
   return []

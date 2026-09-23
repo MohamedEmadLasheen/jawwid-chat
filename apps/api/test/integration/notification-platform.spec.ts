@@ -544,6 +544,53 @@ describe('Scenario 5 · an academy announcement', () => {
     expect(await g.prisma.notification.count({ where: { announcementId: a.id } })).toBe(2);
   });
 
+  it('lists announcements for staff, with counts and never with ids', async () => {
+    const a = await g.announcements.create(admin(), {
+      titleAr: 'خبر', bodyAr: 'نص', targetType: 'families', targetIds: [s.familyId],
+    });
+    await g.announcements.publish(admin(), a.id);
+
+    const page = await g.announcements.list(admin());
+    const row = page.items.find((i) => i.id === a.id)!;
+
+    expect(row.status).toBe('published');
+    expect(row.createdByName).toBe('admin_a');
+    // An admin needs to know how wide it went. Naming the families serves
+    // nothing and puts a roster on a screen that does not need one.
+    expect(row.targetCount).toBe(1);
+    expect(JSON.stringify(row)).not.toContain(s.familyId);
+  });
+
+  it('refuses the list to a role that may not publish', async () => {
+    await expect(
+      g.announcements.list({
+        actorId: s.parentId, kind: 'contact', displayName: 'parent_p',
+        locale: 'ar', isActive: true, familyId: s.familyId,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('pages the list without repeating a row', async () => {
+    for (let i = 0; i < 7; i += 1) {
+      const a = await g.announcements.create(admin(), {
+        titleAr: `خبر ${i}`, bodyAr: 'نص', targetType: 'all_parents',
+        publishAt: new Date(Date.UTC(2026, 8, 20 + i)),
+      });
+      await g.announcements.publish(admin(), a.id);
+    }
+
+    const first = await g.announcements.list(admin(), { limit: 3 });
+    expect(first.items).toHaveLength(3);
+    expect(first.hasMore).toBe(true);
+
+    const second = await g.announcements.list(admin(), { limit: 3, cursor: first.nextCursor! });
+    const third = await g.announcements.list(admin(), { limit: 3, cursor: second.nextCursor! });
+
+    const ids = [...first.items, ...second.items, ...third.items].map((i) => i.id);
+    expect(new Set(ids).size).toBe(7);
+    expect(third.hasMore).toBe(false);
+  });
+
   it('audits who published it, and how many it reached, without listing them', async () => {
     const a = await g.announcements.create(admin(), {
       titleAr: 'خبر', bodyAr: 'نص', targetType: 'families', targetIds: [s.familyId],

@@ -12,6 +12,7 @@ const AREA_PATH: Record<NavArea, string> = {
   tasks: '/tasks',
   coverage: '/coverage',
   dashboard: '/dashboard',
+  announcements: '/announcements',
   settings: '/settings',
 }
 

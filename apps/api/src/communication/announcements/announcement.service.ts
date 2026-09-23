@@ -228,6 +228,92 @@ export class AnnouncementService {
   }
 
   /**
+   * The admin list.
+   *
+   * Staff-facing, so it DOES carry targeting and authorship -- an admin needs to
+   * see who an announcement went to and who sent it. That is exactly why it is a
+   * separate method from readForActor(), which is the parent's view and carries
+   * neither: one read path that decided what to include from the caller's role
+   * would be one `if` away from showing a parent the audience list.
+   *
+   * Keyset-paginated on (publish_at, id), the same shape as the notification
+   * centre and for the same reason: an academy accumulates announcements
+   * forever, and OFFSET makes page 50 scan everything before it.
+   */
+  async list(
+    actor: Actor,
+    query: { status?: string; cursor?: string; limit?: number } = {},
+  ) {
+    if (actor.kind !== 'staff' || !MAY_PUBLISH.has(actor.staffRole ?? '')) {
+      throw new CommError(
+        CommErrorCode.ROLE_CANNOT_MESSAGE_FAMILY,
+        'this role may not read academy announcements',
+      );
+    }
+
+    const limit = Math.min(Math.max(query.limit ?? 25, 1), 100);
+    const cursor = decodeCursor(query.cursor);
+
+    const rows = await this.prisma.announcement.findMany({
+      where: {
+        ...(query.status ? { status: query.status } : {}),
+        ...(cursor
+          ? {
+              OR: [
+                { publishAt: { lt: cursor.publishAt } },
+                { publishAt: cursor.publishAt, id: { lt: cursor.id } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ publishAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+    });
+
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const authors = await this.authorNames(page.map((a) => a.createdBy));
+
+    const last = page.at(-1);
+    return {
+      items: page.map((a) => ({
+        id: a.id,
+        titleAr: a.titleAr,
+        bodyAr: a.bodyAr,
+        titleEn: a.titleEn,
+        bodyEn: a.bodyEn,
+        priority: a.priority,
+        targetType: a.targetType,
+        // The COUNT, not the ids. An admin needs to know how wide an
+        // announcement went; naming the families serves nothing and puts a
+        // roster on a screen that does not need one.
+        targetCount: a.targetIds.length,
+        status: a.status,
+        publishAt: a.publishAt.toISOString(),
+        expiresAt: a.expiresAt?.toISOString() ?? null,
+        publishedAt: a.publishedAt?.toISOString() ?? null,
+        fannedOutAt: a.fannedOutAt?.toISOString() ?? null,
+        recipientCount: a.recipientCount,
+        createdBy: a.createdBy,
+        createdByName: authors.get(a.createdBy) ?? null,
+        createdAt: a.createdAt.toISOString(),
+      })),
+      nextCursor: hasMore && last ? encodeCursor(last.publishAt, last.id) : null,
+      hasMore,
+    };
+  }
+
+  private async authorNames(ids: string[]): Promise<Map<string, string>> {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return new Map();
+    const staff = await this.prisma.staff.findMany({
+      where: { id: { in: unique } },
+      select: { id: true, name: true },
+    });
+    return new Map(staff.map((s) => [s.id, s.name]));
+  }
+
+  /**
    * The deep-link read.
    *
    * Authorization is a notification the fan-out created for this actor, never
@@ -289,5 +375,23 @@ export class AnnouncementService {
         'only an admin or a manager may publish an urgent announcement',
       );
     }
+  }
+}
+
+/** Keyset cursor, opaque to the client. Same shape as the notification centre. */
+function encodeCursor(publishAt: Date, id: string): string {
+  return Buffer.from(`${publishAt.toISOString()}|${id}`).toString('base64url');
+}
+
+function decodeCursor(cursor?: string): { publishAt: Date; id: string } | null {
+  if (!cursor) return null;
+  try {
+    const [at, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
+    const publishAt = new Date(at);
+    if (Number.isNaN(publishAt.getTime()) || !id) return null;
+    return { publishAt, id };
+  } catch {
+    // A stale bookmark shows the newest page rather than an error.
+    return null;
   }
 }

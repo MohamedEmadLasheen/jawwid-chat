@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseFilters } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
 import { AnnouncementService, CreateAnnouncementInput } from '../announcements/announcement.service';
 import { ActorId, CurrentActor } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
@@ -18,6 +18,24 @@ import type { Actor } from '../../platform/types';
 @UseFilters(CommErrorFilter)
 export class AnnouncementController {
   constructor(private readonly announcements: AnnouncementService) {}
+
+  /**
+   * The admin list. Staff-only, and declared BEFORE `:id` so that
+   * `/announcements` is not matched as an announcement whose id is empty.
+   */
+  @Get()
+  async list(
+    @CurrentActor() actor: Actor,
+    @Query('status') status?: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.announcements.list(actor, {
+      status,
+      cursor,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
 
   @Post()
   async create(

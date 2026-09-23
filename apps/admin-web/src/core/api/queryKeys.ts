@@ -24,6 +24,9 @@ export const qk = {
   tasks: (filters: Record<string, unknown>) => ['tasks', filters] as const,
   tasksAll: ['tasks'] as const,
 
+  announcements: (filters: Record<string, unknown>) => ['announcements', filters] as const,
+  announcementsAll: ['announcements'] as const,
+
   shifts: ['coverage', 'shifts'] as const,
   coverageRules: ['coverage', 'rules'] as const,
   absences: ['coverage', 'absences'] as const,

@@ -9,6 +9,7 @@ import { FamiliesPage } from '@/features/family/FamiliesPage'
 import { TasksPage } from '@/features/tasks/TasksPage'
 import { CoveragePage } from '@/features/coverage/CoveragePage'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
+import { AnnouncementsPage } from '@/features/announcements/AnnouncementsPage'
 import { ForbiddenPage } from './ForbiddenPage'
 import type { ReactElement } from 'react'
 
@@ -44,6 +45,10 @@ export function AppRoutes() {
         <Route path="/tasks" element={<Area area="tasks"><TasksPage /></Area>} />
         <Route path="/coverage" element={<Area area="coverage"><CoveragePage /></Area>} />
         <Route path="/dashboard" element={<Area area="dashboard"><DashboardPage /></Area>} />
+        <Route
+          path="/announcements"
+          element={<Area area="announcements"><AnnouncementsPage /></Area>}
+        />
         {/*
           Reserved seams (docs/admin/backend-contract-required.md §10):
           /approvals and /calls are intentionally unregistered. They exist in
