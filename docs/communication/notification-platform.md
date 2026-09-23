@@ -251,3 +251,69 @@ push                →  reach, when the app is not open. Best-effort by nature.
 ```
 
 No screen, count or badge is derived from realtime or from push.
+
+## Deduplication: the exact key at each stage
+
+"It only happens once" is not one mechanism. It is five, each with its own
+idempotency key, each absorbing a different failure. Every one of them is
+asserted by name in `notification-platform.spec.ts` → *deduplication, stage by
+stage*.
+
+| # | Stage | Idempotency key | Enforced by | Absorbs |
+|---|---|---|---|---|
+| 1 | Outbox claim | `chat.outbox_event.id` | Conditional `update … where status='pending'` | Two workers draining at once; a worker restarting mid-drain |
+| 2 | Notification | `chat.notification.dedupe_key` | `UNIQUE` index; `schedule()` treats P2002 as success | A replayed event, a re-run sweep, two producers of the same fact |
+| 3 | Dispatch claim | `notification.id` + `status`/`lease_expires_at` | Conditional update; expired lease is re-claimable | A worker dying between claiming and sending |
+| 4 | Delivery | `(notification_id, channel, device_token_id)` | `UNIQUE` index | A replayed dispatch re-sending to the same device |
+| 5 | Transport | *none* | — | Nothing. See "the guarantee" below. |
+
+### Stage 2, per producer
+
+The key is composed by the producer, and it is the only stage where a producer
+can get deduplication wrong. Each is pinned by a test that asserts the literal
+string.
+
+| Producer | Key | Why that shape |
+|---|---|---|
+| Message | `message:{messageId}:{recipientId}` | One message, one recipient, one notification — forever |
+| Incoming call | `incoming_call:{callId}:{calleeId}` | Re-ringing the same call is the same fact |
+| Missed call | `missed_call:{callId}:{recipientId}` | **Two producers** — the caller hanging up and the ring-timeout sweep — converge on one key |
+| Approval requested | `approval_requested:{approvalId}:{approverId}` | The queue entry, not the message |
+| Approval decided | `approval_decided:{approvalId}:{authorId}` | The decision, not the message |
+| Announcement | `announcement:{announcementId}:{recipientId}` | A re-published or re-fanned announcement reaches each person once |
+| Class reminder | `{ruleKey}:{learnerId}:{classAtISO}:{parentId}` | The class time is in the key, so moving the class produces new reminders and leaves the old ones to be cancelled |
+| Schedule change | `class_change:{learnerId}:{fromISO}>{toISO}:{parentId}` | Keyed on the **transition** |
+| Class cancelled | `class_change:{learnerId}:{fromISO}>none:{parentId}` | The same transition key, with `none` as the destination |
+
+The schedule-change key is the one worth explaining. Keying on the learner alone
+would silence a second, genuinely different change — the parent would never be
+told the class moved again. Keying on the new time alone would repeat the first
+notification every time the same request was retried. Keying on the transition
+does both correctly, and it is why `5:00 PM → 6:00 PM` and `6:00 PM → 7:00 PM`
+are two notifications while a double-tapped Save is one.
+
+### The guarantee
+
+**Notifications are exactly-once. Deliveries are at-least-once.**
+
+Stages 1–4 make the *record* singular: one fact, one row, one badge increment,
+one line in the centre, no matter how many times an event is replayed or a
+worker restarts.
+
+Stage 5 is not deduplicated and cannot be. A worker can die between the push
+provider accepting the request and the database recording that it accepted —
+two writes, two systems, no transaction across them. The recovery in
+`DeliveryService.claim` re-attempts a delivery abandoned in `processing` for
+more than five minutes, and it cannot distinguish "died before sending" from
+"died after sending", because the only record of the difference is the write
+that never landed.
+
+So a parent can, rarely, see the same push twice. They cannot see the same
+notification twice, and their unread count cannot double. That trade is
+deliberate: the alternative — assuming a crashed attempt succeeded — means a
+parent is silently not told their child's class was cancelled, and silence is
+the one failure this platform exists to prevent.
+
+This is proved, not asserted: see *a delivery abandoned between the provider
+call and the acknowledgement* in `notification-resilience.spec.ts`, which
+reproduces the crash and asserts that the second push is real.

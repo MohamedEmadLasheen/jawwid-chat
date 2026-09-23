@@ -793,6 +793,352 @@ describe('Scenario 8 · the same event processed twice', () => {
 });
 
 // =========================================================================
+/**
+ * DEDUPLICATION, STAGE BY STAGE.
+ *
+ * "It only happens once" is not one mechanism, it is five, each with its own
+ * idempotency key and its own failure it is there to absorb. These tests pin
+ * the literal key at every stage, for every producer the product actually has,
+ * so that a change to a key is a failing test rather than a duplicate
+ * notification discovered by a parent.
+ *
+ *   1. OUTBOX CLAIM       key: outbox_event.id
+ *                         conditional update on status='pending'; two workers
+ *                         draining at once, one wins.
+ *   2. NOTIFICATION       key: chat.notification.dedupe_key (UNIQUE)
+ *                         the producer composes it; schedule() treats the
+ *                         unique violation as success.
+ *   3. DISPATCH CLAIM     key: notification.id + status/lease
+ *                         conditional update; expired lease is recoverable.
+ *   4. DELIVERY           key: (notification_id, channel, device_token_id)
+ *                         UNIQUE, so a replayed dispatch cannot re-send.
+ *   5. TRANSPORT          NOT deduplicated. Recovery of an abandoned delivery
+ *                         can re-send a push -- see the at-least-once tests in
+ *                         notification-resilience.spec.ts.
+ *
+ * Stage 2 is the one a producer gets wrong, so each producer is asserted by its
+ * exact key below.
+ */
+describe('deduplication, stage by stage', () => {
+  const admin = () => ({
+    actorId: s.ownerId,
+    kind: 'staff' as const,
+    displayName: 'admin_a',
+    locale: 'ar' as const,
+    isActive: true,
+    staffRole: 'admin' as const,
+  });
+
+  async function keysFor(recipientId: string): Promise<string[]> {
+    const rows = await g.prisma.notification.findMany({
+      where: { recipientId },
+      select: { dedupeKey: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map((r) => r.dedupeKey);
+  }
+
+  // -- stage 1: the outbox claim -------------------------------------------
+
+  it('stage 1 · two workers draining at once publish each event once', async () => {
+    const conversationId = await studentGroup();
+    await g.messages.send({ conversationId, senderId: s.ownerId, body: 'race' });
+
+    // Both start with the same pending row visible to both.
+    await Promise.all([g.outboxWorker.drain(200), g.outboxWorker.drain(200)]);
+
+    expect(await g.prisma.notification.count({ where: { recipientId: s.parentId } })).toBe(1);
+    const events = await g.prisma.outboxEvent.findMany({
+      where: { type: CommEvent.MESSAGE_CREATED },
+    });
+    // Claimed once, published once. The loser of the conditional update skipped
+    // the row rather than processing it a second time.
+    expect(events.every((e) => e.status === 'published')).toBe(true);
+  });
+
+  // -- stage 2: one key per producer ---------------------------------------
+
+  it('stage 2 · a message keys on the message and the recipient', async () => {
+    const conversationId = await studentGroup();
+    const sent = await g.messages.send({ conversationId, senderId: s.ownerId, body: 'keyed' });
+    await drain();
+    await drain();
+
+    expect(await keysFor(s.parentId)).toEqual([`message:${sent.id}:${s.parentId}`]);
+  });
+
+  it('stage 2 · an incoming call keys on the call and the callee', async () => {
+    const conversationId = await studentGroup();
+    const { callId } = await g.calls.start(conversationId, s.ownerId);
+    await drain();
+    await drain();
+
+    expect(await keysFor(s.parentId)).toEqual([`incoming_call:${callId}:${s.parentId}`]);
+  });
+
+  it('stage 2 · a missed call keys on the call, whichever path produced it', async () => {
+    const conversationId = await studentGroup();
+    const { callId } = await g.calls.start(conversationId, s.ownerId);
+
+    // The ring-out sweep gets there first...
+    await g.prisma.call.update({
+      where: { id: callId },
+      data: { startedAt: new Date(Date.now() - 10 * 60_000) },
+    });
+    await g.calls.expireRingingCalls(new Date());
+    await drain();
+
+    // ...and the caller's app, coming back from the dead, ends the same call.
+    await g.calls.end(callId, s.ownerId, 'missed');
+    await drain();
+
+    // Both producers really ran -- otherwise this test would prove nothing.
+    expect(
+      await g.prisma.outboxEvent.count({ where: { type: CommEvent.CALL_ENDED } }),
+    ).toBe(2);
+
+    // TWO producers, ONE key, one notification. This is the case the key
+    // exists for: the sweep and the hang-up are independent, and both are
+    // correct to try.
+    const missed = await g.prisma.notification.findMany({
+      where: { recipientId: s.parentId, type: NotificationType.MISSED_CALL },
+    });
+    expect(missed).toHaveLength(1);
+    expect(missed[0].dedupeKey).toBe(`missed_call:${callId}:${s.parentId}`);
+  });
+
+  it('stage 2 · an approval keys on the approval, for the approver and the author', async () => {
+    const group = await g.conversations.ensureStudentGroup(s.learnerId);
+    const msg = await g.messages.send({
+      conversationId: group.id, senderId: s.teacherId, body: 'homework for tomorrow',
+    });
+    await drain();
+    const approval = (await g.prisma.messageApproval.findUnique({
+      where: { messageId: msg.id },
+    }))!;
+
+    expect(await keysFor(s.ownerId)).toEqual([`approval_requested:${approval.id}:${s.ownerId}`]);
+
+    await g.approvals.approve(approval.id, s.ownerId);
+    await drain();
+    await drain();
+
+    expect(await keysFor(s.teacherId)).toEqual([`approval_decided:${approval.id}:${s.teacherId}`]);
+  });
+
+  it('stage 2 · an announcement keys on the announcement and the recipient', async () => {
+    const a = await g.announcements.create(admin(), {
+      titleAr: 'خبر', bodyAr: 'نص', targetType: 'all_parents',
+    });
+    await g.announcements.publish(admin(), a.id);
+    await g.announcements.fanOut(a.id);
+    await g.announcements.fanOut(a.id);
+
+    const rows = await g.prisma.notification.findMany({ where: { announcementId: a.id } });
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(row.dedupeKey).toBe(`announcement:${a.id}:${row.recipientId}`);
+    }
+  });
+
+  it('stage 2 · a class reminder keys on the rule, the learner, the exact class and the parent',
+    async () => {
+      const classAt = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+      await g.prisma.learner.update({
+        where: { id: s.learnerId },
+        data: { nextClassAt: classAt },
+      });
+      const parents = await g.recipients.forLearner(s.learnerId);
+
+      // Re-running the sweep is normal: it runs on a timer and on every
+      // reschedule. It must cost nothing.
+      await g.classSchedule.scheduleReminders(s.learnerId, parents, classAt);
+      await g.classSchedule.scheduleReminders(s.learnerId, parents, classAt);
+
+      const rules = await g.prisma.notificationRule.findMany({
+        where: { eventType: 'class_scheduled', enabled: true },
+      });
+      const mine = await g.prisma.notification.findMany({
+        where: { recipientId: s.parentId, eventType: 'class_scheduled' },
+      });
+
+      expect(mine).toHaveLength(rules.length);
+      for (const row of mine) {
+        expect(row.dedupeKey).toBe(
+          `${row.ruleKey}:${s.learnerId}:${classAt.toISOString()}:${s.parentId}`,
+        );
+      }
+    });
+
+  it('stage 2 · a schedule change keys on the TRANSITION, so a real second change is told',
+    async () => {
+      const first = new Date('2026-09-29T14:00:00Z');
+      const second = new Date('2026-09-29T15:00:00Z');
+      const third = new Date('2026-09-29T16:00:00Z');
+      await g.prisma.learner.update({
+        where: { id: s.learnerId },
+        data: { nextClassAt: first },
+      });
+
+      await g.classSchedule.reschedule(admin(), {
+        learnerId: s.learnerId, nextClassAt: second, reason: 'first move',
+      });
+      // The same transition again -- a retried request, a double-tapped button.
+      await g.classSchedule.reschedule(admin(), {
+        learnerId: s.learnerId, nextClassAt: second, reason: 'first move',
+      });
+      await g.classSchedule.reschedule(admin(), {
+        learnerId: s.learnerId, nextClassAt: third, reason: 'second move',
+      });
+
+      const changes = await g.prisma.notification.findMany({
+        where: { recipientId: s.parentId, type: NotificationType.CLASS_SCHEDULE_CHANGED },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      // Two changes happened, so the parent was told twice -- and the repeat of
+      // the first was absorbed. A key on the learner alone would have silenced
+      // the second move; a key on the timestamp alone would have repeated the
+      // first.
+      expect(changes.map((c) => c.dedupeKey)).toEqual([
+        `class_change:${s.learnerId}:${first.toISOString()}>${second.toISOString()}:${s.parentId}`,
+        `class_change:${s.learnerId}:${second.toISOString()}>${third.toISOString()}:${s.parentId}`,
+      ]);
+    });
+
+  it('stage 2 · a cancellation keys on the transition to nothing', async () => {
+    const first = new Date('2026-09-29T14:00:00Z');
+    await g.prisma.learner.update({
+      where: { id: s.learnerId },
+      data: { nextClassAt: first },
+    });
+
+    await g.classSchedule.reschedule(admin(), {
+      learnerId: s.learnerId, nextClassAt: null, reason: 'teacher is unwell',
+    });
+    await g.classSchedule.reschedule(admin(), {
+      learnerId: s.learnerId, nextClassAt: null, reason: 'teacher is unwell',
+    });
+
+    const cancels = await g.prisma.notification.findMany({
+      where: { recipientId: s.parentId, type: NotificationType.CLASS_CANCELLED },
+    });
+    expect(cancels).toHaveLength(1);
+    expect(cancels[0].dedupeKey).toBe(
+      `class_change:${s.learnerId}:${first.toISOString()}>none:${s.parentId}`,
+    );
+  });
+
+  it('stage 2 · the uniqueness is the DATABASE’s, not the engine’s', async () => {
+    const input = {
+      dedupeKey: 'proof:1', type: NotificationType.MESSAGE_RECEIVED,
+      eventType: 'message_created', recipientId: s.parentId,
+      scheduledAt: new Date(),
+    };
+
+    const a = await g.notifications.schedule(input);
+    const b = await g.notifications.schedule(input);
+
+    // Same id back, and the caller is told it already existed -- the grouping
+    // path depends on being able to tell.
+    expect(b.notificationId).toBe(a.notificationId);
+    expect(a.created).toBe(true);
+    expect(b.created).toBe(false);
+
+    // And the constraint is real, not a lookup the engine performs: a direct
+    // insert bypassing the engine is refused by Postgres.
+    await expect(
+      g.prisma.notification.create({
+        data: {
+          dedupeKey: 'proof:1', recipientId: s.parentId, eventType: 'message_created',
+          type: NotificationType.MESSAGE_RECEIVED, category: 'messaging', priority: 'normal',
+          templateKey: 'message_received', scheduledAt: new Date(),
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'P2002' });
+  });
+
+  it('stage 2 · concurrent producers of the same key produce one notification', async () => {
+    const input = {
+      dedupeKey: 'race:1', type: NotificationType.MESSAGE_RECEIVED,
+      eventType: 'message_created', recipientId: s.parentId,
+      scheduledAt: new Date(),
+    };
+
+    // No read-then-write window to lose: the unique index arbitrates.
+    const results = await Promise.all([
+      g.notifications.schedule(input),
+      g.notifications.schedule(input),
+      g.notifications.schedule(input),
+    ]);
+
+    const ids = new Set(results.map((r) => r.notificationId));
+    expect(ids.size).toBe(1);
+    expect(results.filter((r) => r.created)).toHaveLength(1);
+    expect(await g.prisma.notification.count({ where: { dedupeKey: 'race:1' } })).toBe(1);
+  });
+
+  // -- stages 3 and 4: dispatch and delivery --------------------------------
+
+  it('stages 3 and 4 · a replayed dispatch re-sends nothing', async () => {
+    await g.notifications.registerDevice({
+      actorId: s.parentId, token: 'dedupe-device', platform: 'android',
+    });
+    const conversationId = await studentGroup();
+    await g.messages.send({ conversationId, senderId: s.ownerId, body: 'once only' });
+    await drain();
+
+    const sends: string[] = [];
+    const spy = jest.spyOn(g.push, 'send').mockImplementation(async (m) => {
+      sends.push(m.token);
+      return { ok: true };
+    });
+
+    await g.notifications.dispatchDue(new Date());
+    await g.notifications.dispatchDue(new Date());
+    await g.notifications.dispatchDue(new Date());
+    spy.mockRestore();
+
+    // Stage 3 stops the second dispatch (the notification is already `sent`),
+    // and stage 4 would stop it even if stage 3 did not.
+    expect(sends).toEqual(['dedupe-device']);
+    expect(
+      await g.prisma.notificationDelivery.count({
+        where: { channel: 'push', recipientId: s.parentId },
+      }),
+    ).toBe(1);
+  });
+
+  it('stages 3 and 4 · a second device is a second delivery, not a second notification',
+    async () => {
+      for (const token of ['phone', 'tablet']) {
+        await g.notifications.registerDevice({
+          actorId: s.parentId, token, platform: 'android',
+        });
+      }
+      const conversationId = await studentGroup();
+      await g.messages.send({ conversationId, senderId: s.ownerId, body: 'two devices' });
+      await drain();
+      await g.notifications.dispatchDue(new Date());
+
+      expect(await g.prisma.notification.count({ where: { recipientId: s.parentId } })).toBe(1);
+      const pushes = await g.prisma.notificationDelivery.findMany({
+        where: { recipientId: s.parentId, channel: 'push' },
+      });
+      // The delivery key includes the device, so fan-out is per device and
+      // re-running it is still one row per device.
+      expect(pushes).toHaveLength(2);
+
+      await g.notifications.dispatchDue(new Date());
+      expect(
+        await g.prisma.notificationDelivery.count({
+          where: { recipientId: s.parentId, channel: 'push' },
+        }),
+      ).toBe(2);
+    });
+});
+
+// =========================================================================
 describe('the notification centre', () => {
   async function fill(count: number): Promise<void> {
     const conversationId = await studentGroup();
