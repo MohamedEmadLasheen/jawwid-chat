@@ -28,6 +28,15 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Jawwid uses the microphone to record voice messages and to make voice calls.</string>
+	<!-- Lets a push wake the app while it is backgrounded, which is what makes
+	     `content-available` in the FCM payload do anything. Without it iOS
+	     delivers the notification to the lock screen but never to the app, so
+	     the badge and the notification centre stay stale until the parent
+	     opens it by hand. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

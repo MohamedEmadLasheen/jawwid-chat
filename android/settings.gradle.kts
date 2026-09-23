@@ -21,6 +21,9 @@ plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     id("com.android.application") version "9.1.0" apply false
     id("org.jetbrains.kotlin.android") version "2.4.0" apply false
+    // Reads google-services.json. Declared here and applied CONDITIONALLY in
+    // app/build.gradle.kts -- see the comment there for why.
+    id("com.google.gms.google-services") version "4.4.2" apply false
 }
 
 include(":app")

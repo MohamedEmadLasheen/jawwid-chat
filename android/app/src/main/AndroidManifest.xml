@@ -2,6 +2,12 @@
     <!-- Voice notes. Requested at the moment the user first presses record, never
          at launch: a permission prompt with no visible cause is the one users deny. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- Android 13+ requires an explicit grant to show a notification at all.
+         Without it every push is delivered to the app and silently dropped by
+         the system, which looks exactly like a backend that stopped sending.
+         Requested after sign-in, when the first notification would matter --
+         never at launch, before the parent knows what the app is. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="jawwid_chat"
         android:name="${applicationName}"
@@ -27,7 +33,23 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- The tap that opens a terminated app. Without this the OS starts
+                 the launcher activity with no payload, PushRegistrar finds no
+                 initial message, and the parent lands on the chat list instead
+                 of the thing they tapped. -->
+            <intent-filter>
+                <action android:name="FLUTTER_NOTIFICATION_CLICK"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
         </activity>
+
+        <!-- The channel a push with no channel of its own lands in. Android
+             silently drops a notification naming a channel that does not exist,
+             so naming the default here is what stops a misconfigured payload
+             becoming an invisible failure. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="jawwid_default"/>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

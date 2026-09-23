@@ -45,6 +45,20 @@ dependencies:
   record: ^7.1.1
   just_audio: ^0.10.6
   path_provider: ^2.1.6
+  # Realtime. The backend is Socket.IO (apps/api .../realtime.gateway.ts), and
+  # Socket.IO is a protocol on top of WebSocket, not a WebSocket: speaking it
+  # with the web_socket_channel already in this list would mean reimplementing
+  # Engine.IO framing, reconnection and acknowledgements by hand. One transport,
+  # matching the server (§48).
+  socket_io_client: ^3.1.6
+
+  # Push. FCM is the one transport that serves both platforms this app targets
+  # (android/ and ios/ exist; there is no web target), because iOS goes through
+  # FCM's own APNs bridge. Reached only through the seams in lib/core/push, so
+  # no test ever touches a platform channel — the same rule the audio seams
+  # follow.
+  firebase_core: ^4.15.0
+  firebase_messaging: ^16.7.0
 
 dev_dependencies:
   flutter_test:

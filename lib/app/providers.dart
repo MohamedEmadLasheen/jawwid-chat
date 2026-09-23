@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/audio/voice_player.dart';
@@ -10,6 +11,7 @@ import '../core/storage/secure_token_store.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/domain/auth_state.dart';
 import '../shared/models/user_role.dart';
+import 'app.dart' show localeOverrideProvider;
 
 /// Composition root.
 ///
@@ -91,6 +93,19 @@ NotifierProvider<AuthController, AuthState> buildAuthController(Ref ref) {
     ),
   );
 }
+
+/// The language this device registers with, so the backend renders notifications
+/// in it. `null` locale means "follow the device", which is what the app itself
+/// resolves to, so this reads the same source the UI does rather than a second
+/// stored preference that could disagree with it.
+final localeCodeProvider = Provider<String>((ref) {
+  final override = ref.watch(localeOverrideProvider);
+  if (override != null) return override.languageCode;
+  final device = WidgetsBinding.instance.platformDispatcher.locale.languageCode;
+  // Arabic is the academy's language and the fallback everywhere else in the
+  // app; a device set to French gets Arabic, not a missing template.
+  return device == 'en' ? 'en' : 'ar';
+});
 
 /// The signed-in user's role, or null while unknown/signed out.
 ///

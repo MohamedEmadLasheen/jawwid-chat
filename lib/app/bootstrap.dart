@@ -12,6 +12,10 @@ import '../core/errors/app_error.dart';
 import '../core/network/actor_identity.dart';
 import '../core/network/api_config.dart';
 import '../core/network/http_stack.dart';
+import '../core/push/firebase_push_tokens.dart';
+import '../core/push/push_registrar.dart';
+import '../core/realtime/realtime_connection.dart';
+import '../core/realtime/socket_io_realtime_client.dart';
 import '../core/storage/secure_token_store.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/domain/auth_state.dart';
@@ -36,9 +40,15 @@ Future<List<Override>> bootstrap({
   UserRole developmentRole = UserRole.parent,
   String debugActorId = '',
 }) async {
-  return ApiConfig.isConfigured
-      ? _httpOverrides(debugActorId: debugActorId)
-      : _fakeOverrides(developmentRole);
+  if (!ApiConfig.isConfigured) return _fakeOverrides(developmentRole);
+
+  // Initialised here, once, and allowed to fail: a checkout without
+  // google-services.json / GoogleService-Info.plist must still run, because
+  // that is the state every developer clone is in until someone adds the
+  // credentials. Without push, notifications still reach the parent in-app and
+  // over realtime -- a degraded channel, not a broken app.
+  final pushAvailable = await FirebasePushTokens.initialise();
+  return _httpOverrides(debugActorId: debugActorId, pushAvailable: pushAvailable);
 }
 
 /// The real stack.
@@ -50,7 +60,10 @@ Future<List<Override>> bootstrap({
 ///
 /// The conversation, message and group repositories are fully implemented against the
 /// published contract and will work the moment an actor identity is available.
-List<Override> _httpOverrides({required String debugActorId}) {
+List<Override> _httpOverrides({
+  required String debugActorId,
+  required bool pushAvailable,
+}) {
   final config = ApiConfig.fromEnvironment();
   final tokenStore = SecureTokenStore();
   const auth = UnavailableAuthRepository();
@@ -62,6 +75,12 @@ List<Override> _httpOverrides({required String debugActorId}) {
       : DebugActorHeaderIdentity(actorId: debugActorId, enabled: true);
 
   final session = SessionContext(fallbackActorId: debugActorId);
+
+  // ONE transport for the whole app. Notifications consume it today; the
+  // messages feature adds a listener when it consumes `message.created`, not a
+  // second socket -- which would mean a second authentication, a second
+  // reconnect policy and two answers to "am I online".
+  final realtime = SocketIoRealtimeClient(baseUrl: config.realtimeBaseUrl);
 
   final client = buildApiClient(
     config: config,
@@ -85,8 +104,13 @@ List<Override> _httpOverrides({required String debugActorId}) {
     groupRepositoryProvider.overrideWithValue(
       HttpGroupRepository(client: client),
     ),
+    realtimeClientProvider.overrideWithValue(realtime),
+    // Firebase only in a build that has a backend: a fixture build has no
+    // google-services.json and must still run. `pushAvailable` is decided once,
+    // at startup, rather than being discovered per call.
+    if (pushAvailable) pushTokensProvider.overrideWithValue(FirebasePushTokens()),
     notificationRepositoryProvider.overrideWithValue(
-      HttpNotificationRepository(client: client),
+      HttpNotificationRepository(client: client, realtime: realtime),
     ),
     authControllerProvider.overrideWith(
       () => AuthController(
@@ -114,6 +138,10 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
     callRepositoryProvider.overrideWithValue(FakeCallRepository(backend)),
     notificationRepositoryProvider
         .overrideWithValue(FakeNotificationRepository()),
+    // A fixture build has no server to connect to. InertRealtimeClient is the
+    // provider default, so nothing is overridden here -- stated rather than
+    // silent, because "why does realtime do nothing in dev" should have an
+    // answer in the file that decides it.
     authControllerProvider.overrideWith(
       () => AuthController(
         repository: authRepository,

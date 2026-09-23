@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
-import '../../../core/errors/app_error.dart';
 import '../../../core/network/error_mapper.dart';
 import '../../../shared/models/notification.dart';
 
@@ -214,34 +213,32 @@ class NotificationsController extends AsyncNotifier<NotificationFeed> {
   }
 }
 
-/// How a failed load recovers.
+/// Retry is the container's, not this provider's.
 ///
-/// Riverpod 3 retries a failed provider on its own, forever, with backoff. Left
-/// at the default that is wrong here in two ways: a parent watching a skeleton
-/// that never resolves has no idea anything failed and no way to act, and an
-/// error that retrying cannot fix -- a revoked session, a forbidden read -- is
-/// retried anyway.
+/// `JawwidRetryPolicy` already answers "how does a failed provider recover" for
+/// the whole app -- transient failures only, bounded attempts, exponential
+/// backoff -- and it exists precisely because Riverpod's default retries a
+/// policy refusal forever. A second policy here would be a second answer to a
+/// question already answered, and the two would drift.
 ///
-/// So: two quick retries, which absorb the network blip this audience's
-/// connections produce constantly, and then a settled error with a Try again
-/// button and a pull-to-refresh. Errors that a retry cannot fix are not retried
-/// at all.
-Duration? _retryTransientOnly(int retryCount, Object error) {
-  const retryable = {
-    AppErrorKind.network,
-    AppErrorKind.timeout,
-    AppErrorKind.server,
-  };
-  if (error is AppError && !retryable.contains(error.kind)) return null;
-  if (retryCount >= 2) return null;
-  return Duration(milliseconds: 300 * (retryCount + 1));
-}
-
+/// What that policy gives this screen is the behaviour it needs: a network blip
+/// recovers silently, and a refusal or an exhausted budget settles into an error
+/// the parent can act on with Try again and pull-to-refresh.
 final notificationsControllerProvider =
     AsyncNotifierProvider<NotificationsController, NotificationFeed>(
   NotificationsController.new,
-  retry: _retryTransientOnly,
 );
+
+/// Every notification that arrives over realtime, wherever the parent is.
+///
+/// Deliberately NOT inside the centre's controller. That controller exists only
+/// while the centre is on screen, so a subscription living there would mean the
+/// badge on the Chats tab never moved for a parent who is reading their chats --
+/// which is the most common place for them to be when a message arrives, and
+/// exactly the case realtime is for.
+final incomingNotificationProvider = StreamProvider<AppNotification>((ref) {
+  return ref.watch(notificationRepositoryProvider).incoming;
+});
 
 /// The badge.
 ///
@@ -249,6 +246,11 @@ final notificationsControllerProvider =
 /// scrolled one page would otherwise see a badge counting thirty out of four
 /// hundred, and it would disagree with their other device.
 final unreadCountsProvider = FutureProvider<UnreadCounts>((ref) async {
+  // Recomputed whenever a notification arrives. Watching the stream rather than
+  // waiting to be invalidated by a caller is what makes this hold no matter
+  // which screen is open -- including none of the notification screens at all.
+  ref.watch(incomingNotificationProvider);
+
   try {
     return await ref.read(notificationRepositoryProvider).unreadCounts();
   } catch (_) {

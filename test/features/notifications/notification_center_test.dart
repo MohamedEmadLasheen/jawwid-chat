@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/app/providers.dart';
+import 'package:jawwid_chat/app/retry_policy.dart';
 import 'package:jawwid_chat/core/data/fake_notification_repository.dart';
 import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/design/theme.dart';
@@ -53,6 +54,10 @@ void main() {
     List<Override> extra = const [],
   }) {
     return ProviderScope(
+      // The app's real policy, not Riverpod's default. Without it a failing
+      // provider retries forever and the settled error state -- the one a
+      // parent can actually act on -- is unreachable in a test.
+      retry: JawwidRetryPolicy.policy,
       overrides: [
         notificationRepositoryProvider.overrideWithValue(repository),
         ...extra,
@@ -115,11 +120,13 @@ void main() {
       await tester.pumpWidget(
         harness(repository: repository, child: const NotificationCenterScreen()),
       );
-      // Past the two transient retries (300ms then 600ms). pumpAndSettle alone
-      // stops as soon as no frame is scheduled, and a pending retry timer does
-      // not schedule one -- so without this the assertion runs while the screen
-      // is still showing its skeleton.
-      await tester.pump(const Duration(seconds: 2));
+      // Past JawwidRetryPolicy's five attempts (400ms doubling to 6.4s).
+      // pumpAndSettle alone stops as soon as no frame is scheduled, and a
+      // pending retry timer does not schedule one -- so without this the
+      // assertion runs while the screen is still showing its skeleton.
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(seconds: 8));
+      }
       await tester.pumpAndSettle();
 
       final l10n = await L10n.delegate.load(const Locale('ar'));

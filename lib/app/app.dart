@@ -66,7 +66,12 @@ class JawwidApp extends ConsumerWidget {
 
         return MediaQuery(
           data: media.copyWith(textScaler: scale),
-          child: child ?? const SizedBox.shrink(),
+          // Inside the router's context, so a notification tap has somewhere to
+          // navigate to -- including a tap that started a terminated app, whose
+          // route was read before this widget existed.
+          child: PushDeepLinkNavigator(
+            child: child ?? const SizedBox.shrink(),
+          ),
         );
       },
     );

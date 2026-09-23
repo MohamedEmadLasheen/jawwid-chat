@@ -56,6 +56,16 @@ class FakeNotificationRepository implements NotificationRepository {
     _incoming.add(notification);
   }
 
+  /// Create a notification WITHOUT telling this device.
+  ///
+  /// The offline case: the server persisted it while the socket was down, so it
+  /// is in the database and nothing delivered it here. This is what makes the
+  /// reconnect re-sync testable, and it is the case that proves realtime cannot
+  /// be the source of truth.
+  void insertWithoutDelivering(AppNotification notification) {
+    _items.insert(0, notification);
+  }
+
   void seedAnnouncement(Announcement announcement) =>
       _announcements[announcement.id] = announcement;
 

@@ -3,6 +3,8 @@ import 'dart:async';
 import '../../../shared/models/notification.dart';
 import '../../errors/app_error.dart';
 import '../../network/api_client.dart';
+import '../../realtime/realtime_client.dart';
+import '../../realtime/realtime_events.dart';
 import '../repositories.dart';
 import '../wire/wire_mappers.dart';
 
@@ -31,25 +33,45 @@ import '../wire/wire_mappers.dart';
 /// the authenticated actor, so there is no request this client can make that
 /// asks for somebody else's notifications.
 class HttpNotificationRepository implements NotificationRepository {
-  HttpNotificationRepository({required ApiClient client}) : _client = client;
+  HttpNotificationRepository({
+    required ApiClient client,
+    required RealtimeClient realtime,
+  })  : _client = client,
+        _realtime = realtime {
+    // The shared transport carries every event in the server's contract; this
+    // repository takes the one it is responsible for and ignores the rest.
+    // Filtering here rather than asking the transport for a notification-only
+    // stream is what keeps the transport feature-agnostic.
+    _subscription = _realtime.events
+        .where((event) => event.name == RealtimeEvents.notificationCreated)
+        .listen(_onRealtimeNotification);
+  }
 
   final ApiClient _client;
+  final RealtimeClient _realtime;
+  late final StreamSubscription<RealtimeEvent> _subscription;
 
-  /// Fed by the realtime layer when a `notification.created` event arrives.
-  /// Broadcast because both the bell and the open centre listen.
+  /// Broadcast because both the bell and an open centre listen.
   final _incoming = StreamController<AppNotification>.broadcast();
 
   @override
   Stream<AppNotification> get incoming => _incoming.stream;
 
-  /// Called by the socket layer. Kept as a method rather than exposing the sink
-  /// so nothing outside the transport can fabricate a notification into the UI.
-  void onRealtimeNotification(Map<String, Object?> payload) {
-    final notification = WireMappers.realtimeNotification(payload);
+  /// A `notification.created` event.
+  ///
+  /// The payload is a HINT, not the record: it carries enough to move the badge
+  /// and show the arrival, and the centre refetches for the rest. The same rule
+  /// `message.created` follows, and the reason a missed event costs latency
+  /// rather than a notification.
+  void _onRealtimeNotification(RealtimeEvent event) {
+    final notification = WireMappers.realtimeNotification(event.payload);
     if (notification != null) _incoming.add(notification);
   }
 
-  void dispose() => _incoming.close();
+  void dispose() {
+    _subscription.cancel();
+    _incoming.close();
+  }
 
   @override
   Future<Page<AppNotification>> history({

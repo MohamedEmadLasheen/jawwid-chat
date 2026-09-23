@@ -4,6 +4,26 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Firebase Cloud Messaging, applied ONLY when the credentials are present.
+//
+// The google-services plugin fails the build outright if google-services.json is
+// missing, and that file is a per-project secret this repository does not carry.
+// Applying it unconditionally would mean every fresh clone fails to build
+// Android until someone is handed a credential -- so a checkout without it
+// builds and runs, and simply has no push. FirebasePushTokens.initialise()
+// reports that honestly at runtime and the app carries on delivering
+// notifications in-app and over realtime.
+//
+// See docs/mobile/push-setup.md for what to put here and where to get it.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+} else {
+    logger.lifecycle(
+        "jawwid: google-services.json not found -- building WITHOUT push. " +
+            "In-app and realtime notifications are unaffected. See docs/mobile/push-setup.md."
+    )
+}
+
 android {
     namespace = "com.jawwid.jawwid_chat"
     compileSdk = flutter.compileSdkVersion

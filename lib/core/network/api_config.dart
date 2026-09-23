@@ -41,4 +41,17 @@ class ApiConfig {
     }
     return ApiConfig(baseUrl: configuredBaseUrl);
   }
+
+  /// Where the Socket.IO server lives.
+  ///
+  /// The SAME origin as the REST API, with the `/api/v1` prefix stripped: the
+  /// backend mounts that prefix on HTTP only (`main.ts` `setGlobalPrefix`), and
+  /// the gateway is attached to the server root. Deriving it rather than taking
+  /// a second environment variable means a deployment cannot be configured with
+  /// an API on one host and a socket on another by accident -- and there is one
+  /// thing to set, not two that must agree.
+  String get realtimeBaseUrl {
+    final uri = Uri.parse(baseUrl);
+    return uri.replace(path: '', query: null, fragment: null).toString();
+  }
 }

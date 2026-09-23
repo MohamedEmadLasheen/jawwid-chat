@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/app/providers.dart';
+import 'package:jawwid_chat/app/retry_policy.dart';
 import 'package:jawwid_chat/core/data/fake_notification_repository.dart';
 import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/features/notifications/application/notifications_controller.dart';
@@ -40,6 +41,9 @@ void main() {
     addTearDown(repository.dispose);
 
     final container = ProviderContainer(
+      // The app's real policy, so these tests exercise what ships rather than
+      // Riverpod's unbounded default.
+      retry: JawwidRetryPolicy.policy,
       overrides: [notificationRepositoryProvider.overrideWithValue(repository)],
     );
     addTearDown(container.dispose);

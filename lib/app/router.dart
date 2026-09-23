@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/push/push_registrar.dart';
 import '../features/auth/domain/auth_state.dart';
 import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/calls/presentation/calls_screen.dart';
@@ -180,6 +181,69 @@ String? _redirect(Ref ref, String location) {
 
   return null;
 }
+
+/// Follows a notification tap once there is somewhere to go.
+///
+/// A tap can arrive BEFORE the router exists: when the app is terminated, the OS
+/// starts the process because of the tap, and `PushRegistrar` has already read
+/// and held the route by the time the first frame is built. So this drains the
+/// held link on mount as well as listening for later ones.
+///
+/// The route is followed only once authenticated. A tap on a signed-out app
+/// lands on sign-in and the link is kept, so the parent arrives where they were
+/// going after signing in rather than on the chat list wondering what buzzed.
+class PushDeepLinkNavigator extends ConsumerStatefulWidget {
+  const PushDeepLinkNavigator({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  ConsumerState<PushDeepLinkNavigator> createState() => _PushDeepLinkNavigatorState();
+}
+
+class _PushDeepLinkNavigatorState extends ConsumerState<PushDeepLinkNavigator> {
+  @override
+  void initState() {
+    super.initState();
+    // After the first frame: GoRouter cannot navigate during a build.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _drain());
+  }
+
+  void _drain() {
+    if (!mounted) return;
+    final registrar = ref.read(pushRegistrarProvider);
+    // Held only while signed out. Taking it before there is a session would
+    // navigate to a screen the redirect immediately replaces, losing the link.
+    if (!ref.read(authControllerProvider).isAuthenticated) return;
+
+    final link = registrar.takePendingDeepLink();
+    if (link != null && mounted) GoRouter.of(context).push(link.route);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // A tap while the app is running.
+    ref.listen(pushDeepLinkStreamProvider, (previous, next) {
+      final link = next.value;
+      if (link == null || !mounted) return;
+      if (!ref.read(authControllerProvider).isAuthenticated) return;
+      ref.read(pushRegistrarProvider).takePendingDeepLink();
+      GoRouter.of(context).push(link.route);
+    });
+
+    // Signing in drains anything held from a tap taken while signed out.
+    ref.listen(authControllerProvider, (previous, next) {
+      if (next.isAuthenticated && previous?.isAuthenticated != true) _drain();
+    });
+
+    return widget.child;
+  }
+}
+
+/// Taps that arrive while the app is running.
+final pushDeepLinkStreamProvider = StreamProvider<PendingDeepLink>((ref) {
+  return ref.watch(pushRegistrarProvider).deepLinks;
+});
 
 class _RoleShell extends ConsumerWidget {
   const _RoleShell({required this.currentRoute, required this.child});
