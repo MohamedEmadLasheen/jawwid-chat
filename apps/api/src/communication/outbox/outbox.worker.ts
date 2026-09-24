@@ -93,8 +93,34 @@ export class OutboxWorker {
         return;
       }
 
-      case CommEvent.CALL_INCOMING: {
-        if (!conversationId) return;
+      /**
+       * Every call event routes to the conversation room, which is exactly the
+       * set of actors AuthorizationService let subscribe -- so the caller and
+       * the callee receive it and nobody else does. Routing is decided here,
+       * from server-derived fields; no client picks its audience.
+       *
+       * Listed explicitly rather than left to `default` on purpose. These four
+       * are the lifecycle a client follows to render a call, and the two that
+       * mattered most -- accepted and declined -- were the ones being dropped.
+       * An explicit case makes the routing of a call event a decision somebody
+       * made rather than a fall-through.
+       */
+      case CommEvent.CALL_INCOMING:
+      case CommEvent.CALL_ACCEPTED:
+      case CommEvent.CALL_DECLINED:
+      case CommEvent.CALL_ENDED:
+      case CommEvent.CALL_PARTICIPANT_JOINED:
+      case CommEvent.CALL_PARTICIPANT_LEFT: {
+        if (!conversationId) {
+          // Unroutable. This is the shape of the defect that hid here for so
+          // long: CALL_ACCEPTED and CALL_DECLINED carried no conversationId,
+          // fell through to `default`, and were discarded without a trace while
+          // the outbox row was marked `published`. Now it is loud.
+          this.log.error(
+            `${type} has no conversationId and cannot be routed; it was NOT delivered`,
+          );
+          return;
+        }
         await this.realtime.toThread(conversationId, type, payload as never);
         return;
       }
@@ -102,7 +128,12 @@ export class OutboxWorker {
       default: {
         if (conversationId) {
           await this.realtime.toThread(conversationId, type, payload as never);
+          return;
         }
+        // Some events legitimately have no conversation -- presence is about an
+        // actor, a notification about a recipient. They are not delivered by
+        // this branch, and saying so is better than a silent `return`.
+        this.log.debug(`${type} has no conversationId; no conversation fan-out`);
       }
     }
   }

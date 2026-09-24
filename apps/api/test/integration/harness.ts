@@ -61,6 +61,9 @@ export function buildGraph() {
     prisma, coverage, identity, authz, conversations, messages, approvals,
     attachments, notifications, reminders, templates, quietHours, calls,
     relationships,
+    // Exposed so a suite can drive the outbox itself: config for a worker it
+    // builds, outbox to enqueue inside its own transaction.
+    config, outbox,
   };
 }
 

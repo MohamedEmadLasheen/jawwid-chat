@@ -121,7 +121,8 @@ export class CallService {
         type,
         initiatorId: initiator.actorId,
         initiatorName: initiator.displayName,
-        roomName,
+        // roomName is NOT broadcast. It comes back from POST /calls/:id/token
+        // with the token that makes it usable; see CallPayload.
       });
 
       await this.audit.event(tx, {
@@ -180,9 +181,26 @@ export class CallService {
    * IDEMPOTENT. Answering twice is a retry, not an error: the second call finds
    * itself already joined and does nothing. `joined_at` is written once so the
    * history says when they actually answered, not when they last retried.
+   *
+   * A BOUNDED RACE, STATED RATHER THAN IMPLIED. Authorization happens before the
+   * lock is taken, so a relationship revoked in that window can let an accept
+   * through and move the call to ACTIVE. Call-state authorization and media
+   * authorization are NOT one atomic transaction, and nothing here should be
+   * read as claiming they are.
+   *
+   * What bounds it: `issueToken` re-resolves the relationship on every media
+   * token, so the party whose relationship was revoked gets no audio — the call
+   * shows as answered for as long as it takes them to fail to join, and then
+   * ends. The exposure is a briefly wrong call record, never media access.
+   *
+   * Closing it completely would mean holding the relationship read inside the
+   * same lock, which means doing identity and relationship resolution inside
+   * the locked transaction and lengthening it for every call. That trade has
+   * not been made deliberately yet, so it is documented rather than assumed
+   * away.
    */
   async accept(callId: string, actorId: string): Promise<void> {
-    const { actor } = await this.authorizeJoin(callId, actorId);
+    const { actor, call } = await this.authorizeJoin(callId, actorId);
 
     await this.prisma.$transaction(async (tx) => {
       const status = await this.lockCall(tx, callId);
@@ -235,8 +253,18 @@ export class CallService {
         data: { status: CallStatus.ACTIVE, answeredAt: now },
       });
 
-      await this.outbox.enqueue(tx, CommEvent.CALL_PARTICIPANT_JOINED, {
+      // CALL_ACCEPTED, not CALL_PARTICIPANT_JOINED. This is an application-level
+      // answer over HTTP; it says nothing about whether the device has reached
+      // the media room. participant_joined means media presence and is emitted
+      // only by something that has observed it -- a LiveKit webhook, which does
+      // not exist yet. See contracts/events.ts.
+      //
+      // conversationId is what makes this event routable at all: without it the
+      // outbox worker had nowhere to send it and dropped it, which is why the
+      // caller never learned the call had been answered.
+      await this.outbox.enqueue(tx, CommEvent.CALL_ACCEPTED, {
         callId,
+        conversationId: call.conversationId,
         actorId: actor.actorId,
       });
     });
@@ -253,7 +281,7 @@ export class CallService {
    * write a leave time onto a finished call and make its history wrong.
    */
   async decline(callId: string, actorId: string): Promise<void> {
-    const { actor } = await this.authorizeJoin(callId, actorId);
+    const { actor, call } = await this.authorizeJoin(callId, actorId);
 
     await this.prisma.$transaction(async (tx) => {
       const status = await this.lockCall(tx, callId);
@@ -288,7 +316,11 @@ export class CallService {
         data: { leftAt: new Date() },
       });
 
-      await this.outbox.enqueue(tx, CommEvent.CALL_DECLINED, { callId, actorId: actor.actorId });
+      await this.outbox.enqueue(tx, CommEvent.CALL_DECLINED, {
+        callId,
+        conversationId: call.conversationId,
+        actorId: actor.actorId,
+      });
     });
   }
 

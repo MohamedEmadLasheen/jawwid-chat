@@ -90,7 +90,9 @@ describe('accept — the happy path still works', () => {
     expect(after.status).toBe('active');
     expect(after.answeredAt).toBeInstanceOf(Date);
     expect(after.participants.find((p) => p.actorId === s.parentId)?.joinedAt).toBeInstanceOf(Date);
-    expect(await callEvents(callId)).toContain('call.participant_joined');
+    // Phase 10 renamed this: an HTTP accept emits call.accepted, never
+    // call.participant_joined, which means media presence.
+    expect(await callEvents(callId)).toContain('call.accepted');
   });
 
   it('answering twice is a retry, not an error, and does not move answered_at', async () => {
@@ -104,7 +106,7 @@ describe('accept — the happy path still works', () => {
 
     expect(second).toEqual(first);
     // And no second join event: the retry did nothing to record.
-    expect((await callEvents(callId)).filter((t) => t === 'call.participant_joined')).toHaveLength(1);
+    expect((await callEvents(callId)).filter((t) => t === 'call.accepted')).toHaveLength(1);
   });
 
   it('declining works, and declining again is refused rather than silently repeated', async () => {
@@ -336,7 +338,7 @@ describe('concurrency — one winner, no torn state', () => {
     const after = await snapshot(callId);
     expect(after.status).toBe('active');
     expect(
-      (await callEvents(callId)).filter((t) => t === 'call.participant_joined'),
+      (await callEvents(callId)).filter((t) => t === 'call.accepted'),
     ).toHaveLength(1);
   });
 
