@@ -89,11 +89,34 @@ abstract final class WireMappers {
     return best;
   }
 
+  /// The learner a conversation is about, straight off `ConversationDto`.
+  ///
+  /// Null for a conversation that has none — the family's own thread with
+  /// Jawwid — and null when the server did not resolve one. It is never
+  /// assembled from anything else: not from the title, not from a participant
+  /// name, not from a cached message. The backend is the authority on which
+  /// child a conversation belongs to, and a client that guesses will
+  /// eventually guess wrong in front of a parent with two children.
+  ///
+  /// `avatarUrl` stays null because `chat.learner` has no avatar column. An
+  /// absent field is rendered as absent rather than filled in with an initial
+  /// dressed up as data.
+  static LearnerRef? learner(Object? raw) {
+    if (raw is! Map) return null;
+
+    final id = raw['id'];
+    final name = raw['name'];
+    if (id is! String || id.isEmpty) return null;
+
+    return LearnerRef(
+      id: id,
+      displayName: name is String ? name : '',
+    );
+  }
+
   static Conversation conversation(
     Map<String, Object?> json, {
     required UserRole viewerRole,
-    LearnerRef? learner,
-    int unreadCount = 0,
     String lastMessagePreview = '',
     bool isPinned = false,
     bool isMuted = false,
@@ -112,11 +135,20 @@ abstract final class WireMappers {
       id: json['id']! as String,
       kind: conversationKind(json['type'] as String?),
       title: (json['title'] as String?) ?? '',
-      learner: learner,
+      // Both from the DTO. They used to be parameters this mapper's caller had
+      // to supply, because the payload carried neither — which meant the child
+      // sections and the unread badge worked against fixtures and were blank
+      // against the real API. Taking them as arguments is also what would let
+      // a caller pass something it inferred locally, so the parameters are
+      // gone rather than merely unused.
+      learner: WireMappers.learner(json['learner']),
       updatedAt: lastActivity,
       lastMessageAt: lastActivity,
       lastMessagePreview: lastMessagePreview,
-      unreadCount: unreadCount,
+      // Server-derived, per actor. Absent is treated as zero: the list route
+      // always sends it, and a create/sync response that omits it is not
+      // describing a badge.
+      unreadCount: (json['unreadCount'] as num?)?.toInt() ?? 0,
       isPinned: isPinned,
       isMuted: isMuted,
       isArchived: archivedAt != null,

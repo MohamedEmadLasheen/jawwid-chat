@@ -229,14 +229,18 @@ These are what mobile is currently blocked on or working around. Each is small.
 
 | # | Need | Owner | Why it matters |
 |---|---|---|---|
-| O1 | **Unread count per conversation** on `ConversationDto` | AI #2 | The chat list, the tab badge and Parent Home all render it. `GET /conversations/:id/messages/unread` exists but the list would need one call per row — a per-row round trip is exactly the cost the low-end target cannot absorb. |
+| ~~O1~~ | ~~**Unread count per conversation** on `ConversationDto`~~ | AI #2 | **CLOSED.** `unreadCount` is on the DTO for both `GET /conversations` and `GET /conversations/:id`, derived per actor from `chat.message_receipt` and computed in one grouped query for the whole list — the per-row round trip that blocked it never happens. Contract: API-CONTRACT §3.4. |
 | O2 | **Last-message preview** on `ConversationDto` | AI #2 | Every chat-list row shows it; without it the list needs a second fetch per conversation. |
 | O3 | **Display names for members and authors** | AI #1 / AI #2 | `MessageDto` carries `authorId` but no name; `ConversationMemberDto` carries `actorId` but no name. Mobile renders names and avatars and must never fall back to an id. |
 | O4 | **The `handledBy` label** for the Jawwid thread | AI #2 | `parent-home.md` §4 requires the parent's Jawwid contact. Mobile must not derive it; it needs a supplied, already-localised string. |
 | O5 | **Auth, session and device endpoints** | AI #1 | C1–C3 are unchanged: login, refresh, logout, `me`, device registration and revocation. The communication engine assumes an actor id already exists. |
 | O6 | **Localisation of server-originated strings** | AI #1 / AI #2 | System messages, rejection reasons and reminder bodies must arrive localised or as key+params. Mobile will not compose them. |
-| O7 | **Learner reference on a student-group conversation** | AI #2 | `learnerId` is present; mobile also needs the learner's display name to group rows under each child. |
+| ~~O7~~ | ~~**Learner reference on a student-group conversation**~~ | AI #2 | **CLOSED.** `ConversationDto.learner` carries `{id, name}`, resolved server-side on the same membership join that authorizes the list. Two fields only: `level`, `nextClassAt` and `teacherId` are deliberately not exposed. Contract: API-CONTRACT §3.4. |
 
-O1 and O2 are the two that shape a screen rather than a field: without them the chat list
-cannot be built in one request, and the parent audience's network is the constraint the whole
-mobile design is organised around.
+O1 and O2 were the two that shape a screen rather than a field. **O1 and O7 are closed**;
+O2 remains, so a chat-list row still has no last-message preview. O3 also remains, and it is
+the reason an incoming group message falls back to the sender's ROLE rather than their name.
+
+The parent audience's network is still the constraint the whole mobile design is organised
+around, which is why O2 must be solved the way O1 was — on the list payload, not with a
+second fetch per conversation.

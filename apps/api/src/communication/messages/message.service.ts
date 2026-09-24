@@ -488,14 +488,86 @@ export class MessageService {
     });
   }
 
-  async unreadCount(conversationId: string, actorId: string): Promise<number> {
-    return this.prisma.messageReceipt.count({
-      where: {
-        actorId,
-        state: { in: [ReceiptState.SENT, ReceiptState.DELIVERED] },
-        message: { conversationId },
+  /**
+   * What counts as unread, in one place.
+   *
+   * Built on the receipt table, which is the existing read-state architecture
+   * and already encodes most of the visibility rules by construction: a
+   * recipient row is written only for live members other than the author, and
+   * never for a message held for approval. So an actor's own messages, pending
+   * messages and (for a contact) internal notes have no receipt and cannot be
+   * counted.
+   *
+   * Two things receipts do NOT encode, and this adds:
+   *
+   * * **Hidden for me.** `message_hidden_for` is written by delete-for-me and
+   *   leaves the receipt untouched. Without this clause a parent who deleted an
+   *   unread message kept it in their badge forever, with no way to clear it --
+   *   the message is not in their conversation to be read.
+   * * **Retracted for everyone.** A message deleted for all is served with no
+   *   body and no attachments; counting it asks the parent to go and read
+   *   nothing.
+   *
+   * The same predicate serves the single-conversation endpoint and the batch
+   * below, so the number on the chat list and the number from
+   * `GET /conversations/:id/messages/unread` cannot disagree.
+   */
+  private unreadWhere(actorId: string): Prisma.MessageWhereInput {
+    return {
+      deletedForAll: false,
+      hiddenFor: { none: { actorId } },
+      receipts: {
+        some: {
+          actorId,
+          state: { in: [ReceiptState.SENT, ReceiptState.DELIVERED] },
+        },
       },
+    };
+  }
+
+  async unreadCount(conversationId: string, actorId: string): Promise<number> {
+    return this.prisma.message.count({
+      where: { conversationId, ...this.unreadWhere(actorId) },
     });
+  }
+
+  /**
+   * Unread counts for many conversations at once.
+   *
+   * **One query, whatever the list length.** The chat list is the only caller
+   * and it renders every conversation an actor has; asking per row would be a
+   * hundred round trips on the mobile connection this audience is on, which is
+   * precisely why the count was left off the DTO in the first place (mobile
+   * gap O1).
+   *
+   * The caller passes ids it has ALREADY authorized -- this method is not an
+   * authorization boundary and must never be handed a raw id from a request.
+   * Even so it is scoped to the actor's own receipts, so it can only ever count
+   * messages that were addressed to them.
+   *
+   * Conversations with nothing unread are absent from the map rather than
+   * present as zero; the caller defaults them.
+   */
+  async unreadCountsFor(
+    conversationIds: string[],
+    actorId: string,
+  ): Promise<Map<string, number>> {
+    const counts = new Map<string, number>();
+    if (conversationIds.length === 0) return counts;
+
+    const rows = await this.prisma.message.groupBy({
+      by: ['conversationId'],
+      where: {
+        conversationId: { in: conversationIds },
+        ...this.unreadWhere(actorId),
+      },
+      _count: { _all: true },
+    });
+
+    for (const row of rows) {
+      if (row.conversationId) counts.set(row.conversationId, row._count._all);
+    }
+    return counts;
   }
 
   // -------------------------------------------------------------------

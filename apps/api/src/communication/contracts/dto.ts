@@ -1,6 +1,7 @@
 import {
   Conversation,
   ConversationMember,
+  Learner,
   Message,
   MessageAttachment,
   MessageReaction,
@@ -61,6 +62,24 @@ export interface ConversationMemberDto {
   isSilent: boolean;
 }
 
+/**
+ * The learner a conversation is about, as a client may see them.
+ *
+ * Two fields, and no third. `learnerId` has always been on ConversationDto, but
+ * an id is not renderable: a parent with two children needs a NAME on the
+ * section heading, and the alternative -- letting the client parse it out of
+ * the conversation title -- is inference dressed up as data.
+ *
+ * What is deliberately NOT here: `level`, `nextClassAt`, `teacherId`,
+ * `familyId`. They exist on chat.learner and are operational detail a parent's
+ * chat list has no use for (PRIVACY INVARIANT above, and boundary doc 25). A
+ * field added to the Learner model cannot appear here by accident.
+ */
+export interface ConversationLearnerDto {
+  id: string;
+  name: string;
+}
+
 export interface ConversationDto {
   id: string;
   type: string;
@@ -75,6 +94,22 @@ export interface ConversationDto {
   teacherRequiresApproval: boolean;
   parentRequiresApproval: boolean;
   members?: ConversationMemberDto[];
+
+  /**
+   * Resolved learner, when the caller loaded one. Optional like `members`:
+   * absent means "not loaded here", never "this conversation has no learner" --
+   * `learnerId` remains the authority on that, and stays for existing
+   * consumers.
+   */
+  learner?: ConversationLearnerDto | null;
+
+  /**
+   * Messages in this conversation the requesting actor has not read.
+   *
+   * Server-derived and per-actor. Optional because the create/sync endpoints
+   * do not compute it; absent means "not computed here", never zero.
+   */
+  unreadCount?: number;
 }
 
 export function needsReply(
@@ -98,9 +133,13 @@ export function conversationState(
   return ConversationState.OPEN;
 }
 
+/** A conversation row loaded with `include: { learner: true }`. */
+export type ConversationWithLearner = Conversation & { learner?: Learner | null };
+
 export function toConversationDto(
-  c: Conversation,
+  c: ConversationWithLearner,
   members?: ConversationMember[],
+  extra?: { unreadCount?: number },
 ): ConversationDto {
   return {
     id: c.id,
@@ -121,6 +160,11 @@ export function toConversationDto(
       memberRole: m.memberRole,
       isSilent: m.isSilent,
     })),
+    // Two fields enumerated by hand, like every other field here: the Learner
+    // row is never spread, so `level`, `nextClassAt` and `teacherId` cannot
+    // reach a client because somebody widened an include.
+    learner: c.learner ? { id: c.learner.id, name: c.learner.name } : undefined,
+    unreadCount: extra?.unreadCount,
   };
 }
 
