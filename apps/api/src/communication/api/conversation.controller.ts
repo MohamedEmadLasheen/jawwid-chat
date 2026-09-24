@@ -33,9 +33,18 @@ export class ConversationController {
     return toConversationDto(conv);
   }
 
+  /**
+   * Reconcile the group's membership from Core.
+   *
+   * Takes the actor, and not only for the audit trail: without it this route
+   * accepted any learner id from any authenticated session and answered with
+   * that learner's conversation. A learner id is in every class notification's
+   * push payload, so it is exactly the kind of id a client can hold without
+   * being entitled to what it names.
+   */
   @Post('student-group/:learnerId/sync')
-  async sync(@Param('learnerId') learnerId: string) {
-    const conv = await this.conversations.syncStudentGroup(learnerId);
+  async sync(@ActorId() actorId: string, @Param('learnerId') learnerId: string) {
+    const conv = await this.conversations.syncStudentGroup(learnerId, actorId);
     return conv ? toConversationDto(conv) : { synced: false };
   }
 

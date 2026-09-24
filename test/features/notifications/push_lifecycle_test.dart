@@ -7,6 +7,8 @@ import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/core/push/push_registrar.dart';
 import 'package:jawwid_chat/core/push/push_tokens.dart';
 import 'package:jawwid_chat/features/auth/domain/auth_state.dart';
+import 'package:jawwid_chat/features/notifications/application/notifications_controller.dart';
+import 'package:jawwid_chat/shared/models/notification.dart';
 
 import '../../support/auth_harness.dart';
 
@@ -200,6 +202,89 @@ void main() {
       expect(h.repository.reportedDelivered, contains('n1'));
       // NOT opened: arriving is not acting on it.
       expect(h.repository.reportedOpened, isEmpty);
+    });
+  });
+
+  // =======================================================================
+  /// THE SAME PHYSICAL PUSH, TWICE.
+  ///
+  /// Transport delivery is at-least-once and is not going to become
+  /// exactly-once: a worker can die between the provider accepting a push and
+  /// the database recording that it did, and the recovery cannot tell that
+  /// apart from "died before sending". So a parent can, rarely, see the same
+  /// push twice.
+  ///
+  /// What must NOT double is the logical state. The notification id is the
+  /// canonical identity, and every client action keyed on it is idempotent --
+  /// so a duplicate push costs a second buzz and nothing else. No client-side
+  /// heuristic tries to suppress the second buzz; the OS showed it, and
+  /// pretending otherwise by corrupting state would be the worse trade.
+  group('a duplicate push', () {
+    const same = PushPayload(data: {'notificationId': 'n1', 'conversationId': 'c1'});
+
+    test('arriving twice reports delivery for one notification, not two', () async {
+      final h = harness(token: 'device-token-1');
+      h.setAuth(signedIn);
+      await h.container.read(pushRegistrarProvider).start();
+
+      h.tokens.arriveInForeground(same);
+      h.tokens.arriveInForeground(same);
+      await Future<void>.delayed(Duration.zero);
+
+      // One notification id, however many times the transport delivered it.
+      expect(h.repository.reportedDelivered, {'n1'});
+    });
+
+    test('tapped twice opens one notification and reads it once', () async {
+      final h = harness(token: 'device-token-1');
+      h.setAuth(signedIn);
+      final registrar = h.container.read(pushRegistrarProvider);
+      await registrar.start();
+
+      final routes = <String>[];
+      registrar.deepLinks.listen((link) => routes.add(link.route));
+
+      h.tokens.tap(same);
+      h.tokens.tap(same);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(h.repository.reportedOpened, {'n1'});
+      // Both taps route -- each one is a real thing the parent did, and the
+      // second must not be swallowed or the app looks broken. They route to the
+      // SAME place, which is the point.
+      expect(routes, ['/chats/c1', '/chats/c1']);
+    });
+
+    test('does not double the badge, the centre, or the read state', () async {
+      final h = harness(token: 'device-token-1');
+      h.setAuth(signedIn);
+      await h.container.read(pushRegistrarProvider).start();
+
+      // One notification exists on the server. The transport delivers it twice.
+      h.repository.insertWithoutDelivering(
+        AppNotification(
+          id: 'n1',
+          category: NotificationCategory.messaging,
+          priority: NotificationPriority.normal,
+          title: 'Ahmed’s teacher',
+          body: 'Sent you a message.',
+          createdAt: DateTime.now(),
+          conversationId: 'c1',
+        ),
+      );
+      expect((await h.container.read(unreadCountsProvider.future)).total, 1);
+
+      h.tokens.tap(same);
+      h.tokens.tap(same);
+      await Future<void>.delayed(Duration.zero);
+
+      // Everything below is server-backed and keyed on the notification id, so
+      // the second delivery changes none of it: one row in the centre, one
+      // read, and a count that cannot go to -1.
+      final page = await h.repository.history();
+      expect(page.items.map((n) => n.id), ['n1']);
+      h.container.invalidate(unreadCountsProvider);
+      expect((await h.container.read(unreadCountsProvider.future)).total, 0);
     });
   });
 

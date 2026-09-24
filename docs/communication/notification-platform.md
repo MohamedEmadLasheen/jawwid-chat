@@ -379,7 +379,9 @@ key in this repository, by design: they are per-project secrets, and
 `android/app/build.gradle.kts` applies the Google Services plugin only when the
 file is present so that a fresh clone still builds and runs without push.
 
-**What remains to be done manually**, once someone has a device and the
+**What remains to be done manually** is the checklist in
+`docs/mobile/device-verification-checklist.md` — A1–A8 on Android, I1–I8 on iOS,
+plus five real business scenarios. In outline, once someone has a device and the
 credentials:
 
 1. Put `google-services.json` in `android/app/` and `GoogleService-Info.plist`

@@ -1,5 +1,16 @@
 # Notification platform — final production validation
 
+```
+NOTIFICATION PLATFORM ................. ENGINEERING COMPLETE
+PHYSICAL DEVICE VERIFICATION .......... PENDING
+DOMAIN-EVENT-DEPENDENT NOTIFICATIONS .. NOT READY UNTIL THEIR PRODUCERS EXIST
+```
+
+These three are separate statuses and stay separate. Engineering being complete
+does not make push delivery verified; push being unverified does not make the
+engineering incomplete; and neither says anything about notification types whose
+domain event does not exist yet.
+
 The architecture was frozen for this pass. Nothing below adds a transport, a
 queue, a retry system, a notification engine, a push abstraction or an auth
 mechanism. Everything below is either a defect found by trying to break what
@@ -334,50 +345,60 @@ typo becomes a message to the whole academy.
 
 ## L. Verification status
 
-### Verified on an actual device
+Two categories. They are never mixed, and nothing moves from the second to the
+first without a person and a handset.
 
-**Nothing.** No part of this was run on a physical or virtual handset.
+### VERIFIED — automated only
 
-There is no Android SDK, no `adb`, no emulator image and no `/dev/kvm` in this
-container; `flutter devices` reports only `Linux (desktop)`. iOS is further out
-of reach — building or running it requires macOS and Xcode, which do not exist
-on Linux. There is also no `google-services.json` and no APNs key in this
-repository, by design: they are per-project secrets, and the Android build
-applies the Google Services plugin only when the file is present, so a fresh
-clone still builds and runs without push.
-
-### Verified by automated tests only
-
-| Suite | Count |
+| Area | Where |
 |---|---|
-| API unit | 388 |
-| API integration (real Postgres, real Redis) | 340 |
-| Flutter | 497 |
-| Admin web | 106 |
-| **Total** | **1,331** |
+| Backend unit | `apps/api/test/unit` — 388 tests |
+| Backend integration, real Postgres | `apps/api/test/integration` — 365 tests |
+| Realtime over real Redis | `realtime-delivery.spec.ts` |
+| RLS and schema invariants | `schema-invariants.spec.ts`, `20260923120100_chat_notification_rls.sql` |
+| Security / authorization | `notification-authz.spec.ts`, `red-team/authz-attacks.spec.ts`, `jc005-jc006-regression.spec.ts` |
+| Failure injection | `notification-resilience.spec.ts` — worker crash, abandoned delivery, provider outage, relay outage, token rotation, ring timeout |
+| Deep links | `notification-deeplinks.spec.ts`, `deep_link_navigation_test.dart` |
+| Retry, lease and recovery | `notification-resilience.spec.ts` |
+| Offline and reconnect | `notification-resilience.spec.ts`, `app_state_behaviour_test.dart` |
+| Notification preferences | `notification-preferences.spec.ts` |
+| Announcement workflow | `notification-announcements.spec.ts`, `Announcements.test.tsx` |
+| Deduplication and idempotency | `notification-platform.spec.ts` → *deduplication, stage by stage* |
+| Multi-device and read sync | `cross_device_sync_test.dart`, `notification-platform.spec.ts` |
+| Badge outside the notification centre | `badge_independence_test.dart` |
+| Flutter | `test/` — 500 tests |
+| Admin web | `apps/admin-web` — 106 tests |
+| **Total** | **1,359 automated tests** |
 
 Plus `flutter analyze` clean over `lib/` and `test/`, and the JC-011 protected-
 test guard passing.
 
-### What remains to be done manually
+### PENDING MANUAL DEVICE VERIFICATION
 
-1. Put `google-services.json` in `android/app/` and `GoogleService-Info.plist`
-   in `ios/Runner/`; set the FCM service-account variables from
-   `infra/env/manifest.tsv` on the API.
-2. **Android** — `flutter run` on a device or a Play-Services emulator. Sign in,
-   confirm a `chat.device_token` row appears, then from another account: send a
-   message and check the notification appears on the lock screen, that its text
-   is the neutral line and **not** the message body, that tapping opens the
-   thread at that message, and that the badge is already correct when the app
-   opens. Repeat backgrounded, then force-stopped.
-3. **iOS** — on macOS with Xcode: upload the APNs key to the Firebase project
-   and repeat the same four checks on a *physical* device; the simulator cannot
-   receive remote push. Then the VoIP path separately: an incoming call must
-   ring through CallKit while the app is terminated.
-4. After each, check `chat.notification_delivery`: `status = 'sent'` per device,
-   and `delivered` only once the app reported it.
+The checklist to run is `docs/mobile/device-verification-checklist.md`: eight
+platform-mechanics checks per platform (A1–A8, I1–I8) and five real business
+scenarios driven through the actual app rather than a generic test push.
 
----
+Nothing in this list has been run. Not partially, not in a simulator.
+
+- Android physical device
+- iOS physical device
+- Real FCM delivery to a handset
+- OS-level notification presentation (lock screen, tray, banner)
+- Real terminated-app push tap
+- APNs / FCM production credentials
+- Real token rotation, as issued by the platform rather than simulated
+- iOS VoIP / CallKit ring while terminated
+
+### Why this environment cannot close it
+
+No Android SDK, no `adb`, no emulator image and no `/dev/kvm`; `flutter devices`
+reports only `Linux (desktop)`. iOS is further out of reach — building or
+running it needs macOS and Xcode, which do not exist on Linux. There is also no
+`google-services.json` and no APNs key in this repository, by design: they are
+per-project secrets, and the Android build applies the Google Services plugin
+only when the file is present, so a fresh clone still builds and runs without
+push.
 
 ## M. What is NOT ready
 

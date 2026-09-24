@@ -44,6 +44,41 @@ export class ConversationService {
     return actor;
   }
 
+  /**
+   * May this actor act on this learner at all?
+   *
+   * The gap this closes: `learnerId` travels to a parent's device in every
+   * class notification's push payload, and two routes accepted one and answered
+   * with the learner's student-group conversation -- id, family id, title,
+   * activity -- without asking who was calling. Any authenticated session could
+   * read another family's group by naming their child, and the sync route also
+   * WROTE to it.
+   *
+   * The rule mirrors who is in that group: the family's own contacts, the
+   * learner's teacher, and staff. Refusals are CONVERSATION_NOT_FOUND rather
+   * than a distinct "not yours", so a learner id cannot be probed for
+   * existence.
+   */
+  private async requireLearnerAccess(
+    learner: { id: string; familyId: string; teacherId: string | null },
+    actorId: string,
+  ): Promise<void> {
+    const actor = await this.requireActor(actorId);
+
+    const permitted =
+      actor.kind === ActorKind.STAFF ||
+      (actor.kind === ActorKind.TEACHER && learner.teacherId === actor.actorId) ||
+      (actor.kind === ActorKind.CONTACT && actor.familyId === learner.familyId);
+
+    if (!permitted) {
+      throw new CommError(
+        CommErrorCode.CONVERSATION_NOT_FOUND,
+        'conversation not found',
+        404,
+      );
+    }
+  }
+
   async requireConversation(id: string): Promise<Conversation> {
     const conv = await this.prisma.conversation.findUnique({ where: { id } });
     if (!conv) {
@@ -182,6 +217,10 @@ export class ConversationService {
     if (!learner) {
       throw new CommError(CommErrorCode.CONVERSATION_NOT_FOUND, 'learner not found', 404);
     }
+    // A learner id is not a credential. It reaches a parent's device in every
+    // class notification's push payload, so an endpoint that accepts one and
+    // answers with a conversation has to check who is asking.
+    if (actorId) await this.requireLearnerAccess(learner, actorId);
 
     const existing = await this.prisma.conversation.findFirst({
       where: {
@@ -259,12 +298,13 @@ export class ConversationService {
    * left_at rather than deleted, and every change writes a system message so the
    * group can see what happened.
    */
-  async syncStudentGroup(learnerId: string): Promise<Conversation | null> {
+  async syncStudentGroup(learnerId: string, actorId?: string): Promise<Conversation | null> {
     const learner = await this.prisma.learner.findUnique({
       where: { id: learnerId },
       include: { family: { include: { contacts: { where: { isActive: true } } } } },
     });
     if (!learner) return null;
+    if (actorId) await this.requireLearnerAccess(learner, actorId);
 
     const conv = await this.prisma.conversation.findFirst({
       where: { learnerId, type: ConversationType.STUDENT_GROUP, archivedAt: null },

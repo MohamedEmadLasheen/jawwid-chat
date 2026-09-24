@@ -28,3 +28,25 @@ apps/api/test/unit/auth/jwt.spec.ts	30	RT-001 token forgery: alg confusion, alg=
 apps/api/test/unit/auth/session.spec.ts	36	Session revocation is immediate (logout, manager revoke, deactivation) and a replayed refresh token revokes every session on the account
 apps/api/test/unit/auth/rate-limit.spec.ts	34	Login rate limiting (IDENTITY-MODEL 4, API-CONTRACT 3.1): password spraying across many accounts is caught by the source budget, which account lockout cannot see; the limiter fails closed and cannot be reset by a success
 apps/api/test/unit/auth/audit.spec.ts	48	Authentication audit trail (IDENTITY-MODEL 6): every login, refresh, logout and revocation is recorded in the same transaction as the state change, and refresh-reuse detection cannot revoke sessions without persisting why
+#
+# Notification platform contract (engineering milestone, 2026-09). These are no
+# longer "the tests for a feature" -- they are the platform's behavioural
+# contract, and every one of them guards a defect that was real and shipped or
+# a guarantee that is easy to lose in a refactor. Floors are set a little below
+# the current count so ordinary edits are not blocked, and deleting a file
+# fails the build outright.
+apps/api/test/integration/notification-platform.spec.ts	230	Frozen content across a second schedule change; five-stage deduplication with the literal key per producer; quiet hours; grouping; retention; cross-device read publish
+apps/api/test/integration/notification-resilience.spec.ts	105	Worker crash mid-dispatch; delivery abandoned between provider success and acknowledgement (at-least-once, proven); ring-timeout races; provider outages; relay outage retried; offline recovery
+apps/api/test/integration/notification-authz.spec.ts	40	A notification is not an authorization token: every push-payload id re-authorized. Guards the learner-id hole that exposed another family's student group
+apps/api/test/integration/notification-deeplinks.spec.ts	32	Every link shape against every target state: deleted, expired, withdrawn (410, not 404), unauthorized, revoked mid-flight
+apps/api/test/integration/notification-preferences.spec.ts	28	The preference is read at DELIVERY, not when queued; non-optional categories refused by service and trigger; essential types bypass a muted category
+apps/api/test/integration/notification-announcements.spec.ts	55	Duplicate publish and concurrent fan-out; audience security; priority escalation refused by service and trigger; targeting never reaches a parent
+apps/api/test/integration/notification-multi-child.spec.ts	33	Every notification names its child and carries its id; nothing crosses a family
+apps/api/test/unit/realtime/handshake-auth.spec.ts	33	Socket handshake: no credential from the query string, client actorId ignored, room authorization, reconnect re-authorized
+apps/api/test/unit/notifications/registry.spec.ts	50	Every type has a category, priority, template and deep link; every optional category has at least one type a parent can actually mute
+test/features/notifications/deep_link_navigation_test.dart	11	The tap that reaches the router, from running, terminated and signed-out. Guards the GoRouter-from-context defect that broke every notification tap
+test/features/notifications/cross_device_sync_test.dart	17	Read state converges across a parent's devices, both directions, no restart
+test/features/notifications/badge_independence_test.dart	12	The badge advances with no notification screen mounted, from every destination in the shell
+test/features/notifications/app_state_behaviour_test.dart	24	App states A/B/E; offline recovery; a read attempted offline rolls back rather than lying
+test/features/notifications/push_lifecycle_test.dart	35	Token lifecycle, tap in all three app states, and idempotent consumption of a duplicate physical push
+test/core/realtime/realtime_test.dart	25	One shared transport; the client replays its rooms after a reconnect; the event contract mirrors the server's
