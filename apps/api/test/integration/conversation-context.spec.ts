@@ -14,7 +14,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { toConversationDto } from '@communication/contracts/dto';
-import { buildGraph, seed, truncate, Scenario } from './harness';
+import { buildGraph, seed, truncate, withAssignmentGate, Scenario } from './harness';
 
 jest.setTimeout(60_000);
 
@@ -106,7 +106,8 @@ describe('learner context', () => {
        values ('${otherContact}'::uuid, '${otherFamily}'::uuid, 'parent_z',
                'primary_guardian', true, true)`,
     );
-    await g.prisma.$executeRawUnsafe(
+    await withAssignmentGate(
+      g.prisma,
       `insert into chat.learner (id, family_id, name, teacher_id)
        values ('${otherLearner}'::uuid, '${otherFamily}'::uuid, 'learner_other',
                '${s.teacherId}'::uuid)`,
