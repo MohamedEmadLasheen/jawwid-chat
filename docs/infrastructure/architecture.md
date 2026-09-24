@@ -18,16 +18,16 @@ and database, across an explicit, read-only boundary.
 
 | Component | Technology | Process | State | Status |
 |---|---|---|---|---|
-| API | NestJS 11 (Node 22) | `node dist/main.js` | stateless | code exists, **no bootstrap yet** |
-| Worker | same image | `node dist/worker.js` | stateless | **PLANNED** (AI #2) |
-| Realtime | Socket.IO on the API process | — | in-memory per instance | dependency declared, not wired |
+| API | NestJS 11 (Node 24) | `node dist/main.js` | stateless | implemented; `src/main.ts` exists |
+| Worker | same image | `node dist/worker.js` | stateless | implemented; drains the transactional outbox |
+| Realtime | Socket.IO on the API process | — | in-memory per instance | implemented; Redis adapter wired in `infra/realtime/io-adapter.ts` |
 | Database | PostgreSQL 17 | managed | **authoritative state** | live locally |
 | Cache / queue | Redis 7 | managed | ephemeral + queue durability | live locally |
-| Object storage | S3-compatible (R2 in production, MinIO locally) | managed | attachments | local only |
+| Object storage | S3-compatible (any; MinIO locally) | managed | attachments | implemented (`S3ObjectStorage`); selected by configuration |
 | Push | FCM + APNs | external | — | **PLANNED** |
 | Calling | LiveKit | external | rooms | **PLANNED** |
 | Admin Web | React 18 + Vite, static | CDN or nginx | none | builds |
-| Mobile | Flutter (parent + teacher) | app stores | local cache | **cannot be built** (no `pubspec.yaml`, no SDK) |
+| Mobile | Flutter (parent + teacher) | app stores | local cache | builds and tests; not yet released to a store |
 | Jawwid Core | external API + database | external | source of truth for accounts, children, subscriptions | boundary views exist |
 
 ---
@@ -58,10 +58,19 @@ and database, across an explicit, read-only boundary.
               (BullMQ consumers)
 ```
 
-Media never flows through the API: clients upload to and download from object
-storage directly, using short-lived signed URLs the API issues after it has
-authorized the request. This keeps large transfers off the API's connection
-budget and means an attachment cannot be read without an authorization decision.
+Media does not flow through the API **when S3-compatible storage is
+configured**: clients upload to and download from the bucket directly, using
+short-lived signed URLs the API issues after it has authorized the request.
+This keeps large transfers off the API's connection budget and means an
+attachment cannot be read without an authorization decision.
+
+With no bucket configured the process falls back to the local reference
+implementation, which signs URLs pointing at its own `/storage` route and keeps
+the bytes on the container filesystem. That is a **local-development mode
+only**: those bytes do not survive a redeploy and are not visible to a second
+replica, so an upload handled by one instance is a 404 from the other. The
+selection and the refusal to start on a half-configured bucket live in
+`communication/attachments/storage.provider.ts`.
 
 ---
 
@@ -120,14 +129,26 @@ Consequences that follow from that, and that the application must respect:
   HTTP — which matters most for BR-1, the Teacher↔Parent prohibition.
 - Reverse proxies must not kill idle upgraded connections; see §8.
 
-*Status: dependencies declared, gateway not yet implemented (AI #2).*
+*Status: implemented. `RealtimeGateway` plus `InfraIoAdapter`, which attaches the
+Redis adapter before the server listens.*
 
 ---
 
-## 6. Queues and workers — PLANNED
+## 6. Queues and workers
 
-BullMQ on Redis. Queue keys are namespaced by `QUEUE_PREFIX` per environment, so
-a misconfigured staging worker cannot consume production jobs.
+**There is no queue, and that is the implemented decision.** `bullmq` is a
+declared dependency that nothing imports. `src/worker.ts` says why: the outbox
+row is written in the same transaction as the domain change, so the database is
+already the source of truth for what needs publishing, and "introducing BullMQ
+here would add a second, weaker record of the same facts."
+
+The worker is a polling drain over `chat.outbox_event`, claiming rows with a
+conditional update so two workers never publish the same event twice. It is
+tuned by `OUTBOX_POLL_MS`, `OUTBOX_BATCH_SIZE` and `OUTBOX_IDLE_BACKOFF_MS`, not
+by `WORKER_CONCURRENCY` — which nothing reads.
+
+`QUEUE_PREFIX` namespaces Redis keys per environment, so a misconfigured staging
+process cannot collide with production.
 
 Requirements infrastructure places on the worker (AI #2 owns the implementation):
 
@@ -138,8 +159,22 @@ Requirements infrastructure places on the worker (AI #2 owns the implementation)
 - Every job has a timeout. An unbounded job holds a worker slot forever.
 - The worker handles `SIGTERM` by refusing new jobs, finishing in-flight work
   within the grace period, and exiting.
-- Redis is configured `appendonly yes` and `maxmemory-policy noeviction`: a
-  queue backend that evicts keys under memory pressure deletes pending work.
+### What Redis is actually required to do
+
+Taken from the consumers, not from the plan. Redis is used by: the Socket.IO
+adapter (pub/sub), the realtime relay (pub/sub), presence and typing (`SET`
+with `EX`), and login rate limiting (`EVAL` of a Lua fixed-window script). The
+commands used are `GET`, `SET`, `DEL`, `KEYS`, `PUBLISH`, `SUBSCRIBE` and
+`EVAL`.
+
+| Capability | Required? | Why |
+|---|---|---|
+| Pub/sub | **Yes** | Cross-instance realtime fan-out. Without it, a second replica silently delivers events to a subset of clients. |
+| Key expiry (`SET … EX`) | **Yes** | Presence and typing are TTL-bounded by design, so a crashed process expires on its own. |
+| Lua (`EVAL`) | **Yes** | The rate limiter reserves its slot atomically; a read-then-decide version reopens the window. |
+| `appendonly` / AOF | **No** | Nothing durable lives in Redis. The queue justification does not apply — the outbox is in Postgres. Everything here is ephemeral and TTL-bounded. |
+| `maxmemory-policy noeviction` | **Recommended, not required** | Evicting a presence or typing key is cosmetic. Evicting a *rate-limit* key ends someone's window early, which is a small weakening — so `noeviction` is still the right setting, but it is no longer the correctness requirement it would be for a queue. |
+| Redis **7** specifically | **No** | No version-7-only command is used. The 7 in the compose file is a supported-version floor, not a dependency. |
 
 ---
 

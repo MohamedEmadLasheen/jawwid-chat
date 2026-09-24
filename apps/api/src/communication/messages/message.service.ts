@@ -113,6 +113,19 @@ export class MessageService {
       this.attachments.validate(a.kind, a.mimeType, a.byteSize, a.durationMs);
     }
 
+    // And the object keys must belong to THIS conversation. `conv.id` is the
+    // conversation the server resolved and authorized `canSend` against, not
+    // the id in the key -- a key names a namespace, and the namespace in a
+    // client-supplied key is a claim. Without this, a member of one
+    // conversation could attach another's object key and then be handed a
+    // signed URL for it by the ordinary read path.
+    //
+    // The signing boundary re-checks this independently
+    // (`AttachmentService.signUrlsForMessages`); doing it here as well means a
+    // foreign key never reaches the database, and the caller gets a 403 rather
+    // than a unique-constraint 500.
+    this.attachments.assertAttachmentsBelongTo(conv.id, input.attachments ?? []);
+
     const family = conv.familyId
       ? await this.prisma.family.findUnique({
           where: { id: conv.familyId },
