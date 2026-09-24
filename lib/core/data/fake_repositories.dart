@@ -193,17 +193,29 @@ class FakeCallRepository implements CallRepository {
   final FakeBackend backend;
 
   @override
-  Future<CallGrant> requestGrant({required String conversationId}) async =>
-      backend.requestGrant(conversationId: conversationId);
+  Future<CallCapability> capability({required String conversationId}) async =>
+      const CallCapability(canCall: true);
 
   @override
-  Future<CallGrant> acceptIncoming({required String callId}) async =>
-      throw const AppError(AppErrorKind.notFound, code: 'call_not_found');
+  Future<StartedCall> start({required String conversationId}) async =>
+      backend.startCall(conversationId: conversationId);
+
+  @override
+  Future<CallMediaGrant> mediaToken({required String callId}) async =>
+      backend.mediaToken(callId: callId);
+
+  @override
+  Future<void> accept({required String callId}) async {}
 
   @override
   Future<void> decline({required String callId}) async {}
 
   @override
-  Future<Page<CallHistoryEntry>> history({String? cursor}) async =>
-      const Page(items: []);
+  Future<void> end({required String callId, String? outcome}) async {}
+
+  @override
+  Future<List<CallHistoryEntry>> callHistory({
+    required String conversationId,
+  }) async =>
+      const [];
 }

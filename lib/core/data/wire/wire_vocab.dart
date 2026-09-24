@@ -83,6 +83,16 @@ abstract final class WireErrors {
   static const replyTargetCrossConversation = 'COMM.REPLY_TARGET_CROSS_CONVERSATION';
   static const emptyMessage = 'COMM.EMPTY_MESSAGE';
 
+  // Calling. Kept distinguishable because they mean different things to a
+  // caller: a call that ended is over, a participant who left has already
+  // answered one way, and an unauthorized pairing is not a retry.
+  static const callNotFound = 'COMM.CALL_NOT_FOUND';
+  static const callAlreadyEnded = 'COMM.CALL_ALREADY_ENDED';
+  static const callNotAParticipant = 'COMM.CALL_NOT_A_PARTICIPANT';
+  static const callParticipantLeft = 'COMM.CALL_PARTICIPANT_LEFT';
+  static const callNotRinging = 'COMM.CALL_NOT_RINGING';
+  static const callAlreadyDeclined = 'COMM.CALL_ALREADY_DECLINED';
+
   /// Codes that mean "this will never succeed, stop asking".
   static const terminal = <String>{
     teacherParentNotAuthorized,
@@ -97,5 +107,12 @@ abstract final class WireErrors {
     messageNotFound,
     replyTargetCrossConversation,
     emptyMessage,
+    // A terminal call state does not become untrue on a retry.
+    callNotFound,
+    callAlreadyEnded,
+    callNotAParticipant,
+    callParticipantLeft,
+    callNotRinging,
+    callAlreadyDeclined,
   };
 }

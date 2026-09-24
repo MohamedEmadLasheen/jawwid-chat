@@ -44,21 +44,57 @@ class StudentGroup {
   final bool requiresApproval;
 }
 
-/// A backend-authorized call session.
+/// Whether the server would let this actor START a call in a conversation.
 ///
-/// The client never constructs a room name and never self-authorizes (§31, §35): it receives
-/// [serverUrl] and a short-lived [token] from the backend, or it does not join at all.
-class CallGrant {
-  const CallGrant({
-    required this.callId,
-    required this.serverUrl,
+/// ADVISORY, and short-lived. It is what the policy says at the moment it was
+/// asked, and it is not a promise about the request that follows: authorization
+/// can be revoked in between, and `POST /calls` decides again. The interface
+/// uses it to know whether to OFFER a call — `screens/call.md` §4 requires the
+/// affordance to be absent where the backend does not authorize the pairing —
+/// and for nothing else.
+///
+/// Never cache it. The relationship it reflects can change at any time.
+class CallCapability {
+  const CallCapability({required this.canCall, this.code});
+
+  final bool canCall;
+
+  /// The server's own `COMM.*` code when refused, null when allowed. A stable
+  /// identifier for which rule said no, never a sentence and never a name.
+  final String? code;
+}
+
+/// A call the server has created and is ringing.
+class StartedCall {
+  const StartedCall({required this.callId, required this.roomName});
+
+  final String callId;
+
+  /// The server's handle for the media room. Carried because the API returns
+  /// it; W3 does nothing with it. Joining is W4's.
+  final String roomName;
+}
+
+/// A short-lived credential for the media room.
+///
+/// The client never constructs a room name and never self-authorizes (§31,
+/// §35): it receives [serverUrl] and [token] from the backend, or it does not
+/// join at all.
+///
+/// W3 OBTAINS THIS AND DOES NOT USE IT. No LiveKit client exists yet; parsing
+/// this into one is W4. It is modelled here because the endpoint is part of the
+/// call contract, not because anything consumes it.
+class CallMediaGrant {
+  const CallMediaGrant({
     required this.token,
+    required this.serverUrl,
+    required this.roomName,
     required this.expiresAt,
   });
 
-  final String callId;
-  final String serverUrl;
   final String token;
+  final String serverUrl;
+  final String roomName;
   final DateTime expiresAt;
 }
 
@@ -339,14 +375,55 @@ abstract interface class GroupRepository {
   Future<StudentGroup> group(String conversationId);
 }
 
+/// The call operations the backend actually exposes.
+///
+/// RECONCILED 2026-09-24. The previous shape described an API that does not
+/// exist: one `requestGrant` for what is two server calls, an `acceptIncoming`
+/// returning a grant the server does not send, no `end` at all, and a global
+/// paginated history for a per-conversation endpoint with no cursor. It was
+/// written against an imagined backend and nothing had ever exercised it.
+///
+/// Every method below is one endpoint in `contracts/API-CONTRACT.md` §3.4/§3.8.
+///
+/// NO AUTHORIZATION LIVES HERE. Each method asks the server and reports what it
+/// said. Errors keep the server's `COMM.*` code so a caller can tell a revoked
+/// relationship from a call that has already ended — see [WireErrors].
 abstract interface class CallRepository {
-  /// Ask the backend to authorize a call. Throws an [AppError] with
-  /// [AppErrorKind.forbidden] when policy refuses; the client must not retry or improvise.
-  Future<CallGrant> requestGrant({required String conversationId});
+  /// `GET /conversations/:id/call-capability`.
+  ///
+  /// Advisory only. A `true` does not make the [start] that follows succeed.
+  Future<CallCapability> capability({required String conversationId});
 
-  Future<CallGrant> acceptIncoming({required String callId});
+  /// `POST /calls` — create the call and start it ringing.
+  ///
+  /// This is the authorization that matters. It is re-decided server-side and
+  /// throws when refused; the client must not retry or improvise around it.
+  Future<StartedCall> start({required String conversationId});
 
+  /// `POST /calls/:id/token` — a short-lived, room-scoped media credential.
+  ///
+  /// W3 does not consume it. W4 does.
+  Future<CallMediaGrant> mediaToken({required String callId});
+
+  /// `POST /calls/:id/accept` — answer at the APPLICATION level.
+  ///
+  /// It does not mean a device reached the media room; the server is explicit
+  /// about that, and so is this client.
+  Future<void> accept({required String callId});
+
+  /// `POST /calls/:id/decline` — refuse a ringing call.
   Future<void> decline({required String callId});
 
-  Future<Page<CallHistoryEntry>> history({String? cursor});
+  /// `POST /calls/:id/end`.
+  ///
+  /// `outcome` is optional; the server derives it when omitted, and deriving it
+  /// here would be the client inventing history.
+  Future<void> end({required String callId, String? outcome});
+
+  /// `GET /calls/history/:conversationId`.
+  ///
+  /// PER CONVERSATION, and unpaginated — that is the endpoint. There is no
+  /// global call history on the server, and this interface does not pretend
+  /// otherwise; `docs/mobile/backend-dependencies.md` carries the gap.
+  Future<List<CallHistoryEntry>> callHistory({required String conversationId});
 }

@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/misc.dart';
 import '../../../app/providers.dart';
 import '../../../core/data/repositories.dart';
 import '../../../core/errors/app_error.dart';
-import '../../../core/network/error_mapper.dart';
 
 /// Call history, from the backend and nowhere else.
 ///
@@ -21,9 +20,11 @@ class CallsController extends AsyncNotifier<List<CallHistoryEntry>> {
   Future<List<CallHistoryEntry>> build() => _load();
 
   Future<List<CallHistoryEntry>> _load() async {
-    final CallRepository repository;
     try {
-      repository = ref.read(callRepositoryProvider);
+      // Read for its refusal: an unregistered provider throws, and that is a
+      // different fault from the one below -- a build wired wrongly, rather
+      // than an endpoint that does not exist.
+      ref.read(callRepositoryProvider);
     } catch (error) {
       // Riverpod wraps whatever a provider's create function throws in a
       // ProviderException, so the UnimplementedError the composition root raises for an
@@ -38,12 +39,30 @@ class CallsController extends AsyncNotifier<List<CallHistoryEntry>> {
       );
     }
 
-    try {
-      final page = await repository.history();
-      return page.items;
-    } catch (error) {
-      throw ErrorMapper.map(error);
-    }
+    // THERE IS NO GLOBAL CALL HISTORY ON THE SERVER.
+    //
+    // `GET /calls/history/:conversationId` is the only history endpoint: it
+    // takes a conversation and returns that conversation's calls, unpaginated.
+    // This screen is the ACCOUNT's call list and has no conversation to ask
+    // about, so there is nothing it can honestly request.
+    //
+    // Until 2026-09-24 the gap was hidden rather than absent. The repository
+    // declared a global `history({cursor})` that no route answered, and this
+    // screen reported "calling is not wired" for the unrelated reason that the
+    // HTTP build registered no repository. A repository now exists and matches
+    // the real API, so the absence is stated instead of implied.
+    //
+    // Building the list client-side -- every conversation fetched and their
+    // histories merged -- is deliberately not done: N+1 requests for one
+    // screen, with ordering and paging invented by the client rather than
+    // given by the server. Carry-forward for the call-history workstream,
+    // which owns the endpoint that would answer this.
+    throw const AppError(
+      AppErrorKind.notFound,
+      code: callsNotAvailableCode,
+      debugDetail:
+          'No global call-history endpoint exists; /calls/history is per-conversation.',
+    );
   }
 
   Future<void> refresh() async {
