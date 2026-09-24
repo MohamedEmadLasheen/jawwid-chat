@@ -4,6 +4,68 @@
 > notification infrastructure. Source of truth for how an event becomes
 > something a parent sees.
 
+## 0. Status — CLOSED, and frozen
+
+```
+NOTIFICATION INFRASTRUCTURE ........... ENGINEERING COMPLETE   (phase closed)
+PHYSICAL ANDROID/iOS VERIFICATION ..... PENDING
+NOTIFICATIONS WITHOUT A PRODUCER ...... NOT READY
+```
+
+This phase is closed. The following are **frozen infrastructure**. Future
+product work consumes them; it does not extend or replace them.
+
+- the event → notification pipeline
+- notification persistence
+- delivery tracking
+- retry and recovery behaviour
+- the FCM integration
+- the realtime integration
+- preferences
+- deep-link routing
+- the authorization model
+- idempotency
+- cross-device synchronization
+- retention
+- announcement infrastructure
+- the notification contract tests
+
+### Adding a notification for a new feature
+
+The whole of what a new business feature does:
+
+1. Emit **one** domain event, written to `chat.outbox_event` in the same
+   transaction as the change that caused it.
+2. Add its type to the registry in `contracts/notifications.ts` — category,
+   priority, essential, template, deep link — and its templates to the catalog
+   migration.
+3. Call `NotificationService.schedule()` with a deterministic dedupe key.
+
+That is the entire integration. Do **not** add a second notification path,
+delivery mechanism, retry system, push abstraction, realtime transport, or
+authorization mechanism. If a feature appears to need one, the requirement is
+wrong or this document is — resolve that before writing code.
+
+### The two gates that stay open
+
+**Physical device verification** — `docs/mobile/device-verification-checklist.md`
+is the source of truth. Android and iOS are recorded separately, as PASS or
+FAIL, by a person with a handset. Code inspection and automated tests do not
+close this gate and never will, regardless of how many of them pass.
+
+**Notifications with no producer** — attendance, student progress,
+package/balance and billing/payment stay NOT READY until the domain event
+exists. No placeholder producer is written to make a matrix look complete.
+
+### The contract tests are a build gate
+
+The suites listed in `docs/qa/protected-tests.tsv` under *Notification platform
+contract* are mandatory. `scripts/qa/check-protected-tests.sh` runs in the
+`guards` job of `.github/workflows/ci.yml`, and every other CI job depends on
+`guards` — so deleting or gutting one of them fails the whole pipeline, not one
+suite. Removing a line from that manifest is a deliberate, reviewable act, and
+is never a way to make a build green.
+
 ## 1. Phase 0 — what was already here
 
 The repository already had a **real notification engine**, not a stub. It was

@@ -6,6 +6,9 @@ PHYSICAL DEVICE VERIFICATION .......... PENDING
 DOMAIN-EVENT-DEPENDENT NOTIFICATIONS .. NOT READY UNTIL THEIR PRODUCERS EXIST
 ```
 
+**Phase closed.** Accepted on the states above; the frozen surfaces and the
+rules for future work are recorded in `notification-platform.md` §0.
+
 These three are separate statuses and stay separate. Engineering being complete
 does not make push delivery verified; push being unverified does not make the
 engineering incomplete; and neither says anything about notification types whose
