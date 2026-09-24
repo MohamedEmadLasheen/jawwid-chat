@@ -12,7 +12,7 @@
  * Requires Redis (REDIS_URL) and the migrated database (DATABASE_URL).
  */
 import Redis from 'ioredis';
-import { PrismaService } from '@platform/prisma.service';
+import { Scenario, buildGraph, seed, truncate } from './harness';
 import { OutboxWorker } from '@communication/outbox/outbox.worker';
 import { RelayRealtimePublisher } from '../../src/infra/realtime/relay.publisher';
 import { realtimeChannel, decodeEnvelope } from '../../src/infra/realtime/realtime-channel';
@@ -94,18 +94,48 @@ describe('D-2 · realtime delivery from a process with no Socket.IO server', () 
   });
 });
 
+/**
+ * This block owns its data.
+ *
+ * It used to read `conversation.findFirst()` and throw "no conversation in the
+ * test database" when the table was empty -- so it passed only when some OTHER
+ * suite had run first and left a conversation behind. Which suite that was
+ * depended on Jest's file ordering, and Jest orders by cached duration, so the
+ * dependency was invisible until the order shifted. Proven at 12cf429: the
+ * whole suite is green in a full run and this case fails on its own against an
+ * empty database.
+ *
+ * A test that needs a row creates the row. truncate + seed + getOrCreateDirect
+ * is what every other integration suite here does, and it is deterministic
+ * whatever runs before or after.
+ */
 describe('D-2 · a failed publish returns the event to the outbox', () => {
-  const prisma = new PrismaService();
+  const g = buildGraph();
+  const prisma = g.prisma;
+  let s: Scenario;
+
+  beforeAll(async () => {
+    await prisma.$connect();
+  });
 
   afterAll(async () => {
     await prisma.$disconnect();
   });
 
+  beforeEach(async () => {
+    await truncate(prisma);
+    s = await seed(prisma);
+    g.coverage.onDutyId = s.ownerId;
+  });
+
   it('leaves the row pending with the error recorded, never published', async () => {
-    const conversationId = await prisma.conversation
-      .findFirst({ select: { id: true } })
-      .then((c) => c?.id);
-    if (!conversationId) throw new Error('no conversation in the test database');
+    // Parent <-> owning admin: authorized by the matrix without depending on
+    // the PD-6 relationship, so this fixture cannot be broken by a change to
+    // the teacher/parent rule it is not testing.
+    const { id: conversationId } = await g.conversations.getOrCreateDirect(
+      s.parentId,
+      s.ownerId,
+    );
 
     const event = await prisma.outboxEvent.create({
       data: {
