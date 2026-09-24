@@ -6,7 +6,7 @@ import { CommErrorCode } from '@platform/errors';
 import { QuietHoursService } from '@communication/notifications/quiet-hours.service';
 import { TemplateService } from '@communication/notifications/template.service';
 import { ReminderService } from '@communication/notifications/reminder.service';
-import { buildGraph, seed, truncate, Scenario } from './harness';
+import { buildGraph, seed, truncate, Scenario, withAssignmentGate } from './harness';
 
 jest.setTimeout(60_000);
 
@@ -55,7 +55,9 @@ describe('student groups', () => {
 
   it('a teacher change removes the old teacher, adds the new one, and says so', async () => {
     const group = await g.conversations.ensureStudentGroup(s.learnerId);
-    await g.prisma.$executeRawUnsafe(
+    // The academy reassigns the learner; ingestion is what writes it.
+    await withAssignmentGate(
+      g.prisma,
       `update chat.learner set teacher_id = '${s.newTeacherId}'::uuid where id = '${s.learnerId}'::uuid`,
     );
 

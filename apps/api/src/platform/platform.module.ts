@@ -5,6 +5,7 @@ import { SqlCoverageService } from './coverage.service';
 import { PrismaAuditService } from './audit.service';
 import { AuthorizationService } from './authorization.service';
 import { AppConfigService } from './app-config.service';
+import { RelationshipService } from './relationship.service';
 import { AUDIT_SERVICE, COVERAGE_SERVICE, IDENTITY_SERVICE } from './tokens';
 
 /**
@@ -20,6 +21,7 @@ import { AUDIT_SERVICE, COVERAGE_SERVICE, IDENTITY_SERVICE } from './tokens';
     PrismaService,
     AppConfigService,
     AuthorizationService,
+    RelationshipService,
     { provide: IDENTITY_SERVICE, useClass: PrismaIdentityService },
     { provide: COVERAGE_SERVICE, useClass: SqlCoverageService },
     { provide: AUDIT_SERVICE, useClass: PrismaAuditService },
@@ -28,6 +30,7 @@ import { AUDIT_SERVICE, COVERAGE_SERVICE, IDENTITY_SERVICE } from './tokens';
     PrismaService,
     AppConfigService,
     AuthorizationService,
+    RelationshipService,
     IDENTITY_SERVICE,
     COVERAGE_SERVICE,
     AUDIT_SERVICE,

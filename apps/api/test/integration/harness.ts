@@ -70,6 +70,26 @@ export interface Scenario {
 }
 
 /**
+ * Write a teacher <-> learner assignment the way ingestion will.
+ *
+ * `chat.learner.teacher_id` is the academy's fact and is trigger-guarded
+ * (`learner_assignment_is_guarded`, PD-6/OD-04): Chat-side edits are refused.
+ * Fixtures are not a Chat-side edit -- they stand in for assignment state that
+ * arrives from the academy -- so they open the same gate the future ingestion
+ * opens. The setting is transaction-local, which is why the gate and the write
+ * have to travel together in one `$transaction`.
+ */
+export async function withAssignmentGate(
+  prisma: PrismaService,
+  sql: string,
+): Promise<void> {
+  await prisma.$transaction([
+    prisma.$executeRawUnsafe(`select set_config('chat.syncing_assignment', 'on', true)`),
+    prisma.$executeRawUnsafe(sql),
+  ]);
+}
+
+/**
  * Synthetic fixtures only. Real staff names and schedules must never enter test
  * data (QA gate G-16), so everyone here is admin_a / parent_b / teacher_c.
  */
@@ -109,13 +129,15 @@ export async function seed(prisma: PrismaService): Promise<Scenario> {
        ('${ids.parentId}'::uuid, '${ids.familyId}'::uuid, 'parent_p', 'primary_guardian', true, true),
        ('${ids.otherParentId}'::uuid, '${ids.familyId}'::uuid, 'parent_q', 'authorized_contact', true, true)`,
   );
-  await prisma.$executeRawUnsafe(
+  await withAssignmentGate(
+    prisma,
     `insert into chat.learner (id, family_id, name, teacher_id)
      values ('${ids.learnerId}'::uuid, '${ids.familyId}'::uuid, 'learner_l', '${ids.teacherId}'::uuid)`,
   );
   // A second learner for the reassignment cases. Since PR-A both teachers are
   // resolvable from chat.teacher in their own right, not by appearing here.
-  await prisma.$executeRawUnsafe(
+  await withAssignmentGate(
+    prisma,
     `insert into chat.learner (id, family_id, name, teacher_id)
      values ('${randomUUID()}'::uuid, '${ids.familyId}'::uuid, 'learner_m', '${ids.newTeacherId}'::uuid)`,
   );
