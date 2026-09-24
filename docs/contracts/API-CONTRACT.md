@@ -546,6 +546,22 @@ CallHistoryDto { id, conversationId, type: 'direct'|'group', status: 'ringing'|'
 
 **POST /calls/:id/end** — EXISTS · Permission `calls.accept` · Scope participant. Request `{ outcome?: 'answered'|'missed'|'declined' }` (default derived from `answeredAt`). Call `ended`, all open participants `leftAt`, `durationSeconds` computed. Realtime: `call.ended { callId, conversationId, outcome, durationSeconds }`. Audit: `event_log` `call_ended`.
 
+> **Ring timeout (Phase 11).** A call nobody answers is not left ringing. The
+> worker sweeps calls whose `started_at` is older than
+> `chat.config['call.ring_timeout_seconds']` (45s) and ends them server-side with
+> `outcome: 'missed'`, `durationSeconds: 0`, `answeredAt` null and every
+> participant's `joinedAt` still null.
+>
+> **No new event and no new state.** The terminal event is the same
+> `call.ended { callId, conversationId, outcome: 'missed', durationSeconds: 0 }`
+> a client already handles; `outcome` is what distinguishes a timeout from an
+> answered or declined ending, so nothing needs to learn a second vocabulary. No
+> `call.expired` event and no `expired` status exist.
+>
+> The transition is a single conditional `UPDATE ... WHERE status = 'ringing'`,
+> so it is atomic, idempotent, and safe to run on every worker replica at once.
+> An expired call cannot then be accepted, declined, or issued a media token.
+
 **GET /calls/history/:conversationId** — EXISTS → RECONCILE · Permission `conversations.read` · Scope `canRead`. Response today `{ calls: CallHistoryDto[] }` newest first, `take: 100`; Phase 1 `Page<CallHistoryDto>`.
 
 ### 3.9 Notifications / Devices (`notification.controller.ts`, `notification.service.ts`)

@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
@@ -9,7 +9,7 @@ import { AUDIT_SERVICE, IDENTITY_SERVICE, MEDIA_TOKEN_ISSUER } from '../../platf
 import type { IdentityService } from '../../platform/identity.service';
 import type { AuditService } from '../../platform/audit.service';
 import type { MediaTokenIssuer } from './media-token';
-import { Actor } from '../../platform/types';
+import { Actor, SYSTEM_ACTOR } from '../../platform/types';
 import { ConversationService } from '../conversations/conversation.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
@@ -27,6 +27,8 @@ import { CallOutcome, CallStatus, CallType, ConversationType } from '../contract
  */
 @Injectable()
 export class CallService {
+  private readonly log = new Logger(CallService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly authz: AuthorizationService,
@@ -383,6 +385,103 @@ export class CallService {
         type: 'call_ended',
         payload: { callId, outcome: resolved, durationSeconds: duration },
       });
+    });
+  }
+
+  /**
+   * Expire the calls that have been ringing past the configured timeout.
+   *
+   * A SERVER-OWNED LIFECYCLE OPERATION. It takes no actor and answers to no
+   * request. Nothing about it is influenced by a client: not the call id, not
+   * the status, not the outcome, and above all not the time -- the deadline is
+   * computed by the database, from the database's clock, against the row's own
+   * `started_at`. An API replica with a skewed clock cannot expire a call early
+   * or late, because no application clock is consulted.
+   *
+   * WHY ONE STATEMENT. The claim and the transition are the same UPDATE:
+   *
+   *   update chat.call set ... where status = 'ringing' and started_at < deadline
+   *
+   * There is no read, no decision, no later write -- so there is no window in
+   * which the state can change underneath a decision already taken. Postgres
+   * takes a row lock per matching row and, if another transaction holds it,
+   * waits and then RE-EVALUATES the WHERE clause against the committed row. So:
+   *
+   *   * sweep vs accept -- accept holds the row via `SELECT ... FOR UPDATE`
+   *     (see accept()). The sweep blocks, then re-checks, sees `status =
+   *     'active'`, and does not match. The call stays answered.
+   *   * sweep vs end -- same shape: `status = 'ended'` no longer matches.
+   *   * sweep vs sweep, on two workers -- the first to take the lock updates the
+   *     row; the second re-checks and finds `status = 'ended'`. Exactly one
+   *     worker gets the row back from RETURNING, so exactly one enqueues the
+   *     terminal event.
+   *
+   * That last property is what makes it safe to run this on every replica
+   * simultaneously, which is the deployment shape: the worker runs from the
+   * same image as the API and may be scaled to any number of copies.
+   *
+   * IDEMPOTENT BY CONSTRUCTION. A second pass over an already-expired call
+   * matches nothing -- it is no longer ringing -- so it writes nothing and
+   * enqueues nothing. Running the sweep once, a thousand times, or from ten
+   * workers at once produces the same database.
+   *
+   * The terminal event is `call.ended` with `outcome: 'missed'`, enqueued in
+   * the same transaction as the transition. A caller therefore learns about a
+   * timeout through the event it already handles for every other ending, and no
+   * client needs to know that a sweep exists.
+   */
+  async expireRingingCalls(limit = 200): Promise<number> {
+    const timeoutSeconds = await this.config.get('call.ring_timeout_seconds');
+
+    return this.prisma.$transaction(async (tx) => {
+      // One statement: claim and transition together. `duration_seconds = 0`
+      // because nobody answered -- see the history note in end().
+      const expired = await tx.$queryRaw<Array<{ id: string; conversation_id: string; family_id: string | null }>>`
+        update chat.call
+           set status = 'ended',
+               ended_at = now(),
+               outcome = 'missed',
+               duration_seconds = 0
+         where id in (
+           select id from chat.call
+            where status = 'ringing'
+              and started_at < now() - make_interval(secs => ${timeoutSeconds}::double precision)
+            order by started_at
+            limit ${limit}
+            for update skip locked
+         )
+        returning id, conversation_id, family_id
+      `;
+
+      for (const call of expired) {
+        // Mirrors end(): a participant who never answered still stops being on
+        // the call. `joined_at` is untouched and stays null, so the history says
+        // plainly that nobody picked up.
+        await tx.callParticipant.updateMany({
+          where: { callId: call.id, leftAt: null },
+          data: { leftAt: new Date() },
+        });
+
+        await this.outbox.enqueue(tx, CommEvent.CALL_ENDED, {
+          callId: call.id,
+          conversationId: call.conversation_id,
+          outcome: CallOutcome.MISSED,
+          durationSeconds: 0,
+        });
+
+        await this.audit.event(tx, {
+          familyId: call.family_id,
+          actorKind: SYSTEM_ACTOR.kind,
+          actorId: null,
+          type: 'call_ended',
+          payload: { callId: call.id, outcome: CallOutcome.MISSED, reason: 'ring_timeout' },
+        });
+      }
+
+      if (expired.length > 0) {
+        this.log.log(`ring timeout expired ${expired.length} call(s) after ${timeoutSeconds}s`);
+      }
+      return expired.length;
     });
   }
 
