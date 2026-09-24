@@ -1,3 +1,8 @@
+> **STATUS: IN FORCE, AMENDED IN PART.** §4 **BR-1** and the §9 calling-matrix row
+> for 1:1 Teacher ↔ Parent are re-versioned by [PRD v0.2](jawwid-chat-prd-v0.2.md)
+> (PD-6, 2026-09-23). Read those two passages there. Every other section of this
+> document remains the PRD and is unchanged. Canonical index: `docs/README.md`.
+
 **Contents**
 
 1. [1Summary](https://26080e48-6fef-48c4-a1e8-65b53e9cd8f3.frame.claudeusercontent.com/_f/1788611809-11b4/?__frame_t=5fF9HJ4lW1XkqMO_T5VMg4sW.5348a617-f1a4-4062-acf4-5e9ef8f457fc.e8b18248-5c46-4b36-b359-8b3d12aa6136.1788615594&__frame_v=manifest.db4407fd1f4905d5.json#s1)
@@ -23,20 +28,11 @@
 
 A customer communication and customer operations system for Jawwid Online Quran & Arabic Academy. Familiar like WhatsApp, owned and operated by Jawwid.
 
-Version0.2**Owner-approved**
+Version0.1**Draft for review**
 
-Date23 September 2026 *(v0.1: 5 September 2026)*
+Date5 September 2026
 
 OwnerMohamed Lasheen
-
-> **v0.2 — what changed.** One rule changed: **BR-1**. Direct Parent ↔ Teacher
-> 1:1 messaging and calling are now **allowed for an authorized relationship**,
-> under product decision **PD-6** (23 September 2026). The v0.1 prohibition is
-> preserved verbatim in [Appendix A — Superseded rules](#appendix-a--superseded-rules),
-> together with the full migration record. Nothing else in this document changed.
->
-> PD-6 is recorded canonically in `JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4.
-> **PD-2 is unaffected:** a parent still may not initiate a Student Group call.
 
 Working nameJawwid Chat (placeholder)
 
@@ -94,17 +90,9 @@ Identity inside the app is **name, profile and role**. Phone numbers are stored
 
 These rules are the constitution of the product. They are enforced in backend authorization and in database constraints, not by hiding buttons. A direct API call that violates a rule is rejected with an audited error. No future feature may contradict them unless the rule itself is explicitly changed and re-versioned here.
 
-**BR-1 · Teacher ↔ Parent communication requires an authorized relationship**
+**BR-1 · No direct Teacher ↔ Parent communication**
 
-*Re-versioned by PD-6 on 23 September 2026. The v0.1 wording — a blanket prohibition on the direct channel — is preserved in Appendix A.*
-
-A teacher and a parent may hold a direct 1:1 conversation and a direct 1:1 voice call **only when an authorized relationship exists between them**. An authorized relationship exists when, and only when, Jawwid Core's own data says so: the parent is an active, messaging-capable contact of a family, the teacher is the active assigned teacher of a learner in that family, and both belong to the same organization.
-
-This is an **authorization** rule, not a moderation rule. Where the relationship exists, the channel behaves like every other authorized direct channel and messages publish immediately (BR-6). Where it does not exist, creating the conversation, sending into it, or placing the call is **rejected server-side regardless of client**, and the denial is audited.
-
-The rule is enforced twice and independently: in backend authorization, and in database constraints that hold even with the application bypassed. A client-supplied `parent_id`, `teacher_id` or `conversation_id` is never evidence of a relationship; it is only a key used to look one up in server-owned data.
-
-The official Student Group remains a channel in its own right and keeps its own rules, including required admin presence. It is no longer the *only* channel between a teacher and a parent.
+Teachers and parents communicate only inside the official Student Group, where the assigned admin/supervisor is a member. A teacher cannot start, send, or receive a private conversation or call with a parent; a parent cannot start one with a teacher. Creating such a conversation, group, or call is rejected server-side regardless of client.
 
 **BR-2 · Phone numbers are never exposed**
 
@@ -139,8 +127,8 @@ Automated reminders and system messages are sent under the official **Jawwid**�
 | **FromToChatCallNotes** |                           |                   |                   |                                                                       |
 | ----------------------- | ------------------------- | ----------------- | ----------------- | --------------------------------------------------------------------- |
 | Parent                  | Admin (owner or coverage) | **1:1**           | **1:1**           | The parent's "Jawwid" conversation. Routed by ownership and coverage. |
-| Parent                  | Teacher                   | **1:1 + Group**   | **1:1 + Group**   | 1:1 only with an **authorized** teacher (PD-6); otherwise denied. Group: admin present. |
-| Teacher                 | Parent                    | **1:1 + Group**   | **1:1 + Group**   | 1:1 only with an **authorized** parent (PD-6); publishes immediately. Group: subject to the group's approval policy. |
+| Parent                  | Teacher                   | **Group only**    | **Group only**    | Inside the Student Group; admin present. **1:1 forbidden**            |
+| Teacher                 | Parent                    | **Group only**    | **Group only**    | Same. Subject to the group's approval policy. **1:1 forbidden**       |
 | Teacher                 | Admin                     | **1:1**           | **1:1**           | Teacher may contact assigned admins.                                  |
 | Admin                   | Parent                    | **1:1**           | **1:1**           | Within owned or covered families; managers everywhere.                |
 | Admin                   | Teacher                   | **1:1**           | **1:1**           |                                                                       |
@@ -371,15 +359,13 @@ Templates are bilingual (Arabic and English, chosen by the recipient's locale), 
 
 In-app voice calling is part of the MVP and follows the communication matrix exactly. Phone numbers are never exposed; calls are placed between Jawwid identities through a real-time media layer.
 
-Since **PD-6** (23 September 2026) a parent and an **authorized** teacher may place a direct 1:1 voice call to each other, in either direction. Authorization is the server-side relationship predicate defined in BR-1 and is re-evaluated on every call start and every media-token issue, so a relationship revoked in Jawwid Core stops the next call even if a previous one succeeded. An unauthorized pairing is refused by backend authorization and, independently, by the database.
-
 | **Call typeWho can startParticipantsRule** |                                   |                                 |                                                |
 | ------------------------------------------ | --------------------------------- | ------------------------------- | ---------------------------------------------- |
 | 1:1 call                                   | Admin, coverage admin, manager    | Admin ↔ Parent, Admin ↔ Teacher | **Allowed** within ownership/coverage scope    |
 | 1:1 call                                   | Parent                            | Parent ↔ Admin (their handler)  | **Allowed**                                    |
 | 1:1 call                                   | Teacher                           | Teacher ↔ Admin                 | **Allowed**                                    |
-| 1:1 call                                   | Teacher or Parent                 | Teacher ↔ Parent                | **Allowed for an authorized relationship** (PD-6); otherwise rejected server-side |
-| Group call                                 | Teacher, admin (never the parent — PD-2) | Members of the Student Group    | **Allowed.** A channel in its own right; no longer the *only* Teacher ↔ Parent channel |
+| 1:1 call                                   | Teacher or Parent                 | Teacher ↔ Parent                | **Rejected server-side** (BR-1)                |
+| Group call                                 | Teacher, admin (parent by policy) | Members of the Student Group    | **The official Teacher ↔ Parent call channel** |
 
 - Native call experience: incoming calls ring on a locked phone via CallKit (iOS) and ConnectionService (Android), with accept / decline, speaker, mute, and Bluetooth routing.
 - Group call: any member can join late, participants list shows names and roles, the admin can end the call for everyone.
@@ -582,7 +568,7 @@ The architecture is deliberately operable by this team: one backend codebase, on
 | 2026-09-03       | Standalone mobile app owned by Jawwid, not a layer on WhatsApp Business API.                                                                                     |
 | 2026-09-05       | Roles and team model: Rukaya (manager); Dina, Zeinab, Rehab, Asmaa (owners); Maryam, Radwa (coverage). Internal product; architecture must not block SaaS later. |
 | 2026-09-05       | Username/password sign-in from Jawwid Core; one parent account per family; multi-device allowed.                                                                 |
-| 2026-09-05       | ~~BR-1: no direct Teacher ↔ Parent chat or call; Student Group with admin present is the only channel. Enforced server-side and in the database.~~ **SUPERSEDED by PD-6, 2026-09-23.** Kept for the record; see Appendix A. |
+| 2026-09-05       | BR-1: no direct Teacher ↔ Parent chat or call; Student Group with admin present is the only channel. Enforced server-side and in the database.                   |
 | 2026-09-05       | BR-2: phone numbers never exposed, including for calls.                                                                                                          |
 | 2026-09-05       | "Encrypted" means approval/visibility control; no E2EE in this phase.                                                                                            |
 | 2026-09-05       | Operating model: permanent ownership + shift coverage + workload monitoring; no shared queue.                                                                    |
@@ -590,135 +576,5 @@ The architecture is deliberately operable by this team: one backend codebase, on
 | 2026-09-05       | Approvals ship in MVP as a simple policy (approve / reject / reason); escalation, expiry and coverage-aware approver in Phase 2.                                 |
 | 2026-09-05       | Labels and broadcast moved to Phase 2. Voice/video calls: voice in MVP, video later.                                                                             |
 | 2026-09-05       | Proposed stack: Flutter, React + TypeScript, NestJS, PostgreSQL, Redis, LiveKit, FCM/APNs; backend language and integration method confirmed after M0.           |
-| **2026-09-23**   | **PD-6 · BR-1 re-versioned.** Direct Parent ↔ Teacher 1:1 messaging and voice calling are ALLOWED for an authorized relationship, and rejected for any other pairing. Authorization is a server-side predicate over Jawwid Core data, enforced in backend authorization AND independently in the database. PD-2 unchanged (a parent still may not initiate a Student Group call). No per-message admin approval on the new direct channel. Full record: Appendix A. |
 
-## Appendix A — Superseded rules
-
-This appendix is the audit trail for every rule this document has retired. A
-rule is never deleted here: its original wording, its reason for existing, the
-decision that replaced it, and the consequences of that replacement stay on the
-record so a future reader can reconstruct why the product behaves as it does.
-
----
-
-### A.1 · BR-1 (v0.1) — No direct Teacher ↔ Parent communication
-
-**Status:** SUPERSEDED on 2026-09-23 by PD-6. In force 2026-09-05 → 2026-09-23.
-
-**Original wording, verbatim from PRD v0.1 §4:**
-
-> **BR-1 · No direct Teacher ↔ Parent communication**
->
-> Teachers and parents communicate only inside the official Student Group, where
-> the assigned admin/supervisor is a member. A teacher cannot start, send, or
-> receive a private conversation or call with a parent; a parent cannot start one
-> with a teacher. Creating such a conversation, group, or call is rejected
-> server-side regardless of client.
-
-**The v0.1 communication-matrix rows it produced, verbatim:**
-
-> | Parent | Teacher | **Group only** | **Group only** | Inside the Student Group; admin present. **1:1 forbidden** |
-> | Teacher | Parent | **Group only** | **Group only** | Same. Subject to the group's approval policy. **1:1 forbidden** |
-
-**The v0.1 §9 calling row it produced, verbatim:**
-
-> | 1:1 call | Teacher or Parent | Teacher ↔ Parent | **Rejected server-side** (BR-1) |
-
-#### Why the rule existed
-
-Jawwid Chat was built to replace WhatsApp, where the teacher–parent
-relationship, its history and the phone number belonged to the employee rather
-than to the academy. A private teacher↔parent channel reproduced exactly that
-failure: conversations the academy could not see, could not hand over when an
-employee left, and could not supervise. The rule also protected minors'
-families by guaranteeing an accountable Jawwid adult was present in every
-teacher–parent exchange, and it protected teachers by making every exchange
-reviewable.
-
-The rule was hardened twice after adversarial review:
-
-* **RT-024** — the invariant spanned two tables but was enforced on one, so a
-  lawful Student Group could be promoted to a forbidden 1:1 with a plain
-  `UPDATE`. Closed by making `type` immutable and by deferred constraint
-  triggers on both tables.
-* **RT-025** — "required admin presence" was not enforced at all, so a group of
-  exactly one teacher and one parent with no admin was a private channel wearing
-  a group's name. Closed by the admin-presence assertion, extended to every
-  group type.
-
-Both findings remain valid findings about the old rule and are **not** retracted.
-
-#### What replaced it — PD-6 (2026-09-23)
-
-Direct Parent ↔ Teacher 1:1 messaging and voice calling are **allowed when, and
-only when, an authorized relationship exists**. The relationship is a
-server-side predicate over Jawwid Core data — an active messaging-capable
-contact of a family, the active assigned teacher of a learner in that family,
-same organization — and is never inferred from anything the client sends.
-
-#### What changed, precisely
-
-| | v0.1 (BR-1) | v0.2 (PD-6) |
-|---|---|---|
-| Parent ↔ assigned teacher, 1:1 chat | DENY | **ALLOW** |
-| Parent ↔ assigned teacher, 1:1 call | DENY | **ALLOW** |
-| Parent ↔ unrelated teacher | DENY | DENY *(unchanged)* |
-| Teacher ↔ unrelated parent | DENY | DENY *(unchanged)* |
-| Student Group, required admin presence (C-4) | REQUIRED | REQUIRED *(unchanged)* |
-| Parent initiating a group call (PD-2) | DENY | DENY *(unchanged)* |
-| `conversation.type` / `call.type` immutable (RT-024) | YES | YES *(unchanged)* |
-| Per-message admin approval on the direct channel | n/a | **NOT required** — publishes immediately, per BR-6 |
-
-#### Systems affected
-
-* **Authorization** — `AuthorizationService.canOpenDirect`, `canSend`, `canCall`.
-  A new `RelationshipService` resolves the relationship; `AuthorizationService`
-  receives the resolved fact and stays free of database access.
-* **Database** — `chat.assert_conversation_br1`, `chat.assert_call_br1`,
-  `chat.enforce_direct_conversation_rules`, `chat.enforce_call_participant_rules`
-  are redirected onto a new `chat.teacher_parent_authorized()` predicate. The
-  deferred constraint triggers and the type-immutability triggers are retained
-  unchanged.
-* **Error contract** — new `COMM.TEACHER_PARENT_NOT_AUTHORIZED` (403).
-  `COMM.BR1_TEACHER_PARENT_DIRECT` is deprecated and no longer emitted.
-* **Release gate G-01** — re-versioned from "no such channel exists" to "the
-  channel exists only for an authorized relationship, proven with the client
-  policy disabled".
-* **Clients** — the call and message affordances become conditional on the
-  backend authorizing the pairing, instead of being absent unconditionally.
-
-#### Security controls that remain in force
-
-Nothing below was relaxed by PD-6:
-
-* Authentication and server-side authorization on every read and write.
-* Required admin presence in Student Groups (C-4).
-* PD-2 — a parent may not initiate a Student Group call.
-* Organization/tenant isolation, including the cross-organization term inside
-  the new predicate.
-* `conversation.type` and `call.type` immutability (RT-024).
-* The two-participant ceiling on direct conversations and direct calls.
-* BR-2 — no phone number on any surface, the new direct channel included.
-* BR-5 — history belongs to Jawwid: the direct channel is retained, auditable
-  and visible to authorized staff under existing permissions.
-* Server-minted LiveKit rooms and short-lived, room-scoped media tokens; no
-  provider secret ever reaches a client.
-* Audit logging of every denial and every call lifecycle event.
-
-#### Tests re-versioned rather than deleted
-
-`br1-conformance.spec.ts` · `db/tests/br1_invariants.sql` (A1, B1, D1, D2) ·
-`authz-attacks.spec.ts` · `communication-engine.spec.ts` ·
-`schema-invariants.spec.ts` · `forbidden_affordances_test.dart` ·
-`live_backend_test.dart` · the Flutter transport/error-mapper suites.
-
-Each former DENY case became a matched pair — authorized → ALLOW, unauthorized →
-DENY — so assertion counts rose. No protected-test assertion floor was lowered
-and no line was removed from `docs/qa/protected-tests.tsv`.
-
-`br1-admin-presence.spec.ts` (C-4) and `pd002-group-call-initiation.spec.ts`
-(PD-2) were **not** changed, and must keep passing untouched.
-
----
-
-Jawwid Chat · PRD v0.2 · Owner-approved · Prepared with Claude for Mohamed Lasheen
+Jawwid Chat · PRD v0.1 · Draft for review · Prepared with Claude for Mohamed Lasheen

@@ -1,7 +1,9 @@
 # Jawwid Chat — Product Boundary
 
 Status: **CANONICAL** · Locked in Phase 0 (2026-09-07)
-Authority order: this document → `jawwid-chat-prd-v0.1.md` (product requirements, **v0.2**) → everything else.
+Authority order: this document → `jawwid-chat-prd-v0.2.md` (the PD-6 amendment: §4 BR-1 and
+the §9 Teacher ↔ Parent calling row) → `jawwid-chat-prd-v0.1.md` (product requirements,
+in force everywhere v0.2 does not amend) → everything else.
 Supersedes as product direction: `docs/JAWWID_CHAT_BRIEF.{pdf,txt}` (Customer Success brief — **HISTORICAL**),
 `docs/architecture/decisions.md` ADR-001 ("build the brief" — **SUPERSEDED**),
 `docs/admin/backend-contract-required.md` (brief-derived — **HISTORICAL**).
@@ -403,3 +405,50 @@ consequences, deprecated behaviour, and the date it was closed.
 | 2 — Console & clients on the canonical contract | Admin Web rework, Flutter realtime client, notification dispatch, storage serving, coverage-window group membership (PD-1), system-event generation as system messages (PD-4) | broadcast, labels |
 | 3 — Communication features | broadcast, labels, class groups, search across chats | AI, video |
 | Later | AI suggestions, video, stories/status, multi-tenant SaaS | — |
+
+### 5.1 Phases and milestones are two different axes
+
+The table above is the **phase map**: what each phase is allowed to change, and
+what it may not touch. It is a scope boundary, not a work plan, and it is the
+only phase numbering this repository recognises. **There is no phase beyond 3.**
+A numbered "phase" that does not appear in the table above is a working plan
+somebody held in their head or in a conversation — useful while it is being
+worked, and not a repository artifact. Do not record one here or anywhere else.
+
+The **delivery sequence** is a separate axis and lives in `jawwid-chat-prd-v0.1.md`
+§13.1 as milestones **M0–M5**, ordered by dependency and risk. Work is scheduled
+against a milestone; scope is bounded by a phase.
+
+**The next calling work is M4 — Calling, 1:1 and group voice.** Its deliverables
+are fixed by §13.1 and are, in order:
+
+1. CallKit / ConnectionService
+2. VoIP push
+3. Call history
+4. Call notifications
+
+M4 has not started. What exists today is the server-side policy, the call
+lifecycle and the media-token layer, together with verified LiveKit Cloud
+**control-plane** connectivity. No audio has been carried. `docs/qa/release-gate.md`
+G-06 is the gate that governs voice calling and is the place that records how far
+that has been proven — not this table.
+
+**Known dependencies of M4**, recorded so they are not rediscovered late. These
+are not additional deliverables — the four above are the deliverables — they are
+things M4 will run into:
+
+* **Media presence is not observed.** `call.participant_joined` means a
+  participant reached the media plane, and nothing in the system observes that.
+  An HTTP accept is not a media join and must never be made to emit that event
+  (`contracts/API-CONTRACT.md`, `POST /calls/:id/accept`). Observing it needs a
+  LiveKit webhook, which is not built.
+* **`GET /calls/history/:conversationId` is marked RECONCILE**, not EXISTS, in
+  `contracts/API-CONTRACT.md` — its response shape is not settled. Call history
+  is M4 deliverable 3 and starts there.
+* **The Flutter client has no calling of any kind** — no LiveKit SDK, no CallKit,
+  no ConnectionService, and `callRepositoryProvider` throws `UnimplementedError`
+  outside test wiring. The phase map puts the Flutter realtime client in Phase 2;
+  M4's client work sits on top of it.
+* **`RT-029` and `RT-030`** (`red-team/findings.md`) are open tenancy defects,
+  both contained and failing closed today. Neither blocks M4 and neither is
+  closed by it; they are tracked separately so M4 does not quietly absorb them.
