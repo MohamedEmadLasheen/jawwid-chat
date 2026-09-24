@@ -22,6 +22,15 @@ dependencies:
   # Networking (§48).
   dio: ^5.11.1
   web_socket_channel: ^3.0.3
+  # Realtime signalling. The backend speaks SOCKET.IO, not bare WebSocket:
+  # API-CONTRACT §1 fixes the handshake as socket.io `auth: { token }` on the
+  # default namespace, and the gateway is a Nest @WebSocketGateway. web_socket_channel
+  # above cannot perform that handshake or framing, so it is not an alternative.
+  # The sibling client (apps/admin-web) already uses socket.io-client ^4.8.1, so
+  # this is the same protocol version on both clients rather than a second one.
+  # Reached only through the seam in lib/core/realtime/realtime_socket.dart, so
+  # no test opens a socket.
+  socket_io_client: ^3.1.6
 
   # Storage. Tokens go to the platform keystore/keychain, never to preferences (§50, §56).
   flutter_secure_storage: ^11.0.0

@@ -49,6 +49,11 @@ abstract final class Wire {
   static const callAnswered = 'answered';
   static const callMissed = 'missed';
   static const callDeclined = 'declined';
+
+  // CallType. `chat.call.type` is immutable in the database (RT-024) and has no
+  // video member -- voice only is the product rule (G-32), not a client choice.
+  static const callTypeDirect = 'direct';
+  static const callTypeGroup = 'group';
 }
 
 /// Backend error codes this client reacts to specifically.
