@@ -415,6 +415,40 @@ describe('Q — the secret never leaves the server', () => {
     }
   });
 
+  it('an https:// LIVEKIT_URL is refused — the client needs the WebSocket form', async () => {
+    // The provisioning foot-gun this guards: a LiveKit project exposes wss://
+    // for media and https:// for the control plane at the same host. The probe
+    // normalises wss:// to https:// for its own request, so it would report the
+    // project VERIFIED with either -- while a client handed the https:// form
+    // cannot connect at all. The server refuses to hand out a URL it knows the
+    // client cannot use.
+    const saved = process.env.LIVEKIT_URL;
+    try {
+      for (const wrong of ['https://x.livekit.cloud', 'http://x.livekit.cloud', 'x.livekit.cloud']) {
+        process.env.LIVEKIT_URL = wrong;
+        const issuer = new LiveKitTokenIssuer();
+        await expect(
+          issuer.issue({
+            roomName: 'r', identity: 'i', name: 'n', canPublish: true, ttlSeconds: 60,
+          }),
+        ).rejects.toThrow(/WebSocket URL/);
+      }
+
+      // And both WebSocket forms are accepted.
+      for (const right of ['wss://x.livekit.cloud', 'ws://localhost:7880']) {
+        process.env.LIVEKIT_URL = right;
+        const issuer = new LiveKitTokenIssuer();
+        await expect(
+          issuer.issue({
+            roomName: 'r', identity: 'i', name: 'n', canPublish: true, ttlSeconds: 60,
+          }),
+        ).resolves.toMatchObject({ url: right });
+      }
+    } finally {
+      process.env.LIVEKIT_URL = saved;
+    }
+  });
+
   it('an empty LIVEKIT_URL is refused rather than returning a token with nowhere to go', async () => {
     const saved = process.env.LIVEKIT_URL;
     try {

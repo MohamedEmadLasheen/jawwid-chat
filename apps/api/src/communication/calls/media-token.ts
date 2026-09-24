@@ -61,6 +61,22 @@ export class LiveKitTokenIssuer implements MediaTokenIssuer {
       );
     }
 
+    // LIVEKIT_URL is handed to the CLIENT, which connects with a WebSocket. A
+    // LiveKit project has two faces at the same host -- wss:// for media
+    // signalling, https:// for the RoomService control plane -- and an operator
+    // copying the wrong one from the dashboard is an easy, silent mistake:
+    // scripts/infra/livekit-probe.sh normalises wss:// to https:// for its own
+    // request, so it would report the project VERIFIED while every client got a
+    // URL it cannot connect to. Refusing here turns that into a server-side
+    // configuration error instead of a mystery on a device.
+    if (!/^wss?:\/\//.test(this.url)) {
+      throw new Error(
+        'LIVEKIT_URL must be a WebSocket URL (wss://…) — it is given to the ' +
+          'client to connect with. The https:// form is the control-plane ' +
+          'endpoint and is derived from it where needed.',
+      );
+    }
+
     const now = Math.floor(Date.now() / 1000);
     const exp = now + grant.ttlSeconds;
 
