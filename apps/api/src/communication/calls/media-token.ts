@@ -21,6 +21,17 @@ export interface MediaTokenIssuer {
   issue(grant: MediaGrant): Promise<{ token: string; url: string; expiresAt: string }>;
 }
 
+/**
+ * The track sources a Jawwid participant may publish.
+ *
+ * These are LiveKit's own wire values for `TrackSource`, the same strings its
+ * server compares against: `camera`, `microphone`, `screen_share`,
+ * `screen_share_audio`. Only `microphone` is granted. A value that is not one
+ * of those four matches nothing, which fails closed -- but it would also make
+ * the grant silently useless, so the spelling is not incidental.
+ */
+const PUBLISHABLE_SOURCES = ['microphone'] as const;
+
 const b64url = (input: Buffer | string): string =>
   Buffer.from(input).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
@@ -96,6 +107,26 @@ export class LiveKitTokenIssuer implements MediaTokenIssuer {
         roomCreate: false,
         roomList: false,
         canPublish: grant.canPublish,
+        // G-32: this call is voice. `canPublish` alone does not say that --
+        // LiveKit treats an unrestricted canPublish as permission to publish
+        // ANY source, camera and screen share included, so "we don't do video"
+        // would be a property of the client rather than of the credential.
+        //
+        // livekit/protocol auth.VideoGrant.GetCanPublishSource decides it:
+        //
+        //   if !GetCanPublish()            -> false   (canPublish still wins)
+        //   if len(CanPublishSources) == 0 -> true    (anything, the old state)
+        //   else                           -> only the sources listed here
+        //
+        // So the empty list was the permissive case, not the restrictive one.
+        // Naming the microphone makes the refusal the server's, enforced before
+        // a track is ever accepted -- which is the point: it has to hold for a
+        // client build nobody here wrote.
+        //
+        // Adding a source is a product decision, not a configuration change.
+        // Video is out of MVP scope (PRD §13, G-32) and screen share is not a
+        // feature of this product at all.
+        canPublishSources: PUBLISHABLE_SOURCES,
         canSubscribe: true,
         // canPublishData is deliberately NOT granted. A voice call needs to
         // publish audio and subscribe to audio; the data channel is a second

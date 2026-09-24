@@ -45,10 +45,24 @@ interface VideoGrant {
   roomList?: boolean;
   roomAdmin?: boolean;
   canPublish?: boolean;
+  canPublishSources?: string[];
   canSubscribe?: boolean;
   canPublishData?: boolean;
   [key: string]: unknown;
 }
+
+/**
+ * LiveKit's four `TrackSource` wire values. Listed in full so the assertions
+ * below can name the three that must be refused, rather than only checking
+ * that the one we want is present -- "microphone is allowed" and "camera is
+ * not" are different claims, and only the second is the control.
+ */
+const EVERY_TRACK_SOURCE = [
+  "camera",
+  "microphone",
+  "screen_share",
+  "screen_share_audio",
+] as const;
 
 const videoGrant = (token: string) => decode(token, 1).video as VideoGrant;
 
@@ -339,6 +353,7 @@ describe("M/N/O/P — the grant is the smallest one a call needs", () => {
     // later has to be added here too, deliberately.
     expect(Object.keys(grant).sort()).toEqual([
       "canPublish",
+      "canPublishSources",
       "canSubscribe",
       "room",
       "roomCreate",
@@ -387,6 +402,41 @@ describe("M/N/O/P — the grant is the smallest one a call needs", () => {
     await expect(g.calls.issueToken(callId, s.parentId)).rejects.toMatchObject({
       code: CommErrorCode.MEMBER_IS_SILENT,
     });
+  });
+
+  it("P4. G-32: the token authorizes the microphone and no other source", async () => {
+    const { callId } = await directCall();
+    const grant = videoGrant(
+      (await g.calls.issueToken(callId, s.parentId)).token,
+    );
+
+    // Asserted on the SIGNED TOKEN, not on a constant in the issuer: what
+    // reaches LiveKit is the only thing LiveKit enforces.
+    expect(grant.canPublishSources).toEqual(["microphone"]);
+
+    // The positive half alone would pass with the list set to every source, so
+    // each refused source is named. LiveKit's rule (auth.VideoGrant
+    // .GetCanPublishSource) is that a NON-EMPTY list admits only its members,
+    // which is what makes these three refusals real rather than implied.
+    for (const source of EVERY_TRACK_SOURCE) {
+      const allowed = grant.canPublishSources!.includes(source);
+      expect({ source, allowed }).toEqual({
+        source,
+        allowed: source === "microphone",
+      });
+    }
+
+    // And nothing outside that vocabulary was granted either -- a typo or an
+    // invented source name would fail closed at LiveKit, but it would also
+    // mean this grant does not say what it appears to say.
+    for (const source of grant.canPublishSources!) {
+      expect(EVERY_TRACK_SOURCE).toContain(source);
+    }
+
+    // An EMPTY list is LiveKit's permissive case: canPublish then admits every
+    // source, which is exactly the state G-32 was open on. Guarded explicitly,
+    // because `[]` would satisfy a careless "no camera in the list" check.
+    expect(grant.canPublishSources!.length).toBe(1);
   });
 });
 
