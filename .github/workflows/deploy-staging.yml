@@ -80,6 +80,9 @@ jobs:
           REALTIME_URL: ${{ vars.STAGING_REALTIME_URL }}
         run: |
           test -n "$API_BASE_URL" || { echo "::error::vars.STAGING_API_BASE_URL is not set"; exit 1; }
+          # Both are compiled into the bundle. Unguarded, a missing realtime URL
+          # builds and ships a staging Admin Web that silently cannot connect.
+          test -n "$REALTIME_URL" || { echo "::error::vars.STAGING_REALTIME_URL is not set"; exit 1; }
           IMAGE="${REGISTRY}/${GITHUB_REPOSITORY,,}/admin-web"
           # These values are compiled into the browser bundle, so the image is
           # environment-specific and is never promoted to production.
@@ -155,6 +158,15 @@ jobs:
           BUILD_VERSION: staging-${{ github.run_number }}
           BUILD_TIME: ${{ github.event.repository.updated_at }}
         run: scripts/infra/check-env.sh staging
+
+      - name: Preflight the database role capability
+        # BEFORE the backup and BEFORE any migration. 20260910120200 grants
+        # BYPASSRLS, which not every managed PostgreSQL permits; without this
+        # the run fails at the seventeenth migration with the database half
+        # applied. Changes nothing -- the probe is rolled back.
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: scripts/db/preflight-role-capability.sh
 
       - name: Back up the database before migrating
         env:

@@ -1,6 +1,10 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/router.dart';
+import '../../../core/errors/app_error.dart';
 import '../../../core/errors/error_presenter.dart';
 import '../../../design/tokens.dart';
 import '../../../design/widgets/jawwid_avatar.dart';
@@ -49,7 +53,13 @@ class ConversationProfileScreen extends ConsumerWidget {
             onRetry: () =>
                 ref.invalidate(conversationProfileProvider(conversationId)),
           ),
-        AsyncData(:final value) => ProfileBody(view: value),
+        AsyncData(:final value) => ProfileBody(
+            view: value,
+            // The conversation-scoped controls. They sit on this screen and not
+            // on MyAccountScreen because they belong to a conversation, not to
+            // a person: muting yourself is not a thing.
+            actions: [ConversationActions(conversationId: conversationId)],
+          ),
       },
     );
   }
@@ -84,9 +94,13 @@ class MyAccountScreen extends ConsumerWidget {
 
 /// The shared body: header, then whatever sections this viewer is entitled to.
 class ProfileBody extends StatelessWidget {
-  const ProfileBody({super.key, required this.view});
+  const ProfileBody({super.key, required this.view, this.actions = const []});
 
   final ProfileView view;
+
+  /// Conversation-scoped controls, rendered under the header. Empty on an
+  /// account profile, which has no conversation to act on.
+  final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) {
@@ -96,6 +110,11 @@ class ProfileBody extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: Spacing.spacing9),
       children: [
         ProfileHeader(view: view),
+
+        if (actions.isNotEmpty) ...[
+          const ProfileDivider(),
+          ...actions,
+        ],
 
         // Owner only, and empty today — there is no contact file in this system. Rendered
         // as a named section saying so rather than omitted, so the gap is visible to the
@@ -271,5 +290,78 @@ class _Error extends StatelessWidget {
       retryLabel: message.canRetry ? l10n.retryAction : null,
       onRetry: message.canRetry ? onRetry : null,
     );
+  }
+}
+
+
+/// Mute, and the way in to what has been shared here.
+///
+/// Three things the brief asks Conversation Info to carry (§28): mute, search
+/// and media. Two of them are here. **Search is absent rather than disabled**
+/// because there is no message-search endpoint on this API — offering a search
+/// box that finds nothing would be worse than not offering one, and a greyed-out
+/// row is an invitation to keep tapping it.
+class ConversationActions extends ConsumerWidget {
+  const ConversationActions({super.key, required this.conversationId});
+
+  final String conversationId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = L10n.of(context);
+    final sections = ref.watch(conversationsControllerProvider).value;
+
+    final conversation = sections
+        ?.expand((section) => section.conversations)
+        .firstWhereOrNull((c) => c.id == conversationId);
+
+    return Column(
+      children: [
+        // Only once the list has loaded. A toggle rendered before its own state
+        // is known shows "Mute" on an already-muted conversation, and the user
+        // taps it to unmute and mutes it instead.
+        if (conversation != null)
+          SwitchListTile(
+            secondary: Icon(
+              conversation.isMuted
+                  ? Icons.notifications_off_outlined
+                  : Icons.notifications_active_outlined,
+            ),
+            title: Text(l10n.notificationsMuted),
+            // Muting silences notifications and nothing else (§5). Saying so
+            // here is what stops a parent muting a conversation and then
+            // believing they stopped receiving their child's messages.
+            subtitle: Text(l10n.notificationsMutedExplainer),
+            value: conversation.isMuted,
+            onChanged: (muted) => _setMuted(context, ref, muted: muted),
+          ),
+        ListTile(
+          leading: const Icon(Icons.photo_library_outlined),
+          title: Text(l10n.mediaAndFilesTitle),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => context.push(Routes.conversationMedia(conversationId)),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _setMuted(
+    BuildContext context,
+    WidgetRef ref, {
+    required bool muted,
+  }) async {
+    final l10n = L10n.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      await ref
+          .read(conversationsControllerProvider.notifier)
+          .setMuted(conversationId, muted);
+    } on AppError catch (error) {
+      // The controller rolls the switch back on failure, so without this the
+      // toggle would flip and flip back on its own.
+      final message = ErrorPresenter.present(error, l10n);
+      messenger.showSnackBar(SnackBar(content: Text(message.title)));
+    }
   }
 }

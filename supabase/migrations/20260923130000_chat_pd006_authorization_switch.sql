@@ -454,3 +454,31 @@ $$;
 -- want_trigger() assertions continue to hold unchanged -- which is the point:
 -- a migration that had to relax an acceptance test to land would be a
 -- migration that removed a control.
+
+-- ---------------------------------------------------------------------------
+-- The index the predicate needs
+-- ---------------------------------------------------------------------------
+--
+-- Carried here when the duplicate predicate migration was withdrawn. The
+-- function itself is defined once, by
+-- 20260923120000_chat_teacher_parent_relationship.sql. This index is the only
+-- thing the withdrawn file added that that one does not, and it belongs with
+-- the change that makes the predicate hot: until this switch lands, nothing
+-- calls it.
+--
+-- The existing indexes are learner_family_idx (family_id) and
+-- learner_teacher_idx (teacher_id) WHERE teacher_id is not null. The predicate
+-- drives from BOTH ends at once -- "is this teacher assigned to any learner in
+-- this family" -- so a composite serves it with one lookup instead of an index
+-- scan plus a filter.
+--
+-- Justified by an actual query pattern, not by speculation: it now runs on
+-- every message send, every call start and every media-token issue between a
+-- teacher and a parent.
+create index if not exists learner_teacher_family_idx
+  on chat.learner (teacher_id, family_id)
+  where teacher_id is not null;
+
+comment on index chat.learner_teacher_family_idx is
+  'Serves chat.teacher_parent_authorized(): the (teacher, family) direction of '
+  'the PD-6 relationship chain.';

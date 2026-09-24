@@ -1,10 +1,15 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
 import { OBJECT_STORAGE } from '../../platform/tokens';
 import type { ObjectStorage, UploadAuthorization } from './object-storage';
 import { ConversationService } from '../conversations/conversation.service';
+import {
+  assertObjectKeyBelongsToConversation,
+  conversationPrefix,
+  objectKeyBelongsToConversation,
+} from './object-key';
 import { Visibility } from '../contracts/vocab';
 
 /** Configurable limits. Read from env so ops can tune without a deploy. */
@@ -31,6 +36,8 @@ const ALLOWED_MIME: Record<string, RegExp> = {
 
 @Injectable()
 export class AttachmentService {
+  private readonly logger = new Logger(AttachmentService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly authz: AuthorizationService,
@@ -105,7 +112,7 @@ export class AttachmentService {
     this.validate(params.kind, params.mimeType, params.byteSize);
 
     return this.storage.authorizeUpload({
-      prefix: `conversations/${params.conversationId}`,
+      prefix: conversationPrefix(conv.id),
       mimeType: params.mimeType,
       byteSize: params.byteSize,
     });
@@ -162,23 +169,100 @@ export class AttachmentService {
   }
 
   /** Signed URLs are minted per read and expire; they are never stored. */
+  /**
+   * Mint short-lived read URLs for the attachments of [messageIds].
+   *
+   * ## This is the access-control decision, not a formatting step
+   *
+   * The bucket is private, so the signed URL IS the capability to read the
+   * object. Callers have already decided that the actor may see these
+   * MESSAGES -- `visibilityFilter` for the list path, `canRead` for a single
+   * message, `messages.moderate` for the approval queue. What none of them
+   * established is that each attachment's object key belongs to the
+   * conversation the message is in, because the key arrives from the client on
+   * send and is stored verbatim.
+   *
+   * Without the check below, that gap is an authorization bypass: a member of
+   * conversation B sends a message in B carrying conversation A's object key,
+   * is trivially authorized to read their own message, and receives a signed
+   * URL for A's object. `object_key` is `unique` in the schema, which blocks
+   * re-using a key that is ALREADY attached somewhere -- but that is a
+   * collision constraint, not an access-control one, it surfaces as a 500, and
+   * `thumbnail_object_key` has no constraint at all, so the same attack goes
+   * straight through the thumbnail field.
+   *
+   * So the conversation id is read from the message row -- server state, never
+   * the request -- and any key outside its namespace is not signed. A key that
+   * cannot be attributed to its own conversation yields no URL rather than an
+   * error, because this path is also the READ path for perfectly ordinary
+   * messages: one bad row must not make a conversation unreadable.
+   */
   async signUrlsForMessages(
     messageIds: string[],
   ): Promise<Map<string, { url: string; thumbnailUrl: string | null }>> {
     const out = new Map<string, { url: string; thumbnailUrl: string | null }>();
     if (messageIds.length === 0) return out;
+
     const attachments = await this.prisma.messageAttachment.findMany({
       where: { messageId: { in: messageIds } },
+      // The authoritative relationship: attachment -> message -> conversation.
+      include: { message: { select: { conversationId: true } } },
     });
+
     const ttl = Number(process.env.STORAGE_SIGNED_URL_TTL_SECONDS ?? 300);
+
     for (const a of attachments) {
+      const conversationId = a.message?.conversationId ?? '';
+
+      if (!objectKeyBelongsToConversation(conversationId, a.objectKey)) {
+        this.logger.warn(
+          `refusing to sign attachment ${a.id}: its object key is outside ` +
+            `conversation ${conversationId || '(none)'}`,
+        );
+        continue;
+      }
+
+      const thumbnail = a.thumbnailObjectKey;
+      // Checked separately and to the same standard. It is the unconstrained
+      // half of the row, so it is the half an attacker reaches for.
+      const thumbnailAllowed =
+        thumbnail !== null &&
+        thumbnail !== undefined &&
+        objectKeyBelongsToConversation(conversationId, thumbnail);
+
+      if (thumbnail && !thumbnailAllowed) {
+        this.logger.warn(
+          `refusing to sign the thumbnail of attachment ${a.id}: its object ` +
+            `key is outside conversation ${conversationId || '(none)'}`,
+        );
+      }
+
       out.set(a.id, {
         url: await this.storage.signedReadUrl(a.objectKey, ttl),
-        thumbnailUrl: a.thumbnailObjectKey
-          ? await this.storage.signedReadUrl(a.thumbnailObjectKey, ttl)
+        thumbnailUrl: thumbnailAllowed
+          ? await this.storage.signedReadUrl(thumbnail, ttl)
           : null,
       });
     }
     return out;
+  }
+
+  /**
+   * Refuse attachments that do not belong to the conversation being posted to.
+   *
+   * Defence in depth ahead of the signing check above, and the reason a caller
+   * gets a clean 403 rather than a unique-constraint 500: a foreign key never
+   * reaches the database at all.
+   */
+  assertAttachmentsBelongTo(
+    conversationId: string,
+    attachments: ReadonlyArray<{ objectKey: string; thumbnailObjectKey?: string | null }>,
+  ): void {
+    for (const a of attachments) {
+      assertObjectKeyBelongsToConversation(conversationId, a.objectKey);
+      if (a.thumbnailObjectKey) {
+        assertObjectKeyBelongsToConversation(conversationId, a.thumbnailObjectKey);
+      }
+    }
   }
 }

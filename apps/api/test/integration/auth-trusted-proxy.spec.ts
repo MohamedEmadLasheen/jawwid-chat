@@ -40,8 +40,21 @@ process.env.REDIS_URL = REDIS_URL;
 jest.setTimeout(180_000);
 
 const PASSWORD = 'a-trusted-proxy-password-1';
-const API_PORT = 34171;
-const PROXY_PORT = 34172;
+/**
+ * Ephemeral ports, assigned by the kernel.
+ *
+ * These were fixed (34171/34172). This is the only integration suite that
+ * binds a listener, and it binds one per `describe` block, so a fixed port
+ * makes each setup race the previous block's socket release — reliably enough
+ * on a quiet run, and not reliably at all once the suite order or the machine's
+ * timing changes. The symptom is `EADDRINUSE`, which reads like a port
+ * conflict with another program and is really the suite colliding with itself.
+ *
+ * Port 0 asks the kernel for a free port; the assigned one is read back after
+ * `listen`. Nothing about what this suite tests depends on the number.
+ */
+let apiPort = 0;
+let proxyPort = 0;
 
 /** A load balancer: forwards, and appends the real client to X-Forwarded-For. */
 function startProxy(): Promise<http.Server> {
@@ -58,12 +71,12 @@ function startProxy(): Promise<http.Server> {
       const pReq = http.request(
         {
           host: '127.0.0.1',
-          port: API_PORT,
+          port: apiPort,
           path: cReq.url,
           method: cReq.method,
           headers: {
             ...cReq.headers,
-            host: `127.0.0.1:${API_PORT}`,
+            host: `127.0.0.1:${apiPort}`,
             'x-forwarded-for': forwarded,
             'content-length': payload.length,
           },
@@ -80,7 +93,7 @@ function startProxy(): Promise<http.Server> {
       pReq.end(payload);
     });
   });
-  return new Promise((resolve) => proxy.listen(PROXY_PORT, '127.0.0.1', () => resolve(proxy)));
+  return new Promise((resolve) => proxy.listen(0, '127.0.0.1', () => resolve(proxy)));
 }
 
 interface Fixture {
@@ -136,8 +149,10 @@ describe('the trusted-proxy boundary over real HTTP', () => {
       app.setGlobalPrefix('api/v1', { exclude: ['health', 'health/live', 'health/ready'] });
       // THE LINE UNDER TEST: this is what applies `trust proxy`.
       applyInfrastructure(app);
-      await app.listen(API_PORT, '127.0.0.1');
+      await app.listen(0, '127.0.0.1');
+      apiPort = (app.getHttpServer().address() as { port: number }).port;
       proxy = await startProxy();
+      proxyPort = (proxy.address() as { port: number }).port;
 
       await prisma.$connect();
       await prisma.$executeRawUnsafe(
@@ -165,7 +180,7 @@ describe('the trusted-proxy boundary over real HTTP', () => {
       await app.get(AuthService).setPassword(fx.account, PASSWORD);
 
       const post = async (path: string, payload: unknown, client: string) => {
-        const r = await fetch(`http://127.0.0.1:${PROXY_PORT}/api/v1${path}`, {
+        const r = await fetch(`http://127.0.0.1:${proxyPort}/api/v1${path}`, {
           method: 'POST',
           headers: { 'content-type': 'application/json', 'x-test-client': client },
           body: JSON.stringify(payload),
@@ -294,7 +309,7 @@ describe('the trusted-proxy boundary over real HTTP', () => {
       // The proxy appends the attacker's real address, so the header is
       // "10.0.0.77, 66.66.66.88" -- and trust proxy = 1 takes the LAST entry.
       for (let i = 0; i < 5; i++) {
-        await fetch(`http://127.0.0.1:${PROXY_PORT}/api/v1/auth/login`, {
+        await fetch(`http://127.0.0.1:${proxyPort}/api/v1/auth/login`, {
           method: 'POST',
           headers: {
             'content-type': 'application/json',

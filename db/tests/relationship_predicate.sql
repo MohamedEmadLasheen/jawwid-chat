@@ -77,6 +77,30 @@ $$;
 -- ---------------------------------------------------------------------------
 begin;
 
+-- ---------------------------------------------------------------------------
+-- The assignment gate
+-- ---------------------------------------------------------------------------
+--
+-- chat.guard_learner_assignment_change()
+-- (20260923130000_chat_learner_assignment_authority) makes
+-- chat.learner.teacher_id writable only inside the ingestion path: the
+-- teacher<->learner assignment is the academy's fact and Chat mirrors it
+-- rather than authoring it. It opens for a transaction that sets
+-- chat.syncing_assignment, exactly as chat.guard_owner_change does for
+-- family.owner_id.
+--
+-- EVERY teacher_id write in this file -- the fixtures, and the reassignments
+-- that stand in for a revoked relationship -- is standing in for what
+-- ingestion would have written. So this transaction opens the gate once, here,
+-- where it is visible, rather than sprinkling set_config through the cases.
+--
+-- This does NOT weaken the guard, and it is not this file's job to test it:
+-- that control has its own suite, apps/api/test/integration/
+-- learner-assignment-authority.spec.ts, which proves both that an application
+-- write is refused and that the gated write succeeds. The setting is
+-- transaction-local (third argument true) and dies with the rollback below.
+select set_config('chat.syncing_assignment', 'on', true);
+
 -- Two organizations, to prove the tenant boundary rather than assume it.
 insert into chat.organization (id, slug, display_name) values
   ('0a000000-0000-0000-0000-00000000000b', 'other-academy', 'Other Academy')

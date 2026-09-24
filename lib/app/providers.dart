@@ -6,6 +6,8 @@ import '../core/audio/voice_recorder.dart';
 import '../core/data/fake_backend.dart';
 import '../core/data/repositories.dart';
 import '../core/logging/redacting_logger.dart';
+import '../core/media/attachment_opener.dart';
+import '../core/media/media_picker.dart';
 import '../core/storage/secure_token_store.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/domain/auth_state.dart';
@@ -56,6 +58,19 @@ final voiceRecorderProvider = Provider<VoiceRecorder>((ref) {
   ref.onDispose(() => recorder.dispose());
   return recorder;
 });
+
+/// The photo library and file picker.
+///
+/// A device capability with a real default, like the recorder and the player
+/// above: there is no contract to be missing here, only a platform channel that
+/// no test may touch. Tests override it with a fake so no suite opens a system
+/// picker and hangs waiting for a tap nobody will make.
+final mediaPickerProvider = Provider<MediaPicker>((ref) => PluginMediaPicker());
+
+/// Hands a document to whatever on the phone opens it. Overridden in tests so
+/// no suite tries to launch an external application.
+final attachmentOpenerProvider =
+    Provider<AttachmentOpener>((ref) => const PluginAttachmentOpener());
 
 /// Audio playback. Like the recorder, a device capability with a real default;
 /// tests override it so no suite opens a platform audio session.

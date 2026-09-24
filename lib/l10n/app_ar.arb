@@ -232,5 +232,172 @@
   "contactInfoTitle": "معلومات التواصل",
   "contactInfoUnavailable": "لا يحتفظ التطبيق بأرقام هواتف أو عناوين بريد إلكتروني بعد.",
   "fieldNotAvailableYet": "غير متاح بعد",
-  "profileNoDirectContact": "يمكنك التواصل مع المعلم داخل مجموعة ابنك."
+  "profileNoDirectContact": "يمكنك التواصل مع المعلم داخل مجموعة ابنك.",
+  "messageActionsTitle": "خيارات الرسالة",
+  "@messageActionsTitle": {
+    "description": "Header of the long-press sheet on a message."
+  },
+  "deleteAction": "حذف",
+  "@deleteAction": {
+    "description": "Opens the choice between deleting for me and for everyone."
+  },
+  "deleteForMeAction": "حذف لدي",
+  "@deleteForMeAction": {
+    "description": "Hides a message for this user only."
+  },
+  "deleteForEveryoneAction": "حذف لدى الجميع",
+  "@deleteForEveryoneAction": {
+    "description": "Retracts a message for every member of the conversation."
+  },
+  "deleteForMeExplainer": "ستظل ظاهرة لبقية المشاركين.",
+  "@deleteForMeExplainer": {
+    "description": "Explains that delete-for-me is private to this reader."
+  },
+  "deleteForEveryoneExplainer": "ستُحذف من المحادثة لدى الجميع.",
+  "@deleteForEveryoneExplainer": {
+    "description": "Explains that delete-for-everyone retracts the message."
+  },
+  "copiedConfirmation": "تم النسخ",
+  "@copiedConfirmation": {
+    "description": "Brief confirmation after copying a message."
+  },
+  "openAction": "فتح",
+  "@openAction": {
+    "description": "Opens an attachment."
+  },
+  "saveAction": "حفظ",
+  "@saveAction": {
+    "description": "Saves an attachment to the device."
+  },
+  "attachPhoto": "صورة",
+  "@attachPhoto": {
+    "description": "Attachment menu entry for the photo library."
+  },
+  "attachFile": "ملف",
+  "@attachFile": {
+    "description": "Attachment menu entry for a document."
+  },
+  "attachmentPhotoLabel": "صورة",
+  "@attachmentPhotoLabel": {
+    "description": "Stands in for a photo where a message has no text."
+  },
+  "attachmentFileLabel": "ملف",
+  "@attachmentFileLabel": {
+    "description": "Stands in for a document where a message has no text."
+  },
+  "attachmentVoiceLabel": "رسالة صوتية",
+  "@attachmentVoiceLabel": {
+    "description": "Stands in for a voice note where a message has no text."
+  },
+  "attachmentSendTitle": "إرسال هذه؟",
+  "@attachmentSendTitle": {
+    "description": "Header of the preview shown before an attachment is sent."
+  },
+  "attachmentTooLarge": "هذا الملف أكبر من أن يُرسل.",
+  "@attachmentTooLarge": {
+    "description": "Shown when a chosen file is over the size the academy accepts."
+  },
+  "attachmentTypeNotAllowed": "لا يمكن إرسال هذا النوع من الملفات هنا.",
+  "@attachmentTypeNotAllowed": {
+    "description": "Shown when a chosen file is not an accepted type."
+  },
+  "attachmentPickFailed": "تعذّر فتح ذلك. برجاء المحاولة مرة أخرى.",
+  "@attachmentPickFailed": {
+    "description": "Shown when the photo or file picker fails."
+  },
+  "attachmentPermissionDenied": "يحتاج جَوِّد إلى إذن للوصول إلى صورك. يمكنك السماح بذلك من الإعدادات.",
+  "@attachmentPermissionDenied": {
+    "description": "Shown when photo-library permission was refused."
+  },
+  "attachmentUnsupported": "لا يمكن اختيار الملفات على هذا الجهاز.",
+  "@attachmentUnsupported": {
+    "description": "Shown when the device has no picker."
+  },
+  "attachmentUploadFailed": "تعذّر إرسال الملف. برجاء المحاولة مرة أخرى.",
+  "@attachmentUploadFailed": {
+    "description": "Shown on a bubble whose attachment failed to upload."
+  },
+  "attachmentUploading": "جارٍ الإرسال…",
+  "@attachmentUploading": {
+    "description": "Shown while an attachment is uploading."
+  },
+  "replyOriginalUnavailable": "الرسالة الأصلية",
+  "@replyOriginalUnavailable": {
+    "description": "Stands in for a quoted message that has not been loaded yet."
+  },
+  "mediaAndFilesTitle": "الوسائط والملفات",
+  "@mediaAndFilesTitle": {
+    "description": "Opens the shared photos, files and voice notes of a conversation."
+  },
+  "mediaPhotosTab": "الصور",
+  "@mediaPhotosTab": {
+    "description": "Tab of shared photos."
+  },
+  "mediaFilesTab": "الملفات",
+  "@mediaFilesTab": {
+    "description": "Tab of shared files."
+  },
+  "mediaVoiceTab": "الصوتيات",
+  "@mediaVoiceTab": {
+    "description": "Tab of shared voice messages."
+  },
+  "mediaEmpty": "لم تتم مشاركة أي شيء بعد",
+  "@mediaEmpty": {
+    "description": "Empty state of the media and files screen."
+  },
+  "mediaEmptyBody": "تظهر هنا الصور والملفات والرسائل الصوتية الخاصة بهذه المحادثة.",
+  "@mediaEmptyBody": {
+    "description": "Explains what the media screen will hold."
+  },
+  "mediaLoadOlder": "تحميل الأقدم",
+  "@mediaLoadOlder": {
+    "description": "Pages further back through a conversation to find more shared items."
+  },
+  "notificationsMuted": "الإشعارات مكتومة",
+  "@notificationsMuted": {
+    "description": "State of a muted conversation. Messages still arrive."
+  },
+  "notificationsMutedExplainer": "ستظل تصلك الرسائل.",
+  "@notificationsMutedExplainer": {
+    "description": "Clarifies that muting only silences notifications."
+  },
+  "reactionCountSemantics": "{emoji}، {count} تفاعلات",
+  "@reactionCountSemantics": {
+    "description": "Screen-reader label for a reaction chip.",
+    "placeholders": {
+      "emoji": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "reactionYoursSemantics": "{emoji}، من بينها تفاعلك",
+  "@reactionYoursSemantics": {
+    "description": "Screen-reader label for a reaction chip the viewer is part of.",
+    "placeholders": {
+      "emoji": {
+        "type": "String"
+      }
+    }
+  },
+  "fileSizeKb": "{size} ك.ب",
+  "@fileSizeKb": {
+    "description": "File size in kilobytes.",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "fileSizeMb": "{size} م.ب",
+  "@fileSizeMb": {
+    "description": "File size in megabytes.",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  }
 }

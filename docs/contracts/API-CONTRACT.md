@@ -240,8 +240,11 @@ One row per distinct (method, path). Paths are relative to `/api/v1` unless mark
 | GET | `/conversations/:id/messages?before&limit` | Flutter (`http_message_repository.dart:43`) | EXISTS | |
 | GET | `/conversations/:id/messages?after` | Flutter (same) | EXISTS | Reconnect catch-up. |
 | POST | `/conversations/:id/messages` | Flutter (same) | EXISTS + RENAME | Body ok; header `X-Idempotency-Key` → `Idempotency-Key`. |
-| POST | `/conversations/:id/messages/:messageId/reactions` | Flutter (`:124`) | EXISTS | |
-| DELETE | `/conversations/:id/messages/:messageId/reactions` | Flutter (`:131`) | RECONCILE | Must send `?emoji=`; today dropped. |
+| POST | `/conversations/:id/messages/:messageId/reactions` | Flutter (`http_message_repository.dart`) | EXISTS | **Fixed:** the client posted to `/messages/:id/reactions`, which is not a route — every reaction 404'd. Now nested under its conversation. |
+| DELETE | `/conversations/:id/messages/:messageId/reactions` | Flutter (same) | EXISTS | **Fixed:** `?emoji=` is now sent, ahead of the server reading it. |
+| DELETE | `/conversations/:id/messages/:messageId/me` | Flutter (same) | EXISTS | Delete for me. |
+| DELETE | `/conversations/:id/messages/:messageId` | Flutter (same) | EXISTS | Delete for everyone; a `DELETE_WINDOW_EXPIRED` refusal is presented, not pre-empted. |
+| POST | `/conversations/:id/messages/attachments/authorize` | Flutter (same) | EXISTS | Now used for `image` and `file` as well as `voice`. |
 | — | `x-actor-id` header (debug builds only) | Flutter (`lib/core/network/actor_identity.dart`) | RENAME | Replaced by `Authorization: Bearer`. |
 | — | auth: login / refresh / me / logout / sessions | Flutter (`unavailable_auth_repository.dart`) | MISSING | §3.1, §3.2 |
 | — | typing / realtime | Flutter (`setTyping` no-op) | MISSING (client) | Flutter has no socket client yet; §4 is the contract to implement. |
@@ -261,8 +264,13 @@ ConversationDto {
   state: 'open'|'waiting_on_customer'|'waiting_on_jawwid'|'resolved',   // computed
   needsReply: boolean, lastSeq: string, lastActivityAt: string, archivedAt: string|null,
   teacherRequiresApproval: boolean, parentRequiresApproval: boolean,
-  members?: ConversationMemberDto[]                                       // detail only
+  members?: ConversationMemberDto[],                                      // detail only
+  learner?: ConversationLearnerDto|null,        // list + detail; null when the conversation
+                                                // is about the family, not one child
+  unreadCount?: number                          // list + detail; per requesting actor
 }
+ConversationLearnerDto { id, name }             // two fields only -- never level,
+                                                // nextClassAt, teacherId or familyId
 ConversationMemberDto { actorId, actorKind: 'contact'|'staff'|'teacher'|'system',
   memberRole: 'parent'|'teacher'|'admin'|'observer', isSilent: boolean }
 MessageDto {
@@ -386,7 +394,9 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 
 **GET /conversations** — EXISTS → RECONCILE (`conversation.controller.ts#list`, `conversation.service.ts#listForActor`)
 - Auth: required. Permission: `conversations.read`. Scope today: contact / teacher → conversations where the actor is a live member; **staff (family-facing) → every conversation in the system, `take: 200`, no scope (RT-011)**; other staff → `COMM.ROLE_CANNOT_MESSAGE_FAMILY` 403.
-- Query today: none. Response today: `{ conversations: ConversationDto[] }` (no `members`), ordered `lastActivityAt desc`.
+- Query today: none. Response today: `{ conversations: ConversationDto[] }` (no `members`), ordered `lastActivityAt desc`. Each row carries `learner` (resolved from `conversation.learner_id`, null when there is none) and `unreadCount` (always a number on this route).
+- **`unreadCount`** is derived from `chat.message_receipt` — the existing read-state architecture, which `markReadUpTo` already writes — and counts messages where the actor holds a receipt in `sent|delivered`, excluding `message_hidden_for` rows and `deleted_for_all`. Receipts are written only for live members other than the author and never for a pending message, so an actor's own messages, messages awaiting approval and (for a contact) internal notes have no receipt and cannot be counted. One grouped query per list request, never one per row (this is the cost that kept the field off the DTO: mobile gap O1).
+- **`learner`** rides the same membership join that authorizes the list, so a contact can only receive the learner of a conversation they are a live member of. `learnerId` is unchanged and remains the authority on whether a conversation has a learner at all.
 - **Phase 1:** query `familyId?`, `section?: 'needs_reply'|'pending_approval'|'unanswered'|'all'` (default `all`), `includeArchived?` (default false), `cursor`, `limit` (default 30, max 100); response `Page<ConversationDto>`; staff scope = family scope rule (§3.3) plus conversations the staff is a live member of. Section definitions: `needs_reply` = `needsReply === true`; `pending_approval` = at least one `message_approval` with `decision='pending'`; `unanswered` = `needsReply === true` and `lastStaffMessageAt is null` (never answered; a subset of `needs_reply`) — *this definition is proposed [B], to be confirmed by product*; `all` = no filter. Contacts and teachers may pass `section` but not `familyId`.
 - Errors: `COMM.UNKNOWN_ACTOR` 401 · `COMM.ROLE_CANNOT_MESSAGE_FAMILY` 403.
 - Audit / Realtime: none.
@@ -415,7 +425,7 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 
 **GET /conversations/:id** — EXISTS → RECONCILE (`conversation.controller.ts#get`)
 - Auth: required. Permission: `conversations.read`. Scope: `canRead` — contact / teacher must be a live member; family-facing staff any conversation.
-- Response today: `ConversationDto` **without `members`** — the controller calls `toConversationDto(conv)` with no member list, although `docs/communication/mobile-contract.md` promises `members` on detail responses and `lib/core/data/http/http_group_repository.dart` depends on it. **Phase 1: return `members: ConversationMemberDto[]` (live members).** The authorization check is performed via `setPreferences(id, actorId, {})`, which also upserts an empty `conversation_participant_state` row as a side effect; Phase 1 replaces it with a pure `canRead` check.
+- Response today: `ConversationDto` carrying `learner` and `unreadCount`, but **without `members`** — the controller calls `toConversationDto(conv)` with no member list, although `docs/communication/mobile-contract.md` promises `members` on detail responses and `lib/core/data/http/http_group_repository.dart` depends on it. **Phase 1: return `members: ConversationMemberDto[]` (live members).** The authorization check is performed via `setPreferences(id, actorId, {})`, which also upserts an empty `conversation_participant_state` row as a side effect; Phase 1 replaces it with a pure `canRead` check.
 - Errors: `COMM.CONVERSATION_NOT_FOUND` 404 · `COMM.NOT_CONVERSATION_MEMBER` 403 · `COMM.ROLE_CANNOT_MESSAGE_FAMILY` 403 · `COMM.ACTOR_INACTIVE` 403.
 
 **POST /conversations/:id/members** — EXISTS → RECONCILE (`setMembership`)
@@ -467,7 +477,7 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 
 **DELETE /conversations/:conversationId/messages/:messageId/reactions** — RECONCILE
 - Auth: required. Permission: `messages.read`. Scope: as above.
-- Today: no parameters; removes the caller's single reaction and emits `reaction.removed` with the stored emoji. **Phase 1: query `?emoji=<emoji>` is required**; if the stored reaction differs the call is a no-op `{ ok: true, removed: false }`. Rationale: makes the delete safe against a concurrent replace and keeps the route stable if multi-reaction ever lands. Flutter drops the emoji today (`http_message_repository.dart:131`).
+- Today: no parameters; removes the caller's single reaction and emits `reaction.removed` with the stored emoji. **Phase 1: query `?emoji=<emoji>` is required**; if the stored reaction differs the call is a no-op `{ ok: true, removed: false }`. Rationale: makes the delete safe against a concurrent replace and keeps the route stable if multi-reaction ever lands. Flutter now sends the emoji, ahead of the server reading it, so the client needs no change when Phase 1 lands.
 - Response: `{ ok: true }`. Realtime: `reaction.removed`.
 
 **DELETE /conversations/:conversationId/messages/:messageId/me**

@@ -23,18 +23,21 @@
  * A policy that decides correctly on a fact it never receives is not a rule
  * anybody is enforcing.
  */
-import { randomUUID } from 'node:crypto';
-import { PrismaRelationshipService } from '@platform/relationship.service';
-import { CommErrorCode } from '@platform/errors';
-import { buildGraph } from './harness';
-import { parent as parentActor, teacher as teacherActor } from '../support/fixtures';
+import { randomUUID } from "node:crypto";
+import { PrismaRelationshipService } from "@platform/relationship.service";
+import { CommErrorCode } from "@platform/errors";
+import { buildGraph, withAssignmentGate } from "./harness";
+import {
+  parent as parentActor,
+  teacher as teacherActor,
+} from "../support/fixtures";
 
 jest.setTimeout(60_000);
 
 const g = buildGraph();
 const relationships = new PrismaRelationshipService(g.prisma);
 
-const ORG_A = '00000000-0000-0000-0000-000000000001';
+const ORG_A = "00000000-0000-0000-0000-000000000001";
 const ORG_B = randomUUID();
 
 interface World {
@@ -58,9 +61,12 @@ interface World {
 let w: World;
 
 /** The database's own answer, reached directly. */
-async function sqlSays(teacherId: string | null, contactId: string | null): Promise<boolean> {
+async function sqlSays(
+  teacherId: string | null,
+  contactId: string | null,
+): Promise<boolean> {
   const rows = await g.prisma.$queryRawUnsafe<Array<{ ok: boolean }>>(
-    'select chat.teacher_parent_authorized($1::uuid, $2::uuid) as ok',
+    "select chat.teacher_parent_authorized($1::uuid, $2::uuid) as ok",
     teacherId,
     contactId,
   );
@@ -78,14 +84,27 @@ async function expectBothLayers(
   contactId: string | null,
   expected: boolean,
 ): Promise<void> {
-  const app = teacherId && contactId
-    ? await relationships.teacherParentAuthorized(teacherId, contactId)
-    : await relationships.teacherParentAuthorized(teacherId as string, contactId as string);
+  const app =
+    teacherId && contactId
+      ? await relationships.teacherParentAuthorized(teacherId, contactId)
+      : await relationships.teacherParentAuthorized(
+          teacherId as string,
+          contactId as string,
+        );
   const db = await sqlSays(teacherId, contactId);
 
-  expect({ layer: 'application', authorized: app }).toEqual({ layer: 'application', authorized: expected });
-  expect({ layer: 'database', authorized: db }).toEqual({ layer: 'database', authorized: expected });
-  expect({ application: app, database: db }).toEqual({ application: expected, database: expected });
+  expect({ layer: "application", authorized: app }).toEqual({
+    layer: "application",
+    authorized: expected,
+  });
+  expect({ layer: "database", authorized: db }).toEqual({
+    layer: "database",
+    authorized: expected,
+  });
+  expect({ application: app, database: db }).toEqual({
+    application: expected,
+    database: expected,
+  });
 }
 
 beforeAll(async () => {
@@ -177,7 +196,10 @@ beforeEach(async () => {
         'primary_guardian',   true,  true, true, true, true, true, true)`,
   );
 
-  await g.prisma.$executeRawUnsafe(
+  // The learner rows carry teacher_id, which only assignment ingestion may
+  // write. These fixtures stand in for it and open the same gate.
+  await withAssignmentGate(
+    g.prisma,
     `insert into chat.learner (id, organization_id, family_id, name, teacher_id) values
        ('${w.learnerOne}'::uuid, '${ORG_A}'::uuid, '${w.familyOne}'::uuid, 'learner_one',   '${w.teacherAssigned}'::uuid),
        ('${randomUUID()}'::uuid, '${ORG_A}'::uuid, '${w.familyOne}'::uuid, 'learner_two',   '${w.teacherSecond}'::uuid),
@@ -189,12 +211,12 @@ beforeEach(async () => {
 });
 
 // -------------------------------------------------------------------------
-describe('PD-6 predicate — the authorized relationship', () => {
-  it('1. authorized parent + assigned teacher → TRUE', async () => {
+describe("PD-6 predicate — the authorized relationship", () => {
+  it("1. authorized parent + assigned teacher → TRUE", async () => {
     await expectBothLayers(w.teacherAssigned, w.parentOk, true);
   });
 
-  it('2. authorized teacher + assigned parent → TRUE (the same fact, asked from the teacher side)', async () => {
+  it("2. authorized teacher + assigned parent → TRUE (the same fact, asked from the teacher side)", async () => {
     // Direction is not a property of the relationship. pairingAuthorized()
     // exists so a call site never has to work out which actor is the teacher,
     // and it must answer identically whichever order it receives them in.
@@ -205,45 +227,54 @@ describe('PD-6 predicate — the authorized relationship', () => {
     await expect(relationships.pairingAuthorized(p, t)).resolves.toBe(true);
   });
 
-  it('10. a family with several learners, the teacher assigned to only one of them → TRUE', async () => {
+  it("10. a family with several learners, the teacher assigned to only one of them → TRUE", async () => {
     await expectBothLayers(w.teacherSecond, w.parentOk, true);
   });
 
-  it('duplicate relationships do not change the answer: a second learner with the same teacher is still one TRUE', async () => {
-    const before = await relationships.teacherParentAuthorized(w.teacherAssigned, w.parentOk);
+  it("duplicate relationships do not change the answer: a second learner with the same teacher is still one TRUE", async () => {
+    const before = await relationships.teacherParentAuthorized(
+      w.teacherAssigned,
+      w.parentOk,
+    );
 
-    await g.prisma.$executeRawUnsafe(
+    await withAssignmentGate(
+      g.prisma,
       `insert into chat.learner (id, organization_id, family_id, name, teacher_id)
        values ('${randomUUID()}'::uuid, '${ORG_A}'::uuid, '${w.familyOne}'::uuid,
                'learner_duplicate', '${w.teacherAssigned}'::uuid)`,
     );
 
-    const after = await relationships.teacherParentAuthorized(w.teacherAssigned, w.parentOk);
+    const after = await relationships.teacherParentAuthorized(
+      w.teacherAssigned,
+      w.parentOk,
+    );
     expect({ before, after }).toEqual({ before: true, after: true });
     await expectBothLayers(w.teacherAssigned, w.parentOk, true);
   });
 });
 
 // -------------------------------------------------------------------------
-describe('PD-6 predicate — no relationship', () => {
-  it('3. parent + unrelated teacher → FALSE', async () => {
+describe("PD-6 predicate — no relationship", () => {
+  it("3. parent + unrelated teacher → FALSE", async () => {
     await expectBothLayers(w.teacherUnrelated, w.parentOk, false);
   });
 
-  it('4. teacher + unrelated parent → FALSE', async () => {
+  it("4. teacher + unrelated parent → FALSE", async () => {
     await expectBothLayers(w.teacherAssigned, w.parentOtherFamily, false);
   });
 
-  it('11. the family has learners, but none assigned to this teacher → FALSE', async () => {
+  it("11. the family has learners, but none assigned to this teacher → FALSE", async () => {
     // Stated separately from case 3 because the failure it guards is different:
     // "this family has children" must never be read as "this family is
     // connected to the teaching staff".
-    const learners = await g.prisma.learner.count({ where: { familyId: w.familyOne } });
+    const learners = await g.prisma.learner.count({
+      where: { familyId: w.familyOne },
+    });
     expect(learners).toBeGreaterThan(1);
     await expectBothLayers(w.teacherUnrelated, w.parentOk, false);
   });
 
-  it('a learner with no teacher assigned authorizes nobody', async () => {
+  it("a learner with no teacher assigned authorizes nobody", async () => {
     const orphan = await g.prisma.learner.findFirst({
       where: { familyId: w.familyOne, teacherId: null },
     });
@@ -251,7 +282,7 @@ describe('PD-6 predicate — no relationship', () => {
     await expectBothLayers(w.teacherUnrelated, w.parentOk, false);
   });
 
-  it('a pairing that is not one teacher and one contact is not a teacher/parent pairing', async () => {
+  it("a pairing that is not one teacher and one contact is not a teacher/parent pairing", async () => {
     const t1 = teacherActor(w.teacherAssigned);
     const t2 = teacherActor(w.teacherSecond);
     const p1 = parentActor(w.parentOk, w.familyOne);
@@ -263,16 +294,16 @@ describe('PD-6 predicate — no relationship', () => {
 });
 
 // -------------------------------------------------------------------------
-describe('PD-6 predicate — each party must be live', () => {
-  it('5. inactive contact → FALSE', async () => {
+describe("PD-6 predicate — each party must be live", () => {
+  it("5. inactive contact → FALSE", async () => {
     await expectBothLayers(w.teacherAssigned, w.parentInactive, false);
   });
 
-  it('6. contact.can_message = false → FALSE', async () => {
+  it("6. contact.can_message = false → FALSE", async () => {
     await expectBothLayers(w.teacherAssigned, w.parentNoMessage, false);
   });
 
-  it('7. inactive teacher → FALSE, even though genuinely assigned to that family', async () => {
+  it("7. inactive teacher → FALSE, even though genuinely assigned to that family", async () => {
     const link = await g.prisma.learner.findFirst({
       where: { familyId: w.familyTwo, teacherId: w.teacherInactive },
     });
@@ -280,8 +311,10 @@ describe('PD-6 predicate — each party must be live', () => {
     await expectBothLayers(w.teacherInactive, w.parentOtherFamily, false);
   });
 
-  it('8. teacher with left_at populated → FALSE, even with is_active still true', async () => {
-    const t = await g.prisma.teacher.findUnique({ where: { id: w.teacherLeft } });
+  it("8. teacher with left_at populated → FALSE, even with is_active still true", async () => {
+    const t = await g.prisma.teacher.findUnique({
+      where: { id: w.teacherLeft },
+    });
     expect({ isActive: t?.isActive, hasLeft: t?.leftAt !== null }).toEqual({
       isActive: true,
       hasLeft: true,
@@ -291,26 +324,31 @@ describe('PD-6 predicate — each party must be live', () => {
 });
 
 // -------------------------------------------------------------------------
-describe('PD-6 predicate — tenant isolation', () => {
-  it('control: organization B\'s own chain is authorized within B', async () => {
+describe("PD-6 predicate — tenant isolation", () => {
+  it("control: organization B's own chain is authorized within B", async () => {
     await expectBothLayers(w.teacherB, w.parentB, true);
   });
 
-  it('9. cross-organization: org A teacher + org B parent → FALSE', async () => {
+  it("9. cross-organization: org A teacher + org B parent → FALSE", async () => {
     await expectBothLayers(w.teacherAssigned, w.parentB, false);
   });
 
-  it('9b. cross-organization, the other direction: org B teacher + org A parent → FALSE', async () => {
+  it("9b. cross-organization, the other direction: org B teacher + org A parent → FALSE", async () => {
     await expectBothLayers(w.teacherB, w.parentOk, false);
   });
 
-  it('cross-tenant data cannot satisfy the predicate even through a learner row', async () => {
+  it("cross-tenant data cannot satisfy the predicate even through a learner row", async () => {
     // Attempt to bridge the tenants with a learner in org A pointing at org B's
     // teacher. chat.enforce_same_organization() may refuse the row outright; if
     // it does not, the predicate must still refuse the relationship.
     let bridged = true;
     try {
-      await g.prisma.$executeRawUnsafe(
+      // The assignment gate is opened deliberately: this case is about TENANCY.
+      // Left closed, chat.guard_learner_assignment_change() refuses the row
+      // first and the test would pass without ever reaching the boundary it
+      // exists to prove.
+      await withAssignmentGate(
+        g.prisma,
         `insert into chat.learner (id, organization_id, family_id, name, teacher_id)
          values ('${randomUUID()}'::uuid, '${ORG_A}'::uuid, '${w.familyOne}'::uuid,
                  'learner_bridge', '${w.teacherB}'::uuid)`,
@@ -322,19 +360,20 @@ describe('PD-6 predicate — tenant isolation', () => {
     await expectBothLayers(w.teacherB, w.parentOk, false);
     // Recorded rather than asserted either way: both outcomes are safe, and
     // which one happens is a property of the tenancy triggers, not of PD-6.
-    expect(typeof bridged).toBe('boolean');
+    expect(typeof bridged).toBe("boolean");
   });
 });
 
 // -------------------------------------------------------------------------
-describe('PD-6 predicate — revocation is immediate', () => {
-  it('12. reassigning learner.teacher_id revokes on the NEXT evaluation', async () => {
+describe("PD-6 predicate — revocation is immediate", () => {
+  it("12. reassigning learner.teacher_id revokes on the NEXT evaluation", async () => {
     await expectBothLayers(w.teacherAssigned, w.parentOk, true);
 
-    await g.prisma.learner.update({
-      where: { id: w.learnerOne },
-      data: { teacherId: w.teacherUnrelated },
-    });
+    await withAssignmentGate(
+      g.prisma,
+      `update chat.learner set teacher_id = '${w.teacherUnrelated}'::uuid
+        where id = '${w.learnerOne}'::uuid`,
+    );
 
     await expectBothLayers(w.teacherAssigned, w.parentOk, false);
     // And the teacher it moved to is authorized from that moment, with no other
@@ -342,65 +381,89 @@ describe('PD-6 predicate — revocation is immediate', () => {
     await expectBothLayers(w.teacherUnrelated, w.parentOk, true);
   });
 
-  it('deactivating the contact revokes on the next evaluation', async () => {
+  it("deactivating the contact revokes on the next evaluation", async () => {
     await expectBothLayers(w.teacherAssigned, w.parentOk, true);
-    await g.prisma.contact.update({ where: { id: w.parentOk }, data: { isActive: false } });
+    await g.prisma.contact.update({
+      where: { id: w.parentOk },
+      data: { isActive: false },
+    });
     await expectBothLayers(w.teacherAssigned, w.parentOk, false);
   });
 
-  it('withdrawing can_message revokes on the next evaluation', async () => {
+  it("withdrawing can_message revokes on the next evaluation", async () => {
     await expectBothLayers(w.teacherAssigned, w.parentOk, true);
-    await g.prisma.contact.update({ where: { id: w.parentOk }, data: { canMessage: false } });
+    await g.prisma.contact.update({
+      where: { id: w.parentOk },
+      data: { canMessage: false },
+    });
     await expectBothLayers(w.teacherAssigned, w.parentOk, false);
   });
 
-  it('offboarding the teacher revokes on the next evaluation', async () => {
+  it("offboarding the teacher revokes on the next evaluation", async () => {
     await expectBothLayers(w.teacherAssigned, w.parentOk, true);
-    await g.prisma.teacher.update({ where: { id: w.teacherAssigned }, data: { leftAt: new Date() } });
+    await g.prisma.teacher.update({
+      where: { id: w.teacherAssigned },
+      data: { leftAt: new Date() },
+    });
     await expectBothLayers(w.teacherAssigned, w.parentOk, false);
   });
 });
 
 // -------------------------------------------------------------------------
-describe('PD-6 predicate — client-supplied ids are never evidence', () => {
-  it('an id that matches no row authorizes nothing', async () => {
+describe("PD-6 predicate — client-supplied ids are never evidence", () => {
+  it("an id that matches no row authorizes nothing", async () => {
     await expectBothLayers(randomUUID(), randomUUID(), false);
     await expectBothLayers(randomUUID(), w.parentOk, false);
     await expectBothLayers(w.teacherAssigned, randomUUID(), false);
   });
 
-  it('transposing the arguments does not manufacture a relationship', async () => {
+  it("transposing the arguments does not manufacture a relationship", async () => {
     // The parameters are ids, not roles. A caller who puts a contact id in the
     // teacher position is not thereby describing a teacher.
     await expectBothLayers(w.parentOk, w.teacherAssigned, false);
   });
 
-  it('a staff id in the teacher position is not a teacher', async () => {
+  it("a staff id in the teacher position is not a teacher", async () => {
     await expectBothLayers(w.adminA, w.parentOk, false);
   });
 
-  it('malformed ids are denied, not raised: a denial must look like a denial', async () => {
+  it("malformed ids are denied, not raised: a denial must look like a denial", async () => {
     // Prisma raises on a non-uuid where the column is uuid. A 500 where a 403
     // belongs would leak the difference between "no such row" and "bad input",
     // and would turn a policy decision into an error page.
-    await expect(relationships.teacherParentAuthorized('', '')).resolves.toBe(false);
-    await expect(relationships.teacherParentAuthorized('not-a-uuid', w.parentOk)).resolves.toBe(false);
-    await expect(relationships.teacherParentAuthorized(w.teacherAssigned, 'not-a-uuid')).resolves.toBe(false);
+    await expect(relationships.teacherParentAuthorized("", "")).resolves.toBe(
+      false,
+    );
     await expect(
-      relationships.teacherParentAuthorized(`${w.teacherAssigned}' or '1'='1`, w.parentOk),
+      relationships.teacherParentAuthorized("not-a-uuid", w.parentOk),
+    ).resolves.toBe(false);
+    await expect(
+      relationships.teacherParentAuthorized(w.teacherAssigned, "not-a-uuid"),
+    ).resolves.toBe(false);
+    await expect(
+      relationships.teacherParentAuthorized(
+        `${w.teacherAssigned}' or '1'='1`,
+        w.parentOk,
+      ),
     ).resolves.toBe(false);
   });
 
-  it('null and undefined ids are denied rather than raised', async () => {
+  it("null and undefined ids are denied rather than raised", async () => {
     await expect(
-      relationships.teacherParentAuthorized(null as unknown as string, w.parentOk),
+      relationships.teacherParentAuthorized(
+        null as unknown as string,
+        w.parentOk,
+      ),
     ).resolves.toBe(false);
     await expect(
-      relationships.teacherParentAuthorized(w.teacherAssigned, undefined as unknown as string),
+      relationships.teacherParentAuthorized(
+        w.teacherAssigned,
+        undefined as unknown as string,
+      ),
     ).resolves.toBe(false);
   });
 
-  it('the database agrees: NULL arguments are false, never NULL', async () => {
+  it("the database agrees: NULL arguments are false, never NULL", async () => {
     await expect(sqlSays(null, w.parentOk)).resolves.toBe(false);
     await expect(sqlSays(w.teacherAssigned, null)).resolves.toBe(false);
     await expect(sqlSays(null, null)).resolves.toBe(false);
@@ -408,7 +471,7 @@ describe('PD-6 predicate — client-supplied ids are never evidence', () => {
 });
 
 // -------------------------------------------------------------------------
-describe('PD-6 — the authorization switch, end to end', () => {
+describe("PD-6 — the authorization switch, end to end", () => {
   /**
    * RE-VERSIONED 2026-09-23. This block previously asserted that nothing
    * consumed the predicate and that the old BR-1 denials still stood. Phase 4
@@ -425,39 +488,55 @@ describe('PD-6 — the authorization switch, end to end', () => {
     g.conversations.getOrCreateDirect(w.teacherAssigned, w.parentOk);
 
   const revokeRelationship = () =>
-    g.prisma.learner.update({
-      where: { id: w.learnerOne },
-      data: { teacherId: w.teacherUnrelated },
-    });
+    withAssignmentGate(
+      g.prisma,
+      `update chat.learner set teacher_id = '${w.teacherUnrelated}'::uuid
+        where id = '${w.learnerOne}'::uuid`,
+    );
 
-  it('1. authorized relationship → direct conversation is allowed, in both directions', async () => {
+  it("1. authorized relationship → direct conversation is allowed, in both directions", async () => {
     const fromTeacher = await openChannel();
-    const fromParent = await g.conversations.getOrCreateDirect(w.parentOk, w.teacherAssigned);
+    const fromParent = await g.conversations.getOrCreateDirect(
+      w.parentOk,
+      w.teacherAssigned,
+    );
     expect(fromTeacher.id).toBe(fromParent.id);
-    expect(fromTeacher.type).toBe('direct');
+    expect(fromTeacher.type).toBe("direct");
   });
 
-  it('1b. unauthorized relationship → direct conversation is denied, in both directions', async () => {
+  it("1b. unauthorized relationship → direct conversation is denied, in both directions", async () => {
     await expect(
       g.conversations.getOrCreateDirect(w.teacherUnrelated, w.parentOk),
-    ).rejects.toMatchObject({ code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED });
+    ).rejects.toMatchObject({
+      code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
+    });
     await expect(
       g.conversations.getOrCreateDirect(w.parentOk, w.teacherUnrelated),
-    ).rejects.toMatchObject({ code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED });
+    ).rejects.toMatchObject({
+      code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
+    });
   });
 
-  it('2. authorized relationship → messaging is allowed, both ways, published immediately', async () => {
+  it("2. authorized relationship → messaging is allowed, both ways, published immediately", async () => {
     const conv = await openChannel();
 
-    const fromTeacher = await g.messages.send({ conversationId: conv.id, senderId: w.teacherAssigned, body: 'assalamu alaykum' });
-    const fromParent = await g.messages.send({ conversationId: conv.id, senderId: w.parentOk, body: 'wa alaykum assalam' });
+    const fromTeacher = await g.messages.send({
+      conversationId: conv.id,
+      senderId: w.teacherAssigned,
+      body: "assalamu alaykum",
+    });
+    const fromParent = await g.messages.send({
+      conversationId: conv.id,
+      senderId: w.parentOk,
+      body: "wa alaykum assalam",
+    });
 
     // PD-6: no admin approval on this channel. Both publish immediately (BR-6).
-    expect(fromTeacher.moderation).toBe('published');
-    expect(fromParent.moderation).toBe('published');
+    expect(fromTeacher.moderation).toBe("published");
+    expect(fromParent.moderation).toBe("published");
   });
 
-  it('3. authorized relationship → a direct call is allowed, started from either side', async () => {
+  it("3. authorized relationship → a direct call is allowed, started from either side", async () => {
     const conv = await openChannel();
 
     const byTeacher = await g.calls.start(conv.id, w.teacherAssigned);
@@ -473,39 +552,59 @@ describe('PD-6 — the authorization switch, end to end', () => {
     await g.calls.end(byParent.callId, w.parentOk);
   });
 
-  it('3b. an authorized participant can obtain a media token', async () => {
+  it("3b. an authorized participant can obtain a media token", async () => {
     const conv = await openChannel();
     const { callId } = await g.calls.start(conv.id, w.teacherAssigned);
 
     const token = await g.calls.issueToken(callId, w.parentOk);
-    expect(token.token.split('.')).toHaveLength(3);
+    expect(token.token.split(".")).toHaveLength(3);
 
     // The grant is scoped to this one room and nothing else.
-    const claims = JSON.parse(Buffer.from(token.token.split('.')[1], 'base64').toString());
+    const claims = JSON.parse(
+      Buffer.from(token.token.split(".")[1], "base64").toString(),
+    );
     expect(claims.video.room).toBe(token.roomName);
     expect(claims.video.roomCreate).toBe(false);
   });
 
-  it('4. relationship revoked → a NEW message is denied', async () => {
+  it("4. relationship revoked → a NEW message is denied", async () => {
     const conv = await openChannel();
-    await g.messages.send({ conversationId: conv.id, senderId: w.teacherAssigned, body: 'before' });
+    await g.messages.send({
+      conversationId: conv.id,
+      senderId: w.teacherAssigned,
+      body: "before",
+    });
 
     await revokeRelationship();
 
     // Both directions close, not just the teacher's.
     await expect(
-      g.messages.send({ conversationId: conv.id, senderId: w.teacherAssigned, body: 'after' }),
-    ).rejects.toMatchObject({ code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED });
+      g.messages.send({
+        conversationId: conv.id,
+        senderId: w.teacherAssigned,
+        body: "after",
+      }),
+    ).rejects.toMatchObject({
+      code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
+    });
     await expect(
-      g.messages.send({ conversationId: conv.id, senderId: w.parentOk, body: 'after' }),
-    ).rejects.toMatchObject({ code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED });
+      g.messages.send({
+        conversationId: conv.id,
+        senderId: w.parentOk,
+        body: "after",
+      }),
+    ).rejects.toMatchObject({
+      code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
+    });
   });
 
-  it('5. relationship revoked → a NEW call is denied', async () => {
+  it("5. relationship revoked → a NEW call is denied", async () => {
     const conv = await openChannel();
     await revokeRelationship();
 
-    await expect(g.calls.start(conv.id, w.teacherAssigned)).rejects.toMatchObject({
+    await expect(
+      g.calls.start(conv.id, w.teacherAssigned),
+    ).rejects.toMatchObject({
       code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
     });
     await expect(g.calls.start(conv.id, w.parentOk)).rejects.toMatchObject({
@@ -513,7 +612,7 @@ describe('PD-6 — the authorization switch, end to end', () => {
     });
   });
 
-  it('6. relationship revoked MID-CALL → media token issuance is denied', async () => {
+  it("6. relationship revoked MID-CALL → media token issuance is denied", async () => {
     // The case that matters most. The call was authorized when it was created,
     // and a token minted from that fact alone would keep the audio path open
     // for the life of the call. Tokens are short-lived precisely so that the
@@ -522,9 +621,11 @@ describe('PD-6 — the authorization switch, end to end', () => {
     const { callId } = await g.calls.start(conv.id, w.teacherAssigned);
 
     // It works while the relationship stands...
-    await expect(g.calls.issueToken(callId, w.parentOk)).resolves.toMatchObject({
-      roomName: expect.any(String),
-    });
+    await expect(g.calls.issueToken(callId, w.parentOk)).resolves.toMatchObject(
+      {
+        roomName: expect.any(String),
+      },
+    );
 
     await revokeRelationship();
 
@@ -532,12 +633,14 @@ describe('PD-6 — the authorization switch, end to end', () => {
     await expect(g.calls.issueToken(callId, w.parentOk)).rejects.toMatchObject({
       code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
     });
-    await expect(g.calls.issueToken(callId, w.teacherAssigned)).rejects.toMatchObject({
+    await expect(
+      g.calls.issueToken(callId, w.teacherAssigned),
+    ).rejects.toMatchObject({
       code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
     });
   });
 
-  it('6b. a call whose relationship was revoked can still be ENDED — no call is stranded', async () => {
+  it("6b. a call whose relationship was revoked can still be ENDED — no call is stranded", async () => {
     // The corollary of re-checking on the token path: revocation must not make
     // the call un-endable, or a revoked relationship would leave calls ACTIVE
     // forever. Ending is a lifecycle write, not a new authorization.
@@ -547,23 +650,35 @@ describe('PD-6 — the authorization switch, end to end', () => {
 
     await revokeRelationship();
 
-    await expect(g.calls.end(callId, w.teacherAssigned)).resolves.toBeUndefined();
+    await expect(
+      g.calls.end(callId, w.teacherAssigned),
+    ).resolves.toBeUndefined();
     const call = await g.prisma.call.findUnique({ where: { id: callId } });
-    expect(call?.status).toBe('ended');
+    expect(call?.status).toBe("ended");
   });
 
-  it('7. revocation does not delete history: past messages and calls remain', async () => {
+  it("7. revocation does not delete history: past messages and calls remain", async () => {
     const conv = await openChannel();
-    const msg = await g.messages.send({ conversationId: conv.id, senderId: w.teacherAssigned, body: 'kept' });
+    const msg = await g.messages.send({
+      conversationId: conv.id,
+      senderId: w.teacherAssigned,
+      body: "kept",
+    });
     const { callId } = await g.calls.start(conv.id, w.teacherAssigned);
     await g.calls.end(callId, w.teacherAssigned);
 
     await revokeRelationship();
 
     // The rows survive untouched.
-    expect(await g.prisma.message.findUnique({ where: { id: msg.id } })).not.toBeNull();
-    expect(await g.prisma.call.findUnique({ where: { id: callId } })).not.toBeNull();
-    expect(await g.prisma.conversation.findUnique({ where: { id: conv.id } })).not.toBeNull();
+    expect(
+      await g.prisma.message.findUnique({ where: { id: msg.id } }),
+    ).not.toBeNull();
+    expect(
+      await g.prisma.call.findUnique({ where: { id: callId } }),
+    ).not.toBeNull();
+    expect(
+      await g.prisma.conversation.findUnique({ where: { id: conv.id } }),
+    ).not.toBeNull();
 
     // And reading is governed by the ordinary read rules, which PD-6 did not
     // touch: a member may still read the conversation they were part of.
@@ -572,51 +687,68 @@ describe('PD-6 — the authorization switch, end to end', () => {
     expect(history[0].id).toBe(callId);
   });
 
-  it('the channel survives revocation as a record, but not as a channel', async () => {
+  it("the channel survives revocation as a record, but not as a channel", async () => {
     // Both halves of the previous two tests stated together, because the pair
     // is the actual product requirement and each alone reads as a bug.
     const conv = await openChannel();
     await revokeRelationship();
 
-    expect(await g.prisma.conversation.findUnique({ where: { id: conv.id } })).not.toBeNull();
+    expect(
+      await g.prisma.conversation.findUnique({ where: { id: conv.id } }),
+    ).not.toBeNull();
     await expect(
-      g.messages.send({ conversationId: conv.id, senderId: w.teacherAssigned, body: 'nope' }),
-    ).rejects.toMatchObject({ code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED });
+      g.messages.send({
+        conversationId: conv.id,
+        senderId: w.teacherAssigned,
+        body: "nope",
+      }),
+    ).rejects.toMatchObject({
+      code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
+    });
   });
 
-  it('anti-bypass: an unauthorized teacher cannot reach an authorized pair\'s conversation', async () => {
+  it("anti-bypass: an unauthorized teacher cannot reach an authorized pair's conversation", async () => {
     // A conversation id is not a capability. Holding one -- by guessing it, or
     // by having been in it once -- does not authorize an actor the relationship
     // does not cover.
     const conv = await openChannel();
 
     await expect(
-      g.messages.send({ conversationId: conv.id, senderId: w.teacherUnrelated, body: 'intruder' }),
+      g.messages.send({
+        conversationId: conv.id,
+        senderId: w.teacherUnrelated,
+        body: "intruder",
+      }),
     ).rejects.toMatchObject({ code: CommErrorCode.NOT_CONVERSATION_MEMBER });
 
-    await expect(g.calls.start(conv.id, w.teacherUnrelated)).rejects.toMatchObject({
+    await expect(
+      g.calls.start(conv.id, w.teacherUnrelated),
+    ).rejects.toMatchObject({
       code: CommErrorCode.NOT_CONVERSATION_MEMBER,
     });
   });
 
-  it('readWithMembers returns the participant set a client needs to classify the channel', async () => {
+  it("readWithMembers returns the participant set a client needs to classify the channel", async () => {
     // PD-6 made the participant set load-bearing for the client: a `direct`
     // conversation may be Parent<->Admin, Teacher<->Admin or Parent<->Teacher,
     // and the type no longer says which. API-CONTRACT section 3.4 requires
     // GET /conversations/:id to carry members[]; this is the service behind it.
     const conv = await openChannel();
 
-    const { members } = await g.conversations.readWithMembers(conv.id, w.parentOk);
+    const { members } = await g.conversations.readWithMembers(
+      conv.id,
+      w.parentOk,
+    );
     const kinds = members.map((m) => m.actorKind).sort();
 
-    expect(kinds).toEqual(['contact', 'teacher']);
+    expect(kinds).toEqual(["contact", "teacher"]);
     // actorKind, not memberRole, is what the client must classify on -- a
     // teacher can carry member_role 'admin' (RT-025 C5). Both are present, so
     // the client can read the right one.
-    expect(members.every((m) => typeof m.actorKind === 'string')).toBe(true);
+    expect(members.every((m) => typeof m.actorKind === "string")).toBe(true);
   });
 
-  it('readWithMembers refuses a non-member: a membership list is not public', async () => {
+  it("readWithMembers refuses a non-member: a membership list is not public", async () => {
     // The endpoint that carries members[] used to lean on a preferences upsert
     // to throw for a non-member. That was true but incidental, and not a
     // property to rely on while widening what the endpoint returns.
@@ -627,25 +759,35 @@ describe('PD-6 — the authorization switch, end to end', () => {
     ).rejects.toMatchObject({ code: CommErrorCode.NOT_CONVERSATION_MEMBER });
   });
 
-  it('a Parent<->Admin direct reports a different participant set, so the client can tell them apart', async () => {
-    const withAdmin = await g.conversations.getOrCreateDirect(w.parentOk, w.adminA);
-    const { members } = await g.conversations.readWithMembers(withAdmin.id, w.parentOk);
-    expect(members.map((m) => m.actorKind).sort()).toEqual(['contact', 'staff']);
+  it("a Parent<->Admin direct reports a different participant set, so the client can tell them apart", async () => {
+    const withAdmin = await g.conversations.getOrCreateDirect(
+      w.parentOk,
+      w.adminA,
+    );
+    const { members } = await g.conversations.readWithMembers(
+      withAdmin.id,
+      w.parentOk,
+    );
+    expect(members.map((m) => m.actorKind).sort()).toEqual([
+      "contact",
+      "staff",
+    ]);
   });
 
-  it('the deprecated BR1_TEACHER_PARENT_DIRECT code is raised by nothing in src/', () => {
+  it("the deprecated BR1_TEACHER_PARENT_DIRECT code is raised by nothing in src/", () => {
     // PD-6 keeps the constant for shipped clients that treat it as terminal.
     // Nothing in the running system may still emit it.
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { execSync } = require('node:child_process') as typeof import('node:child_process');
-    const hits = execSync(
-      "grep -rn 'BR1_TEACHER_PARENT_DIRECT' src || true",
-      { cwd: `${__dirname}/../..`, encoding: 'utf8' },
-    )
-      .split('\n')
+    const { execSync } =
+      require("node:child_process") as typeof import("node:child_process");
+    const hits = execSync("grep -rn 'BR1_TEACHER_PARENT_DIRECT' src || true", {
+      cwd: `${__dirname}/../..`,
+      encoding: "utf8",
+    })
+      .split("\n")
       .filter(Boolean)
       // The enum declaration itself is the one legitimate mention.
-      .filter((line) => !line.startsWith('src/platform/errors.ts'));
+      .filter((line) => !line.startsWith("src/platform/errors.ts"));
 
     expect(hits).toEqual([]);
   });

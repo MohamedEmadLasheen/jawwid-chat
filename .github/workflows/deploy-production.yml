@@ -114,6 +114,15 @@ jobs:
           BUILD_TIME: ${{ github.event.repository.updated_at }}
         run: scripts/infra/check-env.sh production
 
+      - name: Preflight the database role capability
+        # BEFORE the backup and BEFORE any migration. 20260910120200 grants
+        # BYPASSRLS, which not every managed PostgreSQL permits; without this
+        # the run fails at the seventeenth migration with the database half
+        # applied. Changes nothing -- the probe is rolled back.
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: scripts/db/preflight-role-capability.sh
+
       - name: Back up the database
         # Before migrations, every time, no exceptions. This is the artifact the
         # rollback procedure depends on; a migration that drops a column cannot

@@ -14,7 +14,7 @@ import { ApprovalService } from './approvals/approval.service';
 import { CallService } from './calls/call.service';
 import { LiveKitTokenIssuer } from './calls/media-token';
 import { AttachmentService } from './attachments/attachment.service';
-import { SignedLocalObjectStorage } from './attachments/object-storage';
+import { selectObjectStorage } from './attachments/storage.provider';
 import { LocalFsBlobStore } from './attachments/blob-store';
 import { OutboxService } from './outbox/outbox.service';
 import { OutboxWorker } from './outbox/outbox.worker';
@@ -67,7 +67,11 @@ import { StorageController } from './api/storage.controller';
     PresenceService,
     RealtimeGateway,
     LocalFsBlobStore,
-    { provide: OBJECT_STORAGE, useClass: SignedLocalObjectStorage },
+    // Chosen from configuration, not compiled in: S3-compatible storage when
+    // the bucket and credentials are set, the local reference implementation
+    // otherwise, and a startup failure when the configuration is half-present.
+    // See storage.provider.ts.
+    { provide: OBJECT_STORAGE, useFactory: () => selectObjectStorage().storage },
     { provide: PUSH_PROVIDER, useClass: LoggingPushProvider },
     { provide: MEDIA_TOKEN_ISSUER, useClass: LiveKitTokenIssuer },
     // AI #7 (D-2). The gateway ALONE cannot be the publisher: in the worker

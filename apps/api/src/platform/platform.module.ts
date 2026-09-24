@@ -29,8 +29,10 @@ import {
     { provide: IDENTITY_SERVICE, useClass: PrismaIdentityService },
     { provide: COVERAGE_SERVICE, useClass: SqlCoverageService },
     { provide: AUDIT_SERVICE, useClass: PrismaAuditService },
-    // PD-6. Registered now and consumed by nobody yet: the authorization switch
-    // that reads it lands in the next phase, once this predicate is proven.
+    // PD-6. The ONE place the teacher<->parent relationship is resolved.
+    // ConversationService, MessageService and CallService read it through this
+    // token and hand the resolved boolean to AuthorizationService, which stays
+    // database-free. Nothing else may answer this question.
     { provide: RELATIONSHIP_SERVICE, useClass: PrismaRelationshipService },
   ],
   exports: [

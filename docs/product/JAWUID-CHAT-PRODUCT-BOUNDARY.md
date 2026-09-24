@@ -310,52 +310,103 @@ not govern whether the role exists.
 
 ---
 
-### PD-6 · Direct Parent ↔ Teacher communication
+### PD-6 · Teacher–Parent direct communication
 
-**Closed by the product owner on 2026-09-23.** This decision re-versions **BR-1**,
-which PRD §4 calls a rule of "the constitution of the product". PRD §4 requires
-that such a rule change only by being "explicitly changed and re-versioned
-here"; that is what this decision does. The PRD moves to **v0.2** and preserves
-the v0.1 wording in its Appendix A.
+**Closed 2026-09-23.**
 
-**Final decision.** Authorized Parent ↔ Teacher **direct 1:1 messaging and
-direct 1:1 voice calling are ALLOWED**, in both directions. An unauthorized
-pairing stays forbidden. This is not a general parent↔teacher permission: the
-relationship is the whole of the authorization.
+**Final decision.** An active teacher **may** directly message and directly call
+a parent contact **while the Teacher–Parent relationship is authorized**. This is
+an **additional** capability. It does not replace the Student Group, which
+remains the official shared channel, and it does not weaken it.
 
-**Canonical rule.**
+Direct communication between a teacher and a parent who are **not** in an
+authorized relationship remains **forbidden**, exactly as before.
+
+**Canonical rule.** A Teacher–Parent relationship is authorized when, and only
+when, **all** of the following hold at the moment of the action:
 
 ```
-authorized(contact C, teacher T) :=
-  ∃ learner L :  L.family_id  = C.family_id
-              ∧  L.teacher_id = T.id
-              ∧  C.is_active ∧ C.can_message
-              ∧  T.is_active ∧ T.left_at IS NULL
-              ∧  C.organization_id = T.organization_id
+authorized(teacher, contact) =
+      teacher is assigned to >= 1 learner in the contact's family   (A)
+  AND teacher.is_active                                             (B)
+  AND teacher.left_at IS NULL                                       (C)
+  AND contact.is_active                                             (D)
+  AND contact.can_message = true                                    (E)
+  AND teacher, learner and contact share one organization_id        (F)
 
-parent  + authorized teacher + direct chat/call = ALLOW
-teacher + authorized parent  + direct chat/call = ALLOW
-parent  + any other teacher  + direct chat/call = DENY (COMM.TEACHER_PARENT_NOT_AUTHORIZED)
-teacher + any other parent   + direct chat/call = DENY (COMM.TEACHER_PARENT_NOT_AUTHORIZED)
+ONE qualifying learner is sufficient.                               (G)
+Anything else = DENY.
 ```
 
-Every term is read from server-owned data synchronized from Jawwid Core. A
-client-supplied `parent_id`, `teacher_id` or `conversation_id` is a lookup key
-and **never** evidence of a relationship.
+The authorization is **relationship-derived**. It is not conferred by two
+accounts existing, by shared organization membership, by family membership
+alone, by `role_preset`, by an existing conversation, by past communication, by
+a previous authorization, or by group membership. Any missing, invalid,
+inactive, ambiguous or cross-organization condition **fails closed**.
 
-**Reason.** Teachers and parents need to reach each other about the child's
-learning without an admin having to relay. The v0.1 rule achieved supervision by
-removing the channel entirely, which put the academy's operational cost and the
-parent's experience on the wrong side of the trade. PD-6 keeps the control that
-mattered — the academy decides who may speak to whom, from its own records — and
-drops the blanket prohibition. Supervision moves from "no channel exists" to
-"every channel is authorized, audited and retained".
+**One qualifying learner is sufficient.** If family F has learner A taught by
+teacher X and learner B taught by teacher Y, then X may communicate directly
+with F's parent contacts *because of A*, and Y may communicate directly with the
+same contacts *because of B*. Neither teacher's authorization depends on the
+other's learner.
 
-**Implementation phase.** Immediately, as a policy migration executed before any
-calling feature work, in this order: documents → predicate → database backstop →
-application authorization → tests and gate → verification.
+**Communication authorization is not data authorization.** Being authorized to
+*communicate* with a parent grants **no** access to any learner's data. If X is
+authorized because X teaches learner A, that does not authorize X to read
+learner B's grades, attendance, package or balance, lessons, complaints, or any
+other learner-specific record. Learner-data access continues to be governed by
+its own authorization rules, unchanged by this decision.
+
+**Revocation is immediate.** Authorization is evaluated **at the time of each
+protected action**, never cached and never granted ahead of time. It ends the
+moment the qualifying relationship ends — when the learner is reassigned to
+another teacher, when the teacher's `left_at` is set, when the teacher is
+deactivated, when the contact is deactivated, or when `can_message` is withdrawn.
+
+**Revocation is not deletion.** Ending authorization ends *new* protected
+actions only. Existing conversation history is retained; messages are never
+deleted because an authorization lapsed. The teacher simply cannot send a new
+direct message or start a new direct call while unauthorized.
+
+**One relationship definition, two capabilities.** Direct 1:1 messaging and
+direct 1:1 calling share the **same** relationship definition. There are not two
+definitions. The relationship decides *whether*; the action decides *what*.
+
+**Admin oversight.** An admin is **not** required to be a participant in a direct
+Teacher–Parent conversation or call. This decision introduces no admin-presence
+requirement of its own. Existing moderation, audit and administrative
+capabilities are unchanged and continue to be governed by their own rules. The
+C-4 live-admin presence rule continues to govern the **Student Group**, which
+PD-6 does not touch.
+
+**No grant table.** This policy introduces **no** Teacher–Parent authorization or
+grant table, no permanent grants, no time-bounded grants, and no manual
+per-parent teacher authorization records. Authorization is derived from the live
+Teacher ↔ Learner ↔ Family relationship. Introducing any of those mechanisms
+would require a new product decision.
+
+**Implementation phase.** The policy was closed on 2026-09-23 and staged in
+four steps, each of which required that no BR-1 structural backstop and no BR-1
+security test be weakened before it:
+
+1. the relationship predicate, at the application and database layers, proven on its own;
+2. the authorization switch (`canOpenDirect`, and the calling path that shares it);
+3. re-versioned authorization tests;
+4. the database backstop migration, which must permit the authorized case without weakening the unauthorized one.
+
+**All four have landed** (2026-09-24). The permitted case was **added**; the
+prohibited case is enforced exactly as strongly as before, and release gate
+**G-01** records the proof. What is *not* done is the calling product — see
+milestone **M4** in §5.1 and gate **G-06**. Policy and implementation now agree;
+neither asserts that a call carries audio.
 
 **Consequences.**
+- `AuthorizationService.canOpenDirect` gains an authorized Teacher↔Parent pair as a permitted direct pair. Unauthorized pairs keep returning `COMM.BR1_TEACHER_PARENT_DIRECT`.
+- The same predicate governs the direct calling path; PRD §9's 1:1 matrix row changes with it (PRD v0.2).
+- `chat.enforce_direct_conversation_rules()` and `chat.assert_conversation_br1()` must learn the authorized case. Today they make a teacher+contact `direct` conversation unrepresentable, which is what closes RT-024/RT-025; that strength must survive for unauthorized pairs.
+- Revocation being evaluated per action means no authorization may be cached in a session, a socket, or a conversation row.
+- Student Group membership, C-4 admin presence, PD-1 and PD-2 are unaffected.
+
 - A new `RelationshipService` resolves the predicate from Prisma. `AuthorizationService` receives the **resolved fact** and gains no database access, so its database-free unit-test architecture is preserved.
 - `canOpenDirect` becomes asynchronous at its call sites, taking the resolved pairing.
 - The three decision sites change: `canOpenDirect`, `canSend` (teacher branch), `canCall`. Nothing else in the matrix moves.
@@ -377,14 +428,14 @@ pairing, so no row becomes invalid under the new rule.
 - **C-4** stands: a Student Group pairing a teacher and a parent still requires a live Jawwid admin member.
 - RT-024 type-immutability, the two-participant ceiling on direct conversations and calls, tenant isolation, BR-2 (no phone numbers), BR-5 (history belongs to Jawwid), and every unrelated matrix denial — `contact+contact`, `teacher+teacher`, `staff+staff`, `ROLE_CANNOT_MESSAGE_FAMILY`.
 
-**Deprecated or conflicting behaviour.** PRD v0.1 BR-1 and its matrix rows are
-superseded and preserved in PRD Appendix A. `docs/qa/authoritative-scope.md`
-§3's BR-1 paragraph is superseded on this point. `docs/design/screens/call.md`
-§1/§4 and `docs/design/screens/student-group.md` §1, which required the
-affordance to be absent unconditionally, are superseded: the affordance is now
-conditional on backend authorization. Red-team findings **RT-024 and RT-025 are
-not retracted** — they are valid findings about the rule as it stood, and the
-controls they produced remain in force.
+**Deprecated or conflicting behaviour.** PRD v0.1 §4 BR-1 ("No direct
+Teacher ↔ Parent communication") and its §9 calling-matrix row
+("Teacher ↔ Parent — Rejected server-side") are **re-versioned by PRD v0.2** and
+no longer state the whole rule. `decision-log.md` **DEC-03** is superseded in
+part — its prohibition of *authorized* direct communication no longer holds; its
+prohibition of *unauthorized* direct communication is retained and is now the
+whole of DEC-03's surviving force. Nothing here permits a teacher to reach a
+parent they do not teach.
 
 ---
 

@@ -21,31 +21,31 @@
  * property. That boundary is stated in the phase report as NOT VERIFIED rather
  * than quietly implied.
  */
-import { randomUUID } from 'node:crypto';
-import { PrismaService } from '@platform/prisma.service';
-import { PrismaIdentityService } from '@platform/identity.service';
-import { PrismaAuditService } from '@platform/audit.service';
-import { AuthService } from '@platform/auth/auth.service';
-import { AuthorizationService } from '@platform/authorization.service';
-import { PrismaRelationshipService } from '@platform/relationship.service';
-import { ConversationService } from '@communication/conversations/conversation.service';
-import { MessageService } from '@communication/messages/message.service';
-import { AttachmentService } from '@communication/attachments/attachment.service';
-import { SignedLocalObjectStorage } from '@communication/attachments/object-storage';
-import { OutboxService } from '@communication/outbox/outbox.service';
-import { AppConfigService } from '@platform/app-config.service';
-import { RealtimeGateway } from '@communication/realtime/realtime.gateway';
-import { TypingService } from '@communication/realtime/typing.service';
-import { PresenceService } from '@communication/realtime/presence.service';
-import { room } from '@communication/contracts/events';
-import { PinnedCoverage } from './harness';
+import { randomUUID } from "node:crypto";
+import { PrismaService } from "@platform/prisma.service";
+import { PrismaIdentityService } from "@platform/identity.service";
+import { PrismaAuditService } from "@platform/audit.service";
+import { AuthService } from "@platform/auth/auth.service";
+import { AuthorizationService } from "@platform/authorization.service";
+import { PrismaRelationshipService } from "@platform/relationship.service";
+import { ConversationService } from "@communication/conversations/conversation.service";
+import { MessageService } from "@communication/messages/message.service";
+import { AttachmentService } from "@communication/attachments/attachment.service";
+import { SignedLocalObjectStorage } from "@communication/attachments/object-storage";
+import { OutboxService } from "@communication/outbox/outbox.service";
+import { AppConfigService } from "@platform/app-config.service";
+import { RealtimeGateway } from "@communication/realtime/realtime.gateway";
+import { TypingService } from "@communication/realtime/typing.service";
+import { PresenceService } from "@communication/realtime/presence.service";
+import { room } from "@communication/contracts/events";
+import { PinnedCoverage, withAssignmentGate } from "./harness";
 
-process.env.JWT_ACCESS_SECRET ??= 'integration-access-secret-32-chars-min!';
-process.env.JWT_REFRESH_SECRET ??= 'integration-refresh-secret-32-chars-min!';
+process.env.JWT_ACCESS_SECRET ??= "integration-access-secret-32-chars-min!";
+process.env.JWT_REFRESH_SECRET ??= "integration-refresh-secret-32-chars-min!";
 
 jest.setTimeout(60_000);
 
-const PASSWORD = 'a-realtime-integration-password-1';
+const PASSWORD = "a-realtime-integration-password-1";
 
 /** A socket that records what the gateway did to it. */
 class FakeSocket {
@@ -57,7 +57,12 @@ class FakeSocket {
   accountId?: string;
   sessionId?: string;
 
-  constructor(readonly handshake: { auth?: Record<string, unknown>; headers?: Record<string, unknown> }) {
+  constructor(
+    readonly handshake: {
+      auth?: Record<string, unknown>;
+      headers?: Record<string, unknown>;
+    },
+  ) {
     this.handshake.headers ??= {};
   }
 
@@ -71,10 +76,12 @@ class FakeSocket {
   }
 }
 
-const socketWith = (auth: Record<string, unknown>, headers: Record<string, unknown> = {}) =>
-  new FakeSocket({ auth, headers });
+const socketWith = (
+  auth: Record<string, unknown>,
+  headers: Record<string, unknown> = {},
+) => new FakeSocket({ auth, headers });
 
-describe('RT-001 — the socket authenticates, it does not take the client\'s word', () => {
+describe("RT-001 — the socket authenticates, it does not take the client's word", () => {
   const prisma = new PrismaService();
   const identity = new PrismaIdentityService(prisma);
   const auth = new AuthService(prisma, identity, new PrismaAuditService());
@@ -85,18 +92,48 @@ describe('RT-001 — the socket authenticates, it does not take the client\'s wo
   const audit = new PrismaAuditService();
   const config = new AppConfigService(prisma);
   const conversations = new ConversationService(
-    prisma, authz, outbox, identity, coverage, audit, relationships,
+    prisma,
+    authz,
+    outbox,
+    identity,
+    coverage,
+    audit,
+    relationships,
   );
-  const attachments = new AttachmentService(prisma, authz, conversations, new SignedLocalObjectStorage());
-  const messages = new MessageService(prisma, authz, conversations, outbox, config, attachments, audit);
+  const attachments = new AttachmentService(
+    prisma,
+    authz,
+    conversations,
+    new SignedLocalObjectStorage(),
+  );
+  const messages = new MessageService(
+    prisma,
+    authz,
+    conversations,
+    outbox,
+    config,
+    attachments,
+    audit,
+  );
 
   // Redis-backed; neither is exercised by the assertions below, and a missing
   // Redis must not turn an authentication test into an infrastructure test.
-  const typing = { start: async () => false, stop: async () => false } as unknown as TypingService;
-  const presence = { online: async () => undefined, offline: async () => undefined } as unknown as PresenceService;
+  const typing = {
+    start: async () => false,
+    stop: async () => false,
+  } as unknown as TypingService;
+  const presence = {
+    online: async () => undefined,
+    offline: async () => undefined,
+  } as unknown as PresenceService;
 
   const gateway = new RealtimeGateway(
-    authz, conversations, typing, presence, messages, auth,
+    authz,
+    conversations,
+    typing,
+    presence,
+    messages,
+    auth,
   );
 
   /**
@@ -110,16 +147,24 @@ describe('RT-001 — the socket authenticates, it does not take the client\'s wo
    * tenancy defect in conversation creation that is recorded in the phase
    * report rather than fixed here. Working around it would hide it.
    */
-  const org = '00000000-0000-0000-0000-000000000001';
+  const org = "00000000-0000-0000-0000-000000000001";
   const otherOrg = randomUUID();
   const ids = {
-    staff: randomUUID(), staffAccount: randomUUID(),
-    parent: randomUUID(), parentAccount: randomUUID(),
-    teacher: randomUUID(), teacherAccount: randomUUID(),
-    strangerTeacher: randomUUID(), strangerTeacherAccount: randomUUID(),
-    otherStaff: randomUUID(), otherStaffAccount: randomUUID(),
-    otherParent: randomUUID(), otherParentAccount: randomUUID(),
-    family: randomUUID(), otherFamily: randomUUID(), learner: randomUUID(),
+    staff: randomUUID(),
+    staffAccount: randomUUID(),
+    parent: randomUUID(),
+    parentAccount: randomUUID(),
+    teacher: randomUUID(),
+    teacherAccount: randomUUID(),
+    strangerTeacher: randomUUID(),
+    strangerTeacherAccount: randomUUID(),
+    otherStaff: randomUUID(),
+    otherStaffAccount: randomUUID(),
+    otherParent: randomUUID(),
+    otherParentAccount: randomUUID(),
+    family: randomUUID(),
+    otherFamily: randomUUID(),
+    learner: randomUUID(),
   };
   // Unique per run: the primary fixture shares the DEFAULT organization with
   // every other suite, and chat.account.subject is globally unique. Deriving the
@@ -127,12 +172,12 @@ describe('RT-001 — the socket authenticates, it does not take the client\'s wo
   const RUN = randomUUID().slice(0, 8);
   const subject = (name: string) => `rt001-${name}-${RUN}`;
 
-  let parentToken = '';
-  let teacherToken = '';
-  let strangerToken = '';
-  let otherOrgParentToken = '';
-  let authorizedConversationId = '';
-  let unrelatedConversationId = '';
+  let parentToken = "";
+  let teacherToken = "";
+  let strangerToken = "";
+  let otherOrgParentToken = "";
+  let authorizedConversationId = "";
+  let unrelatedConversationId = "";
 
   beforeAll(async () => {
     await prisma.$connect();
@@ -145,12 +190,12 @@ describe('RT-001 — the socket authenticates, it does not take the client\'s wo
     );
 
     const accounts: Array<[string, string, string, string]> = [
-      [ids.staffAccount, 'staff', subject('staff'), org],
-      [ids.parentAccount, 'family', subject('parent'), org],
-      [ids.teacherAccount, 'teacher', subject('teacher'), org],
-      [ids.strangerTeacherAccount, 'teacher', subject('stranger'), org],
-      [ids.otherStaffAccount, 'staff', `rt001-other-staff-${RUN}`, otherOrg],
-      [ids.otherParentAccount, 'family', `rt001-other-parent-${RUN}`, otherOrg],
+      [ids.staffAccount, "staff", subject("staff"), org],
+      [ids.parentAccount, "family", subject("parent"), org],
+      [ids.teacherAccount, "teacher", subject("teacher"), org],
+      [ids.strangerTeacherAccount, "teacher", subject("stranger"), org],
+      [ids.otherStaffAccount, "staff", `rt001-other-staff-${RUN}`, otherOrg],
+      [ids.otherParentAccount, "family", `rt001-other-parent-${RUN}`, otherOrg],
     ];
     for (const [id, kind, sub, organization] of accounts) {
       await prisma.$executeRawUnsafe(
@@ -179,8 +224,11 @@ describe('RT-001 — the socket authenticates, it does not take the client\'s wo
          ('${ids.parent}'::uuid, '${org}'::uuid, '${ids.family}'::uuid, 'parent_p', 'primary_guardian', true, '${ids.parentAccount}'::uuid),
          ('${ids.otherParent}'::uuid, '${otherOrg}'::uuid, '${ids.otherFamily}'::uuid, 'parent_q', 'primary_guardian', true, '${ids.otherParentAccount}'::uuid)`,
     );
-    // The learner link is what authorizes parent <-> teacher (PD-6).
-    await prisma.$executeRawUnsafe(
+    // The learner link is what authorizes parent <-> teacher (PD-6). teacher_id
+    // is the academy's fact, writable only through the ingestion gate, so this
+    // fixture opens it exactly as ingestion would.
+    await withAssignmentGate(
+      prisma,
       `insert into chat.learner (id, organization_id, family_id, name, teacher_id)
        values ('${ids.learner}'::uuid, '${org}'::uuid, '${ids.family}'::uuid, 'learner_l', '${ids.teacher}'::uuid)`,
     );
@@ -189,15 +237,18 @@ describe('RT-001 — the socket authenticates, it does not take the client\'s wo
       await auth.setPassword(accountId, PASSWORD);
     }
 
-    parentToken = (await auth.login(subject('parent'), PASSWORD)).accessToken;
-    teacherToken = (await auth.login(subject('teacher'), PASSWORD)).accessToken;
-    strangerToken = (await auth.login(subject('stranger'), PASSWORD)).accessToken;
+    parentToken = (await auth.login(subject("parent"), PASSWORD)).accessToken;
+    teacherToken = (await auth.login(subject("teacher"), PASSWORD)).accessToken;
+    strangerToken = (await auth.login(subject("stranger"), PASSWORD))
+      .accessToken;
     otherOrgParentToken = (
       await auth.login(`rt001-other-parent-${RUN}`, PASSWORD)
     ).accessToken;
 
     // PD-6 authorizes this pair, so the conversation is real and legitimate.
-    authorizedConversationId = (await conversations.getOrCreateDirect(ids.parent, ids.teacher)).id;
+    authorizedConversationId = (
+      await conversations.getOrCreateDirect(ids.parent, ids.teacher)
+    ).id;
     // A channel the parent is not in: the stranger teacher and the admin.
     unrelatedConversationId = (
       await conversations.getOrCreateDirect(ids.strangerTeacher, ids.staff)
@@ -224,7 +275,8 @@ describe('RT-001 — the socket authenticates, it does not take the client\'s wo
      * sessions, credentials and the accounts whose `subject` is globally
      * unique.
      */
-    const quoted = (ids: string[]) => ids.map((id) => `'${id}'::uuid`).join(',');
+    const quoted = (ids: string[]) =>
+      ids.map((id) => `'${id}'::uuid`).join(",");
     const run = async (sql: string) => {
       try {
         await prisma.$executeRawUnsafe(sql);
@@ -233,73 +285,109 @@ describe('RT-001 — the socket authenticates, it does not take the client\'s wo
       }
     };
 
-    const convs = [authorizedConversationId, unrelatedConversationId].filter(Boolean);
+    const convs = [authorizedConversationId, unrelatedConversationId].filter(
+      Boolean,
+    );
     if (convs.length > 0) {
-      await run(`delete from chat.conversation_member where conversation_id in (${quoted(convs)})`);
+      await run(
+        `delete from chat.conversation_member where conversation_id in (${quoted(convs)})`,
+      );
       await run(`delete from chat.conversation where id in (${quoted(convs)})`);
     }
 
     // Children before accounts: staff/contact/teacher reference chat.account
     // ON DELETE RESTRICT.
-    await run(`delete from chat.learner where id in (${quoted([ids.learner])})`);
-    await run(`delete from chat.contact where id in (${quoted([ids.parent, ids.otherParent])})`);
-    await run(`delete from chat.teacher where id in (${quoted([ids.teacher, ids.strangerTeacher])})`);
+    await run(
+      `delete from chat.learner where id in (${quoted([ids.learner])})`,
+    );
+    await run(
+      `delete from chat.contact where id in (${quoted([ids.parent, ids.otherParent])})`,
+    );
+    await run(
+      `delete from chat.teacher where id in (${quoted([ids.teacher, ids.strangerTeacher])})`,
+    );
 
     const releasable = [
-      ids.parentAccount, ids.otherParentAccount,
-      ids.teacherAccount, ids.strangerTeacherAccount,
+      ids.parentAccount,
+      ids.otherParentAccount,
+      ids.teacherAccount,
+      ids.strangerTeacherAccount,
     ];
-    await run(`delete from chat.session where account_id in (${quoted(releasable)})`);
-    await run(`delete from chat.device where account_id in (${quoted(releasable)})`);
-    await run(`delete from chat.account_credential where account_id in (${quoted(releasable)})`);
+    await run(
+      `delete from chat.session where account_id in (${quoted(releasable)})`,
+    );
+    await run(
+      `delete from chat.device where account_id in (${quoted(releasable)})`,
+    );
+    await run(
+      `delete from chat.account_credential where account_id in (${quoted(releasable)})`,
+    );
     await run(`delete from chat.account where id in (${quoted(releasable)})`);
 
     // The two staff accounts stay: their staff rows own the retained families.
-    await run(`delete from chat.session where account_id in (${quoted([ids.staffAccount, ids.otherStaffAccount])})`);
+    await run(
+      `delete from chat.session where account_id in (${quoted([ids.staffAccount, ids.otherStaffAccount])})`,
+    );
 
     await prisma.$disconnect();
   });
 
   // ---------------------------------------------------------------- authentication
-  describe('authentication', () => {
-    it('1. a valid Parent token makes the socket the Parent', async () => {
+  describe("authentication", () => {
+    it("1. a valid Parent token makes the socket the Parent", async () => {
       const socket = socketWith({ token: parentToken });
       await gateway.handleConnection(socket as never);
 
       expect(socket.disconnected).toBe(false);
-      expect(socket.actor).toMatchObject({ actorId: ids.parent, kind: 'contact' });
+      expect(socket.actor).toMatchObject({
+        actorId: ids.parent,
+        kind: "contact",
+      });
       expect(socket.rooms).toEqual([room.actor(ids.parent)]);
       expect(socket.sessionId).toEqual(expect.any(String));
     });
 
-    it('2. a valid Teacher token makes the socket the Teacher', async () => {
+    it("2. a valid Teacher token makes the socket the Teacher", async () => {
       const socket = socketWith({ token: teacherToken });
       await gateway.handleConnection(socket as never);
 
-      expect(socket.actor).toMatchObject({ actorId: ids.teacher, kind: 'teacher' });
+      expect(socket.actor).toMatchObject({
+        actorId: ids.teacher,
+        kind: "teacher",
+      });
       expect(socket.rooms).toEqual([room.actor(ids.teacher)]);
     });
 
-    it('3. a missing token is refused', async () => {
-      for (const handshake of [{}, { token: '' }, { token: '   ' }, { token: 42 }]) {
+    it("3. a missing token is refused", async () => {
+      for (const handshake of [
+        {},
+        { token: "" },
+        { token: "   " },
+        { token: 42 },
+      ]) {
         const socket = socketWith(handshake as Record<string, unknown>);
         await gateway.handleConnection(socket as never);
         expect({ handshake, disconnected: socket.disconnected }).toEqual({
-          handshake, disconnected: true,
+          handshake,
+          disconnected: true,
         });
         expect(socket.actor).toBeUndefined();
         expect(socket.rooms).toEqual([]);
       }
     });
 
-    it('4. an invalid token is refused', async () => {
+    it("4. an invalid token is refused", async () => {
       const forged = [
-        'not-a-jwt',
+        "not-a-jwt",
         `${parentToken}tampered`,
-        parentToken.split('.').slice(0, 2).join('.'), // no signature
+        parentToken.split(".").slice(0, 2).join("."), // no signature
         // alg=none, the classic
-        Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url') +
-          '.' + parentToken.split('.')[1] + '.',
+        Buffer.from(JSON.stringify({ alg: "none", typ: "JWT" })).toString(
+          "base64url",
+        ) +
+          "." +
+          parentToken.split(".")[1] +
+          ".",
       ];
       for (const token of forged) {
         const socket = socketWith({ token });
@@ -309,8 +397,8 @@ describe('RT-001 — the socket authenticates, it does not take the client\'s wo
       }
     });
 
-    it('5. a revoked session is refused, even though the token itself still verifies', async () => {
-      const pair = await auth.login(subject('parent'), PASSWORD);
+    it("5. a revoked session is refused, even though the token itself still verifies", async () => {
+      const pair = await auth.login(subject("parent"), PASSWORD);
 
       const before = socketWith({ token: pair.accessToken });
       await gateway.handleConnection(before as never);
@@ -325,17 +413,23 @@ describe('RT-001 — the socket authenticates, it does not take the client\'s wo
       expect(after.actor).toBeUndefined();
     });
 
-    it('the Authorization header is accepted as the documented fallback', async () => {
+    it("the Authorization header is accepted as the documented fallback", async () => {
       const socket = socketWith({}, { authorization: `Bearer ${parentToken}` });
       await gateway.handleConnection(socket as never);
       expect(socket.actor).toMatchObject({ actorId: ids.parent });
     });
 
-    it('a malformed Authorization header is refused, not partially parsed', async () => {
-      for (const authorization of [parentToken, `bearer ${parentToken}`, `Bearer  ${parentToken}`, [
-        `Bearer ${parentToken}`, `Bearer ${teacherToken}`,
-      ]]) {
-        const socket = socketWith({}, { authorization } as Record<string, unknown>);
+    it("a malformed Authorization header is refused, not partially parsed", async () => {
+      for (const authorization of [
+        parentToken,
+        `bearer ${parentToken}`,
+        `Bearer  ${parentToken}`,
+        [`Bearer ${parentToken}`, `Bearer ${teacherToken}`],
+      ]) {
+        const socket = socketWith({}, { authorization } as Record<
+          string,
+          unknown
+        >);
         await gateway.handleConnection(socket as never);
         expect(socket.disconnected).toBe(true);
       }
@@ -343,26 +437,32 @@ describe('RT-001 — the socket authenticates, it does not take the client\'s wo
   });
 
   // ------------------------------------------------------------ anti-impersonation
-  describe('anti-impersonation — the handshake cannot name an actor', () => {
-    it('6. Parent token + forged Teacher actorId → the socket is still the Parent', async () => {
+  describe("anti-impersonation — the handshake cannot name an actor", () => {
+    it("6. Parent token + forged Teacher actorId → the socket is still the Parent", async () => {
       const socket = socketWith({ token: parentToken, actorId: ids.teacher });
       await gateway.handleConnection(socket as never);
 
-      expect(socket.actor).toMatchObject({ actorId: ids.parent, kind: 'contact' });
+      expect(socket.actor).toMatchObject({
+        actorId: ids.parent,
+        kind: "contact",
+      });
       expect(socket.rooms).toEqual([room.actor(ids.parent)]);
       expect(socket.rooms).not.toContain(room.actor(ids.teacher));
     });
 
-    it('7. Teacher token + forged Parent actorId → the socket is still the Teacher', async () => {
+    it("7. Teacher token + forged Parent actorId → the socket is still the Teacher", async () => {
       const socket = socketWith({ token: teacherToken, actorId: ids.parent });
       await gateway.handleConnection(socket as never);
 
-      expect(socket.actor).toMatchObject({ actorId: ids.teacher, kind: 'teacher' });
+      expect(socket.actor).toMatchObject({
+        actorId: ids.teacher,
+        kind: "teacher",
+      });
       expect(socket.rooms).toEqual([room.actor(ids.teacher)]);
       expect(socket.rooms).not.toContain(room.actor(ids.parent));
     });
 
-    it('8. a forged actorId with no token is refused outright', async () => {
+    it("8. a forged actorId with no token is refused outright", async () => {
       // This is the exact pre-PR-B handshake. It used to authenticate.
       const socket = socketWith({ actorId: ids.teacher });
       await gateway.handleConnection(socket as never);
@@ -373,14 +473,14 @@ describe('RT-001 — the socket authenticates, it does not take the client\'s wo
       expect(socket.rooms).toEqual([]);
     });
 
-    it('no other handshake field can influence identity either', async () => {
+    it("no other handshake field can influence identity either", async () => {
       const socket = socketWith({
         token: parentToken,
         actorId: ids.teacher,
         accountId: ids.teacherAccount,
         sessionId: randomUUID(),
-        kind: 'staff',
-        role: 'manager',
+        kind: "staff",
+        role: "manager",
         familyId: ids.otherFamily,
         teacherId: ids.teacher,
         organizationId: otherOrg,
@@ -389,7 +489,7 @@ describe('RT-001 — the socket authenticates, it does not take the client\'s wo
 
       expect(socket.actor).toMatchObject({
         actorId: ids.parent,
-        kind: 'contact',
+        kind: "contact",
         familyId: ids.family,
         organizationId: org,
       });
@@ -398,43 +498,48 @@ describe('RT-001 — the socket authenticates, it does not take the client\'s wo
   });
 
   // ------------------------------------------------------------- room authorization
-  describe('conversation subscription', () => {
+  describe("conversation subscription", () => {
     const connected = async (token: string) => {
       const socket = socketWith({ token });
       await gateway.handleConnection(socket as never);
       return socket;
     };
 
-    it('9. an authorized member may subscribe to its conversation', async () => {
+    it("9. an authorized member may subscribe to its conversation", async () => {
       for (const token of [parentToken, teacherToken]) {
         const socket = await connected(token);
         const result = await gateway.subscribe(socket as never, {
           conversationId: authorizedConversationId,
         });
         expect(result).toEqual({ ok: true });
-        expect(socket.rooms).toContain(room.conversation(authorizedConversationId));
+        expect(socket.rooms).toContain(
+          room.conversation(authorizedConversationId),
+        );
       }
     });
 
-    it('10. an unrelated actor may not subscribe', async () => {
+    it("10. an unrelated actor may not subscribe", async () => {
       const socket = await connected(parentToken);
       const result = await gateway.subscribe(socket as never, {
         conversationId: unrelatedConversationId,
       });
 
       expect(result.ok).toBe(false);
-      expect(socket.rooms).not.toContain(room.conversation(unrelatedConversationId));
+      expect(socket.rooms).not.toContain(
+        room.conversation(unrelatedConversationId),
+      );
     });
 
-    it('11. a revoked PD-6 relationship does not stop the existing membership, and grants no NEW channel', async () => {
+    it("11. a revoked PD-6 relationship does not stop the existing membership, and grants no NEW channel", async () => {
       // Revoking the learner link closes the channel for new messages and calls
       // (PD-6, proven in relationship-predicate.spec.ts). It does not delete the
       // conversation, and the member may still subscribe to read its history --
       // which is the documented behaviour, not an oversight.
-      await prisma.learner.update({
-        where: { id: ids.learner },
-        data: { teacherId: ids.strangerTeacher },
-      });
+      await withAssignmentGate(
+        prisma,
+        `update chat.learner set teacher_id = '${ids.strangerTeacher}'::uuid
+          where id = '${ids.learner}'::uuid`,
+      );
       try {
         const socket = await connected(teacherToken);
         const existing = await gateway.subscribe(socket as never, {
@@ -450,7 +555,7 @@ describe('RT-001 — the socket authenticates, it does not take the client\'s wo
         // canRead governs -- so PD-6's "history is preserved" holds.
         await expect(
           conversations.getOrCreateDirect(ids.parent, ids.teacher),
-        ).rejects.toMatchObject({ code: 'COMM.TEACHER_PARENT_NOT_AUTHORIZED' });
+        ).rejects.toMatchObject({ code: "COMM.TEACHER_PARENT_NOT_AUTHORIZED" });
 
         // And the stranger, who now teaches the learner but shares no
         // conversation, still cannot subscribe to this one.
@@ -460,42 +565,45 @@ describe('RT-001 — the socket authenticates, it does not take the client\'s wo
         });
         expect(denied.ok).toBe(false);
       } finally {
-        await prisma.learner.update({
-          where: { id: ids.learner },
-          data: { teacherId: ids.teacher },
-        });
+        await withAssignmentGate(
+          prisma,
+          `update chat.learner set teacher_id = '${ids.teacher}'::uuid
+            where id = '${ids.learner}'::uuid`,
+        );
       }
     });
 
-    it('12. tenant isolation holds: another organization\'s parent cannot subscribe', async () => {
+    it("12. tenant isolation holds: another organization's parent cannot subscribe", async () => {
       const socket = await connected(otherOrgParentToken);
       const result = await gateway.subscribe(socket as never, {
         conversationId: authorizedConversationId,
       });
 
       expect(result.ok).toBe(false);
-      expect(socket.rooms).not.toContain(room.conversation(authorizedConversationId));
+      expect(socket.rooms).not.toContain(
+        room.conversation(authorizedConversationId),
+      );
     });
 
-    it('a subscribe with no conversationId is refused rather than joining something', async () => {
+    it("a subscribe with no conversationId is refused rather than joining something", async () => {
       const socket = await connected(parentToken);
       const result = await gateway.subscribe(socket as never, {});
       expect(result.ok).toBe(false);
       expect(socket.rooms).toEqual([room.actor(ids.parent)]);
     });
 
-    it('an unauthenticated socket cannot subscribe at all', async () => {
+    it("an unauthenticated socket cannot subscribe at all", async () => {
       const socket = socketWith({ actorId: ids.parent });
       await gateway.handleConnection(socket as never);
       const result = await gateway.subscribe(socket as never, {
         conversationId: authorizedConversationId,
       });
-      expect(result).toEqual({ ok: false, code: 'COMM.UNKNOWN_ACTOR' });
+      expect(result).toEqual({ ok: false, code: "COMM.UNKNOWN_ACTOR" });
     });
   });
 
   // ------------------------------------------------------------ call event routing
-  describe('call event routing', () => {
+  describe("call event routing", () => {
     /**
      * Call events are published to `conversation:<id>` and `actor:<id>` rooms.
      * A socket receives an event if and only if it is IN that room, and the
@@ -510,7 +618,7 @@ describe('RT-001 — the socket authenticates, it does not take the client\'s wo
       return socket;
     };
 
-    it('13/14. both call participants reach the conversation room the call events go to', async () => {
+    it("13/14. both call participants reach the conversation room the call events go to", async () => {
       const caller = await connected(parentToken);
       const callee = await connected(teacherToken);
 
@@ -519,7 +627,9 @@ describe('RT-001 — the socket authenticates, it does not take the client\'s wo
           conversationId: authorizedConversationId,
         });
         expect(result).toEqual({ ok: true });
-        expect(socket.rooms).toContain(room.conversation(authorizedConversationId));
+        expect(socket.rooms).toContain(
+          room.conversation(authorizedConversationId),
+        );
       }
       // And each holds its own actor room, which is where a targeted call
       // notification would be addressed.
@@ -527,7 +637,7 @@ describe('RT-001 — the socket authenticates, it does not take the client\'s wo
       expect(callee.rooms).toContain(room.actor(ids.teacher));
     });
 
-    it('15. an unrelated actor reaches neither room, so it receives no call event', async () => {
+    it("15. an unrelated actor reaches neither room, so it receives no call event", async () => {
       const stranger = await connected(strangerToken);
       const result = await gateway.subscribe(stranger as never, {
         conversationId: authorizedConversationId,
@@ -535,13 +645,18 @@ describe('RT-001 — the socket authenticates, it does not take the client\'s wo
 
       expect(result.ok).toBe(false);
       expect(stranger.rooms).toEqual([room.actor(ids.strangerTeacher)]);
-      expect(stranger.rooms).not.toContain(room.conversation(authorizedConversationId));
+      expect(stranger.rooms).not.toContain(
+        room.conversation(authorizedConversationId),
+      );
       expect(stranger.rooms).not.toContain(room.actor(ids.parent));
       expect(stranger.rooms).not.toContain(room.actor(ids.teacher));
     });
 
-    it('16. a forged actorId cannot place a socket in another actor\'s call room', async () => {
-      const impostor = socketWith({ token: strangerToken, actorId: ids.parent });
+    it("16. a forged actorId cannot place a socket in another actor's call room", async () => {
+      const impostor = socketWith({
+        token: strangerToken,
+        actorId: ids.parent,
+      });
       await gateway.handleConnection(impostor as never);
 
       // The actor room is named from the verified actor, so the forgery buys
@@ -556,14 +671,15 @@ describe('RT-001 — the socket authenticates, it does not take the client\'s wo
   });
 
   // ----------------------------------------------------------------- the tripwire
-  it('no source file reads the retired handshake actorId seam', () => {
+  it("no source file reads the retired handshake actorId seam", () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { execSync } = require('node:child_process') as typeof import('node:child_process');
+    const { execSync } =
+      require("node:child_process") as typeof import("node:child_process");
     const hits = execSync(
       "grep -rn 'handshake.auth?.actorId\\|handshake\\.auth\\.actorId' src || true",
-      { cwd: `${__dirname}/../..`, encoding: 'utf8' },
+      { cwd: `${__dirname}/../..`, encoding: "utf8" },
     )
-      .split('\n')
+      .split("\n")
       .filter(Boolean)
       // Prose explaining that it is NOT read is allowed; code reading it is not.
       .filter((line) => !/^\S+:\d+:\s*(\*|\/\/)/.test(line));

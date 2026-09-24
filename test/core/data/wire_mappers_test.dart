@@ -454,6 +454,96 @@ void main() {
       expect(conversation.isArchived, isTrue);
       expect(conversation.isReadOnly, isTrue);
     });
+
+    test('the learner comes from the DTO, resolved to a name', () {
+      final conversation = WireMappers.conversation(
+        {
+          ...json,
+          'learnerId': 'l_1',
+          'learner': {'id': 'l_1', 'name': 'أحمد'},
+        },
+        viewerRole: UserRole.parent,
+      );
+
+      expect(conversation.learner?.id, 'l_1');
+      expect(conversation.learner?.displayName, 'أحمد');
+    });
+
+    test('a conversation with no learner has none — never one from the title', () {
+      // The title here is "أحمد · جَوِّد". Parsing a child out of it is exactly
+      // the inference this field exists to replace.
+      final conversation =
+          WireMappers.conversation(json, viewerRole: UserRole.parent);
+
+      expect(conversation.learner, isNull);
+    });
+
+    test('an explicit null learner is null', () {
+      final conversation = WireMappers.conversation(
+        {...json, 'learner': null},
+        viewerRole: UserRole.parent,
+      );
+
+      expect(conversation.learner, isNull);
+    });
+
+    test('a learner with no usable id is dropped rather than half-built', () {
+      for (final malformed in <Object?>[
+        <String, Object?>{},
+        <String, Object?>{'id': ''},
+        <String, Object?>{'name': 'أحمد'},
+        'l_1',
+        42,
+      ]) {
+        expect(
+          WireMappers.conversation(
+            {...json, 'learner': malformed},
+            viewerRole: UserRole.parent,
+          ).learner,
+          isNull,
+          reason: 'malformed: $malformed',
+        );
+      }
+    });
+
+    test('a learner with an id but no name keeps the id and an empty name', () {
+      // The section heading will be blank, which is visibly wrong and gets
+      // fixed. Inventing a name from the title would be invisibly wrong.
+      final conversation = WireMappers.conversation(
+        {...json, 'learner': {'id': 'l_1'}},
+        viewerRole: UserRole.parent,
+      );
+
+      expect(conversation.learner?.id, 'l_1');
+      expect(conversation.learner?.displayName, isEmpty);
+    });
+
+    test('the unread count comes from the DTO', () {
+      final conversation = WireMappers.conversation(
+        {...json, 'unreadCount': 3},
+        viewerRole: UserRole.parent,
+      );
+
+      expect(conversation.unreadCount, 3);
+      expect(conversation.hasUnread, isTrue);
+    });
+
+    test('an absent unread count is zero, never a guess', () {
+      final conversation =
+          WireMappers.conversation(json, viewerRole: UserRole.parent);
+
+      expect(conversation.unreadCount, 0);
+      expect(conversation.hasUnread, isFalse);
+    });
+
+    test('a zero unread count is zero', () {
+      final conversation = WireMappers.conversation(
+        {...json, 'unreadCount': 0},
+        viewerRole: UserRole.parent,
+      );
+
+      expect(conversation.unreadCount, 0);
+    });
   });
 
   group('voice attachments carry everything the player needs', () {

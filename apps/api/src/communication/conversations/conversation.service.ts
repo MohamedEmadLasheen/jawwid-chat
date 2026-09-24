@@ -16,6 +16,7 @@ import type { CoverageService } from '../../platform/coverage.service';
 import type { AuditService } from '../../platform/audit.service';
 import { Actor } from '../../platform/types';
 import { OutboxService } from '../outbox/outbox.service';
+import type { ConversationWithLearner } from '../contracts/dto';
 import { CommEvent } from '../contracts/events';
 import {
   ActorKind,
@@ -76,8 +77,21 @@ export class ConversationService {
     return actor;
   }
 
-  async requireConversation(id: string): Promise<Conversation> {
-    const conv = await this.prisma.conversation.findUnique({ where: { id } });
+  /**
+   * The learner is included here rather than in a second lookup.
+   *
+   * This is a primary-key fetch and the learner is a nullable FK, so the extra
+   * work is one indexed LEFT JOIN on a single row -- cheaper than the round
+   * trip a separate query would cost, and it means every caller sees the same
+   * shape. Nothing about the authorization this returns into changes: the
+   * callers that matter (`canRead`, `canSend`) still decide, and a caller that
+   * does not want the learner simply does not read it.
+   */
+  async requireConversation(id: string): Promise<ConversationWithLearner> {
+    const conv = await this.prisma.conversation.findUnique({
+      where: { id },
+      include: { learner: true },
+    });
     if (!conv) {
       throw new CommError(CommErrorCode.CONVERSATION_NOT_FOUND, 'conversation not found', 404);
     }
@@ -515,7 +529,7 @@ export class ConversationService {
   }
 
   /** RBAC-scoped chat list. A contact or teacher only ever sees their own. */
-  async listForActor(actorId: string): Promise<Conversation[]> {
+  async listForActor(actorId: string): Promise<ConversationWithLearner[]> {
     const actor = await this.requireActor(actorId);
 
     if (actor.kind === ActorKind.STAFF) {
@@ -532,13 +546,19 @@ export class ConversationService {
       if (!probe.allowed) throw new CommError(probe.code, probe.reason);
 
       return this.prisma.conversation.findMany({
+        include: { learner: true },
         orderBy: { lastActivityAt: 'desc' },
         take: 200,
       });
     }
 
+    // The authorization boundary for a contact or a teacher: live membership,
+    // and nothing else. The learner rides along on that join, so a learner can
+    // only ever reach a caller who is already a member of the conversation it
+    // belongs to -- there is no second, wider query to get it wrong in.
     return this.prisma.conversation.findMany({
       where: { members: { some: { actorId: actor.actorId, leftAt: null } } },
+      include: { learner: true },
       orderBy: { lastActivityAt: 'desc' },
       take: 200,
     });

@@ -55,6 +55,13 @@ export enum CommErrorCode {
   EMPTY_MESSAGE = 'COMM.EMPTY_MESSAGE',
   ATTACHMENT_TOO_LARGE = 'COMM.ATTACHMENT_TOO_LARGE',
   ATTACHMENT_TYPE_NOT_ALLOWED = 'COMM.ATTACHMENT_TYPE_NOT_ALLOWED',
+  /**
+   * An attachment names an object outside the conversation it was sent to.
+   * A policy refusal, not a validation error: the key may be perfectly
+   * well-formed and may name a real object -- it just is not this
+   * conversation's to read.
+   */
+  ATTACHMENT_NOT_IN_CONVERSATION = 'COMM.ATTACHMENT_NOT_IN_CONVERSATION',
   APPROVAL_ALREADY_DECIDED = 'COMM.APPROVAL_ALREADY_DECIDED',
   APPROVAL_REASON_REQUIRED = 'COMM.APPROVAL_REASON_REQUIRED',
   GROUP_ALREADY_EXISTS = 'COMM.GROUP_ALREADY_EXISTS',

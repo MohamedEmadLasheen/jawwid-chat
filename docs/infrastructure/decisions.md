@@ -99,6 +99,27 @@ Render), Cloudflare R2 for object storage, a managed Redis, LiveKit Cloud, and
 static hosting for Admin Web. All are boring, managed, and appropriate for MVP
 scale; none requires Kubernetes.
 
+**UNRESOLVED — this recommendation conflicts with PRD §12.3.** The PRD names
+"Docker containers on one cloud (Hetzner or AWS)" and requires infrastructure
+as code from day one. The two disagree on compute hosting, and `docs/README.md`
+places the PRD above infrastructure documents in authority — but it does not
+list this ADR as superseded, and the paragraph above is explicitly a
+*recommendation*, not a decision. **Neither can be treated as settled on
+repository evidence.** The product owner must choose, and the choice should be
+recorded as a new ADR superseding this paragraph.
+
+Two notes for whoever makes it, both established from the code rather than
+assumed:
+
+* **The BYPASSRLS capability is the gating compatibility question**, not a
+  detail. `20260910120200` grants it unconditionally and `apply.sh` runs with
+  ON_ERROR_STOP=1. Run `scripts/db/preflight-role-capability.sh` against a
+  trial instance of the candidate Postgres *before* committing to it; it
+  changes nothing and answers the question in one command.
+* **Admin Web is an nginx container that needs runtime environment**
+  (`API_ORIGIN`, `REALTIME_ORIGIN`) for its CSP, so "static hosting" above is
+  not accurate for the image this repository actually builds.
+
 ---
 
 ## ADR-004 · The API and the worker are one image, two commands
@@ -116,8 +137,8 @@ that is miserable to diagnose. One artifact makes that impossible to express.
 a few MB, against a whole failure mode. The two processes still scale
 independently — that is a deployment decision, not a packaging one.
 
-**Impact.** `dist/worker.js` does not exist yet. AI #2 owns the worker
-entrypoint; the image is ready for it.
+**Impact.** Both entrypoints exist. `src/worker.ts` drains the transactional
+outbox; it deliberately adds no queue of its own (see `architecture.md` §6).
 
 ---
 
@@ -137,7 +158,19 @@ the one developers exercise daily, so an authorization bug shows up on a laptop
 rather than in production.
 
 **Trade-offs.** Every read needs a signing round-trip, and signed URLs expire
-mid-session if TTLs are set carelessly. The TTL is configurable per environment.
+mid-session if TTLs are set carelessly. The TTL is configurable per environment
+and is capped at one hour, because a signed URL is a bearer credential for one
+object.
+
+**Implementation.** `S3ObjectStorage` (S3-compatible: presigned PUT and GET,
+`forcePathStyle`, no provider hard-coded) is selected by
+`storage.provider.ts` when the bucket and credentials are configured, and the
+local HMAC reference implementation otherwise. A *partial* configuration is a
+startup failure rather than a silent fallback — booting into local storage with
+a bucket half-configured writes attachments to a filesystem the next deploy
+deletes. The presigned PUT names `content-type` and `content-length` in
+`signableHeaders`, so storage refuses a body that differs from the one
+authorized; without that, setting ContentType on the command binds nothing.
 
 ---
 
@@ -198,3 +231,40 @@ makes drift impossible to commit.
 **Trade-offs.** Adding a variable now means editing the manifest and
 regenerating, which is a slightly heavier step than editing one file — and the
 step is enforced by CI, so it cannot be skipped.
+
+---
+
+## ADR-009 · Infrastructure as code is required, and is blocked on the provider
+
+**Decision.** No IaC tool is introduced yet. The requirement is recorded here so
+it is not lost, and the implementation follows provider selection rather than
+preceding it.
+
+**Alternatives.** (a) Adopt Terraform (or Pulumi, or the chosen platform's own
+declarative format) now and write it against a provider nobody has picked.
+(b) Leave the requirement undocumented until somebody notices it again.
+
+**Why.** PRD §12.3 asks for "infrastructure as code from day one" and the
+repository has none — no Terraform, Pulumi or Bicep, and `infra/` holds only
+the environment manifest and a Postgres init script. That gap is real. But IaC
+describes *provider resources*, and the provider is the one thing not decided
+(ADR-003, still open): a managed Postgres, a container host and a bucket are
+different resources, different providers and in practice different tools.
+Writing (a) produces configuration that cannot be applied, cannot be tested,
+and will be rewritten the day the decision is taken — the same failure ADR-003
+rejected for the release step. (b) loses a genuine PRD requirement.
+
+**Trade-offs.** Between now and provider selection, whatever is provisioned is
+provisioned by hand. That is acceptable only because nothing is provisioned
+yet; the first environment must be created *from* the IaC, not imported into it
+afterwards, or the code will describe something that has already drifted.
+
+**What this does not defer.** Everything already declarative stays declarative
+and is unaffected: `infra/env/manifest.tsv` (ADR-008), `docker-compose.yml`,
+both Dockerfiles, the deployment workflows, and the SQL migration chain
+(ADR-002). The gap is cloud resources, not configuration.
+
+**When the choice is made.** Add the IaC in the same change that replaces the
+release step, so that the platform's resources and the platform's deploy
+command land together and neither is described by a document instead of by
+code.

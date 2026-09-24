@@ -9,28 +9,52 @@
  * dependency to another agent's package and tests the database exactly as the
  * migrations define it.
  */
-import { execFileSync } from 'node:child_process';
+import { execFileSync } from "node:child_process";
 
-const CONTAINER = process.env.JAWWID_INT_CONTAINER ?? 'jawwid-chat-int';
-const DB = process.env.JAWWID_INT_DB ?? 'jawwid_chat_int';
+const CONTAINER = process.env.JAWWID_INT_CONTAINER ?? "jawwid-chat-int";
+const DB = process.env.JAWWID_INT_DB ?? "jawwid_chat_int";
 
 /**
  * Local runs talk to the Docker container; CI talks to a Postgres service
  * container over DATABASE_URL. Set JAWWID_PSQL to override entirely.
  */
 function psqlArgv(statement: string): [string, string[]] {
-  const flags = ['-q', '-v', 'ON_ERROR_STOP=1', '-tAc', statement];
-  if (process.env.DATABASE_URL) return ['psql', [process.env.DATABASE_URL, ...flags]];
-  return ['docker', ['exec', '-i', CONTAINER, 'psql', '-U', 'postgres', '-d', DB, ...flags]];
+  const flags = ["-q", "-v", "ON_ERROR_STOP=1", "-tAc", statement];
+  if (process.env.DATABASE_URL)
+    return ["psql", [process.env.DATABASE_URL, ...flags]];
+  return [
+    "docker",
+    ["exec", "-i", CONTAINER, "psql", "-U", "postgres", "-d", DB, ...flags],
+  ];
 }
 
 /** Runs SQL. Returns stdout on success; throws with the postgres error on failure. */
 function sql(statement: string): string {
   const [cmd, args] = psqlArgv(statement);
   return execFileSync(cmd, args, {
-    encoding: 'utf8',
-    stdio: ['pipe', 'pipe', 'pipe'],
+    encoding: "utf8",
+    stdio: ["pipe", "pipe", "pipe"],
   }).trim();
+}
+
+/**
+ * Runs SQL as the assignment-ingestion path would.
+ *
+ * chat.guard_learner_assignment_change()
+ * (20260923130000_chat_learner_assignment_authority) makes
+ * chat.learner.teacher_id writable only inside ingestion: the
+ * teacher<->learner assignment is the academy's fact, not Chat's. A fixture
+ * that needs an assigned learner is standing in for ingestion, so it opens the
+ * same transaction-local gate ingestion opens.
+ *
+ * The guard is NOT weakened, and proving it is not this file's job --
+ * learner-assignment-authority.spec.ts does that, from both directions. Every
+ * other statement here still runs guarded, through sql().
+ */
+function sqlAsIngestion(statement: string): string {
+  return sql(
+    `begin; select set_config('chat.syncing_assignment', 'on', true); ${statement}; commit;`,
+  );
 }
 
 /** Returns the postgres error message, or null if the statement unexpectedly succeeded. */
@@ -44,9 +68,13 @@ function expectRejected(statement: string): string | null {
   }
 }
 
-const uuid = () => sql('select gen_random_uuid()');
+const uuid = () => sql("select gen_random_uuid()");
 
-function addMember(conversationId: string, actorKind: string, memberRole: string): void {
+function addMember(
+  conversationId: string,
+  actorKind: string,
+  memberRole: string,
+): void {
   sql(
     `insert into chat.conversation_member (conversation_id, actor_kind, actor_id, member_role)
      values ('${conversationId}', '${actorKind}', gen_random_uuid(), '${memberRole}')`,
@@ -63,14 +91,14 @@ function addMember(conversationId: string, actorKind: string, memberRole: string
  * them a real family makes the fixture well-formed; every assertion below is
  * unchanged.
  */
-let FAMILY_ID = '';
+let FAMILY_ID = "";
 /** PD-6: a real chain, for the AUTHORIZED half of the backstop assertions. */
-let TEACHER_ID = '';
-let PARENT_ID = '';
+let TEACHER_ID = "";
+let PARENT_ID = "";
 
 beforeAll(() => {
   // Fails fast with a clear message if the environment is not up.
-  sql('select 1 from chat.conversation limit 1');
+  sql("select 1 from chat.conversation limit 1");
   const staffId = sql(
     `insert into chat.staff (name, role) values ('Integration Owner', 'admin') returning id`,
   );
@@ -92,29 +120,29 @@ beforeAll(() => {
      values ('${FAMILY_ID}', 'integration_parent', 'primary_guardian',
              true, true, true, true, true, true) returning id`,
   );
-  sql(
+  sqlAsIngestion(
     `insert into chat.learner (family_id, name, teacher_id)
      values ('${FAMILY_ID}', 'integration_learner', '${TEACHER_ID}')`,
   );
 });
 
-describe('BR-1 database backstop (PD-6)', () => {
-  it('rejects a teacher and an UNAUTHORIZED family contact in a DIRECT conversation', () => {
+describe("BR-1 database backstop (PD-6)", () => {
+  it("rejects a teacher and an UNAUTHORIZED family contact in a DIRECT conversation", () => {
     // Re-versioned 2026-09-23. PD-6 changed WHICH pair the database refuses,
     // not whether it refuses one with the application bypassed.
     const id = sql(
       `insert into chat.conversation (type, state, direct_key, family_id)
        values ('direct', 'open', gen_random_uuid()::text, '${FAMILY_ID}') returning id`,
     );
-    addMember(id, 'teacher', 'teacher');
+    addMember(id, "teacher", "teacher");
     const err = expectRejected(
       `insert into chat.conversation_member (conversation_id, actor_kind, actor_id, member_role)
        values ('${id}', 'contact', gen_random_uuid(), 'parent')`,
     );
-    expect(err).toContain('PD-6 violation');
+    expect(err).toContain("PD-6 violation");
   });
 
-  it('PERMITS a teacher and an AUTHORIZED family contact in a DIRECT conversation', () => {
+  it("PERMITS a teacher and an AUTHORIZED family contact in a DIRECT conversation", () => {
     // The positive control for the assertion above. Without it, that test would
     // still pass against a database that refused every teacher/contact direct
     // pairing -- which is the behaviour PD-6 removed.
@@ -134,12 +162,14 @@ describe('BR-1 database backstop (PD-6)', () => {
     ).toBeNull();
   });
 
-  it('refuses the same authorized pair once the learner link is reassigned', () => {
+  it("refuses the same authorized pair once the learner link is reassigned", () => {
     // The relationship, not the identities, is what the database is checking.
     const otherTeacher = sql(
       `insert into chat.teacher (name) values ('integration_teacher_other') returning id`,
     );
-    sql(`update chat.learner set teacher_id = '${otherTeacher}' where family_id = '${FAMILY_ID}'`);
+    sqlAsIngestion(
+      `update chat.learner set teacher_id = '${otherTeacher}' where family_id = '${FAMILY_ID}'`,
+    );
 
     const id = sql(
       `insert into chat.conversation (type, state, direct_key, family_id)
@@ -153,12 +183,14 @@ describe('BR-1 database backstop (PD-6)', () => {
       `insert into chat.conversation_member (conversation_id, actor_kind, actor_id, member_role)
        values ('${id}', 'contact', '${PARENT_ID}', 'parent')`,
     );
-    expect(err).toContain('PD-6 violation');
+    expect(err).toContain("PD-6 violation");
 
-    sql(`update chat.learner set teacher_id = '${TEACHER_ID}' where family_id = '${FAMILY_ID}'`);
+    sqlAsIngestion(
+      `update chat.learner set teacher_id = '${TEACHER_ID}' where family_id = '${FAMILY_ID}'`,
+    );
   });
 
-  it('allows a teacher and a parent to share a GROUP conversation, with an admin present', () => {
+  it("allows a teacher and a parent to share a GROUP conversation, with an admin present", () => {
     // The admin member is REQUIRED, not decoration. Red-team RT-025 showed that
     // a two-party teacher+parent group with no admin is a private
     // teacher<->parent channel wearing a group's name, which BR-1 forbids:
@@ -169,23 +201,27 @@ describe('BR-1 database backstop (PD-6)', () => {
       `insert into chat.conversation (type, state, family_id)
        values ('class_group','open','${FAMILY_ID}') returning id`,
     );
-    addMember(id, 'teacher', 'teacher');
-    addMember(id, 'staff', 'admin');
-    addMember(id, 'contact', 'parent');
-    expect(sql(`select count(*) from chat.conversation_member where conversation_id='${id}' and left_at is null`)).toBe('3');
+    addMember(id, "teacher", "teacher");
+    addMember(id, "staff", "admin");
+    addMember(id, "contact", "parent");
+    expect(
+      sql(
+        `select count(*) from chat.conversation_member where conversation_id='${id}' and left_at is null`,
+      ),
+    ).toBe("3");
   });
 
-  it('RT-025: the same group WITHOUT an admin is rejected', () => {
+  it("RT-025: the same group WITHOUT an admin is rejected", () => {
     const id = sql(
       `insert into chat.conversation (type, state, family_id)
        values ('class_group','open','${FAMILY_ID}') returning id`,
     );
-    addMember(id, 'teacher', 'teacher');
+    addMember(id, "teacher", "teacher");
     const err = expectRejected(
       `insert into chat.conversation_member (conversation_id, actor_kind, actor_id, member_role)
        values ('${id}', 'contact', gen_random_uuid(), 'parent')`,
     );
-    expect(err).toContain('BR-1 violation');
+    expect(err).toContain("BR-1 violation");
   });
 
   /**
@@ -203,14 +239,14 @@ describe('BR-1 database backstop (PD-6)', () => {
    *
    * Maps to test-plan BR1-10.
    */
-  it('JC-008 / RT-024: converting a teacher+parent GROUP into a DIRECT conversation must be rejected', () => {
+  it("JC-008 / RT-024: converting a teacher+parent GROUP into a DIRECT conversation must be rejected", () => {
     const id = sql(
       `insert into chat.conversation (type, state, family_id)
        values ('class_group','open','${FAMILY_ID}') returning id`,
     );
-    addMember(id, 'teacher', 'teacher');
-    addMember(id, 'staff', 'admin');
-    addMember(id, 'contact', 'parent');
+    addMember(id, "teacher", "teacher");
+    addMember(id, "staff", "admin");
+    addMember(id, "contact", "parent");
 
     const err = expectRejected(
       `update chat.conversation set type='direct', direct_key=gen_random_uuid()::text where id='${id}'`,
@@ -220,12 +256,12 @@ describe('BR-1 database backstop (PD-6)', () => {
   });
 });
 
-describe('append-only and immutability guarantees', () => {
+describe("append-only and immutability guarantees", () => {
   // A FOR EACH ROW trigger only fires when a row actually matches, so each of
   // these inserts a real row first. An earlier draft used `where false` and
   // passed vacuously -- which is the failure mode this comment exists to stop.
 
-  it('chat.event_log rows cannot be updated', () => {
+  it("chat.event_log rows cannot be updated", () => {
     sql(`insert into chat.event_log (actor_type, type, payload)
          values ('system', 'message_sent', '{}')`);
     const err = expectRejected(
@@ -235,7 +271,7 @@ describe('append-only and immutability guarantees', () => {
     expect(err).toBeTruthy();
   });
 
-  it('chat.event_log rows cannot be deleted', () => {
+  it("chat.event_log rows cannot be deleted", () => {
     sql(`insert into chat.event_log (actor_type, type, payload)
          values ('system', 'message_sent', '{}')`);
     const err = expectRejected(
@@ -244,7 +280,7 @@ describe('append-only and immutability guarantees', () => {
     expect(err).toBeTruthy();
   });
 
-  it('chat.audit_log rows cannot be updated', () => {
+  it("chat.audit_log rows cannot be updated", () => {
     sql(`insert into chat.audit_log (action, entity, reason)
          values ('ownership_transferred', 'family', 'integration test')`);
     const err = expectRejected(
@@ -254,7 +290,7 @@ describe('append-only and immutability guarantees', () => {
     expect(err).toBeTruthy();
   });
 
-  it('chat.message carries an immutability trigger', () => {
+  it("chat.message carries an immutability trigger", () => {
     // Weaker than an end-to-end rewrite attempt, which needs the full
     // staff -> family -> thread -> conversation fixture chain. Named honestly:
     // this asserts the guard is installed, not that a rewrite was attempted.
@@ -271,10 +307,10 @@ describe('append-only and immutability guarantees', () => {
     // forbids what actually matters: body, author, conversation and seq cannot
     // be rewritten once the message exists. The two assertions below prove the
     // protection was narrowed rather than removed.
-    expect(triggers).toContain('message_no_rewrite');
+    expect(triggers).toContain("message_no_rewrite");
   });
 
-  it('chat.message body still cannot be rewritten', () => {
+  it("chat.message body still cannot be rewritten", () => {
     const conv = sql(
       `insert into chat.conversation (type, state, direct_key)
        values ('direct','open', gen_random_uuid()::text) returning id`,
@@ -286,11 +322,14 @@ describe('append-only and immutability guarantees', () => {
       `insert into chat.message (conversation_id, author_type, body, visibility, seq, type)
        values ('${conv}', 'system', 'original', 'customer', 1, 'text') returning id`,
     );
-    expect(expectRejected(`update chat.message set body='tampered' where id='${msg}'`))
-      .toContain('immutable');
+    expect(
+      expectRejected(
+        `update chat.message set body='tampered' where id='${msg}'`,
+      ),
+    ).toContain("immutable");
   });
 
-  it('chat.message moderation may still be decided', () => {
+  it("chat.message moderation may still be decided", () => {
     const conv = sql(
       `insert into chat.conversation (type, state, direct_key)
        values ('direct','open', gen_random_uuid()::text) returning id`,
@@ -300,12 +339,14 @@ describe('append-only and immutability guarantees', () => {
        values ('${conv}', 'system', 'held', 'customer', 1, 'text', 'pending') returning id`,
     );
     sql(`update chat.message set moderation='published' where id='${msg}'`);
-    expect(sql(`select moderation from chat.message where id='${msg}'`)).toBe('published');
+    expect(sql(`select moderation from chat.message where id='${msg}'`)).toBe(
+      "published",
+    );
   });
 });
 
-describe('JC-010 — duplicate event_log definitions', () => {
-  it('exactly one actor column exists, and it is not both', () => {
+describe("JC-010 — duplicate event_log definitions", () => {
+  it("exactly one actor column exists, and it is not both", () => {
     const cols = sql(
       `select string_agg(column_name, ',' order by column_name)
          from information_schema.columns
@@ -315,13 +356,13 @@ describe('JC-010 — duplicate event_log definitions', () => {
     // Documents which lineage won. AI #2's shared-logs migration writes
     // actor_kind; AI #1's applies first and defines actor_type, and the
     // `create table if not exists` makes the second definition a silent no-op.
-    expect(cols).toBe('actor_type');
+    expect(cols).toBe("actor_type");
   });
 
-  it('an AI #2-shaped insert (actor_kind) fails against the applied schema', () => {
+  it("an AI #2-shaped insert (actor_kind) fails against the applied schema", () => {
     const err = expectRejected(
       `insert into chat.event_log (type, actor_kind, payload) values ('message_sent','staff','{}')`,
     );
-    expect(err).toContain('actor_kind');
+    expect(err).toContain("actor_kind");
   });
 });

@@ -53,6 +53,11 @@ class JawwidTokens extends ThemeExtension<JawwidTokens> {
     required this.colorMessageSystemText,
     required this.colorMessagePendingBg,
     required this.colorMessageFailedBorder,
+    required this.colorMediaSurface,
+    required this.colorMediaOnSurface,
+    required this.colorMediaOnSurfaceMuted,
+    required this.colorMediaScrim,
+    required this.colorMediaScrimStrong,
   });
 
   // --- §2.2 background / surface -----------------------------------------------------
@@ -108,6 +113,24 @@ class JawwidTokens extends ThemeExtension<JawwidTokens> {
   final Color colorMessagePendingBg;
   final Color colorMessageFailedBorder;
 
+  // --- media -------------------------------------------------------------------------
+  //
+  // The one place the palette does NOT follow the theme. A photo is judged
+  // against what surrounds it, so a full-screen viewer is dark in both themes
+  // and its chrome is light in both — a white ground under someone's photo is
+  // the ground passing judgement on it. These are named tokens rather than
+  // `Colors.black` at the call site so that the rule has a home and the
+  // design-system guard keeps holding.
+  final Color colorMediaSurface;
+  final Color colorMediaOnSurface;
+  final Color colorMediaOnSurfaceMuted;
+
+  /// Laid over a photo that is still uploading.
+  final Color colorMediaScrim;
+
+  /// Laid over a photo whose upload failed, where the icon needs more contrast.
+  final Color colorMediaScrimStrong;
+
   static const light = JawwidTokens(
     colorBackgroundPage: _neutral25,
     colorBackgroundSunken: _neutral50,
@@ -148,6 +171,11 @@ class JawwidTokens extends ThemeExtension<JawwidTokens> {
     colorMessageSystemText: _neutral600,
     colorMessagePendingBg: _neutral50,
     colorMessageFailedBorder: _red600,
+    colorMediaSurface: Color(0xFF000000),
+    colorMediaOnSurface: Color(0xFFFFFFFF),
+    colorMediaOnSurfaceMuted: Color(0xB3FFFFFF),
+    colorMediaScrim: Color(0x40000000),
+    colorMediaScrimStrong: Color(0x61000000),
   );
 
   /// §2.7 — mobile honours the system setting, so every token has a dark value and none is
@@ -192,6 +220,11 @@ class JawwidTokens extends ThemeExtension<JawwidTokens> {
     colorMessageSystemText: _neutral300,
     colorMessagePendingBg: Color(0xFF211F1C),
     colorMessageFailedBorder: _red500,
+    colorMediaSurface: Color(0xFF000000),
+    colorMediaOnSurface: Color(0xFFFFFFFF),
+    colorMediaOnSurfaceMuted: Color(0xB3FFFFFF),
+    colorMediaScrim: Color(0x40000000),
+    colorMediaScrimStrong: Color(0x61000000),
   );
 
   /// Read the tokens for the current theme.

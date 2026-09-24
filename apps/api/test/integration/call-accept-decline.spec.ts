@@ -22,9 +22,15 @@
  * A refusal that still wrote `answered_at` would pass a test that only checked
  * the throw.
  */
-import { randomUUID } from 'node:crypto';
-import { CommErrorCode } from '@platform/errors';
-import { buildGraph, seed, truncate, Scenario } from './harness';
+import { randomUUID } from "node:crypto";
+import { CommErrorCode } from "@platform/errors";
+import {
+  Scenario,
+  buildGraph,
+  seed,
+  truncate,
+  withAssignmentGate,
+} from "./harness";
 
 jest.setTimeout(60_000);
 
@@ -36,7 +42,7 @@ async function snapshot(callId: string) {
   const call = await g.prisma.call.findUnique({ where: { id: callId } });
   const participants = await g.prisma.callParticipant.findMany({
     where: { callId },
-    orderBy: { actorId: 'asc' },
+    orderBy: { actorId: "asc" },
   });
   return {
     status: call?.status,
@@ -52,7 +58,9 @@ async function snapshot(callId: string) {
 }
 
 const callEvents = async (callId: string) => {
-  const rows = await g.prisma.outboxEvent.findMany({ orderBy: { createdAt: 'asc' } });
+  const rows = await g.prisma.outboxEvent.findMany({
+    orderBy: { createdAt: "asc" },
+  });
   return rows
     .filter((r) => (r.payload as { callId?: string })?.callId === callId)
     .map((r) => r.type);
@@ -66,13 +74,18 @@ async function directCall() {
 }
 
 const revokeRelationship = () =>
-  g.prisma.learner.update({
-    where: { id: s.learnerId },
-    data: { teacherId: s.unrelatedTeacherId },
-  });
+  withAssignmentGate(
+    g.prisma,
+    `update chat.learner set teacher_id = '${s.unrelatedTeacherId}'::uuid
+      where id = '${s.learnerId}'::uuid`,
+  );
 
-beforeAll(async () => { await g.prisma.$connect(); });
-afterAll(async () => { await g.prisma.$disconnect(); });
+beforeAll(async () => {
+  await g.prisma.$connect();
+});
+afterAll(async () => {
+  await g.prisma.$disconnect();
+});
 beforeEach(async () => {
   await truncate(g.prisma);
   s = await seed(g.prisma);
@@ -80,22 +93,24 @@ beforeEach(async () => {
 });
 
 // -------------------------------------------------------------------------
-describe('accept — the happy path still works', () => {
-  it('an authorized participant answers: RINGING becomes ACTIVE and answered_at is stamped', async () => {
+describe("accept — the happy path still works", () => {
+  it("an authorized participant answers: RINGING becomes ACTIVE and answered_at is stamped", async () => {
     const { callId } = await directCall();
 
     await g.calls.accept(callId, s.parentId);
 
     const after = await snapshot(callId);
-    expect(after.status).toBe('active');
+    expect(after.status).toBe("active");
     expect(after.answeredAt).toBeInstanceOf(Date);
-    expect(after.participants.find((p) => p.actorId === s.parentId)?.joinedAt).toBeInstanceOf(Date);
+    expect(
+      after.participants.find((p) => p.actorId === s.parentId)?.joinedAt,
+    ).toBeInstanceOf(Date);
     // Phase 10 renamed this: an HTTP accept emits call.accepted, never
     // call.participant_joined, which means media presence.
-    expect(await callEvents(callId)).toContain('call.accepted');
+    expect(await callEvents(callId)).toContain("call.accepted");
   });
 
-  it('answering twice is a retry, not an error, and does not move answered_at', async () => {
+  it("answering twice is a retry, not an error, and does not move answered_at", async () => {
     const { callId } = await directCall();
 
     await g.calls.accept(callId, s.parentId);
@@ -106,10 +121,12 @@ describe('accept — the happy path still works', () => {
 
     expect(second).toEqual(first);
     // And no second join event: the retry did nothing to record.
-    expect((await callEvents(callId)).filter((t) => t === 'call.accepted')).toHaveLength(1);
+    expect(
+      (await callEvents(callId)).filter((t) => t === "call.accepted"),
+    ).toHaveLength(1);
   });
 
-  it('declining works, and declining again is refused rather than silently repeated', async () => {
+  it("declining works, and declining again is refused rather than silently repeated", async () => {
     // Deliberately NOT idempotent-success, unlike accept. Accepting twice is a
     // retry by someone still on the call; declining twice is acting on a call
     // you already left, and authorizeJoin refuses that for the same reason it
@@ -119,22 +136,26 @@ describe('accept — the happy path still works', () => {
 
     await g.calls.decline(callId, s.parentId);
     const first = await snapshot(callId);
-    expect(first.participants.find((p) => p.actorId === s.parentId)?.leftAt).toBeInstanceOf(Date);
+    expect(
+      first.participants.find((p) => p.actorId === s.parentId)?.leftAt,
+    ).toBeInstanceOf(Date);
 
     await expect(g.calls.decline(callId, s.parentId)).rejects.toMatchObject({
       code: CommErrorCode.CALL_PARTICIPANT_LEFT,
     });
     expect(await snapshot(callId)).toEqual(first);
-    expect((await callEvents(callId)).filter((t) => t === 'call.declined')).toHaveLength(1);
+    expect(
+      (await callEvents(callId)).filter((t) => t === "call.declined"),
+    ).toHaveLength(1);
   });
 });
 
 // -------------------------------------------------------------------------
-describe('accept — authorization is re-run, and a refusal leaves no trace', () => {
-  it('a revoked PD-6 relationship cannot answer: no ACTIVE, no answered_at, no event', async () => {
+describe("accept — authorization is re-run, and a refusal leaves no trace", () => {
+  it("a revoked PD-6 relationship cannot answer: no ACTIVE, no answered_at, no event", async () => {
     const { callId } = await directCall();
     const before = await snapshot(callId);
-    expect(before.status).toBe('ringing');
+    expect(before.status).toBe("ringing");
 
     await revokeRelationship();
 
@@ -144,11 +165,14 @@ describe('accept — authorization is re-run, and a refusal leaves no trace', ()
 
     // The whole record, not just the status.
     expect(await snapshot(callId)).toEqual(before);
-    expect(await callEvents(callId)).toEqual(['call.incoming']);
+    expect(await callEvents(callId)).toEqual(["call.incoming"]);
   });
 
-  it('the reverse direction: teacher starts, relationship revoked, parent cannot answer', async () => {
-    const conv = await g.conversations.getOrCreateDirect(s.teacherId, s.parentId);
+  it("the reverse direction: teacher starts, relationship revoked, parent cannot answer", async () => {
+    const conv = await g.conversations.getOrCreateDirect(
+      s.teacherId,
+      s.parentId,
+    );
     const { callId } = await g.calls.start(conv.id, s.parentId);
     const before = await snapshot(callId);
 
@@ -160,7 +184,7 @@ describe('accept — authorization is re-run, and a refusal leaves no trace', ()
     expect(await snapshot(callId)).toEqual(before);
   });
 
-  it('a revoked relationship cannot decline either', async () => {
+  it("a revoked relationship cannot decline either", async () => {
     const { callId } = await directCall();
     const before = await snapshot(callId);
 
@@ -172,7 +196,7 @@ describe('accept — authorization is re-run, and a refusal leaves no trace', ()
     expect(await snapshot(callId)).toEqual(before);
   });
 
-  it('and the media token is refused for the same call, as it always was', async () => {
+  it("and the media token is refused for the same call, as it always was", async () => {
     // The control: token issuance already behaved correctly, which is why the
     // accept defect leaked no audio. Asserted so a future change cannot quietly
     // make accept strict and the token path loose.
@@ -184,11 +208,14 @@ describe('accept — authorization is re-run, and a refusal leaves no trace', ()
     });
   });
 
-  it('a deactivated actor cannot answer', async () => {
+  it("a deactivated actor cannot answer", async () => {
     const { callId } = await directCall();
     const before = await snapshot(callId);
 
-    await g.prisma.contact.update({ where: { id: s.parentId }, data: { isActive: false } });
+    await g.prisma.contact.update({
+      where: { id: s.parentId },
+      data: { isActive: false },
+    });
 
     await expect(g.calls.accept(callId, s.parentId)).rejects.toMatchObject({
       code: CommErrorCode.ACTOR_INACTIVE,
@@ -196,7 +223,7 @@ describe('accept — authorization is re-run, and a refusal leaves no trace', ()
     expect(await snapshot(callId)).toEqual(before);
   });
 
-  it('an actor removed from the conversation cannot answer, though the participant row remains', async () => {
+  it("an actor removed from the conversation cannot answer, though the participant row remains", async () => {
     const { conversationId, callId } = await directCall();
     const before = await snapshot(callId);
 
@@ -213,37 +240,43 @@ describe('accept — authorization is re-run, and a refusal leaves no trace', ()
 });
 
 // -------------------------------------------------------------------------
-describe('unrelated actors', () => {
-  it('an actor who is not a participant cannot accept, however well they know the id', async () => {
+describe("unrelated actors", () => {
+  it("an actor who is not a participant cannot accept, however well they know the id", async () => {
     const { callId } = await directCall();
     const before = await snapshot(callId);
 
-    await expect(g.calls.accept(callId, s.unrelatedTeacherId)).rejects.toMatchObject({
+    await expect(
+      g.calls.accept(callId, s.unrelatedTeacherId),
+    ).rejects.toMatchObject({
       code: CommErrorCode.CALL_NOT_A_PARTICIPANT,
     });
     expect(await snapshot(callId)).toEqual(before);
   });
 
-  it('...and cannot decline either: a call id is not a capability', async () => {
+  it("...and cannot decline either: a call id is not a capability", async () => {
     const { callId } = await directCall();
     const before = await snapshot(callId);
 
-    await expect(g.calls.decline(callId, s.unrelatedTeacherId)).rejects.toMatchObject({
+    await expect(
+      g.calls.decline(callId, s.unrelatedTeacherId),
+    ).rejects.toMatchObject({
       code: CommErrorCode.CALL_NOT_A_PARTICIPANT,
     });
     expect(await snapshot(callId)).toEqual(before);
   });
 
-  it('an unknown call id is a 404, not a leak of whether it exists elsewhere', async () => {
-    await expect(g.calls.accept(randomUUID(), s.parentId)).rejects.toMatchObject({
+  it("an unknown call id is a 404, not a leak of whether it exists elsewhere", async () => {
+    await expect(
+      g.calls.accept(randomUUID(), s.parentId),
+    ).rejects.toMatchObject({
       code: CommErrorCode.CALL_NOT_FOUND,
     });
   });
 });
 
 // -------------------------------------------------------------------------
-describe('state transitions that must not happen', () => {
-  it('DECLINED → ACTIVE: a participant who declined cannot then answer', async () => {
+describe("state transitions that must not happen", () => {
+  it("DECLINED → ACTIVE: a participant who declined cannot then answer", async () => {
     const { callId } = await directCall();
     await g.calls.decline(callId, s.parentId);
     const afterDecline = await snapshot(callId);
@@ -254,7 +287,7 @@ describe('state transitions that must not happen', () => {
     expect(await snapshot(callId)).toEqual(afterDecline);
   });
 
-  it('a call every other participant declined cannot be answered by the initiator', async () => {
+  it("a call every other participant declined cannot be answered by the initiator", async () => {
     const { callId } = await directCall();
     await g.calls.decline(callId, s.parentId);
 
@@ -262,15 +295,15 @@ describe('state transitions that must not happen', () => {
       code: CommErrorCode.CALL_ALREADY_DECLINED,
     });
     const after = await snapshot(callId);
-    expect(after.status).toBe('ringing');
+    expect(after.status).toBe("ringing");
     expect(after.answeredAt).toBeNull();
   });
 
-  it('ENDED → ACTIVE: an ended call cannot be answered, and nothing is written', async () => {
+  it("ENDED → ACTIVE: an ended call cannot be answered, and nothing is written", async () => {
     const { callId } = await directCall();
     await g.calls.end(callId, s.teacherId);
     const afterEnd = await snapshot(callId);
-    expect(afterEnd.status).toBe('ended');
+    expect(afterEnd.status).toBe("ended");
 
     await expect(g.calls.accept(callId, s.parentId)).rejects.toMatchObject({
       code: CommErrorCode.CALL_ALREADY_ENDED,
@@ -280,7 +313,7 @@ describe('state transitions that must not happen', () => {
     expect(await snapshot(callId)).toEqual(afterEnd);
   });
 
-  it('ENDED → DECLINED: an ended call cannot be declined', async () => {
+  it("ENDED → DECLINED: an ended call cannot be declined", async () => {
     const { callId } = await directCall();
     await g.calls.end(callId, s.teacherId);
     const afterEnd = await snapshot(callId);
@@ -291,7 +324,7 @@ describe('state transitions that must not happen', () => {
     expect(await snapshot(callId)).toEqual(afterEnd);
   });
 
-  it('ACTIVE → DECLINED: an answered call is left by ending it, not by declining it', async () => {
+  it("ACTIVE → DECLINED: an answered call is left by ending it, not by declining it", async () => {
     const { callId } = await directCall();
     await g.calls.accept(callId, s.parentId);
     const afterAccept = await snapshot(callId);
@@ -302,7 +335,7 @@ describe('state transitions that must not happen', () => {
     expect(await snapshot(callId)).toEqual(afterAccept);
   });
 
-  it('a participant who left cannot decline', async () => {
+  it("a participant who left cannot decline", async () => {
     const { callId } = await directCall();
     await g.prisma.callParticipant.updateMany({
       where: { callId, actorId: s.parentId },
@@ -318,7 +351,7 @@ describe('state transitions that must not happen', () => {
 });
 
 // -------------------------------------------------------------------------
-describe('concurrency — one winner, no torn state', () => {
+describe("concurrency — one winner, no torn state", () => {
   /**
    * These race real transactions against the real database. The call row is
    * taken with SELECT ... FOR UPDATE, so the second transaction blocks until
@@ -326,23 +359,23 @@ describe('concurrency — one winner, no torn state', () => {
    * read before starting. Without the lock both would read RINGING and both
    * would believe they made the transition.
    */
-  it('two simultaneous accepts produce one answered_at and one event', async () => {
+  it("two simultaneous accepts produce one answered_at and one event", async () => {
     const { callId } = await directCall();
 
     const results = await Promise.allSettled([
       g.calls.accept(callId, s.parentId),
       g.calls.accept(callId, s.parentId),
     ]);
-    expect(results.every((r) => r.status === 'fulfilled')).toBe(true);
+    expect(results.every((r) => r.status === "fulfilled")).toBe(true);
 
     const after = await snapshot(callId);
-    expect(after.status).toBe('active');
+    expect(after.status).toBe("active");
     expect(
-      (await callEvents(callId)).filter((t) => t === 'call.accepted'),
+      (await callEvents(callId)).filter((t) => t === "call.accepted"),
     ).toHaveLength(1);
   });
 
-  it('accept racing decline settles on exactly one of them', async () => {
+  it("accept racing decline settles on exactly one of them", async () => {
     const { callId } = await directCall();
 
     await Promise.allSettled([
@@ -355,12 +388,12 @@ describe('concurrency — one winner, no torn state', () => {
 
     // Exactly one of the two outcomes, never both: a participant cannot have
     // answered and refused the same call.
-    const answered = mine.joinedAt !== null && after.status === 'active';
+    const answered = mine.joinedAt !== null && after.status === "active";
     const declined = mine.leftAt !== null;
     expect(answered !== declined).toBe(true);
   });
 
-  it('accept racing end never leaves the call ACTIVE after it ended', async () => {
+  it("accept racing end never leaves the call ACTIVE after it ended", async () => {
     const { callId } = await directCall();
 
     await Promise.allSettled([
@@ -371,10 +404,10 @@ describe('concurrency — one winner, no torn state', () => {
     const after = await snapshot(callId);
     // Whoever won, the terminal state is terminal. A stale read could have
     // written ACTIVE over ENDED; the lock is what stops it.
-    if (after.endedAt !== null) expect(after.status).toBe('ended');
+    if (after.endedAt !== null) expect(after.status).toBe("ended");
   });
 
-  it('two simultaneous declines record one leave time', async () => {
+  it("two simultaneous declines record one leave time", async () => {
     const { callId } = await directCall();
 
     await Promise.allSettled([
@@ -382,13 +415,15 @@ describe('concurrency — one winner, no torn state', () => {
       g.calls.decline(callId, s.parentId),
     ]);
 
-    expect((await callEvents(callId)).filter((t) => t === 'call.declined')).toHaveLength(1);
+    expect(
+      (await callEvents(callId)).filter((t) => t === "call.declined"),
+    ).toHaveLength(1);
   });
 });
 
 // -------------------------------------------------------------------------
-describe('history correctness — the point of the whole phase', () => {
-  it('a call nobody could answer is never recorded as answered', async () => {
+describe("history correctness — the point of the whole phase", () => {
+  it("a call nobody could answer is never recorded as answered", async () => {
     const { callId } = await directCall();
     await revokeRelationship();
 
@@ -400,22 +435,22 @@ describe('history correctness — the point of the whole phase', () => {
     await g.calls.end(callId, s.teacherId);
 
     const after = await snapshot(callId);
-    expect(after.outcome).toBe('missed');
+    expect(after.outcome).toBe("missed");
     expect(after.answeredAt).toBeNull();
     expect(after.participants.every((p) => p.joinedAt === null)).toBe(true);
   });
 
-  it('duration is still measured from the real answer when one happened', async () => {
+  it("duration is still measured from the real answer when one happened", async () => {
     const { callId } = await directCall();
     await g.calls.accept(callId, s.parentId);
     await g.calls.end(callId, s.teacherId);
 
     const after = await snapshot(callId);
-    expect(after.outcome).toBe('answered');
+    expect(after.outcome).toBe("answered");
     expect(after.answeredAt).toBeInstanceOf(Date);
   });
 
-  it('ending still works after the relationship is revoked — no call is stranded', async () => {
+  it("ending still works after the relationship is revoked — no call is stranded", async () => {
     // The deliberate asymmetry: joining re-runs authorization, ending does not.
     // If a revoked relationship could block `end`, a call would sit ACTIVE
     // forever, which is a worse failure than the one this phase fixes.
@@ -425,6 +460,6 @@ describe('history correctness — the point of the whole phase', () => {
     await revokeRelationship();
 
     await expect(g.calls.end(callId, s.teacherId)).resolves.toBeUndefined();
-    expect((await snapshot(callId)).status).toBe('ended');
+    expect((await snapshot(callId)).status).toBe("ended");
   });
 });

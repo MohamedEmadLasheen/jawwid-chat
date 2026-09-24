@@ -159,6 +159,32 @@ Three properties this design has to keep, each with a test:
 `async` work of its own. Fail-closed still applies: an unresolvable relationship
 is `false`, which denies.
 
+**Where the predicate lives — one answer, and only one.**
+
+| Layer | The one implementation | Consumed through |
+|---|---|---|
+| Application | `apps/api/src/platform/relationship.service.ts` — the `RelationshipService` **interface**, implemented by `PrismaRelationshipService` | the `RELATIONSHIP_SERVICE` token in `platform.module.ts`; `ConversationService`, `MessageService` and `CallService` inject it and pass the resolved boolean to `AuthorizationService` |
+| Database | `chat.teacher_parent_authorized(uuid, uuid)`, defined once by `20260923120000_chat_teacher_parent_relationship.sql` | the BR-1 assertion functions, redirected onto it by `20260923130000_chat_pd006_authorization_switch.sql` |
+
+There is no third. No service answers this question under another name, no call
+site re-derives it inline, and no controller decides it for itself. The two
+implementations above are deliberately written independently rather than one
+delegating to the other — the policy requires the rule at both layers, and a
+wrapper would give two call sites for one implementation, so a mistake would
+look agreed-upon instead of wrong. `teacher-parent-relationship.spec.ts` and
+`relationship-predicate.spec.ts` assert they agree case for case; a divergence
+is a failing test, not a silent drift.
+
+*This was briefly not true.* Two branches added the predicate independently —
+one inert (`main`, `f4957a6`), one wired into the authorization switch — and for
+a while the repository carried two application classes and two migrations
+defining the same SQL function at the same timestamp. They were reconciled on
+2026-09-24: the wired implementation is the one that survived, the duplicate
+predicate migration was withdrawn in favour of `main`'s definition, and the
+index the withdrawn file carried moved into the switch migration. Recorded here
+because "there is exactly one" is a claim that has to be maintained, not
+assumed.
+
 ---
 
 ## 5. Known authorization defects carried into Phase 1 (verified)

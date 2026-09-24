@@ -18,6 +18,10 @@ import '../wire/wire_mappers.dart';
 /// Nothing here invents an endpoint. Where the contract has no route for something the app
 /// needs — search, and the display names behind a conversation title — the method says so
 /// rather than approximating it locally.
+///
+/// `ConversationDto` now carries the learner and the caller's unread count, so
+/// the chat list's child sections and its badges come from the server. Neither
+/// is derived here: see `WireMappers.conversation`.
 class HttpConversationRepository implements ConversationRepository {
   HttpConversationRepository({
     required ApiClient client,
