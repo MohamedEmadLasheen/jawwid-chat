@@ -9,6 +9,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { ObjectStorage, UploadAuthorization } from './object-storage';
+import { assertSafeObjectKey, buildObjectKey } from './object-key';
 
 /**
  * `ObjectStorage` against S3-compatible storage. Owner: AI #7 (infrastructure).
@@ -186,47 +187,11 @@ export interface S3StorageConfig {
 }
 
 /**
- * Build a key inside a prefix, and refuse one that would escape it.
- *
- * An S3 key is not a filesystem path, so `..` does not traverse a directory --
- * but it is still a namespace, and `conversations/A/../B` addresses a different
- * conversation's objects than the one that was authorized. The prefix here is
- * `conversations/<conversationId>`, which is exactly the boundary the
- * authorization decision was made about, so a key that leaves it is an
- * authorization bypass whatever the storage layer calls it.
+ * Key construction and validation live in `object-key.ts`, storage-agnostic,
+ * because the rule must hold identically for the local reference
+ * implementation. Re-exported here so existing importers are unaffected.
  */
-export function buildObjectKey(prefix: string): string {
-  return assertSafeObjectKey(`${assertSafePrefix(prefix)}/${randomUUID()}`);
-}
-
-function assertSafePrefix(prefix: string): string {
-  if (!prefix || prefix.startsWith('/') || prefix.endsWith('/')) {
-    throw new Error('object key prefix must be a non-empty relative path');
-  }
-  return assertSafeObjectKey(prefix);
-}
-
-/**
- * The one place a key is checked. Rejects absolute keys, traversal segments,
- * backslashes, control characters and NUL -- the last because a NUL in a key
- * truncates it in some clients, so `a/b%00.png` and `a/b` can become the same
- * object for one participant and different objects for another.
- */
-export function assertSafeObjectKey(objectKey: string): string {
-  if (typeof objectKey !== 'string' || objectKey.length === 0 || objectKey.length > 1024) {
-    throw new Error('object key must be a non-empty string of at most 1024 characters');
-  }
-  if (objectKey.startsWith('/') || objectKey.includes('\\')) {
-    throw new Error('object key must be relative and must not contain backslashes');
-  }
-  if (/[\u0000-\u001f\u007f]/.test(objectKey)) {
-    throw new Error('object key must not contain control characters');
-  }
-  if (objectKey.split('/').some((segment) => segment === '..' || segment === '.' || segment === '')) {
-    throw new Error('object key must not contain empty or traversal segments');
-  }
-  return objectKey;
-}
+export { assertSafeObjectKey, buildObjectKey } from './object-key';
 
 function isNotFound(error: unknown): boolean {
   const name = (error as { name?: string })?.name;
