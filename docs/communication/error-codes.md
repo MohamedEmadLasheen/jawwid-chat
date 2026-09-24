@@ -19,6 +19,9 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.TEACHER_TEACHER_DISABLED` | Teacher-to-teacher DMs are off by default. |
 | `COMM.STAFF_STAFF_DISABLED` | Staff-to-staff DMs are not in MVP; use internal notes. |
 | `COMM.INVALID_PARTICIPANTS` | The pair cannot form a conversation (two parents, self-chat, no staff side). |
+| `COMM.CALL_PARTICIPANT_LEFT` | 409. The actor is on this call's participant list but has already left it — they declined, or were dropped. Terminal: the call is over for them. |
+| `COMM.CALL_NOT_RINGING` | 409. The call is no longer ringing, so there is nothing to decline. An answered call is left by ending it. |
+| `COMM.CALL_ALREADY_DECLINED` | 409. Every other participant has left, so the call was already refused. Answering it would record an answer nobody gave. |
 
 ## Authorization — HTTP 403
 

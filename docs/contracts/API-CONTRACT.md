@@ -83,6 +83,9 @@ Source of truth: `apps/api/src/platform/errors.ts`. Default HTTP status of a `Co
 | `COMM.GROUP_ALREADY_EXISTS` | — | Declared; **no raise site found** in the services reviewed (`ensureStudentGroup` returns the existing group instead). Reserved. |
 | `COMM.CALL_NOT_FOUND` | 404 | |
 | `COMM.CALL_ALREADY_ENDED` | 409 | Token requested for an ended call. |
+| `COMM.CALL_PARTICIPANT_LEFT` | 409 | The actor is a recorded participant but has already left the call (`accept`, `decline`, `POST /calls/:id/token`). |
+| `COMM.CALL_NOT_RINGING` | 409 | `decline` on a call that is no longer ringing. |
+| `COMM.CALL_ALREADY_DECLINED` | 409 | `accept` on a call every other participant has left. |
 | `COMM.CALL_NOT_A_PARTICIPANT` | 403 | Not in the server-derived participant set. |
 | `COMM.PARENT_CANNOT_START_GROUP_CALL` | 403 | **PD-2.** A family contact tried to START a `student_group` / `class_group` call. Joining is allowed; starting is a teacher or staff action. Never retry. |
 
@@ -537,9 +540,9 @@ CallHistoryDto { id, conversationId, type: 'direct'|'group', status: 'ringing'|'
 - Auth: required. Permission: `calls.accept`. Scope: recorded participant, call not ended, still a member, `canCall(intent = join)` re-evaluated — including the PD-6 relationship predicate, so a teacher–parent relationship revoked in Jawwid Core refuses the next join even mid-call. This is the JOIN path, so a parent is allowed here (**PD-2**). Response: `{ token, url, roomName, expiresAt }`; TTL `call.token_ttl_seconds` (120); `canPublish = !isSilent`.
 - Errors: `COMM.CALL_NOT_FOUND` 404 · `COMM.CALL_ALREADY_ENDED` 409 · `COMM.CALL_NOT_A_PARTICIPANT` 403 · matrix codes. Audit / Realtime: none.
 
-**POST /calls/:id/accept** — EXISTS · Permission `calls.accept` · Scope participant. `joinedAt` set; `ringing → active` with `answeredAt`. Response `{ ok: true }`. Realtime: **`call.participant_joined { callId, actorId }`** (not `call.accepted`). Audit: none.
+**POST /calls/:id/accept** — EXISTS · Permission `calls.accept` · Scope: **the full join authorization chain**, identical to `POST /calls/:id/token` — actor active, recorded participant, `left_at` null, call not ended, still a conversation member, communication matrix, C-4, PD-2, and the **PD-6 relationship re-resolved now** (starting a call does not guarantee it may still be answered). `joinedAt` set; `ringing → active` with `answeredAt`, decided under `SELECT … FOR UPDATE` so concurrent accept/decline/end cannot tear the state. Answering twice is an idempotent no-op. Response `{ ok: true }`. Errors: matrix codes; `COMM.CALL_PARTICIPANT_LEFT` 409; `COMM.CALL_ALREADY_ENDED` 409; `COMM.CALL_ALREADY_DECLINED` 409; `COMM.CALL_NOT_A_PARTICIPANT` 403. **A refused accept writes nothing** — no `joinedAt`, no `answeredAt`, no status change, no event. Realtime: **`call.participant_joined { callId, actorId }`** (not `call.accepted`). Audit: none.
 
-**POST /calls/:id/decline** — EXISTS · Permission `calls.accept` · Scope participant. `leftAt` set. Realtime: `call.declined { callId, actorId }`. Audit: none.
+**POST /calls/:id/decline** — EXISTS · Permission `calls.accept` · Scope: the same full join authorization chain as accept, plus the call must still be **ringing**. `leftAt` set, under the same row lock. Declining again is refused with `COMM.CALL_PARTICIPANT_LEFT` rather than repeated. Errors: matrix codes; `COMM.CALL_NOT_RINGING` 409; `COMM.CALL_PARTICIPANT_LEFT` 409; `COMM.CALL_ALREADY_ENDED` 409. Realtime: `call.declined { callId, actorId }`. Audit: none.
 
 **POST /calls/:id/end** — EXISTS · Permission `calls.accept` · Scope participant. Request `{ outcome?: 'answered'|'missed'|'declined' }` (default derived from `answeredAt`). Call `ended`, all open participants `leftAt`, `durationSeconds` computed. Realtime: `call.ended { callId, conversationId, outcome, durationSeconds }`. Audit: `event_log` `call_ended`.
 

@@ -63,6 +63,20 @@ export enum CommErrorCode {
   CALL_NOT_FOUND = 'COMM.CALL_NOT_FOUND',
   CALL_ALREADY_ENDED = 'COMM.CALL_ALREADY_ENDED',
   CALL_NOT_A_PARTICIPANT = 'COMM.CALL_NOT_A_PARTICIPANT',
+  /**
+   * The actor is recorded on this call but has already left it -- they
+   * declined, or were dropped. A participant row survives leaving, so
+   * "is a participant" and "is still on the call" are different questions and
+   * the second one is the one that governs joining.
+   */
+  CALL_PARTICIPANT_LEFT = 'COMM.CALL_PARTICIPANT_LEFT',
+  /** The call is no longer ringing, so there is nothing left to decline. */
+  CALL_NOT_RINGING = 'COMM.CALL_NOT_RINGING',
+  /**
+   * Every other participant has left, so a direct call has already been
+   * refused. Accepting it would record an answer nobody gave.
+   */
+  CALL_ALREADY_DECLINED = 'COMM.CALL_ALREADY_DECLINED',
   /** PD-2: a family contact may join a Student Group call but never start one. */
   PARENT_CANNOT_START_GROUP_CALL = 'COMM.PARENT_CANNOT_START_GROUP_CALL',
 }

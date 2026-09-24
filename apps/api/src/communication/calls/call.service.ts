@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService, CallIntent } from '../../platform/authorization.service';
 import { AppConfigService } from '../../platform/app-config.service';
@@ -147,64 +148,7 @@ export class CallService {
     callId: string,
     actorId: string,
   ): Promise<{ token: string; url: string; roomName: string; expiresAt: string }> {
-    const now = new Date();
-    const actor = await this.conversations.requireActor(actorId);
-
-    const call = await this.prisma.call.findUnique({
-      where: { id: callId },
-      include: { participants: true },
-    });
-    if (!call) throw new CommError(CommErrorCode.CALL_NOT_FOUND, 'call not found', 404);
-    if (call.status === CallStatus.ENDED) {
-      throw new CommError(CommErrorCode.CALL_ALREADY_ENDED, 'this call has ended', 409);
-    }
-
-    const participant = call.participants.find((p) => p.actorId === actor.actorId);
-    if (!participant) {
-      throw new CommError(
-        CommErrorCode.CALL_NOT_A_PARTICIPANT,
-        'actor is not a participant of this call',
-      );
-    }
-
-    const conv = await this.conversations.requireConversation(call.conversationId);
-    const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
-
-    const participantActors: Actor[] = [];
-    for (const p of call.participants) {
-      const a = await this.identity.resolveActor(p.actorId);
-      if (a) participantActors.push(a);
-    }
-
-    const family = conv.familyId
-      ? await this.prisma.family.findUnique({
-          where: { id: conv.familyId },
-          select: { ownerId: true },
-        })
-      : null;
-
-    const decision = await this.authz.canCall(
-      actor,
-      conv,
-      membership,
-      participantActors,
-      now,
-      family?.ownerId ?? null,
-      // C-4: the call path runs the same admin-presence check as the message
-      // path. Calling is never more permissive than messaging.
-      await this.conversations.liveMembersOf(conv.id),
-      // PD-2: minting a media token is JOINING an existing call, which a parent
-      // may do. The call was already started by a teacher or an admin.
-      CallIntent.JOIN,
-      // PD-6, and this is the important one. The relationship is re-resolved
-      // HERE, at token issue, not inherited from the moment the call was
-      // created. A call is not a standing grant: if the learner was reassigned,
-      // the contact deactivated or the teacher offboarded in the seconds since
-      // `start`, this token is refused. Tokens are short-lived precisely so
-      // that this check recurs for the life of the call.
-      await this.conversations.pairingAuthorizedAmong(call.participants),
-    );
-    if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+    const { call, membership, actor } = await this.authorizeJoin(callId, actorId);
 
     const ttl = await this.config.get('call.token_ttl_seconds');
     const issued = await this.media.issue({
@@ -218,21 +162,79 @@ export class CallService {
     return { ...issued, roomName: call.roomName };
   }
 
+  /**
+   * Answer a call.
+   *
+   * AUTHORIZATION runs in full, through the same chain the media token uses --
+   * see authorizeJoin(). Before this, accept checked only that the actor's id
+   * appeared in call_participant.
+   *
+   * STATE is decided under a row lock, not from the read above. Two devices
+   * answering at once, or an answer racing a decline or an end, must produce
+   * one outcome and not a torn one. `SELECT ... FOR UPDATE` on the call row
+   * serialises every accept/decline/end for that call, so the checks inside the
+   * transaction are made against state nobody can change underneath them. A
+   * check-then-update on a stale read is exactly how a call ends up ACTIVE after
+   * it was ended.
+   *
+   * IDEMPOTENT. Answering twice is a retry, not an error: the second call finds
+   * itself already joined and does nothing. `joined_at` is written once so the
+   * history says when they actually answered, not when they last retried.
+   */
   async accept(callId: string, actorId: string): Promise<void> {
-    const actor = await this.conversations.requireActor(actorId);
-    const call = await this.requireLiveParticipant(callId, actor.actorId);
+    const { actor } = await this.authorizeJoin(callId, actorId);
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.callParticipant.updateMany({
-        where: { callId, actorId: actor.actorId },
-        data: { joinedAt: new Date() },
-      });
-      if (call.status === CallStatus.RINGING) {
-        await tx.call.update({
-          where: { id: callId },
-          data: { status: CallStatus.ACTIVE, answeredAt: new Date() },
-        });
+      const status = await this.lockCall(tx, callId);
+      if (status === CallStatus.ENDED) {
+        throw new CommError(CommErrorCode.CALL_ALREADY_ENDED, 'this call has ended', 409);
       }
+
+      // Re-read under the lock. The participant could have left, or every other
+      // participant could have declined, between authorization and here.
+      const participants = await tx.callParticipant.findMany({ where: { callId } });
+      const mine = participants.find((p) => p.actorId === actor.actorId);
+      if (!mine) {
+        throw new CommError(
+          CommErrorCode.CALL_NOT_A_PARTICIPANT,
+          'actor is not a participant of this call',
+        );
+      }
+      if (mine.leftAt !== null) {
+        throw new CommError(
+          CommErrorCode.CALL_PARTICIPANT_LEFT,
+          'this participant has already left the call',
+          409,
+        );
+      }
+
+      // A call every other participant has left has been refused. Answering it
+      // would record an answer nobody gave -- and for a direct call, the "other
+      // participant" is the whole of the other side.
+      const others = participants.filter((p) => p.actorId !== actor.actorId);
+      if (others.length > 0 && others.every((p) => p.leftAt !== null)) {
+        throw new CommError(
+          CommErrorCode.CALL_ALREADY_DECLINED,
+          'every other participant has left this call',
+          409,
+        );
+      }
+
+      if (mine.joinedAt !== null) return; // already answered; a retry, not a fault
+
+      const now = new Date();
+      await tx.callParticipant.updateMany({
+        where: { callId, actorId: actor.actorId, leftAt: null, joinedAt: null },
+        data: { joinedAt: now },
+      });
+
+      // RINGING -> ACTIVE happens once, for whoever answers first. A later
+      // participant joining an already-active group call is not a transition.
+      await tx.call.updateMany({
+        where: { id: callId, status: CallStatus.RINGING },
+        data: { status: CallStatus.ACTIVE, answeredAt: now },
+      });
+
       await this.outbox.enqueue(tx, CommEvent.CALL_PARTICIPANT_JOINED, {
         callId,
         actorId: actor.actorId,
@@ -240,17 +242,74 @@ export class CallService {
     });
   }
 
+  /**
+   * Refuse a ringing call.
+   *
+   * Same authorization chain as accept: knowing a call id is not permission to
+   * decline somebody's call, and a revoked relationship cannot act on it either.
+   *
+   * Only a RINGING call can be declined. Leaving a call already in progress is
+   * `end`, and declining an ended one is nothing at all -- allowing it would
+   * write a leave time onto a finished call and make its history wrong.
+   */
   async decline(callId: string, actorId: string): Promise<void> {
-    const actor = await this.conversations.requireActor(actorId);
-    await this.requireLiveParticipant(callId, actor.actorId);
+    const { actor } = await this.authorizeJoin(callId, actorId);
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.callParticipant.updateMany({
+      const status = await this.lockCall(tx, callId);
+      if (status === CallStatus.ENDED) {
+        throw new CommError(CommErrorCode.CALL_ALREADY_ENDED, 'this call has ended', 409);
+      }
+      if (status !== CallStatus.RINGING) {
+        throw new CommError(
+          CommErrorCode.CALL_NOT_RINGING,
+          'this call is no longer ringing and cannot be declined',
+          409,
+        );
+      }
+
+      const mine = await tx.callParticipant.findFirst({
         where: { callId, actorId: actor.actorId },
+      });
+      if (!mine) {
+        throw new CommError(
+          CommErrorCode.CALL_NOT_A_PARTICIPANT,
+          'actor is not a participant of this call',
+        );
+      }
+      // Reachable only in a race: two declines both pass authorizeJoin with
+      // left_at null, one wins the lock and writes it, and the loser sees the
+      // committed value here. A sequential second decline never reaches this
+      // line -- authorizeJoin refuses it with CALL_PARTICIPANT_LEFT.
+      if (mine.leftAt !== null) return;
+
+      await tx.callParticipant.updateMany({
+        where: { callId, actorId: actor.actorId, leftAt: null },
         data: { leftAt: new Date() },
       });
+
       await this.outbox.enqueue(tx, CommEvent.CALL_DECLINED, { callId, actorId: actor.actorId });
     });
+  }
+
+  /**
+   * Take the call row's lock, and read its status through it.
+   *
+   * Every accept, decline and end for one call queues here, so the state each
+   * one sees is the state it acts on. Without it two concurrent answers both
+   * read RINGING and both believe they made the transition.
+   */
+  private async lockCall(
+    tx: Prisma.TransactionClient,
+    callId: string,
+  ): Promise<string> {
+    const rows = await tx.$queryRaw<Array<{ status: string }>>`
+      select status from chat.call where id = ${callId}::uuid for update
+    `;
+    if (rows.length === 0) {
+      throw new CommError(CommErrorCode.CALL_NOT_FOUND, 'call not found', 404);
+    }
+    return rows[0].status;
   }
 
   /** Ends the call and records its outcome. */
@@ -330,6 +389,113 @@ export class CallService {
     }));
   }
 
+  /**
+   * THE join authorization chain, for every operation that joins or answers a
+   * call: `issueToken`, `accept` and `decline`.
+   *
+   * WHY ONE METHOD. These three used to disagree. `issueToken` ran the full
+   * chain; `accept` and `decline` ran `requireLiveParticipant`, which checked
+   * only that the actor's id appeared in `call_participant` -- no conversation
+   * membership, no communication matrix, no PD-6 relationship. So a parent
+   * whose relationship had been revoked could still ANSWER: the call flipped to
+   * ACTIVE, `answered_at` was stamped, and `end()` later recorded
+   * `outcome = 'answered'` for a call they could never have obtained a token
+   * for. No media leaked; the history simply lied.
+   *
+   * Three call sites sharing one chain is the fix. A future operation that
+   * joins a call should call this rather than re-deriving the checks.
+   *
+   * STARTING A CALL DOES NOT GUARANTEE IT MAY BE ANSWERED. Every check runs
+   * again here, against the state as it is now.
+   *
+   * `left_at` IS CHECKED, and was not before -- by `issueToken` either. A
+   * participant row survives leaving, so a participant who declined could still
+   * mint a media token. "Is a participant" and "is still on the call" are
+   * different questions; this asks the second.
+   */
+  private async authorizeJoin(callId: string, actorId: string) {
+    const now = new Date();
+    const actor = await this.conversations.requireActor(actorId);
+
+    const call = await this.prisma.call.findUnique({
+      where: { id: callId },
+      include: { participants: true },
+    });
+    if (!call) throw new CommError(CommErrorCode.CALL_NOT_FOUND, 'call not found', 404);
+    if (call.status === CallStatus.ENDED) {
+      throw new CommError(CommErrorCode.CALL_ALREADY_ENDED, 'this call has ended', 409);
+    }
+
+    const participant = call.participants.find((p) => p.actorId === actor.actorId);
+    if (!participant) {
+      throw new CommError(
+        CommErrorCode.CALL_NOT_A_PARTICIPANT,
+        'actor is not a participant of this call',
+      );
+    }
+    if (participant.leftAt !== null) {
+      throw new CommError(
+        CommErrorCode.CALL_PARTICIPANT_LEFT,
+        'this participant has already left the call',
+        409,
+      );
+    }
+
+    const conv = await this.conversations.requireConversation(call.conversationId);
+    const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
+
+    const participantActors: Actor[] = [];
+    for (const p of call.participants) {
+      const a = await this.identity.resolveActor(p.actorId);
+      if (a) participantActors.push(a);
+    }
+
+    const family = conv.familyId
+      ? await this.prisma.family.findUnique({
+          where: { id: conv.familyId },
+          select: { ownerId: true },
+        })
+      : null;
+
+    const decision = await this.authz.canCall(
+      actor,
+      conv,
+      membership,
+      participantActors,
+      now,
+      family?.ownerId ?? null,
+      // C-4: the call path runs the same admin-presence check as the message
+      // path. Calling is never more permissive than messaging.
+      await this.conversations.liveMembersOf(conv.id),
+      // PD-2: joining an existing call, which a parent may do. The call was
+      // already started by a teacher or an admin.
+      CallIntent.JOIN,
+      // PD-6. Re-resolved HERE, never inherited from the moment the call was
+      // created. A call is not a standing grant: if the learner was reassigned,
+      // the contact deactivated or the teacher offboarded in the seconds since
+      // `start`, this is refused.
+      await this.conversations.pairingAuthorizedAmong(call.participants),
+    );
+    if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+
+    return { actor, call, participant, conv, membership };
+  }
+
+  /**
+   * The participant check for ENDING a call. Deliberately weaker than
+   * authorizeJoin(), and deliberately still used here.
+   *
+   * Ending is cleanup, not a new authorization. If a revoked relationship could
+   * block `end`, a call whose learner was reassigned mid-conversation could
+   * never be hung up and would sit ACTIVE forever -- the stuck-call failure the
+   * whole calling effort exists to avoid. PD-6 makes the same choice in the
+   * database: the relationship is asserted when a pairing is created, never on
+   * a later UPDATE, which is what lets `end` always succeed.
+   *
+   * So this asks one question -- is the actor on this call at all -- and that is
+   * the right question for hanging up. Joining, answering and obtaining media
+   * go through authorizeJoin() instead.
+   */
   private async requireLiveParticipant(callId: string, actorId: string) {
     const call = await this.prisma.call.findUnique({
       where: { id: callId },
