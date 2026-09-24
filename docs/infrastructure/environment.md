@@ -137,7 +137,15 @@ credentials, the LiveKit API secret, or Core credentials.
 | `LIVEKIT_URL` | no | req | req | req |
 | `LIVEKIT_API_KEY` | **yes** | req | req | req |
 | `LIVEKIT_API_SECRET` | **yes** | req | req | req |
-| `LIVEKIT_TOKEN_TTL_SECONDS` | no | opt | req | req |
+
+> **Media-token lifetime is not an environment variable.** It is
+> `call.token_ttl_seconds` in `chat.config` (120 s), which is what
+> `CallService.issueToken` reads. A `LIVEKIT_TOKEN_TTL_SECONDS` variable used
+> to be declared here and set to 300 by both deploy workflows; no code ever
+> read it, so the deployed lifetime was always 120 s regardless. It was removed
+> on 2026-09-24 rather than wired up: a shorter token is the security property,
+> and a variable that claims to control something it does not is worse than no
+> variable at all.
 
 ### Core
 

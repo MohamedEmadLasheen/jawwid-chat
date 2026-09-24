@@ -39,9 +39,25 @@ export class LiveKitTokenIssuer implements MediaTokenIssuer {
   private readonly url = process.env.LIVEKIT_URL ?? '';
 
   async issue(grant: MediaGrant): Promise<{ token: string; url: string; expiresAt: string }> {
-    if (!this.apiKey || !this.apiSecret) {
+    // The URL is checked alongside the credentials, and was not before. A
+    // token minted against an empty URL is worse than a refusal: the client
+    // receives a perfectly valid credential and nowhere to present it, and the
+    // failure surfaces as a media timeout on a device instead of a
+    // configuration error on the server.
+    //
+    // NAMES ONLY in the message. A misconfiguration error must never quote the
+    // value it was unhappy with.
+    const missing = [
+      ['LIVEKIT_URL', this.url],
+      ['LIVEKIT_API_KEY', this.apiKey],
+      ['LIVEKIT_API_SECRET', this.apiSecret],
+    ]
+      .filter(([, value]) => !value)
+      .map(([name]) => name);
+
+    if (missing.length > 0) {
       throw new Error(
-        'LIVEKIT_API_KEY and LIVEKIT_API_SECRET must be set to issue call tokens',
+        `LiveKit is not configured: ${missing.join(', ')} must be set to issue call tokens`,
       );
     }
 
@@ -65,7 +81,12 @@ export class LiveKitTokenIssuer implements MediaTokenIssuer {
         roomList: false,
         canPublish: grant.canPublish,
         canSubscribe: true,
-        canPublishData: true,
+        // canPublishData is deliberately NOT granted. A voice call needs to
+        // publish audio and subscribe to audio; the data channel is a second
+        // messaging path, and this product already has one it authorizes
+        // itself (the Socket.IO gateway, behind AuthorizationService). Granting
+        // it here would open a channel between two participants that no
+        // Jawwid rule governs. Add it back only for a feature that needs it.
       },
     };
 

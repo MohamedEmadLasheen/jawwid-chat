@@ -537,6 +537,34 @@ CallHistoryDto { id, conversationId, type: 'direct'|'group', status: 'ringing'|'
 - Audit: `event_log` `call_started`. Realtime: `call.incoming { callId, conversationId, type, initiatorId, initiatorName }` to the conversation room. **`roomName` was removed from this payload 2026-09-24:** the room handle comes back from `POST /calls/:id/token` with the token that makes it usable, so broadcasting it added nothing and put a media handle in a fan-out.
 
 **POST /calls/:id/token** — EXISTS
+
+> **LiveKit (Phase 13).** The room is `jawwid-<conversationId>-<uuid>`, minted by
+> `CallService.start` and stored on `chat.call.room_name` (UNIQUE). The client
+> never names a room: the endpoint takes only the call id, and the room is read
+> from the call row, so both participants are placed in the same server-chosen
+> room and two calls in one conversation never share one.
+>
+> **Grant, in full:** `roomJoin`, `room`, `canPublish`, `canSubscribe`, and
+> `roomCreate: false`, `roomList: false`. Nothing else — no `roomAdmin`, no
+> `recorder`, no `hidden`, and **no `canPublishData`** (removed 2026-09-24: a
+> voice call needs audio, and a data channel would be a second messaging path
+> that no Jawwid rule governs). `sub` is the server-resolved actor id.
+>
+> **TTL** is `chat.config['call.token_ttl_seconds']` (120 s) and nothing else.
+> The `LIVEKIT_TOKEN_TTL_SECONDS` environment variable was removed.
+>
+> **Rooms are created implicitly by LiveKit** on first join and are reaped by
+> LiveKit when the last participant leaves; the API never calls LiveKit's
+> RoomService and needs no cleanup of its own. A room name is used once because
+> it carries a fresh uuid per call.
+>
+> **Webhooks are not implemented and are not required for media.** They become a
+> dependency only for `call.participant_joined` / `participant_left`, which mean
+> media presence and are deliberately unemitted until something has observed it
+> (Phase 10).
+>
+> **Not verified:** that LiveKit accepts these tokens. `scripts/infra/livekit-probe.sh`
+> asks the real service and needs credentials the repository does not contain.
 - Auth: required. Permission: `calls.accept`. Scope: recorded participant, call not ended, still a member, `canCall(intent = join)` re-evaluated — including the PD-6 relationship predicate, so a teacher–parent relationship revoked in Jawwid Core refuses the next join even mid-call. This is the JOIN path, so a parent is allowed here (**PD-2**). Response: `{ token, url, roomName, expiresAt }`; TTL `call.token_ttl_seconds` (120); `canPublish = !isSilent`.
 - Errors: `COMM.CALL_NOT_FOUND` 404 · `COMM.CALL_ALREADY_ENDED` 409 · `COMM.CALL_NOT_A_PARTICIPANT` 403 · matrix codes. Audit / Realtime: none.
 
