@@ -83,26 +83,39 @@ if [ -z "$TOKEN" ]; then
   exit 1
 fi
 
-RESPONSE="$(
-  curl -sS -o /tmp/livekit-probe-body.$$ -w '%{http_code}' \
-    --max-time 15 \
-    -X POST "$HTTP_URL/twirp/livekit.RoomService/ListRooms" \
-    -H "Authorization: Bearer $TOKEN" \
-    -H 'Content-Type: application/json' \
-    -d '{}' 2>/tmp/livekit-probe-err.$$
-)" || RESPONSE="000"
-
-BODY_FILE="/tmp/livekit-probe-body.$$"
-cleanup() { rm -f "$BODY_FILE" "/tmp/livekit-probe-err.$$"; }
+# Private by construction: 077 means the response body -- which lists room
+# names, and a room name identifies a conversation -- is readable only by the
+# user running the probe, for the moments it exists.
+umask 077
+BODY_FILE="$(mktemp -t livekit-probe-body.XXXXXX)"
+ERR_FILE="$(mktemp -t livekit-probe-err.XXXXXX)"
+cleanup() { rm -f "$BODY_FILE" "$ERR_FILE"; }
 trap cleanup EXIT
+
+# The bearer token goes in through curl's CONFIG ON STDIN, not on the command
+# line. `curl -H "Authorization: Bearer $TOKEN"` puts a live admin credential
+# into argv, where `ps` shows it to every other user on the host for as long as
+# the request runs. The token is short-lived, but "short-lived" is not "not
+# leaked", and a probe whose whole purpose is credential hygiene should not be
+# the thing that spills one.
+RESPONSE="$(
+  printf 'header = "Authorization: Bearer %s"\n' "$TOKEN" |
+    curl -sS -o "$BODY_FILE" -w '%{http_code}' \
+      --max-time 15 \
+      --config - \
+      -X POST "$HTTP_URL/twirp/livekit.RoomService/ListRooms" \
+      -H 'Content-Type: application/json' \
+      -d '{}' 2>"$ERR_FILE"
+)" || RESPONSE="000"
 
 case "$RESPONSE" in
   200)
     # Room count only -- names can identify a conversation.
-    COUNT="$(/usr/bin/python3 -c "
-import json,sys
+    COUNT="$(BODY_FILE="$BODY_FILE" /usr/bin/python3 -c "
+import json, os
 try:
-    print(len(json.load(open('$BODY_FILE')).get('rooms', []) or []))
+    with open(os.environ['BODY_FILE']) as fh:
+        print(len(json.load(fh).get('rooms', []) or []))
 except Exception:
     print('unknown')
 ")"

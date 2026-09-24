@@ -432,6 +432,145 @@ describe('Q — the secret never leaves the server', () => {
 });
 
 // -------------------------------------------------------------------------
+describe('control plane vs media plane — the two must never merge', () => {
+  /**
+   * There are two ways to authenticate to LiveKit, and conflating them is the
+   * mistake this block exists to prevent.
+   *
+   *   CONTROL PLANE   server credentials (LIVEKIT_API_KEY / _SECRET) sign a
+   *                   short-lived admin token for LiveKit's RoomService. Used
+   *                   by scripts/infra/livekit-probe.sh, an operator tool. The
+   *                   secret never leaves the server.
+   *
+   *   MEDIA PLANE     an authenticated participant receives a short-lived
+   *                   participant token whose only capability is joining one
+   *                   server-named room. This is what reaches a device.
+   *
+   * The probe needs `roomList` to ask "is this project reachable?". A
+   * participant must never have it: `roomList` enumerates every active room in
+   * the project, which is every call in progress across every family.
+   *
+   * These read the shell script because it IS the implementation -- there is no
+   * TypeScript to exercise. Static inspection is the honest tool here, and the
+   * point is that a future edit pulling the probe onto the participant path, or
+   * pushing roomList onto participants, fails a test rather than passing review.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { readFileSync } = require('node:fs') as typeof import('node:fs');
+  const PROBE = `${__dirname}/../../../../scripts/infra/livekit-probe.sh`;
+  const probeSource = () => readFileSync(PROBE, 'utf8');
+  const issuerSource = () =>
+    readFileSync(`${__dirname}/../../src/communication/calls/media-token.ts`, 'utf8');
+
+  it('the probe authenticates with SERVER credentials, not a participant token', () => {
+    const source = probeSource();
+
+    // It reads the infrastructure credentials directly...
+    expect(source).toMatch(/LIVEKIT_API_KEY/);
+    expect(source).toMatch(/LIVEKIT_API_SECRET/);
+    // ...and signs its own token with `sub` set to the API KEY, which is what
+    // makes it a service credential rather than a participant one.
+    expect(source).toMatch(/'iss':\s*key,\s*'sub':\s*key/);
+  });
+
+  it('the probe never touches the participant-token path', () => {
+    const source = probeSource();
+
+    for (const forbidden of [
+      'media-token',
+      'LiveKitTokenIssuer',
+      'issueToken',
+      'CallService',
+      '/calls/',
+      'call.token_ttl_seconds',
+    ]) {
+      expect(source).not.toContain(forbidden);
+    }
+  });
+
+  it('the probe only READS the control plane, and never joins a room', () => {
+    const source = probeSource();
+
+    // ListRooms is a read. CreateRoom, DeleteRoom, RemoveParticipant and the
+    // rest would be writes against live calls.
+    const calls = source.match(/RoomService\/[A-Za-z]+/g) ?? [];
+    expect(calls).toEqual(['RoomService/ListRooms']);
+
+    // And its own token grants nothing but listing.
+    expect(source).toMatch(/'video':\s*\{'roomList':\s*True\}/);
+    expect(source).not.toMatch(/roomJoin/);
+    expect(source).not.toMatch(/canPublish/);
+  });
+
+  it('the probe prints no credential, no token and no URL', () => {
+    const source = probeSource();
+    // Comment lines stripped: the script's own note explains the argv pitfall
+    // by quoting it, and prose warning against a pattern is not the pattern.
+    const code = source.replace(/^\s*#.*$/gm, '');
+
+    // The token reaches curl through a config on stdin precisely so it stays
+    // out of argv, where `ps` would show it to every other user on the host.
+    expect(code).toMatch(/--config -/);
+    expect(code).not.toMatch(/-H ["']Authorization: Bearer/);
+    expect(code).not.toMatch(/echo[^\n]*\$TOKEN/);
+    expect(code).not.toMatch(/echo[^\n]*\$LIVEKIT_API_SECRET/);
+    expect(code).not.toMatch(/echo[^\n]*\$LIVEKIT_URL/);
+    // The response body is written 0600 and removed on exit: room names
+    // identify conversations.
+    expect(code).toMatch(/umask 077/);
+    expect(code).toMatch(/trap cleanup EXIT/);
+  });
+
+  it('the participant issuer never mentions a control-plane capability', () => {
+    const source = issuerSource();
+
+    // roomList appears exactly once, as `roomList: false`. roomCreate likewise.
+    expect(source).toMatch(/roomList:\s*false/);
+    expect(source).toMatch(/roomCreate:\s*false/);
+    expect(source).not.toMatch(/roomList:\s*true/);
+    expect(source).not.toMatch(/roomCreate:\s*true/);
+
+    for (const capability of [
+      'roomAdmin', 'roomRecord', 'ingressAdmin', 'recorder', 'agent',
+      'canUpdateOwnMetadata', 'hidden',
+    ]) {
+      expect(source).not.toContain(capability);
+    }
+  });
+
+  it('there is exactly one participant-token implementation', () => {
+    // A second issuer is how a grant contract drifts: the strict one keeps
+    // passing its tests while something else mints the tokens.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { execSync } = require('node:child_process') as typeof import('node:child_process');
+    const issuers = execSync(
+      "grep -rln 'implements MediaTokenIssuer' src || true",
+      { cwd: `${__dirname}/../..`, encoding: 'utf8' },
+    )
+      .split('\n')
+      .filter(Boolean);
+
+    expect(issuers).toEqual(['src/communication/calls/media-token.ts']);
+  });
+
+  it('a participant token is not usable against the control plane', async () => {
+    // The end-to-end statement of the property: take a real participant token
+    // and confirm it carries nothing RoomService would honour.
+    const { callId } = await directCall();
+    const grant = videoGrant((await g.calls.issueToken(callId, s.parentId)).token);
+
+    expect(grant.roomList).toBe(false);
+    expect(grant.roomCreate).toBe(false);
+    for (const admin of ['roomAdmin', 'roomRecord', 'ingressAdmin', 'recorder', 'agent']) {
+      expect(grant[admin]).toBeUndefined();
+    }
+    // It can do one thing: join the single room it names.
+    expect(grant.roomJoin).toBe(true);
+    expect(grant.room).toEqual(expect.any(String));
+  });
+});
+
+// -------------------------------------------------------------------------
 describe('R — the boundary of what this suite can prove', () => {
   it('a signed token is not evidence that LiveKit works, and the probe is what asks', () => {
     // Deliberately a test, not just a comment: it puts the limitation in the
