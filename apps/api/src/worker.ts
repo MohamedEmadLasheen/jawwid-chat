@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { OutboxWorker } from './communication/outbox/outbox.worker';
 import { CallService } from './communication/calls/call.service';
+import { NotificationService } from './communication/notifications/notification.service';
 import { readBuildInfo } from './infra/build-info';
 
 /**
@@ -49,6 +50,7 @@ async function bootstrap(): Promise<void> {
   });
   const outbox = app.get(OutboxWorker);
   const calls = app.get(CallService);
+  const notifications = app.get(NotificationService);
 
   let running = true;
   let draining = false;
@@ -113,6 +115,21 @@ async function bootstrap(): Promise<void> {
         // The calls it did not expire are still ringing and still match.
         log.error(`call sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`);
       }
+    }
+
+    // Deliver the notifications the outbox scheduled.
+    //
+    // Nothing called this before, so a notification could be scheduled by the
+    // engine and then sit in chat.notification forever -- the pipeline was
+    // complete at both ends and disconnected in the middle. dispatchDue()
+    // claims each row with a conditional update, so running it on every replica
+    // at once cannot double-send.
+    try {
+      await notifications.dispatchDue();
+    } catch (e) {
+      // A row that failed to dispatch is rescheduled with backoff by the
+      // service itself; a throw here must not stop the drain loop.
+      log.error(`notification dispatch failed: ${e instanceof Error ? e.message : 'unknown error'}`);
     }
     if (!running) break;
     // Back off when there is nothing to do, so an idle deployment is not

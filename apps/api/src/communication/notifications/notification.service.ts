@@ -259,10 +259,79 @@ export class NotificationService {
     });
   }
 
-  async unregisterDevice(token: string): Promise<void> {
+  /**
+   * Retire one of the CALLER'S OWN device tokens.
+   *
+   * `actorId` is the authenticated actor, and the update is scoped to it. This
+   * used to take the token alone, so any authenticated caller who knew or
+   * guessed a token could deactivate it -- silencing that person's push,
+   * including the incoming-call push, from an account with no relationship to
+   * them at all. The mobile contract already said "never unregister another
+   * device's token"; the server did not enforce it.
+   *
+   * A token that is not the caller's matches nothing and the call is a no-op.
+   * Deliberately NOT a 404 or a 403: either would answer "does this token
+   * exist?" for an attacker enumerating tokens, and the honest response to
+   * "delete a thing that is not yours" is that nothing happened. The endpoint
+   * is idempotent for the owner too -- deleting twice is success both times.
+   */
+  async unregisterDevice(token: string, actorId: string): Promise<void> {
     await this.prisma.deviceToken.updateMany({
-      where: { token },
+      where: { token, actorId },
       data: { isActive: false },
+    });
+  }
+
+  /**
+   * Schedule a notification FROM ITS SEEDED RULE.
+   *
+   * chat.notification_rule already carries everything that governs delivery --
+   * the template, the channel, the priority, whether quiet hours apply, an
+   * offset, and an `enabled` switch. Hard-coding any of that at a call site
+   * would make the row decorative and would mean an administrator disabling a
+   * rule changed nothing.
+   *
+   * So the rule is read and obeyed. `incoming_call` is `critical` and
+   * quiet-hours exempt because the row says so, not because this function
+   * knows what a call is.
+   *
+   * A missing or disabled rule is a skip, not an error: notifications are a
+   * side effect of the lifecycle and must never fail the operation that caused
+   * them.
+   */
+  async scheduleByRule(
+    ruleKey: string,
+    input: {
+      recipientId: string;
+      dedupeKey: string;
+      locale?: string;
+      familyId?: string | null;
+      conversationId?: string | null;
+      variables?: Record<string, unknown>;
+      now?: Date;
+    },
+  ): Promise<string | null> {
+    const rule = await this.prisma.notificationRule.findUnique({ where: { key: ruleKey } });
+    if (!rule || !rule.enabled) {
+      this.log.debug(`notification rule ${ruleKey} is missing or disabled; nothing scheduled`);
+      return null;
+    }
+
+    const base = input.now ?? new Date();
+    return this.schedule({
+      dedupeKey: input.dedupeKey,
+      ruleKey: rule.key,
+      templateKey: rule.templateKey,
+      eventType: rule.eventType,
+      recipientId: input.recipientId,
+      locale: input.locale,
+      channel: rule.channel,
+      priority: rule.priority,
+      familyId: input.familyId ?? null,
+      conversationId: input.conversationId ?? null,
+      variables: input.variables,
+      scheduledAt: new Date(base.getTime() + rule.offsetSeconds * 1000),
+      respectQuietHours: rule.respectQuietHours,
     });
   }
 }

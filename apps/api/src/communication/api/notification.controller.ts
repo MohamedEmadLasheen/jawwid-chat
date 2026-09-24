@@ -18,9 +18,13 @@ export class NotificationController {
     return { ok: true };
   }
 
+  /**
+   * Retire one of your OWN device tokens. Scoped to the authenticated actor:
+   * a token belonging to anyone else matches nothing and nothing happens.
+   */
   @Delete('devices/:token')
-  async unregister(@Param('token') token: string) {
-    await this.notifications.unregisterDevice(token);
+  async unregister(@ActorId() actorId: string, @Param('token') token: string) {
+    await this.notifications.unregisterDevice(token, actorId);
     return { ok: true };
   }
 
