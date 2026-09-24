@@ -16,15 +16,15 @@ Legend: ✅ done and verified · 🟡 partial · ❌ not done · ⛔ blocked
 | | Item | State | Note |
 |---|---|---|---|
 | ⛔ | Production environment exists | ❌ | No hosting account, no domain. BLOCKER-1 |
-| ✅ | Repository hosted, CI executable | ✅ | Remote live; CI runs green on a runner. BLOCKER-2 closed |
-| ✅ | Application entrypoint | ✅ | `main.ts` bootstraps Nest and listens. BLOCKER-4 closed |
+| ✅ | Repository hosted, CI executable | ✅ | Remote live; CI runs on every push and PR, green on a GitHub-hosted runner. BLOCKER-2 closed |
+| ✅ | Application entrypoint | ✅ | `apps/api/src/main.ts` and `apps/api/src/worker.ts` both exist. BLOCKER-4 closed |
 | ⛔ | Secrets configured | ❌ | No secret store exists |
 | ⛔ | TLS enabled | ❌ | No domain |
 | 🟡 | Database configured | 🟡 | Local ✅. No managed instance. Authority locked to the SQL migrations; reconciliation in progress |
 | ❌ | Database backup configured | ❌ | Provider backups need a provider. `pg_dump` path ✅ |
 | ✅ | **Restore tested** | ✅ | Drill executed 2026-09-05: 0 errors, 31 tables, 57 config rows |
 | 🟡 | Redis configured | 🟡 | Local ✅, `appendonly` + `noeviction`. No managed instance |
-| ❌ | Workers configured | ❌ | `dist/worker.js` does not exist (AI #2) |
+| 🟡 | Workers configured | 🟡 | Code ✅ — `src/worker.ts` drains the outbox, same image as the API (ADR-004). No worker process runs anywhere |
 | 🟡 | Object storage configured | 🟡 | MinIO ✅, private bucket ✅. No production bucket |
 | ❌ | Push configured | ❌ | No Firebase or Apple credentials |
 | ❌ | LiveKit configured | ❌ | No project |
@@ -96,12 +96,13 @@ deployed anywhere, and the release step of both deployment workflows fails on
 purpose rather than pretending (ADR-003).
 
 **BLOCKER-2 · No git remote. — ✅ CLOSED 2026-09-24.** The repository is hosted
-at `MohamedEmadLasheen/jawwid-chat` and CI executes on GitHub-hosted runners,
-green on `main`. Claims about CI are now claims about observed behaviour. CD
-still cannot be judged this way: `Deploy staging` has failed on all 21 recorded
-runs, and the deploy job was skipped on every run because the build job failed
-first. The release stub has therefore never executed. That is BLOCKER-1, not
-this one.
+at `MohamedEmadLasheen/jawwid-chat`, and CI executes on GitHub-hosted runners on
+every push and pull request, green on `main`. Claims about CI are now claims
+about observed behaviour. CD still cannot be judged this way: `Deploy staging`
+has failed on all 21 recorded runs, and the deploy job was skipped on every run
+because the build job failed first — so the release stub has never executed, and
+would refuse on purpose (ADR-003) if it ever did. What remains unexecuted is the
+*deployment*, not the pipeline. That is BLOCKER-1, not this one.
 
 **BLOCKER-3 · No observability backend.** No error tracking, metrics, dashboards
 or alerting. Detection today means a person noticing. Owner: AI #7, once
@@ -109,8 +110,10 @@ BLOCKER-1 clears.
 
 **BLOCKER-4 · The API has no entrypoint. — ✅ CLOSED.** `apps/api/src/main.ts`
 exists: it constructs the Nest application from `AppModule` and listens on the
-configured port. The API can start. Nothing about this closes BLOCKER-1 — the
-API can start, but there is still nowhere to start it.
+configured port. `apps/api/src/worker.ts` is the second entrypoint, draining the
+outbox from the same image under a different command (ADR-004). Both are
+exercised by the test suites. Nothing about this closes BLOCKER-1 — the API can
+start, but there is still nowhere to start it.
 
 ## High risks
 
@@ -142,15 +145,19 @@ Cross-referenced: `docs/product-operations/shared-working-tree-risk.md`.
 
 ## What would make this green
 
-1. Provision hosting, then create the GitHub `staging` environment and configure
-   its variables and secrets (BLOCKER-1; ordered sequence under **Staging:
-   CODE-CLOSED / INFRA-BLOCKED**).
-2. Write `worker.ts`; `dist/worker.js` still does not exist. (`main.ts` is done —
-   BLOCKER-4 closed.)
-3. Land the database reconciliation (RISK-2).
-4. Fill in the release step in both deployment workflows.
-5. Deploy to staging; run the smoke test; run a restore drill against staging.
-6. Provision observability and wire Sentry and OTLP (BLOCKER-3).
-7. Prove multi-instance realtime on staging (RISK-4).
-8. Define an on-call rotation and escalation path.
-9. Re-run this checklist against the real environment rather than against files.
+1. ~~Provision a git remote~~ — done; CI runs and is green (BLOCKER-2 closed).
+2. ~~Write `main.ts` and `worker.ts`~~ — done (BLOCKER-4 closed).
+3. **Choose a provider** (ADR-003 vs PRD §12.3 remains unresolved) and provision
+   hosting, then create the GitHub `staging` environment and configure its
+   variables and secrets (BLOCKER-1; ordered sequence under **Staging:
+   CODE-CLOSED / INFRA-BLOCKED**). Verify the BYPASSRLS capability first —
+   `scripts/db/preflight-role-capability.sh` answers it against a trial instance
+   without migrating anything.
+4. Land the database reconciliation (RISK-2).
+5. Fill in the release step in both deployment workflows, together with the IaC
+   for the chosen provider (ADR-009).
+6. Deploy to staging; run the smoke test; run a restore drill against staging.
+7. Provision observability and wire Sentry and OTLP (BLOCKER-3).
+8. Prove multi-instance realtime on staging (RISK-4).
+9. Define an on-call rotation and escalation path.
+10. Re-run this checklist against the real environment rather than against files.
