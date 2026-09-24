@@ -80,6 +80,9 @@ jobs:
           REALTIME_URL: ${{ vars.STAGING_REALTIME_URL }}
         run: |
           test -n "$API_BASE_URL" || { echo "::error::vars.STAGING_API_BASE_URL is not set"; exit 1; }
+          # Both are compiled into the bundle. Unguarded, a missing realtime URL
+          # builds and ships a staging Admin Web that silently cannot connect.
+          test -n "$REALTIME_URL" || { echo "::error::vars.STAGING_REALTIME_URL is not set"; exit 1; }
           IMAGE="${REGISTRY}/${GITHUB_REPOSITORY,,}/admin-web"
           # These values are compiled into the browser bundle, so the image is
           # environment-specific and is never promoted to production.
