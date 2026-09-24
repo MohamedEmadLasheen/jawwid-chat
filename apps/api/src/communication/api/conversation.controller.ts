@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
 import { ConversationService } from '../conversations/conversation.service';
 import { MessageService } from '../messages/message.service';
+import { CallService } from '../calls/call.service';
 import { toConversationDto } from '../contracts/dto';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
@@ -19,6 +20,7 @@ export class ConversationController {
   constructor(
     private readonly conversations: ConversationService,
     private readonly messages: MessageService,
+    private readonly calls: CallService,
   ) {}
 
   /**
@@ -100,6 +102,31 @@ export class ConversationController {
     return toConversationDto(conversation, members, {
       unreadCount: await this.messages.unreadCount(id, actorId),
     });
+  }
+
+  /**
+   * May the caller start a call in this conversation? ADVISORY.
+   *
+   * The interface needs this because it may not work it out for itself:
+   * `screens/call.md` section 4 requires the call affordance to be ABSENT
+   * where the backend does not authorize the pairing, and forbids the client
+   * inferring which pairings those are. Since PD-6 that set is data.
+   *
+   * NOT AN AUTHORIZATION. `canCall: true` is this instant's answer and does not
+   * promise that the POST which follows will succeed -- `POST /calls` decides
+   * again, from scratch, and is the only thing that authorizes a call. A
+   * relationship revoked in between is refused there, as it should be.
+   *
+   * Read access is established first, so this cannot be used to probe a
+   * conversation the caller cannot open: that case returns the read path's own
+   * error, not a capability answer.
+   *
+   * Response: `{ canCall, code }` -- the code a stable COMM.* value or null,
+   * and nothing else. No ids, no names, no relationship detail.
+   */
+  @Get(':id/call-capability')
+  async callCapability(@ActorId() actorId: string, @Param('id') id: string) {
+    return this.calls.callCapability(id, actorId);
   }
 
   /** Membership mutations are staff-only, and always carry a reason. */

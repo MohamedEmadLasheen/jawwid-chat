@@ -146,6 +146,7 @@ One row per distinct (method, path). Paths are relative to `/api/v1` unless mark
 | GET | `/conversations/:id` | API, Flutter | RECONCILE | Must include `members[]` (promised by `mobile-contract.md`, not passed by the controller). Side-effect upsert removed. §3.4 |
 | POST | `/conversations/:id/members` | API | RECONCILE | `reason` must be validated (400) rather than failing at the DB NOT NULL. §3.4 |
 | POST | `/conversations/:id/preferences` | API, Flutter | EXISTS | §3.4 |
+| GET | `/conversations/:id/call-capability` | API, Flutter | **EXISTS (new 2026-09-24)** | Advisory: may the caller START a call here. Same `canCall` as `POST /calls`; never a grant. §3.4 |
 | GET | `/conversations/:conversationId/messages` | API, Flutter | EXISTS | seq pagination unchanged. §3.5 |
 | POST | `/conversations/:conversationId/messages` | API, Flutter | EXISTS | Idempotent on `clientMessageId`. §3.5 |
 | POST | `/conversations/:conversationId/messages/attachments/authorize` | API | RECONCILE | Checks `canRead` today; Phase 1 checks `canSend`. §3.6 |
@@ -427,6 +428,15 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 - Auth: required. Permission: `conversations.read`. Scope: `canRead` — contact / teacher must be a live member; family-facing staff any conversation.
 - Response today: `ConversationDto` carrying `learner` and `unreadCount`, but **without `members`** — the controller calls `toConversationDto(conv)` with no member list, although `docs/communication/mobile-contract.md` promises `members` on detail responses and `lib/core/data/http/http_group_repository.dart` depends on it. **Phase 1: return `members: ConversationMemberDto[]` (live members).** The authorization check is performed via `setPreferences(id, actorId, {})`, which also upserts an empty `conversation_participant_state` row as a side effect; Phase 1 replaces it with a pure `canRead` check.
 - Errors: `COMM.CONVERSATION_NOT_FOUND` 404 · `COMM.NOT_CONVERSATION_MEMBER` 403 · `COMM.ROLE_CANNOT_MESSAGE_FAMILY` 403 · `COMM.ACTOR_INACTIVE` 403.
+
+**GET /conversations/:id/call-capability** — EXISTS (added 2026-09-24, `conversation.controller.ts#callCapability`)
+- Auth: required. Permission: `conversations.read` **then** the call decision. Scope: `canRead` establishes access to the conversation first; only then is `canCall` evaluated. A caller who fails `canRead` receives that refusal, so this cannot be used to probe a conversation they could not open.
+- Response: `{ canCall: boolean, code: string | null }`. `code` is a stable `COMM.*` value when `canCall` is false, `null` when true. **Nothing else** — no identifier, no display name, no relationship detail, no prose reason.
+- **Advisory, not an authorization.** It is the policy's answer at that instant and does not promise the next `POST /calls` will succeed; a relationship revoked in between is refused there. `POST /calls` re-decides from scratch and remains the only thing that authorizes a call. Not cached, client-side or server-side.
+- **One policy.** It calls `CallService.callCapability`, which shares `decideInitiate` with `CallService.start` — same participant resolution, same family owner, same live members, same PD-6 pairing, same `AuthorizationService.canCall` with `CallIntent.INITIATE`. There is no second call-authorization path; `call-capability.spec.ts` asserts the two agree case for case, including the refusal code.
+- Why it exists: `docs/design/screens/call.md` §4 requires the call affordance to be **absent** where the backend does not authorize the pairing, and forbids the client inferring which pairings those are. Since PD-6 that set is data, and a conversation's existence proves only that the relationship held when it was created.
+- Errors (from the read gate): `COMM.CONVERSATION_NOT_FOUND` 404 · `COMM.NOT_CONVERSATION_MEMBER` 403 · `COMM.ROLE_CANNOT_MESSAGE_FAMILY` 403 · `COMM.ACTOR_INACTIVE` 403 · `COMM.UNKNOWN_ACTOR` 403.
+- Audit: none. Read-only; it creates no call and writes no row.
 
 **POST /conversations/:id/members** — EXISTS → RECONCILE (`setMembership`)
 - Auth: required. Permission: `conversations.manage`. Scope: family-facing staff (`canManageMembership`); Phase 1 additionally requires the conversation's family in scope.

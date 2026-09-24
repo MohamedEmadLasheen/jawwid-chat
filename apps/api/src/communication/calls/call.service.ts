@@ -1,8 +1,10 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
+import type { Conversation, ConversationMember } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService, CallIntent } from '../../platform/authorization.service';
+import type { Decision } from '../../platform/authorization.service';
 import { AppConfigService } from '../../platform/app-config.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
 import { AUDIT_SERVICE, IDENTITY_SERVICE, MEDIA_TOKEN_ISSUER } from '../../platform/tokens';
@@ -53,39 +55,11 @@ export class CallService {
     const conv = await this.conversations.requireConversation(conversationId);
     const membership = await this.conversations.membershipOf(conv.id, initiator.actorId);
 
-    const members = await this.prisma.conversationMember.findMany({
-      where: { conversationId: conv.id, leftAt: null },
-    });
-
-    const participantActors: Actor[] = [];
-    for (const m of members) {
-      const a = await this.identity.resolveActor(m.actorId);
-      if (a && a.isActive && !m.isSilent) participantActors.push(a);
-    }
-
-    const family = conv.familyId
-      ? await this.prisma.family.findUnique({
-          where: { id: conv.familyId },
-          select: { ownerId: true },
-        })
-      : null;
-
-    const decision = await this.authz.canCall(
+    const { decision, participantActors } = await this.decideInitiate(
       initiator,
       conv,
       membership,
-      participantActors,
       now,
-      family?.ownerId ?? null,
-      // C-4: the call path runs the same admin-presence check as the message
-      // path. Calling is never more permissive than messaging.
-      await this.conversations.liveMembersOf(conv.id),
-      // PD-2: this is the START path. A parent is refused here and allowed on
-      // the join path below.
-      CallIntent.INITIATE,
-      // PD-6: the teacher<->parent relationship, resolved from the conversation
-      // membership rather than from anything the caller sent.
-      await this.conversations.pairingAuthorizedAmong(members),
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
@@ -137,6 +111,107 @@ export class CallService {
 
       return { callId: call.id, roomName };
     });
+  }
+
+  /**
+   * MAY THIS ACTOR START A CALL HERE? The one place that question is answered.
+   *
+   * Extracted from start() so callCapability() can ask it without a second
+   * implementation appearing beside it. Both callers resolve from the same
+   * sources -- participants from conversation membership, the family owner from
+   * the family, live members from the conversation, the PD-6 pairing from
+   * RelationshipService -- and reach the same AuthorizationService.canCall.
+   *
+   * It RESOLVES and DECIDES; it does not act. What a denial means is the
+   * caller's business, which is why start() throws and callCapability()
+   * reports.
+   */
+  private async decideInitiate(
+    initiator: Actor,
+    conv: Conversation,
+    membership: ConversationMember | null,
+    now: Date,
+  ): Promise<{ decision: Decision; participantActors: Actor[] }> {
+    const members = await this.prisma.conversationMember.findMany({
+      where: { conversationId: conv.id, leftAt: null },
+    });
+
+    const participantActors: Actor[] = [];
+    for (const m of members) {
+      const a = await this.identity.resolveActor(m.actorId);
+      if (a && a.isActive && !m.isSilent) participantActors.push(a);
+    }
+
+    const family = conv.familyId
+      ? await this.prisma.family.findUnique({
+          where: { id: conv.familyId },
+          select: { ownerId: true },
+        })
+      : null;
+
+    const decision = await this.authz.canCall(
+      initiator,
+      conv,
+      membership,
+      participantActors,
+      now,
+      family?.ownerId ?? null,
+      // C-4: the call path runs the same admin-presence check as the message
+      // path. Calling is never more permissive than messaging.
+      await this.conversations.liveMembersOf(conv.id),
+      // PD-2: this is the START path. A parent is refused here and allowed on
+      // the join path.
+      CallIntent.INITIATE,
+      // PD-6: the teacher<->parent relationship, resolved from the conversation
+      // membership rather than from anything the caller sent.
+      await this.conversations.pairingAuthorizedAmong(members),
+    );
+
+    return { decision, participantActors };
+  }
+
+  /**
+   * Whether the caller could start a call here. ADVISORY, for the interface.
+   *
+   * WHY IT EXISTS. `screens/call.md` section 4 requires the call affordance to
+   * render only where the backend authorizes the pairing, and to be ABSENT
+   * rather than disabled otherwise -- "the client must never infer it". Since
+   * PD-6 the set of authorized pairs is data, and the client cannot derive it:
+   * a teacher<->parent conversation existing proves the relationship held when
+   * it was CREATED, not that it holds now. Revocation leaves the conversation
+   * and denies the call, which is precisely the case an inferred answer gets
+   * wrong.
+   *
+   * IT IS NOT A GRANT. `true` is what the policy says at this instant, and the
+   * instant passes -- a relationship can be revoked between this answer and the
+   * POST that follows it. start() decides again from scratch and remains the
+   * only thing that authorizes a call. Nothing here is cached, for the same
+   * reason.
+   *
+   * NOT AN ORACLE. Read access is established first, through the same canRead
+   * the conversation read path uses, and a caller who fails it gets that path's
+   * error rather than a capability answer. So this says nothing about a
+   * conversation the caller could not already open.
+   *
+   * The code is a stable COMM.* value and nothing else: no learner, teacher,
+   * contact, family or organization id, no relationship detail, no prose. A
+   * denial says which rule refused, never who or why.
+   */
+  async callCapability(
+    conversationId: string,
+    actorId: string,
+  ): Promise<{ canCall: boolean; code: string | null }> {
+    const actor = await this.conversations.requireActor(actorId);
+    const conv = await this.conversations.requireConversation(conversationId);
+    const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
+
+    const readable = this.authz.canRead(actor, conv, membership);
+    if (!readable.allowed) throw new CommError(readable.code, readable.reason);
+
+    const { decision } = await this.decideInitiate(actor, conv, membership, new Date());
+    return decision.allowed
+      ? { canCall: true, code: null }
+      : { canCall: false, code: decision.code };
   }
 
   /**
