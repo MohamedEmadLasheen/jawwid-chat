@@ -15,7 +15,7 @@ in it invents a Jawwid Core field, event or payload.
 | Link | State |
 |---|---|
 | Core teacher identity | **Does not exist.** Jawwid Core (`second-school`) has no teacher table, and its own PRD lists live classes as a V1 non-goal. PRD v0.1 §12.4 lists teachers as a synced entity, so Core must gain one. |
-| Core identifier | **Unratified.** `core_teacher_id uuid` is a proposal I wrote; the PRD says only that each entity "carries an `external_id`" — no name, no type. |
+| Core identifier | **Settled (20260924110000).** The name is `core_teacher_id`; the type is `text`, opaque. Jawwid Core is Node/Express/Mongoose on MongoDB (`MohamedEmadLasheen/jawwid`, `server/`), so its identifiers are MongoDB ObjectIds and never UUIDs. The earlier `uuid` proposal in this row was wrong and would have failed on the first event. See `core-integration-contract.md` §4, "`core_id` — the identifier type". The rest of this row's chain is unaffected: the type was never what blocked teacher sign-in. |
 | `chat.teacher` record | **Exists**, populated by `chat.ingest_core_teacher`. |
 | `chat.teacher.account_id` | **Exists, never written.** Nothing anywhere assigns it — verified by search. |
 | `chat.account` | **Cannot hold a teacher.** `kind` is `CHECK (kind IN ('staff','family'))`. There is no `'teacher'`. |

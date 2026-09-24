@@ -149,7 +149,8 @@ model ClassSession {
   organizationId     String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   id                 String   @id @default(uuid()) @db.Uuid
   /// The occurrence identity. Unique, so a redelivered Core event updates in place.
-  coreClassSessionId String   @unique @map("core_class_session_id") @db.Uuid
+  /// Opaque external text: Jawwid Core issues MongoDB ObjectIds, not UUIDs.
+  coreClassSessionId String   @unique @map("core_class_session_id")
   learnerId          String   @map("learner_id") @db.Uuid
   learner            Learner  @relation(fields: [learnerId], references: [id])
   teacherId          String?  @map("teacher_id") @db.Uuid
@@ -859,8 +860,9 @@ model Teacher {
   accountId      String?   @unique @map("account_id") @db.Uuid
   account        Account?  @relation(fields: [accountId], references: [id])
   name           String
-  /// Set when Jawwid Core gains a teacher entity.
-  coreTeacherId  String?   @unique @map("core_teacher_id") @db.Uuid
+  /// Set when Jawwid Core gains a teacher entity. Opaque external text
+  /// (MongoDB ObjectId), never a UUID.
+  coreTeacherId  String?   @unique @map("core_teacher_id")
   syncedAt       DateTime? @map("synced_at") @db.Timestamptz
   isActive       Boolean   @default(true) @map("is_active")
   leftAt         DateTime? @map("left_at") @db.Timestamptz

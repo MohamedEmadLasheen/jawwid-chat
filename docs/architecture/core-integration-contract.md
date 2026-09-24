@@ -127,42 +127,77 @@ plus one `case` arm — see ADR-003.
 Flat by design. **This boundary must not grow knowledge of Core's internal
 schema**; a change inside Core is a change in Core's transformer, not here.
 
+### `core_id` — the identifier type
+
+`core_id` is **an opaque non-empty string**, and every `core_*_id` field below
+is one. It is NOT a uuid, and Chat neither parses, validates the shape of,
+normalises the case of, nor generates one.
+
+Jawwid Core is a Node/Express/Mongoose application on MongoDB, so in practice a
+`core_id` is a MongoDB ObjectId: 24 lowercase hexadecimal characters, e.g.
+`"507f1f77bcf86cd799439011"`. Chat does not depend on that and would accept a
+different shape without change — which is the point of calling it opaque.
+
+These fields were specified as `uuid` until 20260924110000, on the assumption
+that Core was a Supabase/PostgreSQL system. It is not. Under the old typing
+`'507f1f77bcf86cd799439011'::uuid` raised `invalid input syntax for type uuid`,
+so the first event Core ever sent would have failed, and so would every event
+after it. The columns behind these fields are now `text`.
+
+The rule the boundary keeps, either side of it:
+
+| identity | type | who mints it |
+|---|---|---|
+| Chat-owned (`chat.family.id`, `chat.learner.id`, …) | `uuid` | Chat |
+| Core-owned (`core_*_id`) | `text`, opaque | Jawwid Core |
+
+Two consequences worth stating, because both used to come free with `uuid`:
+
+- **Comparison is now case-sensitive.** `uuid` canonicalised case; `text` does
+  not. Core emits `ObjectId#toString()`, always lowercase, so this does not
+  bite in practice — but Chat does not normalise, because normalising an opaque
+  external identifier is exactly the reinterpretation this boundary avoids.
+- **Blank is not a valid identifier.** `''::uuid` used to raise. Every ingest
+  function now reads its Core id through `nullif(btrim(...), '')`, and matching
+  check constraints back that up at the table, so a blank or whitespace-only id
+  is still "missing" and still refused rather than becoming a usable key.
+
 ```jsonc
 // parent.upserted
-{ "core_parent_id": uuid, "display_name": string, "language": "ar" | "en" }
+{ "core_parent_id": core_id, "display_name": string, "language": "ar" | "en" }
 
-// student.upserted            // student.deactivated: { "core_child_id": uuid }
-{ "core_child_id": uuid, "core_parent_id": uuid, "name": string,
+// student.upserted            // student.deactivated: { "core_child_id": core_id }
+{ "core_child_id": core_id, "core_parent_id": core_id, "name": string,
   "level": string?, "schedule_ref": string?, "next_class_at": timestamptz?,
   "last_attended_at": timestamptz?, "consecutive_absences": int? }
 
-// teacher.upserted            // teacher.deactivated: { "core_teacher_id": uuid }
-{ "core_teacher_id": uuid, "display_name": string }
+// teacher.upserted            // teacher.deactivated: { "core_teacher_id": core_id }
+{ "core_teacher_id": core_id, "display_name": string }
 
-// enrollment.upserted         // enrollment.ended: { "core_enrollment_id": uuid }
-{ "core_enrollment_id": uuid, "core_child_id": uuid, "core_teacher_id": uuid,
+// enrollment.upserted         // enrollment.ended: { "core_enrollment_id": core_id }
+{ "core_enrollment_id": core_id, "core_child_id": core_id, "core_teacher_id": core_id,
   "subject": string?, "status": "active" | "ended" | "cancelled",
   "started_at": timestamptz?, "ended_at": timestamptz? }
 
-// class_session.upserted      // class_session.cancelled: { "core_class_session_id": uuid }
-{ "core_class_session_id": uuid, "core_child_id": uuid, "core_teacher_id": uuid?,
+// class_session.upserted      // class_session.cancelled: { "core_class_session_id": core_id }
+{ "core_class_session_id": core_id, "core_child_id": core_id, "core_teacher_id": core_id?,
   "starts_at": timestamptz, "ends_at": timestamptz?, "join_url": string?,
   "status": "scheduled" | "done" | "cancelled" | "rescheduled" }
 
 // attendance.upserted
-{ "core_class_session_id": uuid,
+{ "core_class_session_id": core_id,
   "outcome": "class_attended" | "class_missed",   // Chat's existing vocabulary
   "recorded_at": timestamptz? }
 
 // subscription.upserted
-{ "core_subscription_id": uuid, "core_parent_id": uuid, "plan": string?,
+{ "core_subscription_id": core_id, "core_parent_id": core_id, "plan": string?,
   "status": string,                    // Core's own vocabulary; translated on the way in
   "ends_at": timestamptz?, "renewal_due_at": timestamptz?,
   "last_payment_status": "succeeded" | "failed" | "refunded" | null,
   "last_payment_at": timestamptz? }
 
 // payment.upserted
-{ "core_payment_id": uuid, "core_parent_id": uuid, "core_subscription_id": uuid?,
+{ "core_payment_id": core_id, "core_parent_id": core_id, "core_subscription_id": core_id?,
   "amount": decimal?, "currency": string?,
   "status": "due" | "paid" | "failed" | "refunded" | "unknown",
   "due_at": timestamptz?, "paid_at": timestamptz? }
