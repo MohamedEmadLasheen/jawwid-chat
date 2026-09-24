@@ -28,6 +28,7 @@ import { QuietHoursService } from '@communication/notifications/quiet-hours.serv
 import { LoggingPushProvider } from '@communication/notifications/push.provider';
 import { CallService } from '@communication/calls/call.service';
 import { LiveKitTokenIssuer } from '@communication/calls/media-token';
+import { CoreIngestService } from '@communication/core/core-ingest.service';
 
 process.env.DATABASE_URL ??= 'postgres://postgres:postgres@localhost:55433/jawwid_chat_int';
 
@@ -65,9 +66,10 @@ export function buildGraph() {
   const centre = new NotificationCenterService(prisma, realtime);
   const recipients = new RecipientResolver(prisma, identity);
   const announcements = new AnnouncementService(prisma, notifications, recipients, audit);
-  const classSchedule = new ClassScheduleService(prisma, notifications, recipients, audit);
+  const classSchedule = new ClassScheduleService(prisma, notifications, recipients, outbox, audit);
   const reminders = new ReminderService(prisma, notifications);
   const retention = new RetentionService(prisma);
+  const coreIngest = new CoreIngestService(prisma, outbox);
   // Presence is Redis-backed. The integration graph is deliberately
   // Redis-free, so the worker gets a stub that always answers "not viewing" --
   // the safe direction, which pushes rather than suppressing. The suppression
@@ -76,7 +78,7 @@ export function buildGraph() {
     isViewing: async (_actorId: string, _conversationId: string) => false,
   } as unknown as PresenceService;
   const outboxWorker = new OutboxWorker(
-    prisma, notifications, recipients, presence, realtime, identity,
+    prisma, notifications, recipients, presence, realtime, identity, classSchedule,
   );
   const calls = new CallService(
     prisma, authz, conversations, outbox, config, identity, audit, new LiveKitTokenIssuer(),
@@ -87,6 +89,7 @@ export function buildGraph() {
     attachments, notifications, reminders, templates, quietHours, calls,
     deliveries, preferences, centre, recipients, announcements, classSchedule,
     push, realtime, outbox, outboxWorker, presence, audit, config, retention,
+    coreIngest,
   };
 }
 
@@ -164,6 +167,7 @@ export async function truncate(prisma: PrismaService): Promise<void> {
              chat.notification_preference, chat.announcement,
              chat.device_token, chat.quiet_hours, chat.outbox_event,
              chat.conversation_participant_state, chat.conversation_member,
+             chat.class_attendance, chat.class_session, chat.core_event,
              chat.message, chat.conversation, chat.learner,
              chat.contact, chat.family, chat.staff, chat.teacher,
              chat.event_log, chat.audit_log

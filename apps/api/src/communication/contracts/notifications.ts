@@ -117,6 +117,7 @@ export const NotificationType = {
   CLASS_SCHEDULED: 'CLASS_SCHEDULED',
   CLASS_SCHEDULE_CHANGED: 'CLASS_SCHEDULE_CHANGED',
   CLASS_CANCELLED: 'CLASS_CANCELLED',
+  CLASS_MISSED: 'CLASS_MISSED',
 
   ACADEMY_ANNOUNCEMENT: 'ACADEMY_ANNOUNCEMENT',
   IMPORTANT_ANNOUNCEMENT: 'IMPORTANT_ANNOUNCEMENT',
@@ -357,6 +358,38 @@ export const NOTIFICATION_REGISTRY: Readonly<
     groupable: false,
     entityType: EntityType.LEARNER,
     templateKey: 'class_cancelled',
+    deepLink: classLink,
+  }),
+
+  /**
+   * The child was not in their class.
+   *
+   * ONLY THE MISS. `class_attended` is projected and produces no notification:
+   * "your child attended their class" is the normal case, and a platform that
+   * announces the normal case teaches parents to swipe everything away --
+   * including the one that matters. This is the one that matters.
+   *
+   * NOT essential, deliberately, and this is the one judgement call in the
+   * entry. A cancelled class is essential because the parent has to change
+   * their afternoon; a missed class has already happened and nothing they do in
+   * the next ten minutes changes it. So it sits in `classes`, which a parent
+   * may mute, next to the reminders -- and the registry test that every
+   * optional category has at least one muteable type still holds.
+   *
+   * Content on the lock screen, because "Ahmed missed his class" is the whole
+   * message and a knock on the door saying "you have a notification" would send
+   * a worried parent into the app to find out what.
+   */
+  [NotificationType.CLASS_MISSED]: define({
+    type: NotificationType.CLASS_MISSED,
+    category: NotificationCategory.CLASSES,
+    priority: NotificationPriority.HIGH,
+    essential: false,
+    pushCarriesContent: true,
+    bypassQuietHours: false,
+    groupable: false,
+    entityType: EntityType.LEARNER,
+    templateKey: 'class_missed',
     deepLink: classLink,
   }),
 

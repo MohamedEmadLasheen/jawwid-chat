@@ -3,12 +3,37 @@ import { PrismaService } from '../../platform/prisma.service';
 import { IDENTITY_SERVICE, REALTIME_PUBLISHER } from '../../platform/tokens';
 import type { IdentityService } from '../../platform/identity.service';
 import type { RealtimePublisher } from '../realtime/realtime.publisher';
-import { CommEvent, CommEventName } from '../contracts/events';
+import {
+  CommEvent,
+  CommEventName,
+  ClassAttendancePayload,
+  ClassSessionPayload,
+  LearnerScheduleChangedPayload,
+} from '../contracts/events';
 import { NotificationService } from '../notifications/notification.service';
 import { RecipientResolver } from '../notifications/recipient-resolver.service';
 import { PresenceService } from '../realtime/presence.service';
+import {
+  ClassScheduleService,
+  formatDate,
+  formatTime,
+} from '../schedule/class-schedule.service';
 import { ActorKind, CallOutcome, Visibility } from '../contracts/vocab';
 import { NotificationType, messageNotificationType } from '../contracts/notifications';
+
+/**
+ * Two representations of the same moment, compared as moments.
+ *
+ * A timestamp that made the round trip through jsonb comes back in Postgres's
+ * rendering, which is not JavaScript's. Comparing the strings would make every
+ * replayed event look superseded -- a guard that is always on is the same as no
+ * recovery path at all.
+ */
+function sameInstant(a: Date | null | undefined, b: string | null): boolean {
+  if (a == null || b == null) return a == null && b == null;
+  const parsed = new Date(b);
+  return !Number.isNaN(parsed.getTime()) && parsed.getTime() === a.getTime();
+}
 
 /**
  * EVENT HANDLER -- the single place a system event becomes a notification.
@@ -34,6 +59,7 @@ export class OutboxWorker {
     private readonly presence: PresenceService,
     @Inject(REALTIME_PUBLISHER) private readonly realtime: RealtimePublisher,
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
+    private readonly schedule: ClassScheduleService,
   ) {}
 
   async drain(batchSize = 100): Promise<number> {
@@ -120,12 +146,163 @@ export class OutboxWorker {
         return;
       }
 
+      // -- Classes ----------------------------------------------------------
+      // The recovery path for the legacy next_class_at write. The fast path in
+      // ClassScheduleService.reschedule has almost always already run; this is
+      // what happens when it did not, because the process died between the
+      // commit and the notification.
+      case CommEvent.LEARNER_SCHEDULE_CHANGED: {
+        await this.replayScheduleChange(payload as unknown as LearnerScheduleChangedPayload);
+        return;
+      }
+
+      case CommEvent.CLASS_SESSION_SCHEDULED:
+      case CommEvent.CLASS_SESSION_RESCHEDULED: {
+        await this.applySessionReminders(payload as unknown as ClassSessionPayload);
+        return;
+      }
+
+      case CommEvent.CLASS_SESSION_CANCELLED: {
+        const session = payload as unknown as ClassSessionPayload;
+        await this.schedule.cancelSessionReminders(session.classSessionId);
+        return;
+      }
+
+      case CommEvent.CLASS_ATTENDANCE_RECORDED: {
+        await this.notifyAttendance(payload as unknown as ClassAttendancePayload);
+        return;
+      }
+
       default: {
         if (conversationId) {
           await this.realtime.toThread(conversationId, type, payload as never);
         }
       }
     }
+  }
+
+  /**
+   * Replay a schedule change, unless the world has moved on.
+   *
+   * THE HAZARD THIS EXISTS FOR. Change #1 enqueues its event. Change #2 lands,
+   * cancels #1's reminders and schedules its own. Then #1's event is finally
+   * drained -- and a naive handler would re-notify about a move that has been
+   * superseded and, worse, recreate reminders for a class time that no longer
+   * exists. The parent would be reminded to be somewhere at 6:00 for a class
+   * that is now at 7:00.
+   *
+   * The guard is a comparison against the CURRENT authoritative value, not a
+   * delay or a timestamp heuristic: if the learner's next_class_at is no longer
+   * what this event said it became, this event is history and does nothing. A
+   * stale replay is a no-op, never a correction.
+   */
+  private async replayScheduleChange(payload: LearnerScheduleChangedPayload): Promise<void> {
+    const learner = await this.prisma.learner.findUnique({
+      where: { id: payload.learnerId },
+      select: { nextClassAt: true },
+    });
+    if (!learner) return;
+
+    // Compared as INSTANTS, not as strings. Postgres renders a timestamptz in
+    // jsonb as `...T11:42:40.33+00:00` and JavaScript renders the same instant
+    // as `...T11:42:40.330Z`; comparing the text would call every event stale
+    // and silently disable the recovery path.
+    if (!sameInstant(learner.nextClassAt, payload.nextAt)) {
+      this.log.debug(`schedule change for ${payload.learnerId} superseded; replay skipped`);
+      return;
+    }
+
+    await this.schedule.applyScheduleChange(
+      payload.learnerId,
+      payload.previousAt ? new Date(payload.previousAt) : null,
+      payload.nextAt ? new Date(payload.nextAt) : null,
+    );
+  }
+
+  /**
+   * Reminders for a class occurrence, against its current state.
+   *
+   * The same staleness rule as above, expressed against the occurrence rather
+   * than the learner: the session is re-read, and an event describing a time or
+   * a status it has since left does nothing. A cancelled session never gets
+   * reminders, whatever an older event in the queue says.
+   */
+  private async applySessionReminders(payload: ClassSessionPayload): Promise<void> {
+    const session = await this.prisma.classSession.findUnique({
+      where: { id: payload.classSessionId },
+      select: { id: true, learnerId: true, startsAt: true, status: true },
+    });
+    if (!session) return;
+
+    if (session.status !== payload.status || !sameInstant(session.startsAt, payload.startsAt)) {
+      this.log.debug(`class session ${payload.classSessionId} superseded; replay skipped`);
+      return;
+    }
+    if (session.status !== 'scheduled' && session.status !== 'rescheduled') return;
+
+    // A move withdraws the old occurrence's reminders before writing the new
+    // ones. Both are keyed on the session id, so this is exact -- and the ones
+    // for the CURRENT time are kept, because cancelling them would make them
+    // unrecreatable: `schedule()` dedupes on the same key and would find the
+    // row it had just cancelled.
+    await this.schedule.cancelSessionReminders(session.id, session.startsAt);
+    await this.schedule.scheduleSessionReminders(session);
+  }
+
+  /**
+   * One notification, for one outcome.
+   *
+   * `class_missed` only. `class_attended` is projected and stays silent: "your
+   * child attended their class" is the normal case, and announcing the normal
+   * case is how a parent learns to dismiss everything.
+   *
+   * The dedupe key is the occurrence plus the recipient, so a redelivered Core
+   * event, a retried outbox row and a second worker all converge on one
+   * notification.
+   */
+  private async notifyAttendance(payload: ClassAttendancePayload): Promise<void> {
+    if (payload.outcome !== 'class_missed') return;
+    // A redelivery that says exactly what the row already said is not news.
+    if (payload.previousOutcome === 'class_missed') return;
+
+    const learner = await this.prisma.learner.findUnique({
+      where: { id: payload.learnerId },
+      select: { name: true, familyId: true },
+    });
+    if (!learner) return;
+
+    const startsAt = new Date(payload.startsAt);
+    const parents = await this.recipients.forLearner(payload.learnerId);
+
+    for (const parent of parents) {
+      const zone = await this.timezoneOf(parent.actorId);
+      await this.notifications.schedule({
+        dedupeKey: `class_missed:${payload.classSessionId}:${parent.actorId}`,
+        type: NotificationType.CLASS_MISSED,
+        eventType: 'class_missed',
+        recipientId: parent.actorId,
+        locale: parent.locale,
+        familyId: learner.familyId,
+        learnerId: payload.learnerId,
+        learnerName: learner.name,
+        variables: {
+          student_name: learner.name,
+          parent_name: parent.displayName,
+          class_time: formatTime(startsAt, zone, parent.locale),
+          class_date: formatDate(startsAt, zone, parent.locale),
+        },
+        scheduledAt: new Date(),
+      });
+    }
+  }
+
+  /** The family's zone, never the server's. Mirrors ClassScheduleService. */
+  private async timezoneOf(actorId: string): Promise<string> {
+    const row = await this.prisma.quietHours.findUnique({
+      where: { actorId },
+      select: { timezone: true },
+    });
+    return row?.timezone ?? 'Asia/Riyadh';
   }
 
   private async staffMemberIds(conversationId: string): Promise<string[]> {

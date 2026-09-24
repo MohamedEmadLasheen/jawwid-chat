@@ -7,6 +7,7 @@ import { NotificationService } from './communication/notifications/notification.
 import { DeliveryService } from './communication/notifications/delivery.service';
 import { AnnouncementService } from './communication/announcements/announcement.service';
 import { RetentionService } from './communication/notifications/retention.service';
+import { CoreIngestService } from './communication/core/core-ingest.service';
 import { CallService } from './communication/calls/call.service';
 import { readBuildInfo } from './infra/build-info';
 
@@ -43,6 +44,7 @@ async function bootstrap(): Promise<void> {
   const announcements = app.get(AnnouncementService);
   const retention = app.get(RetentionService);
   const calls = app.get(CallService);
+  const coreIngest = app.get(CoreIngestService);
 
   let running = true;
   let draining = false;
@@ -84,6 +86,10 @@ async function bootstrap(): Promise<void> {
     // stop the outbox draining.
     for (const [name, sweep] of [
       // 1. Events -> notifications. Must run first; the others act on its output.
+      // The Core boundary's processor, first: a class session that arrived in
+      // this tick should produce its reminders in the same tick rather than the
+      // next one. It enqueues outbox events, which the sweep below then drains.
+      ['core-ingest', () => coreIngest.drain(BATCH)],
       ['outbox', () => outbox.drain(BATCH)],
       // 2. Due notifications -> channels. This is what makes a class reminder
       //    fire while the parent's phone is off and the app has been closed for

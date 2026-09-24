@@ -112,8 +112,82 @@ model Learner {
 
   conversations Conversation[]
   notifications Notification[]
+  classSessions ClassSession[]
+  attendance    ClassAttendance[]
 
   @@map("learner")
+  @@schema("chat")
+}
+
+/// The inbound Core ledger. Append-only, unique on (source, external_event_id),
+/// written by chat.record_core_event. Mapped here so the processor can drain it;
+/// the DDL is SQL's and predates this model by a long way.
+model CoreEventRow {
+  id              BigInt    @id @default(autoincrement())
+  source          String    @default("jawwid_core")
+  externalEventId String    @map("external_event_id")
+  eventType       String?   @map("event_type")
+  payload         Json      @default("{}")
+  receivedAt      DateTime  @default(now()) @map("received_at") @db.Timestamptz
+  processedAt     DateTime? @map("processed_at") @db.Timestamptz
+  error           String?
+
+  @@unique([source, externalEventId])
+  @@map("core_event")
+  @@schema("chat")
+}
+
+/// Projection of a Jawwid Core class session. Core is authoritative (integration
+/// contract section 8); this exists so attendance, reminders and notifications
+/// have a stable occurrence identity to point at instead of the mutable
+/// `learner.next_class_at` scalar. SQL owns the DDL.
+model ClassSession {
+  organizationId     String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id                 String   @id @default(uuid()) @db.Uuid
+  /// The occurrence identity. Unique, so a redelivered Core event updates in place.
+  coreClassSessionId String   @unique @map("core_class_session_id") @db.Uuid
+  learnerId          String   @map("learner_id") @db.Uuid
+  learner            Learner  @relation(fields: [learnerId], references: [id])
+  teacherId          String?  @map("teacher_id") @db.Uuid
+  teacher            Teacher? @relation(fields: [teacherId], references: [id])
+
+  startsAt DateTime  @map("starts_at") @db.Timestamptz
+  endsAt   DateTime? @map("ends_at") @db.Timestamptz
+  /// Stored opaquely and rendered nowhere: PRD 15.2 open question 8 is open.
+  joinUrl  String?   @map("join_url")
+  status   String    @default("scheduled")
+
+  /// The occurred_at of the Core event that last wrote this row. An older event
+  /// is dropped rather than applied -- webhook delivery is not ordered.
+  coreSyncedAt DateTime @map("core_synced_at") @db.Timestamptz
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  attendance ClassAttendance[]
+
+  @@map("class_session")
+  @@schema("chat")
+}
+
+/// What happened at one occurrence, as Core reports it. Nothing in Jawwid Chat
+/// records attendance and no client may write this table; the vocabulary is
+/// chat.event_log's existing class_attended / class_missed.
+model ClassAttendance {
+  organizationId String       @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id             String       @id @default(uuid()) @db.Uuid
+  classSessionId String       @map("class_session_id") @db.Uuid
+  classSession   ClassSession @relation(fields: [classSessionId], references: [id], onDelete: Cascade)
+  learnerId      String       @map("learner_id") @db.Uuid
+  learner        Learner      @relation(fields: [learnerId], references: [id])
+
+  outcome     String
+  recordedAt  DateTime? @map("recorded_at") @db.Timestamptz
+  coreSyncedAt DateTime @map("core_synced_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([classSessionId, learnerId])
+  @@map("class_attendance")
   @@schema("chat")
 }
 
@@ -789,7 +863,8 @@ model Teacher {
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  learners Learner[]
+  learners      Learner[]
+  classSessions ClassSession[]
 
   @@map("teacher")
   @@schema("chat")

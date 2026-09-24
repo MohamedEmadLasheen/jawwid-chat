@@ -53,9 +53,16 @@ is the source of truth. Android and iOS are recorded separately, as PASS or
 FAIL, by a person with a handset. Code inspection and automated tests do not
 close this gate and never will, regardless of how many of them pass.
 
-**Notifications with no producer** — attendance, student progress,
-package/balance and billing/payment stay NOT READY until the domain event
-exists. No placeholder producer is written to make a matrix look complete.
+**Notifications with no producer** — student progress, package/balance and
+billing/payment stay NOT READY until the domain event exists. No placeholder
+producer is written to make a matrix look complete.
+
+*Attendance left that list in 2026-09.* `chat.class_session` and
+`chat.class_attendance` project Jawwid Core's occurrences and outcomes, and
+`class_missed` now notifies through this platform unchanged — one registry
+entry, one template pair, one `schedule()` call from the existing outbox
+worker. `class_attended` is projected and notifies nobody. See
+`docs/architecture/core-integration-contract.md` §10a.
 
 ### The contract tests are a build gate
 
@@ -288,7 +295,8 @@ Columns, and what each one is asserting:
 | Approval decided | PASS | PASS | PASS | PASS | DEVICE-E2E-PENDING | PASS | NOT-APPLICABLE (essential) | PASS | PASS | PASS |
 | Renewal reminder | NOT-IMPLEMENTED | CODE-VERIFIED | CODE-VERIFIED | CODE-VERIFIED | DEVICE-E2E-PENDING | NOT-IMPLEMENTED | CODE-VERIFIED | CODE-VERIFIED | CODE-VERIFIED | NOT-IMPLEMENTED |
 | Payment reminder | NOT-IMPLEMENTED | CODE-VERIFIED | CODE-VERIFIED | CODE-VERIFIED | DEVICE-E2E-PENDING | NOT-IMPLEMENTED | CODE-VERIFIED | CODE-VERIFIED | CODE-VERIFIED | NOT-IMPLEMENTED |
-| Attendance | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED |
+| Class missed | PASS | PASS | PASS | PASS | DEVICE-E2E-PENDING | NOT-IMPLEMENTED | PASS | PASS | PASS | PASS |
+| Class attended | PASS (projection only) | PASS | NOT-APPLICABLE | NOT-APPLICABLE | NOT-APPLICABLE | NOT-APPLICABLE | NOT-APPLICABLE | NOT-APPLICABLE | NOT-APPLICABLE | NOT-APPLICABLE |
 | Progress update | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED |
 | Package balance | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED | NOT-IMPLEMENTED |
 
@@ -334,11 +342,17 @@ exist and are covered, which is why the middle columns read CODE-VERIFIED — bu
 no producer means no notification, so the producer and the end-to-end columns
 read NOT-IMPLEMENTED. No fake producer was added to fill the row in.
 
-### Why attendance, progress and package balance are NOT-IMPLEMENTED
+### Why progress and package balance are NOT-IMPLEMENTED
 
-There is no domain event for any of them anywhere in this repository. Not a
+There is no domain event for either of them anywhere in this repository. Not a
 missing template or an unwired handler — the fact itself is never recorded. A
 notification type for an event that does not exist would be a lie in a registry.
+
+Attendance was in this paragraph until 2026-09. It left it the only way a row
+in this matrix should: a real producer arrived. `class_attended` is deliberately
+NOT-APPLICABLE across the delivery columns — it is projected and notifies
+nobody, because announcing that a child turned up as expected is how a parent
+learns to dismiss everything.
 
 ## App states
 

@@ -37,6 +37,25 @@ export const CommEvent = {
    * parent is signed in on is in that room, and no one else's is.
    */
   NOTIFICATION_READ: 'notification.read',
+
+  /**
+   * The class-session projection changed, or an attendance outcome landed.
+   *
+   * These are CHAT-SIDE domain events about a Core-authoritative fact: Core
+   * owns the class, Chat owns the notification. They are enqueued in the same
+   * transaction as the projection write, so the fact and the event it justifies
+   * commit together or not at all.
+   */
+  CLASS_SESSION_SCHEDULED: 'class.session_scheduled',
+  CLASS_SESSION_RESCHEDULED: 'class.session_rescheduled',
+  CLASS_SESSION_CANCELLED: 'class.session_cancelled',
+  CLASS_ATTENDANCE_RECORDED: 'class.attendance_recorded',
+  /**
+   * A staff member changed chat.learner.next_class_at through the existing
+   * schedule path. Kept distinct from the class.session_* events above because
+   * it describes a different thing: the legacy scalar, not a Core occurrence.
+   */
+  LEARNER_SCHEDULE_CHANGED: 'learner.schedule_changed',
 } as const;
 
 export type CommEventName = (typeof CommEvent)[keyof typeof CommEvent];
@@ -167,6 +186,48 @@ export interface NotificationReadPayload {
   readAt: string;
 }
 
+/**
+ * A class-session projection change.
+ *
+ * Carries the OCCURRENCE identity, not the learner and a time: a consumer must
+ * be able to tell one occurrence from another after the time has moved.
+ */
+export interface ClassSessionPayload {
+  classSessionId: string;
+  learnerId: string;
+  startsAt: string;
+  status: string;
+  /** Null on a first sighting. Present when a redelivery changed something. */
+  previousStartsAt: string | null;
+  previousStatus: string | null;
+}
+
+export interface ClassAttendancePayload {
+  attendanceId: string;
+  classSessionId: string;
+  learnerId: string;
+  /** chat.event_log's vocabulary: `class_attended` or `class_missed`. */
+  outcome: string;
+  startsAt: string;
+  /** Null on a first delivery; used to suppress a no-change redelivery. */
+  previousOutcome: string | null;
+}
+
+/**
+ * The legacy `next_class_at` write path.
+ *
+ * `previousAt` and `nextAt` are the two times the parent is told about, and
+ * they are what makes a stale replay detectable: a handler compares `nextAt`
+ * against the learner's CURRENT value before acting.
+ */
+export interface LearnerScheduleChangedPayload {
+  learnerId: string;
+  previousAt: string | null;
+  nextAt: string | null;
+  actorId: string;
+  reason: string;
+}
+
 export interface CommEventPayloads {
   [CommEvent.MESSAGE_CREATED]: MessageCreatedPayload;
   [CommEvent.MESSAGE_DELETED]: MessageDeletedPayload;
@@ -188,6 +249,11 @@ export interface CommEventPayloads {
   [CommEvent.CALL_PARTICIPANT_LEFT]: CallParticipantPayload;
   [CommEvent.NOTIFICATION_CREATED]: NotificationCreatedPayload;
   [CommEvent.NOTIFICATION_READ]: NotificationReadPayload;
+  [CommEvent.CLASS_SESSION_SCHEDULED]: ClassSessionPayload;
+  [CommEvent.CLASS_SESSION_RESCHEDULED]: ClassSessionPayload;
+  [CommEvent.CLASS_SESSION_CANCELLED]: ClassSessionPayload;
+  [CommEvent.CLASS_ATTENDANCE_RECORDED]: ClassAttendancePayload;
+  [CommEvent.LEARNER_SCHEDULE_CHANGED]: LearnerScheduleChangedPayload;
 }
 
 /** Rooms a socket may join. Never a client-supplied raw string. */

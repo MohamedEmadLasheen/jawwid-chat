@@ -76,6 +76,7 @@ delivery layer.
 | `teacher.upserted` / `teacher.deactivated` | teacher; deactivation removes them from every group |
 | `enrollment.upserted` / `enrollment.ended` | student ⇄ teacher; drives Student Group membership |
 | `class_session.upserted` / `class_session.cancelled` | schedule; drives class reminders and the attention rule |
+| `attendance.upserted` | the outcome of one class session for its learner |
 | `subscription.upserted` | plan, status, renewal date |
 | `payment.upserted` | due dates and payment outcomes |
 
@@ -110,6 +111,11 @@ schema**; a change inside Core is a change in Core's transformer, not here.
 { "core_class_session_id": uuid, "core_child_id": uuid, "core_teacher_id": uuid?,
   "starts_at": timestamptz, "ends_at": timestamptz?, "join_url": string?,
   "status": "scheduled" | "done" | "cancelled" | "rescheduled" }
+
+// attendance.upserted
+{ "core_class_session_id": uuid,
+  "outcome": "class_attended" | "class_missed",   // Chat's existing vocabulary
+  "recorded_at": timestamptz? }
 
 // subscription.upserted
 { "core_subscription_id": uuid, "core_parent_id": uuid, "plan": string?,
@@ -222,6 +228,7 @@ columns, the split is stated.
 | Teacher | **AUTHORITATIVE IN CORE**, mirrored in `chat.teacher` |
 | Enrollment (student ⇄ teacher) | **AUTHORITATIVE IN CORE**, mirrored in `chat.enrollment` |
 | Class session / schedule | **AUTHORITATIVE IN CORE**, mirrored in `chat.class_session` |
+| Attendance outcome | **AUTHORITATIVE IN CORE**, mirrored in `chat.class_attendance`. Nothing in Chat records attendance, and no client may write the table |
 | Subscription | **AUTHORITATIVE IN CORE**, mirrored in `chat.subscription` (status vocabulary is Chat's, translated) |
 | Payment / due date | **AUTHORITATIVE IN CORE**, mirrored in `chat.payment` |
 | Conversation, membership, message, approval | **AUTHORITATIVE IN CHAT** |
@@ -280,6 +287,42 @@ membership and posts both messages.*
 > are representable (`chat.conversation_member.is_silent` exists). **Neither is
 > implemented**, and the reconciler does not add coverage admins at all. This is
 > a functional gap in Student Groups until it is answered.
+
+---
+
+## 10a. Class sessions and attendance
+
+`class_session.upserted` mirrors one occurrence into `chat.class_session`,
+keyed on `core_class_session_id` — the stable identity everything else points
+at. `chat.learner.next_class_at` is **not** that identity and is not written by
+this path: it is a mutable scalar that cannot name a class which already
+happened, and it stays exactly as it is for the consumers that still read it.
+`class_session.cancelled` sets `status = 'cancelled'` and retains the row (§12).
+
+`attendance.upserted` attaches an outcome to an occurrence. Two rules, both
+enforced in the ingest function rather than by convention:
+
+- **The vocabulary is `class_attended` / `class_missed`**, which is what
+  `chat.event_log`'s type constraint has carried since 20260905090500. A value
+  outside those two is **refused**, not coerced: guessing which of the two Core
+  meant would write a fact nobody asserted. The delivery stays unprocessed with
+  its reason, which `chat.sync_health` counts.
+- **No orphans.** Attendance for a session Chat has not mirrored returns
+  `not_applicable` and writes nothing. The session arrives first, or on the
+  next backfill.
+
+Applying either event enqueues a Chat-side domain event in the **same
+transaction** as the projection write, so a class Chat knows about always has
+the event that would tell a parent about it. `class_missed` produces one
+parent notification through the existing notification engine; `class_attended`
+produces none, deliberately — announcing the normal case is how a parent learns
+to dismiss everything.
+
+> **PRODUCT DECISION REQUIRED — per-learner attendance.**
+> `attendance.upserted` carries no `core_child_id`: the outcome is attached to
+> the session's learner. That is correct for one-to-one classes, which is what
+> `chat.class_session` models today. A group class would need the child named
+> explicitly, and the table's unique key already allows it.
 
 ---
 

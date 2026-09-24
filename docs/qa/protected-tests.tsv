@@ -50,3 +50,11 @@ test/features/notifications/badge_independence_test.dart	12	The badge advances w
 test/features/notifications/app_state_behaviour_test.dart	24	App states A/B/E; offline recovery; a read attempted offline rolls back rather than lying
 test/features/notifications/push_lifecycle_test.dart	35	Token lifecycle, tap in all three app states, and idempotent consumption of a duplicate physical push
 test/core/realtime/realtime_test.dart	25	One shared transport; the client replays its rooms after a reconnect; the event contract mirrors the server's
+#
+# Class session + attendance foundation (2026-09). Core is authoritative for
+# both; these guard the properties that make Chat a faithful projection rather
+# than a second opinion, and the authorization that keeps one family's classes
+# out of another family's reach.
+apps/api/test/integration/class-session-ingestion.spec.ts	40	Idempotent Core ingestion, source-time ordering, cancellation retains history, no orphan attendance, unmappable outcome refused not coerced, projection and event commit atomically
+apps/api/test/integration/class-notifications.spec.ts	40	class_missed notifies once through the existing engine and class_attended notifies nobody; occurrence-keyed reminders; the schedule producer's crash window stays closed and a stale replay cannot resurrect obsolete reminders
+apps/api/test/integration/class-authz.spec.ts	9	No client session may assert a Core-authoritative class or attendance fact; reads never cross a family; a learner or session id is not authorization

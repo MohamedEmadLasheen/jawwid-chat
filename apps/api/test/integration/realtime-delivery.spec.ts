@@ -130,8 +130,11 @@ describe('D-2 · a failed publish returns the event to the outbox', () => {
     // Presence is Redis-backed; the worker must not depend on it to publish.
     const presence = { isViewing: async () => false } as never;
 
+    // The schedule service is unreachable on this path: the event under test is
+    // a realtime publish, not a class event.
+    const schedule = {} as never;
     const worker = new OutboxWorker(
-      prisma, notifications, recipients, presence, alwaysFails as never, identity,
+      prisma, notifications, recipients, presence, alwaysFails as never, identity, schedule,
     );
     await worker.drain(50);
 

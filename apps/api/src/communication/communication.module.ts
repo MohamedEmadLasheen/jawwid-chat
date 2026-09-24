@@ -30,6 +30,7 @@ import { LoggingPushProvider } from './notifications/push.provider';
 import { FcmPushProvider, fcmConfigFromEnvironment } from './notifications/fcm.provider';
 import { AnnouncementService } from './announcements/announcement.service';
 import { ClassScheduleService } from './schedule/class-schedule.service';
+import { CoreIngestService } from './core/core-ingest.service';
 import { RealtimeGateway } from './realtime/realtime.gateway';
 import { TypingService } from './realtime/typing.service';
 import { PresenceService } from './realtime/presence.service';
@@ -75,6 +76,7 @@ import { StorageController } from './api/storage.controller';
     RetentionService,
     AnnouncementService,
     ClassScheduleService,
+    CoreIngestService,
     ReminderService,
     TemplateService,
     QuietHoursService,
@@ -119,6 +121,7 @@ import { StorageController } from './api/storage.controller';
     RetentionService,
     AnnouncementService,
     ClassScheduleService,
+    CoreIngestService,
     ReminderService,
     OutboxWorker,
     RealtimeRelay,

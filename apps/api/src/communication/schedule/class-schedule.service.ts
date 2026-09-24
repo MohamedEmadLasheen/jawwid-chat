@@ -6,6 +6,8 @@ import type { AuditService } from '../../platform/audit.service';
 import { Actor } from '../../platform/types';
 import { NotificationService } from '../notifications/notification.service';
 import { RecipientResolver, ResolvedRecipient } from '../notifications/recipient-resolver.service';
+import { OutboxService } from '../outbox/outbox.service';
+import { CommEvent } from '../contracts/events';
 import { NotificationStatus, StaffRole } from '../contracts/vocab';
 import { NotificationType } from '../contracts/notifications';
 
@@ -52,6 +54,7 @@ export class ClassScheduleService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationService,
     private readonly recipients: RecipientResolver,
+    private readonly outbox: OutboxService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
   ) {}
 
@@ -97,18 +100,61 @@ export class ClassScheduleService {
         after: { nextClassAt: next?.toISOString() ?? null },
         reason: input.reason,
       });
+      // THE CRASH WINDOW, closed. Everything below this transaction -- the
+      // notification, the reminder cancellation, the new reminders -- used to
+      // be the only thing that produced them, so a process that died after the
+      // commit left a class that had moved and a parent who was never told.
+      // The event commits with the fact it describes, and the worker replays it
+      // if this process does not get that far.
+      await this.outbox.enqueue(tx, CommEvent.LEARNER_SCHEDULE_CHANGED, {
+        learnerId: learner.id,
+        previousAt: previous?.toISOString() ?? null,
+        nextAt: next?.toISOString() ?? null,
+        actorId: actor.actorId,
+        reason: input.reason,
+      });
     });
 
-    // Reminders for the OLD time are now wrong. Cancel them before scheduling
-    // the new ones, or a parent gets reminded about a class that has moved.
-    await this.cancelPendingReminders(learner.id);
-
-    const parents = await this.recipients.forLearner(learner.id);
-    const notified = await this.notifyScheduleChange(learner.id, parents, previous, next);
-
-    if (next) await this.scheduleReminders(learner.id, parents, next);
+    // THE FAST PATH, unchanged. The outbox event above is a safety net, not a
+    // replacement: notifications still happen here, synchronously, so the
+    // caller's `notified` count stays true and nothing waits a worker tick.
+    // Both paths converge on the same dedupe keys, so whichever runs second
+    // does nothing.
+    const notified = await this.applyScheduleChange(learner.id, previous, next);
 
     return { notified };
+  }
+
+  /**
+   * Everything a schedule change owes the parent, done twice safely.
+   *
+   * Reached from `reschedule` immediately (the fast path) and from the outbox
+   * worker on replay (the recovery path). It is idempotent in both directions:
+   * the notification dedupes on `class_change:{learner}:{from}>{to}:{parent}`
+   * and the reminders on the rule key plus the class time, so a second run
+   * creates nothing and reports zero.
+   */
+  async applyScheduleChange(
+    learnerId: string,
+    previous: Date | null,
+    next: Date | null,
+  ): Promise<number> {
+    // Reminders for the OLD time are now wrong. Cancel them before scheduling
+    // the new ones, or a parent gets reminded about a class that has moved.
+    //
+    // KEEPING the ones for `next` is what makes a replay safe. Cancelling them
+    // and re-scheduling would not restore them: the dedupe key is the same, so
+    // `schedule()` would find the row it just cancelled and report it as
+    // already handled, leaving the parent with no reminders at all. This is the
+    // recovery path running over work the fast path already did.
+    await this.cancelPendingReminders(learnerId, next);
+
+    const parents = await this.recipients.forLearner(learnerId);
+    const notified = await this.notifyScheduleChange(learnerId, parents, previous, next);
+
+    if (next) await this.scheduleReminders(learnerId, parents, next);
+
+    return notified;
   }
 
   /**
@@ -180,18 +226,126 @@ export class ClassScheduleService {
   }
 
   /**
+   * Reminders for a CLASS OCCURRENCE, keyed on its identity rather than on a
+   * learner and a timestamp.
+   *
+   * This is the same scheduler, the same three rules (T-24h / T-30m / T-10m)
+   * and the same `schedule()` call as `scheduleReminders` above -- no second
+   * reminder engine. What changes is the dedupe key: it carries the
+   * `class_session_id`, so reminders belong to one occurrence and can be
+   * cancelled for that occurrence alone. A learner with two upcoming sessions
+   * keeps both sets, which the learner-and-time key could never express.
+   *
+   * IDEMPOTENT AND BOUNDED. Re-running it for the same session at the same time
+   * creates nothing; a session whose reminders have already fired is left
+   * alone, because a rule whose moment has passed is skipped rather than sent
+   * late.
+   */
+  async scheduleSessionReminders(session: {
+    id: string;
+    learnerId: string;
+    startsAt: Date;
+  }): Promise<number> {
+    const rules = await this.prisma.notificationRule.findMany({
+      where: { eventType: 'class_scheduled', enabled: true },
+    });
+
+    const learner = await this.prisma.learner.findUnique({
+      where: { id: session.learnerId },
+      select: { name: true, familyId: true },
+    });
+    if (!learner) return 0;
+
+    const parents = await this.recipients.forLearner(session.learnerId);
+    const now = new Date();
+    let scheduled = 0;
+
+    for (const rule of rules) {
+      const fireAt = new Date(session.startsAt.getTime() + rule.offsetSeconds * 1000);
+      if (fireAt <= now) continue;
+
+      for (const parent of parents) {
+        if (rule.recipientRole !== 'participant' && rule.recipientRole !== 'parent') continue;
+
+        const zone = await this.timezoneFor(parent.actorId);
+        const result = await this.notifications.schedule({
+          // The occurrence is IN the key, twice over: its id, so cancellation
+          // can find exactly these rows, and its time, so a session that moves
+          // produces genuinely new reminders rather than deduplicating against
+          // the ones just cancelled.
+          dedupeKey: sessionReminderKey(rule.key, session.id, session.startsAt, parent.actorId),
+          type: NotificationType.CLASS_REMINDER,
+          eventType: 'class_scheduled',
+          ruleKey: rule.key,
+          templateKey: rule.templateKey,
+          priority: rule.priority,
+          recipientId: parent.actorId,
+          locale: parent.locale,
+          familyId: learner.familyId,
+          learnerId: session.learnerId,
+          learnerName: learner.name,
+          variables: {
+            student_name: learner.name,
+            parent_name: parent.displayName,
+            class_time: formatTime(session.startsAt, zone, parent.locale),
+            class_date: formatDate(session.startsAt, zone, parent.locale),
+          },
+          scheduledAt: fireAt,
+        });
+        if (result.created) scheduled += 1;
+      }
+    }
+    return scheduled;
+  }
+
+  /**
+   * Withdraw the reminders belonging to one occurrence.
+   *
+   * Scoped by the session id inside the dedupe key -- the same `contains`
+   * idiom ReminderService already uses for its own subject -- so cancelling a
+   * Tuesday class does not silence Thursday's. Only `scheduled` rows are
+   * touched: a reminder already sent is history and stays.
+   */
+  async cancelSessionReminders(
+    classSessionId: string,
+    keepForStartsAt?: Date | null,
+  ): Promise<number> {
+    const result = await this.prisma.notification.updateMany({
+      where: {
+        status: NotificationStatus.SCHEDULED,
+        eventType: 'class_scheduled',
+        dedupeKey: {
+          contains: `:session:${classSessionId}:`,
+          // Same reasoning as cancelPendingReminders: the reminders for the
+          // time being scheduled are kept, so a replay is a no-op rather than a
+          // self-inflicted silence.
+          ...(keepForStartsAt ? { not: { contains: keepForStartsAt.toISOString() } } : {}),
+        },
+      },
+      data: { status: NotificationStatus.CANCELLED },
+    });
+    return result.count;
+  }
+
+  /**
    * Cancel reminders that have not gone out yet.
    *
    * Only `scheduled` rows are touched. An already-sent notification is left
    * exactly as it was: history is not rewritten, and a parent who was reminded
    * about the 5:00 class was reminded about the 5:00 class.
    */
-  async cancelPendingReminders(learnerId: string): Promise<number> {
+  async cancelPendingReminders(learnerId: string, keepForClassAt?: Date | null): Promise<number> {
     const result = await this.prisma.notification.updateMany({
       where: {
         learnerId,
         status: NotificationStatus.SCHEDULED,
         eventType: 'class_scheduled',
+        // The reminders for the time we are about to schedule are not stale --
+        // they are the answer. Their dedupe key carries the class time, which
+        // is what makes "for this time" expressible at all.
+        ...(keepForClassAt
+          ? { dedupeKey: { not: { contains: keepForClassAt.toISOString() } } }
+          : {}),
       },
       data: { status: NotificationStatus.CANCELLED },
     });
@@ -288,6 +442,22 @@ export class ClassScheduleService {
     });
     return row?.timezone ?? 'Asia/Riyadh';
   }
+}
+
+/**
+ * The dedupe key for one occurrence's reminder.
+ *
+ * Exported so the worker and the tests name it the same way the scheduler does.
+ * `:session:` is the segment `cancelSessionReminders` matches on; changing
+ * either without the other would leave reminders that cannot be withdrawn.
+ */
+export function sessionReminderKey(
+  ruleKey: string,
+  classSessionId: string,
+  startsAt: Date,
+  recipientId: string,
+): string {
+  return `${ruleKey}:session:${classSessionId}:${startsAt.toISOString()}:${recipientId}`;
 }
 
 /** 6:00 PM / ٦:٠٠ م, in the recipient's zone. Never the server's. */
