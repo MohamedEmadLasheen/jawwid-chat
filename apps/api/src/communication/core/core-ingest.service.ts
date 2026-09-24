@@ -31,6 +31,9 @@ import { CommEvent } from '../contracts/events';
  * An event type outside this set is left unprocessed rather than consumed, so
  * whoever implements it later finds it waiting.
  */
+/** This endpoint is Jawwid Core's. The ledger's source column says so. */
+export const CORE_SOURCE = 'jawwid_core';
+
 @Injectable()
 export class CoreIngestService {
   private readonly log = new Logger(CoreIngestService.name);
@@ -46,6 +49,89 @@ export class CoreIngestService {
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxService,
   ) {}
+
+  /**
+   * Record one delivery and apply it, which is what the webhook needs.
+   *
+   * TWO LAYERS, AND THEY ANSWER DIFFERENT QUESTIONS. The ledger's unique
+   * `(source, external_event_id)` says whether this DELIVERY has been seen;
+   * `processed_at` with no `error` says whether it was successfully APPLIED.
+   * Only the second makes a repeat a duplicate. A delivery that was recorded
+   * and then failed -- a crash mid-apply -- is re-applied on the next attempt,
+   * because reporting it as a duplicate would tell Core to stop retrying
+   * something that never landed.
+   */
+  async recordAndApply(input: {
+    externalEventId: string;
+    eventType: string;
+    payload: Prisma.JsonObject;
+    occurredAt: Date;
+  }): Promise<'applied' | 'duplicate' | 'not_applicable'> {
+    const recorded = await this.prisma.$queryRaw<{ recorded: boolean }[]>`
+      select chat.record_core_event(
+        ${input.externalEventId}, ${input.eventType},
+        ${input.payload}::jsonb, ${CORE_SOURCE}, ${input.occurredAt}::timestamptz
+      ) as recorded`;
+
+    if (recorded[0]?.recorded !== true) {
+      const existing = await this.prisma.coreEventRow.findUnique({
+        where: {
+          source_externalEventId: {
+            source: CORE_SOURCE,
+            externalEventId: input.externalEventId,
+          },
+        },
+        select: { processedAt: true, error: true },
+      });
+      // Applied cleanly before: a duplicate, and Core should stop.
+      if (existing?.processedAt && !existing.error) return 'duplicate';
+      // Recorded but not applied. Fall through and try again.
+    }
+
+    return this.applyOne(input.externalEventId);
+  }
+
+  /**
+   * Apply one recorded delivery by its Core event id.
+   *
+   * Claims the row the same way `drain` does, so a webhook retry racing the
+   * worker sweep cannot both apply it.
+   */
+  private async applyOne(
+    externalEventId: string,
+  ): Promise<'applied' | 'not_applicable'> {
+    const row = await this.prisma.coreEventRow.findUnique({
+      where: { source_externalEventId: { source: CORE_SOURCE, externalEventId } },
+    });
+    if (!row) return 'not_applicable';
+
+    // An event type this phase has no processor for is left UNPROCESSED in the
+    // ledger, on purpose: the contract's `not_applicable` means "accepted,
+    // nothing to write yet", and whoever implements that type later finds the
+    // delivery waiting rather than marked done by something that ignored it.
+    if (!CoreIngestService.HANDLED.has(row.eventType ?? '')) return 'not_applicable';
+
+    const occurredAt = row.occurredAt;
+    if (!occurredAt) return 'not_applicable';
+
+    const claimed = await this.prisma.$executeRaw`
+      update chat.core_event
+         set processed_at = now(), error = null
+       where id = ${row.id} and processed_at is null`;
+    if (claimed !== 1) return 'not_applicable';
+
+    try {
+      const outcome = await this.apply(
+        row.eventType ?? '',
+        row.payload as Prisma.JsonObject,
+        occurredAt,
+      );
+      return outcome === 'applied' ? 'applied' : 'not_applicable';
+    } catch (error) {
+      await this.unclaim(row.id, error);
+      throw error;
+    }
+  }
 
   /**
    * Apply everything unprocessed that this phase understands.
@@ -67,6 +153,17 @@ export class CoreIngestService {
 
     let applied = 0;
     for (const row of pending) {
+      // A row recorded before the ledger carried source time. Its occurred_at
+      // is genuinely UNKNOWN, and received_at is not a substitute: ordering it
+      // by the moment the HTTP request arrived would let a backfill overwrite
+      // newer state, which is the exact failure the ordering rule exists to
+      // prevent. It is left unprocessed WITH a reason, so it is visible in
+      // chat.sync_health rather than quietly applied with a fabricated time.
+      if (!row.occurredAt) {
+        await this.unclaim(row.id, new Error('occurred_at unknown: recorded before the webhook carried source time'));
+        continue;
+      }
+
       // The claim. A second processor racing this one finds count 0 and skips.
       const claimed = await this.prisma.$executeRaw`
         update chat.core_event
@@ -78,7 +175,7 @@ export class CoreIngestService {
         const outcome = await this.apply(
           row.eventType ?? '',
           row.payload as Prisma.JsonObject,
-          row.receivedAt,
+          row.occurredAt,
         );
         if (outcome === 'applied') applied += 1;
       } catch (error) {
@@ -86,24 +183,29 @@ export class CoreIngestService {
         // `check_violation` from the SQL function and will keep failing --
         // which is correct: it is a boundary disagreement, not a transient
         // fault, and it stays visible rather than being swallowed.
-        await this.prisma.$executeRaw`
-          update chat.core_event
-             set processed_at = null,
-                 error = ${error instanceof Error ? error.message.slice(0, 500) : 'unknown'}
-           where id = ${row.id}`;
+        await this.unclaim(row.id, error);
         this.log.warn(`core event ${row.id} (${row.eventType}) failed to apply`);
       }
     }
     return applied;
   }
 
+  /** Return a row to the queue with the reason it did not apply. */
+  private async unclaim(id: bigint, error: unknown): Promise<void> {
+    await this.prisma.$executeRaw`
+      update chat.core_event
+         set processed_at = null,
+             error = ${error instanceof Error ? error.message.slice(0, 500) : 'unknown'}
+       where id = ${id}`;
+  }
+
   /**
    * One event, applied with its domain event, in one transaction.
    *
-   * `occurredAt` is the ledger's `received_at`. The contract's ordering rule
-   * (section 5) is last-writer-wins by SOURCE time, and this is the closest
-   * thing the existing ledger records; an envelope-level `occurred_at` would be
-   * strictly better and is noted as a limitation rather than invented here.
+   * `occurredAt` is the envelope's own `occurred_at`, carried through the
+   * ledger column added for it. The contract's ordering rule (section 5) is
+   * last-writer-wins by SOURCE time, and this is that time -- not the moment
+   * the HTTP request happened to arrive.
    */
   private async apply(
     eventType: string,

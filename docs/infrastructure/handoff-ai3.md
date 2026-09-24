@@ -43,7 +43,7 @@ identifier, the Firebase client configuration (`google-services.json`,
 app is public: anything inside it can be extracted from the binary in minutes.
 
 `scripts/infra/scan-secrets.sh` fails CI if `LIVEKIT_API_SECRET`,
-`JWT_*_SECRET`, `STORAGE_SECRET_KEY`, `CORE_API_KEY`, `CORE_WEBHOOK_SECRET` or
+`JWT_*_SECRET`, `STORAGE_SECRET_KEY`, `CORE_API_KEY`, `CORE_WEBHOOK_SECRETS` or
 `service_role` appears anywhere under `lib/`.
 
 Calling works by the app asking the API for a short-lived LiveKit room token

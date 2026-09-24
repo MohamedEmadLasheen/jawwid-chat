@@ -71,7 +71,7 @@ done
 # The Flutter app and the Admin Web bundle ship to devices and browsers.
 # Anything in them is public, whatever it is named.
 CLIENT_PATHS="lib apps/admin-web/src"
-CLIENT_FORBIDDEN='LIVEKIT_API_SECRET|JWT_ACCESS_SECRET|JWT_REFRESH_SECRET|STORAGE_SECRET_KEY|CORE_API_KEY|CORE_WEBHOOK_SECRET|service_role'
+CLIENT_FORBIDDEN='LIVEKIT_API_SECRET|JWT_ACCESS_SECRET|JWT_REFRESH_SECRET|STORAGE_SECRET_KEY|CORE_API_KEY|CORE_WEBHOOK_SECRETS|service_role'
 for p in $CLIENT_PATHS; do
   [ -d "$p" ] || continue
   while IFS=: read -r file _; do

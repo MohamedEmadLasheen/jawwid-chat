@@ -58,3 +58,9 @@ test/core/realtime/realtime_test.dart	25	One shared transport; the client replay
 apps/api/test/integration/class-session-ingestion.spec.ts	40	Idempotent Core ingestion, source-time ordering, cancellation retains history, no orphan attendance, unmappable outcome refused not coerced, projection and event commit atomically
 apps/api/test/integration/class-notifications.spec.ts	40	class_missed notifies once through the existing engine and class_attended notifies nobody; occurrence-keyed reminders; the schedule producer's crash window stays closed and a stale replay cannot resurrect obsolete reminders
 apps/api/test/integration/class-authz.spec.ts	9	No client session may assert a Core-authoritative class or attendance fact; reads never cross a family; a learner or session id is not authorization
+#
+# Core → Chat webhook transport (2026-09). The only door into Jawwid Chat an
+# unauthenticated caller can knock on, and everything behind it is
+# Core-authoritative fact no client session may assert.
+apps/api/test/unit/core/core-webhook-auth.spec.ts	32	HMAC over raw bytes, exact sha256= lowercase format, constant-time compare, replay window, key rotation, fail-closed when unconfigured, 1 MiB ceiling, secret never in a rejection
+apps/api/test/integration/core-webhook.spec.ts	45	Envelope validation and allowlist; occurred_at preserved envelope→ledger→projection; backfill accepted but cannot regress newer state; recorded-but-failed is retryable not duplicate; refusals audited without credentials; clients cannot reach the ledger

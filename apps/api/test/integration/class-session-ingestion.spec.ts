@@ -29,13 +29,16 @@ const drainOutbox = () => g.outboxWorker.drain(200);
 /** Record an event on the boundary exactly as chat.record_core_event does. */
 async function coreEvent(
   eventType: string,
+  // The envelope's SOURCE time. Ordering is by this, never by the moment the
+  // delivery arrived -- so the tests name it for what it is.
   payload: Record<string, unknown>,
-  receivedAt = new Date(),
+  occurredAt = new Date(),
 ): Promise<void> {
   await g.prisma.$executeRaw`
-    insert into chat.core_event (source, external_event_id, event_type, payload, received_at)
+    insert into chat.core_event (source, external_event_id, event_type, payload,
+                                occurred_at, received_at)
     values ('jawwid_core', ${randomUUID()}, ${eventType}, ${JSON.stringify(payload)}::jsonb,
-            ${receivedAt}::timestamptz)`;
+            ${occurredAt}::timestamptz, now())`;
 }
 
 /** A class-session payload, as the contract's section 4 defines it. */
@@ -195,6 +198,26 @@ describe('a class session arriving from Core', () => {
     const row = (await g.prisma.coreEventRow.findFirst())!;
     expect(row.error).toContain('unknown class session status');
     expect(await g.prisma.classSession.count()).toBe(0);
+  });
+
+  it('a row with NO occurred_at is refused rather than ordered by arrival', async () => {
+    // A delivery recorded before the ledger carried source time. Its
+    // occurred_at is genuinely unknown, and received_at is not a substitute:
+    // ordering by when the request arrived is what would let a backfill
+    // overwrite newer state. So it is left unprocessed WITH a reason, visible
+    // in chat.sync_health, rather than applied with a fabricated time.
+    await g.prisma.$executeRaw`
+      insert into chat.core_event (source, external_event_id, event_type, payload,
+                                  occurred_at, received_at)
+      values ('jawwid_core', ${randomUUID()}, 'class_session.upserted',
+              ${JSON.stringify(sessionPayload())}::jsonb, null, now())`;
+
+    expect(await g.coreIngest.drain()).toBe(0);
+    expect(await g.prisma.classSession.count()).toBe(0);
+
+    const row = (await g.prisma.coreEventRow.findFirst())!;
+    expect(row.processedAt).toBeNull();
+    expect(row.error).toContain('occurred_at unknown');
   });
 
   it('an event type this phase does not handle is left for whoever implements it',

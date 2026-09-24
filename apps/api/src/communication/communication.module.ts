@@ -31,6 +31,7 @@ import { FcmPushProvider, fcmConfigFromEnvironment } from './notifications/fcm.p
 import { AnnouncementService } from './announcements/announcement.service';
 import { ClassScheduleService } from './schedule/class-schedule.service';
 import { CoreIngestService } from './core/core-ingest.service';
+import { CoreWebhookController } from './core/core-webhook.controller';
 import { RealtimeGateway } from './realtime/realtime.gateway';
 import { TypingService } from './realtime/typing.service';
 import { PresenceService } from './realtime/presence.service';
@@ -57,6 +58,7 @@ import { StorageController } from './api/storage.controller';
     NotificationController,
     AnnouncementController,
     ClassScheduleController,
+    CoreWebhookController,
     StorageController,
   ],
   providers: [

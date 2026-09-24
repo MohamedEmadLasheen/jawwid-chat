@@ -146,7 +146,7 @@ jobs:
           LIVEKIT_TOKEN_TTL_SECONDS: '300'
           CORE_BASE_URL: ${{ vars.CORE_BASE_URL }}
           CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
-          CORE_WEBHOOK_SECRET: ${{ secrets.CORE_WEBHOOK_SECRET }}
+          CORE_WEBHOOK_SECRETS: ${{ secrets.CORE_WEBHOOK_SECRETS }}
           CORE_TIMEOUT_MS: '5000'
           CORE_RETRY_MAX: '3'
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}

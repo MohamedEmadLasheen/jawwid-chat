@@ -17,6 +17,7 @@ import { OutboxWorker } from '@communication/outbox/outbox.worker';
 import { RelayRealtimePublisher } from '../../src/infra/realtime/relay.publisher';
 import { realtimeChannel, decodeEnvelope } from '../../src/infra/realtime/realtime-channel';
 import type { RealtimeGateway } from '@communication/realtime/realtime.gateway';
+import { buildGraph, seed, truncate } from './harness';
 
 const REDIS_URL = process.env.REALTIME_TEST_REDIS_URL ?? 'redis://localhost:6410';
 
@@ -95,17 +96,26 @@ describe('D-2 · realtime delivery from a process with no Socket.IO server', () 
 });
 
 describe('D-2 · a failed publish returns the event to the outbox', () => {
-  const prisma = new PrismaService();
+  const g = buildGraph();
+  const prisma = g.prisma;
 
   afterAll(async () => {
+    await truncate(prisma);
     await prisma.$disconnect();
   });
 
   it('leaves the row pending with the error recorded, never published', async () => {
-    const conversationId = await prisma.conversation
-      .findFirst({ select: { id: true } })
-      .then((c) => c?.id);
-    if (!conversationId) throw new Error('no conversation in the test database');
+    // SELF-CONTAINED, deliberately. This used to read whatever conversation an
+    // earlier suite happened to leave behind and drain whatever outbox rows
+    // happened to be pending -- so it passed or failed on test ORDER rather
+    // than on D-2. `drain` takes a batch ordered by age, and enough leftover
+    // events push this one out of the window entirely, leaving the row
+    // untouched and the assertions failing for an unrelated reason.
+    await truncate(prisma);
+    const s = await seed(prisma);
+    g.coverage.onDutyId = s.ownerId;
+    const conversationId = (await g.conversations.ensureStudentGroup(s.learnerId)).id;
+    await prisma.outboxEvent.deleteMany({});
 
     const event = await prisma.outboxEvent.create({
       data: {
@@ -130,9 +140,15 @@ describe('D-2 · a failed publish returns the event to the outbox', () => {
     // Presence is Redis-backed; the worker must not depend on it to publish.
     const presence = { isViewing: async () => false } as never;
 
-    // The schedule service is unreachable on this path: the event under test is
-    // a realtime publish, not a class event.
-    const schedule = {} as never;
+    // The class handlers are not on this path -- the event under test is a
+    // realtime publish -- but the stub answers their calls rather than being
+    // empty, so a future leftover event fails on its own merits instead of on
+    // a missing method.
+    const schedule = {
+      cancelSessionReminders: async () => 0,
+      scheduleSessionReminders: async () => 0,
+      applyScheduleChange: async () => 0,
+    } as never;
     const worker = new OutboxWorker(
       prisma, notifications, recipients, presence, alwaysFails as never, identity, schedule,
     );

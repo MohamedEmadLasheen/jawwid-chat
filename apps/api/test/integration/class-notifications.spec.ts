@@ -41,13 +41,16 @@ const admin = () => ({
 
 async function coreEvent(
   eventType: string,
+  // The envelope's SOURCE time. Ordering is by this, never by the moment the
+  // delivery arrived -- so the tests name it for what it is.
   payload: Record<string, unknown>,
-  receivedAt = new Date(),
+  occurredAt = new Date(),
 ): Promise<void> {
   await g.prisma.$executeRaw`
-    insert into chat.core_event (source, external_event_id, event_type, payload, received_at)
+    insert into chat.core_event (source, external_event_id, event_type, payload,
+                                occurred_at, received_at)
     values ('jawwid_core', ${randomUUID()}, ${eventType}, ${JSON.stringify(payload)}::jsonb,
-            ${receivedAt}::timestamptz)`;
+            ${occurredAt}::timestamptz, now())`;
 }
 
 /** A mirrored, upcoming occurrence. Returns both ids. */

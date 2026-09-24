@@ -1,10 +1,32 @@
-> **STATUS: REFERENCE** (Phase 0, 2026-09-07). Sound webhook contract from the archived branch `archive/phase0/feat/core-integration-boundary`; not implemented on the integration line. Re-implemented against the canonical schema in a later phase per `JAWUID-CHAT-ARCHITECTURE.md` §2.9.
 > Canonical index: `docs/README.md`.
 
 # Jawwid Core ⇄ Jawwid Chat — integration contract
 
-**Status: authoritative.** This supersedes the proposed payload shapes in
-`backend-contract.md` §9 and any earlier description of the boundary.
+## Status — read this before citing this document
+
+Two different things are described here, and they have never had the same
+status. Conflating them is the mistake this section exists to prevent.
+
+| What | Status | Established by |
+|---|---|---|
+| **Who owns the data** — the authority table in §8 | **AUTHORITATIVE** | `JAWUID-CHAT-ARCHITECTURE.md` §2.9 independently, in the same terms: Core owns students, parents, teachers, schedules, enrolments, subscriptions and payments; "conflicts resolved in favour of Core" |
+| **The wire contract** — §1–§7, the payloads, the envelope, the status codes | **IMPLEMENTED** (2026-09-24) | `POST /integration/core/events`, `apps/api/src/communication/core/`, and the ledger + processor behind it |
+
+**Historical note, kept because deleting it would hide how we got here.** Until
+2026-09-24 this file opened with `STATUS: REFERENCE` — the webhook it describes
+had been built on the archived branch `archive/phase0/feat/core-integration-boundary`
+and was *not* implemented on the integration line, while the body of the
+document simultaneously called itself authoritative. Both statements were true
+of different halves and the combination was unreadable: a developer citing "the
+authoritative contract" could not tell whether they were citing settled
+ownership or an unbuilt design.
+
+The wire is now built on this line, so the reference status no longer applies.
+The archived branch remains the origin of the design and is not the running
+code. §8's authority table never depended on the wire existing and does not now.
+
+This document supersedes the proposed payload shapes in `backend-contract.md`
+§9 and any earlier description of the boundary.
 
 Owner: AI #1. Source of truth for the product: **Jawwid Chat PRD v0.1**
 (`docs/product/jawwid-chat-prd-v0.1.md`), §12.4 in particular.
@@ -38,8 +60,23 @@ HMAC-SHA256.
 - Comparison is constant-time.
 - `CORE_WEBHOOK_SECRETS` holds `keyid:secret[,keyid2:secret2]`. Two entries is
   how a rotation lands: Core switches key id, then the old secret is dropped.
+  Only the **first** colon separates, so a secret may contain one. A malformed
+  entry is dropped rather than guessed at; if that leaves no keys, the boundary
+  is unconfigured.
 - A deployment with no secrets configured returns `503` and accepts nothing.
   An unconfigured boundary must never be an open one.
+
+**Settled 2026-09-24, when the boundary was implemented.** These were open to
+interpretation and are now fixed, because a constant-time comparison is exact
+and a sender that guessed differently would be refused every time:
+
+| Question | Answer |
+|---|---|
+| Secret encoding | **Raw UTF-8 bytes** of the string after the first colon. Not hex, not base64, no decoding |
+| Digest case | **Lowercase** hex |
+| Is `sha256=` part of the compared value? | **Yes.** The prefix is not stripped and the case is not normalised |
+| Maximum body | **1 MiB**, refused before parsing |
+| Is `occurred_at` replay-checked? | **No.** Only `X-Jawwid-Timestamp` is. A backfill carries an old `occurred_at` and a fresh HTTP timestamp, and is valid |
 
 > **PRODUCT DECISION REQUIRED — can Jawwid Core sign?**
 > PRD §15.2 open question 1 (Core's stack and authentication scheme) is still

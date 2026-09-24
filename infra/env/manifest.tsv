@@ -91,7 +91,8 @@ LIVEKIT_API_SECRET	calling	yes	req	req	req
 LIVEKIT_TOKEN_TTL_SECONDS	calling	no	opt	req	req
 CORE_BASE_URL	core	no	req	req	req
 CORE_API_KEY	core	yes	opt	req	req
-CORE_WEBHOOK_SECRET	core	yes	opt	req	req
+CORE_WEBHOOK_SECRETS	core	yes	opt	req	req
+CORE_WEBHOOK_TOLERANCE_SECONDS	core	no	opt	opt	opt
 CORE_TIMEOUT_MS	core	no	opt	req	req
 CORE_RETRY_MAX	core	no	opt	req	req
 SENTRY_DSN	observability	yes	opt	req	req

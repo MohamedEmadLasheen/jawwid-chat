@@ -59,7 +59,7 @@ Rotate on a schedule, on staff departure, and immediately on any suspicion.
 | `FCM_SERVICE_ACCOUNT_JSON` | New service-account key in Firebase → update → deploy → verify → delete the old key. | None. |
 | `APNS_PRIVATE_KEY` | New APNs auth key → update `APNS_KEY_ID` **and** the key together → deploy → verify on a real device → revoke the old. | iOS push fails if the ID and key are updated separately. |
 | `LIVEKIT_API_SECRET` | New key pair → update → deploy → verify a call connects → revoke the old. | Tokens minted with the old secret fail; TTL is 300s, so a short window. |
-| `CORE_API_KEY` / `CORE_WEBHOOK_SECRET` | Coordinate with the Core team; the webhook secret must be rotated on both sides, ideally with dual-accept. | Webhook signature failures if rotated one-sided. |
+| `CORE_API_KEY` / `CORE_WEBHOOK_SECRETS` | Coordinate with the Core team; the webhook secret must be rotated on both sides, ideally with dual-accept. | Webhook signature failures if rotated one-sided. |
 | Mobile signing | **Not rotatable.** An Android upload key or an iOS certificate cannot be changed without a store process. Back them up; losing the Android keystore means the app cannot be updated. | — |
 
 ## 5. Revoking a compromised credential

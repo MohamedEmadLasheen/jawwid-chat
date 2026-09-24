@@ -41,7 +41,7 @@ inspection of current artifacts shows the production code does **not** implement
 - `docker-compose.yml:15-19` records: *"This changed on 2026-09-05 when the product owner locked
   the database decision: Jawwid Chat is standalone and owns its own PostgreSQL database, and
   Jawwid Core integration goes through an API/webhook boundary."*
-- `.env.example` already carries `CORE_BASE_URL`, `CORE_API_KEY`, `CORE_WEBHOOK_SECRET`,
+- `.env.example` already carries `CORE_BASE_URL`, `CORE_API_KEY`, `CORE_WEBHOOK_SECRETS`,
   `CORE_TIMEOUT_MS`, `CORE_RETRY_MAX`.
 
 **D-7 is therefore largely already satisfied.** What remains is residue and proof, not a
@@ -429,7 +429,7 @@ Core's favour; change events drive the event bus; sync health is visible and ale
 | `public.profiles/children/subscriptions/payments`, `auth.users`, `auth.uid` in migrations or API | **0** |
 | Those symbols in `db/test/00_core_shim.sql` | present — file declares *"TEST FIXTURE ONLY — never applied to a real database"* |
 | Own database | `docker-compose.yml` runs `postgres:17-alpine` as `jawwid-chat-postgres`; `.env.example` defines its own `POSTGRES_DB` / `DATABASE_URL` |
-| API integration config | `CORE_BASE_URL`, `CORE_API_KEY`, `CORE_WEBHOOK_SECRET`, `CORE_TIMEOUT_MS`, `CORE_RETRY_MAX` present |
+| API integration config | `CORE_BASE_URL`, `CORE_API_KEY`, `CORE_WEBHOOK_SECRETS`, `CORE_TIMEOUT_MS`, `CORE_RETRY_MAX` present |
 | Recorded decision | `docker-compose.yml:15-19` — standalone DB + API/webhook boundary, locked by the product owner 2026-09-05 |
 
 **3. Exact contradiction — residue only.**

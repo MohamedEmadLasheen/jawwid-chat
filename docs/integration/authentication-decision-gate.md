@@ -21,7 +21,7 @@ implementer's to make.
 ## 1 · Evidence found
 
 Every line below is from the repository. Nothing is inferred from a variable
-name; `CORE_BASE_URL`, `CORE_API_KEY` and `CORE_WEBHOOK_SECRET` are declared in
+name; `CORE_BASE_URL`, `CORE_API_KEY` and `CORE_WEBHOOK_SECRETS` are declared in
 `.env.example` and **read by no code**, so they are evidence of intent, not of
 capability.
 

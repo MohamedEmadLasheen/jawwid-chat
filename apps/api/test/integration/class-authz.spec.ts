@@ -21,8 +21,10 @@ let coreChildId: string;
 
 async function coreEvent(eventType: string, payload: Record<string, unknown>): Promise<void> {
   await g.prisma.$executeRaw`
-    insert into chat.core_event (source, external_event_id, event_type, payload, received_at)
-    values ('jawwid_core', ${randomUUID()}, ${eventType}, ${JSON.stringify(payload)}::jsonb, now())`;
+    insert into chat.core_event (source, external_event_id, event_type, payload,
+                                occurred_at, received_at)
+    values ('jawwid_core', ${randomUUID()}, ${eventType}, ${JSON.stringify(payload)}::jsonb,
+            now(), now())`;
 }
 
 async function mirroredSession(): Promise<{ coreId: string; id: string }> {

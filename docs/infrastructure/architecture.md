@@ -75,7 +75,7 @@ budget and means an attachment cannot be read without an authorization decision.
 | API → Redis | Private network, authenticated, TLS where the provider offers it. Never public. |
 | API → object storage | Server-side credentials. Clients never receive storage credentials — only signed URLs. |
 | API → Jawwid Core | Outbound HTTPS, authenticated, bounded by `CORE_TIMEOUT_MS`. |
-| Core → API (webhooks) | Inbound HTTPS, signature-verified with `CORE_WEBHOOK_SECRET`. |
+| Core → API (webhooks) | Inbound HTTPS, signature-verified with `CORE_WEBHOOK_SECRETS`. |
 | Client → LiveKit | Direct, using a short-lived token minted by the API. The LiveKit **API secret never leaves the server**. |
 
 ---

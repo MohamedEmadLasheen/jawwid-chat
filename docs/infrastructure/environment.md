@@ -145,7 +145,8 @@ credentials, the LiveKit API secret, or Core credentials.
 |---|---|---|---|---|
 | `CORE_BASE_URL` | no | req | req | req |
 | `CORE_API_KEY` | **yes** | opt | req | req |
-| `CORE_WEBHOOK_SECRET` | **yes** | opt | req | req |
+| `CORE_WEBHOOK_SECRETS` | **yes** | opt | req | req |
+| `CORE_WEBHOOK_TOLERANCE_SECONDS` | no | opt | opt | opt |
 | `CORE_TIMEOUT_MS` | no | opt | req | req |
 | `CORE_RETRY_MAX` | no | opt | req | req |
 
@@ -225,7 +226,7 @@ tokens; the secret itself must never reach a client. `scan-secrets.sh` fails the
 build if it appears under `lib/` or `apps/admin-web/src/`.
 
 **`CORE_*`** — Jawwid Core integration. `CORE_TIMEOUT_MS` bounds Core's latency
-so it cannot become Chat's latency; `CORE_WEBHOOK_SECRET` verifies inbound
+so it cannot become Chat's latency; `CORE_WEBHOOK_SECRETS` verifies inbound
 webhook signatures. A Core outage degrades Core-dependent features and leaves
 the rest of Chat running (see `architecture.md` §4).
 
