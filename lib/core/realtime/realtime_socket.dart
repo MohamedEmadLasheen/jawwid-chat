@@ -223,3 +223,37 @@ class SocketIoRealtimeSocket implements RealtimeSocket {
     await _states.close();
   }
 }
+
+/// A transport that opens nothing.
+///
+/// For the fixture build, which has no server. It is a real implementation of
+/// the seam rather than a null: the client's lifecycle runs unchanged, it
+/// simply never receives a frame. That keeps a demo build from reaching a
+/// socket by accident, and keeps the fixture path exercising the same code the
+/// real one does.
+class SilentRealtimeSocket implements RealtimeSocket {
+  final _frames = StreamController<RealtimeFrame>.broadcast();
+  final _states = StreamController<RealtimeSocketState>.broadcast();
+
+  @override
+  Stream<RealtimeFrame> get frames => _frames.stream;
+
+  @override
+  Stream<RealtimeSocketState> get states => _states.stream;
+
+  @override
+  Future<void> connect(String token) async {}
+
+  @override
+  Future<SubscriptionResult> subscribe(String conversationId) async =>
+      const SubscriptionResult(ok: false, code: 'COMM.NOT_CONNECTED');
+
+  @override
+  Future<void> unsubscribe(String conversationId) async {}
+
+  @override
+  Future<void> dispose() async {
+    if (!_frames.isClosed) await _frames.close();
+    if (!_states.isClosed) await _states.close();
+  }
+}

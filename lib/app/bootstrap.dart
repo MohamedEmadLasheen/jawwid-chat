@@ -2,14 +2,17 @@ import 'package:flutter_riverpod/misc.dart';
 
 import '../core/data/fake_backend.dart';
 import '../core/data/fake_repositories.dart';
+import '../core/data/http/http_call_repository.dart';
 import '../core/data/http/http_conversation_repository.dart';
 import '../core/data/http/http_group_repository.dart';
 import '../core/data/http/http_message_repository.dart';
 import '../core/data/http/unavailable_auth_repository.dart';
 import '../core/errors/app_error.dart';
 import '../core/network/actor_identity.dart';
+import '../core/network/api_client.dart' show TokenProvider;
 import '../core/network/api_config.dart';
 import '../core/network/http_stack.dart';
+import '../core/realtime/realtime_socket.dart';
 import '../core/storage/secure_token_store.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/domain/auth_state.dart';
@@ -61,13 +64,20 @@ List<Override> _httpOverrides({required String debugActorId}) {
 
   final session = SessionContext(fallbackActorId: debugActorId);
 
+  // ONE TokenProvider for the whole session. The HTTP client and the realtime
+  // socket share it rather than each holding their own: `StoredTokenProvider`
+  // single-flights its refresh, and two instances over one session would
+  // refresh independently and could rotate the refresh token out from under
+  // each other.
+  final tokens = StoredTokenProvider(
+    store: tokenStore,
+    auth: auth,
+    onEnded: session.end,
+  );
+
   final client = buildApiClient(
     config: config,
-    tokens: StoredTokenProvider(
-      store: tokenStore,
-      auth: auth,
-      onEnded: session.end,
-    ),
+    tokens: tokens,
     identity: identity,
   );
 
@@ -82,6 +92,13 @@ List<Override> _httpOverrides({required String debugActorId}) {
     ),
     groupRepositoryProvider.overrideWithValue(
       HttpGroupRepository(client: client),
+    ),
+    callRepositoryProvider.overrideWithValue(
+      HttpCallRepository(client: client),
+    ),
+    realtimeTokenProvider.overrideWithValue(tokens),
+    realtimeSocketProvider.overrideWithValue(
+      SocketIoRealtimeSocket(baseUrl: config.baseUrl),
     ),
     authControllerProvider.overrideWith(
       () => AuthController(
@@ -107,6 +124,11 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
     messageRepositoryProvider.overrideWithValue(FakeMessageRepository(backend)),
     groupRepositoryProvider.overrideWithValue(FakeGroupRepository(backend)),
     callRepositoryProvider.overrideWithValue(FakeCallRepository(backend)),
+    // The fixture build gets a realtime seam that opens nothing. Calls are
+    // still not wired to an interface, so there is nothing to drive it; what
+    // matters is that a demo build cannot reach a real socket.
+    realtimeTokenProvider.overrideWithValue(const _NoRealtimeTokens()),
+    realtimeSocketProvider.overrideWithValue(SilentRealtimeSocket()),
     authControllerProvider.overrideWith(
       () => AuthController(
         repository: authRepository,
@@ -152,3 +174,19 @@ class SessionContext {
 }
 
 typedef AppAuthState = AuthState;
+
+
+/// No credential, so [CallRealtimeClient] reports `unauthorized` and opens
+/// nothing. The fixture build has no server to authenticate against.
+class _NoRealtimeTokens implements TokenProvider {
+  const _NoRealtimeTokens();
+
+  @override
+  Future<String?> accessToken() async => null;
+
+  @override
+  Future<String?> refresh() async => null;
+
+  @override
+  Future<void> onSessionEnded(AppError error) async {}
+}
