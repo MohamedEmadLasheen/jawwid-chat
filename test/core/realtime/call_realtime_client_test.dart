@@ -72,10 +72,18 @@ class FakeRealtimeSocket implements RealtimeSocket {
 }
 
 class FakeTokens implements TokenProvider {
-  FakeTokens(this._token);
+  FakeTokens(this._token, {String? renewsTo, this.renewable = true})
+      : _renewed = renewsTo;
 
-  final String? _token;
+  String? _token;
+  final String? _renewed;
+
+  /// Whether the session can be renewed at all. False stands in for a refresh
+  /// token the server has rejected.
+  final bool renewable;
+
   int accessCalls = 0;
+  int refreshCalls = 0;
 
   @override
   Future<String?> accessToken() async {
@@ -84,7 +92,39 @@ class FakeTokens implements TokenProvider {
   }
 
   @override
-  Future<String?> refresh() async => _token;
+  Future<String?> refresh() async {
+    refreshCalls++;
+    if (!renewable) return null;
+    // A real refresh replaces the access token, so a later connect uses it.
+    if (_renewed != null) _token = _renewed;
+    return _token;
+  }
+
+  @override
+  Future<void> onSessionEnded(AppError error) async {}
+}
+
+/// A refresh a test can hold open, to land a dispose in the middle of it.
+class SlowTokens implements TokenProvider {
+  SlowTokens(this._token, this._renewed);
+
+  String? _token;
+  final String _renewed;
+  final _gate = Completer<void>();
+  int refreshCalls = 0;
+
+  void releaseRefresh() => _gate.complete();
+
+  @override
+  Future<String?> accessToken() async => _token;
+
+  @override
+  Future<String?> refresh() async {
+    refreshCalls++;
+    await _gate.future;
+    _token = _renewed;
+    return _token;
+  }
 
   @override
   Future<void> onSessionEnded(AppError error) async {}
@@ -231,11 +271,21 @@ void main() {
 
     test('a server-initiated refusal is unauthorized, not a retryable drop',
         () async {
-      await client.connect();
+      // Updated when the bounded renewal landed. A refusal now spends ONE
+      // refresh before giving up, so the terminal state is only observable on
+      // a session that cannot be renewed -- which is the case this was always
+      // about: the server said no and no amount of retrying changes it.
+      final tokens = FakeTokens('stale-token', renewable: false);
+      final refused = CallRealtimeClient(socket: socket, tokens: tokens);
+      addTearDown(refused.dispose);
+
+      await refused.connect();
       socket.moveTo(RealtimeSocketState.unauthorized);
       await pumpEventQueue();
 
-      expect(client.state, CallRealtimeState.unauthorized);
+      expect(refused.state, CallRealtimeState.unauthorized);
+      // And it stopped: one connection attempt, never a second.
+      expect(socket.connectedWith, hasLength(1));
     });
 
     test('dispose stops delivery and is idempotent', () async {
@@ -477,6 +527,151 @@ void main() {
         expect(source, isNot(contains('Bearer ')));
         expect(source, isNot(contains('livekit')));
         expect(source, isNot(contains('apiSecret')));
+      }
+    });
+  });
+
+  group('D. the token lifecycle when a credential is refused', () {
+    test('D5. a refusal spends one refresh and reconnects with what it returns',
+        () async {
+      final tokens = FakeTokens('stale-token', renewsTo: 'fresh-token');
+      final client = CallRealtimeClient(socket: socket, tokens: tokens);
+      addTearDown(client.dispose);
+
+      await client.connect();
+      expect(socket.connectedWith, ['stale-token']);
+
+      // The server refuses the handshake: `io server disconnect`.
+      socket.moveTo(RealtimeSocketState.unauthorized);
+      await pumpEventQueue();
+
+      expect(tokens.refreshCalls, 1);
+      expect(socket.connectedWith, ['stale-token', 'fresh-token']);
+    });
+
+    test('D4/D6. a session that cannot be renewed stops, it does not loop',
+        () async {
+      final tokens = FakeTokens('stale-token', renewable: false);
+      final client = CallRealtimeClient(socket: socket, tokens: tokens);
+      addTearDown(client.dispose);
+
+      await client.connect();
+      socket.moveTo(RealtimeSocketState.unauthorized);
+      await pumpEventQueue();
+
+      expect(tokens.refreshCalls, 1);
+      // One attempt, and no second connection. Reporting the dead session is
+      // the session lifecycle's job, not this client's.
+      expect(socket.connectedWith, hasLength(1));
+      expect(client.state, CallRealtimeState.unauthorized);
+    });
+
+    test('D4. a refusal that survives the refresh does not become a storm',
+        () async {
+      // The nastiest shape: refresh keeps handing back a token the server keeps
+      // refusing. Without a budget this is an infinite reconnect.
+      final tokens = FakeTokens('stale-token', renewsTo: 'still-bad');
+      final client = CallRealtimeClient(socket: socket, tokens: tokens);
+      addTearDown(client.dispose);
+
+      await client.connect();
+      for (var i = 0; i < 5; i++) {
+        socket.moveTo(RealtimeSocketState.unauthorized);
+        await pumpEventQueue();
+      }
+
+      // Refused, refreshed, refused again, stopped.
+      expect(tokens.refreshCalls, 1);
+      expect(socket.connectedWith, ['stale-token', 'still-bad']);
+    });
+
+    test('a connection that works restores the budget for a later refusal',
+        () async {
+      final tokens = FakeTokens('t1', renewsTo: 't2');
+      final client = CallRealtimeClient(socket: socket, tokens: tokens);
+      addTearDown(client.dispose);
+
+      await client.connect();
+      socket.moveTo(RealtimeSocketState.unauthorized);
+      await pumpEventQueue();
+      expect(tokens.refreshCalls, 1);
+
+      // It connects this time.
+      socket.moveTo(RealtimeSocketState.connected);
+      await pumpEventQueue();
+
+      // A refusal much later is a new problem and deserves its own attempt.
+      socket.moveTo(RealtimeSocketState.unauthorized);
+      await pumpEventQueue();
+      expect(tokens.refreshCalls, 2);
+    });
+
+    test('D9b. a dispose DURING the refresh cancels the reconnect', () async {
+      // The race the second guard exists for: the refusal arrived, the refresh
+      // is in flight, and the user signs out before it returns. Reconnecting
+      // afterwards would open a socket for a session that has ended -- with a
+      // credential that was renewed after the sign-out.
+      final tokens = SlowTokens('stale-token', 'fresh-token');
+      final client = CallRealtimeClient(socket: socket, tokens: tokens);
+
+      await client.connect();
+      socket.moveTo(RealtimeSocketState.unauthorized);
+      await pumpEventQueue();
+      expect(tokens.refreshCalls, 1, reason: 'the refresh is in flight');
+
+      await client.dispose();
+      tokens.releaseRefresh();
+      await pumpEventQueue();
+
+      // The refresh completed and produced a usable token. Nothing used it.
+      expect(socket.connectedWith, ['stale-token']);
+    });
+
+    test('D9. a disposed client neither refreshes nor reconnects', () async {
+      final tokens = FakeTokens('stale-token', renewsTo: 'fresh-token');
+      final client = CallRealtimeClient(socket: socket, tokens: tokens);
+
+      await client.connect();
+      await client.dispose();
+
+      socket.moveTo(RealtimeSocketState.unauthorized);
+      await pumpEventQueue();
+
+      // Signing out must not be followed by the client quietly renewing the
+      // session it was disposed with.
+      expect(tokens.refreshCalls, 0);
+      expect(socket.connectedWith, hasLength(1));
+    });
+
+    test('D2. an ordinary drop does not refresh — only a refusal does', () async {
+      final tokens = FakeTokens('t1', renewsTo: 't2');
+      final client = CallRealtimeClient(socket: socket, tokens: tokens);
+      addTearDown(client.dispose);
+
+      await client.connect();
+      socket.moveTo(RealtimeSocketState.disconnected);
+      await pumpEventQueue();
+
+      // A network blip is socket.io's to retry with the credential it has.
+      // Refreshing on every drop would be churn nobody asked for.
+      expect(tokens.refreshCalls, 0);
+    });
+
+    test('D8. no token reaches a log, on any of these paths', () {
+      final source =
+          File('lib/core/realtime/call_realtime_client.dart').readAsStringSync();
+      final logCalls = RegExp(r'_log\.\w+\([^;]*?\);', dotAll: true)
+          .allMatches(source)
+          .map((m) => m.group(0)!);
+
+      for (final call in logCalls) {
+        // Prose may say the word; what must never appear is an interpolated
+        // credential. `$renewed` or `$token` inside a log line is the failure
+        // this is looking for, not the noun.
+        expect(call, isNot(contains(r'$renewed')), reason: call);
+        expect(call, isNot(contains(r'$token')), reason: call);
+        expect(call, isNot(contains(r'${_tokens')), reason: call);
+        expect(call, isNot(contains('accessToken')), reason: call);
       }
     });
   });

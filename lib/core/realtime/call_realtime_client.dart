@@ -55,6 +55,14 @@ class CallRealtimeClient {
   bool _connecting = false;
   bool _disposed = false;
 
+  /// One refresh-and-retry per connection attempt.
+  ///
+  /// Spent when the server refuses a credential and restored by a successful
+  /// connection. Without it, a refresh that keeps producing a token the server
+  /// keeps refusing would reconnect forever -- which is the loop this whole
+  /// path exists to avoid.
+  bool _mayRetryAfterRefresh = true;
+
   /// Typed call events. Broadcast: several listeners are fine, and a late
   /// listener does not replay history it would misread as new.
   Stream<CallEvent> get events => _events.stream;
@@ -134,6 +142,8 @@ class CallRealtimeClient {
       case RealtimeSocketState.connecting:
         _setState(CallRealtimeState.connecting);
       case RealtimeSocketState.connected:
+        // The credential worked. A later refusal gets a fresh attempt.
+        _mayRetryAfterRefresh = true;
         _setState(CallRealtimeState.connected);
         // Rooms do not survive a reconnect; the socket does. Restore what we
         // were subscribed to, and let the server authorize each one again --
@@ -145,7 +155,53 @@ class CallRealtimeClient {
       case RealtimeSocketState.unauthorized:
         _log.warn('realtime: server refused the connection');
         _setState(CallRealtimeState.unauthorized);
+        unawaited(_renewAndReconnect());
     }
+  }
+
+  /// The server refused our credential. Try the session once, then stop.
+  ///
+  /// WHY THIS IS NEEDED AT ALL. socket.io carries the token from the handshake
+  /// and re-presents that same one on every reconnect, so an access token that
+  /// expired while the socket was down is refused, refused again, and the
+  /// connection never returns even though the session is perfectly renewable.
+  ///
+  /// WHY IT IS BOUNDED. A refusal that a refresh cannot fix must not become a
+  /// reconnect storm. The budget is one attempt, spent here and restored only
+  /// by a connection that actually succeeds, so the worst case is: refused,
+  /// refresh, refused again, stop.
+  ///
+  /// The refresh is [TokenProvider.refresh] -- the same single-flighted one the
+  /// HTTP stack uses, on the same instance, so a socket and an HTTP 401
+  /// recovering at once produce one refresh rather than two racing ones. There
+  /// is no second token mechanism here and no timer: this is driven by a
+  /// refusal, not by a clock.
+  ///
+  /// A refresh that fails ends the session through TokenProvider's own
+  /// `onEnded`, which is what already signs the user out everywhere else. This
+  /// stays [CallRealtimeState.unauthorized] and does nothing further.
+  Future<void> _renewAndReconnect() async {
+    if (_disposed || !_mayRetryAfterRefresh) return;
+    _mayRetryAfterRefresh = false;
+
+    final renewed = await _tokens.refresh();
+    // A sign-out can land while the refresh is in flight. connect() below
+    // already refuses once disposed -- verified by removing this line and
+    // watching the suite still pass -- so this is a second reading of the same
+    // fact, kept because it makes the intent local rather than two methods
+    // away.
+    if (_disposed) return;
+    if (renewed == null || renewed.isEmpty) {
+      // Not renewable. The session is over; saying so is the session
+      // lifecycle's job, not this client's.
+      _log.warn('realtime: session could not be renewed, staying disconnected');
+      return;
+    }
+
+    // Reconnect through the ordinary path so the listener discipline and the
+    // single-socket rule still hold. The state is unauthorized, so connect()
+    // does not treat this as an already-live connection.
+    await connect();
   }
 
   Future<void> _resubscribe() async {
