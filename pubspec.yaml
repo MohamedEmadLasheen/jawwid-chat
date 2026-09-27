@@ -22,6 +22,21 @@ dependencies:
   # Networking (§48).
   dio: ^5.11.1
   web_socket_channel: ^3.0.3
+  # Voice call media. The server owns the room, the grant and the token (W1/W3);
+  # this is only the client that joins with what it is given. Pinned to a
+  # version whose own constraints this SDK satisfies -- 2.13.0 requires Dart
+  # >=3.10.0 and Flutter >=3.38.0, against our ^3.13.0 / >=3.47.0.
+  #
+  # AUDIO ONLY. The SDK exposes camera and screen share; W1 restricted the
+  # server-issued grant to canPublishSources: ['microphone'], so publishing
+  # either would be refused by LiveKit. The client does not offer them either --
+  # see lib/core/call_media, and the tests that assert no camera or screen API
+  # is reached for.
+  #
+  # Reached only through the seam in lib/core/call_media/call_media_client.dart,
+  # so no test needs a microphone or a room.
+  livekit_client: ^2.13.0
+
   # Realtime signalling. The backend speaks SOCKET.IO, not bare WebSocket:
   # API-CONTRACT §1 fixes the handshake as socket.io `auth: { token }` on the
   # default namespace, and the gateway is a Nest @WebSocketGateway. web_socket_channel
