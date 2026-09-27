@@ -691,6 +691,24 @@ abstract class L10n {
   /// **'The call could not connect. Check your connection and try again.'**
   String get callFailedNetwork;
 
+  /// No description provided for @callOutgoing.
+  ///
+  /// In en, this message translates to:
+  /// **'Calling…'**
+  String get callOutgoing;
+
+  /// No description provided for @callEnded.
+  ///
+  /// In en, this message translates to:
+  /// **'Call ended'**
+  String get callEnded;
+
+  /// No description provided for @callSendMessageInstead.
+  ///
+  /// In en, this message translates to:
+  /// **'Send a message instead'**
+  String get callSendMessageInstead;
+
   /// No description provided for @notificationsTitle.
   ///
   /// In en, this message translates to:

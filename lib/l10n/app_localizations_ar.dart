@@ -343,6 +343,15 @@ class L10nAr extends L10n {
       'تعذّر إجراء المكالمة. تحقق من اتصالك وحاول مرة أخرى.';
 
   @override
+  String get callOutgoing => 'جارٍ الاتصال…';
+
+  @override
+  String get callEnded => 'انتهت المكالمة';
+
+  @override
+  String get callSendMessageInstead => 'إرسال رسالة بدلاً من ذلك';
+
+  @override
   String get notificationsTitle => 'المستجدات';
 
   @override

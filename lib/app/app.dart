@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../design/theme.dart';
+import '../features/calls/presentation/call_presenter.dart';
 import '../l10n/app_localizations.dart';
 import 'router.dart';
 
@@ -66,7 +67,10 @@ class JawwidApp extends ConsumerWidget {
 
         return MediaQuery(
           data: media.copyWith(textScaler: scale),
-          child: child ?? const SizedBox.shrink(),
+          // W7: a call has to be able to appear wherever the user is, so the
+          // presenter wraps the whole router rather than one screen. It renders
+          // nothing itself; see `call_presenter.dart`.
+          child: CallPresenter(child: child ?? const SizedBox.shrink()),
         );
       },
     );
