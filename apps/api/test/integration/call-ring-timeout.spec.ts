@@ -182,17 +182,33 @@ describe('D/E/F/G — a call that already reached a terminal state', () => {
     expect(answered.status).toBe('active');
   });
 
-  it('E. a declined call: the participant left, but the call itself is still ringing and does expire', async () => {
-    // Declining marks the participant, not the call -- there is no
-    // caller-cancelled/declined CALL STATUS in this schema, and Phase 11 did
-    // not invent one. The sweep is what gives that call its terminal state.
+  it('E. a declined call is ALREADY terminal, and the sweep can never relabel it missed', async () => {
+    // CHANGED BY W6, deliberately. Declining used to mark the participant and
+    // leave the CALL ringing, so this sweep collected it and recorded
+    // `outcome = 'missed'` -- a call the callee had explicitly refused, written
+    // into history as one they never saw, and (via notifyMissedCall) a
+    // missed-call push sent to the person who declined it.
+    //
+    // A decline is now the terminal transition itself:
+    //   ringing --decline--> ended, outcome = 'declined'
+    // and this sweep needed no change to respect that. It matches
+    // `status = 'ringing'`; a declined call is `ended`.
     const { callId } = await directCall();
     await g.calls.decline(callId, s.parentId);
-    expect((await snapshot(callId)).status).toBe('ringing');
 
+    const declined = await snapshot(callId);
+    expect(declined.status).toBe('ended');
+    expect(declined.outcome).toBe('declined');
+    expect(declined.answeredAt).toBeNull();
+    expect(declined.durationSeconds).toBe(0);
+
+    // Age it far past the ring deadline and sweep repeatedly: nothing matches,
+    // and the outcome is not rewritten.
     await pastDeadline(callId);
-    expect(await g.calls.expireRingingCalls()).toBe(1);
-    expect((await snapshot(callId)).outcome).toBe('missed');
+    expect(await g.calls.expireRingingCalls()).toBe(0);
+    expect(await g.calls.expireRingingCalls()).toBe(0);
+    expect(await snapshot(callId)).toEqual(declined);
+    expect((await snapshot(callId)).outcome).toBe('declined');
   });
 
   it('F. an ended call is not touched, and its outcome is not rewritten', async () => {
@@ -252,7 +268,15 @@ describe('H/I/J/K — races, against the real database', () => {
     }
   });
 
-  it('I. decline vs timeout: one terminal outcome, never two', async () => {
+  it('I. decline vs timeout: one terminal outcome, never two, and never both labels', async () => {
+    // Both are now terminal transitions competing for the same ringing call, so
+    // this is the race W6 had to make safe rather than merely tolerable.
+    //
+    // Either ordering is correct and exactly one can win. Decline holds the row
+    // with SELECT ... FOR UPDATE; the sweep's inner select takes rows
+    // `for update skip locked`, so a sweep meeting a decline in progress SKIPS
+    // the row instead of waiting to overwrite it, and a decline meeting a
+    // committed sweep reads `ended` and refuses.
     const { callId } = await directCall();
     await pastDeadline(callId);
 
@@ -262,11 +286,15 @@ describe('H/I/J/K — races, against the real database', () => {
     ]);
 
     const after = await snapshot(callId);
-    // Whatever the order, the call is in exactly one state and carries at most
-    // one terminal event.
-    expect(['ringing', 'ended']).toContain(after.status);
-    expect((await terminalEvents(callId)).length).toBeLessThanOrEqual(1);
-    if (after.status === 'ended') expect(after.outcome).toBe('missed');
+    // Terminal either way: the call cannot be left ringing by this race.
+    expect(after.status).toBe('ended');
+    // One label, and it is one of the two legitimate ones -- never a `missed`
+    // written over a `declined` or the reverse.
+    expect(['declined', 'missed']).toContain(after.outcome);
+    expect(after.answeredAt).toBeNull();
+    expect(after.durationSeconds).toBe(0);
+    // And exactly one terminal event, whichever path produced it.
+    expect(await terminalEvents(callId)).toHaveLength(1);
   });
 
   it('J. end vs timeout: the outcome is never both answered and missed', async () => {

@@ -59,7 +59,7 @@ multi-device fan-out works: all of one person's devices receive the same events.
 | `approval.requested` | `{ conversationId, messageId, approvalId, requestedBy }` | **Staff rooms only** — never the group |
 | `approval.decided` | `{ conversationId, messageId, approvalId, decision, rejectionReason }` | Conversation room |
 | `call.incoming` | `{ callId, conversationId, type, initiatorId, initiatorName, roomName }` | Conversation room |
-| `call.accepted` / `call.declined` | `{ callId, actorId }` | Conversation room |
+| `call.accepted` / `call.declined` | `{ callId, conversationId, actorId }` | Conversation room. Since 2026-09-27 a `call.declined` is accompanied by `call.ended` with `outcome: 'declined'` — the refusal ends the call. Both are enqueued in one transaction and share `created_at`, so their relative order is not guaranteed. |
 | `call.participant_joined` / `call.participant_left` | `{ callId, actorId }` | Conversation room |
 | `call.ended` | `{ callId, conversationId, outcome, durationSeconds }` | Conversation room |
 | `notification.created` | `{ notificationId, recipientId, eventType, title, body, conversationId }` | Actor room |

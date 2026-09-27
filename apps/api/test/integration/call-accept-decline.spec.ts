@@ -126,27 +126,39 @@ describe("accept — the happy path still works", () => {
     ).toHaveLength(1);
   });
 
-  it("declining works, and declining again is refused rather than silently repeated", async () => {
-    // Deliberately NOT idempotent-success, unlike accept. Accepting twice is a
-    // retry by someone still on the call; declining twice is acting on a call
-    // you already left, and authorizeJoin refuses that for the same reason it
-    // refuses any other non-participant. The client treats the code as
-    // terminal, which is correct: the call IS declined.
+  it("declining ENDS the call as declined, and declining again changes nothing", async () => {
+    // CHANGED BY W6. Declining used to mark only the participant and leave the
+    // call ringing for the timeout sweep to record as `missed`. A refusal is now
+    // the terminal transition itself, so history says what happened.
+    //
+    // Still deliberately NOT idempotent-success, unlike accept: the second
+    // decline is refused. What matters -- and is asserted -- is that it changes
+    // nothing and announces nothing, which is the property the client relies on.
     const { callId } = await directCall();
 
     await g.calls.decline(callId, s.parentId);
     const first = await snapshot(callId);
-    expect(
-      first.participants.find((p) => p.actorId === s.parentId)?.leftAt,
-    ).toBeInstanceOf(Date);
+
+    expect(first.status).toBe("ended");
+    expect(first.outcome).toBe("declined");
+    // Refusing is not answering: no answer time, and no participant marked as
+    // having joined.
+    expect(first.answeredAt).toBeNull();
+    expect(first.participants.every((p) => p.joinedAt === null)).toBe(true);
+    // A terminal call has no live participants -- the decliner, and the caller
+    // who was still ringing.
+    expect(first.participants.every((p) => p.leftAt !== null)).toBe(true);
 
     await expect(g.calls.decline(callId, s.parentId)).rejects.toMatchObject({
-      code: CommErrorCode.CALL_PARTICIPANT_LEFT,
+      code: CommErrorCode.CALL_ALREADY_ENDED,
     });
     expect(await snapshot(callId)).toEqual(first);
-    expect(
-      (await callEvents(callId)).filter((t) => t === "call.declined"),
-    ).toHaveLength(1);
+
+    const events = await callEvents(callId);
+    expect(events.filter((t) => t === "call.declined")).toHaveLength(1);
+    // The same terminal event every other ending produces, exactly once, so a
+    // client follows one ending.
+    expect(events.filter((t) => t === "call.ended")).toHaveLength(1);
   });
 });
 
@@ -280,9 +292,14 @@ describe("state transitions that must not happen", () => {
     const { callId } = await directCall();
     await g.calls.decline(callId, s.parentId);
     const afterDecline = await snapshot(callId);
+    expect(afterDecline.status).toBe("ended");
 
+    // CALL_ALREADY_ENDED since W6, where it used to be CALL_PARTICIPANT_LEFT:
+    // the decline made the call terminal, so the terminal check answers first.
+    // The property under test is unchanged -- a declined call cannot become
+    // active, and the attempt writes nothing.
     await expect(g.calls.accept(callId, s.parentId)).rejects.toMatchObject({
-      code: CommErrorCode.CALL_PARTICIPANT_LEFT,
+      code: CommErrorCode.CALL_ALREADY_ENDED,
     });
     expect(await snapshot(callId)).toEqual(afterDecline);
   });
@@ -291,11 +308,17 @@ describe("state transitions that must not happen", () => {
     const { callId } = await directCall();
     await g.calls.decline(callId, s.parentId);
 
+    // The property is the same and the state is now honest about it. This used
+    // to be CALL_ALREADY_DECLINED against a call still sitting in `ringing`:
+    // accept already knew the call was dead, but the record did not say so
+    // until a sweep relabelled it `missed`. The refusal now comes from the
+    // terminal state itself.
     await expect(g.calls.accept(callId, s.teacherId)).rejects.toMatchObject({
-      code: CommErrorCode.CALL_ALREADY_DECLINED,
+      code: CommErrorCode.CALL_ALREADY_ENDED,
     });
     const after = await snapshot(callId);
-    expect(after.status).toBe("ringing");
+    expect(after.status).toBe("ended");
+    expect(after.outcome).toBe("declined");
     expect(after.answeredAt).toBeNull();
   });
 

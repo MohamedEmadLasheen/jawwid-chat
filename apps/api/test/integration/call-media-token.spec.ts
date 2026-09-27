@@ -118,12 +118,34 @@ describe("A–H — who may obtain a media token", () => {
     });
   });
 
-  it("D. a participant who left the call is denied", async () => {
+  it("D. a participant who left the call is denied, even while the call is live", async () => {
+    // The participant row is marked directly rather than by declining, because
+    // since W6 a decline ENDS the call and the terminal check would answer
+    // first. This test is about the `left_at` check specifically -- "is a
+    // participant" and "is still on the call" are different questions -- so the
+    // call is deliberately left RINGING and only the participant has left.
+    const { callId } = await directCall();
+    await g.prisma.callParticipant.updateMany({
+      where: { callId, actorId: s.parentId },
+      data: { leftAt: new Date() },
+    });
+    const call = await g.prisma.call.findUnique({ where: { id: callId } });
+    expect(call!.status).toBe("ringing");
+
+    await expect(g.calls.issueToken(callId, s.parentId)).rejects.toMatchObject({
+      code: CommErrorCode.CALL_PARTICIPANT_LEFT,
+    });
+  });
+
+  it("D1. and a declined call is denied a token because it has ENDED", async () => {
+    // The companion property, and the reason D could no longer be written this
+    // way: a decline is now terminal, so the token path refuses on the call
+    // state before it ever looks at the participant.
     const { callId } = await directCall();
     await g.calls.decline(callId, s.parentId);
 
     await expect(g.calls.issueToken(callId, s.parentId)).rejects.toMatchObject({
-      code: CommErrorCode.CALL_PARTICIPANT_LEFT,
+      code: CommErrorCode.CALL_ALREADY_ENDED,
     });
   });
 

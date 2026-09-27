@@ -280,7 +280,7 @@ export class CallService {
     const { actor, call } = await this.authorizeJoin(callId, actorId);
 
     await this.prisma.$transaction(async (tx) => {
-      const status = await this.lockCall(tx, callId);
+      const { status } = await this.lockCall(tx, callId);
       if (status === CallStatus.ENDED) {
         throw new CommError(CommErrorCode.CALL_ALREADY_ENDED, 'this call has ended', 409);
       }
@@ -306,6 +306,13 @@ export class CallService {
       // A call every other participant has left has been refused. Answering it
       // would record an answer nobody gave -- and for a direct call, the "other
       // participant" is the whole of the other side.
+      //
+      // A BACKSTOP SINCE W6, not the primary path. A decline now ends the call
+      // itself, so the usual way to reach this state is refused above by the
+      // terminal check. It stays because `left_at` is not written only by
+      // decline: a direct row write, or a future "leave the call" operation that
+      // does not end it, could still empty a ringing call, and answering such a
+      // call must not be possible.
       const others = participants.filter((p) => p.actorId !== actor.actorId);
       if (others.length > 0 && others.every((p) => p.leftAt !== null)) {
         throw new CommError(
@@ -348,20 +355,63 @@ export class CallService {
   }
 
   /**
-   * Refuse a ringing call.
+   * Refuse a ringing call. THE CALL ENDS HERE -- W6's one deliberate lifecycle
+   * correction, and the only behaviour change in this workstream.
+   *
+   * WHAT IT USED TO DO, MEASURED RATHER THAN ASSUMED. `decline` marked the
+   * participant and left the CALL `ringing`. Nothing ended it, so the
+   * ring-timeout sweep collected it seconds later and wrote
+   * `outcome = 'missed'`:
+   *
+   *   decline()          -> {status: ringing, outcome: null}
+   *   sweep, 45s later   -> {status: ended,   outcome: missed, duration: 0}
+   *
+   * Three things were wrong with that. History recorded a call the callee had
+   * explicitly REFUSED as one they never saw. `notifyMissedCall` fires on that
+   * outcome, so the sweep then pushed a "missed call" notification to the very
+   * person who had just declined. And `declined` -- a value the schema defines
+   * and the check constraint allows -- was unreachable from the decline
+   * endpoint, leaving a vocabulary no code path could produce.
+   *
+   * WHAT IT DOES NOW
+   *
+   *   ringing --decline--> ended, outcome = 'declined', duration 0
+   *
+   * `answered_at` stays null and no `joined_at` is written: refusing is not
+   * answering, and history must not be able to claim otherwise.
+   *
+   * WHY VIABILITY, NOT "ANY DECLINE ENDS THE CALL". A group call is not a 1:1.
+   * One parent refusing a Student Group call must not hang up on the admin and
+   * the other parents still ringing. So the call becomes terminal when FEWER
+   * THAN TWO PARTICIPANTS REMAIN LIVE -- a call needs two parties to be
+   * answerable. For a direct call that is the first decline, immediately, which
+   * is the locked contract. For a group call it is the last invitee's decline.
+   *
+   * This is not a new rule invented here: `accept` already refuses with
+   * CALL_ALREADY_DECLINED once every other participant has left, i.e. it
+   * already treats such a call as dead. W6 makes the STATE agree with that
+   * refusal instead of leaving a dead call ringing until a sweep relabels it.
+   *
+   * THE SWEEP CAN NO LONGER TOUCH A DECLINED CALL, and needed no change to stop
+   * it: `expireRingingCalls` matches `status = 'ringing'` and a declined call is
+   * `ended`. Both orderings are safe because this holds the row lock -- a sweep
+   * running concurrently either skips the locked row (`skip locked`) or claims it
+   * first, in which case `lockCall` below reads `ended` and this refuses.
+   * Exactly one terminal outcome, never two, and never a `missed` written over a
+   * `declined`.
    *
    * Same authorization chain as accept: knowing a call id is not permission to
    * decline somebody's call, and a revoked relationship cannot act on it either.
    *
    * Only a RINGING call can be declined. Leaving a call already in progress is
-   * `end`, and declining an ended one is nothing at all -- allowing it would
-   * write a leave time onto a finished call and make its history wrong.
+   * `end`, and declining an ended one is refused -- allowing it would write a
+   * leave time onto a finished call and make its history wrong.
    */
   async decline(callId: string, actorId: string): Promise<void> {
     const { actor, call } = await this.authorizeJoin(callId, actorId);
 
     await this.prisma.$transaction(async (tx) => {
-      const status = await this.lockCall(tx, callId);
+      const { status } = await this.lockCall(tx, callId);
       if (status === CallStatus.ENDED) {
         throw new CommError(CommErrorCode.CALL_ALREADY_ENDED, 'this call has ended', 409);
       }
@@ -373,9 +423,11 @@ export class CallService {
         );
       }
 
-      const mine = await tx.callParticipant.findFirst({
-        where: { callId, actorId: actor.actorId },
-      });
+      // Every participant, read under the lock: the decision below is about who
+      // is still live, and a stale read of that is how a group call gets hung up
+      // on the people still ringing.
+      const participants = await tx.callParticipant.findMany({ where: { callId } });
+      const mine = participants.find((p) => p.actorId === actor.actorId);
       if (!mine) {
         throw new CommError(
           CommErrorCode.CALL_NOT_A_PARTICIPANT,
@@ -385,12 +437,15 @@ export class CallService {
       // Reachable only in a race: two declines both pass authorizeJoin with
       // left_at null, one wins the lock and writes it, and the loser sees the
       // committed value here. A sequential second decline never reaches this
-      // line -- authorizeJoin refuses it with CALL_PARTICIPANT_LEFT.
+      // line -- the call is terminal by then and authorizeJoin refuses it with
+      // CALL_ALREADY_ENDED. Either way the second decline changes nothing and
+      // announces nothing.
       if (mine.leftAt !== null) return;
 
+      const now = new Date();
       await tx.callParticipant.updateMany({
         where: { callId, actorId: actor.actorId, leftAt: null },
-        data: { leftAt: new Date() },
+        data: { leftAt: now },
       });
 
       await this.outbox.enqueue(tx, CommEvent.CALL_DECLINED, {
@@ -398,42 +453,136 @@ export class CallService {
         conversationId: call.conversationId,
         actorId: actor.actorId,
       });
+
+      // Who is left that could still answer, AFTER this refusal. The decliner is
+      // excluded explicitly because the rows above were read before the update.
+      const stillLive = participants.filter(
+        (p) => p.leftAt === null && p.actorId !== actor.actorId,
+      ).length;
+      if (stillLive >= 2) return; // a group call the remaining parties can still answer
+
+      // TERMINAL, in the same transaction as the refusal. The conditional
+      // `status: RINGING` is belt-and-braces under a lock we already hold: it
+      // means a concurrent transition could not be overwritten even if the lock
+      // were removed.
+      await tx.call.updateMany({
+        where: { id: callId, status: CallStatus.RINGING },
+        data: {
+          status: CallStatus.ENDED,
+          endedAt: now,
+          outcome: CallOutcome.DECLINED,
+          durationSeconds: 0,
+        },
+      });
+
+      // Mirrors end() and the sweep: a terminal call has no live participants.
+      // `joined_at` is untouched and stays null, so history says plainly that
+      // nobody answered.
+      await tx.callParticipant.updateMany({
+        where: { callId, leftAt: null },
+        data: { leftAt: now },
+      });
+
+      // The SAME terminal event every other ending produces, so a client
+      // follows one ending and no consumer needs to know decline exists. Both
+      // rows are written in this transaction and therefore share `created_at`;
+      // their relative delivery order is not a guarantee the outbox makes, and
+      // nothing depends on it -- `call.declined` says who refused, `call.ended`
+      // says the call is over.
+      await this.outbox.enqueue(tx, CommEvent.CALL_ENDED, {
+        callId,
+        conversationId: call.conversationId,
+        outcome: CallOutcome.DECLINED,
+        durationSeconds: 0,
+      });
+
+      await this.audit.event(tx, {
+        familyId: call.familyId,
+        actorKind: actor.kind,
+        actorId: actor.actorId,
+        type: 'call_ended',
+        payload: { callId, outcome: CallOutcome.DECLINED, reason: 'declined' },
+      });
     });
   }
 
   /**
-   * Take the call row's lock, and read its status through it.
+   * Take the call row's lock, and read the lifecycle through it.
    *
    * Every accept, decline and end for one call queues here, so the state each
    * one sees is the state it acts on. Without it two concurrent answers both
    * read RINGING and both believe they made the transition.
+   *
+   * IT RETURNS `answered_at` AS WELL AS `status`, because `end` derives the
+   * outcome from it and must derive it from LOCKED state. Reading it before the
+   * lock is what let an accept commit in the window and an end still record
+   * `missed` for a call that had been answered a millisecond earlier.
    */
   private async lockCall(
     tx: Prisma.TransactionClient,
     callId: string,
-  ): Promise<string> {
-    const rows = await tx.$queryRaw<Array<{ status: string }>>`
-      select status from chat.call where id = ${callId}::uuid for update
+  ): Promise<{ status: string; answeredAt: Date | null }> {
+    const rows = await tx.$queryRaw<Array<{ status: string; answeredAt: Date | null }>>`
+      select status, answered_at as "answeredAt"
+        from chat.call where id = ${callId}::uuid for update
     `;
     if (rows.length === 0) {
       throw new CommError(CommErrorCode.CALL_NOT_FOUND, 'call not found', 404);
     }
-    return rows[0].status;
+    return rows[0];
   }
 
-  /** Ends the call and records its outcome. */
+  /**
+   * Ends the call and records its outcome.
+   *
+   * THE OUTCOME IS DERIVED FROM LOCKED STATE, not from the read above.
+   * `answered_at` is re-read through the row lock, so an accept that commits
+   * between the authorization check and here is seen: the call ends `answered`,
+   * with a duration, instead of `missed` with none. Deriving it from a pre-lock
+   * read is a lost update in the one field call history is made of.
+   *
+   * ALREADY ENDED IS A NO-OP, NOT A REWRITE. Before W6 this method had no
+   * terminal guard at all -- `requireLiveParticipant` deliberately does not
+   * check status -- so an `end` arriving after any other ending overwrote
+   * `status`, `ended_at`, `outcome` and `duration_seconds` and enqueued a second
+   * `call.ended`. That is a terminal state being mutated, and with decline now
+   * terminal it is a live path: a client that declines and then hangs up would
+   * have rewritten its own `declined` as `missed`. Hanging up twice is a retry,
+   * so it succeeds and changes nothing.
+   *
+   * THE `outcome` PARAMETER IS NO LONGER REACHABLE FROM HTTP. The controller
+   * used to forward a request field into it, which let a participant name their
+   * own call history; it does not any more (see call.controller.ts). It survives
+   * here for one caller: a test that has to construct the single state the
+   * missed-call notification filter defends against -- an ANSWERED call ending
+   * `missed` -- which no production path can now produce.
+   *
+   * ENDING STILL NEVER FAILS FOR AUTHORIZATION REASONS. `requireLiveParticipant`
+   * is unchanged and deliberately weaker than `authorizeJoin`: a call whose
+   * relationship was revoked mid-conversation must still be hangable, or it sits
+   * ACTIVE forever. See that method for the full reasoning.
+   */
   async end(callId: string, actorId: string, outcome?: string): Promise<void> {
     const actor = await this.conversations.requireActor(actorId);
     const call = await this.requireLiveParticipant(callId, actor.actorId);
-    const now = new Date();
-
-    const resolved =
-      outcome ?? (call.answeredAt ? CallOutcome.ANSWERED : CallOutcome.MISSED);
-    const duration = call.answeredAt
-      ? Math.max(0, Math.round((now.getTime() - call.answeredAt.getTime()) / 1000))
-      : 0;
 
     await this.prisma.$transaction(async (tx) => {
+      const locked = await this.lockCall(tx, callId);
+
+      // Terminal. Whatever ended it -- a decline, a sweep, another device's
+      // hang-up -- owns the outcome, and this does not get to relabel it.
+      if (locked.status === CallStatus.ENDED) return;
+
+      const now = new Date();
+      const resolved =
+        outcome ?? (locked.answeredAt ? CallOutcome.ANSWERED : CallOutcome.MISSED);
+      // Duration is measured from `answered_at`, the application answer, and
+      // deliberately NOT from `media_joined_at`: accepting is the act being
+      // timed, and a slow media join does not shorten the call.
+      const duration = locked.answeredAt
+        ? Math.max(0, Math.round((now.getTime() - locked.answeredAt.getTime()) / 1000))
+        : 0;
+
       await tx.call.update({
         where: { id: callId },
         data: {
@@ -486,6 +635,14 @@ export class CallService {
    *     (see accept()). The sweep blocks, then re-checks, sees `status =
    *     'active'`, and does not match. The call stays answered.
    *   * sweep vs end -- same shape: `status = 'ended'` no longer matches.
+   *   * sweep vs decline -- since W6 a decline ends the call, so this is the
+   *     same shape again and needed no change here: the row is `ended` with
+   *     `outcome = 'declined'` and does not match, which is what stops a
+   *     refused call being relabelled `missed`. Both orderings are safe -- the
+   *     inner select takes the row `for update skip locked`, so a sweep meeting
+   *     a decline in progress skips the row entirely rather than waiting to
+   *     overwrite it, and a decline meeting a committed sweep reads `ended` and
+   *     refuses.
    *   * sweep vs sweep, on two workers -- the first to take the lock updates the
    *     row; the second re-checks and finds `status = 'ended'`. Exactly one
    *     worker gets the row back from RETURNING, so exactly one enqueues the

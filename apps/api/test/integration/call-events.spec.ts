@@ -224,16 +224,27 @@ describe("the lifecycle a client can follow", () => {
   it("the declined call is a complete sequence too", async () => {
     const { callId } = await directCall();
     await g.calls.decline(callId, s.parentId);
+    // The caller's client hangs up after seeing the refusal. Since W6 the call
+    // is already terminal, so this is a no-op and adds no second ending.
     await g.calls.end(callId, s.teacherId);
 
     const sequence = (await drain()).filter(
       (d) => d.payload?.callId === callId,
     );
-    expect(sequence.map((d) => d.event)).toEqual([
-      CommEvent.CALL_INCOMING,
-      CommEvent.CALL_DECLINED,
-      CommEvent.CALL_ENDED,
-    ]);
+
+    // `call.incoming` is its own transaction and is therefore strictly first.
+    expect(sequence[0].event).toBe(CommEvent.CALL_INCOMING);
+    // `call.declined` and `call.ended` are enqueued in ONE transaction, so they
+    // share `created_at` and the outbox -- which drains `order by created_at` --
+    // makes no promise about which of the two it publishes first. The guarantee
+    // is that both are delivered, exactly once each, and nothing else is: one
+    // says who refused, the other says the call is over, and no consumer needs
+    // them ordered. Asserting an order here would be asserting a tie-break the
+    // database does not owe us.
+    expect(sequence.map((d) => d.event).sort()).toEqual(
+      [CommEvent.CALL_INCOMING, CommEvent.CALL_DECLINED, CommEvent.CALL_ENDED].sort(),
+    );
+    expect(sequence).toHaveLength(3);
   });
 });
 

@@ -38,9 +38,20 @@ export class CallController {
     return { ok: true };
   }
 
+  /**
+   * Hang up. THE OUTCOME IS NOT A REQUEST FIELD.
+   *
+   * This used to pass `body.outcome` straight through, so a participant could
+   * POST `{"outcome": "answered"}` and have history record a conversation that
+   * never happened -- the exact class of defect the accept/decline
+   * authorization chain exists to prevent -- or send any other string and turn a
+   * check-constraint violation into a 500. The outcome is derived from the
+   * call's own locked state: ACTIVE ends `answered`, RINGING ends `missed`, and
+   * `declined` comes only from the decline endpoint.
+   */
   @Post(':id/end')
-  async end(@ActorId() actorId: string, @Param('id') id: string, @Body() body: { outcome?: string }) {
-    await this.calls.end(id, actorId, body?.outcome);
+  async end(@ActorId() actorId: string, @Param('id') id: string) {
+    await this.calls.end(id, actorId);
     return { ok: true };
   }
 
