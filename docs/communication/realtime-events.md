@@ -58,10 +58,10 @@ multi-device fan-out works: all of one person's devices receive the same events.
 | `conversation.membership_changed` | `{ conversationId, added[], removed[] }` | Conversation room |
 | `approval.requested` | `{ conversationId, messageId, approvalId, requestedBy }` | **Staff rooms only** — never the group |
 | `approval.decided` | `{ conversationId, messageId, approvalId, decision, rejectionReason }` | Conversation room |
-| `call.incoming` | `{ callId, conversationId, type, initiatorId, initiatorName, roomName }` | Conversation room |
+| `call.incoming` | `{ callId, conversationId, type, initiatorId, initiatorName }` | Conversation room. **No `roomName`** (removed 2026-09-24): the room handle comes back from `POST /calls/:id/token` with the token that makes it usable. |
 | `call.accepted` / `call.declined` | `{ callId, conversationId, actorId }` | Conversation room. Since 2026-09-27 a `call.declined` is accompanied by `call.ended` with `outcome: 'declined'` — the refusal ends the call. Both are enqueued in one transaction and share `created_at`, so their relative order is not guaranteed. |
-| `call.participant_joined` / `call.participant_left` | `{ callId, actorId }` | Conversation room |
-| `call.ended` | `{ callId, conversationId, outcome, durationSeconds }` | Conversation room |
+| `call.participant_joined` / `call.participant_left` | `{ callId, conversationId, actorId }` | Conversation room. **MEDIA presence, emitted only by `POST /livekit/webhook`** — never by an HTTP accept, which emits `call.accepted`. A join is not an application answer and a leave does not end the call. |
+| `call.ended` | `{ callId, conversationId, outcome, durationSeconds }` | Conversation room. Every termination: `end`, the ring-timeout sweep, and (since 2026-09-27) `decline`. |
 | `notification.created` | `{ notificationId, recipientId, eventType, title, body, conversationId }` | Actor room |
 
 ## Guarantees

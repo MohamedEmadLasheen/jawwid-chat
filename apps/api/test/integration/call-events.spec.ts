@@ -263,22 +263,46 @@ describe("7/8. media presence is not faked from an HTTP accept", () => {
     expect(events).not.toContain(CommEvent.CALL_PARTICIPANT_JOINED);
   });
 
-  it("nothing in the API emits the media-presence events yet", () => {
-    // A tripwire, so faking media presence from an HTTP call becomes a
-    // deliberate act rather than a convenience. The emitter, when it exists,
-    // will be a LiveKit webhook.
+  it("the media-presence events have exactly ONE emitter, and it is the webhook", () => {
+    // A tripwire, so faking media presence from an HTTP call is a deliberate act
+    // rather than a convenience.
+    //
+    // REWRITTEN 2026-09-27, because the old version had stopped guarding
+    // anything. It asserted that NOTHING emitted these events -- true when it was
+    // written, false since W5 built `MediaPresenceService` -- and it kept passing
+    // only because it grepped for `enqueue(` on the SAME LINE as the constant,
+    // and that call spans four lines. A tripwire that cannot see the emitter it
+    // exists to watch is worse than no tripwire: it reads as evidence.
+    //
+    // The real contract, and what is asserted now: these events mean media
+    // presence, so the only thing that may enqueue them is the thing that
+    // observed it -- the LiveKit webhook's reconciliation. An HTTP accept emits
+    // `call.accepted` instead. See API-CONTRACT §3.8/§3.9.
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { execSync } =
       require("node:child_process") as typeof import("node:child_process");
-    const emitters = execSync(
-      "grep -rn 'CALL_PARTICIPANT_JOINED\\|CALL_PARTICIPANT_LEFT' src || true",
-      { cwd: `${__dirname}/../..`, encoding: "utf8" },
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { readFileSync } = require("node:fs") as typeof import("node:fs");
+    const root = `${__dirname}/../..`;
+
+    const referencing = execSync(
+      "grep -rl 'CommEvent.CALL_PARTICIPANT_JOINED\\|CommEvent.CALL_PARTICIPANT_LEFT' src || true",
+      { cwd: root, encoding: "utf8" },
     )
       .split("\n")
-      .filter(Boolean)
-      .filter((line) => /enqueue\(/.test(line));
+      .filter(Boolean);
+    // The set is non-empty, or the grep itself is what is broken.
+    expect(referencing.length).toBeGreaterThan(0);
 
-    expect(emitters).toEqual([]);
+    // Referencing them is fine -- the outbox worker has to ROUTE them and
+    // contracts/events.ts has to declare them. ENQUEUING them is the act.
+    const emitters = referencing.filter((file) =>
+      /\.enqueue\(/.test(readFileSync(`${root}/${file}`, "utf8")),
+    );
+
+    expect(emitters).toEqual([
+      "src/communication/calls/media-presence.service.ts",
+    ]);
   });
 });
 

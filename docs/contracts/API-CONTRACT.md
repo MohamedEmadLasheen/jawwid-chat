@@ -165,7 +165,7 @@ One row per distinct (method, path). Paths are relative to `/api/v1` unless mark
 | POST | `/livekit/webhook` | API | **EXISTS (new 2026-09-27)** | LiveKit's own callback, not a Jawwid actor. Verified with the official `WebhookReceiver`; records MEDIA presence, never an accept. §3.9 |
 | POST | `/calls` | API | EXISTS | §3.8 |
 | POST | `/calls/:id/token` | API | EXISTS | §3.8 |
-| POST | `/calls/:id/accept` | API | EXISTS | Emits `call.participant_joined`, not `call.accepted`. §3.8 |
+| POST | `/calls/:id/accept` | API | EXISTS | Emits **`call.accepted`** — an application answer. `call.participant_joined` means MEDIA presence and comes only from `POST /livekit/webhook`. §3.8 |
 | POST | `/calls/:id/decline` | API | EXISTS | §3.8 |
 | POST | `/calls/:id/end` | API | EXISTS | §3.8 |
 | GET | `/calls/history/:conversationId` | API | RECONCILE | Response → `{items,nextCursor}` (Phase 1). §3.8 |
@@ -587,10 +587,18 @@ what LiveKit observed and never write `status`, `outcome`, `answered_at`, `joine
   media joined 10:03, ended 10:10 ⇒ **10 minutes**.
 - A media join on a ringing call does not answer it.
 
-**Group calls.** A decline ends the call once fewer than two participants remain live — a
-call needs two parties. For a direct call that is the first decline; for a Student/Class
-Group call one parent's refusal leaves the call ringing for everyone else, and the last
-invitee's refusal ends it.
+**The transition is unconditional.** A decline ends the call whoever declines and however
+many participants it has. There is **no group-call exception**: no product source defines
+one, and W6 does not invent one. `docs/design/screens/call.md` §7 says only that *"a group
+call with one participant is allowed"*, which is about a call continuing, not about a
+refusal. If a Student Group call is to survive one parent's refusal, that is a product
+decision with its own authorization.
+
+**A decline stamps `left_at` for the decliner alone.** A participant who was still ringing
+did not leave, and a call becoming terminal is not evidence that they did — so an ended
+call may carry a participant whose `left_at` is null. Terminal state is `call.status`, which
+is what every guard checks. `end` and the ring-timeout sweep do stamp every open
+participant; that is their existing rule and it is unchanged. The asymmetry is deliberate.
 
 **Carry-forward risk (out of scope for W6, stated deliberately).** An ACTIVE call has no
 deadline: nothing but an explicit `end` terminates it, so a call accepted by a client that
@@ -636,19 +644,19 @@ unauthorized lifecycle rule.
 - Auth: required. Permission: `calls.accept`. Scope: recorded participant, call not ended, still a member, `canCall(intent = join)` re-evaluated — including the PD-6 relationship predicate, so a teacher–parent relationship revoked in Jawwid Core refuses the next join even mid-call. This is the JOIN path, so a parent is allowed here (**PD-2**). Response: `{ token, url, roomName, expiresAt }`; TTL `call.token_ttl_seconds` (120); `canPublish = !isSilent`.
 - Errors: `COMM.CALL_NOT_FOUND` 404 · `COMM.CALL_ALREADY_ENDED` 409 · `COMM.CALL_NOT_A_PARTICIPANT` 403 · matrix codes. Audit / Realtime: none.
 
-**POST /calls/:id/accept** — EXISTS · Permission `calls.accept` · Scope: **the full join authorization chain**, identical to `POST /calls/:id/token` — actor active, recorded participant, `left_at` null, call not ended, still a conversation member, communication matrix, C-4, PD-2, and the **PD-6 relationship re-resolved now** (starting a call does not guarantee it may still be answered). `joinedAt` set; `ringing → active` with `answeredAt`, decided under `SELECT … FOR UPDATE` so concurrent accept/decline/end cannot tear the state. Answering twice is an idempotent no-op. Response `{ ok: true }`. Errors: matrix codes; `COMM.CALL_PARTICIPANT_LEFT` 409; `COMM.CALL_ALREADY_ENDED` 409; `COMM.CALL_ALREADY_DECLINED` 409; `COMM.CALL_NOT_A_PARTICIPANT` 403. **A refused accept writes nothing** — no `joinedAt`, no `answeredAt`, no status change, no event. Realtime: **`call.accepted { callId, conversationId, actorId }`** to `conversation:<id>`. **Changed 2026-09-24:** this used to emit `call.participant_joined` with no `conversationId`, which the outbox could not route and silently discarded. `participant_joined` now means MEDIA presence and is emitted only by something that has observed it (a LiveKit webhook — not yet built); an HTTP accept does not assert a media connection. Audit: none.
+**POST /calls/:id/accept** — EXISTS · Permission `calls.accept` · Scope: **the full join authorization chain**, identical to `POST /calls/:id/token` — actor active, recorded participant, `left_at` null, call not ended, still a conversation member, communication matrix, C-4, PD-2, and the **PD-6 relationship re-resolved now** (starting a call does not guarantee it may still be answered). `joinedAt` set; `ringing → active` with `answeredAt`, decided under `SELECT … FOR UPDATE` so concurrent accept/decline/end cannot tear the state. Answering twice is an idempotent no-op. Response `{ ok: true }`. Errors: matrix codes; `COMM.CALL_PARTICIPANT_LEFT` 409; `COMM.CALL_ALREADY_ENDED` 409; `COMM.CALL_ALREADY_DECLINED` 409; `COMM.CALL_NOT_A_PARTICIPANT` 403. **A refused accept writes nothing** — no `joinedAt`, no `answeredAt`, no status change, no event. Realtime: **`call.accepted { callId, conversationId, actorId }`** to `conversation:<id>`. **Changed 2026-09-24:** this used to emit `call.participant_joined` with no `conversationId`, which the outbox could not route and silently discarded. `participant_joined` means MEDIA presence and is emitted only by something that has observed it — `POST /livekit/webhook` and nothing else (§3.9, built 2026-09-27). An HTTP accept does not assert a media connection, and the two facts are stored in different columns: `joined_at` is the accept, `media_joined_at` is the room. Audit: none.
 
 **POST /calls/:id/decline** — EXISTS · Permission `calls.accept` · Scope: the same full join authorization chain as accept, plus the call must still be **ringing**. `leftAt` set, under the same row lock.
 
-**Changed 2026-09-27 (W6): a decline is now the TERMINAL transition.** `ringing → ended` with `outcome = 'declined'`, `duration_seconds = 0`, `answered_at` left null, and every remaining participant's `leftAt` stamped — all in one transaction with the refusal. It used to mark only the participant and leave the call `ringing`, so the ring-timeout sweep collected it ~45s later and recorded `outcome = 'missed'`: a call the callee had explicitly refused was written into history as one they never saw, `missed_call` then pushed a notification to the person who had just declined, and the `declined` outcome the schema defines was unreachable from this endpoint. The sweep needed no change to respect the new state — it matches `status = 'ringing'`.
+**Changed 2026-09-27 (W6): a decline is now the TERMINAL transition.** `ringing → ended` with `outcome = 'declined'`, `duration_seconds = 0`, `answered_at` left null, and the decliner's `leftAt` stamped — all in one transaction with the refusal. It used to mark only the participant and leave the call `ringing`, so the ring-timeout sweep collected it ~45s later and recorded `outcome = 'missed'`: a call the callee had explicitly refused was written into history as one they never saw, `missed_call` then pushed a notification to the person who had just declined, and the `declined` outcome the schema defines was unreachable from this endpoint. The sweep needed no change to respect the new state — it matches `status = 'ringing'`.
 
-For a **group** call the call ends only when fewer than two participants remain live, so one refusal does not hang up on the parties still ringing.
+The transition is **unconditional** — no participant-count qualifier, and no group-call exception (see the lifecycle block above). Only the decliner's `leftAt` is written; nobody else's is fabricated because the call ended.
 
 Declining again is refused with `COMM.CALL_ALREADY_ENDED` (was `COMM.CALL_PARTICIPANT_LEFT`) and changes nothing. Errors: matrix codes; `COMM.CALL_NOT_RINGING` 409; `COMM.CALL_ALREADY_ENDED` 409; `COMM.CALL_PARTICIPANT_LEFT` 409 (reachable in a concurrent-decline race). Realtime: **`call.declined { callId, conversationId, actorId }`** and, when the call becomes terminal, **`call.ended { callId, conversationId, outcome: 'declined', durationSeconds: 0 }`**, both to `conversation:<id>`, exactly once each. They are enqueued in one transaction and therefore share `created_at`; their relative delivery order is not guaranteed and nothing depends on it. Audit: `event_log` `call_ended` when it terminates.
 
 **POST /calls/:id/end** — EXISTS · Permission `calls.accept` · Scope participant. **No request body.** Call `ended`, all open participants `leftAt`, `durationSeconds` computed. Realtime: `call.ended { callId, conversationId, outcome, durationSeconds }`. Audit: `event_log` `call_ended`.
 
-**Changed 2026-09-27 (W6), twice.** (1) The outcome is no longer a request field. `{ outcome }` used to be forwarded straight into the service, so a participant could POST `{"outcome":"answered"}` for a call nobody answered — false history through the front door — or any other string and turn a check-constraint violation into a 500. It is now derived: ACTIVE ends `answered`, RINGING ends `missed`. (2) The derivation reads `answered_at` **through the row lock**, and an already-ended call is a **no-op**. Without the guard, an `end` arriving after any other ending (a decline, the sweep, a second device) overwrote `status`, `ended_at`, `outcome` and `duration_seconds` and enqueued a second `call.ended`. Hanging up twice is a retry: it succeeds and changes nothing. Ending still never fails for authorization reasons, so no call can be stranded ACTIVE.
+**Changed 2026-09-27 (W6), twice.** (1) The outcome is no longer a request field. `{ outcome }` used to be forwarded straight into the service, so a participant could POST `{"outcome":"answered"}` for a call nobody answered — false history through the front door — or any other string and turn a check-constraint violation into a 500. It is now derived: ACTIVE ends `answered`, RINGING ends `missed`. **The service takes no `outcome` argument either** — `CallService.end(callId, actorId)` — so there is no parameter for a future caller to rediscover. (2) The derivation reads `answered_at` **through the row lock**, and an already-ended call is a **no-op**. Without the guard, an `end` arriving after any other ending (a decline, the sweep, a second device) overwrote `status`, `ended_at`, `outcome` and `duration_seconds` and enqueued a second `call.ended`. Hanging up twice is a retry: it succeeds and changes nothing. Ending still never fails for authorization reasons, so no call can be stranded ACTIVE.
 
 > **Ring timeout (Phase 11).** A call nobody answers is not left ringing. The
 > worker sweeps calls whose `started_at` is older than
@@ -766,12 +774,12 @@ Transport: socket.io on the **default namespace** at the API origin (Redis adapt
 | `conversation.membership_changed` | `{ conversationId, added: string[], removed: string[] }` | conversation room | `setMembership`, `syncStudentGroup` |
 | `approval.requested` | `{ conversationId, messageId, approvalId, requestedBy }` | **staff actor rooms only** | `send` (pending) |
 | `approval.decided` | `{ conversationId, messageId, approvalId, decision, rejectionReason }` | conversation room | `decide` |
-| `call.incoming` | `{ callId, conversationId, type, initiatorId, initiatorName, roomName }` | conversation room | `start` |
-| `call.accepted` | `{ callId, actorId }` | — | **nobody** (accept emits `call.participant_joined`). Phase 1: remove or alias. |
-| `call.declined` | `{ callId, actorId }` | conversation room | `decline` |
-| `call.participant_joined` | `{ callId, actorId }` | conversation room | `accept` |
-| `call.participant_left` | `{ callId, actorId }` | — | **nobody**. Phase 1 decides. |
-| `call.ended` | `{ callId, conversationId, outcome, durationSeconds }` | conversation room | `end` |
+| `call.incoming` | `{ callId, conversationId, type, initiatorId, initiatorName }` | conversation room | `start`. **No `roomName`** — removed 2026-09-24; the room handle comes back from `POST /calls/:id/token`. |
+| `call.accepted` | `{ callId, conversationId, actorId }` | conversation room | **`accept`** — the HTTP answer, an APPLICATION act. |
+| `call.declined` | `{ callId, conversationId, actorId }` | conversation room | `decline` |
+| `call.participant_joined` | `{ callId, conversationId, actorId }` | conversation room | **`POST /livekit/webhook` only** (`MediaPresenceService`) — MEDIA presence, something observed in the room. **Never `accept`.** |
+| `call.participant_left` | `{ callId, conversationId, actorId }` | conversation room | **`POST /livekit/webhook` only.** Records a departure; does **not** end the call. |
+| `call.ended` | `{ callId, conversationId, outcome, durationSeconds }` | conversation room | `end`, the ring-timeout sweep, and `decline` (terminal since 2026-09-27) |
 | `notification.created` | `{ notificationId, recipientId, eventType, title, body, conversationId }` | actor room | **nobody** — `in_app` channel is a no-op in `deliver()`. Phase 1 decides. |
 | **`session.revoked`** (Phase 1, new) | `{ sessionId }` | actor room, then the session's sockets are disconnected | `DELETE /me/sessions/:id`, refresh-reuse detection |
 | **`family.assignment_changed`** (Phase 1, new) | `{ familyId, fromStaffId, toStaffId, at }` | actor rooms of both staff + the family's conversation rooms | `POST /families/:id/assignment` |

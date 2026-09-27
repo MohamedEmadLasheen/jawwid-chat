@@ -145,9 +145,15 @@ describe("accept — the happy path still works", () => {
     // having joined.
     expect(first.answeredAt).toBeNull();
     expect(first.participants.every((p) => p.joinedAt === null)).toBe(true);
-    // A terminal call has no live participants -- the decliner, and the caller
-    // who was still ringing.
-    expect(first.participants.every((p) => p.leftAt !== null)).toBe(true);
+    // Only the decliner is marked as having left. The caller was still ringing;
+    // they did not leave, and a call becoming terminal is not evidence that they
+    // did. Terminal state lives in `call.status`, not in a fabricated departure.
+    expect(
+      first.participants.find((p) => p.actorId === s.parentId)?.leftAt,
+    ).toBeInstanceOf(Date);
+    expect(
+      first.participants.find((p) => p.actorId === s.teacherId)?.leftAt,
+    ).toBeNull();
 
     await expect(g.calls.decline(callId, s.parentId)).rejects.toMatchObject({
       code: CommErrorCode.CALL_ALREADY_ENDED,

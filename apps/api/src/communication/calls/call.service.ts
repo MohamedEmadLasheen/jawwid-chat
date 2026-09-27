@@ -380,17 +380,24 @@ export class CallService {
    * `answered_at` stays null and no `joined_at` is written: refusing is not
    * answering, and history must not be able to claim otherwise.
    *
-   * WHY VIABILITY, NOT "ANY DECLINE ENDS THE CALL". A group call is not a 1:1.
-   * One parent refusing a Student Group call must not hang up on the admin and
-   * the other parents still ringing. So the call becomes terminal when FEWER
-   * THAN TWO PARTICIPANTS REMAIN LIVE -- a call needs two parties to be
-   * answerable. For a direct call that is the first decline, immediately, which
-   * is the locked contract. For a group call it is the last invitee's decline.
+   * UNCONDITIONAL, AND NOT QUALIFIED BY PARTICIPANT COUNT. A decline ends the
+   * call, whoever declines and however many participants the call has. There is
+   * no group-call exception here, deliberately: no product source defines one.
+   * A W6 draft made the transition conditional on two participants remaining
+   * live so that one parent's refusal would not end a Student Group call; that
+   * was an inference, the product owner rejected it, and it is gone. If group
+   * calls are to survive a refusal, that is a product decision with its own
+   * authorization, and it will be a rule written here rather than one guessed.
    *
-   * This is not a new rule invented here: `accept` already refuses with
-   * CALL_ALREADY_DECLINED once every other participant has left, i.e. it
-   * already treats such a call as dead. W6 makes the STATE agree with that
-   * refusal instead of leaving a dead call ringing until a sweep relabels it.
+   * WHAT IT DOES NOT WRITE: a `left_at` for anybody but the decliner. A
+   * participant who was still ringing did not leave, and a call becoming
+   * terminal is not evidence that they did. `end()` and the ring-timeout sweep
+   * stamp every open participant -- that is their existing, documented rule and
+   * it is untouched -- but this path does not adopt it, because inventing a
+   * departure for somebody who never departed would put a fact in the
+   * participant lifecycle that nothing observed. An ended call may therefore
+   * carry a participant whose `left_at` is null; terminal state is read from
+   * `call.status`, which is what every guard already checks.
    *
    * THE SWEEP CAN NO LONGER TOUCH A DECLINED CALL, and needed no change to stop
    * it: `expireRingingCalls` matches `status = 'ringing'` and a declined call is
@@ -454,13 +461,6 @@ export class CallService {
         actorId: actor.actorId,
       });
 
-      // Who is left that could still answer, AFTER this refusal. The decliner is
-      // excluded explicitly because the rows above were read before the update.
-      const stillLive = participants.filter(
-        (p) => p.leftAt === null && p.actorId !== actor.actorId,
-      ).length;
-      if (stillLive >= 2) return; // a group call the remaining parties can still answer
-
       // TERMINAL, in the same transaction as the refusal. The conditional
       // `status: RINGING` is belt-and-braces under a lock we already hold: it
       // means a concurrent transition could not be overwritten even if the lock
@@ -475,13 +475,10 @@ export class CallService {
         },
       });
 
-      // Mirrors end() and the sweep: a terminal call has no live participants.
-      // `joined_at` is untouched and stays null, so history says plainly that
-      // nobody answered.
-      await tx.callParticipant.updateMany({
-        where: { callId, leftAt: null },
-        data: { leftAt: now },
-      });
+      // NOTHING ELSE IS STAMPED. Only the decliner's `left_at` was written, above.
+      // The other participants keep whatever their rows already said: `joined_at`
+      // null because nobody answered, and `left_at` null because nobody left.
+      // See the note in this method's doc comment.
 
       // The SAME terminal event every other ending produces, so a client
       // follows one ending and no consumer needs to know decline exists. Both
@@ -550,19 +547,24 @@ export class CallService {
    * have rewritten its own `declined` as `missed`. Hanging up twice is a retry,
    * so it succeeds and changes nothing.
    *
-   * THE `outcome` PARAMETER IS NO LONGER REACHABLE FROM HTTP. The controller
-   * used to forward a request field into it, which let a participant name their
-   * own call history; it does not any more (see call.controller.ts). It survives
-   * here for one caller: a test that has to construct the single state the
-   * missed-call notification filter defends against -- an ANSWERED call ending
-   * `missed` -- which no production path can now produce.
+   * THERE IS NO `outcome` PARAMETER, AND THAT IS THE POINT. This used to take
+   * one, and the controller forwarded a request field into it, so a participant
+   * could POST {"outcome":"answered"} for a call nobody answered -- false history
+   * through the front door -- or any other string and turn a check-constraint
+   * violation into a 500. A W6 draft kept the parameter for one test's benefit;
+   * a production signature that exists for a test is a signature that lies about
+   * the contract, so it is gone. The domain API now expresses the locked state
+   * machine and nothing else:
+   *
+   *   ACTIVE  --end--> ended, answered, duration = now - answered_at
+   *   RINGING --end--> ended, missed,   duration = 0
    *
    * ENDING STILL NEVER FAILS FOR AUTHORIZATION REASONS. `requireLiveParticipant`
    * is unchanged and deliberately weaker than `authorizeJoin`: a call whose
    * relationship was revoked mid-conversation must still be hangable, or it sits
    * ACTIVE forever. See that method for the full reasoning.
    */
-  async end(callId: string, actorId: string, outcome?: string): Promise<void> {
+  async end(callId: string, actorId: string): Promise<void> {
     const actor = await this.conversations.requireActor(actorId);
     const call = await this.requireLiveParticipant(callId, actor.actorId);
 
@@ -574,8 +576,7 @@ export class CallService {
       if (locked.status === CallStatus.ENDED) return;
 
       const now = new Date();
-      const resolved =
-        outcome ?? (locked.answeredAt ? CallOutcome.ANSWERED : CallOutcome.MISSED);
+      const resolved = locked.answeredAt ? CallOutcome.ANSWERED : CallOutcome.MISSED;
       // Duration is measured from `answered_at`, the application answer, and
       // deliberately NOT from `media_joined_at`: accepting is the act being
       // timed, and a slow media join does not shorten the call.

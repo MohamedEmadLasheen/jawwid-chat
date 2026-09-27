@@ -24,6 +24,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { OutboxWorker } from "@communication/outbox/outbox.worker";
+import { CommEvent } from "@communication/contracts/events";
 import { NotificationService } from "@communication/notifications/notification.service";
 import { NoopRealtimePublisher } from "@communication/realtime/realtime.publisher";
 import type {
@@ -356,11 +357,33 @@ describe("H/I — a missed call notifies whoever did not answer", () => {
   });
 
   it("a participant who ANSWERED is not told they missed it", async () => {
-    const { callId } = await directCall();
+    // The `joined_at` filter in notifyMissedCall, exercised at the seam that can
+    // actually reach it. This used to force `missed` through a third argument to
+    // `end()`; W6 removed that parameter -- the outcome is derived from locked
+    // state, so no caller can name it and no production path can produce an
+    // ANSWERED call carrying outcome `missed`.
+    //
+    // The worker can still SEE that combination, which is why the filter must
+    // stay: outbox delivery is at-least-once, so a `call.ended/missed` row can be
+    // replayed after the call was answered. Enqueuing that row directly is
+    // therefore the honest test -- it drives the consumer with the input the
+    // consumer is defending against, instead of corrupting the writer to
+    // manufacture it.
+    const { conversationId, callId } = await directCall();
     await g.calls.accept(callId, s.parentId);
-    await g.calls.end(callId, s.teacherId, "missed"); // outcome forced
+
+    await g.prisma.$transaction(async (tx) => {
+      await g.outbox.enqueue(tx, CommEvent.CALL_ENDED, {
+        callId,
+        conversationId,
+        outcome: "missed",
+        durationSeconds: 0,
+      });
+    });
     await drainOutbox();
 
+    // The participant answered, so the call was not missed for them, whatever
+    // the event says.
     const missed = (await notificationsFor(s.parentId)).filter(
       (n) => n.ruleKey === "missed_call",
     );

@@ -145,9 +145,15 @@ describe('1. decline is the terminal transition', () => {
     expect(after.answeredAt).toBeNull();
     expect(after.durationSeconds).toBe(0);
     expect(after.participants.every((p) => p.joinedAt === null)).toBe(true);
-    // A terminal call has no live participants: the decliner, and the caller
-    // who was still ringing.
-    expect(after.participants.every((p) => p.leftAt !== null)).toBe(true);
+
+    // AND NOTHING IS FABRICATED. The decliner left; the caller, who was still
+    // ringing, did not, and a call becoming terminal is not evidence that they
+    // did. An ended call may carry a participant whose `left_at` is null --
+    // terminal state is `call.status`, which is what every guard checks.
+    const decliner = after.participants.find((p) => p.actorId === s.parentId)!;
+    const caller = after.participants.find((p) => p.actorId === s.teacherId)!;
+    expect(decliner.leftAt).toBeInstanceOf(Date);
+    expect(caller.leftAt).toBeNull();
   });
 
   it('1b. the ring timeout can never convert a declined call into missed', async () => {
@@ -238,56 +244,92 @@ describe('1. decline is the terminal transition', () => {
 });
 
 // =========================================================================
-// 2. GROUP CALLS  (the viability boundary)
+// 2. MULTI-PARTICIPANT CALLS  (no group exception; participant state intact)
 // =========================================================================
-describe('2. one refusal does not hang up on everyone else', () => {
-  it('2a. a four-party group call stays ringing while two parties remain', async () => {
+describe('2. a decline on a multi-party call corrupts nobody else\'s row', () => {
+  /**
+   * THERE IS NO GROUP EXCEPTION, and these do not assert one. The locked
+   * transition applies uniformly -- a decline ends the call whoever declines and
+   * however many participants there are. A W6 draft made it conditional on two
+   * parties remaining live; that was an inference, it was rejected, and it is
+   * gone. What is asserted here is only that the uniform rule leaves the other
+   * participants' rows exactly as it found them.
+   */
+  it('2a. a four-party call ends as declined, and only the decliner is marked', async () => {
     const { callId } = await groupCall();
     const before = await snapshot(callId);
     expect(before.participants).toHaveLength(4);
 
-    // Two of the four refuse. The admin and the teacher are still ringing.
     await g.calls.decline(callId, s.parentId);
-    expect((await snapshot(callId)).status).toBe('ringing');
-
-    await g.calls.decline(callId, s.otherParentId);
-    const after = await snapshot(callId);
-    expect(after.status).toBe('ringing');
-    expect(after.outcome).toBeNull();
-    // Only the two who refused have left.
-    expect(after.participants.filter((p) => p.leftAt !== null)).toHaveLength(2);
-    // And each refusal was announced.
-    expect(await countOf(callId, CommEvent.CALL_DECLINED)).toBe(2);
-    // But no ending yet: nothing has ended.
-    expect(await countOf(callId, CommEvent.CALL_ENDED)).toBe(0);
-  });
-
-  it('2b. it still ENDS as declined when the last party who could answer refuses', async () => {
-    const { callId } = await groupCall();
-
-    await g.calls.decline(callId, s.parentId);
-    await g.calls.decline(callId, s.otherParentId);
-    await g.calls.decline(callId, s.teacherId);
 
     const after = await snapshot(callId);
     expect(after.status).toBe('ended');
     expect(after.outcome).toBe('declined');
     expect(after.answeredAt).toBeNull();
-    expect(after.participants.every((p) => p.leftAt !== null)).toBe(true);
+
+    const decliner = after.participants.find((p) => p.actorId === s.parentId)!;
+    expect(decliner.leftAt).toBeInstanceOf(Date);
+
+    // The other three did not answer and did not leave. Every column stays as it
+    // was, including both media columns -- a lifecycle transition must not write
+    // presence facts nothing observed.
+    for (const other of after.participants.filter((p) => p.actorId !== s.parentId)) {
+      expect(other.leftAt).toBeNull();
+      expect(other.joinedAt).toBeNull();
+      expect(other.mediaJoinedAt).toBeNull();
+      expect(other.mediaLeftAt).toBeNull();
+    }
+    // And their rows are byte-for-byte what they were before the decline.
+    expect(after.participants.filter((p) => p.actorId !== s.parentId)).toEqual(
+      before.participants.filter((p) => p.actorId !== s.parentId),
+    );
+  });
+
+  it('2b. one refusal, one ending: the other parties cannot decline it again', async () => {
+    const { callId } = await groupCall();
+    await g.calls.decline(callId, s.parentId);
+    const declined = await snapshot(callId);
+
+    // The call is terminal, so every other party's decline is refused and writes
+    // nothing -- no second `left_at`, no second event.
+    for (const actorId of [s.otherParentId, s.teacherId, s.ownerId]) {
+      await expect(g.calls.decline(callId, actorId)).rejects.toMatchObject({
+        code: CommErrorCode.CALL_ALREADY_ENDED,
+      });
+    }
+
+    expect(await snapshot(callId)).toEqual(declined);
+    expect(await countOf(callId, CommEvent.CALL_DECLINED)).toBe(1);
     expect(await countOf(callId, CommEvent.CALL_ENDED)).toBe(1);
   });
 
-  it('2c. a group call one party declined can still be ANSWERED by another', async () => {
-    // The property the viability rule exists to protect: a refusal must not
-    // deprive the remaining parties of the call.
+  it('2c. nor can another party ANSWER a call that was refused', async () => {
     const { callId } = await groupCall();
     await g.calls.decline(callId, s.parentId);
+    const declined = await snapshot(callId);
 
-    await g.calls.accept(callId, s.teacherId);
+    await expect(g.calls.accept(callId, s.teacherId)).rejects.toMatchObject({
+      code: CommErrorCode.CALL_ALREADY_ENDED,
+    });
+
+    expect(await snapshot(callId)).toEqual(declined);
+    expect(await countOf(callId, CommEvent.CALL_ACCEPTED)).toBe(0);
+  });
+
+  it('2d. a four-party call that is ENDED leaves every non-decliner untouched', async () => {
+    // The companion to 2a for the other terminal writer: `end()` DOES stamp every
+    // open participant, and that existing rule is untouched by W6. Asserted so
+    // the asymmetry between the two paths is recorded on purpose rather than
+    // discovered later.
+    const { callId } = await groupCall();
+
+    await g.calls.end(callId, s.ownerId);
 
     const after = await snapshot(callId);
-    expect(after.status).toBe('active');
-    expect(after.answeredAt).toBeInstanceOf(Date);
+    expect(after.status).toBe('ended');
+    expect(after.outcome).toBe('missed');
+    expect(after.participants.every((p) => p.leftAt !== null)).toBe(true);
+    expect(after.participants.every((p) => p.joinedAt === null)).toBe(true);
   });
 });
 
@@ -735,7 +777,26 @@ describe('7. no client names its own call history', () => {
     expect(body).not.toMatch(/outcome/);
   });
 
-  it('7b. and the three outcomes each have exactly one writer', async () => {
+  it('7b. the service itself exposes no outcome parameter', async () => {
+    // A signature check, because the HTTP guard alone is not the contract: a
+    // W6 draft kept `end(callId, actorId, outcome?)` alive for one test, which is
+    // a production API that lies about the locked state machine. Two required
+    // parameters, and no optional third -- `Function.length` counts required
+    // parameters only, so an added `outcome?` would not change it; the source
+    // check is what catches that.
+    expect(g.calls.end).toHaveLength(2);
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { readFileSync } = require('node:fs') as typeof import('node:fs');
+    const source = readFileSync(
+      `${__dirname}/../../src/communication/calls/call.service.ts`,
+      'utf8',
+    );
+    const sig = source.slice(source.indexOf('async end('));
+    expect(sig.slice(0, sig.indexOf(')'))).toBe('async end(callId: string, actorId: string');
+  });
+
+  it('7c. and the three outcomes each have exactly one writer', async () => {
     // answered <- end() on an ACTIVE call
     const answered = await directCall();
     await g.calls.accept(answered.callId, s.parentId);
