@@ -41,6 +41,13 @@ async function bootstrap(): Promise<void> {
     // collects it. Structured JSON logging is a separate piece of work
     // (docs/infrastructure/monitoring.md §3) and is deliberately not faked here.
     logger: ['error', 'warn', 'log'],
+
+    // Keep the request body as the bytes that arrived, alongside the parsed
+    // object. The LiveKit webhook's JWT carries a `sha256` claim over exactly
+    // those bytes, so verification has to hash the original: a re-serialized
+    // object hashes differently and every webhook would be refused. Nothing
+    // else reads `rawBody`, and no route's parsed body changes.
+    rawBody: true,
   });
 
   // /api/v1 matches the base URL Admin Web and the mobile clients are built

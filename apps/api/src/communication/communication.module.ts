@@ -34,6 +34,9 @@ import { ConversationController } from './api/conversation.controller';
 import { MessageController } from './api/message.controller';
 import { ApprovalController } from './api/approval.controller';
 import { CallController } from './api/call.controller';
+import { LiveKitWebhookController } from './api/livekit-webhook.controller';
+import { LiveKitWebhookVerifier } from './calls/livekit-webhook.verifier';
+import { MediaPresenceService } from './calls/media-presence.service';
 import { NotificationController } from './api/notification.controller';
 import { StorageController } from './api/storage.controller';
 
@@ -47,6 +50,7 @@ import { StorageController } from './api/storage.controller';
     MessageController,
     ApprovalController,
     CallController,
+    LiveKitWebhookController,
     NotificationController,
     StorageController,
   ],
@@ -56,6 +60,8 @@ import { StorageController } from './api/storage.controller';
     MessageService,
     ApprovalService,
     CallService,
+    MediaPresenceService,
+    LiveKitWebhookVerifier,
     AttachmentService,
     OutboxService,
     OutboxWorker,

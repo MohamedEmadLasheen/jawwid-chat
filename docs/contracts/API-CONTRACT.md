@@ -162,6 +162,7 @@ One row per distinct (method, path). Paths are relative to `/api/v1` unless mark
 | POST | `/approvals/:id/approve` | API | EXISTS | §3.7 |
 | POST | `/approvals/:id/reject` | API | EXISTS | §3.7 |
 | GET | `/approvals/history/:conversationId` | API | RECONCILE | Response → `{items,nextCursor}` (Phase 1). §3.7 |
+| POST | `/livekit/webhook` | API | **EXISTS (new 2026-09-27)** | LiveKit's own callback, not a Jawwid actor. Verified with the official `WebhookReceiver`; records MEDIA presence, never an accept. §3.9 |
 | POST | `/calls` | API | EXISTS | §3.8 |
 | POST | `/calls/:id/token` | API | EXISTS | §3.8 |
 | POST | `/calls/:id/accept` | API | EXISTS | Emits `call.participant_joined`, not `call.accepted`. §3.8 |
@@ -609,6 +610,17 @@ CallHistoryDto { id, conversationId, type: 'direct'|'group', status: 'ringing'|'
 > The transition is a single conditional `UPDATE ... WHERE status = 'ringing'`,
 > so it is atomic, idempotent, and safe to run on every worker replica at once.
 > An expired call cannot then be accepted, declined, or issued a media token.
+
+**POST /livekit/webhook** — EXISTS (added 2026-09-27, `livekit-webhook.controller.ts`)
+- Auth: **not a Jawwid session.** LiveKit carries no actor and no bearer of ours; it authenticates with an HS256 JWT signed by the project API secret, whose `sha256` claim is a hash of the RAW body. Verified by `WebhookReceiver` from `livekit-server-sdk` — the official verifier, not a hand-rolled HMAC. `main.ts` sets `rawBody: true` because the hash is over the bytes as they arrived. A participant access token is never accepted here: that is a credential we send a device, this is one LiveKit sends us.
+- Events consumed: **`participant_joined` and `participant_left`, and nothing else.** `room_started`, `room_finished`, `track_published`, `track_unpublished`, `participant_connection_aborted` and the egress/ingress family are verified and ignored — W5 establishes presence, and consuming more would be a media-analytics system.
+- Room → call: `chat.call.room_name`, which is UNIQUE and server-minted. Never a conversation id, never participant metadata.
+- Identity → participant: the LiveKit participant `identity`, which is the actor id the server put in the token (`CallService.issueToken`). Never a display name, never metadata. A non-uuid identity fails closed rather than reaching the database.
+- Writes **only** `chat.call_participant.media_joined_at` / `media_left_at`. It never creates a call or a participant, never touches `joined_at` / `left_at` / `answered_at` / `status` / `outcome`, never ends a call, and never authorizes anything.
+- **Accepted ≠ in the room.** `joined_at` is the HTTP accept; `media_joined_at` is LiveKit. Emits `call.participant_joined` / `call.participant_left` through the existing outbox, in the same transaction as the write — **never `call.accepted`**, which stays an application act.
+- Idempotent and order-independent: earliest join wins, latest leave wins, both from the event's own timestamp rather than arrival time. Duplicate delivery changes nothing and emits nothing; a rejoin newer than a recorded departure clears it.
+- A webhook for an ended call is recorded into history and announced to nobody; terminal state never moves backwards.
+- Responses: `200 {ok:true}` for every verified event including ignored and no-op ones — LiveKit retries a non-2xx, and a failure code for "already seen" would buy a retry loop. `401` with no body for anything unverified, and nothing is written.
 
 **GET /calls/history/:conversationId** — EXISTS → RECONCILE · Permission `conversations.read` · Scope `canRead`. Response today `{ calls: CallHistoryDto[] }` newest first, `take: 100`; Phase 1 `Page<CallHistoryDto>`.
 
