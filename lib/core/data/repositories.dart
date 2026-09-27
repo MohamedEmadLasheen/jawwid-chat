@@ -414,11 +414,17 @@ abstract interface class CallRepository {
   /// `POST /calls/:id/decline` — refuse a ringing call.
   Future<void> decline({required String callId});
 
-  /// `POST /calls/:id/end`.
+  /// `POST /calls/:id/end` — hang up. NO BODY, AND NO OUTCOME.
   ///
-  /// `outcome` is optional; the server derives it when omitted, and deriving it
-  /// here would be the client inventing history.
-  Future<void> end({required String callId, String? outcome});
+  /// The client asks to end the call; the server decides what the call WAS. An
+  /// ACTIVE call ends `answered`, a still-ringing one ends `missed`, and
+  /// `declined` comes only from `decline`.
+  ///
+  /// This used to take an optional `outcome` and forward it. The server stopped
+  /// accepting one on 2026-09-27 -- a participant naming their own call history
+  /// is false history through the front door -- so the parameter is gone rather
+  /// than left here to be rediscovered and silently ignored.
+  Future<void> end({required String callId});
 
   /// `GET /calls/history/:conversationId`.
   ///

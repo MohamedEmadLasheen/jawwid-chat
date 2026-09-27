@@ -211,7 +211,7 @@ class FakeCallRepository implements CallRepository {
   Future<void> decline({required String callId}) async {}
 
   @override
-  Future<void> end({required String callId, String? outcome}) async {}
+  Future<void> end({required String callId}) async {}
 
   @override
   Future<List<CallHistoryEntry>> callHistory({

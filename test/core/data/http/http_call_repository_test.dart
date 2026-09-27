@@ -238,23 +238,48 @@ void main() {
       expect(server.requests.single.path, '/calls/call_1/decline');
     });
 
-    test('end sends no outcome when none is given', () async {
+    test('end sends the call id and nothing else', () async {
       reply('end', const Reply.ok({'ok': true}));
 
       await repository().end(callId: 'call_1');
 
-      // The server derives it from whether the call was answered. A client
-      // default here would be the client writing history.
+      // The server derives the outcome from the call's own locked state: ACTIVE
+      // ends answered, ringing ends missed, and declined comes only from
+      // decline. A client that named it would be writing history.
       expect(server.requests.single.path, '/calls/call_1/end');
       expect(server.requests.single.json, isEmpty);
+      // Named explicitly, so a re-added field is a failure and not merely a
+      // difference: `isEmpty` would also pass for a body this test forgot to
+      // look at.
+      expect(server.requests.single.json, isNot(contains('outcome')));
     });
 
-    test('end forwards an outcome when one is given', () async {
-      reply('end', const Reply.ok({'ok': true}));
+    test('and the end API has no outcome parameter to pass', () {
+      // A source check, because the compiler is the real guard: `end(callId:
+      // ..., outcome: ...)` would not compile, so no runtime test can exercise
+      // the removed parameter. What CAN regress is somebody re-adding it, and
+      // that is what this catches -- at the interface, the HTTP implementation
+      // and the request body together.
+      //
+      // The parameter existed until 2026-09-27 and forwarded `{'outcome': ...}`
+      // to an endpoint that had stopped accepting one. See API-CONTRACT §3.8.
+      final contract = File('lib/core/data/repositories.dart').readAsStringSync();
+      expect(contract, contains('Future<void> end({required String callId});'));
+      expect(contract, isNot(contains('end({required String callId, String? outcome')));
 
-      await repository().end(callId: 'call_1', outcome: Wire.callDeclined);
-
-      expect(server.requests.single.json, {'outcome': 'declined'});
+      final http =
+          File('lib/core/data/http/http_call_repository.dart').readAsStringSync();
+      final endMethod = http.substring(http.indexOf('Future<void> end('));
+      // Comment lines are dropped before asserting: the method explains WHY it
+      // sends no outcome, and prose that names the thing it refuses to send must
+      // not read as the thing itself.
+      final code = endMethod
+          .substring(0, endMethod.indexOf('\n  }'))
+          .split('\n')
+          .where((line) => !line.trimLeft().startsWith('//'))
+          .join('\n');
+      expect(code, isNot(contains('outcome')));
+      expect(code, isNot(contains('data:')));
     });
 
     test('accepting a call already left keeps its own code', () async {

@@ -97,14 +97,12 @@ class HttpCallRepository implements CallRepository {
   }
 
   @override
-  Future<void> end({required String callId, String? outcome}) async {
-    await _client.post<Map<String, Object?>>(
-      '/calls/$callId/end',
-      // Omitted rather than defaulted: the server derives the outcome from
-      // whether the call was answered, and guessing it here would write a
-      // history the client invented.
-      data: outcome == null ? null : {'outcome': outcome},
-    );
+  Future<void> end({required String callId}) async {
+    // NO BODY. The server derives the outcome from the call's own locked state,
+    // and it stopped accepting one from the request on 2026-09-27. Sending a
+    // field the endpoint ignores would only teach the next reader that the
+    // client has a say in call history.
+    await _client.post<Map<String, Object?>>('/calls/$callId/end');
   }
 
   @override
