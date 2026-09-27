@@ -123,8 +123,27 @@ verified.
 | # | Gate | Status |
 |---|---|---|
 | G-31 | **No** AI attention scoring, drafting, summarization or classification | UNVERIFIED |
-| G-32 | **No** video calling | **PARTIAL — re-assessed 2026-09-24.** No video calling is offered or reachable: `CallType` is `{direct, group}` with no video member, the type is immutable in the database (`call_type_immutable`, RT-024), and no client has a video surface. **But the media grant does not forbid it.** `media-token.ts` sets `canPublish` without `canPublishSources`, and LiveKit reads an unrestricted `canPublish` as permission to publish any source, camera included. The product does not do video; the token does not prevent it. Restricting the grant to the microphone source is the control this gate wants and it does not exist yet. **Deliberately deferred to M4, as its first item**, before any LiveKit client reaches the app: the change is `canPublishSources: ['microphone']` in the participant grant, plus extending `call-media-token.spec.ts` P — whose key-set assertion is exhaustive by design, so a new capability cannot be added without being declared there. Deferred rather than done because nothing can exploit it today (no media client exists at all) and it is a functional change to the token, not the preservation of an existing invariant. (The `video: {…}` object in `media-token.ts` is LiveKit's name for the whole grant namespace, not a video capability. Do not read it as one.) |
+| G-32 | **No** video calling | **PASS — re-assessed 2026-09-25, M4/W1.** No video calling is offered or reachable: `CallType` is `{direct, group}` with no video member, the type is immutable in the database (`call_type_immutable`, RT-024), and no client has a video surface. **And the media grant now forbids it.** The participant token declares `canPublishSources: PUBLISHABLE_SOURCES` where `const PUBLISHABLE_SOURCES = ['microphone'] as const` — `media-token.ts:33` and `media-token.ts:129`. LiveKit refuses a camera, screen-share or screen-share-audio track for such a token server-side, so the control this gate wants is enforced where a client cannot reach it. Evidence: `apps/api/test/integration/call-media-token.spec.ts`, whose grant key-set assertion is exhaustive by design — a new capability cannot be added to the token without being declared there — and which asserts the source list is exactly `['microphone']`. The suite is protected at an assertion floor in `docs/qa/protected-tests.tsv`. (The `video: {…}` object in `media-token.ts` is LiveKit's name for the whole grant namespace, not a video capability. Do not read it as one.) |
 | G-33 | **No** labels, **no** broadcast | UNVERIFIED |
+
+> **G-32 — superseded status (in force 2026-09-24 → 2026-09-25).**
+> Preserved so the gate's history is auditable, in the same form as G-01's.
+>
+> > *PARTIAL — re-assessed 2026-09-24.* No video calling is offered or reachable:
+> > `CallType` is `{direct, group}` with no video member, the type is immutable in
+> > the database (`call_type_immutable`, RT-024), and no client has a video surface.
+> > **But the media grant does not forbid it.** `media-token.ts` sets `canPublish`
+> > without `canPublishSources`, and LiveKit reads an unrestricted `canPublish` as
+> > permission to publish any source, camera included. The product does not do
+> > video; the token does not prevent it. Restricting the grant to the microphone
+> > source is the control this gate wants and it does not exist yet. **Deliberately
+> > deferred to M4, as its first item**, before any LiveKit client reaches the app.
+>
+> Closed by M4 workstream W1 (`7e94d58`), which was authorized for this gate and
+> nothing else. The deferral reasoning was sound at the time and is recorded here
+> rather than deleted: nothing could exploit the open grant while no media client
+> existed, and W4 shipped that client only after this gate was closed.
+
 | G-34 | **No** approval escalation, expiry or coverage-aware approval | UNVERIFIED |
 | G-35 | **No** shared queue or automatic routing | UNVERIFIED |
 

@@ -10,11 +10,18 @@ import '../../../core/errors/app_error.dart';
 /// Two states this must distinguish, because conflating them would misinform the user:
 ///
 /// * **No calls.** The backend answered with an empty history. Nothing is wrong.
-/// * **Calling is not wired.** No implementation of [CallRepository] is registered in this
-///   build — the HTTP composition root does not provide one, because no call endpoint has
-///   been published. Reading the provider throws [UnimplementedError],
-///   which is caught here and turned into a specific, honest state rather than a red error
-///   screen or, worse, an empty list that would read as "you have no calls".
+/// * **No repository is registered in this container.** Both shipped composition roots
+///   DO provide one — `bootstrap.dart` overrides [callRepositoryProvider] with
+///   `HttpCallRepository` for the HTTP build and `FakeCallRepository` for the fake one, and
+///   `POST /calls` and `GET /calls/history/:conversationId` both exist. So this is the
+///   fail-closed path for a container built without that override: the base provider
+///   throws [UnimplementedError] rather than defaulting to something, which is caught here
+///   and turned into a specific, honest state rather than a red error screen or, worse, an
+///   empty list that would read as "you have no calls".
+///
+///   The description above used to say calling was not wired at all, because no call
+///   endpoint had been published when this was written. M4/W3 published them and
+///   registered the repository; the guard is still right, its explanation was not.
 class CallsController extends AsyncNotifier<List<CallHistoryEntry>> {
   @override
   Future<List<CallHistoryEntry>> build() => _load();
