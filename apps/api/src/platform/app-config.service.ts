@@ -34,6 +34,18 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'call.ring_timeout_seconds': 45,
   /** initial hypothesis - notification delivery retry budget */
   'notification.max_attempts': 5,
+  /** initial hypothesis - how long a published story stays readable */
+  'story.default_lifetime_hours': 24,
+  /** initial hypothesis - longest story body accepted */
+  'story.max_body_length': 2000,
+  /** initial hypothesis - stories returned in one feed page */
+  'story.feed_page_size': 50,
+  /**
+   * initial hypothesis - how long story media survives in object storage after
+   * access ends, before the sweep purges it. Access ends at expires_at
+   * regardless of this value; this only governs the bytes.
+   */
+  'story.media_retention_hours': 72,
 } as const;
 
 export type CommunicationConfigKey = keyof typeof COMMUNICATION_CONFIG_DEFAULTS;

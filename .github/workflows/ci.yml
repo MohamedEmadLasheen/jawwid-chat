@@ -258,6 +258,14 @@ jobs:
       - name: G-01 · BR-1 structural invariants (RT-024, RT-025)
         run: psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f db/tests/br1_invariants.sql
 
+      # Story RLS, run as `authenticated` so the policies are actually evaluated.
+      # This suite is the reason the story child tables carry restrictive tenant
+      # policies: it caught a publisher in one academy reading every other
+      # academy's viewer and recipient rows. A policy no job executes is a policy
+      # that rots, so it runs here rather than only on a laptop.
+      - name: Story row-level security
+        run: psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f db/tests/story_rls.sql
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}

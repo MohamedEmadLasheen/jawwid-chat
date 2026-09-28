@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -20,6 +20,8 @@ export interface StoredBlob {
 export interface BlobStore {
   put(objectKey: string, mimeType: string, bytes: Buffer): Promise<void>;
   get(objectKey: string): Promise<StoredBlob | null>;
+  /** Idempotent: removing an absent object succeeds, so a sweep converges. */
+  delete(objectKey: string): Promise<void>;
 }
 
 /**
@@ -62,5 +64,15 @@ export class LocalFsBlobStore implements BlobStore {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Remove the bytes and the MIME sidecar together. `force` makes an absent file
+   * a success rather than an ENOENT, which is what lets the story retention
+   * sweep re-run over a key it already purged without failing the batch.
+   */
+  async delete(objectKey: string): Promise<void> {
+    const path = this.pathFor(objectKey);
+    await Promise.all([rm(path, { force: true }), rm(`${path}.meta`, { force: true })]);
   }
 }

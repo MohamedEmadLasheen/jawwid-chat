@@ -15,6 +15,9 @@ import { LiveKitTokenIssuer } from './calls/media-token';
 import { AttachmentService } from './attachments/attachment.service';
 import { selectObjectStorage } from './attachments/storage.provider';
 import { LocalFsBlobStore } from './attachments/blob-store';
+import { StoryService } from './stories/story.service';
+import { StoryAudienceResolver } from './stories/story-audience.resolver';
+import { StorySweeper } from './stories/story-sweeper.service';
 import { OutboxService } from './outbox/outbox.service';
 import { OutboxWorker } from './outbox/outbox.worker';
 import { NotificationService } from './notifications/notification.service';
@@ -35,6 +38,7 @@ import { ApprovalController } from './api/approval.controller';
 import { CallController } from './api/call.controller';
 import { NotificationController } from './api/notification.controller';
 import { StorageController } from './api/storage.controller';
+import { StoryController } from './api/story.controller';
 
 @Module({
   imports: [PlatformModule],
@@ -45,6 +49,7 @@ import { StorageController } from './api/storage.controller';
     CallController,
     NotificationController,
     StorageController,
+    StoryController,
   ],
   providers: [
     redisProvider,
@@ -53,6 +58,9 @@ import { StorageController } from './api/storage.controller';
     ApprovalService,
     CallService,
     AttachmentService,
+    StoryService,
+    StoryAudienceResolver,
+    StorySweeper,
     OutboxService,
     OutboxWorker,
     NotificationService,
@@ -85,6 +93,8 @@ import { StorageController } from './api/storage.controller';
     MessageService,
     ApprovalService,
     CallService,
+    StoryService,
+    StorySweeper,
     NotificationService,
     ReminderService,
     OutboxWorker,

@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { OutboxWorker } from './communication/outbox/outbox.worker';
+import { StorySweeper } from './communication/stories/story-sweeper.service';
 import { readBuildInfo } from './infra/build-info';
 
 /**
@@ -24,6 +25,18 @@ const POLL_MS = Number(process.env.OUTBOX_POLL_MS ?? 1000);
 const BATCH = Number(process.env.OUTBOX_BATCH_SIZE ?? 100);
 const IDLE_BACKOFF_MS = Number(process.env.OUTBOX_IDLE_BACKOFF_MS ?? 5000);
 
+/**
+ * How often the story sweep runs.
+ *
+ * Deliberately NOT once per outbox poll: the outbox loop ticks every second and
+ * the sweep is a scan over two indexed predicates that nothing is waiting on.
+ * A minute is far tighter than it needs to be, because the sweep does not gate
+ * access -- a story stops being readable at its expires_at whatever this value
+ * is (see StorySweeper). Raising it delays bookkeeping and media purging, never
+ * a revocation.
+ */
+const STORY_SWEEP_MS = Number(process.env.STORY_SWEEP_MS ?? 60_000);
+
 async function bootstrap(): Promise<void> {
   const log = new Logger('Worker');
   const build = readBuildInfo();
@@ -33,6 +46,7 @@ async function bootstrap(): Promise<void> {
     logger: ['error', 'warn', 'log'],
   });
   const outbox = app.get(OutboxWorker);
+  const stories = app.get(StorySweeper);
 
   let running = true;
   let draining = false;
@@ -64,6 +78,8 @@ async function bootstrap(): Promise<void> {
       `[env=${build.environment} commit=${build.commit} poll=${POLL_MS}ms batch=${BATCH}]`,
   );
 
+  let nextStorySweep = 0;
+
   while (running) {
     let published = 0;
     draining = true;
@@ -76,6 +92,25 @@ async function bootstrap(): Promise<void> {
     } finally {
       draining = false;
     }
+
+    // Retire expired stories and purge media past its retention window. Inside
+    // the same `draining` guard as the outbox so a shutdown finishes it, and
+    // wrapped in its own try so a sweep failure can never stop event delivery --
+    // the two have separate failure domains on purpose.
+    if (Date.now() >= nextStorySweep) {
+      draining = true;
+      try {
+        await stories.sweep();
+      } catch (e) {
+        log.error(`story sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`);
+      } finally {
+        draining = false;
+        // Scheduled from completion rather than from the previous start, so a
+        // slow sweep cannot queue up behind itself.
+        nextStorySweep = Date.now() + STORY_SWEEP_MS;
+      }
+    }
+
     if (!running) break;
     // Back off when there is nothing to do, so an idle deployment is not
     // hammering the database once a second for no reason.

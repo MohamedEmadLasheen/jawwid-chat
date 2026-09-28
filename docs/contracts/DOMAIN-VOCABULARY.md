@@ -144,7 +144,7 @@ representation and needs none; "(none yet)" = the layer should have one and does
 | **Label** | Manual or system tag on a Family, auto-updating (PRD §13). | `chat.family_label` (not designed) | phase-2 |
 | **Broadcast** | One-to-many official message with per-recipient delivery, templates, scheduling, approval and reply linkage (PRD §13). `Origin = broadcast` already reserves the message origin. | (not designed) | phase-2 |
 | **Class Group** | Conversation type `class_group` — reserved in the CHECK and vocab; no creation path in MVP (PRD §13 row 2). | `chat.conversation.type = 'class_group'` | phase-2 |
-| **Story / Status** | Ephemeral status posts (PRD §13 row 1 "Later": *Status, disappearing messages*). Not modelled. | — | deferred |
+| **Story / Status** | A short-lived publication from the academy to a server-resolved audience: words plus at most one image or video, readable for 24h, then unreadable. Read-only — no reply, no thread. Distinct from **Broadcast**, which reaches a family as an answerable message. | `chat.story`, `chat.story_audience`, `chat.story_recipient`, `chat.story_view` | built |
 | **Video call** | PRD §13 rows 6–7 "Later". | `chat.call` leaves room | deferred |
 
 ---

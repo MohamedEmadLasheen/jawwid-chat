@@ -29,6 +29,8 @@ export const CommEvent = {
   CALL_PARTICIPANT_JOINED: 'call.participant_joined',
   CALL_PARTICIPANT_LEFT: 'call.participant_left',
   NOTIFICATION_CREATED: 'notification.created',
+  STORY_PUBLISHED: 'story.published',
+  STORY_RETIRED: 'story.retired',
 } as const;
 
 export type CommEventName = (typeof CommEvent)[keyof typeof CommEvent];
@@ -139,6 +141,32 @@ export interface NotificationCreatedPayload {
   conversationId: string | null;
 }
 
+/**
+ * A story went live.
+ *
+ * Carries NO story body, NO title and NO media URL, and no recipient list. It is
+ * a nudge to refetch `/stories/feed`, which re-runs the audience join and the
+ * expiry check for whoever is asking. Putting the content here would mean the
+ * fan-out itself had to be audience-correct, and a bug in the fan-out would leak
+ * a publication rather than merely fail to announce it.
+ *
+ * `recipientCount` is for the publisher's own screen; it names nobody.
+ */
+export interface StoryPublishedPayload {
+  storyId: string;
+  publishedAt: string;
+  expiresAt: string;
+  hasMedia: boolean;
+  recipientCount: number;
+}
+
+/** A story stopped being readable -- expired by the sweep, or deleted by an operator. */
+export interface StoryRetiredPayload {
+  storyId: string;
+  reason: 'expired' | 'deleted';
+  at: string;
+}
+
 export interface CommEventPayloads {
   [CommEvent.MESSAGE_CREATED]: MessageCreatedPayload;
   [CommEvent.MESSAGE_DELETED]: MessageDeletedPayload;
@@ -159,6 +187,8 @@ export interface CommEventPayloads {
   [CommEvent.CALL_PARTICIPANT_JOINED]: CallParticipantPayload;
   [CommEvent.CALL_PARTICIPANT_LEFT]: CallParticipantPayload;
   [CommEvent.NOTIFICATION_CREATED]: NotificationCreatedPayload;
+  [CommEvent.STORY_PUBLISHED]: StoryPublishedPayload;
+  [CommEvent.STORY_RETIRED]: StoryRetiredPayload;
 }
 
 /** Rooms a socket may join. Never a client-supplied raw string. */

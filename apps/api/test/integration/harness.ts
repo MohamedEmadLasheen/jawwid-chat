@@ -17,6 +17,9 @@ import { TemplateService } from '@communication/notifications/template.service';
 import { QuietHoursService } from '@communication/notifications/quiet-hours.service';
 import { LoggingPushProvider } from '@communication/notifications/push.provider';
 import { CallService } from '@communication/calls/call.service';
+import { StoryService } from '@communication/stories/story.service';
+import { StoryAudienceResolver } from '@communication/stories/story-audience.resolver';
+import { StorySweeper } from '@communication/stories/story-sweeper.service';
 import { LiveKitTokenIssuer } from '@communication/calls/media-token';
 
 process.env.DATABASE_URL ??= 'postgres://postgres:postgres@localhost:55433/jawwid_chat_int';
@@ -50,10 +53,16 @@ export function buildGraph() {
   const calls = new CallService(
     prisma, authz, conversations, outbox, config, identity, audit, new LiveKitTokenIssuer(),
   );
+  const storyAudience = new StoryAudienceResolver(prisma);
+  const stories = new StoryService(
+    prisma, authz, storyAudience, outbox, config, identity, storage, audit,
+  );
+  const storySweeper = new StorySweeper(prisma, config, outbox, storage);
 
   return {
     prisma, coverage, identity, authz, conversations, messages, approvals,
     attachments, notifications, reminders, templates, quietHours, calls,
+    stories, storyAudience, storySweeper, storage, outbox,
   };
 }
 
@@ -147,7 +156,8 @@ export async function seed(prisma: PrismaService): Promise<Scenario> {
 /** Order matters: children before parents. */
 export async function truncate(prisma: PrismaService): Promise<void> {
   await prisma.$executeRawUnsafe(`
-    truncate chat.message_receipt, chat.message_reaction, chat.message_attachment,
+    truncate chat.story_view, chat.story_recipient, chat.story_audience, chat.story,
+             chat.message_receipt, chat.message_reaction, chat.message_attachment,
              chat.message_hidden_for, chat.message_approval, chat.call_participant,
              chat.call, chat.notification, chat.outbox_event,
              chat.conversation_participant_state, chat.conversation_member,
