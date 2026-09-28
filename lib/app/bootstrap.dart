@@ -16,6 +16,8 @@ import '../core/realtime/realtime_socket.dart';
 import '../core/storage/secure_token_store.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/domain/auth_state.dart';
+import '../features/calls/data/account_call_history.dart';
+import '../features/calls/data/http_account_call_history.dart';
 import '../shared/models/user_role.dart';
 import 'providers.dart';
 
@@ -95,6 +97,14 @@ List<Override> _httpOverrides({required String debugActorId}) {
     ),
     callRepositoryProvider.overrideWithValue(
       HttpCallRepository(client: client),
+    ),
+    // W8-W2. THE SAME `client`, deliberately: the account-history repository is
+    // handed the application's single ApiClient rather than building one, so
+    // there is exactly one interceptor chain, one TokenProvider and one refresh
+    // lifecycle for this session. It is registered here because this is where
+    // that client lives; nothing else in the W3 composition root changes.
+    accountCallHistoryProvider.overrideWithValue(
+      HttpAccountCallHistory(client: client),
     ),
     realtimeTokenProvider.overrideWithValue(tokens),
     realtimeSocketProvider.overrideWithValue(

@@ -168,7 +168,8 @@ One row per distinct (method, path). Paths are relative to `/api/v1` unless mark
 | POST | `/calls/:id/accept` | API | EXISTS | Emits **`call.accepted`** — an application answer. `call.participant_joined` means MEDIA presence and comes only from `POST /livekit/webhook`. §3.8 |
 | POST | `/calls/:id/decline` | API | EXISTS | §3.8 |
 | POST | `/calls/:id/end` | API | EXISTS | §3.8 |
-| GET | `/calls/history/:conversationId` | API | RECONCILE | Response → `{items,nextCursor}` (Phase 1). §3.8 |
+| GET | `/calls/history` | API | **EXISTS (new 2026-09-28, W8-W2)** | THIS ACTOR's calls across the conversations they may read. Paged `{items,nextCursor}`. **Not a family query.** §3.8 |
+| GET | `/calls/history/:conversationId` | API | RECONCILE | Response → `{items,nextCursor}` (Phase 1). Unchanged by W8-W2 — see §3.8. |
 | POST | `/notifications/devices` | API | RECONCILE | Token re-binding to any actor; Phase 1 binds to the authenticated session. §3.9 |
 | DELETE | `/notifications/devices/:token` | API | RECONCILE | **No actor at all.** Phase 1: auth required, own tokens only. §3.9, §5 |
 | POST | `/notifications/:id/delivered` | API | RECONCILE | **No actor at all.** Phase 1: auth required, recipient only. §3.9, §5 |
@@ -685,7 +686,46 @@ Declining again is refused with `COMM.CALL_ALREADY_ENDED` (was `COMM.CALL_PARTIC
 - A webhook for an ended call is recorded into history and announced to nobody; terminal state never moves backwards.
 - Responses: `200 {ok:true}` for every verified event including ignored and no-op ones — LiveKit retries a non-2xx, and a failure code for "already seen" would buy a retry loop. `401` with no body for anything unverified, and nothing is written.
 
-**GET /calls/history/:conversationId** — EXISTS → RECONCILE · Permission `conversations.read` · Scope `canRead`. Response today `{ calls: CallHistoryDto[] }` newest first, `take: 100`; Phase 1 `Page<CallHistoryDto>`.
+**GET /calls/history** — EXISTS (added 2026-09-28, W8-W2)
+- Auth: required. Permission `conversations.read`. **Scope: the conversations this actor may read, and nothing else.**
+- **THE SCOPE IS DERIVED, NOT DECLARED.** `CallService.historyForActor` calls `ConversationService.listForActor`, which IS the canonical "conversations this actor may read" surface — family-facing staff are probed through `AuthorizationService.canRead` and then see the conversation set; a contact or a teacher gets live membership and nothing else. Calls follow from that set. There is no second authorization model and no `canRead` reimplementation to drift from the original.
+- **IT NEVER QUERIES BY `family_id`, AND THAT IS THE POINT.** A family holds conversations a given parent is **not** a member of — the second parent's 1:1 with an admin, a teacher/admin thread about the learner — so `where family_id = …` (filtered afterwards or not) would hand a parent somebody else's calls. Family membership is not permission to read a family's calls. A regression test pins this: two conversations sharing one `family_id`, the actor a member of only one, and the other's call absent.
+- An **inactive** actor is refused (`COMM.ACTOR_INACTIVE`). This mirrors `canRead`'s first check at a new entry point: `listForActor` probes `canRead` for staff but not for a contact or teacher, so without it the account scope would have been weaker than the per-conversation one.
+- Request: `?cursor=<opaque>&limit=<n>`. `limit` defaults to 30 and is **clamped server-side** to 100; a client cannot ask for the whole table.
+- Response: `{ items: CallHistoryDto[], nextCursor: string | null }`. `nextCursor` is null on the last page.
+- **Ordering is the server's**: `started_at desc, id desc`. The id breaks ties so a page boundary cannot repeat or skip a row when two calls share a timestamp.
+- **Cursor semantics.** Keyset, base64url, carrying the last row's `started_at` and `id`. It is **not a capability**: the authorized scope is re-derived on every request, so a cursor naming a call the actor may not read yields their own first page. A malformed cursor is treated as no cursor rather than an error.
+- Privacy: the rows come from the **same** `toHistoryRow` mapping the per-conversation endpoint uses — one explicit field mapping, so G-07 has one place to be right. No phone number, no `room_name`, no media credential, no column added later that nobody listed.
+- Indexes: reuses `call_conversation_idx (conversation_id, started_at)`. **No migration.**
+- **This endpoint does NOT grant family-wide access.** See the family-scope note below.
+
+> **FAMILY-SCOPED CALL HISTORY — BLOCKED, AUTHORIZATION CONTRACT REQUIRED.**
+>
+> PRD v0.1 §9 requires call history *"per conversation and per family"*, and that
+> requirement **stands**. It is not cancelled, not descoped, and not satisfied by
+> the endpoint above.
+>
+> It is blocked because **no family-level authorization predicate exists in this
+> repository**. Every read rule in `AuthorizationService` takes a *conversation*:
+> `canRead(actor, conv, membership)`. The closest rule — *"family-facing staff may
+> open any family conversation"* — still requires a conversation, and
+> `isFamilyFacingStaff` is a role test, not a family-access decision. There is no
+> `canReadFamily`, and no endpoint anywhere serves a family.
+>
+> **`family_id` alone cannot authorize access.** A parent belongs to a family and
+> is a member of only some of its conversations, so treating family membership as
+> permission would expose the second parent's calls and teacher/admin calls about
+> the learner. That is an authorization expansion, not a query convenience.
+>
+> The documented family-level consumer is **Family 360** (`screens/family-360.md`
+> §1: *admin · coverage · manager*), which is an **Admin Web** surface and is
+> outside W8's scope. The rule must be owned by the workstream that defines that
+> consumer.
+>
+> **No family-wide data is exposed by `GET /calls/history`.** W8-W2 implemented
+> account scope only and invented no predicate.
+
+**GET /calls/history/:conversationId** — EXISTS → RECONCILE · **Unchanged by W8-W2.** Its `{ calls: … }` envelope and its RECONCILE status are inherited, not endorsed: settling it would change a response shape that W6/W7 already consume, which is a behaviour change inside a closed workstream rather than the additive read capability W8-W2 was authorized to add. The two endpoints are not competing shapes — one is a bounded per-conversation list, the other a paged account list — and the account endpoint above is canonical for account scope. · Permission `conversations.read` · Scope `canRead`. Response today `{ calls: CallHistoryDto[] }` newest first, `take: 100`; Phase 1 `Page<CallHistoryDto>`.
 
 ### 3.9 Notifications / Devices (`notification.controller.ts`, `notification.service.ts`)
 

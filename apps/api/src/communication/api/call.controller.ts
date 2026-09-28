@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseFilters } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
 import { CallService } from '../calls/call.service';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
@@ -58,5 +58,32 @@ export class CallController {
   @Get('history/:conversationId')
   async history(@ActorId() actorId: string, @Param('conversationId') conversationId: string) {
     return { calls: await this.calls.history(conversationId, actorId) };
+  }
+
+  /**
+   * `GET /calls/history` — THIS ACTOR'S calls, across every conversation they may
+   * read (W8-W2).
+   *
+   * NOT A FAMILY QUERY. The account scope is derived from the conversations the
+   * actor is authorized to read, never from `family_id`: one family holds
+   * conversations a given parent is not a member of, so a family-wide query
+   * would hand them somebody else's calls. Family-scoped history is a separate,
+   * currently UNDEFINED authorization contract — see the W8-W2 closeout.
+   *
+   * Paged by the server. `cursor` is the opaque value from the previous
+   * response's `nextCursor`; `limit` is clamped server-side, so a client cannot
+   * ask for the whole table.
+   */
+  @Get('history')
+  async accountHistory(
+    @ActorId() actorId: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const parsed = Number.parseInt(limit ?? '', 10);
+    return this.calls.historyForActor(actorId, {
+      cursor,
+      limit: Number.isFinite(parsed) ? parsed : undefined,
+    });
   }
 }

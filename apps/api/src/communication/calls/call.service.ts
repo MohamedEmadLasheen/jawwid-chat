@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
-import type { Conversation, ConversationMember } from '@prisma/client';
+import type { Call, CallParticipant, Conversation, ConversationMember } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService, CallIntent } from '../../platform/authorization.service';
 import type { Decision } from '../../platform/authorization.service';
@@ -27,6 +27,37 @@ import { CallOutcome, CallStatus, CallType, ConversationType } from '../contract
  *
  * No audio is recorded in MVP.
  */
+/** Default and maximum page size for account-scoped call history. */
+const DEFAULT_HISTORY_PAGE = 30;
+const MAX_HISTORY_PAGE = 100;
+
+/**
+ * A keyset cursor: the last row's `started_at` and `id`, opaque to the client.
+ *
+ * BOTH FIELDS, because `started_at` alone is not unique -- two calls in the same
+ * millisecond would make a page boundary repeat or skip a row. Base64 so it
+ * reads as a token rather than an invitation to construct one; it is not a
+ * secret and carries no authority. A malformed or foreign cursor is treated as
+ * "no cursor" rather than an error: the worst it can do is return the first
+ * page, and every row it could reach was already authorized by the query it
+ * belongs to.
+ */
+function encodeHistoryCursor(startedAt: Date, id: string): string {
+  return Buffer.from(`${startedAt.toISOString()}|${id}`, 'utf8').toString('base64url');
+}
+
+function decodeHistoryCursor(cursor?: string): { startedAt: Date; id: string } | null {
+  if (!cursor) return null;
+  try {
+    const [iso, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
+    const startedAt = new Date(iso ?? '');
+    if (!id || Number.isNaN(startedAt.getTime())) return null;
+    return { startedAt, id };
+  } catch {
+    return null;
+  }
+}
+
 @Injectable()
 export class CallService {
   private readonly log = new Logger(CallService.name);
@@ -733,24 +764,149 @@ export class CallService {
       take: 100,
     });
 
-    // Explicit field mapping: no phone number exists here and none can appear.
-    return calls.map((c) => ({
-      id: c.id,
-      conversationId: c.conversationId,
-      type: c.type,
-      status: c.status,
-      outcome: c.outcome,
-      initiatorId: c.initiatorId,
-      startedAt: c.startedAt.toISOString(),
-      endedAt: c.endedAt?.toISOString() ?? null,
-      durationSeconds: c.durationSeconds,
-      participants: c.participants.map((p) => ({
+    return calls.map((c) => this.toHistoryRow(c));
+  }
+
+  /**
+   * THIS ACTOR'S calls, across every conversation they may read (W8-W2).
+   *
+   * WHY IT EXISTS. `GET /calls/history/:conversationId` is per-conversation, so
+   * the Calls screen -- which is the ACCOUNT's call list and has no conversation
+   * to ask about -- had nothing it could honestly request and said so. This is
+   * the endpoint that answers it.
+   *
+   * AUTHORIZATION IS NOT RE-DERIVED HERE, and that is the whole design. It calls
+   * `ConversationService.listForActor`, which IS the canonical "conversations
+   * this actor may read" surface: family-facing staff are probed through
+   * `AuthorizationService.canRead` and then see the conversation set, while a
+   * contact or a teacher gets live membership and nothing else. Calls follow from
+   * that set. There is no second authorization model here and no `canRead`
+   * reimplementation to drift from the original.
+   *
+   * IT NEVER QUERIES BY FAMILY. A family-scoped query -- `where family_id = ...`,
+   * filtered afterwards -- would be the natural shortcut and is exactly the
+   * defect this avoids: one family holds conversations a given parent is NOT a
+   * member of (the second parent's 1:1, a teacher/admin thread about the
+   * learner), so family membership is not permission to read their calls. The
+   * authorization contract for family-scoped history is UNDEFINED in this
+   * repository and W8-W2 does not invent one; see the W8-W2 closeout.
+   *
+   * KEYSET PAGINATION, SERVER-OWNED. Ordering is `started_at desc, id desc` and
+   * the cursor carries both, so a page boundary cannot repeat or skip a row when
+   * two calls share a timestamp. The client never merges, sorts or pages
+   * anything itself.
+   *
+   * A BOUND INHERITED, NOT INVENTED. `listForActor` takes at most 200
+   * conversations, so an actor with more than that would not see calls from the
+   * remainder. That cap belongs to the conversation surface, not to this method,
+   * and is recorded as a carry-forward rather than worked around here -- working
+   * around it would mean re-deriving the authorization set, which is the one
+   * thing this method must not do.
+   */
+  async historyForActor(
+    actorId: string,
+    options: { cursor?: string; limit?: number } = {},
+  ): Promise<{ items: ReturnType<CallService['toHistoryRow']>[]; nextCursor: string | null }> {
+    const actor = await this.conversations.requireActor(actorId);
+
+    // THE SAME FIRST CHECK `canRead` MAKES, at this boundary.
+    //
+    // `history(conversationId, actorId)` reaches `AuthorizationService.canRead`,
+    // whose very first line refuses an inactive actor. The account scope reaches
+    // `listForActor`, which probes `canRead` for STAFF but goes straight to the
+    // membership query for a contact or a teacher -- so without this line a
+    // deactivated parent would receive an account history that the
+    // per-conversation endpoint refuses them. Measured, not assumed: the test
+    // "a deactivated actor is refused" fails without it.
+    //
+    // This mirrors the canonical rule at a new entry point; it does not restate
+    // or replace it. That a deactivated contact can still LIST conversations
+    // through `listForActor` is a separate observation about a closed file and is
+    // reported in the W8-W2 closeout rather than changed here.
+    if (!actor.isActive) {
+      throw new CommError(CommErrorCode.ACTOR_INACTIVE, 'actor is inactive', 403);
+    }
+
+    const conversations = await this.conversations.listForActor(actorId);
+    if (conversations.length === 0) return { items: [], nextCursor: null };
+
+    const limit = Math.min(Math.max(options.limit ?? DEFAULT_HISTORY_PAGE, 1), MAX_HISTORY_PAGE);
+    const after = decodeHistoryCursor(options.cursor);
+
+    const calls = await this.prisma.call.findMany({
+      where: {
+        conversationId: { in: conversations.map((c) => c.id) },
+        ...(after
+          ? {
+              OR: [
+                { startedAt: { lt: after.startedAt } },
+                { startedAt: after.startedAt, id: { lt: after.id } },
+              ],
+            }
+          : {}),
+      },
+      include: { participants: true },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      // One more than asked for, to know whether another page exists without a
+      // second count query.
+      take: limit + 1,
+    });
+
+    const page = calls.slice(0, limit);
+    const last = page.at(-1);
+    return {
+      items: page.map((c) => this.toHistoryRow(c)),
+      nextCursor:
+        calls.length > limit && last ? encodeHistoryCursor(last.startedAt, last.id) : null,
+    };
+  }
+
+  /**
+   * ONE history row, and the only place a call becomes one.
+   *
+   * THE PRIVACY BOUNDARY IS THIS FUNCTION. The mapping is explicit field by
+   * field: no phone number exists on these rows and none can appear, and nothing
+   * that is not listed here reaches a client -- not `room_name`, not a media
+   * credential, not an internal column added later. G-07 is enforced by there
+   * being exactly one mapping, which is why the account-scoped history above
+   * shares it rather than writing a second one.
+   */
+  private toHistoryRow(
+    call: Call & { participants: CallParticipant[] },
+  ): {
+    id: string;
+    conversationId: string;
+    type: string;
+    status: string;
+    outcome: string | null;
+    initiatorId: string;
+    startedAt: string;
+    endedAt: string | null;
+    durationSeconds: number | null;
+    participants: {
+      actorId: string;
+      actorKind: string;
+      joinedAt: string | null;
+      leftAt: string | null;
+    }[];
+  } {
+    return {
+      id: call.id,
+      conversationId: call.conversationId,
+      type: call.type,
+      status: call.status,
+      outcome: call.outcome,
+      initiatorId: call.initiatorId,
+      startedAt: call.startedAt.toISOString(),
+      endedAt: call.endedAt?.toISOString() ?? null,
+      durationSeconds: call.durationSeconds,
+      participants: call.participants.map((p) => ({
         actorId: p.actorId,
         actorKind: p.actorKind,
         joinedAt: p.joinedAt?.toISOString() ?? null,
         leftAt: p.leftAt?.toISOString() ?? null,
       })),
-    }));
+    };
   }
 
   /**

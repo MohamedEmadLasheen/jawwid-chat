@@ -1,9 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 
-import '../../../app/providers.dart';
 import '../../../core/data/repositories.dart';
 import '../../../core/errors/app_error.dart';
+import '../data/account_call_history.dart';
 
 /// Call history, from the backend and nowhere else.
 ///
@@ -27,49 +27,42 @@ class CallsController extends AsyncNotifier<List<CallHistoryEntry>> {
   Future<List<CallHistoryEntry>> build() => _load();
 
   Future<List<CallHistoryEntry>> _load() async {
+    final AccountCallHistoryRepository history;
     try {
       // Read for its refusal: an unregistered provider throws, and that is a
       // different fault from the one below -- a build wired wrongly, rather
       // than an endpoint that does not exist.
-      ref.read(callRepositoryProvider);
+      history = ref.read(accountCallHistoryProvider);
     } catch (error) {
       // Riverpod wraps whatever a provider's create function throws in a
-      // ProviderException, so the UnimplementedError the composition root raises for an
-      // unregistered repository arrives one layer down. Unwrap before deciding.
+      // ProviderException, so the UnimplementedError the composition root raises
+      // for an unregistered repository arrives one layer down. Unwrap before
+      // deciding.
       final cause = error is ProviderException ? error.exception : error;
       if (cause is! UnimplementedError) rethrow;
 
       throw const AppError(
         AppErrorKind.notFound,
         code: callsNotAvailableCode,
-        debugDetail: 'No CallRepository is registered in this build.',
+        debugDetail: 'No account call-history repository is registered in this build.',
       );
     }
 
-    // THERE IS NO GLOBAL CALL HISTORY ON THE SERVER.
+    // THE SERVER OWNS THE LIST (W8-W2).
     //
-    // `GET /calls/history/:conversationId` is the only history endpoint: it
-    // takes a conversation and returns that conversation's calls, unpaginated.
-    // This screen is the ACCOUNT's call list and has no conversation to ask
-    // about, so there is nothing it can honestly request.
+    // Until this workstream there was no endpoint this screen could honestly
+    // ask: `GET /calls/history/:conversationId` is per-conversation and this is
+    // the ACCOUNT's call list, so the screen reported the absence instead of
+    // inventing an answer. `GET /calls/history` now answers it, scoped server-
+    // side to the conversations this actor may read.
     //
-    // Until 2026-09-24 the gap was hidden rather than absent. The repository
-    // declared a global `history({cursor})` that no route answered, and this
-    // screen reported "calling is not wired" for the unrelated reason that the
-    // HTTP build registered no repository. A repository now exists and matches
-    // the real API, so the absence is stated instead of implied.
-    //
-    // Building the list client-side -- every conversation fetched and their
-    // histories merged -- is deliberately not done: N+1 requests for one
-    // screen, with ordering and paging invented by the client rather than
-    // given by the server. Carry-forward for the call-history workstream,
-    // which owns the endpoint that would answer this.
-    throw const AppError(
-      AppErrorKind.notFound,
-      code: callsNotAvailableCode,
-      debugDetail:
-          'No global call-history endpoint exists; /calls/history is per-conversation.',
-    );
+    // WHAT IS DELIBERATELY NOT DONE HERE. No per-conversation fan-out, no
+    // client-side merge of several histories, no client ordering, no paging
+    // arithmetic, and above all no `family_id` -- a family holds conversations
+    // this actor may not be in, and scope is not the client's to compute. One
+    // request, and the order it comes back in is the order shown.
+    final page = await history.page();
+    return page.items;
   }
 
   Future<void> refresh() async {
