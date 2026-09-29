@@ -33,10 +33,18 @@ class SessionTermination {
   /// disposed notifier.
   void bind(Future<void> Function(AppError error) handler) => _handler = handler;
 
+  /// Only the current holder may release it, so a late dispose from a superseded controller
+  /// cannot silently disconnect the live one.
+  ///
+  /// Compared with `==`, NOT `identical`. Dart guarantees that two tear-offs of the same
+  /// method on the same object are equal, and guarantees nothing about their identity — in
+  /// practice `identical(o.m, o.m)` is false, so an identity check here never matched and
+  /// [unbind] silently did nothing. A disposed controller stayed on the wire, and a terminal
+  /// refusal arriving afterwards would have been delivered to a notifier that no longer
+  /// exists. Equality still distinguishes the case this guard is for, because tear-offs from
+  /// two *different* controllers are not equal.
   void unbind(Future<void> Function(AppError error) handler) {
-    // Only the current holder may release it, so a late dispose from a superseded controller
-    // cannot silently disconnect the live one.
-    if (identical(_handler, handler)) _handler = null;
+    if (_handler == handler) _handler = null;
   }
 
   /// Report that the backend has ended this session.

@@ -32,7 +32,8 @@ void main() {
   setUp(() async => server = await TestServer.start());
   tearDown(() async => server.stop());
 
-  ({HttpAuthRepository auth, TokenStore store, List<AppError> ended}) stack() {
+  ({HttpAuthRepository auth, TokenStore store, ApiClient client, List<AppError> ended})
+      stack() {
     final store = InMemoryTokenStore();
     final ended = <AppError>[];
     late final ApiClient client;
@@ -53,7 +54,7 @@ void main() {
       ),
     );
 
-    return (auth: auth, store: store, ended: ended);
+    return (auth: auth, store: store, client: client, ended: ended);
   }
 
   Future<void> seed(TokenStore store, {String access = 'access-1'}) => store.write(
@@ -267,5 +268,55 @@ void main() {
       1,
       reason: 'an unkeyed POST is still never replayed',
     );
+  });
+
+  test('a sign-out racing a protected 401 shares ONE refresh', () async {
+    // The scenario the future realtime and push consumers will actually produce: the user
+    // presses sign out while a background request is in flight, and both are refused for the
+    // same expired access token.
+    //
+    // Both enter the single refresh authority, so there is one rotation, not two -- which
+    // matters more here than anywhere else, because presenting a retired refresh token is
+    // read as theft and revokes every live session on the account. The logout retry then
+    // carries the token that rotation produced, so the session it ends is the live one.
+    final logoutTokens = <String?>[];
+    server.onRequest('POST', '/auth/logout', (request) {
+      logoutTokens.add(request.headers['authorization']);
+      return request.headers['authorization'] == 'Bearer access-2'
+          ? const Reply.ok({'ok': true})
+          : authError(401, AuthErrors.unauthenticated);
+    });
+    server.onRequest(
+      'GET',
+      '/probe',
+      (request) => request.headers['authorization'] == 'Bearer access-2'
+          ? const Reply.ok({'ok': true})
+          : authError(401, AuthErrors.unauthenticated),
+    );
+    // Slow enough that both callers are inside the refresh window together.
+    server.on('POST', '/auth/refresh', [
+      Reply(200, pair('access-2', 'refresh-2'), delay: const Duration(milliseconds: 120)),
+    ]);
+
+    final s = stack();
+    await seed(s.store);
+
+    // One session, two callers -- the same store, the same token provider, the same client.
+    await Future.wait<void>([
+      s.auth.signOut(),
+      s.client
+          .get<Map<String, Object?>>('/probe')
+          .then<void>((_) {}, onError: (Object _) {}),
+    ]);
+
+    expect(refreshes(), 1, reason: 'one rotation for the whole session, not one per caller');
+    expect(logoutTokens, ['Bearer access-1', 'Bearer access-2']);
+    expect(
+      server.countOf('GET', '/probe'),
+      2,
+      reason: 'refused once, replayed once on the shared token',
+    );
+    expect(server.requests, hasLength(5), reason: '2 logout + 1 refresh + 2 probe');
+    expect((await s.store.read())!.accessToken, 'access-2');
   });
 }
