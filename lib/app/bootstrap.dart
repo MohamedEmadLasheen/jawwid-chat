@@ -2,14 +2,14 @@ import 'package:flutter_riverpod/misc.dart';
 
 import '../core/data/fake_backend.dart';
 import '../core/data/fake_repositories.dart';
+import '../core/data/http/http_auth_repository.dart';
 import '../core/data/http/http_call_repository.dart';
 import '../core/data/http/http_conversation_repository.dart';
 import '../core/data/http/http_group_repository.dart';
 import '../core/data/http/http_message_repository.dart';
-import '../core/data/http/unavailable_auth_repository.dart';
 import '../core/errors/app_error.dart';
 import '../core/network/actor_identity.dart';
-import '../core/network/api_client.dart' show TokenProvider;
+import '../core/network/api_client.dart' show ApiClient, TokenProvider;
 import '../core/network/api_config.dart';
 import '../core/network/http_stack.dart';
 import '../core/push/push_registration.dart';
@@ -47,17 +47,31 @@ Future<List<Override>> bootstrap({
 
 /// The real stack.
 ///
-/// **Authentication is not wired, because no auth contract exists.**
-/// [UnavailableAuthRepository] fails every auth call with a specific, terminal error rather
-/// than inventing `/auth/login`. That means this build reaches the login screen and stops
-/// there — which is the honest state of the integration, not a bug to route around.
+/// **Authentication is wired (W8-W0).** [HttpAuthRepository] speaks to the four
+/// routes `apps/api` publishes — login, refresh, logout and `/me`. It replaced
+/// `UnavailableAuthRepository`, which had been correct when written and stale ever
+/// since `auth.controller.ts` landed: the client kept refusing to authenticate
+/// against endpoints that by then existed.
 ///
-/// The conversation, message and group repositories are fully implemented against the
-/// published contract and will work the moment an actor identity is available.
+/// A session registry is still absent server-side, so listing and revoking other
+/// devices remain unsupported and say so rather than returning an empty list.
 List<Override> _httpOverrides({required String debugActorId}) {
   final config = ApiConfig.fromEnvironment();
   final tokenStore = SecureTokenStore();
-  const auth = UnavailableAuthRepository();
+
+  // W8-W0. THE REAL ADAPTER, replacing UnavailableAuthRepository now that
+  // /auth/login, /auth/refresh, /auth/logout and /me exist.
+  //
+  // `client` is assigned three statements down and read through a closure,
+  // because the three collaborators form a cycle: the token provider needs an
+  // AuthRepository to refresh with, the ApiClient needs the token provider, and
+  // this needs the ApiClient for the two AUTHENTICATED routes. The callback is
+  // what lets the cycle close once rather than becoming a second client.
+  late final ApiClient client;
+  final auth = HttpAuthRepository(
+    config: config,
+    authenticatedClient: () => client,
+  );
 
   // Set only for local bring-up against the engine's documented `x-actor-id` seam, and
   // compiled out of release builds. See ActorIdentity for why this is not authentication.
@@ -78,7 +92,7 @@ List<Override> _httpOverrides({required String debugActorId}) {
     onEnded: session.end,
   );
 
-  final client = buildApiClient(
+  client = buildApiClient(
     config: config,
     tokens: tokens,
     identity: identity,
