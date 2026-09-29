@@ -1,7 +1,7 @@
 # Mobile ↔ Backend HTTP Integration
 
-Owner: AI #3 · Date: 2026-09-06
-Status: **Data plane CONNECTED and verified against a running backend. Auth plane BLOCKED.**
+Owner: AI #3 · Date: 2026-09-29
+Status: **Data plane CONNECTED. Auth plane CONNECTED.**
 
 ---
 
@@ -79,41 +79,87 @@ Note the `/api/v1` prefix — `main.ts` sets it globally, excluding `/health*`.
 Not consumed: calling (out of scope by instruction), attachments, notifications, membership
 mutation (staff-only), and `POST /conversations/direct` outside the BR-1 conformance test.
 
-## 4. The auth plane is blocked
+## 4. The auth plane
 
-**There is no authentication anywhere in `apps/api`.** No login route, no token issuance, no
-refresh, no `/me`, no guard, no device or session registry. The engine identifies its caller
-from a plaintext `x-actor-id` header, and says so itself:
+**Chat owns credentials and sessions**, and the backend's implementation is authoritative
+(`docs/architecture/IDENTITY-MODEL.md` §4.1; `apps/api/src/platform/auth/`). Not Supabase
+Auth — there is none in this repository. Not Jawwid Core — Core provisions who exists, Chat
+issues sessions.
 
-> *"AI #1 SEAM: the authenticated actor id. Today it is read from a header so the engine is
-> runnable and testable before auth lands."* — `actor.decorator.ts`
+The Flutter client consumes the published contract unchanged:
 
-A client that asserts its own identity in a header is not authenticated; it is asking to be
-trusted. So the mobile client does **not** ship that as authentication:
+| Method | Path | Guard | Client transport |
+|---|---|---|---|
+| POST | `/auth/login` | `@Public()` | `AuthTransport` |
+| POST | `/auth/refresh` | `@Public()` | `AuthTransport` |
+| GET | `/me` | bearer | `ApiClient` |
+| POST | `/auth/logout` | bearer | `ApiClient` |
 
-- `UnavailableAuthRepository` fails every auth call with a specific terminal error rather
-  than inventing `/auth/login`.
-- `DebugActorHeaderIdentity` exists only for local bring-up, is off unless explicitly enabled,
-  and is compiled out of release builds by a `kDebugMode` guard.
+`HttpAuthRepository` is the only implementation. There is no second auth path, no development
+bypass, and no build in which a client asserts its own identity.
 
-**Consequence: a build pointed at the real backend reaches the sign-in screen and stops.**
-That is the honest state of the integration.
+### Tokens live in exactly one place
 
-### What AI #1 must publish
+`SecureTokenStore` — iOS Keychain (`first_unlock_this_device`, never migrated to a new
+device) and Android AES-GCM under the platform keystore. Never `shared_preferences`, never
+the sqlite cache, never a file, never a URL, never a log. `RedactingLogger` masks token- and
+JWT-shaped values on the way out as a second line of defence, not as permission to be casual.
 
-1. **Login** — username + password → access token, refresh token, expiries. Failures must be
-   *distinguishable*: bad credentials vs disabled account vs locked. The app reacts
-   differently to each; one generic 401 collapses that.
-2. **Refresh** — refresh token → new access token.
-3. **`/me`** — actor id, display name, avatar, and **server-asserted role** (`parent` |
-   `teacher`).
-4. **Logout** — invalidate server-side.
-5. **Devices/sessions** — register (with push token), list, revoke, and make revocation
-   observable to the client.
+### One TokenProvider, shared by every authenticated consumer
 
-The client plumbing for all five already exists and is tested: secure token storage,
-single-flight refresh on 401 with one replay, and terminal handling for revoked/disabled.
-Only the transport calls are missing.
+**This is the rule most likely to be broken by accident, so it is stated here and in the code
+(`StoredTokenProvider`, `bootstrap.dart`).** There is one `SecureTokenStore`, one
+`StoredTokenProvider` and one `ApiClient` per session, and realtime and push registration
+must take the same instances when they arrive.
+
+`POST /auth/refresh` **rotates**: the presented refresh token is retired as it is used, and
+`AuthService.handleRefreshReuse` treats a replayed one as theft and revokes **every live
+session on the account**. Two independent refreshers on one device therefore do not cost a
+retry — they sign the user out of every device they own. `ApiClient` single-flights the
+refresh, and that guarantee holds *per provider instance*, which is exactly why there must
+only ever be one.
+
+### Why login and refresh use a different transport
+
+`ApiClient` answers a 401 by refreshing and replaying. On `/auth/refresh` itself that is a
+loop that awaits its own future and never completes. The two `@Public()` routes therefore go
+over `AuthTransport`, which has no refresh interceptor — the recursion is impossible by
+construction rather than avoided by care. `/me` and `/auth/logout` deliberately go the other
+way, over `ApiClient`, *because* it refreshes: `/me` is what `restore()` calls on a cold
+start, by which point the access token is usually expired.
+
+### Which principals may sign in
+
+`ActorDto.kind` is `contact | staff | teacher | system`; the app models `parent | teacher`.
+`contact → parent`, `teacher → teacher`, and **`staff`, `system` and any unrecognised kind
+are refused** with their own message. Staff use the Jawwid console. The mapping fails closed:
+defaulting an unclassified principal to parent would hand them a screen and an approval
+policy nobody decided they should have.
+
+### The `x-actor-id` seam is gone
+
+PR-B removed the last HTTP reader of that header (`@ActorId()` reads `request.actor`, which
+only the verified-bearer guard writes). `DebugActorHeaderIdentity`, `ActorIdentity` and
+`UnavailableAuthRepository` have been deleted, and `buildApiClient` no longer takes an
+identity: the bearer token is the only credential the client sends.
+
+### Not this workstream
+
+- **Realtime.** `realtime.gateway.ts` still trusts `handshake.auth.actorId`, and
+  `identity-seam.ts` refuses to boot the API outside `local | test | ci` because of it. The
+  realtime workstream verifies the handshake token and deletes that guard. When it does, its
+  client takes the same `TokenProvider` — it must not build its own.
+- **Push registration.** `POST /notifications/devices` is authenticated and exists, but no
+  push client ships on this branch. It will be another consumer of the same session, and it
+  must retire its tokens *before* the session is cleared, because unregistering is itself an
+  authenticated call.
+- **Proactive revocation.** `AuthRepository.sessionRevoked` is an empty stream. Revocation is
+  still enforced immediately — `AuthService.authenticate` re-reads the session row on every
+  request — so a revoked session fails the next call the app makes. What is missing is only
+  the eviction of an app sitting idle, which realtime provides.
+- **Session registry.** `GET /me/sessions` and `DELETE /me/sessions/:id` are named in
+  IDENTITY-MODEL §4 but not published. `devices()` and `revokeDevice()` fail explicitly
+  rather than fabricating a list a user would act on.
 
 ## 5. Defects found in the backend while integrating
 
@@ -144,11 +190,10 @@ Unchanged from `backend-dependencies.md` §5, and now confirmed against the live
 
 | Area | State |
 |---|---|
-| Authentication | `UnavailableAuthRepository` — blocked on AI #1 |
 | Calling | `FakeCallRepository` — out of scope by instruction |
 | Attachments, voice notes | Not implemented |
 | Push notifications | Not implemented |
-| Realtime | Not connected; reconnect resync uses the REST `?after=` cursor |
+| Realtime | Not connected; reconnect resync uses the REST `?after=` cursor. Socket auth is still the `handshake.auth.actorId` seam server-side |
 | Typing indicators | No-op; a gateway concern |
 
 Widget tests and local development without a backend still use `FakeBackend`. Selection is by

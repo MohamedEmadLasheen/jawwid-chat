@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/core/data/http/http_auth_repository.dart';
 import 'package:jawwid_chat/core/data/wire/wire_vocab.dart';
 import 'package:jawwid_chat/core/errors/app_error.dart';
-import 'package:jawwid_chat/core/network/actor_identity.dart';
 import 'package:jawwid_chat/core/network/api_client.dart';
 import 'package:jawwid_chat/core/network/api_config.dart';
 import 'package:jawwid_chat/core/network/device_descriptor.dart';
@@ -54,7 +53,6 @@ void main() {
         auth: auth,
         onEnded: (error) async => ended.add(error),
       ),
-      identity: const BearerTokenIdentity(),
     );
 
     return (client: client, store: store, ended: ended);

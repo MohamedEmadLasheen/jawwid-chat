@@ -8,7 +8,6 @@ import '../core/data/http/http_group_repository.dart';
 import '../core/data/http/http_message_repository.dart';
 import '../core/data/http/http_story_repository.dart';
 import '../core/errors/app_error.dart';
-import '../core/network/actor_identity.dart';
 import '../core/network/api_client.dart';
 import '../core/network/api_config.dart';
 import '../core/network/device_descriptor.dart';
@@ -35,11 +34,8 @@ enum DataSource {
 /// a backend or it was not, and there is no way to flip a shipped app into fixture mode.
 Future<List<Override>> bootstrap({
   UserRole developmentRole = UserRole.parent,
-  String debugActorId = '',
 }) async {
-  return ApiConfig.isConfigured
-      ? _httpOverrides(debugActorId: debugActorId)
-      : _fakeOverrides(developmentRole);
+  return ApiConfig.isConfigured ? _httpOverrides() : _fakeOverrides(developmentRole);
 }
 
 /// The real stack.
@@ -62,10 +58,10 @@ Future<List<Override>> bootstrap({
 /// `late final` plus a closure resolves that at call time rather than construction time.
 /// The alternative — giving the repository its own client — is the exact duplication the
 /// paragraph above forbids.
-List<Override> _httpOverrides({required String debugActorId}) {
+List<Override> _httpOverrides() {
   final config = ApiConfig.fromEnvironment();
   final tokenStore = SecureTokenStore();
-  final session = SessionContext(fallbackActorId: debugActorId);
+  final session = SessionContext();
 
   late final ApiClient client;
 
@@ -83,11 +79,7 @@ List<Override> _httpOverrides({required String debugActorId}) {
     onEnded: session.end,
   );
 
-  client = buildApiClient(
-    config: config,
-    tokens: tokens,
-    identity: const BearerTokenIdentity(),
-  );
+  client = buildApiClient(config: config, tokens: tokens);
 
   return [
     tokenStoreProvider.overrideWithValue(tokenStore),
@@ -156,11 +148,6 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
 /// Holding them here rather than reaching into a provider keeps the transport free of any
 /// dependency on Riverpod, which is what makes it testable without a container.
 class SessionContext {
-  SessionContext({this.fallbackActorId = ''});
-
-  /// Used only by the debug bring-up seam, where the actor id *is* the identity.
-  final String fallbackActorId;
-
   UserRole? _role;
   String? _actorId;
 
@@ -183,7 +170,9 @@ class SessionContext {
   /// two for approvals, so an accidental read cannot under-restrict the composer.
   UserRole role() => _role ?? UserRole.parent;
 
-  String actorId() => _actorId ?? fallbackActorId;
+  /// Empty before a session exists. Nothing authenticated can run in that window: every
+  /// request would be refused by the guard before an actor id mattered.
+  String actorId() => _actorId ?? '';
 }
 
 typedef AppAuthState = AuthState;

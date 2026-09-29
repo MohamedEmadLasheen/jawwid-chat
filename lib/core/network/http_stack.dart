@@ -4,7 +4,6 @@ import '../data/repositories.dart';
 import '../errors/app_error.dart';
 import '../logging/redacting_logger.dart';
 import '../storage/secure_token_store.dart';
-import 'actor_identity.dart';
 import 'api_client.dart';
 import 'api_config.dart';
 import 'error_mapper.dart';
@@ -124,37 +123,23 @@ BaseOptions _baseOptions(ApiConfig config) => BaseOptions(
       validateStatus: (status) => status != null && status >= 200 && status < 300,
     );
 
-/// Attaches the actor-identity headers to every request.
+/// Builds the configured, authenticated HTTP client.
 ///
-/// In a release build [DebugActorHeaderIdentity] returns nothing, so this interceptor is
-/// inert — the header cannot ship.
-class _ActorIdentityInterceptor extends Interceptor {
-  _ActorIdentityInterceptor(this._identity);
-
-  final ActorIdentity _identity;
-
-  @override
-  Future<void> onRequest(
-    RequestOptions options,
-    RequestInterceptorHandler handler,
-  ) async {
-    options.headers.addAll(await _identity.headers());
-    handler.next(options);
-  }
-}
-
-/// Builds the configured HTTP client.
+/// There is no `identity` parameter any more. It carried the `x-actor-id` bring-up seam, and
+/// PR-B removed the last reader of that header from the backend — `@ActorId()` now reads
+/// `request.actor`, which only the verified-bearer guard writes. A client-supplied identity
+/// header is therefore not merely disabled, it is ignored, and a seam that pretends to offer
+/// an identity nobody honours is worse than none: it documents a security model that no
+/// longer exists. Identity now comes from exactly one place, [TokenProvider].
 ApiClient buildApiClient({
   required ApiConfig config,
   required TokenProvider tokens,
-  required ActorIdentity identity,
   RedactingLogger logger = const RedactingLogger(),
   HttpClientAdapter? adapter,
 }) {
   final dio = Dio(_baseOptions(config));
 
   if (adapter != null) dio.httpClientAdapter = adapter;
-  dio.interceptors.add(_ActorIdentityInterceptor(identity));
 
   return ApiClient(dio: dio, tokens: tokens, logger: logger);
 }
