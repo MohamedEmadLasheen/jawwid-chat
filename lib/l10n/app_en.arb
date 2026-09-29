@@ -8,6 +8,8 @@
   "signInAction": "Sign in",
   "signInFailedCredentials": "That username or password is not correct.",
   "signInFailedDisabled": "This account is no longer active. Please contact Jawwid.",
+  "signInFailedLocked": "Too many attempts. Try again in a few minutes.",
+  "signInFailedRoleUnsupported": "This account cannot sign in to the Jawwid app. Staff accounts use the Jawwid console.",
   "sessionExpiredTitle": "You have been signed out",
   "sessionExpiredBody": "Your session ended. Please sign in again.",
   "signOutAction": "Sign out",

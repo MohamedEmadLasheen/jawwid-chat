@@ -15,6 +15,16 @@ enum SignedOutReason {
 
   /// The account was disabled server-side.
   accountDisabled,
+
+  /// The account is temporarily locked after repeated failed attempts. It unlocks by itself,
+  /// which is the one thing that makes it different from [accountDisabled] to the person
+  /// standing in front of the screen.
+  accountLocked,
+
+  /// The credentials were correct, but this principal is not one the mobile app can act as
+  /// (staff, system, or a kind this build does not recognise). Telling the user to check
+  /// their password would send them round a loop they cannot exit.
+  roleNotSupported,
 }
 
 /// The authentication state machine.
@@ -28,9 +38,9 @@ sealed class AuthState {
   bool get isAuthenticated => this is AuthAuthenticated;
 
   AuthUser? get user => switch (this) {
-        final AuthAuthenticated state => state.principal,
-        _ => null,
-      };
+    final AuthAuthenticated state => state.principal,
+    _ => null,
+  };
 }
 
 class AuthUnknown extends AuthState {
@@ -45,12 +55,26 @@ class AuthSignedOut extends AuthState {
   /// Present when sign-in itself failed, as opposed to a session ending.
   final AppError? error;
 
-  static SignedOutReason reasonFor(AppError error) => switch (error.kind) {
-        AppErrorKind.accountDisabled => SignedOutReason.accountDisabled,
-        AppErrorKind.sessionRevoked => SignedOutReason.sessionRevoked,
-        AppErrorKind.unauthenticated => SignedOutReason.sessionExpired,
-        _ => SignedOutReason.none,
-      };
+  /// [AppErrorKind.invalidCredentials] maps to [SignedOutReason.sessionExpired] on purpose,
+  /// and the screen tells the two apart by whether [error] is set: a *reason* arrives with no
+  /// error, a failed *attempt* arrives with one. That distinction already existed and is
+  /// already tested; adding a fifth reason to say the same thing would leave two ways to
+  /// express one state.
+  static SignedOutReason reasonFor(AppError error) {
+    // Checked ahead of the kind: the *kind* of a refused principal is an ordinary
+    // `forbidden`, and only the code says which forbidden thing happened.
+    if (error.code == AuthFailures.roleNotSupported) {
+      return SignedOutReason.roleNotSupported;
+    }
+    return switch (error.kind) {
+      AppErrorKind.accountDisabled => SignedOutReason.accountDisabled,
+      AppErrorKind.accountLocked => SignedOutReason.accountLocked,
+      AppErrorKind.sessionRevoked => SignedOutReason.sessionRevoked,
+      AppErrorKind.unauthenticated ||
+      AppErrorKind.invalidCredentials => SignedOutReason.sessionExpired,
+      _ => SignedOutReason.none,
+    };
+  }
 }
 
 class AuthSigningIn extends AuthState {

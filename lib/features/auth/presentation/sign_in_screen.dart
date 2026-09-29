@@ -150,8 +150,13 @@ class _SignInNotice extends StatelessWidget {
     final l10n = L10n.of(context);
     final theme = Theme.of(context);
 
+    // Locked, disabled and wrong-password are three different backend security states and
+    // are shown as three different things. Collapsing them would tell someone whose account
+    // unlocks in five minutes to go and find an administrator.
     final message = switch (state.reason) {
       SignedOutReason.accountDisabled => l10n.signInFailedDisabled,
+      SignedOutReason.accountLocked => l10n.signInFailedLocked,
+      SignedOutReason.roleNotSupported => l10n.signInFailedRoleUnsupported,
       SignedOutReason.sessionRevoked ||
       SignedOutReason.sessionExpired =>
         state.error == null ? l10n.sessionExpiredBody : l10n.signInFailedCredentials,

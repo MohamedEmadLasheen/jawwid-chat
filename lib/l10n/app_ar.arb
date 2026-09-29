@@ -8,6 +8,8 @@
   "signInAction": "تسجيل الدخول",
   "signInFailedCredentials": "اسم المستخدم أو كلمة المرور غير صحيحة.",
   "signInFailedDisabled": "هذا الحساب لم يعد نشطًا. برجاء التواصل مع جَوِّد.",
+  "signInFailedLocked": "محاولات كثيرة. برجاء المحاولة مرة أخرى بعد عدة دقائق.",
+  "signInFailedRoleUnsupported": "لا يمكن تسجيل الدخول إلى تطبيق جَوِّد بهذا الحساب. حسابات الموظفين تستخدم لوحة تحكم جَوِّد.",
   "sessionExpiredTitle": "تم تسجيل خروجك",
   "sessionExpiredBody": "انتهت جلستك. برجاء تسجيل الدخول مرة أخرى.",
   "signOutAction": "تسجيل الخروج",

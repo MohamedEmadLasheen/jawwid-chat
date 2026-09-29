@@ -37,6 +37,14 @@ class L10nAr extends L10n {
       'هذا الحساب لم يعد نشطًا. برجاء التواصل مع جَوِّد.';
 
   @override
+  String get signInFailedLocked =>
+      'محاولات كثيرة. برجاء المحاولة مرة أخرى بعد عدة دقائق.';
+
+  @override
+  String get signInFailedRoleUnsupported =>
+      'لا يمكن تسجيل الدخول إلى تطبيق جَوِّد بهذا الحساب. حسابات الموظفين تستخدم لوحة تحكم جَوِّد.';
+
+  @override
   String get sessionExpiredTitle => 'تم تسجيل خروجك';
 
   @override
