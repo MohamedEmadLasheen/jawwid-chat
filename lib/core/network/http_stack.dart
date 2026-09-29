@@ -4,12 +4,28 @@ import '../data/repositories.dart';
 import '../errors/app_error.dart';
 import '../logging/redacting_logger.dart';
 import '../storage/secure_token_store.dart';
-import 'actor_identity.dart';
 import 'api_client.dart';
 import 'api_config.dart';
+import 'error_mapper.dart';
 
 /// Bridges the token store to [ApiClient], and routes a terminal auth failure back to
 /// whoever owns the session.
+///
+/// ## THE SINGLE-TOKEN-AUTHORITY RULE
+///
+/// **There is exactly one of these per session, and every authenticated consumer shares it.**
+/// The HTTP client shares it today; realtime and push registration must share it when they
+/// arrive. Do not give any consumer its own token provider, its own refresh call, or its own
+/// copy of the refresh token.
+///
+/// This is not a style preference. `POST /auth/refresh` ROTATES: the presented refresh token
+/// is retired as it is used, and presenting an already-rotated one is read as theft —
+/// `AuthService.handleRefreshReuse` then revokes **every live session on the account**, not
+/// just the offending one. Two independent refreshers on one device are therefore not a race
+/// that costs a retry; they are a race that signs the user out of every device they own.
+///
+/// [ApiClient] single-flights the refresh, so a burst of 401s produces one exchange. That
+/// guarantee holds per provider instance, which is precisely why there must only ever be one.
 class StoredTokenProvider implements TokenProvider {
   StoredTokenProvider({
     required TokenStore store,
@@ -45,35 +61,69 @@ class StoredTokenProvider implements TokenProvider {
   Future<void> onSessionEnded(AppError error) => _onEnded(error);
 }
 
-/// Attaches the actor-identity headers to every request.
+/// The transport for the **public** half of the auth plane: `POST /auth/login` and
+/// `POST /auth/refresh`.
 ///
-/// In a release build [DebugActorHeaderIdentity] returns nothing, so this interceptor is
-/// inert — the header cannot ship.
-class _ActorIdentityInterceptor extends Interceptor {
-  _ActorIdentityInterceptor(this._identity);
+/// ## Why this exists rather than reusing [ApiClient]
+///
+/// [ApiClient] answers a 401 by refreshing and replaying. That is right for a protected
+/// route and catastrophic for `/auth/refresh` itself:
+///
+/// ```
+/// AuthRepository.refresh()  ->  ApiClient  ->  401
+///                           ->  ApiClient._refreshOnce()   (already in flight)
+///                           ->  returns the very future that is awaiting this request
+/// ```
+///
+/// The chain then awaits itself and never completes. Fixing the error vocabulary removes
+/// today's trigger, but the *shape* would still be there for the next person to hit. So the
+/// two routes that must never provoke a refresh are given a transport that has no refresh
+/// interceptor to provoke: the recursion is impossible by construction, not by care.
+///
+/// It is also the honest boundary. These are exactly the routes the backend marks
+/// `@Public()` — the only two in the whole application — so "unauthenticated transport" and
+/// "public route" are the same line drawn in two places.
+///
+/// It owns no tokens and coordinates nothing. The single refresh authority remains
+/// [StoredTokenProvider]; this only carries the bytes.
+class AuthTransport {
+  AuthTransport({required Dio dio}) : _dio = dio;
 
-  final ActorIdentity _identity;
+  final Dio _dio;
 
-  @override
-  Future<void> onRequest(
-    RequestOptions options,
-    RequestInterceptorHandler handler,
-  ) async {
-    options.headers.addAll(await _identity.headers());
-    handler.next(options);
+  /// [headers] exists for exactly one caller: the bounded logout retry, which must present
+  /// a credential explicitly BECAUSE this transport has no interceptor to attach one. That
+  /// is the whole point — a retry sent here cannot provoke a second refresh, so the sign-out
+  /// flow is bounded by construction rather than by a counter somebody has to maintain.
+  Future<Response<T>> post<T>(
+    String path, {
+    Object? data,
+    Map<String, String>? headers,
+  }) async {
+    try {
+      return await _dio.post<T>(
+        path,
+        data: data,
+        options: headers == null ? null : Options(headers: headers),
+      );
+    } catch (error) {
+      throw ErrorMapper.map(error);
+    }
   }
 }
 
-/// Builds the configured HTTP client.
-ApiClient buildApiClient({
+/// Builds the public-route transport. Same base options as [buildApiClient], deliberately
+/// **without** the token and refresh interceptors.
+AuthTransport buildAuthTransport({
   required ApiConfig config,
-  required TokenProvider tokens,
-  required ActorIdentity identity,
-  RedactingLogger logger = const RedactingLogger(),
   HttpClientAdapter? adapter,
 }) {
-  final dio = Dio(
-    BaseOptions(
+  final dio = Dio(_baseOptions(config));
+  if (adapter != null) dio.httpClientAdapter = adapter;
+  return AuthTransport(dio: dio);
+}
+
+BaseOptions _baseOptions(ApiConfig config) => BaseOptions(
       baseUrl: config.baseUrl,
       connectTimeout: config.connectTimeout,
       receiveTimeout: config.receiveTimeout,
@@ -83,11 +133,24 @@ ApiClient buildApiClient({
       // Let every status through to the error mapper, which owns the taxonomy. Dio's own
       // 2xx-only default would classify a 403 as a transport failure.
       validateStatus: (status) => status != null && status >= 200 && status < 300,
-    ),
-  );
+    );
+
+/// Builds the configured, authenticated HTTP client.
+///
+/// **`Authorization: Bearer` is the only credential this client sends**, and [TokenProvider]
+/// is the only thing that can produce one. There is deliberately no way to pass an identity
+/// in alongside it: the backend derives the actor exclusively from the verified token
+/// (AUTH-INV-1), so a second identity channel could only ever be a client asserting something
+/// the server does not read. Do not add one back.
+ApiClient buildApiClient({
+  required ApiConfig config,
+  required TokenProvider tokens,
+  RedactingLogger logger = const RedactingLogger(),
+  HttpClientAdapter? adapter,
+}) {
+  final dio = Dio(_baseOptions(config));
 
   if (adapter != null) dio.httpClientAdapter = adapter;
-  dio.interceptors.add(_ActorIdentityInterceptor(identity));
 
   return ApiClient(dio: dio, tokens: tokens, logger: logger);
 }

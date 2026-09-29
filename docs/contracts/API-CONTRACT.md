@@ -241,8 +241,9 @@ One row per distinct (method, path). Paths are relative to `/api/v1` unless mark
 | DELETE | `/conversations/:id/messages/:messageId/me` | Flutter (same) | EXISTS | Delete for me. |
 | DELETE | `/conversations/:id/messages/:messageId` | Flutter (same) | EXISTS | Delete for everyone; a `DELETE_WINDOW_EXPIRED` refusal is presented, not pre-empted. |
 | POST | `/conversations/:id/messages/attachments/authorize` | Flutter (same) | EXISTS | Now used for `image` and `file` as well as `voice`. |
-| — | `x-actor-id` header (debug builds only) | Flutter (`lib/core/network/actor_identity.dart`) | RENAME | Replaced by `Authorization: Bearer`. |
-| — | auth: login / refresh / me / logout / sessions | Flutter (`unavailable_auth_repository.dart`) | MISSING | §3.1, §3.2 |
+| — | `x-actor-id` header | — | **RETIRED** | Deleted on both sides. `actor_identity.dart` and `DebugActorHeaderIdentity` no longer exist; `Authorization: Bearer` is the only credential Flutter sends. |
+| — | auth: login / refresh / me / logout | Flutter (`http_auth_repository.dart`) | **EXISTS** | §3.1, §3.2. `UnavailableAuthRepository` is retired. |
+| — | auth: `GET/DELETE /me/sessions` | Flutter (`http_auth_repository.dart`) | MISSING (server) | Named in IDENTITY-MODEL §4 but not published. `devices()` / `revokeDevice()` fail explicitly rather than fabricating a list. |
 | — | typing / realtime | Flutter (`setTyping` no-op) | MISSING (client) | Flutter has no socket client yet; §4 is the contract to implement. |
 
 ---
@@ -772,7 +773,16 @@ Reconnect: re-subscribe, `GET …/messages?after=<last seq held>` per conversati
 ### 6.2 Flutter (`lib/`)
 
 1. **Header rename**: `ApiClient.idempotencyHeader` `'X-Idempotency-Key'` → `'Idempotency-Key'` (`lib/core/network/api_client.dart`). Keep `clientMessageId` in the body — that is the guarantee the server enforces.
-2. **Auth endpoints**: replace `UnavailableAuthRepository` with an HTTP implementation of `POST /auth/login`, `POST /auth/refresh`, `GET /me`, `POST /auth/logout`, `GET/DELETE /me/sessions`; the existing `TokenProvider` / single-flight refresh in `ApiClient` already fits `TokenPairDto`. Map `AUTH.UNAUTHENTICATED` → `unauthenticated`, `AUTH.ACCOUNT_DISABLED` → `accountDisabled`, `AUTH.SESSION_REVOKED` → `sessionRevoked` in `ErrorMapper`. Delete `DebugActorHeaderIdentity` (`actor_identity.dart`) once the guard lands.
+2. **Auth endpoints — DONE.** `HttpAuthRepository` (`lib/core/data/http/http_auth_repository.dart`) is the production `AuthRepository`, consuming `POST /auth/login`, `POST /auth/refresh`, `GET /me` and `POST /auth/logout` unchanged. `UnavailableAuthRepository` and `DebugActorHeaderIdentity` are deleted; `Authorization: Bearer` is the only identity mechanism Flutter has. `ErrorMapper` recognises the `AUTH.*` and `COMMON.RATE_LIMITED` codes, and `Retry-After` is carried on `AppError`.
+
+   Four properties are load-bearing and must survive any future change here:
+
+   - **One session authority.** Exactly one `SecureTokenStore`, one `StoredTokenProvider` and one `ApiClient` per session, built in `bootstrap.dart` and shared by every authenticated consumer — realtime and push included, when they arrive. `POST /auth/refresh` rotates and a replayed refresh token revokes every live session on the account, so a second refresher is not a wasted request, it is a sign-out on every device the user owns.
+   - **Login and refresh do not use the authenticated client.** They go over `AuthTransport`, which has no 401 interceptor, so `/auth/refresh` cannot re-enter the refresh machinery and await its own future. `/me` and `/auth/logout` go over `ApiClient` precisely *because* it refreshes.
+   - **Refresh is single-flight, and replay is capped at one.** A burst of 401s produces one token exchange; an unkeyed POST is never replayed.
+   - **Sign-out is bounded.** One logout, at most one refresh, at most one logout retry over `AuthTransport` with the rotated token — so an expired access token cannot leave the rotated session live on the server. Generic replay policy is unchanged.
+
+   Still owed by the server: `GET /me/sessions` and `DELETE /me/sessions/:id` (IDENTITY-MODEL §4). `devices()` and `revokeDevice()` fail explicitly until they exist, and `AuthRepository.sessionRevoked` stays an empty stream until realtime can carry a revocation signal — request-time validation in `AuthService.authenticate` remains authoritative meanwhile.
 3. **Reaction DELETE must carry the emoji**: `HttpMessageRepository.removeReaction(messageId, emoji)` (`lib/core/data/http/http_message_repository.dart:131`) calls `DELETE /conversations/:id/messages/:messageId/reactions` with no parameters; send `?emoji=<emoji>` (Phase 1 requires it; today it is ignored).
 4. **List shape**: `GET /conversations` moves from `{conversations}` to `{items, nextCursor}`; add cursor paging and `includeArchived` instead of filtering locally.
 5. **Members on detail**: `HttpGroupRepository` reads `members[]` from `GET /conversations/:id`; the server does not return it today (RECONCILE §3.4) — no client change, but expect empty members until the server fix. Display names for members remain an open server item (mobile O3).

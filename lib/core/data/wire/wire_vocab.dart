@@ -103,3 +103,38 @@ abstract final class WireErrors {
     storyCannotRead,
   };
 }
+
+/// The authentication error codes, mirroring `apps/api/src/platform/auth/auth.errors.ts`.
+///
+/// Separate from [WireErrors] because these are not communication-domain refusals: the
+/// backend decides them in `AuthenticatedGuard` before any controller runs, and the client
+/// branches on them to decide whether to refresh, re-login, or stop for good.
+///
+/// The `AUTH.` prefix is not decoration. Before these constants existed the client recognised
+/// `session_revoked` and `account_disabled` — codes the backend has never sent — so a revoked
+/// session was classified merely `unauthenticated` and the client answered it by presenting
+/// a dead refresh token, and a disabled account classified as `forbidden` and kept rendering
+/// protected screens.
+abstract final class AuthErrors {
+  /// 401. Missing, malformed or expired bearer token. Refresh once, then end.
+  static const unauthenticated = 'AUTH.UNAUTHENTICATED';
+
+  /// 401 from `POST /auth/login` only. Uniform for "no such user" and "wrong password",
+  /// because a response that distinguished them would enumerate accounts.
+  static const invalidCredentials = 'AUTH.INVALID_CREDENTIALS';
+
+  /// 403. Deactivated or suspended.
+  static const accountDisabled = 'AUTH.ACCOUNT_DISABLED';
+
+  /// 403. Temporarily locked after repeated failures.
+  static const accountLocked = 'AUTH.ACCOUNT_LOCKED';
+
+  /// 401. Revoked, rotated-and-reused, or the session row is gone.
+  static const sessionRevoked = 'AUTH.SESSION_REVOKED';
+
+  /// 403. Authenticated, but not permitted. NOT a reason to end the session.
+  static const forbidden = 'AUTH.FORBIDDEN';
+
+  /// 429. Carries the wait in the `Retry-After` header, never in the body.
+  static const rateLimited = 'COMMON.RATE_LIMITED';
+}

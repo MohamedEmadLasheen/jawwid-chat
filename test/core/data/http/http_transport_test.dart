@@ -3,11 +3,9 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/core/data/http/http_conversation_repository.dart';
 import 'package:jawwid_chat/core/data/http/http_message_repository.dart';
-import 'package:jawwid_chat/core/data/http/unavailable_auth_repository.dart';
 import 'package:jawwid_chat/core/data/repositories.dart';
 import 'package:jawwid_chat/core/data/wire/wire_vocab.dart';
 import 'package:jawwid_chat/core/errors/app_error.dart';
-import 'package:jawwid_chat/core/network/actor_identity.dart';
 import 'package:jawwid_chat/core/network/api_client.dart';
 import 'package:jawwid_chat/core/network/api_config.dart';
 import 'package:jawwid_chat/core/network/http_stack.dart';
@@ -68,14 +66,10 @@ void main() {
   ApiClient clientWith(
     TokenProvider tokens, {
     Duration receive = const Duration(seconds: 5),
-    String debugActorId = '',
   }) {
     return buildApiClient(
       config: ApiConfig(baseUrl: server.baseUrl, receiveTimeout: receive),
       tokens: tokens,
-      identity: debugActorId.isEmpty
-          ? const BearerTokenIdentity()
-          : DebugActorHeaderIdentity(actorId: debugActorId, enabled: true),
     );
   }
 
@@ -621,7 +615,6 @@ void main() {
           connectTimeout: Duration(milliseconds: 300),
         ),
         tokens: _NoTokens(),
-        identity: const BearerTokenIdentity(),
       );
 
       try {
@@ -731,8 +724,40 @@ void main() {
     });
   });
 
-  group('the actor-identity bring-up seam', () {
-    test('sends no identity header by default', () async {
+  group('identity travels one way only', () {
+    // The `x-actor-id` bring-up seam is gone. PR-B removed the last reader of that header
+    // from the backend -- `@ActorId()` reads `request.actor`, which only the verified-bearer
+    // guard writes -- so a client-asserted identity header is not merely disabled, it is
+    // ignored. What remains must be the token, and nothing but the token.
+    test('no identity header is sent, ever', () async {
+      server.on('GET', '/conversations', [
+        const Reply.ok({'conversations': []}),
+      ]);
+
+      await conversations(clientWith(_RenewableTokens())).list();
+
+      final headers = server.lastRequestTo('GET', '/conversations')!.headers;
+      expect(headers.containsKey('x-actor-id'), isFalse);
+      expect(
+        headers.keys.where((k) => k.toLowerCase().contains('actor')),
+        isEmpty,
+      );
+    });
+
+    test('the Authorization header is the only credential', () async {
+      server.on('GET', '/conversations', [
+        const Reply.ok({'conversations': []}),
+      ]);
+
+      await conversations(clientWith(_RenewableTokens())).list();
+
+      expect(
+        server.lastRequestTo('GET', '/conversations')!.headers['authorization'],
+        'Bearer stale-token',
+      );
+    });
+
+    test('with no token, nothing is invented in its place', () async {
       server.on('GET', '/conversations', [
         const Reply.ok({'conversations': []}),
       ]);
@@ -740,29 +765,9 @@ void main() {
       await conversations(clientWith(_NoTokens())).list();
 
       expect(
-        server.lastRequestTo('GET', '/conversations')!.headers
-            .containsKey(DebugActorHeaderIdentity.headerName),
+        server.lastRequestTo('GET', '/conversations')!.headers.containsKey('authorization'),
         isFalse,
       );
-    });
-
-    test('sends x-actor-id only when explicitly enabled', () async {
-      server.on('GET', '/conversations', [
-        const Reply.ok({'conversations': []}),
-      ]);
-
-      await conversations(clientWith(_NoTokens(), debugActorId: 'actor-1')).list();
-
-      expect(
-        server.lastRequestTo('GET', '/conversations')!.headers[
-            DebugActorHeaderIdentity.headerName],
-        'actor-1',
-      );
-    });
-
-    test('the seam is inert unless enabled', () async {
-      const identity = DebugActorHeaderIdentity(actorId: 'actor-1');
-      expect(await identity.headers(), isEmpty);
     });
   });
 
@@ -962,32 +967,10 @@ void main() {
       );
     });
 
-    test('every auth call fails with a specific, terminal error', () async {
-      const auth = UnavailableAuthRepository();
-
-      for (final call in <Future<Object?> Function()>[
-        () => auth.signIn(username: 'u', password: 'p'),
-        () => auth.currentUser(),
-        () => auth.refresh('r'),
-        () => auth.devices(),
-        () => auth.revokeDevice('d'),
-      ]) {
-        await expectLater(
-          call(),
-          throwsA(
-            isA<AppError>().having(
-              (e) => e.code,
-              'code',
-              'auth_contract_not_published',
-            ),
-          ),
-        );
-      }
-    });
-
-    test('sign-out still clears locally even with no server session', () async {
-      const auth = UnavailableAuthRepository();
-      await expectLater(auth.signOut(), completes);
-    });
+    // The two tests that stood here asserted UnavailableAuthRepository's throwing
+    // behaviour. That class is gone: authentication is implemented, and its contract is
+    // proved against a real server in auth_over_http_test.dart and
+    // auth_refresh_rotation_test.dart. Keeping a test for the placeholder would pin the
+    // absence of the feature.
   });
 }

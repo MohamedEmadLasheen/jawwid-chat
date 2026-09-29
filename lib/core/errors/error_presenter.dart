@@ -32,6 +32,20 @@ abstract final class ErrorPresenter {
           body: l10n.signInFailedDisabled,
           canRetry: false,
         ),
+      // Locked is not disabled: it ends on its own, so the body says so rather than sending
+      // the user to find an administrator who has nothing to undo.
+      AppErrorKind.accountLocked => ErrorMessage(
+          title: l10n.sessionExpiredTitle,
+          body: l10n.signInFailedLocked,
+          canRetry: false,
+        ),
+      // Retryable in the plain sense -- the user retypes and tries again -- but never
+      // *automatically*, which is why canRetry stays false for a credential failure.
+      AppErrorKind.invalidCredentials => ErrorMessage(
+          title: l10n.sessionExpiredTitle,
+          body: l10n.signInFailedCredentials,
+          canRetry: false,
+        ),
       AppErrorKind.unauthenticated || AppErrorKind.sessionRevoked => ErrorMessage(
           title: l10n.sessionExpiredTitle,
           body: l10n.sessionExpiredBody,

@@ -103,15 +103,19 @@ class ApiClient {
   ) async {
     final mapped = ErrorMapper.map(error);
 
-    // A disabled account or a revoked session is terminal: refreshing cannot help, and
-    // pretending otherwise would strand the user on a spinner.
-    if (mapped.kind == AppErrorKind.accountDisabled ||
-        mapped.kind == AppErrorKind.sessionRevoked) {
+    // A disabled account, a locked account or a revoked session is terminal: refreshing
+    // cannot help, and pretending otherwise would strand the user on a spinner. Worse, the
+    // backend rotates refresh tokens and reads a replayed one as theft, so spending the
+    // refresh token on a refusal that will repeat is not merely futile.
+    if (mapped.terminatesSession && !mapped.isRefreshable) {
       await _tokens.onSessionEnded(mapped);
       return handler.reject(error);
     }
 
-    if (mapped.kind != AppErrorKind.unauthenticated) return handler.next(error);
+    // Everything else -- a policy refusal, a validation failure, and in particular a failed
+    // *login* -- travels on untouched. A wrong password is not this layer's business: it has
+    // no session to renew and none to end.
+    if (!mapped.isRefreshable) return handler.next(error);
 
     final request = error.requestOptions;
     if (request.extra['jawwid.replayed'] == true) {

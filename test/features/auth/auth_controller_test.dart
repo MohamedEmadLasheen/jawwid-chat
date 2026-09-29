@@ -74,6 +74,8 @@ void main() {
   late _FakeAuthRepository repository;
   late InMemoryTokenStore tokens;
   late int clearCalls;
+  late List<AuthUser> adopted;
+  late int sessionClearedCalls;
   late ProviderContainer container;
   late NotifierProvider<AuthController, AuthState> provider;
 
@@ -81,12 +83,16 @@ void main() {
     repository = _FakeAuthRepository();
     tokens = InMemoryTokenStore();
     clearCalls = 0;
+    adopted = [];
+    sessionClearedCalls = 0;
 
     provider = NotifierProvider<AuthController, AuthState>(
       () => AuthController(
         repository: repository,
         tokens: tokens,
         clearLocalData: () async => clearCalls++,
+        onPrincipal: adopted.add,
+        onSessionCleared: () async => sessionClearedCalls++,
       ),
     );
     container = ProviderContainer();
@@ -249,6 +255,139 @@ void main() {
       final state = container.read(provider) as AuthSignedOut;
       expect(state.reason, SignedOutReason.accountDisabled);
       expect(clearCalls, 1);
+    });
+  });
+
+  group('the transport learns who is signed in', () {
+    test('signing in announces the principal exactly once', () async {
+      await controller().signIn(username: 'mona', password: 'pw');
+
+      expect(adopted, hasLength(1));
+      expect(adopted.single.id, 'u1');
+      expect(adopted.single.role, UserRole.parent);
+    });
+
+    test('restoring a stored session announces it too', () async {
+      // Otherwise a cold start leaves the transport with no actor id, and every message the
+      // user wrote yesterday renders as somebody else's.
+      await tokens.write(
+        AuthSession(
+          accessToken: 'a',
+          refreshToken: 'r',
+          accessTokenExpiresAt: DateTime.utc(2030),
+        ),
+      );
+
+      await controller().restore();
+
+      expect(adopted.single.id, 'u1');
+    });
+
+    test('a teacher is announced as a teacher, not as the default', () async {
+      final teacher = _FakeAuthRepository(role: UserRole.teacher);
+      addTearDown(teacher.dispose);
+
+      final teacherProvider = NotifierProvider<AuthController, AuthState>(
+        () => AuthController(
+          repository: teacher,
+          tokens: tokens,
+          clearLocalData: () async {},
+          onPrincipal: adopted.add,
+        ),
+      );
+
+      await container.read(teacherProvider.notifier).signIn(username: 'm', password: 'p');
+
+      expect(adopted.single.role, UserRole.teacher);
+    });
+
+    test('signing out forgets the principal', () async {
+      await controller().signIn(username: 'mona', password: 'pw');
+      await controller().signOut();
+
+      expect(sessionClearedCalls, 1);
+    });
+
+    test('a session the backend ends forgets the principal too', () async {
+      await controller().signIn(username: 'mona', password: 'pw');
+      await controller().onSessionEnded(
+        const AppError(AppErrorKind.sessionRevoked),
+      );
+
+      expect(sessionClearedCalls, 1);
+      expect(container.read(provider), isA<AuthSignedOut>());
+    });
+
+    test('a failed sign-in announces nothing', () async {
+      repository.signInError = const AppError(AppErrorKind.invalidCredentials);
+
+      await controller().signIn(username: 'mona', password: 'wrong');
+
+      expect(adopted, isEmpty);
+    });
+  });
+
+  group('states the backend distinguishes stay distinguished', () {
+    Future<AuthSignedOut> signInFailingWith(AppError error) async {
+      repository.signInError = error;
+      await controller().signIn(username: 'mona', password: 'pw');
+      return container.read(provider) as AuthSignedOut;
+    }
+
+    test('a locked account is its own reason', () async {
+      final state = await signInFailingWith(const AppError(AppErrorKind.accountLocked));
+      expect(state.reason, SignedOutReason.accountLocked);
+    });
+
+    test('a disabled account is its own reason', () async {
+      final state = await signInFailingWith(const AppError(AppErrorKind.accountDisabled));
+      expect(state.reason, SignedOutReason.accountDisabled);
+    });
+
+    test('bad credentials carry the error, which is what the screen reads', () async {
+      final state = await signInFailingWith(const AppError(AppErrorKind.invalidCredentials));
+      expect(state.error, isNotNull);
+      expect(state.reason, isNot(SignedOutReason.accountDisabled));
+      expect(state.reason, isNot(SignedOutReason.accountLocked));
+    });
+
+    test('a principal the app cannot act as is refused, and stores nothing', () async {
+      // Credentials were correct -- tokens were issued and written -- and the refusal comes
+      // from GET /me. The tokens must not survive it.
+      repository.currentUserError = const AppError(
+        AppErrorKind.forbidden,
+        code: AuthFailures.roleNotSupported,
+      );
+
+      await controller().signIn(username: 'staff', password: 'pw');
+
+      final state = container.read(provider) as AuthSignedOut;
+      expect(state.reason, SignedOutReason.roleNotSupported);
+      expect(await tokens.read(), isNull);
+      expect(adopted, isEmpty);
+    });
+
+    test('a refused principal on restore ends the stored session', () async {
+      await tokens.write(
+        AuthSession(
+          accessToken: 'a',
+          refreshToken: 'r',
+          accessTokenExpiresAt: DateTime.utc(2030),
+        ),
+      );
+      repository.currentUserError = const AppError(
+        AppErrorKind.forbidden,
+        code: AuthFailures.roleNotSupported,
+      );
+
+      await controller().restore();
+
+      expect(container.read(provider), isA<AuthSignedOut>());
+      expect(
+        await tokens.read(),
+        isNull,
+        reason: 'a staff token on a phone is not a session to keep for later',
+      );
     });
   });
 }

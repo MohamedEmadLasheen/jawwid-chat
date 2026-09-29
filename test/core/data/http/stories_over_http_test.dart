@@ -5,7 +5,6 @@ import 'package:jawwid_chat/app/retry_policy.dart';
 import 'package:jawwid_chat/core/data/http/http_story_repository.dart';
 import 'package:jawwid_chat/core/data/wire/wire_vocab.dart';
 import 'package:jawwid_chat/core/errors/app_error.dart';
-import 'package:jawwid_chat/core/network/actor_identity.dart';
 import 'package:jawwid_chat/core/network/api_client.dart';
 import 'package:jawwid_chat/core/network/api_config.dart';
 import 'package:jawwid_chat/core/network/http_stack.dart';
@@ -72,7 +71,6 @@ void main() {
             client: buildApiClient(
               config: ApiConfig(baseUrl: server.baseUrl),
               tokens: _NoTokens(),
-              identity: const BearerTokenIdentity(),
             ),
           ),
         ),

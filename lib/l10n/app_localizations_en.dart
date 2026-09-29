@@ -37,6 +37,14 @@ class L10nEn extends L10n {
       'This account is no longer active. Please contact Jawwid.';
 
   @override
+  String get signInFailedLocked =>
+      'Too many attempts. Try again in a few minutes.';
+
+  @override
+  String get signInFailedRoleUnsupported =>
+      'This account cannot sign in to the Jawwid app. Staff accounts use the Jawwid console.';
+
+  @override
   String get sessionExpiredTitle => 'You have been signed out';
 
   @override

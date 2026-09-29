@@ -145,6 +145,18 @@ abstract class L10n {
   /// **'This account is no longer active. Please contact Jawwid.'**
   String get signInFailedDisabled;
 
+  /// No description provided for @signInFailedLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many attempts. Try again in a few minutes.'**
+  String get signInFailedLocked;
+
+  /// No description provided for @signInFailedRoleUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'This account cannot sign in to the Jawwid app. Staff accounts use the Jawwid console.'**
+  String get signInFailedRoleUnsupported;
+
   /// No description provided for @sessionExpiredTitle.
   ///
   /// In en, this message translates to:
