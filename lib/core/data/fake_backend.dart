@@ -79,7 +79,11 @@ class FakeBackend {
           title: 'جَوِّد',
           updatedAt: _now,
           lastMessageAt: _now.subtract(const Duration(minutes: 4)),
-          lastMessagePreview: 'أهلًا بك، كيف يمكننا مساعدتك؟',
+          lastMessage: MessagePreview(
+            kind: MessageKind.text,
+            at: _now.subtract(const Duration(minutes: 4)),
+            text: 'أهلًا بك، كيف يمكننا مساعدتك؟',
+          ),
           unreadCount: 1,
           isPinned: true,
           handledByLabel: 'المشرفة المناوبة',
@@ -110,7 +114,11 @@ class FakeBackend {
           title: 'إدارة جَوِّد',
           updatedAt: _now.subtract(const Duration(hours: 2)),
           lastMessageAt: _now.subtract(const Duration(hours: 2)),
-          lastMessagePreview: 'برجاء مراجعة جدول الحصص.',
+          lastMessage: MessagePreview(
+            kind: MessageKind.text,
+            at: _now.subtract(const Duration(hours: 2)),
+            text: 'برجاء مراجعة جدول الحصص.',
+          ),
         ),
       );
     }
@@ -122,7 +130,7 @@ class FakeBackend {
 
     _appendServerMessage(
       conversationId: conversation.id,
-      body: conversation.lastMessagePreview,
+      body: conversation.lastMessage?.text ?? '',
       authorName: conversation.title,
       authorRole: ParticipantRole.admin,
       at: conversation.lastMessageAt ?? conversation.updatedAt,
@@ -142,7 +150,11 @@ class FakeBackend {
         learner: learner,
         updatedAt: _now.subtract(const Duration(hours: 1)),
         lastMessageAt: _now.subtract(const Duration(hours: 1)),
-        lastMessagePreview: 'تم تأكيد موعد الحصة القادمة.',
+        lastMessage: MessagePreview(
+          kind: MessageKind.text,
+          at: _now.subtract(const Duration(minutes: 30)),
+          text: 'تم تأكيد موعد الحصة القادمة.',
+        ),
         requiresApproval: true,
       ),
     );

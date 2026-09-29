@@ -10,6 +10,69 @@ class L10nAr extends L10n {
   L10nAr([String locale = 'ar']) : super(locale);
 
   @override
+  String systemGroupCreated(String learner) {
+    return 'فتحت جوّيد هذه المجموعة لـ$learner.';
+  }
+
+  @override
+  String get systemGroupCreatedUnnamed => 'فتحت جوّيد هذه المجموعة.';
+
+  @override
+  String get systemGroupMembersChanged => 'حدّثت جوّيد أعضاء هذه المجموعة.';
+
+  @override
+  String systemGroupMembersJoined(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'انضم $count أشخاص إلى المجموعة.',
+      two: 'انضم شخصان إلى المجموعة.',
+      one: 'انضم شخص إلى المجموعة.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String systemGroupMembersLeft(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'غادر $count أشخاص المجموعة.',
+      two: 'غادر شخصان المجموعة.',
+      one: 'غادر شخص المجموعة.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get systemGroupArchived => 'أغلقت جوّيد هذه المجموعة.';
+
+  @override
+  String get systemEventUnknown => 'حدّثت جوّيد هذه المحادثة.';
+
+  @override
+  String get previewVoice => 'رسالة صوتية';
+
+  @override
+  String get previewPhoto => 'صورة';
+
+  @override
+  String get previewVideo => 'فيديو';
+
+  @override
+  String get previewFile => 'ملف';
+
+  @override
+  String previewYouPrefix(String preview) {
+    return 'أنت: $preview';
+  }
+
+  @override
+  String previewSenderPrefix(String name, String preview) {
+    return '$name: $preview';
+  }
+
+  @override
   String get appName => 'جَوِّد';
 
   @override

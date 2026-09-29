@@ -1,5 +1,36 @@
 {
   "@@locale": "ar",
+  "systemGroupCreated": "فتحت جوّيد هذه المجموعة لـ{learner}.",
+  "@systemGroupCreated": {
+    "placeholders": { "learner": { "type": "String" } }
+  },
+  "systemGroupCreatedUnnamed": "فتحت جوّيد هذه المجموعة.",
+  "systemGroupMembersChanged": "حدّثت جوّيد أعضاء هذه المجموعة.",
+  "systemGroupMembersJoined": "{count, plural, =1{انضم شخص إلى المجموعة.} =2{انضم شخصان إلى المجموعة.} other{انضم {count} أشخاص إلى المجموعة.}}",
+  "@systemGroupMembersJoined": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "systemGroupMembersLeft": "{count, plural, =1{غادر شخص المجموعة.} =2{غادر شخصان المجموعة.} other{غادر {count} أشخاص المجموعة.}}",
+  "@systemGroupMembersLeft": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "systemGroupArchived": "أغلقت جوّيد هذه المجموعة.",
+  "systemEventUnknown": "حدّثت جوّيد هذه المحادثة.",
+  "previewVoice": "رسالة صوتية",
+  "previewPhoto": "صورة",
+  "previewVideo": "فيديو",
+  "previewFile": "ملف",
+  "previewYouPrefix": "أنت: {preview}",
+  "@previewYouPrefix": {
+    "placeholders": { "preview": { "type": "String" } }
+  },
+  "previewSenderPrefix": "{name}: {preview}",
+  "@previewSenderPrefix": {
+    "placeholders": {
+      "name": { "type": "String" },
+      "preview": { "type": "String" }
+    }
+  },
   "appName": "جَوِّد",
   "signInTitle": "تسجيل الدخول إلى جَوِّد",
   "signInSubtitle": "يتم إنشاء حسابك من قِبَل جَوِّد. لا يوجد تسجيل ذاتي.",

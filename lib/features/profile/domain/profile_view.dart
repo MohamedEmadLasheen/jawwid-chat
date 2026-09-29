@@ -158,8 +158,11 @@ abstract final class ProfileViewBuilder {
       audience: ProfileAudience.other,
       subject: ProfilePerson(
         id: conversation.id,
-        displayName: conversation.title,
-        avatarUrl: conversation.avatarUrl,
+        // The 1:1 profile is a PERSON, and a direct conversation has no title
+        // to name them by -- which is why this screen showed a blank name and
+        // a placeholder avatar for the one conversation every parent has.
+        displayName: conversation.displayTitle,
+        avatarUrl: conversation.displayAvatarUrl,
       ),
       isGroup: isGroup,
       learner: conversation.learner ?? group?.learner,
@@ -173,7 +176,11 @@ abstract final class ProfileViewBuilder {
           ),
       ],
       handledByLabel: conversation.handledByLabel,
-      requiresApproval: conversation.requiresApproval || (group?.requiresApproval ?? false),
+      // The conversation's own answer, and only it. This used to OR in the
+      // group payload's flag as well, so a notice could be shown on the
+      // strength of a policy that does not apply to this viewer -- and both
+      // values now come from the same server-derived field anyway.
+      requiresApproval: conversation.requiresApproval,
     );
   }
 

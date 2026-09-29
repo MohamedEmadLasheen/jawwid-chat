@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/features/conversations/domain/chat_feed.dart';
 import 'package:jawwid_chat/features/conversations/domain/conversation_list.dart';
 import 'package:jawwid_chat/shared/models/conversation.dart';
+import 'package:jawwid_chat/shared/models/message.dart';
 import 'package:jawwid_chat/shared/models/user_role.dart';
 
 /// The filter chips are the whole reason Groups stopped being a tab, so what each chip
@@ -178,7 +179,11 @@ void main() {
           title: 'إدارة',
           updatedAt: now,
           lastMessageAt: now,
-          lastMessagePreview: 'برجاء مراجعة جدول الحصص',
+          lastMessage: MessagePreview(
+            kind: MessageKind.text,
+            at: now,
+            text: 'برجاء مراجعة جدول الحصص',
+          ),
         ),
       ];
       final built = ConversationListBuilder.build(

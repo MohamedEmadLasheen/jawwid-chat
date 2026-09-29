@@ -97,6 +97,84 @@ abstract class L10n {
     Locale('en'),
   ];
 
+  /// No description provided for @systemGroupCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Jawwid opened this group for {learner}.'**
+  String systemGroupCreated(String learner);
+
+  /// No description provided for @systemGroupCreatedUnnamed.
+  ///
+  /// In en, this message translates to:
+  /// **'Jawwid opened this group.'**
+  String get systemGroupCreatedUnnamed;
+
+  /// No description provided for @systemGroupMembersChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Jawwid updated who is in this group.'**
+  String get systemGroupMembersChanged;
+
+  /// No description provided for @systemGroupMembersJoined.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{One person joined this group.} other{{count} people joined this group.}}'**
+  String systemGroupMembersJoined(int count);
+
+  /// No description provided for @systemGroupMembersLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{One person left this group.} other{{count} people left this group.}}'**
+  String systemGroupMembersLeft(int count);
+
+  /// No description provided for @systemGroupArchived.
+  ///
+  /// In en, this message translates to:
+  /// **'Jawwid closed this group.'**
+  String get systemGroupArchived;
+
+  /// No description provided for @systemEventUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Jawwid updated this conversation.'**
+  String get systemEventUnknown;
+
+  /// No description provided for @previewVoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice message'**
+  String get previewVoice;
+
+  /// No description provided for @previewPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo'**
+  String get previewPhoto;
+
+  /// No description provided for @previewVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'Video'**
+  String get previewVideo;
+
+  /// No description provided for @previewFile.
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get previewFile;
+
+  /// No description provided for @previewYouPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'You: {preview}'**
+  String previewYouPrefix(String preview);
+
+  /// No description provided for @previewSenderPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}: {preview}'**
+  String previewSenderPrefix(String name, String preview);
+
   /// No description provided for @appName.
   ///
   /// In en, this message translates to:

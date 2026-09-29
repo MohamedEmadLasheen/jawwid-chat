@@ -4,7 +4,9 @@ import '../../../design/tokens.dart';
 import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/conversation.dart';
+import '../../../shared/models/message.dart';
 import '../../../shared/utils/relative_time.dart';
+import '../../../shared/utils/system_event_text.dart';
 import '../../../shared/utils/text_direction.dart';
 
 /// One row of the chat list.
@@ -58,7 +60,7 @@ class ConversationTile extends StatelessWidget {
     // One semantic string for the whole row, so a screen reader announces it as a unit
     // rather than reading five disconnected fragments.
     final semanticLabel = [
-      conversation.title,
+      conversation.displayTitle,
       if (conversation.handledByLabel != null)
         l10n.handledBy(conversation.handledByLabel!),
       if (unread) l10n.unreadCount(conversation.unreadCount),
@@ -88,8 +90,12 @@ class ConversationTile extends StatelessWidget {
                   _ProfileTarget(
                     onOpenProfile: onOpenProfile,
                     child: JawwidAvatar(
-                      displayName: conversation.title,
-                      imageUrl: conversation.avatarUrl,
+                      // The 1:1 avatar falls out of the same resolution as the
+                      // name: before the counterpart reached the client, every
+                      // direct conversation drew a placeholder initial because
+                      // there was no name to take one from.
+                      displayName: conversation.displayTitle,
+                      imageUrl: conversation.displayAvatarUrl,
                       size: Sizes.avatarLg,
                     ),
                   ),
@@ -104,7 +110,7 @@ class ConversationTile extends StatelessWidget {
                         _ProfileTarget(
                           onOpenProfile: onOpenProfile,
                           child: ContentText(
-                            conversation.title,
+                            conversation.displayTitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.titleSmall?.copyWith(
@@ -240,6 +246,40 @@ class _Preview extends StatelessWidget {
   }
 }
 
+/// The one line a list row shows about the last message.
+///
+/// A body is only ever quoted for a TEXT message. A voice note, a photo and a
+/// file each get a word for what they are, because there is nothing to quote;
+/// and a system message gets the same sentence it shows inside the
+/// conversation, from [SystemEventText], so the two surfaces cannot describe
+/// the same event differently.
+///
+/// Nothing here can render a payload: the server sends `preview: null` for
+/// every non-text kind, and the system branch never reads a body at all.
+String previewText(MessagePreview? preview, L10n l10n) {
+  if (preview == null) return '';
+
+  final body = switch (preview.kind) {
+    MessageKind.text => preview.text ?? '',
+    MessageKind.voice => l10n.previewVoice,
+    MessageKind.image => l10n.previewPhoto,
+    MessageKind.video => l10n.previewVideo,
+    MessageKind.file => l10n.previewFile,
+    MessageKind.system => preview.systemEvent == null
+        ? ''
+        : SystemEventText.format(preview.systemEvent!, l10n),
+  };
+  if (body.isEmpty) return '';
+
+  // A system line is about the room, not from a person, so it is never
+  // attributed. Everything else names its sender when one was resolved -- which
+  // is what tells a parent whether the teacher or Jawwid spoke last.
+  if (preview.kind == MessageKind.system) return body;
+  if (preview.isMine) return l10n.previewYouPrefix(body);
+  final name = preview.authorName;
+  return name == null ? body : l10n.previewSenderPrefix(name, body);
+}
+
 class _PreviewText extends StatelessWidget {
   const _PreviewText({required this.conversation, required this.unread});
 
@@ -249,10 +289,11 @@ class _PreviewText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = L10n.of(context);
 
     // Without this, an Arabic sentence in an English UI puts its full stop on the left.
     return ContentText(
-      conversation.lastMessagePreview,
+      previewText(conversation.lastMessage, l10n),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: theme.textTheme.bodySmall?.copyWith(

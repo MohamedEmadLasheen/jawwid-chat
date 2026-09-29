@@ -1,6 +1,7 @@
 import '../../../shared/models/conversation.dart';
 import '../../../shared/models/message.dart';
 import '../../../shared/models/story.dart';
+import '../../../shared/models/system_event.dart';
 import '../../../shared/models/user_role.dart';
 import '../repositories.dart';
 import 'wire_vocab.dart';
@@ -115,22 +116,92 @@ abstract final class WireMappers {
     );
   }
 
+  /// Whether a stored mute expiry is still in force.
+  ///
+  /// The contract models a mute as `mutedUntil`, not a boolean, so "muted" is a
+  /// question about now. A far-future timestamp is how an indefinite mute is
+  /// expressed; a past one is a mute that has lapsed and must read as off.
+  static bool _isMuted(DateTime? mutedUntil) =>
+      mutedUntil != null && mutedUntil.isAfter(DateTime.now().toUtc());
+
+  /// Approval policy for a backend that does not yet send `viewerRequiresApproval`.
+  ///
+  /// Kept deliberately narrow: ONE flag, chosen by the viewer's role, and only
+  /// on a group. Approval exists for student and class groups; a 1:1 has never
+  /// been moderated, and claiming otherwise is the exact falsehood this whole
+  /// change removes.
+  static bool _legacyRequiresApproval(Map<String, Object?> json, UserRole viewerRole) {
+    final type = json['type'] as String?;
+    if (type != Wire.conversationStudentGroup && type != Wire.conversationClassGroup) {
+      return false;
+    }
+    return viewerRole == UserRole.teacher
+        ? json['teacherRequiresApproval'] == true
+        : json['parentRequiresApproval'] == true;
+  }
+
+  /// The last message on a list row, or null when the conversation is empty.
+  static MessagePreview? lastMessage(
+    Object? json, {
+    required String viewerActorId,
+  }) {
+    if (json is! Map<String, Object?>) return null;
+
+    final kind = messageKind(json['type'] as String?);
+    final authorId = json['authorId'] as String?;
+    final text = (json['preview'] as String?)?.trim();
+
+    return MessagePreview(
+      kind: kind,
+      at: parseTime(json['createdAt']) ?? DateTime.now(),
+      // Only a text message carries text. The server sends null for every other
+      // kind rather than a body that would be meaningless or, for a system
+      // message, a raw payload.
+      text: (text == null || text.isEmpty) ? null : text,
+      systemEvent: SystemEvent.fromJson(json['systemEvent']),
+      authorName: (json['authorName'] as String?)?.trim().isNotEmpty == true
+          ? (json['authorName'] as String).trim()
+          : null,
+      isMine: authorId != null && authorId.isNotEmpty && authorId == viewerActorId,
+    );
+  }
+
   static Conversation conversation(
     Map<String, Object?> json, {
     required UserRole viewerRole,
-    String lastMessagePreview = '',
-    bool isPinned = false,
-    bool isMuted = false,
+    required String viewerActorId,
     String? handledByLabel,
   }) {
     final archivedAt = parseTime(json['archivedAt']);
     final lastActivity = parseTime(json['lastActivityAt']) ?? DateTime.now();
 
-    // Approval policy is per role, so the flag the composer honours depends on who is
-    // looking (§26).
-    final requiresApproval = viewerRole == UserRole.teacher
-        ? json['teacherRequiresApproval'] == true
-        : json['parentRequiresApproval'] == true;
+    // Server-derived: `viewerRequiresApproval` is decided by the same function
+    // that decides the moderation a message is stored with, so the notice and
+    // the behaviour cannot disagree.
+    //
+    // The per-role fallback below is for a backend that predates the field. It
+    // reads ONE flag chosen by role -- never both OR-ed, which is what told a
+    // parent their messages were reviewed because the teacher's were -- and it
+    // gates on conversation type, because approval has never applied to a 1:1.
+    final requiresApproval = json['viewerRequiresApproval'] is bool
+        ? json['viewerRequiresApproval'] as bool
+        : _legacyRequiresApproval(json, viewerRole);
+
+    // Per-viewer pin/mute/archive. Written by POST /preferences and now read
+    // back here; before the contract carried them the client could set them and
+    // never see them again, so Favourites was permanently empty and a mute
+    // always read as off after a reload.
+    final viewerState = json['viewerState'];
+    final state = viewerState is Map<String, Object?> ? viewerState : const <String, Object?>{};
+    final viewerArchivedAt = parseTime(state['archivedAt']);
+
+    final counterpartJson = json['counterpart'];
+    final counterpart = counterpartJson is Map<String, Object?>
+        ? ConversationCounterpart(
+            id: (counterpartJson['actorId'] as String?) ?? '',
+            displayName: (counterpartJson['displayName'] as String?) ?? '',
+          )
+        : null;
 
     return Conversation(
       id: json['id']! as String,
@@ -143,16 +214,21 @@ abstract final class WireMappers {
       // a caller pass something it inferred locally, so the parameters are
       // gone rather than merely unused.
       learner: WireMappers.learner(json['learner']),
+      counterpart: counterpart,
       updatedAt: lastActivity,
       lastMessageAt: lastActivity,
-      lastMessagePreview: lastMessagePreview,
+      lastMessage: lastMessage(json['lastMessage'], viewerActorId: viewerActorId),
       // Server-derived, per actor. Absent is treated as zero: the list route
       // always sends it, and a create/sync response that omits it is not
       // describing a badge.
       unreadCount: (json['unreadCount'] as num?)?.toInt() ?? 0,
-      isPinned: isPinned,
-      isMuted: isMuted,
-      isArchived: archivedAt != null,
+      isPinned: parseTime(state['pinnedAt']) != null,
+      // A mute is stored as an expiry, so a lapsed one is not a mute.
+      isMuted: _isMuted(parseTime(state['mutedUntil'])),
+      // Either kind of archive hides the row: the conversation being closed by
+      // staff, or this viewer archiving their own copy. Only the first makes it
+      // read-only, which is why `isReadOnly` below reads the conversation's.
+      isArchived: archivedAt != null || viewerArchivedAt != null,
       handledByLabel: handledByLabel,
       requiresApproval: requiresApproval,
       // An archived conversation is read-only for this client; the backend also refuses
@@ -164,7 +240,6 @@ abstract final class WireMappers {
   static Message message(
     Map<String, Object?> json, {
     required String viewerActorId,
-    String authorName = '',
   }) {
     final authorId = json['authorId'] as String?;
     final isMine = authorId != null && authorId == viewerActorId;
@@ -190,8 +265,11 @@ abstract final class WireMappers {
       conversationId: (json['conversationId'] as String?) ?? '',
       sequence: parseSeq(json['seq']),
       authorId: authorId,
-      authorName: authorName,
+      // From the wire since backend gap O3 closed. Empty means unresolved, and
+      // the bubble says a role word rather than an id in that case (§25).
+      authorName: ((json['authorName'] as String?) ?? '').trim(),
       authorRole: authorRole(json['authorKind'] as String?),
+      systemEvent: SystemEvent.fromJson(json['systemEvent']),
       kind: messageKind(json['type'] as String?),
       body: (json['body'] as String?) ?? '',
       attachments: [
@@ -274,10 +352,17 @@ abstract final class WireMappers {
     return trimmed.isEmpty ? null : trimmed;
   }
 
-  static GroupMember groupMember(Map<String, Object?> json, {String displayName = ''}) {
+  /// One group member.
+  ///
+  /// `displayName` comes from the payload now that `ConversationMemberDto`
+  /// carries it; the parameter remains so a caller with a better name can
+  /// override, and so the fake backend keeps working. An unresolved name stays
+  /// EMPTY -- the UI shows a neutral word for that and must never fall back to
+  /// the actor id (§25).
+  static GroupMember groupMember(Map<String, Object?> json, {String? displayName}) {
     return GroupMember(
       id: (json['actorId'] as String?) ?? '',
-      displayName: displayName,
+      displayName: displayName ?? ((json['displayName'] as String?) ?? '').trim(),
       role: memberRole(json['memberRole'] as String?),
     );
   }

@@ -35,7 +35,7 @@ class _DtoBackedRepository implements ConversationRepository {
 
   List<Conversation> get _mapped => [
         for (final row in payload)
-          WireMappers.conversation(row, viewerRole: UserRole.parent),
+          WireMappers.conversation(row, viewerRole: UserRole.parent, viewerActorId: 'viewer'),
       ];
 
   @override
@@ -262,7 +262,7 @@ void main() {
           dto(id: 'c_1', title: 'Ahmed · Jawwid',
               learner: {'id': 'l_real', 'name': 'Mohamed Junior'}),
         ])
-          WireMappers.conversation(row, viewerRole: UserRole.parent),
+          WireMappers.conversation(row, viewerRole: UserRole.parent, viewerActorId: 'viewer'),
       ];
 
       final sections = ConversationListBuilder.build(

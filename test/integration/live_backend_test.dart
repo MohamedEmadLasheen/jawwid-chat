@@ -60,7 +60,11 @@ class _LivePrincipal {
   final UserRole role;
 
   HttpConversationRepository get conversations =>
-      HttpConversationRepository(client: client, viewerRole: () => role);
+      HttpConversationRepository(
+        client: client,
+        viewerRole: () => role,
+        viewerActorId: () => actorId,
+      );
 
   HttpMessageRepository get messages =>
       HttpMessageRepository(client: client, viewerActorId: () => actorId);
@@ -384,7 +388,7 @@ void main() {
         final page = await parent.messages.history(conversationId!, limit: 50);
 
         final surfaces = <String>[
-          for (final c in list) '${c.title} ${c.lastMessagePreview}',
+          for (final c in list) '${c.displayTitle} ${c.lastMessage?.text ?? ''}',
           for (final m in page.items) '${m.authorName} ${m.body}',
         ];
 

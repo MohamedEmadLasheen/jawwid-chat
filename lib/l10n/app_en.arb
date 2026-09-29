@@ -1,5 +1,36 @@
 {
   "@@locale": "en",
+  "systemGroupCreated": "Jawwid opened this group for {learner}.",
+  "@systemGroupCreated": {
+    "placeholders": { "learner": { "type": "String" } }
+  },
+  "systemGroupCreatedUnnamed": "Jawwid opened this group.",
+  "systemGroupMembersChanged": "Jawwid updated who is in this group.",
+  "systemGroupMembersJoined": "{count, plural, =1{One person joined this group.} other{{count} people joined this group.}}",
+  "@systemGroupMembersJoined": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "systemGroupMembersLeft": "{count, plural, =1{One person left this group.} other{{count} people left this group.}}",
+  "@systemGroupMembersLeft": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "systemGroupArchived": "Jawwid closed this group.",
+  "systemEventUnknown": "Jawwid updated this conversation.",
+  "previewVoice": "Voice message",
+  "previewPhoto": "Photo",
+  "previewVideo": "Video",
+  "previewFile": "File",
+  "previewYouPrefix": "You: {preview}",
+  "@previewYouPrefix": {
+    "placeholders": { "preview": { "type": "String" } }
+  },
+  "previewSenderPrefix": "{name}: {preview}",
+  "@previewSenderPrefix": {
+    "placeholders": {
+      "name": { "type": "String" },
+      "preview": { "type": "String" }
+    }
+  },
   "appName": "Jawwid",
   "signInTitle": "Sign in to Jawwid",
   "signInSubtitle": "Your account is created by Jawwid. There is no public sign-up.",

@@ -261,20 +261,20 @@ void main() {
 
     test('a teacher sees the teacher policy', () {
       final conversation =
-          WireMappers.conversation(json, viewerRole: UserRole.teacher);
+          WireMappers.conversation(json, viewerRole: UserRole.teacher, viewerActorId: 'viewer');
       expect(conversation.requiresApproval, isTrue);
     });
 
     test('a parent sees the parent policy', () {
       final conversation =
-          WireMappers.conversation(json, viewerRole: UserRole.parent);
+          WireMappers.conversation(json, viewerRole: UserRole.parent, viewerActorId: 'viewer');
       expect(conversation.requiresApproval, isFalse);
     });
 
     test('an archived conversation is read-only', () {
       final conversation = WireMappers.conversation(
         {...json, 'archivedAt': '2026-09-05T14:00:00.000Z'},
-        viewerRole: UserRole.parent,
+        viewerRole: UserRole.parent, viewerActorId: 'viewer',
       );
 
       expect(conversation.isArchived, isTrue);
@@ -288,7 +288,7 @@ void main() {
           'learnerId': 'l_1',
           'learner': {'id': 'l_1', 'name': 'أحمد'},
         },
-        viewerRole: UserRole.parent,
+        viewerRole: UserRole.parent, viewerActorId: 'viewer',
       );
 
       expect(conversation.learner?.id, 'l_1');
@@ -299,7 +299,7 @@ void main() {
       // The title here is "أحمد · جَوِّد". Parsing a child out of it is exactly
       // the inference this field exists to replace.
       final conversation =
-          WireMappers.conversation(json, viewerRole: UserRole.parent);
+          WireMappers.conversation(json, viewerRole: UserRole.parent, viewerActorId: 'viewer');
 
       expect(conversation.learner, isNull);
     });
@@ -307,7 +307,7 @@ void main() {
     test('an explicit null learner is null', () {
       final conversation = WireMappers.conversation(
         {...json, 'learner': null},
-        viewerRole: UserRole.parent,
+        viewerRole: UserRole.parent, viewerActorId: 'viewer',
       );
 
       expect(conversation.learner, isNull);
@@ -324,7 +324,7 @@ void main() {
         expect(
           WireMappers.conversation(
             {...json, 'learner': malformed},
-            viewerRole: UserRole.parent,
+            viewerRole: UserRole.parent, viewerActorId: 'viewer',
           ).learner,
           isNull,
           reason: 'malformed: $malformed',
@@ -337,7 +337,7 @@ void main() {
       // fixed. Inventing a name from the title would be invisibly wrong.
       final conversation = WireMappers.conversation(
         {...json, 'learner': {'id': 'l_1'}},
-        viewerRole: UserRole.parent,
+        viewerRole: UserRole.parent, viewerActorId: 'viewer',
       );
 
       expect(conversation.learner?.id, 'l_1');
@@ -347,7 +347,7 @@ void main() {
     test('the unread count comes from the DTO', () {
       final conversation = WireMappers.conversation(
         {...json, 'unreadCount': 3},
-        viewerRole: UserRole.parent,
+        viewerRole: UserRole.parent, viewerActorId: 'viewer',
       );
 
       expect(conversation.unreadCount, 3);
@@ -356,7 +356,7 @@ void main() {
 
     test('an absent unread count is zero, never a guess', () {
       final conversation =
-          WireMappers.conversation(json, viewerRole: UserRole.parent);
+          WireMappers.conversation(json, viewerRole: UserRole.parent, viewerActorId: 'viewer');
 
       expect(conversation.unreadCount, 0);
       expect(conversation.hasUnread, isFalse);
@@ -365,7 +365,7 @@ void main() {
     test('a zero unread count is zero', () {
       final conversation = WireMappers.conversation(
         {...json, 'unreadCount': 0},
-        viewerRole: UserRole.parent,
+        viewerRole: UserRole.parent, viewerActorId: 'viewer',
       );
 
       expect(conversation.unreadCount, 0);

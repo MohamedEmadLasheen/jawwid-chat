@@ -7,11 +7,16 @@ import '../wire/wire_mappers.dart';
 /// `GroupRepository` over `GET /conversations/:id`, whose `ConversationDto` carries
 /// `members: ConversationMemberDto[]`.
 ///
-/// **Members arrive without display names.** `ConversationMemberDto` is
-/// `{ actorId, actorKind, memberRole, isSilent }` — there is no name and no avatar. The
-/// member sheet must show a name and must never fall back to showing an id, so this maps
-/// what exists and leaves the name empty for the UI to treat as unresolved. Recorded as O3
-/// in `docs/mobile/backend-dependencies.md`.
+/// **Members now arrive named.** The route did not return a `members` array at
+/// all, so this mapped an absent list and Group Info rendered an empty section
+/// under a heading — the client was written against a payload that was never
+/// sent. The route now returns every live member with a `displayName`, resolved
+/// server-side in one batch (backend gap O3), behind the same authorization
+/// that gates the rest of the conversation.
+///
+/// A name that is still null means the backend could not resolve the
+/// principal. It is left empty here and the UI says so in words; the actor id
+/// is never a fallback (§25).
 ///
 /// Note what is deliberately *not* here: no membership mutation. `POST /conversations/:id/members`
 /// exists but is staff-only and always carries a reason; a parent or teacher may not change
@@ -53,8 +58,10 @@ class HttpGroupRepository implements GroupRepository {
         displayName: (data['title'] as String?) ?? '',
       ),
       members: members,
-      requiresApproval: data['teacherRequiresApproval'] == true ||
-          data['parentRequiresApproval'] == true,
+      // Server-derived, for THIS viewer. The OR of the two stored flags used to
+      // stand in for it, which told a parent their messages were reviewed
+      // whenever the teacher's were.
+      requiresApproval: data['viewerRequiresApproval'] == true,
     );
   }
 }

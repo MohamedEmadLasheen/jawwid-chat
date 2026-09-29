@@ -97,7 +97,11 @@ List<Override> _httpOverrides() {
     tokenStoreProvider.overrideWithValue(tokenStore),
     authRepositoryProvider.overrideWithValue(auth),
     conversationRepositoryProvider.overrideWithValue(
-      HttpConversationRepository(client: client, viewerRole: session.role),
+      HttpConversationRepository(
+        client: client,
+        viewerRole: session.role,
+        viewerActorId: session.actorId,
+      ),
     ),
     messageRepositoryProvider.overrideWithValue(
       HttpMessageRepository(client: client, viewerActorId: session.actorId),

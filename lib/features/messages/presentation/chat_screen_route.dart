@@ -53,7 +53,9 @@ class ChatScreenRoute extends ConsumerWidget {
         ),
       AsyncData(:final value) => ChatScreen(
           conversationId: conversationId,
-          title: value.title,
+          // The room's own name, or the other person's. A 1:1 has no title, so
+          // the header used to be empty and the avatar a placeholder initial.
+          title: value.displayTitle,
           onOpenProfile: () =>
               context.push(Routes.conversationProfile(conversationId)),
           // Two different things, and never invented.
