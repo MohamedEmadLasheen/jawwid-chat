@@ -125,12 +125,11 @@ BaseOptions _baseOptions(ApiConfig config) => BaseOptions(
 
 /// Builds the configured, authenticated HTTP client.
 ///
-/// There is no `identity` parameter any more. It carried the `x-actor-id` bring-up seam, and
-/// PR-B removed the last reader of that header from the backend — `@ActorId()` now reads
-/// `request.actor`, which only the verified-bearer guard writes. A client-supplied identity
-/// header is therefore not merely disabled, it is ignored, and a seam that pretends to offer
-/// an identity nobody honours is worse than none: it documents a security model that no
-/// longer exists. Identity now comes from exactly one place, [TokenProvider].
+/// **`Authorization: Bearer` is the only credential this client sends**, and [TokenProvider]
+/// is the only thing that can produce one. There is deliberately no way to pass an identity
+/// in alongside it: the backend derives the actor exclusively from the verified token
+/// (AUTH-INV-1), so a second identity channel could only ever be a client asserting something
+/// the server does not read. Do not add one back.
 ApiClient buildApiClient({
   required ApiConfig config,
   required TokenProvider tokens,
