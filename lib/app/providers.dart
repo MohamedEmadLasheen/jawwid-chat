@@ -8,6 +8,7 @@ import '../core/data/repositories.dart';
 import '../core/logging/redacting_logger.dart';
 import '../core/media/attachment_opener.dart';
 import '../core/media/media_picker.dart';
+import '../core/media/story_video_player.dart';
 import '../core/storage/secure_token_store.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/domain/auth_state.dart';
@@ -82,6 +83,19 @@ final mediaPickerProvider = Provider<MediaPicker>((ref) => PluginMediaPicker());
 /// no suite tries to launch an external application.
 final attachmentOpenerProvider =
     Provider<AttachmentOpener>((ref) => const PluginAttachmentOpener());
+
+/// Makes a story video player.
+///
+/// A FACTORY rather than an instance, because the lifecycle belongs to the story viewer: it
+/// builds one in `initState` and disposes it in `dispose`, so playback cannot outlive the
+/// screen and there is never a second decoder alive. A plain `Provider<StoryVideoPlayer>`
+/// would tie the player to the container instead, which is how a closed viewer keeps playing.
+///
+/// Like the recorder and the audio player, a device capability with a real default; tests
+/// override it so no suite opens a platform video session.
+final storyVideoPlayerFactoryProvider = Provider<StoryVideoPlayer Function()>(
+  (ref) => VideoPlayerStoryVideoPlayer.new,
+);
 
 /// Audio playback. Like the recorder, a device capability with a real default;
 /// tests override it so no suite opens a platform audio session.

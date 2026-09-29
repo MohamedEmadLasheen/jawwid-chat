@@ -424,7 +424,7 @@
   "storyImageLabel": "صورة الحالة",
   "storyMediaFailed": "لم نتمكّن من تحميل هذه الصورة.",
   "storyUnavailable": "هذه الحالة لم تعد متاحة.",
-  "storyVideoTitle": "هذه الحالة مقطع فيديو.",
-  "storyVideoOpen": "تشغيل الفيديو",
-  "storyVideoOpenFailed": "لا يوجد تطبيق على هذا الجهاز يمكنه تشغيله."
+  "storyVideoLabel": "فيديو الحالة",
+  "storyVideoFailed": "لم نتمكّن من تشغيل هذا الفيديو.",
+  "storyVideoRetry": "إعادة المحاولة"
 }

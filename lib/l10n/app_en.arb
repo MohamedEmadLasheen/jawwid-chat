@@ -424,7 +424,7 @@
   "storyImageLabel": "Story image",
   "storyMediaFailed": "This picture could not be loaded.",
   "storyUnavailable": "This story is no longer available.",
-  "storyVideoTitle": "This story is a video.",
-  "storyVideoOpen": "Open video",
-  "storyVideoOpenFailed": "Nothing on this device can open it."
+  "storyVideoLabel": "Story video",
+  "storyVideoFailed": "This video could not be played.",
+  "storyVideoRetry": "Try again"
 }

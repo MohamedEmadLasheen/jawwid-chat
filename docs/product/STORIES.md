@@ -239,6 +239,7 @@ available to a `parent` or `teacher`.
 | Piece | File |
 |---|---|
 | Model, mirroring `StoryFeedItem` | `lib/shared/models/story.dart` |
+| Video playback seam | `lib/core/media/story_video_player.dart` |
 | Repository interface | `lib/core/data/repositories.dart` (`StoryRepository`) |
 | HTTP implementation | `lib/core/data/http/http_story_repository.dart` |
 | Wire mapping | `WireMappers.story` |
@@ -270,22 +271,46 @@ Decisions worth knowing before changing it:
   there before the feed loads. It shows a spinner rather than declaring the story missing — the
   first version read the list in `initState`, found it empty, and lied.
 * **Media is passed through, never constructed.** The signed URL is handed to `Image.network`
-  exactly as received. A lapsed signature or a purged object reaches the reader as "this
-  picture could not be loaded", not a blank.
+  or to the video seam exactly as received — no bucket, no key, no path building. A lapsed
+  signature or a purged object reaches the reader as "this picture could not be loaded" or
+  "this video could not be played", not a blank.
 
-### The one UX limitation: video
+### Video
 
-**This app has no video player**, and story video follows the app's existing convention rather
-than introducing one. `MessageKind.video` is grouped with `MessageKind.file` everywhere in this
-client — the chat labels it as an attachment, the media screen files it under Files, and
-`MediaViewer` renders photos only. A video story therefore shows a panel with an **Open video**
-action that hands the signed URL to the same `AttachmentOpener` seam attachments already use,
-and says so plainly when nothing on the device can open it. It is a working control, not a
-placeholder, and a video story does not auto-advance because the client cannot know when
-playback would end.
+Video stories **play inline**, through the seam in `lib/core/media/story_video_player.dart`.
 
-Adding `video_player` would mean a new dependency, iOS and Android platform configuration and a
-new media architecture for one story kind. That belongs in its own change, with its own tests.
+`video_player` (flutter.dev's own package) is the only dependency this feature added, and it
+exists for exactly one reason: the backend accepts `video/mp4`, `quicktime` and `webm`, so a
+video story has to actually play. Nothing else in the app plays video — a video ATTACHMENT is
+deliberately treated as a file and handed to the platform — so there was no existing capability
+to reuse.
+
+The package is reached only through `StoryVideoPlayer`, so no widget names a platform type and
+no test touches a platform channel. One player instance is owned by the viewer's `State` and
+disposed with it; `load` releases the previous controller before building the next, so two
+decoders are never alive at once.
+
+**Two advance mechanisms, deliberately not one:**
+
+| Story kind | Progress segment | Advances when |
+|---|---|---|
+| image, or words only | `AnimationController` over `imageDuration` (5s) | the animation completes |
+| video | real `position / duration` from the player | **playback completes** |
+
+A video is never given a timer. A fixed one would be wrong in both directions: it would cut a
+40-second video short, and it would skip past one that stalled buffering. A video that fails to
+initialise is **not** treated as completed — it shows the failure with a retry, and the story
+stays put.
+
+Every automatic advance passes through one gate (`_advanceFrom`) which drops the request unless
+the story asking is still the current one, the viewer is still mounted, and it is not already
+leaving. That is what makes a late callback — a video completing just after the reader tapped
+next — harmless rather than a double advance.
+
+**Lifecycle.** Backgrounding the app pauses a video and stops an image's clock; resuming
+restarts it, unless the reader is holding the screen. Closing the viewer pauses playback,
+cancels the status subscription and disposes the player. There is no `Timer` anywhere in the
+viewer: an `AnimationController` and a stream subscription both die with the `State`.
 
 ## 9. Relationship to the abandoned Phase 5 lineage
 
@@ -333,7 +358,7 @@ are jpeg/png/webp/heic and mp4/quicktime/webm.
 | `db/tests/story_rls.sql` | every policy, run as `authenticated` (36 assertions) |
 | `apps/admin-web/src/features/stories/StoriesPage.test.tsx` | the console's UI contract (16) |
 | `test/features/stories/stories_rail_test.dart` | the rail: absence, ordering, read state, no publishing affordance, refresh (13) |
-| `test/features/stories/story_viewer_test.dart` | the viewer: opening, view tracking, navigation, progress, lifecycle, media, localisation (28) |
+| `test/features/stories/story_viewer_test.dart` | the viewer: opening, view tracking, navigation, progress, image and video media, video lifecycle, mixed image/video sequences, localisation (44) |
 | `test/core/data/http/stories_over_http_test.dart` | the client's half of the wire contract, over real sockets (12) |
 
 All of it runs in CI on every pull request: `api` (typecheck + unit), `admin-web`

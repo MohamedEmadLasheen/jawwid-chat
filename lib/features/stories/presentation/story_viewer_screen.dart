@@ -1,8 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
-import '../../../core/media/attachment_opener.dart';
+import '../../../core/media/story_video_player.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/story.dart';
@@ -10,16 +12,27 @@ import '../application/stories_controller.dart';
 
 /// The full-screen story viewer.
 ///
-/// ## How it advances
+/// ## How a story ends, and why the two kinds differ
 ///
-/// One [AnimationController] drives both the progress bar and the auto-advance, and there is
-/// deliberately no [Timer] anywhere in this file. A controller is disposed with the State, so
-/// it cannot outlive the screen; a stray timer is exactly how a closed viewer keeps ticking
-/// and pushes a route onto a widget tree that has moved on.
+/// An IMAGE has no intrinsic length, so it gets a fixed one: [imageDuration], driven by an
+/// [AnimationController] that also draws the progress segment.
 ///
-/// Images advance on their own. A video does NOT: this client cannot play one (see
-/// [_VideoStoryPanel]), so it has no idea when playback would finish, and auto-advancing past
-/// a video the reader is about to open would be worse than waiting.
+/// A VIDEO has its own length, so it is never given a timer. It advances when playback
+/// actually COMPLETES, reported by the [StoryVideoPlayer] seam, and its progress segment is
+/// drawn from real position over real duration. A fixed timer would be wrong in both
+/// directions: it would cut a 40-second video short, and it would skip past one that stalled
+/// buffering.
+///
+/// There is deliberately no [Timer] anywhere in this file. An AnimationController and a stream
+/// subscription both die with the State; a timer is how a closed viewer keeps ticking and
+/// pushes a route onto a widget tree that has moved on.
+///
+/// ## Every advance goes through one gate
+///
+/// [_advanceFrom] refuses to act unless the story asking is still the current one, the viewer
+/// is still mounted, and it is not already leaving. That single check is what makes a late
+/// callback — a video completing just after the reader tapped next, an animation finishing as
+/// the route pops — harmless rather than a double advance.
 ///
 /// ## What it never does
 ///
@@ -34,7 +47,7 @@ class StoryViewerScreen extends ConsumerStatefulWidget {
   /// viewer pages through exactly what the rail showed, in the same order.
   final String storyId;
 
-  /// How long an image story stays on screen before advancing.
+  /// How long an IMAGE story stays on screen. A video's length is its own.
   static const imageDuration = Duration(seconds: 5);
 
   /// Fraction of the width each edge tap zone occupies, leaving the middle to the page.
@@ -45,9 +58,15 @@ class StoryViewerScreen extends ConsumerStatefulWidget {
 }
 
 class _StoryViewerScreenState extends ConsumerState<StoryViewerScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final PageController _pages;
   late final AnimationController _progress;
+
+  /// Owned here, so playback cannot outlive this screen. Built from a factory provider rather
+  /// than read as a shared instance for exactly that reason.
+  late final StoryVideoPlayer _video;
+  StreamSubscription<StoryVideoStatus>? _videoSub;
+  StoryVideoStatus _videoStatus = const StoryVideoStatus();
 
   /// The stories this viewer opened with.
   ///
@@ -67,19 +86,77 @@ class _StoryViewerScreenState extends ConsumerState<StoryViewerScreen>
   int _index = 0;
   bool _leaving = false;
 
+  /// True while the reader is holding the screen, so a lifecycle resume knows not to override
+  /// a deliberate pause.
+  bool _held = false;
+
   @override
   void initState() {
     super.initState();
     _pages = PageController();
     _progress = AnimationController(vsync: this, duration: StoryViewerScreen.imageDuration)
       ..addStatusListener(_onProgressStatus);
+    _video = ref.read(storyVideoPlayerFactoryProvider)();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    // Order matters: stop listening before tearing anything down, so no final event can call
+    // back into a half-disposed State.
+    WidgetsBinding.instance.removeObserver(this);
+    _cancelVideoSub();
+    _progress.removeStatusListener(_onProgressStatus);
+    _progress.dispose();
+    unawaited(_video.dispose());
+    _pages.dispose();
+    super.dispose();
+  }
+
+  /// Backgrounding the app stops the story. A video playing behind a locked screen, and a
+  /// progress bar that advanced three stories while the reader was in another app, are the same
+  /// bug: the story continued with nobody watching.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        if (!_held) _resumeCurrent();
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+        _pauseCurrent();
+    }
+  }
+
+  Story? get _current => _index >= 0 && _index < _stories.length ? _stories[_index] : null;
+  bool get _currentIsVideo => _current?.mediaKind == StoryMediaKind.video;
+
+  void _onProgressStatus(AnimationStatus status) {
+    // Images and text-only stories. A video's controller is never started, so this cannot fire
+    // for one.
+    if (status == AnimationStatus.completed) _advanceFrom(_index);
+  }
+
+  void _pauseCurrent() {
+    _progress.stop();
+    if (_currentIsVideo) unawaited(_video.pause());
+  }
+
+  void _resumeCurrent() {
+    if (_leaving || !mounted) return;
+    if (_currentIsVideo) {
+      if (!_videoStatus.isCompleted && !_videoStatus.hasFailed) unawaited(_video.play());
+      return;
+    }
+    if (!_progress.isAnimating && _progress.value < 1) _progress.forward();
   }
 
   /// Take the feed as it stands, and start on the requested story.
   ///
   /// Called from `build` and so must not call setState: the fields it sets are read by the
-  /// same build pass. The side effects that CANNOT happen during build -- jumping the page
-  /// controller, recording the view, leaving -- are deferred to after the frame.
+  /// same build pass. The side effects that CANNOT happen during build — jumping the page
+  /// controller, recording the view, leaving — are deferred to after the frame.
   void _capture(List<Story> stories) {
     _captured = true;
     _stories = stories;
@@ -92,30 +169,36 @@ class _StoryViewerScreenState extends ConsumerState<StoryViewerScreen>
         _leave();
         return;
       }
-      if (_index != 0 && _pages.hasClients) _pages.jumpToPage(_index);
-      _enter(_index);
+      // ONE entry point per story. `jumpToPage` fires `onPageChanged`, which enters the story
+      // itself -- so calling `_enter` here as well entered it twice: two video loads, two view
+      // requests, and two live subscriptions of which only the second was ever cancelled.
+      // Entering from the jump when there is one, and directly only when there is not.
+      if (_index != 0 && _pages.hasClients) {
+        _pages.jumpToPage(_index);
+      } else {
+        _enter(_index);
+      }
     });
   }
 
-  @override
-  void dispose() {
-    _progress.removeStatusListener(_onProgressStatus);
-    _progress.dispose();
-    _pages.dispose();
-    super.dispose();
-  }
-
-  void _onProgressStatus(AnimationStatus status) {
-    if (status == AnimationStatus.completed) _next();
-  }
-
-  /// Arrive on a story: record the view, and start the clock if it is an image.
+  /// Arrive on a story: reset whatever was running, start the right mechanism, record the view.
   Future<void> _enter(int index) async {
-    final story = index < _stories.length ? _stories[index] : null;
+    final story = index >= 0 && index < _stories.length ? _stories[index] : null;
     if (story == null) return;
 
-    _progress.stop();
-    _progress.value = 0;
+    // Leave the previous story cleanly, whichever kind it was.
+    _progress
+      ..stop()
+      ..value = 0;
+    // NOT awaited, and that is load-bearing. `StreamSubscription.cancel()` on a broadcast
+    // stream returns a future that does not complete until the stream itself closes -- which
+    // here is when the player is disposed, i.e. when the viewer is torn down. Awaiting it
+    // stalled this method forever: the next story never started its clock and never recorded
+    // its view. Nothing downstream needs the cancel to have finished; dropping the reference
+    // is what stops the events reaching us.
+    _cancelVideoSub();
+    if (!mounted) return;
+    setState(() => _videoStatus = const StoryVideoStatus());
 
     // A story that lapsed while the reader was on an earlier page. Skip the round trip the
     // server would refuse and leave, so nobody stares at a picture that is already over.
@@ -124,7 +207,13 @@ class _StoryViewerScreenState extends ConsumerState<StoryViewerScreen>
       return;
     }
 
-    if (story.mediaKind == StoryMediaKind.image || !story.hasMedia) {
+    if (story.mediaKind == StoryMediaKind.video && story.mediaUrl != null) {
+      await _startVideo(index, story.mediaUrl!);
+    } else {
+      // An image, or words only: a fixed length is the only sensible one. Release any video
+      // still held from a previous story so no decoder lingers.
+      await _video.stop();
+      if (!mounted || _index != index || _leaving) return;
       _progress.forward();
     }
 
@@ -139,24 +228,79 @@ class _StoryViewerScreenState extends ConsumerState<StoryViewerScreen>
     }
   }
 
+  /// Drop the current subscription without waiting for it. See [_enter] for why.
+  void _cancelVideoSub() {
+    unawaited(_videoSub?.cancel());
+    _videoSub = null;
+  }
+
+  Future<void> _startVideo(int index, String url) async {
+    // Belt and braces against a leaked listener: whoever calls this has usually cancelled
+    // already, but a second live subscription would double every advance it reports.
+    _cancelVideoSub();
+    _videoSub = _video.status.listen((status) {
+      if (!mounted) return;
+      setState(() => _videoStatus = status);
+      // THE advance for a video: its own playback finishing, never a timer.
+      if (status.isCompleted) _advanceFrom(index);
+    });
+
+    await _video.load(url);
+    if (!mounted || _index != index || _leaving) return;
+    await _video.play();
+  }
+
+  /// Retry a video that failed to initialise — a lapsed signature, a stalled network.
+  Future<void> _retryVideo() async {
+    final story = _current;
+    final url = story?.mediaUrl;
+    if (url == null) return;
+    final index = _index;
+
+    _cancelVideoSub();
+    if (!mounted) return;
+    setState(() => _videoStatus = const StoryVideoStatus(state: StoryVideoState.loading));
+    await _video.stop();
+    if (!mounted || _index != index || _leaving) return;
+    await _startVideo(index, url);
+  }
+
+  /// The single gate every automatic advance passes through.
+  ///
+  /// `from` is the story that asked. If it is no longer the current one the request is stale —
+  /// a video completing just after the reader tapped next, an animation finishing as the route
+  /// pops — and is dropped rather than skipping a story or advancing twice.
+  void _advanceFrom(int from) {
+    if (!mounted || _leaving || from != _index) return;
+    _next();
+  }
+
   void _next() {
+    if (_leaving) return;
     if (_index >= _stories.length - 1) {
       _leave();
       return;
     }
+    _pauseCurrent();
     _pages.nextPage(duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
   }
 
   void _previous() {
+    if (_leaving) return;
     if (_index == 0) {
       // Restart the current story rather than leaving. Leaving on a back-tap at the first
       // story is how a reader loses their place by mistiming a tap.
-      _progress
-        ..stop()
-        ..value = 0
-        ..forward();
+      if (_currentIsVideo) {
+        unawaited(_retryVideo());
+      } else {
+        _progress
+          ..stop()
+          ..value = 0
+          ..forward();
+      }
       return;
     }
+    _pauseCurrent();
     _pages.previousPage(duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
   }
 
@@ -166,6 +310,8 @@ class _StoryViewerScreenState extends ConsumerState<StoryViewerScreen>
     if (_leaving) return;
     _leaving = true;
     _progress.stop();
+    _cancelVideoSub();
+    unawaited(_video.pause());
     if (refresh) {
       // Fire and forget: the rail rebuilds when it lands, and nothing here waits on it.
       ref.read(storiesControllerProvider.notifier).refresh();
@@ -210,9 +356,13 @@ class _StoryViewerScreenState extends ConsumerState<StoryViewerScreen>
             // Long-press anywhere holds the story, the way every reader already expects.
             GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onLongPressStart: (_) => _progress.stop(),
+              onLongPressStart: (_) {
+                _held = true;
+                _pauseCurrent();
+              },
               onLongPressEnd: (_) {
-                if (!_progress.isAnimating && _progress.value < 1) _progress.forward();
+                _held = false;
+                _resumeCurrent();
               },
               child: PageView.builder(
                 controller: _pages,
@@ -221,17 +371,23 @@ class _StoryViewerScreenState extends ConsumerState<StoryViewerScreen>
                   setState(() => _index = index);
                   _enter(index);
                 },
-                itemBuilder: (context, index) => _StoryPage(story: _stories[index]),
+                itemBuilder: (context, index) => _StoryPage(
+                  story: _stories[index],
+                  isCurrent: index == _index,
+                  videoStatus: _videoStatus,
+                  videoSurface: _video.surface,
+                  onRetryVideo: _retryVideo,
+                ),
               ),
             ),
 
             // Tap zones along the two EDGES, not two full-width halves.
             //
             // Halves were the first version and they were wrong: an invisible pane covering
-            // the whole screen swallows every tap meant for the page, so the "open video"
-            // button could not be pressed at all. A test caught it. Edges also mean a tap on
-            // a caption does not advance the story, which is what a reader expects when they
-            // are still reading it.
+            // the whole screen swallows every tap meant for the page, so a control inside the
+            // story could not be pressed at all. A test caught it. Edges also mean a tap on a
+            // caption does not advance the story, which is what a reader expects when they are
+            // still reading it.
             //
             // Not full-height either: the bottom strip belongs to the page and to the
             // previous/next controls.
@@ -267,6 +423,11 @@ class _StoryViewerScreenState extends ConsumerState<StoryViewerScreen>
               count: _stories.length,
               index: _index,
               animation: _progress,
+              // A video's segment is drawn from real position over real duration. Null while
+              // it is still loading, so the bar stays empty rather than animating against a
+              // length nobody knows yet.
+              videoFraction: _currentIsVideo ? _videoStatus.fraction : null,
+              isVideo: _currentIsVideo,
             ),
 
             PositionedDirectional(
@@ -323,9 +484,23 @@ class _StoryViewerScreenState extends ConsumerState<StoryViewerScreen>
 
 /// One story: its media if it has any, and its words.
 class _StoryPage extends StatelessWidget {
-  const _StoryPage({required this.story});
+  const _StoryPage({
+    required this.story,
+    required this.isCurrent,
+    required this.videoStatus,
+    required this.videoSurface,
+    required this.onRetryVideo,
+  });
 
   final Story story;
+
+  /// PageView builds the neighbours too. Only the current page may show the video surface:
+  /// there is one player, and it belongs to whichever story the reader is actually on.
+  final bool isCurrent;
+
+  final StoryVideoStatus videoStatus;
+  final Widget? videoSurface;
+  final Future<void> Function() onRetryVideo;
 
   @override
   Widget build(BuildContext context) {
@@ -337,7 +512,14 @@ class _StoryPage extends StatelessWidget {
           child: Center(
             child: switch (story.mediaKind) {
               StoryMediaKind.image => _ImageStory(url: story.mediaUrl!),
-              StoryMediaKind.video => _VideoStoryPanel(url: story.mediaUrl!),
+              StoryMediaKind.video => isCurrent
+                  ? _VideoStory(
+                      status: videoStatus,
+                      surface: videoSurface,
+                      onRetry: onRetryVideo,
+                    )
+                  // A neighbour page: no surface, no decoder, no playback.
+                  : const _VideoStandby(),
               null => const SizedBox.shrink(),
             },
           ),
@@ -419,89 +601,79 @@ class _ImageStory extends StatelessWidget {
   }
 }
 
-/// A video story.
+/// A video story, playing inline.
 ///
-/// THIS APP HAS NO VIDEO PLAYER, and this panel is the honest consequence rather than a
-/// placeholder. `MessageKind.video` is grouped with `MessageKind.file` everywhere in this
-/// client — the chat labels it as an attachment, the media screen files it under Files, and
-/// `MediaViewer` renders photos only. Story video follows the same established convention:
-/// hand it to whatever on the phone plays video, through the same [AttachmentOpener] seam
-/// attachments already use.
-///
-/// It is not a dead control: the button works, and when nothing on the device can open the
-/// URL the opener says so and the reader is told. Adding `video_player` would mean a new
-/// dependency, iOS and Android platform configuration and a new media architecture for one
-/// story kind — which belongs in its own change, with its own tests, not smuggled in here.
-class _VideoStoryPanel extends ConsumerStatefulWidget {
-  const _VideoStoryPanel({required this.url});
+/// The frames come from the [StoryVideoPlayer] seam, so this widget names no platform type and
+/// holds no controller. It renders whichever state the seam reports: loading, playing, held,
+/// or failed with a retry.
+class _VideoStory extends StatelessWidget {
+  const _VideoStory({
+    required this.status,
+    required this.surface,
+    required this.onRetry,
+  });
 
-  final String url;
-
-  @override
-  ConsumerState<_VideoStoryPanel> createState() => _VideoStoryPanelState();
-}
-
-class _VideoStoryPanelState extends ConsumerState<_VideoStoryPanel> {
-  bool _opening = false;
-  bool _failed = false;
-
-  Future<void> _open() async {
-    if (_opening) return;
-    setState(() {
-      _opening = true;
-      _failed = false;
-    });
-    bool ok = false;
-    try {
-      ok = await ref.read(attachmentOpenerProvider).open(widget.url);
-    } catch (_) {
-      ok = false;
-    }
-    if (!mounted) return;
-    setState(() {
-      _opening = false;
-      _failed = !ok;
-    });
-  }
+  final StoryVideoStatus status;
+  final Widget? surface;
+  final Future<void> Function() onRetry;
 
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
     final tokens = JawwidTokens.of(context);
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.play_circle_outline, size: 64, color: tokens.colorMediaOnSurfaceMuted),
-        const SizedBox(height: Spacing.spacing4),
-        Text(
-          l10n.storyVideoTitle,
-          textAlign: TextAlign.center,
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium
-              ?.copyWith(color: tokens.colorMediaOnSurface),
-        ),
-        const SizedBox(height: Spacing.spacing3),
-        FilledButton.tonalIcon(
-          onPressed: _opening ? null : _open,
-          icon: const Icon(Icons.open_in_new),
-          label: Text(l10n.storyVideoOpen),
-        ),
-        if (_failed)
-          Padding(
-            padding: const EdgeInsets.only(top: Spacing.spacing3),
-            child: Text(
-              l10n.storyVideoOpenFailed,
-              textAlign: TextAlign.center,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: tokens.colorMediaOnSurfaceMuted),
-            ),
+    if (status.hasFailed) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _MediaUnavailable(message: l10n.storyVideoFailed),
+          const SizedBox(height: Spacing.spacing4),
+          FilledButton.tonalIcon(
+            onPressed: () => onRetry(),
+            icon: const Icon(Icons.refresh),
+            label: Text(l10n.storyVideoRetry),
           ),
-      ],
+        ],
+      );
+    }
+
+    final view = surface;
+    if (view == null) {
+      return Center(
+        child: CircularProgressIndicator(color: tokens.colorMediaOnSurfaceMuted),
+      );
+    }
+
+    return Semantics(
+      label: l10n.storyVideoLabel,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // The video's own ratio, so it letterboxes rather than stretching.
+          AspectRatio(
+            aspectRatio: status.aspectRatio ?? 16 / 9,
+            child: view,
+          ),
+          // Buffering mid-playback: the frames stay, the spinner sits over them.
+          if (status.isLoading)
+            CircularProgressIndicator(color: tokens.colorMediaOnSurfaceMuted),
+          // Held by the reader, or paused by the app going to the background.
+          if (status.state == StoryVideoState.paused && status.position > Duration.zero)
+            Icon(Icons.pause_circle_filled, size: 56, color: tokens.colorMediaOnSurface),
+        ],
+      ),
     );
+  }
+}
+
+/// A video story that is NOT the current page. Deliberately inert: no surface, no decoder.
+class _VideoStandby extends StatelessWidget {
+  const _VideoStandby();
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = JawwidTokens.of(context);
+    return Icon(Icons.movie_outlined, size: 64, color: tokens.colorMediaOnSurfaceMuted);
   }
 }
 
@@ -533,21 +705,58 @@ class _MediaUnavailable extends StatelessWidget {
   }
 }
 
-/// One segment per story: filled behind, animating on the current one, empty ahead.
+/// One segment per story: filled behind, live on the current one, empty ahead.
+///
+/// The current segment is drawn from whichever clock owns this story — the image animation, or
+/// the video's real position. Two mechanisms, one bar.
 class _ProgressBar extends StatelessWidget {
   const _ProgressBar({
     required this.count,
     required this.index,
     required this.animation,
+    required this.videoFraction,
+    required this.isVideo,
   });
 
   final int count;
   final int index;
   final Animation<double> animation;
+  final double? videoFraction;
+  final bool isVideo;
 
   @override
   Widget build(BuildContext context) {
     final tokens = JawwidTokens.of(context);
+
+    Widget segment(int i) {
+      if (i != index) {
+        return LinearProgressIndicator(
+          value: i < index ? 1 : 0,
+          minHeight: 3,
+          backgroundColor: tokens.colorMediaOnSurfaceMuted,
+          color: tokens.colorMediaOnSurface,
+        );
+      }
+      if (isVideo) {
+        // Zero while the duration is unknown: an empty segment is honest, a moving one would
+        // be pretending to measure something.
+        return LinearProgressIndicator(
+          value: videoFraction ?? 0,
+          minHeight: 3,
+          backgroundColor: tokens.colorMediaOnSurfaceMuted,
+          color: tokens.colorMediaOnSurface,
+        );
+      }
+      return AnimatedBuilder(
+        animation: animation,
+        builder: (context, _) => LinearProgressIndicator(
+          value: animation.value,
+          minHeight: 3,
+          backgroundColor: tokens.colorMediaOnSurfaceMuted,
+          color: tokens.colorMediaOnSurface,
+        ),
+      );
+    }
 
     return PositionedDirectional(
       top: Spacing.spacing3,
@@ -564,22 +773,7 @@ class _ProgressBar extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 2),
                   child: ClipRRect(
                     borderRadius: const BorderRadius.all(Radii.radiusFull),
-                    child: i == index
-                        ? AnimatedBuilder(
-                            animation: animation,
-                            builder: (context, _) => LinearProgressIndicator(
-                              value: animation.value,
-                              minHeight: 3,
-                              backgroundColor: tokens.colorMediaOnSurfaceMuted,
-                              color: tokens.colorMediaOnSurface,
-                            ),
-                          )
-                        : LinearProgressIndicator(
-                            value: i < index ? 1 : 0,
-                            minHeight: 3,
-                            backgroundColor: tokens.colorMediaOnSurfaceMuted,
-                            color: tokens.colorMediaOnSurface,
-                          ),
+                    child: segment(i),
                   ),
                 ),
               ),

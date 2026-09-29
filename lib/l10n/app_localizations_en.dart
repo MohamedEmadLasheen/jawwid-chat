@@ -701,11 +701,11 @@ class L10nEn extends L10n {
   String get storyUnavailable => 'This story is no longer available.';
 
   @override
-  String get storyVideoTitle => 'This story is a video.';
+  String get storyVideoLabel => 'Story video';
 
   @override
-  String get storyVideoOpen => 'Open video';
+  String get storyVideoFailed => 'This video could not be played.';
 
   @override
-  String get storyVideoOpenFailed => 'Nothing on this device can open it.';
+  String get storyVideoRetry => 'Try again';
 }

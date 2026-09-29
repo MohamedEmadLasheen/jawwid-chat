@@ -1363,23 +1363,23 @@ abstract class L10n {
   /// **'This story is no longer available.'**
   String get storyUnavailable;
 
-  /// No description provided for @storyVideoTitle.
+  /// No description provided for @storyVideoLabel.
   ///
   /// In en, this message translates to:
-  /// **'This story is a video.'**
-  String get storyVideoTitle;
+  /// **'Story video'**
+  String get storyVideoLabel;
 
-  /// No description provided for @storyVideoOpen.
+  /// No description provided for @storyVideoFailed.
   ///
   /// In en, this message translates to:
-  /// **'Open video'**
-  String get storyVideoOpen;
+  /// **'This video could not be played.'**
+  String get storyVideoFailed;
 
-  /// No description provided for @storyVideoOpenFailed.
+  /// No description provided for @storyVideoRetry.
   ///
   /// In en, this message translates to:
-  /// **'Nothing on this device can open it.'**
-  String get storyVideoOpenFailed;
+  /// **'Try again'**
+  String get storyVideoRetry;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

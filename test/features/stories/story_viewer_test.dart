@@ -6,7 +6,6 @@ import 'package:jawwid_chat/app/app.dart';
 import 'package:jawwid_chat/app/providers.dart';
 import 'package:jawwid_chat/app/retry_policy.dart';
 import 'package:jawwid_chat/core/data/wire/wire_vocab.dart';
-import 'package:jawwid_chat/core/media/attachment_opener.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/features/stories/application/stories_controller.dart';
 import 'package:jawwid_chat/features/stories/presentation/story_viewer_screen.dart';
@@ -14,20 +13,7 @@ import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/story.dart';
 
 import 'fake_story_repository.dart';
-
-/// Records what it was asked to open, and whether it could.
-class _RecordingOpener implements AttachmentOpener {
-  _RecordingOpener({this.succeeds = true});
-
-  final bool succeeds;
-  final List<String> opened = [];
-
-  @override
-  Future<bool> open(String url) async {
-    opened.add(url);
-    return succeeds;
-  }
-}
+import 'fake_story_video_player.dart';
 
 /// The story viewer.
 ///
@@ -47,22 +33,36 @@ class _RecordingOpener implements AttachmentOpener {
 /// which these tests assert directly.
 void main() {
   late FakeStoryRepository fake;
-  late _RecordingOpener opener;
+  late FakeStoryVideoPlayer video;
 
   setUp(() {
     fake = FakeStoryRepository();
-    opener = _RecordingOpener();
+    video = FakeStoryVideoPlayer();
   });
 
   /// Advance past a route or page transition without completing the auto-advance animation.
   ///
-  /// Three stepped frames, not one big jump. A single `pump(400ms)` completes the page
-  /// animation but leaves the `setState` that `onPageChanged` schedules unpumped, so the new
-  /// page is never built and the assertion looks for text that is one frame away.
+  /// Stepped frames, not one big jump. A single `pump(400ms)` completes the page animation but
+  /// leaves the `setState` that `onPageChanged` schedules unpumped, so the new page is never
+  /// built and the assertion looks for text that is one frame away. The trailing zero-duration
+  /// pumps flush the same thing for `setState`s raised from stream microtasks — the video seam
+  /// delivers on a broadcast stream, so its events land a frame after the pump that queued them.
   Future<void> settleRoute(WidgetTester tester) async {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
     await tester.pump(const Duration(milliseconds: 250));
+    // `_enter` is an async chain — cancel the old subscription, reset state, stop or load the
+    // player, then record the view. Each await is a microtask, and each `setState` needs a
+    // frame, so a handful of zero-duration pumps is what lets it finish.
+    for (var i = 0; i < 4; i++) {
+      await tester.pump();
+    }
+  }
+
+  /// Flush a `setState` raised from a stream event without advancing the clock.
+  Future<void> flush(WidgetTester tester) async {
+    await tester.pump();
+    await tester.pump();
   }
 
   /// Pump the viewer inside a real Navigator, so `maybePop` has somewhere to go and closing
@@ -72,7 +72,6 @@ void main() {
     required List<Story> stories,
     required String storyId,
     Locale locale = const Locale('en'),
-    AttachmentOpener? attachmentOpener,
   }) async {
     fake.setStories(stories);
     late ProviderContainer container;
@@ -82,7 +81,9 @@ void main() {
         retry: JawwidRetryPolicy.policy,
         overrides: [
           storyRepositoryProvider.overrideWithValue(fake),
-          attachmentOpenerProvider.overrideWithValue(attachmentOpener ?? opener),
+          // A factory, because the viewer owns the player's lifecycle. Returning the same
+          // instance each call is what lets a test assert it was disposed.
+          storyVideoPlayerFactoryProvider.overrideWithValue(() => video),
         ],
         child: Consumer(
           builder: (context, ref, _) {
@@ -182,7 +183,7 @@ void main() {
           retry: JawwidRetryPolicy.policy,
           overrides: [
             storyRepositoryProvider.overrideWithValue(fake),
-            attachmentOpenerProvider.overrideWithValue(opener),
+            storyVideoPlayerFactoryProvider.overrideWithValue(() => video),
           ],
           child: MaterialApp(
             locale: const Locale('en'),
@@ -508,9 +509,9 @@ void main() {
       expect(find.text('This picture could not be loaded.'), findsOneWidget);
     });
 
-    testWidgets('a VIDEO story offers to open it, through the existing opener seam',
+    testWidgets('a VIDEO story plays inline, using the URL the server sent untouched',
         (tester) async {
-      const url = 'https://storage.test/stories/clip.mp4?sig=abc';
+      const url = 'https://storage.test/stories/clip.mp4?sig=abc&expires=123';
       await pumpViewer(
         tester,
         stories: [
@@ -519,18 +520,14 @@ void main() {
         storyId: 'a',
       );
 
-      expect(find.text('This story is a video.'), findsOneWidget);
-      await tester.tap(find.text('Open video'));
-      await settleRoute(tester);
-
-      // The same seam attachments already use — no new media architecture, and the URL is
-      // passed through exactly as received.
-      expect(opener.opened, [url]);
+      // Byte-for-byte what the server minted: no bucket, no key, no path building.
+      expect(video.loaded, [url]);
+      expect(video.playCalls, greaterThan(0));
+      expect(find.byKey(fakeVideoSurface), findsOneWidget);
     });
 
-    testWidgets('a video the device cannot open says so rather than doing nothing',
+    testWidgets('shows a spinner while the video initialises, then the surface',
         (tester) async {
-      final failing = _RecordingOpener(succeeds: false);
       await pumpViewer(
         tester,
         stories: [
@@ -538,20 +535,100 @@ void main() {
             id: 'a',
             mediaKind: StoryMediaKind.video,
             mediaUrl: 'https://storage.test/clip.mp4',
+            title: null,
             body: null,
           ),
         ],
         storyId: 'a',
-        attachmentOpener: failing,
       );
 
-      await tester.tap(find.text('Open video'));
-      await settleRoute(tester);
-
-      expect(find.text('Nothing on this device can open it.'), findsOneWidget);
+      expect(find.byKey(fakeVideoSurface), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
     });
 
-    testWidgets('a video story does NOT auto-advance', (tester) async {
+    testWidgets('a video that fails to initialise says so and offers a retry',
+        (tester) async {
+      video.failOnLoad = true;
+      await pumpViewer(
+        tester,
+        stories: [
+          story(
+            id: 'a',
+            mediaKind: StoryMediaKind.video,
+            mediaUrl: 'https://storage.test/gone.mp4',
+            title: null,
+            body: null,
+          ),
+        ],
+        storyId: 'a',
+      );
+
+      expect(find.text('This video could not be played.'), findsOneWidget);
+      expect(find.text('Try again'), findsOneWidget);
+    });
+
+    testWidgets('a failed video does NOT count as completed and does not advance',
+        (tester) async {
+      video.failOnLoad = true;
+      await pumpViewer(
+        tester,
+        stories: [
+          story(
+            id: 'a',
+            title: 'A',
+            mediaKind: StoryMediaKind.video,
+            mediaUrl: 'https://storage.test/gone.mp4',
+            publishedAt: DateTime.now(),
+          ),
+          story(
+            id: 'b',
+            title: 'B',
+            publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
+          ),
+        ],
+        storyId: 'a',
+      );
+
+      // Well past any image duration: a failure must not be mistaken for an ending.
+      await tester.pump(StoryViewerScreen.imageDuration * 3);
+      await settleRoute(tester);
+
+      expect(find.text('This video could not be played.'), findsOneWidget);
+      expect(find.text('B'), findsNothing);
+      expect(fake.viewed, ['a']);
+    });
+
+    testWidgets('retry reloads the same URL and plays', (tester) async {
+      video.failOnLoad = true;
+      await pumpViewer(
+        tester,
+        stories: [
+          story(
+            id: 'a',
+            mediaKind: StoryMediaKind.video,
+            mediaUrl: 'https://storage.test/clip.mp4',
+            title: null,
+            body: null,
+          ),
+        ],
+        storyId: 'a',
+      );
+      expect(find.text('Try again'), findsOneWidget);
+
+      // The signature was renewed, or the network came back.
+      video.failOnLoad = false;
+      await tester.tap(find.text('Try again'));
+      await settleRoute(tester);
+      await flush(tester);
+
+      expect(video.loaded, [
+        'https://storage.test/clip.mp4',
+        'https://storage.test/clip.mp4',
+      ]);
+      expect(find.byKey(fakeVideoSurface), findsOneWidget);
+    });
+
+    testWidgets('a video story does NOT advance on a timer', (tester) async {
       await pumpViewer(
         tester,
         stories: [
@@ -571,12 +648,365 @@ void main() {
         storyId: 'a',
       );
 
+      // Five times an image's length. A 40-second video must not be cut short.
+      await tester.pump(StoryViewerScreen.imageDuration * 5);
+      await settleRoute(tester);
+
+      expect(find.text('A'), findsOneWidget);
+      expect(find.text('B'), findsNothing);
+    });
+
+    testWidgets('a video story advances when PLAYBACK COMPLETES, exactly once',
+        (tester) async {
+      await pumpViewer(
+        tester,
+        stories: [
+          story(
+            id: 'a',
+            title: 'A',
+            mediaKind: StoryMediaKind.video,
+            mediaUrl: 'https://storage.test/clip.mp4',
+            publishedAt: DateTime.now(),
+          ),
+          story(
+            id: 'b',
+            title: 'B',
+            publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
+          ),
+          story(
+            id: 'c',
+            title: 'C',
+            publishedAt: DateTime.now().subtract(const Duration(hours: 2)),
+          ),
+        ],
+        storyId: 'a',
+      );
+
+      video.completePlayback();
+      await settleRoute(tester);
+
+      expect(find.text('B'), findsOneWidget);
+      // Exactly one story further on, not two: a completion event must not advance twice.
+      expect(find.text('C'), findsNothing);
+      expect(fake.viewed, ['a', 'b']);
+    });
+
+    testWidgets('a buffering stall keeps the frames and shows a spinner over them',
+        (tester) async {
+      await pumpViewer(
+        tester,
+        stories: [
+          story(
+            id: 'a',
+            mediaKind: StoryMediaKind.video,
+            mediaUrl: 'https://storage.test/clip.mp4',
+            title: null,
+            body: null,
+          ),
+        ],
+        storyId: 'a',
+      );
+
+      video.reportBuffering();
+      await flush(tester);
+
+      expect(find.byKey(fakeVideoSurface), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    });
+
+    testWidgets('the progress bar tracks real position, not a timer', (tester) async {
+      await pumpViewer(
+        tester,
+        stories: [
+          story(
+            id: 'a',
+            mediaKind: StoryMediaKind.video,
+            mediaUrl: 'https://storage.test/clip.mp4',
+            title: null,
+            body: null,
+          ),
+        ],
+        storyId: 'a',
+      );
+
+      video.reportProgress(const Duration(seconds: 3)); // of 12
+      await flush(tester);
+
+      final bar = tester.widget<LinearProgressIndicator>(
+        find.byType(LinearProgressIndicator).first,
+      );
+      expect(bar.value, closeTo(0.25, 0.01));
+    });
+  });
+
+  group('video lifecycle', () {
+    Future<void> openVideoThen(
+      WidgetTester tester,
+      Future<void> Function() action, {
+      int stories = 2,
+    }) async {
+      await pumpViewer(
+        tester,
+        stories: [
+          story(
+            id: 'a',
+            title: 'A',
+            mediaKind: StoryMediaKind.video,
+            mediaUrl: 'https://storage.test/clip.mp4',
+            publishedAt: DateTime.now(),
+          ),
+          if (stories > 1)
+            story(
+              id: 'b',
+              title: 'B',
+              publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
+            ),
+        ],
+        storyId: 'a',
+      );
+      await action();
+    }
+
+    testWidgets('closing stops playback and disposes the player', (tester) async {
+      await openVideoThen(tester, () async {
+        await tester.tap(find.bySemanticsLabel('Close story'));
+        await tester.pumpAndSettle();
+      });
+
+      expect(find.byType(StoryViewerScreen), findsNothing);
+      expect(video.pauseCalls, greaterThan(0));
+      expect(video.isDisposed, isTrue);
+      expect(video.holdsVideo, isFalse);
+    });
+
+    testWidgets('nothing is emitted after disposal, so no callback mutates dead state',
+        (tester) async {
+      await openVideoThen(tester, () async {
+        await tester.tap(find.bySemanticsLabel('Close story'));
+        await tester.pumpAndSettle();
+      });
+
+      // A completion arriving after the reader left must reach nobody.
+      video.completePlayback();
+      await tester.pump(const Duration(seconds: 1));
+      await flush(tester);
+
+      expect(tester.takeException(), isNull);
+      expect(video.emittedAfterDispose, isNotEmpty,
+          reason: 'the fake recorded it, which means the seam was closed first');
+      expect(find.byType(StoryViewerScreen), findsNothing);
+    });
+
+    testWidgets('a completion arriving AFTER the reader advanced does not advance again',
+        (tester) async {
+      await openVideoThen(tester, () async {
+        // Manual next while the video is still playing.
+        await tester.tap(find.bySemanticsLabel('Next story'));
+        await settleRoute(tester);
+      });
+
+      expect(find.text('B'), findsOneWidget);
+      expect(video.pauseCalls, greaterThan(0));
+
+      // The stale completion for story A lands now. The gate must drop it.
+      video.completePlayback();
+      await settleRoute(tester);
+
+      expect(find.text('B'), findsOneWidget, reason: 'still on B, not closed past it');
+      expect(find.byType(StoryViewerScreen), findsOneWidget);
+    });
+
+    testWidgets('previous while playing stops the video and moves back', (tester) async {
+      await pumpViewer(
+        tester,
+        stories: [
+          story(id: 'a', title: 'A', publishedAt: DateTime.now()),
+          story(
+            id: 'b',
+            title: 'B',
+            mediaKind: StoryMediaKind.video,
+            mediaUrl: 'https://storage.test/clip.mp4',
+            publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
+          ),
+        ],
+        storyId: 'b',
+      );
+      expect(video.loaded, isNotEmpty);
+
+      await tester.tap(find.bySemanticsLabel('Previous story'));
+      await settleRoute(tester);
+
+      expect(find.text('A'), findsOneWidget);
+      // Moving to an image releases the video rather than leaving a decoder running.
+      expect(video.stopCalls, greaterThan(0));
+      expect(video.holdsVideo, isFalse);
+    });
+
+    testWidgets('a long press pauses the video and releasing resumes it', (tester) async {
+      await openVideoThen(tester, () async {});
+      final playsBefore = video.playCalls;
+
+      final hold = await tester.startGesture(tester.getCenter(find.byType(PageView)));
+      await tester.pump(const Duration(seconds: 1));
+      await flush(tester);
+      expect(video.pauseCalls, greaterThan(0));
+
+      await hold.up();
+      await settleRoute(tester);
+      expect(video.playCalls, greaterThan(playsBefore));
+    });
+
+    testWidgets('backgrounding the app pauses playback; resuming plays again',
+        (tester) async {
+      await openVideoThen(tester, () async {});
+      final playsBefore = video.playCalls;
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await flush(tester);
+      expect(video.pauseCalls, greaterThan(0));
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await flush(tester);
+      expect(video.playCalls, greaterThan(playsBefore));
+    });
+
+    testWidgets('backgrounding an IMAGE story stops its clock rather than advancing',
+        (tester) async {
+      await pumpViewer(
+        tester,
+        stories: [
+          story(id: 'a', title: 'A', publishedAt: DateTime.now()),
+          story(
+            id: 'b',
+            title: 'B',
+            publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
+          ),
+        ],
+        storyId: 'a',
+      );
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await flush(tester);
+      // Long enough to have advanced twice if the clock had kept running.
       await tester.pump(StoryViewerScreen.imageDuration * 2);
       await settleRoute(tester);
 
-      // Advancing past a video the reader is about to open would be worse than waiting.
       expect(find.text('A'), findsOneWidget);
       expect(find.text('B'), findsNothing);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await flush(tester);
+      await tester.pump(StoryViewerScreen.imageDuration);
+      await settleRoute(tester);
+      expect(find.text('B'), findsOneWidget);
+    });
+  });
+
+  group('mixed sequences use the right mechanism for each story', () {
+    testWidgets('IMAGE -> VIDEO -> IMAGE', (tester) async {
+      final now = DateTime.now();
+      await pumpViewer(
+        tester,
+        stories: [
+          story(id: 'i1', title: 'I1', publishedAt: now),
+          story(
+            id: 'v1',
+            title: 'V1',
+            mediaKind: StoryMediaKind.video,
+            mediaUrl: 'https://storage.test/clip.mp4',
+            publishedAt: now.subtract(const Duration(hours: 1)),
+          ),
+          story(id: 'i2', title: 'I2', publishedAt: now.subtract(const Duration(hours: 2))),
+        ],
+        storyId: 'i1',
+      );
+
+      // Image: duration.
+      expect(find.text('I1'), findsOneWidget);
+      await tester.pump(StoryViewerScreen.imageDuration);
+      await settleRoute(tester);
+      expect(find.text('V1'), findsOneWidget);
+
+      // Video: NOT duration.
+      await tester.pump(StoryViewerScreen.imageDuration * 3);
+      await settleRoute(tester);
+      expect(find.text('V1'), findsOneWidget);
+
+      // Video: completion.
+      video.completePlayback();
+      await settleRoute(tester);
+      expect(find.text('I2'), findsOneWidget);
+      // The decoder was released on the way out.
+      expect(video.holdsVideo, isFalse);
+
+      // Image again: duration, and the last story closes.
+      await tester.pump(StoryViewerScreen.imageDuration);
+      await tester.pumpAndSettle();
+      expect(find.byType(StoryViewerScreen), findsNothing);
+
+      expect(fake.viewed, ['i1', 'v1', 'i2']);
+    });
+
+    testWidgets('VIDEO -> IMAGE -> VIDEO', (tester) async {
+      final now = DateTime.now();
+      await pumpViewer(
+        tester,
+        stories: [
+          story(
+            id: 'v1',
+            title: 'V1',
+            mediaKind: StoryMediaKind.video,
+            mediaUrl: 'https://storage.test/one.mp4',
+            publishedAt: now,
+          ),
+          story(id: 'i1', title: 'I1', publishedAt: now.subtract(const Duration(hours: 1))),
+          story(
+            id: 'v2',
+            title: 'V2',
+            mediaKind: StoryMediaKind.video,
+            mediaUrl: 'https://storage.test/two.mp4',
+            publishedAt: now.subtract(const Duration(hours: 2)),
+          ),
+        ],
+        storyId: 'v1',
+      );
+
+      expect(video.loaded, ['https://storage.test/one.mp4']);
+
+      video.completePlayback();
+      await settleRoute(tester);
+      expect(find.text('I1'), findsOneWidget);
+
+      await tester.pump(StoryViewerScreen.imageDuration);
+      await settleRoute(tester);
+      expect(find.text('V2'), findsOneWidget);
+
+      // A second video loaded its own URL, and only after the first was released.
+      expect(video.loaded, ['https://storage.test/one.mp4', 'https://storage.test/two.mp4']);
+      expect(fake.viewed, ['v1', 'i1', 'v2']);
+    });
+
+    testWidgets('the progress bar has one segment per story throughout', (tester) async {
+      final now = DateTime.now();
+      await pumpViewer(
+        tester,
+        stories: [
+          story(id: 'i1', title: 'I1', publishedAt: now),
+          story(
+            id: 'v1',
+            title: 'V1',
+            mediaKind: StoryMediaKind.video,
+            mediaUrl: 'https://storage.test/clip.mp4',
+            publishedAt: now.subtract(const Duration(hours: 1)),
+          ),
+        ],
+        storyId: 'i1',
+      );
+      expect(find.byType(LinearProgressIndicator), findsNWidgets(2));
+
+      await tester.pump(StoryViewerScreen.imageDuration);
+      await settleRoute(tester);
+      expect(find.byType(LinearProgressIndicator), findsNWidgets(2));
     });
   });
 

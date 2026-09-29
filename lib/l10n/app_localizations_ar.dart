@@ -702,12 +702,11 @@ class L10nAr extends L10n {
   String get storyUnavailable => 'هذه الحالة لم تعد متاحة.';
 
   @override
-  String get storyVideoTitle => 'هذه الحالة مقطع فيديو.';
+  String get storyVideoLabel => 'فيديو الحالة';
 
   @override
-  String get storyVideoOpen => 'تشغيل الفيديو';
+  String get storyVideoFailed => 'لم نتمكّن من تشغيل هذا الفيديو.';
 
   @override
-  String get storyVideoOpenFailed =>
-      'لا يوجد تطبيق على هذا الجهاز يمكنه تشغيله.';
+  String get storyVideoRetry => 'إعادة المحاولة';
 }
