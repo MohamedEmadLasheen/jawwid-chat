@@ -394,6 +394,68 @@ export class AuthorizationService {
     return null;
   }
 
+  /**
+   * May this actor provision or reconcile a Student Group?
+   *
+   * ## The defect this closes
+   *
+   * `ensureStudentGroup` and `syncStudentGroup` checked NOTHING. The first took
+   * an actor id only to stamp `added_by`; the second did not read an actor at
+   * all. So any authenticated caller could hand either route a learner id from
+   * another household and receive that family's group -- title included, which
+   * is the child's name -- and, if no group existed yet, CREATE one there,
+   * writing membership rows, a system message and outbox events into a family
+   * they have nothing to do with.
+   *
+   * ## Why the answer is staff-only
+   *
+   * A Student Group is provisioning, not communication. Its membership is
+   * derived from the academy's own relationships -- the family's contacts, the
+   * assigned teacher, the owning admin -- and PRD BR-1 requires an admin in it.
+   * A parent or a teacher is a SUBJECT of that arrangement and never its
+   * author; there is no product flow in which either creates or reconciles one.
+   * So the rule is the same family-facing staff test the rest of this service
+   * uses, and it is expressed here rather than in the service so that every
+   * access decision in this system stays in one file.
+   */
+  canProvisionStudentGroup(actor: Actor): Decision {
+    if (!actor.isActive) return deny(CommErrorCode.ACTOR_INACTIVE, 'actor is inactive');
+    if (actor.kind === ActorKind.SYSTEM) return allow();
+    if (!isFamilyFacingStaff(actor)) {
+      return deny(
+        CommErrorCode.ROLE_CANNOT_MESSAGE_FAMILY,
+        'a Student Group is provisioned by Jawwid staff, never by a family member or a teacher',
+      );
+    }
+    return allow();
+  }
+
+  /**
+   * Would THIS actor's next message be held for approval?
+   *
+   * The public form of `moderationFor`, and the only thing a client should ever
+   * ask. It exists because the client used to answer this itself by OR-ing
+   * `teacherRequiresApproval` with `parentRequiresApproval` -- which told a
+   * parent their messages were reviewed whenever the TEACHER's were, and showed
+   * the notice on 1:1 conversations, where approval has never applied at all.
+   *
+   * Delegating to `moderationFor` is the point: the notice a reader sees and
+   * the moderation the message is actually stored with are now decided by one
+   * function, so they cannot drift.
+   *
+   * Staff are never held (see `canSend`), so they get `false` without
+   * consulting the flags.
+   */
+  requiresApprovalFor(actor: Actor, conv: Conv): boolean {
+    if (actor.kind === ActorKind.CONTACT) {
+      return this.moderationFor(conv, MemberRole.PARENT) === Moderation.PENDING;
+    }
+    if (actor.kind === ActorKind.TEACHER) {
+      return this.moderationFor(conv, MemberRole.TEACHER) === Moderation.PENDING;
+    }
+    return false;
+  }
+
   private moderationFor(conv: Conv, role: string): string {
     if (conv.type !== ConversationType.STUDENT_GROUP && conv.type !== ConversationType.CLASS_GROUP) {
       return Moderation.PUBLISHED;

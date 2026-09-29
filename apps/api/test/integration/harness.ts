@@ -3,6 +3,7 @@ import { PrismaService } from '@platform/prisma.service';
 import { AuthorizationService } from '@platform/authorization.service';
 import { AppConfigService } from '@platform/app-config.service';
 import { PrismaIdentityService } from '@platform/identity.service';
+import { PrismaDirectoryService } from '@platform/directory.service';
 import { PrismaAuditService } from '@platform/audit.service';
 import type { CoverageService } from '@platform/coverage.service';
 import { ConversationService } from '@communication/conversations/conversation.service';
@@ -37,6 +38,7 @@ export function buildGraph() {
   const prisma = new PrismaService();
   const coverage = new PinnedCoverage();
   const identity = new PrismaIdentityService(prisma);
+  const directory = new PrismaDirectoryService(prisma);
   const audit = new PrismaAuditService();
   const authz = new AuthorizationService(coverage);
   const outbox = new OutboxService();
@@ -45,7 +47,7 @@ export function buildGraph() {
 
   const conversations = new ConversationService(prisma, authz, outbox, identity, coverage, audit);
   const attachments = new AttachmentService(prisma, authz, conversations, storage);
-  const messages = new MessageService(prisma, authz, conversations, outbox, config, attachments, audit);
+  const messages = new MessageService(prisma, authz, conversations, outbox, config, attachments, audit, directory);
   const approvals = new ApprovalService(prisma, authz, conversations, attachments, outbox, audit);
   const templates = new TemplateService(prisma);
   const quietHours = new QuietHoursService(prisma);
@@ -67,7 +69,7 @@ export function buildGraph() {
   const outboxWorker = new OutboxWorker(prisma, notifications, silentRealtime as never, identity);
 
   return {
-    prisma, coverage, identity, authz, conversations, messages, approvals,
+    prisma, coverage, identity, directory, authz, conversations, messages, approvals,
     attachments, notifications, reminders, templates, quietHours, calls,
     stories, storyAudience, storySweeper, storage, outbox, config, outboxWorker,
   };
@@ -156,6 +158,55 @@ export async function seed(prisma: PrismaService): Promise<Scenario> {
     prisma,
     `insert into chat.learner (id, family_id, name, teacher_id)
      values ('${randomUUID()}'::uuid, '${ids.familyId}'::uuid, 'learner_m', '${ids.newTeacherId}'::uuid)`,
+  );
+  return ids;
+}
+
+/**
+ * A SECOND, unrelated family -- its own owner, parent, teacher and learner.
+ *
+ * The cross-account security suite needs two households that share nothing, and
+ * `seed()` deliberately puts both of its parents inside ONE family (they model
+ * two guardians of the same children). Asserting isolation against those two
+ * would prove nothing, because they are supposed to see the same conversations.
+ */
+export interface SecondFamily {
+  ownerId: string;
+  familyId: string;
+  parentId: string;
+  teacherId: string;
+  learnerId: string;
+}
+
+export async function seedSecondFamily(prisma: PrismaService): Promise<SecondFamily> {
+  const ids: SecondFamily = {
+    ownerId: randomUUID(),
+    familyId: randomUUID(),
+    parentId: randomUUID(),
+    teacherId: randomUUID(),
+    learnerId: randomUUID(),
+  };
+
+  await prisma.$executeRawUnsafe(
+    `insert into chat.staff (id, name, role, is_active)
+     values ('${ids.ownerId}'::uuid, 'admin_z', 'admin', true)`,
+  );
+  await prisma.$executeRawUnsafe(
+    `insert into chat.teacher (id, name, is_active)
+     values ('${ids.teacherId}'::uuid, 'teacher_z', true)`,
+  );
+  await prisma.$executeRawUnsafe(
+    `insert into chat.family (id, display_name, owner_id, language)
+     values ('${ids.familyId}'::uuid, 'family_z', '${ids.ownerId}'::uuid, 'ar')`,
+  );
+  await prisma.$executeRawUnsafe(
+    `insert into chat.contact (id, family_id, name, role_preset, can_message, is_active)
+     values ('${ids.parentId}'::uuid, '${ids.familyId}'::uuid, 'parent_z', 'primary_guardian', true, true)`,
+  );
+  await withAssignmentGate(
+    prisma,
+    `insert into chat.learner (id, family_id, name, teacher_id)
+     values ('${ids.learnerId}'::uuid, '${ids.familyId}'::uuid, 'learner_z', '${ids.teacherId}'::uuid)`,
   );
   return ids;
 }

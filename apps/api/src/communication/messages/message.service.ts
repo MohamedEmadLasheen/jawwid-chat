@@ -1,11 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Message, Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
 import { AppConfigService } from '../../platform/app-config.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
-import { AUDIT_SERVICE } from '../../platform/tokens';
+import { AUDIT_SERVICE, DIRECTORY_SERVICE } from '../../platform/tokens';
 import type { AuditService } from '../../platform/audit.service';
+import type { DirectoryService } from '../../platform/directory.service';
 import { Actor } from '../../platform/types';
 import { ConversationService } from '../conversations/conversation.service';
 import { AttachmentService } from '../attachments/attachment.service';
@@ -70,6 +71,7 @@ export class MessageService {
     private readonly config: AppConfigService,
     private readonly attachments: AttachmentService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    @Inject(DIRECTORY_SERVICE) private readonly directory: DirectoryService,
   ) {}
 
   // -------------------------------------------------------------------
@@ -411,11 +413,95 @@ export class MessageService {
     // Signed URLs are minted per read, scoped to messages this actor is already
     // permitted to see, and they expire.
     const signed = await this.attachments.signUrlsForMessages(rows.map((m) => m.id));
-    const messages = rows.map((m) => toMessageDto(m, signed));
+
+    // Author names for the WHOLE PAGE in one batch (backend gap O3). Resolved
+    // after the visibility filter, so a name can only ever be attached to a
+    // message this actor was already permitted to read -- the directory is not
+    // an authorization boundary and must never be asked to be one.
+    const directory = await this.directory.resolveMany(
+      rows
+        .filter((m) => m.authorId !== null)
+        .map((m) => ({ actorId: m.authorId as string, actorKind: m.authorType })),
+    );
+    const messages = rows.map((m) => toMessageDto(m, signed, directory));
     const nextBefore =
       !ascending && rows.length === limit ? (rows[rows.length - 1].seq?.toString() ?? null) : null;
 
     return { messages, nextBefore };
+  }
+
+  /**
+   * The newest message each conversation shows THIS actor, for the list rows.
+   *
+   * Closes backend gap O2. Two queries for the whole list, never one per row:
+   * a grouped `max(seq)` inside the actor's own visibility filter, then one
+   * fetch of exactly those (conversation, seq) pairs. The per-conversation
+   * alternative is the round trip the mobile audience's network cannot absorb,
+   * which is the same reason the unread count is batched directly above.
+   *
+   * It reuses `visibilityFilter`, so the row that decides a preview is a row
+   * the actor could have opened the conversation and read. A pending message
+   * held for approval is the author's own last message and nobody else's; an
+   * internal note is never a contact's; a message deleted for me is not mine.
+   */
+  async lastVisibleMessagesFor(
+    conversationIds: string[],
+    actorId: string,
+  ): Promise<Map<string, Message>> {
+    const byConversation = new Map<string, Message>();
+    if (conversationIds.length === 0) return byConversation;
+
+    const actor = await this.conversations.requireActor(actorId);
+
+    const newest = await this.prisma.message.groupBy({
+      by: ['conversationId'],
+      where: {
+        conversationId: { in: conversationIds },
+        // A message retracted for everyone has no body and no attachments left
+        // to preview; the row before it is what the conversation now shows.
+        deletedForAll: false,
+        ...this.visibilityFilterFor(actor),
+      },
+      _max: { seq: true },
+    });
+
+    const pairs = newest
+      .filter((row) => row.conversationId !== null && row._max.seq !== null)
+      .map((row) => ({
+        conversationId: row.conversationId as string,
+        seq: row._max.seq as bigint,
+      }));
+    if (pairs.length === 0) return byConversation;
+
+    const rows = await this.prisma.message.findMany({
+      where: { OR: pairs.map((p) => ({ conversationId: p.conversationId, seq: p.seq })) },
+    });
+    for (const row of rows) {
+      if (row.conversationId) byConversation.set(row.conversationId, row);
+    }
+    return byConversation;
+  }
+
+  /**
+   * The actor-dependent half of `visibilityFilter`, without the conversation
+   * or the cursor. Extracted so the batch above and the single-conversation
+   * list cannot disagree about what an actor may see.
+   */
+  private visibilityFilterFor(actor: Actor): Prisma.MessageWhereInput {
+    const where: Prisma.MessageWhereInput = {
+      hiddenFor: { none: { actorId: actor.actorId } },
+    };
+    if (!this.authz.canReadInternal(actor)) {
+      where.visibility = Visibility.CUSTOMER;
+    }
+    where.OR = this.authz.canReadInternal(actor)
+      ? [
+          { moderation: Moderation.PUBLISHED },
+          { moderation: Moderation.PENDING },
+          { authorId: actor.actorId },
+        ]
+      : [{ moderation: Moderation.PUBLISHED }, { authorId: actor.actorId }];
+    return where;
   }
 
   /**
@@ -432,24 +518,13 @@ export class MessageService {
     conversationId: string,
     input: ListMessagesInput,
   ): Prisma.MessageWhereInput {
-    const where: Prisma.MessageWhereInput = { conversationId };
+    const where: Prisma.MessageWhereInput = {
+      conversationId,
+      ...this.visibilityFilterFor(actor),
+    };
 
     if (input.before) where.seq = { lt: BigInt(input.before) };
     if (input.after) where.seq = { gt: BigInt(input.after) };
-
-    if (!this.authz.canReadInternal(actor)) {
-      where.visibility = Visibility.CUSTOMER;
-    }
-
-    where.hiddenFor = { none: { actorId: actor.actorId } };
-
-    where.OR = this.authz.canReadInternal(actor)
-      ? [
-          { moderation: Moderation.PUBLISHED },
-          { moderation: Moderation.PENDING },
-          { authorId: actor.actorId },
-        ]
-      : [{ moderation: Moderation.PUBLISHED }, { authorId: actor.actorId }];
 
     return where;
   }
