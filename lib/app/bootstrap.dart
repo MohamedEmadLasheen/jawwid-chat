@@ -14,6 +14,7 @@ import '../core/network/device_descriptor.dart';
 import '../core/network/http_stack.dart';
 import '../core/storage/secure_token_store.dart';
 import '../features/auth/application/auth_controller.dart';
+import '../features/auth/application/session_termination.dart';
 import '../features/auth/domain/auth_state.dart';
 import '../shared/models/user_role.dart';
 import 'providers.dart';
@@ -63,6 +64,11 @@ List<Override> _httpOverrides() {
   final tokenStore = SecureTokenStore();
   final session = SessionContext();
 
+  // The wire from the transport to the controller. `ApiClient` is what sees a revocation on
+  // a background request, and a refusal seen there has to end the session as completely as
+  // one seen at launch — which means reaching AuthController, not just clearing the actor id.
+  final termination = SessionTermination();
+
   late final ApiClient client;
 
   final auth = HttpAuthRepository(
@@ -71,12 +77,18 @@ List<Override> _httpOverrides() {
     transport: buildAuthTransport(config: config),
     protected: () => client,
     device: PlatformDeviceDescriptor(),
+    currentAccessToken: () async => (await tokenStore.read())?.accessToken,
   );
 
   final tokens = StoredTokenProvider(
     store: tokenStore,
     auth: auth,
-    onEnded: session.end,
+    onEnded: (error) async {
+      // The actor id goes first and unconditionally, so the transport stops naming a
+      // principal even in the window before the controller has been built.
+      await session.end(error);
+      await termination.end(error);
+    },
   );
 
   client = buildApiClient(config: config, tokens: tokens);
@@ -112,6 +124,7 @@ List<Override> _httpOverrides() {
         onPrincipal: (principal) =>
             session.adopt(role: principal.role, actorId: principal.id),
         onSessionCleared: session.clear,
+        termination: termination,
       ),
     ),
   ];

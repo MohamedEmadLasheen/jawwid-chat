@@ -48,6 +48,7 @@ void main() {
       transport: buildAuthTransport(config: ApiConfig(baseUrl: server.baseUrl)),
       protected: () => client,
       device: _FakeDevice(device),
+      currentAccessToken: () async => (await store.read())?.accessToken,
     );
 
     client = buildApiClient(

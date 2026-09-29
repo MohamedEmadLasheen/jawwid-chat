@@ -43,9 +43,11 @@ class HttpAuthRepository implements AuthRepository {
     required AuthTransport transport,
     required ApiClient Function() protected,
     required DeviceDescriptor device,
+    required Future<String?> Function() currentAccessToken,
   })  : _transport = transport,
         _protected = protected,
-        _device = device;
+        _device = device,
+        _currentAccessToken = currentAccessToken;
 
   final AuthTransport _transport;
 
@@ -54,6 +56,16 @@ class HttpAuthRepository implements AuthRepository {
   final ApiClient Function() _protected;
 
   final DeviceDescriptor _device;
+
+  /// Reads the access token the session currently holds. A READ, not ownership: this never
+  /// writes one, never decides to renew one, and never holds one between calls. It exists so
+  /// [signOut] can tell "the refresh authority renewed the session" from "it could not",
+  /// which are the two outcomes that decide whether one more logout is worth sending.
+  final Future<String?> Function() _currentAccessToken;
+
+  /// Single-flights sign-out, so two taps -- or a tap racing a terminal refusal -- produce
+  /// one logout flow rather than two.
+  Future<void>? _signingOut;
 
   @override
   Future<AuthSession> signIn({
@@ -103,15 +115,57 @@ class HttpAuthRepository implements AuthRepository {
     return principalFrom(body);
   }
 
+  /// Ends the session server-side, in at most three requests and never more.
+  ///
+  /// ## Why a retry at all
+  ///
+  /// `POST /auth/logout` is authenticated, and the moment a user is most likely to press
+  /// sign out is after the app has sat in the background past the fifteen-minute access-token
+  /// lifetime. The first attempt then 401s, [ApiClient] renews through the one refresh
+  /// authority — which ROTATES, minting a fresh session — and declines to replay a POST. The
+  /// client would clear its tokens and walk away, leaving a brand-new live session on the
+  /// server that nobody holds the credentials for and that expires thirty days later.
+  ///
+  /// ## Why it is bounded by construction
+  ///
+  /// The retry goes over [AuthTransport], carrying the renewed token explicitly. That
+  /// transport has no refresh interceptor, so the retry cannot trigger a second renewal no
+  /// matter how it is refused. The ceiling for one sign-out is therefore: one logout, at most
+  /// one refresh (ApiClient's, single-flighted), at most one logout retry. Nothing here
+  /// changes generic replay policy, and `_mayReplay` is untouched — a POST is still not
+  /// something the transport replays on its own.
   @override
-  Future<void> signOut() async {
-    // Best effort, by contract with AuthController: the local session is cleared either way.
-    // Throwing here would strand a user signed in on their own device because a network they
-    // are not on failed to answer.
+  Future<void> signOut() => _signingOut ??= _signOut().whenComplete(() {
+        _signingOut = null;
+      });
+
+  Future<void> _signOut() async {
+    final before = await _currentAccessToken();
+
     try {
       await _protected().post<Map<String, Object?>>('/auth/logout');
+      return;
+    } on AppError catch (error) {
+      // Only an expired access token is worth a second attempt. A revoked session, a
+      // disabled or locked account, a network failure or a 500 are each either already final
+      // or not recoverable by sending the same request again.
+      if (!error.isRefreshable) return;
+    }
+
+    final renewed = await _currentAccessToken();
+    // Unchanged means the refresh did not happen or did not succeed, so there is no new
+    // credential to try and a retry would simply be refused identically.
+    if (renewed == null || renewed == before) return;
+
+    try {
+      await _transport.post<Map<String, Object?>>(
+        '/auth/logout',
+        headers: {'Authorization': 'Bearer $renewed'},
+      );
     } on AppError {
-      // Nothing to add. The caller logs the classification; the raw detail never travels.
+      // Bounded: there is no third attempt. The local session is cleared by AuthController
+      // regardless, and a server session the client can no longer name will expire on its
+      // own. Throwing would strand a user signed in on their own device.
     }
   }
 

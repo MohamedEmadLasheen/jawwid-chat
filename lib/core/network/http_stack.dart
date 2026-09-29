@@ -91,9 +91,21 @@ class AuthTransport {
 
   final Dio _dio;
 
-  Future<Response<T>> post<T>(String path, {Object? data}) async {
+  /// [headers] exists for exactly one caller: the bounded logout retry, which must present
+  /// a credential explicitly BECAUSE this transport has no interceptor to attach one. That
+  /// is the whole point — a retry sent here cannot provoke a second refresh, so the sign-out
+  /// flow is bounded by construction rather than by a counter somebody has to maintain.
+  Future<Response<T>> post<T>(
+    String path, {
+    Object? data,
+    Map<String, String>? headers,
+  }) async {
     try {
-      return await _dio.post<T>(path, data: data);
+      return await _dio.post<T>(
+        path,
+        data: data,
+        options: headers == null ? null : Options(headers: headers),
+      );
     } catch (error) {
       throw ErrorMapper.map(error);
     }

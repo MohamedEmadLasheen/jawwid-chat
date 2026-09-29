@@ -77,6 +77,7 @@ class _LivePrincipal {
       transport: buildAuthTransport(config: ApiConfig(baseUrl: baseUrl)),
       protected: () => client,
       device: _TestDevice(),
+      currentAccessToken: () async => (await store.read())?.accessToken,
     );
 
     client = buildApiClient(
@@ -184,6 +185,7 @@ void main() {
             transport: buildAuthTransport(config: ApiConfig(baseUrl: baseUrl!)),
             protected: () => throw StateError('no protected call expected'),
             device: _TestDevice(),
+            currentAccessToken: () async => null,
           );
 
           try {
