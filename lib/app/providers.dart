@@ -24,7 +24,17 @@ final loggerProvider = Provider<RedactingLogger>(
   (ref) => const RedactingLogger(enabled: kDebugMode),
 );
 
-final tokenStoreProvider = Provider<TokenStore>((ref) => SecureTokenStore());
+/// Overridden at startup with the ONE store the session uses; see bootstrap.dart.
+///
+/// Throws rather than defaulting to `SecureTokenStore()`, for the same reason
+/// [authRepositoryProvider] does. A default here hands out a second store to whoever reads
+/// this without an override, and "how many objects are allowed to hold the session" is
+/// exactly the question the single-token-authority rule answers with *one*.
+final tokenStoreProvider = Provider<TokenStore>((ref) {
+  throw UnimplementedError(
+    'tokenStoreProvider must be overridden at startup — see lib/app/bootstrap.dart',
+  );
+});
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   throw UnimplementedError(
