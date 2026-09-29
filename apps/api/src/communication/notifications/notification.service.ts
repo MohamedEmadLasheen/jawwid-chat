@@ -7,6 +7,7 @@ import type { PushProvider } from './push.provider';
 import { TemplateService } from './template.service';
 import { QuietHoursService } from './quiet-hours.service';
 import { NotificationStatus } from '../contracts/vocab';
+import { buildPushData, isCallNotification, mayDeliverTo } from './call-push-routing';
 
 export interface ScheduleInput {
   /**
@@ -141,13 +142,32 @@ export class NotificationService {
       return true;
     }
 
-    const tokens = await this.prisma.deviceToken.findMany({
+    const active = await this.prisma.deviceToken.findMany({
       where: { actorId: n.recipientId, isActive: true },
     });
+
+    // WHICH DEVICES MAY RECEIVE THIS. A VoIP token takes call pushes and
+    // nothing else: on iOS a PushKit delivery that does not report a call to
+    // CallKit terminates the app. The rule lives in one place -- see
+    // `call-push-routing.ts` -- so it can be read, tested and changed without
+    // touching this loop.
+    const isCall = isCallNotification(n.eventType);
+    const tokens = active.filter((t) => mayDeliverTo(isCall, t));
+
     if (tokens.length === 0) {
+      // Covers both "no device at all" and "no device of the right kind" -- an
+      // iOS user who has not registered a VoIP token yet cannot be sent a call,
+      // and that is a missing registration rather than a delivery failure.
       await this.fail(notificationId, 'NO_DEVICE_TOKEN');
       return false;
     }
+
+    const data = buildPushData({
+      eventType: n.eventType,
+      notificationId: n.id,
+      conversationId: n.conversationId,
+      dedupeKey: n.dedupeKey,
+    });
 
     let anyOk = false;
     for (const t of tokens) {
@@ -155,12 +175,9 @@ export class NotificationService {
         token: t.token,
         title: rendered.title,
         body: rendered.body,
-        data: {
-          eventType: n.eventType,
-          notificationId: n.id,
-          ...(n.conversationId ? { conversationId: n.conversationId } : {}),
-        },
+        data,
         isVoip: t.isVoip,
+        platform: t.platform,
       });
       if (result.ok) anyOk = true;
       if (result.tokenInvalid) {
@@ -250,8 +267,16 @@ export class NotificationService {
         locale: input.locale ?? 'ar',
       },
       // A token can move between accounts when a device is handed over.
+      //
+      // `platform` AND `isVoip` ARE UPDATED TOO. They were not, so a token
+      // re-registered with a different kind kept the kind it was first seen
+      // with. Harmless while nothing read `is_voip`; now that it decides
+      // whether a device may receive a call push, a stale value is the
+      // difference between a phone that rings and one that does not.
       update: {
         actorId: input.actorId,
+        platform: input.platform,
+        isVoip: input.isVoip ?? false,
         isActive: true,
         lastSeenAt: new Date(),
         locale: input.locale ?? 'ar',

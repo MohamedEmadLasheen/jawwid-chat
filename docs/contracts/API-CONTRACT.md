@@ -729,6 +729,68 @@ Declining again is refused with `COMM.CALL_ALREADY_ENDED` (was `COMM.CALL_PARTIC
 
 ### 3.9 Notifications / Devices (`notification.controller.ts`, `notification.service.ts`)
 
+> **THE VOICE-CALL PUSH CONTRACT (W8-W1, 2026-09-28).**
+>
+> **Which device receives what.** A VoIP token (iOS PushKit) receives call
+> notifications and **nothing else** — on iOS a PushKit delivery that does not
+> immediately report a call to CallKit terminates the app, so a stray message
+> push there is a crash loop, not an inefficiency. The rule lives in one place,
+> `call-push-routing.ts`, and routes on `rule.event_type`:
+>
+> | destination | receives |
+> |---|---|
+> | VoIP token (`is_voip = true`) | `call_started`, `group_call_started` only |
+> | iOS standard token | everything except those two |
+> | Android / web token | everything — FCM has no VoIP channel |
+>
+> An iPhone holding both tokens gets a call on the VoIP one only, so it rings
+> once. An iPhone with no VoIP token yet is not sent a call at all, and the
+> notification records `NO_DEVICE_TOKEN`: an incoming-call banner with no
+> CallKit screen behind it is the degraded experience the platform rules exist
+> to prevent.
+>
+> **The payload.** `data` carries at most four keys and is BUILT, never copied
+> from a row:
+>
+> ```
+> { eventType, notificationId, conversationId?, callId? }
+> ```
+>
+> `callId` appears **only** for `call_started` and `group_call_started`. It is
+> there because the native call layer must report a specific call to CallKit and
+> later correlate an accept or a decline to it. It is **data-only, never
+> rendered, and authorizes nothing**: `POST /calls/:id/accept`, `/decline` and
+> `/end` each re-run the full server-side chain, and `POST /calls/:id/token` is
+> the only route to media. A call id without a session is useless.
+>
+> Never present, and structurally unable to be: a LiveKit token, a room name, an
+> access token, any media credential, a contact channel (BR-2).
+>
+> **Transport.** Configured, not compiled — APNs (`@parse/node-apn`) and FCM v1
+> (`google-auth-library` + `fetch`) behind the existing `PushProvider` seam, with
+> `LoggingPushProvider` as the fallback when nothing is configured. A **half**
+> configured provider refuses to start rather than reporting a healthy pipeline
+> that delivers nothing. Only Apple's and Google's *permanent* rejection codes
+> deactivate a device; a 5xx, a 429 or our own credential failure never does.
+>
+> **THE iOS VoIP ACTIVATION GATE.** `APNS_VOIP_ENABLED` defaults to **false**,
+> and while it is closed no VoIP push is delivered — such a message is reported
+> as `VOIP_GATED` and retried rather than recorded as sent. It must not be set
+> to `true` until the native CallKit reporting path exists (W8-W3): delivering a
+> PushKit push to an app that cannot report a call terminates it and, repeated,
+> costs the VoIP entitlement.
+>
+> **Android is not yet configured.** The channel, the Dart boundary and the
+> manifest permission exist; obtaining an FCM token needs a Firebase project
+> (`google-services.json` + the Gradle plugin), which is infrastructure
+> configuration rather than code. Until then the device reports no token and
+> `POST /notifications/devices` is simply never called from Android.
+>
+> **Push is not the call.** A push wakes the app; the call itself still arrives
+> over the realtime connection and the server remains the only authority on its
+> lifecycle. Nothing in the push path marks a call ringing, active, answered,
+> declined or ended.
+
 **POST /notifications/devices** — EXISTS → RECONCILE
 - Auth: required. Permission: `sessions.manage`. Scope: self.
 - Request: `{ token: string, platform: string, isVoip?: boolean, locale?: 'ar'|'en' }`. Upsert by `token`: today a token already registered to another actor is **silently re-bound** to the caller ("device handed over"). Phase 1: the token is bound to the authenticated actor **and session** (revoking the session deactivates it); re-binding across actors requires the previous session to be revoked.

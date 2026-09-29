@@ -22,7 +22,7 @@ import { NotificationService } from './notifications/notification.service';
 import { ReminderService } from './notifications/reminder.service';
 import { TemplateService } from './notifications/template.service';
 import { QuietHoursService } from './notifications/quiet-hours.service';
-import { LoggingPushProvider } from './notifications/push.provider';
+import { selectPushProvider } from './notifications/push.provider.selector';
 import { RealtimeGateway } from './realtime/realtime.gateway';
 import { TypingService } from './realtime/typing.service';
 import { PresenceService } from './realtime/presence.service';
@@ -78,7 +78,11 @@ import { StorageController } from './api/storage.controller';
     // otherwise, and a startup failure when the configuration is half-present.
     // See storage.provider.ts.
     { provide: OBJECT_STORAGE, useFactory: () => selectObjectStorage().storage },
-    { provide: PUSH_PROVIDER, useClass: LoggingPushProvider },
+    // W8-W1. Configured, not compiled -- the same shape as OBJECT_STORAGE
+    // above. With no credentials set this resolves to LoggingPushProvider,
+    // which is exactly the previous behaviour; a partial configuration refuses
+    // to start. See push.provider.selector.ts.
+    { provide: PUSH_PROVIDER, useFactory: () => selectPushProvider().provider },
     { provide: MEDIA_TOKEN_ISSUER, useClass: LiveKitTokenIssuer },
     // AI #7 (D-2). The gateway ALONE cannot be the publisher: in the worker
     // process there is no Socket.IO server, so gateway.toThread()'s

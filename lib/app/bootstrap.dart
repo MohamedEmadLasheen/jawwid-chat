@@ -12,6 +12,7 @@ import '../core/network/actor_identity.dart';
 import '../core/network/api_client.dart' show TokenProvider;
 import '../core/network/api_config.dart';
 import '../core/network/http_stack.dart';
+import '../core/push/push_registration.dart';
 import '../core/realtime/realtime_socket.dart';
 import '../core/storage/secure_token_store.dart';
 import '../features/auth/application/auth_controller.dart';
@@ -105,6 +106,13 @@ List<Override> _httpOverrides({required String debugActorId}) {
     // that client lives; nothing else in the W3 composition root changes.
     accountCallHistoryProvider.overrideWithValue(
       HttpAccountCallHistory(client: client),
+    ),
+    // W8-W1. THE SAME `client` again: device registration travels on the one
+    // authenticated stack, so there is a single interceptor chain, a single
+    // TokenProvider and a single refresh lifecycle. Registered here because
+    // that client lives here; nothing else in the W3 composition root changes.
+    pushRegistrationApiProvider.overrideWithValue(
+      HttpPushRegistration(client: client),
     ),
     realtimeTokenProvider.overrideWithValue(tokens),
     realtimeSocketProvider.overrideWithValue(

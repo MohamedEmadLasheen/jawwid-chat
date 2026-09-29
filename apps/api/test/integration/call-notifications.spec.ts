@@ -423,6 +423,7 @@ describe("J/K/R — transactional and idempotent", () => {
       actorId: s.parentId,
       token: "parent-device",
       platform: "ios",
+      isVoip: true,
     });
   });
 
@@ -496,6 +497,7 @@ describe("L/M — devices", () => {
         actorId: s.parentId,
         token,
         platform: "ios",
+        isVoip: true,
       });
     }
     await directCall();
@@ -514,6 +516,7 @@ describe("L/M — devices", () => {
       actorId: s.parentId,
       token: "stale-token",
       platform: "ios",
+      isVoip: true,
     });
     push.rejectAs = "invalid";
 
@@ -565,6 +568,7 @@ describe("N/O/P/Q — security", () => {
       actorId: s.parentId,
       token: "parent-device",
       platform: "ios",
+      isVoip: true,
     });
   });
 
@@ -639,11 +643,21 @@ describe("N/O/P/Q — security", () => {
     await notifications.dispatchDue();
 
     const [message] = push.sent;
+    // W8-W1 added `callId` for call notifications only, approved as AD-3: the
+    // native call layer must report a SPECIFIC call to CallKit and later
+    // correlate an accept or a decline to it. It is data-only, never rendered,
+    // and authorizes nothing -- accept/decline/end each re-run the full server
+    // chain. Every other assertion in this test is unchanged.
     expect(Object.keys(message.data).sort()).toEqual([
+      "callId",
       "conversationId",
       "eventType",
       "notificationId",
     ]);
+    // And it is the call this notification is about, not an arbitrary string.
+    expect(message.data.callId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
 
     // The envelope's `token` is the DESTINATION -- the device address the
     // provider needs -- not payload content. It must be the registered device
@@ -683,5 +697,7 @@ describe("N/O/P/Q — security", () => {
     expect(message.data.eventType).toBe("call_started");
     expect(message.data.conversationId).toEqual(expect.any(String));
     expect(message.data.notificationId).toEqual(expect.any(String));
+    // Which call, so the native layer can report THIS one to CallKit.
+    expect(message.data.callId).toEqual(expect.any(String));
   });
 });
