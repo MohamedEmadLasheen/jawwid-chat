@@ -399,5 +399,32 @@
         "type": "String"
       }
     }
-  }
+  },
+  "storyRingUnviewed": "Unviewed story: {label}",
+  "@storyRingUnviewed": {
+    "description": "Accessible label for one ring in the stories rail.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "storyRingViewed": "Viewed story: {label}",
+  "@storyRingViewed": {
+    "description": "Accessible label for one ring in the stories rail.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "storyClose": "Close story",
+  "storyPrevious": "Previous story",
+  "storyNext": "Next story",
+  "storyImageLabel": "Story image",
+  "storyMediaFailed": "This picture could not be loaded.",
+  "storyUnavailable": "This story is no longer available.",
+  "storyVideoLabel": "Story video",
+  "storyVideoFailed": "This video could not be played.",
+  "storyVideoRetry": "Try again"
 }

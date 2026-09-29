@@ -14,11 +14,11 @@ import 'package:jawwid_chat/features/conversations/presentation/chat_filter_bar.
 import 'package:jawwid_chat/features/conversations/presentation/chat_search_field.dart';
 import 'package:jawwid_chat/features/conversations/presentation/chats_screen.dart';
 import 'package:jawwid_chat/features/conversations/presentation/conversation_tile.dart';
-import 'package:jawwid_chat/features/stories/application/stories_controller.dart';
-import 'package:jawwid_chat/features/stories/domain/story.dart';
 import 'package:jawwid_chat/features/stories/presentation/stories_rail.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/user_role.dart';
+
+import '../stories/fake_story_repository.dart';
 
 /// The rendered Chats screen, in both languages.
 ///
@@ -230,19 +230,22 @@ void main() {
   });
 
   group('nothing on this screen is fabricated', () {
-    testWidgets('no stories rail renders while no story feature exists',
+    testWidgets('an empty story feed costs no vertical space at all',
         (tester) async {
       await tester.pumpWidget(
-        harness(role: UserRole.parent, child: const ChatsScreen()),
+        harness(
+          role: UserRole.parent,
+          child: const ChatsScreen(),
+          extra: [
+            storyRepositoryProvider.overrideWithValue(FakeStoryRepository()),
+          ],
+        ),
       );
       await tester.pumpAndSettle();
 
-      // Nothing of it is visible — no placeholder circles, no "Your story" button, no
-      // skeleton implying data is on the way.
+      // No placeholder circles, no skeleton implying data is on the way.
       expect(find.byType(StoriesRail), findsNothing);
 
-      // It is still mounted (offstage, at zero height), which is what lets it appear the
-      // moment a real source supplies rings without any change to this screen.
       final offstage = find.byType(StoriesRail, skipOffstage: false);
       expect(offstage, findsOneWidget);
       expect(
@@ -252,28 +255,36 @@ void main() {
       );
     });
 
-    testWidgets('the rail renders properly the moment real rings exist',
+    testWidgets('a build with NO story backend also shows nothing, and does not error',
         (tester) async {
-      // Proves the seam works, without any fixture reaching the shipped app.
+      // The development composition root registers no StoryRepository. The rail must be
+      // absent rather than an error band above the chat list: stories are secondary, and a
+      // missing wiring must never stop somebody reading their messages.
+      await tester.pumpWidget(
+        harness(role: UserRole.parent, child: const ChatsScreen()),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(StoriesRail), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the rail renders when the feed returns stories', (tester) async {
       await tester.pumpWidget(
         harness(
           role: UserRole.parent,
           child: const ChatsScreen(),
           extra: [
-            storyRingsProvider.overrideWithValue([
-              StoryRing(
-                id: 's1',
-                authorName: 'أحمد',
-                postedAt: DateTime.utc(2026, 9, 5, 9),
-              ),
-            ]),
+            storyRepositoryProvider.overrideWithValue(
+              FakeStoryRepository(stories: [story(id: 's1', title: 'أهلاً')]),
+            ),
           ],
         ),
       );
       await tester.pumpAndSettle();
 
       expect(tester.getSize(find.byType(StoriesRail)).height, greaterThan(0));
-      expect(find.text('أحمد'), findsWidgets);
+      expect(find.text('أهلاً'), findsWidgets);
     });
 
     testWidgets('there is no compose or new-chat affordance', (tester) async {

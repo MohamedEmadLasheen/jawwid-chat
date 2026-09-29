@@ -1,7 +1,7 @@
 # Jawwid Chat — Stories
 
-Status: **BACKEND + ADMIN PUBLISHING IMPLEMENTED** · Flutter feed/viewer DEFERRED (§8)
-Landed 2026-09-28, hardened 2026-09-29 · Migration `20260928120000_chat_stories.sql`
+Status: **IMPLEMENTED END TO END** · backend + admin publishing + Flutter read client
+Landed 2026-09-28, hardened 2026-09-29, Flutter client 2026-09-29 · Migration `20260928120000_chat_stories.sql`
 Companions: `../security/RLS-STRATEGY.md`, `../architecture/AUTHORIZATION-MODEL.md`,
 `../contracts/API-CONTRACT.md`, `../contracts/DOMAIN-VOCABULARY.md`
 
@@ -232,22 +232,85 @@ open a viewer list, remove with a reason. Registered as nav area `stories`, visi
 to `admin`, `coverage` and `manager` — mirroring `canPublishStory`, because a nav
 entry that hid a page the server would serve is a worse lie than one that shows it.
 
-**Flutter** is **not wired in this change.** The mobile client authenticates only
-as `parent | teacher`, so it can never publish; its role is a read-only feed and
-viewer. `lib/features/stories/` remains the inert seam it has been since `c36ae46`
-— `storyRingsProvider` returns `const []`, the rail renders zero pixels, and
-`test/features/conversations/chats_screen_test.dart` asserts that it does. No dead
-controls, nothing fake. Wiring it is a follow-up:
+**Flutter** (`lib/features/stories/`) is the read client. It consumes exactly two routes —
+`GET /stories/feed` and `POST /stories/:id/view` — and nothing else, because nothing else is
+available to a `parent` or `teacher`.
 
-1. `StoryRepository` + `HttpStoryRepository` over `GET /stories/feed` and
-   `POST /stories/:id/view`.
-2. Override `storyRingsProvider` at the composition root (`lib/app/bootstrap.dart`).
-3. A full-screen viewer route with progress, advance and pause.
-4. `canPostStoryProvider` stays `false` — this client cannot publish.
+| Piece | File |
+|---|---|
+| Model, mirroring `StoryFeedItem` | `lib/shared/models/story.dart` |
+| Video playback seam | `lib/core/media/story_video_player.dart` |
+| Repository interface | `lib/core/data/repositories.dart` (`StoryRepository`) |
+| HTTP implementation | `lib/core/data/http/http_story_repository.dart` |
+| Wire mapping | `WireMappers.story` |
+| Feed state, ordering, view recording | `lib/features/stories/application/stories_controller.dart` |
+| The rail | `lib/features/stories/presentation/stories_rail.dart` |
+| The full-screen viewer | `lib/features/stories/presentation/story_viewer_screen.dart` |
+| Route | `Routes.story(id)` → `/stories/:storyId` |
 
-Deferred because no Dart toolchain was available to compile or test it in the
-session that built the backend, and shipping unverified Dart is worse than
-shipping a seam that tells the truth.
+Decisions worth knowing before changing it:
+
+* **The rail renders nothing unless there are stories.** Loading, empty, failed and
+  "no repository registered" all look the same from outside: absent. The controller keeps them
+  apart internally so a missing wiring cannot masquerade as a quiet academy. Retry is the Chats
+  screen's existing pull-to-refresh, which now refreshes conversations and stories together.
+* **One ring per story, not per author.** The feed carries no author on purpose, so grouping by
+  publisher would yield exactly one ring and discard the per-story `viewed` flag. Each ring is
+  labelled with the story's own title, falling back to the academy name from localisation — the
+  publisher identity is never invented from a field the contract does not have.
+* **No publishing affordance at all.** No "your story" entry, no composer, no delete. This
+  client cannot authenticate as a role that may publish, so any such control could only fail.
+* **Views are recorded on ARRIVAL in the viewer**, never on feed load and never on a ring tap.
+  The ring updates optimistically so it stops looking unread immediately; the server stays
+  authoritative and the next refresh reconciles.
+* **Expiry is respected, not re-implemented.** The viewer leaves a story whose `expires_at` has
+  passed rather than requesting a view the server would refuse, and a refused view
+  (`STORY_EXPIRED` / `STORY_DELETED` / `STORY_NOT_FOUND`) closes the story and refetches the
+  feed.
+* **A deep link waits for the feed.** `/stories/:id` is a real route, so a cold start can land
+  there before the feed loads. It shows a spinner rather than declaring the story missing — the
+  first version read the list in `initState`, found it empty, and lied.
+* **Media is passed through, never constructed.** The signed URL is handed to `Image.network`
+  or to the video seam exactly as received — no bucket, no key, no path building. A lapsed
+  signature or a purged object reaches the reader as "this picture could not be loaded" or
+  "this video could not be played", not a blank.
+
+### Video
+
+Video stories **play inline**, through the seam in `lib/core/media/story_video_player.dart`.
+
+`video_player` (flutter.dev's own package) is the only dependency this feature added, and it
+exists for exactly one reason: the backend accepts `video/mp4`, `quicktime` and `webm`, so a
+video story has to actually play. Nothing else in the app plays video — a video ATTACHMENT is
+deliberately treated as a file and handed to the platform — so there was no existing capability
+to reuse.
+
+The package is reached only through `StoryVideoPlayer`, so no widget names a platform type and
+no test touches a platform channel. One player instance is owned by the viewer's `State` and
+disposed with it; `load` releases the previous controller before building the next, so two
+decoders are never alive at once.
+
+**Two advance mechanisms, deliberately not one:**
+
+| Story kind | Progress segment | Advances when |
+|---|---|---|
+| image, or words only | `AnimationController` over `imageDuration` (5s) | the animation completes |
+| video | real `position / duration` from the player | **playback completes** |
+
+A video is never given a timer. A fixed one would be wrong in both directions: it would cut a
+40-second video short, and it would skip past one that stalled buffering. A video that fails to
+initialise is **not** treated as completed — it shows the failure with a retry, and the story
+stays put.
+
+Every automatic advance passes through one gate (`_advanceFrom`) which drops the request unless
+the story asking is still the current one, the viewer is still mounted, and it is not already
+leaving. That is what makes a late callback — a video completing just after the reader tapped
+next — harmless rather than a double advance.
+
+**Lifecycle.** Backgrounding the app pauses a video and stops an image's clock; resuming
+restarts it, unless the reader is holding the screen. Closing the viewer pauses playback,
+cancels the status subscription and disposes the player. There is no `Timer` anywhere in the
+viewer: an `AnimationController` and a stream subscription both die with the `State`.
 
 ## 9. Relationship to the abandoned Phase 5 lineage
 
@@ -294,9 +357,13 @@ are jpeg/png/webp/heic and mp4/quicktime/webm.
 | `apps/api/test/integration/stories-hardening.spec.ts` | media after access ends, retention on every state, full cross-tenant matrix, expiry with the sweeper off, empty audiences, fan-out limits, failure isolation (34) |
 | `db/tests/story_rls.sql` | every policy, run as `authenticated` (36 assertions) |
 | `apps/admin-web/src/features/stories/StoriesPage.test.tsx` | the console's UI contract (16) |
+| `test/features/stories/stories_rail_test.dart` | the rail: absence, ordering, read state, no publishing affordance, refresh (13) |
+| `test/features/stories/story_viewer_test.dart` | the viewer: opening, view tracking, navigation, progress, image and video media, video lifecycle, mixed image/video sequences, localisation (44) |
+| `test/core/data/http/stories_over_http_test.dart` | the client's half of the wire contract, over real sockets (12) |
 
 All of it runs in CI on every pull request: `api` (typecheck + unit), `admin-web`
 (typecheck + tests + build), `migrations` (apply from empty, G-19 idempotency,
 schema acceptance, identity and BR-1 invariants, **story RLS**, integration suite).
-The `mobile` job reports BLOCKED, which is the standing record of why §8 is
-deferred.
+The `mobile` job reports BLOCKED on the CI hosts, where no Flutter toolchain is installed; the
+Flutter suite (545 tests) runs locally on a host that has one. Closing that gap is a CI concern,
+not a code one.

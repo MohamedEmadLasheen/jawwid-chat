@@ -399,5 +399,32 @@
         "type": "String"
       }
     }
-  }
+  },
+  "storyRingUnviewed": "حالة غير مقروءة: {label}",
+  "@storyRingUnviewed": {
+    "description": "Accessible label for one ring in the stories rail.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "storyRingViewed": "حالة مقروءة: {label}",
+  "@storyRingViewed": {
+    "description": "Accessible label for one ring in the stories rail.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "storyClose": "إغلاق الحالة",
+  "storyPrevious": "الحالة السابقة",
+  "storyNext": "الحالة التالية",
+  "storyImageLabel": "صورة الحالة",
+  "storyMediaFailed": "لم نتمكّن من تحميل هذه الصورة.",
+  "storyUnavailable": "هذه الحالة لم تعد متاحة.",
+  "storyVideoLabel": "فيديو الحالة",
+  "storyVideoFailed": "لم نتمكّن من تشغيل هذا الفيديو.",
+  "storyVideoRetry": "إعادة المحاولة"
 }

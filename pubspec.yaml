@@ -54,6 +54,15 @@ dependencies:
   file_selector: ^1.1.0
   url_launcher: ^6.3.2
 
+  # Story video. The ONLY reason this is here: the Stories backend accepts
+  # video/mp4, quicktime and webm, so a video story must actually play -- and
+  # nothing else in this app plays video (a video ATTACHMENT is deliberately a
+  # file, opened by the platform). flutter.dev's own package, which is the same
+  # bar every other dependency here is held to, and it is reached only through
+  # the seam in lib/core/media/story_video_player.dart so no test touches a
+  # platform channel.
+  video_player: ^2.14.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

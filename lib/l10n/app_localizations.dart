@@ -1314,6 +1314,72 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'{size} MB'**
   String fileSizeMb(String size);
+
+  /// Accessible label for one ring in the stories rail.
+  ///
+  /// In en, this message translates to:
+  /// **'Unviewed story: {label}'**
+  String storyRingUnviewed(String label);
+
+  /// Accessible label for one ring in the stories rail.
+  ///
+  /// In en, this message translates to:
+  /// **'Viewed story: {label}'**
+  String storyRingViewed(String label);
+
+  /// No description provided for @storyClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close story'**
+  String get storyClose;
+
+  /// No description provided for @storyPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous story'**
+  String get storyPrevious;
+
+  /// No description provided for @storyNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next story'**
+  String get storyNext;
+
+  /// No description provided for @storyImageLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Story image'**
+  String get storyImageLabel;
+
+  /// No description provided for @storyMediaFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'This picture could not be loaded.'**
+  String get storyMediaFailed;
+
+  /// No description provided for @storyUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This story is no longer available.'**
+  String get storyUnavailable;
+
+  /// No description provided for @storyVideoLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Story video'**
+  String get storyVideoLabel;
+
+  /// No description provided for @storyVideoFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'This video could not be played.'**
+  String get storyVideoFailed;
+
+  /// No description provided for @storyVideoRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get storyVideoRetry;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

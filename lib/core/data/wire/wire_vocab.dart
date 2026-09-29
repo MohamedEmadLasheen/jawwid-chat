@@ -72,6 +72,18 @@ abstract final class WireErrors {
   static const replyTargetCrossConversation = 'COMM.REPLY_TARGET_CROSS_CONVERSATION';
   static const emptyMessage = 'COMM.EMPTY_MESSAGE';
 
+  // Stories. All four are final states or standing refusals, never transient, so the client
+  // must not retry any of them -- it refetches the feed instead, which is a different
+  // request answering a different question.
+  static const storyNotFound = 'COMM.STORY_NOT_FOUND';
+  static const storyExpired = 'COMM.STORY_EXPIRED';
+  static const storyDeleted = 'COMM.STORY_DELETED';
+  static const storyCannotRead = 'COMM.STORY_CANNOT_READ';
+
+  /// Story codes that mean "this story is over". The viewer reacts to these by leaving the
+  /// story and refreshing the feed, rather than by showing an error the reader cannot act on.
+  static const storyGone = <String>{storyNotFound, storyExpired, storyDeleted};
+
   /// Codes that mean "this will never succeed, stop asking".
   static const terminal = <String>{
     br1TeacherParentDirect,
@@ -85,5 +97,9 @@ abstract final class WireErrors {
     messageNotFound,
     replyTargetCrossConversation,
     emptyMessage,
+    storyNotFound,
+    storyExpired,
+    storyDeleted,
+    storyCannotRead,
   };
 }

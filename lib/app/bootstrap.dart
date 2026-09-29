@@ -5,6 +5,7 @@ import '../core/data/fake_repositories.dart';
 import '../core/data/http/http_conversation_repository.dart';
 import '../core/data/http/http_group_repository.dart';
 import '../core/data/http/http_message_repository.dart';
+import '../core/data/http/http_story_repository.dart';
 import '../core/data/http/unavailable_auth_repository.dart';
 import '../core/errors/app_error.dart';
 import '../core/network/actor_identity.dart';
@@ -82,6 +83,13 @@ List<Override> _httpOverrides({required String debugActorId}) {
     ),
     groupRepositoryProvider.overrideWithValue(
       HttpGroupRepository(client: client),
+    ),
+    // Stories are read-only here. The development composition root below registers no
+    // implementation on purpose -- a fixture story is indistinguishable on screen from a real
+    // publication, and this feature's contract is that what a reader sees was genuinely
+    // published to them.
+    storyRepositoryProvider.overrideWithValue(
+      HttpStoryRepository(client: client),
     ),
     authControllerProvider.overrideWith(
       () => AuthController(
