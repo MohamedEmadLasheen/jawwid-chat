@@ -94,34 +94,63 @@ export class OutboxWorker {
       }
 
       /**
-       * Every call event routes to the conversation room, which is exactly the
-       * set of actors AuthorizationService let subscribe -- so the caller and
-       * the callee receive it and nobody else does. Routing is decided here,
-       * from server-derived fields; no client picks its audience.
+       * THE CALL LIFECYCLE GOES TO THE PARTICIPANTS, not to the conversation.
        *
-       * Listed explicitly rather than left to `default` on purpose. These four
-       * are the lifecycle a client follows to render a call, and the two that
-       * mattered most -- accepted and declined -- were the ones being dropped.
-       * An explicit case makes the routing of a call event a decision somebody
-       * made rather than a fall-through.
+       * It used to go to `conversation:<id>`, and that was wrong in two
+       * directions at once (W8-W0b):
+       *
+       * TOO NARROW. A socket is only in a conversation room after it has sent
+       * `conversation.subscribe`, and a client cannot subscribe to a call it
+       * does not yet know exists. A phone that was asleep, backgrounded or
+       * terminated has subscribed to nothing, so the one event that has to
+       * reach it -- `call.incoming` -- was the one it could not receive.
+       *
+       * TOO BROAD. The conversation room is every member who passed `canRead`,
+       * and `CallService.start` deliberately excludes SILENT members from a
+       * call's participants. A silent member was therefore told about a call
+       * they were not part of and could not join.
+       *
+       * So the recipients are the call's own participant rows -- the set the
+       * server derived when it authorized the call, under PD-6, PD-2 and C-4 --
+       * and each one is reached in its own actor room, which
+       * `RealtimeGateway.handleConnection` joins from the RESOLVED actor. A
+       * forged handshake cannot put a socket in someone else's actor room, so
+       * no client can name its own audience here or anywhere downstream.
+       *
+       * Media presence is NOT part of this. `participant_joined` /
+       * `participant_left` say what LiveKit observed, they are only meaningful
+       * to a client already in the call, and they keep the conversation-room
+       * routing they have always had.
        */
       case CommEvent.CALL_INCOMING:
       case CommEvent.CALL_ACCEPTED:
       case CommEvent.CALL_DECLINED:
-      case CommEvent.CALL_ENDED:
-      case CommEvent.CALL_PARTICIPANT_JOINED:
-      case CommEvent.CALL_PARTICIPANT_LEFT: {
+      case CommEvent.CALL_ENDED: {
         // Push, for the two lifecycle moments that have a seeded rule. A socket
         // only reaches a client that is already connected; these are how a call
         // reaches a phone in someone's pocket.
         if (type === CommEvent.CALL_INCOMING) await this.notifyIncomingCall(payload);
         if (type === CommEvent.CALL_ENDED) await this.notifyMissedCall(payload);
 
+        const participants = await this.callParticipantIds(payload);
+        if (participants.length === 0) {
+          // Unroutable, and said out loud. This is the shape of the defect that
+          // hid here for so long: CALL_ACCEPTED and CALL_DECLINED carried no
+          // conversationId, fell through to `default`, and were discarded
+          // without a trace while the outbox row was marked `published`.
+          this.log.error(
+            `${type} resolved no call participants and was NOT delivered`,
+          );
+          return;
+        }
+        await this.realtime.toUsers(participants, type, payload as never);
+        return;
+      }
+
+      case CommEvent.CALL_PARTICIPANT_JOINED:
+      case CommEvent.CALL_PARTICIPANT_LEFT: {
+        // Media presence, unchanged: the conversation room, exactly as before.
         if (!conversationId) {
-          // Unroutable. This is the shape of the defect that hid here for so
-          // long: CALL_ACCEPTED and CALL_DECLINED carried no conversationId,
-          // fell through to `default`, and were discarded without a trace while
-          // the outbox row was marked `published`. Now it is loud.
           this.log.error(
             `${type} has no conversationId and cannot be routed; it was NOT delivered`,
           );
@@ -150,6 +179,39 @@ export class OutboxWorker {
       select: { actorId: true },
     });
     return members.map((m) => m.actorId);
+  }
+
+  /**
+   * WHO MAY RECEIVE A CALL EVENT. The single source of that answer.
+   *
+   * It reads `chat.call_participant` for the call the event names, and nothing
+   * else. Not the payload's `conversationId`, not conversation membership, not
+   * anything a client sent: those rows were written by `CallService.start`
+   * from live, active, NON-SILENT members after the relationship predicate
+   * (PD-6), PD-2 and C-4 had all been satisfied. Reusing them inherits that
+   * decision instead of re-deriving it, which is the only way the two can
+   * never drift apart.
+   *
+   * A call that cannot be found yields nobody, and the caller logs and drops
+   * the event. Delivering to a conversation because a call row is missing
+   * would be exactly the widening this exists to prevent.
+   *
+   * The INITIATOR IS INCLUDED. They are a participant row like any other, and
+   * they are the one who most needs `call.accepted` and `call.ended` -- the
+   * caller has to learn the outcome. (Push is different: `notifyIncomingCall`
+   * skips them, because a person does not need telling they are calling.)
+   */
+  private async callParticipantIds(
+    payload: Record<string, unknown>,
+  ): Promise<string[]> {
+    const callId = payload.callId;
+    if (typeof callId !== 'string' || callId.length === 0) return [];
+
+    const participants = await this.prisma.callParticipant.findMany({
+      where: { callId },
+      select: { actorId: true },
+    });
+    return participants.map((p) => p.actorId);
   }
 
   /**

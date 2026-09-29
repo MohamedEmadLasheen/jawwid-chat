@@ -97,6 +97,26 @@ async function drain(): Promise<Delivery[]> {
   return published.deliveries;
 }
 
+/**
+ * The rooms one event reached, asserting no actor was reached TWICE.
+ *
+ * This is what replaced `toHaveLength(1)` in the idempotency tests. One outbox
+ * row now produces one delivery per participant, so a raw count no longer says
+ * anything about duplication -- and the set check is stronger than the count
+ * ever was: a length of 1 could never have caught the same actor being
+ * delivered to twice, and this does.
+ */
+function roomsOf(deliveries: Delivery[], event: string): Set<string> {
+  const rooms = deliveries.filter((d) => d.event === event).map((d) => d.room);
+  expect(new Set(rooms).size).toBe(rooms.length);
+  return new Set(rooms);
+}
+
+/** The actor rooms a direct call's participants are reached in. */
+function directCallRooms(): Set<string> {
+  return new Set([room.actor(s.parentId), room.actor(s.teacherId)]);
+}
+
 async function directCall() {
   const conv = await g.conversations.getOrCreateDirect(s.parentId, s.teacherId);
   const { callId } = await g.calls.start(conv.id, s.teacherId);
@@ -127,7 +147,7 @@ beforeEach(async () => {
 
 // -------------------------------------------------------------------------
 describe("the lifecycle a client can follow", () => {
-  it("1/2. starting a call delivers call.incoming to the conversation room", async () => {
+  it("1/2. starting a call delivers call.incoming to every participant's actor room", async () => {
     const { conversationId, callId } = await directCall();
 
     const deliveries = await drain();
@@ -135,8 +155,13 @@ describe("the lifecycle a client can follow", () => {
       (d) => d.event === CommEvent.CALL_INCOMING,
     );
 
-    expect(incoming).toHaveLength(1);
-    expect(incoming[0].room).toBe(room.conversation(conversationId));
+    // ONE DELIVERY PER PARTICIPANT, and the rooms are theirs -- not the
+    // conversation's. A client cannot subscribe to a call it does not yet know
+    // exists, so the room that has to carry this is the one the gateway joined
+    // from the authenticated actor.
+    expect(incoming).toHaveLength(2);
+    expect(new Set(incoming.map((d) => d.room))).toEqual(directCallRooms());
+    expect(incoming[0].room).not.toBe(room.conversation(conversationId));
     expect(incoming[0].payload).toEqual({
       callId,
       conversationId,
@@ -156,8 +181,11 @@ describe("the lifecycle a client can follow", () => {
     const accepted = deliveries.filter(
       (d) => d.event === CommEvent.CALL_ACCEPTED,
     );
-    expect(accepted).toHaveLength(1);
-    expect(accepted[0].room).toBe(room.conversation(conversationId));
+    // The CALLER needs this one most -- it is how they learn they were
+    // answered -- so it reaches both participants, each in their own room.
+    expect(accepted).toHaveLength(2);
+    expect(new Set(accepted.map((d) => d.room))).toEqual(directCallRooms());
+    expect(accepted[0].room).not.toBe(room.conversation(conversationId));
     expect(accepted[0].payload).toEqual({
       callId,
       conversationId,
@@ -175,8 +203,9 @@ describe("the lifecycle a client can follow", () => {
     const declined = deliveries.filter(
       (d) => d.event === CommEvent.CALL_DECLINED,
     );
-    expect(declined).toHaveLength(1);
-    expect(declined[0].room).toBe(room.conversation(conversationId));
+    expect(declined).toHaveLength(2);
+    expect(new Set(declined.map((d) => d.room))).toEqual(directCallRooms());
+    expect(declined[0].room).not.toBe(room.conversation(conversationId));
     expect(declined[0].payload).toEqual({
       callId,
       conversationId,
@@ -193,8 +222,9 @@ describe("the lifecycle a client can follow", () => {
     const deliveries = await drain();
 
     const ended = deliveries.filter((d) => d.event === CommEvent.CALL_ENDED);
-    expect(ended).toHaveLength(1);
-    expect(ended[0].room).toBe(room.conversation(conversationId));
+    expect(ended).toHaveLength(2);
+    expect(new Set(ended.map((d) => d.room))).toEqual(directCallRooms());
+    expect(ended[0].room).not.toBe(room.conversation(conversationId));
     expect(ended[0].payload).toMatchObject({
       callId,
       conversationId,
@@ -210,15 +240,21 @@ describe("the lifecycle a client can follow", () => {
     const deliveries = await drain();
     const sequence = deliveries.filter((d) => d.payload?.callId === callId);
 
-    expect(sequence.map((d) => d.event)).toEqual([
+    // Each event now lands once per participant, so the ORDER is asserted on
+    // the distinct events rather than on the delivery count.
+    const order: string[] = [];
+    for (const d of sequence) {
+      if (order[order.length - 1] !== d.event) order.push(d.event);
+    }
+    expect(order).toEqual([
       CommEvent.CALL_INCOMING,
       CommEvent.CALL_ACCEPTED,
       CommEvent.CALL_ENDED,
     ]);
-    // Every one of them routable, and to the same room.
-    expect(new Set(sequence.map((d) => d.room))).toEqual(
-      new Set([room.conversation(conversationId)]),
-    );
+    // Every one of them routable, and to the participants -- nobody else.
+    expect(new Set(sequence.map((d) => d.room))).toEqual(directCallRooms());
+    expect(sequence.every((d) => d.room !== room.conversation(conversationId)))
+      .toBe(true);
   });
 
   it("the declined call is a complete sequence too", async () => {
@@ -241,10 +277,18 @@ describe("the lifecycle a client can follow", () => {
     // says who refused, the other says the call is over, and no consumer needs
     // them ordered. Asserting an order here would be asserting a tie-break the
     // database does not owe us.
-    expect(sequence.map((d) => d.event).sort()).toEqual(
+    expect([...new Set(sequence.map((d) => d.event))].sort()).toEqual(
       [CommEvent.CALL_INCOMING, CommEvent.CALL_DECLINED, CommEvent.CALL_ENDED].sort(),
     );
-    expect(sequence).toHaveLength(3);
+    // Three events, each reaching both participants exactly once.
+    expect(sequence).toHaveLength(6);
+    for (const event of [
+      CommEvent.CALL_INCOMING,
+      CommEvent.CALL_DECLINED,
+      CommEvent.CALL_ENDED,
+    ]) {
+      expect(roomsOf(sequence, event)).toEqual(directCallRooms());
+    }
   });
 });
 
@@ -398,7 +442,7 @@ describe("13/14. transactional delivery", () => {
       deliveries.some(
         (d) =>
           d.event === CommEvent.CALL_ACCEPTED &&
-          d.room === room.conversation(conversationId),
+          d.room === room.actor(s.parentId),
       ),
     ).toBe(true);
   });
@@ -411,9 +455,9 @@ describe("18. retry and idempotency", () => {
     await g.calls.accept(callId, s.parentId);
 
     const first = await drain();
-    expect(
-      first.filter((d) => d.event === CommEvent.CALL_ACCEPTED),
-    ).toHaveLength(1);
+    // Each participant reached exactly once -- `roomsOf` fails if any actor
+    // appears twice, which is the duplication this test is about.
+    expect(roomsOf(first, CommEvent.CALL_ACCEPTED)).toEqual(directCallRooms());
 
     // The row is claimed with a conditional update, so a second drain finds
     // nothing to publish.
@@ -431,7 +475,15 @@ describe("18. retry and idempotency", () => {
         if (attempts === 1) throw new Error("transient realtime failure");
         await published.toThread(threadId, event as string, payload);
       },
-      toUsers: async () => undefined,
+      // Call lifecycle events travel by toUsers now, so THIS is the method
+      // that has to fail for the retry to be exercised at all. Forwarding it
+      // (rather than discarding, as it did while call events went by
+      // toThread) is what lets the re-delivery be observed.
+      toUsers: async (actorIds, event, payload) => {
+        attempts += 1;
+        if (attempts === 1) throw new Error("transient realtime failure");
+        await published.toUsers(actorIds, event as string, payload);
+      },
     };
     const flakyWorker = new OutboxWorker(
       g.prisma,
@@ -456,8 +508,8 @@ describe("18. retry and idempotency", () => {
 
     // Delivered exactly once despite the failure, and the call state never moved.
     expect(
-      published.deliveries.filter((d) => d.event === CommEvent.CALL_ACCEPTED),
-    ).toHaveLength(1);
+      roomsOf(published.deliveries, CommEvent.CALL_ACCEPTED),
+    ).toEqual(directCallRooms());
     const call = await g.prisma.call.findUnique({ where: { id: callId } });
     expect(call?.status).toBe("active");
   });
@@ -485,18 +537,15 @@ describe("18. retry and idempotency", () => {
     const sequence = (await drain()).filter(
       (d) => d.payload?.callId === callId,
     );
-    expect(
-      sequence.filter((d) => d.event === CommEvent.CALL_ACCEPTED),
-    ).toHaveLength(1);
-    expect(
-      sequence.filter((d) => d.event === CommEvent.CALL_ENDED),
-    ).toHaveLength(1);
+    // One transition, one event -- now read as "each participant once".
+    expect(roomsOf(sequence, CommEvent.CALL_ACCEPTED)).toEqual(directCallRooms());
+    expect(roomsOf(sequence, CommEvent.CALL_ENDED)).toEqual(directCallRooms());
   });
 });
 
 // -------------------------------------------------------------------------
 describe("10/11/12. routing is the security boundary", () => {
-  it("every call event goes to the conversation room and nowhere else", async () => {
+  it("every call event goes to a participant's actor room and nowhere else", async () => {
     const { conversationId, callId } = await directCall();
     await g.calls.accept(callId, s.parentId);
     await g.calls.end(callId, s.teacherId);
@@ -507,15 +556,23 @@ describe("10/11/12. routing is the security boundary", () => {
 
     expect(sequence.length).toBeGreaterThan(0);
     for (const delivery of sequence) {
-      expect(delivery.room).toBe(room.conversation(conversationId));
-      // Never an actor room: a call event is addressed to the conversation, so
-      // there is no per-actor fan-out that could be aimed at the wrong actor.
-      expect(delivery.room.startsWith("actor:")).toBe(false);
+      // A PARTICIPANT'S OWN ROOM, and the gateway joins that room from the
+      // resolved actor -- so a forged handshake cannot land a socket in it.
+      expect(directCallRooms().has(delivery.room)).toBe(true);
+      // NEVER the conversation room. That room is every member who passed
+      // canRead, which is a wider set than the call's participants.
+      expect(delivery.room).not.toBe(room.conversation(conversationId));
+      expect(delivery.room.startsWith("actor:")).toBe(true);
     }
   });
 
-  it("a second conversation's call never routes into the first one's room", async () => {
-    const { conversationId: first } = await directCall();
+  it("a second call reaches ITS participants only, never the first call's", async () => {
+    // The stronger form of the old cross-conversation check. The teacher is a
+    // member of the first conversation and a participant of the first call;
+    // they are neither for the second. Under conversation-room routing the
+    // guarantee was "a different room"; under participant routing it is "a
+    // different set of PEOPLE", which is the property that actually matters.
+    const { callId: firstCall } = await directCall();
     const otherConv = await g.conversations.getOrCreateDirect(
       s.parentId,
       s.ownerId,
@@ -526,12 +583,140 @@ describe("10/11/12. routing is the security boundary", () => {
     const otherDeliveries = deliveries.filter(
       (d) => d.payload?.callId === otherCall,
     );
+    const firstDeliveries = deliveries.filter(
+      (d) => d.payload?.callId === firstCall,
+    );
 
     expect(otherDeliveries.length).toBeGreaterThan(0);
-    for (const delivery of otherDeliveries) {
-      expect(delivery.room).toBe(room.conversation(otherConv.id));
-      expect(delivery.room).not.toBe(room.conversation(first));
-    }
+    expect(new Set(otherDeliveries.map((d) => d.room))).toEqual(
+      new Set([room.actor(s.parentId), room.actor(s.ownerId)]),
+    );
+    // The teacher is on the FIRST call and hears nothing of the second.
+    expect(
+      otherDeliveries.some((d) => d.room === room.actor(s.teacherId)),
+    ).toBe(false);
+    // And the owner, who is on the second, hears nothing of the first.
+    expect(
+      firstDeliveries.some((d) => d.room === room.actor(s.ownerId)),
+    ).toBe(false);
+  });
+
+  it("a SILENT conversation member is not a participant and hears nothing", async () => {
+    // The widening the old routing had. `conversation:<id>` is every member who
+    // passed canRead; `CallService.start` excludes silent members from the
+    // participant set. So a silent member used to be told about a call they
+    // were not on and could not join. Now membership alone delivers nothing.
+    const group = await g.conversations.ensureStudentGroup(
+      s.learnerId,
+      s.ownerId,
+    );
+    await g.prisma.conversationMember.updateMany({
+      where: { conversationId: group.id, actorId: s.parentId },
+      data: { isSilent: true },
+    });
+
+    const { callId } = await g.calls.start(group.id, s.ownerId);
+    const deliveries = (await drain()).filter(
+      (d) => d.payload?.callId === callId,
+    );
+
+    expect(deliveries.length).toBeGreaterThan(0);
+    expect(
+      deliveries.some((d) => d.room === room.actor(s.parentId)),
+    ).toBe(false);
+    // And the participant rows agree -- one derivation, not two.
+    const participants = await g.prisma.callParticipant.findMany({
+      where: { callId },
+      select: { actorId: true },
+    });
+    expect(participants.map((p) => p.actorId)).not.toContain(s.parentId);
+    expect(new Set(deliveries.map((d) => d.room))).toEqual(
+      new Set(participants.map((p) => room.actor(p.actorId))),
+    );
+  });
+
+  it("an actor outside the call receives nothing, however it is asked for",
+    async () => {
+      // Non-participants, each unrelated to this call in a different way.
+      const { callId } = await directCall();
+      await g.calls.accept(callId, s.parentId);
+      await g.calls.end(callId, s.teacherId);
+
+      const deliveries = (await drain()).filter(
+        (d) => d.payload?.callId === callId,
+      );
+
+      for (const outsider of [
+        s.otherParentId,
+        s.unrelatedTeacherId,
+        s.ownerId,
+        s.otherAdminId,
+      ]) {
+        expect(
+          deliveries.some((d) => d.room === room.actor(outsider)),
+        ).toBe(false);
+      }
+    });
+
+  it("the recipient set is the call's own rows, not the payload", async () => {
+    // THE INVARIANT THIS WORKSTREAM EXISTS FOR. An outbox payload naming a
+    // different conversation -- the shape a forged or replayed event would
+    // take -- cannot redirect delivery, because the audience is read from
+    // chat.call_participant for the call id and from nothing else.
+    const { callId } = await directCall();
+    const elsewhere = await g.conversations.getOrCreateDirect(
+      s.parentId,
+      s.ownerId,
+    );
+    await g.prisma.outboxEvent.updateMany({
+      where: { type: CommEvent.CALL_INCOMING, status: "pending" },
+      data: {
+        payload: {
+          callId,
+          conversationId: elsewhere.id,
+          type: "direct",
+          initiatorId: s.otherAdminId,
+          initiatorName: "forged",
+        },
+      },
+    });
+
+    const deliveries = (await drain()).filter(
+      (d) => d.event === CommEvent.CALL_INCOMING,
+    );
+
+    // The forged conversationId and initiatorId changed NOTHING about who was
+    // reached: still the two real participants, still their own actor rooms.
+    expect(new Set(deliveries.map((d) => d.room))).toEqual(directCallRooms());
+    expect(
+      deliveries.some((d) => d.room === room.actor(s.otherAdminId)),
+    ).toBe(false);
+    expect(
+      deliveries.some((d) => d.room === room.conversation(elsewhere.id)),
+    ).toBe(false);
+  });
+
+  it("media presence still routes to the conversation, unchanged", async () => {
+    // W8-W0b moved the four LIFECYCLE events only. participant_joined and
+    // participant_left mean "LiveKit observed this", are only meaningful to a
+    // client already in the call, and keep the routing they have always had.
+    const { conversationId, callId } = await directCall();
+    await drain();
+
+    await g.prisma.outboxEvent.create({
+      data: {
+        type: CommEvent.CALL_PARTICIPANT_JOINED,
+        payload: { callId, conversationId, actorId: s.parentId },
+        status: "pending",
+      },
+    });
+
+    const deliveries = (await drain()).filter(
+      (d) => d.event === CommEvent.CALL_PARTICIPANT_JOINED,
+    );
+
+    expect(deliveries).toHaveLength(1);
+    expect(deliveries[0].room).toBe(room.conversation(conversationId));
   });
 
   it("the payload carries only what a client needs, and no media handle", async () => {
