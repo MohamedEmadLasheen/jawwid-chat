@@ -83,7 +83,7 @@ export const api = {
     request<T>(path, { method: 'POST', body, idempotencyKey }),
   patch: <T>(path: string, body?: unknown, idempotencyKey?: string) =>
     request<T>(path, { method: 'PATCH', body, idempotencyKey }),
-  delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  delete: <T>(path: string, query?: Query) => request<T>(path, { method: 'DELETE', query }),
 }
 
 export function newIdempotencyKey(): string {

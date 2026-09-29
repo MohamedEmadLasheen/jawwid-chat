@@ -554,6 +554,69 @@ CallHistoryDto { id, conversationId, type: 'direct'|'group', status: 'ringing'|'
 
 **GET /calls/history/:conversationId** — EXISTS → RECONCILE · Permission `conversations.read` · Scope `canRead`. Response today `{ calls: CallHistoryDto[] }` newest first, `take: 100`; Phase 1 `Page<CallHistoryDto>`.
 
+### 3.8b Stories (`story.controller.ts`, `story.service.ts`) — all EXISTS
+
+Canonical design: `../product/STORIES.md`.
+
+```
+StoryFeedItem  { id, title: string|null, body: string|null, mediaKind: 'image'|'video'|null,
+  mediaUrl: string|null, publishedAt, expiresAt, viewed: boolean }
+StoryAdminItem { id, title, body, mediaKind, mediaUrl, state: 'draft'|'published'|'expired'|'deleted',
+  publishedAt: string|null, expiresAt: string|null, createdBy,
+  audiences: { kind, refId: string|null }[], recipientCount: number, viewCount: number }
+StoryViewer    { actorId, displayName, actorKind, viewedAt }
+AudienceClause { kind: 'all_families'|'all_teachers'|'assigned_families'|'family'|'teacher'
+  |'contact'|'conversation', refId?: string|null }
+```
+
+**No route accepts a recipient list.** A client states an AUDIENCE and the server
+resolves it, so "may this publisher address an arbitrary person?" is not a check
+that can be forgotten — it is unrepresentable. No route accepts an actor id
+either: every handler takes the authenticated actor from `@ActorId()`.
+
+**GET /stories/feed** — EXISTS
+- Auth: required. Scope: `canReadStories` — any active actor; a contact must hold `can_message`. Returns only stories joined through the caller's own `chat.story_recipient` rows, with `state = 'published' AND expires_at > now() AND deleted_at IS NULL`. Page size `story.feed_page_size` (50), newest first.
+- **There is no `state` or `expired` filter.** A client cannot ask to see expired stories.
+- Response: `{ stories: StoryFeedItem[] }`. `mediaUrl` is signed and short-lived, minted per request; `null` once media is purged. A story that is expired, deleted or purged signs nothing on any surface — `mediaUrl` is `null`, never a URL that would 404 or outlive access.
+- Errors: `COMM.STORY_CANNOT_READ` 403 · `COMM.ACTOR_INACTIVE` 403.
+
+**GET /stories?drafts=true|false** — EXISTS
+- Auth: required. Scope: `canPublishStory` + own organization. `take: 100`, newest created first.
+- Response: `{ stories: StoryAdminItem[] }`. Deleted stories are never returned. Expired ones are (this is the reporting surface) but carry `mediaUrl: null`. Errors: `COMM.STORY_CANNOT_PUBLISH` 403.
+
+**POST /stories/media** — EXISTS
+- Auth: required. Scope: `canPublishStory`. Request `{ mimeType, byteSize }`. Reuses the attachment object-storage seam with prefix `stories/`; the signature is bound to the MIME type and byte size.
+- Accepted: `image/jpeg|png|webp|heic` ≤ 10 MB, `video/mp4|quicktime|webm` ≤ 100 MB.
+- Response: `UploadAuthorization { objectKey, uploadUrl, method: 'PUT', headers, expiresAt }`.
+- Errors: `COMM.ATTACHMENT_TYPE_NOT_ALLOWED` 400 · `COMM.ATTACHMENT_TOO_LARGE` 400.
+
+**POST /stories** — EXISTS
+- Auth: required. Scope: `canPublishStory`. Creates a **draft**; the audience is validated against the author's scope but not yet materialised.
+- Request `{ title?, body?, mediaObjectKey?, mediaKind?, mediaMime?, audiences: AudienceClause[] }`. Idempotency-Key honoured.
+- Response: `StoryAdminItem`. Audit: `audit_log` `story.created`.
+- Errors: `COMM.STORY_EMPTY` 400 · `COMM.STORY_TOO_LONG` 400 · `COMM.STORY_AUDIENCE_EMPTY` 400 · `COMM.STORY_AUDIENCE_INVALID` 400 · `COMM.ATTACHMENT_TYPE_NOT_ALLOWED` 400.
+
+**POST /stories/:id/publish** — EXISTS
+- Auth: required. Scope: `canPublishStory`, own organization, and the author **or** a manager (an admin may not publish another admin's draft).
+- Resolves the audience **again** under the publisher's live scope and writes `chat.story_recipient` in the same transaction as the state change. `expires_at = now + story.default_lifetime_hours` (24).
+- Response: `StoryAdminItem`. Audit: `audit_log` `story.published` with `recipientCount` / `familyCount`. Realtime: `story.published` to each recipient's actor room; notification `story_published` per recipient.
+- Errors: `COMM.STORY_NOT_FOUND` 404 · `COMM.STORY_ALREADY_PUBLISHED` 409 · `COMM.STORY_EXPIRED` 410 · `COMM.STORY_AUDIENCE_EMPTY` 400.
+
+**POST /stories/:id/view** — EXISTS
+- Auth: required. Scope: `canReadStories` **and** a `chat.story_recipient` row for the caller — the recipient join is part of the lookup, not a check after it, so a non-recipient gets `STORY_NOT_FOUND` and learns nothing. Expiry is checked against the clock, not the state column. Idempotent (composite PK).
+- Response `{ ok: true }`. Errors: `COMM.STORY_NOT_FOUND` 404 · `COMM.STORY_EXPIRED` 410 · `COMM.STORY_DELETED` 410 · `COMM.STORY_NOT_PUBLISHED` 409.
+
+**GET /stories/:id/viewers** — EXISTS
+- Auth: required. Scope: `canReadStoryViewers` (= `canPublishStory`) + own organization. **Deliberately not available to recipients.** `take: 500`, newest first.
+- Response `{ viewers: StoryViewer[] }` — display names and times only; the `Actor` contract carries no phone or email, so neither can appear.
+- Errors: `COMM.STORY_CANNOT_PUBLISH` 403 · `COMM.STORY_NOT_FOUND` 404.
+
+**DELETE /stories/:id?reason=…** — EXISTS
+- Auth: required. Scope: `canPublishStory`, own organization, author **or** manager. Soft delete: access ends immediately, the row survives as the audit trail, media is purged by the retention sweep. Idempotent.
+- `reason` is a **query parameter and required** (no default, unlike `DELETE /messages/:id`): an academy publication removed without a stated reason is a gap in the audit trail.
+- Response `{ ok: true, alreadyDeleted: boolean }`. Audit: `audit_log` `story.deleted`. Realtime: `story.retired { reason: 'deleted' }`.
+- Errors: `COMM.STORY_DELETE_REASON_REQUIRED` 400 · `COMM.STORY_CANNOT_PUBLISH` 403 · `COMM.STORY_NOT_FOUND` 404.
+
 ### 3.9 Notifications / Devices (`notification.controller.ts`, `notification.service.ts`)
 
 **POST /notifications/devices** — EXISTS → RECONCILE
@@ -638,6 +701,8 @@ Transport: socket.io on the **default namespace** at the API origin (Redis adapt
 | `typing.started` / `typing.stopped` | `{ conversationId, actorId, displayName }` | conversation room, excluding sender | gateway (direct emit, not outbox) |
 | `presence.changed` | `{ actorId, state: 'online'\|'offline', lastSeenAt }` | actor rooms | **nobody** — declared, never emitted (`PresenceService` only writes Redis keys). Phase 1 decides. |
 | `conversation.updated` | `{ conversationId, familyId, state, needsReply, lastActivityAt, handlerId }` | conversation room | `send` (always) |
+| `story.published` | `{ storyId, publishedAt, expiresAt, hasMedia, recipientCount }` — a hint; **no title, no body, no media URL** | the resolved audience's actor rooms, one per recipient. Never a broadcast: there is no room meaning "everyone" | `StoryService.publish` via outbox |
+| `story.retired` | `{ storyId, reason: 'expired'\|'deleted', at }` | the same actor rooms | `StorySweeper.expireDue`, `StoryService.remove` |
 | `conversation.membership_changed` | `{ conversationId, added: string[], removed: string[] }` | conversation room | `setMembership`, `syncStudentGroup` |
 | `approval.requested` | `{ conversationId, messageId, approvalId, requestedBy }` | **staff actor rooms only** | `send` (pending) |
 | `approval.decided` | `{ conversationId, messageId, approvalId, decision, rejectionReason }` | conversation room | `decide` |

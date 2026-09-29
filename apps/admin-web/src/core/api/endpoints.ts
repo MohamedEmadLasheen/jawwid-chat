@@ -226,3 +226,91 @@ export const staffApi = {
   offboard: (id: string, input: { mode: 'even' | 'named'; to_staff_id?: string; reason: string }) =>
     api.post<void>(`/staff/${id}/offboard`, input, newIdempotencyKey()),
 }
+
+/* ---------------------------------------------------------------- stories */
+
+/**
+ * A short-lived publication to a server-resolved audience.
+ *
+ * Note what the client never sends: a recipient list. It states an AUDIENCE and
+ * the server resolves it, so this console cannot address a person it was not
+ * entitled to reach even if its own code were wrong.
+ */
+export type StoryAudienceKind =
+  | 'all_families'
+  | 'all_teachers'
+  | 'assigned_families'
+  | 'family'
+  | 'teacher'
+  | 'contact'
+  | 'conversation'
+
+export interface StoryAudienceClause {
+  kind: StoryAudienceKind
+  /** Null exactly for the kinds that name no particular record. */
+  refId?: string | null
+}
+
+export interface Story {
+  id: string
+  title: string | null
+  body: string | null
+  media_kind: string | null
+  /** Signed and short-lived; minted per request. Null once the media is purged. */
+  mediaUrl: string | null
+  state: 'draft' | 'published' | 'expired' | 'deleted'
+  publishedAt: string | null
+  expiresAt: string | null
+  createdBy: string
+  audiences: Array<{ kind: string; refId: string | null }>
+  recipientCount: number
+  viewCount: number
+}
+
+export interface StoryViewer {
+  actorId: string
+  displayName: string
+  actorKind: string
+  viewedAt: string
+}
+
+export interface StoryUploadAuthorization {
+  objectKey: string
+  uploadUrl: string
+  method: 'PUT'
+  headers: Record<string, string>
+  expiresAt: string
+}
+
+export const storyApi = {
+  /** The publisher's list. 403s for a role that may not publish. */
+  list: (includeDrafts = true) =>
+    api
+      .get<{ stories: Story[] }>('/stories', { drafts: includeDrafts ? 'true' : 'false' })
+      .then((r) => r.stories),
+
+  /**
+   * Authorize a media upload. The bytes go straight to storage on the returned
+   * URL; they never pass through this console or the API process.
+   */
+  authorizeMedia: (mimeType: string, byteSize: number) =>
+    api.post<StoryUploadAuthorization>('/stories/media', { mimeType, byteSize }),
+
+  create: (input: {
+    title?: string
+    body?: string
+    mediaObjectKey?: string
+    mediaKind?: string
+    mediaMime?: string
+    audiences: StoryAudienceClause[]
+  }) => api.post<Story>('/stories', input, newIdempotencyKey()),
+
+  publish: (id: string) => api.post<Story>(`/stories/${id}/publish`, undefined, newIdempotencyKey()),
+
+  viewers: (id: string) =>
+    api.get<{ viewers: StoryViewer[] }>(`/stories/${id}/viewers`).then((r) => r.viewers),
+
+  /** Soft delete. The reason is required and lands in chat.audit_log. */
+  remove: (id: string, reason: string) =>
+    api.delete<{ ok: true; alreadyDeleted: boolean }>(`/stories/${id}`, { reason }),
+}

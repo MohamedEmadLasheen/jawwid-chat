@@ -43,6 +43,10 @@ model Staff {
   ownedFamilies  Family[]        @relation("FamilyOwner")
   stickyOf       Conversation[]  @relation("ConversationStickyHandler")
 
+  storiesCreated   Story[] @relation("StoryCreatedBy")
+  storiesPublished Story[] @relation("StoryPublishedBy")
+  storiesDeleted   Story[] @relation("StoryDeletedBy")
+
   @@map("staff")
   @@schema("chat")
 }
@@ -653,5 +657,99 @@ model Teacher {
   learners Learner[]
 
   @@map("teacher")
+  @@schema("chat")
+}
+
+// =====================================================================
+// Stories -- 20260928120000_chat_stories.sql owns the DDL.
+// =====================================================================
+
+/// A short-lived publication to a server-resolved audience.
+model Story {
+  /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
+  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id             String  @id @default(uuid()) @db.Uuid
+  title          String?
+  body           String?
+
+  /// A key into private object storage. Never a URL, and never a capability:
+  /// reads go through a short-lived signed URL minted per request.
+  mediaObjectKey String? @map("media_object_key")
+  mediaKind      String? @map("media_kind")
+  mediaMime      String? @map("media_mime")
+
+  /// draft | published | expired | deleted. Transitions are guarded by
+  /// chat.guard_story_transition(); `deleted` is terminal.
+  state       String    @default("draft")
+  publishedAt DateTime? @map("published_at") @db.Timestamptz
+  /// When access ends. Part of the read invariant, not just a sweep input.
+  expiresAt   DateTime? @map("expires_at") @db.Timestamptz
+
+  createdBy   String @map("created_by") @db.Uuid
+  creator     Staff  @relation("StoryCreatedBy", fields: [createdBy], references: [id])
+  publishedBy String? @map("published_by") @db.Uuid
+  publisher   Staff?  @relation("StoryPublishedBy", fields: [publishedBy], references: [id])
+
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+  deleter       Staff?    @relation("StoryDeletedBy", fields: [deletedBy], references: [id])
+  deletedReason String?   @map("deleted_reason")
+
+  /// Stamped once the bytes are actually gone from object storage.
+  mediaPurgedAt DateTime? @map("media_purged_at") @db.Timestamptz
+
+  createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
+  updatedAt DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  audiences  StoryAudience[]
+  recipients StoryRecipient[]
+  views      StoryView[]
+
+  @@map("story")
+  @@schema("chat")
+}
+
+/// The audience as AUTHORED. An operator surface: it names families, groups and
+/// teachers, so a reader never sees it.
+model StoryAudience {
+  id        String   @id @default(uuid()) @db.Uuid
+  storyId   String   @map("story_id") @db.Uuid
+  story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  /// all_families | all_teachers | assigned_families | family | teacher | contact | conversation
+  kind      String
+  /// Null exactly for the kinds that name no particular record. Not a foreign
+  /// key: it points into a different table per kind, and the resolver validates
+  /// it under the author's own scope.
+  refId     String?  @map("ref_id") @db.Uuid
+  createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
+
+  @@map("story_audience")
+  @@schema("chat")
+}
+
+/// The audience RESOLVED to people, once, server-side. The composite primary key
+/// is the deduplication guarantee for overlapping clauses.
+model StoryRecipient {
+  storyId     String   @map("story_id") @db.Uuid
+  story       Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  actorId     String   @map("actor_id") @db.Uuid
+  actorKind   String   @map("actor_kind")
+  /// Which clause first matched this person. Reporting only, never authorization.
+  matchedKind String   @map("matched_kind")
+  createdAt   DateTime @map("created_at") @db.Timestamptz @default(now())
+
+  @@id([storyId, actorId])
+  @@map("story_recipient")
+  @@schema("chat")
+}
+
+model StoryView {
+  storyId  String   @map("story_id") @db.Uuid
+  story    Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  actorId  String   @map("actor_id") @db.Uuid
+  viewedAt DateTime @map("viewed_at") @db.Timestamptz @default(now())
+
+  @@id([storyId, actorId])
+  @@map("story_view")
   @@schema("chat")
 }

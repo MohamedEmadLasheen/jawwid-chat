@@ -41,7 +41,7 @@ communication safe and answerable, never as a general workflow system.
 | **Attachments** — signed upload/download URLs, validated MIME/size, object storage | MVP | `apps/api/src/communication/attachments` |
 | **Labels** | Phase 2 | not built |
 | **Broadcast** — official messages from Jawwid to many families | Phase 2 | `official` type present; sending not built |
-| **Stories / Status** | Deferred (not in the PRD) | not built |
+| **Stories / Status** — short-lived publications to a server-resolved audience, 24h expiry, view tracking, media retention | Built 2026-09-28 (was Deferred / not in the PRD; built on explicit instruction) | `apps/api/src/communication/stories`, `20260928120000`, `apps/admin-web/src/features/stories`, `STORIES.md`. Mobile feed still a seam |
 | **Audit** — append-only event log and audit log, reasons mandatory for sensitive actions | MVP | `chat.event_log`, `chat.audit_log` |
 | **Access control** — one server-side `AuthorizationService`, BR-1 enforced in the API and in the database | MVP | `apps/api/src/platform/authorization.service.ts`, `093000`/`093300`/`094000` |
 | **Supervisor ownership** — every family has exactly one current supervisor; reassignment by a manager with a reason; history | MVP | `SUPERVISOR-OWNERSHIP.md` |
@@ -428,4 +428,4 @@ consequences, deprecated behaviour, and the date it was closed.
 | **1 — Identity, Authentication & Authorization** | accounts, credentials, sessions, devices, teacher identity, role/permission model, supervisor assignment, RLS engagement | messaging features |
 | 2 — Console & clients on the canonical contract | Admin Web rework, Flutter realtime client, notification dispatch, storage serving, coverage-window group membership (PD-1), system-event generation as system messages (PD-4) | broadcast, labels |
 | 3 — Communication features | broadcast, labels, class groups, search across chats | AI, video |
-| Later | AI suggestions, video, stories/status, multi-tenant SaaS | — |
+| Later | AI suggestions, video, multi-tenant SaaS | stories/status built early, out of band — see `STORIES.md` §2 |

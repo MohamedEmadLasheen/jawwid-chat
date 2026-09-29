@@ -53,6 +53,28 @@ export enum CommErrorCode {
   CALL_NOT_A_PARTICIPANT = 'COMM.CALL_NOT_A_PARTICIPANT',
   /** PD-2: a family contact may join a Student Group call but never start one. */
   PARENT_CANNOT_START_GROUP_CALL = 'COMM.PARENT_CANNOT_START_GROUP_CALL',
+
+  // --- Stories ---
+  /** Not a publisher. Also the answer to "may I see the viewer list?". */
+  STORY_CANNOT_PUBLISH = 'COMM.STORY_CANNOT_PUBLISH',
+  STORY_CANNOT_READ = 'COMM.STORY_CANNOT_READ',
+  /**
+   * Returned for "does not exist", "not yours to see" and "not published to
+   * you" alike. Deliberately one code: distinguishing them would turn every
+   * story route into an existence oracle.
+   */
+  STORY_NOT_FOUND = 'COMM.STORY_NOT_FOUND',
+  STORY_EMPTY = 'COMM.STORY_EMPTY',
+  STORY_TOO_LONG = 'COMM.STORY_TOO_LONG',
+  STORY_ALREADY_PUBLISHED = 'COMM.STORY_ALREADY_PUBLISHED',
+  STORY_NOT_PUBLISHED = 'COMM.STORY_NOT_PUBLISHED',
+  /** Past expires_at. A 410: it existed, it does not any more. */
+  STORY_EXPIRED = 'COMM.STORY_EXPIRED',
+  STORY_DELETED = 'COMM.STORY_DELETED',
+  STORY_DELETE_REASON_REQUIRED = 'COMM.STORY_DELETE_REASON_REQUIRED',
+  /** The authored audience resolves to nobody the author may address. */
+  STORY_AUDIENCE_EMPTY = 'COMM.STORY_AUDIENCE_EMPTY',
+  STORY_AUDIENCE_INVALID = 'COMM.STORY_AUDIENCE_INVALID',
 }
 
 export class CommError extends Error {

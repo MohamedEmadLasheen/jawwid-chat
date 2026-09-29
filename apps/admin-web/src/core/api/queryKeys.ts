@@ -37,4 +37,8 @@ export const qk = {
   needsAction: ['dashboard', 'needs-action'] as const,
   thisWeek: ['dashboard', 'this-week'] as const,
   dashboardAll: ['dashboard'] as const,
+
+  stories: (includeDrafts: boolean) => ['stories', { includeDrafts }] as const,
+  storyViewers: (id: string) => ['stories', id, 'viewers'] as const,
+  storiesAll: ['stories'] as const,
 }

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { LocalFsBlobStore } from './blob-store';
 
 /**
  * PLATFORM SEAM. Binary content never touches Postgres.
@@ -37,6 +38,18 @@ export interface ObjectStorage {
   }): Promise<UploadAuthorization>;
   /** Short-lived signed read URL. Never a permanent public URL. */
   signedReadUrl(objectKey: string, ttlSeconds: number): Promise<string>;
+  /**
+   * Remove the bytes. Idempotent: deleting an absent object succeeds, because a
+   * retention sweep must converge rather than wedge on a key somebody already
+   * cleaned up by hand.
+   *
+   * `S3ObjectStorage` has had this since the S3 work landed; declaring it on the
+   * interface is what lets a caller that is not holding a concrete class use it.
+   * Message attachments deliberately do not: `deleteForEveryone` keeps the row
+   * and stops serving the body. Story media does, because a story's whole
+   * contract is that it stops existing.
+   */
+  delete(objectKey: string): Promise<void>;
 }
 
 /**
@@ -90,6 +103,26 @@ export class SignedLocalObjectStorage implements ObjectStorage {
     const sig = this.sign(objectKey, expires, 'GET');
     return `${this.base}/${encodeURIComponent(objectKey)}?expires=${expires}&sig=${sig}`;
   }
+
+  /**
+   * Remove the bytes.
+   *
+   * Its own blob store rather than an injected one: this class is constructed by
+   * a factory (`selectObjectStorage`) that has no DI container in hand, and
+   * `LocalFsBlobStore` addresses files by hashing the object key under
+   * STORAGE_LOCAL_ROOT -- so a second instance reaches exactly the same bytes as
+   * the one StorageController serves reads from.
+   *
+   * Note what this does NOT do: invalidate outstanding signed URLs. It cannot --
+   * a signature is self-validating. A URL minted before the purge stays
+   * syntactically valid until it expires, and then 404s because the bytes are
+   * gone. That is why STORAGE_SIGNED_URL_TTL_SECONDS is capped at an hour.
+   */
+  async delete(objectKey: string): Promise<void> {
+    await this.blobs.delete(objectKey);
+  }
+
+  private readonly blobs = new LocalFsBlobStore();
 
   /**
    * A PUT is verifiable only against the MIME type and byte size it was

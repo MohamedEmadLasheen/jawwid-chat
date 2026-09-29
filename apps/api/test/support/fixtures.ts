@@ -13,6 +13,14 @@ export class FakeCoverage implements CoverageService {
 export const authzWithOnDuty = (onDutyId: string | null = null): AuthorizationService =>
   new AuthorizationService(new FakeCoverage(onDutyId));
 
+/**
+ * Every fixture carries an organizationId, because every real Actor does:
+ * IdentityService reads it from a NOT NULL column on each principal table. A
+ * fixture without one models a state the identity layer cannot produce, and a
+ * tenant check written against it would be testing the wrong world.
+ */
+const ORG = 'org-1';
+
 export const parent = (id = 'parent-1', familyId = 'family-1'): Actor => ({
   actorId: id,
   kind: 'contact',
@@ -21,6 +29,7 @@ export const parent = (id = 'parent-1', familyId = 'family-1'): Actor => ({
   isActive: true,
   familyId,
   canMessage: true,
+  organizationId: ORG,
 });
 
 export const teacher = (id = 'teacher-1'): Actor => ({
@@ -29,6 +38,7 @@ export const teacher = (id = 'teacher-1'): Actor => ({
   displayName: 'Ustadh Mohamed',
   locale: 'ar',
   isActive: true,
+  organizationId: ORG,
 });
 
 export const admin = (id = 'admin-1', role: string = 'admin'): Actor => ({
@@ -38,6 +48,7 @@ export const admin = (id = 'admin-1', role: string = 'admin'): Actor => ({
   locale: 'ar',
   isActive: true,
   staffRole: role as Actor['staffRole'],
+  organizationId: ORG,
 });
 
 export const manager = (id = 'manager-1'): Actor => admin(id, 'manager');

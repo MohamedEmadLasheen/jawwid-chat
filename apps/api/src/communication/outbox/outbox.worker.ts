@@ -5,7 +5,7 @@ import type { IdentityService } from '../../platform/identity.service';
 import type { RealtimePublisher } from '../realtime/realtime.publisher';
 import { CommEvent, CommEventName, room } from '../contracts/events';
 import { NotificationService } from '../notifications/notification.service';
-import { ActorKind, Visibility } from '../contracts/vocab';
+import { ActorKind, StoryState, Visibility } from '../contracts/vocab';
 
 /**
  * Drains the transactional outbox.
@@ -99,11 +99,98 @@ export class OutboxWorker {
         return;
       }
 
+      case CommEvent.STORY_PUBLISHED: {
+        // Fanned out to the RESOLVED AUDIENCE and nobody else, one actor room
+        // each. Never a broadcast: there is no room that means "everyone", and
+        // introducing one for stories would make the fan-out itself a place a
+        // publication could leak from.
+        const storyId = payload.storyId as string | undefined;
+        if (!storyId) return;
+        const recipients = await this.storyRecipientIds(storyId);
+        await this.realtime.toUsers(recipients, type, payload as never);
+        await this.notifyStoryPublished(storyId);
+        return;
+      }
+
+      case CommEvent.STORY_RETIRED: {
+        // Same audience. A client that is showing an expired or deleted story
+        // gets told to drop it rather than finding out on its next refetch --
+        // and the refetch it then makes is itself audience- and expiry-checked,
+        // so this event grants nothing.
+        const storyId = payload.storyId as string | undefined;
+        if (!storyId) return;
+        await this.realtime.toUsers(await this.storyRecipientIds(storyId), type, payload as never);
+        return;
+      }
+
       default: {
         if (conversationId) {
           await this.realtime.toThread(conversationId, type, payload as never);
         }
       }
+    }
+  }
+
+  private async storyRecipientIds(storyId: string): Promise<string[]> {
+    const rows = await this.prisma.storyRecipient.findMany({
+      where: { storyId },
+      select: { actorId: true },
+    });
+    return rows.map((r) => r.actorId);
+  }
+
+  /**
+   * One push per recipient per story.
+   *
+   * The recipient set is read from chat.story_recipient -- the same rows the feed
+   * joins against -- so a notification can never reach somebody the story was not
+   * published to. The body carries the TITLE only, never the story body and never
+   * a media URL: a lock-screen preview is not the place to spend a publication's
+   * privacy, and the client refetches the feed (audience- and expiry-checked) to
+   * render anything more.
+   *
+   * Muting: story notifications honour quiet hours through
+   * NotificationService.schedule like every other notification. There is no
+   * per-story mute, because there is no per-story conversation to hang one on.
+   */
+  private async notifyStoryPublished(storyId: string): Promise<void> {
+    const story = await this.prisma.story.findUnique({
+      where: { id: storyId },
+      select: { id: true, title: true, state: true, expiresAt: true, organizationId: true },
+    });
+    // Retired between publish and drain: do not announce it.
+    if (!story || story.state !== StoryState.PUBLISHED) return;
+    if (story.expiresAt && story.expiresAt <= new Date()) return;
+
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: story.organizationId },
+      select: { displayName: true },
+    });
+
+    const recipients = await this.prisma.storyRecipient.findMany({
+      where: { storyId },
+      select: { actorId: true },
+    });
+
+    for (const r of recipients) {
+      const actor = await this.identity.resolveActor(r.actorId);
+      // An actor deactivated between publish and drain gets nothing.
+      if (!actor || !actor.isActive) continue;
+
+      await this.notifications.schedule({
+        // One notification per story per recipient, forever.
+        dedupeKey: `story_published:${storyId}:${r.actorId}`,
+        ruleKey: 'story_published',
+        templateKey: 'story_published',
+        eventType: 'story_published',
+        recipientId: r.actorId,
+        locale: actor.locale,
+        variables: {
+          organization_name: organization?.displayName ?? 'Jawwid',
+          story_title: story.title ?? '',
+        },
+        scheduledAt: new Date(),
+      });
     }
   }
 

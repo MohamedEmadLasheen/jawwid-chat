@@ -446,6 +446,88 @@ export class AuthorizationService {
     return allow();
   }
 
+  /**
+   * May this actor publish a story?
+   *
+   * The family-facing staff roles, and only them: `isFamilyFacingStaff` is the
+   * same predicate that decides who may message a family, which is the right
+   * comparison -- a story is an academy-to-family communication. Department
+   * staff (finance, technical, academic) complete tasks and never address
+   * families, so they do not publish either. Teachers and contacts cannot: the
+   * mobile client cannot even authenticate as a role that could.
+   *
+   * NECESSARY, NOT SUFFICIENT. This says "you may publish something"; it says
+   * nothing about the audience. StoryAudienceResolver independently refuses
+   * every clause outside the author's own organization, so this verdict can
+   * never widen anybody's reach on its own.
+   *
+   * Written as an intent method on this service rather than as a permission-key
+   * lookup, because this codebase has exactly one authorization model and adding
+   * a second (the abandoned Phase 5 lineage's `chat.role_permission`) would mean
+   * two places to read before knowing whether an actor may act.
+   */
+  canPublishStory(actor: Actor): Decision {
+    if (!actor.isActive) {
+      return deny(CommErrorCode.ACTOR_INACTIVE, 'an inactive actor may not publish');
+    }
+    if (!isFamilyFacingStaff(actor)) {
+      return deny(
+        CommErrorCode.STORY_CANNOT_PUBLISH,
+        'only Jawwid admins, coverage admins and managers may publish a story',
+      );
+    }
+    // A publisher with no tenant cannot be scoped, and an unscoped audience
+    // clause is not a narrow one -- `all_families` resolved without an
+    // organization filter would mean every contact in the database. Every real
+    // actor carries an organization (IdentityService requires the column), so
+    // this is refusing a state the identity layer does not produce rather than
+    // one anybody reaches. It is here because the alternative is a `where`
+    // clause that silently omits a filter, which is the wrong shape for a tenant
+    // boundary: it fails open.
+    if (!actor.organizationId) {
+      return deny(
+        CommErrorCode.STORY_CANNOT_PUBLISH,
+        'an actor with no organization cannot publish: the audience could not be scoped',
+      );
+    }
+    return allow();
+  }
+
+  /**
+   * May this actor read the stories published to them?
+   *
+   * Everyone active may. Which stories they then see is not decided here at all:
+   * it is the join against their own chat.story_recipient rows. Splitting the two
+   * is the point -- "may I read stories" must never be the check that decides
+   * WHICH stories, or the answer becomes a filter somebody can forget to apply.
+   */
+  canReadStories(actor: Actor): Decision {
+    if (!actor.isActive) {
+      return deny(CommErrorCode.ACTOR_INACTIVE, 'an inactive actor has no story feed');
+    }
+    if (actor.kind === ActorKind.CONTACT && actor.canMessage === false) {
+      return deny(
+        CommErrorCode.STORY_CANNOT_READ,
+        'this contact is not a communicating contact for the family',
+      );
+    }
+    return allow();
+  }
+
+  /**
+   * May this actor see WHO viewed a story?
+   *
+   * Only a publisher, and the service additionally requires the story to belong
+   * to their organization. A viewer list is the most privacy-sensitive read in
+   * the feature -- it says which named parent opened which publication and when --
+   * so it is deliberately not granted to the recipients themselves, however
+   * WhatsApp-like that might feel: a parent is not the owner of an academy
+   * publication.
+   */
+  canReadStoryViewers(actor: Actor): Decision {
+    return this.canPublishStory(actor);
+  }
+
   /** The approver is the family's active handler, or any manager. */
   canApprove(actor: Actor, activeHandlerId: string | null): Decision {
     if (!isFamilyFacingStaff(actor)) {

@@ -58,6 +58,23 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.CALL_NOT_A_PARTICIPANT` | 403 | Not in the server-derived participant set. |
 | `COMM.PARENT_CANNOT_START_GROUP_CALL` | 403 | Product decision PD-2: a parent may JOIN a Student Group or Class Group call but may never START one. Never retry; a teacher or an admin starts it. |
 
+## Stories
+
+| Code | HTTP | Meaning |
+|---|---|---|
+| `COMM.STORY_CANNOT_PUBLISH` | 403 | Not a publisher. Publishing is the family-facing staff roles (admin, coverage, manager). Also the answer to "may I read the viewer list?". Never retry. |
+| `COMM.STORY_CANNOT_READ` | 403 | This contact is not a communicating contact for the family. |
+| `COMM.STORY_NOT_FOUND` | 404 | Deliberately returned for "does not exist", "not yours" and "not published to you" alike, with the same message. Distinguishing them would turn every story route into an existence oracle. |
+| `COMM.STORY_EMPTY` | 400 | A story needs a body or a piece of media. |
+| `COMM.STORY_TOO_LONG` | 400 | Body longer than `story.max_body_length`. |
+| `COMM.STORY_ALREADY_PUBLISHED` | 409 | Refresh; publishing is not idempotent by design. |
+| `COMM.STORY_NOT_PUBLISHED` | 409 | Still a draft. |
+| `COMM.STORY_EXPIRED` | 410 | Past `expires_at`. It existed; it does not any more. Never retry. |
+| `COMM.STORY_DELETED` | 410 | Removed by an operator. Never retry. |
+| `COMM.STORY_DELETE_REASON_REQUIRED` | 400 | Deleting a story requires a reason; it is recorded in `chat.audit_log`. |
+| `COMM.STORY_AUDIENCE_EMPTY` | 400 | The authored audience resolves to nobody you may address. |
+| `COMM.STORY_AUDIENCE_INVALID` | 400 | A clause is malformed, names an unknown kind, or names a record outside your organization. Loud rather than silent, so an operator learns while composing. |
+
 ## Client guidance
 
 - **Never retry** a BR-1 or role denial: it is a rule, not a transient failure.
@@ -65,3 +82,5 @@ Source of truth: `apps/api/src/platform/errors.ts`.
   are free and return the original message.
 - `COMM.APPROVAL_ALREADY_DECIDED` means refresh, not retry.
 - Treat unknown `COMM.*` codes as a generic failure and show the `message`.
+- **Never retry** `COMM.STORY_EXPIRED` or `COMM.STORY_DELETED`: both are final
+  states, not transient failures. Drop the story from the view instead.

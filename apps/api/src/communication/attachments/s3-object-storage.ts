@@ -159,11 +159,12 @@ export class S3ObjectStorage implements ObjectStorage {
   /**
    * Remove an object.
    *
-   * Also not on the interface, and deliberately not called from the message
-   * path: `deleteForEveryone` keeps the row and stops serving the body, and a
-   * retention policy has not been decided (PRD 11.1). This exists so that
-   * lifecycle work has a supported way in when that decision is taken, rather
-   * than reaching for the SDK directly.
+   * On the `ObjectStorage` interface since stories landed, and still
+   * deliberately not called from the message path: `deleteForEveryone` keeps the
+   * row and stops serving the body, and no retention policy has been decided for
+   * attachments (PRD 11.1). Stories DO have one -- access ends at expires_at and
+   * the bytes are purged story.media_retention_hours later -- which is the
+   * lifecycle decision this method was left here waiting for.
    */
   async delete(objectKey: string): Promise<void> {
     await this.client.send(
