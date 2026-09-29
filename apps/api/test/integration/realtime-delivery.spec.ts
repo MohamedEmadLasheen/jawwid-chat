@@ -11,6 +11,7 @@
  *
  * Requires Redis (REDIS_URL) and the migrated database (DATABASE_URL).
  */
+import { randomUUID } from 'node:crypto';
 import Redis from 'ioredis';
 import { PrismaService } from '@platform/prisma.service';
 import { OutboxWorker } from '@communication/outbox/outbox.worker';
@@ -102,10 +103,16 @@ describe('D-2 · a failed publish returns the event to the outbox', () => {
   });
 
   it('leaves the row pending with the error recorded, never published', async () => {
-    const conversationId = await prisma.conversation
-      .findFirst({ select: { id: true } })
-      .then((c) => c?.id);
-    if (!conversationId) throw new Error('no conversation in the test database');
+    // A plain uuid, NOT a row borrowed from the database.
+    //
+    // This used to be `prisma.conversation.findFirst(...)`, which made the test
+    // depend on some earlier suite happening to leave a conversation behind -- so
+    // it failed with "no conversation in the test database" whenever jest ordered
+    // it after a suite that truncates. The conversation is never read: the outbox
+    // payload is JSON with no foreign key, and the publisher under test throws
+    // before anything queries it. What D-2 asserts is what happens to the OUTBOX
+    // ROW when a publish fails, and that needs an id, not a conversation.
+    const conversationId = randomUUID();
 
     const event = await prisma.outboxEvent.create({
       data: {
