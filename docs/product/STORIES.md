@@ -1,6 +1,7 @@
 # Jawwid Chat — Stories
 
-Status: **IMPLEMENTED** · Landed 2026-09-28 · Migration `20260928120000_chat_stories.sql`
+Status: **BACKEND + ADMIN PUBLISHING IMPLEMENTED** · Flutter feed/viewer DEFERRED (§8)
+Landed 2026-09-28, hardened 2026-09-29 · Migration `20260928120000_chat_stories.sql`
 Companions: `../security/RLS-STRATEGY.md`, `../architecture/AUTHORIZATION-MODEL.md`,
 `../contracts/API-CONTRACT.md`, `../contracts/DOMAIN-VOCABULARY.md`
 
@@ -121,17 +122,38 @@ read requires `expires_at > now()`: the service's WHERE clause and the
 millisecond past its expiry even if no sweep has ever run.
 
 **Bytes** are removed later, `story.media_retention_hours` (default 72h) after
-access ended — measured from `deleted_at` for a story an operator removed, and
-`expires_at` otherwise.
+access ended. The sweep's predicate has **one branch per story state**, so there
+is no state a media object can hide in:
+
+| State | Window measured from |
+|---|---|
+| `draft` | `updated_at` — an abandoned draft; an actively edited one keeps resetting its own clock |
+| `published` | `expires_at` — even if `expireDue` has not relabelled it, so a stalled expiry pass cannot stall retention |
+| `expired` | `expires_at` |
+| `deleted` | `deleted_at` |
+
+Adding a fifth state without adding a branch fails the "nothing left holding
+media" test in `stories-hardening.spec.ts` §B.
 
 ```
 published ──► expires_at reached ──► access revoked ──► retention window ──► media purged
 ```
 
-The window exists because an operator who deletes the wrong story has a bounded
-interval in which the content can still be recovered, and because destroying bytes
-in the same transaction that revokes access makes an accidental publication
-unrecoverable.
+The window exists so that revoking access and destroying bytes are not the same
+act. Deletion is terminal and no surface re-serves a removed story's media, so this
+is **not** an in-product undo — it is the interval in which an operator with
+storage access can still retrieve content that was removed by mistake, before it is
+gone for good. Stating it that way matters: an earlier draft of this document
+called it "recoverable", which was not true of anything a user could do.
+
+**No surface hands out media once access has ended.** `signMedia` is gated on
+readability, not just on the key existing: a draft and a live published story
+sign; an expired, deleted or purged one returns `null`. The gate is in the signing
+helper rather than at each call site, because `list()` deliberately returns expired
+stories as the publisher's reporting surface. What it cannot do is revoke a URL
+already minted — a signature is self-validating — so the exposure is bounded by
+`STORAGE_SIGNED_URL_TTL_SECONDS` (default 300s, capped at 3600), not by the story's
+lifetime.
 
 **If the sweep fails**, nothing becomes readable that should not be. The worst a
 wedged sweep does is leave rows labelled `published` that no query returns, and
@@ -161,7 +183,7 @@ inert on the API path today because the API connects as the owner and sets no
 actor context. The policies are written to be correct on the day that changes, and
 `db/tests/story_rls.sql` runs them as `authenticated` in CI so they cannot rot.
 
-### Two defects found while building this, and fixed
+### Four defects found by these tests, and fixed
 
 - **The audience trigger read under the caller's RLS.** A system control that asks
   "is this actor in this story's audience?" while constrained to the caller's own
@@ -177,6 +199,30 @@ actor context. The policies are written to be correct on the day that changes, a
   academy's viewer lists, recipient lists and authored audiences. Each child table
   now carries a restrictive organization policy resolved through
   `chat.story_organization_id()`. `db/tests/story_rls.sql` H3–H5 is the regression.
+- **A publisher could mint a fresh media URL for a story whose access had ended.**
+  `signMedia` signed any key it was handed, and `list()` returns expired stories by
+  design, so an expired publication's picture stayed retrievable for as long as
+  retention kept the bytes. No feed showed it, which is why it would not have been
+  noticed. Now gated on readability. `stories-hardening.spec.ts` §A is the
+  regression.
+- **Story media could outlive the product, two different ways.** The purge sweep
+  keyed only on `deleted_at` / `expires_at`, both NULL for a draft — so media on a
+  never-published story was never eligible and sat in the bucket forever. And
+  `story_has_content` required a body **or** a media key, so clearing the key on a
+  *picture-only* publication violated the check and that story could never be
+  purged at all. Every earlier retention test happened to give its story a body,
+  which is how the second one hid. `stories-hardening.spec.ts` §B is the regression.
+
+### And one correctness defect the fan-out test found
+
+`chat.notification.rule_key` carries a foreign key to
+`chat.notification_rule(key)`. The migration seeded the story *template* but not
+the *rule*, so **every story notification failed at INSERT**, the outbox returned
+the event to pending, retried five times and marked it `failed`. Realtime still
+fanned out, so the feature looked like it worked. Nothing caught it because no test
+drained the outbox for a story. The rule row is now seeded and
+`stories-hardening.spec.ts` §G drains the outbox and asserts on real notification
+rows.
 
 ## 8. Clients
 
@@ -231,6 +277,11 @@ never deleted story media.
 
 All four are seeded in the migration and mirrored in
 `COMMUNICATION_CONFIG_DEFAULTS`, so an unset row falls back rather than failing.
+
+The migration also seeds a `chat.notification_template` row per locale **and** a
+`chat.notification_rule` row keyed `story_published`. The rule row is not optional:
+`chat.notification.rule_key` is a foreign key, so without it every story
+notification fails to insert.
 Media limits are 10 MB for an image and 100 MB for a video, and the accepted types
 are jpeg/png/webp/heic and mp4/quicktime/webm.
 
@@ -239,6 +290,13 @@ are jpeg/png/webp/heic and mp4/quicktime/webm.
 | Suite | Covers |
 |---|---|
 | `apps/api/test/unit/authorization/story-authorization.spec.ts` | the role matrix, as pure decisions (19) |
-| `apps/api/test/integration/stories.spec.ts` | the whole lifecycle, audience resolution, expiry, views, viewer list, delete, retention, tenant isolation (65) |
+| `apps/api/test/integration/stories.spec.ts` | the whole lifecycle, audience resolution, expiry, views, viewer list, delete, retention (65) |
+| `apps/api/test/integration/stories-hardening.spec.ts` | media after access ends, retention on every state, full cross-tenant matrix, expiry with the sweeper off, empty audiences, fan-out limits, failure isolation (34) |
 | `db/tests/story_rls.sql` | every policy, run as `authenticated` (36 assertions) |
 | `apps/admin-web/src/features/stories/StoriesPage.test.tsx` | the console's UI contract (16) |
+
+All of it runs in CI on every pull request: `api` (typecheck + unit), `admin-web`
+(typecheck + tests + build), `migrations` (apply from empty, G-19 idempotency,
+schema acceptance, identity and BR-1 invariants, **story RLS**, integration suite).
+The `mobile` job reports BLOCKED, which is the standing record of why §8 is
+deferred.

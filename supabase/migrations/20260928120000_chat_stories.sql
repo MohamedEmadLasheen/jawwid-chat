@@ -179,9 +179,18 @@ create table if not exists chat.story (
         or (media_object_key is not null and media_kind is not null)
         or (media_object_key is null and media_purged_at is not null
             and media_kind is not null)),
-  -- A story with neither words nor a picture is not a story.
+  -- A story with neither words nor a picture is not a story -- until retention
+  -- takes the picture away.
+  --
+  -- The `media_purged_at` branch is not a loosening, it is what makes retention
+  -- possible at all: without it, clearing media_object_key on a picture-only
+  -- publication violates this check, so the sweep could never purge the one shape
+  -- of story most likely to be carrying a large file. It stayed hidden because
+  -- every retention test happened to give its story a body as well.
   constraint story_has_content
-    check (coalesce(btrim(body), '') <> '' or media_object_key is not null),
+    check (coalesce(btrim(body), '') <> ''
+        or media_object_key is not null
+        or media_purged_at is not null),
   -- A published story knows when it went out, who published it, and when it
   -- stops. All three or none: an expiring publication with no expiry is how a
   -- "story" quietly becomes a permanent notice board.
@@ -512,6 +521,33 @@ insert into chat.notification_template (key, locale, version, title, body) value
   ('story_published', 'ar', 1, 'جديد من {organization_name}', '{story_title}'),
   ('story_published', 'en', 1, 'New from {organization_name}', '{story_title}')
 on conflict (key, locale, version) do nothing;
+
+-- THE RULE ROW, and it is not optional.
+--
+-- chat.notification.rule_key carries a FOREIGN KEY to chat.notification_rule(key).
+-- The first version of this migration seeded the TEMPLATE and not the RULE, so
+-- every story notification failed at INSERT with a foreign-key violation, the
+-- outbox returned the event to pending, retried it five times and marked it
+-- `failed`. Realtime still fanned out, so the feature looked like it worked --
+-- and no test caught it, because none of them drained the outbox for a story.
+--
+-- `offset_seconds = 0`: a story announcement is immediate, not a scheduled
+-- reminder. ReminderService only walks rules with a non-zero offset, so this row
+-- configures the notification without becoming a reminder schedule.
+--
+-- `recipient_role = 'participant'`: the same value new_message uses, and the
+-- honest one here -- the recipient set is whoever the audience resolved to, which
+-- is already materialised in chat.story_recipient. The column does not decide who
+-- is notified; the resolved audience does.
+--
+-- `respect_quiet_hours = true`: a publication is never urgent enough to wake
+-- somebody. Only incoming_call sets this false.
+insert into chat.notification_rule
+  (key, event_type, offset_seconds, template_key, recipient_role, channel, priority,
+   respect_quiet_hours) values
+  ('story_published', 'story_published', 0, 'story_published', 'participant', 'push',
+   'normal', true)
+on conflict (key) do nothing;
 
 -- ---------------------------------------------------------------------------
 -- 8. Row level security -- deny by default

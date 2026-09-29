@@ -20,6 +20,7 @@ import { CallService } from '@communication/calls/call.service';
 import { StoryService } from '@communication/stories/story.service';
 import { StoryAudienceResolver } from '@communication/stories/story-audience.resolver';
 import { StorySweeper } from '@communication/stories/story-sweeper.service';
+import { OutboxWorker } from '@communication/outbox/outbox.worker';
 import { LiveKitTokenIssuer } from '@communication/calls/media-token';
 
 process.env.DATABASE_URL ??= 'postgres://postgres:postgres@localhost:55433/jawwid_chat_int';
@@ -59,10 +60,16 @@ export function buildGraph() {
   );
   const storySweeper = new StorySweeper(prisma, config, outbox, storage);
 
+  // A worker whose realtime publisher is a no-op: these suites assert on what
+  // reaches the DATABASE (notifications, outbox status), and a socket server in
+  // a jest process would be a second thing to tear down.
+  const silentRealtime = { toThread: async () => undefined, toUsers: async () => undefined };
+  const outboxWorker = new OutboxWorker(prisma, notifications, silentRealtime as never, identity);
+
   return {
     prisma, coverage, identity, authz, conversations, messages, approvals,
     attachments, notifications, reminders, templates, quietHours, calls,
-    stories, storyAudience, storySweeper, storage, outbox,
+    stories, storyAudience, storySweeper, storage, outbox, config, outboxWorker,
   };
 }
 

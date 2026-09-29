@@ -593,15 +593,41 @@ export class StoryService {
   /**
    * A signed read URL, minted per request, or null.
    *
-   * Returns null once the bytes have been purged, so a client is told "no media"
-   * instead of being handed a URL that will 404. Never called for a story the
-   * caller was not already authorized to see.
+   * THE GATE IS HERE, not at the call sites. `feed()` already excludes expired and
+   * deleted stories, but `list()` deliberately returns them -- it is the
+   * publisher's reporting surface -- and the first version of this method signed
+   * whatever key it was handed. So a publisher could mint a FRESH media URL for a
+   * story whose access had ended, for as long as the bytes survived retention.
+   * Nobody's feed showed it, which is exactly why it would not have been noticed.
+   *
+   * A story hands out media only while it is READABLE:
+   *   * a draft   -- yes; the author has to see what they attached
+   *   * published -- yes, while `expires_at` is still in the future
+   *   * expired   -- no
+   *   * deleted   -- no
+   *   * purged    -- no, and `null` rather than a URL that would 404
+   *
+   * What this cannot do is revoke a URL already minted: a signature is
+   * self-validating, so one issued a second before expiry stays usable until it
+   * lapses. That is why STORAGE_SIGNED_URL_TTL_SECONDS is capped at an hour and
+   * defaults to five minutes -- the window is bounded by the TTL, not unbounded by
+   * the story's lifetime.
    */
   private async signMedia(story: {
     mediaObjectKey: string | null;
     mediaPurgedAt: Date | null;
+    state: string;
+    expiresAt: Date | null;
+    deletedAt: Date | null;
   }): Promise<string | null> {
     if (!story.mediaObjectKey || story.mediaPurgedAt) return null;
+    if (story.deletedAt || story.state === StoryState.DELETED) return null;
+    if (story.state === StoryState.EXPIRED) return null;
+    // Checked against the clock, not the state column: the sweep may not have
+    // relabelled it yet, and that must not buy an extra URL.
+    if (story.state === StoryState.PUBLISHED && (!story.expiresAt || story.expiresAt <= new Date())) {
+      return null;
+    }
     const ttl = Number(process.env.STORAGE_SIGNED_URL_TTL_SECONDS ?? 300);
     return this.storage.signedReadUrl(story.mediaObjectKey, ttl);
   }
@@ -625,6 +651,7 @@ export class StoryService {
     state: string;
     publishedAt: Date | null;
     expiresAt: Date | null;
+    deletedAt: Date | null;
     createdBy: string;
     audiences: Array<{ kind: string; refId: string | null }>;
     _count: { recipients: number; views: number };

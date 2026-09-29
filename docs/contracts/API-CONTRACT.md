@@ -577,12 +577,12 @@ either: every handler takes the authenticated actor from `@ActorId()`.
 **GET /stories/feed** — EXISTS
 - Auth: required. Scope: `canReadStories` — any active actor; a contact must hold `can_message`. Returns only stories joined through the caller's own `chat.story_recipient` rows, with `state = 'published' AND expires_at > now() AND deleted_at IS NULL`. Page size `story.feed_page_size` (50), newest first.
 - **There is no `state` or `expired` filter.** A client cannot ask to see expired stories.
-- Response: `{ stories: StoryFeedItem[] }`. `mediaUrl` is signed and short-lived, minted per request; `null` once media is purged.
+- Response: `{ stories: StoryFeedItem[] }`. `mediaUrl` is signed and short-lived, minted per request; `null` once media is purged. A story that is expired, deleted or purged signs nothing on any surface — `mediaUrl` is `null`, never a URL that would 404 or outlive access.
 - Errors: `COMM.STORY_CANNOT_READ` 403 · `COMM.ACTOR_INACTIVE` 403.
 
 **GET /stories?drafts=true|false** — EXISTS
 - Auth: required. Scope: `canPublishStory` + own organization. `take: 100`, newest created first.
-- Response: `{ stories: StoryAdminItem[] }`. Errors: `COMM.STORY_CANNOT_PUBLISH` 403.
+- Response: `{ stories: StoryAdminItem[] }`. Deleted stories are never returned. Expired ones are (this is the reporting surface) but carry `mediaUrl: null`. Errors: `COMM.STORY_CANNOT_PUBLISH` 403.
 
 **POST /stories/media** — EXISTS
 - Auth: required. Scope: `canPublishStory`. Request `{ mimeType, byteSize }`. Reuses the attachment object-storage seam with prefix `stories/`; the signature is bound to the MIME type and byte size.

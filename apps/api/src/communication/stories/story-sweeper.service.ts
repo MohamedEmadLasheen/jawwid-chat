@@ -109,7 +109,27 @@ export class StorySweeper {
    * The window runs from the moment ACCESS ended -- `deleted_at` for a story an
    * operator removed, `expires_at` otherwise -- so a deleted story and an expired
    * one are treated identically, and neither has its content destroyed in the
-   * same breath as being hidden.
+   * same breath as being hidden. That interval is for an operator with storage
+   * access, NOT an in-product undo: deletion is terminal and no surface re-serves
+   * a removed story's media.
+   *
+   * ## The predicate is exhaustive over `story_state_check`, on purpose
+   *
+   * The first version keyed only on `deleted_at` and `expires_at`. Both are NULL
+   * for a DRAFT, so media attached to a story nobody ever published was never
+   * eligible: an operator uploads a 100 MB video, abandons the draft, and the
+   * object sits in the bucket forever with nothing pointing at it. A retention
+   * policy with a hole that shape is not a retention policy.
+   *
+   * So there is one branch per state, and adding a fifth state without adding a
+   * branch is caught by the "nothing left holding media" test:
+   *
+   *   draft      -> `updated_at` (abandoned; an actively edited draft is safe
+   *                  because editing moves updated_at forward)
+   *   published  -> `expires_at` (even if expireDue has not relabelled it, so a
+   *                  stalled expiry pass cannot stall retention too)
+   *   expired    -> `expires_at`
+   *   deleted    -> `deleted_at`
    *
    * The storage delete happens BEFORE the stamp. If the process dies in between,
    * the row still says the media is present and the next pass deletes an already
@@ -128,10 +148,10 @@ export class StorySweeper {
         OR: [
           { deletedAt: { not: null, lte: cutoff } },
           { state: StoryState.EXPIRED, expiresAt: { not: null, lte: cutoff } },
-          // A story whose expiry passed long enough ago that retention has also
-          // closed, even if expireDue has not reached it yet. Without this a
-          // stalled expiry pass would also stall retention.
           { state: StoryState.PUBLISHED, expiresAt: { not: null, lte: cutoff } },
+          // An abandoned draft. Measured from updated_at so a draft somebody is
+          // still editing keeps resetting its own clock.
+          { state: StoryState.DRAFT, updatedAt: { lte: cutoff } },
         ],
       },
       select: { id: true, mediaObjectKey: true },

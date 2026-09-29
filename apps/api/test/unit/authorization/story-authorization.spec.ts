@@ -60,6 +60,17 @@ describe('who may publish a story', () => {
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.ACTOR_INACTIVE);
   });
 
+  it('an admin with NO organization may not publish — an unscoped audience is not a narrow one', () => {
+    // `orgScope()` omits its WHERE clause for an actor with no organization,
+    // which would turn `all_families` into every contact in the database. No real
+    // actor is in that state (IdentityService requires the column), so this
+    // refuses a state the identity layer does not produce -- because the
+    // alternative shape, a filter that silently disappears, fails OPEN.
+    const d = authz.canPublishStory({ ...admin(), organizationId: undefined });
+    expect(d.allowed).toBe(false);
+    if (!d.allowed) expect(d.code).toBe(CommErrorCode.STORY_CANNOT_PUBLISH);
+  });
+
   it('there is no staff role named super_admin or coverage_admin to grant it to', () => {
     // Those are the ABANDONED Phase 5 lineage's role names. If either ever
     // resolves to a publisher, somebody has reintroduced a second role

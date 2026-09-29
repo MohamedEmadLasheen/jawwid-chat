@@ -476,6 +476,20 @@ export class AuthorizationService {
         'only Jawwid admins, coverage admins and managers may publish a story',
       );
     }
+    // A publisher with no tenant cannot be scoped, and an unscoped audience
+    // clause is not a narrow one -- `all_families` resolved without an
+    // organization filter would mean every contact in the database. Every real
+    // actor carries an organization (IdentityService requires the column), so
+    // this is refusing a state the identity layer does not produce rather than
+    // one anybody reaches. It is here because the alternative is a `where`
+    // clause that silently omits a filter, which is the wrong shape for a tenant
+    // boundary: it fails open.
+    if (!actor.organizationId) {
+      return deny(
+        CommErrorCode.STORY_CANNOT_PUBLISH,
+        'an actor with no organization cannot publish: the audience could not be scoped',
+      );
+    }
     return allow();
   }
 
