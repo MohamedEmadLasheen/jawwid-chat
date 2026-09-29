@@ -6,6 +6,8 @@ import '../../../app/providers.dart';
 import '../../../core/call_media/audio_route.dart';
 import '../../../core/call_media/call_media_client.dart';
 import '../../../core/call_media/media_room.dart';
+import '../../../core/call_native/call_native_providers.dart';
+import '../../../core/call_native/call_presentation.dart';
 import '../../../core/data/repositories.dart';
 import '../../../core/data/wire/wire_vocab.dart';
 import '../../../core/errors/app_error.dart';
@@ -204,6 +206,15 @@ class CallController extends Notifier<CallUiState> {
   StreamSubscription<CallMediaSnapshot>? _mediaSub;
   StreamSubscription<CallEvent>? _eventSub;
 
+  /// The system call screen (W8-W3). Presentation only -- see
+  /// `call_presentation.dart` for why it holds no lifecycle.
+  CallPresentation? _native;
+  StreamSubscription<NativeCallAction>? _nativeSub;
+
+  /// Calls this device has asked the native layer to take off the screen, so a
+  /// second terminal event does not ask again. Bounded by one call at a time.
+  final _dismissed = <String>{};
+
   /// True while WE are taking the media down, so the `disconnected` snapshot that
   /// follows is not mistaken for a drop.
   bool _leavingMedia = false;
@@ -247,9 +258,19 @@ class CallController extends Notifier<CallUiState> {
     final client = ref.watch(callRealtimeClientProvider);
     _eventSub = client?.events.listen(_onServerEvent);
 
+    // The system call screen, subscribed the same way and for the same reason:
+    // a CallKit answer arrives whenever the person taps it, not when a widget
+    // happens to be watching this provider. NOT session-scoped -- on a cold
+    // VoIP wake the screen is up before this app knows it has a session.
+    _native = ref.watch(callPresentationProvider);
+    _nativeSub = _native?.actions().listen(_onNativeAction);
+    unawaited(_native?.start());
+
     ref.onDispose(() {
       unawaited(_eventSub?.cancel());
       _eventSub = null;
+      unawaited(_nativeSub?.cancel());
+      _nativeSub = null;
       unawaited(_mediaSub?.cancel());
       _mediaSub = null;
       // Release the room. `dispose()` is idempotent in W4 and guards its own
@@ -317,6 +338,17 @@ class CallController extends Notifier<CallUiState> {
       await calls.accept(callId: callId);
     } catch (error) {
       if (!_alive) return;
+      // THE SYSTEM SCREEN CANNOT STAY UP ON A FAILED ANSWER (W8-W3). The
+      // in-app screen offers a retry and is the place for one; CallKit has no
+      // such affordance, so a call it can no longer do anything with must come
+      // off it either way. An already-ended call is the server's 409 -- the W6
+      // contract, not an inference here.
+      _dismissNative(
+        callId,
+        _alreadyOver(error is AppError ? error.code : null)
+            ? CallDismissReason.remoteEnded
+            : CallDismissReason.failed,
+      );
       state = state.copyWith(phase: CallUiPhase.failed, failure: _classify(error));
       return;
     }
@@ -455,15 +487,33 @@ class CallController extends Notifier<CallUiState> {
         );
 
       case CallAccepted(:final callId):
+        if (callId != state.callId) return;
+
         // THE CALLER'S CUE TO JOIN MEDIA, and phase is what identifies it as ours
         // to act on rather than an actor-id comparison: the account id is not the
         // actor id (W3), and comparing them would be exactly the identity
         // conflation W3 refused. Only a device that is still ringing an outgoing
         // call joins here; the answering device already joined in `accept()`.
-        if (callId != state.callId) return;
-        if (state.phase != CallUiPhase.outgoingRinging) return;
-        state = state.copyWith(phase: CallUiPhase.connecting);
-        unawaited(_joinMedia(callId));
+        if (state.phase == CallUiPhase.outgoingRinging) {
+          state = state.copyWith(phase: CallUiPhase.connecting);
+          unawaited(_joinMedia(callId));
+          return;
+        }
+
+        // ANOTHER OF THIS ACCOUNT'S DEVICES ANSWERED (W8-W3).
+        //
+        // Still ringing here means it was answered somewhere else -- this
+        // device's own accept() would have left `incomingRinging` already. The
+        // call is now ACTIVE, so `call.ended` is NOT coming, and without this a
+        // second phone rings on after the first one picked up.
+        //
+        // Server-driven, not inferred: `call.accepted` is the server's word,
+        // delivered to this actor's room by W8-W0b. Nothing is timed and
+        // nothing is guessed.
+        if (state.phase == CallUiPhase.incomingRinging) {
+          _dismissNative(callId, CallDismissReason.answeredElsewhere);
+          _goTerminal(outcome: CallOutcome.answered, authoritative: true);
+        }
 
       case CallDeclined(:final callId):
         if (callId != state.callId) return;
@@ -474,6 +524,74 @@ class CallController extends Notifier<CallUiState> {
         // The authority on the outcome, even for a state it did not create.
         _goTerminal(outcome: outcome, duration: duration, authoritative: true);
     }
+  }
+
+  // ------------------------------------------------------------ native calls
+
+  /// An action from the system call screen (W8-W3).
+  ///
+  /// EVERY ONE OF THESE IS FORWARDED, never acted on locally. Answer becomes
+  /// the same `POST /calls/:id/accept` the in-app button sends; decline and end
+  /// likewise. The server re-runs the full authorization chain and remains the
+  /// only thing that decides what a call is doing, so a native tap cannot move
+  /// a call by itself and a forged one cannot move it at all.
+  void _onNativeAction(NativeCallAction action) {
+    if (!_alive) return;
+
+    switch (action.kind) {
+      case NativeCallActionKind.incoming:
+        // A VoIP push was reported to CallKit before this engine existed. The
+        // realtime `call.incoming` is the authority and usually arrives too,
+        // so this only fills the gap when the socket is not up yet.
+        //
+        // NO PEER NAME. The push payload carries none (B-3 is a separate
+        // authorization), and inventing one here would put a guess on a lock
+        // screen. The realtime event supersedes this state when it lands.
+        if (state.isPresent) return;
+        state = CallUiState(
+          phase: CallUiPhase.incomingRinging,
+          callId: action.callId,
+          conversationId: action.conversationId,
+          isGroup: false,
+          canSwitchSpeaker: _audio?.canSwitch ?? false,
+          speakerPreferred: _audio?.speakerPreferred ?? false,
+        );
+
+      case NativeCallActionKind.answer:
+        if (action.callId != state.callId) return;
+        unawaited(accept());
+
+      case NativeCallActionKind.decline:
+        if (action.callId != state.callId) return;
+        unawaited(decline());
+
+      case NativeCallActionKind.end:
+        if (action.callId != state.callId) return;
+        // CallKit HAS ONE END ACTION for both "refuse this ringing call" and
+        // "hang up this one", and those are different server operations --
+        // decline writes outcome `declined`, end on a ringing call writes
+        // `missed`. The phase decides, and the phase came from the server.
+        //
+        // Deciding it HERE is what keeps the native side stateless: it would
+        // otherwise have to remember whether this call had been answered,
+        // which is the first step towards a second lifecycle.
+        if (state.phase == CallUiPhase.incomingRinging) {
+          unawaited(decline());
+        } else {
+          unawaited(hangUp());
+        }
+    }
+  }
+
+  /// Ask the native layer to take one call off the system screen, once.
+  ///
+  /// Idempotent by callId: `_goTerminal` is reachable from several directions
+  /// and an already-dismissed call must not be dismissed again. The native side
+  /// tolerates a repeat anyway -- this keeps the channel quiet rather than
+  /// relying on that.
+  void _dismissNative(String callId, CallDismissReason reason) {
+    if (!_dismissed.add(callId)) return;
+    unawaited(_native?.dismiss(callId: callId, reason: reason));
   }
 
   /// The one way into a terminal state.
@@ -493,6 +611,19 @@ class CallController extends Notifier<CallUiState> {
         state = state.copyWith(outcome: outcome, duration: duration);
       }
       return;
+    }
+
+    // THE SYSTEM SCREEN COMES DOWN HERE, on the one terminal path, so every
+    // route to terminal -- our decline, our hang-up, `call.declined`,
+    // `call.ended`, the ring timeout -- takes it down exactly once.
+    final callId = state.callId;
+    if (callId != null) {
+      _dismissNative(
+        callId,
+        outcome == CallOutcome.declined
+            ? CallDismissReason.declined
+            : CallDismissReason.remoteEnded,
+      );
     }
 
     state = state.copyWith(
