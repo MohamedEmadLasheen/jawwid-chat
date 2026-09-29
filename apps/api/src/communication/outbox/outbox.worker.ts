@@ -48,6 +48,13 @@ function sameInstant(a: Date | null | undefined, b: string | null): boolean {
  * naturally so, and notifications dedupe on dedupe_key. A row is claimed with a
  * conditional update, so two workers never publish the same event twice.
  */
+/**
+ * How long a claimed outbox row stays invisible to other workers. Long enough
+ * that a slow publish is not double-delivered, short enough that a crashed
+ * worker's row is retried promptly.
+ */
+const LEASE_MS = 60_000;
+
 @Injectable()
 export class OutboxWorker {
   private readonly log = new Logger(OutboxWorker.name);
@@ -72,14 +79,34 @@ export class OutboxWorker {
 
     let published = 0;
     for (const event of batch) {
+      // THE CLAIM IS A LEASE, NOT A COMPLETION.
+      //
+      // It used to set `published` -- the TERMINAL state -- before delivery ran.
+      // A worker that died in between left the row `published` with nothing
+      // delivered, and drain() only selects `pending`, so no sweep ever
+      // reclaimed it: the notification was lost permanently and silently.
+      //
+      // Now the row stays `pending` and its visibility is pushed out by
+      // LEASE_MS instead, so a crash simply lets the lease lapse and the next
+      // drain picks it up. Two workers still cannot both take it: the
+      // conditional update matches only while `available_at <= now`.
+      //
+      // Re-delivery after a lapsed lease is safe by the same contract this
+      // worker already relies on -- delivery is at-least-once and consumers are
+      // idempotent (realtime emits naturally, notifications on dedupe_key).
       const claimed = await this.prisma.outboxEvent.updateMany({
-        where: { id: event.id, status: 'pending' },
-        data: { status: 'published', publishedAt: now, attempts: { increment: 1 } },
+        where: { id: event.id, status: 'pending', availableAt: { lte: now } },
+        data: { availableAt: new Date(now.getTime() + LEASE_MS), attempts: { increment: 1 } },
       });
       if (claimed.count === 0) continue;
 
       try {
         await this.publish(event.type as CommEventName, event.payload as Record<string, unknown>);
+        // Terminal only once the work is actually done.
+        await this.prisma.outboxEvent.update({
+          where: { id: event.id },
+          data: { status: 'published', publishedAt: new Date() },
+        });
         published += 1;
       } catch (err) {
         // Return it to the queue with backoff rather than losing it.

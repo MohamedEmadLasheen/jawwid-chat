@@ -114,20 +114,21 @@ export class CoreIngestService {
     const occurredAt = row.occurredAt;
     if (!occurredAt) return 'not_applicable';
 
-    const claimed = await this.prisma.$executeRaw`
-      update chat.core_event
-         set processed_at = now(), error = null
-       where id = ${row.id} and processed_at is null`;
-    if (claimed !== 1) return 'not_applicable';
-
     try {
       const outcome = await this.apply(
+        row.id,
         row.eventType ?? '',
         row.payload as Prisma.JsonObject,
         occurredAt,
+        new Date(),
       );
+      // `not_claimed` means another processor holds it -- the same answer the
+      // standalone claim used to give when its conditional update matched
+      // nothing.
       return outcome === 'applied' ? 'applied' : 'not_applicable';
     } catch (error) {
+      // The transaction already rolled the claim back; this only records WHY,
+      // so the row stays visible in chat.sync_health.
       await this.unclaim(row.id, error);
       throw error;
     }
@@ -147,7 +148,19 @@ export class CoreIngestService {
   async drain(batchSize = 50, now = new Date()): Promise<number> {
     const pending = await this.prisma.coreEventRow.findMany({
       where: { processedAt: null, eventType: { in: [...CoreIngestService.HANDLED] } },
-      orderBy: { id: 'asc' },
+      // NEVER-FAILED EVENTS FIRST, then oldest.
+      //
+      // A permanently failing event -- a payload the projection refuses, say --
+      // stays unprocessed by design, so it stays visible. Ordered by id alone,
+      // enough of them collect at the head to fill every batch, and legitimate
+      // newer events are then never reached: the pipeline stalls indefinitely
+      // while looking healthy. Measured: 60 poison rows occupied all 50 slots
+      // on every tick and a valid event behind them was never selected.
+      //
+      // `error is null` first keeps fresh work ahead of known-bad work. The
+      // bad rows are still retried whenever there is spare batch capacity, and
+      // they still surface in chat.sync_health -- nothing is swept under.
+      orderBy: [{ error: { sort: 'asc', nulls: 'first' } }, { id: 'asc' }],
       take: batchSize,
     });
 
@@ -164,18 +177,16 @@ export class CoreIngestService {
         continue;
       }
 
-      // The claim. A second processor racing this one finds count 0 and skips.
-      const claimed = await this.prisma.$executeRaw`
-        update chat.core_event
-           set processed_at = ${now}
-         where id = ${row.id} and processed_at is null`;
-      if (claimed !== 1) continue;
-
       try {
+        // The claim happens inside apply()'s transaction. A second processor
+        // racing this one blocks on the row and then finds it already claimed,
+        // which surfaces here as `not_claimed`.
         const outcome = await this.apply(
+          row.id,
           row.eventType ?? '',
           row.payload as Prisma.JsonObject,
           row.occurredAt,
+          now,
         );
         if (outcome === 'applied') applied += 1;
       } catch (error) {
@@ -208,11 +219,31 @@ export class CoreIngestService {
    * the HTTP request happened to arrive.
    */
   private async apply(
+    id: bigint,
     eventType: string,
     payload: Prisma.JsonObject,
     occurredAt: Date,
-  ): Promise<'applied' | 'not_applicable' | 'stale'> {
+    now: Date,
+  ): Promise<'applied' | 'not_applicable' | 'stale' | 'not_claimed'> {
     return this.prisma.$transaction(async (tx) => {
+      // THE CLAIM IS PART OF THIS TRANSACTION, and that is the whole point.
+      //
+      // It used to commit on its own, before this transaction opened. A process
+      // that died in between left `processed_at` set with no projection and no
+      // error -- indistinguishable from success, so Core's retry was answered
+      // `duplicate`, drain() skipped it (it filters on processed_at is null),
+      // and the event was lost silently. Committing the claim with the work it
+      // authorises is what makes a crash roll the claim back.
+      //
+      // It also still serialises consumers: a second processor's identical
+      // UPDATE blocks on this row until we commit, then re-evaluates
+      // `processed_at is null` against the committed row and matches nothing.
+      const claimed = await tx.$executeRaw`
+        update chat.core_event
+           set processed_at = ${now}, error = null
+         where id = ${id} and processed_at is null`;
+      if (claimed !== 1) return 'not_claimed';
+
       const [result] = await tx.$queryRaw<{ result: IngestResult }[]>`
         select ${Prisma.raw(functionFor(eventType))}(
           ${payload}::jsonb, ${occurredAt}::timestamptz) as result`;

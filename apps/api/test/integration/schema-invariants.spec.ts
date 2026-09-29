@@ -258,3 +258,82 @@ describe('JC-010 — duplicate event_log definitions', () => {
     expect(err).toContain('actor_kind');
   });
 });
+
+describe('the Core ledger claim has no privileged bypass', () => {
+  /**
+   * `chat.mark_core_event_processed` sets `processed_at` with no
+   * `processed_at is null` predicate, no projection and no outbox. Executing it
+   * recreates the state the atomic claim exists to prevent: an event durably
+   * marked processed with no Chat projection, which Core's retry then reads as
+   * a duplicate and drain() skips forever.
+   *
+   * It shipped in 20260905090900 with no ACL at all, which in PostgreSQL is
+   * IMPLICIT PUBLIC EXECUTE -- so authenticated, anon and service_role could
+   * all call it. 20260929120000 revokes that.
+   *
+   * These assertions read the REAL privilege from the server, not the migration
+   * text: a migration that says REVOKE but does not take effect must fail here.
+   */
+  const FN = 'chat.mark_core_event_processed(text,text,text)';
+
+  const mayExecute = (role: string): string =>
+    sql(`select has_function_privilege('${role}', '${FN}', 'EXECUTE')`);
+
+  it('no ordinary end-user role can execute it', () => {
+    expect(mayExecute('authenticated')).toBe('f');
+    expect(mayExecute('anon')).toBe('f');
+  });
+
+  it('not even service_role can execute it', () => {
+    // service_role is what the API runs as, and the API is exactly the
+    // component the atomic claim constrains. Nothing calls this function, so
+    // withholding it costs no behaviour.
+    expect(mayExecute('service_role')).toBe('f');
+  });
+
+  it('PUBLIC no longer carries an implicit grant', () => {
+    // A NULL proacl means "owner plus the default", and for a function the
+    // default is PUBLIC EXECUTE. An explicit ACL is the evidence the revoke ran.
+    const acl = sql(
+      `select coalesce(array_to_string(proacl, '|'), 'NULL')
+         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'chat' and p.proname = 'mark_core_event_processed'`,
+    );
+    expect(acl).not.toBe('NULL');
+    expect(acl).not.toContain('authenticated=');
+    expect(acl).not.toContain('anon=');
+    expect(acl).not.toContain('service_role=');
+  });
+
+  it('the function still exists — this is a privilege fix, not a deletion', () => {
+    expect(
+      sql(`select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname='chat' and p.proname='mark_core_event_processed'`),
+    ).toBe('1');
+  });
+});
+
+describe('Core ingestion functions are service-only', () => {
+  /**
+   * `ingest_core_learner` upserts chat.learner on core_child_id, which is how
+   * the class projection resolves a family -- so an end-user role able to call
+   * it could redirect another family's class notifications. Its two siblings
+   * are locked for the same reason. service_role keeps EXECUTE: these are real
+   * ingestion functions a later Core phase will call.
+   */
+  const FNS = [
+    'chat.ingest_core_learner(jsonb)',
+    'chat.ingest_core_parent(jsonb)',
+    'chat.ingest_core_subscription(jsonb)',
+  ];
+
+  it.each(FNS)('%s is not executable by any end-user role', (fn) => {
+    for (const role of ['public', 'authenticated', 'anon']) {
+      expect(sql(`select has_function_privilege('${role}', '${fn}', 'EXECUTE')`)).toBe('f');
+    }
+  });
+
+  it.each(FNS)('%s remains executable by service_role', (fn) => {
+    expect(sql(`select has_function_privilege('service_role', '${fn}', 'EXECUTE')`)).toBe('t');
+  });
+});
