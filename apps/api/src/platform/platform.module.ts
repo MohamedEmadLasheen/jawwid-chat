@@ -1,12 +1,18 @@
 import { Global, Module } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 import { PrismaIdentityService } from './identity.service';
+import { PrismaDirectoryService } from './directory.service';
 import { SqlCoverageService } from './coverage.service';
 import { PrismaAuditService } from './audit.service';
 import { AuthorizationService } from './authorization.service';
 import { AppConfigService } from './app-config.service';
 import { RelationshipService } from './relationship.service';
-import { AUDIT_SERVICE, COVERAGE_SERVICE, IDENTITY_SERVICE } from './tokens';
+import {
+  AUDIT_SERVICE,
+  COVERAGE_SERVICE,
+  DIRECTORY_SERVICE,
+  IDENTITY_SERVICE,
+} from './tokens';
 
 /**
  * Every provider here is an AI #1 seam, except AuthorizationService, whose
@@ -23,6 +29,7 @@ import { AUDIT_SERVICE, COVERAGE_SERVICE, IDENTITY_SERVICE } from './tokens';
     AuthorizationService,
     RelationshipService,
     { provide: IDENTITY_SERVICE, useClass: PrismaIdentityService },
+    { provide: DIRECTORY_SERVICE, useClass: PrismaDirectoryService },
     { provide: COVERAGE_SERVICE, useClass: SqlCoverageService },
     { provide: AUDIT_SERVICE, useClass: PrismaAuditService },
   ],
@@ -32,6 +39,7 @@ import { AUDIT_SERVICE, COVERAGE_SERVICE, IDENTITY_SERVICE } from './tokens';
     AuthorizationService,
     RelationshipService,
     IDENTITY_SERVICE,
+    DIRECTORY_SERVICE,
     COVERAGE_SERVICE,
     AUDIT_SERVICE,
   ],

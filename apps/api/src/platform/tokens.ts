@@ -1,5 +1,6 @@
 /** DI tokens for seams AI #1 (or an infrastructure choice) replaces. */
 export const IDENTITY_SERVICE = Symbol('IdentityService');
+export const DIRECTORY_SERVICE = Symbol('DirectoryService');
 export const COVERAGE_SERVICE = Symbol('CoverageService');
 export const AUDIT_SERVICE = Symbol('AuditService');
 export const OBJECT_STORAGE = Symbol('ObjectStorage');
