@@ -19,8 +19,33 @@ import { LoggingPushProvider, type PushMessage, type PushProvider, type PushResu
  * developer machine keeps working and no notification is silently lost, because
  * `NotificationService` still records every scheduled row.
  */
-const APNS_VARS = ['APNS_KEY_ID', 'APNS_TEAM_ID', 'APNS_KEY', 'APNS_BUNDLE_ID'] as const;
-const FCM_VARS = ['FCM_PROJECT_ID', 'FCM_CLIENT_EMAIL', 'FCM_PRIVATE_KEY'] as const;
+/**
+ * THE NAMES COME FROM `infra/env/manifest.tsv`, the repository's single
+ * machine-readable source of truth for configuration and what
+ * `scripts/infra/check-env.sh` validates every deployment against.
+ *
+ * W8-W1 invented its own names instead of reading that file, and the two sets
+ * disagreed: the manifest and `deploy-production.yml` supply
+ * `FCM_SERVICE_ACCOUNT_JSON` and `APNS_PRIVATE_KEY`, while this selector looked
+ * for `FCM_CLIENT_EMAIL` + `FCM_PRIVATE_KEY` and `APNS_KEY`. A real deployment
+ * therefore presented 3 of 4 APNs variables and 1 of 3 FCM ones -- a PARTIAL
+ * group -- and `readGroup` below would have refused to start the API at all.
+ * The guard was right; the names were wrong.
+ *
+ * `APNS_PRODUCTION` belongs to the group rather than being a defaulted flag.
+ * The manifest marks it `req` in production alongside the credentials, and
+ * there is no safe default to pick: the sandbox silently DROPS production
+ * device tokens and the production endpoint rejects sandbox ones, so a wrong
+ * guess fails invisibly. Configuring APNs means saying which endpoint.
+ */
+const APNS_VARS = [
+  'APNS_KEY_ID',
+  'APNS_TEAM_ID',
+  'APNS_BUNDLE_ID',
+  'APNS_PRIVATE_KEY',
+  'APNS_PRODUCTION',
+] as const;
+const FCM_VARS = ['FCM_PROJECT_ID', 'FCM_SERVICE_ACCOUNT_JSON'] as const;
 
 /**
  * THE iOS VoIP ACTIVATION GATE. Default OFF, and it must stay off until W8-W3.
@@ -54,7 +79,7 @@ export function selectPushProvider(
 ): PushSelection {
   const apnsConfig = readGroup('APNs', APNS_VARS, env);
   const fcmConfig = readGroup('FCM', FCM_VARS, env);
-  const voipEnabled = (env[VOIP_GATE] ?? '').trim().toLowerCase() === 'true';
+  const voipEnabled = isTrue(env[VOIP_GATE]);
 
   if (!apnsConfig && !fcmConfig) {
     logger.warn(
@@ -72,17 +97,20 @@ export function selectPushProvider(
     ? new ApnsPushProvider({
         keyId: apnsConfig.APNS_KEY_ID,
         teamId: apnsConfig.APNS_TEAM_ID,
-        key: apnsConfig.APNS_KEY,
+        key: apnsConfig.APNS_PRIVATE_KEY,
         bundleId: apnsConfig.APNS_BUNDLE_ID,
-        production: (env.NODE_ENV ?? '') === 'production',
+        // The deployment's own word, not an inference from NODE_ENV. They are
+        // two different questions -- a staging deployment can legitimately hold
+        // production-issued device tokens -- and the manifest makes this the
+        // variable that answers the second one.
+        production: isTrue(apnsConfig.APNS_PRODUCTION),
       })
     : null;
 
   const fcm = fcmConfig
     ? new FcmPushProvider({
         projectId: fcmConfig.FCM_PROJECT_ID,
-        clientEmail: fcmConfig.FCM_CLIENT_EMAIL,
-        privateKey: fcmConfig.FCM_PRIVATE_KEY,
+        ...serviceAccount(fcmConfig.FCM_SERVICE_ACCOUNT_JSON),
       })
     : null;
 
@@ -165,6 +193,67 @@ export class PlatformRoutedPushProvider implements PushProvider {
     }
     return provider.send(message);
   }
+}
+
+/**
+ * The word `true`, trimmed and case-insensitive. Nothing else is true.
+ *
+ * `1` and `yes` are NOT accepted, and that is the point: they are somebody's
+ * assumption about what a flag takes, and a flag that guesses is how a sandbox
+ * deployment quietly starts talking to Apple's production endpoint. Surrounding
+ * whitespace and capitalisation are forgiven, because a secret store adds them
+ * and an operator did not mean them.
+ *
+ * This is the VoIP gate's existing rule, unchanged, now shared with the APNs
+ * endpoint so both flags answer to exactly the same word.
+ */
+function isTrue(value: string | undefined): boolean {
+  return (value ?? '').trim().toLowerCase() === 'true';
+}
+
+/**
+ * The two fields FCM signs with, read out of the service-account document that
+ * `infra/env/manifest.tsv` declares.
+ *
+ * Google issues ONE document and that is what a secret store holds. Splitting
+ * it into separate variables -- which W8-W1 did -- means transcribing a PEM by
+ * hand into an environment variable, and is not the contract this repository
+ * deploys with.
+ *
+ * NOTHING FROM THE DOCUMENT REACHES AN ERROR MESSAGE. A malformed value here is
+ * a private key with a typo in it: the failure names which FIELD is missing and
+ * never what was found, because a startup exception is the one place a
+ * credential would be printed and then kept forever in a deployment log.
+ */
+function serviceAccount(raw: string): { clientEmail: string; privateKey: string } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(
+      'FCM_SERVICE_ACCOUNT_JSON is not valid JSON. It is the service-account ' +
+        'document Google issues, stored verbatim.',
+    );
+  }
+
+  const doc = parsed as { client_email?: unknown; private_key?: unknown };
+  const clientEmail =
+    typeof doc.client_email === 'string' ? doc.client_email.trim() : '';
+  const privateKey = typeof doc.private_key === 'string' ? doc.private_key : '';
+
+  if (!clientEmail || !privateKey) {
+    const missing = [
+      clientEmail ? null : 'client_email',
+      privateKey ? null : 'private_key',
+    ].filter(Boolean);
+    throw new Error(
+      `FCM_SERVICE_ACCOUNT_JSON is missing ${missing.join(' and ')}. Starting ` +
+        'without it would report a healthy push pipeline that cannot ' +
+        'authenticate to FCM.',
+    );
+  }
+
+  return { clientEmail, privateKey };
 }
 
 /**

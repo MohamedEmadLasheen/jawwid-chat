@@ -42,8 +42,15 @@ jest.mock('@parse/node-apn', () => {
   const base = actual.default ?? actual;
   const deliveries: { topic: unknown; pushType: unknown; token: string }[] = [];
 
+  const constructions: { production: unknown }[] = [];
+
   class RecordingProvider {
     static deliveries = deliveries;
+    /** How each provider was configured -- the APNs ENDPOINT, in particular. */
+    static constructions = constructions;
+    constructor(options: { production?: unknown }) {
+      constructions.push({ production: options?.production });
+    }
     async send(notification: { topic: unknown; pushType: unknown }, token: string) {
       deliveries.push({
         topic: notification.topic,
@@ -70,6 +77,19 @@ jest.mock('google-auth-library', () => ({
 /** Everything the stubbed APNs transport was asked to deliver. */
 const apnsDeliveries = () =>
   (apn.Provider as unknown as { deliveries: { pushType: unknown }[] }).deliveries;
+
+/**
+ * The endpoint the most recently constructed APNs provider was pointed at.
+ *
+ * Read off the SDK constructor rather than asserted on a private field: the
+ * question "sandbox or production" is only answerable where the connection is
+ * made, and that is the one place it matters.
+ */
+const lastApnsProduction = (): unknown => {
+  const all = (apn.Provider as unknown as { constructions: { production: unknown }[] })
+    .constructions;
+  return all[all.length - 1]?.production;
+};
 
 /**
  * A real EC P-256 key, generated per run.
@@ -309,16 +329,28 @@ describe('provider selection', () => {
     apnsDeliveries().length = 0;
   });
 
+  // EXACTLY THE NAMES IN infra/env/manifest.tsv, which is what
+  // scripts/infra/check-env.sh validates and what deploy-production.yml sets.
+  // W8-W1 shipped a different set and a real deployment would have presented a
+  // PARTIAL group, which the half-configured guard refuses -- so the API would
+  // not have booted. These fixtures are the contract, and the tests below
+  // assert the old invented names are no longer required.
   const apnsEnv = {
     APNS_KEY_ID: 'K',
     APNS_TEAM_ID: 'T',
-    APNS_KEY: SIGNING_KEY,
     APNS_BUNDLE_ID: 'com.jawwid.chat',
+    APNS_PRIVATE_KEY: SIGNING_KEY,
+    APNS_PRODUCTION: 'false',
   };
+  const serviceAccountJson = JSON.stringify({
+    type: 'service_account',
+    project_id: 'p',
+    client_email: 'push@p.iam.gserviceaccount.com',
+    private_key: SIGNING_KEY,
+  });
   const fcmEnv = {
     FCM_PROJECT_ID: 'p',
-    FCM_CLIENT_EMAIL: 'e@x',
-    FCM_PRIVATE_KEY: SIGNING_KEY,
+    FCM_SERVICE_ACCOUNT_JSON: serviceAccountJson,
   };
 
   it('no configuration keeps the logging provider — a laptop still works', () => {
@@ -335,7 +367,7 @@ describe('provider selection', () => {
       /partially configured/i,
     );
     expect(() =>
-      selectPushProvider({ FCM_PROJECT_ID: 'p', FCM_CLIENT_EMAIL: 'e@x' }, silent),
+      selectPushProvider({ FCM_PROJECT_ID: 'p' }, silent),
     ).toThrow(/partially configured/i);
   });
 
@@ -352,6 +384,125 @@ describe('provider selection', () => {
 
   it('both configured is the production shape', () => {
     expect(selectPushProvider({ ...apnsEnv, ...fcmEnv }, silent).kind).toBe('apns+fcm');
+  });
+
+  describe('the deployment contract in infra/env/manifest.tsv', () => {
+    it('7. the invented W8-W1 names are no longer required', () => {
+      // The regression this whole micro-workstream exists for. If the selector
+      // ever asks for APNS_KEY or FCM_CLIENT_EMAIL again, the manifest's own
+      // variables become a partial group and the API refuses to start.
+      const selection = selectPushProvider({ ...apnsEnv, ...fcmEnv }, silent);
+
+      expect(selection.kind).toBe('apns+fcm');
+      for (const invented of ['APNS_KEY', 'FCM_CLIENT_EMAIL', 'FCM_PRIVATE_KEY']) {
+        expect(Object.keys({ ...apnsEnv, ...fcmEnv })).not.toContain(invented);
+      }
+    });
+
+    it('4. the manifest\'s APNs variables select the real provider', () => {
+      expect(selectPushProvider({ ...apnsEnv }, silent).kind).toBe('apns');
+    });
+
+    it('1. the manifest\'s FCM variables select the real provider', () => {
+      expect(selectPushProvider({ ...fcmEnv }, silent).kind).toBe('fcm');
+    });
+
+    it('5. APNS_PRODUCTION decides the endpoint, and NODE_ENV does not', () => {
+      // Two different questions. A staging deployment can hold production
+      // device tokens, and the sandbox silently DROPS those -- so inferring
+      // the endpoint from NODE_ENV fails invisibly, which is the worst way for
+      // a push pipeline to fail.
+      const production = selectPushProvider(
+        { ...apnsEnv, APNS_PRODUCTION: 'true', NODE_ENV: 'development' },
+        silent,
+      );
+      const sandbox = selectPushProvider(
+        { ...apnsEnv, APNS_PRODUCTION: 'false', NODE_ENV: 'production' },
+        silent,
+      );
+
+      void production;
+      // Constructed in order, so the last two entries are these two.
+      const all = (apn.Provider as unknown as {
+        constructions: { production: unknown }[];
+      }).constructions;
+      expect(all[all.length - 2].production).toBe(true);
+      expect(lastApnsProduction()).toBe(false);
+      void sandbox;
+    });
+
+    it('5b. only the exact string "true" opens the production endpoint', () => {
+      // `1` and `yes` are somebody's assumption, and are refused. Whitespace
+      // and capitalisation are a secret store's doing, not an operator's, and
+      // are forgiven -- the same rule the VoIP gate has always used.
+      for (const value of ['1', 'yes', 'on', 'production', '']) {
+        selectPushProvider({ ...apnsEnv, APNS_PRODUCTION: value || 'false' }, silent);
+        expect(lastApnsProduction()).toBe(false);
+      }
+      for (const value of ['true', 'TRUE ', ' True']) {
+        selectPushProvider({ ...apnsEnv, APNS_PRODUCTION: value }, silent);
+        expect(lastApnsProduction()).toBe(true);
+      }
+    });
+
+    it('6. APNs without its endpoint declared is partial, and refused', () => {
+      const { APNS_PRODUCTION: _omitted, ...withoutEndpoint } = apnsEnv;
+
+      expect(() => selectPushProvider(withoutEndpoint, silent)).toThrow(
+        /APNS_PRODUCTION/,
+      );
+    });
+
+    it('3. a service-account document that is not JSON is refused', () => {
+      expect(() =>
+        selectPushProvider(
+          { FCM_PROJECT_ID: 'p', FCM_SERVICE_ACCOUNT_JSON: 'not-json' },
+          silent,
+        ),
+      ).toThrow(/not valid JSON/i);
+    });
+
+    it('3b. a service-account document missing a signing field is refused', () => {
+      expect(() =>
+        selectPushProvider(
+          {
+            FCM_PROJECT_ID: 'p',
+            FCM_SERVICE_ACCOUNT_JSON: JSON.stringify({ client_email: 'e@x' }),
+          },
+          silent,
+        ),
+      ).toThrow(/private_key/);
+    });
+
+    it('8. NO CREDENTIAL REACHES A MESSAGE OR A LOG', () => {
+      // A startup exception is the one place a private key would be printed
+      // and then kept forever in a deployment log.
+      const said: string[] = [];
+      const recorder = {
+        log: (m: string) => said.push(m),
+        warn: (m: string) => said.push(m),
+      };
+      const secret = 'SUPER-SECRET-KEY-MATERIAL';
+
+      expect(() =>
+        selectPushProvider(
+          {
+            FCM_PROJECT_ID: 'p',
+            FCM_SERVICE_ACCOUNT_JSON: JSON.stringify({ private_key: secret }),
+          },
+          recorder,
+        ),
+      ).toThrow(/client_email/);
+
+      // And the happy path says nothing either.
+      selectPushProvider({ ...apnsEnv, ...fcmEnv }, recorder);
+
+      for (const line of said) {
+        expect(line).not.toContain(secret);
+        expect(line).not.toContain(SIGNING_KEY);
+        expect(line).not.toContain('BEGIN');
+      }
+    });
   });
 
   describe('the iOS VoIP activation gate', () => {
