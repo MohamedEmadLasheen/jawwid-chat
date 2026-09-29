@@ -2,14 +2,16 @@ import 'package:flutter_riverpod/misc.dart';
 
 import '../core/data/fake_backend.dart';
 import '../core/data/fake_repositories.dart';
+import '../core/data/http/http_auth_repository.dart';
 import '../core/data/http/http_conversation_repository.dart';
 import '../core/data/http/http_group_repository.dart';
 import '../core/data/http/http_message_repository.dart';
 import '../core/data/http/http_story_repository.dart';
-import '../core/data/http/unavailable_auth_repository.dart';
 import '../core/errors/app_error.dart';
 import '../core/network/actor_identity.dart';
+import '../core/network/api_client.dart';
 import '../core/network/api_config.dart';
+import '../core/network/device_descriptor.dart';
 import '../core/network/http_stack.dart';
 import '../core/storage/secure_token_store.dart';
 import '../features/auth/application/auth_controller.dart';
@@ -42,34 +44,49 @@ Future<List<Override>> bootstrap({
 
 /// The real stack.
 ///
-/// **Authentication is not wired, because no auth contract exists.**
-/// [UnavailableAuthRepository] fails every auth call with a specific, terminal error rather
-/// than inventing `/auth/login`. That means this build reaches the login screen and stops
-/// there — which is the honest state of the integration, not a bug to route around.
+/// ## One session authority
 ///
-/// The conversation, message and group repositories are fully implemented against the
-/// published contract and will work the moment an actor identity is available.
+/// Exactly one [SecureTokenStore], one [StoredTokenProvider] and one [ApiClient] are built
+/// here, and everything authenticated shares them. Realtime and push registration, when they
+/// arrive, take the same `tokens` instance — they must not build their own.
+///
+/// The reason is `POST /auth/refresh`: it rotates, and `AuthService.handleRefreshReuse`
+/// reads a replayed refresh token as theft and revokes **every live session on the account**.
+/// A second refresher on this device is therefore not a wasted request; it is a sign-out on
+/// every device the user owns.
+///
+/// ## How the knot is tied
+///
+/// The repository needs the client (for `/me` and `/auth/logout`), the client needs the
+/// token provider, and the token provider needs the repository (to perform the exchange).
+/// `late final` plus a closure resolves that at call time rather than construction time.
+/// The alternative — giving the repository its own client — is the exact duplication the
+/// paragraph above forbids.
 List<Override> _httpOverrides({required String debugActorId}) {
   final config = ApiConfig.fromEnvironment();
   final tokenStore = SecureTokenStore();
-  const auth = UnavailableAuthRepository();
-
-  // Set only for local bring-up against the engine's documented `x-actor-id` seam, and
-  // compiled out of release builds. See ActorIdentity for why this is not authentication.
-  final identity = debugActorId.isEmpty
-      ? const BearerTokenIdentity() as ActorIdentity
-      : DebugActorHeaderIdentity(actorId: debugActorId, enabled: true);
-
   final session = SessionContext(fallbackActorId: debugActorId);
 
-  final client = buildApiClient(
+  late final ApiClient client;
+
+  final auth = HttpAuthRepository(
+    // Login and refresh go over the public transport, which has no refresh interceptor to
+    // re-enter. See AuthTransport for the recursion this forecloses.
+    transport: buildAuthTransport(config: config),
+    protected: () => client,
+    device: PlatformDeviceDescriptor(),
+  );
+
+  final tokens = StoredTokenProvider(
+    store: tokenStore,
+    auth: auth,
+    onEnded: session.end,
+  );
+
+  client = buildApiClient(
     config: config,
-    tokens: StoredTokenProvider(
-      store: tokenStore,
-      auth: auth,
-      onEnded: session.end,
-    ),
-    identity: identity,
+    tokens: tokens,
+    identity: const BearerTokenIdentity(),
   );
 
   return [
@@ -96,6 +113,13 @@ List<Override> _httpOverrides({required String debugActorId}) {
         repository: auth,
         tokens: tokenStore,
         clearLocalData: () async {},
+        // The transport layer needs the principal too: ownership is decided by actor id and
+        // approval policy by role. Before this existed, `actorId()` returned '' and `role()`
+        // silently defaulted to parent, so a signed-in teacher saw their own messages as
+        // somebody else's.
+        onPrincipal: (principal) =>
+            session.adopt(role: principal.role, actorId: principal.id),
+        onSessionCleared: session.clear,
       ),
     ),
   ];
@@ -146,7 +170,10 @@ class SessionContext {
   }
 
   /// Cleared when the backend ends the session, so no stale identity can outlive it.
-  Future<void> end(AppError error) async {
+  Future<void> end(AppError error) => clear();
+
+  /// Same, for an ordinary sign-out, where there is no error to report.
+  Future<void> clear() async {
     _role = null;
     _actorId = null;
   }

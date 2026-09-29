@@ -34,7 +34,12 @@ class RecordedRequest {
 
 /// A scripted reply.
 class Reply {
-  const Reply(this.status, this.body, {this.delay = Duration.zero});
+  const Reply(
+    this.status,
+    this.body, {
+    this.delay = Duration.zero,
+    this.headers = const {},
+  });
 
   const Reply.ok(Object? body) : this(200, body);
 
@@ -46,6 +51,11 @@ class Reply {
   final int status;
   final Object? body;
   final Duration delay;
+
+  /// Response headers. Needed because some of the contract lives there and not in the body:
+  /// `COMMON.RATE_LIMITED` carries its wait in `Retry-After`, deliberately, so that a
+  /// per-account countdown cannot leak which accounts are under attack.
+  final Map<String, String> headers;
 }
 
 /// A real HTTP server on loopback, used to verify the client speaks the documented protocol.
@@ -155,6 +165,7 @@ class TestServer {
 
       request.response.statusCode = reply.status;
       request.response.headers.contentType = ContentType.json;
+      reply.headers.forEach(request.response.headers.set);
 
       // A String body is written verbatim, so a malformed payload can be simulated.
       final payload = reply.body;

@@ -6,6 +6,7 @@ import '../../../core/data/repositories.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/logging/redacting_logger.dart';
 import '../../../core/storage/secure_token_store.dart';
+import '../../../shared/models/auth.dart';
 import '../domain/auth_state.dart';
 
 /// Owns the session for the whole app.
@@ -19,10 +20,14 @@ class AuthController extends Notifier<AuthState> {
     required AuthRepository repository,
     required TokenStore tokens,
     required Future<void> Function() clearLocalData,
+    void Function(AuthUser principal)? onPrincipal,
+    Future<void> Function()? onSessionCleared,
     RedactingLogger logger = const RedactingLogger(),
   })  : _repository = repository,
         _tokens = tokens,
         _clearLocalData = clearLocalData,
+        _onPrincipal = onPrincipal,
+        _onSessionCleared = onSessionCleared,
         _logger = logger;
 
   final AuthRepository _repository;
@@ -31,6 +36,15 @@ class AuthController extends Notifier<AuthState> {
   /// Drops cached conversations, messages, and drafts. Injected rather than imported so the
   /// auth feature does not reach into the storage layer directly.
   final Future<void> Function() _clearLocalData;
+
+  /// Announces the authenticated principal to the layers that need it but must not depend on
+  /// Riverpod — the transport decides message ownership by actor id and approval policy by
+  /// role, and had neither until this existed.
+  final void Function(AuthUser principal)? _onPrincipal;
+
+  /// The other half: whatever [_onPrincipal] told, forget. Called from the one cleanup path,
+  /// so a stale identity cannot outlive the session that produced it.
+  final Future<void> Function()? _onSessionCleared;
 
   final RedactingLogger _logger;
 
@@ -56,10 +70,10 @@ class AuthController extends Notifier<AuthState> {
 
     try {
       final principal = await _repository.currentUser();
-      _watchRevocation();
+      _adopt(principal);
       state = AuthAuthenticated(principal);
     } on AppError catch (error) {
-      if (error.terminatesSession) {
+      if (error.terminatesSession || error.code == AuthFailures.roleNotSupported) {
         await _endSession(AuthSignedOut.reasonFor(error));
       } else {
         // A network failure at launch is not a sign-out. Keep the stored session and let
@@ -81,7 +95,7 @@ class AuthController extends Notifier<AuthState> {
       await _tokens.write(session);
 
       final principal = await _repository.currentUser();
-      _watchRevocation();
+      _adopt(principal);
       state = AuthAuthenticated(principal);
     } on AppError catch (error) {
       // Never log the attempted credentials, and never echo the raw server body.
@@ -108,6 +122,11 @@ class AuthController extends Notifier<AuthState> {
   Future<void> onSessionEnded(AppError error) =>
       _endSession(AuthSignedOut.reasonFor(error));
 
+  void _adopt(AuthUser principal) {
+    _onPrincipal?.call(principal);
+    _watchRevocation();
+  }
+
   void _watchRevocation() {
     _revocationWatch?.cancel();
     _revocationWatch = _repository.sessionRevoked.listen((_) {
@@ -121,6 +140,7 @@ class AuthController extends Notifier<AuthState> {
 
     await _tokens.clear();
     await _clearLocalData();
+    await _onSessionCleared?.call();
 
     state = AuthSignedOut(reason: reason);
   }
