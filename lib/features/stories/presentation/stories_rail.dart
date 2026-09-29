@@ -3,192 +3,99 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../design/tokens.dart';
 import '../../../design/widgets/jawwid_avatar.dart';
+import '../../../l10n/app_localizations.dart';
+import '../../../shared/models/story.dart';
 import '../application/stories_controller.dart';
-import '../domain/story.dart';
 
 /// The horizontally scrolling stories rail, above the conversation list.
 ///
-/// Built to the interaction model people already know from other messaging apps —
-/// circular avatars, unviewed first, a ring that distinguishes viewed from unviewed, the
-/// viewer's own entry leading — while staying inside Jawwid's own palette and type. No
-/// borrowed colours, no borrowed marks.
+/// ## It renders nothing unless there are stories to render
 ///
-/// **It renders nothing when there are no rings**, which is every build today. That is
-/// deliberate: an empty rail of grey circles would take 110dp of the most valuable space on
-/// the screen to communicate that a feature does not exist. See [storyRingsProvider].
+/// Not a skeleton while loading, not a row of grey circles when the academy has published
+/// nothing, and not an error band when the feed failed. Stories are secondary to the chat
+/// list, and 106dp of the most valuable space on the screen is too much to spend saying
+/// "nothing here". Loading, empty, unavailable and failed all look the same from the outside:
+/// absent. The controller still distinguishes them internally, so a missing wiring cannot
+/// masquerade as a quiet academy.
+///
+/// Retry is the screen's existing pull-to-refresh, which refreshes conversations and stories
+/// together. The rail deliberately has no refresh control of its own.
+///
+/// ## One ring per story, not per author
+///
+/// The feed carries no author, on purpose: a reader has no business learning which member of
+/// staff wrote an academy publication. Every story a reader sees is from the academy, so
+/// grouping by publisher would produce exactly one ring and throw away the per-story
+/// unviewed state the contract does give us. Each ring is therefore one story, labelled with
+/// its own title, and the avatar carries the academy's initial.
+///
+/// There is no "Your story" entry. This client authenticates only as `parent` or `teacher`
+/// and can never publish, so an entry that opened a composer would be a control that exists
+/// only to fail.
 class StoriesRail extends ConsumerWidget {
-  const StoriesRail({super.key, this.onOpenStory, this.onCreateStory});
+  const StoriesRail({super.key, this.onOpenStory});
 
-  final void Function(StoryRing story)? onOpenStory;
-  final VoidCallback? onCreateStory;
+  /// Overridable so widget tests can observe navigation without a router.
+  final void Function(Story story)? onOpenStory;
+
+  /// Avatar + ring + one line of label, plus the row's own padding.
+  static const railHeight = 106.0;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final rings = ref.watch(storyRingsProvider);
-    final canPost = ref.watch(canPostStoryProvider);
+    final stories = ref.watch(storyRailOrderProvider);
+    if (stories.isEmpty) return const SizedBox.shrink();
 
-    if (rings.isEmpty && !canPost) return const SizedBox.shrink();
-
-    // Unviewed first, then newest — the order that makes the rail worth swiping.
-    final ordered = [...rings]..sort((a, b) {
-        if (a.isOwn != b.isOwn) return a.isOwn ? -1 : 1;
-        if (a.isViewed != b.isViewed) return a.isViewed ? 1 : -1;
-        return b.postedAt.compareTo(a.postedAt);
-      });
-
-    final own = ordered.where((s) => s.isOwn).firstOrNull;
-    final others = ordered.where((s) => !s.isOwn).toList(growable: false);
+    final l10n = L10n.of(context);
+    final tokens = JawwidTokens.of(context);
 
     return Container(
-      height: _railHeight,
+      height: railHeight,
       decoration: BoxDecoration(
-        color: JawwidTokens.of(context).colorSurfaceDefault,
-        border: Border(
-          bottom: BorderSide(color: JawwidTokens.of(context).colorBorderSubtle),
-        ),
+        color: tokens.colorSurfaceDefault,
+        border: Border(bottom: BorderSide(color: tokens.colorBorderSubtle)),
       ),
-      // A horizontal ListView takes its scroll direction from the ambient Directionality,
-      // so this starts at the right in Arabic without any mirroring code.
-      child: ListView(
+      // A horizontal ListView takes its scroll direction from the ambient Directionality, so
+      // this starts at the right in Arabic without any mirroring code.
+      child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(
           horizontal: Spacing.spacing4,
           vertical: Spacing.spacing3,
         ),
-        children: [
-          if (canPost)
-            _CreateStoryEntry(
-              existing: own,
-              onTap: own == null
-                  ? onCreateStory
-                  : () => onOpenStory?.call(own),
-            ),
-          for (final story in others)
-            _StoryEntry(
-              story: story,
-              onTap: () => onOpenStory?.call(story),
-            ),
-        ],
+        itemCount: stories.length,
+        itemBuilder: (context, index) => _StoryEntry(
+          story: stories[index],
+          publisherName: l10n.appName,
+          onTap: () => onOpenStory?.call(stories[index]),
+        ),
       ),
     );
   }
-
-  /// Avatar + ring + one line of name, plus the row's own padding.
-  static const _railHeight = 106.0;
 }
 
 class _StoryEntry extends StatelessWidget {
-  const _StoryEntry({required this.story, this.onTap});
-
-  final StoryRing story;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return _RailSlot(
-      // Viewed state reaches a screen reader as words, never as a ring colour alone.
-      semanticLabel: story.authorName,
-      onTap: onTap,
-      ring: _AvatarRing(
-        viewed: story.isViewed,
-        child: JawwidAvatar(
-          displayName: story.authorName,
-          imageUrl: story.avatarUrl,
-          size: Sizes.avatarLg,
-        ),
-      ),
-      label: story.authorName,
-      emphasised: !story.isViewed,
-    );
-  }
-}
-
-/// The viewer's own entry. Shown only where posting is actually supported.
-class _CreateStoryEntry extends StatelessWidget {
-  const _CreateStoryEntry({required this.existing, this.onTap});
-
-  final StoryRing? existing;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = JawwidTokens.of(context);
-    final name = existing?.authorName ?? '';
-
-    return _RailSlot(
-      semanticLabel: name,
-      onTap: onTap,
-      ring: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          existing == null
-              ? Container(
-                  width: Sizes.avatarLg,
-                  height: Sizes.avatarLg,
-                  decoration: BoxDecoration(
-                    color: tokens.colorSurfaceMuted,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: tokens.colorBorderDefault),
-                  ),
-                )
-              : _AvatarRing(
-                  viewed: existing!.isViewed,
-                  child: JawwidAvatar(
-                    displayName: name,
-                    imageUrl: existing!.avatarUrl,
-                    size: Sizes.avatarLg,
-                  ),
-                ),
-          PositionedDirectional(
-            bottom: -2,
-            end: -2,
-            child: Container(
-              padding: const EdgeInsets.all(2),
-              decoration: BoxDecoration(
-                color: tokens.colorSurfaceDefault,
-                shape: BoxShape.circle,
-              ),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: tokens.colorBrandPrimary,
-                  shape: BoxShape.circle,
-                ),
-                padding: const EdgeInsets.all(2),
-                child: Icon(
-                  Icons.add,
-                  size: 12,
-                  color: tokens.colorBrandOnPrimary,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-      label: name,
-      emphasised: false,
-    );
-  }
-}
-
-/// One fixed-width column in the rail, so entries line up whatever the name length.
-class _RailSlot extends StatelessWidget {
-  const _RailSlot({
-    required this.ring,
-    required this.label,
-    required this.semanticLabel,
-    required this.emphasised,
+  const _StoryEntry({
+    required this.story,
+    required this.publisherName,
     this.onTap,
   });
 
-  final Widget ring;
-  final String label;
-  final String semanticLabel;
-  final bool emphasised;
+  final Story story;
+  final String publisherName;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = L10n.of(context);
     final theme = Theme.of(context);
+    final label = story.title ?? publisherName;
+
+    // Viewed state reaches a screen reader as WORDS. The ring colour alone would be the only
+    // indication for a sighted user and no indication at all for anyone else.
+    final semanticLabel = story.isViewed
+        ? l10n.storyRingViewed(label)
+        : l10n.storyRingUnviewed(label);
 
     return Semantics(
       button: true,
@@ -202,7 +109,13 @@ class _RailSlot extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                ring,
+                _AvatarRing(
+                  viewed: story.isViewed,
+                  child: JawwidAvatar(
+                    displayName: publisherName,
+                    size: Sizes.avatarLg,
+                  ),
+                ),
                 const SizedBox(height: Spacing.spacing2),
                 Text(
                   label,
@@ -210,10 +123,10 @@ class _RailSlot extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
                   style: theme.textTheme.labelSmall?.copyWith(
-                    fontWeight: emphasised ? FontWeight.w700 : FontWeight.w400,
-                    color: emphasised
-                        ? theme.colorScheme.onSurface
-                        : theme.colorScheme.onSurfaceVariant,
+                    fontWeight: story.isViewed ? FontWeight.w400 : FontWeight.w700,
+                    color: story.isViewed
+                        ? theme.colorScheme.onSurfaceVariant
+                        : theme.colorScheme.onSurface,
                   ),
                 ),
               ],

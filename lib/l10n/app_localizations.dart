@@ -1314,6 +1314,72 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'{size} MB'**
   String fileSizeMb(String size);
+
+  /// Accessible label for one ring in the stories rail.
+  ///
+  /// In en, this message translates to:
+  /// **'Unviewed story: {label}'**
+  String storyRingUnviewed(String label);
+
+  /// Accessible label for one ring in the stories rail.
+  ///
+  /// In en, this message translates to:
+  /// **'Viewed story: {label}'**
+  String storyRingViewed(String label);
+
+  /// No description provided for @storyClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close story'**
+  String get storyClose;
+
+  /// No description provided for @storyPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous story'**
+  String get storyPrevious;
+
+  /// No description provided for @storyNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next story'**
+  String get storyNext;
+
+  /// No description provided for @storyImageLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Story image'**
+  String get storyImageLabel;
+
+  /// No description provided for @storyMediaFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'This picture could not be loaded.'**
+  String get storyMediaFailed;
+
+  /// No description provided for @storyUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This story is no longer available.'**
+  String get storyUnavailable;
+
+  /// No description provided for @storyVideoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This story is a video.'**
+  String get storyVideoTitle;
+
+  /// No description provided for @storyVideoOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open video'**
+  String get storyVideoOpen;
+
+  /// No description provided for @storyVideoOpenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing on this device can open it.'**
+  String get storyVideoOpenFailed;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

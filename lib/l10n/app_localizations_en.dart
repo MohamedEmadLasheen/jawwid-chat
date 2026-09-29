@@ -671,4 +671,41 @@ class L10nEn extends L10n {
   String fileSizeMb(String size) {
     return '$size MB';
   }
+
+  @override
+  String storyRingUnviewed(String label) {
+    return 'Unviewed story: $label';
+  }
+
+  @override
+  String storyRingViewed(String label) {
+    return 'Viewed story: $label';
+  }
+
+  @override
+  String get storyClose => 'Close story';
+
+  @override
+  String get storyPrevious => 'Previous story';
+
+  @override
+  String get storyNext => 'Next story';
+
+  @override
+  String get storyImageLabel => 'Story image';
+
+  @override
+  String get storyMediaFailed => 'This picture could not be loaded.';
+
+  @override
+  String get storyUnavailable => 'This story is no longer available.';
+
+  @override
+  String get storyVideoTitle => 'This story is a video.';
+
+  @override
+  String get storyVideoOpen => 'Open video';
+
+  @override
+  String get storyVideoOpenFailed => 'Nothing on this device can open it.';
 }

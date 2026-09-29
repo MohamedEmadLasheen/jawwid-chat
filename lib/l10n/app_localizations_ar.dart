@@ -672,4 +672,42 @@ class L10nAr extends L10n {
   String fileSizeMb(String size) {
     return '$size م.ب';
   }
+
+  @override
+  String storyRingUnviewed(String label) {
+    return 'حالة غير مقروءة: $label';
+  }
+
+  @override
+  String storyRingViewed(String label) {
+    return 'حالة مقروءة: $label';
+  }
+
+  @override
+  String get storyClose => 'إغلاق الحالة';
+
+  @override
+  String get storyPrevious => 'الحالة السابقة';
+
+  @override
+  String get storyNext => 'الحالة التالية';
+
+  @override
+  String get storyImageLabel => 'صورة الحالة';
+
+  @override
+  String get storyMediaFailed => 'لم نتمكّن من تحميل هذه الصورة.';
+
+  @override
+  String get storyUnavailable => 'هذه الحالة لم تعد متاحة.';
+
+  @override
+  String get storyVideoTitle => 'هذه الحالة مقطع فيديو.';
+
+  @override
+  String get storyVideoOpen => 'تشغيل الفيديو';
+
+  @override
+  String get storyVideoOpenFailed =>
+      'لا يوجد تطبيق على هذا الجهاز يمكنه تشغيله.';
 }

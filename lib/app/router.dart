@@ -10,6 +10,7 @@ import '../features/messages/presentation/chat_screen_route.dart';
 import '../features/messages/presentation/conversation_media_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
+import '../features/stories/presentation/story_viewer_screen.dart';
 import 'providers.dart';
 import 'shells/app_shell.dart';
 
@@ -41,6 +42,14 @@ abstract final class Routes {
   /// The signed-in user's own account. Deliberately under Settings rather than alongside
   /// the profiles above: "my account" and "someone else's profile" are different things.
   static const myAccount = '/settings/account';
+
+  /// One story, opened full-screen from the rail.
+  ///
+  /// A real route rather than a bare `Navigator.push`, for the same reason the media screen is
+  /// one: the back button, the Android system back gesture and a notification deep link all
+  /// have to land somewhere, and a story that lapsed before the link was followed must reach a
+  /// screen that says so rather than a 404.
+  static String story(String id) => '/stories/$id';
 }
 
 /// Rebuilds on every authentication change, so a session ending immediately evicts every
@@ -107,6 +116,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.myAccount,
         builder: (context, state) => const MyAccountScreen(),
+      ),
+      // Full-screen, above the tab bar: a story is the whole viewport for as long as it is
+      // open, and a tab bar underneath it would be something to tap by accident.
+      GoRoute(
+        path: '/stories/:storyId',
+        builder: (context, state) => StoryViewerScreen(
+          storyId: state.pathParameters['storyId']!,
+        ),
       ),
       // The two retired destinations, registered purely to forward. Declared as real routes
       // rather than left to the top-level redirect so that an old link is *matched* and

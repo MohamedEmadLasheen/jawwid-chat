@@ -1,6 +1,7 @@
 import '../../shared/models/auth.dart';
 import '../../shared/models/conversation.dart';
 import '../../shared/models/message.dart';
+import '../../shared/models/story.dart';
 import '../../shared/models/user_role.dart';
 
 /// One page of a cursor-paginated list (§19).
@@ -333,6 +334,26 @@ abstract interface class MessageRepository {
   });
 
   Future<void> setTyping(String conversationId, {required bool isTyping});
+}
+
+/// Stories, read-only.
+///
+/// There is no create, no publish, no delete and no viewer list here, and that is not an
+/// omission. This client authenticates only as `parent` or `teacher`; publishing is
+/// `stories.publish`, held by the family-facing staff roles, and the viewer list is
+/// deliberately publisher-only (docs/product/STORIES.md section 3). A method for any of them
+/// would be a method whose only possible body is a permission error.
+abstract interface class StoryRepository {
+  /// The live stories published to the signed-in actor, newest first.
+  ///
+  /// The server resolves the audience and filters by expiry; there is nothing to filter
+  /// here. No cursor: `GET /stories/feed` returns one page of at most
+  /// `story.feed_page_size` and publishes no pagination contract, so this does not invent
+  /// one.
+  Future<List<Story>> feed();
+
+  /// Record that the signed-in actor opened this story. Idempotent on the server.
+  Future<void> markViewed(String storyId);
 }
 
 abstract interface class GroupRepository {

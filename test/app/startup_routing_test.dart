@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:jawwid_chat/app/app.dart';
 import 'package:jawwid_chat/app/providers.dart';
+import 'package:jawwid_chat/app/retry_policy.dart';
 import 'package:jawwid_chat/app/router.dart';
 import 'package:jawwid_chat/core/data/fake_backend.dart';
 import 'package:jawwid_chat/core/data/fake_repositories.dart';
@@ -39,6 +40,7 @@ void main() {
     final auth = FakeAuthRepository(backend: backend, tokens: tokens);
 
     container = ProviderContainer(
+      retry: JawwidRetryPolicy.policy,
       overrides: [
         tokenStoreProvider.overrideWithValue(tokens),
         authRepositoryProvider.overrideWithValue(auth),

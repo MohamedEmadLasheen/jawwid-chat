@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/app/app.dart';
 import 'package:jawwid_chat/app/providers.dart';
+import 'package:jawwid_chat/app/retry_policy.dart';
 import 'package:jawwid_chat/core/data/repositories.dart';
 import 'package:jawwid_chat/core/data/wire/wire_mappers.dart';
 import 'package:jawwid_chat/design/theme.dart';
@@ -95,6 +96,7 @@ void main() {
   }) {
     return UncontrolledProviderScope(
       container: container = ProviderContainer(
+        retry: JawwidRetryPolicy.policy,
         overrides: [
           currentRoleProvider.overrideWithValue(UserRole.parent),
           conversationRepositoryProvider
@@ -164,6 +166,7 @@ void main() {
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: container = ProviderContainer(
+        retry: JawwidRetryPolicy.policy,
             overrides: [
               currentRoleProvider.overrideWithValue(UserRole.parent),
               conversationRepositoryProvider.overrideWithValue(repository),

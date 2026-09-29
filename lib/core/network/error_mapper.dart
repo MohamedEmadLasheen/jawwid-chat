@@ -62,7 +62,13 @@ abstract final class ErrorMapper {
       if (WireErrors.terminal.contains(code)) {
         return switch (code) {
           WireErrors.conversationNotFound ||
-          WireErrors.messageNotFound =>
+          WireErrors.messageNotFound ||
+          // A story that is expired, deleted or was never yours reads the same way to a
+          // client: it is not there any more. The viewer distinguishes them by `code` when
+          // it needs to; the taxonomy does not have to.
+          WireErrors.storyNotFound ||
+          WireErrors.storyExpired ||
+          WireErrors.storyDeleted =>
             AppErrorKind.notFound,
           WireErrors.emptyMessage ||
           WireErrors.replyTargetCrossConversation =>

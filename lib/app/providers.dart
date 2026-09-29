@@ -47,6 +47,17 @@ final callRepositoryProvider = Provider<CallRepository>((ref) {
   throw UnimplementedError('callRepositoryProvider must be overridden');
 });
 
+/// Stories, read-only.
+///
+/// Registered by the HTTP composition root only. The development composition root
+/// deliberately does NOT provide one: there is no fake story backend, because a fixture
+/// story is indistinguishable on screen from a real publication and this feature's whole
+/// contract is that what you see was actually published to you. A build with no
+/// implementation shows no rail at all, which is honest -- see StoriesController.
+final storyRepositoryProvider = Provider<StoryRepository>((ref) {
+  throw UnimplementedError('storyRepositoryProvider must be overridden');
+});
+
 /// The device's microphone.
 ///
 /// Unlike the repositories this has a real default, because it is a device

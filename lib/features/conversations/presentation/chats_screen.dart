@@ -12,6 +12,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/conversation.dart';
 import '../../../shared/models/user_role.dart';
 import '../../../shared/utils/text_direction.dart';
+import '../../stories/application/stories_controller.dart';
 import '../../stories/presentation/stories_rail.dart';
 import '../application/conversations_controller.dart';
 import '../domain/chat_feed.dart';
@@ -36,6 +37,7 @@ class ChatsScreen extends ConsumerStatefulWidget {
     super.key,
     this.onOpenConversation,
     this.onOpenProfile,
+    this.onOpenStory,
     this.initialFilter = ChatFilter.all,
   });
 
@@ -44,6 +46,9 @@ class ChatsScreen extends ConsumerStatefulWidget {
 
   /// Same, for the avatar/name tap that opens a profile rather than the conversation.
   final void Function(String conversationId)? onOpenProfile;
+
+  /// Same, for a tap on the stories rail.
+  final void Function(String storyId)? onOpenStory;
 
   /// Which chip the screen opens on. Always [ChatFilter.all] in the app — the parameter
   /// exists so a test can assert what a given filter shows without driving a tap through
@@ -81,6 +86,17 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
       return;
     }
     context.push(Routes.conversationProfile(conversationId));
+  }
+
+  void _openStory(String storyId) {
+    final handler = widget.onOpenStory;
+    if (handler != null) {
+      handler(storyId);
+      return;
+    }
+    // `push`, not `go`: the story sits on top of the chat list and closing it must return
+    // the reader to exactly where they were, mid-scroll.
+    context.push(Routes.story(storyId));
   }
 
   @override
@@ -145,6 +161,7 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
                   role: role,
                   onOpen: _open,
                   onOpenProfile: _openProfile,
+                  onOpenStory: _openStory,
                 ),
             },
           ),
@@ -163,6 +180,7 @@ class _Feed extends ConsumerWidget {
     required this.role,
     required this.onOpen,
     required this.onOpenProfile,
+    required this.onOpenStory,
   });
 
   final List<Conversation> conversations;
@@ -171,22 +189,36 @@ class _Feed extends ConsumerWidget {
   final UserRole? role;
   final void Function(String conversationId) onOpen;
   final void Function(String conversationId) onOpenProfile;
+  final void Function(String storyId) onOpenStory;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final now = DateTime.now();
 
     return RefreshIndicator(
-      onRefresh: () =>
-          ref.read(conversationsControllerProvider.notifier).refresh(),
+      // Both, together. The rail has no refresh control of its own precisely because this
+      // one already exists, and a reader pulling the chat list plainly means "show me what
+      // is new" rather than "show me what is new, except the stories".
+      //
+      // `Future.wait` rather than sequential awaits: one failing must not stop the other,
+      // and the spinner should reflect the slower of the two, not their sum. Neither
+      // refresh throws -- both capture their own error into provider state.
+      onRefresh: () => Future.wait([
+        ref.read(conversationsControllerProvider.notifier).refresh(),
+        ref.read(storiesControllerProvider.notifier).refresh(),
+      ]),
       child: CustomScrollView(
         // Always scrollable, so pull-to-refresh works on an empty list too.
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
-          // Part of the scrolling content rather than pinned above it: when stories
-          // exist they should get out of the way as soon as someone starts reading
-          // their chats. Renders nothing at all while no story feature exists.
-          const SliverToBoxAdapter(child: StoriesRail()),
+          // Part of the scrolling content rather than pinned above it: when stories exist
+          // they should get out of the way as soon as someone starts reading their chats.
+          // Renders nothing at all when there are none.
+          SliverToBoxAdapter(
+            child: StoriesRail(
+              onOpenStory: (story) => onOpenStory(story.id),
+            ),
+          ),
           if (conversations.isEmpty)
             SliverFillRemaining(
               hasScrollBody: false,

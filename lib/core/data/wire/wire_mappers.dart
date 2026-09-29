@@ -1,5 +1,6 @@
 import '../../../shared/models/conversation.dart';
 import '../../../shared/models/message.dart';
+import '../../../shared/models/story.dart';
 import '../../../shared/models/user_role.dart';
 import '../repositories.dart';
 import 'wire_vocab.dart';
@@ -232,6 +233,45 @@ abstract final class WireMappers {
       mimeType: json['mimeType'] as String?,
       durationMs: (json['durationMs'] as num?)?.toInt(),
     );
+  }
+
+  /// One `StoryFeedItem`, or null when the row is unusable.
+  ///
+  /// `publishedAt` and `expiresAt` are required by the contract and are the two fields the
+  /// viewer's behaviour hangs on -- the expiry is what it stops at. A row missing either is
+  /// returned as null so the caller can drop it, rather than being handed a story with a
+  /// substituted clock that would outstay the server's own answer.
+  ///
+  /// `mediaKind` and `mediaUrl` travel together: the server sets both or neither, and once
+  /// media is purged it sends neither. A half-described attachment is treated as no
+  /// attachment, so the viewer shows the words instead of an image box that cannot fill.
+  static Story? story(Map<String, Object?> json) {
+    final id = json['id'] as String?;
+    final publishedAt = parseTime(json['publishedAt']);
+    final expiresAt = parseTime(json['expiresAt']);
+    if (id == null || id.isEmpty || publishedAt == null || expiresAt == null) return null;
+
+    final mediaKind = StoryMediaKind.tryParse(json['mediaKind'] as String?);
+    final mediaUrl = json['mediaUrl'] as String?;
+    final hasMedia = mediaKind != null && mediaUrl != null && mediaUrl.isNotEmpty;
+
+    return Story(
+      id: id,
+      title: _nonEmpty(json['title']),
+      body: _nonEmpty(json['body']),
+      mediaKind: hasMedia ? mediaKind : null,
+      mediaUrl: hasMedia ? mediaUrl : null,
+      publishedAt: publishedAt,
+      expiresAt: expiresAt,
+      isViewed: json['viewed'] == true,
+    );
+  }
+
+  static String? _nonEmpty(Object? raw) {
+    final value = raw as String?;
+    if (value == null) return null;
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
   }
 
   static GroupMember groupMember(Map<String, Object?> json, {String displayName = ''}) {
