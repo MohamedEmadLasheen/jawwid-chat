@@ -45,14 +45,16 @@ void main() {
     String actorId,
     String actorKind,
     String memberRole,
-    Object? displayName,
-  ) =>
+    Object? displayName, {
+    Object? canOpenDirect,
+  }) =>
       {
         'actorId': actorId,
         'actorKind': actorKind,
         'memberRole': memberRole,
         'isSilent': false,
         'displayName': displayName,
+        'canOpenDirect': ?canOpenDirect,
       };
 
   test('maps every member, with the display name off the wire', () async {
@@ -134,5 +136,62 @@ void main() {
     final group = await repository().group('c1');
 
     expect(group.members, isEmpty);
+  });
+
+  /// PD-6. `canOpenDirect` is the server's advisory, and the client must take it
+  /// from the wire rather than infer it: whether a teacher may open a channel
+  /// with a parent depends on a relationship this client is never told.
+  test('reads canOpenDirect off the wire, per member', () async {
+    server.on('GET', '/conversations/c1', [
+      Reply.ok({
+        'id': 'c1',
+        'type': 'student_group',
+        'title': 'Yusuf · Jawwid',
+        'learnerId': 'l1',
+        'teacherRequiresApproval': true,
+        'parentRequiresApproval': false,
+        'members': [
+          member('p1', 'contact', 'parent', 'Umm Yusuf', canOpenDirect: true),
+          member('p2', 'contact', 'parent', 'Abu Yusuf', canOpenDirect: false),
+          member('a1', 'staff', 'admin', 'Jawwid Support', canOpenDirect: true),
+        ],
+      }),
+    ]);
+
+    final group = await repository().group('c1');
+
+    expect(
+      {for (final m in group.members) m.id: m.canOpenDirect},
+      {'p1': true, 'p2': false, 'a1': true},
+    );
+  });
+
+  /// Fails closed on every shape that is not a literal `true`. An advisory that
+  /// defaulted to "you may" would offer actions the server then refuses, and a
+  /// truthy-string would make a stray `"false"` read as permission.
+  test('a missing or non-boolean canOpenDirect is false', () async {
+    server.on('GET', '/conversations/c1', [
+      Reply.ok({
+        'id': 'c1',
+        'type': 'student_group',
+        'title': 'Yusuf · Jawwid',
+        'learnerId': 'l1',
+        'teacherRequiresApproval': true,
+        'parentRequiresApproval': false,
+        'members': [
+          member('p1', 'contact', 'parent', 'Umm Yusuf'),
+          member('p2', 'contact', 'parent', 'Abu Yusuf', canOpenDirect: 'true'),
+          member('p3', 'contact', 'parent', 'Khala', canOpenDirect: 1),
+          member('p4', 'contact', 'parent', 'Amm', canOpenDirect: null),
+        ],
+      }),
+    ]);
+
+    final group = await repository().group('c1');
+
+    expect(
+      group.members.where((m) => m.canOpenDirect),
+      isEmpty,
+    );
   });
 }

@@ -179,23 +179,32 @@ class ProfileBody extends ConsumerWidget {
 
   /// Whether this client may *offer* a direct channel to [member].
   ///
-  /// `allowsDirectContactFromGroupMember` rather than the general predicate: this
-  /// is the call site that method was named for, and its doc carries the rule
-  /// that matters here — being in a group together grants no 1:1 channel, so
-  /// membership must never become a directory (§25).
+  /// Two sources, and the offer needs only one of them to say yes:
   ///
-  /// Today that resolves to one case: a member whose role is `admin`. Which is
-  /// also why there is no "is this me" check — a parent and a teacher are each
-  /// refused their own role pair, so a viewer can never be offered a channel with
-  /// themselves.
+  /// * `member.canOpenDirect` — the server's advisory, computed by the same
+  ///   `AuthorizationService.canOpenDirect` the request will run, with the PD-6
+  ///   relationship resolved. This is the only thing that can authorize a
+  ///   teacher↔parent pair, because that pairing is undecidable from roles alone
+  ///   and the client is not told the relationship.
+  /// * `allowsDirectContactFromGroupMember` — the role rule, kept so a server
+  ///   that does not send the field yet still offers the channels that ARE
+  ///   decidable from roles (today: a member whose role is `admin`).
   ///
-  /// None of this is permission. Permission is the server's, on the request.
+  /// Being in a group together still grants no 1:1 channel: neither source says
+  /// yes merely because two people share a roster, so membership does not become
+  /// a directory (§25). There is no "is this me" check because the server refuses
+  /// a self-pair and the role rule refuses a viewer's own role.
+  ///
+  /// None of this is permission. Permission is the server's, on the request — an
+  /// offer shown in error becomes a refusal the user sees, never an unauthorized
+  /// conversation.
   bool _mayOffer(WidgetRef ref, ProfilePerson member) {
     final viewer = ref.watch(currentRoleProvider);
     final role = member.role;
     if (viewer == null || role == null || member.id.isEmpty) return false;
 
-    return CommunicationPolicy.allowsDirectContactFromGroupMember(viewer, role);
+    return member.canOpenDirect ||
+        CommunicationPolicy.allowsDirectContactFromGroupMember(viewer, role);
   }
 
   /// Open the channel, then go to it.

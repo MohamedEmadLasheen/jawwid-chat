@@ -57,23 +57,26 @@ class _RecordingConversations implements ConversationRepository {
 /// relationship the client cannot evaluate. Absent, not disabled: a greyed-out
 /// button would tell a teacher that a private channel to this parent exists.
 void main() {
-  ProfileView groupView() => const ProfileView(
+  /// [parentCanOpenDirect] is the server's PD-6 advisory for the parent row.
+  /// False is the wire default, so the fixture defaults to it too.
+  ProfileView groupView({bool parentCanOpenDirect = false}) => ProfileView(
         audience: ProfileAudience.other,
-        subject: ProfilePerson(id: 'c_group', displayName: 'Yusuf · Jawwid'),
+        subject: const ProfilePerson(id: 'c_group', displayName: 'Yusuf · Jawwid'),
         isGroup: true,
-        learner: LearnerRef(id: 'l1', displayName: 'Yusuf'),
+        learner: const LearnerRef(id: 'l1', displayName: 'Yusuf'),
         members: [
           ProfilePerson(
             id: 'm_parent',
             displayName: 'Umm Yusuf',
             role: ParticipantRole.parent,
+            canOpenDirect: parentCanOpenDirect,
           ),
-          ProfilePerson(
+          const ProfilePerson(
             id: 'm_admin',
             displayName: 'Jawwid Support',
             role: ParticipantRole.admin,
           ),
-          ProfilePerson(
+          const ProfilePerson(
             id: 'm_teacher',
             displayName: 'Ustadh Kareem',
             role: ParticipantRole.teacher,
@@ -86,12 +89,17 @@ void main() {
   Widget harness({
     required UserRole role,
     required ConversationRepository conversations,
+    bool parentCanOpenDirect = false,
   }) {
     final router = GoRouter(
       routes: [
         GoRoute(
           path: '/',
-          builder: (context, state) => Scaffold(body: ProfileBody(view: groupView())),
+          builder: (context, state) => Scaffold(
+            body: ProfileBody(
+              view: groupView(parentCanOpenDirect: parentCanOpenDirect),
+            ),
+          ),
         ),
         GoRoute(
           path: '/chats/:conversationId',
@@ -141,20 +149,53 @@ void main() {
     expect(button.tooltip, 'Message: Jawwid Support');
   });
 
-  testWidgets('a teacher is offered NOTHING for the parent row (PD-6 pending UI)',
+  testWidgets(
+      'PD-6 fail-closed: no advisory means the parent row offers nothing',
       (tester) async {
     final repo = _RecordingConversations();
     await tester.pumpWidget(harness(role: UserRole.teacher, conversations: repo));
     await tester.pumpAndSettle();
 
     // The parent is on screen — this is a real group and the teacher can see who
-    // is in it — and there is no way to message them from here.
+    // is in it — and with `canOpenDirect` false there is no way to message them.
+    // Absent, not disabled: a greyed-out button would itself disclose that a
+    // private channel to this parent exists.
     expect(find.text('Umm Yusuf'), findsOneWidget);
     expect(messageButtons(), findsOneWidget); // the admin's, and only that
     for (final tooltip
         in tester.widgetList<IconButton>(find.byType(IconButton)).map((b) => b.tooltip)) {
       expect(tooltip, isNot(contains('Umm Yusuf')));
     }
+  });
+
+  testWidgets(
+      'PD-6 authorized: the server advisory makes the parent reachable',
+      (tester) async {
+    final repo = _RecordingConversations();
+    await tester.pumpWidget(harness(
+      role: UserRole.teacher,
+      conversations: repo,
+      parentCanOpenDirect: true,
+    ));
+    await tester.pumpAndSettle();
+
+    // Now two: the admin's, and the parent's. This is the whole point of the
+    // advisory — the channel PD-6 permits was unreachable from either client
+    // while the decision was guessed from roles alone.
+    expect(messageButtons(), findsNWidgets(2));
+
+    // Found by tooltip, not by position: asserting on `.first`/`.last` would pass
+    // for the wrong row the day the member order changes.
+    final parentButton = find.byWidgetPredicate(
+      (w) => w is IconButton && (w.tooltip ?? '').contains('Umm Yusuf'),
+    );
+    expect(parentButton, findsOneWidget);
+
+    await tester.tap(parentButton);
+    await tester.pumpAndSettle();
+
+    // It opened the channel with the PARENT specifically.
+    expect(repo.opened, ['m_parent']);
   });
 
   testWidgets('a parent is offered the staff member and not the teacher',

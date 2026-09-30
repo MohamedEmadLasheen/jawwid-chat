@@ -374,6 +374,9 @@ abstract final class WireMappers {
       id: (json['actorId'] as String?) ?? '',
       displayName: _nonEmpty(json['displayName']) ?? '',
       role: memberRole(json['memberRole'] as String?),
+      // Absent or non-boolean reads as false: an advisory that defaulted to
+      // "you may" would offer actions the server then refuses.
+      canOpenDirect: json['canOpenDirect'] == true,
     );
   }
 

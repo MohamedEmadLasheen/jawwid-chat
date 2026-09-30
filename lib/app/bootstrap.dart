@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/misc.dart';
 
 import '../core/data/fake_backend.dart';
@@ -41,7 +42,25 @@ enum DataSource {
 Future<List<Override>> bootstrap({
   UserRole developmentRole = UserRole.parent,
 }) async {
-  return ApiConfig.isConfigured ? _httpOverrides() : _fakeOverrides(developmentRole);
+  if (ApiConfig.isConfigured) return _httpOverrides();
+
+  // A release build with no backend is a build that would run on fixtures: real
+  // screens, invented families, invented messages, and no way for anyone holding
+  // the phone to tell. `ApiConfig` already promises an unconfigured build "fails
+  // loudly at startup instead" -- this is where that promise is kept, because the
+  // selection happens here and not there.
+  //
+  // Debug and profile still get the fixtures: developing without a backend and
+  // running widget tests are the reasons they exist.
+  if (kReleaseMode) {
+    throw StateError(
+      'JAWWID_API_BASE_URL is not set in a release build. Build with '
+      '--dart-define=JAWWID_API_BASE_URL=https://…  Refusing to start on '
+      'fixture data: see docs/mobile/http-integration.md',
+    );
+  }
+
+  return _fakeOverrides(developmentRole);
 }
 
 /// The real stack.

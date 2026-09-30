@@ -103,6 +103,28 @@ export interface ConversationMemberDto {
    * returned only for a conversation the caller is already authorized to read.
    */
   displayName: string;
+
+  /**
+   * May the CALLER open a 1:1 channel with this member? Advisory only.
+   *
+   * PD-6 made the teacher/parent pairing undecidable from roles alone: whether a
+   * teacher may message a parent depends on a relationship only the server can
+   * resolve. Without this the mobile client had two bad options -- offer the
+   * action to every parent and let most attempts fail, or offer it to none, which
+   * is what it did, leaving the authorized PD-6 channel unreachable from either
+   * side.
+   *
+   * IT IS NOT PERMISSION, exactly as `canCall` is not permission. The request is
+   * authorized again on `POST /conversations/direct` by the same
+   * `AuthorizationService.canOpenDirect` that computed this, so a stale or forged
+   * `true` buys nothing. `false` is the safe default and is what an unresolved
+   * viewer, an unknown pair or an absent field all produce.
+   *
+   * DISCLOSURE: it says only what the caller may do with a member they can
+   * already see in a conversation they are already authorized to read. It adds no
+   * contact channel and names nobody new -- this is not a directory (§25).
+   */
+  canOpenDirect: boolean;
 }
 
 /**
@@ -195,6 +217,8 @@ export interface ResolvedMember {
   isSilent: boolean;
   /** '' when the actor no longer resolves. Never an id. */
   displayName: string;
+  /** Advisory; see ConversationMemberDto.canOpenDirect. False when unknown. */
+  canOpenDirect: boolean;
 }
 
 export function toConversationDto(
@@ -221,6 +245,7 @@ export function toConversationDto(
       memberRole: m.memberRole,
       isSilent: m.isSilent,
       displayName: m.displayName,
+      canOpenDirect: m.canOpenDirect,
     })),
     // Two fields enumerated by hand, like every other field here: the Learner
     // row is never spread, so `level`, `nextClassAt` and `teacherId` cannot
