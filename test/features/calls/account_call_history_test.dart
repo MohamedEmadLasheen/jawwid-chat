@@ -69,6 +69,7 @@ void main() {
 
   HttpAccountCallHistory repository({String? token = 'fake-access-token'}) =>
       HttpAccountCallHistory(
+        viewerActorId: () => 'viewer',
         client: buildApiClient(
           config: ApiConfig(baseUrl: server.baseUrl),
           tokens: _Tokens(token),

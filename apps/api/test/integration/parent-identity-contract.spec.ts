@@ -497,6 +497,50 @@ describe('lastMessage gives the list row something to show', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Calls: a history row names the other party
+// ---------------------------------------------------------------------------
+
+describe('call history carries participant names', () => {
+  it('names every participant on an account-history row', async () => {
+    // O3 for calls. The row carried actor ids and no names, so the Calls tab
+    // drew a placeholder avatar and no title for every call a parent ever made.
+    const thread = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
+    const started = await g.calls.start(thread.id, s.parentId);
+    await g.calls.end(started.callId, s.parentId);
+
+    const page = await g.calls.historyForActor(s.parentId, {});
+    const row = page.items.find((c) => c.conversationId === thread.id)!;
+
+    const names = row.participants.map((p) => p.displayName).sort();
+    expect(names).toEqual(['admin_a', 'parent_p']);
+  });
+
+  it('names them on the conversation-scoped route too, from the same mapping', async () => {
+    const thread = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
+    const started = await g.calls.start(thread.id, s.parentId);
+    await g.calls.end(started.callId, s.parentId);
+
+    const rows = await g.calls.history(thread.id, s.parentId);
+
+    expect(rows[0].participants.map((p) => p.displayName).sort())
+      .toEqual(['admin_a', 'parent_p']);
+  });
+
+  it('still carries no room name or media credential', async () => {
+    // The privacy boundary is this one mapping, and adding a name must not
+    // have widened it.
+    const thread = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
+    const started = await g.calls.start(thread.id, s.parentId);
+    await g.calls.end(started.callId, s.parentId);
+
+    const row = (await g.calls.historyForActor(s.parentId, {})).items[0];
+
+    expect(JSON.stringify(row)).not.toContain('jawwid-');
+    expect(Object.keys(row)).not.toContain('roomName');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // FIX 8 -- search is server-side and inside the caller's scope
 // ---------------------------------------------------------------------------
 

@@ -370,8 +370,17 @@ describe('11/12/13. what a history row may carry', () => {
         'type',
       ].sort(),
     );
+    // `displayName` is a DELIBERATE addition, not a leak: a history row used to
+    // carry an actor id and no name, so the Calls tab drew a placeholder avatar
+    // and no title for every call a parent had ever made (O3 for calls). It is
+    // a name and nothing else -- resolved for the page in one batch, from
+    // principals the caller is already authorized to see.
+    //
+    // The list stays exhaustive on purpose. This assertion is the privacy
+    // boundary for a call row, and widening it must remain a decision somebody
+    // makes here rather than a field that arrives quietly.
     expect(Object.keys(page.items[0].participants[0]).sort()).toEqual(
-      ['actorId', 'actorKind', 'joinedAt', 'leftAt'].sort(),
+      ['actorId', 'actorKind', 'displayName', 'joinedAt', 'leftAt'].sort(),
     );
   });
 

@@ -25,9 +25,17 @@ import 'account_call_history.dart';
 /// server answers with what this actor may read, in its own order, and this maps
 /// the rows.
 class HttpAccountCallHistory implements AccountCallHistoryRepository {
-  HttpAccountCallHistory({required ApiClient client}) : _client = client;
+  HttpAccountCallHistory({
+    required ApiClient client,
+    required String Function() viewerActorId,
+  })  : _client = client,
+        _viewerActorId = viewerActorId;
 
   final ApiClient _client;
+
+  /// The signed-in actor, read per call. A 1:1 call row is named after whoever
+  /// is NOT you, so the same row yields a different name for each side.
+  final String Function() _viewerActorId;
 
   @override
   Future<Page<CallHistoryEntry>> page({String? cursor}) async {
@@ -89,16 +97,34 @@ class HttpAccountCallHistory implements AccountCallHistoryRepository {
     return CallHistoryEntry(
       id: id,
       conversationId: conversationId,
-      // NO DISPLAY NAME EXISTS on a history row — it carries `initiatorId` and
-      // no name. Left empty for the interface to treat as unresolved rather than
-      // filled with an id a parent would then read (O3 in
-      // `docs/mobile/backend-dependencies.md`).
-      title: '',
+      // The other party, from the participants the server now names (O3 for
+      // calls). Empty means unresolved and the interface says so; an actor id
+      // is never the fallback (§25).
+      //
+      // A GROUP call has no single "other side" to name, so it is left to the
+      // group branch of the row rather than picking one participant of several.
+      title: _counterpartName(row),
       startedAt: startedAt,
       outcome: outcome,
       isGroup: row['type'] == Wire.callTypeGroup,
       duration: seconds is int ? Duration(seconds: seconds) : null,
     );
+  }
+
+  /// The display name of the one participant who is not the viewer.
+  ///
+  /// Empty for a group call, and empty when the set is not a clean pair —
+  /// naming one of several would put a name on a row that means something else.
+  String _counterpartName(Map<dynamic, dynamic> row) {
+    if (row['type'] == Wire.callTypeGroup) return '';
+
+    final me = _viewerActorId();
+    final others = [
+      for (final p in (row['participants'] as List?) ?? const [])
+        if (p is Map && p['actorId'] is String && p['actorId'] != me) p,
+    ];
+    if (others.length != 1) return '';
+    return ((others.single['displayName'] as String?) ?? '').trim();
   }
 
   AppError _malformed(String detail) => AppError(

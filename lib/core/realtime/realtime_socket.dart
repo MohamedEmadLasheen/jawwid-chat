@@ -71,9 +71,33 @@ class SubscriptionResult {
 /// a second retry engine on top of the library's would produce two backoffs
 /// racing each other.
 class SocketIoRealtimeSocket implements RealtimeSocket {
-  SocketIoRealtimeSocket({required String baseUrl}) : _baseUrl = baseUrl;
+  SocketIoRealtimeSocket({required String baseUrl})
+      : _origin = originOf(baseUrl);
 
-  final String _baseUrl;
+  /// The socket connects to the ORIGIN, never to the API base URL.
+  ///
+  /// socket.io reads a path on the connection URL as a NAMESPACE. The API base
+  /// URL always carries one — `/api/v1` is the server's global prefix — so
+  /// handing it over verbatim asks for a namespace called `/api/v1`, while the
+  /// gateway is on the default namespace. The handshake then never reaches it
+  /// and the client waits forever, which is exactly what a caller saw: a call
+  /// that rang, was answered on the other side, and stayed "Calling…" on this
+  /// one because no event could ever arrive.
+  ///
+  /// It cost nothing to miss in review: every test doubles the socket, so the
+  /// only thing that could have caught it is a real server.
+  final String _origin;
+
+  /// The scheme and authority of [baseUrl], with any path discarded.
+  ///
+  /// Visible for testing, and a pure function so the rule can be asserted
+  /// without a socket, a server or a network.
+  static String originOf(String baseUrl) {
+    final uri = Uri.parse(baseUrl);
+    if (!uri.hasAuthority) return baseUrl;
+    return Uri(scheme: uri.scheme, host: uri.host, port: uri.hasPort ? uri.port : null)
+        .toString();
+  }
 
   final _frames = StreamController<RealtimeFrame>.broadcast();
   final _states = StreamController<RealtimeSocketState>.broadcast();
@@ -121,7 +145,7 @@ class SocketIoRealtimeSocket implements RealtimeSocket {
 
   void _open(String token) {
     final socket = io.io(
-      _baseUrl,
+      _origin,
       io.OptionBuilder()
           .setTransports(<String>['websocket'])
           .disableAutoConnect()

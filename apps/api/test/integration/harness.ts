@@ -61,6 +61,7 @@ export function buildGraph() {
   const reminders = new ReminderService(prisma, notifications);
   const calls = new CallService(
     prisma, authz, conversations, outbox, config, identity, audit, new LiveKitTokenIssuer(),
+    directory,
   );
   const storyAudience = new StoryAudienceResolver(prisma);
   const stories = new StoryService(

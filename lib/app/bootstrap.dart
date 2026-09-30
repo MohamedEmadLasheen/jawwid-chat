@@ -125,7 +125,10 @@ List<Override> _httpOverrides() {
     // there is exactly one interceptor chain, one TokenProvider and one refresh
     // lifecycle for this session.
     accountCallHistoryProvider.overrideWithValue(
-      HttpAccountCallHistory(client: client),
+      HttpAccountCallHistory(
+        client: client,
+        viewerActorId: session.actorId,
+      ),
     ),
     // W8-W1. THE SAME `client` again: device registration travels on the one
     // authenticated stack, so there is a single interceptor chain, a single
