@@ -3,6 +3,7 @@ import { PrismaService } from '@platform/prisma.service';
 import { AuthorizationService } from '@platform/authorization.service';
 import { AppConfigService } from '@platform/app-config.service';
 import { PrismaIdentityService } from '@platform/identity.service';
+import type { IdentityService } from '@platform/identity.service';
 import { PrismaAuditService } from '@platform/audit.service';
 import type { CoverageService } from '@platform/coverage.service';
 import { ConversationService } from '@communication/conversations/conversation.service';
@@ -33,10 +34,19 @@ export class PinnedCoverage implements CoverageService {
   }
 }
 
-export function buildGraph() {
+/**
+ * @param wrapIdentity Wraps the real identity service before the graph is built,
+ *   so a suite can OBSERVE identity resolution without stubbing its answers. Used
+ *   by `message-author-identity.spec.ts` to assert that a page costs one batch
+ *   rather than one lookup per row — a property no assertion on the response
+ *   shape can see. Default is identity, so every existing caller is unaffected.
+ */
+export function buildGraph(
+  wrapIdentity: (inner: IdentityService) => IdentityService = (inner) => inner,
+) {
   const prisma = new PrismaService();
   const coverage = new PinnedCoverage();
-  const identity = new PrismaIdentityService(prisma);
+  const identity = wrapIdentity(new PrismaIdentityService(prisma));
   const audit = new PrismaAuditService();
   const authz = new AuthorizationService(coverage);
   const outbox = new OutboxService();
@@ -45,8 +55,12 @@ export function buildGraph() {
 
   const conversations = new ConversationService(prisma, authz, outbox, identity, coverage, audit);
   const attachments = new AttachmentService(prisma, authz, conversations, storage);
-  const messages = new MessageService(prisma, authz, conversations, outbox, config, attachments, audit);
-  const approvals = new ApprovalService(prisma, authz, conversations, attachments, outbox, audit);
+  const messages = new MessageService(
+    prisma, authz, conversations, outbox, config, attachments, audit, identity,
+  );
+  const approvals = new ApprovalService(
+    prisma, authz, conversations, attachments, outbox, audit, identity,
+  );
   const templates = new TemplateService(prisma);
   const quietHours = new QuietHoursService(prisma);
   const notifications = new NotificationService(prisma, templates, quietHours, config, new LoggingPushProvider());

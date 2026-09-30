@@ -524,6 +524,9 @@ class L10nAr extends L10n {
   String get groupMemberUnresolved => 'عضو';
 
   @override
+  String get memberMessageAction => 'مراسلة';
+
+  @override
   String get myAccountTitle => 'حسابي';
 
   @override

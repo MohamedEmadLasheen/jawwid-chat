@@ -15,6 +15,7 @@
  * one. Nest serialises a returned plain object as-is, so the gap is the JSON
  * encoder and the route decorators, both of which are framework behaviour.
  */
+import { randomUUID } from 'node:crypto';
 import { ConversationController } from '@communication/api/conversation.controller';
 import type { ConversationDto } from '@communication/contracts/dto';
 import { buildGraph, seed, truncate, Scenario } from './harness';
@@ -157,5 +158,80 @@ describe('GET /conversations/:id — the detail response', () => {
       );
 
       await expect(controller.get(s.teacherId, theirThread.id)).rejects.toThrow();
+    });
+});
+
+/**
+ * Gap O3. The detail route returned no `members` at all -- not nameless ones --
+ * so a client could render nobody, and a teacher had no way to name the parent
+ * they are authorized to speak to.
+ */
+describe('GET /conversations/:id — members, with names (O3)', () => {
+  it('returns every live member with a renderable name', async () => {
+    const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
+
+    const dto = await controller.get(s.teacherId, group.id);
+    const members = dto.members!;
+
+    expect(members).toBeDefined();
+
+    // The three the group is built from, each named from its own table:
+    // contact.name, staff.name, teacher.name -- one spelling, resolved by
+    // IdentityService, never assembled from the title or an id.
+    expect(members).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ actorId: s.parentId, actorKind: 'contact', displayName: 'parent_p' }),
+        expect.objectContaining({ actorId: s.ownerId, actorKind: 'staff', displayName: 'admin_a' }),
+        expect.objectContaining({ actorId: s.teacherId, actorKind: 'teacher', displayName: 'teacher_c' }),
+      ]),
+    );
+  });
+
+  it('exposes no member field beyond the five on the contract', async () => {
+    const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
+
+    const dto = await controller.get(s.teacherId, group.id);
+
+    for (const member of dto.members!) {
+      expect(Object.keys(member).sort()).toEqual(
+        ['actorId', 'actorKind', 'displayName', 'isSilent', 'memberRole'],
+      );
+    }
+  });
+
+  it('a name is never an id, and an unresolvable member yields an empty string', async () => {
+    const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
+
+    // A membership row outlives the actor it names (BR-5), so this state is
+    // reachable in production and must not render as a uuid.
+    const ghost = randomUUID();
+    await g.prisma.conversationMember.create({
+      data: {
+        conversationId: group.id,
+        actorId: ghost,
+        actorKind: 'staff',
+        memberRole: 'observer',
+      },
+    });
+
+    const dto = await controller.get(s.teacherId, group.id);
+    const orphan = dto.members!.find((m) => m.actorId === ghost)!;
+
+    expect(orphan.displayName).toBe('');
+    for (const member of dto.members!) {
+      expect(member.displayName).not.toBe(member.actorId);
+    }
+  });
+
+  it('the LIST route still carries no members, so a list is not N identity queries',
+    async () => {
+      await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
+
+      const body = await listBody(s.teacherId);
+
+      expect(body.conversations.length).toBeGreaterThan(0);
+      for (const c of body.conversations) {
+        expect(c.members).toBeUndefined();
+      }
     });
 });

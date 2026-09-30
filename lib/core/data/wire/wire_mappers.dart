@@ -161,10 +161,22 @@ abstract final class WireMappers {
     );
   }
 
+  /// One message, from `MessageDto`.
+  ///
+  /// `authorName` now comes off the wire as `authorDisplayName` (gap O3 closed).
+  /// It used to be a named parameter defaulting to `''` because the DTO carried no
+  /// name at all and the caller had nothing to pass — so the parameter is gone
+  /// rather than left as a second, quieter way to set an identity.
+  ///
+  /// **Null or absent stays `''`, and the client resolves nothing.** The server
+  /// sends null for a system message (there is no person) and for an author whose
+  /// actor no longer resolves. `MessageBubble` then falls back to the ROLE label —
+  /// which is defensive presentation, **not** identity resolution: this client
+  /// never asks an identity endpoint for a missing name, and it never derives one
+  /// from the role, the actor kind, or conversation membership.
   static Message message(
     Map<String, Object?> json, {
     required String viewerActorId,
-    String authorName = '',
   }) {
     final authorId = json['authorId'] as String?;
     final isMine = authorId != null && authorId == viewerActorId;
@@ -190,7 +202,7 @@ abstract final class WireMappers {
       conversationId: (json['conversationId'] as String?) ?? '',
       sequence: parseSeq(json['seq']),
       authorId: authorId,
-      authorName: authorName,
+      authorName: _nonEmpty(json['authorDisplayName']) ?? '',
       authorRole: authorRole(json['authorKind'] as String?),
       kind: messageKind(json['type'] as String?),
       body: (json['body'] as String?) ?? '',
@@ -274,10 +286,21 @@ abstract final class WireMappers {
     return trimmed.isEmpty ? null : trimmed;
   }
 
-  static GroupMember groupMember(Map<String, Object?> json, {String displayName = ''}) {
+  /// One member of a conversation, from `ConversationMemberDto`.
+  ///
+  /// `displayName` now comes off the wire (gap O3 closed). It used to be a named
+  /// parameter defaulting to `''`, because the DTO carried no name at all and the
+  /// caller had nothing to pass — so the parameter is gone rather than left as a
+  /// second, quieter way to set a name.
+  ///
+  /// An absent or blank name stays `''`. The server sends `''` for a member whose
+  /// actor no longer resolves, and the UI renders that as `groupMemberUnresolved`
+  /// rather than an id — so empty is a value this client already knows how to
+  /// show, not a defect to paper over here.
+  static GroupMember groupMember(Map<String, Object?> json) {
     return GroupMember(
       id: (json['actorId'] as String?) ?? '',
-      displayName: displayName,
+      displayName: _nonEmpty(json['displayName']) ?? '',
       role: memberRole(json['memberRole'] as String?),
     );
   }

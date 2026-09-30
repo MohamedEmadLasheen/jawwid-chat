@@ -1,17 +1,28 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Message, Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
 import { AppConfigService } from '../../platform/app-config.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
-import { AUDIT_SERVICE } from '../../platform/tokens';
+import { AUDIT_SERVICE, IDENTITY_SERVICE } from '../../platform/tokens';
 import type { AuditService } from '../../platform/audit.service';
+import type {
+  ActorRef,
+  IdentityService,
+  ResolvedActors,
+} from '../../platform/identity.service';
 import { Actor } from '../../platform/types';
 import { ConversationService } from '../conversations/conversation.service';
 import { AttachmentService } from '../attachments/attachment.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
-import { MessageDto, toMessageDto, needsReply, conversationState } from '../contracts/dto';
+import {
+  MessageDto,
+  messageAuthorRef,
+  toMessageDto,
+  needsReply,
+  conversationState,
+} from '../contracts/dto';
 import {
   ActorKind,
   ApprovalDecision,
@@ -70,7 +81,34 @@ export class MessageService {
     private readonly config: AppConfigService,
     private readonly attachments: AttachmentService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
   ) {}
+
+  /**
+   * The authors of these messages, resolved in a bounded number of queries.
+   *
+   * This service does three things here and no more: collect the distinct
+   * references, ask the identity service, hand the map to the mapper. Actor
+   * resolution itself belongs to `IdentityService` and is not reimplemented —
+   * there is one place that knows how a uuid becomes a person.
+   *
+   * BOUNDED BY KIND, NOT BY ROWS. `message.author_type` is the actor kind, so a
+   * page of any size costs at most one query per kind present (3), and a page
+   * whose authors are all contacts costs one. Deduplication is on
+   * `(actorKind, actorId)`, so the same author appearing eighty times is one
+   * lookup — and `STAFF:x` and `TEACHER:x` stay two, which an id-keyed map would
+   * silently conflate.
+   */
+  private async authorsFor(
+    rows: ReadonlyArray<Pick<Message, 'authorId' | 'authorType'>>,
+  ): Promise<ResolvedActors> {
+    const refs: ActorRef[] = [];
+    for (const row of rows) {
+      const ref = messageAuthorRef(row);
+      if (ref) refs.push(ref);
+    }
+    return this.identity.resolveActors(refs);
+  }
 
   // -------------------------------------------------------------------
   // Send
@@ -315,7 +353,11 @@ export class MessageService {
       // Sign this message's attachment URLs too. Without it a sender's own
       // voice note comes back with url: null and is unplayable until the thread
       // is re-fetched -- the message is there, but it cannot be heard.
-      return toMessageDto(created, await this.attachments.signUrlsForMessages([created.id]));
+      return toMessageDto(
+        created,
+        await this.attachments.signUrlsForMessages([created.id]),
+        await this.authorsFor([created]),
+      );
     } catch (e) {
       // Concurrent duplicate submission of the same client_message_id.
       if (
@@ -346,7 +388,11 @@ export class MessageService {
     // The idempotent-replay path returns the original message, so it must carry
     // the same playable URLs a first send does.
     if (!found) return null;
-    return toMessageDto(found, await this.attachments.signUrlsForMessages([found.id]));
+    return toMessageDto(
+      found,
+      await this.attachments.signUrlsForMessages([found.id]),
+      await this.authorsFor([found]),
+    );
   }
 
   private validateContent(type: string, input: SendMessageInput): void {
@@ -411,7 +457,11 @@ export class MessageService {
     // Signed URLs are minted per read, scoped to messages this actor is already
     // permitted to see, and they expire.
     const signed = await this.attachments.signUrlsForMessages(rows.map((m) => m.id));
-    const messages = rows.map((m) => toMessageDto(m, signed));
+    // ONE identity batch for the whole page, before the map. Resolving inside the
+    // map would be one round trip per message -- the shape this whole change exists
+    // to remove.
+    const authors = await this.authorsFor(rows);
+    const messages = rows.map((m) => toMessageDto(m, signed, authors));
     const nextBefore =
       !ascending && rows.length === limit ? (rows[rows.length - 1].seq?.toString() ?? null) : null;
 

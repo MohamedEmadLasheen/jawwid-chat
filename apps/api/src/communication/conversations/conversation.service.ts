@@ -6,11 +6,12 @@ import type { LiveMember } from '../../platform/authorization.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
 import { AUDIT_SERVICE, COVERAGE_SERVICE, IDENTITY_SERVICE } from '../../platform/tokens';
 import type { IdentityService } from '../../platform/identity.service';
+import { actorRefKey } from '../../platform/identity.service';
 import type { CoverageService } from '../../platform/coverage.service';
 import type { AuditService } from '../../platform/audit.service';
 import { Actor } from '../../platform/types';
 import { OutboxService } from '../outbox/outbox.service';
-import type { ConversationWithLearner } from '../contracts/dto';
+import type { ConversationWithLearner, ResolvedMember } from '../contracts/dto';
 import { CommEvent } from '../contracts/events';
 import {
   ActorKind,
@@ -99,6 +100,53 @@ export class ConversationService {
         return { actorId: m.actorId, actorKind: m.actorKind, memberRole: m.memberRole };
       }),
     );
+  }
+
+  /**
+   * Live membership with display names, for a client that has to render people
+   * (mobile gap O3).
+   *
+   * SEPARATE FROM liveMembersOf ON PURPOSE. That one feeds an authorization
+   * decision and resolves only staff admins, because that is the only activity
+   * the C-4 rule reads and resolving everybody on every send would be a
+   * per-message cost for no decision. This one is for display, resolves every
+   * member, and is called once per conversation-detail read. Merging them would
+   * either put a display name inside an authorization struct or make every send
+   * pay for names nobody reads.
+   *
+   * THE CALLER AUTHORIZES FIRST. This method answers "who is in this
+   * conversation"; it does not decide who may ask. Every current caller runs
+   * canRead before reaching it.
+   *
+   * BOUNDED BY KIND. One `resolveActors` call, so at most one identity query per
+   * actor kind present rather than one per member. It used to be the latter, and
+   * the O3 author-identity audit found it: a conversation's membership is small,
+   * so it was never a production problem, but two callers resolving identity two
+   * different ways is how the second one ends up on a page of a hundred rows.
+   * `conversation_member.actor_kind` supplies the kind, so nothing has to guess.
+   *
+   * An actor that no longer resolves yields '' rather than an id or a
+   * placeholder: a membership row outlives the actor it names (BR-5), and the
+   * client already treats an empty name as unresolved.
+   */
+  async membersOf(conversationId: string): Promise<ResolvedMember[]> {
+    const rows = await this.prisma.conversationMember.findMany({
+      where: { conversationId, leftAt: null },
+      orderBy: { joinedAt: 'asc' },
+    });
+
+    const actors = await this.identity.resolveActors(
+      rows.map((m) => ({ actorId: m.actorId, actorKind: m.actorKind })),
+    );
+
+    return rows.map((m) => ({
+      actorId: m.actorId,
+      actorKind: m.actorKind,
+      memberRole: m.memberRole,
+      isSilent: m.isSilent,
+      displayName:
+        actors.get(actorRefKey({ actorId: m.actorId, actorKind: m.actorKind }))?.displayName ?? '',
+    }));
   }
 
   /** Canonical, order-independent identity of a 1:1 channel. */

@@ -104,6 +104,33 @@ class FakeConversationRepository implements ConversationRepository {
         .where((c) => c.title.toLowerCase().contains(needle))
         .toList(growable: false);
   }
+
+  /// Opening a direct channel is **not** offered by the fixture, on purpose.
+  ///
+  /// Whether two actors may share a channel is `canOpenDirect` — a server
+  /// decision over real relationships (PD-6 resolves it per learner, per family,
+  /// at the moment of the action). A fixture cannot evaluate that, and the only
+  /// two things it could do instead are both wrong: fabricate a conversation for
+  /// any id handed to it, which makes an unauthorized pairing look like it
+  /// worked; or hard-code a pairing, which teaches a rule the server does not
+  /// have.
+  ///
+  /// Refusing is the same call the story repository already makes — the HTTP
+  /// composition root registers one and the development root deliberately does
+  /// not, because a fixture publication is indistinguishable on screen from a
+  /// real one. An authorization result is the same kind of claim.
+  ///
+  /// The client's own model is the second reason: [Conversation] carries no
+  /// counterpart actor id, so there is nothing here to match an actor against.
+  @override
+  Future<Conversation> openDirect(String withActorId) async {
+    throw const AppError(
+      AppErrorKind.notFound,
+      code: 'direct_open_not_available_in_fixtures',
+      debugDetail:
+          'openDirect needs a server authorization decision; the fixture has none to give',
+    );
+  }
 }
 
 class FakeMessageRepository implements MessageRepository {

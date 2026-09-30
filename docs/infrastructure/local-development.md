@@ -10,7 +10,22 @@ Owner: AI #7 · Date: 2026-09-05
 | Docker | any recent | Postgres, Redis, MinIO |
 | **Docker Compose** | v2 plugin | the local stack |
 | Flutter / Dart | stable | mobile apps only |
-| `psql` (optional) | 17 | convenience; scripts fall back to a container |
+| `psql` | 17 | **required for `npm run test:int`**; optional for everything else |
+
+> **`psql` is only optional for the shell scripts.** `scripts/db/*.sh` run the
+> client inside the container, so they work without one. Two integration specs do
+> not: `test/integration/schema-invariants.spec.ts` and
+> `role-capability-preflight.spec.ts` shell out to `psql` directly — deliberately,
+> because they assert what the DATABASE does with a given connection URL, and
+> `role-capability-preflight` reconnects as a *different, restricted role* to prove
+> the preflight refuses it. A container-exec wrapper cannot express that: it would
+> silently connect as the container's superuser and the test would pass while
+> proving nothing.
+>
+> Without a client those two suites fail with `spawnSync psql ENOENT` — 16 tests,
+> a missing prerequisite rather than a defect. CI installs one explicitly (`Install
+> psql` in the `migrations` job, which is the job that then runs `npm run test:int`),
+> so this never affects CI. On macOS: `brew install libpq` and put its `bin` on PATH.
 
 > **Docker Compose is a separate plugin.** Having `docker` is not enough. If
 > `docker compose version` fails:

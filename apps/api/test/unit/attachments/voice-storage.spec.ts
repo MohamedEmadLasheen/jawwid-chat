@@ -281,6 +281,11 @@ describe('every path that returns a message signs its attachment URLs', () => {
   it('the approval queue carries signed URLs', () => {
     expect(approvalSource).not.toMatch(/toMessageDto\(r\.message\)/);
     expect(approvalSource).toMatch(/signUrlsForMessages\(rows\.map\(\(r\) => r\.messageId\)\)/);
-    expect(approvalSource).toMatch(/toMessageDto\(r\.message, signed\)/);
+    // Left open like the `found,` assertion above: what this guards is that
+    // `signed` is the second argument, not that it is the LAST one. The mapper
+    // gained a third (resolved authors, O3), and a pattern that forbade any
+    // further argument would fail on an additive change while proving nothing
+    // more about signing.
+    expect(approvalSource).toMatch(/toMessageDto\(r\.message, signed/);
   });
 });

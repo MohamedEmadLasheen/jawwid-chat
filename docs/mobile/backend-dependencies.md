@@ -231,15 +231,24 @@ These are what mobile is currently blocked on or working around. Each is small.
 |---|---|---|---|
 | ~~O1~~ | ~~**Unread count per conversation** on `ConversationDto`~~ | AI #2 | **CLOSED.** `unreadCount` is on the DTO for both `GET /conversations` and `GET /conversations/:id`, derived per actor from `chat.message_receipt` and computed in one grouped query for the whole list — the per-row round trip that blocked it never happens. Contract: API-CONTRACT §3.4. |
 | O2 | **Last-message preview** on `ConversationDto` | AI #2 | Every chat-list row shows it; without it the list needs a second fetch per conversation. |
-| O3 | **Display names for members and authors** | AI #1 / AI #2 | `MessageDto` carries `authorId` but no name; `ConversationMemberDto` carries `actorId` but no name. Mobile renders names and avatars and must never fall back to an id. |
+| ~~O3~~ | ~~**Display names for members and authors**~~ | AI #1 / AI #2 | **CLOSED, both halves, on one canonical primitive.** `IdentityService.resolveActors(refs)` resolves many actors in a bounded number of queries — one per actor KIND present, at most three, never one per row — keyed on `(actorKind, actorId)` because the three principal tables generate ids independently. *Members:* `ConversationMemberDto.displayName`, and `GET /conversations/:id` populates `members`, which it previously omitted entirely. *Authors:* `MessageDto.authorDisplayName`, on the list, the send response and the approvals queue. Both read the same `Actor.displayName` (staff.name / contact.name / teacher.name) — one source, no second identity model, no client-side resolution. Unresolved is `''` for a member and `null` for an author (that DTO's `authorId` is already nullable); never a role, a label, an id or a fabrication. `message.created` is unchanged on purpose: it is a fetch hint, and the rendered author comes from the fetch. Contract: API-CONTRACT §2 (`MessageDto`, `ConversationMemberDto`), §3.4, §4. |
 | O4 | **The `handledBy` label** for the Jawwid thread | AI #2 | `parent-home.md` §4 requires the parent's Jawwid contact. Mobile must not derive it; it needs a supplied, already-localised string. |
 | O5 | **Auth, session and device endpoints** | AI #1 | C1–C3 are unchanged: login, refresh, logout, `me`, device registration and revocation. The communication engine assumes an actor id already exists. |
 | O6 | **Localisation of server-originated strings** | AI #1 / AI #2 | System messages, rejection reasons and reminder bodies must arrive localised or as key+params. Mobile will not compose them. |
 | ~~O7~~ | ~~**Learner reference on a student-group conversation**~~ | AI #2 | **CLOSED.** `ConversationDto.learner` carries `{id, name}`, resolved server-side on the same membership join that authorizes the list. Two fields only: `level`, `nextClassAt` and `teacherId` are deliberately not exposed. Contract: API-CONTRACT §3.4. |
 
-O1 and O2 were the two that shape a screen rather than a field. **O1 and O7 are closed**;
-O2 remains, so a chat-list row still has no last-message preview. O3 also remains, and it is
-the reason an incoming group message falls back to the sender's ROLE rather than their name.
+O1 and O2 were the two that shape a screen rather than a field. **O1, O3 and O7 are closed**;
+O2 remains, so a chat-list row still has no last-message preview.
+
+**O3 closed on one primitive rather than two fixes.** The member half came first and resolved
+one actor per member — bounded by a group's size, so never a production problem, but the wrong
+shape to copy onto a page of a hundred messages, where a message author is *not* bounded by
+membership (family-facing staff may post in any conversation, so deduplicating by author does
+not bound it either). `IdentityService.resolveActors` is the answer for both: every caller
+already carries the actor KIND beside the id — `conversation_member.actor_kind`,
+`message.author_type` — and given the kind, one query per kind answers a whole list. `membersOf`
+was moved onto it in the same change, so there is one way identity is resolved in bulk and not
+two. The remaining identity gap is O4, which is a localised *label* rather than a name.
 
 The parent audience's network is still the constraint the whole mobile design is organised
 around, which is why O2 must be solved the way O1 was — on the list payload, not with a

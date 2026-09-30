@@ -522,6 +522,9 @@ class L10nEn extends L10n {
   String get groupMemberUnresolved => 'Member';
 
   @override
+  String get memberMessageAction => 'Message';
+
+  @override
   String get myAccountTitle => 'My account';
 
   @override

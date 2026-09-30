@@ -269,9 +269,16 @@ ConversationDto {
 ConversationLearnerDto { id, name }             // two fields only -- never level,
                                                 // nextClassAt, teacherId or familyId
 ConversationMemberDto { actorId, actorKind: 'contact'|'staff'|'teacher'|'system',
-  memberRole: 'parent'|'teacher'|'admin'|'observer', isSilent: boolean }
+  memberRole: 'parent'|'teacher'|'admin'|'observer', isSilent: boolean,
+  displayName: string }                           // '' when the actor no longer
+                                                  // resolves; never an id (O3)
 MessageDto {
   id, conversationId: string|null, seq: string|null, authorKind, authorId: string|null,
+  authorDisplayName: string|null,                 // canonical Actor.displayName (O3).
+                                                  // null for a system message and for
+                                                  // an author who no longer resolves.
+                                                  // Resolved in ONE batch per page via
+                                                  // IdentityService.resolveActors.
   onBehalfMode: 'owner'|'coverage'|'assist'|'escalation'|null,
   type: 'text'|'image'|'video'|'voice'|'file'|'system', body: string|null,
   visibility: 'customer'|'internal', moderation: 'published'|'pending'|'rejected',
@@ -695,7 +702,7 @@ Transport: socket.io on the **default namespace** at the API origin (Redis adapt
 
 | Event | Payload | Delivered to | Emitted today by |
 |---|---|---|---|
-| `message.created` | `{ conversationId, messageId, seq, authorKind, authorId, type, visibility, moderation, createdAt }` — a hint, no body | conversation room; **internal notes: staff actor rooms only** | `send` (published), `approve` |
+| `message.created` | `{ conversationId, messageId, seq, authorKind, authorId, type, visibility, moderation, createdAt }` — a hint, no body. **Deliberately no `authorDisplayName`:** the event does not render a message, it triggers `GET …/messages?after=<seq>`, and the rendered author comes from `MessageDto` on that fetch. Adding the name here would enlarge a push-adjacent payload to answer a question the fetch already answers. | conversation room; **internal notes: staff actor rooms only** | `send` (published), `approve` |
 | `message.deleted` | `{ conversationId, messageId, deletedForAll }` | conversation room | `deleteForEveryone` |
 | `message.receipt.updated` | `{ conversationId, messageId, actorId, state, at }` | conversation room | **nobody** — declared, never enqueued. Phase 1 decides: emit on `read` / `delivered` (subject to RT-012 scoping) or remove. |
 | `reaction.added` / `reaction.removed` | `{ conversationId, messageId, actorId, emoji }` | conversation room | `react` / `unreact` |

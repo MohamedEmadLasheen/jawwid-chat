@@ -79,7 +79,11 @@ export class ConversationController {
     // refused here and never reaches the query below.
     await this.conversations.setPreferences(id, actorId, {});
 
-    return toConversationDto(conv, undefined, {
+    // Members, with display names (mobile gap O3). AFTER the authorization
+    // above, and only on this route: the list endpoint deliberately does not
+    // load them, because resolving every member of every conversation would be
+    // an identity query per row for a screen that renders none of them.
+    return toConversationDto(conv, await this.conversations.membersOf(id), {
       unreadCount: await this.messages.unreadCount(id, actorId),
     });
   }

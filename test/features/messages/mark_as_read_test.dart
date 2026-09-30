@@ -56,6 +56,11 @@ class _ReadRecordingRepository implements ConversationRepository {
 
   @override
   Future<List<Conversation>> search(String query) => _inner.search(query);
+
+  /// Not exercised here: this double covers read-and-mark, not channel creation.
+  @override
+  Future<Conversation> openDirect(String withActorId) =>
+      throw UnimplementedError();
 }
 
 /// When unread clears, and — more importantly — when it does not.

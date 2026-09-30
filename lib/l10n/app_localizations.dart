@@ -1039,6 +1039,12 @@ abstract class L10n {
   /// **'Member'**
   String get groupMemberUnresolved;
 
+  /// No description provided for @memberMessageAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Message'**
+  String get memberMessageAction;
+
   /// No description provided for @myAccountTitle.
   ///
   /// In en, this message translates to:

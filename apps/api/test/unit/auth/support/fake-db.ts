@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import type { PrismaService } from '@platform/prisma.service';
-import type { IdentityService, ResolvableAccount } from '@platform/identity.service';
+import type {
+  ActorRef,
+  IdentityService,
+  ResolvableAccount,
+  ResolvedActors,
+} from '@platform/identity.service';
+import { actorRefKey } from '@platform/identity.service';
 import type { AuditService, AuditWriteInput, EventWriteInput, Tx } from '@platform/audit.service';
 import type { RateLimitStore, ReserveResult } from '@platform/auth/login-rate-limit';
 import type { Actor } from '@platform/types';
@@ -413,6 +419,21 @@ export class FakeIdentity implements IdentityService {
 
   async resolveActor(actorId: string): Promise<Actor | null> {
     return this.byActorId.get(actorId) ?? null;
+  }
+
+  /**
+   * Keyed on `(actorKind, actorId)` like the real one, so a ref whose kind does
+   * not match the stored actor misses — the polymorphic key is the property these
+   * doubles must not quietly relax. Authentication tests do not use this; it is
+   * here because the interface requires it.
+   */
+  async resolveActors(refs: readonly ActorRef[]): Promise<ResolvedActors> {
+    const resolved = new Map<string, Actor>();
+    for (const ref of refs) {
+      const actor = this.byActorId.get(ref.actorId);
+      if (actor && actor.kind === ref.actorKind) resolved.set(actorRefKey(ref), actor);
+    }
+    return resolved;
   }
 
   async resolveForAccount(account: ResolvableAccount): Promise<Actor | null> {

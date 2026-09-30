@@ -7,11 +7,15 @@ import '../wire/wire_mappers.dart';
 /// `GroupRepository` over `GET /conversations/:id`, whose `ConversationDto` carries
 /// `members: ConversationMemberDto[]`.
 ///
-/// **Members arrive without display names.** `ConversationMemberDto` is
-/// `{ actorId, actorKind, memberRole, isSilent }` — there is no name and no avatar. The
-/// member sheet must show a name and must never fall back to showing an id, so this maps
-/// what exists and leaves the name empty for the UI to treat as unresolved. Recorded as O3
-/// in `docs/mobile/backend-dependencies.md`.
+/// **Members now arrive with display names (gap O3 closed).** `ConversationMemberDto` is
+/// `{ actorId, actorKind, memberRole, isSilent, displayName }`, and `GET /conversations/:id`
+/// populates `members` — it previously returned none at all, so the member sheet was empty
+/// rather than merely nameless.
+///
+/// There is still no avatar, and an empty `displayName` is still possible: the server sends
+/// `''` for a member whose actor no longer resolves, because a membership row outlives the
+/// actor it names (BR-5). The sheet must never fall back to showing an id, so the UI treats
+/// an empty name as unresolved and renders `groupMemberUnresolved`.
 ///
 /// Note what is deliberately *not* here: no membership mutation. `POST /conversations/:id/members`
 /// exists but is staff-only and always carries a reason; a parent or teacher may not change

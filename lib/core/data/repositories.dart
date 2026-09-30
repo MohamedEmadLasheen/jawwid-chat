@@ -261,6 +261,22 @@ abstract interface class ConversationRepository {
 
   /// Scoped strictly to the caller's own authorized conversations — never a directory (§41).
   Future<List<Conversation>> search(String query);
+
+  /// Open the 1:1 channel with [withActorId], creating it only if none exists.
+  ///
+  /// **Idempotent by the server's construction, not by a check here.**
+  /// `conversation.direct_key` is unique, so the same pair always resolves to the
+  /// same conversation: a second call returns the first one rather than making a
+  /// second channel. The client therefore does not look first and must not — a
+  /// look-then-create is a race, and the race is exactly what the unique index
+  /// exists to lose safely.
+  ///
+  /// **Authorization is the server's, entirely.** Whether these two actors may
+  /// share a channel is `AuthorizationService.canOpenDirect`, and a refusal
+  /// arrives as a typed `AppError` carrying the engine's own code. Nothing here
+  /// re-implements that decision; `CommunicationPolicy` only decides whether to
+  /// *offer* the action, which is UX and is deliberately narrower.
+  Future<Conversation> openDirect(String withActorId);
 }
 
 abstract interface class MessageRepository {
