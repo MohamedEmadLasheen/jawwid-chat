@@ -88,7 +88,16 @@ class _StoryEntry extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
-    final theme = Theme.of(context);
+
+    // The story's own words, for the SCREEN READER only.
+    //
+    // The rail is a row of rings and nothing else: a caption under each circle
+    // was three sources of noise at once -- an ellipsised title that could not
+    // be read anyway, a second copy of text the viewer is about to show in
+    // full, and a mixed-script line that sets its own direction under a
+    // centred circle. Removing it is a visual decision and must not be an
+    // accessibility one, so the title still reaches anyone who cannot see the
+    // ring, through the semantic label below.
     final label = story.title ?? publisherName;
 
     // Viewed state reaches a screen reader as WORDS. The ring colour alone would be the only
@@ -114,19 +123,6 @@ class _StoryEntry extends StatelessWidget {
                   child: JawwidAvatar(
                     displayName: publisherName,
                     size: Sizes.avatarLg,
-                  ),
-                ),
-                const SizedBox(height: Spacing.spacing2),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    fontWeight: story.isViewed ? FontWeight.w400 : FontWeight.w700,
-                    color: story.isViewed
-                        ? theme.colorScheme.onSurfaceVariant
-                        : theme.colorScheme.onSurface,
                   ),
                 ),
               ],
