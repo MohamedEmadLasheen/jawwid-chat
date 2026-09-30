@@ -123,6 +123,7 @@ void main() {
       final now = DateTime.now();
       await tester.pumpWidget(
         harness(
+          locale: const Locale('en'),
           overrides: [
             repo(FakeStoryRepository(stories: [
               // Deliberately the NEWEST story of all, and viewed: it must still sort behind
@@ -155,17 +156,23 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Only the ring labels. The avatar initials are Text too, and interleaved; filtering
-      // to the titles keeps the tree order, which is what is being asserted.
+      // Read from the SEMANTIC labels, not from visible text: the rail shows
+      // rings and no captions, so the title exists on screen only for a screen
+      // reader. That is the point of the change, and it is also what keeps this
+      // assertion possible -- the order is still observable, just not by
+      // sighted means.
       // A = unviewed newest, B = unviewed oldest, C = viewed newest, D = viewed oldest.
-      const titles = {'A', 'B', 'C', 'D'};
-      final labels = tester
-          .widgetList<Text>(find.byType(Text))
-          .map((t) => t.data)
+      final order = tester
+          .widgetList<Semantics>(find.byType(Semantics))
+          .map((w) => w.properties.label)
           .whereType<String>()
-          .where(titles.contains)
+          .where((l) => l.endsWith(' story: A') ||
+              l.endsWith(' story: B') ||
+              l.endsWith(' story: C') ||
+              l.endsWith(' story: D'))
+          .map((l) => l.characters.last)
           .toList();
-      expect(labels, ['A', 'B', 'C', 'D']);
+      expect(order, ['A', 'B', 'C', 'D']);
     });
 
     testWidgets('viewed state reaches a screen reader as WORDS, not just a ring colour',
@@ -203,8 +210,128 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Not an empty label, and not an invented author: the publisher IS the academy.
-      expect(find.text('Jawwid'), findsOneWidget);
+      // Not an empty label, and not an invented author: the publisher IS the
+      // academy. Asserted on the semantic label, because the rail no longer
+      // prints a caption for anyone to read.
+      expect(find.bySemanticsLabel('Unviewed story: Jawwid'), findsOneWidget);
+    });
+  });
+
+  group('the rail is rings and nothing else', () {
+    testWidgets('prints no caption under a circle, however long the title',
+        (tester) async {
+      const longTitle =
+          'A deliberately long academy announcement that would be ellipsised into '
+          'uselessness under a 76dp circle';
+
+      await tester.pumpWidget(
+        harness(
+          locale: const Locale('en'),
+          overrides: [
+            repo(FakeStoryRepository(stories: [
+              story(id: 'a', title: longTitle),
+              story(id: 'b', title: 'Short'),
+            ])),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Every Text still on screen belongs to an AVATAR INITIAL. A caption --
+      // the title, a truncation of it, or any replacement label -- is what this
+      // forbids, so the assertion is on what is rendered rather than on the
+      // absence of one particular string.
+      final rendered = tester
+          .widgetList<Text>(find.descendant(
+            of: find.byType(StoriesRail),
+            matching: find.byType(Text),
+          ))
+          .map((t) => t.data ?? '')
+          .where((t) => t.isNotEmpty)
+          .toList();
+
+      for (final text in rendered) {
+        expect(text.length, lessThanOrEqualTo(2),
+            reason: 'only an avatar initial may be drawn in the rail, found: $text');
+      }
+      expect(find.textContaining('academy announcement'), findsNothing);
+      expect(find.text('Short'), findsNothing);
+    });
+
+    testWidgets('prints no caption in Arabic either', (tester) async {
+      await tester.pumpWidget(
+        harness(
+          locale: const Locale('ar'),
+          overrides: [
+            repo(FakeStoryRepository(stories: [
+              story(id: 'a', title: 'إجازة نهاية الأسبوع'),
+            ])),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('إجازة نهاية الأسبوع'), findsNothing);
+      expect(find.textContaining('إجازة'), findsNothing);
+    });
+
+    testWidgets('keeps the ring, its seen state and the screen-reader title',
+        (tester) async {
+      // Removing the caption is a VISUAL decision. It must not take the title
+      // away from someone who cannot see the ring, and it must not take the
+      // seen state away from anyone.
+      await tester.pumpWidget(
+        harness(
+          locale: const Locale('en'),
+          overrides: [
+            repo(FakeStoryRepository(stories: [
+              story(id: 'a', title: 'Fresh', publishedAt: DateTime.now()),
+              story(
+                id: 'b',
+                title: 'Seen',
+                isViewed: true,
+                publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
+              ),
+            ])),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.bySemanticsLabel('Unviewed story: Fresh'), findsOneWidget);
+      expect(find.bySemanticsLabel('Viewed story: Seen'), findsOneWidget);
+      expect(find.byType(StoriesRail), findsOneWidget);
+    });
+
+    testWidgets('still scrolls horizontally with many stories', (tester) async {
+      await tester.pumpWidget(
+        harness(
+          locale: const Locale('en'),
+          overrides: [
+            repo(FakeStoryRepository(stories: [
+              for (var i = 0; i < 12; i += 1)
+                story(
+                  id: 's$i',
+                  title: 'Story $i',
+                  publishedAt: DateTime.now().subtract(Duration(minutes: i)),
+                ),
+            ])),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final rail = find.descendant(
+        of: find.byType(StoriesRail),
+        matching: find.byType(Scrollable),
+      );
+      expect(rail, findsOneWidget);
+
+      await tester.drag(rail, const Offset(-300, 0));
+      await tester.pumpAndSettle();
+
+      // Nothing appeared under a circle as a result of scrolling either.
+      expect(find.textContaining('Story '), findsNothing);
     });
   });
 
@@ -245,7 +372,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Second'));
+      await tester.tap(find.bySemanticsLabel('Unviewed story: Second'));
       await tester.pumpAndSettle();
       expect(tapped, ['second']);
     });
@@ -296,7 +423,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Before'), findsOneWidget);
+      expect(find.bySemanticsLabel('Unviewed story: Before'), findsOneWidget);
       expect(fake.feedCalls, 1);
 
       // The academy published something else and pulled the first one.
@@ -305,8 +432,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(fake.feedCalls, 2);
-      expect(find.text('Before'), findsNothing);
-      expect(find.text('After'), findsOneWidget);
+      expect(find.bySemanticsLabel('Unviewed story: Before'), findsNothing);
+      expect(find.bySemanticsLabel('Unviewed story: After'), findsOneWidget);
     });
 
     testWidgets('a refresh that finds nothing collapses the rail again', (tester) async {

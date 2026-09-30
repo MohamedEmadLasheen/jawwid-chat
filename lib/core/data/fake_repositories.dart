@@ -3,6 +3,7 @@ import 'dart:async';
 import '../../shared/models/auth.dart';
 import '../../shared/models/conversation.dart';
 import '../../shared/models/message.dart';
+import '../../shared/utils/search_text.dart';
 import '../errors/app_error.dart';
 import '../storage/secure_token_store.dart';
 import 'fake_backend.dart';
@@ -96,12 +97,23 @@ class FakeConversationRepository implements ConversationRepository {
   Future<void> markRead(String conversationId, {required int throughSequence}) async =>
       backend.updateConversation(conversationId, (c) => c.copyWith(unreadCount: 0));
 
+  /// Search, folded the way the server folds it.
+  ///
+  /// `toLowerCase().contains()` stood here and was wrong for this audience in
+  /// the same way it was wrong on the server: a parent typing `احمد` must find
+  /// `أحمد`. The development stack has to behave like production or it teaches
+  /// the wrong thing, so this uses the same [SearchText] the UI does and
+  /// matches the same three surfaces the server matches.
   @override
   Future<List<Conversation>> search(String query) async {
-    final needle = query.toLowerCase();
+    if (query.trim().isEmpty) return const [];
+
     return backend
         .listConversations()
-        .where((c) => c.title.toLowerCase().contains(needle))
+        .where((c) =>
+            SearchText.matches(c.displayTitle, query) ||
+            SearchText.matches(c.learner?.displayName ?? '', query) ||
+            SearchText.matches(c.counterpart?.displayName ?? '', query))
         .toList(growable: false);
   }
 }
@@ -193,17 +205,29 @@ class FakeCallRepository implements CallRepository {
   final FakeBackend backend;
 
   @override
-  Future<CallGrant> requestGrant({required String conversationId}) async =>
-      backend.requestGrant(conversationId: conversationId);
+  Future<CallCapability> capability({required String conversationId}) async =>
+      const CallCapability(canCall: true);
 
   @override
-  Future<CallGrant> acceptIncoming({required String callId}) async =>
-      throw const AppError(AppErrorKind.notFound, code: 'call_not_found');
+  Future<StartedCall> start({required String conversationId}) async =>
+      backend.startCall(conversationId: conversationId);
+
+  @override
+  Future<CallMediaGrant> mediaToken({required String callId}) async =>
+      backend.mediaToken(callId: callId);
+
+  @override
+  Future<void> accept({required String callId}) async {}
 
   @override
   Future<void> decline({required String callId}) async {}
 
   @override
-  Future<Page<CallHistoryEntry>> history({String? cursor}) async =>
-      const Page(items: []);
+  Future<void> end({required String callId}) async {}
+
+  @override
+  Future<List<CallHistoryEntry>> callHistory({
+    required String conversationId,
+  }) async =>
+      const [];
 }

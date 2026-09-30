@@ -10,6 +10,69 @@ class L10nAr extends L10n {
   L10nAr([String locale = 'ar']) : super(locale);
 
   @override
+  String systemGroupCreated(String learner) {
+    return 'فتحت جوّيد هذه المجموعة لـ$learner.';
+  }
+
+  @override
+  String get systemGroupCreatedUnnamed => 'فتحت جوّيد هذه المجموعة.';
+
+  @override
+  String get systemGroupMembersChanged => 'حدّثت جوّيد أعضاء هذه المجموعة.';
+
+  @override
+  String systemGroupMembersJoined(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'انضم $count أشخاص إلى المجموعة.',
+      two: 'انضم شخصان إلى المجموعة.',
+      one: 'انضم شخص إلى المجموعة.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String systemGroupMembersLeft(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'غادر $count أشخاص المجموعة.',
+      two: 'غادر شخصان المجموعة.',
+      one: 'غادر شخص المجموعة.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get systemGroupArchived => 'أغلقت جوّيد هذه المجموعة.';
+
+  @override
+  String get systemEventUnknown => 'حدّثت جوّيد هذه المحادثة.';
+
+  @override
+  String get previewVoice => 'رسالة صوتية';
+
+  @override
+  String get previewPhoto => 'صورة';
+
+  @override
+  String get previewVideo => 'فيديو';
+
+  @override
+  String get previewFile => 'ملف';
+
+  @override
+  String previewYouPrefix(String preview) {
+    return 'أنت: $preview';
+  }
+
+  @override
+  String previewSenderPrefix(String name, String preview) {
+    return '$name: $preview';
+  }
+
+  @override
   String get appName => 'جَوِّد';
 
   @override
@@ -351,6 +414,15 @@ class L10nAr extends L10n {
       'تعذّر إجراء المكالمة. تحقق من اتصالك وحاول مرة أخرى.';
 
   @override
+  String get callOutgoing => 'جارٍ الاتصال…';
+
+  @override
+  String get callEnded => 'انتهت المكالمة';
+
+  @override
+  String get callSendMessageInstead => 'إرسال رسالة بدلاً من ذلك';
+
+  @override
   String get notificationsTitle => 'المستجدات';
 
   @override
@@ -589,6 +661,9 @@ class L10nAr extends L10n {
   String get saveAction => 'حفظ';
 
   @override
+  String get attachCamera => 'الكاميرا';
+
+  @override
   String get attachPhoto => 'صورة';
 
   @override
@@ -615,6 +690,13 @@ class L10nAr extends L10n {
 
   @override
   String get attachmentPickFailed => 'تعذّر فتح ذلك. برجاء المحاولة مرة أخرى.';
+
+  @override
+  String get cameraPermissionDenied =>
+      'يحتاج جَوِّد إلى إذن لاستخدام الكاميرا. يمكنك السماح بذلك من الإعدادات.';
+
+  @override
+  String get cameraUnavailable => 'لا توجد كاميرا متاحة على هذا الجهاز.';
 
   @override
   String get attachmentPermissionDenied =>

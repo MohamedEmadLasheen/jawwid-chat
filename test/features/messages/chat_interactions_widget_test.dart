@@ -24,10 +24,12 @@ import 'fake_voice_devices.dart';
 /// A picker that hands back whatever the test says, without a platform channel.
 class _FakeMediaPicker implements MediaPicker {
   PendingAttachment? image;
+  PendingAttachment? capture;
   PendingAttachment? file;
   MediaPickException? failure;
 
   int imageCalls = 0;
+  int captureCalls = 0;
   int fileCalls = 0;
 
   @override
@@ -35,6 +37,13 @@ class _FakeMediaPicker implements MediaPicker {
     imageCalls++;
     if (failure != null) throw failure!;
     return image;
+  }
+
+  @override
+  Future<PendingAttachment?> captureImage() async {
+    captureCalls++;
+    if (failure != null) throw failure!;
+    return capture;
   }
 
   @override
@@ -265,17 +274,122 @@ void main() {
   });
 
   group('the attach menu', () {
-    testWidgets('offers exactly Photo and File', (tester) async {
+    testWidgets('offers exactly Camera, Photo and File, in that order',
+        (tester) async {
       await tester.pumpWidget(harness());
       await tester.pumpAndSettle();
 
       await tester.tap(find.byIcon(Icons.add));
       await tester.pumpAndSettle();
 
+      expect(find.text('Camera'), findsOneWidget);
       expect(find.text('Photo'), findsOneWidget);
       expect(find.text('File'), findsOneWidget);
-      expect(find.text('Camera'), findsNothing);
+      // The menu is a shortcut, and one that grows past a glance has stopped
+      // being one. Three, and no fourth.
       expect(find.text('Location'), findsNothing);
+      expect(find.byType(ListTile), findsNWidgets(3));
+
+      // Camera first: the commonest reason to attach anything is something in
+      // front of you now.
+      double y(String label) => tester.getCenter(find.text(label)).dy;
+      expect(y('Camera'), lessThan(y('Photo')));
+      expect(y('Photo'), lessThan(y('File')));
+    });
+
+    testWidgets('a captured photo goes through the same preview and pipeline',
+        (tester) async {
+      // The whole point: a capture is not a second attachment mechanism. It
+      // reaches the same confirmation step and the same send path as a photo
+      // picked from the library.
+      picker.capture = const PendingAttachment(
+        filePath: '/tmp/does-not-exist.jpg',
+        kind: MessageKind.image,
+        mimeType: 'image/jpeg',
+        byteSize: 2048,
+        fileName: 'capture.jpg',
+      );
+
+      await tester.pumpWidget(harness());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Camera'));
+      await tester.pumpAndSettle();
+
+      expect(picker.captureCalls, 1);
+      expect(picker.imageCalls, 0, reason: 'Camera must not open the library');
+      expect(
+        find.text('Send this?'),
+        findsOneWidget,
+        reason: '§16 — a captured photo is never sent on the spot either',
+      );
+    });
+
+    testWidgets('backing out of the camera says nothing at all', (tester) async {
+      picker.capture = null;
+
+      await tester.pumpWidget(harness());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Camera'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SnackBar), findsNothing);
+      expect(find.text('Send this?'), findsNothing);
+    });
+
+    testWidgets('a refused CAMERA sends the parent to the right permission',
+        (tester) async {
+      // "Jawwid needs permission to open your photos" after a camera denial
+      // would send a parent to the wrong row in Settings.
+      picker.failure = const MediaPickException(MediaPickFailure.permissionDenied);
+
+      await tester.pumpWidget(harness());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Camera'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('camera'), findsOneWidget);
+      expect(find.textContaining('your photos'), findsNothing);
+      // Refused, not stuck: the sheet is gone and the composer is usable.
+      expect(find.text('Send this?'), findsNothing);
+      expect(find.byIcon(Icons.add), findsOneWidget);
+    });
+
+    testWidgets('a refused PHOTO LIBRARY still says photos', (tester) async {
+      picker.failure = const MediaPickException(MediaPickFailure.permissionDenied);
+
+      await tester.pumpWidget(harness());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Photo'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('your photos'), findsOneWidget);
+    });
+
+    testWidgets('a device with no camera is told that, not that it cannot pick files',
+        (tester) async {
+      picker.failure = const MediaPickException(MediaPickFailure.unsupported);
+
+      await tester.pumpWidget(harness());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Camera'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('no camera'), findsOneWidget);
     });
 
     testWidgets('a chosen photo is previewed before anything is sent',

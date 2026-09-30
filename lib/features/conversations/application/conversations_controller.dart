@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -192,6 +194,39 @@ class ConversationsController extends AsyncNotifier<List<ConversationSection>> {
 
 final conversationsControllerProvider = AsyncNotifierProvider<
     ConversationsController, List<ConversationSection>>(ConversationsController.new);
+
+/// Server-backed conversation search, keyed by the term.
+///
+/// ## Why this is a provider and not a filter
+///
+/// The search box used to narrow the list already in memory. That is not
+/// search: it silently covers only the page that happens to be loaded, so a
+/// conversation the parent genuinely has can be missing from its own results.
+/// The obvious "fix" -- fetch more and filter here -- is worse, because it
+/// would make client-side code the thing standing between one family and
+/// another's conversations. So the term goes to the server, which applies it
+/// INSIDE the caller's authorization.
+///
+/// `autoDispose` and the family key together give free per-term caching:
+/// backspacing to a term already typed re-renders without a round trip, and the
+/// results are dropped as soon as the box is cleared.
+final conversationSearchProvider =
+    FutureProvider.autoDispose.family<List<Conversation>, String>((ref, query) async {
+  final term = query.trim();
+  if (term.isEmpty) return const [];
+
+  // Debounce, so a term is not sent once per keystroke. A cancelled timer
+  // leaves the future pending and the provider is disposed with it.
+  final completer = Completer<void>();
+  final timer = Timer(const Duration(milliseconds: 300), completer.complete);
+  ref.onDispose(() {
+    timer.cancel();
+    if (!completer.isCompleted) completer.complete();
+  });
+  await completer.future;
+
+  return ref.read(conversationsControllerProvider.notifier).search(term);
+});
 
 /// Total unread across everything, for the tab badge.
 final totalUnreadProvider = Provider<int>((ref) {

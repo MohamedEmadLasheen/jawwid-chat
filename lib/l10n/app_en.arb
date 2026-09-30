@@ -1,5 +1,36 @@
 {
   "@@locale": "en",
+  "systemGroupCreated": "Jawwid opened this group for {learner}.",
+  "@systemGroupCreated": {
+    "placeholders": { "learner": { "type": "String" } }
+  },
+  "systemGroupCreatedUnnamed": "Jawwid opened this group.",
+  "systemGroupMembersChanged": "Jawwid updated who is in this group.",
+  "systemGroupMembersJoined": "{count, plural, =1{One person joined this group.} other{{count} people joined this group.}}",
+  "@systemGroupMembersJoined": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "systemGroupMembersLeft": "{count, plural, =1{One person left this group.} other{{count} people left this group.}}",
+  "@systemGroupMembersLeft": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "systemGroupArchived": "Jawwid closed this group.",
+  "systemEventUnknown": "Jawwid updated this conversation.",
+  "previewVoice": "Voice message",
+  "previewPhoto": "Photo",
+  "previewVideo": "Video",
+  "previewFile": "File",
+  "previewYouPrefix": "You: {preview}",
+  "@previewYouPrefix": {
+    "placeholders": { "preview": { "type": "String" } }
+  },
+  "previewSenderPrefix": "{name}: {preview}",
+  "@previewSenderPrefix": {
+    "placeholders": {
+      "name": { "type": "String" },
+      "preview": { "type": "String" }
+    }
+  },
   "appName": "Jawwid",
   "signInTitle": "Sign in to Jawwid",
   "signInSubtitle": "Your account is created by Jawwid. There is no public sign-up.",
@@ -160,6 +191,9 @@
   "callFailedMicrophone": "Jawwid needs microphone access to make calls.",
   "callFailedNotAllowed": "This call is not available.",
   "callFailedNetwork": "The call could not connect. Check your connection and try again.",
+  "callOutgoing": "Calling…",
+  "callEnded": "Call ended",
+  "callSendMessageInstead": "Send a message instead",
   "notificationsTitle": "Updates",
   "notificationsEmpty": "You are all caught up",
   "notificationPermissionTitle": "Turn on notifications",
@@ -271,6 +305,7 @@
   "@saveAction": {
     "description": "Saves an attachment to the device."
   },
+  "attachCamera": "Camera",
   "attachPhoto": "Photo",
   "@attachPhoto": {
     "description": "Attachment menu entry for the photo library."
@@ -307,6 +342,8 @@
   "@attachmentPickFailed": {
     "description": "Shown when the photo or file picker fails."
   },
+  "cameraPermissionDenied": "Jawwid needs permission to use the camera. You can allow it in Settings.",
+  "cameraUnavailable": "This device has no camera available.",
   "attachmentPermissionDenied": "Jawwid needs permission to open your photos. You can allow it in Settings.",
   "@attachmentPermissionDenied": {
     "description": "Shown when photo-library permission was refused."

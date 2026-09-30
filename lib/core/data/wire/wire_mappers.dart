@@ -1,6 +1,7 @@
 import '../../../shared/models/conversation.dart';
 import '../../../shared/models/message.dart';
 import '../../../shared/models/story.dart';
+import '../../../shared/models/system_event.dart';
 import '../../../shared/models/user_role.dart';
 import '../repositories.dart';
 import 'wire_vocab.dart';
@@ -28,14 +29,86 @@ abstract final class WireMappers {
   static DateTime? parseTime(Object? raw) =>
       raw is String ? DateTime.tryParse(raw)?.toLocal() : null;
 
-  static ConversationKind conversationKind(String? type) => switch (type) {
+  /// Classify a conversation from its wire payload.
+  ///
+  /// Before PD-6 the type alone decided this: a `direct` conversation could only be with
+  /// staff, because BR-1 refused every other 1:1. Since PD-6 a `direct` conversation may be
+  /// Parent <-> Admin, Teacher <-> Admin **or** Parent <-> Teacher, and the type no longer
+  /// distinguishes them.
+  ///
+  /// So the participants decide, and only the participants the payload actually states.
+  ///
+  /// WHAT THIS IS NOT. This is not an authorization decision and cannot become one. The
+  /// server authorizes the channel and refuses anything else with
+  /// `COMM.TEACHER_PARENT_NOT_AUTHORIZED`; classifying a row as
+  /// [ConversationKind.teacherParentDirect] grants the viewer nothing they did not already
+  /// have. It decides how the row is presented, nothing more.
+  ///
+  /// WHY `actorKind` AND NOT `memberRole`. `memberRole` is a label on the membership row
+  /// and a teacher can carry `member_role: 'admin'` — red-team RT-025 C5 is exactly that
+  /// attack against the server. `actorKind` is the identity's own kind and is the field the
+  /// server's own rules are written against, so it is the field to read here too.
+  ///
+  /// FAILING CLOSED. Anything other than exactly one `contact` and exactly one `teacher` is
+  /// [ConversationKind.unknownDirect] — no members (the list endpoint sends none, by
+  /// contract), an empty list, a malformed entry, or a set this client does not recognise.
+  /// Guessing [ConversationKind.teacherParentDirect] from a type, a title or an id is the
+  /// one mistake this function exists to make impossible.
+  static ConversationKind conversationKind(
+    String? type, {
+    Object? members,
+  }) =>
+      switch (type) {
         Wire.conversationOfficial => ConversationKind.jawwidSupport,
         Wire.conversationStudentGroup => ConversationKind.studentGroup,
         Wire.conversationClassGroup => ConversationKind.studentGroup,
-        // A `direct` conversation from this client's perspective is always with staff: the
-        // backend refuses a teacher/parent direct channel outright (BR1).
+        Wire.conversationDirect => _directKind(members),
+        // An unknown type is not a direct conversation this client understands.
+        // adminDirect remains the pre-PD-6 default for backward compatibility;
+        // what matters is that it is never teacherParentDirect.
         _ => ConversationKind.adminDirect,
       };
+
+  /// The participant shapes of a `direct` conversation. Order is irrelevant: a set is a set.
+  static ConversationKind _directKind(Object? members) {
+    if (members is! List) return ConversationKind.unknownDirect;
+
+    var contacts = 0;
+    var teachers = 0;
+    var staff = 0;
+    var unrecognised = 0;
+
+    for (final entry in members) {
+      if (entry is! Map) {
+        unrecognised += 1;
+        continue;
+      }
+      switch (entry['actorKind']) {
+        case Wire.actorContact:
+          contacts += 1;
+        case Wire.actorTeacher:
+          teachers += 1;
+        case Wire.actorStaff:
+          staff += 1;
+        default:
+          unrecognised += 1;
+      }
+    }
+
+    if (unrecognised > 0) return ConversationKind.unknownDirect;
+
+    // Exactly one of each, and nobody else present. A third participant means this is not
+    // the 1:1 the server's two-participant ceiling describes, so it is not classified.
+    if (contacts == 1 && teachers == 1 && staff == 0) {
+      return ConversationKind.teacherParentDirect;
+    }
+    // Parent <-> Admin and Teacher <-> Admin: one staff member and one counterpart.
+    if (staff == 1 && contacts + teachers == 1) {
+      return ConversationKind.adminDirect;
+    }
+
+    return ConversationKind.unknownDirect;
+  }
 
   static ParticipantRole memberRole(String? role) => switch (role) {
         Wire.memberParent => ParticipantRole.parent,
@@ -115,26 +188,96 @@ abstract final class WireMappers {
     );
   }
 
+  /// Whether a stored mute expiry is still in force.
+  ///
+  /// The contract models a mute as `mutedUntil`, not a boolean, so "muted" is a
+  /// question about now. A far-future timestamp is how an indefinite mute is
+  /// expressed; a past one is a mute that has lapsed and must read as off.
+  static bool _isMuted(DateTime? mutedUntil) =>
+      mutedUntil != null && mutedUntil.isAfter(DateTime.now().toUtc());
+
+  /// Approval policy for a backend that does not yet send `viewerRequiresApproval`.
+  ///
+  /// Kept deliberately narrow: ONE flag, chosen by the viewer's role, and only
+  /// on a group. Approval exists for student and class groups; a 1:1 has never
+  /// been moderated, and claiming otherwise is the exact falsehood this whole
+  /// change removes.
+  static bool _legacyRequiresApproval(Map<String, Object?> json, UserRole viewerRole) {
+    final type = json['type'] as String?;
+    if (type != Wire.conversationStudentGroup && type != Wire.conversationClassGroup) {
+      return false;
+    }
+    return viewerRole == UserRole.teacher
+        ? json['teacherRequiresApproval'] == true
+        : json['parentRequiresApproval'] == true;
+  }
+
+  /// The last message on a list row, or null when the conversation is empty.
+  static MessagePreview? lastMessage(
+    Object? json, {
+    required String viewerActorId,
+  }) {
+    if (json is! Map<String, Object?>) return null;
+
+    final kind = messageKind(json['type'] as String?);
+    final authorId = json['authorId'] as String?;
+    final text = (json['preview'] as String?)?.trim();
+
+    return MessagePreview(
+      kind: kind,
+      at: parseTime(json['createdAt']) ?? DateTime.now(),
+      // Only a text message carries text. The server sends null for every other
+      // kind rather than a body that would be meaningless or, for a system
+      // message, a raw payload.
+      text: (text == null || text.isEmpty) ? null : text,
+      systemEvent: SystemEvent.fromJson(json['systemEvent']),
+      authorName: (json['authorName'] as String?)?.trim().isNotEmpty == true
+          ? (json['authorName'] as String).trim()
+          : null,
+      isMine: authorId != null && authorId.isNotEmpty && authorId == viewerActorId,
+    );
+  }
+
   static Conversation conversation(
     Map<String, Object?> json, {
     required UserRole viewerRole,
-    String lastMessagePreview = '',
-    bool isPinned = false,
-    bool isMuted = false,
+    required String viewerActorId,
     String? handledByLabel,
   }) {
     final archivedAt = parseTime(json['archivedAt']);
     final lastActivity = parseTime(json['lastActivityAt']) ?? DateTime.now();
 
-    // Approval policy is per role, so the flag the composer honours depends on who is
-    // looking (§26).
-    final requiresApproval = viewerRole == UserRole.teacher
-        ? json['teacherRequiresApproval'] == true
-        : json['parentRequiresApproval'] == true;
+    // Server-derived: `viewerRequiresApproval` is decided by the same function
+    // that decides the moderation a message is stored with, so the notice and
+    // the behaviour cannot disagree.
+    //
+    // The per-role fallback below is for a backend that predates the field. It
+    // reads ONE flag chosen by role -- never both OR-ed, which is what told a
+    // parent their messages were reviewed because the teacher's were -- and it
+    // gates on conversation type, because approval has never applied to a 1:1.
+    final requiresApproval = json['viewerRequiresApproval'] is bool
+        ? json['viewerRequiresApproval'] as bool
+        : _legacyRequiresApproval(json, viewerRole);
+
+    // Per-viewer pin/mute/archive. Written by POST /preferences and now read
+    // back here; before the contract carried them the client could set them and
+    // never see them again, so Favourites was permanently empty and a mute
+    // always read as off after a reload.
+    final viewerState = json['viewerState'];
+    final state = viewerState is Map<String, Object?> ? viewerState : const <String, Object?>{};
+    final viewerArchivedAt = parseTime(state['archivedAt']);
+
+    final counterpartJson = json['counterpart'];
+    final counterpart = counterpartJson is Map<String, Object?>
+        ? ConversationCounterpart(
+            id: (counterpartJson['actorId'] as String?) ?? '',
+            displayName: (counterpartJson['displayName'] as String?) ?? '',
+          )
+        : null;
 
     return Conversation(
       id: json['id']! as String,
-      kind: conversationKind(json['type'] as String?),
+      kind: conversationKind(json['type'] as String?, members: json['members']),
       title: (json['title'] as String?) ?? '',
       // Both from the DTO. They used to be parameters this mapper's caller had
       // to supply, because the payload carried neither — which meant the child
@@ -143,16 +286,21 @@ abstract final class WireMappers {
       // a caller pass something it inferred locally, so the parameters are
       // gone rather than merely unused.
       learner: WireMappers.learner(json['learner']),
+      counterpart: counterpart,
       updatedAt: lastActivity,
       lastMessageAt: lastActivity,
-      lastMessagePreview: lastMessagePreview,
+      lastMessage: lastMessage(json['lastMessage'], viewerActorId: viewerActorId),
       // Server-derived, per actor. Absent is treated as zero: the list route
       // always sends it, and a create/sync response that omits it is not
       // describing a badge.
       unreadCount: (json['unreadCount'] as num?)?.toInt() ?? 0,
-      isPinned: isPinned,
-      isMuted: isMuted,
-      isArchived: archivedAt != null,
+      isPinned: parseTime(state['pinnedAt']) != null,
+      // A mute is stored as an expiry, so a lapsed one is not a mute.
+      isMuted: _isMuted(parseTime(state['mutedUntil'])),
+      // Either kind of archive hides the row: the conversation being closed by
+      // staff, or this viewer archiving their own copy. Only the first makes it
+      // read-only, which is why `isReadOnly` below reads the conversation's.
+      isArchived: archivedAt != null || viewerArchivedAt != null,
       handledByLabel: handledByLabel,
       requiresApproval: requiresApproval,
       // An archived conversation is read-only for this client; the backend also refuses
@@ -164,7 +312,6 @@ abstract final class WireMappers {
   static Message message(
     Map<String, Object?> json, {
     required String viewerActorId,
-    String authorName = '',
   }) {
     final authorId = json['authorId'] as String?;
     final isMine = authorId != null && authorId == viewerActorId;
@@ -190,8 +337,11 @@ abstract final class WireMappers {
       conversationId: (json['conversationId'] as String?) ?? '',
       sequence: parseSeq(json['seq']),
       authorId: authorId,
-      authorName: authorName,
+      // From the wire since backend gap O3 closed. Empty means unresolved, and
+      // the bubble says a role word rather than an id in that case (§25).
+      authorName: ((json['authorName'] as String?) ?? '').trim(),
       authorRole: authorRole(json['authorKind'] as String?),
+      systemEvent: SystemEvent.fromJson(json['systemEvent']),
       kind: messageKind(json['type'] as String?),
       body: (json['body'] as String?) ?? '',
       attachments: [
@@ -274,10 +424,17 @@ abstract final class WireMappers {
     return trimmed.isEmpty ? null : trimmed;
   }
 
-  static GroupMember groupMember(Map<String, Object?> json, {String displayName = ''}) {
+  /// One group member.
+  ///
+  /// `displayName` comes from the payload now that `ConversationMemberDto`
+  /// carries it; the parameter remains so a caller with a better name can
+  /// override, and so the fake backend keeps working. An unresolved name stays
+  /// EMPTY -- the UI shows a neutral word for that and must never fall back to
+  /// the actor id (§25).
+  static GroupMember groupMember(Map<String, Object?> json, {String? displayName}) {
     return GroupMember(
       id: (json['actorId'] as String?) ?? '',
-      displayName: displayName,
+      displayName: displayName ?? ((json['displayName'] as String?) ?? '').trim(),
       role: memberRole(json['memberRole'] as String?),
     );
   }

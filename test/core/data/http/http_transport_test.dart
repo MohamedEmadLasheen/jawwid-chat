@@ -77,7 +77,11 @@ void main() {
     ApiClient client, {
     UserRole role = UserRole.parent,
   }) =>
-      HttpConversationRepository(client: client, viewerRole: () => role);
+      HttpConversationRepository(
+        client: client,
+        viewerRole: () => role,
+        viewerActorId: () => 'me',
+      );
 
   HttpMessageRepository messages(ApiClient client, {String actorId = 'me'}) =>
       HttpMessageRepository(client: client, viewerActorId: () => actorId);
@@ -957,14 +961,25 @@ void main() {
     });
   });
 
-  group('capabilities the contract does not provide', () {
-    test('search fails honestly rather than filtering locally', () async {
-      await expectLater(
-        conversations(clientWith(_NoTokens())).search('أحمد'),
-        throwsA(
-          isA<AppError>().having((e) => e.code, 'code', 'search_not_supported'),
-        ),
-      );
+  group('search goes to the server', () {
+    test('sends the term to the list route, url-encoded', () async {
+      // The whole point of the change: the term reaches the SERVER, which
+      // applies it inside the caller's own authorization. A client that
+      // filtered a page it already held would be search in appearance only --
+      // and fixing that by fetching more and filtering here would make client
+      // code the thing separating one family from another's conversations.
+      server.on('GET', '/conversations', const [Reply.ok({'conversations': []})]);
+
+      await conversations(clientWith(_NoTokens())).search('أحمد');
+
+      final sent = server.lastRequestTo('GET', '/conversations')!;
+      expect(sent.query['q'], 'أحمد');
+    });
+
+    test('spends no request at all on an empty term', () async {
+      await conversations(clientWith(_NoTokens())).search('   ');
+
+      expect(server.requests, isEmpty);
     });
 
     // The two tests that stood here asserted UnavailableAuthRepository's throwing

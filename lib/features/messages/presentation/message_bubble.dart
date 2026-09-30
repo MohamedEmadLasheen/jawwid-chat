@@ -10,6 +10,7 @@ import '../../../shared/models/message.dart';
 import '../../../shared/models/user_role.dart';
 import '../../../shared/utils/byte_size_format.dart';
 import '../../../shared/utils/relative_time.dart';
+import '../../../shared/utils/system_event_text.dart';
 import '../../../shared/utils/text_direction.dart';
 import 'voice_message_player.dart';
 
@@ -214,17 +215,15 @@ class MessageBubble extends StatelessWidget {
 
   /// Who sent this, as a group member needs to see it.
   ///
-  /// `MessageDto` carries `authorId` and `authorKind` but **no display name**,
-  /// and `ConversationMemberDto` has no name field either (gap O3), so over
-  /// HTTP `authorName` is empty today. This used to render that empty string:
-  /// a blank, bolded line above every incoming group message, which is worse
-  /// than saying nothing and much worse than saying something true.
+  /// `MessageDto` now carries `authorName`, resolved server-side for the whole
+  /// page at once (backend gap O3). It used to carry only `authorId` and
+  /// `authorKind`, so this label was a ROLE WORD for every message — a parent
+  /// saw "Teacher" and "Jawwid" where names belong.
   ///
-  /// The role is the thing the client *does* have — `authorKind` is on the
-  /// DTO — and in a Student Group it is also the thing that matters: a parent
-  /// needs to know a message came from the teacher rather than from Jawwid,
-  /// more than they need the teacher's given name. The actor id is never a
-  /// fallback (§25).
+  /// The role remains the fallback, and only the fallback: it is reached when
+  /// the backend could not resolve the principal, which is a real state
+  /// (someone offboarded) and is still better than a blank line. The actor id
+  /// is never a fallback (§25).
   static String _authorLabel(Message message, L10n l10n) {
     final name = message.authorName.trim();
     if (name.isNotEmpty) return name;
@@ -820,6 +819,17 @@ class _FileAttachment extends StatelessWidget {
 
 /// Operational events — teacher changed, class rescheduled, coverage active (§27). Centred
 /// and visually distinct so they never read as somebody's message.
+/// A system line: what happened to this conversation, in words.
+///
+/// It renders [Message.systemEvent] and NEVER [Message.body]. The backend used
+/// to put its own payload in the body — `{"kind":"group.created",...}` — and
+/// this widget printed it, so a parent opening their child's group was shown
+/// JSON. The body is now null for system messages on the wire, and reading it
+/// here would render nothing even if that regressed.
+///
+/// An event this build does not recognise still produces a sentence; see
+/// [SystemEventText]. An event that cannot be parsed at all renders nothing at
+/// all, which is the only honest remaining option.
 class _SystemMessage extends StatelessWidget {
   const _SystemMessage({required this.message});
 
@@ -829,6 +839,9 @@ class _SystemMessage extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final tokens = JawwidTokens.of(context);
+    final event = message.systemEvent;
+    if (event == null) return const SizedBox.shrink();
+    final text = SystemEventText.format(event, L10n.of(context));
 
     return Padding(
       padding: const EdgeInsets.symmetric(
@@ -846,7 +859,7 @@ class _SystemMessage extends StatelessWidget {
             borderRadius: Radii.card,
           ),
           child: ContentText(
-            message.body,
+            text,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodySmall?.copyWith(
               color: tokens.colorMessageSystemText,

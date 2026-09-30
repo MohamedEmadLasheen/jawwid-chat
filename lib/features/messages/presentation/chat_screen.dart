@@ -18,6 +18,11 @@ import '../../../shared/models/conversation.dart';
 import '../../../shared/models/message.dart';
 import '../../../shared/utils/relative_time.dart';
 import '../../../shared/utils/text_direction.dart';
+import '../../calls/application/call_capability.dart';
+import '../../calls/application/call_controller.dart';
+import '../../calls/application/conversation_calls.dart';
+import '../../calls/domain/call_timeline.dart';
+import '../../calls/presentation/call_card.dart';
 import '../../conversations/application/conversations_controller.dart';
 import '../application/messages_controller.dart';
 import '../application/voice_composer_controller.dart';
@@ -168,11 +173,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     final PendingAttachment? picked;
     try {
-      picked = source == AttachmentSource.photo
-          ? await picker.pickImage()
-          : await picker.pickFile();
+      picked = switch (source) {
+        AttachmentSource.camera => await picker.captureImage(),
+        AttachmentSource.photo => await picker.pickImage(),
+        AttachmentSource.file => await picker.pickFile(),
+      };
     } on MediaPickException catch (failure) {
-      if (mounted) _sayPickFailed(failure.reason);
+      if (mounted) _sayPickFailed(failure.reason, source);
       return;
     }
 
@@ -195,15 +202,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   /// Say what went wrong in the user's terms — never the platform's (§31).
-  void _sayPickFailed(MediaPickFailure reason) {
+  ///
+  /// The SOURCE changes two of these sentences and nothing else. A refused
+  /// camera and a refused photo library are different permissions with
+  /// different switches behind them, and "Jawwid needs permission to open your
+  /// photos" is simply untrue after a camera denial — it would send a parent to
+  /// the wrong row in Settings. Likewise a device with no camera is not a
+  /// device that "can't pick files".
+  void _sayPickFailed(MediaPickFailure reason, AttachmentSource source) {
     final l10n = L10n.of(context);
     final messenger = ScaffoldMessenger.of(context);
+    final isCamera = source == AttachmentSource.camera;
 
     final text = switch (reason) {
-      MediaPickFailure.permissionDenied => l10n.attachmentPermissionDenied,
+      MediaPickFailure.permissionDenied => isCamera
+          ? l10n.cameraPermissionDenied
+          : l10n.attachmentPermissionDenied,
       MediaPickFailure.tooLarge => l10n.attachmentTooLarge,
       MediaPickFailure.typeNotAllowed => l10n.attachmentTypeNotAllowed,
-      MediaPickFailure.unsupported => l10n.attachmentUnsupported,
+      MediaPickFailure.unsupported =>
+        isCamera ? l10n.cameraUnavailable : l10n.attachmentUnsupported,
       MediaPickFailure.failed => l10n.attachmentPickFailed,
     };
 
@@ -495,6 +513,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
         ),
         actions: [
+          // W7: the call affordance. ABSENT unless the server authorizes a call
+          // for this conversation, never disabled — `screens/call.md` §4. The
+          // answer is advisory and uncached; `POST /calls` decides again.
+          _CallAction(
+            conversationId: widget.conversationId,
+            title: widget.title,
+            kind: widget.kind,
+          ),
           if (widget.onOpenMembers != null)
             IconButton(
               onPressed: widget.onOpenMembers,
@@ -565,7 +591,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       );
     }
 
-    if (state.isEmpty) {
+    // W7: the conversation's calls, derived from the authoritative call-history
+    // record rather than persisted as system messages (see `call_timeline.dart`).
+    // An empty list is the honest answer when calling is not wired or the fetch
+    // failed, so the thread renders exactly as it did before.
+    final calls = ref
+            .watch(conversationCallsProvider(widget.conversationId))
+            .asData
+            ?.value ??
+        const <CallHistoryEntry>[];
+
+    if (state.isEmpty && calls.isEmpty) {
       return JawwidEmptyView(
         title: l10n.messagesEmptyTitle,
         body: l10n.messagesEmptyBody,
@@ -574,7 +610,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
 
     // Newest first, because the list is reversed.
-    final ordered = state.log.messages.reversed.toList(growable: false);
+    final ordered = mergeThread(messages: state.log.messages, calls: calls)
+        .reversed
+        .toList(growable: false);
 
     return Stack(
       children: [
@@ -597,14 +635,34 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               );
             }
 
-            final message = ordered[index];
-            // The *next* index is the older message, because the list is reversed.
-            final older = index + 1 < ordered.length ? ordered[index + 1] : null;
+            final item = ordered[index];
+            // The *next* index is the older item, because the list is reversed.
+            final olderItem = index + 1 < ordered.length ? ordered[index + 1] : null;
+            final showDaySeparator =
+                olderItem == null || !_sameDay(olderItem.at, item.at);
+
+            // W7: a call is an event in the thread, not a turn in the
+            // conversation — no author, no reply, no reaction.
+            if (item is CallItem) {
+              return Column(
+                children: [
+                  if (showDaySeparator) _DaySeparator(when: item.at),
+                  CallCard(call: item.call),
+                ],
+              );
+            }
+
+            final message = (item as MessageItem).message;
+            // Author grouping looks past call cards: two messages from the same
+            // person with a call between them are still the same person talking.
+            final older = ordered
+                .skip(index + 1)
+                .whereType<MessageItem>()
+                .firstOrNull
+                ?.message;
 
             final showAuthor = !message.isMine &&
                 (older == null || older.authorId != message.authorId);
-            final showDaySeparator = older == null ||
-                !_sameDay(older.createdAt, message.createdAt);
 
             final key = _keyOf(message);
             final reply = _resolveReply(message, state);
@@ -745,6 +803,60 @@ class _DaySeparator extends StatelessWidget {
                 ?.copyWith(color: tokens.colorMessageSystemText),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The call affordance in the conversation header (W7).
+///
+/// ABSENT, NOT DISABLED, wherever the server does not authorize a call —
+/// `screens/call.md` §4, and it matters more since PD-6 because the set of
+/// authorized pairs is DATA the client must never infer. Loading, an error and a
+/// refusal all render nothing, so there is no state in which this offers a call
+/// the server would refuse.
+///
+/// TAPPING IT IS NOT PERMISSION EITHER. `CallController.start` posts to `/calls`,
+/// which decides again from scratch; a relationship revoked between the answer and
+/// the tap is refused there and shown as a plain "not available".
+class _CallAction extends ConsumerWidget {
+  const _CallAction({
+    required this.conversationId,
+    required this.title,
+    required this.kind,
+  });
+
+  final String conversationId;
+
+  /// The display name already on the header, reused as the call's label so the
+  /// call screen names the same person the thread does. Never an id.
+  final String title;
+
+  /// A Student Group call is a group call. Taken from the conversation the header
+  /// already describes rather than guessed from the participant count.
+  final ConversationKind kind;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(canCallProvider(conversationId))) {
+      return const SizedBox.shrink();
+    }
+
+    final l10n = L10n.of(context);
+    return IconButton(
+      icon: const Icon(Icons.call_outlined),
+      tooltip: l10n.callVoice,
+      // STARTING IS ALL THIS DOES. It does not navigate: `CallPresenter` watches
+      // the controller and puts the call on screen, which is the same path an
+      // INCOMING call takes. One navigator for both means a call cannot end up on
+      // screen twice, and a header button cannot leave the user on a call screen
+      // for a call that was never started.
+      onPressed: () => unawaited(
+        ref.read(callControllerProvider.notifier).start(
+              conversationId: conversationId,
+              peerLabel: title,
+              isGroup: kind == ConversationKind.studentGroup,
+            ),
       ),
     );
   }

@@ -1,10 +1,21 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Conversation, ConversationMember, Prisma } from '@prisma/client';
+import {
+  Conversation,
+  ConversationMember,
+  ConversationParticipantState,
+  Prisma,
+} from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
 import type { LiveMember } from '../../platform/authorization.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
-import { AUDIT_SERVICE, COVERAGE_SERVICE, IDENTITY_SERVICE } from '../../platform/tokens';
+import {
+  AUDIT_SERVICE,
+  COVERAGE_SERVICE,
+  IDENTITY_SERVICE,
+  RELATIONSHIP_SERVICE,
+} from '../../platform/tokens';
+import type { RelationshipService } from '../../platform/relationship.service';
 import type { IdentityService } from '../../platform/identity.service';
 import type { CoverageService } from '../../platform/coverage.service';
 import type { AuditService } from '../../platform/audit.service';
@@ -20,6 +31,9 @@ import {
   Origin,
   Visibility,
 } from '../contracts/vocab';
+
+/** One page of conversations. Search and the list share it, deliberately. */
+const CONVERSATION_PAGE_SIZE = 200;
 
 export interface MemberSpec {
   actorId: string;
@@ -37,7 +51,33 @@ export class ConversationService {
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
     @Inject(COVERAGE_SERVICE) private readonly coverage: CoverageService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    @Inject(RELATIONSHIP_SERVICE) private readonly relationships: RelationshipService,
   ) {}
+
+  /**
+   * PD-6. The resolved teacher<->parent relationship behind a participant set.
+   *
+   * Every service that authorizes an operation on a conversation already holds
+   * its participants, so the fact is resolved from those rather than re-read,
+   * and this one method is the only place that decides which participant is
+   * the teacher and which is the parent. Three call sites doing that
+   * separately is three chances to get the direction backwards, and a backwards
+   * lookup denies a legitimate pair silently.
+   *
+   * Exactly one live teacher and exactly one live contact is the only shape
+   * that can be a teacher/parent pairing. Anything else -- a group, a
+   * staff-only channel, a malformed set -- is false, which the policy ignores
+   * for every conversation type but `direct`.
+   */
+  async pairingAuthorizedAmong(
+    participants: ReadonlyArray<{ actorId: string; actorKind: string }>,
+  ): Promise<boolean> {
+    const teachers = participants.filter((p) => p.actorKind === ActorKind.TEACHER);
+    const contacts = participants.filter((p) => p.actorKind === ActorKind.CONTACT);
+    if (teachers.length !== 1 || contacts.length !== 1) return false;
+
+    return this.relationships.teacherParentAuthorized(teachers[0].actorId, contacts[0].actorId);
+  }
 
   async requireActor(actorId: string): Promise<Actor> {
     const actor = await this.identity.resolveActor(actorId);
@@ -81,6 +121,45 @@ export class ConversationService {
    * else is returned with isActive undefined, which the policy reads as
    * "not resolved", never as "inactive".
    */
+  /**
+   * A conversation plus its membership, for a caller who may read it.
+   *
+   * PD-6 made the participant set load-bearing for the client: since a `direct`
+   * conversation may now be Parent<->Admin, Teacher<->Admin or Parent<->Teacher,
+   * the type alone no longer says which, and the client classifies from
+   * `actorKind`. API-CONTRACT section 3.4 already required `GET
+   * /conversations/:id` to carry `members[]`; this is what supplies it.
+   *
+   * The read is authorized HERE and explicitly. `GET /conversations/:id`
+   * previously leaned on setPreferences() to throw for a non-member -- true,
+   * but incidental, and it is not a property to rely on while widening what the
+   * endpoint returns. A membership list must be reachable only by a member.
+   */
+  async readWithMembers(
+    conversationId: string,
+    actorId: string,
+  ): Promise<{ conversation: Conversation; members: ConversationMember[] }> {
+    const actor = await this.requireActor(actorId);
+    const conversation = await this.requireConversation(conversationId);
+    const membership = await this.membershipOf(conversation.id, actor.actorId);
+
+    const decision = this.authz.canRead(actor, conversation, membership);
+    if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+
+    const members = await this.prisma.conversationMember.findMany({
+      where: { conversationId: conversation.id, leftAt: null },
+    });
+    return { conversation, members };
+  }
+
+  /** The live membership of a conversation, for a caller that has already been
+   *  authorized to see it (the direct get-or-create path). */
+  async membersOf(conversationId: string): Promise<ConversationMember[]> {
+    return this.prisma.conversationMember.findMany({
+      where: { conversationId, leftAt: null },
+    });
+  }
+
   async liveMembersOf(conversationId: string): Promise<LiveMember[]> {
     const rows = await this.prisma.conversationMember.findMany({
       where: { conversationId, leftAt: null },
@@ -99,6 +178,22 @@ export class ConversationService {
         return { actorId: m.actorId, actorKind: m.actorKind, memberRole: m.memberRole };
       }),
     );
+  }
+
+  /**
+   * The provisioning gate for Student Groups.
+   *
+   * `actorId` is OPTIONAL and an omitted one means the SYSTEM, not "skip the
+   * check": this is the seam Jawwid Core's assignment ingestion writes through,
+   * and the fixtures that stand in for it. It cannot be reached from HTTP --
+   * every route resolves its actor from a verified bearer token, so the
+   * controller always has one to pass, and a request can never arrive without.
+   */
+  private async assertMayProvision(actorId?: string): Promise<void> {
+    if (actorId === undefined) return;
+    const actor = await this.requireActor(actorId);
+    const decision = this.authz.canProvisionStudentGroup(actor);
+    if (!decision.allowed) throw new CommError(decision.code, decision.reason);
   }
 
   /** Canonical, order-independent identity of a 1:1 channel. */
@@ -121,7 +216,11 @@ export class ConversationService {
     const a = await this.requireActor(requesterId);
     const b = await this.requireActor(otherId);
 
-    const decision = this.authz.canOpenDirect(a, b);
+    // PD-6. The relationship is resolved from server-owned data BEFORE the
+    // policy runs. `otherId` selected a row; it asserted nothing about it.
+    const pairingAuthorized = await this.relationships.pairingAuthorized(a, b);
+
+    const decision = this.authz.canOpenDirect(a, b, pairingAuthorized);
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
     const key = ConversationService.directKey(a.actorId, b.actorId);
@@ -189,6 +288,11 @@ export class ConversationService {
    * A partial unique index guarantees one live group per learner.
    */
   async ensureStudentGroup(learnerId: string, actorId?: string): Promise<Conversation> {
+    // AUTHORIZATION FIRST, before the learner is even looked up: a caller who
+    // may not provision groups must not be able to use this route as an oracle
+    // for whether a learner id exists.
+    await this.assertMayProvision(actorId);
+
     const learner = await this.prisma.learner.findUnique({
       where: { id: learnerId },
       include: { family: { include: { contacts: { where: { isActive: true } } } } },
@@ -273,7 +377,9 @@ export class ConversationService {
    * left_at rather than deleted, and every change writes a system message so the
    * group can see what happened.
    */
-  async syncStudentGroup(learnerId: string): Promise<Conversation | null> {
+  async syncStudentGroup(learnerId: string, actorId?: string): Promise<Conversation | null> {
+    await this.assertMayProvision(actorId);
+
     const learner = await this.prisma.learner.findUnique({
       where: { id: learnerId },
       include: { family: { include: { contacts: { where: { isActive: true } } } } },
@@ -457,36 +563,216 @@ export class ConversationService {
   async listForActor(actorId: string): Promise<ConversationWithLearner[]> {
     const actor = await this.requireActor(actorId);
 
-    if (actor.kind === ActorKind.STAFF) {
-      const probe = this.authz.canRead(actor, {
-        id: '',
-        type: ConversationType.DIRECT,
-        familyId: null,
-        stickyHandlerId: null,
-        stickyUntil: null,
-        teacherRequiresApproval: false,
-        parentRequiresApproval: false,
-        archivedAt: null,
-      }, null);
-      if (!probe.allowed) throw new CommError(probe.code, probe.reason);
-
-      return this.prisma.conversation.findMany({
-        include: { learner: true },
-        orderBy: { lastActivityAt: 'desc' },
-        take: 200,
-      });
-    }
-
-    // The authorization boundary for a contact or a teacher: live membership,
-    // and nothing else. The learner rides along on that join, so a learner can
-    // only ever reach a caller who is already a member of the conversation it
-    // belongs to -- there is no second, wider query to get it wrong in.
+    // The authorization boundary, shared verbatim with `searchForActor`: live
+    // membership for a contact or a teacher, the family-facing role check for
+    // staff. The learner rides along on that join, so a learner can only ever
+    // reach a caller who is already a member of the conversation it belongs to
+    // -- there is no second, wider query to get it wrong in.
     return this.prisma.conversation.findMany({
-      where: { members: { some: { actorId: actor.actorId, leftAt: null } } },
+      where: await this.authorizedScope(actor),
       include: { learner: true },
       orderBy: { lastActivityAt: 'desc' },
-      take: 200,
+      take: CONVERSATION_PAGE_SIZE,
     });
+  }
+
+  /**
+   * Conversation search, inside the caller's own authorization.
+   *
+   * ## Why this is not a filter
+   *
+   * The client used to "search" by filtering the page of conversations it had
+   * already downloaded. That looks like search and is not: it silently covers
+   * only what happened to be cached, and it would have been actively dangerous
+   * to fix by fetching more and filtering client-side, because the filtering
+   * would then be the only thing standing between one family and another's
+   * conversations.
+   *
+   * So the authorization comes first and the matching second, in that order and
+   * in one statement. `authorizedScope` is the SAME predicate `listForActor`
+   * uses -- live membership for a contact or teacher, the family-facing role
+   * check for staff -- so search can never reach a conversation the list would
+   * not have shown. A term is a filter applied INSIDE that scope; it can narrow
+   * the result and can never widen it.
+   *
+   * ## What is matched
+   *
+   * The three things a row actually displays: its title, the learner it is
+   * about, and (for a 1:1, which has no title) the other participant's name.
+   * Message bodies are deliberately NOT searched -- that is a different feature
+   * with different privacy consequences and a different index, and this is the
+   * minimum correct search for the conversation model that exists.
+   *
+   * Case-insensitive, unaccented-naive `contains`: Arabic and Latin names both
+   * behave, and a trigram index is a tuning decision for when the corpus
+   * justifies it rather than something to guess at now.
+   */
+  async searchForActor(actorId: string, query: string): Promise<ConversationWithLearner[]> {
+    const actor = await this.requireActor(actorId);
+    const term = query.trim();
+    if (term.length === 0) return [];
+
+    // Staff scope is a POLICY decision, so it is taken by AuthorizationService
+    // exactly as the list takes it, before any row is read.
+    const isStaff = actor.kind === ActorKind.STAFF;
+    if (isStaff) await this.authorizedScope(actor);
+
+    // AUTHORIZATION IS IN THE STATEMENT, not applied to its result. The
+    // membership clause is a `where`, so an unauthorized conversation is never
+    // read, never counted and never returned -- rather than read and then
+    // filtered, which is the shape that leaks the moment a filter is wrong.
+    //
+    // `chat.search_fold` is applied to BOTH sides so Arabic matches the way the
+    // audience types it: `احمد` finds `أحمد`, `جود` finds `جَوِّد`. Raw SQL
+    // rather than a Prisma `contains` because the folding has to reach the
+    // STORED side, which no ORM predicate can do -- and dropping it would have
+    // made search quietly worse for the audience it exists for.
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT c.id
+        FROM chat.conversation c
+        LEFT JOIN chat.learner l ON l.id = c.learner_id
+       WHERE (
+               ${isStaff}::boolean
+               OR EXISTS (
+                    SELECT 1 FROM chat.conversation_member m
+                     WHERE m.conversation_id = c.id
+                       AND m.actor_id = ${actor.actorId}::uuid
+                       AND m.left_at IS NULL)
+             )
+         AND (
+               chat.search_fold(COALESCE(c.title, '')) LIKE '%' || chat.search_fold(${term}) || '%'
+               OR chat.search_fold(COALESCE(l.name, '')) LIKE '%' || chat.search_fold(${term}) || '%'
+               OR (
+                    c.type = ${ConversationType.DIRECT}
+                    AND EXISTS (
+                      SELECT 1
+                        FROM chat.conversation_member other
+                        LEFT JOIN chat.staff   s  ON s.id  = other.actor_id
+                        LEFT JOIN chat.contact ct ON ct.id = other.actor_id
+                        LEFT JOIN chat.teacher t  ON t.id  = other.actor_id
+                       WHERE other.conversation_id = c.id
+                         AND other.left_at IS NULL
+                         AND other.actor_id <> ${actor.actorId}::uuid
+                         AND chat.search_fold(COALESCE(s.name, ct.name, t.name, ''))
+                             LIKE '%' || chat.search_fold(${term}) || '%')
+                  )
+             )
+       ORDER BY c.last_activity_at DESC
+       LIMIT ${CONVERSATION_PAGE_SIZE}
+    `;
+
+    if (rows.length === 0) return [];
+
+    // The rows themselves come back through Prisma so a search result and a
+    // list row are the same shape, decorated by the same code. This is a fetch
+    // of ids the statement above already authorized, not a second scope.
+    const ids = rows.map((r) => r.id);
+    const conversations = await this.prisma.conversation.findMany({
+      where: { id: { in: ids } },
+      include: { learner: true },
+    });
+
+    // Re-ordered to the statement's ordering, which the id fetch does not keep.
+    const byId = new Map(conversations.map((c) => [c.id, c]));
+    const ordered: ConversationWithLearner[] = [];
+    for (const id of ids) {
+      const conversation = byId.get(id);
+      if (conversation) ordered.push(conversation);
+    }
+    return ordered;
+  }
+
+  /**
+   * The one predicate that decides which conversations an actor may see.
+   *
+   * Extracted so `listForActor` and `searchForActor` cannot drift: a scope that
+   * is written twice is a scope that will eventually be widened once.
+   */
+  private async authorizedScope(actor: Actor): Promise<Prisma.ConversationWhereInput> {
+    if (actor.kind === ActorKind.STAFF) {
+      const probe = this.authz.canRead(
+        actor,
+        {
+          id: '',
+          type: ConversationType.DIRECT,
+          familyId: null,
+          stickyHandlerId: null,
+          stickyUntil: null,
+          teacherRequiresApproval: false,
+          parentRequiresApproval: false,
+          archivedAt: null,
+        },
+        null,
+      );
+      if (!probe.allowed) throw new CommError(probe.code, probe.reason);
+      return {};
+    }
+
+    // A contact or a teacher sees exactly what they are a live member of.
+    return { members: { some: { actorId: actor.actorId, leftAt: null } } };
+  }
+
+  /**
+   * Live members of many conversations at once.
+   *
+   * One query for the whole list. Asking per conversation is the N+1 that kept
+   * membership off the chat list in the first place, and the caller here is the
+   * list endpoint.
+   */
+  async membersFor(conversationIds: string[]): Promise<Map<string, ConversationMember[]>> {
+    const byConversation = new Map<string, ConversationMember[]>();
+    if (conversationIds.length === 0) return byConversation;
+
+    const rows = await this.prisma.conversationMember.findMany({
+      where: { conversationId: { in: conversationIds }, leftAt: null },
+      orderBy: { joinedAt: 'asc' },
+    });
+    for (const row of rows) {
+      const bucket = byConversation.get(row.conversationId);
+      if (bucket) bucket.push(row);
+      else byConversation.set(row.conversationId, [row]);
+    }
+    return byConversation;
+  }
+
+  /**
+   * The caller's own pin/mute/archive rows, for many conversations at once.
+   *
+   * Scoped to one actor by construction -- `actorId` is a where clause, not a
+   * filter applied afterwards -- so this cannot return another person's pins
+   * even if a caller passed ids it should not have.
+   */
+  async viewerStatesFor(
+    conversationIds: string[],
+    actorId: string,
+  ): Promise<Map<string, ConversationParticipantState>> {
+    const byConversation = new Map<string, ConversationParticipantState>();
+    if (conversationIds.length === 0) return byConversation;
+
+    const rows = await this.prisma.conversationParticipantState.findMany({
+      where: { conversationId: { in: conversationIds }, actorId },
+    });
+    for (const row of rows) byConversation.set(row.conversationId, row);
+    return byConversation;
+  }
+
+  /**
+   * Who the other side of a 1:1 is, from the caller's point of view.
+   *
+   * Null for anything that is not a two-party direct conversation: a group
+   * already has a title and a learner, and a direct row that somehow holds more
+   * than two live members has no single "other side" to name -- returning one
+   * of them arbitrarily would put a name on a row that means something else.
+   */
+  counterpartOf(
+    conv: Pick<Conversation, 'type'>,
+    members: ConversationMember[],
+    actorId: string,
+  ): { actorId: string; actorKind: string } | null {
+    if (conv.type !== ConversationType.DIRECT) return null;
+    const others = members.filter((m) => m.actorId !== actorId);
+    if (others.length !== 1) return null;
+    return { actorId: others[0].actorId, actorKind: others[0].actorKind };
   }
 
   /** Archive / mute / pin are per-user; one user's pin never affects another. */

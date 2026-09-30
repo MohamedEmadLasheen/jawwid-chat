@@ -2,6 +2,10 @@
     <!-- Voice notes. Requested at the moment the user first presses record, never
          at launch: a permission prompt with no visible cause is the one users deny. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- W8-W1. Android 13+ requires this before a notification can be shown.
+         Requested at the point a notification first matters, never at launch.
+         The token itself needs no permission; this is about DISPLAY. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="jawwid_chat"
         android:name="${applicationName}"

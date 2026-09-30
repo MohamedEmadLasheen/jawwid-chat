@@ -1,5 +1,36 @@
 {
   "@@locale": "ar",
+  "systemGroupCreated": "فتحت جوّيد هذه المجموعة لـ{learner}.",
+  "@systemGroupCreated": {
+    "placeholders": { "learner": { "type": "String" } }
+  },
+  "systemGroupCreatedUnnamed": "فتحت جوّيد هذه المجموعة.",
+  "systemGroupMembersChanged": "حدّثت جوّيد أعضاء هذه المجموعة.",
+  "systemGroupMembersJoined": "{count, plural, =1{انضم شخص إلى المجموعة.} =2{انضم شخصان إلى المجموعة.} other{انضم {count} أشخاص إلى المجموعة.}}",
+  "@systemGroupMembersJoined": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "systemGroupMembersLeft": "{count, plural, =1{غادر شخص المجموعة.} =2{غادر شخصان المجموعة.} other{غادر {count} أشخاص المجموعة.}}",
+  "@systemGroupMembersLeft": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "systemGroupArchived": "أغلقت جوّيد هذه المجموعة.",
+  "systemEventUnknown": "حدّثت جوّيد هذه المحادثة.",
+  "previewVoice": "رسالة صوتية",
+  "previewPhoto": "صورة",
+  "previewVideo": "فيديو",
+  "previewFile": "ملف",
+  "previewYouPrefix": "أنت: {preview}",
+  "@previewYouPrefix": {
+    "placeholders": { "preview": { "type": "String" } }
+  },
+  "previewSenderPrefix": "{name}: {preview}",
+  "@previewSenderPrefix": {
+    "placeholders": {
+      "name": { "type": "String" },
+      "preview": { "type": "String" }
+    }
+  },
   "appName": "جَوِّد",
   "signInTitle": "تسجيل الدخول إلى جَوِّد",
   "signInSubtitle": "يتم إنشاء حسابك من قِبَل جَوِّد. لا يوجد تسجيل ذاتي.",
@@ -160,6 +191,9 @@
   "callFailedMicrophone": "يحتاج جَوِّد إلى إذن الميكروفون لإجراء المكالمات.",
   "callFailedNotAllowed": "هذه المكالمة غير متاحة.",
   "callFailedNetwork": "تعذّر إجراء المكالمة. تحقق من اتصالك وحاول مرة أخرى.",
+  "callOutgoing": "جارٍ الاتصال…",
+  "callEnded": "انتهت المكالمة",
+  "callSendMessageInstead": "إرسال رسالة بدلاً من ذلك",
   "notificationsTitle": "المستجدات",
   "notificationsEmpty": "لا يوجد جديد",
   "notificationPermissionTitle": "فعّل الإشعارات",
@@ -271,6 +305,7 @@
   "@saveAction": {
     "description": "Saves an attachment to the device."
   },
+  "attachCamera": "الكاميرا",
   "attachPhoto": "صورة",
   "@attachPhoto": {
     "description": "Attachment menu entry for the photo library."
@@ -307,6 +342,8 @@
   "@attachmentPickFailed": {
     "description": "Shown when the photo or file picker fails."
   },
+  "cameraPermissionDenied": "يحتاج جَوِّد إلى إذن لاستخدام الكاميرا. يمكنك السماح بذلك من الإعدادات.",
+  "cameraUnavailable": "لا توجد كاميرا متاحة على هذا الجهاز.",
   "attachmentPermissionDenied": "يحتاج جَوِّد إلى إذن للوصول إلى صورك. يمكنك السماح بذلك من الإعدادات.",
   "@attachmentPermissionDenied": {
     "description": "Shown when photo-library permission was refused."

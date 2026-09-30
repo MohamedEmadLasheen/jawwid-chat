@@ -1,3 +1,5 @@
+import 'system_event.dart';
+
 import 'user_role.dart';
 
 /// How far an outgoing message has travelled.
@@ -137,6 +139,7 @@ class Message {
     this.isMine = false,
     this.isDeleted = false,
     this.failureCode,
+    this.systemEvent,
   });
 
   /// Server id. Null until the server has accepted the message.
@@ -181,6 +184,14 @@ class Message {
   /// Machine-readable reason a send failed, for choosing the retry affordance.
   final String? failureCode;
 
+  /// What a system message says, as structured data.
+  ///
+  /// Present only on [MessageKind.system]. The backend no longer sends a body
+  /// for those at all — it used to send its own JSON payload, which the chat
+  /// screen then rendered as prose — so this is the only thing a system line
+  /// can be built from, and the only thing it may be built from.
+  final SystemEvent? systemEvent;
+
   bool get isSystem => kind == MessageKind.system;
   bool get isPending => deliveryState.isInFlight;
   bool get canRetry => deliveryState == DeliveryState.failed;
@@ -213,6 +224,7 @@ class Message {
         isMine: isMine,
         isDeleted: isDeleted,
         failureCode: failureCode,
+        systemEvent: systemEvent,
       );
 
   Message copyWith({
@@ -246,6 +258,7 @@ class Message {
       isMine: isMine,
       isDeleted: isDeleted ?? this.isDeleted,
       failureCode: failureCode ?? this.failureCode,
+      systemEvent: systemEvent,
     );
   }
 }

@@ -83,7 +83,6 @@ APNS_PRODUCTION	push	no	opt	opt	req
 LIVEKIT_URL	calling	no	req	req	req
 LIVEKIT_API_KEY	calling	yes	req	req	req
 LIVEKIT_API_SECRET	calling	yes	req	req	req
-LIVEKIT_TOKEN_TTL_SECONDS	calling	no	opt	req	req
 CORE_BASE_URL	core	no	req	opt	req
 CORE_API_KEY	core	yes	opt	opt	req
 CORE_WEBHOOK_SECRET	core	yes	opt	opt	req

@@ -38,6 +38,7 @@ void main() {
   tearDown(() async => server.stop());
 
   HttpConversationRepository repository() => HttpConversationRepository(
+        viewerActorId: () => 'viewer',
         client: buildApiClient(
           config: ApiConfig(baseUrl: server.baseUrl),
           tokens: _NoTokens(),

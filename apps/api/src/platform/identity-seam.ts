@@ -1,28 +1,32 @@
 /**
- * What is left of the self-asserted-identity seam, and the guard that keeps it
- * local.
+ * The self-asserted-identity seam — CLOSED, on both halves.
  *
  * HISTORY. Phase 0 resolved the caller from `x-actor-id` on HTTP and
  * `handshake.auth.actorId` on the WebSocket, and contained both by refusing to
  * start outside `local | test | ci` (red-team RT-001 / NF-08).
  *
- * PR-B CLOSED THE HTTP HALF. `x-actor-id` is not read on any HTTP path: the
- * global AuthenticatedGuard verifies a bearer token and writes `request.actor`,
- * and `@ActorId()` reads nothing else. HTTP no longer gates the boot.
+ * PR-B closed the HTTP half: the global AuthenticatedGuard verifies a bearer
+ * token and writes `request.actor`, and `@ActorId()` reads nothing else.
  *
- * THE SOCKET HALF IS STILL OPEN. `realtime.gateway.ts#handleConnection` still
- * takes `handshake.auth.actorId` at face value, so any caller who can reach the
- * socket can still name any active actor there. WebSocket authentication is a
- * separate, explicitly scoped piece of work (API-CONTRACT §4: the handshake
- * moves to `auth: { token }` verified by the same verifier as HTTP), and it is
- * NOT in PR-B.
+ * PHASE 8 (2026-09-23) CLOSED THE WEBSOCKET HALF. `realtime.gateway.ts`
+ * `handleConnection` now takes a token from the handshake and verifies it with
+ * `AuthService.authenticate()` — the same method the HTTP guard uses, not a
+ * second verifier — and `handshake.auth.actorId` is read nowhere.
  *
- * So this guard narrows rather than disappears. Deleting it because "HTTP is
- * fixed now" would let a build whose sockets are still unauthenticated start in
- * production, which is a worse outcome than the one it was written for. The
- * realtime PR deletes this file when it verifies the handshake token.
+ * WHAT WENT WITH IT. `assertHandshakeIdentitySeamAllowed()`,
+ * `IdentitySeamRefused`, `SEAM_ALLOWED_ENVIRONMENTS` and
+ * `HANDSHAKE_IDENTITY_SEAM` are deleted, and `main.ts` no longer calls the
+ * guard. The guard existed to keep a build whose sockets were unauthenticated
+ * out of production; that build no longer exists, and leaving the check would
+ * only assert something that is now structurally true.
  *
- * Protected by test/unit/auth/identity-seam.spec.ts (docs/qa/protected-tests.tsv).
+ * WHAT STAYS, AND WHY. `HEADER_IDENTITY_SEAM` remains a named constant with no
+ * reader. It is the tripwire: `test/unit/auth/identity-seam.spec.ts`
+ * (docs/qa/protected-tests.tsv) asserts that no source file reads it, so
+ * reintroducing header identity means deleting a symbol a protected test is
+ * watching rather than quietly adding a line.
+ *
+ * Protected by test/unit/auth/identity-seam.spec.ts.
  */
 
 /**
@@ -32,34 +36,12 @@
  */
 export const HEADER_IDENTITY_SEAM = 'x-actor-id';
 
-/** STILL OPEN. The gateway reads this; the realtime PR replaces it with a token. */
-export const HANDSHAKE_IDENTITY_SEAM = 'handshake.auth.actorId';
-
-/** Environments in which self-asserted identity is tolerated. */
-export const SEAM_ALLOWED_ENVIRONMENTS: ReadonlySet<string> = new Set(['local', 'test', 'ci']);
-
-export class IdentitySeamRefused extends Error {
-  constructor(appEnv: string) {
-    super(
-      `refusing to start: WebSocket identity is still the ${HANDSHAKE_IDENTITY_SEAM} seam ` +
-        `(RT-001), and APP_ENV='${appEnv}' is not a local environment ` +
-        `(allowed: ${[...SEAM_ALLOWED_ENVIRONMENTS].join(', ')}). ` +
-        'PR-B replaced the HTTP half -- the x-actor-id header is no longer read on any ' +
-        'HTTP path -- but realtime.gateway.ts still trusts the handshake, so this build ' +
-        'must not run where an untrusted network can reach it. The realtime PR verifies ' +
-        'the handshake token and deletes this guard.',
-    );
-    this.name = 'IdentitySeamRefused';
-  }
-}
-
 /**
- * Throws unless the remaining (WebSocket) identity seam is permitted in this
- * environment. A missing APP_ENV is treated as `local`, matching readBuildInfo().
+ * CLOSED by Phase 8. Kept for the same reason as the header above: the
+ * protected test asserts that no source file reads this handshake field, and a
+ * constant with a watcher is harder to reintroduce than a bare string.
+ *
+ * Deliberately NOT spelled as the dotted path any more — the tripwire greps for
+ * the code shape, and a constant containing it would match itself.
  */
-export function assertHandshakeIdentitySeamAllowed(env: NodeJS.ProcessEnv = process.env): void {
-  const appEnv = (env.APP_ENV ?? 'local').trim().toLowerCase();
-  if (!SEAM_ALLOWED_ENVIRONMENTS.has(appEnv)) {
-    throw new IdentitySeamRefused(appEnv);
-  }
-}
+export const HANDSHAKE_IDENTITY_FIELD = 'actorId';

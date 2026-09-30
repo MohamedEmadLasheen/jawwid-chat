@@ -3,6 +3,7 @@ import { PrismaService } from '@platform/prisma.service';
 import { AuthorizationService } from '@platform/authorization.service';
 import { AppConfigService } from '@platform/app-config.service';
 import { PrismaIdentityService } from '@platform/identity.service';
+import { PrismaDirectoryService } from '@platform/directory.service';
 import { PrismaAuditService } from '@platform/audit.service';
 import type { CoverageService } from '@platform/coverage.service';
 import { ConversationService } from '@communication/conversations/conversation.service';
@@ -22,6 +23,7 @@ import { StoryAudienceResolver } from '@communication/stories/story-audience.res
 import { StorySweeper } from '@communication/stories/story-sweeper.service';
 import { OutboxWorker } from '@communication/outbox/outbox.worker';
 import { LiveKitTokenIssuer } from '@communication/calls/media-token';
+import { PrismaRelationshipService } from '@platform/relationship.service';
 
 process.env.DATABASE_URL ??= 'postgres://postgres:postgres@localhost:55433/jawwid_chat_int';
 
@@ -37,15 +39,21 @@ export function buildGraph() {
   const prisma = new PrismaService();
   const coverage = new PinnedCoverage();
   const identity = new PrismaIdentityService(prisma);
+  const directory = new PrismaDirectoryService(prisma);
   const audit = new PrismaAuditService();
   const authz = new AuthorizationService(coverage);
   const outbox = new OutboxService();
   const config = new AppConfigService(prisma);
   const storage = new SignedLocalObjectStorage();
+  // PD-6. The real implementation, against the same database: the harness must
+  // not be able to authorize a relationship the running system would refuse.
+  const relationships = new PrismaRelationshipService(prisma);
 
-  const conversations = new ConversationService(prisma, authz, outbox, identity, coverage, audit);
+  const conversations = new ConversationService(
+    prisma, authz, outbox, identity, coverage, audit, relationships,
+  );
   const attachments = new AttachmentService(prisma, authz, conversations, storage);
-  const messages = new MessageService(prisma, authz, conversations, outbox, config, attachments, audit);
+  const messages = new MessageService(prisma, authz, conversations, outbox, config, attachments, audit, directory);
   const approvals = new ApprovalService(prisma, authz, conversations, attachments, outbox, audit);
   const templates = new TemplateService(prisma);
   const quietHours = new QuietHoursService(prisma);
@@ -53,6 +61,7 @@ export function buildGraph() {
   const reminders = new ReminderService(prisma, notifications);
   const calls = new CallService(
     prisma, authz, conversations, outbox, config, identity, audit, new LiveKitTokenIssuer(),
+    directory,
   );
   const storyAudience = new StoryAudienceResolver(prisma);
   const stories = new StoryService(
@@ -67,9 +76,13 @@ export function buildGraph() {
   const outboxWorker = new OutboxWorker(prisma, notifications, silentRealtime as never, identity);
 
   return {
-    prisma, coverage, identity, authz, conversations, messages, approvals,
+    prisma, coverage, identity, directory, authz, conversations, messages, approvals,
     attachments, notifications, reminders, templates, quietHours, calls,
-    stories, storyAudience, storySweeper, storage, outbox, config, outboxWorker,
+    stories, storyAudience, storySweeper, storage, outboxWorker,
+    relationships,
+    // Exposed so a suite can drive the outbox itself: config for a worker it
+    // builds, outbox to enqueue inside its own transaction.
+    config, outbox,
   };
 }
 
@@ -82,6 +95,11 @@ export interface Scenario {
   otherParentId: string;
   teacherId: string;
   newTeacherId: string;
+  /** PD-6: a real, active teacher who teaches NOBODY in this family, so the
+   *  pair (unrelatedTeacherId, parentId) has no authorized relationship. The
+   *  negative half of every PD-6 assertion needs a teacher that exists --
+   *  a nonexistent id would prove only that unknown ids are denied. */
+  unrelatedTeacherId: string;
   learnerId: string;
 }
 
@@ -119,6 +137,7 @@ export async function seed(prisma: PrismaService): Promise<Scenario> {
     otherParentId: randomUUID(),
     teacherId: randomUUID(),
     newTeacherId: randomUUID(),
+    unrelatedTeacherId: randomUUID(),
     learnerId: randomUUID(),
   };
 
@@ -134,7 +153,8 @@ export async function seed(prisma: PrismaService): Promise<Scenario> {
   await prisma.$executeRawUnsafe(
     `insert into chat.teacher (id, name, is_active) values
        ('${ids.teacherId}'::uuid, 'teacher_c', true),
-       ('${ids.newTeacherId}'::uuid, 'teacher_d', true)`,
+       ('${ids.newTeacherId}'::uuid, 'teacher_d', true),
+       ('${ids.unrelatedTeacherId}'::uuid, 'teacher_e', true)`,
   );
   await prisma.$executeRawUnsafe(
     `insert into chat.family (id, display_name, owner_id, language)
@@ -156,6 +176,55 @@ export async function seed(prisma: PrismaService): Promise<Scenario> {
     prisma,
     `insert into chat.learner (id, family_id, name, teacher_id)
      values ('${randomUUID()}'::uuid, '${ids.familyId}'::uuid, 'learner_m', '${ids.newTeacherId}'::uuid)`,
+  );
+  return ids;
+}
+
+/**
+ * A SECOND, unrelated family -- its own owner, parent, teacher and learner.
+ *
+ * The cross-account security suite needs two households that share nothing, and
+ * `seed()` deliberately puts both of its parents inside ONE family (they model
+ * two guardians of the same children). Asserting isolation against those two
+ * would prove nothing, because they are supposed to see the same conversations.
+ */
+export interface SecondFamily {
+  ownerId: string;
+  familyId: string;
+  parentId: string;
+  teacherId: string;
+  learnerId: string;
+}
+
+export async function seedSecondFamily(prisma: PrismaService): Promise<SecondFamily> {
+  const ids: SecondFamily = {
+    ownerId: randomUUID(),
+    familyId: randomUUID(),
+    parentId: randomUUID(),
+    teacherId: randomUUID(),
+    learnerId: randomUUID(),
+  };
+
+  await prisma.$executeRawUnsafe(
+    `insert into chat.staff (id, name, role, is_active)
+     values ('${ids.ownerId}'::uuid, 'admin_z', 'admin', true)`,
+  );
+  await prisma.$executeRawUnsafe(
+    `insert into chat.teacher (id, name, is_active)
+     values ('${ids.teacherId}'::uuid, 'teacher_z', true)`,
+  );
+  await prisma.$executeRawUnsafe(
+    `insert into chat.family (id, display_name, owner_id, language)
+     values ('${ids.familyId}'::uuid, 'family_z', '${ids.ownerId}'::uuid, 'ar')`,
+  );
+  await prisma.$executeRawUnsafe(
+    `insert into chat.contact (id, family_id, name, role_preset, can_message, is_active)
+     values ('${ids.parentId}'::uuid, '${ids.familyId}'::uuid, 'parent_z', 'primary_guardian', true, true)`,
+  );
+  await withAssignmentGate(
+    prisma,
+    `insert into chat.learner (id, family_id, name, teacher_id)
+     values ('${ids.learnerId}'::uuid, '${ids.familyId}'::uuid, 'learner_z', '${ids.teacherId}'::uuid)`,
   );
   return ids;
 }

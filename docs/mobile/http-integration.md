@@ -55,6 +55,34 @@ JAWWID_LIVE_API=http://127.0.0.1:3100/api/v1 JAWWID_LIVE_PARENT=<contact-uuid> J
 
 The suite **skips** when those variables are absent, so CI without a backend stays green.
 
+> ### ⚠️ The live suite cannot currently be run at all (verified 2026-09-23)
+>
+> Not "nobody has set the variables" — the supported path to produce them is
+> broken by two changes that have since landed. Both were reproduced, not
+> inferred:
+>
+> 1. **`scripts/mobile/seed-live.sh` no longer applies.** It inserts a
+>    `chat.learner` with a `teacher_id` and never inserts the `chat.teacher`
+>    row. PR-A made that column a real foreign key, so the insert fails:
+>    `insert or update on table "learner" violates foreign key constraint
+>    "learner_teacher_fk"`. Executed against a database built by the current
+>    migration chain.
+>
+> 2. **The suite authenticates with `x-actor-id`, which no longer exists.**
+>    PR-B closed the HTTP half of the identity seam: no file under
+>    `apps/api/src` reads that header (asserted by the protected test
+>    `test/unit/auth/identity-seam.spec.ts`), and `@ActorId()` now reads only
+>    `request.actor`, which only `AuthenticatedGuard` writes from a verified
+>    bearer token. Every request the suite makes would be refused
+>    `AUTH.UNAUTHENTICATED` before reaching a handler.
+>
+> Reviving it needs a seed script that creates the teacher row and a live run
+> that obtains a real session through `POST /auth/login`, plus credentials for
+> a seeded account. That is authentication work, not mobile work, and is not
+> done here. **Until it is, no claim of live end-to-end verification is
+> supportable** — the suite reports `All tests skipped`, which is honest, and
+> must not be read as a pass.
+
 The app itself is pointed at a backend at build time. There is no default:
 
 ```bash

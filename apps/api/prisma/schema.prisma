@@ -513,8 +513,15 @@ model CallParticipant {
   actorId   String    @map("actor_id") @db.Uuid
   actorKind String    @map("actor_kind")
   invitedAt DateTime  @map("invited_at") @db.Timestamptz @default(now())
+  /// APPLICATION accept (`POST /calls/:id/accept`). Not media presence.
   joinedAt  DateTime? @map("joined_at") @db.Timestamptz
+  /// APPLICATION departure: decline, or end() closing an open participant.
   leftAt    DateTime? @map("left_at") @db.Timestamptz
+  /// MEDIA presence, from the LiveKit webhook's own event timestamp. Distinct
+  /// from joinedAt on purpose -- accepting a call and reaching the room are two
+  /// different facts, and only LiveKit knows the second.
+  mediaJoinedAt DateTime? @map("media_joined_at") @db.Timestamptz
+  mediaLeftAt   DateTime? @map("media_left_at") @db.Timestamptz
 
   @@unique([callId, actorId])
   @@map("call_participant")

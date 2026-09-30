@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/misc.dart';
 import '../core/data/fake_backend.dart';
 import '../core/data/fake_repositories.dart';
 import '../core/data/http/http_auth_repository.dart';
+import '../core/data/http/http_call_repository.dart';
 import '../core/data/http/http_conversation_repository.dart';
 import '../core/data/http/http_group_repository.dart';
 import '../core/data/http/http_message_repository.dart';
@@ -12,10 +13,14 @@ import '../core/network/api_client.dart';
 import '../core/network/api_config.dart';
 import '../core/network/device_descriptor.dart';
 import '../core/network/http_stack.dart';
+import '../core/push/push_registration.dart';
+import '../core/realtime/realtime_socket.dart';
 import '../core/storage/secure_token_store.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/application/session_termination.dart';
 import '../features/auth/domain/auth_state.dart';
+import '../features/calls/data/account_call_history.dart';
+import '../features/calls/data/http_account_call_history.dart';
 import '../shared/models/user_role.dart';
 import 'providers.dart';
 
@@ -97,13 +102,48 @@ List<Override> _httpOverrides() {
     tokenStoreProvider.overrideWithValue(tokenStore),
     authRepositoryProvider.overrideWithValue(auth),
     conversationRepositoryProvider.overrideWithValue(
-      HttpConversationRepository(client: client, viewerRole: session.role),
+      HttpConversationRepository(
+        client: client,
+        viewerRole: session.role,
+        viewerActorId: session.actorId,
+      ),
     ),
     messageRepositoryProvider.overrideWithValue(
       HttpMessageRepository(client: client, viewerActorId: session.actorId),
     ),
     groupRepositoryProvider.overrideWithValue(
       HttpGroupRepository(client: client),
+    ),
+    // Calling, against the routes apps/api publishes. Until this was
+    // registered, reading the provider threw and the Calls tab said calling
+    // was not switched on -- which was true, and is no longer.
+    callRepositoryProvider.overrideWithValue(
+      HttpCallRepository(client: client),
+    ),
+    // W8-W2. THE SAME `client`, deliberately: the account-history repository is
+    // handed the application's single ApiClient rather than building one, so
+    // there is exactly one interceptor chain, one TokenProvider and one refresh
+    // lifecycle for this session.
+    accountCallHistoryProvider.overrideWithValue(
+      HttpAccountCallHistory(
+        client: client,
+        viewerActorId: session.actorId,
+      ),
+    ),
+    // W8-W1. THE SAME `client` again: device registration travels on the one
+    // authenticated stack, so there is a single interceptor chain, a single
+    // TokenProvider and a single refresh lifecycle.
+    pushRegistrationApiProvider.overrideWithValue(
+      HttpPushRegistration(client: client),
+    ),
+    // The socket shares the ONE TokenProvider built above rather than holding
+    // its own. `StoredTokenProvider` single-flights its refresh, and two
+    // instances over one session would refresh independently and could rotate
+    // the refresh token out from under each other -- which the server reads as
+    // theft and answers by revoking every session on the account.
+    realtimeTokenProvider.overrideWithValue(tokens),
+    realtimeSocketProvider.overrideWithValue(
+      SocketIoRealtimeSocket(baseUrl: config.baseUrl),
     ),
     // Stories are read-only here. The development composition root below registers no
     // implementation on purpose -- a fixture story is indistinguishable on screen from a real
@@ -144,6 +184,10 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
     messageRepositoryProvider.overrideWithValue(FakeMessageRepository(backend)),
     groupRepositoryProvider.overrideWithValue(FakeGroupRepository(backend)),
     callRepositoryProvider.overrideWithValue(FakeCallRepository(backend)),
+    // The fixture build gets a realtime seam that opens nothing: a demo build
+    // must not be able to reach a real socket.
+    realtimeTokenProvider.overrideWithValue(const _NoRealtimeTokens()),
+    realtimeSocketProvider.overrideWithValue(SilentRealtimeSocket()),
     authControllerProvider.overrideWith(
       () => AuthController(
         repository: authRepository,
@@ -186,6 +230,24 @@ class SessionContext {
   /// Empty before a session exists. Nothing authenticated can run in that window: every
   /// request would be refused by the guard before an actor id mattered.
   String actorId() => _actorId ?? '';
+}
+
+/// A token provider for the fixture build: there is no session and no socket.
+///
+/// Every method answers "there is no session" rather than throwing, because the
+/// realtime client is allowed to ASK at any time and a demo build must simply
+/// never connect — not crash on the question.
+class _NoRealtimeTokens implements TokenProvider {
+  const _NoRealtimeTokens();
+
+  @override
+  Future<String?> accessToken() async => null;
+
+  @override
+  Future<String?> refresh() async => null;
+
+  @override
+  Future<void> onSessionEnded(AppError error) async {}
 }
 
 typedef AppAuthState = AuthState;

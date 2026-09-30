@@ -1,12 +1,19 @@
 import { Global, Module } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 import { PrismaIdentityService } from './identity.service';
+import { PrismaDirectoryService } from './directory.service';
 import { SqlCoverageService } from './coverage.service';
 import { PrismaAuditService } from './audit.service';
 import { AuthorizationService } from './authorization.service';
 import { AppConfigService } from './app-config.service';
-import { RelationshipService } from './relationship.service';
-import { AUDIT_SERVICE, COVERAGE_SERVICE, IDENTITY_SERVICE } from './tokens';
+import { PrismaRelationshipService } from './relationship.service';
+import {
+  AUDIT_SERVICE,
+  COVERAGE_SERVICE,
+  DIRECTORY_SERVICE,
+  IDENTITY_SERVICE,
+  RELATIONSHIP_SERVICE,
+} from './tokens';
 
 /**
  * Every provider here is an AI #1 seam, except AuthorizationService, whose
@@ -21,19 +28,29 @@ import { AUDIT_SERVICE, COVERAGE_SERVICE, IDENTITY_SERVICE } from './tokens';
     PrismaService,
     AppConfigService,
     AuthorizationService,
-    RelationshipService,
     { provide: IDENTITY_SERVICE, useClass: PrismaIdentityService },
+    // Display names for actors a caller may ALREADY see. Deliberately separate
+    // from IDENTITY_SERVICE, which answers "who is this and what may they do":
+    // rendering a name needs none of that and must not cost three lookups per
+    // actor to get it.
+    { provide: DIRECTORY_SERVICE, useClass: PrismaDirectoryService },
     { provide: COVERAGE_SERVICE, useClass: SqlCoverageService },
     { provide: AUDIT_SERVICE, useClass: PrismaAuditService },
+    // PD-6. The ONE place the teacher<->parent relationship is resolved.
+    // ConversationService, MessageService and CallService read it through this
+    // token and hand the resolved boolean to AuthorizationService, which stays
+    // database-free. Nothing else may answer this question.
+    { provide: RELATIONSHIP_SERVICE, useClass: PrismaRelationshipService },
   ],
   exports: [
     PrismaService,
     AppConfigService,
     AuthorizationService,
-    RelationshipService,
     IDENTITY_SERVICE,
+    DIRECTORY_SERVICE,
     COVERAGE_SERVICE,
     AUDIT_SERVICE,
+    RELATIONSHIP_SERVICE,
   ],
 })
 export class PlatformModule {}

@@ -284,7 +284,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.getSize(find.byType(StoriesRail)).height, greaterThan(0));
-      expect(find.text('أهلاً'), findsWidgets);
+      // The rail draws rings, not captions, so the story's presence is asserted
+      // on the ring's semantic label rather than on visible text.
+      expect(find.bySemanticsLabel(RegExp('أهلاً')), findsWidgets);
     });
 
     testWidgets('there is no compose or new-chat affordance', (tester) async {
@@ -310,8 +312,17 @@ void main() {
   });
 
   group('Calls tells the truth about itself', () {
-    testWidgets('an empty history reads as empty, not broken', (tester) async {
-      // FakeCallRepository answers with an empty page — a real answer, no fixtures.
+    testWidgets('with no global history endpoint, it says calling is not on yet',
+        (tester) async {
+      // Reconciled 2026-09-24. This used to assert "No calls yet", on the
+      // strength of FakeCallRepository answering a global `history()` with an
+      // empty page. That method described a route the server does not have:
+      // `GET /calls/history/:conversationId` is per-conversation, and this
+      // screen is the account's list. An empty answer was the fixture agreeing
+      // with a contract nobody had checked.
+      //
+      // "You have no calls" and "this cannot be asked yet" are different
+      // things to tell a parent, and only the second is true.
       await tester.pumpWidget(
         harness(
           role: UserRole.parent,
@@ -321,8 +332,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('No calls yet'), findsOneWidget);
-      expect(find.text('Calls you take part in will appear here.'), findsOneWidget);
+      expect(find.text('No calls yet'), findsNothing);
+      expect(find.byIcon(Icons.phone_disabled_outlined), findsOneWidget);
     });
 
     testWidgets('with no call repository at all, it says calling is not on yet',

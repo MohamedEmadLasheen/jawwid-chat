@@ -26,8 +26,10 @@ class HttpConversationRepository implements ConversationRepository {
   HttpConversationRepository({
     required ApiClient client,
     required UserRole Function() viewerRole,
+    required String Function() viewerActorId,
   })  : _client = client,
-        _viewerRole = viewerRole;
+        _viewerRole = viewerRole,
+        _viewerActorId = viewerActorId;
 
   final ApiClient _client;
 
@@ -35,16 +37,31 @@ class HttpConversationRepository implements ConversationRepository {
   /// differently for a parent and a teacher (§26).
   final UserRole Function() _viewerRole;
 
+  /// The signed-in actor, read per call. A list row says "You:" on your own
+  /// last message, and ownership is decided by id, never by role.
+  final String Function() _viewerActorId;
+
   @override
   Future<List<Conversation>> list({bool includeArchived = false}) async {
-    final response = await _client.get<Map<String, Object?>>('/conversations');
+    return _fetchList('/conversations', includeArchived: includeArchived);
+  }
+
+  Future<List<Conversation>> _fetchList(
+    String path, {
+    required bool includeArchived,
+  }) async {
+    final response = await _client.get<Map<String, Object?>>(path);
     final rows = (response.data?['conversations'] as List?) ?? const [];
 
     final conversations = <Conversation>[];
     for (final row in rows) {
       if (row is! Map<String, Object?>) continue;
       conversations.add(
-        WireMappers.conversation(row, viewerRole: _viewerRole()),
+        WireMappers.conversation(
+          row,
+          viewerRole: _viewerRole(),
+          viewerActorId: _viewerActorId(),
+        ),
       );
     }
 
@@ -68,7 +85,11 @@ class HttpConversationRepository implements ConversationRepository {
         debugDetail: 'conversation response carried no id',
       );
     }
-    return WireMappers.conversation(data, viewerRole: _viewerRole());
+    return WireMappers.conversation(
+      data,
+      viewerRole: _viewerRole(),
+      viewerActorId: _viewerActorId(),
+    );
   }
 
   @override
@@ -116,15 +137,27 @@ class HttpConversationRepository implements ConversationRepository {
     return (response.data?['unread'] as num?)?.toInt() ?? 0;
   }
 
+  /// Search, on the server, inside this caller's own authorization.
+  ///
+  /// `GET /conversations?q=` is the SAME route as the list and the same
+  /// authorization scope; the term narrows the authorized set and can never
+  /// widen it. That matters more than it sounds: the alternative -- fetching
+  /// everything and filtering here -- would make client-side code the only
+  /// thing separating one family from another's conversations.
+  ///
+  /// An empty term is answered without a round trip, because the caller is
+  /// clearing the box rather than asking a question.
   @override
   Future<List<Conversation>> search(String query) async {
-    // The contract has no search route. Filtering the already-fetched list locally would
-    // look like search while silently only covering what happens to be cached, so this
-    // fails honestly instead. Recorded as a backend dependency.
-    throw const AppError(
-      AppErrorKind.notFound,
-      code: 'search_not_supported',
-      debugDetail: 'No search endpoint exists in the published contract.',
+    final term = query.trim();
+    if (term.isEmpty) return const [];
+
+    // Archived rows are included: someone searching by name is looking for a
+    // conversation, and hiding it because they once archived it is the answer
+    // to a question they did not ask.
+    return _fetchList(
+      '/conversations?q=${Uri.encodeQueryComponent(term)}',
+      includeArchived: true,
     );
   }
 

@@ -9,6 +9,8 @@ import '../core/logging/redacting_logger.dart';
 import '../core/media/attachment_opener.dart';
 import '../core/media/media_picker.dart';
 import '../core/media/story_video_player.dart';
+import '../core/network/api_client.dart' show TokenProvider;
+import '../core/realtime/realtime_socket.dart';
 import '../core/storage/secure_token_store.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/domain/auth_state.dart';
@@ -67,6 +69,26 @@ final callRepositoryProvider = Provider<CallRepository>((ref) {
 /// implementation shows no rail at all, which is honest -- see StoriesController.
 final storyRepositoryProvider = Provider<StoryRepository>((ref) {
   throw UnimplementedError('storyRepositoryProvider must be overridden');
+});
+
+/// The realtime transport, as a seam.
+///
+/// Overridden by the composition root, which is the only place that knows the
+/// backend URL. Left throwing by default for the same reason the repositories
+/// are: a build that forgot to wire it should fail loudly rather than open a
+/// socket at some default address.
+final realtimeSocketProvider = Provider<RealtimeSocket>((ref) {
+  throw UnimplementedError('realtimeSocketProvider must be overridden');
+});
+
+/// Credentials for the realtime connection.
+///
+/// The SAME TokenProvider the HTTP stack uses — `StoredTokenProvider`, whose
+/// refresh is already single-flighted. Deliberately the one object rather than
+/// a second instance: two providers over one session would refresh
+/// independently and could rotate the refresh token out from under each other.
+final realtimeTokenProvider = Provider<TokenProvider>((ref) {
+  throw UnimplementedError('realtimeTokenProvider must be overridden');
 });
 
 /// The device's microphone.

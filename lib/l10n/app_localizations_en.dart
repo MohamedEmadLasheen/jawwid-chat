@@ -10,6 +10,68 @@ class L10nEn extends L10n {
   L10nEn([String locale = 'en']) : super(locale);
 
   @override
+  String systemGroupCreated(String learner) {
+    return 'Jawwid opened this group for $learner.';
+  }
+
+  @override
+  String get systemGroupCreatedUnnamed => 'Jawwid opened this group.';
+
+  @override
+  String get systemGroupMembersChanged =>
+      'Jawwid updated who is in this group.';
+
+  @override
+  String systemGroupMembersJoined(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count people joined this group.',
+      one: 'One person joined this group.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String systemGroupMembersLeft(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count people left this group.',
+      one: 'One person left this group.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get systemGroupArchived => 'Jawwid closed this group.';
+
+  @override
+  String get systemEventUnknown => 'Jawwid updated this conversation.';
+
+  @override
+  String get previewVoice => 'Voice message';
+
+  @override
+  String get previewPhoto => 'Photo';
+
+  @override
+  String get previewVideo => 'Video';
+
+  @override
+  String get previewFile => 'File';
+
+  @override
+  String previewYouPrefix(String preview) {
+    return 'You: $preview';
+  }
+
+  @override
+  String previewSenderPrefix(String name, String preview) {
+    return '$name: $preview';
+  }
+
+  @override
   String get appName => 'Jawwid';
 
   @override
@@ -347,6 +409,15 @@ class L10nEn extends L10n {
       'The call could not connect. Check your connection and try again.';
 
   @override
+  String get callOutgoing => 'Calling…';
+
+  @override
+  String get callEnded => 'Call ended';
+
+  @override
+  String get callSendMessageInstead => 'Send a message instead';
+
+  @override
   String get notificationsTitle => 'Updates';
 
   @override
@@ -588,6 +659,9 @@ class L10nEn extends L10n {
   String get saveAction => 'Save';
 
   @override
+  String get attachCamera => 'Camera';
+
+  @override
   String get attachPhoto => 'Photo';
 
   @override
@@ -614,6 +688,13 @@ class L10nEn extends L10n {
 
   @override
   String get attachmentPickFailed => 'Couldn\'t open that. Please try again.';
+
+  @override
+  String get cameraPermissionDenied =>
+      'Jawwid needs permission to use the camera. You can allow it in Settings.';
+
+  @override
+  String get cameraUnavailable => 'This device has no camera available.';
 
   @override
   String get attachmentPermissionDenied =>

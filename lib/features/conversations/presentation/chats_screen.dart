@@ -147,27 +147,92 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
           ),
           Divider(height: 1, color: tokens.colorBorderSubtle),
           Expanded(
-            child: switch (state) {
-              AsyncLoading() => JawwidLoadingView(label: l10n.tabChats),
-              AsyncError(:final error) => _ErrorState(error: error),
-              AsyncData(:final value) => _Feed(
-                  conversations: ChatFeed.build(
-                    sections: value,
-                    filter: _filter,
+            // Searching and browsing are two different queries, so they are two
+            // different states. A term goes to the server -- inside this
+            // caller's own authorization -- rather than narrowing whatever page
+            // happens to be in memory, which is what the box used to do.
+            child: _query.trim().isNotEmpty
+                ? _SearchResults(
                     query: _query,
-                  ),
-                  filter: _filter,
-                  query: _query,
-                  role: role,
-                  onOpen: _open,
-                  onOpenProfile: _openProfile,
-                  onOpenStory: _openStory,
-                ),
-            },
+                    role: role,
+                    onOpen: _open,
+                    onOpenProfile: _openProfile,
+                  )
+                : switch (state) {
+                    AsyncLoading() => JawwidLoadingView(label: l10n.tabChats),
+                    AsyncError(:final error) => _ErrorState(error: error),
+                    AsyncData(:final value) => _Feed(
+                        conversations: ChatFeed.build(
+                          sections: value,
+                          filter: _filter,
+                          query: '',
+                        ),
+                        filter: _filter,
+                        query: '',
+                        role: role,
+                        onOpen: _open,
+                        onOpenProfile: _openProfile,
+                        onOpenStory: _openStory,
+                      ),
+                  },
           ),
         ],
       ),
     );
+  }
+}
+
+/// Results for a search term, from the server.
+///
+/// Deliberately not the same widget as the browsing feed: results are a flat
+/// list with no stories rail, no child sections and no filter chips, because
+/// none of those mean anything about a set of matches. What it does share is
+/// the row, so a conversation looks the same wherever it is found.
+class _SearchResults extends ConsumerWidget {
+  const _SearchResults({
+    required this.query,
+    required this.role,
+    required this.onOpen,
+    required this.onOpenProfile,
+  });
+
+  final String query;
+  final UserRole? role;
+  final void Function(String conversationId) onOpen;
+  final void Function(String conversationId) onOpenProfile;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = L10n.of(context);
+    final results = ref.watch(conversationSearchProvider(query));
+    final now = DateTime.now();
+
+    return switch (results) {
+      AsyncLoading() => JawwidLoadingView(label: l10n.searchHint),
+      AsyncError(:final error) => _ErrorState(error: error),
+      // Biased towards the top, like the browsing feed's empty state: the
+      // explanation belongs next to the search field the reader just used, not
+      // centred in an otherwise blank screen.
+      AsyncData(:final value) when value.isEmpty => Align(
+          alignment: Alignment.topCenter,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: Spacing.spacing9),
+              _EmptyState(filter: ChatFilter.all, query: query, role: role),
+            ],
+          ),
+        ),
+      AsyncData(:final value) => ListView.builder(
+          itemCount: value.length,
+          itemBuilder: (context, index) => ConversationTile(
+            conversation: value[index],
+            now: now,
+            onTap: () => onOpen(value[index].id),
+            onOpenProfile: () => onOpenProfile(value[index].id),
+          ),
+        ),
+    };
   }
 }
 

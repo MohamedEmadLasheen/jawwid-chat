@@ -245,11 +245,16 @@ describe('the audience is resolved server-side', () => {
   });
 
   it('all_teachers reaches active teachers only', async () => {
+    // EVERY active teacher, including the one who teaches nobody in this
+    // family: `all_teachers` is a broadcast to the teaching staff, and a
+    // teacher's audience membership does not depend on whose children they
+    // happen to teach. The PD-6 fixture added a third (teacher_e) precisely to
+    // have an unrelated one, and it belongs in this audience like the others.
     const id = await publishedStory(s.ownerId, [{ kind: StoryAudienceKind.ALL_TEACHERS }]);
     const ids = (await prisma.storyRecipient.findMany({ where: { storyId: id } }))
       .map((r) => r.actorId)
       .sort();
-    expect(ids).toEqual([s.teacherId, s.newTeacherId].sort());
+    expect(ids).toEqual([s.teacherId, s.newTeacherId, s.unrelatedTeacherId].sort());
   });
 
   it('assigned_families reaches only the families the author supervises', async () => {
