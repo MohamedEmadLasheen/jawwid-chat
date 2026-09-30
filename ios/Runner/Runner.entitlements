@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  W8-W3. Push Notifications, which PushKit requires: without this the app
+	  registers for no APNs or VoIP token at all, so the whole push path is
+	  inert no matter what the server is configured with.
+
+	  `development` is the value a debug build and a development provisioning
+	  profile need. A RELEASE build must carry `production`, and the two are not
+	  interchangeable: a production device token presented to the sandbox
+	  endpoint is silently dropped, and a sandbox token to production is
+	  refused. Switching it is part of setting up real signing, which this
+	  repository does not yet have -- release currently builds with debug keys.
+
+	  Not verified here, and not claimed: that any of this is accepted by Apple.
+	  That needs a signed build on a real device, which is W8-W4's.
+	-->
+	<key>aps-environment</key>
+	<string>development</string>
+</dict>
+</plist>

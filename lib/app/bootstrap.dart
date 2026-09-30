@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/misc.dart';
 import '../core/data/fake_backend.dart';
 import '../core/data/fake_repositories.dart';
 import '../core/data/http/http_auth_repository.dart';
+import '../core/data/http/http_call_repository.dart';
 import '../core/data/http/http_conversation_repository.dart';
 import '../core/data/http/http_group_repository.dart';
 import '../core/data/http/http_message_repository.dart';
@@ -12,10 +13,14 @@ import '../core/network/api_client.dart';
 import '../core/network/api_config.dart';
 import '../core/network/device_descriptor.dart';
 import '../core/network/http_stack.dart';
+import '../core/push/push_registration.dart';
+import '../core/realtime/realtime_socket.dart';
 import '../core/storage/secure_token_store.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/application/session_termination.dart';
 import '../features/auth/domain/auth_state.dart';
+import '../features/calls/data/account_call_history.dart';
+import '../features/calls/data/http_account_call_history.dart';
 import '../shared/models/user_role.dart';
 import 'providers.dart';
 
@@ -111,6 +116,33 @@ List<Override> _httpOverrides() {
     // published to them.
     storyRepositoryProvider.overrideWithValue(
       HttpStoryRepository(client: client),
+    ),
+
+    // --- Calling, realtime and push (the communication branch) -------------
+    //
+    // THE SAME `client` and THE SAME `tokens`, deliberately. Every one of these
+    // travels on the application's single authenticated stack, so there is one
+    // interceptor chain, one TokenProvider and one refresh lifecycle for the
+    // session. A second provider over one session would refresh independently
+    // and could rotate the refresh token out from under the first -- which
+    // `AuthService.handleRefreshReuse` reads as theft and answers by revoking
+    // every live session on the account.
+    callRepositoryProvider.overrideWithValue(
+      HttpCallRepository(client: client),
+    ),
+    accountCallHistoryProvider.overrideWithValue(
+      HttpAccountCallHistory(client: client),
+    ),
+    pushRegistrationApiProvider.overrideWithValue(
+      HttpPushRegistration(client: client),
+    ),
+    // The socket authenticates with a token from this same provider. It does
+    // NOT name an actor: `handshake.auth.token` is verified server-side by the
+    // same verifier the HTTP guard uses, and the actor is derived from it. The
+    // retired `x-actor-id` seam is not reintroduced here in any form.
+    realtimeTokenProvider.overrideWithValue(tokens),
+    realtimeSocketProvider.overrideWithValue(
+      SocketIoRealtimeSocket(baseUrl: config.baseUrl),
     ),
     authControllerProvider.overrideWith(
       () => AuthController(

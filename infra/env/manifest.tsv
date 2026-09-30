@@ -86,10 +86,13 @@ APNS_PRODUCTION	push	no	opt	opt	req
 # so an unconfigured local environment cannot call and cannot pretend to -- which is
 # why these are opt locally and req everywhere a client actually connects. Same
 # shape, and same reason, as the push group above.
+#
+# The token TTL is deliberately NOT here: it lives in chat.config as
+# `call.token_ttl_seconds`, which is what CallService reads when it mints a media
+# token. An env var would be a knob that changes nothing.
 LIVEKIT_URL	calling	no	opt	req	req
 LIVEKIT_API_KEY	calling	yes	opt	req	req
 LIVEKIT_API_SECRET	calling	yes	opt	req	req
-LIVEKIT_TOKEN_TTL_SECONDS	calling	no	opt	req	req
 CORE_BASE_URL	core	no	req	opt	req
 CORE_API_KEY	core	yes	opt	opt	req
 CORE_WEBHOOK_SECRET	core	yes	opt	opt	req

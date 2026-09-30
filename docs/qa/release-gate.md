@@ -1,7 +1,8 @@
 # Jawwid Chat — Release Gate
 
-Date: 2026-09-05 · Owner: AI #5
-Authoritative scope: `docs/qa/authoritative-scope.md` (PRD v0.1)
+Date: 2026-09-05 · Owner: AI #5 · **G-01 re-versioned 2026-09-23 (PD-6)**
+Authoritative scope: `docs/qa/authoritative-scope.md` (PRD v0.1) → superseded on BR-1 by **PRD v0.2 / PD-6**
+(`docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4)
 
 A release is **BLOCKED** if any gate is failing **or unverified**. The two are
 treated identically: an untested control is not a control.
@@ -24,15 +25,71 @@ passing, 1 failing, and that failure is JC-008 rather than a test defect.
 
 | # | Gate | Status |
 |---|---|---|
-| **G-01** | **BR-1: no Teacher↔Parent 1:1 messaging or calling exists, enforced server-side, verified with client-side policy disabled (BR1-19)** | **FAIL — JC-008.** Materially improved: BR-1 is now a DB constraint trigger and blocks the member path (verified). It does **not** guard `conversation.type`, so a group converts to a forbidden 1:1 by `UPDATE` (reproduced). |
+| **G-01** | **BR-1 (PD-6): a Teacher↔Parent 1:1 conversation or call exists ONLY for an authorized relationship — enforced server-side AND independently in the database, verified with client-side policy disabled** | **PASS — verified 2026-09-23.** All five proofs below execute. The gate was re-versioned, not weakened: it gained the positive half it never had. Old condition recorded beneath this table. |
+
+**G-01 pass condition, and where each half is proven.** No client is involved in
+any of it; every assertion drives the server decision or the database directly,
+which is what "with client-side policy disabled" means.
+
+| # | Must prove | Proven by |
+|---|---|---|
+| 1 | Authorized Parent ↔ Teacher direct communication is **allowed** | `relationship-predicate.spec.ts` §"authorization switch" 1, 2, 3, 3b · `br1_invariants.sql` A2, D5 · `schema-invariants.spec.ts` "PERMITS…" |
+| 2 | Unauthorized Parent ↔ Teacher direct communication is **denied** | `br1-conformance.spec.ts` BR1-01/02/03/04 · `relationship-predicate.spec.ts` 1b · `communication-engine.spec.ts` "refuses…" · `br1_invariants.sql` A1, A3, A4, D1, D7 |
+| 3 | **Application** authorization enforces the relationship | `br1-conformance.spec.ts` (the policy, in isolation) + the end-to-end block driving `ConversationService`, `MessageService` and `CallService`, which proves each call site actually resolves and passes the fact |
+| 4 | **Database** backstop enforces the relationship | `br1_invariants.sql` A1–A4, D1, D5–D7 · `relationship_predicate.sql` H1, H2 · `communication-engine.spec.ts` and `schema-invariants.spec.ts`, both of which write through raw SQL with the API bypassed |
+| 5 | Client-side policy **cannot** bypass server or database | Every assertion under 1–4 is server-side or SQL-side. Specifically: `authz-attacks.spec.ts` "a client cannot widen its own authority" (no request field reaches the resolved fact), `relationship-predicate.spec.ts` "client-supplied ids are never evidence" and "anti-bypass", and the raw-SQL inserts in 4, which have no client at all |
+
+Additionally proven, because a gate that only tested the happy direction would
+not be testing a boundary: the relationship is re-checked at **media-token
+issue**, so revoking it mid-call denies the next token (`relationship-predicate.spec.ts` 6)
+while still allowing the call to be **ended** (6b, and `br1_invariants.sql` D6) —
+no call is stranded by a revocation.
 | **G-02** | Student Groups implemented, with membership derived from Jawwid Core and BR-1 enforced at creation **and** every membership mutation | **FAIL — JC-001** |
 | **G-03** | Teacher is a first-class authenticated actor with Teacher↔Admin and group access | **FAIL — JC-003** |
-| G-04 | One centralized authorization policy governs messaging **and** calling; no second matrix; **no client-supplied field widens authority** | **PASS (messaging)** — JC-005 fixed, regression-tested. Calling unverified. |
+| G-04 | One centralized authorization policy governs messaging **and** calling; no second matrix; **no client-supplied field widens authority** | **PASS — re-assessed 2026-09-24.** Messaging: JC-005 fixed, regression-tested. Calling: `CallService` reaches exactly one decision surface — `AuthorizationService.canCall` — and there is exactly one `AuthorizationService` and one `canCall` in `apps/api/src`. `start`, `issueToken`, `accept` and `decline` all pass through it; `accept`/`decline` re-enter the full chain through `authorizeJoin`. No client field widens authority: the token endpoint takes no room parameter (`call-media-token.spec.ts` K), the participant identity is the resolved actor and not anything supplied (L), and the PD-6 fact is resolved server-side from Core data, never from the request (`relationship-predicate.spec.ts`, "client-supplied ids are never evidence"). |
 | G-05 | Approvals: approve / reject / mandatory reason; pending never delivered, pushed, searchable or emitted; no self-approval; concurrent decisions resolve to one state | UNVERIFIED |
-| G-06 | Voice calling authorized through the same policy; tokens server-generated, short-lived, room-scoped; unauthorized room join denied | UNVERIFIED |
-| G-07 | **No phone number** in any API response, realtime event, push payload, call setup/metadata/history, search result, log, cache or export | PARTIAL — structural control now **guarded in CI** (`no-contact-channel-columns.spec.ts`: schema, migrations, Actor seam, DTO/event contracts). Runtime surfaces still unverified. |
+| G-06 | Voice calling authorized through the same policy; tokens server-generated, short-lived, room-scoped; unauthorized room join denied | **PARTIAL — re-assessed 2026-09-24.** Four of the five conditions are proven; the fifth is proven on the issuing side only. Breakdown beneath this table. |
+| G-07 | **No phone number** in any API response, realtime event, push payload, call setup/metadata/history, search result, log, cache or export | **PARTIAL — re-assessed 2026-09-24.** Structural control guarded in CI (`no-contact-channel-columns.spec.ts`: schema, migrations, Actor seam, DTO/event contracts). **One runtime surface is now covered:** the push payload, asserted on the delivered message rather than on a type — `call-notifications.spec.ts` Q checks `data`, `title` and `body` against `/@|\+\d{6,}/`, and against a JWT, a room name and every media-handle key. The remaining named surfaces — API response, realtime event, call metadata/history, search result, log, cache, export — are **still unverified at runtime**. |
 | G-08 | Internal notes unreachable by any parent or teacher through any surface | PARTIAL — contacts and deactivated actors denied (verified, JC-006 fixed); other surfaces unverified |
 | G-09 | No cross-family or cross-group access; IDOR sweep clean across every entity id | UNVERIFIED |
+
+**G-06 breakdown, re-assessed 2026-09-24.** The gate states five conditions. They
+are not equally proven, and collapsing them into one verdict is how a gate stops
+meaning anything.
+
+| # | Condition | Status | Proven by |
+|---|---|---|---|
+| 1 | Calling authorized through **the same** policy | **PROVEN** | One `AuthorizationService`, one `canCall`. `call-media-token.spec.ts` A–H covers who may obtain a token: unrelated actor, revoked PD-6 relationship, participant who left, participant removed from the conversation, deactivated actor, ended call, ring-timeout-expired call, unknown actor — each denied. `call-accept-decline.spec.ts` proves accept and decline re-enter the same chain |
+| 2 | Tokens **server-generated** | **PROVEN** | `call-media-token.spec.ts` J (room name derived from conversation + call), J2 (no two calls share a room), K (the endpoint takes no room parameter), L (identity is the resolved actor), Q (signed server-side; the secret is never in the token) |
+| 3 | Tokens **short-lived** | **PROVEN** | `call-media-token.spec.ts` I — the TTL comes from `chat.config['call.token_ttl_seconds']`, the token's `exp` matches it, changing the config changes the token, and no environment variable claims to control it |
+| 4 | Tokens **room-scoped** | **PROVEN** | `call-media-token.spec.ts` M (`roomJoin` for exactly one named room), N/O (no `roomCreate`, no `roomList`), P/P2 (publish and subscribe only; no administrative capability), and no `canPublishData` |
+| 5 | **Unauthorized room join denied** | **PARTIAL** | The *issuing* half is proven — an unauthorized actor receives no token at all (condition 1). The *joining* half is LiveKit refusing a token that does not name the room, and nothing here has ever asked LiveKit to refuse one. That is a media-plane assertion and needs a real participant connection |
+
+**Why this is PARTIAL and not PASS.** Everything the API controls is proven.
+What is unproven is the other party's behaviour: that LiveKit enforces the scope
+the token declares. The control-plane probe (`scripts/infra/livekit-probe.sh`)
+established that LiveKit accepts a token this codebase mints and that the
+credentials are real — it did not, and cannot, establish that a room-scoped
+token is refused for a different room, because it never joins one.
+`call-media-token.spec.ts` R states this boundary in the suite itself: a signed
+token is not evidence that LiveKit works.
+
+**G-06 closes under M4**, with the media plane. Until then the honest reading is:
+the authorization and token layers are done and tested; voice calling is not
+verified.
+
+> **G-01 — superseded pass condition (in force 2026-09-05 → 2026-09-23).**
+> Preserved so the gate's history is auditable, per PD-6.
+>
+> > **BR-1: no Teacher↔Parent 1:1 messaging or calling exists, enforced
+> > server-side, verified with client-side policy disabled (BR1-19)** —
+> > *FAIL — JC-008. Materially improved: BR-1 is now a DB constraint trigger and
+> > blocks the member path (verified). It does not guard `conversation.type`, so
+> > a group converts to a forbidden 1:1 by `UPDATE` (reproduced).*
+>
+> The JC-008 finding was closed by the RT-024 type-immutability triggers, which
+> PD-6 retains unchanged. What PD-6 changed is *which end state is forbidden*,
+> not whether the database is allowed to be bypassed.
 | G-10 | Realtime delivers only in-scope events; re-authorized on reconnect and on permission change | UNVERIFIED |
 | G-11 | Manager-only actions unreachable by admin, coverage, teacher, parent or internal staff | UNVERIFIED |
 | **G-44** | `on_duty()` is the sole authority for acting on a family; assist and escalation are gated by server-evaluated preconditions | **FAIL — JC-007**: now fail-closed (not bypassable) but the real predicate is not implemented |
@@ -66,8 +123,27 @@ passing, 1 failing, and that failure is JC-008 rather than a test defect.
 | # | Gate | Status |
 |---|---|---|
 | G-31 | **No** AI attention scoring, drafting, summarization or classification | UNVERIFIED |
-| G-32 | **No** video calling | UNVERIFIED |
+| G-32 | **No** video calling | **PASS — re-assessed 2026-09-25, M4/W1.** No video calling is offered or reachable: `CallType` is `{direct, group}` with no video member, the type is immutable in the database (`call_type_immutable`, RT-024), and no client has a video surface. **And the media grant now forbids it.** The participant token declares `canPublishSources: PUBLISHABLE_SOURCES` where `const PUBLISHABLE_SOURCES = ['microphone'] as const` — `media-token.ts:33` and `media-token.ts:129`. LiveKit refuses a camera, screen-share or screen-share-audio track for such a token server-side, so the control this gate wants is enforced where a client cannot reach it. Evidence: `apps/api/test/integration/call-media-token.spec.ts`, whose grant key-set assertion is exhaustive by design — a new capability cannot be added to the token without being declared there — and which asserts the source list is exactly `['microphone']`. The suite is protected at an assertion floor in `docs/qa/protected-tests.tsv`. (The `video: {…}` object in `media-token.ts` is LiveKit's name for the whole grant namespace, not a video capability. Do not read it as one.) |
 | G-33 | **No** labels, **no** broadcast | UNVERIFIED |
+
+> **G-32 — superseded status (in force 2026-09-24 → 2026-09-25).**
+> Preserved so the gate's history is auditable, in the same form as G-01's.
+>
+> > *PARTIAL — re-assessed 2026-09-24.* No video calling is offered or reachable:
+> > `CallType` is `{direct, group}` with no video member, the type is immutable in
+> > the database (`call_type_immutable`, RT-024), and no client has a video surface.
+> > **But the media grant does not forbid it.** `media-token.ts` sets `canPublish`
+> > without `canPublishSources`, and LiveKit reads an unrestricted `canPublish` as
+> > permission to publish any source, camera included. The product does not do
+> > video; the token does not prevent it. Restricting the grant to the microphone
+> > source is the control this gate wants and it does not exist yet. **Deliberately
+> > deferred to M4, as its first item**, before any LiveKit client reaches the app.
+>
+> Closed by M4 workstream W1 (`7e94d58`), which was authorized for this gate and
+> nothing else. The deferral reasoning was sound at the time and is recorded here
+> rather than deleted: nothing could exploit the open grant while no media client
+> existed, and W4 shipped that client only after this gate was closed.
+
 | G-34 | **No** approval escalation, expiry or coverage-aware approval | UNVERIFIED |
 | G-35 | **No** shared queue or automatic routing | UNVERIFIED |
 

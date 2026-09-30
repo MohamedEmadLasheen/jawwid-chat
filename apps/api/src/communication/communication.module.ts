@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PlatformModule } from '../platform/platform.module';
+import { AuthModule } from '../platform/auth/auth.module';
 import {
   MEDIA_TOKEN_ISSUER,
   OBJECT_STORAGE,
@@ -24,7 +25,7 @@ import { NotificationService } from './notifications/notification.service';
 import { ReminderService } from './notifications/reminder.service';
 import { TemplateService } from './notifications/template.service';
 import { QuietHoursService } from './notifications/quiet-hours.service';
-import { LoggingPushProvider } from './notifications/push.provider';
+import { selectPushProvider } from './notifications/push.provider.selector';
 import { RealtimeGateway } from './realtime/realtime.gateway';
 import { TypingService } from './realtime/typing.service';
 import { PresenceService } from './realtime/presence.service';
@@ -36,17 +37,24 @@ import { ConversationController } from './api/conversation.controller';
 import { MessageController } from './api/message.controller';
 import { ApprovalController } from './api/approval.controller';
 import { CallController } from './api/call.controller';
+import { LiveKitWebhookController } from './api/livekit-webhook.controller';
+import { LiveKitWebhookVerifier } from './calls/livekit-webhook.verifier';
+import { MediaPresenceService } from './calls/media-presence.service';
 import { NotificationController } from './api/notification.controller';
 import { StorageController } from './api/storage.controller';
 import { StoryController } from './api/story.controller';
 
 @Module({
-  imports: [PlatformModule],
+  // AuthModule exports AuthService, which RealtimeGateway uses to verify the
+  // handshake token. The dependency runs one way only -- platform never imports
+  // communication -- so there is no cycle.
+  imports: [PlatformModule, AuthModule],
   controllers: [
     ConversationController,
     MessageController,
     ApprovalController,
     CallController,
+    LiveKitWebhookController,
     NotificationController,
     StorageController,
     StoryController,
@@ -57,6 +65,8 @@ import { StoryController } from './api/story.controller';
     MessageService,
     ApprovalService,
     CallService,
+    MediaPresenceService,
+    LiveKitWebhookVerifier,
     AttachmentService,
     StoryService,
     StoryAudienceResolver,
@@ -76,7 +86,11 @@ import { StoryController } from './api/story.controller';
     // otherwise, and a startup failure when the configuration is half-present.
     // See storage.provider.ts.
     { provide: OBJECT_STORAGE, useFactory: () => selectObjectStorage().storage },
-    { provide: PUSH_PROVIDER, useClass: LoggingPushProvider },
+    // W8-W1. Configured, not compiled -- the same shape as OBJECT_STORAGE
+    // above. With no credentials set this resolves to LoggingPushProvider,
+    // which is exactly the previous behaviour; a partial configuration refuses
+    // to start. See push.provider.selector.ts.
+    { provide: PUSH_PROVIDER, useFactory: () => selectPushProvider().provider },
     { provide: MEDIA_TOKEN_ISSUER, useClass: LiveKitTokenIssuer },
     // AI #7 (D-2). The gateway ALONE cannot be the publisher: in the worker
     // process there is no Socket.IO server, so gateway.toThread()'s

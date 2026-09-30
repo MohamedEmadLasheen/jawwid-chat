@@ -2,8 +2,15 @@
 
 **Priority:** **P0 — PRD MVP scope** · **Platform:** Flutter (parent + teacher) · **Owner:** AI #3
 
-> **Student Groups are MVP** (`docs/qa/authoritative-scope.md` §3). They are the **only**
-> permitted Teacher↔Parent communication path — **BR-1**.
+> **Student Groups are MVP** (`docs/qa/authoritative-scope.md` §3).
+>
+> **Updated 2026-09-23 by PD-6.** This line previously read *"They are the **only** permitted
+> Teacher↔Parent communication path — **BR-1**"*. That was correct under PRD v0.1 and is
+> superseded: a parent and an **authorized** teacher may also hold a direct 1:1 conversation
+> and call (`screens/call.md` §1). The Student Group remains a channel in its own right and
+> keeps **all** of its own rules, including required admin presence (C-4) and PD-2 — a parent
+> may join a group call but never start one. The two channels are separate authorization
+> models and must not be merged.
 >
 > **Corrected on review.** An earlier revision framed this screen as conditional on the brief's
 > one-thread-per-family model and recommended a data shape. Both are **withdrawn**: the brief's
@@ -157,7 +164,7 @@ the role, so a screen-reader user knows who is a teacher without relying on a vi
 | G1 | A **Student Group** entity and membership, supporting **one group per student** and therefore several concurrent groups per family | AI #1 / AI #2 (C-2) |
 | G2 | A **teacher principal** — see `screens/teacher-home.md` §8 (C-1 / OD-04) | AI #1 |
 | G3 | Group membership that **follows the teacher↔learner assignment automatically**. A teacher change that does not update membership is a privacy incident, not a data gap | AI #1 (OD-04) |
-| G4 | **BR-1 enforced server-side** on a single *(actor, conversation, channel)* path covering messaging **and** calling, with a stable machine-readable error code | AI #1 (C-2 / JC-002) |
+| G4 | **BR-1 (as re-versioned by PD-6) enforced server-side** on a single *(actor, conversation, channel)* path covering messaging **and** calling, with a stable machine-readable error code (`COMM.TEACHER_PARENT_NOT_AUTHORIZED`) | AI #1 (C-2 / JC-002) |
 | G5 | A resolution of **"required admin presence"** (OD-03) | product owner |
 | G6 | Approval state + per-conversation policy — `screens/approvals.md` §9 | AI #2 |
 | G7 | Group call authorization — `screens/call.md` §8 | AI #1 |

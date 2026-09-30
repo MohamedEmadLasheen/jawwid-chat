@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
 import { ConversationService } from '../conversations/conversation.service';
 import { MessageService } from '../messages/message.service';
+import { CallService } from '../calls/call.service';
 import { toConversationDto } from '../contracts/dto';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
@@ -19,6 +20,7 @@ export class ConversationController {
   constructor(
     private readonly conversations: ConversationService,
     private readonly messages: MessageService,
+    private readonly calls: CallService,
   ) {}
 
   /**
@@ -49,12 +51,19 @@ export class ConversationController {
 
   /**
    * Get or create the 1:1 channel with another actor.
-   * A teacher/parent pair is refused here with COMM.BR1_TEACHER_PARENT_DIRECT.
+   *
+   * PD-6: a teacher/parent pair is permitted only where the server-resolved
+   * relationship authorizes it, and refused otherwise with
+   * COMM.TEACHER_PARENT_NOT_AUTHORIZED. `withActorId` selects the other party;
+   * it asserts nothing about the relationship with them.
    */
   @Post('direct')
   async direct(@ActorId() actorId: string, @Body() body: { withActorId: string }) {
     const conv = await this.conversations.getOrCreateDirect(actorId, body.withActorId);
-    return toConversationDto(conv);
+    // PD-6: members[] so the client can tell a Parent<->Teacher channel from a
+    // Parent<->Admin one. The caller was just authorized into this conversation
+    // by getOrCreateDirect, so no second read check is needed.
+    return toConversationDto(conv, await this.conversations.membersOf(conv.id));
   }
 
   /** The official group for a learner, created from Core relationships. */
@@ -70,22 +79,58 @@ export class ConversationController {
     return conv ? toConversationDto(conv) : { synced: false };
   }
 
+  /**
+   * One conversation, with its membership.
+   *
+   * `members[]` is required here by API-CONTRACT section 3.4 and is what lets a
+   * client classify a `direct` conversation after PD-6. readWithMembers()
+   * authorizes the read explicitly rather than leaving it to the preferences
+   * upsert below to throw.
+   */
   @Get(':id')
   async get(@ActorId() actorId: string, @Param('id') id: string) {
-    const conv = await this.conversations.requireConversation(id);
-    // Unchanged: setPreferences is where this route's authorization happens
-    // today (API-CONTRACT 3.4 records the wart and Phase 1's fix). It runs
-    // BEFORE the count, so an actor who may not read this conversation is
-    // refused here and never reaches the query below.
+    // Authorization is EXPLICIT here. It used to ride on setPreferences
+    // throwing (API-CONTRACT 3.4 recorded the wart), which meant the route was
+    // readable only by tracing a side effect. readWithMembers runs canRead
+    // against the actor's membership and refuses before anything is read.
+    const { conversation, members } = await this.conversations.readWithMembers(id, actorId);
+
+    // setPreferences stays, for what it is actually for: the per-actor
+    // preference/read row. It is no longer this route's access control.
     await this.conversations.setPreferences(id, actorId, {});
 
-    // Members, with display names (mobile gap O3). AFTER the authorization
-    // above, and only on this route: the list endpoint deliberately does not
-    // load them, because resolving every member of every conversation would be
-    // an identity query per row for a screen that renders none of them.
-    return toConversationDto(conv, await this.conversations.membersOf(id), {
+    // Members carry display names (mobile gap O3); `readWithMembers` resolves
+    // them through the one batch primitive. Only on this route: the LIST
+    // endpoint deliberately does not load members, because that would be an
+    // identity batch per row for a screen that renders none of them.
+    return toConversationDto(conversation, members, {
       unreadCount: await this.messages.unreadCount(id, actorId),
     });
+  }
+
+  /**
+   * May the caller start a call in this conversation? ADVISORY.
+   *
+   * The interface needs this because it may not work it out for itself:
+   * `screens/call.md` section 4 requires the call affordance to be ABSENT
+   * where the backend does not authorize the pairing, and forbids the client
+   * inferring which pairings those are. Since PD-6 that set is data.
+   *
+   * NOT AN AUTHORIZATION. `canCall: true` is this instant's answer and does not
+   * promise that the POST which follows will succeed -- `POST /calls` decides
+   * again, from scratch, and is the only thing that authorizes a call. A
+   * relationship revoked in between is refused there, as it should be.
+   *
+   * Read access is established first, so this cannot be used to probe a
+   * conversation the caller cannot open: that case returns the read path's own
+   * error, not a capability answer.
+   *
+   * Response: `{ canCall, code }` -- the code a stable COMM.* value or null,
+   * and nothing else. No ids, no names, no relationship detail.
+   */
+  @Get(':id/call-capability')
+  async callCapability(@ActorId() actorId: string, @Param('id') id: string) {
+    return this.calls.callCapability(id, actorId);
   }
 
   /** Membership mutations are staff-only, and always carry a reason. */

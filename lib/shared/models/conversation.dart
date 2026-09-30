@@ -1,7 +1,13 @@
 /// The kinds of conversation this client can render.
 ///
-/// There is deliberately no "direct chat with a teacher/parent" kind — the type system itself
-/// refuses to represent the forbidden channel (§4).
+/// PD-6 (2026-09-23) added [teacherParentDirect]. An earlier revision of this file said
+/// "there is deliberately no 'direct chat with a teacher/parent' kind — the type system
+/// itself refuses to represent the forbidden channel". That channel is no longer forbidden
+/// when the server authorizes the relationship, so the type must now be able to name it.
+///
+/// This enum is **presentation and domain mapping only**. It never grants anything: the
+/// server decides who may speak to whom and refuses anything else with
+/// `COMM.TEACHER_PARENT_NOT_AUTHORIZED`, whatever this client believes a row to be.
 enum ConversationKind {
   /// The family's single continuous support thread. Exactly one per family, and its identity
   /// survives a change of handling admin (§12).
@@ -11,12 +17,39 @@ enum ConversationKind {
   studentGroup,
 
   /// A 1:1 with Jawwid staff. Available to both parents and teachers.
-  adminDirect;
+  adminDirect,
+
+  /// A 1:1 between a parent and a teacher the server has authorized (PD-6).
+  ///
+  /// Only ever produced when the payload actually says so — exactly one `contact` member
+  /// and exactly one `teacher` member. It is never inferred from the conversation type,
+  /// from a title, or from an id.
+  teacherParentDirect,
+
+  /// A direct conversation whose participants could not be established.
+  ///
+  /// The honest answer when the payload carries no members (the list endpoint does not send
+  /// them, by contract) or carries a set this client does not recognise. It groups and
+  /// renders exactly like [adminDirect]; what it must never do is stand in for
+  /// [teacherParentDirect], because that is the one classification a wrong guess could turn
+  /// into an affordance the relationship does not support.
+  unknownDirect;
+
+  /// True for every 1:1 shape, known or not.
+  ///
+  /// List grouping and filtering must use this rather than testing `== adminDirect`: a new
+  /// member of this enum that no filter recognises makes conversations silently vanish from
+  /// the chat list, which is a worse failure than mislabelling one.
+  bool get isDirect =>
+      this == ConversationKind.adminDirect ||
+      this == ConversationKind.teacherParentDirect ||
+      this == ConversationKind.unknownDirect;
 
   static ConversationKind parse(String? raw) => switch (raw) {
         'jawwid_support' => ConversationKind.jawwidSupport,
         'student_group' => ConversationKind.studentGroup,
         'admin_direct' => ConversationKind.adminDirect,
+        'teacher_parent_direct' => ConversationKind.teacherParentDirect,
         _ => ConversationKind.adminDirect,
       };
 }

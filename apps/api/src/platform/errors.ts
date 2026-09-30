@@ -5,6 +5,25 @@
  */
 export enum CommErrorCode {
   // --- BR-1 and the communication matrix ---
+  /**
+   * PD-6 (2026-09-23). A teacher and a parent would share a direct 1:1
+   * conversation or call with NO authorized relationship between them.
+   *
+   * "Authorized" is the relationship predicate: a learner in the contact's
+   * family, taught by that teacher, both sides live, one organization. It is
+   * resolved from Jawwid Core data and never from anything the client sent.
+   */
+  TEACHER_PARENT_NOT_AUTHORIZED = 'COMM.TEACHER_PARENT_NOT_AUTHORIZED',
+  /**
+   * DEPRECATED by PD-6. The server no longer emits this for any authorization
+   * decision: the blanket teacher<->parent prohibition it named is gone, and
+   * an unauthorized pairing now reports TEACHER_PARENT_NOT_AUTHORIZED above.
+   *
+   * Kept, not deleted, for exactly one reason: shipped clients treat this code
+   * as terminal (never retried), and removing the constant would delete the
+   * contract those builds were written against. Nothing in src/ raises it.
+   * Asserted by test/unit/authorization/br1-conformance.spec.ts.
+   */
   BR1_TEACHER_PARENT_DIRECT = 'COMM.BR1_TEACHER_PARENT_DIRECT',
   BR1_ADMIN_PRESENCE_REQUIRED = 'COMM.BR1_ADMIN_PRESENCE_REQUIRED',
   ROLE_CANNOT_MESSAGE_FAMILY = 'COMM.ROLE_CANNOT_MESSAGE_FAMILY',
@@ -51,6 +70,20 @@ export enum CommErrorCode {
   CALL_NOT_FOUND = 'COMM.CALL_NOT_FOUND',
   CALL_ALREADY_ENDED = 'COMM.CALL_ALREADY_ENDED',
   CALL_NOT_A_PARTICIPANT = 'COMM.CALL_NOT_A_PARTICIPANT',
+  /**
+   * The actor is recorded on this call but has already left it -- they
+   * declined, or were dropped. A participant row survives leaving, so
+   * "is a participant" and "is still on the call" are different questions and
+   * the second one is the one that governs joining.
+   */
+  CALL_PARTICIPANT_LEFT = 'COMM.CALL_PARTICIPANT_LEFT',
+  /** The call is no longer ringing, so there is nothing left to decline. */
+  CALL_NOT_RINGING = 'COMM.CALL_NOT_RINGING',
+  /**
+   * Every other participant has left, so a direct call has already been
+   * refused. Accepting it would record an answer nobody gave.
+   */
+  CALL_ALREADY_DECLINED = 'COMM.CALL_ALREADY_DECLINED',
   /** PD-2: a family contact may join a Student Group call but never start one. */
   PARENT_CANNOT_START_GROUP_CALL = 'COMM.PARENT_CANNOT_START_GROUP_CALL',
 
