@@ -302,6 +302,7 @@
   "@saveAction": {
     "description": "Saves an attachment to the device."
   },
+  "attachCamera": "الكاميرا",
   "attachPhoto": "صورة",
   "@attachPhoto": {
     "description": "Attachment menu entry for the photo library."
@@ -338,6 +339,8 @@
   "@attachmentPickFailed": {
     "description": "Shown when the photo or file picker fails."
   },
+  "cameraPermissionDenied": "يحتاج جَوِّد إلى إذن لاستخدام الكاميرا. يمكنك السماح بذلك من الإعدادات.",
+  "cameraUnavailable": "لا توجد كاميرا متاحة على هذا الجهاز.",
   "attachmentPermissionDenied": "يحتاج جَوِّد إلى إذن للوصول إلى صورك. يمكنك السماح بذلك من الإعدادات.",
   "@attachmentPermissionDenied": {
     "description": "Shown when photo-library permission was refused."

@@ -1243,6 +1243,12 @@ abstract class L10n {
   /// **'Save'**
   String get saveAction;
 
+  /// No description provided for @attachCamera.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera'**
+  String get attachCamera;
+
   /// Attachment menu entry for the photo library.
   ///
   /// In en, this message translates to:
@@ -1296,6 +1302,18 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Couldn\'t open that. Please try again.'**
   String get attachmentPickFailed;
+
+  /// No description provided for @cameraPermissionDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Jawwid needs permission to use the camera. You can allow it in Settings.'**
+  String get cameraPermissionDenied;
+
+  /// No description provided for @cameraUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This device has no camera available.'**
+  String get cameraUnavailable;
 
   /// Shown when photo-library permission was refused.
   ///

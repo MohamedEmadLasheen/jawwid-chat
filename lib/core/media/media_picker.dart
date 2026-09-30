@@ -46,6 +46,16 @@ abstract interface class MediaPicker {
   /// One photo from the device's library. Null when the user backed out.
   Future<PendingAttachment?> pickImage();
 
+  /// One photo from the device's CAMERA. Null when the user backed out.
+  ///
+  /// A separate method rather than a parameter on [pickImage], because the two
+  /// fail differently and the difference reaches the user: a denied camera and
+  /// a denied photo library are two permissions, asked at different moments,
+  /// with different Settings switches behind them. What they share -- the
+  /// downscaling, the resulting [PendingAttachment], and every step after it --
+  /// is shared in the implementation, not flattened into one call here.
+  Future<PendingAttachment?> captureImage();
+
   /// One file of any allowed type. Null when the user backed out.
   Future<PendingAttachment?> pickFile();
 }
@@ -57,14 +67,29 @@ class PluginMediaPicker implements MediaPicker {
   final ImagePicker _images;
 
   @override
-  Future<PendingAttachment?> pickImage() async {
+  Future<PendingAttachment?> pickImage() => _image(ImageSource.gallery);
+
+  @override
+  Future<PendingAttachment?> captureImage() => _image(ImageSource.camera);
+
+  /// One image, from wherever it comes from.
+  ///
+  /// The camera and the library differ in exactly one argument. Everything the
+  /// product actually cares about -- the downscale, the re-encode, the failure
+  /// classification, the shape handed to the upload -- is identical, and
+  /// writing it twice is how a photo and a capture end up as two subtly
+  /// different attachments.
+  Future<PendingAttachment?> _image(ImageSource source) async {
     final XFile? picked;
     try {
       // Downscaled and re-encoded before it ever reaches the upload. A modern
       // phone camera produces 4-6 MB images that no one looks at at full size
       // in a chat bubble, and this audience is on mobile data (§21, §33).
+      // This matters MORE for a capture than for a pick: a fresh photo is the
+      // full sensor resolution, where a library photo has often been through
+      // something already.
       picked = await _images.pickImage(
-        source: ImageSource.gallery,
+        source: source,
         maxWidth: 1920,
         maxHeight: 1920,
         imageQuality: 85,
@@ -184,12 +209,22 @@ class PluginMediaPicker implements MediaPicker {
 
   /// `image_picker` reports a denial as a `PlatformException`, and the code is
   /// the only thing that distinguishes it from a device that cannot pick at all.
+  ///
+  /// Both halves matter for the camera. iOS raises `camera_access_denied` when
+  /// the permission was refused -- caught by the `denied` test below, which is
+  /// deliberately broad because the exact code has changed between plugin
+  /// versions -- and `no_available_camera` on a device or simulator that has
+  /// none, which is a different message to show and not a trip to Settings.
   static MediaPickFailure _imageFailure(Exception error) {
     final text = error.toString().toLowerCase();
-    if (text.contains('photo_access_denied') || text.contains('denied')) {
+    if (text.contains('photo_access_denied') ||
+        text.contains('camera_access_denied') ||
+        text.contains('denied')) {
       return MediaPickFailure.permissionDenied;
     }
-    if (text.contains('no_available_camera') || text.contains('unsupported')) {
+    if (text.contains('no_available_camera') ||
+        text.contains('no_camera') ||
+        text.contains('unsupported')) {
       return MediaPickFailure.unsupported;
     }
     return MediaPickFailure.failed;

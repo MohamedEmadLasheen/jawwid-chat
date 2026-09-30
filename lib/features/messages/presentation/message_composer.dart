@@ -311,6 +311,15 @@ Future<AttachmentSource?> showAttachmentMenu(BuildContext context) {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Camera first: the commonest reason a parent attaches anything at
+            // all is something in front of them right now -- a page of
+            // homework, a certificate -- not a file they saved earlier.
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: Text(l10n.attachCamera),
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(AttachmentSource.camera),
+            ),
             ListTile(
               leading: const Icon(Icons.photo_outlined),
               title: Text(l10n.attachPhoto),
@@ -329,4 +338,10 @@ Future<AttachmentSource?> showAttachmentMenu(BuildContext context) {
   );
 }
 
-enum AttachmentSource { photo, file }
+/// Where an attachment comes from.
+///
+/// All three end in the SAME place: one `PendingAttachment`, through the same
+/// authorize -> upload -> send pipeline, arriving as the same message. The
+/// source is a question about the picker and about which permission is asked
+/// for; it is not a question about the attachment.
+enum AttachmentSource { camera, photo, file }

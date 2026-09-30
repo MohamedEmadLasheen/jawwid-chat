@@ -652,6 +652,9 @@ class L10nAr extends L10n {
   String get saveAction => 'حفظ';
 
   @override
+  String get attachCamera => 'الكاميرا';
+
+  @override
   String get attachPhoto => 'صورة';
 
   @override
@@ -678,6 +681,13 @@ class L10nAr extends L10n {
 
   @override
   String get attachmentPickFailed => 'تعذّر فتح ذلك. برجاء المحاولة مرة أخرى.';
+
+  @override
+  String get cameraPermissionDenied =>
+      'يحتاج جَوِّد إلى إذن لاستخدام الكاميرا. يمكنك السماح بذلك من الإعدادات.';
+
+  @override
+  String get cameraUnavailable => 'لا توجد كاميرا متاحة على هذا الجهاز.';
 
   @override
   String get attachmentPermissionDenied =>
