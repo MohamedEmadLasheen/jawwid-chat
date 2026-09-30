@@ -761,7 +761,7 @@ export class CallService {
 
     const calls = await this.prisma.call.findMany({
       where: { conversationId },
-      include: { participants: true },
+      include: CallService.HISTORY_INCLUDE,
       orderBy: { startedAt: 'desc' },
       take: 100,
     });
@@ -854,7 +854,7 @@ export class CallService {
             }
           : {}),
       },
-      include: { participants: true },
+      include: CallService.HISTORY_INCLUDE,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       // One more than asked for, to know whether another page exists without a
       // second count query.
@@ -879,6 +879,37 @@ export class CallService {
         calls.length > limit && last ? encodeHistoryCursor(last.startedAt, last.id) : null,
     };
   }
+
+  /**
+   * The participant include BOTH history routes use.
+   *
+   * THE ORDER IS PART OF THE RESPONSE. Neither query said how to order the
+   * relation, so neither got a guarantee: Postgres returns an unordered result
+   * in whatever order the chosen plan produces. The two routes select different
+   * sets of calls -- one conversation against a cursor-paged window -- so they
+   * can be planned differently and return the same participants in different
+   * orders. They did: four failures in twelve full integration runs,
+   * transposing in BOTH directions, which is what rules out one route being
+   * consistently reversed and leaves "no order was specified" as the cause.
+   *
+   * That is a defect in the RESPONSE, not in the test that noticed it. Two
+   * identical requests must not produce different JSON, or a client that
+   * caches, diffs or renders a participant list sees it reshuffle for no
+   * reason.
+   *
+   * `invitedAt` is the meaningful order -- who was brought onto the call first.
+   * It is not sufficient alone: participants are created by one `createMany`
+   * inside a transaction, so they share `now()` to the microsecond. `actorId`
+   * breaks that tie deterministically, which is all a tiebreak has to do.
+   *
+   * Declared once because the two routes are documented to share a mapper;
+   * sharing the mapper and not the query is exactly how they came to disagree.
+   */
+  private static readonly HISTORY_INCLUDE = {
+    participants: {
+      orderBy: [{ invitedAt: 'asc' }, { actorId: 'asc' }],
+    },
+  } as const satisfies Prisma.CallInclude;
 
   /**
    * ONE history row, and the only place a call becomes one.

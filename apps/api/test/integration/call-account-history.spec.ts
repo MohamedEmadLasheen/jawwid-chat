@@ -384,6 +384,63 @@ describe('11/12/13. what a history row may carry', () => {
     );
   });
 
+  /**
+   * The participant order is part of the response, and it is DETERMINISTIC.
+   *
+   * The test below ("they share a mapper") caught this, but only by chance: the
+   * two routes returned the same two people in opposite orders in FOUR OF TWELVE
+   * full integration runs, transposing in both directions. Neither query said
+   * how to order the relation, so the order came from whatever plan Postgres
+   * chose -- and the two routes select different numbers of calls, so they can
+   * choose differently.
+   *
+   * A GROUP call, because a direct one may not have more than two participants
+   * (`assert_call_participant_rules`) and two rows are not enough to tell a
+   * sorted order from an accidental one. The invitation times are then written
+   * in the REVERSE of the order the rows were created in, so the documented
+   * order and the stored order disagree by construction: an unordered read
+   * returns them as stored, `invited_at, actor_id` returns them reversed.
+   */
+  it('orders participants by invitedAt, not by how they were stored', async () => {
+    const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
+    // Staff starts it: PD-2 forbids a parent starting a group call.
+    const { callId } = await g.calls.start(group.id, s.ownerId);
+
+    const stored = await g.prisma.callParticipant.findMany({
+      where: { callId },
+      orderBy: { id: 'asc' },
+    });
+    expect(stored.length).toBeGreaterThanOrEqual(3);
+
+    // Reverse the invitation times against the stored order: the row that
+    // sorts FIRST by id was invited LAST, so `invited_at ascending` is the
+    // exact reverse of it.
+    for (const [i, row] of stored.entries()) {
+      await g.prisma.$executeRawUnsafe(
+        `update chat.call_participant
+            set invited_at = now() - make_interval(secs => ${(i + 1) * 60})
+          where id = '${row.id}'::uuid`,
+      );
+    }
+
+    const documented = (
+      await g.prisma.callParticipant.findMany({
+        where: { callId },
+        orderBy: [{ invitedAt: 'asc' }, { actorId: 'asc' }],
+      })
+    ).map((r) => r.actorId);
+
+    // The two disagree, which is the whole point of the fixture.
+    expect(documented).not.toEqual(stored.map((r) => r.actorId));
+
+    const [fromConversation] = await g.calls.history(group.id, s.parentId);
+    const page = await g.calls.historyForActor(s.parentId);
+    const fromAccount = page.items.find((c) => c.id === callId)!;
+
+    expect(fromConversation.participants.map((p) => p.actorId)).toEqual(documented);
+    expect(fromAccount.participants.map((p) => p.actorId)).toEqual(documented);
+  });
+
   it('the per-conversation endpoint and this one agree, because they share a mapper',
     async () => {
       const mine = await callBetween(s.parentId, s.ownerId, s.ownerId);
