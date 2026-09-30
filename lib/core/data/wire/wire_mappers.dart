@@ -28,14 +28,86 @@ abstract final class WireMappers {
   static DateTime? parseTime(Object? raw) =>
       raw is String ? DateTime.tryParse(raw)?.toLocal() : null;
 
-  static ConversationKind conversationKind(String? type) => switch (type) {
+  /// Classify a conversation from its wire payload.
+  ///
+  /// Before PD-6 the type alone decided this: a `direct` conversation could only be with
+  /// staff, because BR-1 refused every other 1:1. Since PD-6 a `direct` conversation may be
+  /// Parent <-> Admin, Teacher <-> Admin **or** Parent <-> Teacher, and the type no longer
+  /// distinguishes them.
+  ///
+  /// So the participants decide, and only the participants the payload actually states.
+  ///
+  /// WHAT THIS IS NOT. This is not an authorization decision and cannot become one. The
+  /// server authorizes the channel and refuses anything else with
+  /// `COMM.TEACHER_PARENT_NOT_AUTHORIZED`; classifying a row as
+  /// [ConversationKind.teacherParentDirect] grants the viewer nothing they did not already
+  /// have. It decides how the row is presented, nothing more.
+  ///
+  /// WHY `actorKind` AND NOT `memberRole`. `memberRole` is a label on the membership row
+  /// and a teacher can carry `member_role: 'admin'` — red-team RT-025 C5 is exactly that
+  /// attack against the server. `actorKind` is the identity's own kind and is the field the
+  /// server's own rules are written against, so it is the field to read here too.
+  ///
+  /// FAILING CLOSED. Anything other than exactly one `contact` and exactly one `teacher` is
+  /// [ConversationKind.unknownDirect] — no members (the list endpoint sends none, by
+  /// contract), an empty list, a malformed entry, or a set this client does not recognise.
+  /// Guessing [ConversationKind.teacherParentDirect] from a type, a title or an id is the
+  /// one mistake this function exists to make impossible.
+  static ConversationKind conversationKind(
+    String? type, {
+    Object? members,
+  }) =>
+      switch (type) {
         Wire.conversationOfficial => ConversationKind.jawwidSupport,
         Wire.conversationStudentGroup => ConversationKind.studentGroup,
         Wire.conversationClassGroup => ConversationKind.studentGroup,
-        // A `direct` conversation from this client's perspective is always with staff: the
-        // backend refuses a teacher/parent direct channel outright (BR1).
+        Wire.conversationDirect => _directKind(members),
+        // An unknown type is not a direct conversation this client understands.
+        // adminDirect remains the pre-PD-6 default for backward compatibility;
+        // what matters is that it is never teacherParentDirect.
         _ => ConversationKind.adminDirect,
       };
+
+  /// The participant shapes of a `direct` conversation. Order is irrelevant: a set is a set.
+  static ConversationKind _directKind(Object? members) {
+    if (members is! List) return ConversationKind.unknownDirect;
+
+    var contacts = 0;
+    var teachers = 0;
+    var staff = 0;
+    var unrecognised = 0;
+
+    for (final entry in members) {
+      if (entry is! Map) {
+        unrecognised += 1;
+        continue;
+      }
+      switch (entry['actorKind']) {
+        case Wire.actorContact:
+          contacts += 1;
+        case Wire.actorTeacher:
+          teachers += 1;
+        case Wire.actorStaff:
+          staff += 1;
+        default:
+          unrecognised += 1;
+      }
+    }
+
+    if (unrecognised > 0) return ConversationKind.unknownDirect;
+
+    // Exactly one of each, and nobody else present. A third participant means this is not
+    // the 1:1 the server's two-participant ceiling describes, so it is not classified.
+    if (contacts == 1 && teachers == 1 && staff == 0) {
+      return ConversationKind.teacherParentDirect;
+    }
+    // Parent <-> Admin and Teacher <-> Admin: one staff member and one counterpart.
+    if (staff == 1 && contacts + teachers == 1) {
+      return ConversationKind.adminDirect;
+    }
+
+    return ConversationKind.unknownDirect;
+  }
 
   static ParticipantRole memberRole(String? role) => switch (role) {
         Wire.memberParent => ParticipantRole.parent,
@@ -134,7 +206,7 @@ abstract final class WireMappers {
 
     return Conversation(
       id: json['id']! as String,
-      kind: conversationKind(json['type'] as String?),
+      kind: conversationKind(json['type'] as String?, members: json['members']),
       title: (json['title'] as String?) ?? '',
       // Both from the DTO. They used to be parameters this mapper's caller had
       // to supply, because the payload carried neither — which meant the child
@@ -161,10 +233,22 @@ abstract final class WireMappers {
     );
   }
 
+  /// One message, from `MessageDto`.
+  ///
+  /// `authorName` now comes off the wire as `authorDisplayName` (gap O3 closed).
+  /// It used to be a named parameter defaulting to `''` because the DTO carried no
+  /// name at all and the caller had nothing to pass — so the parameter is gone
+  /// rather than left as a second, quieter way to set an identity.
+  ///
+  /// **Null or absent stays `''`, and the client resolves nothing.** The server
+  /// sends null for a system message (there is no person) and for an author whose
+  /// actor no longer resolves. `MessageBubble` then falls back to the ROLE label —
+  /// which is defensive presentation, **not** identity resolution: this client
+  /// never asks an identity endpoint for a missing name, and it never derives one
+  /// from the role, the actor kind, or conversation membership.
   static Message message(
     Map<String, Object?> json, {
     required String viewerActorId,
-    String authorName = '',
   }) {
     final authorId = json['authorId'] as String?;
     final isMine = authorId != null && authorId == viewerActorId;
@@ -190,7 +274,7 @@ abstract final class WireMappers {
       conversationId: (json['conversationId'] as String?) ?? '',
       sequence: parseSeq(json['seq']),
       authorId: authorId,
-      authorName: authorName,
+      authorName: _nonEmpty(json['authorDisplayName']) ?? '',
       authorRole: authorRole(json['authorKind'] as String?),
       kind: messageKind(json['type'] as String?),
       body: (json['body'] as String?) ?? '',
@@ -274,10 +358,21 @@ abstract final class WireMappers {
     return trimmed.isEmpty ? null : trimmed;
   }
 
-  static GroupMember groupMember(Map<String, Object?> json, {String displayName = ''}) {
+  /// One member of a conversation, from `ConversationMemberDto`.
+  ///
+  /// `displayName` now comes off the wire (gap O3 closed). It used to be a named
+  /// parameter defaulting to `''`, because the DTO carried no name at all and the
+  /// caller had nothing to pass — so the parameter is gone rather than left as a
+  /// second, quieter way to set a name.
+  ///
+  /// An absent or blank name stays `''`. The server sends `''` for a member whose
+  /// actor no longer resolves, and the UI renders that as `groupMemberUnresolved`
+  /// rather than an id — so empty is a value this client already knows how to
+  /// show, not a defect to paper over here.
+  static GroupMember groupMember(Map<String, Object?> json) {
     return GroupMember(
       id: (json['actorId'] as String?) ?? '',
-      displayName: displayName,
+      displayName: _nonEmpty(json['displayName']) ?? '',
       role: memberRole(json['memberRole'] as String?),
     );
   }

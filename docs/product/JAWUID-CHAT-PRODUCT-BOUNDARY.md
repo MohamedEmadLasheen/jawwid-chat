@@ -1,7 +1,9 @@
 # Jawwid Chat — Product Boundary
 
 Status: **CANONICAL** · Locked in Phase 0 (2026-09-07)
-Authority order: this document → `jawwid-chat-prd-v0.1.md` (product requirements) → everything else.
+Authority order: this document → `jawwid-chat-prd-v0.2.md` (the PD-6 amendment: §4 BR-1 and
+the §9 Teacher ↔ Parent calling row) → `jawwid-chat-prd-v0.1.md` (product requirements,
+in force everywhere v0.2 does not amend) → everything else.
 Supersedes as product direction: `docs/JAWWID_CHAT_BRIEF.{pdf,txt}` (Customer Success brief — **HISTORICAL**),
 `docs/architecture/decisions.md` ADR-001 ("build the brief" — **SUPERSEDED**),
 `docs/admin/backend-contract-required.md` (brief-derived — **HISTORICAL**).
@@ -120,10 +122,10 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 ## 4. Product decisions PD-1 to PD-6 — CLOSED
 
 PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
-exit gate, before `main` was baselined. **PD-6 was closed on 2026-09-23** and is
-recorded here in the same form. This section is the canonical record. Any
-document that contradicts it is superseded on that point, whatever its own
-status banner says.
+exit gate, before `main` was baselined. **PD-6 was closed by the product owner
+on 2026-09-23** and re-versions a rule the PRD calls constitutional; it follows
+the same six-field form. This section is the canonical record. Any document that
+contradicts it is superseded on that point, whatever its own status banner says.
 
 | ID | Subject | Status |
 |---|---|---|
@@ -132,7 +134,7 @@ status banner says.
 | PD-3 | Coverage model | **CLOSED** — explicit temporary assignment |
 | PD-4 | Representation of system-generated events | **CLOSED** — system messages |
 | PD-5 | Role model | **CLOSED** — `super_admin` exists from day one |
-| PD-6 | Teacher–Parent direct communication | **CLOSED** — permitted while the relationship is authorized |
+| **PD-6** | **Direct Parent ↔ Teacher communication** | **CLOSED** — allowed for an authorized relationship; re-versions BR-1 |
 
 ---
 
@@ -306,6 +308,8 @@ not govern whether the role exists.
 
 ---
 
+---
+
 ### PD-6 · Teacher–Parent direct communication
 
 **Closed 2026-09-23.**
@@ -381,18 +385,20 @@ per-parent teacher authorization records. Authorization is derived from the live
 Teacher ↔ Learner ↔ Family relationship. Introducing any of those mechanisms
 would require a new product decision.
 
-**Implementation phase.** The policy is closed **now**; the implementation is
-**not** done and is explicitly staged. Until each stage lands, the prohibition
-stands as built:
+**Implementation phase.** The policy was closed on 2026-09-23 and staged in
+four steps, each of which required that no BR-1 structural backstop and no BR-1
+security test be weakened before it:
 
 1. the relationship predicate, at the application and database layers, proven on its own;
 2. the authorization switch (`canOpenDirect`, and the calling path that shares it);
 3. re-versioned authorization tests;
 4. the database backstop migration, which must permit the authorized case without weakening the unauthorized one.
 
-No BR-1 structural backstop, and no BR-1 security test, may be weakened before
-its stage. The permitted case must be **added**; the prohibited case must remain
-exactly as strongly enforced as it is today.
+**All four have landed** (2026-09-24). The permitted case was **added**; the
+prohibited case is enforced exactly as strongly as before, and release gate
+**G-01** records the proof. What is *not* done is the calling product — see
+milestone **M4** in §5.1 and gate **G-06**. Policy and implementation now agree;
+neither asserts that a call carries audio.
 
 **Consequences.**
 - `AuthorizationService.canOpenDirect` gains an authorized Teacher↔Parent pair as a permitted direct pair. Unauthorized pairs keep returning `COMM.BR1_TEACHER_PARENT_DIRECT`.
@@ -400,6 +406,27 @@ exactly as strongly enforced as it is today.
 - `chat.enforce_direct_conversation_rules()` and `chat.assert_conversation_br1()` must learn the authorized case. Today they make a teacher+contact `direct` conversation unrepresentable, which is what closes RT-024/RT-025; that strength must survive for unauthorized pairs.
 - Revocation being evaluated per action means no authorization may be cached in a session, a socket, or a conversation row.
 - Student Group membership, C-4 admin presence, PD-1 and PD-2 are unaffected.
+
+- A new `RelationshipService` resolves the predicate from Prisma. `AuthorizationService` receives the **resolved fact** and gains no database access, so its database-free unit-test architecture is preserved.
+- `canOpenDirect` becomes asynchronous at its call sites, taking the resolved pairing.
+- The three decision sites change: `canOpenDirect`, `canSend` (teacher branch), `canCall`. Nothing else in the matrix moves.
+- A new database function `chat.teacher_parent_authorized(uuid, uuid)` enforces the same rule independently. The four BR-1 assertion functions are redirected onto it; the deferred constraint triggers and the `type`-immutability triggers are retained exactly as they are.
+- New stable error code `COMM.TEACHER_PARENT_NOT_AUTHORIZED`, HTTP 403. `COMM.BR1_TEACHER_PARENT_DIRECT` is **deprecated** — retained as a constant and still treated as terminal by clients, but no longer emitted by the server.
+- Release gate **G-01** is re-versioned; it is not retired.
+- Messages on the new direct channel **publish immediately**. No per-message admin approval is introduced. Audit logging, administrative visibility under existing permissions, moderation/reporting and the ability of an authorized admin to intervene are all unchanged.
+- The database backstop now joins real `chat.contact` / `chat.learner` / `chat.teacher` rows, so `db/tests/br1_invariants.sql` needs real relationship fixtures where it previously used synthetic actor ids.
+
+**Migration impact.** No historical migration is edited; one new forward
+migration carries the change. No data migration is required — the predicate
+reads relationships that already exist. Existing Student Groups, existing direct
+conversations and existing call history are untouched. The change is
+behaviour-widening for authorized pairs and behaviour-preserving for every other
+pairing, so no row becomes invalid under the new rule.
+
+**Explicitly NOT changed by this decision.**
+- **PD-2** stands: a parent may join a Student Group call but may never initiate one. The direct channel and the group channel are separate authorization models and must not be merged.
+- **C-4** stands: a Student Group pairing a teacher and a parent still requires a live Jawwid admin member.
+- RT-024 type-immutability, the two-participant ceiling on direct conversations and calls, tenant isolation, BR-2 (no phone numbers), BR-5 (history belongs to Jawwid), and every unrelated matrix denial — `contact+contact`, `teacher+teacher`, `staff+staff`, `ROLE_CANNOT_MESSAGE_FAMILY`.
 
 **Deprecated or conflicting behaviour.** PRD v0.1 §4 BR-1 ("No direct
 Teacher ↔ Parent communication") and its §9 calling-matrix row
@@ -414,7 +441,7 @@ parent they do not teach.
 
 ### Decisions still open after PD-1 to PD-6
 
-None. Any new product question is recorded here with a new
+None. PD-6 is closed. Any new product question is recorded here with a new
 `PD-n` and the same six fields: decision, canonical rule, implementation phase,
 consequences, deprecated behaviour, and the date it was closed.
 
@@ -429,3 +456,50 @@ consequences, deprecated behaviour, and the date it was closed.
 | 2 — Console & clients on the canonical contract | Admin Web rework, Flutter realtime client, notification dispatch, storage serving, coverage-window group membership (PD-1), system-event generation as system messages (PD-4) | broadcast, labels |
 | 3 — Communication features | broadcast, labels, class groups, search across chats | AI, video |
 | Later | AI suggestions, video, multi-tenant SaaS | stories/status built early, out of band — see `STORIES.md` §2 |
+
+### 5.1 Phases and milestones are two different axes
+
+The table above is the **phase map**: what each phase is allowed to change, and
+what it may not touch. It is a scope boundary, not a work plan, and it is the
+only phase numbering this repository recognises. **There is no phase beyond 3.**
+A numbered "phase" that does not appear in the table above is a working plan
+somebody held in their head or in a conversation — useful while it is being
+worked, and not a repository artifact. Do not record one here or anywhere else.
+
+The **delivery sequence** is a separate axis and lives in `jawwid-chat-prd-v0.1.md`
+§13.1 as milestones **M0–M5**, ordered by dependency and risk. Work is scheduled
+against a milestone; scope is bounded by a phase.
+
+**The next calling work is M4 — Calling, 1:1 and group voice.** Its deliverables
+are fixed by §13.1 and are, in order:
+
+1. CallKit / ConnectionService
+2. VoIP push
+3. Call history
+4. Call notifications
+
+M4 has not started. What exists today is the server-side policy, the call
+lifecycle and the media-token layer, together with verified LiveKit Cloud
+**control-plane** connectivity. No audio has been carried. `docs/qa/release-gate.md`
+G-06 is the gate that governs voice calling and is the place that records how far
+that has been proven — not this table.
+
+**Known dependencies of M4**, recorded so they are not rediscovered late. These
+are not additional deliverables — the four above are the deliverables — they are
+things M4 will run into:
+
+* **Media presence is not observed.** `call.participant_joined` means a
+  participant reached the media plane, and nothing in the system observes that.
+  An HTTP accept is not a media join and must never be made to emit that event
+  (`contracts/API-CONTRACT.md`, `POST /calls/:id/accept`). Observing it needs a
+  LiveKit webhook, which is not built.
+* **`GET /calls/history/:conversationId` is marked RECONCILE**, not EXISTS, in
+  `contracts/API-CONTRACT.md` — its response shape is not settled. Call history
+  is M4 deliverable 3 and starts there.
+* **The Flutter client has no calling of any kind** — no LiveKit SDK, no CallKit,
+  no ConnectionService, and `callRepositoryProvider` throws `UnimplementedError`
+  outside test wiring. The phase map puts the Flutter realtime client in Phase 2;
+  M4's client work sits on top of it.
+* **`RT-029` and `RT-030`** (`red-team/findings.md`) are open tenancy defects,
+  both contained and failing closed today. Neither blocks M4 and neither is
+  closed by it; they are tracked separately so M4 does not quietly absorb them.

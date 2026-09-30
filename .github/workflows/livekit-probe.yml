@@ -1,0 +1,64 @@
+name: LiveKit probe
+
+# Verify that an environment's LiveKit Cloud credentials actually work.
+#
+# WHY THIS RUNS IN CI RATHER THAN ON A LAPTOP
+# -------------------------------------------
+# The probe needs LIVEKIT_API_SECRET. Running it locally means the secret exists
+# in somebody's shell, in their history if they are careless, and in whatever
+# they paste when they report the result. Running it here means the secret is
+# read by GitHub from the environment it is scoped to, used for one HTTPS
+# request, and never leaves the runner -- while the result is visible to anyone
+# who may read Actions logs.
+#
+# MANUAL ONLY. `workflow_dispatch` and nothing else: this reaches a third-party
+# service with production-shaped credentials, so it runs when a person asks,
+# never on a push and never on a schedule.
+#
+# The probe prints no key, secret, token or URL (scripts/infra/livekit-probe.sh),
+# and Actions masks registered secrets in logs regardless. Both, deliberately.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which environment's credentials to verify
+        required: true
+        default: staging
+        type: choice
+        options: [staging, production]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Control plane
+    runs-on: ubuntu-latest
+    # Scopes the secrets to the chosen environment. A job that does not name it
+    # cannot read them.
+    environment:
+      name: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify LiveKit Cloud control-plane connectivity
+        env:
+          LIVEKIT_URL: ${{ vars.LIVEKIT_URL }}
+          LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET: ${{ secrets.LIVEKIT_API_SECRET }}
+        run: |
+          # Exit 78 means a value is missing; 1 means LiveKit refused or could
+          # not be reached; 0 means the endpoint answered and the credentials
+          # authenticated. The script decides -- this step only runs it.
+          bash scripts/infra/livekit-probe.sh
+
+      - name: What this did and did not prove
+        if: always()
+        run: |
+          echo "PROVEN (on success): the endpoint is reachable, the API key is"
+          echo "recognised, and the API secret is correct for it."
+          echo
+          echo "NOT PROVEN: that audio flows. A participant joining a room,"
+          echo "publishing a microphone and subscribing to remote audio needs a"
+          echo "media client and two devices, and is a later phase."

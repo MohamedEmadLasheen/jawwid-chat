@@ -249,7 +249,26 @@ describe('the audience is resolved server-side', () => {
     const ids = (await prisma.storyRecipient.findMany({ where: { storyId: id } }))
       .map((r) => r.actorId)
       .sort();
-    expect(ids).toEqual([s.teacherId, s.newTeacherId].sort());
+
+    // Asserted against the ACTIVE TEACHERS THE DATABASE HOLDS, not against a list
+    // of fixture ids. This test names its own invariant -- every active teacher,
+    // and only those -- and a hard-coded population expressed neither half: it
+    // failed the moment a suite that needed a third teacher widened the shared
+    // seed, which is a fixture change and not a Stories regression.
+    //
+    // Exhaustive equality is kept, because it is what proves the "only": an
+    // inactive or departed teacher appearing here would make the sets differ.
+    const active = (
+      await prisma.teacher.findMany({
+        where: { isActive: true, leftAt: null },
+        select: { id: true },
+      })
+    )
+      .map((teacher) => teacher.id)
+      .sort();
+
+    expect(active.length).toBeGreaterThanOrEqual(2);
+    expect(ids).toEqual(active);
   });
 
   it('assigned_families reaches only the families the author supervises', async () => {

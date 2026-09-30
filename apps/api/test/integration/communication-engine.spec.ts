@@ -31,8 +31,18 @@ async function parentAdminConversation() {
 }
 
 // -------------------------------------------------------------------------
-describe('BR-1 is enforced by the database, not only by the API', () => {
-  it('refuses a direct conversation containing both a teacher and a parent', async () => {
+describe('PD-6 — the relationship is enforced by the database, not only by the API', () => {
+  /**
+   * RE-VERSIONED 2026-09-23. This block used to assert that a teacher and a
+   * parent could never share a direct channel. PD-6 changed which pairs are
+   * forbidden, not whether the database enforces the answer, so every
+   * assertion here kept its shape and gained its opposite.
+   *
+   * The harness seeds teacherId as the assigned teacher of learnerId in
+   * parentId's family, so (teacherId, parentId) is AUTHORIZED and
+   * (unrelatedTeacherId, parentId) is not.
+   */
+  it('refuses a direct conversation pairing a teacher with an UNAUTHORIZED parent', async () => {
     const convId = randomUUID();
     await g.prisma.$executeRawUnsafe(
       `insert into chat.conversation (id, type, direct_key, family_id)
@@ -40,7 +50,7 @@ describe('BR-1 is enforced by the database, not only by the API', () => {
     );
     await g.prisma.$executeRawUnsafe(
       `insert into chat.conversation_member (conversation_id, actor_kind, actor_id, member_role)
-       values ('${convId}'::uuid, 'teacher', '${s.teacherId}'::uuid, 'teacher')`,
+       values ('${convId}'::uuid, 'teacher', '${s.unrelatedTeacherId}'::uuid, 'teacher')`,
     );
 
     // A direct SQL session, bypassing the API entirely, still cannot do it.
@@ -49,32 +59,62 @@ describe('BR-1 is enforced by the database, not only by the API', () => {
         `insert into chat.conversation_member (conversation_id, actor_kind, actor_id, member_role)
          values ('${convId}'::uuid, 'contact', '${s.parentId}'::uuid, 'parent')`,
       ),
-    ).rejects.toThrow(/BR-1 violation/);
+    ).rejects.toThrow(/PD-6 violation/);
   });
 
-  it('refuses a direct call pairing a teacher with a parent', async () => {
-    const conv = await g.conversations.getOrCreateDirect(s.teacherId, s.ownerId);
+  it('PERMITS the same shape when the relationship is authorized', async () => {
+    // The positive control. Without it the assertion above could be passing
+    // because the database rejects every direct teacher/contact pairing, which
+    // is precisely the behaviour PD-6 removed.
+    const convId = randomUUID();
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.conversation (id, type, direct_key, family_id)
+       values ('${convId}'::uuid, 'direct', 'allowed-${convId}', '${s.familyId}'::uuid)`,
+    );
+    await g.prisma.$executeRawUnsafe(
+      `insert into chat.conversation_member (conversation_id, actor_kind, actor_id, member_role)
+       values ('${convId}'::uuid, 'teacher', '${s.teacherId}'::uuid, 'teacher')`,
+    );
+    await expect(
+      g.prisma.$executeRawUnsafe(
+        `insert into chat.conversation_member (conversation_id, actor_kind, actor_id, member_role)
+         values ('${convId}'::uuid, 'contact', '${s.parentId}'::uuid, 'parent')`,
+      ),
+    ).resolves.toBeDefined();
+  });
+
+  it('refuses a direct call pairing a teacher with an UNAUTHORIZED parent', async () => {
+    const conv = await g.conversations.getOrCreateDirect(s.unrelatedTeacherId, s.ownerId);
     const callId = randomUUID();
     await g.prisma.$executeRawUnsafe(
       `insert into chat.call (id, conversation_id, initiator_id, type, room_name)
-       values ('${callId}'::uuid, '${conv.id}'::uuid, '${s.teacherId}'::uuid, 'direct', 'room-${callId}')`,
+       values ('${callId}'::uuid, '${conv.id}'::uuid, '${s.unrelatedTeacherId}'::uuid, 'direct', 'room-${callId}')`,
     );
     await g.prisma.$executeRawUnsafe(
       `insert into chat.call_participant (call_id, actor_id, actor_kind)
-       values ('${callId}'::uuid, '${s.teacherId}'::uuid, 'teacher')`,
+       values ('${callId}'::uuid, '${s.unrelatedTeacherId}'::uuid, 'teacher')`,
     );
     await expect(
       g.prisma.$executeRawUnsafe(
         `insert into chat.call_participant (call_id, actor_id, actor_kind)
          values ('${callId}'::uuid, '${s.parentId}'::uuid, 'contact')`,
       ),
-    ).rejects.toThrow(/BR-1 violation/);
+    ).rejects.toThrow(/PD-6 violation/);
   });
 
-  it('the API refuses to create the channel in the first place', async () => {
-    await expect(g.conversations.getOrCreateDirect(s.teacherId, s.parentId)).rejects.toMatchObject({
-      code: CommErrorCode.BR1_TEACHER_PARENT_DIRECT,
+  it('the API refuses to create the channel for an unauthorized pair', async () => {
+    await expect(
+      g.conversations.getOrCreateDirect(s.unrelatedTeacherId, s.parentId),
+    ).rejects.toMatchObject({
+      code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
     });
+  });
+
+  it('the API creates it for an authorized pair, in either direction', async () => {
+    const a = await g.conversations.getOrCreateDirect(s.teacherId, s.parentId);
+    const b = await g.conversations.getOrCreateDirect(s.parentId, s.teacherId);
+    expect(a.id).toBe(b.id); // direct_key is the sorted pair; one channel, not two
+    expect(a.familyId).toBe(s.familyId);
   });
 });
 

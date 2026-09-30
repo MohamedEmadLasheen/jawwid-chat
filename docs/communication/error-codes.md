@@ -8,13 +8,20 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 
 ## BR-1 and the communication matrix — HTTP 403
 
+> **PD-6 (2026-09-23)** re-versioned BR-1. Direct teacher↔parent channels are now
+> allowed for an authorized relationship; only an *unauthorized* pairing is refused.
+
 | Code | Meaning |
 |---|---|
-| `COMM.BR1_TEACHER_PARENT_DIRECT` | A teacher and a parent were about to share a 1:1 channel or call. Never retry; offer the Student Group instead. |
+| `COMM.TEACHER_PARENT_NOT_AUTHORIZED` | A teacher and a parent were about to share a 1:1 channel or call with **no authorized relationship** between them. Never retry. |
+| `COMM.BR1_TEACHER_PARENT_DIRECT` | **DEPRECATED (PD-6).** No longer emitted by the server. Clients still treat it as terminal so older builds behave correctly. |
 | `COMM.ROLE_CANNOT_MESSAGE_FAMILY` | Finance/technical/academic staff may never take part in family communication. |
 | `COMM.TEACHER_TEACHER_DISABLED` | Teacher-to-teacher DMs are off by default. |
 | `COMM.STAFF_STAFF_DISABLED` | Staff-to-staff DMs are not in MVP; use internal notes. |
 | `COMM.INVALID_PARTICIPANTS` | The pair cannot form a conversation (two parents, self-chat, no staff side). |
+| `COMM.CALL_PARTICIPANT_LEFT` | 409. The actor is on this call's participant list but has already left it — they were dropped, or left a group call that continued without them. Terminal: the call is over for them. Since 2026-09-27 a decline ENDS the call, so a repeat decline reports `COMM.CALL_ALREADY_ENDED` instead; this code still appears on a concurrent-decline race and on the token/accept paths. |
+| `COMM.CALL_NOT_RINGING` | 409. The call is no longer ringing, so there is nothing to decline. An answered call is left by ending it. |
+| `COMM.CALL_ALREADY_DECLINED` | 409. Every other participant has left, so the call was already refused. Answering it would record an answer nobody gave. A backstop since 2026-09-27: a decline now ends the call, so that state is normally reported as `COMM.CALL_ALREADY_ENDED`. |
 
 ## Authorization — HTTP 403
 

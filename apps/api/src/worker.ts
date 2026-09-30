@@ -4,6 +4,8 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { OutboxWorker } from './communication/outbox/outbox.worker';
 import { StorySweeper } from './communication/stories/story-sweeper.service';
+import { CallService } from './communication/calls/call.service';
+import { NotificationService } from './communication/notifications/notification.service';
 import { readBuildInfo } from './infra/build-info';
 
 /**
@@ -37,6 +39,20 @@ const IDLE_BACKOFF_MS = Number(process.env.OUTBOX_IDLE_BACKOFF_MS ?? 5000);
  */
 const STORY_SWEEP_MS = Number(process.env.STORY_SWEEP_MS ?? 60_000);
 
+/**
+ * How often the ring-timeout sweep runs. NOT the ring timeout itself -- that is
+ * `call.ring_timeout_seconds` in chat.config and has exactly one home.
+ *
+ * This is only how often we ask, so it bounds how LATE an expiry can be: a call
+ * is expired somewhere between its deadline and its deadline plus this
+ * interval. At 5 seconds against a 45-second timeout that is under 12% of
+ * lateness on a state the user already experiences as "it is still ringing".
+ *
+ * Running it on every outbox poll instead would mean a query per second per
+ * replica for a table that is almost always empty of ringing calls.
+ */
+const CALL_SWEEP_MS = Number(process.env.CALL_SWEEP_INTERVAL_MS ?? 5000);
+
 async function bootstrap(): Promise<void> {
   const log = new Logger('Worker');
   const build = readBuildInfo();
@@ -47,6 +63,8 @@ async function bootstrap(): Promise<void> {
   });
   const outbox = app.get(OutboxWorker);
   const stories = app.get(StorySweeper);
+  const calls = app.get(CallService);
+  const notifications = app.get(NotificationService);
 
   let running = true;
   let draining = false;
@@ -75,10 +93,12 @@ async function bootstrap(): Promise<void> {
 
   log.log(
     `Jawwid Chat worker started ` +
-      `[env=${build.environment} commit=${build.commit} poll=${POLL_MS}ms batch=${BATCH}]`,
+      `[env=${build.environment} commit=${build.commit} poll=${POLL_MS}ms batch=${BATCH} ` +
+      `callSweep=${CALL_SWEEP_MS}ms]`,
   );
 
   let nextStorySweep = 0;
+  let lastSweepAt = 0;
 
   while (running) {
     let published = 0;
@@ -111,6 +131,39 @@ async function bootstrap(): Promise<void> {
       }
     }
 
+    // Ring timeout. In the same loop rather than a timer of its own: a
+    // setInterval would keep firing during a shutdown drain, and would run
+    // whether or not this process still held its database connection.
+    //
+    // Safe on every replica at once -- the sweep claims each call with a single
+    // conditional UPDATE, so concurrent workers cannot expire the same call
+    // twice (CallService.expireRingingCalls). No leader election, no lock
+    // service, nothing new to operate.
+    if (Date.now() - lastSweepAt >= CALL_SWEEP_MS) {
+      lastSweepAt = Date.now();
+      try {
+        await calls.expireRingingCalls();
+      } catch (e) {
+        // Same rule as the drain: a failed sweep is retried on the next pass.
+        // The calls it did not expire are still ringing and still match.
+        log.error(`call sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`);
+      }
+    }
+
+    // Deliver the notifications the outbox scheduled.
+    //
+    // Nothing called this before, so a notification could be scheduled by the
+    // engine and then sit in chat.notification forever -- the pipeline was
+    // complete at both ends and disconnected in the middle. dispatchDue()
+    // claims each row with a conditional update, so running it on every replica
+    // at once cannot double-send.
+    try {
+      await notifications.dispatchDue();
+    } catch (e) {
+      // A row that failed to dispatch is rescheduled with backoff by the
+      // service itself; a throw here must not stop the drain loop.
+      log.error(`notification dispatch failed: ${e instanceof Error ? e.message : 'unknown error'}`);
+    }
     if (!running) break;
     // Back off when there is nothing to do, so an idle deployment is not
     // hammering the database once a second for no reason.

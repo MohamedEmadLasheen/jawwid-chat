@@ -347,6 +347,15 @@ class L10nEn extends L10n {
       'The call could not connect. Check your connection and try again.';
 
   @override
+  String get callOutgoing => 'Calling…';
+
+  @override
+  String get callEnded => 'Call ended';
+
+  @override
+  String get callSendMessageInstead => 'Send a message instead';
+
+  @override
   String get notificationsTitle => 'Updates';
 
   @override
@@ -520,6 +529,9 @@ class L10nEn extends L10n {
 
   @override
   String get groupMemberUnresolved => 'Member';
+
+  @override
+  String get memberMessageAction => 'Message';
 
   @override
   String get myAccountTitle => 'My account';

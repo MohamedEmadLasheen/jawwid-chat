@@ -14,6 +14,15 @@ export interface PushMessage {
   data: Record<string, string>;
   /** VoIP pushes take the CallKit path on iOS. */
   isVoip: boolean;
+  /**
+   * The device's platform, from `chat.device_token.platform`.
+   *
+   * Added by W8-W1 so the selector can send each message through the transport
+   * its destination actually uses -- APNs for iOS, FCM for the rest. A provider
+   * cannot work this out from a token string, and guessing would put an Android
+   * token on Apple's connection.
+   */
+  platform: string;
 }
 
 export interface PushResult {

@@ -534,8 +534,11 @@ class FakeBackend {
     return group;
   }
 
-  /// Authorize a call, refusing the forbidden pairing exactly as the backend must (§32).
-  CallGrant requestGrant({required String conversationId}) {
+  /// Start a call, refusing the forbidden pairing exactly as the backend must (§32).
+  ///
+  /// The fixture mirrors the real split: starting a call and obtaining a media
+  /// credential are two operations, as they are on the server.
+  StartedCall startCall({required String conversationId}) {
     _maybeFail();
     final conversation = conversationById(conversationId);
 
@@ -546,10 +549,18 @@ class FakeBackend {
       }
     }
 
-    return CallGrant(
+    return StartedCall(
       callId: 'call_${conversationId}_$_sequence',
-      serverUrl: 'wss://livekit.invalid',
+      roomName: 'jawwid-$conversationId-fixture',
+    );
+  }
+
+  CallMediaGrant mediaToken({required String callId}) {
+    _maybeFail();
+    return CallMediaGrant(
       token: 'fake-token',
+      serverUrl: 'wss://livekit.invalid',
+      roomName: 'jawwid-fixture',
       expiresAt: _now.add(const Duration(minutes: 5)),
     );
   }

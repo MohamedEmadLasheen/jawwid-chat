@@ -56,6 +56,11 @@ class _DtoBackedRepository implements ConversationRepository {
   Future<void> setArchived(String conversationId, bool archived) async {}
   @override
   Future<List<Conversation>> search(String query) async => const [];
+
+  /// Not exercised here: this double covers learner context, not channel creation.
+  @override
+  Future<Conversation> openDirect(String withActorId) =>
+      throw UnimplementedError();
 }
 
 void main() {

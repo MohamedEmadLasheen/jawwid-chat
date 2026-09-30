@@ -28,7 +28,7 @@ Phase in which each item lands: **Phase 0** = this document only · **Phase 1** 
 | Transport | HTTPS JSON. Request `Content-Type: application/json`. Responses are JSON objects; a mutation that has nothing to return answers `{ "ok": true }`. | controllers |
 | Casing | **camelCase** on the wire, in every request and response field and query parameter. Enum values are lower snake (`student_group`, `waiting_on_jawwid`), exactly as in `contracts/vocab.ts`. | decision 1; `dto.ts`; `vocab.ts` |
 | Authentication (Phase 1) | HTTP: `Authorization: Bearer <access token>`. WebSocket: socket.io handshake `auth: { token }` on the **default** namespace. Access tokens are short-lived; refresh tokens rotate (`POST /auth/refresh`). | decision 2 |
-| Authentication (today, DEPRECATED) | HTTP header `x-actor-id: <actor uuid>`; WebSocket handshake `auth: { actorId }`. This is a **local-only seam, not authentication**: the server trusts the value after resolving it through `IdentityService`. Removed in Phase 1. | `api/actor.decorator.ts`, `realtime/realtime.gateway.ts` `handleConnection` |
+| Authentication (today) | **As specified above — the deprecated seam is gone.** HTTP `x-actor-id` was removed by PR-B; the WebSocket `auth: { actorId }` handshake was removed 2026-09-23 (Phase 8). The socket now verifies `auth: { token }` — `Authorization: Bearer` is accepted as a fallback — through the same `AuthService.authenticate()` the HTTP guard uses. A missing, malformed, forged or revoked token disconnects the socket, and no client-supplied field can name the actor. The `APP_ENV` boot restriction that contained the old seam is deleted. | `api/actor.decorator.ts`, `realtime/realtime.gateway.ts` `handleConnection`, `platform/auth/auth.service.ts` |
 | Cookies | Not part of the contract. Admin Web drops `credentials: 'include'` and adopts bearer tokens. | decision 2; `admin-web/src/core/api/client.ts` |
 | Authorization | Server-side `AuthorizationService` (`platform/authorization.service.ts`) is the only place an access decision is made. Client permission lists are UX affordances only. Every canonical endpoint states: **auth** (required / none), **permission key**, **scope rule**. | decision 8; `admin-web/src/core/permissions/capabilities.ts` header comment |
 | Error body | `{ "error": { "code": "<stable code>", "message": "<developer diagnostic>" } }`. Clients branch on `code` and localise client-side; `message` is never rendered to a user. **Today only `CommError` is mapped** (`api/http-exception.filter.ts`); Nest defaults (`{statusCode,message,error}`) still leak for unknown routes, malformed JSON and the health 503. **Phase 1: a catch-all filter maps every non-`CommError` to the same body using the `COMMON.*` codes below.** | decision 1; `main.ts` `useGlobalFilters(new CommErrorFilter())` |
@@ -50,7 +50,8 @@ Source of truth: `apps/api/src/platform/errors.ts`. Default HTTP status of a `Co
 
 | Code | HTTP | Raised when |
 |---|---|---|
-| `COMM.BR1_TEACHER_PARENT_DIRECT` | 403 | A teacher and a parent would share a 1:1 conversation or call (`canOpenDirect`, `canSend`, `canCall`). Never retry. |
+| `COMM.TEACHER_PARENT_NOT_AUTHORIZED` | 403 | A teacher and a parent would share a 1:1 conversation or call **without an authorized relationship** (`canOpenDirect`, `canSend`, `canCall`; PD-6). Never retry. |
+| `COMM.BR1_TEACHER_PARENT_DIRECT` | 403 | **DEPRECATED (PD-6, 2026-09-23).** No longer emitted: the blanket teacher↔parent 1:1 prohibition was re-versioned. Clients keep treating it as terminal so older builds behave correctly. |
 | `COMM.BR1_ADMIN_PRESENCE_REQUIRED` | 403 | Teacher and parent in a group with no live Jawwid admin member (C-4), or presence could not be established (fail closed). |
 | `COMM.ROLE_CANNOT_MESSAGE_FAMILY` | 403 | Staff role is finance / technical / academic. |
 | `COMM.TEACHER_TEACHER_DISABLED` | 403 | Teacher ↔ teacher direct. |
@@ -82,6 +83,9 @@ Source of truth: `apps/api/src/platform/errors.ts`. Default HTTP status of a `Co
 | `COMM.GROUP_ALREADY_EXISTS` | — | Declared; **no raise site found** in the services reviewed (`ensureStudentGroup` returns the existing group instead). Reserved. |
 | `COMM.CALL_NOT_FOUND` | 404 | |
 | `COMM.CALL_ALREADY_ENDED` | 409 | Token requested for an ended call. |
+| `COMM.CALL_PARTICIPANT_LEFT` | 409 | The actor is a recorded participant but has already left the call (`accept`, `decline`, `POST /calls/:id/token`). |
+| `COMM.CALL_NOT_RINGING` | 409 | `decline` on a call that is no longer ringing. |
+| `COMM.CALL_ALREADY_DECLINED` | 409 | `accept` on a call every other participant has left. |
 | `COMM.CALL_NOT_A_PARTICIPANT` | 403 | Not in the server-derived participant set. |
 | `COMM.PARENT_CANNOT_START_GROUP_CALL` | 403 | **PD-2.** A family contact tried to START a `student_group` / `class_group` call. Joining is allowed; starting is a teacher or staff action. Never retry. |
 
@@ -142,6 +146,7 @@ One row per distinct (method, path). Paths are relative to `/api/v1` unless mark
 | GET | `/conversations/:id` | API, Flutter | RECONCILE | Must include `members[]` (promised by `mobile-contract.md`, not passed by the controller). Side-effect upsert removed. §3.4 |
 | POST | `/conversations/:id/members` | API | RECONCILE | `reason` must be validated (400) rather than failing at the DB NOT NULL. §3.4 |
 | POST | `/conversations/:id/preferences` | API, Flutter | EXISTS | §3.4 |
+| GET | `/conversations/:id/call-capability` | API, Flutter | **EXISTS (new 2026-09-24)** | Advisory: may the caller START a call here. Same `canCall` as `POST /calls`; never a grant. §3.4 |
 | GET | `/conversations/:conversationId/messages` | API, Flutter | EXISTS | seq pagination unchanged. §3.5 |
 | POST | `/conversations/:conversationId/messages` | API, Flutter | EXISTS | Idempotent on `clientMessageId`. §3.5 |
 | POST | `/conversations/:conversationId/messages/attachments/authorize` | API | RECONCILE | Checks `canRead` today; Phase 1 checks `canSend`. §3.6 |
@@ -157,12 +162,14 @@ One row per distinct (method, path). Paths are relative to `/api/v1` unless mark
 | POST | `/approvals/:id/approve` | API | EXISTS | §3.7 |
 | POST | `/approvals/:id/reject` | API | EXISTS | §3.7 |
 | GET | `/approvals/history/:conversationId` | API | RECONCILE | Response → `{items,nextCursor}` (Phase 1). §3.7 |
+| POST | `/livekit/webhook` | API | **EXISTS (new 2026-09-27)** | LiveKit's own callback, not a Jawwid actor. Verified with the official `WebhookReceiver`; records MEDIA presence, never an accept. §3.9 |
 | POST | `/calls` | API | EXISTS | §3.8 |
 | POST | `/calls/:id/token` | API | EXISTS | §3.8 |
-| POST | `/calls/:id/accept` | API | EXISTS | Emits `call.participant_joined`, not `call.accepted`. §3.8 |
+| POST | `/calls/:id/accept` | API | EXISTS | Emits **`call.accepted`** — an application answer. `call.participant_joined` means MEDIA presence and comes only from `POST /livekit/webhook`. §3.8 |
 | POST | `/calls/:id/decline` | API | EXISTS | §3.8 |
 | POST | `/calls/:id/end` | API | EXISTS | §3.8 |
-| GET | `/calls/history/:conversationId` | API | RECONCILE | Response → `{items,nextCursor}` (Phase 1). §3.8 |
+| GET | `/calls/history` | API | **EXISTS (new 2026-09-28, W8-W2)** | THIS ACTOR's calls across the conversations they may read. Paged `{items,nextCursor}`. **Not a family query.** §3.8 |
+| GET | `/calls/history/:conversationId` | API | RECONCILE | Response → `{items,nextCursor}` (Phase 1). Unchanged by W8-W2 — see §3.8. |
 | POST | `/notifications/devices` | API | RECONCILE | Token re-binding to any actor; Phase 1 binds to the authenticated session. §3.9 |
 | DELETE | `/notifications/devices/:token` | API | RECONCILE | **No actor at all.** Phase 1: auth required, own tokens only. §3.9, §5 |
 | POST | `/notifications/:id/delivered` | API | RECONCILE | **No actor at all.** Phase 1: auth required, recipient only. §3.9, §5 |
@@ -269,9 +276,16 @@ ConversationDto {
 ConversationLearnerDto { id, name }             // two fields only -- never level,
                                                 // nextClassAt, teacherId or familyId
 ConversationMemberDto { actorId, actorKind: 'contact'|'staff'|'teacher'|'system',
-  memberRole: 'parent'|'teacher'|'admin'|'observer', isSilent: boolean }
+  memberRole: 'parent'|'teacher'|'admin'|'observer', isSilent: boolean,
+  displayName: string }                           // '' when the actor no longer
+                                                  // resolves; never an id (O3)
 MessageDto {
   id, conversationId: string|null, seq: string|null, authorKind, authorId: string|null,
+  authorDisplayName: string|null,                 // canonical Actor.displayName (O3).
+                                                  // null for a system message and for
+                                                  // an author who no longer resolves.
+                                                  // Resolved in ONE batch per page via
+                                                  // IdentityService.resolveActors.
   onBehalfMode: 'owner'|'coverage'|'assist'|'escalation'|null,
   type: 'text'|'image'|'video'|'voice'|'file'|'system', body: string|null,
   visibility: 'customer'|'internal', moderation: 'published'|'pending'|'rejected',
@@ -399,9 +413,9 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 - Audit / Realtime: none.
 
 **POST /conversations/direct** — EXISTS (`getOrCreateDirect`)
-- Auth: required. Permission: `conversations.read` (opening one's own channel) + `AuthorizationService.canOpenDirect`. Scope: allowed pairs only: contact ↔ family-facing staff, teacher ↔ family-facing staff.
+- Auth: required. Permission: `conversations.read` (opening one's own channel) + `AuthorizationService.canOpenDirect`. Scope: allowed pairs only: contact ↔ family-facing staff, teacher ↔ family-facing staff, and **contact ↔ teacher when the relationship predicate authorizes it** (PD-6; `AUTHORIZATION-MODEL.md` §4.1). The relationship is resolved server-side from Jawwid Core data — `withActorId` is a lookup key, never evidence.
 - Request: `{ withActorId: string }`. Response: `200 ConversationDto` (existing or created; `familyId` = the contact's family; `directKey` is the sorted pair, so the pair is unique).
-- Errors: `COMM.UNKNOWN_ACTOR` 401 (either side) · `COMM.ACTOR_INACTIVE` · `COMM.INVALID_PARTICIPANTS` · `COMM.BR1_TEACHER_PARENT_DIRECT` · `COMM.TEACHER_TEACHER_DISABLED` · `COMM.STAFF_STAFF_DISABLED` · `COMM.ROLE_CANNOT_MESSAGE_FAMILY` (all 403).
+- Errors: `COMM.UNKNOWN_ACTOR` 401 (either side) · `COMM.ACTOR_INACTIVE` · `COMM.INVALID_PARTICIPANTS` · `COMM.TEACHER_PARENT_NOT_AUTHORIZED` · `COMM.TEACHER_TEACHER_DISABLED` · `COMM.STAFF_STAFF_DISABLED` · `COMM.ROLE_CANNOT_MESSAGE_FAMILY` (all 403).
 - Idempotency: natural (get-or-create; unique `direct_key`, P2002 re-read).
 - Audit: `event_log` `{type:'conversation_created', familyId, actorKind, actorId, payload:{conversationId, type:'direct'}}` on create only.
 - Realtime: none (no outbox row on create).
@@ -424,6 +438,15 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 - Auth: required. Permission: `conversations.read`. Scope: `canRead` — contact / teacher must be a live member; family-facing staff any conversation.
 - Response today: `ConversationDto` carrying `learner` and `unreadCount`, but **without `members`** — the controller calls `toConversationDto(conv)` with no member list, although `docs/communication/mobile-contract.md` promises `members` on detail responses and `lib/core/data/http/http_group_repository.dart` depends on it. **Phase 1: return `members: ConversationMemberDto[]` (live members).** The authorization check is performed via `setPreferences(id, actorId, {})`, which also upserts an empty `conversation_participant_state` row as a side effect; Phase 1 replaces it with a pure `canRead` check.
 - Errors: `COMM.CONVERSATION_NOT_FOUND` 404 · `COMM.NOT_CONVERSATION_MEMBER` 403 · `COMM.ROLE_CANNOT_MESSAGE_FAMILY` 403 · `COMM.ACTOR_INACTIVE` 403.
+
+**GET /conversations/:id/call-capability** — EXISTS (added 2026-09-24, `conversation.controller.ts#callCapability`)
+- Auth: required. Permission: `conversations.read` **then** the call decision. Scope: `canRead` establishes access to the conversation first; only then is `canCall` evaluated. A caller who fails `canRead` receives that refusal, so this cannot be used to probe a conversation they could not open.
+- Response: `{ canCall: boolean, code: string | null }`. `code` is a stable `COMM.*` value when `canCall` is false, `null` when true. **Nothing else** — no identifier, no display name, no relationship detail, no prose reason.
+- **Advisory, not an authorization.** It is the policy's answer at that instant and does not promise the next `POST /calls` will succeed; a relationship revoked in between is refused there. `POST /calls` re-decides from scratch and remains the only thing that authorizes a call. Not cached, client-side or server-side.
+- **One policy.** It calls `CallService.callCapability`, which shares `decideInitiate` with `CallService.start` — same participant resolution, same family owner, same live members, same PD-6 pairing, same `AuthorizationService.canCall` with `CallIntent.INITIATE`. There is no second call-authorization path; `call-capability.spec.ts` asserts the two agree case for case, including the refusal code.
+- Why it exists: `docs/design/screens/call.md` §4 requires the call affordance to be **absent** where the backend does not authorize the pairing, and forbids the client inferring which pairings those are. Since PD-6 that set is data, and a conversation's existence proves only that the relationship held when it was created.
+- Errors (from the read gate): `COMM.CONVERSATION_NOT_FOUND` 404 · `COMM.NOT_CONVERSATION_MEMBER` 403 · `COMM.ROLE_CANNOT_MESSAGE_FAMILY` 403 · `COMM.ACTOR_INACTIVE` 403 · `COMM.UNKNOWN_ACTOR` 403.
+- Audit: none. Read-only; it creates no call and writes no row.
 
 **POST /conversations/:id/members** — EXISTS → RECONCILE (`setMembership`)
 - Auth: required. Permission: `conversations.manage`. Scope: family-facing staff (`canManageMembership`); Phase 1 additionally requires the conversation's family in scope.
@@ -536,24 +559,181 @@ CallHistoryDto { id, conversationId, type: 'direct'|'group', status: 'ringing'|'
   participants: { actorId, actorKind, joinedAt, leftAt }[] }
 ```
 
+#### The call lifecycle — the locked contract (W6, 2026-09-27)
+
+Persisted vocabulary, and there is no other: `status ∈ {ringing, active, ended}`,
+`outcome ∈ {answered, missed, declined}`, with `call_outcome_when_ended` requiring an
+outcome on every ended call. There is no `accepted`, `declined` or `timeout` **status** —
+decline and missed are outcomes.
+
+```
+RINGING ── accept ───────────▶ ACTIVE   answered_at, participant.joined_at
+        ├─ decline ──────────▶ ENDED    outcome = declined, duration 0
+        ├─ explicit end ─────▶ ENDED    outcome = missed,   duration 0
+        └─ ring timeout ─────▶ ENDED    outcome = missed,   duration 0
+
+ACTIVE  ── explicit end ─────▶ ENDED    outcome = answered, duration = now − answered_at
+        └─ ring timeout ─────▶ no match. The sweep reads status = 'ringing' only.
+
+ENDED is terminal. accept/decline → COMM.CALL_ALREADY_ENDED with nothing written;
+a second end is a no-op that does not rewrite the outcome or emit a second event;
+the sweep matches nothing; a late media webhook is recorded into history and
+announces nothing.
+```
+
+One writer per outcome: **answered** only from `end` on an ACTIVE call · **missed** only
+from `end` on a RINGING call or the sweep · **declined** only from `decline`.
+
+**Media presence is not the lifecycle.** `media_joined_at` / `media_left_at` (W5) record
+what LiveKit observed and never write `status`, `outcome`, `answered_at`, `joined_at`,
+`left_at` or `duration_seconds`.
+
+- An accepted call whose device never reached the room is still **answered**. HTTP accept
+  is the user's acceptance; a missing media join does not retract it.
+- A media leave never ends a call, and an answered call never becomes `missed` because
+  media later disappeared.
+- Duration is measured from `answered_at`, never from `media_joined_at`. Accepted 10:00,
+  media joined 10:03, ended 10:10 ⇒ **10 minutes**.
+- A media join on a ringing call does not answer it.
+
+**The transition is unconditional.** A decline ends the call whoever declines and however
+many participants it has. There is **no group-call exception**: no product source defines
+one, and W6 does not invent one. `docs/design/screens/call.md` §7 says only that *"a group
+call with one participant is allowed"*, which is about a call continuing, not about a
+refusal. If a Student Group call is to survive one parent's refusal, that is a product
+decision with its own authorization.
+
+**A decline stamps `left_at` for the decliner alone.** A participant who was still ringing
+did not leave, and a call becoming terminal is not evidence that they did — so an ended
+call may carry a participant whose `left_at` is null. Terminal state is `call.status`, which
+is what every guard checks. `end` and the ring-timeout sweep do stamp every open
+participant; that is their existing rule and it is unchanged. The asymmetry is deliberate.
+
+**Carry-forward risk (out of scope for W6, stated deliberately).** An ACTIVE call has no
+deadline: nothing but an explicit `end` terminates it, so a call accepted by a client that
+then disappears stays ACTIVE indefinitely. A stale-active reconciliation is a separate,
+unauthorized lifecycle rule.
+
 **POST /calls** — EXISTS
-- Auth: required. Permission: `calls.start`. Scope: `canCall(intent = initiate)` = `canSend` (customer visibility) + BR-1 participant-set check + **PD-2**. Participants = live, active, non-silent members (server-derived; never client-supplied). Room name minted server-side.
+- Auth: required. Permission: `calls.start`. Scope: `canCall(intent = initiate)` = `canSend` (customer visibility) + the authorized-relationship check on a direct teacher/parent pair (**PD-6**) + C-4 + **PD-2**. Participants = live, active, non-silent members (server-derived; never client-supplied). Room name minted server-side.
 - **PD-2:** a family contact may not start a `student_group` or `class_group` call. A parent's 1:1 call to their handler is unaffected.
 - Request: `{ conversationId: string }`. Response: `{ callId, roomName }`.
-- Errors: matrix codes; `COMM.BR1_TEACHER_PARENT_DIRECT` 403; `COMM.PARENT_CANNOT_START_GROUP_CALL` 403.
-- Audit: `event_log` `call_started`. Realtime: `call.incoming { callId, conversationId, type, initiatorId, initiatorName, roomName }` to the conversation room.
+- Errors: matrix codes; `COMM.TEACHER_PARENT_NOT_AUTHORIZED` 403; `COMM.PARENT_CANNOT_START_GROUP_CALL` 403.
+- Audit: `event_log` `call_started`. Realtime: `call.incoming { callId, conversationId, type, initiatorId, initiatorName }` to the conversation room. **`roomName` was removed from this payload 2026-09-24:** the room handle comes back from `POST /calls/:id/token` with the token that makes it usable, so broadcasting it added nothing and put a media handle in a fan-out.
 
 **POST /calls/:id/token** — EXISTS
-- Auth: required. Permission: `calls.accept`. Scope: recorded participant, call not ended, still a member, `canCall(intent = join)` re-evaluated (a revoked permission takes effect on the next join). This is the JOIN path, so a parent is allowed here (**PD-2**). Response: `{ token, url, roomName, expiresAt }`; TTL `call.token_ttl_seconds` (120); `canPublish = !isSilent`.
+
+> **LiveKit (Phase 13).** The room is `jawwid-<conversationId>-<uuid>`, minted by
+> `CallService.start` and stored on `chat.call.room_name` (UNIQUE). The client
+> never names a room: the endpoint takes only the call id, and the room is read
+> from the call row, so both participants are placed in the same server-chosen
+> room and two calls in one conversation never share one.
+>
+> **Grant, in full:** `roomJoin`, `room`, `canPublish`, `canSubscribe`, and
+> `roomCreate: false`, `roomList: false`. Nothing else — no `roomAdmin`, no
+> `recorder`, no `hidden`, and **no `canPublishData`** (removed 2026-09-24: a
+> voice call needs audio, and a data channel would be a second messaging path
+> that no Jawwid rule governs). `sub` is the server-resolved actor id.
+>
+> **TTL** is `chat.config['call.token_ttl_seconds']` (120 s) and nothing else.
+> The `LIVEKIT_TOKEN_TTL_SECONDS` environment variable was removed.
+>
+> **Rooms are created implicitly by LiveKit** on first join and are reaped by
+> LiveKit when the last participant leaves; the API never calls LiveKit's
+> RoomService and needs no cleanup of its own. A room name is used once because
+> it carries a fresh uuid per call.
+>
+> **Webhooks are not implemented and are not required for media.** They become a
+> dependency only for `call.participant_joined` / `participant_left`, which mean
+> media presence and are deliberately unemitted until something has observed it
+> (Phase 10).
+>
+> **Not verified:** that LiveKit accepts these tokens. `scripts/infra/livekit-probe.sh`
+> asks the real service and needs credentials the repository does not contain.
+- Auth: required. Permission: `calls.accept`. Scope: recorded participant, call not ended, still a member, `canCall(intent = join)` re-evaluated — including the PD-6 relationship predicate, so a teacher–parent relationship revoked in Jawwid Core refuses the next join even mid-call. This is the JOIN path, so a parent is allowed here (**PD-2**). Response: `{ token, url, roomName, expiresAt }`; TTL `call.token_ttl_seconds` (120); `canPublish = !isSilent`.
 - Errors: `COMM.CALL_NOT_FOUND` 404 · `COMM.CALL_ALREADY_ENDED` 409 · `COMM.CALL_NOT_A_PARTICIPANT` 403 · matrix codes. Audit / Realtime: none.
 
-**POST /calls/:id/accept** — EXISTS · Permission `calls.accept` · Scope participant. `joinedAt` set; `ringing → active` with `answeredAt`. Response `{ ok: true }`. Realtime: **`call.participant_joined { callId, actorId }`** (not `call.accepted`). Audit: none.
+**POST /calls/:id/accept** — EXISTS · Permission `calls.accept` · Scope: **the full join authorization chain**, identical to `POST /calls/:id/token` — actor active, recorded participant, `left_at` null, call not ended, still a conversation member, communication matrix, C-4, PD-2, and the **PD-6 relationship re-resolved now** (starting a call does not guarantee it may still be answered). `joinedAt` set; `ringing → active` with `answeredAt`, decided under `SELECT … FOR UPDATE` so concurrent accept/decline/end cannot tear the state. Answering twice is an idempotent no-op. Response `{ ok: true }`. Errors: matrix codes; `COMM.CALL_PARTICIPANT_LEFT` 409; `COMM.CALL_ALREADY_ENDED` 409; `COMM.CALL_ALREADY_DECLINED` 409; `COMM.CALL_NOT_A_PARTICIPANT` 403. **A refused accept writes nothing** — no `joinedAt`, no `answeredAt`, no status change, no event. Realtime: **`call.accepted { callId, conversationId, actorId }`** to `conversation:<id>`. **Changed 2026-09-24:** this used to emit `call.participant_joined` with no `conversationId`, which the outbox could not route and silently discarded. `participant_joined` means MEDIA presence and is emitted only by something that has observed it — `POST /livekit/webhook` and nothing else (§3.9, built 2026-09-27). An HTTP accept does not assert a media connection, and the two facts are stored in different columns: `joined_at` is the accept, `media_joined_at` is the room. Audit: none.
 
-**POST /calls/:id/decline** — EXISTS · Permission `calls.accept` · Scope participant. `leftAt` set. Realtime: `call.declined { callId, actorId }`. Audit: none.
+**POST /calls/:id/decline** — EXISTS · Permission `calls.accept` · Scope: the same full join authorization chain as accept, plus the call must still be **ringing**. `leftAt` set, under the same row lock.
 
-**POST /calls/:id/end** — EXISTS · Permission `calls.accept` · Scope participant. Request `{ outcome?: 'answered'|'missed'|'declined' }` (default derived from `answeredAt`). Call `ended`, all open participants `leftAt`, `durationSeconds` computed. Realtime: `call.ended { callId, conversationId, outcome, durationSeconds }`. Audit: `event_log` `call_ended`.
+**Changed 2026-09-27 (W6): a decline is now the TERMINAL transition.** `ringing → ended` with `outcome = 'declined'`, `duration_seconds = 0`, `answered_at` left null, and the decliner's `leftAt` stamped — all in one transaction with the refusal. It used to mark only the participant and leave the call `ringing`, so the ring-timeout sweep collected it ~45s later and recorded `outcome = 'missed'`: a call the callee had explicitly refused was written into history as one they never saw, `missed_call` then pushed a notification to the person who had just declined, and the `declined` outcome the schema defines was unreachable from this endpoint. The sweep needed no change to respect the new state — it matches `status = 'ringing'`.
 
-**GET /calls/history/:conversationId** — EXISTS → RECONCILE · Permission `conversations.read` · Scope `canRead`. Response today `{ calls: CallHistoryDto[] }` newest first, `take: 100`; Phase 1 `Page<CallHistoryDto>`.
+The transition is **unconditional** — no participant-count qualifier, and no group-call exception (see the lifecycle block above). Only the decliner's `leftAt` is written; nobody else's is fabricated because the call ended.
+
+Declining again is refused with `COMM.CALL_ALREADY_ENDED` (was `COMM.CALL_PARTICIPANT_LEFT`) and changes nothing. Errors: matrix codes; `COMM.CALL_NOT_RINGING` 409; `COMM.CALL_ALREADY_ENDED` 409; `COMM.CALL_PARTICIPANT_LEFT` 409 (reachable in a concurrent-decline race). Realtime: **`call.declined { callId, conversationId, actorId }`** and, when the call becomes terminal, **`call.ended { callId, conversationId, outcome: 'declined', durationSeconds: 0 }`**, both to `conversation:<id>`, exactly once each. They are enqueued in one transaction and therefore share `created_at`; their relative delivery order is not guaranteed and nothing depends on it. Audit: `event_log` `call_ended` when it terminates.
+
+**POST /calls/:id/end** — EXISTS · Permission `calls.accept` · Scope participant. **No request body.** Call `ended`, all open participants `leftAt`, `durationSeconds` computed. Realtime: `call.ended { callId, conversationId, outcome, durationSeconds }`. Audit: `event_log` `call_ended`.
+
+**Changed 2026-09-27 (W6), twice.** (1) The outcome is no longer a request field. `{ outcome }` used to be forwarded straight into the service, so a participant could POST `{"outcome":"answered"}` for a call nobody answered — false history through the front door — or any other string and turn a check-constraint violation into a 500. It is now derived: ACTIVE ends `answered`, RINGING ends `missed`. **The service takes no `outcome` argument either** — `CallService.end(callId, actorId)` — so there is no parameter for a future caller to rediscover. (2) The derivation reads `answered_at` **through the row lock**, and an already-ended call is a **no-op**. Without the guard, an `end` arriving after any other ending (a decline, the sweep, a second device) overwrote `status`, `ended_at`, `outcome` and `duration_seconds` and enqueued a second `call.ended`. Hanging up twice is a retry: it succeeds and changes nothing. Ending still never fails for authorization reasons, so no call can be stranded ACTIVE.
+
+> **Ring timeout (Phase 11).** A call nobody answers is not left ringing. The
+> worker sweeps calls whose `started_at` is older than
+> `chat.config['call.ring_timeout_seconds']` (45s) and ends them server-side with
+> `outcome: 'missed'`, `durationSeconds: 0`, `answeredAt` null and every
+> participant's `joinedAt` still null.
+>
+> **No new event and no new state.** The terminal event is the same
+> `call.ended { callId, conversationId, outcome: 'missed', durationSeconds: 0 }`
+> a client already handles; `outcome` is what distinguishes a timeout from an
+> answered or declined ending, so nothing needs to learn a second vocabulary. No
+> `call.expired` event and no `expired` status exist.
+>
+> The transition is a single conditional `UPDATE ... WHERE status = 'ringing'`,
+> so it is atomic, idempotent, and safe to run on every worker replica at once.
+> An expired call cannot then be accepted, declined, or issued a media token.
+
+**POST /livekit/webhook** — EXISTS (added 2026-09-27, `livekit-webhook.controller.ts`)
+- Auth: **not a Jawwid session.** LiveKit carries no actor and no bearer of ours; it authenticates with an HS256 JWT signed by the project API secret, whose `sha256` claim is a hash of the RAW body. Verified by `WebhookReceiver` from `livekit-server-sdk` — the official verifier, not a hand-rolled HMAC. `main.ts` sets `rawBody: true` because the hash is over the bytes as they arrived. A participant access token is never accepted here: that is a credential we send a device, this is one LiveKit sends us.
+- Events consumed: **`participant_joined` and `participant_left`, and nothing else.** `room_started`, `room_finished`, `track_published`, `track_unpublished`, `participant_connection_aborted` and the egress/ingress family are verified and ignored — W5 establishes presence, and consuming more would be a media-analytics system.
+- Room → call: `chat.call.room_name`, which is UNIQUE and server-minted. Never a conversation id, never participant metadata.
+- Identity → participant: the LiveKit participant `identity`, which is the actor id the server put in the token (`CallService.issueToken`). Never a display name, never metadata. A non-uuid identity fails closed rather than reaching the database.
+- Writes **only** `chat.call_participant.media_joined_at` / `media_left_at`. It never creates a call or a participant, never touches `joined_at` / `left_at` / `answered_at` / `status` / `outcome`, never ends a call, and never authorizes anything.
+- **Accepted ≠ in the room.** `joined_at` is the HTTP accept; `media_joined_at` is LiveKit. Emits `call.participant_joined` / `call.participant_left` through the existing outbox, in the same transaction as the write — **never `call.accepted`**, which stays an application act.
+- Idempotent and order-independent: earliest join wins, latest leave wins, both from the event's own timestamp rather than arrival time. Duplicate delivery changes nothing and emits nothing; a rejoin newer than a recorded departure clears it.
+- A webhook for an ended call is recorded into history and announced to nobody; terminal state never moves backwards.
+- Responses: `200 {ok:true}` for every verified event including ignored and no-op ones — LiveKit retries a non-2xx, and a failure code for "already seen" would buy a retry loop. `401` with no body for anything unverified, and nothing is written.
+
+**GET /calls/history** — EXISTS (added 2026-09-28, W8-W2)
+- Auth: required. Permission `conversations.read`. **Scope: the conversations this actor may read, and nothing else.**
+- **THE SCOPE IS DERIVED, NOT DECLARED.** `CallService.historyForActor` calls `ConversationService.listForActor`, which IS the canonical "conversations this actor may read" surface — family-facing staff are probed through `AuthorizationService.canRead` and then see the conversation set; a contact or a teacher gets live membership and nothing else. Calls follow from that set. There is no second authorization model and no `canRead` reimplementation to drift from the original.
+- **IT NEVER QUERIES BY `family_id`, AND THAT IS THE POINT.** A family holds conversations a given parent is **not** a member of — the second parent's 1:1 with an admin, a teacher/admin thread about the learner — so `where family_id = …` (filtered afterwards or not) would hand a parent somebody else's calls. Family membership is not permission to read a family's calls. A regression test pins this: two conversations sharing one `family_id`, the actor a member of only one, and the other's call absent.
+- An **inactive** actor is refused (`COMM.ACTOR_INACTIVE`). This mirrors `canRead`'s first check at a new entry point: `listForActor` probes `canRead` for staff but not for a contact or teacher, so without it the account scope would have been weaker than the per-conversation one.
+- Request: `?cursor=<opaque>&limit=<n>`. `limit` defaults to 30 and is **clamped server-side** to 100; a client cannot ask for the whole table.
+- Response: `{ items: CallHistoryDto[], nextCursor: string | null }`. `nextCursor` is null on the last page.
+- **Ordering is the server's**: `started_at desc, id desc`. The id breaks ties so a page boundary cannot repeat or skip a row when two calls share a timestamp.
+- **Cursor semantics.** Keyset, base64url, carrying the last row's `started_at` and `id`. It is **not a capability**: the authorized scope is re-derived on every request, so a cursor naming a call the actor may not read yields their own first page. A malformed cursor is treated as no cursor rather than an error.
+- Privacy: the rows come from the **same** `toHistoryRow` mapping the per-conversation endpoint uses — one explicit field mapping, so G-07 has one place to be right. No phone number, no `room_name`, no media credential, no column added later that nobody listed.
+- Indexes: reuses `call_conversation_idx (conversation_id, started_at)`. **No migration.**
+- **This endpoint does NOT grant family-wide access.** See the family-scope note below.
+
+> **FAMILY-SCOPED CALL HISTORY — BLOCKED, AUTHORIZATION CONTRACT REQUIRED.**
+>
+> PRD v0.1 §9 requires call history *"per conversation and per family"*, and that
+> requirement **stands**. It is not cancelled, not descoped, and not satisfied by
+> the endpoint above.
+>
+> It is blocked because **no family-level authorization predicate exists in this
+> repository**. Every read rule in `AuthorizationService` takes a *conversation*:
+> `canRead(actor, conv, membership)`. The closest rule — *"family-facing staff may
+> open any family conversation"* — still requires a conversation, and
+> `isFamilyFacingStaff` is a role test, not a family-access decision. There is no
+> `canReadFamily`, and no endpoint anywhere serves a family.
+>
+> **`family_id` alone cannot authorize access.** A parent belongs to a family and
+> is a member of only some of its conversations, so treating family membership as
+> permission would expose the second parent's calls and teacher/admin calls about
+> the learner. That is an authorization expansion, not a query convenience.
+>
+> The documented family-level consumer is **Family 360** (`screens/family-360.md`
+> §1: *admin · coverage · manager*), which is an **Admin Web** surface and is
+> outside W8's scope. The rule must be owned by the workstream that defines that
+> consumer.
+>
+> **No family-wide data is exposed by `GET /calls/history`.** W8-W2 implemented
+> account scope only and invented no predicate.
+
+**GET /calls/history/:conversationId** — EXISTS → RECONCILE · **Unchanged by W8-W2.** Its `{ calls: … }` envelope and its RECONCILE status are inherited, not endorsed: settling it would change a response shape that W6/W7 already consume, which is a behaviour change inside a closed workstream rather than the additive read capability W8-W2 was authorized to add. The two endpoints are not competing shapes — one is a bounded per-conversation list, the other a paged account list — and the account endpoint above is canonical for account scope. · Permission `conversations.read` · Scope `canRead`. Response today `{ calls: CallHistoryDto[] }` newest first, `take: 100`; Phase 1 `Page<CallHistoryDto>`.
 
 ### 3.8b Stories (`story.controller.ts`, `story.service.ts`) — all EXISTS
 
@@ -620,13 +800,75 @@ either: every handler takes the authenticated actor from `@ActorId()`.
 
 ### 3.9 Notifications / Devices (`notification.controller.ts`, `notification.service.ts`)
 
+> **THE VOICE-CALL PUSH CONTRACT (W8-W1, 2026-09-28).**
+>
+> **Which device receives what.** A VoIP token (iOS PushKit) receives call
+> notifications and **nothing else** — on iOS a PushKit delivery that does not
+> immediately report a call to CallKit terminates the app, so a stray message
+> push there is a crash loop, not an inefficiency. The rule lives in one place,
+> `call-push-routing.ts`, and routes on `rule.event_type`:
+>
+> | destination | receives |
+> |---|---|
+> | VoIP token (`is_voip = true`) | `call_started`, `group_call_started` only |
+> | iOS standard token | everything except those two |
+> | Android / web token | everything — FCM has no VoIP channel |
+>
+> An iPhone holding both tokens gets a call on the VoIP one only, so it rings
+> once. An iPhone with no VoIP token yet is not sent a call at all, and the
+> notification records `NO_DEVICE_TOKEN`: an incoming-call banner with no
+> CallKit screen behind it is the degraded experience the platform rules exist
+> to prevent.
+>
+> **The payload.** `data` carries at most four keys and is BUILT, never copied
+> from a row:
+>
+> ```
+> { eventType, notificationId, conversationId?, callId? }
+> ```
+>
+> `callId` appears **only** for `call_started` and `group_call_started`. It is
+> there because the native call layer must report a specific call to CallKit and
+> later correlate an accept or a decline to it. It is **data-only, never
+> rendered, and authorizes nothing**: `POST /calls/:id/accept`, `/decline` and
+> `/end` each re-run the full server-side chain, and `POST /calls/:id/token` is
+> the only route to media. A call id without a session is useless.
+>
+> Never present, and structurally unable to be: a LiveKit token, a room name, an
+> access token, any media credential, a contact channel (BR-2).
+>
+> **Transport.** Configured, not compiled — APNs (`@parse/node-apn`) and FCM v1
+> (`google-auth-library` + `fetch`) behind the existing `PushProvider` seam, with
+> `LoggingPushProvider` as the fallback when nothing is configured. A **half**
+> configured provider refuses to start rather than reporting a healthy pipeline
+> that delivers nothing. Only Apple's and Google's *permanent* rejection codes
+> deactivate a device; a 5xx, a 429 or our own credential failure never does.
+>
+> **THE iOS VoIP ACTIVATION GATE.** `APNS_VOIP_ENABLED` defaults to **false**,
+> and while it is closed no VoIP push is delivered — such a message is reported
+> as `VOIP_GATED` and retried rather than recorded as sent. It must not be set
+> to `true` until the native CallKit reporting path exists (W8-W3): delivering a
+> PushKit push to an app that cannot report a call terminates it and, repeated,
+> costs the VoIP entitlement.
+>
+> **Android is not yet configured.** The channel, the Dart boundary and the
+> manifest permission exist; obtaining an FCM token needs a Firebase project
+> (`google-services.json` + the Gradle plugin), which is infrastructure
+> configuration rather than code. Until then the device reports no token and
+> `POST /notifications/devices` is simply never called from Android.
+>
+> **Push is not the call.** A push wakes the app; the call itself still arrives
+> over the realtime connection and the server remains the only authority on its
+> lifecycle. Nothing in the push path marks a call ringing, active, answered,
+> declined or ended.
+
 **POST /notifications/devices** — EXISTS → RECONCILE
 - Auth: required. Permission: `sessions.manage`. Scope: self.
 - Request: `{ token: string, platform: string, isVoip?: boolean, locale?: 'ar'|'en' }`. Upsert by `token`: today a token already registered to another actor is **silently re-bound** to the caller ("device handed over"). Phase 1: the token is bound to the authenticated actor **and session** (revoking the session deactivates it); re-binding across actors requires the previous session to be revoked.
 - Response: `{ ok: true }`. Idempotent. Audit / Realtime: none.
 
-**DELETE /notifications/devices/:token** — EXISTS → RECONCILE
-- Auth today: **none** (no `@ActorId`); anyone can deactivate any token. Phase 1: auth required, Permission `sessions.manage`, Scope: own tokens only; unknown/not-owned → `{ ok: true }` (no enumeration).
+**DELETE /notifications/devices/:token** — EXISTS
+- **Closed 2026-09-24.** Auth required (global guard); Scope: **own tokens only** — the update is `where { token, actorId }` with `actorId` from the verified actor. A token belonging to anyone else, or no token at all, matches nothing and returns `{ ok: true }`: a 404 or 403 would answer "does this token exist?" for an enumerator, and the honest response to deleting something that is not yours is that nothing happened. Idempotent for the owner too. Previously took the token alone, so any authenticated caller who knew one could silence that person's push, including their incoming-call push.
 - Response: `{ ok: true }`.
 
 **POST /notifications/:id/delivered** — EXISTS → RECONCILE
@@ -695,7 +937,7 @@ Transport: socket.io on the **default namespace** at the API origin (Redis adapt
 
 | Event | Payload | Delivered to | Emitted today by |
 |---|---|---|---|
-| `message.created` | `{ conversationId, messageId, seq, authorKind, authorId, type, visibility, moderation, createdAt }` — a hint, no body | conversation room; **internal notes: staff actor rooms only** | `send` (published), `approve` |
+| `message.created` | `{ conversationId, messageId, seq, authorKind, authorId, type, visibility, moderation, createdAt }` — a hint, no body. **Deliberately no `authorDisplayName`:** the event does not render a message, it triggers `GET …/messages?after=<seq>`, and the rendered author comes from `MessageDto` on that fetch. Adding the name here would enlarge a push-adjacent payload to answer a question the fetch already answers. | conversation room; **internal notes: staff actor rooms only** | `send` (published), `approve` |
 | `message.deleted` | `{ conversationId, messageId, deletedForAll }` | conversation room | `deleteForEveryone` |
 | `message.receipt.updated` | `{ conversationId, messageId, actorId, state, at }` | conversation room | **nobody** — declared, never enqueued. Phase 1 decides: emit on `read` / `delivered` (subject to RT-012 scoping) or remove. |
 | `reaction.added` / `reaction.removed` | `{ conversationId, messageId, actorId, emoji }` | conversation room | `react` / `unreact` |
@@ -707,12 +949,12 @@ Transport: socket.io on the **default namespace** at the API origin (Redis adapt
 | `conversation.membership_changed` | `{ conversationId, added: string[], removed: string[] }` | conversation room | `setMembership`, `syncStudentGroup` |
 | `approval.requested` | `{ conversationId, messageId, approvalId, requestedBy }` | **staff actor rooms only** | `send` (pending) |
 | `approval.decided` | `{ conversationId, messageId, approvalId, decision, rejectionReason }` | conversation room | `decide` |
-| `call.incoming` | `{ callId, conversationId, type, initiatorId, initiatorName, roomName }` | conversation room | `start` |
-| `call.accepted` | `{ callId, actorId }` | — | **nobody** (accept emits `call.participant_joined`). Phase 1: remove or alias. |
-| `call.declined` | `{ callId, actorId }` | conversation room | `decline` |
-| `call.participant_joined` | `{ callId, actorId }` | conversation room | `accept` |
-| `call.participant_left` | `{ callId, actorId }` | — | **nobody**. Phase 1 decides. |
-| `call.ended` | `{ callId, conversationId, outcome, durationSeconds }` | conversation room | `end` |
+| `call.incoming` | `{ callId, conversationId, type, initiatorId, initiatorName }` | conversation room | `start`. **No `roomName`** — removed 2026-09-24; the room handle comes back from `POST /calls/:id/token`. |
+| `call.accepted` | `{ callId, conversationId, actorId }` | conversation room | **`accept`** — the HTTP answer, an APPLICATION act. |
+| `call.declined` | `{ callId, conversationId, actorId }` | conversation room | `decline` |
+| `call.participant_joined` | `{ callId, conversationId, actorId }` | conversation room | **`POST /livekit/webhook` only** (`MediaPresenceService`) — MEDIA presence, something observed in the room. **Never `accept`.** |
+| `call.participant_left` | `{ callId, conversationId, actorId }` | conversation room | **`POST /livekit/webhook` only.** Records a departure; does **not** end the call. |
+| `call.ended` | `{ callId, conversationId, outcome, durationSeconds }` | conversation room | `end`, the ring-timeout sweep, and `decline` (terminal since 2026-09-27) |
 | `notification.created` | `{ notificationId, recipientId, eventType, title, body, conversationId }` | actor room | **nobody** — `in_app` channel is a no-op in `deliver()`. Phase 1 decides. |
 | **`session.revoked`** (Phase 1, new) | `{ sessionId }` | actor room, then the session's sockets are disconnected | `DELETE /me/sessions/:id`, refresh-reuse detection |
 | **`family.assignment_changed`** (Phase 1, new) | `{ familyId, fromStaffId, toStaffId, at }` | actor rooms of both staff + the family's conversation rooms | `POST /families/:id/assignment` |
@@ -744,7 +986,7 @@ Reconnect: re-subscribe, `GET …/messages?after=<last seq held>` per conversati
 | # | Gap | Evidence | Fix | Phase |
 |---|---|---|---|---|
 | S-1 | **No authentication.** `x-actor-id` header and `auth.actorId` handshake are trusted after identity resolution; any caller can act as any active actor. | `api/actor.decorator.ts`; `realtime.gateway.ts#handleConnection`; `docs/integration/auth-current-state.md` | Bearer tokens, guard populating `request.user`, WS token verification (§1, §3.1, §4). | 1 |
-| S-2 | **Routes with no actor at all**: `POST /conversations/student-group/:learnerId/sync`, `DELETE /notifications/devices/:token`, `POST /notifications/:id/delivered`. Anyone can resync any group, silence any device's push, or corrupt delivery metrics. | `conversation.controller.ts#sync`, `notification.controller.ts#unregister`, `#delivered` | Auth required on all three; sync becomes `conversations.manage` (or worker-internal); device / delivered scoped to owner / recipient. | 1 |
+| S-2 | **Routes with no actor at all**: `POST /conversations/student-group/:learnerId/sync`, `DELETE /notifications/devices/:token`, `POST /notifications/:id/delivered`. Anyone can resync any group, silence any device's push, or corrupt delivery metrics. | `conversation.controller.ts#sync`, `notification.controller.ts#unregister`, `#delivered` | Auth required on all three; sync becomes `conversations.manage` (or worker-internal); device / delivered scoped to owner / recipient. **`unregister` closed 2026-09-24** (scoped to the authenticated owner); `sync` and `delivered` remain open. | 1 |
 | S-3 | `POST /conversations/student-group` performs no actor or permission check (header only used as `addedBy`). | `conversation.controller.ts#studentGroup`, `ensureStudentGroup` | `conversations.manage` + family scope. | 1 |
 | S-4 | **RT-011 — unscoped staff lists.** `GET /conversations` returns every conversation (`take: 200`) to any family-facing staff; `GET /approvals/pending` returns every pending approval; `canRead` allows any family-facing staff into any conversation. | `conversation.service.ts#listForActor`; `approval.service.ts#listPending`; `authorization.service.ts#canRead`; `docs/red-team/findings.md` RT-011 | Family scope rule (§3.3) applied to `listForActor`, `listPending`, `canRead` for non-managers; cursor pagination. Lists are built from an authorization-derived filter, never a probe. | 1 |
 | S-5 | **RT-012 — receipt roster disclosure.** `MessageDto.receipts` maps every receipt row (`actorId`, `deliveredAt`, `readAt`) to every reader, so a parent learns staff ids and read times. | `dto.ts#toMessageDto`; findings RT-012 | Receipts scoped to the requester's own row plus an aggregate (`readCount`, `deliveredCount`) for the author; staff see the roster for staff-authored messages only. Shape change is a breaking DTO change — announce with the Phase 1 DTO. | 1 |

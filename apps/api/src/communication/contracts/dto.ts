@@ -1,12 +1,13 @@
 import {
   Conversation,
-  ConversationMember,
   Learner,
   Message,
   MessageAttachment,
   MessageReaction,
   MessageReceipt,
 } from '@prisma/client';
+import type { ActorRef, ResolvedActors } from '../../platform/identity.service';
+import { actorRefKey } from '../../platform/identity.service';
 import { ConversationState, Moderation } from './vocab';
 
 /**
@@ -39,6 +40,25 @@ export interface MessageDto {
   seq: string | null;
   authorKind: string;
   authorId: string | null;
+
+  /**
+   * The author's canonical display name (mobile gap O3, author half).
+   *
+   * Resolved server-side from `Actor.displayName` — the same single source as
+   * `ConversationMemberDto.displayName` and `ActorDto.displayName`, derived from
+   * staff.name / contact.name / teacher.name by `IdentityService`. It is never
+   * derived from the role, the actor kind, conversation membership, or a label.
+   *
+   * NULL, not '', when there is nobody to name: a system message (`authorId` is
+   * null by construction) or an author whose actor no longer resolves. It is
+   * spelled `string | null` rather than `''` — unlike the member field — because
+   * `authorId` on this same DTO is already nullable, so "no author" is a state
+   * this DTO already had to express. A null here is the absence of a fact, never
+   * a fabricated name; the client's role label is a presentation fallback and is
+   * not an identity mechanism.
+   */
+  authorDisplayName: string | null;
+
   onBehalfMode: string | null;
   type: string;
   body: string | null;
@@ -60,6 +80,29 @@ export interface ConversationMemberDto {
   actorKind: string;
   memberRole: string;
   isSilent: boolean;
+
+  /**
+   * The member's display name (mobile gap O3).
+   *
+   * `displayName` and not `name`: this is an ACTOR, and `Actor.displayName` is
+   * already the one name a principal has in this codebase -- IdentityService
+   * derives it from staff.name / contact.name / teacher.name and ActorDto
+   * publishes it under that spelling. `ConversationLearnerDto.name` is spelled
+   * differently on purpose, because a learner is not an actor and that field
+   * mirrors a column.
+   *
+   * EMPTY MEANS UNRESOLVED, NEVER "has no name". A membership row outlives the
+   * actor it names (BR-5: departures are recorded, not deleted), so a member
+   * whose identity no longer resolves yields '' -- and the client renders that
+   * as unresolved rather than falling back to an id, which is what it already
+   * does today for every member.
+   *
+   * PRIVACY: a display name is not a contact channel. Actor carries no phone,
+   * email or address field and the chat schema has no such column
+   * (no-contact-channel-columns.spec.ts), so this cannot become one. It is
+   * returned only for a conversation the caller is already authorized to read.
+   */
+  displayName: string;
 }
 
 /**
@@ -136,9 +179,27 @@ export function conversationState(
 /** A conversation row loaded with `include: { learner: true }`. */
 export type ConversationWithLearner = Conversation & { learner?: Learner | null };
 
+/**
+ * A membership row with its actor's display name already resolved.
+ *
+ * The name is resolved by the caller (ConversationService.membersOf) rather than
+ * here, because resolving an identity is a query and a mapper must not make
+ * one. Structural rather than `ConversationMember & {...}`: the mapper needs
+ * four columns and a name, and saying so keeps a widened Prisma include from
+ * reaching a client through this parameter.
+ */
+export interface ResolvedMember {
+  actorId: string;
+  actorKind: string;
+  memberRole: string;
+  isSilent: boolean;
+  /** '' when the actor no longer resolves. Never an id. */
+  displayName: string;
+}
+
 export function toConversationDto(
   c: ConversationWithLearner,
-  members?: ConversationMember[],
+  members?: ResolvedMember[],
   extra?: { unreadCount?: number },
 ): ConversationDto {
   return {
@@ -159,6 +220,7 @@ export function toConversationDto(
       actorKind: m.actorKind,
       memberRole: m.memberRole,
       isSilent: m.isSilent,
+      displayName: m.displayName,
     })),
     // Two fields enumerated by hand, like every other field here: the Learner
     // row is never spread, so `level`, `nextClassAt` and `teacherId` cannot
@@ -187,23 +249,51 @@ export function toAttachmentDto(
   };
 }
 
+/**
+ * The actor reference a message's author is, or null when it is nobody.
+ *
+ * `message.author_type` IS the actor kind, so no caller has to discover it — which
+ * is what lets a whole page be resolved by kind rather than one row at a time. A
+ * system message carries `author_id = null` by construction, and null is the one
+ * honest answer for it: there is no person to name.
+ *
+ * Exported so that the code collecting references for a batch and the code reading
+ * the batch back agree by construction rather than by convention.
+ */
+export function messageAuthorRef(
+  m: Pick<Message, 'authorId' | 'authorType'>,
+): ActorRef | null {
+  return m.authorId ? { actorId: m.authorId, actorKind: m.authorType } : null;
+}
+
 type MessageWithRelations = Message & {
   attachments?: MessageAttachment[];
   reactions?: MessageReaction[];
   receipts?: MessageReceipt[];
 };
 
+/**
+ * @param authors Resolved authors from `IdentityService.resolveActors`, keyed by
+ *   `actorRefKey`. Defaults to empty, which yields `authorDisplayName: null` —
+ *   the same answer as an unresolvable author, because a caller that resolved
+ *   nobody knows nothing about this author either. The mapper takes a map and
+ *   never a service: resolving an identity is a query, and a mapper must not
+ *   make one.
+ */
 export function toMessageDto(
   m: MessageWithRelations,
   signedUrls: Map<string, { url: string; thumbnailUrl: string | null }> = new Map(),
+  authors: ResolvedActors = new Map(),
 ): MessageDto {
   const hidden = m.deletedForAll;
+  const author = messageAuthorRef(m);
   return {
     id: m.id,
     conversationId: m.conversationId,
     seq: m.seq?.toString() ?? null,
     authorKind: m.authorType,
     authorId: m.authorId,
+    authorDisplayName: author ? (authors.get(actorRefKey(author))?.displayName ?? null) : null,
     onBehalfMode: m.onBehalfMode,
     type: m.type,
     // A message deleted for everyone keeps its row for auditability, but its

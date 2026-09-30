@@ -197,7 +197,7 @@ POST /calls                { conversationId }  → { callId, roomName }
 POST /calls/:id/token                          → { token, url, roomName, expiresAt }
 POST /calls/:id/accept
 POST /calls/:id/decline
-POST /calls/:id/end        { outcome? }
+POST /calls/:id/end
 GET  /calls/history/:conversationId
 ```
 
@@ -209,6 +209,21 @@ Flow:
 3. Each participant `POST /calls/:id/token` and connects to LiveKit with
    `{ token, url }`.
 4. `POST /calls/:id/end` when finished.
+
+**`end` takes no body.** The outcome is the server's: an ACTIVE call ends
+`answered`, a still-ringing one ends `missed`, and `declined` comes only from
+`decline`. Sending an outcome never worked as a way to label a call and no longer
+reaches the service at all.
+
+**`decline` ends the call** (since 2026-09-27) with `outcome: 'declined'`, so you
+receive `call.declined` and `call.ended` and the call is over — you do not need to
+follow a refusal with `end`, and doing so is a harmless no-op. This is
+unconditional: it holds for a group call too, whoever declines.
+
+**`call.accepted` is the application answer; `call.participant_joined` is media
+presence** and arrives only from LiveKit's webhook. Render "answered" from the
+first and "in the room" from the second — they are different facts and either can
+arrive without the other.
 
 Tokens are **short-lived (≈120 s) and scoped to one room**. Fetch one per join;
 never cache or share one. The full authorization chain re-runs at token issue, so

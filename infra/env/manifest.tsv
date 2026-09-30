@@ -80,10 +80,19 @@ APNS_TEAM_ID	push	no	opt	opt	req
 APNS_BUNDLE_ID	push	no	opt	opt	req
 APNS_PRIVATE_KEY	push	yes	opt	opt	req
 APNS_PRODUCTION	push	no	opt	opt	req
-LIVEKIT_URL	calling	no	req	req	req
-LIVEKIT_API_KEY	calling	yes	req	req	req
-LIVEKIT_API_SECRET	calling	yes	req	req	req
-LIVEKIT_TOKEN_TTL_SECONDS	calling	no	opt	req	req
+# Calling is LiveKit Cloud; there is no local LiveKit server in docker-compose, so
+# a developer machine and a unit/integration test run leave it unconfigured. The
+# issuer refuses to mint a token when any of the three is absent (media-token.ts),
+# so an unconfigured local environment cannot call and cannot pretend to -- which is
+# why these are opt locally and req everywhere a client actually connects. Same
+# shape, and same reason, as the push group above.
+#
+# The token TTL is deliberately NOT here: it lives in chat.config as
+# `call.token_ttl_seconds`, which is what CallService reads when it mints a media
+# token. An env var would be a knob that changes nothing.
+LIVEKIT_URL	calling	no	opt	req	req
+LIVEKIT_API_KEY	calling	yes	opt	req	req
+LIVEKIT_API_SECRET	calling	yes	opt	req	req
 CORE_BASE_URL	core	no	req	opt	req
 CORE_API_KEY	core	yes	opt	opt	req
 CORE_WEBHOOK_SECRET	core	yes	opt	opt	req

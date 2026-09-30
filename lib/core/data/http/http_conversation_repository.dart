@@ -71,6 +71,38 @@ class HttpConversationRepository implements ConversationRepository {
     return WireMappers.conversation(data, viewerRole: _viewerRole());
   }
 
+  /// `POST /conversations/direct` — the first conversation-CREATION call this
+  /// client has ever made.
+  ///
+  /// The server decides three things this method deliberately does not:
+  /// whether the pair may share a channel at all (`canOpenDirect`), whether one
+  /// already exists (`direct_key` is unique, so a repeat returns the first), and
+  /// what the conversation then looks like. So there is no "does it exist?"
+  /// request before this one: asking would be a race, and the unique index is
+  /// what makes losing that race harmless.
+  ///
+  /// A refusal keeps its code. `BR1_TEACHER_PARENT_DIRECT` and
+  /// `TEACHER_PARENT_NOT_AUTHORIZED` are different facts — forbidden versus not
+  /// currently authorized — and the transport maps both to a typed AppError so
+  /// the UI can say which happened instead of "something went wrong".
+  @override
+  Future<Conversation> openDirect(String withActorId) async {
+    final response = await _client.post<Map<String, Object?>>(
+      '/conversations/direct',
+      data: {'withActorId': withActorId},
+    );
+
+    final data = response.data;
+    if (data == null || (data['id'] as String?)?.isNotEmpty != true) {
+      throw const AppError(
+        AppErrorKind.server,
+        code: 'malformed_conversation_response',
+        debugDetail: 'direct conversation response carried no id',
+      );
+    }
+    return WireMappers.conversation(data, viewerRole: _viewerRole());
+  }
+
   @override
   Future<void> setPinned(String conversationId, bool pinned) =>
       _preferences(conversationId, {'pinned': pinned});

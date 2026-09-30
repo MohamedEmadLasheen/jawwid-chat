@@ -3,13 +3,14 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
-import { AUDIT_SERVICE } from '../../platform/tokens';
+import { AUDIT_SERVICE, IDENTITY_SERVICE } from '../../platform/tokens';
 import type { AuditService } from '../../platform/audit.service';
+import type { ActorRef, IdentityService } from '../../platform/identity.service';
 import { ConversationService } from '../conversations/conversation.service';
 import { AttachmentService } from '../attachments/attachment.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
-import { toMessageDto, MessageDto } from '../contracts/dto';
+import { messageAuthorRef, toMessageDto, MessageDto } from '../contracts/dto';
 import { ActorKind, ApprovalDecision, Moderation, ReceiptState, Visibility } from '../contracts/vocab';
 
 export interface PendingApprovalDto {
@@ -41,6 +42,7 @@ export class ApprovalService {
     private readonly attachments: AttachmentService,
     private readonly outbox: OutboxService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
   ) {}
 
   /** The approval queue, scoped to what this actor is allowed to decide. */
@@ -94,6 +96,19 @@ export class ApprovalService {
     }>,
   ): Promise<PendingApprovalDto[]> {
     const signed = await this.attachments.signUrlsForMessages(rows.map((r) => r.messageId));
+
+    // Authors, in one batch for the whole queue — the same shape as the signed
+    // URLs above and for the same reason. An approver is deciding about a
+    // person's message, so "approve this from Umm Yusuf" is the question they are
+    // actually answering; a role label would make two pending messages from two
+    // different parents indistinguishable.
+    const refs: ActorRef[] = [];
+    for (const r of rows) {
+      const ref = messageAuthorRef(r.message);
+      if (ref) refs.push(ref);
+    }
+    const authors = await this.identity.resolveActors(refs);
+
     return rows.map((r) => ({
       approvalId: r.id,
       conversationId: r.conversationId,
@@ -101,7 +116,7 @@ export class ApprovalService {
       requestedBy: r.requestedBy,
       approverId: r.approverId,
       createdAt: r.createdAt.toISOString(),
-      message: toMessageDto(r.message, signed),
+      message: toMessageDto(r.message, signed, authors),
     }));
   }
 

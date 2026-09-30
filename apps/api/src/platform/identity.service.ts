@@ -21,6 +21,7 @@ import { ActorKind, Locale, StaffRole } from '../communication/contracts/vocab';
  */
 export interface IdentityService {
   resolveActor(actorId: string): Promise<Actor | null>;
+  resolveActors(refs: readonly ActorRef[]): Promise<ResolvedActors>;
   resolveForAccount(account: ResolvableAccount): Promise<Actor | null>;
 }
 
@@ -29,6 +30,42 @@ export interface ResolvableAccount {
   readonly id: string;
   readonly kind: string;
   readonly organizationId: string;
+}
+
+/**
+ * A polymorphic reference to an actor.
+ *
+ * BOTH FIELDS ARE THE IDENTITY. `chat.staff`, `chat.contact` and `chat.teacher`
+ * are three tables with independently generated uuids, so an id alone does not
+ * name anybody: `STAFF:x` and `TEACHER:x` are different actors, and a map keyed
+ * on the id alone would silently return one when asked for the other. Every
+ * caller already has the kind — `conversation_member.actor_kind`,
+ * `message.author_type`, `call_participant.actor_kind` — so nothing has to
+ * discover it.
+ */
+export interface ActorRef {
+  readonly actorId: string;
+  readonly actorKind: string;
+}
+
+/**
+ * Resolved actors, keyed by [actorRefKey].
+ *
+ * A key that is ABSENT means the actor does not resolve — it does not mean an
+ * actor with no name. Callers must treat absence as unresolved and must not
+ * substitute anything for it.
+ */
+export type ResolvedActors = ReadonlyMap<string, Actor>;
+
+/**
+ * The one spelling of an actor reference as a map key.
+ *
+ * Exported so no caller invents a second one. Two callers that agreed on the
+ * shape of the map but disagreed on how to build its keys would produce
+ * misses that look like unresolved actors.
+ */
+export function actorRefKey(ref: ActorRef): string {
+  return `${ref.actorKind}:${ref.actorId}`;
 }
 
 @Injectable()
@@ -56,6 +93,100 @@ export class PrismaIdentityService implements IdentityService {
     if (teacher) return toTeacherActor(teacher);
 
     return null;
+  }
+
+  /**
+   * Resolve many actors in a bounded number of queries.
+   *
+   * ## Why this exists
+   *
+   * `resolveActor` probes three tables in turn because it is given an id and no
+   * kind. Called once per row it is the worst shape in the codebase: a
+   * 100-message page would cost up to 300 sequential queries, and a message
+   * author is not bounded by conversation membership (family-facing staff may
+   * post in any conversation), so deduplicating by author does not bound it
+   * either.
+   *
+   * Every caller that has a LIST already has the kind alongside each id. Given
+   * the kind, one query per kind answers the whole list:
+   *
+   *     queries = number of DISTINCT KINDS PRESENT   (at most 3)
+   *     queries ≠ number of rows
+   *     queries ≠ number of distinct actors
+   *
+   * A kind with no references issues no query at all, so a conversation of only
+   * contacts costs one.
+   *
+   * ## What it does not do
+   *
+   * It does not filter by activity and it does not filter by organization. It
+   * answers "who is this", and `Actor.isActive` carries the liveness the same way
+   * `resolveActor` does — so a caller that needs a live actor reads that field
+   * rather than getting a silent miss it would have to interpret. Tenancy is the
+   * caller's boundary here exactly as it is for `resolveActor`; both are reached
+   * with ids the system already trusts.
+   *
+   * SYSTEM is answered without a query. An id that resolves to nothing is simply
+   * absent from the map: no placeholder, no fabricated name.
+   */
+  async resolveActors(refs: readonly ActorRef[]): Promise<ResolvedActors> {
+    const resolved = new Map<string, Actor>();
+    if (refs.length === 0) return resolved;
+
+    // Deduplicate on the COMPOSITE key, so one author appearing eighty times is
+    // one lookup, and `STAFF:x` and `TEACHER:x` stay two.
+    const wanted = new Map<string, ActorRef>();
+    for (const ref of refs) {
+      if (!ref.actorId) continue;
+      wanted.set(actorRefKey(ref), ref);
+    }
+
+    const idsOfKind = (kind: string): string[] =>
+      [...wanted.values()].filter((r) => r.actorKind === kind).map((r) => r.actorId);
+
+    // No query for the system actor: it is a constant, not a row.
+    for (const ref of wanted.values()) {
+      if (ref.actorKind === ActorKind.SYSTEM) {
+        resolved.set(actorRefKey(ref), SYSTEM_ACTOR);
+      }
+    }
+
+    const staffIds = idsOfKind(ActorKind.STAFF);
+    const contactIds = idsOfKind(ActorKind.CONTACT);
+    const teacherIds = idsOfKind(ActorKind.TEACHER);
+
+    const [staff, contacts, teachers] = await Promise.all([
+      staffIds.length > 0
+        ? this.prisma.staff.findMany({ where: { id: { in: staffIds } } })
+        : Promise.resolve([]),
+      contactIds.length > 0
+        ? this.prisma.contact.findMany({
+            where: { id: { in: contactIds } },
+            include: { family: true },
+          })
+        : Promise.resolve([]),
+      teacherIds.length > 0
+        ? this.prisma.teacher.findMany({ where: { id: { in: teacherIds } } })
+        : Promise.resolve([]),
+    ]);
+
+    for (const row of staff) {
+      resolved.set(actorRefKey({ actorId: row.id, actorKind: ActorKind.STAFF }), toStaffActor(row));
+    }
+    for (const row of contacts) {
+      resolved.set(
+        actorRefKey({ actorId: row.id, actorKind: ActorKind.CONTACT }),
+        toContactActor(row),
+      );
+    }
+    for (const row of teachers) {
+      resolved.set(
+        actorRefKey({ actorId: row.id, actorKind: ActorKind.TEACHER }),
+        toTeacherActor(row),
+      );
+    }
+
+    return resolved;
   }
 
   /**

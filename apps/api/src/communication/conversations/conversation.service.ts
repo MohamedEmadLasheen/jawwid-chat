@@ -4,13 +4,20 @@ import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
 import type { LiveMember } from '../../platform/authorization.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
-import { AUDIT_SERVICE, COVERAGE_SERVICE, IDENTITY_SERVICE } from '../../platform/tokens';
+import {
+  AUDIT_SERVICE,
+  COVERAGE_SERVICE,
+  IDENTITY_SERVICE,
+  RELATIONSHIP_SERVICE,
+} from '../../platform/tokens';
+import type { RelationshipService } from '../../platform/relationship.service';
 import type { IdentityService } from '../../platform/identity.service';
+import { actorRefKey } from '../../platform/identity.service';
 import type { CoverageService } from '../../platform/coverage.service';
 import type { AuditService } from '../../platform/audit.service';
 import { Actor } from '../../platform/types';
 import { OutboxService } from '../outbox/outbox.service';
-import type { ConversationWithLearner } from '../contracts/dto';
+import type { ConversationWithLearner, ResolvedMember } from '../contracts/dto';
 import { CommEvent } from '../contracts/events';
 import {
   ActorKind,
@@ -37,7 +44,33 @@ export class ConversationService {
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
     @Inject(COVERAGE_SERVICE) private readonly coverage: CoverageService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    @Inject(RELATIONSHIP_SERVICE) private readonly relationships: RelationshipService,
   ) {}
+
+  /**
+   * PD-6. The resolved teacher<->parent relationship behind a participant set.
+   *
+   * Every service that authorizes an operation on a conversation already holds
+   * its participants, so the fact is resolved from those rather than re-read,
+   * and this one method is the only place that decides which participant is
+   * the teacher and which is the parent. Three call sites doing that
+   * separately is three chances to get the direction backwards, and a backwards
+   * lookup denies a legitimate pair silently.
+   *
+   * Exactly one live teacher and exactly one live contact is the only shape
+   * that can be a teacher/parent pairing. Anything else -- a group, a
+   * staff-only channel, a malformed set -- is false, which the policy ignores
+   * for every conversation type but `direct`.
+   */
+  async pairingAuthorizedAmong(
+    participants: ReadonlyArray<{ actorId: string; actorKind: string }>,
+  ): Promise<boolean> {
+    const teachers = participants.filter((p) => p.actorKind === ActorKind.TEACHER);
+    const contacts = participants.filter((p) => p.actorKind === ActorKind.CONTACT);
+    if (teachers.length !== 1 || contacts.length !== 1) return false;
+
+    return this.relationships.teacherParentAuthorized(teachers[0].actorId, contacts[0].actorId);
+  }
 
   async requireActor(actorId: string): Promise<Actor> {
     const actor = await this.identity.resolveActor(actorId);
@@ -81,6 +114,38 @@ export class ConversationService {
    * else is returned with isActive undefined, which the policy reads as
    * "not resolved", never as "inactive".
    */
+  /**
+   * A conversation plus its membership, for a caller who may read it.
+   *
+   * PD-6 made the participant set load-bearing for the client: since a `direct`
+   * conversation may now be Parent<->Admin, Teacher<->Admin or Parent<->Teacher,
+   * the type alone no longer says which, and the client classifies from
+   * `actorKind`. API-CONTRACT section 3.4 already required `GET
+   * /conversations/:id` to carry `members[]`; this is what supplies it.
+   *
+   * The read is authorized HERE and explicitly. `GET /conversations/:id`
+   * previously leaned on setPreferences() to throw for a non-member -- true,
+   * but incidental, and it is not a property to rely on while widening what the
+   * endpoint returns. A membership list must be reachable only by a member.
+   */
+  async readWithMembers(
+    conversationId: string,
+    actorId: string,
+  ): Promise<{ conversation: ConversationWithLearner; members: ResolvedMember[] }> {
+    const actor = await this.requireActor(actorId);
+    const conversation = await this.requireConversation(conversationId);
+    const membership = await this.membershipOf(conversation.id, actor.actorId);
+
+    const decision = this.authz.canRead(actor, conversation, membership);
+    if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+
+    // Delegates rather than querying again: one member-resolution path, so the
+    // display names O3 added cannot be present on one route and absent on
+    // another. The authorization above is this method's own contribution and is
+    // what `membersOf` deliberately does not do.
+    return { conversation, members: await this.membersOf(conversation.id) };
+  }
+
   async liveMembersOf(conversationId: string): Promise<LiveMember[]> {
     const rows = await this.prisma.conversationMember.findMany({
       where: { conversationId, leftAt: null },
@@ -99,6 +164,53 @@ export class ConversationService {
         return { actorId: m.actorId, actorKind: m.actorKind, memberRole: m.memberRole };
       }),
     );
+  }
+
+  /**
+   * Live membership with display names, for a client that has to render people
+   * (mobile gap O3).
+   *
+   * SEPARATE FROM liveMembersOf ON PURPOSE. That one feeds an authorization
+   * decision and resolves only staff admins, because that is the only activity
+   * the C-4 rule reads and resolving everybody on every send would be a
+   * per-message cost for no decision. This one is for display, resolves every
+   * member, and is called once per conversation-detail read. Merging them would
+   * either put a display name inside an authorization struct or make every send
+   * pay for names nobody reads.
+   *
+   * THE CALLER AUTHORIZES FIRST. This method answers "who is in this
+   * conversation"; it does not decide who may ask. Every current caller runs
+   * canRead before reaching it.
+   *
+   * BOUNDED BY KIND. One `resolveActors` call, so at most one identity query per
+   * actor kind present rather than one per member. It used to be the latter, and
+   * the O3 author-identity audit found it: a conversation's membership is small,
+   * so it was never a production problem, but two callers resolving identity two
+   * different ways is how the second one ends up on a page of a hundred rows.
+   * `conversation_member.actor_kind` supplies the kind, so nothing has to guess.
+   *
+   * An actor that no longer resolves yields '' rather than an id or a
+   * placeholder: a membership row outlives the actor it names (BR-5), and the
+   * client already treats an empty name as unresolved.
+   */
+  async membersOf(conversationId: string): Promise<ResolvedMember[]> {
+    const rows = await this.prisma.conversationMember.findMany({
+      where: { conversationId, leftAt: null },
+      orderBy: { joinedAt: 'asc' },
+    });
+
+    const actors = await this.identity.resolveActors(
+      rows.map((m) => ({ actorId: m.actorId, actorKind: m.actorKind })),
+    );
+
+    return rows.map((m) => ({
+      actorId: m.actorId,
+      actorKind: m.actorKind,
+      memberRole: m.memberRole,
+      isSilent: m.isSilent,
+      displayName:
+        actors.get(actorRefKey({ actorId: m.actorId, actorKind: m.actorKind }))?.displayName ?? '',
+    }));
   }
 
   /** Canonical, order-independent identity of a 1:1 channel. */
@@ -121,7 +233,11 @@ export class ConversationService {
     const a = await this.requireActor(requesterId);
     const b = await this.requireActor(otherId);
 
-    const decision = this.authz.canOpenDirect(a, b);
+    // PD-6. The relationship is resolved from server-owned data BEFORE the
+    // policy runs. `otherId` selected a row; it asserted nothing about it.
+    const pairingAuthorized = await this.relationships.pairingAuthorized(a, b);
+
+    const decision = this.authz.canOpenDirect(a, b, pairingAuthorized);
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
     const key = ConversationService.directKey(a.actorId, b.actorId);
