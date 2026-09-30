@@ -8,7 +8,7 @@ import type { Decision } from '../../platform/authorization.service';
 import { AppConfigService } from '../../platform/app-config.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
 import { AUDIT_SERVICE, IDENTITY_SERVICE, MEDIA_TOKEN_ISSUER } from '../../platform/tokens';
-import type { IdentityService } from '../../platform/identity.service';
+import { actorRefKey, type IdentityService, type ResolvedActors } from '../../platform/identity.service';
 import type { AuditService } from '../../platform/audit.service';
 import type { MediaTokenIssuer } from './media-token';
 import { Actor, SYSTEM_ACTOR } from '../../platform/types';
@@ -776,7 +776,14 @@ export class CallService {
       take: 100,
     });
 
-    return calls.map((c) => this.toHistoryRow(c));
+    // Named in one batch, exactly as the account-scoped history above: both
+    // feed the same row shape, so both resolve the same way.
+    const directory = await this.identity.resolveActors(
+      calls.flatMap((c) =>
+        c.participants.map((p) => ({ actorId: p.actorId, actorKind: p.actorKind })),
+      ),
+    );
+    return calls.map((c) => this.toHistoryRow(c, directory));
   }
 
   /**
@@ -866,8 +873,18 @@ export class CallService {
 
     const page = calls.slice(0, limit);
     const last = page.at(-1);
+
+    // Every participant in the page, named in one batch. Per row it would be a
+    // lookup per call per person, which is the cost that kept names off this
+    // payload; resolveActors spends at most one query per actor kind for the whole page.
+    const directory = await this.identity.resolveActors(
+      page.flatMap((c) =>
+        c.participants.map((p) => ({ actorId: p.actorId, actorKind: p.actorKind })),
+      ),
+    );
+
     return {
-      items: page.map((c) => this.toHistoryRow(c)),
+      items: page.map((c) => this.toHistoryRow(c, directory)),
       nextCursor:
         calls.length > limit && last ? encodeHistoryCursor(last.startedAt, last.id) : null,
     };
@@ -885,6 +902,7 @@ export class CallService {
    */
   private toHistoryRow(
     call: Call & { participants: CallParticipant[] },
+    directory?: ResolvedActors,
   ): {
     id: string;
     conversationId: string;
@@ -898,6 +916,13 @@ export class CallService {
     participants: {
       actorId: string;
       actorKind: string;
+      /**
+       * Resolved for the page in one batch, or null when the principal could
+       * not be resolved. Closes O3 for calls: a history row carried an actor id
+       * and no name, so the Calls tab drew a placeholder avatar and no title
+       * for every call a parent had ever made. An id is never the fallback.
+       */
+      displayName: string | null;
       joinedAt: string | null;
       leftAt: string | null;
     }[];
@@ -915,6 +940,7 @@ export class CallService {
       participants: call.participants.map((p) => ({
         actorId: p.actorId,
         actorKind: p.actorKind,
+        displayName: directory?.get(actorRefKey({ actorId: p.actorId, actorKind: p.actorKind }))?.displayName ?? null,
         joinedAt: p.joinedAt?.toISOString() ?? null,
         leftAt: p.leftAt?.toISOString() ?? null,
       })),
