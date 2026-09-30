@@ -34,7 +34,7 @@ beforeEach(async () => {
   await truncate(g.prisma);
   s = await seed(g.prisma);
   g.coverage.onDutyId = s.ownerId;
-  conversations = new ConversationController(g.conversations, g.messages, g.directory, g.authz);
+  conversations = new ConversationController(g.conversations, g.messages, g.directory, g.authz, g.calls);
   messages = new MessageController(g.messages, g.attachments);
 });
 

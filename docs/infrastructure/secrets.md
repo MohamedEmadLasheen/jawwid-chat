@@ -89,10 +89,89 @@ Clients may never hold: any JWT signing secret, storage credentials, the LiveKit
 API secret, Core credentials, or a Supabase `service_role` key. Everything
 shipped to a device or a browser is public, whatever it is named.
 
+## 6.1 Provisioning LiveKit Cloud staging
+
+**DONE on 2026-09-24.** The `jawwid-staging` project exists (LiveKit Cloud, data
+region European Union / Frankfurt), the GitHub Environment `staging` holds all
+three values, and `scripts/infra/livekit-probe.sh` exits 0 against the real
+project:
+
+```
+VERIFIED — LiveKit Cloud accepted a token minted by this codebase.
+  endpoint reachable, key recognised, secret correct
+  active rooms visible to this project: 0
+```
+
+**What that proves:** the endpoint is reachable over TLS, the API key names a
+real project, and the API secret is the right one for it — LiveKit verifies the
+HMAC, so a wrong secret is refused as unauthenticated.
+
+**What it does not prove, and must not be reported as proving:** that audio
+flows. Joining a room, publishing a microphone and subscribing to remote audio
+need a media client and two devices. The control plane is verified; the media
+plane is not.
+
+Re-run it after any key rotation. The steps below are the record of how the
+project was provisioned, and what to repeat if it is ever rebuilt.
+
+1. **Create the LiveKit Cloud project** at `cloud.livekit.io` — a *staging*
+   project, separate from any production one. An account owner does this;
+   creating accounts is not something automation should attempt.
+
+2. **Copy three values** from the project's Settings → Keys:
+   the project URL, an API key, and its secret.
+
+3. **`LIVEKIT_URL` must be the `wss://` form.** A LiveKit project answers on the
+   same host with two faces: `wss://` for media signalling and `https://` for the
+   RoomService control plane. The value here is handed to the CLIENT, which
+   connects over WebSocket, so it must be `wss://<project>.livekit.cloud`. The
+   probe derives the `https://` form itself. Getting this wrong used to be
+   silent — the probe would pass while every client failed — and
+   `media-token.ts` now refuses a non-WebSocket URL for exactly that reason.
+
+4. **Create the GitHub Environment `staging`** (it does not exist yet), then add:
+
+   | Name | Kind | Why |
+   |---|---|---|
+   | `LIVEKIT_URL` | **variable** | not a secret; `manifest.tsv` marks it `no` |
+   | `LIVEKIT_API_KEY` | **secret** | |
+   | `LIVEKIT_API_SECRET` | **secret** | |
+
+   The names must be exactly these — `deploy-staging.yml` reads
+   `vars.LIVEKIT_URL`, `secrets.LIVEKIT_API_KEY`, `secrets.LIVEKIT_API_SECRET`.
+   Do not add a fourth variable: token lifetime is
+   `chat.config['call.token_ttl_seconds']` (120 s) and is deliberately not an
+   environment variable.
+
+5. **Verify, before trusting it.** Either from a shell holding the three values,
+   or — better, because then nobody has to hold the secret at all — through the
+   `LiveKit probe` workflow (`.github/workflows/livekit-probe.yml`), which runs
+   the same script inside the environment. It is `workflow_dispatch` only, and
+   GitHub requires such a workflow to be on the default branch before it can be
+   dispatched.
+
+   Locally:
+
+   ```bash
+   scripts/infra/livekit-probe.sh
+   ```
+
+   Exit 0 means the endpoint is reachable, the key is recognised and the secret
+   is correct. Exit 78 means a value is missing. Exit 1 means LiveKit refused or
+   could not be reached. The probe prints no key, secret, token or URL, so its
+   output is safe to paste into an issue.
+
+   A token that parses proves nothing: the API signs its own tokens, so they
+   verify whether or not the project exists. Only the probe asks LiveKit.
+
 ## 7. Known gaps
 
-- No secret store exists yet, because no hosting or GitHub repository exists yet
-  (`production-readiness.md`, BLOCKER-1 and BLOCKER-2).
+- **Partially resolved 2026-09-24.** The GitHub Environment `staging` now exists
+  and holds the three LiveKit values, verified end to end by the probe. Every
+  other staging secret — database, Redis, JWT, storage, FCM, APNs, Core — is
+  still unset, and no `production` Environment exists at all, so a deployment
+  would still fail on the first missing value (`production-readiness.md`,
+  BLOCKER-1 and BLOCKER-2).
 - No automated rotation schedule. Rotation is documented and manual.
 - `scan-secrets.sh` is a tripwire covering this project's realistic failure
   modes, not a comprehensive scanner. Adding a managed scanner is worthwhile once

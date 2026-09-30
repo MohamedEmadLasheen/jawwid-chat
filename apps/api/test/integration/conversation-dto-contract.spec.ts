@@ -35,7 +35,13 @@ beforeEach(async () => {
   await truncate(g.prisma);
   s = await seed(g.prisma);
   g.coverage.onDutyId = s.ownerId;
-  controller = new ConversationController(g.conversations, g.messages, g.directory, g.authz);
+  controller = new ConversationController(
+    g.conversations,
+    g.messages,
+    g.directory,
+    g.authz,
+    g.calls,
+  );
 });
 
 async function listBody(actorId: string): Promise<{ conversations: ConversationDto[] }> {

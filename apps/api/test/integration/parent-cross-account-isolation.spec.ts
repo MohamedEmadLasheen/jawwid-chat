@@ -67,7 +67,7 @@ beforeEach(async () => {
   b = await seedSecondFamily(g.prisma);
   g.coverage.onDutyId = a.ownerId;
 
-  conversations = new ConversationController(g.conversations, g.messages, g.directory, g.authz);
+  conversations = new ConversationController(g.conversations, g.messages, g.directory, g.authz, g.calls);
   messages = new MessageController(g.messages, g.attachments);
   stories = new StoryController(g.stories);
   approvals = new ApprovalController(g.approvals);
@@ -286,10 +286,28 @@ describe('Parent A cannot reach Parent B', () => {
     ).rejects.toThrow();
   });
 
-  it('cannot open a direct conversation with a teacher, their own or another family', async () => {
-    // BR-1, and it must not be reachable by naming a teacher from outside.
-    await expect(conversations.direct(a.parentId, { withActorId: a.teacherId })).rejects.toThrow();
-    await expect(conversations.direct(a.parentId, { withActorId: b.teacherId })).rejects.toThrow();
+  it('cannot open a direct conversation with an UNRELATED teacher', async () => {
+    // PD-6 re-versioned BR-1: a parent and a teacher may hold a direct channel
+    // where the server-resolved relationship authorizes it, and nowhere else.
+    // So the assertion is no longer "never a teacher" -- it is "never a teacher
+    // who teaches none of this parent's children", which is the boundary that
+    // still matters. `unrelatedTeacherId` teaches nobody in family A;
+    // `b.teacherId` belongs to another household entirely.
+    await expect(
+      conversations.direct(a.parentId, { withActorId: a.unrelatedTeacherId }),
+    ).rejects.toThrow();
+    await expect(
+      conversations.direct(a.parentId, { withActorId: b.teacherId }),
+    ).rejects.toThrow();
+  });
+
+  it('may open one with the teacher who actually teaches their child', async () => {
+    // The other half of PD-6, asserted so the rule above cannot be "fixed" by
+    // refusing every teacher again -- which would pass the test above and
+    // delete a product capability.
+    await expect(
+      conversations.direct(a.parentId, { withActorId: a.teacherId }),
+    ).resolves.toBeDefined();
   });
 
   it('cannot find family B conversations through search, at any term', async () => {

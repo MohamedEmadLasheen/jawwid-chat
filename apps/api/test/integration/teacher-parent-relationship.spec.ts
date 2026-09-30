@@ -2,7 +2,7 @@
  * PD-6 step 1: the teacher <-> parent relationship predicate, proven on its own
  * before anything is authorized differently.
  *
- * Two implementations answer the same question -- `RelationshipService`
+ * Two implementations answer the same question -- `PrismaRelationshipService`
  * (Prisma) and `chat.teacher_parent_authorized` (SQL) -- and the policy needs
  * the rule at both layers. Every case below runs through BOTH and asserts they
  * agree, so a divergence is a failing test rather than a latent disagreement
@@ -20,13 +20,13 @@
  */
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '@platform/prisma.service';
-import { RelationshipService } from '@platform/relationship.service';
+import { PrismaRelationshipService } from '@platform/relationship.service';
 import { seed, truncate, withAssignmentGate, Scenario } from './harness';
 
 jest.setTimeout(60_000);
 
 const prisma = new PrismaService();
-const relationships = new RelationshipService(prisma);
+const relationships = new PrismaRelationshipService(prisma);
 
 /** A second tenant, for the cross-organization cases. */
 const OTHER_ORG = '00000000-0000-0000-0000-0000000000f6';

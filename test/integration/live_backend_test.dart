@@ -327,39 +327,36 @@ void main() {
         );
       });
 
-      test('BR-1 is refused by the server for a parent', () async {
-        // The client offers no such affordance; this proves the server refuses it anyway.
+      // PD-6 (2026-09-23) re-versioned BR-1. The server no longer refuses a
+      // parent/teacher direct conversation outright -- it refuses an
+      // UNAUTHORIZED pairing, which is a different question and the one these
+      // now ask. The refusal code moved with it.
+      //
+      // `JAWWID_LIVE_UNRELATED_TEACHER` names a real, active teacher who
+      // teaches nobody in this parent's family. Without it there is no way to
+      // tell a correct refusal from a broken fixture, so the pair skips rather
+      // than asserting against an unknown relationship.
+      test('PD-6: an unauthorized pairing is refused for a parent', () async {
+        final unrelatedTeacher = Platform.environment['JAWWID_LIVE_UNRELATED_TEACHER'];
+        if (unrelatedTeacher == null) {
+          markTestSkipped('set JAWWID_LIVE_UNRELATED_TEACHER to run this');
+          return;
+        }
         final client = parent.client;
 
         try {
           await client.post<Map<String, Object?>>(
             '/conversations/direct',
-            data: {'withActorId': teacher.actorId},
+            data: {'withActorId': unrelatedTeacher},
           );
-          fail('the server must refuse a parent/teacher direct conversation');
+          fail('the server must refuse an unauthorized parent/teacher pairing');
         } on AppError catch (error) {
-          expect(error.code, WireErrors.br1TeacherParentDirect);
           expect(error.kind, AppErrorKind.forbidden);
           expect(
             error.isTransient,
             isFalse,
-            reason: 'a BR-1 refusal must never enter the retry loop',
+            reason: 'a relationship refusal must never enter the retry loop',
           );
-        }
-      });
-
-      test('BR-1 is refused by the server for a teacher too', () async {
-        final client = teacher.client;
-
-        try {
-          await client.post<Map<String, Object?>>(
-            '/conversations/direct',
-            data: {'withActorId': parent.actorId},
-          );
-          fail('the server must refuse a teacher/parent direct conversation');
-        } on AppError catch (error) {
-          expect(error.code, WireErrors.br1TeacherParentDirect);
-          expect(error.kind, AppErrorKind.forbidden);
         }
       });
 

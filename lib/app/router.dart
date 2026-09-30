@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../features/auth/domain/auth_state.dart';
 import '../features/auth/presentation/sign_in_screen.dart';
+import '../features/calls/presentation/active_call_screen.dart';
 import '../features/calls/presentation/calls_screen.dart';
 import '../features/conversations/presentation/chats_screen.dart';
 import '../features/messages/presentation/chat_screen_route.dart';
@@ -30,6 +31,11 @@ abstract final class Routes {
   static const retiredGroups = '/groups';
 
   static String conversation(String id) => '/chats/$id';
+
+  /// The live call (W7). Outside the tab shell and outside `/chats`, because a
+  /// call is not a section of the app and is not a child of one conversation: an
+  /// incoming call can arrive while the user is anywhere.
+  static const activeCall = '/call';
 
   /// A person's profile, or a group's info. Reached only by tapping an avatar or a name —
   /// there is no Profile tab, and there never will be.
@@ -111,6 +117,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '${Routes.chats}/:conversationId/media',
         builder: (context, state) => ConversationMediaScreen(
           conversationId: state.pathParameters['conversationId']!,
+        ),
+      ),
+      // W7. Pushed on top of everything, with no tab highlighted: a call takes the
+      // screen while it lasts. Leaving it returns to whatever was underneath.
+      GoRoute(
+        path: Routes.activeCall,
+        builder: (context, state) => ActiveCallScreen(
+          onLeave: () {
+            if (context.canPop()) context.pop();
+          },
         ),
       ),
       GoRoute(

@@ -1,82 +1,40 @@
 /**
  * PROTECTED (docs/qa/protected-tests.tsv) -- RT-001 containment.
  *
- * WHAT CHANGED IN PR-B, AND WHY THIS FILE STILL EXISTS.
+ * RE-VERSIONED 2026-09-23 (Phase 8). BOTH SEAMS ARE NOW CLOSED.
  *
  * Phase 0 had two self-asserted-identity seams: `x-actor-id` on HTTP and
  * `handshake.auth.actorId` on the WebSocket. Both were contained by refusing to
- * start outside `local | test | ci`, and that refusal is what this file has
- * always pinned.
+ * start outside `local | test | ci`, and that refusal is what this file used to
+ * pin.
  *
- * PR-B closed the HTTP half: a verified bearer token is the only HTTP identity,
- * and the header is not read anywhere. The socket half is untouched -- the
- * gateway still takes `handshake.auth.actorId` at face value -- so the boot
- * guard NARROWS rather than disappears. Deleting it because "HTTP is fixed now"
- * would let a build whose sockets are still unauthenticated start in
- * production, which is worse than the state it was written for.
+ * PR-B closed the HTTP half. Phase 8 closed the WebSocket half: the gateway
+ * verifies a handshake token with `AuthService.authenticate()` -- the same
+ * method the HTTP guard uses -- and reads no client-supplied actor id. With
+ * nothing left to contain, the boot guard was deleted along with the seam.
  *
- * So this suite now pins two things, and the second is new:
- *   1. the remaining (socket) seam still cannot start outside a local environment;
- *   2. the HTTP seam is genuinely closed -- no source file reads the header.
+ * The environment assertions are therefore GONE, not weakened: the thing they
+ * asserted (a dangerous build must not start in production) is now structurally
+ * unreachable, and a test that pins a deleted guard pins nothing. They are
+ * replaced by assertions that the seams themselves cannot come back, which is
+ * strictly more than the old file proved -- it watched one seam, this watches
+ * two, plus the absence of the guard.
  *
- * The realtime PR deletes the guard, this file, and its registry line together,
- * when the handshake verifies a token.
+ * What this suite pins now:
+ *   1. no source file reads the `x-actor-id` header;
+ *   2. no source file reads a client-supplied actor id from the handshake;
+ *   3. `request.actor` has exactly one writer, the guard;
+ *   4. the socket's identity comes from AuthService.authenticate() and nothing else;
+ *   5. both seam names survive as watched constants, so a reintroduction has to
+ *      delete a symbol a protected test is looking at.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import {
-  assertHandshakeIdentitySeamAllowed,
-  HANDSHAKE_IDENTITY_SEAM,
-  HEADER_IDENTITY_SEAM,
-  IdentitySeamRefused,
-  SEAM_ALLOWED_ENVIRONMENTS,
-} from '@platform/identity-seam';
+import { HANDSHAKE_IDENTITY_FIELD, HEADER_IDENTITY_SEAM } from '@platform/identity-seam';
 
 const SRC = join(__dirname, '..', '..', '..', 'src');
 
-describe('RT-001 containment: the remaining seam never runs outside local', () => {
-  it('refuses production', () => {
-    expect(() => assertHandshakeIdentitySeamAllowed({ APP_ENV: 'production' })).toThrow(
-      IdentitySeamRefused,
-    );
-  });
-
-  it('refuses staging', () => {
-    expect(() => assertHandshakeIdentitySeamAllowed({ APP_ENV: 'staging' })).toThrow(
-      IdentitySeamRefused,
-    );
-  });
-
-  it('refuses any environment that is not on the allow-list, whatever its casing', () => {
-    for (const env of ['Production', 'PROD', 'prod', 'preview', 'demo', 'uat', ' ']) {
-      expect(() => assertHandshakeIdentitySeamAllowed({ APP_ENV: env })).toThrow(
-        IdentitySeamRefused,
-      );
-    }
-  });
-
-  it('allows exactly local, test and ci', () => {
-    expect([...SEAM_ALLOWED_ENVIRONMENTS].sort()).toEqual(['ci', 'local', 'test']);
-    for (const env of SEAM_ALLOWED_ENVIRONMENTS) {
-      expect(() => assertHandshakeIdentitySeamAllowed({ APP_ENV: env })).not.toThrow();
-    }
-  });
-
-  it('treats a missing APP_ENV as local, matching readBuildInfo()', () => {
-    expect(() => assertHandshakeIdentitySeamAllowed({})).not.toThrow();
-  });
-
-  it('names the finding and the seam that is still open, so the operator knows why', () => {
-    expect(() => assertHandshakeIdentitySeamAllowed({ APP_ENV: 'production' })).toThrow(
-      /RT-001/,
-    );
-    expect(() => assertHandshakeIdentitySeamAllowed({ APP_ENV: 'production' })).toThrow(
-      new RegExp(HANDSHAKE_IDENTITY_SEAM.replace(/\./g, '\\.')),
-    );
-  });
-});
-
-describe('the HTTP half is closed: nothing reads x-actor-id', () => {
+describe('RT-001: both identity seams are closed', () => {
   /** Every .ts file under src/, so a reintroduction anywhere is caught. */
   function sourceFiles(dir: string): string[] {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -122,5 +80,52 @@ describe('the HTTP half is closed: nothing reads x-actor-id', () => {
 
   it('the header constant is still exported, so a reintroduction has to delete a watched symbol', () => {
     expect(HEADER_IDENTITY_SEAM).toBe('x-actor-id');
+  });
+
+  // ---- the WebSocket half, closed in Phase 8 ----------------------------
+
+  it('no source file reads a client-supplied actor id from the handshake', () => {
+    // The old gateway line was `client.handshake.auth?.actorId`. Any spelling
+    // that reaches for an actor id on the handshake is a reintroduction.
+    const offenders = sourceFiles(SRC).filter((path) => {
+      const source = readFileSync(path, 'utf8');
+      return /handshake[\s\S]{0,40}?\bauth\b[^\n]{0,20}?\.?\s*\[?\s*['"]?actorId/.test(
+        source.replace(/^\s*(\*|\/\/).*$/gm, ''), // strip comment lines: prose is not a read
+      );
+    });
+
+    expect(offenders.map((p) => p.slice(SRC.length + 1))).toEqual([]);
+  });
+
+  it('the gateway takes its identity from AuthService.authenticate and nothing else', () => {
+    const gateway = readFileSync(
+      join(SRC, 'communication', 'realtime', 'realtime.gateway.ts'),
+      'utf8',
+    );
+    expect(gateway).toMatch(/this\.auth\.authenticate\(/);
+    // The actor room is named from the verified actor, never from the handshake.
+    expect(gateway).toMatch(/room\.actor\(authenticated\.actor\.actorId\)/);
+  });
+
+  it('the handshake field name survives as a watched constant', () => {
+    expect(HANDSHAKE_IDENTITY_FIELD).toBe('actorId');
+  });
+
+  it('the boot guard is gone, and main.ts no longer calls it', () => {
+    // The guard existed to keep an unauthenticated-socket build out of
+    // production. That build cannot be produced any more, so the guard was
+    // deleted rather than left asserting something structurally true.
+    // Matched on the DECLARATION, not on any mention: the module's own history
+    // note names the deleted symbols, and prose recording what was removed is
+    // the opposite of a reintroduction.
+    const seam = readFileSync(join(SRC, 'platform', 'identity-seam.ts'), 'utf8');
+    expect(seam).not.toMatch(/export\s+(function|const)\s+assertHandshakeIdentitySeamAllowed/);
+    expect(seam).not.toMatch(/export\s+(const|class)\s+SEAM_ALLOWED_ENVIRONMENTS/);
+    expect(seam).not.toMatch(/export\s+class\s+IdentitySeamRefused/);
+
+    // main.ts must not CALL it. Again a call, not a mention.
+    const main = readFileSync(join(SRC, 'main.ts'), 'utf8')
+      .replace(/^\s*(\*|\/\/).*$/gm, '');
+    expect(main).not.toMatch(/assertHandshakeIdentitySeamAllowed\s*\(/);
   });
 });
