@@ -23,12 +23,22 @@ class GroupMember {
     required this.displayName,
     required this.role,
     this.avatarUrl,
+    this.canOpenDirect = false,
   });
 
   final String id;
   final String displayName;
   final ParticipantRole role;
   final String? avatarUrl;
+
+  /// Whether the server says the viewer may open a 1:1 with this member.
+  ///
+  /// Advisory, exactly like the call capability: it decides what the UI may
+  /// OFFER, never what the server will allow. PD-6 made the teacher/parent
+  /// pairing undecidable from roles alone, so the client stopped guessing and
+  /// asks. Defaults to false, which is what a server that does not send the
+  /// field — an older build — correctly yields.
+  final bool canOpenDirect;
 }
 
 class StudentGroup {

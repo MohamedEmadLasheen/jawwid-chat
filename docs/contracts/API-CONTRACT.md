@@ -277,8 +277,19 @@ ConversationLearnerDto { id, name }             // two fields only -- never leve
                                                 // nextClassAt, teacherId or familyId
 ConversationMemberDto { actorId, actorKind: 'contact'|'staff'|'teacher'|'system',
   memberRole: 'parent'|'teacher'|'admin'|'observer', isSilent: boolean,
-  displayName: string }                           // '' when the actor no longer
+  displayName: string,                            // '' when the actor no longer
                                                   // resolves; never an id (O3)
+  canOpenDirect: boolean }                        // PD-6 advisory, per requesting
+                                                  // actor: may YOU open a 1:1 with
+                                                  // this member? Computed by the same
+                                                  // AuthorizationService.canOpenDirect
+                                                  // that POST /conversations/direct
+                                                  // runs, with the teacher<->parent
+                                                  // relationship resolved server-side.
+                                                  // NOT permission -- the request is
+                                                  // authorized again. Always present,
+                                                  // never omitted for false; false is
+                                                  // the value for an unknown viewer.
 MessageDto {
   id, conversationId: string|null, seq: string|null, authorKind, authorId: string|null,
   authorDisplayName: string|null,                 // canonical Actor.displayName (O3).

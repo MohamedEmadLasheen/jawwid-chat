@@ -187,16 +187,32 @@ describe('GET /conversations/:id — members, with names (O3)', () => {
     );
   });
 
-  it('exposes no member field beyond the five on the contract', async () => {
+  it('exposes no member field beyond the six on the contract', async () => {
     const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
 
     const dto = await controller.get(s.teacherId, group.id);
 
+    // Exact equality, not a subset: this is the tripwire that stops a widened
+    // Prisma include or a convenience field reaching a client through the member
+    // list. `canOpenDirect` is the sixth and is declared in API-CONTRACT.md; a
+    // seventh should fail here until it is declared there too.
     for (const member of dto.members!) {
       expect(Object.keys(member).sort()).toEqual(
-        ['actorId', 'actorKind', 'displayName', 'isSilent', 'memberRole'],
+        ['actorId', 'actorKind', 'canOpenDirect', 'displayName', 'isSilent', 'memberRole'],
       );
     }
+  });
+
+  it('spells canOpenDirect on every member, false included', async () => {
+    const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
+
+    // Omitting the field for the false ones would make "not allowed" and "old
+    // server" indistinguishable to a client, and the client fails closed on both
+    // -- so the bug would hide until someone wondered why a channel never appeared.
+    const dto = await controller.get(s.teacherId, group.id);
+
+    expect(dto.members!.length).toBeGreaterThan(0);
+    expect(dto.members!.every((m) => typeof m.canOpenDirect === 'boolean')).toBe(true);
   });
 
   it('a name is never an id, and an unresolvable member yields an empty string', async () => {

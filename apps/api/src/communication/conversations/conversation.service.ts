@@ -13,6 +13,7 @@ import {
 import type { RelationshipService } from '../../platform/relationship.service';
 import type { IdentityService } from '../../platform/identity.service';
 import { actorRefKey } from '../../platform/identity.service';
+import type { ResolvedActors } from '../../platform/identity.service';
 import type { CoverageService } from '../../platform/coverage.service';
 import type { AuditService } from '../../platform/audit.service';
 import { Actor } from '../../platform/types';
@@ -143,7 +144,7 @@ export class ConversationService {
     // display names O3 added cannot be present on one route and absent on
     // another. The authorization above is this method's own contribution and is
     // what `membersOf` deliberately does not do.
-    return { conversation, members: await this.membersOf(conversation.id) };
+    return { conversation, members: await this.membersOf(conversation.id, actor) };
   }
 
   async liveMembersOf(conversationId: string): Promise<LiveMember[]> {
@@ -193,7 +194,16 @@ export class ConversationService {
    * placeholder: a membership row outlives the actor it names (BR-5), and the
    * client already treats an empty name as unresolved.
    */
-  async membersOf(conversationId: string): Promise<ResolvedMember[]> {
+  /**
+   * The live members, with identity resolved in one batch.
+   *
+   * `viewer` is optional and, when given, is the actor the `canOpenDirect`
+   * advisory is computed FOR. Omitting it yields `false` everywhere rather than
+   * `true`: a member list built without knowing who is asking cannot answer "may
+   * you message them", and guessing in the permissive direction is how an
+   * advisory becomes a lie. See ConversationMemberDto.canOpenDirect.
+   */
+  async membersOf(conversationId: string, viewer?: Actor): Promise<ResolvedMember[]> {
     const rows = await this.prisma.conversationMember.findMany({
       where: { conversationId, leftAt: null },
       orderBy: { joinedAt: 'asc' },
@@ -203,6 +213,8 @@ export class ConversationService {
       rows.map((m) => ({ actorId: m.actorId, actorKind: m.actorKind })),
     );
 
+    const openable = await this.openableFor(viewer, rows, actors);
+
     return rows.map((m) => ({
       actorId: m.actorId,
       actorKind: m.actorKind,
@@ -210,7 +222,60 @@ export class ConversationService {
       isSilent: m.isSilent,
       displayName:
         actors.get(actorRefKey({ actorId: m.actorId, actorKind: m.actorKind }))?.displayName ?? '',
+      canOpenDirect: openable.has(actorRefKey({ actorId: m.actorId, actorKind: m.actorKind })),
     }));
+  }
+
+  /**
+   * Which of these members the viewer may open a 1:1 with.
+   *
+   * The decision is `AuthorizationService.canOpenDirect` -- the same method the
+   * `POST /conversations/direct` request runs -- so the advisory cannot drift
+   * from the enforcement. What it adds is the PD-6 relationship argument, which
+   * only the server can resolve.
+   *
+   * COST. The relationship predicate is consulted only for the pair that needs
+   * it: exactly one of the viewer and the member is a teacher and the other a
+   * family contact. Every other pairing (staff, system, same-kind, self) is
+   * decided from the actors alone with no query at all. A member list is a single
+   * conversation's roster, so this is bounded by the contacts in one group, not
+   * by anything that grows with the tenant.
+   *
+   * It deliberately reuses the existing single-pair `pairingAuthorized` rather
+   * than adding a batched variant: the predicate is written twice on purpose,
+   * once here and once in the database (`chat.teacher_parent_authorized`), and a
+   * third implementation written for speed is a third place for the answers to
+   * diverge.
+   */
+  private async openableFor(
+    viewer: Actor | undefined,
+    rows: ReadonlyArray<{ actorId: string; actorKind: string }>,
+    actors: ResolvedActors,
+  ): Promise<Set<string>> {
+    const openable = new Set<string>();
+    if (!viewer) return openable;
+
+    for (const row of rows) {
+      const key = actorRefKey({ actorId: row.actorId, actorKind: row.actorKind });
+      const other = actors.get(key);
+      // An unresolved member is not a correspondent. Same actor is refused by
+      // canOpenDirect itself, but skipping it here saves a pointless query.
+      if (!other || other.actorId === viewer.actorId) continue;
+
+      const needsRelationship =
+        (viewer.kind === ActorKind.TEACHER && other.kind === ActorKind.CONTACT) ||
+        (viewer.kind === ActorKind.CONTACT && other.kind === ActorKind.TEACHER);
+
+      const pairingAuthorized = needsRelationship
+        ? await this.relationships.pairingAuthorized(viewer, other)
+        : false;
+
+      if (this.authz.canOpenDirect(viewer, other, pairingAuthorized).allowed) {
+        openable.add(key);
+      }
+    }
+
+    return openable;
   }
 
   /** Canonical, order-independent identity of a 1:1 channel. */

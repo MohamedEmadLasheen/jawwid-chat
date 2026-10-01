@@ -39,6 +39,7 @@ class ProfilePerson {
     required this.displayName,
     this.role,
     this.avatarUrl,
+    this.canOpenDirect = false,
   });
 
   final String id;
@@ -49,6 +50,13 @@ class ProfilePerson {
 
   final ParticipantRole? role;
   final String? avatarUrl;
+
+  /// The server's advisory answer to "may I open a 1:1 with this person".
+  ///
+  /// Only meaningful for a member of a conversation the viewer is reading; a
+  /// subject or an own-account person is never someone you message from here and
+  /// keeps the false default.
+  final bool canOpenDirect;
 
   bool get hasResolvedName => displayName.trim().isNotEmpty;
 }
@@ -170,6 +178,7 @@ abstract final class ProfileViewBuilder {
             displayName: member.displayName,
             role: member.role,
             avatarUrl: member.avatarUrl,
+            canOpenDirect: member.canOpenDirect,
           ),
       ],
       handledByLabel: conversation.handledByLabel,

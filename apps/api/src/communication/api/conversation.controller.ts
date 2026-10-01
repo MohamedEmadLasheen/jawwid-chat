@@ -62,8 +62,13 @@ export class ConversationController {
     const conv = await this.conversations.getOrCreateDirect(actorId, body.withActorId);
     // PD-6: members[] so the client can tell a Parent<->Teacher channel from a
     // Parent<->Admin one. The caller was just authorized into this conversation
-    // by getOrCreateDirect, so no second read check is needed.
-    return toConversationDto(conv, await this.conversations.membersOf(conv.id));
+    // by getOrCreateDirect, so no second read check is needed -- but the viewer is
+    // passed so `canOpenDirect` is answered for THIS caller rather than defaulting
+    // to false on the one route that returns a freshly opened channel.
+    return toConversationDto(
+      conv,
+      await this.conversations.membersOf(conv.id, await this.conversations.requireActor(actorId)),
+    );
   }
 
   /** The official group for a learner, created from Core relationships. */
