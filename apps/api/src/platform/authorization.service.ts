@@ -307,6 +307,60 @@ export class AuthorizationService {
     const isGroup =
       conv.type === ConversationType.STUDENT_GROUP || conv.type === ConversationType.CLASS_GROUP;
 
+    // DEF-001. A DIRECT staff conversation that is not family-scoped: the
+    // Teacher <-> Admin channel (decision C-2, "never family-scoped").
+    //
+    // Nothing below can reach it. `onDuty()` takes a familyId and there is no
+    // family, so the coverage branch is skipped; it is not a group, so the group
+    // branch is skipped; control fell through to NOT_ON_DUTY and an ordinary
+    // `admin` could never answer a teacher, while a manager and an internal note
+    // both could.
+    //
+    // MEMBERSHIP IS THE AUTHORITY HERE, and it has to be stated explicitly:
+    // `canRead` above does NOT establish it, because family-facing staff may READ
+    // any conversation without being a member. Without this check a non-member
+    // admin who guessed a conversation id would be allowed to SEND.
+    //
+    // WHY THIS IS NOT JC-005 AGAIN. That defect was ASSIST/ESCALATION granted
+    // from `intent.requestedMode` -- a field the client controls. This branch
+    // reads nothing the caller sent: `membership` is the server's own
+    // chat.conversation_member row, resolved before canSend is entered, and a
+    // null or departed membership falls straight through to the same deny as
+    // before. It also cannot widen anything family-scoped: `conv.familyId ===
+    // null` excludes every family conversation, which is where on-duty and
+    // coverage live.
+    //
+    // WHY IT SITS ABOVE STICKINESS. `MessageService.send` makes the replying
+    // staff member sticky for `handoff.grace_minutes`, so from the SECOND reply
+    // onwards the sticky branch below would match first and attribute the message
+    // through `deriveMode`, which -- with no family owner and no coverage to find
+    // -- falls through to ASSIST. That would be false (the admin is the
+    // counterpart here, not a stand-in) and `MessageService` writes a
+    // `message.assist` audit row for it, so every ordinary reply after the first
+    // would forge an assist event. Deciding this shape first keeps one honest
+    // attribution for every reply. Authorization is identical either way: both
+    // paths allow, so the order changes only the recorded capacity.
+    //
+    // IT DECIDES THE SHAPE OUTRIGHT, allow or deny, and does not fall through.
+    // That is deliberate. `MessageService.send` makes a replying staff member
+    // sticky, so once an admin has answered once, a LATER request from that same
+    // admin after they were removed from the conversation would reach the sticky
+    // branch below and be allowed on nothing but a stale `sticky_handler_id`.
+    // Falling through would therefore hand a departed member a grace window
+    // measured in `handoff.grace_minutes`. Before this fix that window was
+    // unreachable only because no admin could ever become sticky here; making the
+    // journey work is what made it reachable, so it is closed in the same change.
+    // A non-member gets the same refusal they got before, by name.
+    if (conv.type === ConversationType.DIRECT && conv.familyId === null) {
+      if (membership !== null && membership.leftAt === null) {
+        return allow(OnBehalfMode.OWNER, Moderation.PUBLISHED);
+      }
+      return deny(
+        CommErrorCode.NOT_CONVERSATION_MEMBER,
+        'a direct staff conversation is answerable only by its members',
+      );
+    }
+
     // Stickiness wins while it is live.
     if (
       conv.stickyHandlerId === actor.actorId &&
