@@ -173,11 +173,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     final PendingAttachment? picked;
     try {
-      picked = source == AttachmentSource.photo
-          ? await picker.pickImage()
-          : await picker.pickFile();
+      picked = switch (source) {
+        AttachmentSource.camera => await picker.captureImage(),
+        AttachmentSource.photo => await picker.pickImage(),
+        AttachmentSource.file => await picker.pickFile(),
+      };
     } on MediaPickException catch (failure) {
-      if (mounted) _sayPickFailed(failure.reason);
+      if (mounted) _sayPickFailed(failure.reason, source);
       return;
     }
 
@@ -200,15 +202,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   /// Say what went wrong in the user's terms — never the platform's (§31).
-  void _sayPickFailed(MediaPickFailure reason) {
+  ///
+  /// The SOURCE changes two of these sentences and nothing else. A refused
+  /// camera and a refused photo library are different permissions with
+  /// different switches behind them, and "Jawwid needs permission to open your
+  /// photos" is simply untrue after a camera denial — it would send a parent to
+  /// the wrong row in Settings. Likewise a device with no camera is not a
+  /// device that "can't pick files".
+  void _sayPickFailed(MediaPickFailure reason, AttachmentSource source) {
     final l10n = L10n.of(context);
     final messenger = ScaffoldMessenger.of(context);
+    final isCamera = source == AttachmentSource.camera;
 
     final text = switch (reason) {
-      MediaPickFailure.permissionDenied => l10n.attachmentPermissionDenied,
+      MediaPickFailure.permissionDenied => isCamera
+          ? l10n.cameraPermissionDenied
+          : l10n.attachmentPermissionDenied,
       MediaPickFailure.tooLarge => l10n.attachmentTooLarge,
       MediaPickFailure.typeNotAllowed => l10n.attachmentTypeNotAllowed,
-      MediaPickFailure.unsupported => l10n.attachmentUnsupported,
+      MediaPickFailure.unsupported =>
+        isCamera ? l10n.cameraUnavailable : l10n.attachmentUnsupported,
       MediaPickFailure.failed => l10n.attachmentPickFailed,
     };
 

@@ -36,6 +36,11 @@
 		<string>voip</string>
 		<string>remote-notification</string>
 	</array>
+	<!-- Required before the system will even present the camera. Without it iOS
+	     terminates the app on capture rather than refusing it, so this is not a
+	     nicety: attaching a photo from the camera is unreachable without it. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Jawwid uses the camera to take a photo to send in a conversation.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Jawwid uses the microphone to record voice messages and to make voice calls.</string>
 	<key>UIApplicationSceneManifest</key>

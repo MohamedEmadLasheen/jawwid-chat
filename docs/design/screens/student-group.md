@@ -108,7 +108,7 @@ delivered — the exact failure approval exists to prevent.
 
 ## 4. Composer
 
-Same as `parent-chat.md` §6: `+` → photo · file · voice note · *(call, OQ-4)*, then the field,
+Same as `parent-chat.md` §6: `+` → camera · photo · file · voice note · *(call, OQ-4)*, then the field,
 then send. Keyboard-anchored, never jumps, drafts persist.
 
 Where approval is on `[BE]` (policy is **per conversation, server-supplied** — the client never
