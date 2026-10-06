@@ -385,6 +385,18 @@ class L10nAr extends L10n {
   String get settingsLanguage => 'اللغة';
 
   @override
+  String get settingsAppearance => 'المظهر';
+
+  @override
+  String get settingsAppearanceAuto => 'تلقائي';
+
+  @override
+  String get settingsAppearanceLight => 'الوضع الفاتح';
+
+  @override
+  String get settingsAppearanceDark => 'الوضع الداكن';
+
+  @override
   String get settingsLanguageArabic => 'العربية';
 
   @override

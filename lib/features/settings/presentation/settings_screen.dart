@@ -9,6 +9,7 @@ import '../../../design/tokens.dart';
 import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/text_direction.dart';
+import '../application/theme_mode_controller.dart';
 
 /// Profile and settings.
 ///
@@ -23,6 +24,7 @@ class SettingsScreen extends ConsumerWidget {
     final tokens = JawwidTokens.of(context);
     final user = ref.watch(authControllerProvider).user;
     final locale = ref.watch(localeOverrideProvider);
+    final themeMode = ref.watch(themeModeProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -126,6 +128,34 @@ class SettingsScreen extends ConsumerWidget {
                 RadioListTile<String>(
                   value: 'en',
                   title: Text(l10n.settingsLanguageEnglish),
+                ),
+              ],
+            ),
+          ),
+          const Divider(),
+
+          // "Appearance", not "Theme": the section above is Language, whose Auto
+          // reads "Follow device". Two rows both offering "Follow device" for
+          // different things is how someone changes the wrong one.
+          _SectionHeading(text: l10n.settingsAppearance),
+          RadioGroup<ThemeMode>(
+            groupValue: themeMode,
+            onChanged: (value) => ref
+                .read(themeModeProvider.notifier)
+                .set(value ?? ThemeMode.system),
+            child: Column(
+              children: [
+                RadioListTile<ThemeMode>(
+                  value: ThemeMode.system,
+                  title: Text(l10n.settingsAppearanceAuto),
+                ),
+                RadioListTile<ThemeMode>(
+                  value: ThemeMode.light,
+                  title: Text(l10n.settingsAppearanceLight),
+                ),
+                RadioListTile<ThemeMode>(
+                  value: ThemeMode.dark,
+                  title: Text(l10n.settingsAppearanceDark),
                 ),
               ],
             ),

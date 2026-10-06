@@ -381,6 +381,18 @@ class L10nEn extends L10n {
   String get settingsLanguage => 'Language';
 
   @override
+  String get settingsAppearance => 'Appearance';
+
+  @override
+  String get settingsAppearanceAuto => 'Auto';
+
+  @override
+  String get settingsAppearanceLight => 'Light';
+
+  @override
+  String get settingsAppearanceDark => 'Dark';
+
+  @override
   String get settingsLanguageArabic => 'العربية';
 
   @override
