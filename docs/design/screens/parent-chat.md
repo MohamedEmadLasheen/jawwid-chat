@@ -83,8 +83,15 @@ other families · phone numbers (DQ-03, DQ-04, risk R3).
 
 ## 6. Composer
 
-`+` → photo · file · voice note · start a topic · self-service (by capability flags) ·
-call *(OQ-4)*. Then the text field, then send.
+`+` → camera · photo · file · voice note · start a topic · self-service (by capability
+flags) · call *(OQ-4)*. Then the text field, then send.
+
+**Camera is first.** The commonest reason anyone attaches anything here is something in front
+of them right now — a page of homework, a certificate — and for that the library is the wrong
+door. A capture is not a different kind of attachment: it produces the same image attachment,
+through the same preview and the same upload, as one chosen from the library. The two differ
+only in which permission is asked for, and a refused camera must not be explained as a refused
+photo library — they are two switches in Settings.
 
 Anchored to the keyboard; the message list resizes and **the composer never translates or jumps**
 (role brief §45). Drafts persist per conversation and survive session expiry (journey J24).

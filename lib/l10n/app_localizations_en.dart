@@ -612,6 +612,9 @@ class L10nEn extends L10n {
   String get saveAction => 'Save';
 
   @override
+  String get attachCamera => 'Camera';
+
+  @override
   String get attachPhoto => 'Photo';
 
   @override
@@ -638,6 +641,13 @@ class L10nEn extends L10n {
 
   @override
   String get attachmentPickFailed => 'Couldn\'t open that. Please try again.';
+
+  @override
+  String get cameraPermissionDenied =>
+      'Jawwid needs permission to use the camera. You can allow it in Settings.';
+
+  @override
+  String get cameraUnavailable => 'This device has no camera available.';
 
   @override
   String get attachmentPermissionDenied =>

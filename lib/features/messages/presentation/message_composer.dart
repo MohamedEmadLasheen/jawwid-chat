@@ -294,11 +294,13 @@ class _ReplyBanner extends StatelessWidget {
   }
 }
 
-/// The `+` menu: a photo, or a file.
+/// The `+` menu: the camera, a photo, or a file.
 ///
-/// Two entries and no third. §1 puts photo and file one interaction away and
-/// everything else further back, and a menu that grows past what fits on one
-/// glance has stopped being a shortcut.
+/// Three entries, in that order (`screens/parent-chat.md` §6). Camera is first
+/// because the commonest reason anyone attaches anything is something in front
+/// of them right now, and for that the library is the wrong door. It stops at
+/// three: a menu that grows past what fits on one glance has stopped being a
+/// shortcut.
 Future<AttachmentSource?> showAttachmentMenu(BuildContext context) {
   return showModalBottomSheet<AttachmentSource>(
     context: context,
@@ -311,6 +313,15 @@ Future<AttachmentSource?> showAttachmentMenu(BuildContext context) {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Camera first: the commonest reason a parent attaches anything at
+            // all is something in front of them right now -- a page of
+            // homework, a certificate -- not a file they saved earlier.
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: Text(l10n.attachCamera),
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(AttachmentSource.camera),
+            ),
             ListTile(
               leading: const Icon(Icons.photo_outlined),
               title: Text(l10n.attachPhoto),
@@ -329,4 +340,10 @@ Future<AttachmentSource?> showAttachmentMenu(BuildContext context) {
   );
 }
 
-enum AttachmentSource { photo, file }
+/// Where an attachment comes from.
+///
+/// All three end in the SAME place: one `PendingAttachment`, through the same
+/// authorize -> upload -> send pipeline, arriving as the same message. The
+/// source is a question about the picker and about which permission is asked
+/// for; it is not a question about the attachment.
+enum AttachmentSource { camera, photo, file }

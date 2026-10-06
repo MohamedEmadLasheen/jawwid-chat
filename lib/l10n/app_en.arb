@@ -279,6 +279,7 @@
   "@saveAction": {
     "description": "Saves an attachment to the device."
   },
+  "attachCamera": "Camera",
   "attachPhoto": "Photo",
   "@attachPhoto": {
     "description": "Attachment menu entry for the photo library."
@@ -315,6 +316,8 @@
   "@attachmentPickFailed": {
     "description": "Shown when the photo or file picker fails."
   },
+  "cameraPermissionDenied": "Jawwid needs permission to use the camera. You can allow it in Settings.",
+  "cameraUnavailable": "This device has no camera available.",
   "attachmentPermissionDenied": "Jawwid needs permission to open your photos. You can allow it in Settings.",
   "@attachmentPermissionDenied": {
     "description": "Shown when photo-library permission was refused."
