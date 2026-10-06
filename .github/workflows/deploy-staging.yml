@@ -1,7 +1,16 @@
 # Staging deployment. Owner: AI #7 (infrastructure).
 #
-# Triggered by a push to main (i.e. after review and a green CI run) and
-# manually, for redeploying or rolling back to a previously built image.
+# Manual only. The automatic push-to-main trigger was removed on 2026-10-06:
+# staging has never had a deployment target (BLOCKER-1), so all 34 of its
+# push-triggered runs failed -- and a deployment workflow that is red on every
+# single merge teaches everyone to ignore the one signal that should mean
+# something.
+#
+# Running it by hand still fails, and is still meant to. The build needs
+# vars.STAGING_API_BASE_URL and vars.STAGING_REALTIME_URL, neither of which
+# exists; the Release step has no platform to release to. It is left runnable so
+# that provisioning staging means setting those and replacing one step, rather
+# than reconstructing a pipeline from memory.
 #
 # Kept separate from ci.yml on purpose: pull_request workflows can be triggered
 # by anyone who can open a pull request, and must never have access to a
@@ -9,8 +18,6 @@
 name: Deploy staging
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       image_tag:
