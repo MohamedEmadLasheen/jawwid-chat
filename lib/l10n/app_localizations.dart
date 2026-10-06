@@ -769,6 +769,30 @@ abstract class L10n {
   /// **'Language'**
   String get settingsLanguage;
 
+  /// No description provided for @settingsAppearance.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get settingsAppearance;
+
+  /// No description provided for @settingsAppearanceAuto.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto'**
+  String get settingsAppearanceAuto;
+
+  /// No description provided for @settingsAppearanceLight.
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get settingsAppearanceLight;
+
+  /// No description provided for @settingsAppearanceDark.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get settingsAppearanceDark;
+
   /// No description provided for @settingsLanguageArabic.
   ///
   /// In en, this message translates to:

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../design/theme.dart';
 import '../features/calls/presentation/call_presenter.dart';
+import '../features/settings/application/theme_mode_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'router.dart';
 
@@ -47,6 +48,10 @@ class JawwidApp extends ConsumerWidget {
       routerConfig: router,
       theme: JawwidTheme.light(isArabic: isArabic),
       darkTheme: JawwidTheme.dark(isArabic: isArabic),
+      // Auto by default. `ThemeMode.system` is re-resolved by MaterialApp
+      // against the platform brightness, so Auto tracks the device live rather
+      // than freezing whatever was set at launch.
+      themeMode: ref.watch(themeModeProvider),
       locale: override,
       supportedLocales: supportedLocales,
       localizationsDelegates: const [

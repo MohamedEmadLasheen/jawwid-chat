@@ -128,6 +128,31 @@ abstract final class JawwidTheme {
         height: Sizes.tabBarHeight,
         // Icon *and* label, always — never icon-only (handoff §3).
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        // Stated, not inherited. Material resolves a selected destination's icon
+        // from `onSecondaryContainer`; this scheme never sets that, so it fell
+        // back to `onSecondary` -- white -- in BOTH themes. On the light
+        // indicator (#E7F2F1) white measures 1.14:1, which is less a colour
+        // choice than an invisible icon.
+        //
+        // So the selected icon is brand-tinted per theme, from tokens that
+        // already exist: gold on the dark indicator (4.29:1) and the brand teal
+        // on the light one (4.54:1). Gold cannot serve both -- on #E7F2F1 it
+        // measures 2.97:1 and misses the 3:1 the design system asks of a UI
+        // element (`design-system.md` §483). That is the same reason the login
+        // lockup ships as a light/dark pair rather than one asset.
+        //
+        // Unselected does not move: `colorTextSecondary` is the token behind
+        // `onSurfaceVariant`, which is exactly what Material already resolved.
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          if (!states.contains(WidgetState.selected)) {
+            return IconThemeData(color: tokens.colorTextSecondary);
+          }
+          return IconThemeData(
+            color: brightness == Brightness.dark
+                ? tokens.colorAccent
+                : tokens.colorBrandPrimary,
+          );
+        }),
         labelTextStyle: WidgetStatePropertyAll(JawwidTypography.caption(isArabic)),
       ),
       snackBarTheme: SnackBarThemeData(
