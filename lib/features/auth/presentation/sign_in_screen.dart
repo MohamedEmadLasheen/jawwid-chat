@@ -61,19 +61,12 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _Brand(name: l10n.appName),
+                    const _Brand(),
                     const SizedBox(height: Spacing.spacing8),
                     Text(
                       l10n.signInTitle,
                       style: theme.textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: Spacing.spacing2),
-                    Text(
-                      l10n.signInSubtitle,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                     const SizedBox(height: Spacing.spacing7),
@@ -193,38 +186,38 @@ class _SignInNotice extends StatelessWidget {
 }
 
 class _Brand extends StatelessWidget {
-  const _Brand({required this.name});
+  const _Brand();
 
-  final String name;
+  /// The approved production lockup, trimmed to its artwork and carrying real
+  /// transparency, so it sits on the page background rather than on a white tile.
+  ///
+  /// Two variants, not one asset and a filter. They share geometry and alpha
+  /// exactly; only the teal ink differs. The light teal (#195766) measures
+  /// 2.19:1 on the dark canvas and the dark teal (#2A94AD) measures 1.10:1 on
+  /// the light one, so neither can serve both — the pair is the fix.
+  static const _lockup = 'assets/brand/jawwid-lockup-derived.png';
+  static const _lockupDark = 'assets/brand/jawwid-lockup-dark-derived.png';
+
+  /// Height of the ARTWORK, which is also the height of the image: the asset is
+  /// trimmed, so unlike the web JPEG there is no padding to compensate for.
+  /// `width` is deliberately left unset — one fixed axis and the other follows
+  /// the file's own 372:148 ratio, which makes distortion impossible.
+  static const double _lockupHeight = 64;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = JawwidTokens.of(context);
+    // The lockup alone. It used to carry the product name underneath it as real
+    // text, which read as the same word twice: the heading immediately below is
+    // already "Sign in to Jawwid".
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Placeholder brand mark. Replaced by the official Jawwid logo once brand assets are
-    // supplied — see lib/design/tokens.dart.
-    return Column(
-      children: [
-        Container(
-          width: Sizes.avatarXl,
-          height: Sizes.avatarXl,
-          decoration: BoxDecoration(
-            color: tokens.colorBrandPrimary,
-            shape: BoxShape.circle,
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            name.characters.first,
-            style: TextStyle(
-              color: tokens.colorBrandOnPrimary,
-              fontSize: 40,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        const SizedBox(height: Spacing.spacing4),
-        Text(name, style: Theme.of(context).textTheme.titleLarge),
-      ],
+    return Image.asset(
+      isDark ? _lockupDark : _lockup,
+      height: _lockupHeight,
+      fit: BoxFit.contain,
+      // Decorative, and deliberately so: the heading below names the product in
+      // real text, so announcing the artwork too would say it twice (§53).
+      excludeFromSemantics: true,
     );
   }
 }
