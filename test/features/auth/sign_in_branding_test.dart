@@ -112,8 +112,39 @@ void main() {
     });
 
     test('the artwork is not announced twice', () {
-      // The product name is rendered as real text directly below the lockup.
+      // The heading below names the product in real text, so the lockup itself
+      // is decorative and must stay out of the semantics tree.
       expect(screen, contains('excludeFromSemantics: true'));
+    });
+
+    test('the product name is not repeated underneath the lockup', () {
+      // The mark carries the wordmark already and the heading says it again in
+      // real text; a third copy between them was the same word three times.
+      expect(screen, contains('const _Brand()'));
+      expect(screen, isNot(contains('_Brand(name:')));
+      expect(screen, isNot(contains('l10n.appName')));
+    });
+
+    test('the explanatory paragraph is gone', () {
+      expect(screen, isNot(contains('l10n.signInSubtitle')));
+    });
+  });
+
+  group('removing the text left the rest of the screen intact', () {
+    test('the heading is still the first text under the branding', () {
+      expect(screen, contains('l10n.signInTitle'));
+    });
+
+    test('both fields, the reveal control and the submit button remain', () {
+      expect(screen, contains('AutofillHints.username'));
+      expect(screen, contains('AutofillHints.password'));
+      expect(screen, contains('obscureText: _obscured'));
+      expect(screen, contains('l10n.signInAction'));
+    });
+
+    test('authentication still runs through the auth controller', () {
+      expect(screen, contains('authControllerProvider'));
+      expect(screen, contains('.signIn('));
     });
   });
 
