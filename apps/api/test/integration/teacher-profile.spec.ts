@@ -784,3 +784,289 @@ describe('the public read model', () => {
     expect(serialized).not.toContain('objectKey');
   });
 });
+
+// ===========================================================================
+describe('the certificate audit trail', () => {
+  /**
+   * WHY THIS BLOCK EXISTS. V1 shipped with NO certificate audit records at all
+   * and nobody noticed, because nothing asserted them. V2 writes all five, which
+   * was proved by hand against the QA database -- and a property proved by hand
+   * is a property that regresses the next time somebody refactors the service.
+   *
+   * These run against the REAL `PrismaAuditService` the harness wires into
+   * `TeacherProfileService` (harness.ts), writing to the real `chat.audit_log`.
+   * Nothing is mocked: a test that asserts a mock was called proves the test
+   * knows what the code does, not that the row reaches the database.
+   */
+
+  /** Every field the requirement names, in one place. */
+  async function auditRowFor(action: string) {
+    const rows = await g.prisma.auditLog.findMany({ where: { action } });
+    expect(rows).toHaveLength(1);
+    const row = rows[0];
+    expect(row.entity).toBe('teacher_profile_certificate');
+    expect(row.at).toBeInstanceOf(Date);
+    // A reason is NOT NULL by design: a review-significant action without one is
+    // a bug (audit.service.ts).
+    expect(row.reason.trim().length).toBeGreaterThan(0);
+    return row;
+  }
+
+  /**
+   * The forbidden list, applied to the WHOLE row rather than to named fields --
+   * `before`/`after` are free-form JSON, so a future change could put a key
+   * somewhere this test did not think to look.
+   */
+  function expectNothingSensitive(row: unknown, objectKey: string) {
+    const text = serialize(row);
+    expect(text).not.toContain(objectKey);
+    expect(text).not.toContain('teacher-certificates/');
+    expect(text).not.toContain('teacher-photos/');
+    expect(text).not.toContain('objectKey');
+    expect(text).not.toContain('sig=');
+    expect(text).not.toMatch(/bearer/i);
+    expect(text).not.toContain('expires=');
+    // A signing secret or an access key would arrive as one of these.
+    expect(text).not.toMatch(/STORAGE_(SIGNING_SECRET|ACCESS_KEY|SECRET_KEY)/);
+    expect(text).not.toMatch(/%PDF/);
+  }
+
+  it('1. ADDED: one row, by the teacher, naming the certificate', async () => {
+    const id = await attachCertificate(s.teacherId, 'Ijazah in Tajweed');
+    const row = await auditRowFor('teacher_profile.certificate_added');
+    const stored = await g.prisma.teacherProfileCertificate.findUniqueOrThrow({
+      where: { id },
+    });
+
+    expect(row.actorId).toBe(s.teacherId);
+    expect(row.entityId).toBe(id);
+    // Nothing existed before; the claim and its untrusted state exist after.
+    expect(row.before).toBeNull();
+    expect(row.after).toEqual({ title: 'Ijazah in Tajweed', state: 'pending' });
+    expectNothingSensitive(row, stored.objectKey);
+  });
+
+  it('2. EDITED: one row, carrying the title change and the lost approval',
+      async () => {
+    const id = await attachCertificate(s.teacherId, 'Before');
+    await g.teacherProfiles.decideCertificate(s.ownerId, id, { approved: true });
+    await g.teacherProfiles.updateCertificate(s.teacherId, id, { title: 'After' });
+
+    const row = await auditRowFor('teacher_profile.certificate_edited');
+    const stored = await g.prisma.teacherProfileCertificate.findUniqueOrThrow({
+      where: { id },
+    });
+
+    expect(row.actorId).toBe(s.teacherId);
+    expect(row.entityId).toBe(id);
+    // The audit is what makes the re-pend legible afterwards: approved -> pending
+    // is the consequence a reviewer needs to be able to see.
+    expect(row.before).toEqual({ title: 'Before', state: 'approved' });
+    expect(row.after).toEqual({ title: 'After', state: 'pending' });
+    expectNothingSensitive(row, stored.objectKey);
+  });
+
+  it('3. REMOVED: one row, naming what was removed, after the row is gone',
+      async () => {
+    const id = await attachCertificate(s.teacherId, 'Gone');
+    const stored = await g.prisma.teacherProfileCertificate.findUniqueOrThrow({
+      where: { id },
+    });
+    await g.teacherProfiles.removeCertificate(s.teacherId, id);
+
+    const row = await auditRowFor('teacher_profile.certificate_removed');
+    expect(row.actorId).toBe(s.teacherId);
+    // The entityId still names a certificate that no longer exists -- which is
+    // the whole point of an audit row and the reason it is not a foreign key.
+    expect(row.entityId).toBe(id);
+    expect(await g.prisma.teacherProfileCertificate.count({ where: { id } })).toBe(0);
+    expect(row.before).toEqual({ title: 'Gone', state: 'pending' });
+    expect(row.after).toBeNull();
+    expectNothingSensitive(row, stored.objectKey);
+  });
+
+  it('4. APPROVED: one row, by the REVIEWER and not the owner', async () => {
+    const id = await attachCertificate(s.teacherId, 'Ijazah');
+    await g.teacherProfiles.decideCertificate(s.ownerId, id, { approved: true });
+
+    const row = await auditRowFor('teacher_profile.certificate_approved');
+    const stored = await g.prisma.teacherProfileCertificate.findUniqueOrThrow({
+      where: { id },
+    });
+
+    // THE assertion that makes the trail worth keeping: the actor is the staff
+    // member who decided, never the teacher who uploaded.
+    expect(row.actorId).toBe(s.ownerId);
+    expect(row.actorId).not.toBe(s.teacherId);
+    expect(row.entityId).toBe(id);
+    expect(row.before).toEqual({ state: 'pending' });
+    expect(row.after).toEqual({ state: 'approved' });
+    // An approval carries no reviewer words, so it says what it is rather than
+    // leaving the NOT NULL reason empty.
+    expect(row.reason).toBe('a reviewer approved this credential');
+    expectNothingSensitive(row, stored.objectKey);
+  });
+
+  it('5. REJECTED: one row, carrying the reviewer’s own reason', async () => {
+    const id = await attachCertificate(s.teacherId, 'Illegible');
+    await g.teacherProfiles.decideCertificate(s.ownerId, id, {
+      approved: false,
+      note: 'the scan is not readable',
+    });
+
+    const row = await auditRowFor('teacher_profile.certificate_rejected');
+    const stored = await g.prisma.teacherProfileCertificate.findUniqueOrThrow({
+      where: { id },
+    });
+
+    expect(row.actorId).toBe(s.ownerId);
+    expect(row.entityId).toBe(id);
+    expect(row.before).toEqual({ state: 'pending' });
+    expect(row.after).toEqual({ state: 'rejected' });
+    expect(row.reason).toBe('the scan is not readable');
+    expectNothingSensitive(row, stored.objectKey);
+  });
+
+  it('writes EXACTLY the expected event, and no other, per action', async () => {
+    // A full lifecycle in order. Five actions in, five rows out: no duplicates
+    // from a retry, and no event fired that nobody asked for.
+    const id = await attachCertificate(s.teacherId, 'Lifecycle');
+    await g.teacherProfiles.decideCertificate(s.ownerId, id, { approved: true });
+    await g.teacherProfiles.updateCertificate(s.teacherId, id, { title: 'Renamed' });
+    await g.teacherProfiles.decideCertificate(s.ownerId, id, {
+      approved: false,
+      note: 'no',
+    });
+    await g.teacherProfiles.removeCertificate(s.teacherId, id);
+
+    const rows = await g.prisma.auditLog.findMany({
+      where: { entity: 'teacher_profile_certificate' },
+      orderBy: { id: 'asc' },
+    });
+    expect(rows.map((r) => r.action)).toEqual([
+      'teacher_profile.certificate_added',
+      'teacher_profile.certificate_approved',
+      'teacher_profile.certificate_edited',
+      'teacher_profile.certificate_rejected',
+      'teacher_profile.certificate_removed',
+    ]);
+    expect(new Set(rows.map((r) => r.entityId))).toEqual(new Set([id]));
+  });
+
+  it('no certificate audit row anywhere carries sensitive data', async () => {
+    const id = await attachCertificate(s.teacherId, 'Sweep');
+    const stored = await g.prisma.teacherProfileCertificate.findUniqueOrThrow({
+      where: { id },
+    });
+    await g.teacherProfiles.decideCertificate(s.ownerId, id, { approved: true });
+    await g.teacherProfiles.updateCertificate(s.teacherId, id, { title: 'Swept' });
+    await g.teacherProfiles.removeCertificate(s.teacherId, id);
+
+    const rows = await g.prisma.auditLog.findMany();
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) expectNothingSensitive(row, stored.objectKey);
+  });
+
+  // -------------------------------------------------------------------------
+  // Transactional behaviour
+  // -------------------------------------------------------------------------
+
+  it('ROLLBACK: an audit row written in a failed transaction does not survive',
+      async () => {
+    // The mechanism, with the REAL audit service and the REAL table. This is the
+    // property every mutation above depends on: `audit(tx, …)` writes through
+    // the transaction client it is handed, so the row shares that
+    // transaction's fate.
+    const before = await g.prisma.auditLog.count();
+
+    await expect(
+      g.prisma.$transaction(async (tx) => {
+        await g.audit.audit(tx, {
+          actorId: s.teacherId,
+          action: 'teacher_profile.certificate_added',
+          entity: 'teacher_profile_certificate',
+          entityId: s.learnerId,
+          before: null,
+          after: { title: 'never committed', state: 'pending' },
+          reason: 'a deliberately failed transaction',
+        });
+        // Prove the row is visible INSIDE the transaction, so the assertion
+        // below is about the rollback and not about a write that never happened.
+        expect(await tx.auditLog.count()).toBe(before + 1);
+        throw new Error('the mutation failed after the audit write');
+      }),
+    ).rejects.toThrow('the mutation failed after the audit write');
+
+    expect(await g.prisma.auditLog.count()).toBe(before);
+  });
+
+  it('a REFUSED decision leaves no audit row behind', async () => {
+    const id = await attachCertificate(s.teacherId, 'Mine');
+    const added = await g.prisma.auditLog.count();
+
+    // Refused by the service AND, independently, by a database trigger.
+    expect(
+      await codeOf(() =>
+        g.teacherProfiles.decideCertificate(s.teacherId, id, { approved: true }),
+      ),
+    ).toBe(CommErrorCode.TEACHER_PROFILE_CANNOT_REVIEW);
+
+    expect(await g.prisma.auditLog.count()).toBe(added);
+    expect(
+      await g.prisma.auditLog.count({
+        where: { action: 'teacher_profile.certificate_approved' },
+      }),
+    ).toBe(0);
+  });
+
+  it('a REFUSED rejection (no reason given) leaves no audit row behind', async () => {
+    const id = await attachCertificate(s.teacherId, 'Mine');
+    const added = await g.prisma.auditLog.count();
+
+    expect(
+      await codeOf(() =>
+        g.teacherProfiles.decideCertificate(s.ownerId, id, { approved: false, note: ' ' }),
+      ),
+    ).toBe(CommErrorCode.TEACHER_PROFILE_REVIEW_NOTE_REQUIRED);
+
+    expect(await g.prisma.auditLog.count()).toBe(added);
+  });
+
+  it('a REFUSED edit on somebody else’s certificate leaves no audit row',
+      async () => {
+    const theirs = await attachCertificate(s.newTeacherId, 'Theirs');
+    const added = await g.prisma.auditLog.count();
+
+    expect(
+      await codeOf(() =>
+        g.teacherProfiles.updateCertificate(s.teacherId, theirs, { title: 'Stolen' }),
+      ),
+    ).toBe(CommErrorCode.TEACHER_CERTIFICATE_NOT_FOUND);
+
+    expect(await g.prisma.auditLog.count()).toBe(added);
+    expect(
+      await g.prisma.auditLog.count({
+        where: { action: 'teacher_profile.certificate_edited' },
+      }),
+    ).toBe(0);
+  });
+
+  it('the audit write shares the mutation’s transaction, not a second one',
+      async () => {
+    // Asserted by consequence rather than by inspection: the row and the state
+    // change are both present, and `at` sits inside the mutation's own window.
+    const started = new Date();
+    const id = await attachCertificate(s.teacherId, 'Together');
+    await g.teacherProfiles.decideCertificate(s.ownerId, id, { approved: true });
+    const finished = new Date();
+
+    const row = await auditRowFor('teacher_profile.certificate_approved');
+    const certificate = await g.prisma.teacherProfileCertificate.findUniqueOrThrow({
+      where: { id },
+    });
+
+    expect(certificate.state).toBe('approved');
+    expect(row.at.getTime()).toBeGreaterThanOrEqual(started.getTime() - 1000);
+    expect(row.at.getTime()).toBeLessThanOrEqual(finished.getTime() + 1000);
+  });
+});

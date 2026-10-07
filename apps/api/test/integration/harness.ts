@@ -97,6 +97,10 @@ export function buildGraph(
     // Exposed so a suite can drive the outbox itself: config for a worker it
     // builds, outbox to enqueue inside its own transaction.
     config, outbox,
+    // The same PrismaAuditService the services above were handed, so a suite can
+    // assert the audit write's TRANSACTIONAL behaviour against the real writer
+    // rather than against a stand-in that cannot roll back.
+    audit,
   };
 }
 
