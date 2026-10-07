@@ -19,6 +19,7 @@ import { QuietHoursService } from '@communication/notifications/quiet-hours.serv
 import { LoggingPushProvider } from '@communication/notifications/push.provider';
 import { CallService } from '@communication/calls/call.service';
 import { StoryService } from '@communication/stories/story.service';
+import { TeacherProfileService } from '@communication/teacher-profile/teacher-profile.service';
 import { StoryAudienceResolver } from '@communication/stories/story-audience.resolver';
 import { StorySweeper } from '@communication/stories/story-sweeper.service';
 import { OutboxWorker } from '@communication/outbox/outbox.worker';
@@ -79,6 +80,7 @@ export function buildGraph(
     prisma, authz, storyAudience, outbox, config, identity, storage, audit,
   );
   const storySweeper = new StorySweeper(prisma, config, outbox, storage);
+  const teacherProfiles = new TeacherProfileService(prisma, authz, identity, storage, audit);
 
   // A worker whose realtime publisher is a no-op: these suites assert on what
   // reaches the DATABASE (notifications, outbox status), and a socket server in
@@ -90,6 +92,7 @@ export function buildGraph(
     prisma, coverage, identity, authz, conversations, messages, approvals,
     attachments, notifications, reminders, templates, quietHours, calls,
     stories, storyAudience, storySweeper, storage, outboxWorker,
+    teacherProfiles,
     relationships,
     // Exposed so a suite can drive the outbox itself: config for a worker it
     // builds, outbox to enqueue inside its own transaction.

@@ -590,6 +590,51 @@ export class AuthorizationService {
    * a second (the abandoned Phase 5 lineage's `chat.role_permission`) would mean
    * two places to read before knowing whether an actor may act.
    */
+  /**
+   * May this actor REVIEW a teacher's professional profile?
+   *
+   * The same family-facing staff set that publishes stories. Deciding what a
+   * family may read ABOUT a teacher is the same kind of authority as deciding
+   * what a family is told, so it does not get a looser rule of its own.
+   *
+   * Says nothing about whose profile it is. "A teacher may not review their own"
+   * is a separate fact the service checks against the resolved owner, and the
+   * database enforces independently -- a role predicate cannot express it,
+   * because the reviewer's role is identical either way.
+   */
+  canReviewTeacherProfile(actor: Actor): Decision {
+    if (!actor.isActive) {
+      return deny(CommErrorCode.ACTOR_INACTIVE, 'an inactive actor may not review');
+    }
+    if (!isFamilyFacingStaff(actor)) {
+      return deny(
+        CommErrorCode.TEACHER_PROFILE_CANNOT_REVIEW,
+        'only Jawwid admins, coverage admins and managers may review a teacher profile',
+      );
+    }
+    return allow();
+  }
+
+  /**
+   * May this actor own a professional profile at all?
+   *
+   * Only a teacher. Staff and family contacts have no professional profile in
+   * this product, and answering "no" here is what stops `/me/...` from quietly
+   * creating one for an admin.
+   */
+  canOwnTeacherProfile(actor: Actor): Decision {
+    if (!actor.isActive) {
+      return deny(CommErrorCode.ACTOR_INACTIVE, 'an inactive actor may not edit a profile');
+    }
+    if (actor.kind !== 'teacher') {
+      return deny(
+        CommErrorCode.TEACHER_PROFILE_NOT_A_TEACHER,
+        'only a teacher has a professional profile',
+      );
+    }
+    return allow();
+  }
+
   canPublishStory(actor: Actor): Decision {
     if (!actor.isActive) {
       return deny(CommErrorCode.ACTOR_INACTIVE, 'an inactive actor may not publish');

@@ -43,6 +43,8 @@ import { MediaPresenceService } from './calls/media-presence.service';
 import { NotificationController } from './api/notification.controller';
 import { StorageController } from './api/storage.controller';
 import { StoryController } from './api/story.controller';
+import { TeacherProfileController } from './api/teacher-profile.controller';
+import { TeacherProfileService } from './teacher-profile/teacher-profile.service';
 
 @Module({
   // AuthModule exports AuthService, which RealtimeGateway uses to verify the
@@ -58,10 +60,12 @@ import { StoryController } from './api/story.controller';
     NotificationController,
     StorageController,
     StoryController,
+    TeacherProfileController,
   ],
   providers: [
     redisProvider,
     ConversationService,
+    TeacherProfileService,
     MessageService,
     ApprovalService,
     CallService,
