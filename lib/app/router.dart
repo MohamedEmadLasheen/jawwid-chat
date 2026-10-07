@@ -12,6 +12,7 @@ import '../features/messages/presentation/conversation_media_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/stories/presentation/story_viewer_screen.dart';
+import '../features/teacher_profile/presentation/teacher_profile_screen.dart';
 import 'providers.dart';
 import 'shells/app_shell.dart';
 
@@ -48,6 +49,11 @@ abstract final class Routes {
   /// The signed-in user's own account. Deliberately under Settings rather than alongside
   /// the profiles above: "my account" and "someone else's profile" are different things.
   static const myAccount = '/settings/account';
+
+  /// The teacher's professional profile. A SEPARATE destination from
+  /// [myAccount]: that screen is who you are, this one is what families read
+  /// about you, and the two have different audiences and different lifecycles.
+  static const teacherProfile = '/settings/professional-profile';
 
   /// One story, opened full-screen from the rail.
   ///
@@ -132,6 +138,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.myAccount,
         builder: (context, state) => const MyAccountScreen(),
+      ),
+      GoRoute(
+        path: Routes.teacherProfile,
+        builder: (context, state) => const TeacherProfileScreen(),
       ),
       // Full-screen, above the tab bar: a story is the whole viewport for as long as it is
       // open, and a tab bar underneath it would be something to tap by accident.

@@ -751,4 +751,167 @@ class L10nAr extends L10n {
 
   @override
   String get storyVideoRetry => 'إعادة المحاولة';
+
+  @override
+  String get teacherProfileTitle => 'الملف المهني للمعلم';
+
+  @override
+  String get teacherProfileSettingsEntry => 'الملف المهني';
+
+  @override
+  String get teacherProfileSettingsSubtitle => 'ما تقرؤه الأسر عنك';
+
+  @override
+  String get teacherProfileAboutSection => 'نبذة';
+
+  @override
+  String get teacherProfileBioLabel => 'نبذة تعريفية';
+
+  @override
+  String get teacherProfileBioHint => 'تعريف موجز للأسر.';
+
+  @override
+  String get teacherProfileProfessionalSection => 'المعلومات المهنية';
+
+  @override
+  String get teacherProfileSpecializationLabel => 'التخصص';
+
+  @override
+  String get teacherProfileQualificationsLabel => 'المؤهلات';
+
+  @override
+  String get teacherProfileExperienceLabel => 'الخبرة';
+
+  @override
+  String get teacherProfileLanguagesLabel => 'اللغات';
+
+  @override
+  String get teacherProfileLanguagesHint => 'افصل بين اللغات بفاصلة.';
+
+  @override
+  String get teacherProfileCertificatesSection => 'الشهادات';
+
+  @override
+  String get teacherProfileCertificatesEmpty => 'لا توجد شهادات بعد.';
+
+  @override
+  String get teacherProfileAddCertificate => 'إضافة شهادة';
+
+  @override
+  String get teacherProfileCertificateTitleLabel => 'اسم الشهادة';
+
+  @override
+  String get teacherProfileCertificateIssuerLabel => 'الجهة المانحة';
+
+  @override
+  String get teacherProfileCertificateYearLabel => 'سنة الإصدار';
+
+  @override
+  String get teacherProfileCertificateFile => 'اختيار ملف';
+
+  @override
+  String teacherProfileCertificateFileChosen(String name) {
+    return '$name جاهز للرفع';
+  }
+
+  @override
+  String get teacherProfileCertificateUploading => 'جارٍ الرفع…';
+
+  @override
+  String get teacherProfileCertificateOpen => 'فتح';
+
+  @override
+  String get teacherProfileCertificateRemove => 'حذف';
+
+  @override
+  String get teacherProfileCertificateRemoveTitle => 'حذف هذه الشهادة؟';
+
+  @override
+  String get teacherProfileCertificateRemoveBody =>
+      'ستُحذف من النسخة التي تحرّرها. أما النسخة المعتمدة التي تراها الأسر فلن تتغير.';
+
+  @override
+  String get teacherProfileCertificatePending => 'بانتظار المراجعة';
+
+  @override
+  String get teacherProfileCertificateApproved => 'معتمدة';
+
+  @override
+  String get teacherProfileCertificateRejected => 'غير مقبولة';
+
+  @override
+  String get teacherProfileStatusDraft => 'لم تُرسل بعد';
+
+  @override
+  String get teacherProfileStatusPending => 'بانتظار مراجعة الإدارة';
+
+  @override
+  String get teacherProfileStatusChangesRequested => 'مطلوب تعديل';
+
+  @override
+  String get teacherProfileStatusApproved => 'معتمد';
+
+  @override
+  String get teacherProfileStatusApprovedBody =>
+      'تستطيع الأسر قراءة هذا الملف.';
+
+  @override
+  String get teacherProfileStatusPendingBody =>
+      'لا يمكنك التعديل أثناء المراجعة.';
+
+  @override
+  String get teacherProfileEditAndResubmit => 'تعديل وإعادة الإرسال';
+
+  @override
+  String get teacherProfileEdit => 'تعديل';
+
+  @override
+  String get teacherProfileSave => 'حفظ';
+
+  @override
+  String get teacherProfileSaving => 'جارٍ الحفظ…';
+
+  @override
+  String get teacherProfileSaved => 'تم الحفظ';
+
+  @override
+  String get teacherProfileSubmit => 'إرسال للمراجعة';
+
+  @override
+  String get teacherProfileSubmitted => 'أُرسل للمراجعة';
+
+  @override
+  String get teacherProfileEmptyTitle => 'أنشئ ملفك المهني';
+
+  @override
+  String get teacherProfileEmptyBody =>
+      'عرّف الأسر بخبرتك. تراجعه الإدارة قبل أن يظهر لأحد.';
+
+  @override
+  String get teacherProfileEditingNotice =>
+      'أنت تحرّر نسخة جديدة. تبقى النسخة المعتمدة ظاهرة حتى تُعتمد هذه.';
+
+  @override
+  String get teacherProfileUnavailable => 'ملفك المهني غير متاح الآن.';
+
+  @override
+  String teacherProfileFieldTooLong(int count) {
+    return 'أطول من المسموح بـ $count حرفًا.';
+  }
+
+  @override
+  String get teacherProfileCertificateTitleRequired => 'أدخل اسم الشهادة.';
+
+  @override
+  String get teacherProfileCertificateFileRequired => 'اختر ملفًا أولًا.';
+
+  @override
+  String get teacherProfileCertificateBadType => 'اختر ملف PDF أو JPEG أو PNG.';
+
+  @override
+  String get teacherProfileCertificateTooLarge =>
+      'حجم الملف أكبر من ١٠ ميجابايت.';
+
+  @override
+  String get teacherProfileTooManyLanguages => 'حتى ١٠ لغات.';
 }

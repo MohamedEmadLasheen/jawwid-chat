@@ -72,6 +72,14 @@ final storyRepositoryProvider = Provider<StoryRepository>((ref) {
   throw UnimplementedError('storyRepositoryProvider must be overridden');
 });
 
+/// The teacher's professional profile. Overridden by the authenticated
+/// composition root; the development root registers none, exactly as stories
+/// does, so a missing wiring surfaces as "unavailable" instead of as an empty
+/// profile a teacher might start typing into.
+final teacherProfileRepositoryProvider = Provider<TeacherProfileRepository>((ref) {
+  throw UnimplementedError('teacherProfileRepositoryProvider must be overridden');
+});
+
 /// The realtime transport, as a seam.
 ///
 /// Overridden by the composition root, which is the only place that knows the

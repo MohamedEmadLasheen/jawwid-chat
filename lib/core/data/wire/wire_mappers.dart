@@ -1,6 +1,7 @@
 import '../../../shared/models/conversation.dart';
 import '../../../shared/models/message.dart';
 import '../../../shared/models/story.dart';
+import '../../../shared/models/teacher_profile.dart';
 import '../../../shared/models/user_role.dart';
 import '../repositories.dart';
 import 'wire_vocab.dart';
@@ -348,6 +349,59 @@ abstract final class WireMappers {
       publishedAt: publishedAt,
       expiresAt: expiresAt,
       isViewed: json['viewed'] == true,
+    );
+  }
+
+  /// `GET /me/teacher-profile` and every teacher-facing mutation return this
+  /// same envelope: `{published, draft}`, either half possibly null.
+  ///
+  /// A revision whose `state` the client does not recognise is dropped rather
+  /// than guessed at: rendering an unknown state as "draft" would offer an edit
+  /// button for something the server may be refusing to let anyone touch.
+  static TeacherProfile teacherProfile(Map<String, Object?> json) => TeacherProfile(
+        published: _revision(json['published']),
+        draft: _revision(json['draft']),
+      );
+
+  static ProfileRevision? _revision(Object? raw) {
+    if (raw is! Map<String, Object?>) return null;
+    final state = RevisionState.tryParse(raw['state'] as String?);
+    if (state == null) return null;
+
+    return ProfileRevision(
+      state: state,
+      bio: _nonEmpty(raw['bio']),
+      specialization: _nonEmpty(raw['specialization']),
+      qualifications: _nonEmpty(raw['qualifications']),
+      experience: _nonEmpty(raw['experience']),
+      languages: [
+        for (final language in (raw['languages'] as List?) ?? const [])
+          if (language is String && language.trim().isNotEmpty) language.trim(),
+      ],
+      reviewNote: _nonEmpty(raw['reviewNote']),
+      certificates: [
+        for (final certificate in (raw['certificates'] as List?) ?? const [])
+          ?_certificate(certificate),
+      ],
+    );
+  }
+
+  static ProfileCertificate? _certificate(Object? raw) {
+    if (raw is! Map<String, Object?>) return null;
+    final id = raw['id'] as String?;
+    final title = _nonEmpty(raw['title']);
+    final state = CertificateState.tryParse(raw['state'] as String?);
+    // A claim with no id cannot be opened or removed, and one with no title has
+    // nothing to show; either way it is unusable rather than partially usable.
+    if (id == null || id.isEmpty || title == null || state == null) return null;
+
+    return ProfileCertificate(
+      id: id,
+      title: title,
+      state: state,
+      issuingOrganization: _nonEmpty(raw['issuingOrganization']),
+      issuedOn: parseTime(raw['issuedOn']),
+      reviewNote: _nonEmpty(raw['reviewNote']),
     );
   }
 

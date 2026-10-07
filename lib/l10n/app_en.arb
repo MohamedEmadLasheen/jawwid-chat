@@ -439,5 +439,70 @@
   "storyUnavailable": "This story is no longer available.",
   "storyVideoLabel": "Story video",
   "storyVideoFailed": "This video could not be played.",
-  "storyVideoRetry": "Try again"
+  "storyVideoRetry": "Try again",
+  "teacherProfileTitle": "Teacher professional profile",
+  "teacherProfileSettingsEntry": "Professional profile",
+  "teacherProfileSettingsSubtitle": "What families read about you",
+  "teacherProfileAboutSection": "About",
+  "teacherProfileBioLabel": "Bio",
+  "teacherProfileBioHint": "A short introduction for families.",
+  "teacherProfileProfessionalSection": "Professional information",
+  "teacherProfileSpecializationLabel": "Specialization",
+  "teacherProfileQualificationsLabel": "Qualifications",
+  "teacherProfileExperienceLabel": "Experience",
+  "teacherProfileLanguagesLabel": "Languages",
+  "teacherProfileLanguagesHint": "Separate each language with a comma.",
+  "teacherProfileCertificatesSection": "Certificates",
+  "teacherProfileCertificatesEmpty": "No certificates yet.",
+  "teacherProfileAddCertificate": "Add certificate",
+  "teacherProfileCertificateTitleLabel": "Certificate title",
+  "teacherProfileCertificateIssuerLabel": "Issuing organization",
+  "teacherProfileCertificateYearLabel": "Year issued",
+  "teacherProfileCertificateFile": "Choose file",
+  "teacherProfileCertificateFileChosen": "{name} ready to upload",
+  "@teacherProfileCertificateFileChosen": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "teacherProfileCertificateUploading": "Uploading…",
+  "teacherProfileCertificateOpen": "Open",
+  "teacherProfileCertificateRemove": "Remove",
+  "teacherProfileCertificateRemoveTitle": "Remove this certificate?",
+  "teacherProfileCertificateRemoveBody": "It will be removed from the version you are editing. The approved version families can see is not changed.",
+  "teacherProfileCertificatePending": "Awaiting review",
+  "teacherProfileCertificateApproved": "Approved",
+  "teacherProfileCertificateRejected": "Not accepted",
+  "teacherProfileStatusDraft": "Not submitted",
+  "teacherProfileStatusPending": "Waiting for admin review",
+  "teacherProfileStatusChangesRequested": "Changes requested",
+  "teacherProfileStatusApproved": "Approved",
+  "teacherProfileStatusApprovedBody": "Families can read this profile.",
+  "teacherProfileStatusPendingBody": "You cannot edit while it is being reviewed.",
+  "teacherProfileEditAndResubmit": "Edit and resubmit",
+  "teacherProfileEdit": "Edit",
+  "teacherProfileSave": "Save",
+  "teacherProfileSaving": "Saving…",
+  "teacherProfileSaved": "Saved",
+  "teacherProfileSubmit": "Submit for review",
+  "teacherProfileSubmitted": "Sent for review",
+  "teacherProfileEmptyTitle": "Build your professional profile",
+  "teacherProfileEmptyBody": "Tell families about your background. An admin reviews it before anyone sees it.",
+  "teacherProfileEditingNotice": "You are editing a new version. The approved version stays visible until this one is approved.",
+  "teacherProfileUnavailable": "Your professional profile is not available right now.",
+  "teacherProfileFieldTooLong": "Too long by {count} characters.",
+  "@teacherProfileFieldTooLong": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "teacherProfileCertificateTitleRequired": "Give the certificate a title.",
+  "teacherProfileCertificateFileRequired": "Choose a file first.",
+  "teacherProfileCertificateBadType": "Choose a PDF, JPEG or PNG.",
+  "teacherProfileCertificateTooLarge": "That file is larger than 10 MB.",
+  "teacherProfileTooManyLanguages": "Up to 10 languages."
 }

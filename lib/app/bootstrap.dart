@@ -9,6 +9,7 @@ import '../core/data/http/http_conversation_repository.dart';
 import '../core/data/http/http_group_repository.dart';
 import '../core/data/http/http_message_repository.dart';
 import '../core/data/http/http_story_repository.dart';
+import '../core/data/http/http_teacher_profile_repository.dart';
 import '../core/errors/app_error.dart';
 import '../core/network/api_client.dart';
 import '../core/network/api_config.dart';
@@ -135,6 +136,9 @@ List<Override> _httpOverrides() {
     // published to them.
     storyRepositoryProvider.overrideWithValue(
       HttpStoryRepository(client: client),
+    ),
+    teacherProfileRepositoryProvider.overrideWithValue(
+      HttpTeacherProfileRepository(client: client),
     ),
 
     // --- Calling, realtime and push (the communication branch) -------------

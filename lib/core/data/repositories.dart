@@ -2,6 +2,7 @@ import '../../shared/models/auth.dart';
 import '../../shared/models/conversation.dart';
 import '../../shared/models/message.dart';
 import '../../shared/models/story.dart';
+import '../../shared/models/teacher_profile.dart';
 import '../../shared/models/user_role.dart';
 
 /// One page of a cursor-paginated list (§19).
@@ -405,6 +406,55 @@ abstract interface class MessageRepository {
 /// `stories.publish`, held by the family-facing staff roles, and the viewer list is
 /// deliberately publisher-only (docs/product/STORIES.md section 3). A method for any of them
 /// would be a method whose only possible body is a permission error.
+/// The signed-in teacher's own professional profile.
+///
+/// Every method is about the CALLER. There is no teacher-id parameter anywhere
+/// in this interface, because the server derives the teacher from the session --
+/// so "edit somebody else's profile" is not a request this client can express.
+///
+/// The client never creates a revision and never names a state. `saveDraft`
+/// writes content and the SERVER decides whether that opened a new revision
+/// (copy-on-write, when the last one is approved) or wrote into the open one.
+abstract interface class TeacherProfileRepository {
+  /// The published revision, the open one, or neither. Creates nothing.
+  Future<TeacherProfile> myProfile();
+
+  /// Write content to the open revision, opening one if the server needs to.
+  Future<TeacherProfile> saveDraft({
+    String? bio,
+    String? specialization,
+    String? qualifications,
+    String? experience,
+    List<String> languages,
+  });
+
+  /// Hand the open revision to a reviewer.
+  Future<TeacherProfile> submit();
+
+  /// Upload a credential and attach it to the open revision.
+  ///
+  /// [onProgress] reports the bytes of the file transfer only; the two small
+  /// requests either side are not counted, because a progress bar that jumps to
+  /// 100% and then waits is worse than one that finishes when the work does.
+  Future<TeacherProfile> addCertificate({
+    required PendingCertificateFile file,
+    required String title,
+    String? issuingOrganization,
+    DateTime? issuedOn,
+    void Function(int sent, int total)? onProgress,
+  });
+
+  /// Drop a credential from the OPEN revision. A published revision keeps its
+  /// own copy; the server refuses to touch it.
+  Future<TeacherProfile> removeCertificate(String certificateId);
+
+  /// A short-lived URL for one certificate file, authorized per request.
+  ///
+  /// Not cached and not stored: it expires, and holding it would be holding a
+  /// capability past the moment it was granted for.
+  Future<String> certificateUrl(String certificateId);
+}
+
 abstract interface class StoryRepository {
   /// The live stories published to the signed-in actor, newest first.
   ///

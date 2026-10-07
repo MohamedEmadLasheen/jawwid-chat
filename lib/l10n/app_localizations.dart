@@ -1458,6 +1458,312 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Try again'**
   String get storyVideoRetry;
+
+  /// No description provided for @teacherProfileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Teacher professional profile'**
+  String get teacherProfileTitle;
+
+  /// No description provided for @teacherProfileSettingsEntry.
+  ///
+  /// In en, this message translates to:
+  /// **'Professional profile'**
+  String get teacherProfileSettingsEntry;
+
+  /// No description provided for @teacherProfileSettingsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What families read about you'**
+  String get teacherProfileSettingsSubtitle;
+
+  /// No description provided for @teacherProfileAboutSection.
+  ///
+  /// In en, this message translates to:
+  /// **'About'**
+  String get teacherProfileAboutSection;
+
+  /// No description provided for @teacherProfileBioLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Bio'**
+  String get teacherProfileBioLabel;
+
+  /// No description provided for @teacherProfileBioHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A short introduction for families.'**
+  String get teacherProfileBioHint;
+
+  /// No description provided for @teacherProfileProfessionalSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Professional information'**
+  String get teacherProfileProfessionalSection;
+
+  /// No description provided for @teacherProfileSpecializationLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Specialization'**
+  String get teacherProfileSpecializationLabel;
+
+  /// No description provided for @teacherProfileQualificationsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Qualifications'**
+  String get teacherProfileQualificationsLabel;
+
+  /// No description provided for @teacherProfileExperienceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Experience'**
+  String get teacherProfileExperienceLabel;
+
+  /// No description provided for @teacherProfileLanguagesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Languages'**
+  String get teacherProfileLanguagesLabel;
+
+  /// No description provided for @teacherProfileLanguagesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Separate each language with a comma.'**
+  String get teacherProfileLanguagesHint;
+
+  /// No description provided for @teacherProfileCertificatesSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Certificates'**
+  String get teacherProfileCertificatesSection;
+
+  /// No description provided for @teacherProfileCertificatesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No certificates yet.'**
+  String get teacherProfileCertificatesEmpty;
+
+  /// No description provided for @teacherProfileAddCertificate.
+  ///
+  /// In en, this message translates to:
+  /// **'Add certificate'**
+  String get teacherProfileAddCertificate;
+
+  /// No description provided for @teacherProfileCertificateTitleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Certificate title'**
+  String get teacherProfileCertificateTitleLabel;
+
+  /// No description provided for @teacherProfileCertificateIssuerLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Issuing organization'**
+  String get teacherProfileCertificateIssuerLabel;
+
+  /// No description provided for @teacherProfileCertificateYearLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Year issued'**
+  String get teacherProfileCertificateYearLabel;
+
+  /// No description provided for @teacherProfileCertificateFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose file'**
+  String get teacherProfileCertificateFile;
+
+  /// No description provided for @teacherProfileCertificateFileChosen.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} ready to upload'**
+  String teacherProfileCertificateFileChosen(String name);
+
+  /// No description provided for @teacherProfileCertificateUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading…'**
+  String get teacherProfileCertificateUploading;
+
+  /// No description provided for @teacherProfileCertificateOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get teacherProfileCertificateOpen;
+
+  /// No description provided for @teacherProfileCertificateRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get teacherProfileCertificateRemove;
+
+  /// No description provided for @teacherProfileCertificateRemoveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this certificate?'**
+  String get teacherProfileCertificateRemoveTitle;
+
+  /// No description provided for @teacherProfileCertificateRemoveBody.
+  ///
+  /// In en, this message translates to:
+  /// **'It will be removed from the version you are editing. The approved version families can see is not changed.'**
+  String get teacherProfileCertificateRemoveBody;
+
+  /// No description provided for @teacherProfileCertificatePending.
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting review'**
+  String get teacherProfileCertificatePending;
+
+  /// No description provided for @teacherProfileCertificateApproved.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved'**
+  String get teacherProfileCertificateApproved;
+
+  /// No description provided for @teacherProfileCertificateRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'Not accepted'**
+  String get teacherProfileCertificateRejected;
+
+  /// No description provided for @teacherProfileStatusDraft.
+  ///
+  /// In en, this message translates to:
+  /// **'Not submitted'**
+  String get teacherProfileStatusDraft;
+
+  /// No description provided for @teacherProfileStatusPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for admin review'**
+  String get teacherProfileStatusPending;
+
+  /// No description provided for @teacherProfileStatusChangesRequested.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes requested'**
+  String get teacherProfileStatusChangesRequested;
+
+  /// No description provided for @teacherProfileStatusApproved.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved'**
+  String get teacherProfileStatusApproved;
+
+  /// No description provided for @teacherProfileStatusApprovedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Families can read this profile.'**
+  String get teacherProfileStatusApprovedBody;
+
+  /// No description provided for @teacherProfileStatusPendingBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You cannot edit while it is being reviewed.'**
+  String get teacherProfileStatusPendingBody;
+
+  /// No description provided for @teacherProfileEditAndResubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit and resubmit'**
+  String get teacherProfileEditAndResubmit;
+
+  /// No description provided for @teacherProfileEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get teacherProfileEdit;
+
+  /// No description provided for @teacherProfileSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get teacherProfileSave;
+
+  /// No description provided for @teacherProfileSaving.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving…'**
+  String get teacherProfileSaving;
+
+  /// No description provided for @teacherProfileSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get teacherProfileSaved;
+
+  /// No description provided for @teacherProfileSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit for review'**
+  String get teacherProfileSubmit;
+
+  /// No description provided for @teacherProfileSubmitted.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent for review'**
+  String get teacherProfileSubmitted;
+
+  /// No description provided for @teacherProfileEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Build your professional profile'**
+  String get teacherProfileEmptyTitle;
+
+  /// No description provided for @teacherProfileEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Tell families about your background. An admin reviews it before anyone sees it.'**
+  String get teacherProfileEmptyBody;
+
+  /// No description provided for @teacherProfileEditingNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'You are editing a new version. The approved version stays visible until this one is approved.'**
+  String get teacherProfileEditingNotice;
+
+  /// No description provided for @teacherProfileUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Your professional profile is not available right now.'**
+  String get teacherProfileUnavailable;
+
+  /// No description provided for @teacherProfileFieldTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'Too long by {count} characters.'**
+  String teacherProfileFieldTooLong(int count);
+
+  /// No description provided for @teacherProfileCertificateTitleRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Give the certificate a title.'**
+  String get teacherProfileCertificateTitleRequired;
+
+  /// No description provided for @teacherProfileCertificateFileRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a file first.'**
+  String get teacherProfileCertificateFileRequired;
+
+  /// No description provided for @teacherProfileCertificateBadType.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a PDF, JPEG or PNG.'**
+  String get teacherProfileCertificateBadType;
+
+  /// No description provided for @teacherProfileCertificateTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'That file is larger than 10 MB.'**
+  String get teacherProfileCertificateTooLarge;
+
+  /// No description provided for @teacherProfileTooManyLanguages.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to 10 languages.'**
+  String get teacherProfileTooManyLanguages;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

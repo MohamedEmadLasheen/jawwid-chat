@@ -750,4 +750,170 @@ class L10nEn extends L10n {
 
   @override
   String get storyVideoRetry => 'Try again';
+
+  @override
+  String get teacherProfileTitle => 'Teacher professional profile';
+
+  @override
+  String get teacherProfileSettingsEntry => 'Professional profile';
+
+  @override
+  String get teacherProfileSettingsSubtitle => 'What families read about you';
+
+  @override
+  String get teacherProfileAboutSection => 'About';
+
+  @override
+  String get teacherProfileBioLabel => 'Bio';
+
+  @override
+  String get teacherProfileBioHint => 'A short introduction for families.';
+
+  @override
+  String get teacherProfileProfessionalSection => 'Professional information';
+
+  @override
+  String get teacherProfileSpecializationLabel => 'Specialization';
+
+  @override
+  String get teacherProfileQualificationsLabel => 'Qualifications';
+
+  @override
+  String get teacherProfileExperienceLabel => 'Experience';
+
+  @override
+  String get teacherProfileLanguagesLabel => 'Languages';
+
+  @override
+  String get teacherProfileLanguagesHint =>
+      'Separate each language with a comma.';
+
+  @override
+  String get teacherProfileCertificatesSection => 'Certificates';
+
+  @override
+  String get teacherProfileCertificatesEmpty => 'No certificates yet.';
+
+  @override
+  String get teacherProfileAddCertificate => 'Add certificate';
+
+  @override
+  String get teacherProfileCertificateTitleLabel => 'Certificate title';
+
+  @override
+  String get teacherProfileCertificateIssuerLabel => 'Issuing organization';
+
+  @override
+  String get teacherProfileCertificateYearLabel => 'Year issued';
+
+  @override
+  String get teacherProfileCertificateFile => 'Choose file';
+
+  @override
+  String teacherProfileCertificateFileChosen(String name) {
+    return '$name ready to upload';
+  }
+
+  @override
+  String get teacherProfileCertificateUploading => 'Uploading…';
+
+  @override
+  String get teacherProfileCertificateOpen => 'Open';
+
+  @override
+  String get teacherProfileCertificateRemove => 'Remove';
+
+  @override
+  String get teacherProfileCertificateRemoveTitle => 'Remove this certificate?';
+
+  @override
+  String get teacherProfileCertificateRemoveBody =>
+      'It will be removed from the version you are editing. The approved version families can see is not changed.';
+
+  @override
+  String get teacherProfileCertificatePending => 'Awaiting review';
+
+  @override
+  String get teacherProfileCertificateApproved => 'Approved';
+
+  @override
+  String get teacherProfileCertificateRejected => 'Not accepted';
+
+  @override
+  String get teacherProfileStatusDraft => 'Not submitted';
+
+  @override
+  String get teacherProfileStatusPending => 'Waiting for admin review';
+
+  @override
+  String get teacherProfileStatusChangesRequested => 'Changes requested';
+
+  @override
+  String get teacherProfileStatusApproved => 'Approved';
+
+  @override
+  String get teacherProfileStatusApprovedBody =>
+      'Families can read this profile.';
+
+  @override
+  String get teacherProfileStatusPendingBody =>
+      'You cannot edit while it is being reviewed.';
+
+  @override
+  String get teacherProfileEditAndResubmit => 'Edit and resubmit';
+
+  @override
+  String get teacherProfileEdit => 'Edit';
+
+  @override
+  String get teacherProfileSave => 'Save';
+
+  @override
+  String get teacherProfileSaving => 'Saving…';
+
+  @override
+  String get teacherProfileSaved => 'Saved';
+
+  @override
+  String get teacherProfileSubmit => 'Submit for review';
+
+  @override
+  String get teacherProfileSubmitted => 'Sent for review';
+
+  @override
+  String get teacherProfileEmptyTitle => 'Build your professional profile';
+
+  @override
+  String get teacherProfileEmptyBody =>
+      'Tell families about your background. An admin reviews it before anyone sees it.';
+
+  @override
+  String get teacherProfileEditingNotice =>
+      'You are editing a new version. The approved version stays visible until this one is approved.';
+
+  @override
+  String get teacherProfileUnavailable =>
+      'Your professional profile is not available right now.';
+
+  @override
+  String teacherProfileFieldTooLong(int count) {
+    return 'Too long by $count characters.';
+  }
+
+  @override
+  String get teacherProfileCertificateTitleRequired =>
+      'Give the certificate a title.';
+
+  @override
+  String get teacherProfileCertificateFileRequired => 'Choose a file first.';
+
+  @override
+  String get teacherProfileCertificateBadType => 'Choose a PDF, JPEG or PNG.';
+
+  @override
+  String get teacherProfileCertificateTooLarge =>
+      'That file is larger than 10 MB.';
+
+  @override
+  String get teacherProfileTooManyLanguages => 'Up to 10 languages.';
 }
