@@ -47,6 +47,9 @@ model Staff {
   storiesPublished Story[] @relation("StoryPublishedBy")
   storiesDeleted   Story[] @relation("StoryDeletedBy")
 
+  teacherRevisionsReviewed    TeacherProfileRevision[]     @relation("TeacherRevisionReviewer")
+  teacherCertificatesReviewed TeacherProfileCertificate[]  @relation("TeacherCertificateReviewer")
+
   @@map("staff")
   @@schema("chat")
 }
@@ -662,8 +665,127 @@ model Teacher {
   updatedAt     DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
   learners Learner[]
+  professionalProfile TeacherProfessionalProfile?
 
   @@map("teacher")
+  @@schema("chat")
+}
+
+// =====================================================================
+// Teacher professional profile --
+// 20261007120000_chat_teacher_professional_profile.sql owns the DDL.
+// =====================================================================
+
+/// The container for one teacher's professional profile.
+///
+/// Holds NO content and NO identity -- only which revision a family reads and
+/// which the teacher is editing. Name and role stay Teacher's, joined and never
+/// copied, so a profile cannot disagree with the person it belongs to.
+model TeacherProfessionalProfile {
+  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id             String @id @default(uuid()) @db.Uuid
+
+  teacherId String  @unique @map("teacher_id") @db.Uuid
+  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  /// The ONLY parent-visible revision. NULL means never approved -- it never
+  /// means "currently being edited".
+  publishedRevisionId String?                  @unique @map("published_revision_id") @db.Uuid
+  publishedRevision   TeacherProfileRevision?  @relation("PublishedRevision", fields: [publishedRevisionId], references: [id])
+
+  draftRevisionId String?                 @unique @map("draft_revision_id") @db.Uuid
+  draftRevision   TeacherProfileRevision? @relation("DraftRevision", fields: [draftRevisionId], references: [id])
+
+  revisions TeacherProfileRevision[] @relation("ProfileRevisions")
+
+  createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
+  updatedAt DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  @@map("teacher_professional_profile")
+  @@schema("chat")
+}
+
+/// One content snapshot, immutable once approved.
+///
+/// Database triggers own the lifecycle, not this client:
+///   - an approved or superseded revision REFUSES any content update
+///   - a content edit on an open revision returns it to `draft`
+///   - `draft -> approved` is not a legal transition
+///   - approval is refused while any certificate on it is still `pending`
+///   - a teacher may edit and submit their own revision but never decide it
+/// So code that writes content and then sets a state is writing a state the
+/// database will overrule. Edit after approval by creating a NEW revision.
+model TeacherProfileRevision {
+  id        String                     @id @default(uuid()) @db.Uuid
+  profileId String                     @map("profile_id") @db.Uuid
+  profile   TeacherProfessionalProfile @relation("ProfileRevisions", fields: [profileId], references: [id], onDelete: Cascade)
+
+  revisionNumber Int @map("revision_number")
+
+  bio            String?
+  specialization String?
+  qualifications String?
+  experience     String?
+  languages      String[] @default([])
+
+  /// draft | pending_review | changes_requested | approved | superseded
+  state String @default("draft")
+
+  submittedAt  DateTime? @map("submitted_at") @db.Timestamptz
+  reviewedAt   DateTime? @map("reviewed_at") @db.Timestamptz
+  reviewedById String?   @map("reviewed_by") @db.Uuid
+  reviewedBy   Staff?    @relation("TeacherRevisionReviewer", fields: [reviewedById], references: [id])
+  reviewNote   String?   @map("review_note")
+  approvedAt   DateTime? @map("approved_at") @db.Timestamptz
+
+  createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
+  updatedAt DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  certificates TeacherProfileCertificate[]
+
+  publishedBy TeacherProfessionalProfile? @relation("PublishedRevision")
+  draftOf     TeacherProfessionalProfile? @relation("DraftRevision")
+
+  @@unique([profileId, revisionNumber])
+  @@index([profileId])
+  @@index([submittedAt])
+  @@map("teacher_profile_revision")
+  @@schema("chat")
+}
+
+/// A credential CLAIM belonging to exactly one revision.
+///
+/// `objectKey` names a PRIVATE object and is a name, not a capability: it never
+/// leaves the API, and every read is a fresh signing decision made against the
+/// caller. Unique only WITHIN a revision -- copy-on-write cites the same stored
+/// file from the next revision, so the bytes are stored once.
+model TeacherProfileCertificate {
+  id         String                 @id @default(uuid()) @db.Uuid
+  revisionId String                 @map("revision_id") @db.Uuid
+  revision   TeacherProfileRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+
+  title               String
+  issuingOrganization String?   @map("issuing_organization")
+  issuedOn            DateTime? @map("issued_on") @db.Date
+
+  objectKey String @map("object_key")
+  mimeType  String @map("mime_type")
+  byteSize  BigInt @map("byte_size")
+
+  /// pending | approved | rejected
+  state String @default("pending")
+
+  reviewedAt   DateTime? @map("reviewed_at") @db.Timestamptz
+  reviewedById String?   @map("reviewed_by") @db.Uuid
+  reviewedBy   Staff?    @relation("TeacherCertificateReviewer", fields: [reviewedById], references: [id])
+  reviewNote   String?   @map("review_note")
+
+  createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
+  updatedAt DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  @@unique([revisionId, objectKey])
+  @@index([revisionId])
+  @@map("teacher_profile_certificate")
   @@schema("chat")
 }
 
