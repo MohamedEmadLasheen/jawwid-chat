@@ -11,27 +11,30 @@ import '../wire/wire_mappers.dart';
 ///
 /// | verb   | path                                          | returns            |
 /// |--------|-----------------------------------------------|--------------------|
-/// | GET    | `/me/teacher-profile`                         | `{published,draft}`|
-/// | POST   | `/me/teacher-profile`                         | the same           |
-/// | POST   | `/me/teacher-profile/submit`                  | the same           |
+/// | GET    | `/me/teacher-profile`                         | the profile        |
+/// | POST   | `/me/teacher-profile`                         | the profile        |
+/// | PATCH  | `/me/teacher-profile/name`                    | `{name, role}`     |
+/// | POST   | `/me/teacher-profile/photo/upload`            | an authorization   |
+/// | POST   | `/me/teacher-profile/photo`                   | the profile        |
+/// | DELETE | `/me/teacher-profile/photo`                   | the profile        |
 /// | POST   | `/me/teacher-profile/certificates/upload`     | an authorization   |
-/// | POST   | `/me/teacher-profile/certificates`            | the same profile   |
-/// | PATCH  | `/me/teacher-profile/certificates/:id`        | the same profile   |
-/// | DELETE | `/me/teacher-profile/certificates/:id`        | the same profile   |
+/// | POST   | `/me/teacher-profile/certificates`            | the profile        |
+/// | PATCH  | `/me/teacher-profile/certificates/:id`        | the profile        |
+/// | DELETE | `/me/teacher-profile/certificates/:id`        | the profile        |
 /// | GET    | `/teacher-profiles/certificates/:id/download` | `{url}`            |
 ///
 /// Every path is `/me/...`: the server derives the teacher from the session, so
 /// there is no teacher id to send and none that could be tampered with. The
-/// review endpoints (`/teacher-profiles/review/...`) are deliberately NOT called
-/// from this client — a teacher has no business reaching them, and the server
-/// refuses anyway.
+/// review endpoints are deliberately NOT called from this client -- a teacher
+/// has no business reaching them, and the server refuses anyway.
 ///
 /// ## Uploading
 ///
-/// Three steps, because the row must not exist before the bytes do:
+/// Three steps, the same for a photo and for a certificate, because the row
+/// must not exist before the bytes do:
 ///
-/// 1. ask for an authorization — the server mints the destination and returns an
-///    opaque token;
+/// 1. ask for an authorization -- the server validates type and size and mints
+///    the destination, returning an opaque token;
 /// 2. PUT the bytes to the returned URL, carrying the session's Authorization
 ///    header. The signature authorizes the OBJECT; the header authenticates the
 ///    CALLER, and the storage route requires both. An earlier version of this
@@ -69,7 +72,7 @@ class HttpTeacherProfileRepository implements TeacherProfileRepository {
   }
 
   @override
-  Future<TeacherProfile> saveDraft({
+  Future<TeacherProfile> saveProfile({
     String? bio,
     String? specialization,
     String? qualifications,
@@ -90,9 +93,49 @@ class HttpTeacherProfileRepository implements TeacherProfileRepository {
   }
 
   @override
-  Future<TeacherProfile> submit() async {
+  Future<String> updateName(String name) async {
+    final response = await _client.patch<Map<String, Object?>>(
+      '/me/teacher-profile/name',
+      data: {'name': name},
+    );
+    // The SERVER's name, not the one that was sent: it trims, collapses pasted
+    // newlines and has the last word on what was stored. Returning the sent
+    // string would be the local-only optimistic name this must not create.
+    final stored = (response.data?['name'] as String?)?.trim();
+    if (stored == null || stored.isEmpty) {
+      throw const FormatException('the server returned no name');
+    }
+    return stored;
+  }
+
+  @override
+  Future<TeacherProfile> setPhoto({
+    required PendingPhotoFile file,
+    void Function(int sent, int total)? onProgress,
+  }) async {
+    final token = await _uploadBytes(
+      authorizePath: '/me/teacher-profile/photo/upload',
+      filePath: file.filePath,
+      mimeType: file.mimeType,
+      byteSize: file.byteSize,
+      onProgress: onProgress,
+    );
+
+    final response = await _client.post<Map<String, Object?>>(
+      '/me/teacher-profile/photo',
+      data: {
+        'uploadToken': token,
+        'mimeType': file.mimeType,
+        'byteSize': file.byteSize,
+      },
+    );
+    return WireMappers.teacherProfile(response.data ?? const {});
+  }
+
+  @override
+  Future<TeacherProfile> removePhoto() async {
     final response =
-        await _client.post<Map<String, Object?>>('/me/teacher-profile/submit');
+        await _client.delete<Map<String, Object?>>('/me/teacher-profile/photo');
     return WireMappers.teacherProfile(response.data ?? const {});
   }
 
@@ -104,40 +147,14 @@ class HttpTeacherProfileRepository implements TeacherProfileRepository {
     DateTime? issuedOn,
     void Function(int sent, int total)? onProgress,
   }) async {
-    // 1. Authorize. The server validates type and size here, before any bytes
-    //    move, so an oversized file is refused in one round trip rather than
-    //    after an upload.
-    final authorization = await _client.post<Map<String, Object?>>(
-      '/me/teacher-profile/certificates/upload',
-      data: {'mimeType': file.mimeType, 'byteSize': file.byteSize},
-    );
-    final body = authorization.data ?? const {};
-    final uploadUrl = body['uploadUrl'] as String?;
-    final uploadToken = body['uploadToken'] as String?;
-    if (uploadUrl == null || uploadToken == null) {
-      throw const FormatException('upload authorization was incomplete');
-    }
-
-    // 2. The bytes, authenticated as this session.
-    //
-    // The token is read at the moment of upload and not retained: holding one
-    // for a feature would outlive the refresh that rotates it.
-    final token = await _tokens.accessToken();
-    await _uploader.put<void>(
-      uploadUrl,
-      data: File(file.filePath).openRead(),
-      options: Options(
-        headers: {
-          Headers.contentTypeHeader: file.mimeType,
-          Headers.contentLengthHeader: file.byteSize,
-          // Never in the URL, the query string or the object key.
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
-      ),
-      onSendProgress: onProgress,
+    final token = await _uploadBytes(
+      authorizePath: '/me/teacher-profile/certificates/upload',
+      filePath: file.filePath,
+      mimeType: file.mimeType,
+      byteSize: file.byteSize,
+      onProgress: onProgress,
     );
 
-    // 3. The claim.
     final response = await _client.post<Map<String, Object?>>(
       '/me/teacher-profile/certificates',
       data: {
@@ -146,7 +163,7 @@ class HttpTeacherProfileRepository implements TeacherProfileRepository {
         'issuedOn': issuedOn?.toIso8601String(),
         'mimeType': file.mimeType,
         'byteSize': file.byteSize,
-        'uploadToken': uploadToken,
+        'uploadToken': token,
       },
     );
     return WireMappers.teacherProfile(response.data ?? const {});
@@ -160,7 +177,7 @@ class HttpTeacherProfileRepository implements TeacherProfileRepository {
     DateTime? issuedOn,
   }) async {
     // Metadata only. There is no field here for the file, so a rename cannot
-    // become a substitution.
+    // become a substitution -- and no upload happens, so the bytes never move.
     final response = await _client.patch<Map<String, Object?>>(
       '/me/teacher-profile/certificates/$certificateId',
       data: {
@@ -192,5 +209,48 @@ class HttpTeacherProfileRepository implements TeacherProfileRepository {
       throw const FormatException('no download url was returned');
     }
     return url;
+  }
+
+  /// Steps 1 and 2 of the upload, shared by the photo and the certificate.
+  ///
+  /// Shared deliberately: these two steps are where the security properties
+  /// live -- the credential travels in a header and nowhere else, and the URL is
+  /// used verbatim -- and two copies of that is one copy that can drift.
+  Future<String> _uploadBytes({
+    required String authorizePath,
+    required String filePath,
+    required String mimeType,
+    required int byteSize,
+    void Function(int sent, int total)? onProgress,
+  }) async {
+    final authorization = await _client.post<Map<String, Object?>>(
+      authorizePath,
+      data: {'mimeType': mimeType, 'byteSize': byteSize},
+    );
+    final body = authorization.data ?? const {};
+    final uploadUrl = body['uploadUrl'] as String?;
+    final uploadToken = body['uploadToken'] as String?;
+    if (uploadUrl == null || uploadToken == null) {
+      throw const FormatException('upload authorization was incomplete');
+    }
+
+    // The token is read at the moment of upload and not retained: holding one
+    // for a feature would outlive the refresh that rotates it.
+    final token = await _tokens.accessToken();
+    await _uploader.put<void>(
+      uploadUrl,
+      data: File(filePath).openRead(),
+      options: Options(
+        headers: {
+          Headers.contentTypeHeader: mimeType,
+          Headers.contentLengthHeader: byteSize,
+          // Never in the URL, the query string or the object key.
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      ),
+      onSendProgress: onProgress,
+    );
+
+    return uploadToken;
   }
 }

@@ -412,15 +412,14 @@ abstract interface class MessageRepository {
 /// in this interface, because the server derives the teacher from the session --
 /// so "edit somebody else's profile" is not a request this client can express.
 ///
-/// The client never creates a revision and never names a state. `saveDraft`
-/// writes content and the SERVER decides whether that opened a new revision
-/// (copy-on-write, when the last one is approved) or wrote into the open one.
+/// There is no submit, no draft and no state. The teacher owns the profile:
+/// [saveProfile] writes it and the write is the publish.
 abstract interface class TeacherProfileRepository {
-  /// The published revision, the open one, or neither. Creates nothing.
+  /// The current profile. Creates nothing.
   Future<TeacherProfile> myProfile();
 
-  /// Write content to the open revision, opening one if the server needs to.
-  Future<TeacherProfile> saveDraft({
+  /// Save the profile content. Immediately current when it returns.
+  Future<TeacherProfile> saveProfile({
     String? bio,
     String? specialization,
     String? qualifications,
@@ -428,14 +427,28 @@ abstract interface class TeacherProfileRepository {
     List<String> languages,
   });
 
-  /// Hand the open revision to a reviewer.
-  Future<TeacherProfile> submit();
+  /// Rename the signed-in teacher.
+  ///
+  /// Separate from [saveProfile] because the name is IDENTITY: it lives on
+  /// `chat.teacher` and is read by surfaces that have nothing to do with this
+  /// screen. Returns the authoritative name the server stored -- which is what
+  /// the caller must then display, rather than the string it sent.
+  Future<String> updateName(String name);
 
-  /// Upload a credential and attach it to the open revision.
+  /// Upload a photo and make it the profile photo, replacing any previous one.
   ///
   /// [onProgress] reports the bytes of the file transfer only; the two small
   /// requests either side are not counted, because a progress bar that jumps to
   /// 100% and then waits is worse than one that finishes when the work does.
+  Future<TeacherProfile> setPhoto({
+    required PendingPhotoFile file,
+    void Function(int sent, int total)? onProgress,
+  });
+
+  /// Remove the photo. The avatar falls back to generated initials.
+  Future<TeacherProfile> removePhoto();
+
+  /// Upload a credential and attach it to the profile.
   Future<TeacherProfile> addCertificate({
     required PendingCertificateFile file,
     required String title,
@@ -444,7 +457,7 @@ abstract interface class TeacherProfileRepository {
     void Function(int sent, int total)? onProgress,
   });
 
-  /// Edit a credential's metadata on the OPEN revision.
+  /// Edit a credential's metadata.
   ///
   /// The FILE is not a parameter and does not move. The server returns the
   /// claim to `pending` -- a reviewer approved those words, not the file in the
@@ -456,8 +469,6 @@ abstract interface class TeacherProfileRepository {
     DateTime? issuedOn,
   });
 
-  /// Drop a credential from the OPEN revision. A published revision keeps its
-  /// own copy; the server refuses to touch it.
   Future<TeacherProfile> removeCertificate(String certificateId);
 
   /// A short-lived URL for one certificate file, authorized per request.

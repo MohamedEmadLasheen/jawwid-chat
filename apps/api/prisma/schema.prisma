@@ -47,7 +47,6 @@ model Staff {
   storiesPublished Story[] @relation("StoryPublishedBy")
   storiesDeleted   Story[] @relation("StoryDeletedBy")
 
-  teacherRevisionsReviewed    TeacherProfileRevision[]     @relation("TeacherRevisionReviewer")
   teacherCertificatesReviewed TeacherProfileCertificate[]  @relation("TeacherCertificateReviewer")
 
   @@map("staff")
@@ -676,11 +675,20 @@ model Teacher {
 // 20261007120000_chat_teacher_professional_profile.sql owns the DDL.
 // =====================================================================
 
-/// The container for one teacher's professional profile.
+/// One teacher's professional profile. The teacher owns it and edits it
+/// directly: what is saved IS what is current.
 ///
-/// Holds NO content and NO identity -- only which revision a family reads and
-/// which the teacher is editing. Name and role stay Teacher's, joined and never
-/// copied, so a profile cannot disagree with the person it belongs to.
+/// Holds NO identity. The name and role stay on `Teacher`, joined and never
+/// copied -- a profile that could carry a second copy of the teacher's name is
+/// a profile that could disagree with it.
+///
+/// `photoObjectKey` names a PRIVATE object and is a name, not a capability. It
+/// never leaves the API: a read is a fresh signing decision made against the
+/// caller, so the DTO carries a short-lived signed URL and never this column.
+///
+/// 20261008090000_chat_teacher_profile_v2_immediate_save.sql owns the DDL and
+/// the length ceilings; the service repeats them so a client is refused before
+/// a round trip, not instead of one.
 model TeacherProfessionalProfile {
   organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   id             String @id @default(uuid()) @db.Uuid
@@ -688,15 +696,18 @@ model TeacherProfessionalProfile {
   teacherId String  @unique @map("teacher_id") @db.Uuid
   teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
 
-  /// The ONLY parent-visible revision. NULL means never approved -- it never
-  /// means "currently being edited".
-  publishedRevisionId String?                  @unique @map("published_revision_id") @db.Uuid
-  publishedRevision   TeacherProfileRevision?  @relation("PublishedRevision", fields: [publishedRevisionId], references: [id])
+  bio            String?
+  specialization String?
+  qualifications String?
+  experience     String?
+  languages      String[] @default([])
 
-  draftRevisionId String?                 @unique @map("draft_revision_id") @db.Uuid
-  draftRevision   TeacherProfileRevision? @relation("DraftRevision", fields: [draftRevisionId], references: [id])
+  photoObjectKey String?   @map("photo_object_key")
+  photoMimeType  String?   @map("photo_mime_type")
+  photoByteSize  BigInt?   @map("photo_byte_size")
+  photoUpdatedAt DateTime? @map("photo_updated_at") @db.Timestamptz
 
-  revisions TeacherProfileRevision[] @relation("ProfileRevisions")
+  certificates TeacherProfileCertificate[]
 
   createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
   updatedAt DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
@@ -705,64 +716,20 @@ model TeacherProfessionalProfile {
   @@schema("chat")
 }
 
-/// One content snapshot, immutable once approved.
-///
-/// Database triggers own the lifecycle, not this client:
-///   - an approved or superseded revision REFUSES any content update
-///   - a content edit on an open revision returns it to `draft`
-///   - `draft -> approved` is not a legal transition
-///   - approval is refused while any certificate on it is still `pending`
-///   - a teacher may edit and submit their own revision but never decide it
-/// So code that writes content and then sets a state is writing a state the
-/// database will overrule. Edit after approval by creating a NEW revision.
-model TeacherProfileRevision {
-  id        String                     @id @default(uuid()) @db.Uuid
-  profileId String                     @map("profile_id") @db.Uuid
-  profile   TeacherProfessionalProfile @relation("ProfileRevisions", fields: [profileId], references: [id], onDelete: Cascade)
-
-  revisionNumber Int @map("revision_number")
-
-  bio            String?
-  specialization String?
-  qualifications String?
-  experience     String?
-  languages      String[] @default([])
-
-  /// draft | pending_review | changes_requested | approved | superseded
-  state String @default("draft")
-
-  submittedAt  DateTime? @map("submitted_at") @db.Timestamptz
-  reviewedAt   DateTime? @map("reviewed_at") @db.Timestamptz
-  reviewedById String?   @map("reviewed_by") @db.Uuid
-  reviewedBy   Staff?    @relation("TeacherRevisionReviewer", fields: [reviewedById], references: [id])
-  reviewNote   String?   @map("review_note")
-  approvedAt   DateTime? @map("approved_at") @db.Timestamptz
-
-  createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
-  updatedAt DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
-
-  certificates TeacherProfileCertificate[]
-
-  publishedBy TeacherProfessionalProfile? @relation("PublishedRevision")
-  draftOf     TeacherProfessionalProfile? @relation("DraftRevision")
-
-  @@unique([profileId, revisionNumber])
-  @@index([profileId])
-  @@index([submittedAt])
-  @@map("teacher_profile_revision")
-  @@schema("chat")
-}
-
-/// A credential CLAIM belonging to exactly one revision.
+/// A credential CLAIM belonging to exactly one profile.
 ///
 /// `objectKey` names a PRIVATE object and is a name, not a capability: it never
 /// leaves the API, and every read is a fresh signing decision made against the
-/// caller. Unique only WITHIN a revision -- copy-on-write cites the same stored
-/// file from the next revision, so the bytes are stored once.
+/// caller.
+///
+/// Profile text saves immediately; a credential does NOT become verified by
+/// being uploaded. `state` is the reviewer's decision, a teacher may never make
+/// it, and editing the claim returns it to `pending` -- the approval was of a
+/// claim, not of a file.
 model TeacherProfileCertificate {
-  id         String                 @id @default(uuid()) @db.Uuid
-  revisionId String                 @map("revision_id") @db.Uuid
-  revision   TeacherProfileRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  id        String                     @id @default(uuid()) @db.Uuid
+  profileId String                     @map("profile_id") @db.Uuid
+  profile   TeacherProfessionalProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   title               String
   issuingOrganization String?   @map("issuing_organization")
@@ -783,8 +750,8 @@ model TeacherProfileCertificate {
   createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
   updatedAt DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
-  @@unique([revisionId, objectKey])
-  @@index([revisionId])
+  @@unique([profileId, objectKey])
+  @@index([profileId])
   @@map("teacher_profile_certificate")
   @@schema("chat")
 }

@@ -2,47 +2,28 @@
 /// returns it.
 ///
 /// This mirrors the server's view and deliberately adds nothing. In particular
-/// it carries:
+/// it carries NO object key, storage path or reviewer id: the server never
+/// sends them, so there is nothing here to leak and nothing to render by
+/// accident. [photoUrl] is a short-lived signed URL, not a path.
 ///
-/// * NO teacher name and NO role. Those come from the authenticated identity
-///   (`AuthUser`), which is the one place they live. A profile that could carry
-///   a second copy of the teacher's name is a profile that could disagree with
-///   it.
-/// * NO object key, storage path, revision id or reviewer id. The server never
-///   sends them, so there is nothing here to leak and nothing to accidentally
-///   render.
+/// ## V2: there are no versions
 ///
-/// Versioning is the SERVER's. The client never decides which revision it is
-/// editing, never creates one, and never computes the next state: it renders
-/// what `published` and `draft` say and calls the endpoint that changes them.
+/// The previous shape was `{published, draft}` with a five-value review state,
+/// because an admin decided when a teacher's words became visible. The teacher
+/// now owns their profile: Save writes it and the write is the publish. So this
+/// is one flat object, and the client has no state to interpret.
+///
+/// [name] is the teacher's authoritative identity, served from `chat.teacher`
+/// and NOT stored in any profile table. It is here because the screen renders
+/// it and edits it; it is never a second copy, because the only place it is
+/// written is `PATCH /me/teacher-profile/name`, and the response to that is
+/// what the client then shows.
 library;
 
-/// Where a revision sits in review. These are the server's own values; the
-/// client never invents a state and never maps one onto another.
-enum RevisionState {
-  draft,
-  pendingReview,
-  changesRequested,
-  approved,
-
-  /// A past published version. The teacher-facing API never returns one — the
-  /// published pointer always names the current version — but the value exists
-  /// so an unexpected payload degrades to "something we do not render" rather
-  /// than to a wrong state.
-  superseded;
-
-  static RevisionState? tryParse(String? raw) => switch (raw) {
-        'draft' => RevisionState.draft,
-        'pending_review' => RevisionState.pendingReview,
-        'changes_requested' => RevisionState.changesRequested,
-        'approved' => RevisionState.approved,
-        'superseded' => RevisionState.superseded,
-        _ => null,
-      };
-}
-
-/// A credential's own review outcome, decided independently of the revision it
-/// belongs to.
+/// A credential's own review outcome.
+///
+/// Credentials still have one: profile text saves immediately, but a document
+/// claiming a qualification does not become verified by being uploaded.
 enum CertificateState {
   pending,
   approved,
@@ -58,10 +39,8 @@ enum CertificateState {
 
 /// One credential claim.
 ///
-/// [id] is the certificate's own id and is the only identifier the client ever
-/// holds — it is what `DELETE …/certificates/:id` and the download endpoint
-/// take. There is no revision id here, because the client has no business
-/// naming a revision.
+/// [id] is the only identifier the client ever holds -- it is what
+/// `PATCH`/`DELETE …/certificates/:id` and the download endpoint take.
 class ProfileCertificate {
   const ProfileCertificate({
     required this.id,
@@ -82,96 +61,71 @@ class ProfileCertificate {
   final String? reviewNote;
 }
 
-/// One version of the profile's content.
-class ProfileRevision {
-  const ProfileRevision({
-    required this.state,
-    required this.certificates,
+/// The teacher's professional profile: one object, current as of the last save.
+class TeacherProfile {
+  const TeacherProfile({
+    required this.name,
+    this.photoUrl,
     this.bio,
     this.specialization,
     this.qualifications,
     this.experience,
     this.languages = const [],
-    this.reviewNote,
+    this.certificates = const [],
+    this.updatedAt,
   });
 
-  final RevisionState state;
-  final List<ProfileCertificate> certificates;
+  /// Empty, for a teacher who has never saved. The server creates no row for
+  /// one either, so opening the screen is not a write.
+  const TeacherProfile.empty({required String name})
+      : this(name: name);
+
+  /// The authoritative teacher name, from `chat.teacher`.
+  final String name;
+
+  /// A short-lived signed URL, or null when there is no photo -- in which case
+  /// the avatar falls back to generated initials.
+  final String? photoUrl;
 
   final String? bio;
   final String? specialization;
   final String? qualifications;
   final String? experience;
   final List<String> languages;
+  final List<ProfileCertificate> certificates;
 
-  /// The reviewer's note. Only ever present on a `changesRequested` revision.
-  final String? reviewNote;
+  /// When the profile was last saved. Null when it never has been.
+  final DateTime? updatedAt;
 
-  /// Whether the teacher has written anything at all into this revision.
+  /// Whether the teacher has written anything at all.
   bool get isEmpty =>
       (bio ?? '').trim().isEmpty &&
       (specialization ?? '').trim().isEmpty &&
       (qualifications ?? '').trim().isEmpty &&
       (experience ?? '').trim().isEmpty &&
       languages.isEmpty &&
-      certificates.isEmpty;
+      certificates.isEmpty &&
+      photoUrl == null;
+
+  /// How many credentials are still awaiting a decision. Shown as information,
+  /// never as something that blocks the teacher from saving.
+  int get pendingCertificates =>
+      certificates.where((c) => c.state == CertificateState.pending).length;
+
+  TeacherProfile copyWith({String? name}) => TeacherProfile(
+        name: name ?? this.name,
+        photoUrl: photoUrl,
+        bio: bio,
+        specialization: specialization,
+        qualifications: qualifications,
+        experience: experience,
+        languages: languages,
+        certificates: certificates,
+        updatedAt: updatedAt,
+      );
 }
 
-/// What the teacher's own screen renders.
-///
-/// Both halves can be null, and the pair is what the screen reads:
-///
-/// * `published == null && draft == null` — nothing written yet.
-/// * `published == null && draft != null` — a first profile, not yet approved.
-/// * `published != null && draft == null` — approved, with no edit in flight.
-/// * both — approved, and a new revision is being written or reviewed. The
-///   family still reads `published`; the teacher edits `draft`.
-class TeacherProfile {
-  const TeacherProfile({this.published, this.draft});
-
-  /// The approved version a family reads. Never editable — editing it is what
-  /// copy-on-write exists to prevent, and the server refuses it outright.
-  final ProfileRevision? published;
-
-  /// The revision the teacher may edit, when one is open.
-  final ProfileRevision? draft;
-
-  /// The revision the screen shows.
-  ///
-  /// The open one when there is one, because that is what the teacher is
-  /// working on; otherwise the published one, which is what exists. Null only
-  /// before anything has ever been written.
-  ProfileRevision? get current => draft ?? published;
-
-  /// Whether the teacher may type right now.
-  ///
-  /// False while a revision is with a reviewer: the server would bounce the
-  /// revision back to draft on any edit, and letting someone type into a
-  /// screen that silently withdraws their submission is worse than not
-  /// offering it.
-  bool get isEditable {
-    final open = draft;
-    if (open == null) return true; // starting a new revision is always allowed
-    return open.state == RevisionState.draft ||
-        open.state == RevisionState.changesRequested;
-  }
-
-  /// Whether there is anything a reviewer could be asked to look at.
-  bool get canSubmit =>
-      draft != null &&
-      !draft!.isEmpty &&
-      (draft!.state == RevisionState.draft ||
-          draft!.state == RevisionState.changesRequested);
-
-  bool get isAwaitingReview => draft?.state == RevisionState.pendingReview;
-
-  bool get hasChangesRequested => draft?.state == RevisionState.changesRequested;
-
-  /// Approved AND nothing in flight — the resting state after a review.
-  bool get isApproved => published != null && draft == null;
-}
-
-/// A file the teacher chose, on its way to becoming a certificate.
+/// A file the teacher has chosen but not yet uploaded.
 class PendingCertificateFile {
   const PendingCertificateFile({
     required this.filePath,
@@ -186,9 +140,45 @@ class PendingCertificateFile {
   final String? fileName;
 }
 
-/// What the server accepts. Mirrors the check constraint and the service
-/// validation, which are the real limits — this copy exists so the teacher is
-/// told before a file is uploaded, never to decide anything the server decides.
+/// A photo the teacher has chosen but not yet uploaded.
+///
+/// Its own type rather than a reused [PendingCertificateFile]: the accepted
+/// types and the size ceiling are different, and sharing one type is how a
+/// 10MB PDF ends up being offered as an avatar.
+class PendingPhotoFile {
+  const PendingPhotoFile({
+    required this.filePath,
+    required this.mimeType,
+    required this.byteSize,
+    this.fileName,
+  });
+
+  final String filePath;
+  final String mimeType;
+  final int byteSize;
+  final String? fileName;
+
+  /// What the server accepts. Repeated here so the picker can filter and the
+  /// user is told before an upload, not after one.
+  static const allowedMimeTypes = <String>{'image/jpeg', 'image/png', 'image/webp'};
+  static const maxBytes = 5 * 1024 * 1024;
+
+  bool get isAllowedType => allowedMimeTypes.contains(mimeType);
+  bool get isWithinSizeLimit => byteSize > 0 && byteSize <= maxBytes;
+}
+
+/// What the server accepts for profile CONTENT. Repeated here so a field can
+/// stop the teacher at the limit instead of letting a save fail at it; the
+/// database CHECK constraints are the real limit.
+abstract final class ProfileLimits {
+  static const maxBio = 2000;
+  static const maxSpecialization = 200;
+  static const maxQualifications = 2000;
+  static const maxExperience = 2000;
+  static const maxLanguages = 10;
+  static const maxName = 120;
+}
+
 abstract final class CertificateLimits {
   static const maxBytes = 10 * 1024 * 1024;
 
@@ -200,13 +190,4 @@ abstract final class CertificateLimits {
 
   static const maxTitleLength = 200;
   static const maxIssuerLength = 200;
-}
-
-/// Field limits for the profile text, matching the database check constraints.
-abstract final class ProfileLimits {
-  static const maxBio = 2000;
-  static const maxSpecialization = 200;
-  static const maxQualifications = 2000;
-  static const maxExperience = 2000;
-  static const maxLanguages = 10;
 }

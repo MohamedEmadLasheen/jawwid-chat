@@ -1606,7 +1606,7 @@ abstract class L10n {
   /// No description provided for @teacherProfileCertificateRemoveBody.
   ///
   /// In en, this message translates to:
-  /// **'It will be removed from the version you are editing. The approved version families can see is not changed.'**
+  /// **'It will be removed from your profile. The file is deleted.'**
   String get teacherProfileCertificateRemoveBody;
 
   /// No description provided for @teacherProfileCertificatePending.
@@ -1627,54 +1627,6 @@ abstract class L10n {
   /// **'Not accepted'**
   String get teacherProfileCertificateRejected;
 
-  /// No description provided for @teacherProfileStatusDraft.
-  ///
-  /// In en, this message translates to:
-  /// **'Not submitted'**
-  String get teacherProfileStatusDraft;
-
-  /// No description provided for @teacherProfileStatusPending.
-  ///
-  /// In en, this message translates to:
-  /// **'Waiting for admin review'**
-  String get teacherProfileStatusPending;
-
-  /// No description provided for @teacherProfileStatusChangesRequested.
-  ///
-  /// In en, this message translates to:
-  /// **'Changes requested'**
-  String get teacherProfileStatusChangesRequested;
-
-  /// No description provided for @teacherProfileStatusApproved.
-  ///
-  /// In en, this message translates to:
-  /// **'Approved'**
-  String get teacherProfileStatusApproved;
-
-  /// No description provided for @teacherProfileStatusApprovedBody.
-  ///
-  /// In en, this message translates to:
-  /// **'Families can read this profile.'**
-  String get teacherProfileStatusApprovedBody;
-
-  /// No description provided for @teacherProfileStatusPendingBody.
-  ///
-  /// In en, this message translates to:
-  /// **'You cannot edit while it is being reviewed.'**
-  String get teacherProfileStatusPendingBody;
-
-  /// No description provided for @teacherProfileEditAndResubmit.
-  ///
-  /// In en, this message translates to:
-  /// **'Edit and resubmit'**
-  String get teacherProfileEditAndResubmit;
-
-  /// No description provided for @teacherProfileEdit.
-  ///
-  /// In en, this message translates to:
-  /// **'Edit'**
-  String get teacherProfileEdit;
-
   /// No description provided for @teacherProfileSave.
   ///
   /// In en, this message translates to:
@@ -1693,18 +1645,6 @@ abstract class L10n {
   /// **'Saved'**
   String get teacherProfileSaved;
 
-  /// No description provided for @teacherProfileSubmit.
-  ///
-  /// In en, this message translates to:
-  /// **'Submit for review'**
-  String get teacherProfileSubmit;
-
-  /// No description provided for @teacherProfileSubmitted.
-  ///
-  /// In en, this message translates to:
-  /// **'Sent for review'**
-  String get teacherProfileSubmitted;
-
   /// No description provided for @teacherProfileEmptyTitle.
   ///
   /// In en, this message translates to:
@@ -1714,14 +1654,8 @@ abstract class L10n {
   /// No description provided for @teacherProfileEmptyBody.
   ///
   /// In en, this message translates to:
-  /// **'Tell families about your background. An admin reviews it before anyone sees it.'**
+  /// **'Tell families about your background. Your changes are saved and visible right away.'**
   String get teacherProfileEmptyBody;
-
-  /// No description provided for @teacherProfileEditingNotice.
-  ///
-  /// In en, this message translates to:
-  /// **'You are editing a new version. The approved version stays visible until this one is approved.'**
-  String get teacherProfileEditingNotice;
 
   /// No description provided for @teacherProfileUnavailable.
   ///
@@ -1782,6 +1716,84 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Editing the details sends this certificate for review again. The file is not changed.'**
   String get teacherProfileCertificateEditNote;
+
+  /// No description provided for @teacherProfileNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Your name'**
+  String get teacherProfileNameLabel;
+
+  /// No description provided for @teacherProfileNameSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save name'**
+  String get teacherProfileNameSave;
+
+  /// No description provided for @teacherProfileNameSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Name saved'**
+  String get teacherProfileNameSaved;
+
+  /// No description provided for @teacherProfileNameRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your name.'**
+  String get teacherProfileNameRequired;
+
+  /// No description provided for @teacherProfilePhotoChoose.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile photo'**
+  String get teacherProfilePhotoChoose;
+
+  /// No description provided for @teacherProfilePhotoReplace.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace photo'**
+  String get teacherProfilePhotoReplace;
+
+  /// No description provided for @teacherProfilePhotoRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove photo'**
+  String get teacherProfilePhotoRemove;
+
+  /// No description provided for @teacherProfilePhotoRemoveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove your photo?'**
+  String get teacherProfilePhotoRemoveTitle;
+
+  /// No description provided for @teacherProfilePhotoRemoveBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your profile will show your initials instead.'**
+  String get teacherProfilePhotoRemoveBody;
+
+  /// No description provided for @teacherProfilePhotoUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading photo…'**
+  String get teacherProfilePhotoUploading;
+
+  /// No description provided for @teacherProfilePhotoBadType.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a JPEG, PNG or WebP image.'**
+  String get teacherProfilePhotoBadType;
+
+  /// No description provided for @teacherProfilePhotoTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'That image is larger than 5 MB.'**
+  String get teacherProfilePhotoTooLarge;
+
+  /// No description provided for @teacherProfileCertificateSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save certificate'**
+  String get teacherProfileCertificateSave;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

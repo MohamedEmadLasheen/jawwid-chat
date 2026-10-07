@@ -11,8 +11,8 @@ export const qk = {
   staff: ['staff'] as const,
 
   teacherProfileReviews: ['teacher-profile-reviews'] as const,
-  teacherProfileReview: (revisionId: string) =>
-    ['teacher-profile-reviews', revisionId] as const,
+  teacherProfileReview: (profileId: string) =>
+    ['teacher-profile-reviews', profileId] as const,
 
   inbox: (section: AttentionBucket | 'covering') => ['inbox', section] as const,
   inboxAll: ['inbox'] as const,

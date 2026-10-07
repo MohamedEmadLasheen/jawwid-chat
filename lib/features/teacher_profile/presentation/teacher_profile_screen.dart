@@ -15,22 +15,29 @@ import '../application/teacher_profile_controller.dart';
 /// The teacher's professional profile.
 ///
 /// Reached from Settings, and only by a teacher. This is NOT "My account" --
-/// that screen is the signed-in person's identity and is untouched here. This
-/// one is the thing a family eventually reads, which is why every word on it
-/// goes through review.
+/// that screen is the signed-in person's account and is untouched here. This
+/// one is the thing a family eventually reads.
+///
+/// ## The teacher owns this screen
+///
+/// There is no Submit, no pending-review banner and no approval. Save writes
+/// the profile and the write IS the publish, so the only states this screen has
+/// are the ordinary ones: idle, saving, saved, failed. A teacher does not wait
+/// for another person to publish their own words.
+///
+/// What is NOT immediate is a CERTIFICATE's trust. Uploading a document does not
+/// make it verified, so each credential shows its own review state -- and that
+/// state is information, never something that blocks the teacher from saving.
 ///
 /// ## What the screen does not decide
 ///
-/// WHICH REVISION IT IS EDITING. The server answers that: saving content while
-/// the last version is approved opens a new revision by copy-on-write, and the
-/// screen finds out by rendering what came back. There is no client-side
-/// versioning here, and no attempt to predict one.
+/// WHAT THE NAME IS. A rename returns the name the server stored, after its own
+/// trimming, and that is what gets rendered. The screen never shows the string
+/// that was typed.
 ///
-/// WHETHER SOMETHING IS EDITABLE. `TeacherProfile.isEditable` reads the state
-/// the server sent. While a revision is with a reviewer the fields are
-/// read-only, because the server would bounce that revision back to draft on
-/// any edit -- silently withdrawing a submission the teacher believes is in the
-/// queue.
+/// WHERE THE PHOTO LIVES. It renders a short-lived signed URL the server
+/// minted, through the shared [JawwidAvatar], and falls back to generated
+/// initials when there is none. No path is ever constructed here.
 class TeacherProfileScreen extends ConsumerStatefulWidget {
   const TeacherProfileScreen({super.key});
 
@@ -45,12 +52,11 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
   final _experience = TextEditingController();
   final _languages = TextEditingController();
 
-  /// The revision the controllers were last filled from. Re-filling on every
+  /// The profile the controllers were last filled from. Re-filling on every
   /// build would overwrite what the teacher is typing on each rebuild.
-  ProfileRevision? _loadedFrom;
+  TeacherProfile? _loadedFrom;
 
   bool _saving = false;
-  bool _submitting = false;
 
   @override
   void dispose() {
@@ -66,14 +72,14 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
     super.dispose();
   }
 
-  void _fill(ProfileRevision? revision) {
-    if (identical(revision, _loadedFrom)) return;
-    _loadedFrom = revision;
-    _bio.text = revision?.bio ?? '';
-    _specialization.text = revision?.specialization ?? '';
-    _qualifications.text = revision?.qualifications ?? '';
-    _experience.text = revision?.experience ?? '';
-    _languages.text = (revision?.languages ?? const []).join('، ');
+  void _fill(TeacherProfile? profile) {
+    if (identical(profile, _loadedFrom)) return;
+    _loadedFrom = profile;
+    _bio.text = profile?.bio ?? '';
+    _specialization.text = profile?.specialization ?? '';
+    _qualifications.text = profile?.qualifications ?? '';
+    _experience.text = profile?.experience ?? '';
+    _languages.text = (profile?.languages ?? const []).join('، ');
   }
 
   @override
@@ -97,10 +103,8 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
             experience: _experience,
             languages: _languages,
             saving: _saving,
-            submitting: _submitting,
             fill: _fill,
             onSave: _save,
-            onSubmit: _submit,
           ),
       },
     );
@@ -129,29 +133,15 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
       messenger.showSnackBar(SnackBar(content: Text(l10n.teacherProfileSaved)));
     } on AppError catch (error) {
       messenger.showSnackBar(
-        SnackBar(content: Text(ErrorPresenter.present(error, l10n).title)),
+        SnackBar(
+          content: Text(ErrorPresenter.present(error, l10n).title),
+          // A failed save is the one place a retry belongs: the teacher's words
+          // are still in the fields, so retrying costs one tap and loses nothing.
+          action: SnackBarAction(label: l10n.retryAction, onPressed: _save),
+        ),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  Future<void> _submit() async {
-    if (_submitting) return;
-
-    final l10n = L10n.of(context);
-    final messenger = ScaffoldMessenger.of(context);
-    setState(() => _submitting = true);
-    try {
-      await ref.read(teacherProfileControllerProvider.notifier).submit();
-      _loadedFrom = null;
-      messenger.showSnackBar(SnackBar(content: Text(l10n.teacherProfileSubmitted)));
-    } on AppError catch (error) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(ErrorPresenter.present(error, l10n).title)),
-      );
-    } finally {
-      if (mounted) setState(() => _submitting = false);
     }
   }
 
@@ -172,10 +162,8 @@ class _Body extends ConsumerWidget {
     required this.experience,
     required this.languages,
     required this.saving,
-    required this.submitting,
     required this.fill,
     required this.onSave,
-    required this.onSubmit,
   });
 
   final TeacherProfile profile;
@@ -185,27 +173,21 @@ class _Body extends ConsumerWidget {
   final TextEditingController experience;
   final TextEditingController languages;
   final bool saving;
-  final bool submitting;
-  final void Function(ProfileRevision?) fill;
+  final void Function(TeacherProfile?) fill;
   final Future<void> Function() onSave;
-  final Future<void> Function() onSubmit;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = L10n.of(context);
-    final user = ref.watch(authControllerProvider).user;
-    final revision = profile.current;
-    final editable = profile.isEditable;
 
-    fill(revision);
+    fill(profile);
 
     return ListView(
       padding: const EdgeInsets.only(bottom: Spacing.spacing9),
       children: [
-        if (user != null) _Header(displayName: user.displayName, isTeacher: user.isTeacher),
-        _StatusBanner(profile: profile),
+        _Header(profile: profile),
 
-        if (revision == null || revision.isEmpty)
+        if (profile.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: Spacing.spacing5),
             child: JawwidEmptyView(
@@ -220,7 +202,7 @@ class _Body extends ConsumerWidget {
           controller: bio,
           label: l10n.teacherProfileBioLabel,
           hint: l10n.teacherProfileBioHint,
-          enabled: editable,
+          enabled: !saving,
           maxLength: ProfileLimits.maxBio,
           maxLines: 5,
         ),
@@ -229,20 +211,20 @@ class _Body extends ConsumerWidget {
         _Field(
           controller: specialization,
           label: l10n.teacherProfileSpecializationLabel,
-          enabled: editable,
+          enabled: !saving,
           maxLength: ProfileLimits.maxSpecialization,
         ),
         _Field(
           controller: qualifications,
           label: l10n.teacherProfileQualificationsLabel,
-          enabled: editable,
+          enabled: !saving,
           maxLength: ProfileLimits.maxQualifications,
           maxLines: 4,
         ),
         _Field(
           controller: experience,
           label: l10n.teacherProfileExperienceLabel,
-          enabled: editable,
+          enabled: !saving,
           maxLength: ProfileLimits.maxExperience,
           maxLines: 4,
         ),
@@ -250,36 +232,21 @@ class _Body extends ConsumerWidget {
           controller: languages,
           label: l10n.teacherProfileLanguagesLabel,
           hint: l10n.teacherProfileLanguagesHint,
-          enabled: editable,
+          enabled: !saving,
           maxLength: ProfileLimits.maxSpecialization,
         ),
 
         _Section(title: l10n.teacherProfileCertificatesSection),
-        _Certificates(revision: revision, editable: editable),
+        _Certificates(certificates: profile.certificates),
 
         const SizedBox(height: Spacing.spacing6),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: Spacing.spacing5),
-          child: Row(
-            children: [
-              Expanded(
-                child: FilledButton.tonal(
-                  onPressed: editable && !saving ? onSave : null,
-                  child: Text(saving ? l10n.teacherProfileSaving : l10n.teacherProfileSave),
-                ),
-              ),
-              const SizedBox(width: Spacing.spacing4),
-              Expanded(
-                child: FilledButton(
-                  onPressed: profile.canSubmit && !submitting && !saving ? onSubmit : null,
-                  child: Text(
-                    profile.hasChangesRequested
-                        ? l10n.teacherProfileEditAndResubmit
-                        : l10n.teacherProfileSubmit,
-                  ),
-                ),
-              ),
-            ],
+          // ONE action. The previous version had Save beside Submit, which is
+          // the whole thing this release removed.
+          child: FilledButton(
+            onPressed: saving ? null : onSave,
+            child: Text(saving ? l10n.teacherProfileSaving : l10n.teacherProfileSave),
           ),
         ),
       ],
@@ -287,17 +254,23 @@ class _Body extends ConsumerWidget {
   }
 }
 
-/// Name and role, from the authenticated identity and nowhere else.
+/// Photo, editable name, read-only role.
 ///
-/// Not editable, and not a field of the profile: the professional profile has
-/// no name column precisely so it cannot disagree with the account. The avatar
-/// is the existing shared component, unchanged -- there is no photo upload in
-/// this feature.
-class _Header extends StatelessWidget {
-  const _Header({required this.displayName, required this.isTeacher});
+/// The name is rendered from [TeacherProfile.name], which the server served
+/// from `chat.teacher`. The profile has no name column precisely so it cannot
+/// disagree with the identity every other screen shows.
+class _Header extends ConsumerStatefulWidget {
+  const _Header({required this.profile});
 
-  final String displayName;
-  final bool isTeacher;
+  final TeacherProfile profile;
+
+  @override
+  ConsumerState<_Header> createState() => _HeaderState();
+}
+
+class _HeaderState extends ConsumerState<_Header> {
+  bool _busy = false;
+  double? _progress;
 
   @override
   Widget build(BuildContext context) {
@@ -312,93 +285,298 @@ class _Header extends StatelessWidget {
       ),
       child: Column(
         children: [
-          JawwidAvatar(displayName: displayName, size: Sizes.avatarXl),
-          const SizedBox(height: Spacing.spacing4),
-          ContentText(
-            displayName,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+          Stack(
+            children: [
+              // The SHARED avatar, given a signed URL. No second avatar
+              // component exists, and this one already falls back to initials
+              // when the URL is null or fails to load.
+              JawwidAvatar(
+                displayName: widget.profile.name,
+                imageUrl: widget.profile.photoUrl,
+                // Empty while the token resolves, which renders initials rather
+                // than a broken image.
+                imageHeaders: ref.watch(signedImageHeadersProvider).value,
+                size: Sizes.avatarXl,
+              ),
+              PositionedDirectional(
+                bottom: 0,
+                end: 0,
+                child: _PhotoButton(
+                  busy: _busy,
+                  hasPhoto: widget.profile.photoUrl != null,
+                  onPick: _pickPhoto,
+                  onRemove: _removePhoto,
+                ),
+              ),
+            ],
           ),
+          if (_busy) ...[
+            const SizedBox(height: Spacing.spacing3),
+            LinearProgressIndicator(value: _progress),
+            const SizedBox(height: Spacing.spacing2),
+            Text(l10n.teacherProfilePhotoUploading),
+          ],
+          const SizedBox(height: Spacing.spacing4),
+          _NameField(name: widget.profile.name),
           const SizedBox(height: Spacing.spacing1),
           Text(
-            isTeacher ? l10n.groupMemberRoleTeacher : l10n.groupMemberRoleParent,
+            l10n.groupMemberRoleTeacher,
             style: theme.textTheme.bodySmall?.copyWith(color: tokens.colorTextSecondary),
           ),
         ],
       ),
     );
   }
+
+  Future<void> _pickPhoto() async {
+    final l10n = L10n.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+
+    final picked = await ref.read(mediaPickerProvider).pickFile();
+    if (picked == null) return;
+
+    final file = PendingPhotoFile(
+      filePath: picked.filePath,
+      mimeType: picked.mimeType,
+      byteSize: picked.byteSize,
+      fileName: picked.fileName,
+    );
+
+    // The same two rules the server enforces, applied before any bytes move --
+    // so the teacher is told now rather than after a failed upload.
+    if (!file.isAllowedType) {
+      messenger.showSnackBar(SnackBar(content: Text(l10n.teacherProfilePhotoBadType)));
+      return;
+    }
+    if (!file.isWithinSizeLimit) {
+      messenger.showSnackBar(SnackBar(content: Text(l10n.teacherProfilePhotoTooLarge)));
+      return;
+    }
+
+    setState(() {
+      _busy = true;
+      _progress = 0;
+    });
+    try {
+      await ref.read(teacherProfileControllerProvider.notifier).setPhoto(
+            file: file,
+            onProgress: (sent, total) {
+              if (!mounted || total <= 0) return;
+              setState(() => _progress = sent / total);
+            },
+          );
+    } on AppError catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(ErrorPresenter.present(error, l10n).title)),
+      );
+    } catch (error) {
+      // A transport failure during the PUT is not an AppError; one vocabulary
+      // of failure on screen is worth the mapping.
+      messenger.showSnackBar(
+        SnackBar(content: Text(ErrorPresenter.present(asAppErrorOf(error), l10n).title)),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _progress = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _removePhoto() async {
+    final l10n = L10n.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.teacherProfilePhotoRemoveTitle),
+        content: Text(l10n.teacherProfilePhotoRemoveBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.cancelAction),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.teacherProfilePhotoRemove),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _busy = true);
+    try {
+      await ref.read(teacherProfileControllerProvider.notifier).removePhoto();
+    } on AppError catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(ErrorPresenter.present(error, l10n).title)),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 }
 
-/// Where this profile stands, in the server's own vocabulary.
-class _StatusBanner extends StatelessWidget {
-  const _StatusBanner({required this.profile});
+class _PhotoButton extends StatelessWidget {
+  const _PhotoButton({
+    required this.busy,
+    required this.hasPhoto,
+    required this.onPick,
+    required this.onRemove,
+  });
 
-  final TeacherProfile profile;
+  final bool busy;
+  final bool hasPhoto;
+  final VoidCallback onPick;
+  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
-    final draft = profile.draft;
 
-    final (title, body, icon, tone) = switch (draft?.state) {
-      RevisionState.pendingReview => (
-          l10n.teacherProfileStatusPending,
-          l10n.teacherProfileStatusPendingBody,
-          Icons.hourglass_top_outlined,
-          JawwidBannerTone.neutral,
-        ),
-      RevisionState.changesRequested => (
-          l10n.teacherProfileStatusChangesRequested,
-          // The reviewer's own words. Shown verbatim -- paraphrasing a review
-          // is how a teacher ends up fixing the wrong thing.
-          draft?.reviewNote ?? '',
-          Icons.edit_note_outlined,
-          JawwidBannerTone.warning,
-        ),
-      RevisionState.draft => (
-          l10n.teacherProfileStatusDraft,
-          profile.published != null ? l10n.teacherProfileEditingNotice : '',
-          Icons.drafts_outlined,
-          JawwidBannerTone.neutral,
-        ),
-      _ when profile.isApproved => (
-          l10n.teacherProfileStatusApproved,
-          l10n.teacherProfileStatusApprovedBody,
-          Icons.verified_outlined,
-          JawwidBannerTone.neutral,
-        ),
-      _ => (null, null, null, null),
-    };
+    if (!hasPhoto) {
+      return IconButton.filled(
+        onPressed: busy ? null : onPick,
+        icon: const Icon(Icons.photo_camera_outlined),
+        tooltip: l10n.teacherProfilePhotoChoose,
+      );
+    }
 
-    if (title == null || icon == null || tone == null) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsetsDirectional.fromSTEB(
-        Spacing.spacing5,
-        0,
-        Spacing.spacing5,
-        Spacing.spacing4,
-      ),
-      child: JawwidBanner(
-        icon: icon,
-        tone: tone,
-        message: (body ?? '').isEmpty ? title : '$title. $body',
-      ),
+    // Replace and Remove are different enough to deserve separate choices, but
+    // not enough to deserve two buttons on an avatar.
+    return PopupMenuButton<_PhotoAction>(
+      enabled: !busy,
+      tooltip: l10n.teacherProfilePhotoChoose,
+      icon: const CircleAvatar(child: Icon(Icons.photo_camera_outlined, size: 18)),
+      onSelected: (action) => switch (action) {
+        _PhotoAction.replace => onPick(),
+        _PhotoAction.remove => onRemove(),
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          value: _PhotoAction.replace,
+          child: Text(l10n.teacherProfilePhotoReplace),
+        ),
+        PopupMenuItem(
+          value: _PhotoAction.remove,
+          child: Text(l10n.teacherProfilePhotoRemove),
+        ),
+      ],
     );
   }
 }
 
-class _Certificates extends ConsumerWidget {
-  const _Certificates({required this.revision, required this.editable});
+enum _PhotoAction { replace, remove }
 
-  final ProfileRevision? revision;
-  final bool editable;
+/// The editable name.
+///
+/// Saved on its own, by its own button, because it writes a different thing from
+/// the profile Save: this one writes IDENTITY, read by screens that have nothing
+/// to do with this one. The field is re-seeded from [name] whenever the server's
+/// answer changes, so a rejected or trimmed name snaps back to what was stored.
+class _NameField extends ConsumerStatefulWidget {
+  const _NameField({required this.name});
+
+  final String name;
+
+  @override
+  ConsumerState<_NameField> createState() => _NameFieldState();
+}
+
+class _NameFieldState extends ConsumerState<_NameField> {
+  late final TextEditingController _controller = TextEditingController(text: widget.name);
+  String? _error;
+  bool _saving = false;
+
+  @override
+  void didUpdateWidget(_NameField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Only when the SERVER's name changed, and never while the teacher is
+    // mid-edit of a name that matches what is stored.
+    if (widget.name != oldWidget.name && !_saving) {
+      _controller.text = widget.name;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = L10n.of(context);
+    final dirty = _controller.text.trim() != widget.name;
+
+    return Column(
+      children: [
+        TextField(
+          controller: _controller,
+          enabled: !_saving,
+          textAlign: TextAlign.center,
+          maxLength: ProfileLimits.maxName,
+          textInputAction: TextInputAction.done,
+          onChanged: (_) => setState(() => _error = null),
+          onSubmitted: (_) => _save(),
+          decoration: InputDecoration(
+            labelText: l10n.teacherProfileNameLabel,
+            errorText: _error,
+            counterText: '',
+          ),
+        ),
+        if (dirty || _saving)
+          Padding(
+            padding: const EdgeInsets.only(top: Spacing.spacing2),
+            child: FilledButton.tonal(
+              onPressed: _saving ? null : _save,
+              child: Text(
+                _saving ? l10n.teacherProfileSaving : l10n.teacherProfileNameSave,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+
+    final l10n = L10n.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final name = _controller.text.trim();
+
+    // Refused here as well as on the server, so the teacher is told before the
+    // round trip rather than after it. The server's rule is the one that counts.
+    if (name.isEmpty) {
+      setState(() => _error = l10n.teacherProfileNameRequired);
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      await ref.read(teacherProfileControllerProvider.notifier).rename(name);
+      messenger.showSnackBar(SnackBar(content: Text(l10n.teacherProfileNameSaved)));
+    } on AppError catch (error) {
+      setState(() => _error = ErrorPresenter.present(error, l10n).title);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+}
+
+class _Certificates extends ConsumerWidget {
+  const _Certificates({required this.certificates});
+
+  final List<ProfileCertificate> certificates;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = L10n.of(context);
-    final certificates = revision?.certificates ?? const <ProfileCertificate>[];
 
     return Column(
       children: [
@@ -415,9 +593,8 @@ class _Certificates extends ConsumerWidget {
           )
         else
           for (final certificate in certificates)
-            _CertificateTile(certificate: certificate, editable: editable),
-        if (editable)
-          Padding(
+            _CertificateTile(certificate: certificate),
+        Padding(
             padding: const EdgeInsets.symmetric(horizontal: Spacing.spacing5),
             child: Align(
               alignment: AlignmentDirectional.centerStart,
@@ -442,10 +619,9 @@ class _Certificates extends ConsumerWidget {
 }
 
 class _CertificateTile extends ConsumerWidget {
-  const _CertificateTile({required this.certificate, required this.editable});
+  const _CertificateTile({required this.certificate});
 
   final ProfileCertificate certificate;
-  final bool editable;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -498,8 +674,7 @@ class _CertificateTile extends ConsumerWidget {
             tooltip: l10n.teacherProfileCertificateOpen,
             onPressed: () => _open(context, ref),
           ),
-          if (editable) ...[
-            IconButton(
+          IconButton(
               icon: const Icon(Icons.edit_outlined),
               tooltip: l10n.teacherProfileCertificateEdit,
               onPressed: () => showModalBottomSheet<void>(
@@ -511,12 +686,11 @@ class _CertificateTile extends ConsumerWidget {
                 builder: (_) => AddCertificateSheet(editing: certificate),
               ),
             ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              tooltip: l10n.teacherProfileCertificateRemove,
-              onPressed: () => _confirmRemove(context, ref),
-            ),
-          ],
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            tooltip: l10n.teacherProfileCertificateRemove,
+            onPressed: () => _confirmRemove(context, ref),
+          ),
         ],
       ),
     );
@@ -732,8 +906,11 @@ class _AddCertificateSheetState extends ConsumerState<AddCertificateSheet> {
           FilledButton(
             onPressed: _uploading ? null : _upload,
             child: Text(
+              // Not just "Save": the profile's own Save button is on the screen
+              // behind this sheet, and two controls with one label is one
+              // control the teacher has to guess about.
               _isEditing
-                  ? l10n.teacherProfileSave
+                  ? l10n.teacherProfileCertificateSave
                   : l10n.teacherProfileAddCertificate,
             ),
           ),

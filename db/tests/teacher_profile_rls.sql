@@ -1,15 +1,21 @@
--- Jawwid Chat -- executable RLS, lifecycle and revision tests for the teacher
--- professional profile.
+-- Jawwid Chat -- executable RLS and lifecycle tests for the teacher
+-- professional profile (V2).
 --
 -- These run against a real database built by the migration chain, as the
 -- `authenticated` role, with the actor assumed through `chat.actor_subject` --
 -- the same mechanism story_rls.sql uses. The application is entirely out of the
 -- picture, which is the threat model the policies exist for.
 --
--- The assertion this whole feature turns on is V3: A PARENT STILL SEES THE LAST
--- APPROVED REVISION WHILE THE NEXT ONE IS UNDER REVIEW. If that ever fails, the
--- published/draft split has stopped working and families are seeing editing
--- activity.
+-- WHAT V2 CHANGED. V1's keystone was "a parent still sees the last APPROVED
+-- revision while the next one is under review" -- the published/draft split.
+-- V2 deletes the split: the teacher saves and the save is the profile. So the
+-- keystone here is now its opposite:
+--
+--   P3: WHAT A SAVE WROTE IS IMMEDIATELY WHAT A THIRD PARTY READS.
+--
+-- The credential assertions did NOT change, because they were never about
+-- revisions: C3 (a teacher cannot decide their own) and C4 (editing a claim
+-- drops the decision) are the two that keep "approved" meaning anything.
 --
 --   psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f db/tests/teacher_profile_rls.sql
 --
@@ -40,20 +46,13 @@ begin
 end;
 $$;
 
--- True only when the statement was rejected. The pointer guard is a DEFERRABLE
--- constraint trigger, so it fires at COMMIT -- which never happens inside a
--- plpgsql subtransaction. Forcing the pending checks evaluates it here and now;
--- the setting is restored so later tests can still build a profile and its
--- revision in either order.
+-- True only when the statement was rejected.
 create or replace function pg_temp.refused(stmt text)
 returns boolean language plpgsql as $$
 begin
   execute stmt;
-  set constraints all immediate;
-  set constraints all deferred;
   return false;
 exception when others then
-  set constraints all deferred;
   return true;
 end;
 $$;
@@ -83,313 +82,323 @@ insert into chat.contact (id, family_id, account_id, name, role_preset, can_mess
   ('ee000000-0000-0000-0000-0000000000e1', 'dd000000-0000-0000-0000-0000000000d1',
    'aa000000-0000-0000-0000-0000000000a4', 'TP Parent', 'primary_guardian', true);
 
--- Profile A, built the way the application builds one: R1 is drafted, given a
--- credential, reviewed and approved; then R2 is opened by copy-on-write. Seeding
--- a terminal state directly would skip the very guards under test.
-insert into chat.teacher_professional_profile (id, teacher_id) values
-  ('f0000000-0000-0000-0000-0000000000f1', 'bb000000-0000-0000-0000-0000000000b1');
-
-insert into chat.teacher_profile_revision
-  (id, profile_id, revision_number, bio, specialization, state)
+-- Profile A: content and a credential, built the way the application builds one
+-- -- the credential is INSERTed pending and then decided, because seeding a
+-- terminal state directly would skip the very guard under test.
+insert into chat.teacher_professional_profile
+  (id, teacher_id, bio, specialization, qualifications, languages,
+   photo_object_key, photo_mime_type, photo_byte_size, photo_updated_at)
 values
-  ('a1000000-0000-0000-0000-000000000001', 'f0000000-0000-0000-0000-0000000000f1', 1,
-   'PUBLISHED BIO', 'Tajweed', 'draft');
+  ('f0000000-0000-0000-0000-0000000000f1', 'bb000000-0000-0000-0000-0000000000b1',
+   'SAVED BIO', 'Tajweed', 'Ijazah', array['Arabic','English'],
+   'teacher-photos/bb000000-0000-0000-0000-0000000000b1/p.jpg', 'image/jpeg', 2048, now());
 
 insert into chat.teacher_profile_certificate
-  (id, revision_id, title, object_key, mime_type, byte_size)
+  (id, profile_id, title, object_key, mime_type, byte_size)
 values
-  ('c1000000-0000-0000-0000-000000000001', 'a1000000-0000-0000-0000-000000000001',
-   'Published ijazah', 'teacher-certs/a/ijazah.pdf', 'application/pdf', 1000);
+  ('c1000000-0000-0000-0000-000000000001', 'f0000000-0000-0000-0000-0000000000f1',
+   'Approved ijazah', 'teacher-certificates/a/ijazah.pdf', 'application/pdf', 1000),
+  ('c1000000-0000-0000-0000-000000000002', 'f0000000-0000-0000-0000-0000000000f1',
+   'Pending ijazah', 'teacher-certificates/a/pending.pdf', 'application/pdf', 1000);
 
 update chat.teacher_profile_certificate
    set state = 'approved', reviewed_at = now(),
        reviewed_by = 'cc000000-0000-0000-0000-0000000000c1'
  where id = 'c1000000-0000-0000-0000-000000000001';
 
-update chat.teacher_profile_revision
-   set state = 'pending_review', submitted_at = now()
- where id = 'a1000000-0000-0000-0000-000000000001';
-update chat.teacher_profile_revision
-   set state = 'approved', approved_at = now(), reviewed_at = now(),
-       reviewed_by = 'cc000000-0000-0000-0000-0000000000c1'
- where id = 'a1000000-0000-0000-0000-000000000001';
-
--- Copy-on-write: R2 cites the SAME object as R1 and carries its approval.
-insert into chat.teacher_profile_revision
-  (id, profile_id, revision_number, bio, specialization, state)
-values
-  ('a1000000-0000-0000-0000-000000000002', 'f0000000-0000-0000-0000-0000000000f1', 2,
-   'DRAFT BIO -- must never reach a parent', 'Tajweed', 'draft');
-
-insert into chat.teacher_profile_certificate
-  (id, revision_id, title, object_key, mime_type, byte_size)
-values
-  ('c1000000-0000-0000-0000-000000000002', 'a1000000-0000-0000-0000-000000000002',
-   'Published ijazah', 'teacher-certs/a/ijazah.pdf', 'application/pdf', 1000);
-update chat.teacher_profile_certificate
-   set state = 'approved', reviewed_at = now(),
-       reviewed_by = 'cc000000-0000-0000-0000-0000000000c1'
- where id = 'c1000000-0000-0000-0000-000000000002';
-
-update chat.teacher_profile_revision
-   set state = 'pending_review', submitted_at = now()
- where id = 'a1000000-0000-0000-0000-000000000002';
-
-update chat.teacher_professional_profile
-   set published_revision_id = 'a1000000-0000-0000-0000-000000000001',
-       draft_revision_id     = 'a1000000-0000-0000-0000-000000000002'
- where id = 'f0000000-0000-0000-0000-0000000000f1';
-
--- Profile B: a first draft, never approved. Parents must see nothing at all.
-insert into chat.teacher_professional_profile (id, teacher_id) values
-  ('f0000000-0000-0000-0000-0000000000f2', 'bb000000-0000-0000-0000-0000000000b2');
-insert into chat.teacher_profile_revision
-  (id, profile_id, revision_number, bio, state)
-values
-  ('a2000000-0000-0000-0000-000000000001', 'f0000000-0000-0000-0000-0000000000f2', 1,
-   'B never approved', 'draft');
-update chat.teacher_professional_profile
-   set draft_revision_id = 'a2000000-0000-0000-0000-000000000001'
- where id = 'f0000000-0000-0000-0000-0000000000f2';
-
-set constraints all immediate;
-set constraints all deferred;
+-- Profile B: another teacher, for every cross-tenant assertion.
+insert into chat.teacher_professional_profile (id, teacher_id, bio) values
+  ('f0000000-0000-0000-0000-0000000000f2', 'bb000000-0000-0000-0000-0000000000b2',
+   'B SAVED BIO');
 
 -- ---------------------------------------------------------------------------
--- V. THE VERSIONING GUARANTEE
+-- P. THE PUBLISH GUARANTEE (V2's keystone)
 -- ---------------------------------------------------------------------------
 
 set local role authenticated;
 set local chat.actor_subject = 'tp-parent';
 
 select pg_temp.want_ok(
-  'V1  a parent sees the PUBLISHED revision',
-  (select count(*) = 1 from chat.teacher_profile_revision
-    where id = 'a1000000-0000-0000-0000-000000000001'));
+  'P1  a parent sees a teacher''s saved profile',
+  (select count(*) = 1 from chat.teacher_professional_profile
+    where id = 'f0000000-0000-0000-0000-0000000000f1'));
 
 select pg_temp.want_ok(
-  'V2  a parent CANNOT see the draft revision under review',
-  (select count(*) = 0 from chat.teacher_profile_revision
-    where id = 'a1000000-0000-0000-0000-000000000002'));
+  'P2  there is no second version of it anywhere',
+  (select count(*) = 0 from information_schema.tables
+    where table_schema = 'chat' and table_name = 'teacher_profile_revision'));
 
 select pg_temp.want_ok(
-  'V3  *** the parent-visible bio is the PUBLISHED one, while R2 is pending ***',
-  (select r.bio = 'PUBLISHED BIO'
+  'P3  *** what a save wrote is immediately what a third party reads ***',
+  (select p.bio = 'SAVED BIO'
      from chat.teacher_professional_profile p
-     join chat.teacher_profile_revision r on r.id = p.published_revision_id
     where p.teacher_id = 'bb000000-0000-0000-0000-0000000000b1'));
 
 select pg_temp.want_ok(
-  'V4  a never-approved profile shows a parent nothing',
-  (select count(*) = 0
-     from chat.teacher_professional_profile p
-     join chat.teacher_profile_revision r on r.id = p.published_revision_id
-    where p.teacher_id = 'bb000000-0000-0000-0000-0000000000b2'));
+  'P4  no draft or review state survives on the profile',
+  (select count(*) = 0 from information_schema.columns
+    where table_schema = 'chat' and table_name = 'teacher_professional_profile'
+      and column_name in ('state', 'published_revision_id', 'draft_revision_id',
+                          'submitted_at', 'approved_at', 'review_note')));
 
 select pg_temp.want_ok(
-  'V5  a parent sees the approved certificate ON the published revision only',
-  (select count(*) = 1 from chat.teacher_profile_certificate)
-  );
-
-select pg_temp.want_ok(
-  'V6  that certificate is R1''s, not R2''s copy',
-  (select count(*) = 1 from chat.teacher_profile_certificate
-    where id = 'c1000000-0000-0000-0000-000000000001'));
+  'P5  a parent CANNOT write a teacher''s profile',
+  pg_temp.refused($$update chat.teacher_professional_profile
+                       set bio = 'parent wrote this'
+                     where id = 'f0000000-0000-0000-0000-0000000000f1'$$)
+  or (select bio = 'SAVED BIO' from chat.teacher_professional_profile
+       where id = 'f0000000-0000-0000-0000-0000000000f1'));
 
 -- ---------------------------------------------------------------------------
--- I. IMMUTABILITY OF AN APPROVED REVISION
+-- N. THE NAME IS NOT HERE
+-- ---------------------------------------------------------------------------
+
+select pg_temp.want_ok(
+  'N1  no profile table carries a name column',
+  (select count(*) = 0 from information_schema.columns
+    where table_schema = 'chat' and table_name like 'teacher_prof%'
+      and column_name like '%name%'));
+
+select pg_temp.want_ok(
+  'N2  chat.teacher.name is still the only teacher name in the schema',
+  (select count(*) = 1 from information_schema.columns c
+     join information_schema.tables t
+       on t.table_schema = c.table_schema and t.table_name = c.table_name
+    where c.table_schema = 'chat' and c.column_name = 'name'
+      and t.table_type = 'BASE TABLE' and c.table_name = 'teacher'));
+
+-- ---------------------------------------------------------------------------
+-- O. OWNERSHIP
 -- ---------------------------------------------------------------------------
 
 set local chat.actor_subject = 'tp-teacher-a';
 
 select pg_temp.want_ok(
-  'I1  the OWNING teacher cannot edit her own approved revision',
-  pg_temp.refused($$update chat.teacher_profile_revision
-                       set bio = 'sneaky edit'
-                     where id = 'a1000000-0000-0000-0000-000000000001'$$));
+  'O1  a teacher may edit their own profile',
+  pg_temp.affected($$update chat.teacher_professional_profile
+                        set bio = 'SAVED BIO'
+                      where teacher_id = 'bb000000-0000-0000-0000-0000000000b1'$$) = 1);
 
 select pg_temp.want_ok(
-  'I2  the published bio is unchanged',
-  (select bio = 'PUBLISHED BIO' from chat.teacher_profile_revision
-    where id = 'a1000000-0000-0000-0000-000000000001'));
+  'O2  *** teacher A CANNOT edit teacher B''s profile ***',
+  pg_temp.affected($$update chat.teacher_professional_profile
+                        set bio = 'A wrote into B'
+                      where teacher_id = 'bb000000-0000-0000-0000-0000000000b2'$$) = 0);
 
 select pg_temp.want_ok(
-  'I3  a certificate on an approved revision cannot be deleted',
-  pg_temp.refused($$delete from chat.teacher_profile_certificate
-                     where id = 'c1000000-0000-0000-0000-000000000001'$$));
-
-set local chat.actor_subject = 'tp-admin';
-
-select pg_temp.want_ok(
-  'I4  a REVIEWER cannot edit an approved revision either',
-  pg_temp.refused($$update chat.teacher_profile_revision
-                       set bio = 'reviewer rewrote history'
-                     where id = 'a1000000-0000-0000-0000-000000000001'$$));
-
--- ---------------------------------------------------------------------------
--- T. TEACHER ISOLATION
--- ---------------------------------------------------------------------------
-
-set local chat.actor_subject = 'tp-teacher-a';
+  'O3  teacher A CANNOT remove teacher B''s photo',
+  pg_temp.affected($$update chat.teacher_professional_profile
+                        set photo_object_key = null, photo_mime_type = null,
+                            photo_byte_size = null, photo_updated_at = null
+                      where teacher_id = 'bb000000-0000-0000-0000-0000000000b2'$$) = 0);
 
 select pg_temp.want_ok(
-  'T1  teacher A reads her own OPEN revision',
-  (select count(*) = 1 from chat.teacher_profile_revision
-    where id = 'a1000000-0000-0000-0000-000000000002'));
-
-select pg_temp.want_ok(
-  'T2  teacher A CANNOT read teacher B''s unapproved revision',
-  (select count(*) = 0 from chat.teacher_profile_revision
-    where id = 'a2000000-0000-0000-0000-000000000001'));
-
-select pg_temp.want_ok(
-  'T3  teacher A CANNOT update teacher B''s revision',
-  pg_temp.affected($$update chat.teacher_profile_revision
-                        set bio = 'hijacked'
-                      where id = 'a2000000-0000-0000-0000-000000000001'$$) = 0);
-
-select pg_temp.want_ok(
-  'T4  teacher A CANNOT approve her own open revision',
-  pg_temp.refused($$update chat.teacher_profile_revision
-                       set state = 'approved', approved_at = now(),
-                           reviewed_at = now(),
-                           reviewed_by = 'cc000000-0000-0000-0000-0000000000c1'
-                     where id = 'a1000000-0000-0000-0000-000000000002'$$));
-
-select pg_temp.want_ok(
-  'T5  a material edit returns the open revision to draft',
-  pg_temp.affected($$update chat.teacher_profile_revision
-                        set bio = 'revised again'
-                      where id = 'a1000000-0000-0000-0000-000000000002'$$) = 1);
-
-select pg_temp.want_ok(
-  'T6  ... and the parent STILL sees the published bio',
-  (select r.bio = 'PUBLISHED BIO'
-     from chat.teacher_professional_profile p
-     join chat.teacher_profile_revision r on r.id = p.published_revision_id
-    where p.teacher_id = 'bb000000-0000-0000-0000-0000000000b1'));
-
--- ---------------------------------------------------------------------------
--- G. THE APPROVAL GATE
--- ---------------------------------------------------------------------------
-
-set local chat.actor_subject = 'tp-admin';
-
--- The TEACHER attaches a credential and resubmits. A reviewer has no INSERT
--- policy on certificates at all -- uploading one is not a reviewer's action --
--- so doing this as the admin is both wrong and refused.
-select pg_temp.want_ok(
-  'G0  a REVIEWER cannot attach a certificate to a teacher''s revision',
+  'O4  teacher A CANNOT attach a credential to teacher B''s profile',
   pg_temp.refused($$insert into chat.teacher_profile_certificate
-                      (revision_id, title, object_key, mime_type, byte_size)
-                    values ('a1000000-0000-0000-0000-000000000002',
-                            'Planted by staff', 'teacher-certs/a/planted.pdf',
-                            'application/pdf', 100)$$));
-
-set local chat.actor_subject = 'tp-teacher-a';
-
-insert into chat.teacher_profile_certificate
-  (id, revision_id, title, object_key, mime_type, byte_size)
-values
-  ('c1000000-0000-0000-0000-000000000003', 'a1000000-0000-0000-0000-000000000002',
-   'Brand new, unread', 'teacher-certs/a/new.pdf', 'application/pdf', 2000);
-
-update chat.teacher_profile_revision
-   set state = 'pending_review', submitted_at = now()
- where id = 'a1000000-0000-0000-0000-000000000002';
+                      (profile_id, title, object_key, mime_type, byte_size)
+                    values ('f0000000-0000-0000-0000-0000000000f2', 'planted',
+                            'teacher-certificates/a/planted.pdf', 'application/pdf', 10)$$));
 
 select pg_temp.want_ok(
-  'G0b a teacher cannot decide her OWN certificate',
+  'O5  teacher A CANNOT delete teacher B''s credential',
+  pg_temp.affected($$delete from chat.teacher_profile_certificate
+                      where profile_id = 'f0000000-0000-0000-0000-0000000000f2'$$) = 0);
+
+-- ---------------------------------------------------------------------------
+-- H. THE PHOTO
+-- ---------------------------------------------------------------------------
+
+select pg_temp.want_ok(
+  'H1  a photo must be complete or absent, never half-set',
+  pg_temp.refused($$update chat.teacher_professional_profile
+                       set photo_object_key = 'x', photo_mime_type = null,
+                           photo_byte_size = null, photo_updated_at = null
+                     where teacher_id = 'bb000000-0000-0000-0000-0000000000b1'$$));
+
+select pg_temp.want_ok(
+  'H2  a photo type that cannot be displayed is refused',
+  pg_temp.refused($$update chat.teacher_professional_profile
+                       set photo_mime_type = 'image/svg+xml'
+                     where teacher_id = 'bb000000-0000-0000-0000-0000000000b1'$$));
+
+select pg_temp.want_ok(
+  'H3  a photo over 5MB is refused',
+  pg_temp.refused($$update chat.teacher_professional_profile
+                       set photo_byte_size = 5242881
+                     where teacher_id = 'bb000000-0000-0000-0000-0000000000b1'$$));
+
+select pg_temp.want_ok(
+  'H4  clearing all four photo columns together is allowed',
+  pg_temp.affected($$update chat.teacher_professional_profile
+                        set photo_object_key = null, photo_mime_type = null,
+                            photo_byte_size = null, photo_updated_at = null
+                      where teacher_id = 'bb000000-0000-0000-0000-0000000000b1'$$) = 1);
+
+-- ---------------------------------------------------------------------------
+-- L. CONTENT LIMITS
+-- ---------------------------------------------------------------------------
+
+select pg_temp.want_ok(
+  'L1  a bio over 2000 characters is refused',
+  pg_temp.refused($$update chat.teacher_professional_profile
+                       set bio = repeat('x', 2001)
+                     where teacher_id = 'bb000000-0000-0000-0000-0000000000b1'$$));
+
+select pg_temp.want_ok(
+  'L2  a specialization over 200 characters is refused',
+  pg_temp.refused($$update chat.teacher_professional_profile
+                       set specialization = repeat('x', 201)
+                     where teacher_id = 'bb000000-0000-0000-0000-0000000000b1'$$));
+
+select pg_temp.want_ok(
+  'L3  more than 10 languages is refused',
+  pg_temp.refused($$update chat.teacher_professional_profile
+                       set languages = array['1','2','3','4','5','6','7','8','9','10','11']
+                     where teacher_id = 'bb000000-0000-0000-0000-0000000000b1'$$));
+
+-- ---------------------------------------------------------------------------
+-- C. CREDENTIALS -- unchanged by immediate save, and this is why
+-- ---------------------------------------------------------------------------
+
+select pg_temp.want_ok(
+  'C1  a new credential starts pending, whatever the client asked for',
+  (select state = 'pending' from chat.teacher_profile_certificate
+    where id = 'c1000000-0000-0000-0000-000000000002'));
+
+select pg_temp.want_ok(
+  'C2  a teacher may attach their own credential',
+  pg_temp.affected($$insert into chat.teacher_profile_certificate
+                       (profile_id, title, object_key, mime_type, byte_size)
+                     values ('f0000000-0000-0000-0000-0000000000f1', 'another',
+                             'teacher-certificates/a/another.pdf', 'application/pdf', 10)$$) = 1);
+
+select pg_temp.want_ok(
+  'C3  *** a teacher CANNOT approve their own credential ***',
   pg_temp.refused($$update chat.teacher_profile_certificate
                        set state = 'approved', reviewed_at = now(),
                            reviewed_by = 'cc000000-0000-0000-0000-0000000000c1'
-                     where id = 'c1000000-0000-0000-0000-000000000003'$$));
+                     where id = 'c1000000-0000-0000-0000-000000000002'$$));
+
+select pg_temp.want_ok(
+  'C3b a teacher CANNOT reject their own credential either',
+  pg_temp.refused($$update chat.teacher_profile_certificate
+                       set state = 'rejected', reviewed_at = now(), review_note = 'self',
+                           reviewed_by = 'cc000000-0000-0000-0000-0000000000c1'
+                     where id = 'c1000000-0000-0000-0000-000000000002'$$));
+
+-- The retitle is its OWN statement. Folding it into the assertion's FROM clause
+-- reads the row under the outer query's snapshot, which was taken before the
+-- function ran -- so the test would report the old state and fail a working
+-- guard. (It did, once.)
+update chat.teacher_profile_certificate
+   set title = 'Anything At All'
+ where id = 'c1000000-0000-0000-0000-000000000001';
+
+select pg_temp.want_ok(
+  'C4  *** retitling an APPROVED credential returns it to pending ***',
+  (select state = 'pending' from chat.teacher_profile_certificate
+    where id = 'c1000000-0000-0000-0000-000000000001'));
+
+select pg_temp.want_ok(
+  'C4b and it forgets who decided the old claim',
+  (select reviewed_by is null and reviewed_at is null and review_note is null
+     from chat.teacher_profile_certificate
+    where id = 'c1000000-0000-0000-0000-000000000001'));
+
+select pg_temp.want_ok(
+  'C5  an unsupported credential type is refused',
+  pg_temp.refused($$insert into chat.teacher_profile_certificate
+                      (profile_id, title, object_key, mime_type, byte_size)
+                    values ('f0000000-0000-0000-0000-0000000000f1', 'html',
+                            'teacher-certificates/a/x.html', 'text/html', 10)$$));
+
+select pg_temp.want_ok(
+  'C6  a credential over 10MB is refused',
+  pg_temp.refused($$insert into chat.teacher_profile_certificate
+                      (profile_id, title, object_key, mime_type, byte_size)
+                    values ('f0000000-0000-0000-0000-0000000000f1', 'huge',
+                            'teacher-certificates/a/huge.pdf', 'application/pdf', 10485761)$$));
+
+select pg_temp.want_ok(
+  'C7  the same object cannot be claimed twice on one profile',
+  pg_temp.refused($$insert into chat.teacher_profile_certificate
+                      (profile_id, title, object_key, mime_type, byte_size)
+                    values ('f0000000-0000-0000-0000-0000000000f1', 'duplicate',
+                            'teacher-certificates/a/pending.pdf', 'application/pdf', 10)$$));
+
+select pg_temp.want_ok(
+  'C8  a credential cannot be titled with whitespace',
+  pg_temp.refused($$insert into chat.teacher_profile_certificate
+                      (profile_id, title, object_key, mime_type, byte_size)
+                    values ('f0000000-0000-0000-0000-0000000000f1', '   ',
+                            'teacher-certificates/a/blank.pdf', 'application/pdf', 10)$$));
+
+-- ---------------------------------------------------------------------------
+-- R. THE REVIEWER
+-- ---------------------------------------------------------------------------
 
 set local chat.actor_subject = 'tp-admin';
 
+-- Scoped to the fixtures, not a count of the whole table: this file runs
+-- against a shared verification database that other suites leave rows in, and
+-- `count(*) = 2` would fail for a reason that has nothing to do with RLS.
 select pg_temp.want_ok(
-  'G1  a revision with a PENDING certificate cannot be approved',
-  pg_temp.refused($$update chat.teacher_profile_revision
-                       set state = 'approved', approved_at = now(),
-                           reviewed_at = now(),
-                           reviewed_by = 'cc000000-0000-0000-0000-0000000000c1'
-                     where id = 'a1000000-0000-0000-0000-000000000002'$$));
+  'R1  a reviewer reads both fixture profiles, including one they do not own',
+  (select count(*) = 2 from chat.teacher_professional_profile
+    where id in ('f0000000-0000-0000-0000-0000000000f1',
+                 'f0000000-0000-0000-0000-0000000000f2')));
 
-update chat.teacher_profile_certificate
-   set state = 'rejected', reviewed_at = now(),
-       reviewed_by = 'cc000000-0000-0000-0000-0000000000c1',
-       review_note = 'Unreadable scan.'
- where id = 'c1000000-0000-0000-0000-000000000003';
-
--- Deciding a certificate is not a material change, so the revision is still
--- submitted and can now be approved.
 select pg_temp.want_ok(
-  'G2  once every certificate is decided, approval succeeds',
-  pg_temp.affected($$update chat.teacher_profile_revision
-                        set state = 'approved', approved_at = now(),
-                            reviewed_at = now(),
+  'R2  a reviewer reads a PENDING credential -- that is the job',
+  (select count(*) = 1 from chat.teacher_profile_certificate
+    where id = 'c1000000-0000-0000-0000-000000000002'));
+
+select pg_temp.want_ok(
+  'R3  a reviewer may decide a credential they do not own',
+  pg_temp.affected($$update chat.teacher_profile_certificate
+                        set state = 'approved', reviewed_at = now(),
                             reviewed_by = 'cc000000-0000-0000-0000-0000000000c1'
-                      where id = 'a1000000-0000-0000-0000-000000000002'$$) = 1);
+                      where id = 'c1000000-0000-0000-0000-000000000002'$$) = 1);
+
+select pg_temp.want_ok(
+  'R4  *** a reviewer CANNOT edit profile CONTENT -- there is nothing to approve ***',
+  pg_temp.affected($$update chat.teacher_professional_profile
+                        set bio = 'reviewer rewrote this'
+                      where id = 'f0000000-0000-0000-0000-0000000000f1'$$) = 0);
+
+select pg_temp.want_ok(
+  'R5  a reviewer CANNOT delete a credential',
+  pg_temp.affected($$delete from chat.teacher_profile_certificate
+                      where id = 'c1000000-0000-0000-0000-000000000002'$$) = 0);
 
 -- ---------------------------------------------------------------------------
--- E. PROMOTION
+-- T. THE THIRD PARTY
 -- ---------------------------------------------------------------------------
-
-update chat.teacher_profile_revision
-   set state = 'superseded'
- where id = 'a1000000-0000-0000-0000-000000000001';
-
-update chat.teacher_professional_profile
-   set published_revision_id = 'a1000000-0000-0000-0000-000000000002',
-       draft_revision_id     = null
- where id = 'f0000000-0000-0000-0000-0000000000f1';
-
-set constraints all immediate;
-set constraints all deferred;
 
 set local chat.actor_subject = 'tp-parent';
 
 select pg_temp.want_ok(
-  'E1  after promotion the parent sees the NEW revision''s bio',
-  (select r.bio = 'revised again'
-     from chat.teacher_professional_profile p
-     join chat.teacher_profile_revision r on r.id = p.published_revision_id
-    where p.teacher_id = 'bb000000-0000-0000-0000-0000000000b1'));
-
-select pg_temp.want_ok(
-  'E2  the SUPERSEDED revision is invisible to a parent',
-  (select count(*) = 0 from chat.teacher_profile_revision
-    where id = 'a1000000-0000-0000-0000-000000000001'));
-
-select pg_temp.want_ok(
-  'E3  the REJECTED certificate never becomes parent-visible',
-  (select count(*) = 0 from chat.teacher_profile_certificate
-    where id = 'c1000000-0000-0000-0000-000000000003'));
-
-select pg_temp.want_ok(
-  'E4  the carried-forward approved certificate IS parent-visible',
+  'T1  a parent sees an APPROVED credential',
   (select count(*) = 1 from chat.teacher_profile_certificate
     where id = 'c1000000-0000-0000-0000-000000000002'));
 
--- ---------------------------------------------------------------------------
--- P. THE POINTER GUARD
--- ---------------------------------------------------------------------------
-
-set local chat.actor_subject = 'tp-admin';
+select pg_temp.want_ok(
+  'T2  *** a parent CANNOT see a PENDING credential ***',
+  (select count(*) = 0 from chat.teacher_profile_certificate
+    where id = 'c1000000-0000-0000-0000-000000000001'));
 
 select pg_temp.want_ok(
-  'P1  a DRAFT revision cannot be published by pointer',
-  pg_temp.refused($$update chat.teacher_professional_profile
-                       set published_revision_id = 'a2000000-0000-0000-0000-000000000001'
-                     where id = 'f0000000-0000-0000-0000-0000000000f2'$$));
+  'T3  a parent CANNOT decide a credential',
+  pg_temp.affected($$update chat.teacher_profile_certificate
+                        set state = 'approved', reviewed_at = now(),
+                            reviewed_by = 'cc000000-0000-0000-0000-0000000000c1'
+                      where id = 'c1000000-0000-0000-0000-000000000001'$$) = 0);
 
 select pg_temp.want_ok(
-  'P2  a profile cannot publish ANOTHER profile''s revision',
-  pg_temp.refused($$update chat.teacher_professional_profile
-                       set published_revision_id = 'a1000000-0000-0000-0000-000000000002'
-                     where id = 'f0000000-0000-0000-0000-0000000000f2'$$));
+  'T4  a parent CANNOT delete a credential',
+  pg_temp.affected($$delete from chat.teacher_profile_certificate
+                      where id = 'c1000000-0000-0000-0000-000000000002'$$) = 0);
 
 rollback;
 
-\echo ''
 \echo 'ALL TEACHER PROFILE TESTS PASSED'

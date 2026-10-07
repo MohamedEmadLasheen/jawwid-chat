@@ -353,38 +353,31 @@ abstract final class WireMappers {
   }
 
   /// `GET /me/teacher-profile` and every teacher-facing mutation return this
-  /// same envelope: `{published, draft}`, either half possibly null.
+  /// same flat object. There is no `{published, draft}` envelope any more and no
+  /// state to interpret: what the server returns is what is current.
   ///
-  /// A revision whose `state` the client does not recognise is dropped rather
-  /// than guessed at: rendering an unknown state as "draft" would offer an edit
-  /// button for something the server may be refusing to let anyone touch.
+  /// `name` is required, because the profile is unrenderable without the
+  /// teacher's identity -- but it is read from the response rather than from any
+  /// local copy, so the client cannot drift from `chat.teacher`.
   static TeacherProfile teacherProfile(Map<String, Object?> json) => TeacherProfile(
-        published: _revision(json['published']),
-        draft: _revision(json['draft']),
+        name: (json['name'] as String?)?.trim() ?? '',
+        // A signed URL, short-lived by design. Never cached: holding it would be
+        // holding a capability past the moment it was granted for.
+        photoUrl: _nonEmpty(json['photoUrl']),
+        bio: _nonEmpty(json['bio']),
+        specialization: _nonEmpty(json['specialization']),
+        qualifications: _nonEmpty(json['qualifications']),
+        experience: _nonEmpty(json['experience']),
+        languages: [
+          for (final language in (json['languages'] as List?) ?? const [])
+            if (language is String && language.trim().isNotEmpty) language.trim(),
+        ],
+        certificates: [
+          for (final certificate in (json['certificates'] as List?) ?? const [])
+            ?_certificate(certificate),
+        ],
+        updatedAt: parseTime(json['updatedAt']),
       );
-
-  static ProfileRevision? _revision(Object? raw) {
-    if (raw is! Map<String, Object?>) return null;
-    final state = RevisionState.tryParse(raw['state'] as String?);
-    if (state == null) return null;
-
-    return ProfileRevision(
-      state: state,
-      bio: _nonEmpty(raw['bio']),
-      specialization: _nonEmpty(raw['specialization']),
-      qualifications: _nonEmpty(raw['qualifications']),
-      experience: _nonEmpty(raw['experience']),
-      languages: [
-        for (final language in (raw['languages'] as List?) ?? const [])
-          if (language is String && language.trim().isNotEmpty) language.trim(),
-      ],
-      reviewNote: _nonEmpty(raw['reviewNote']),
-      certificates: [
-        for (final certificate in (raw['certificates'] as List?) ?? const [])
-          ?_certificate(certificate),
-      ],
-    );
-  }
 
   static ProfileCertificate? _certificate(Object? raw) {
     if (raw is! Map<String, Object?>) return null;

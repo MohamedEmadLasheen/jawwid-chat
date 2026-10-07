@@ -9,47 +9,83 @@ import type { IdentityService } from '../../platform/identity.service';
 import type { ObjectStorage } from '../attachments/object-storage';
 
 /**
- * The teacher's professional profile.
+ * The teacher's professional profile. The teacher owns it.
+ *
+ * ## V2: saved is current
+ *
+ * V1 was a copy-on-write revision model behind an admin approval workflow: the
+ * teacher edited a draft, an admin approved it, and a pointer decided what a
+ * parent saw. That machinery existed to answer one question -- "what does a
+ * parent see while the teacher is mid-edit?" -- and the product no longer asks
+ * it. There is one profile row, Save writes it, and the write IS the publish.
+ *
+ * What did NOT change is the part that was never about revisions: a credential
+ * does not become verified by being uploaded. Certificate review survives
+ * intact, because immediate save on profile TEXT is not a reason to treat an
+ * uploaded Ijazah as checked.
  *
  * ## What no method accepts
  *
  * A TEACHER ID. Every teacher-facing method takes the authenticated actor and
  * resolves the profile from it. There is no parameter through which a caller
- * could name somebody else's profile, so "may this teacher edit that teacher?"
- * is not a check that can be forgotten -- it is unrepresentable.
+ * could name somebody else's profile or identity, so "may this teacher edit
+ * that teacher?" is not a check that can be forgotten -- it is unrepresentable.
  *
- * A STATE. A client submits, and a reviewer approves or requests changes; none
- * of them names the resulting state. The transitions are the server's, and the
- * database refuses the illegal ones independently.
+ * AN OBJECT KEY AS A FIELD, inbound or outbound. Keys are minted here from an
+ * upload authorization and no response carries one as data -- not to the owning
+ * teacher, not to a reviewer, not to a family. A certificate is read only
+ * through {@link certificateDownloadUrl} and a photo only through a signed URL
+ * built in {@link toProfileView}, each a fresh authorization.
  *
- * AN OBJECT KEY, inbound or outbound. The key is minted here from the upload
- * authorization and never echoed to a client -- not to the owning teacher, not
- * to a reviewer, not to a family. A certificate file is read only through
- * {@link certificateDownloadUrl}, which is a fresh authorization each time.
+ * Said precisely, because the imprecise version is a lie: a signed URL NAMES
+ * the object it grants, inside its path, exactly as an S3 presigned URL names a
+ * bucket key. That is inherent to signed delivery and is not a leak -- the URL
+ * is itself the time-bounded grant, and the route behind it still demands a
+ * session. What must never happen is a key appearing as a FIELD a client could
+ * read, store, or hand back for a different object.
  *
- * ## Why the writes are transactional
+ * ## Where the name lives
  *
- * Two readers racing to submit, or two reviewers racing to approve, must not be
- * able to leave two open revisions, two published revisions, or a pointer
- * naming a revision that moved underneath it. Every mutation below runs inside
- * `$transaction` and re-reads the rows it depends on INSIDE that transaction;
- * the database's partial unique index on the open revision is the backstop that
- * turns a genuine race into a conflict error rather than a corrupt profile.
+ * On `chat.teacher`, and nowhere else. {@link updateName} writes that row and
+ * this file holds no copy of it: `IdentityService` has no cache and resolves
+ * actors from the database per request, so one UPDATE is visible to every
+ * surface that renders a teacher's name -- `GET /me`, message authors,
+ * conversation participants -- without anything here publishing an event.
  */
 @Injectable()
 export class TeacherProfileService {
   /** Matches the database check constraint, which is the real limit. */
-  private static readonly ALLOWED_MIME = new Set([
+  private static readonly ALLOWED_CERTIFICATE_MIME = new Set([
     'application/pdf',
     'image/jpeg',
     'image/png',
   ]);
   private static readonly MAX_CERTIFICATE_BYTES = 10 * 1024 * 1024;
 
+  /**
+   * One face at avatar size, not a document -- so narrower than the 10MB
+   * attachment ceiling. WebP is in because the client can encode it and every
+   * target can render it; HEIC is out because it cannot be displayed without
+   * transcoding, and a photo that needs a pipeline to be seen is not a photo.
+   */
+  private static readonly ALLOWED_PHOTO_MIME = new Set([
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+  ]);
+  private static readonly MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+
   /** Long enough to open a PDF, short enough that a leaked URL is worthless. */
   private static readonly DOWNLOAD_TTL_SECONDS = 300;
 
-  private static readonly OPEN_STATES = ['draft', 'pending_review', 'changes_requested'];
+  /**
+   * Longer than a download, because an avatar is re-rendered as the user
+   * scrolls and a 300s URL would blink out mid-session. Still short enough that
+   * a copied URL is worthless tomorrow.
+   */
+  private static readonly PHOTO_TTL_SECONDS = 900;
+
+  private static readonly MAX_NAME_LENGTH = 120;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -60,128 +96,254 @@ export class TeacherProfileService {
   ) {}
 
   // ---------------------------------------------------------------------------
-  // Teacher
+  // Teacher: the profile
   // ---------------------------------------------------------------------------
 
   /**
-   * The signed-in teacher's own profile: the published revision, the open one,
-   * and the review state of each.
+   * The signed-in teacher's own profile.
    *
-   * Creates nothing. A teacher who has never written a profile gets a null
-   * draft, and the first `saveDraft` is what brings a revision into existence --
-   * so merely opening the screen does not put a row in the reviewer's world.
+   * Creates nothing: a teacher who has never saved gets an empty profile view
+   * rather than a row, so opening the screen is not a write.
    */
   async myProfile(actorId: string): Promise<TeacherProfileView> {
     const actor = await this.requireTeacher(actorId);
     const profile = await this.prisma.teacherProfessionalProfile.findUnique({
       where: { teacherId: actor.actorId },
-      include: {
-        publishedRevision: { include: { certificates: true } },
-        draftRevision: { include: { certificates: true } },
-      },
+      include: { certificates: { orderBy: { createdAt: 'asc' } } },
     });
-
-    return {
-      published: profile?.publishedRevision
-        ? this.toRevisionView(profile.publishedRevision)
-        : null,
-      draft: profile?.draftRevision ? this.toRevisionView(profile.draftRevision) : null,
-    };
+    return this.toProfileView(actor, profile);
   }
 
   /**
-   * Write the teacher's content to their OPEN revision, creating one if needed.
+   * Save the profile content. This is the whole publish step.
    *
-   * This is where copy-on-write happens. If the profile has no open revision but
-   * does have a published one, the new revision is seeded from the published
-   * content AND its certificate claims -- the claims cite the same stored
-   * objects, so an already-approved credential carries its approval forward and
-   * does not need reviewing again. The published revision is not touched.
+   * Upsert rather than "create if missing, then update": a teacher's first save
+   * and their hundredth are the same action, and splitting them is how a first
+   * save races itself into a unique-violation on `teacher_id`.
    */
-  async saveDraft(actorId: string, input: ProfileContentInput): Promise<TeacherProfileView> {
+  async saveProfile(actorId: string, input: ProfileContentInput): Promise<TeacherProfileView> {
     const actor = await this.requireTeacher(actorId);
+    const content = this.validateContent(input);
 
-    await this.prisma.$transaction(async (tx) => {
-      const profile = await this.ensureProfile(tx, actor);
-      const revision = await this.openRevision(tx, profile);
-
-      await tx.teacherProfileRevision.update({
-        where: { id: revision.id },
-        data: {
-          bio: input.bio ?? null,
-          specialization: input.specialization ?? null,
-          qualifications: input.qualifications ?? null,
-          experience: input.experience ?? null,
-          languages: input.languages ?? [],
-        },
+    const profile = await this.prisma.$transaction(async (tx) => {
+      const before = await tx.teacherProfessionalProfile.findUnique({
+        where: { teacherId: actor.actorId },
       });
-    });
 
-    return this.myProfile(actorId);
-  }
-
-  /**
-   * Hand the open revision to a reviewer.
-   *
-   * The state is set here and nowhere else; a client never sends one. Submitting
-   * an already-submitted revision is a conflict rather than a no-op, because the
-   * two cases differ for the person looking at the screen.
-   */
-  async submit(actorId: string): Promise<TeacherProfileView> {
-    const actor = await this.requireTeacher(actorId);
-
-    await this.prisma.$transaction(async (tx) => {
-      const profile = await this.requireProfile(tx, actor.actorId);
-      const revision = profile.draftRevisionId
-        ? await tx.teacherProfileRevision.findUnique({
-            where: { id: profile.draftRevisionId },
-            include: { certificates: true },
-          })
-        : null;
-
-      if (!revision) {
-        throw new CommError(
-          CommErrorCode.TEACHER_PROFILE_NO_OPEN_REVISION,
-          'there is nothing to submit',
-          409,
-        );
-      }
-      if (revision.state === 'pending_review') {
-        throw new CommError(
-          CommErrorCode.TEACHER_PROFILE_ALREADY_SUBMITTED,
-          'this revision is already with a reviewer',
-          409,
-        );
-      }
-
-      await tx.teacherProfileRevision.update({
-        where: { id: revision.id },
-        data: { state: 'pending_review', submittedAt: new Date() },
+      const saved = await tx.teacherProfessionalProfile.upsert({
+        where: { teacherId: actor.actorId },
+        create: { teacherId: actor.actorId, ...content },
+        update: content,
+        include: { certificates: { orderBy: { createdAt: 'asc' } } },
       });
 
       await this.audit.audit(tx, {
         actorId: actor.actorId,
-        action: 'teacher_profile.submitted',
-        entity: 'teacher_profile_revision',
-        entityId: revision.id,
-        reason: 'teacher submitted a professional profile revision for review',
+        action: 'teacher_profile.saved',
+        entity: 'teacher_professional_profile',
+        entityId: saved.id,
+        before: before ? this.auditContent(before) : null,
+        after: this.auditContent(saved),
+        reason: 'the teacher saved their own professional profile',
       });
+
+      return saved;
     });
 
-    return this.myProfile(actorId);
+    return this.toProfileView(actor, profile);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Teacher: the name, which is identity and not profile content
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Rename the signed-in teacher.
+   *
+   * Writes `chat.teacher.name` -- the authoritative, Chat-owned teacher
+   * identity -- and deliberately does NOT write a copy into any profile table.
+   * A profile that carried its own name is a profile that could disagree with
+   * the identity every other screen renders.
+   *
+   * Scoped by `teacherId: actor.actorId`, so the statement cannot name another
+   * teacher's row even if a caller wanted it to. Jawwid Core is not involved:
+   * Core has no teacher entity, and `core_teacher_id` stays whatever it was.
+   */
+  async updateName(actorId: string, rawName: string): Promise<TeacherIdentityView> {
+    const actor = await this.requireTeacher(actorId);
+    const name = this.validateName(rawName);
+
+    const teacher = await this.prisma.$transaction(async (tx) => {
+      const before = await tx.teacher.findUnique({ where: { id: actor.actorId } });
+      if (!before) {
+        throw new CommError(CommErrorCode.UNKNOWN_ACTOR, 'unknown actor', 401);
+      }
+
+      const updated = await tx.teacher.update({
+        where: { id: actor.actorId },
+        data: { name },
+      });
+
+      await this.audit.audit(tx, {
+        actorId: actor.actorId,
+        action: 'teacher.renamed',
+        entity: 'teacher',
+        entityId: updated.id,
+        before: { name: before.name },
+        after: { name: updated.name },
+        reason: 'the teacher changed their own name',
+      });
+
+      return updated;
+    });
+
+    return { name: teacher.name, role: 'teacher' };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Teacher: the photo
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Authorize a photo upload. Validates type and size BEFORE any bytes move, so
+   * an oversized file costs one round trip instead of an upload.
+   *
+   * Returns an opaque token, which is the object key the server minted. The
+   * client hands it back to {@link setPhoto} and never parses or builds one.
+   */
+  async authorizePhotoUpload(
+    actorId: string,
+    input: { mimeType: string; byteSize: number },
+  ): Promise<{ uploadUrl: string; uploadToken: string; expiresAt: string }> {
+    const actor = await this.requireTeacher(actorId);
+    this.validatePhoto(input);
+
+    const authorization = await this.storage.authorizeUpload({
+      prefix: `teacher-photos/${actor.actorId}`,
+      mimeType: input.mimeType,
+      byteSize: input.byteSize,
+    });
+
+    return {
+      uploadUrl: authorization.uploadUrl,
+      uploadToken: authorization.objectKey,
+      expiresAt: authorization.expiresAt,
+    };
   }
 
   /**
-   * Attach a credential to the open revision.
+   * Point the profile at an uploaded photo, replacing any previous one.
    *
-   * Returns an upload authorization, never a key. The binding commits the
-   * uploader to the exact type and size that were validated, so an
-   * authorization taken out for a 2MB PDF cannot be spent on a 50MB one.
+   * The previous object is deleted AFTER the row commits, and only once nothing
+   * references it. Deleting first would leave a profile pointing at bytes that
+   * no longer exist if the transaction then rolled back; deleting inside the
+   * transaction would make an un-rollback-able filesystem call part of a
+   * rollback-able unit.
    */
+  async setPhoto(
+    actorId: string,
+    input: { uploadToken: string; mimeType: string; byteSize: number },
+  ): Promise<TeacherProfileView> {
+    const actor = await this.requireTeacher(actorId);
+    this.validatePhoto(input);
+    this.requireOwnedObjectKey(actor, input.uploadToken, 'teacher-photos');
+
+    const { profile, replaced } = await this.prisma.$transaction(async (tx) => {
+      const before = await tx.teacherProfessionalProfile.findUnique({
+        where: { teacherId: actor.actorId },
+      });
+
+      const photo = {
+        photoObjectKey: input.uploadToken,
+        photoMimeType: input.mimeType,
+        photoByteSize: BigInt(input.byteSize),
+        photoUpdatedAt: new Date(),
+      };
+
+      const saved = await tx.teacherProfessionalProfile.upsert({
+        where: { teacherId: actor.actorId },
+        create: { teacherId: actor.actorId, ...photo },
+        update: photo,
+        include: { certificates: { orderBy: { createdAt: 'asc' } } },
+      });
+
+      await this.audit.audit(tx, {
+        actorId: actor.actorId,
+        action: 'teacher_profile.photo_set',
+        entity: 'teacher_professional_profile',
+        entityId: saved.id,
+        // The KEY is never audited either: an audit row is still a place a key
+        // could leak from. Only that a photo changed, and its shape.
+        before: { hadPhoto: before?.photoObjectKey != null },
+        after: { mimeType: input.mimeType, byteSize: input.byteSize },
+        reason: 'the teacher set their own profile photo',
+      });
+
+      return {
+        profile: saved,
+        replaced:
+          before?.photoObjectKey && before.photoObjectKey !== input.uploadToken
+            ? before.photoObjectKey
+            : null,
+      };
+    });
+
+    if (replaced) await this.discardObject(replaced);
+    return this.toProfileView(actor, profile);
+  }
+
+  /** Remove the photo. The avatar falls back to generated initials. */
+  async removePhoto(actorId: string): Promise<TeacherProfileView> {
+    const actor = await this.requireTeacher(actorId);
+
+    const { profile, removed } = await this.prisma.$transaction(async (tx) => {
+      const before = await tx.teacherProfessionalProfile.findUnique({
+        where: { teacherId: actor.actorId },
+      });
+      if (!before?.photoObjectKey) {
+        throw new CommError(
+          CommErrorCode.TEACHER_PROFILE_PHOTO_NOT_FOUND,
+          'there is no photo to remove',
+          404,
+        );
+      }
+
+      const saved = await tx.teacherProfessionalProfile.update({
+        where: { id: before.id },
+        data: {
+          photoObjectKey: null,
+          photoMimeType: null,
+          photoByteSize: null,
+          photoUpdatedAt: null,
+        },
+        include: { certificates: { orderBy: { createdAt: 'asc' } } },
+      });
+
+      await this.audit.audit(tx, {
+        actorId: actor.actorId,
+        action: 'teacher_profile.photo_removed',
+        entity: 'teacher_professional_profile',
+        entityId: saved.id,
+        before: { hadPhoto: true },
+        after: { hadPhoto: false },
+        reason: 'the teacher removed their own profile photo',
+      });
+
+      return { profile: saved, removed: before.photoObjectKey };
+    });
+
+    await this.discardObject(removed);
+    return this.toProfileView(actor, profile);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Teacher: certificates
+  // ---------------------------------------------------------------------------
+
   async authorizeCertificateUpload(
     actorId: string,
-    input: CertificateUploadInput,
-  ): Promise<CertificateUploadAuthorization> {
+    input: { mimeType: string; byteSize: number },
+  ): Promise<{ uploadUrl: string; uploadToken: string; expiresAt: string }> {
     const actor = await this.requireTeacher(actorId);
     this.validateCertificate(input);
 
@@ -198,419 +360,260 @@ export class TeacherProfileService {
     };
   }
 
-  /**
-   * Record the uploaded credential against the open revision.
-   *
-   * Separate from the upload authorization on purpose: the row exists only once
-   * the bytes do. `uploadToken` is the object key the previous call minted --
-   * the client hands it straight back and cannot have chosen it, because the
-   * prefix is derived from the authenticated teacher.
-   */
   async addCertificate(
     actorId: string,
-    input: AddCertificateInput,
+    input: {
+      title: string;
+      issuingOrganization?: string | null;
+      issuedOn?: string | null;
+      mimeType: string;
+      byteSize: number;
+      uploadToken: string;
+    },
   ): Promise<TeacherProfileView> {
     const actor = await this.requireTeacher(actorId);
     this.validateCertificate(input);
-    this.requireOwnedObjectKey(actor, input.uploadToken);
+    this.requireOwnedObjectKey(actor, input.uploadToken, 'teacher-certificates');
+    const title = this.requireTitle(input.title);
 
-    await this.prisma.$transaction(async (tx) => {
-      const profile = await this.ensureProfile(tx, actor);
-      const revision = await this.openRevision(tx, profile);
+    const profile = await this.prisma.$transaction(async (tx) => {
+      const owner = await this.ensureProfile(tx, actor);
 
-      await tx.teacherProfileCertificate.create({
+      const certificate = await tx.teacherProfileCertificate.create({
         data: {
-          revisionId: revision.id,
-          title: input.title.trim(),
+          profileId: owner.id,
+          title,
           issuingOrganization: input.issuingOrganization?.trim() || null,
-          issuedOn: input.issuedOn ?? null,
+          issuedOn: this.optionalDate(input.issuedOn),
           objectKey: input.uploadToken,
           mimeType: input.mimeType,
           byteSize: BigInt(input.byteSize),
         },
       });
+
+      await this.audit.audit(tx, {
+        actorId: actor.actorId,
+        action: 'teacher_profile.certificate_added',
+        entity: 'teacher_profile_certificate',
+        entityId: certificate.id,
+        before: null,
+        after: { title: certificate.title, state: certificate.state },
+        reason: 'the teacher added a credential to their own profile',
+      });
+
+      return tx.teacherProfessionalProfile.findUniqueOrThrow({
+        where: { id: owner.id },
+        include: { certificates: { orderBy: { createdAt: 'asc' } } },
+      });
     });
 
-    return this.myProfile(actorId);
+    return this.toProfileView(actor, profile);
   }
 
   /**
-   * Edit a credential's metadata on the OPEN revision.
+   * Metadata only.
    *
-   * The FILE does not move: `objectKey`, `mimeType` and `byteSize` are not
-   * parameters and are never written here, so editing a title cannot repoint a
-   * claim at different bytes and cannot duplicate them.
-   *
-   * The claim returns to `pending`, enforced by the database trigger rather than
-   * here. That matters most for a carried-forward approved credential: the
-   * reviewer approved "Ijazah in Tajweed, Al-Azhar", not the file in the
-   * abstract, so new words need a new decision. The published revision keeps its
-   * own claim and is untouched.
-   *
-   * Scoped to `draftRevisionId`, which is what makes an approved or superseded
-   * revision unreachable from here -- the lookup simply does not find it. The
-   * database refuses those too.
+   * There is no field here for the file, so a rename cannot become a
+   * substitution -- and the database trigger returns the claim to `pending`,
+   * because the approval was of a claim and not of a file.
    */
   async updateCertificate(
     actorId: string,
     certificateId: string,
-    input: CertificateMetadataInput,
+    input: { title: string; issuingOrganization?: string | null; issuedOn?: string | null },
   ): Promise<TeacherProfileView> {
     const actor = await this.requireTeacher(actorId);
+    const title = this.requireTitle(input.title);
 
-    const title = input.title?.trim() ?? '';
-    if (!title) {
-      throw new CommError(
-        CommErrorCode.TEACHER_CERTIFICATE_INVALID_TYPE,
-        'a certificate needs a title',
-        400,
-      );
-    }
+    const profile = await this.prisma.$transaction(async (tx) => {
+      const certificate = await this.requireOwnCertificate(tx, actor, certificateId);
 
-    await this.prisma.$transaction(async (tx) => {
-      const profile = await this.requireProfile(tx, actor.actorId);
-      const certificate = await tx.teacherProfileCertificate.findUnique({
-        where: { id: certificateId },
-      });
-
-      if (!certificate || certificate.revisionId !== profile.draftRevisionId) {
-        throw new CommError(
-          CommErrorCode.TEACHER_CERTIFICATE_NOT_FOUND,
-          'certificate not found',
-          404,
-        );
-      }
-
-      await tx.teacherProfileCertificate.update({
+      const updated = await tx.teacherProfileCertificate.update({
         where: { id: certificate.id },
         data: {
           title,
           issuingOrganization: input.issuingOrganization?.trim() || null,
-          issuedOn: input.issuedOn ?? null,
+          issuedOn: this.optionalDate(input.issuedOn),
         },
-      });
-    });
-
-    return this.myProfile(actorId);
-  }
-
-  /** Drop a credential from the OPEN revision. The published one keeps its own. */
-  async removeCertificate(actorId: string, certificateId: string): Promise<TeacherProfileView> {
-    const actor = await this.requireTeacher(actorId);
-
-    await this.prisma.$transaction(async (tx) => {
-      const profile = await this.requireProfile(tx, actor.actorId);
-      const certificate = await tx.teacherProfileCertificate.findUnique({
-        where: { id: certificateId },
-      });
-
-      // Scoped to the OPEN revision, so a teacher cannot reach into their own
-      // published revision -- which the database would refuse anyway -- nor into
-      // anybody else's, which this lookup never finds.
-      if (!certificate || certificate.revisionId !== profile.draftRevisionId) {
-        throw new CommError(
-          CommErrorCode.TEACHER_CERTIFICATE_NOT_FOUND,
-          'certificate not found',
-          404,
-        );
-      }
-
-      await tx.teacherProfileCertificate.delete({ where: { id: certificate.id } });
-    });
-
-    return this.myProfile(actorId);
-  }
-
-  // ---------------------------------------------------------------------------
-  // Reviewer
-  // ---------------------------------------------------------------------------
-
-  /** Submitted revisions waiting for a decision, oldest first. */
-  async reviewQueue(actorId: string): Promise<ReviewQueueItem[]> {
-    const actor = await this.requireReviewer(actorId);
-
-    const revisions = await this.prisma.teacherProfileRevision.findMany({
-      where: {
-        state: 'pending_review',
-        profile: this.orgScope(actor),
-      },
-      include: {
-        certificates: true,
-        profile: { include: { teacher: true } },
-      },
-      orderBy: { submittedAt: 'asc' },
-    });
-
-    return revisions.map((revision) => ({
-      ...this.toRevisionView(revision),
-      revisionId: revision.id,
-      // The name is read from chat.teacher through the join -- the profile has
-      // no name of its own to disagree with it.
-      teacherName: revision.profile.teacher.name,
-      pendingCertificates: revision.certificates.filter((c) => c.state === 'pending').length,
-    }));
-  }
-
-  /** One submitted revision, in full, for the reviewer reading it. */
-  async revisionForReview(actorId: string, revisionId: string): Promise<ReviewQueueItem> {
-    const actor = await this.requireReviewer(actorId);
-    const revision = await this.prisma.teacherProfileRevision.findFirst({
-      where: { id: revisionId, profile: this.orgScope(actor) },
-      include: { certificates: true, profile: { include: { teacher: true } } },
-    });
-    if (!revision) {
-      throw new CommError(CommErrorCode.TEACHER_PROFILE_NOT_FOUND, 'revision not found', 404);
-    }
-
-    return {
-      ...this.toRevisionView(revision),
-      revisionId: revision.id,
-      teacherName: revision.profile.teacher.name,
-      pendingCertificates: revision.certificates.filter((c) => c.state === 'pending').length,
-    };
-  }
-
-  /** Approve or reject one credential. */
-  async decideCertificate(
-    actorId: string,
-    certificateId: string,
-    decision: { approved: boolean; note?: string },
-  ): Promise<ReviewQueueItem> {
-    const actor = await this.requireReviewer(actorId);
-
-    const revisionId = await this.prisma.$transaction(async (tx) => {
-      const certificate = await tx.teacherProfileCertificate.findFirst({
-        where: { id: certificateId, revision: { profile: this.orgScope(actor) } },
-        include: { revision: { include: { profile: true } } },
-      });
-      if (!certificate) {
-        throw new CommError(
-          CommErrorCode.TEACHER_CERTIFICATE_NOT_FOUND,
-          'certificate not found',
-          404,
-        );
-      }
-      this.refuseSelfReview(actor, certificate.revision.profile.teacherId);
-      this.requireOpen(certificate.revision.state);
-
-      await tx.teacherProfileCertificate.update({
-        where: { id: certificate.id },
-        data: {
-          state: decision.approved ? 'approved' : 'rejected',
-          reviewedAt: new Date(),
-          reviewedById: actor.actorId,
-          reviewNote: decision.note?.trim() || null,
-        },
-      });
-      return certificate.revisionId;
-    });
-
-    return this.revisionForReview(actorId, revisionId);
-  }
-
-  /**
-   * Approve a revision and make it the published one.
-   *
-   * ONE transaction, and every precondition is re-read inside it: the caller's
-   * authority was checked a moment ago against an actor that could since have
-   * been deactivated, and the revision could since have been edited, withdrawn
-   * or approved by somebody else. Checking outside the transaction and writing
-   * inside it is the shape that produces two published revisions under load.
-   */
-  async approve(actorId: string, revisionId: string): Promise<ReviewQueueItem> {
-    const actor = await this.requireReviewer(actorId);
-
-    await this.prisma.$transaction(async (tx) => {
-      // Re-resolve the authority INSIDE the transaction, per the brief: an actor
-      // deactivated between the guard and the write must not approve.
-      const fresh = await this.identity.resolveActor(actorId);
-      if (!fresh) {
-        throw new CommError(CommErrorCode.UNKNOWN_ACTOR, 'unknown actor', 401);
-      }
-      const decision = this.authz.canReviewTeacherProfile(fresh);
-      if (!decision.allowed) throw new CommError(decision.code, decision.reason);
-
-      await this.lockRevision(tx, revisionId);
-
-      const revision = await tx.teacherProfileRevision.findFirst({
-        where: { id: revisionId, profile: this.orgScope(actor) },
-        include: { certificates: true, profile: true },
-      });
-      if (!revision) {
-        throw new CommError(CommErrorCode.TEACHER_PROFILE_NOT_FOUND, 'revision not found', 404);
-      }
-      this.refuseSelfReview(actor, revision.profile.teacherId);
-
-      if (revision.state !== 'pending_review') {
-        throw new CommError(
-          CommErrorCode.TEACHER_PROFILE_NOT_SUBMITTED,
-          `this revision is ${revision.state} and is not awaiting a decision`,
-          409,
-        );
-      }
-
-      const undecided = revision.certificates.filter((c) => c.state === 'pending').length;
-      if (undecided > 0) {
-        throw new CommError(
-          CommErrorCode.TEACHER_PROFILE_CERTIFICATES_UNDECIDED,
-          `${undecided} certificate(s) still need a decision`,
-          409,
-        );
-      }
-
-      const now = new Date();
-      await tx.teacherProfileRevision.update({
-        where: { id: revision.id },
-        data: {
-          state: 'approved',
-          approvedAt: now,
-          reviewedAt: now,
-          reviewedById: actor.actorId,
-        },
-      });
-
-      // Retire the outgoing version. Conditional because the first approval has
-      // nothing to retire.
-      if (revision.profile.publishedRevisionId) {
-        await tx.teacherProfileRevision.update({
-          where: { id: revision.profile.publishedRevisionId },
-          data: { state: 'superseded' },
-        });
-      }
-
-      // The pointer swap is what a family's next read observes, and it happens
-      // in the same transaction as both state changes -- so there is no instant
-      // at which a family sees nothing, and none at which they see two versions.
-      await tx.teacherProfessionalProfile.update({
-        where: { id: revision.profileId },
-        data: { publishedRevisionId: revision.id, draftRevisionId: null },
       });
 
       await this.audit.audit(tx, {
         actorId: actor.actorId,
-        action: 'teacher_profile.approved',
-        entity: 'teacher_profile_revision',
-        entityId: revision.id,
-        after: { publishedRevisionId: revision.id, supersededId: revision.profile.publishedRevisionId },
-        reason: 'reviewer approved a professional profile revision',
+        action: 'teacher_profile.certificate_edited',
+        entity: 'teacher_profile_certificate',
+        entityId: updated.id,
+        before: { title: certificate.title, state: certificate.state },
+        after: { title: updated.title, state: updated.state },
+        reason: 'the teacher edited a credential on their own profile',
+      });
+
+      return tx.teacherProfessionalProfile.findUniqueOrThrow({
+        where: { id: certificate.profileId },
+        include: { certificates: { orderBy: { createdAt: 'asc' } } },
       });
     });
 
-    return this.revisionForReview(actorId, revisionId);
+    return this.toProfileView(actor, profile);
   }
 
+  async removeCertificate(actorId: string, certificateId: string): Promise<TeacherProfileView> {
+    const actor = await this.requireTeacher(actorId);
+
+    const { profile, removed } = await this.prisma.$transaction(async (tx) => {
+      const certificate = await this.requireOwnCertificate(tx, actor, certificateId);
+
+      await tx.teacherProfileCertificate.delete({ where: { id: certificate.id } });
+
+      await this.audit.audit(tx, {
+        actorId: actor.actorId,
+        action: 'teacher_profile.certificate_removed',
+        entity: 'teacher_profile_certificate',
+        entityId: certificate.id,
+        before: { title: certificate.title, state: certificate.state },
+        after: null,
+        reason: 'the teacher removed a credential from their own profile',
+      });
+
+      const owner = await tx.teacherProfessionalProfile.findUniqueOrThrow({
+        where: { id: certificate.profileId },
+        include: { certificates: { orderBy: { createdAt: 'asc' } } },
+      });
+      return { profile: owner, removed: certificate.objectKey };
+    });
+
+    await this.discardObject(removed);
+    return this.toProfileView(actor, profile);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Reviewer: certificates only
+  // ---------------------------------------------------------------------------
+
   /**
-   * Send a revision back with a note.
+   * Teachers with at least one credential awaiting a decision.
    *
-   * The published revision is untouched, so a family keeps reading the last
-   * approved version while the teacher works. The note is mandatory: telling
-   * somebody to change something without saying what is not a review.
+   * Certificate-level, because certificate review is all that is left: there is
+   * no profile to approve. Authorization is re-checked here and again on the
+   * decision, because a queue read and a decision are separate requests and a
+   * role can be revoked between them.
    */
-  async requestChanges(
-    actorId: string,
-    revisionId: string,
-    note: string,
-  ): Promise<ReviewQueueItem> {
+  async certificateReviewQueue(actorId: string): Promise<CertificateReviewItem[]> {
     const actor = await this.requireReviewer(actorId);
-    const trimmed = note?.trim() ?? '';
-    if (!trimmed) {
+
+    const profiles = await this.prisma.teacherProfessionalProfile.findMany({
+      where: {
+        ...this.orgScope(actor),
+        certificates: { some: { state: 'pending' } },
+      },
+      include: {
+        teacher: true,
+        certificates: { orderBy: { createdAt: 'asc' } },
+      },
+      orderBy: { updatedAt: 'asc' },
+    });
+
+    return profiles.map((profile) => ({
+      profileId: profile.id,
+      teacherName: profile.teacher.name,
+      pendingCertificates: profile.certificates.filter((c) => c.state === 'pending').length,
+      certificates: profile.certificates.map((c) => this.toCertificateView(c)),
+    }));
+  }
+
+  async decideCertificate(
+    actorId: string,
+    certificateId: string,
+    decision: { approved: boolean; note?: string | null },
+  ): Promise<CertificateReviewItem> {
+    const actor = await this.requireReviewer(actorId);
+
+    if (!decision.approved && !(decision.note ?? '').trim()) {
       throw new CommError(
         CommErrorCode.TEACHER_PROFILE_REVIEW_NOTE_REQUIRED,
-        'say what needs to change',
+        'rejecting a certificate requires a reason',
         400,
       );
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      const fresh = await this.identity.resolveActor(actorId);
-      if (!fresh) throw new CommError(CommErrorCode.UNKNOWN_ACTOR, 'unknown actor', 401);
-      const decision = this.authz.canReviewTeacherProfile(fresh);
-      if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+    return this.prisma.$transaction(async (tx) => {
+      // Re-checked INSIDE the transaction and after the lock: the decision is
+      // made against the row as it is now, not as the queue showed it.
+      await this.lockCertificate(tx, certificateId);
 
-      await this.lockRevision(tx, revisionId);
-
-      const revision = await tx.teacherProfileRevision.findFirst({
-        where: { id: revisionId, profile: this.orgScope(actor) },
-        include: { profile: true },
+      const certificate = await tx.teacherProfileCertificate.findUnique({
+        where: { id: certificateId },
+        include: { profile: { include: { teacher: true } } },
       });
-      if (!revision) {
-        throw new CommError(CommErrorCode.TEACHER_PROFILE_NOT_FOUND, 'revision not found', 404);
-      }
-      this.refuseSelfReview(actor, revision.profile.teacherId);
-      if (revision.state !== 'pending_review') {
+      if (!certificate || !this.inOrg(actor, certificate.profile.organizationId)) {
         throw new CommError(
-          CommErrorCode.TEACHER_PROFILE_NOT_SUBMITTED,
-          `this revision is ${revision.state} and is not awaiting a decision`,
-          409,
+          CommErrorCode.TEACHER_CERTIFICATE_NOT_FOUND,
+          'no such certificate',
+          404,
         );
       }
+      this.refuseSelfReview(actor, certificate.profile.teacherId);
 
-      await tx.teacherProfileRevision.update({
-        where: { id: revision.id },
+      const reviewer = actor.kind === 'staff' ? actor.actorId : null;
+      const updated = await tx.teacherProfileCertificate.update({
+        where: { id: certificate.id },
         data: {
-          state: 'changes_requested',
+          state: decision.approved ? 'approved' : 'rejected',
           reviewedAt: new Date(),
-          reviewedById: actor.actorId,
-          reviewNote: trimmed,
+          reviewedById: reviewer,
+          reviewNote: decision.note?.trim() || null,
         },
       });
 
       await this.audit.audit(tx, {
         actorId: actor.actorId,
-        action: 'teacher_profile.changes_requested',
-        entity: 'teacher_profile_revision',
-        entityId: revision.id,
-        reason: 'reviewer returned a professional profile revision to its author',
+        action: decision.approved
+          ? 'teacher_profile.certificate_approved'
+          : 'teacher_profile.certificate_rejected',
+        entity: 'teacher_profile_certificate',
+        entityId: updated.id,
+        before: { state: certificate.state },
+        after: { state: updated.state },
+        // NOT NULL by design. A rejection carries the reviewer's own words;
+        // an approval has none to carry, so it says what it is.
+        reason: updated.reviewNote ?? 'a reviewer approved this credential',
       });
-    });
 
-    return this.revisionForReview(actorId, revisionId);
+      const profile = await tx.teacherProfessionalProfile.findUniqueOrThrow({
+        where: { id: certificate.profileId },
+        include: { teacher: true, certificates: { orderBy: { createdAt: 'asc' } } },
+      });
+
+      return {
+        profileId: profile.id,
+        teacherName: profile.teacher.name,
+        pendingCertificates: profile.certificates.filter((c) => c.state === 'pending').length,
+        certificates: profile.certificates.map((c) => this.toCertificateView(c)),
+      };
+    });
   }
 
-  // ---------------------------------------------------------------------------
-  // Files
-  // ---------------------------------------------------------------------------
-
   /**
-   * A short-lived signed URL for ONE certificate.
+   * A fresh signed URL for one certificate file.
    *
-   * THE GATE IS HERE, not at the call sites. The caller must either own the
-   * revision the claim belongs to, or hold review authority. A family never
-   * reaches this method at all -- the published read model returns metadata and
-   * no file handle, because a parent has no reason to hold a teacher's
-   * credential document.
+   * Two callers, one rule: the owning teacher, or a reviewer. The signing call
+   * IS the access decision -- holding the id is not enough, and the key is
+   * never returned so a client cannot construct a URL of its own.
    */
   async certificateDownloadUrl(actorId: string, certificateId: string): Promise<string> {
     const actor = await this.requireActor(actorId);
 
     const certificate = await this.prisma.teacherProfileCertificate.findUnique({
       where: { id: certificateId },
-      include: { revision: { include: { profile: true } } },
+      include: { profile: true },
     });
-    if (!certificate) {
-      throw new CommError(
-        CommErrorCode.TEACHER_CERTIFICATE_NOT_FOUND,
-        'certificate not found',
-        404,
-      );
-    }
 
-    const ownsIt =
-      actor.kind === 'teacher' && certificate.revision.profile.teacherId === actor.actorId;
-    const reviewsIt =
-      this.authz.canReviewTeacherProfile(actor).allowed &&
-      (!actor.organizationId ||
-        certificate.revision.profile.organizationId === actor.organizationId);
+    const notFound = () =>
+      new CommError(CommErrorCode.TEACHER_CERTIFICATE_NOT_FOUND, 'no such certificate', 404);
+    if (!certificate || !this.inOrg(actor, certificate.profile.organizationId)) throw notFound();
 
-    if (!ownsIt && !reviewsIt) {
-      // The same code and status as a missing row: whether a particular
-      // certificate exists is not a fact an unauthorized caller gets to learn.
-      throw new CommError(
-        CommErrorCode.TEACHER_CERTIFICATE_NOT_FOUND,
-        'certificate not found',
-        404,
-      );
-    }
+    const isOwner =
+      actor.kind === 'teacher' && actor.actorId === certificate.profile.teacherId;
+    if (!isOwner && !this.authz.canReviewTeacherProfile(actor).allowed) throw notFound();
 
     return this.storage.signedReadUrl(
       certificate.objectKey,
@@ -619,43 +622,42 @@ export class TeacherProfileService {
   }
 
   // ---------------------------------------------------------------------------
-  // Published read model (no UI in this feature; the contract is implemented)
+  // The public read
   // ---------------------------------------------------------------------------
 
   /**
-   * What a family may read about a teacher: the PUBLISHED revision, and nothing
-   * else.
+   * One teacher's profile as a third party sees it.
    *
-   * Resolved through the pointer rather than by searching for an approved row,
-   * so a superseded revision -- still historically approved -- can never be
-   * selected. Returns no state, no review note, no timestamps, no ids and no
-   * object key: the shape itself is what makes a leak hard to write.
+   * The CURRENT saved profile -- there is no other version any more. Approved
+   * certificates only: a pending credential is unverified and a rejected one was
+   * refused, and publishing either would make the decision meaningless. Carries
+   * no id, no object key, no review metadata and no reviewer.
+   *
+   * No route exposes this yet; the Parent surface is a separate piece of work.
    */
-  async publishedProfile(teacherId: string): Promise<PublishedProfileView | null> {
+  async publicProfile(teacherId: string): Promise<PublicProfileView | null> {
     const profile = await this.prisma.teacherProfessionalProfile.findUnique({
       where: { teacherId },
       include: {
         teacher: true,
-        publishedRevision: { include: { certificates: true } },
+        certificates: { where: { state: 'approved' }, orderBy: { createdAt: 'asc' } },
       },
     });
-    if (!profile?.publishedRevision) return null;
+    if (!profile) return null;
 
-    const revision = profile.publishedRevision;
     return {
       teacherName: profile.teacher.name,
-      bio: revision.bio,
-      specialization: revision.specialization,
-      qualifications: revision.qualifications,
-      experience: revision.experience,
-      languages: revision.languages,
-      certificates: revision.certificates
-        .filter((c) => c.state === 'approved')
-        .map((c) => ({
-          title: c.title,
-          issuingOrganization: c.issuingOrganization,
-          issuedOn: c.issuedOn,
-        })),
+      photoUrl: await this.signPhoto(profile.photoObjectKey),
+      bio: profile.bio,
+      specialization: profile.specialization,
+      qualifications: profile.qualifications,
+      experience: profile.experience,
+      languages: profile.languages,
+      certificates: profile.certificates.map((c) => ({
+        title: c.title,
+        issuingOrganization: c.issuingOrganization,
+        issuedOn: c.issuedOn,
+      })),
     };
   }
 
@@ -684,7 +686,7 @@ export class TeacherProfileService {
   }
 
   /**
-   * A teacher may never decide their own profile.
+   * A teacher may never decide their own credential.
    *
    * Role alone cannot express this -- a teacher who is also staff would pass
    * every role check -- so it is compared against the resolved owner. The
@@ -695,17 +697,7 @@ export class TeacherProfileService {
     if (actor.kind === 'teacher' && actor.actorId === ownerTeacherId) {
       throw new CommError(
         CommErrorCode.TEACHER_PROFILE_CANNOT_REVIEW,
-        'a teacher cannot review their own profile',
-      );
-    }
-  }
-
-  private requireOpen(state: string): void {
-    if (!TeacherProfileService.OPEN_STATES.includes(state)) {
-      throw new CommError(
-        CommErrorCode.TEACHER_PROFILE_REVISION_CLOSED,
-        `revision is ${state} and can no longer be changed`,
-        409,
+        'a teacher cannot review their own certificate',
       );
     }
   }
@@ -714,14 +706,21 @@ export class TeacherProfileService {
     return actor.organizationId ? { organizationId: actor.organizationId } : {};
   }
 
+  private inOrg(actor: Actor, organizationId: string): boolean {
+    return !actor.organizationId || actor.organizationId === organizationId;
+  }
+
   /**
-   * The key must sit under the prefix this teacher's upload authorization
+   * The key must sit under the prefix this teacher's own upload authorization
    * minted. Without this a teacher could hand back a key belonging to another
-   * teacher's upload and attach their document as a credential of their own.
+   * teacher's upload and attach their file as their own.
+   *
+   * The `..` test is not decoration: the key becomes a path on the reference
+   * storage's filesystem.
    */
-  private requireOwnedObjectKey(actor: Actor, objectKey: string): void {
-    const prefix = `teacher-certificates/${actor.actorId}/`;
-    if (!objectKey || !objectKey.startsWith(prefix) || objectKey.includes('..')) {
+  private requireOwnedObjectKey(actor: Actor, objectKey: string, prefix: string): void {
+    const expected = `${prefix}/${actor.actorId}/`;
+    if (!objectKey || !objectKey.startsWith(expected) || objectKey.includes('..')) {
       throw new CommError(
         CommErrorCode.TEACHER_CERTIFICATE_NOT_FOUND,
         'that upload does not belong to this teacher',
@@ -731,7 +730,7 @@ export class TeacherProfileService {
   }
 
   private validateCertificate(input: { mimeType: string; byteSize: number }): void {
-    if (!TeacherProfileService.ALLOWED_MIME.has(input.mimeType)) {
+    if (!TeacherProfileService.ALLOWED_CERTIFICATE_MIME.has(input.mimeType)) {
       throw new CommError(
         CommErrorCode.TEACHER_CERTIFICATE_INVALID_TYPE,
         'a certificate must be a PDF, JPEG or PNG',
@@ -751,163 +750,263 @@ export class TeacherProfileService {
     }
   }
 
+  private validatePhoto(input: { mimeType: string; byteSize: number }): void {
+    if (!TeacherProfileService.ALLOWED_PHOTO_MIME.has(input.mimeType)) {
+      throw new CommError(
+        CommErrorCode.TEACHER_PROFILE_PHOTO_INVALID_TYPE,
+        'a profile photo must be a JPEG, PNG or WebP image',
+        400,
+      );
+    }
+    if (
+      !Number.isFinite(input.byteSize) ||
+      input.byteSize <= 0 ||
+      input.byteSize > TeacherProfileService.MAX_PHOTO_BYTES
+    ) {
+      throw new CommError(
+        CommErrorCode.TEACHER_PROFILE_PHOTO_TOO_LARGE,
+        'a profile photo must be 5MB or smaller',
+        400,
+      );
+    }
+  }
+
   /**
-   * Take the row lock before deciding anything about a revision.
+   * A name is required, bounded, and renders as one tidy line.
    *
-   * Without it two reviewers both approve: Prisma runs READ COMMITTED, so the
-   * loser's UPDATE re-reads the row after the winner commits, the transition
-   * trigger sees `approved -> approved` and waves it through, and the second
-   * reviewer is told they approved something they did not -- with a second audit
-   * record to match. The data stayed consistent; the story told about it did
-   * not. Locking first makes the loser re-read the committed state and fail the
-   * `pending_review` check honestly.
+   * Whitespace runs -- newlines, tabs, control and format characters, and plain
+   * double spaces -- collapse to a single space rather than being rejected: they
+   * arrive from paste, not from intent, and "الأستاذ   محمد" looks broken in
+   * every list it appears in. Unicode is otherwise untouched: these names are
+   * Arabic, and normalising them further would be a product decision nobody
+   * asked for.
+   *
+   * Collapsing is also what lets the CLIENT be honest. The contract is that the
+   * client renders what the server stored, and a server that only trimmed would
+   * make "trim" and "collapse" indistinguishable to anyone reading the response.
    */
-  private async lockRevision(tx: PrismaTx, revisionId: string): Promise<void> {
+  private validateName(raw: string): string {
+    const name =
+      typeof raw === 'string' ? raw.replace(/[\s\p{Cc}\p{Cf}]+/gu, ' ').trim() : '';
+    if (name.length === 0) {
+      throw new CommError(CommErrorCode.TEACHER_NAME_INVALID, 'a name is required', 400);
+    }
+    if (name.length > TeacherProfileService.MAX_NAME_LENGTH) {
+      throw new CommError(
+        CommErrorCode.TEACHER_NAME_INVALID,
+        `a name must be ${TeacherProfileService.MAX_NAME_LENGTH} characters or fewer`,
+        400,
+      );
+    }
+    return name;
+  }
+
+  private requireTitle(raw: string): string {
+    const title = (raw ?? '').trim();
+    if (title.length === 0 || title.length > 200) {
+      throw new CommError(
+        CommErrorCode.TEACHER_CERTIFICATE_INVALID_TYPE,
+        'a certificate needs a title of at most 200 characters',
+        400,
+      );
+    }
+    return title;
+  }
+
+  private validateContent(input: ProfileContentInput): {
+    bio: string | null;
+    specialization: string | null;
+    qualifications: string | null;
+    experience: string | null;
+    languages: string[];
+  } {
+    // The ceilings match the database CHECK constraints, which are the real
+    // limit; these exist so a client is refused before a round trip, not
+    // instead of one.
+    const text = (value: string | null | undefined, max: number, field: string) => {
+      const trimmed = (value ?? '').trim();
+      if (trimmed.length === 0) return null;
+      if (trimmed.length > max) {
+        throw new CommError(
+          CommErrorCode.TEACHER_PROFILE_INVALID_CONTENT,
+          `${field} must be ${max} characters or fewer`,
+          400,
+        );
+      }
+      return trimmed;
+    };
+
+    const languages = (input.languages ?? [])
+      .map((l) => (typeof l === 'string' ? l.trim() : ''))
+      .filter((l) => l.length > 0 && l.length <= 40);
+    if (languages.length > 10) {
+      throw new CommError(
+        CommErrorCode.TEACHER_PROFILE_INVALID_CONTENT,
+        'at most 10 languages',
+        400,
+      );
+    }
+
+    return {
+      bio: text(input.bio, 2000, 'bio'),
+      specialization: text(input.specialization, 200, 'specialization'),
+      qualifications: text(input.qualifications, 2000, 'qualifications'),
+      experience: text(input.experience, 2000, 'experience'),
+      languages: [...new Set(languages)],
+    };
+  }
+
+  private optionalDate(value: string | null | undefined): Date | null {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      throw new CommError(CommErrorCode.TEACHER_PROFILE_INVALID_CONTENT, 'issuedOn is not a date', 400);
+    }
+    return date;
+  }
+
+  /**
+   * Hold the row before deciding anything about it.
+   *
+   * Prisma runs READ COMMITTED, so without the lock two reviewers can both read
+   * `pending`, both write, and both be told they decided it. The data stays
+   * consistent; the story told about it does not.
+   */
+  private async lockCertificate(tx: PrismaTx, certificateId: string): Promise<void> {
     await tx.$queryRaw`
-      select id from chat.teacher_profile_revision where id = ${revisionId}::uuid for update
+      select id from chat.teacher_profile_certificate where id = ${certificateId}::uuid for update
     `;
   }
 
-  private async requireProfile(tx: PrismaTx, teacherId: string) {
-    const profile = await tx.teacherProfessionalProfile.findUnique({ where: { teacherId } });
-    if (!profile) {
-      throw new CommError(CommErrorCode.TEACHER_PROFILE_NOT_FOUND, 'no profile yet', 404);
+  private async requireOwnCertificate(tx: PrismaTx, actor: Actor, certificateId: string) {
+    const certificate = await tx.teacherProfileCertificate.findUnique({
+      where: { id: certificateId },
+      include: { profile: true },
+    });
+    // One error for "does not exist" and "is not yours": telling them apart
+    // would turn this endpoint into an oracle for other teachers' certificate
+    // ids.
+    if (
+      !certificate ||
+      certificate.profile.teacherId !== actor.actorId ||
+      !this.inOrg(actor, certificate.profile.organizationId)
+    ) {
+      throw new CommError(CommErrorCode.TEACHER_CERTIFICATE_NOT_FOUND, 'no such certificate', 404);
     }
-    return profile;
+    return certificate;
   }
 
   private async ensureProfile(tx: PrismaTx, actor: Actor) {
-    const existing = await tx.teacherProfessionalProfile.findUnique({
+    return tx.teacherProfessionalProfile.upsert({
       where: { teacherId: actor.actorId },
-    });
-    if (existing) return existing;
-
-    return tx.teacherProfessionalProfile.create({
-      data: {
-        teacherId: actor.actorId,
-        ...(actor.organizationId ? { organizationId: actor.organizationId } : {}),
-      },
+      create: { teacherId: actor.actorId },
+      update: {},
     });
   }
 
   /**
-   * The open revision, created by copy-on-write if there is none.
+   * Drop bytes nothing references any more.
    *
-   * Seeded from the published revision when one exists, certificate claims
-   * included: the claims cite the SAME stored objects and keep their approval,
-   * so an unchanged credential is not re-reviewed and no bytes are copied.
+   * Best effort by design: the row is already committed, so a storage hiccup
+   * must not fail the request the teacher made. A key that survives is an
+   * orphan, which costs disk; a request that fails because cleanup failed costs
+   * the teacher their edit.
    */
-  private async openRevision(tx: PrismaTx, profile: ProfileRow) {
-    if (profile.draftRevisionId) {
-      const open = await tx.teacherProfileRevision.findUnique({
-        where: { id: profile.draftRevisionId },
-      });
-      if (open) return open;
+  private async discardObject(objectKey: string): Promise<void> {
+    try {
+      await this.storage.delete(objectKey);
+    } catch {
+      // Intentionally swallowed -- see above.
     }
-
-    const published = profile.publishedRevisionId
-      ? await tx.teacherProfileRevision.findUnique({
-          where: { id: profile.publishedRevisionId },
-          include: { certificates: true },
-        })
-      : null;
-
-    const last = await tx.teacherProfileRevision.aggregate({
-      where: { profileId: profile.id },
-      _max: { revisionNumber: true },
-    });
-
-    const created = await tx.teacherProfileRevision.create({
-      data: {
-        profileId: profile.id,
-        revisionNumber: (last._max.revisionNumber ?? 0) + 1,
-        bio: published?.bio ?? null,
-        specialization: published?.specialization ?? null,
-        qualifications: published?.qualifications ?? null,
-        experience: published?.experience ?? null,
-        languages: published?.languages ?? [],
-      },
-    });
-
-    if (published?.certificates.length) {
-      await tx.teacherProfileCertificate.createMany({
-        data: published.certificates.map((c) => ({
-          revisionId: created.id,
-          title: c.title,
-          issuingOrganization: c.issuingOrganization,
-          issuedOn: c.issuedOn,
-          objectKey: c.objectKey,
-          mimeType: c.mimeType,
-          byteSize: c.byteSize,
-          state: c.state,
-          reviewedAt: c.reviewedAt,
-          reviewedById: c.reviewedById,
-        })),
-      });
-    }
-
-    await tx.teacherProfessionalProfile.update({
-      where: { id: profile.id },
-      data: { draftRevisionId: created.id },
-    });
-
-    return created;
   }
 
-  /** Never includes objectKey. A view that cannot carry a key cannot leak one. */
-  private toRevisionView(revision: RevisionRow): RevisionView {
+  private async signPhoto(objectKey: string | null): Promise<string | null> {
+    if (!objectKey) return null;
+    return this.storage.signedReadUrl(objectKey, TeacherProfileService.PHOTO_TTL_SECONDS);
+  }
+
+  private auditContent(row: {
+    bio: string | null;
+    specialization: string | null;
+    qualifications: string | null;
+    experience: string | null;
+    languages: string[];
+  }): Record<string, unknown> {
     return {
-      state: revision.state,
-      revisionNumber: revision.revisionNumber,
-      bio: revision.bio,
-      specialization: revision.specialization,
-      qualifications: revision.qualifications,
-      experience: revision.experience,
-      languages: revision.languages,
-      reviewNote: revision.reviewNote,
-      submittedAt: revision.submittedAt,
-      approvedAt: revision.approvedAt,
-      certificates: (revision.certificates ?? []).map((c) => ({
-        id: c.id,
-        title: c.title,
-        issuingOrganization: c.issuingOrganization,
-        issuedOn: c.issuedOn,
-        state: c.state,
-        reviewNote: c.reviewNote,
-        mimeType: c.mimeType,
-        byteSize: Number(c.byteSize),
-      })),
+      bio: row.bio,
+      specialization: row.specialization,
+      qualifications: row.qualifications,
+      experience: row.experience,
+      languages: row.languages,
+    };
+  }
+
+  private toCertificateView(certificate: {
+    id: string;
+    title: string;
+    issuingOrganization: string | null;
+    issuedOn: Date | null;
+    state: string;
+    reviewNote: string | null;
+  }): CertificateView {
+    return {
+      id: certificate.id,
+      title: certificate.title,
+      issuingOrganization: certificate.issuingOrganization,
+      issuedOn: certificate.issuedOn,
+      state: certificate.state,
+      reviewNote: certificate.reviewNote,
+    };
+  }
+
+  /**
+   * The teacher's own view.
+   *
+   * `name` and `role` come from the resolved ACTOR, not from any profile
+   * column, which is what makes a stale name impossible: there is nothing here
+   * that could hold an old one.
+   */
+  private async toProfileView(
+    actor: Actor,
+    profile:
+      | (ProfileRow & { certificates: CertificateRow[] })
+      | null,
+  ): Promise<TeacherProfileView> {
+    return {
+      name: actor.displayName,
+      role: 'teacher',
+      photoUrl: await this.signPhoto(profile?.photoObjectKey ?? null),
+      bio: profile?.bio ?? null,
+      specialization: profile?.specialization ?? null,
+      qualifications: profile?.qualifications ?? null,
+      experience: profile?.experience ?? null,
+      languages: profile?.languages ?? [],
+      certificates: (profile?.certificates ?? []).map((c) => this.toCertificateView(c)),
+      updatedAt: profile?.updatedAt ?? null,
     };
   }
 }
 
-// --- shapes -----------------------------------------------------------------
-
 type PrismaTx = Parameters<Parameters<PrismaService['$transaction']>[0]>[0];
-type ProfileRow = { id: string; draftRevisionId: string | null; publishedRevisionId: string | null };
-type RevisionRow = {
-  state: string;
-  revisionNumber: number;
+
+interface ProfileRow {
   bio: string | null;
   specialization: string | null;
   qualifications: string | null;
   experience: string | null;
   languages: string[];
-  reviewNote: string | null;
-  submittedAt: Date | null;
-  approvedAt: Date | null;
-  certificates?: CertificateRow[];
-};
-type CertificateRow = {
+  photoObjectKey: string | null;
+  updatedAt: Date;
+}
+
+interface CertificateRow {
   id: string;
   title: string;
   issuingOrganization: string | null;
   issuedOn: Date | null;
   state: string;
   reviewNote: string | null;
-  mimeType: string;
-  byteSize: bigint;
-};
+}
 
 export interface ProfileContentInput {
   bio?: string | null;
@@ -917,71 +1016,46 @@ export interface ProfileContentInput {
   languages?: string[];
 }
 
-export interface CertificateUploadInput {
-  mimeType: string;
-  byteSize: number;
-}
-
-/// What may be edited after upload. Notably absent: the file itself.
-export interface CertificateMetadataInput {
-  title: string;
-  issuingOrganization?: string | null;
-  issuedOn?: Date | null;
-}
-
-export interface AddCertificateInput extends CertificateUploadInput {
-  title: string;
-  issuingOrganization?: string | null;
-  issuedOn?: Date | null;
-  /** The object key the upload authorization minted. Never client-chosen. */
-  uploadToken: string;
-}
-
-export interface CertificateUploadAuthorization {
-  uploadUrl: string;
-  /** Handed straight back to `addCertificate`. Opaque to the client. */
-  uploadToken: string;
-  expiresAt: string;
-}
-
 export interface CertificateView {
   id: string;
   title: string;
   issuingOrganization: string | null;
   issuedOn: Date | null;
+  /** pending | approved | rejected -- the reviewer's decision. */
   state: string;
   reviewNote: string | null;
-  mimeType: string;
-  byteSize: number;
 }
 
-export interface RevisionView {
-  state: string;
-  revisionNumber: number;
+/** What the owning teacher sees. No ids, no keys, no reviewer. */
+export interface TeacherProfileView {
+  name: string;
+  role: 'teacher';
+  photoUrl: string | null;
   bio: string | null;
   specialization: string | null;
   qualifications: string | null;
   experience: string | null;
   languages: string[];
-  reviewNote: string | null;
-  submittedAt: Date | null;
-  approvedAt: Date | null;
+  certificates: CertificateView[];
+  updatedAt: Date | null;
+}
+
+export interface TeacherIdentityView {
+  name: string;
+  role: 'teacher';
+}
+
+/** One row of the certificate review queue. No revision, because there is none. */
+export interface CertificateReviewItem {
+  profileId: string;
+  teacherName: string;
+  pendingCertificates: number;
   certificates: CertificateView[];
 }
 
-export interface TeacherProfileView {
-  published: RevisionView | null;
-  draft: RevisionView | null;
-}
-
-export interface ReviewQueueItem extends RevisionView {
-  revisionId: string;
+export interface PublicProfileView {
   teacherName: string;
-  pendingCertificates: number;
-}
-
-export interface PublishedProfileView {
-  teacherName: string;
+  photoUrl: string | null;
   bio: string | null;
   specialization: string | null;
   qualifications: string | null;

@@ -8,93 +8,132 @@ import {
   Post,
   UseFilters,
 } from '@nestjs/common';
-import {
-  TeacherProfileService,
-  type AddCertificateInput,
-} from '../teacher-profile/teacher-profile.service';
+import { TeacherProfileService } from '../teacher-profile/teacher-profile.service';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
 
 /**
- * The teacher's professional profile, and its review.
+ * The teacher's professional profile, and certificate review.
  *
  * ## What no route accepts
  *
  * A TEACHER ID. Every teacher route takes the authenticated actor from
  * `@ActorId()` -- written only by AuthenticatedGuard from a verified bearer
  * token -- and resolves the profile from it. `/me/teacher-profile` cannot be
- * asked for somebody else's profile, because there is no field in which to name
- * one.
- *
- * A STATE. A teacher submits; a reviewer approves or requests changes. None of
- * them sends the resulting state, so a client cannot drive the profile into
- * `approved` by asking nicely. The service sets it and the database refuses the
- * illegal transitions independently.
+ * asked for somebody else's profile or name, because there is no field in which
+ * to name one.
  *
  * AN OBJECT KEY. Uploads return an opaque `uploadToken` which is handed straight
  * back; no response on any route carries a storage key. A certificate file is
- * read only through `GET …/certificates/:id/download`, which re-authorizes.
+ * read only through `GET …/certificates/:id/download` and a photo only through
+ * the short-lived `photoUrl` on the profile, each a fresh authorization.
+ *
+ * ## What V2 removed
+ *
+ * SUBMIT, APPROVE and REQUEST-CHANGES, for the profile. The teacher owns their
+ * profile: `POST /me/teacher-profile` saves it and the save IS the publish.
+ * There is no state for a client to send and none for a reviewer to set.
+ *
+ * What survives is CERTIFICATE review, which was never about revisions: a
+ * credential does not become verified by being uploaded, so a reviewer still
+ * decides each one and a teacher still cannot decide their own.
  *
  * ## What is deliberately absent
  *
- * A PARENT ROUTE. The published read model exists on the service and is tested,
- * but no family-facing endpoint is exposed in this feature -- there is no
- * parent-facing teacher surface in the product yet, and shipping an endpoint
- * before the screen that justifies it invites exactly one caller to guess at the
- * shape. It is a deliberate scope boundary, not an oversight.
+ * A PARENT ROUTE. `publicProfile` exists on the service and is tested, but no
+ * family-facing endpoint is exposed here -- there is no parent-facing teacher
+ * surface in the product yet, and shipping an endpoint before the screen that
+ * justifies it invites exactly one caller to guess at the shape.
  */
 @Controller()
 @UseFilters(CommErrorFilter)
 export class TeacherProfileController {
   constructor(private readonly profiles: TeacherProfileService) {}
 
-  // --- the teacher's own -----------------------------------------------------
+  // --- the teacher's own profile ---------------------------------------------
 
-  /** The signed-in teacher's published and open revisions. Creates nothing. */
+  /** The signed-in teacher's current profile. Creates nothing. */
   @Get('me/teacher-profile')
   async mine(@ActorId() actorId: string) {
     return this.profiles.myProfile(actorId);
   }
 
-  /** Write content to the open revision, opening one by copy-on-write if needed. */
+  /** Save the profile. Immediately current; nothing waits for a reviewer. */
   @Post('me/teacher-profile')
   async save(
     @ActorId() actorId: string,
     @Body()
     body: {
-      bio?: string;
-      specialization?: string;
-      qualifications?: string;
-      experience?: string;
+      bio?: string | null;
+      specialization?: string | null;
+      qualifications?: string | null;
+      experience?: string | null;
       languages?: string[];
     },
   ) {
-    return this.profiles.saveDraft(actorId, {
-      bio: body?.bio,
-      specialization: body?.specialization,
-      qualifications: body?.qualifications,
-      experience: body?.experience,
-      languages: Array.isArray(body?.languages) ? body.languages : undefined,
+    return this.profiles.saveProfile(actorId, {
+      bio: body?.bio ?? null,
+      specialization: body?.specialization ?? null,
+      qualifications: body?.qualifications ?? null,
+      experience: body?.experience ?? null,
+      languages: Array.isArray(body?.languages) ? body.languages : [],
     });
   }
 
-  @Post('me/teacher-profile/submit')
-  async submit(@ActorId() actorId: string) {
-    return this.profiles.submit(actorId);
-  }
+  // --- identity --------------------------------------------------------------
 
   /**
-   * Authorize a credential upload. Returns a URL and an opaque token, never a
-   * storage key: the prefix is derived from the authenticated teacher, so the
-   * client cannot choose where the bytes land.
+   * Rename the signed-in teacher.
+   *
+   * Separate from the profile save on purpose: the name is IDENTITY, lives on
+   * `chat.teacher`, and is read by surfaces that have nothing to do with this
+   * feature. Folding it into the profile body would imply the profile owns it.
    */
+  @Patch('me/teacher-profile/name')
+  async rename(@ActorId() actorId: string, @Body() body: { name?: string }) {
+    return this.profiles.updateName(actorId, body?.name ?? '');
+  }
+
+  // --- the photo -------------------------------------------------------------
+
+  @Post('me/teacher-profile/photo/upload')
+  async authorizePhoto(
+    @ActorId() actorId: string,
+    @Body() body: { mimeType?: string; byteSize?: number },
+  ) {
+    return this.profiles.authorizePhotoUpload(actorId, {
+      mimeType: body?.mimeType ?? '',
+      byteSize: Number(body?.byteSize),
+    });
+  }
+
+  /** Attach the uploaded photo, replacing any previous one. */
+  @Post('me/teacher-profile/photo')
+  async setPhoto(
+    @ActorId() actorId: string,
+    @Body() body: { uploadToken?: string; mimeType?: string; byteSize?: number },
+  ) {
+    return this.profiles.setPhoto(actorId, {
+      uploadToken: body?.uploadToken ?? '',
+      mimeType: body?.mimeType ?? '',
+      byteSize: Number(body?.byteSize),
+    });
+  }
+
+  @Delete('me/teacher-profile/photo')
+  async removePhoto(@ActorId() actorId: string) {
+    return this.profiles.removePhoto(actorId);
+  }
+
+  // --- certificates ----------------------------------------------------------
+
   @Post('me/teacher-profile/certificates/upload')
-  async authorizeUpload(
+  async authorizeCertificate(
     @ActorId() actorId: string,
     @Body() body: { mimeType?: string; byteSize?: number },
   ) {
     return this.profiles.authorizeCertificateUpload(actorId, {
-      mimeType: String(body?.mimeType ?? ''),
+      mimeType: body?.mimeType ?? '',
       byteSize: Number(body?.byteSize),
     });
   }
@@ -105,38 +144,35 @@ export class TeacherProfileController {
     @Body()
     body: {
       title?: string;
-      issuingOrganization?: string;
-      issuedOn?: string;
+      issuingOrganization?: string | null;
+      issuedOn?: string | null;
       mimeType?: string;
       byteSize?: number;
       uploadToken?: string;
     },
   ) {
-    const input: AddCertificateInput = {
-      title: String(body?.title ?? ''),
-      issuingOrganization: body?.issuingOrganization,
-      issuedOn: body?.issuedOn ? new Date(body.issuedOn) : null,
-      mimeType: String(body?.mimeType ?? ''),
+    return this.profiles.addCertificate(actorId, {
+      title: body?.title ?? '',
+      issuingOrganization: body?.issuingOrganization ?? null,
+      issuedOn: body?.issuedOn ?? null,
+      mimeType: body?.mimeType ?? '',
       byteSize: Number(body?.byteSize),
-      uploadToken: String(body?.uploadToken ?? ''),
-    };
-    return this.profiles.addCertificate(actorId, input);
+      uploadToken: body?.uploadToken ?? '',
+    });
   }
 
-  /**
-   * Edit a credential's metadata. The file is not a parameter: there is no field
-   * here through which a caller could repoint a claim at other bytes.
-   */
+  /** Metadata only. There is no field here for the file. */
   @Patch('me/teacher-profile/certificates/:id')
   async updateCertificate(
     @ActorId() actorId: string,
     @Param('id') id: string,
-    @Body() body: { title?: string; issuingOrganization?: string; issuedOn?: string },
+    @Body()
+    body: { title?: string; issuingOrganization?: string | null; issuedOn?: string | null },
   ) {
     return this.profiles.updateCertificate(actorId, id, {
-      title: String(body?.title ?? ''),
-      issuingOrganization: body?.issuingOrganization,
-      issuedOn: body?.issuedOn ? new Date(body.issuedOn) : null,
+      title: body?.title ?? '',
+      issuingOrganization: body?.issuingOrganization ?? null,
+      issuedOn: body?.issuedOn ?? null,
     });
   }
 
@@ -145,56 +181,29 @@ export class TeacherProfileController {
     return this.profiles.removeCertificate(actorId, id);
   }
 
-  // --- review ----------------------------------------------------------------
+  // --- certificate review (staff) -------------------------------------------
 
+  /** Teachers with at least one credential awaiting a decision. */
   @Get('teacher-profiles/review')
-  async queue(@ActorId() actorId: string) {
-    return { revisions: await this.profiles.reviewQueue(actorId) };
-  }
-
-  @Get('teacher-profiles/review/:revisionId')
-  async forReview(@ActorId() actorId: string, @Param('revisionId') revisionId: string) {
-    return this.profiles.revisionForReview(actorId, revisionId);
-  }
-
-  @Post('teacher-profiles/review/:revisionId/approve')
-  async approve(@ActorId() actorId: string, @Param('revisionId') revisionId: string) {
-    return this.profiles.approve(actorId, revisionId);
-  }
-
-  @Post('teacher-profiles/review/:revisionId/request-changes')
-  async requestChanges(
-    @ActorId() actorId: string,
-    @Param('revisionId') revisionId: string,
-    @Body() body: { note?: string },
-  ) {
-    return this.profiles.requestChanges(actorId, revisionId, String(body?.note ?? ''));
+  async reviewQueue(@ActorId() actorId: string) {
+    return { profiles: await this.profiles.certificateReviewQueue(actorId) };
   }
 
   @Post('teacher-profiles/certificates/:id/decide')
   async decideCertificate(
     @ActorId() actorId: string,
     @Param('id') id: string,
-    @Body() body: { approved?: boolean; note?: string },
+    @Body() body: { approved?: boolean; note?: string | null },
   ) {
     return this.profiles.decideCertificate(actorId, id, {
       approved: body?.approved === true,
-      note: body?.note,
+      note: body?.note ?? null,
     });
   }
 
-  // --- files -----------------------------------------------------------------
-
-  /**
-   * A short-lived signed URL for one certificate.
-   *
-   * Shared by the owning teacher and a reviewer; the service decides which of
-   * those the caller is. An unauthorized caller gets the same 404 a missing
-   * certificate gets, because whether a particular credential exists is not a
-   * fact they are entitled to learn.
-   */
+  /** A fresh signed URL. The owning teacher, or a reviewer. */
   @Get('teacher-profiles/certificates/:id/download')
-  async download(@ActorId() actorId: string, @Param('id') id: string) {
+  async certificateUrl(@ActorId() actorId: string, @Param('id') id: string) {
     return { url: await this.profiles.certificateDownloadUrl(actorId, id) };
   }
 }

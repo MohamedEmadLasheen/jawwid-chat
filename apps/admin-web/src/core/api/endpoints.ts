@@ -337,20 +337,20 @@ export interface ReviewCertificate {
   byteSize: number
 }
 
-export interface ReviewRevision {
-  revisionId: string
+/**
+ * One teacher with credentials awaiting a decision.
+ *
+ * V2 removed profile-level review: a teacher saves their own profile and the
+ * save IS the publish, so there is no revision, no state and nothing to
+ * approve. What survives is CERTIFICATE review -- a document claiming a
+ * qualification does not become verified by being uploaded -- which is why this
+ * is keyed by profile and carries no revision id.
+ */
+export interface CertificateReviewItem {
+  /** Used as a React key and a query key. Never rendered. */
+  profileId: string
   /** From chat.teacher through the server's join. Never stored client-side. */
   teacherName: string
-  state: 'draft' | 'pending_review' | 'changes_requested' | 'approved' | 'superseded'
-  revisionNumber: number
-  bio: string | null
-  specialization: string | null
-  qualifications: string | null
-  experience: string | null
-  languages: string[]
-  reviewNote: string | null
-  submittedAt: string | null
-  approvedAt: string | null
   pendingCertificates: number
   certificates: ReviewCertificate[]
 }
@@ -358,28 +358,11 @@ export interface ReviewRevision {
 export const teacherProfileReviewApi = {
   pending: () =>
     api
-      .get<{ revisions: ReviewRevision[] }>('/teacher-profiles/review')
-      .then((r) => r.revisions),
-
-  get: (revisionId: string) =>
-    api.get<ReviewRevision>(`/teacher-profiles/review/${revisionId}`),
-
-  approve: (revisionId: string) =>
-    api.post<ReviewRevision>(
-      `/teacher-profiles/review/${revisionId}/approve`,
-      undefined,
-      newIdempotencyKey(),
-    ),
-
-  requestChanges: (revisionId: string, note: string) =>
-    api.post<ReviewRevision>(
-      `/teacher-profiles/review/${revisionId}/request-changes`,
-      { note },
-      newIdempotencyKey(),
-    ),
+      .get<{ profiles: CertificateReviewItem[] }>('/teacher-profiles/review')
+      .then((r) => r.profiles),
 
   decideCertificate: (certificateId: string, approved: boolean, note?: string) =>
-    api.post<ReviewRevision>(
+    api.post<CertificateReviewItem>(
       `/teacher-profiles/certificates/${certificateId}/decide`,
       { approved, note },
       newIdempotencyKey(),

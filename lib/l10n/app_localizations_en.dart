@@ -828,7 +828,7 @@ class L10nEn extends L10n {
 
   @override
   String get teacherProfileCertificateRemoveBody =>
-      'It will be removed from the version you are editing. The approved version families can see is not changed.';
+      'It will be removed from your profile. The file is deleted.';
 
   @override
   String get teacherProfileCertificatePending => 'Awaiting review';
@@ -840,32 +840,6 @@ class L10nEn extends L10n {
   String get teacherProfileCertificateRejected => 'Not accepted';
 
   @override
-  String get teacherProfileStatusDraft => 'Not submitted';
-
-  @override
-  String get teacherProfileStatusPending => 'Waiting for admin review';
-
-  @override
-  String get teacherProfileStatusChangesRequested => 'Changes requested';
-
-  @override
-  String get teacherProfileStatusApproved => 'Approved';
-
-  @override
-  String get teacherProfileStatusApprovedBody =>
-      'Families can read this profile.';
-
-  @override
-  String get teacherProfileStatusPendingBody =>
-      'You cannot edit while it is being reviewed.';
-
-  @override
-  String get teacherProfileEditAndResubmit => 'Edit and resubmit';
-
-  @override
-  String get teacherProfileEdit => 'Edit';
-
-  @override
   String get teacherProfileSave => 'Save';
 
   @override
@@ -875,21 +849,11 @@ class L10nEn extends L10n {
   String get teacherProfileSaved => 'Saved';
 
   @override
-  String get teacherProfileSubmit => 'Submit for review';
-
-  @override
-  String get teacherProfileSubmitted => 'Sent for review';
-
-  @override
   String get teacherProfileEmptyTitle => 'Build your professional profile';
 
   @override
   String get teacherProfileEmptyBody =>
-      'Tell families about your background. An admin reviews it before anyone sees it.';
-
-  @override
-  String get teacherProfileEditingNotice =>
-      'You are editing a new version. The approved version stays visible until this one is approved.';
+      'Tell families about your background. Your changes are saved and visible right away.';
 
   @override
   String get teacherProfileUnavailable =>
@@ -926,4 +890,44 @@ class L10nEn extends L10n {
   @override
   String get teacherProfileCertificateEditNote =>
       'Editing the details sends this certificate for review again. The file is not changed.';
+
+  @override
+  String get teacherProfileNameLabel => 'Your name';
+
+  @override
+  String get teacherProfileNameSave => 'Save name';
+
+  @override
+  String get teacherProfileNameSaved => 'Name saved';
+
+  @override
+  String get teacherProfileNameRequired => 'Enter your name.';
+
+  @override
+  String get teacherProfilePhotoChoose => 'Profile photo';
+
+  @override
+  String get teacherProfilePhotoReplace => 'Replace photo';
+
+  @override
+  String get teacherProfilePhotoRemove => 'Remove photo';
+
+  @override
+  String get teacherProfilePhotoRemoveTitle => 'Remove your photo?';
+
+  @override
+  String get teacherProfilePhotoRemoveBody =>
+      'Your profile will show your initials instead.';
+
+  @override
+  String get teacherProfilePhotoUploading => 'Uploading photo…';
+
+  @override
+  String get teacherProfilePhotoBadType => 'Choose a JPEG, PNG or WebP image.';
+
+  @override
+  String get teacherProfilePhotoTooLarge => 'That image is larger than 5 MB.';
+
+  @override
+  String get teacherProfileCertificateSave => 'Save certificate';
 }

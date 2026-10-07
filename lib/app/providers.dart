@@ -92,6 +92,23 @@ final realtimeSocketProvider = Provider<RealtimeSocket>((ref) {
 
 /// Credentials for the realtime connection.
 ///
+/// Headers for an image served from PRIVATE object storage.
+///
+/// A signed storage URL is half of the access decision: the signature authorizes
+/// the object, and the API still requires a session on the route. `Image.network`
+/// carries no credential of its own, so a private avatar needs this.
+///
+/// A future, not a plain value, because the token is read asynchronously and
+/// must be CURRENT -- refresh rotation invalidates the previous one, and a
+/// cached header map would quietly start 401ing. While it resolves, or when
+/// there is no session, callers get no headers and the avatar falls back to
+/// initials rather than rendering a broken image.
+final signedImageHeadersProvider = FutureProvider<Map<String, String>>((ref) async {
+  final token = await ref.watch(realtimeTokenProvider).accessToken();
+  if (token == null || token.isEmpty) return const {};
+  return {'Authorization': 'Bearer $token'};
+});
+
 /// The SAME TokenProvider the HTTP stack uses — `StoredTokenProvider`, whose
 /// refresh is already single-flighted. Deliberately the one object rather than
 /// a second instance: two providers over one session would refresh

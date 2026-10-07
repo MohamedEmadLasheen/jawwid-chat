@@ -15,17 +15,15 @@ const teacherProfileNotAvailableCode = 'teacher_profile_not_available';
 ///
 /// ## What this controller is authoritative about: nothing
 ///
-/// The server owns the revision model. This controller does not decide which
-/// revision is being edited, does not create one, does not compute the next
-/// state, and never writes a state of its own into the model it holds. Every
-/// mutation returns the server's fresh view and that view replaces the state
-/// wholesale — so an optimistic guess cannot drift from what was actually
-/// stored.
+/// Every mutation returns the server's fresh view and that view replaces the
+/// state wholesale — so an optimistic guess cannot drift from what was actually
+/// stored. That matters most for the NAME: the server trims it, collapses
+/// pasted newlines and has the last word, so what is rendered after a rename is
+/// what came back, never the string that was typed.
 ///
-/// That is a deliberate cost: each save is a round trip before the screen
-/// settles. The alternative is a client that believes it knows whether its edit
-/// opened a new revision, which is exactly the fact copy-on-write makes
-/// non-obvious.
+/// It is a deliberate cost: each save is a round trip before the screen
+/// settles. The alternative is a client that shows the teacher a profile the
+/// server does not have.
 class TeacherProfileController extends AsyncNotifier<TeacherProfile> {
   @override
   Future<TeacherProfile> build() => _load();
@@ -53,11 +51,7 @@ class TeacherProfileController extends AsyncNotifier<TeacherProfile> {
     state = await AsyncValue.guard(_load);
   }
 
-  /// Save the teacher's content.
-  ///
-  /// Whether this opened a NEW revision — because the last one was approved —
-  /// is the server's answer, and arrives in the response. The screen learns it
-  /// by rendering what came back, not by predicting it.
+  /// Save the teacher's content. It is current the moment this returns.
   Future<void> save({
     String? bio,
     String? specialization,
@@ -65,7 +59,7 @@ class TeacherProfileController extends AsyncNotifier<TeacherProfile> {
     String? experience,
     List<String> languages = const [],
   }) =>
-      _mutate((repository) => repository.saveDraft(
+      _mutate((repository) => repository.saveProfile(
             bio: bio,
             specialization: specialization,
             qualifications: qualifications,
@@ -73,7 +67,33 @@ class TeacherProfileController extends AsyncNotifier<TeacherProfile> {
             languages: languages,
           ));
 
-  Future<void> submit() => _mutate((repository) => repository.submit());
+  /// Rename the teacher.
+  ///
+  /// Two writes land here, and the order is the point: the server's stored name
+  /// goes into THIS state, and the session identity is refreshed so every other
+  /// Teacher Account surface re-reads it through its own data flow. Nothing is
+  /// copied between them -- both read the same server answer.
+  Future<void> rename(String name) async {
+    final repository = ref.read(teacherProfileRepositoryProvider);
+    final stored = await repository.updateName(name);
+
+    final current = state.value;
+    if (current != null) state = AsyncData(current.copyWith(name: stored));
+
+    // The auth session holds the identity that Settings, message authors and
+    // every participant list render. Re-reading it is what makes the rename
+    // visible there without this feature knowing those screens exist.
+    await ref.read(authControllerProvider.notifier).refreshIdentity();
+  }
+
+  /// Replace the profile photo.
+  Future<void> setPhoto({
+    required PendingPhotoFile file,
+    void Function(int sent, int total)? onProgress,
+  }) =>
+      _mutate((repository) => repository.setPhoto(file: file, onProgress: onProgress));
+
+  Future<void> removePhoto() => _mutate((repository) => repository.removePhoto());
 
   Future<void> addCertificate({
     required PendingCertificateFile file,

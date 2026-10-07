@@ -17,12 +17,23 @@ class JawwidAvatar extends StatelessWidget {
     super.key,
     required this.displayName,
     this.imageUrl,
+    this.imageHeaders,
     this.size = Sizes.avatarMd,
     this.badge,
   });
 
   final String displayName;
   final String? imageUrl;
+
+  /// Headers for [imageUrl], when the image is behind authentication.
+  ///
+  /// Private object storage needs BOTH: the URL's signature authorizes the
+  /// object and an Authorization header authenticates the caller. `Image.network`
+  /// sends no credential of its own, so without this a private avatar 401s and
+  /// silently falls back to initials. Null for every public or data URL, which is
+  /// every other caller.
+  final Map<String, String>? imageHeaders;
+
   final double size;
 
   /// Small overlay, e.g. a muted indicator.
@@ -41,6 +52,7 @@ class JawwidAvatar extends StatelessWidget {
             ? _Initials(displayName: displayName, size: size)
             : Image.network(
                 url,
+                headers: imageHeaders,
                 fit: BoxFit.cover,
                 cacheWidth: pixels,
                 cacheHeight: pixels,

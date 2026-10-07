@@ -7,8 +7,8 @@ import 'package:jawwid_chat/shared/models/teacher_profile.dart';
 /// A [TeacherProfileRepository] standing in for the network, and nothing more.
 ///
 /// It fakes the TRANSPORT. It does not reimplement the server: there is no
-/// revision state machine here, no copy-on-write, no approval gate. Those are
-/// the server's, are tested against a real database in
+/// validation here, no ownership check, no certificate review. Those are the
+/// server's, are tested against a real database in
 /// `apps/api/test/integration/teacher-profile.spec.ts` and
 /// `db/tests/teacher_profile_rls.sql`, and a second copy in this file could
 /// only ever agree with itself.
@@ -24,7 +24,7 @@ class FakeTeacherProfileRepository implements TeacherProfileRepository {
     this.mutationError,
     this.uploadError,
     this.loadDelay = Duration.zero,
-  }) : profile = profile ?? const TeacherProfile();
+  }) : profile = profile ?? const TeacherProfile(name: 'Ustadh Teacher');
 
   TeacherProfile profile;
 
@@ -59,14 +59,14 @@ class FakeTeacherProfileRepository implements TeacherProfileRepository {
   }
 
   @override
-  Future<TeacherProfile> saveDraft({
+  Future<TeacherProfile> saveProfile({
     String? bio,
     String? specialization,
     String? qualifications,
     String? experience,
     List<String> languages = const [],
   }) async {
-    calls.add('saveDraft');
+    calls.add('saveProfile');
     if (mutationDelay > Duration.zero) await Future<void>.delayed(mutationDelay);
     lastSave = {
       'bio': bio,
@@ -79,9 +79,52 @@ class FakeTeacherProfileRepository implements TeacherProfileRepository {
     return _resolve();
   }
 
+  /// The name the fake "stored", after the trimming the real server does.
+  ///
+  /// Trimmed HERE on purpose: the contract the client must honour is that it
+  /// renders the SERVER's answer, so the fake has to be able to answer something
+  /// different from what was sent.
+  String storedName = 'Ustadh Teacher';
+  final List<String> renames = [];
+
   @override
-  Future<TeacherProfile> submit() async {
-    calls.add('submit');
+  Future<String> updateName(String name) async {
+    calls.add('updateName');
+    renames.add(name);
+    if (mutationDelay > Duration.zero) await Future<void>.delayed(mutationDelay);
+    if (mutationError != null) throw mutationError!;
+    storedName = name.replaceAll(RegExp(r'\s+'), ' ').trim();
+    profile = profile.copyWith(name: storedName);
+    return storedName;
+  }
+
+  PendingPhotoFile? lastPhoto;
+  int removePhotoCalls = 0;
+
+  @override
+  Future<TeacherProfile> setPhoto({
+    required PendingPhotoFile file,
+    void Function(int sent, int total)? onProgress,
+  }) async {
+    calls.add('setPhoto');
+    lastPhoto = file;
+
+    // Partial progress before the outcome, so a failing upload is one that
+    // failed PART WAY -- which is the case a progress bar has to survive.
+    onProgress?.call(file.byteSize ~/ 2, file.byteSize);
+    if (uploadError != null) throw uploadError!;
+    // Held here so a test can observe the in-flight UI. Without it the upload
+    // completes in a microtask and the progress bar never exists in any frame.
+    if (mutationDelay > Duration.zero) await Future<void>.delayed(mutationDelay);
+    onProgress?.call(file.byteSize, file.byteSize);
+    if (mutationError != null) throw mutationError!;
+    return _resolve();
+  }
+
+  @override
+  Future<TeacherProfile> removePhoto() async {
+    calls.add('removePhoto');
+    removePhotoCalls += 1;
     if (mutationDelay > Duration.zero) await Future<void>.delayed(mutationDelay);
     if (mutationError != null) throw mutationError!;
     return _resolve();

@@ -8,7 +8,7 @@ import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/core/network/api_client.dart';
 import 'package:jawwid_chat/shared/models/teacher_profile.dart';
 
-/// Certificate upload, over the wire.
+/// Certificate AND photo upload, over the wire.
 ///
 /// WHY THIS FILE EXISTS. The first version of this client PUT the bytes on a
 /// bare Dio with no credential, reasoning that a signed URL is already a
@@ -19,6 +19,11 @@ import 'package:jawwid_chat/shared/models/teacher_profile.dart';
 /// The security property being pinned is narrow and specific: the signature
 /// authorizes the OBJECT, the header authenticates the CALLER, and the
 /// credential travels in the header and NOWHERE else.
+///
+/// The photo path is asserted alongside the certificate one because V2 added it
+/// through the SAME private helper. One shared implementation is the reason
+/// these properties cannot drift apart -- and these tests are what prove the
+/// sharing actually happened.
 
 class _Tokens implements TokenProvider {
   _Tokens(this.token);
@@ -69,7 +74,14 @@ void main() {
           'expiresAt': '2030-01-01T00:00:00.000Z',
         });
       }
-      return _json({'published': null, 'draft': null});
+      if (path.endsWith('/photo/upload')) {
+        return _json({
+          'uploadUrl': 'https://storage.example/api/v1/storage/photo_1?expires=1&sig=xyz',
+          'uploadToken': 'teacher-photos/t1/photo_1',
+          'expiresAt': '2030-01-01T00:00:00.000Z',
+        });
+      }
+      return _json({'name': 'Ustadh Teacher'});
     });
 
     final uploadDio = Dio();
@@ -91,6 +103,12 @@ void main() {
   PendingCertificateFile pending() => PendingCertificateFile(
         filePath: file.path,
         mimeType: 'application/pdf',
+        byteSize: file.lengthSync(),
+      );
+
+  PendingPhotoFile pendingPhoto() => PendingPhotoFile(
+        filePath: file.path,
+        mimeType: 'image/jpeg',
         byteSize: file.lengthSync(),
       );
 
@@ -165,6 +183,75 @@ void main() {
 
     final put = h.requests.firstWhere((r) => r.method == 'PUT');
     expect(put.headers.containsKey('Authorization'), isFalse);
+  });
+
+  test('the PHOTO upload PUT carries the same session header', () async {
+    final h = build();
+    await h.repository.setPhoto(file: pendingPhoto());
+
+    final put = h.requests.firstWhere((r) => r.method == 'PUT');
+    expect(put.headers['Authorization'], 'Bearer session-token-abc123');
+    expect(put.headers[Headers.contentTypeHeader], 'image/jpeg');
+  });
+
+  test('the photo signed URL is used verbatim and carries no credential',
+      () async {
+    final h = build();
+    await h.repository.setPhoto(file: pendingPhoto());
+
+    final put = h.requests.firstWhere((r) => r.method == 'PUT');
+    final url = put.uri.toString();
+
+    expect(url, 'https://storage.example/api/v1/storage/photo_1?expires=1&sig=xyz');
+    expect(url, isNot(contains('session-token-abc123')));
+    expect(put.uri.queryParameters.containsKey('token'), isFalse);
+  });
+
+  test('the photo attach body carries the token and no credential', () async {
+    final h = build();
+    await h.repository.setPhoto(file: pendingPhoto());
+
+    final attach = h.requests.lastWhere((r) => r.method == 'POST');
+    final body = attach.data as Map<String, Object?>;
+    expect(body['uploadToken'], 'teacher-photos/t1/photo_1');
+    expect('$body', isNot(contains('session-token-abc123')));
+  });
+
+  test('a 401 from storage means no photo is attached', () async {
+    final h = build(uploadStatus: 401);
+
+    await expectLater(
+      h.repository.setPhoto(file: pendingPhoto()),
+      throwsA(isA<Object>()),
+    );
+    expect(h.requests.where((r) => r.path.endsWith('/photo/upload')).length, 1);
+    expect(
+      h.requests.where((r) => r.method == 'POST' && r.path.endsWith('/photo')).length,
+      0,
+    );
+  });
+
+  test('a photo upload reports progress', () async {
+    final h = build();
+    final seen = <int>[];
+    await h.repository.setPhoto(
+      file: pendingPhoto(),
+      onProgress: (sent, total) => seen.add(sent),
+    );
+    expect(seen, isNotEmpty);
+  });
+
+  test('renaming sends the name and returns what the SERVER stored', () async {
+    final h = build();
+
+    // The adapter answers with the canonical name regardless of what was sent,
+    // which is exactly the drift this contract must not allow.
+    final stored = await h.repository.updateName('  Ustadh   Teacher  ');
+    expect(stored, 'Ustadh Teacher');
+
+    final patch = h.requests.firstWhere((r) => r.method == 'PATCH');
+    expect(patch.path, endsWith('/me/teacher-profile/name'));
+    expect((patch.data as Map<String, Object?>)['name'], '  Ustadh   Teacher  ');
   });
 }
 

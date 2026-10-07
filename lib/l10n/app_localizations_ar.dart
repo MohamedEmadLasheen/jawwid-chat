@@ -828,7 +828,7 @@ class L10nAr extends L10n {
 
   @override
   String get teacherProfileCertificateRemoveBody =>
-      'ستُحذف من النسخة التي تحرّرها. أما النسخة المعتمدة التي تراها الأسر فلن تتغير.';
+      'ستُزال من ملفك، ويُحذف الملف المرفوع.';
 
   @override
   String get teacherProfileCertificatePending => 'بانتظار المراجعة';
@@ -840,32 +840,6 @@ class L10nAr extends L10n {
   String get teacherProfileCertificateRejected => 'غير مقبولة';
 
   @override
-  String get teacherProfileStatusDraft => 'لم تُرسل بعد';
-
-  @override
-  String get teacherProfileStatusPending => 'بانتظار مراجعة الإدارة';
-
-  @override
-  String get teacherProfileStatusChangesRequested => 'مطلوب تعديل';
-
-  @override
-  String get teacherProfileStatusApproved => 'معتمد';
-
-  @override
-  String get teacherProfileStatusApprovedBody =>
-      'تستطيع الأسر قراءة هذا الملف.';
-
-  @override
-  String get teacherProfileStatusPendingBody =>
-      'لا يمكنك التعديل أثناء المراجعة.';
-
-  @override
-  String get teacherProfileEditAndResubmit => 'تعديل وإعادة الإرسال';
-
-  @override
-  String get teacherProfileEdit => 'تعديل';
-
-  @override
   String get teacherProfileSave => 'حفظ';
 
   @override
@@ -875,21 +849,11 @@ class L10nAr extends L10n {
   String get teacherProfileSaved => 'تم الحفظ';
 
   @override
-  String get teacherProfileSubmit => 'إرسال للمراجعة';
-
-  @override
-  String get teacherProfileSubmitted => 'أُرسل للمراجعة';
-
-  @override
   String get teacherProfileEmptyTitle => 'أنشئ ملفك المهني';
 
   @override
   String get teacherProfileEmptyBody =>
-      'عرّف الأسر بخبرتك. تراجعه الإدارة قبل أن يظهر لأحد.';
-
-  @override
-  String get teacherProfileEditingNotice =>
-      'أنت تحرّر نسخة جديدة. تبقى النسخة المعتمدة ظاهرة حتى تُعتمد هذه.';
+      'عرِّف الأسر بخبرتك. يتم حفظ تعديلاتك وتظهر فوراً.';
 
   @override
   String get teacherProfileUnavailable => 'ملفك المهني غير متاح الآن.';
@@ -924,4 +888,45 @@ class L10nAr extends L10n {
   @override
   String get teacherProfileCertificateEditNote =>
       'تعديل البيانات يُعيد إرسال الشهادة للمراجعة. الملف نفسه لا يتغير.';
+
+  @override
+  String get teacherProfileNameLabel => 'اسمك';
+
+  @override
+  String get teacherProfileNameSave => 'حفظ الاسم';
+
+  @override
+  String get teacherProfileNameSaved => 'تم حفظ الاسم';
+
+  @override
+  String get teacherProfileNameRequired => 'أدخل اسمك.';
+
+  @override
+  String get teacherProfilePhotoChoose => 'صورة الملف';
+
+  @override
+  String get teacherProfilePhotoReplace => 'تغيير الصورة';
+
+  @override
+  String get teacherProfilePhotoRemove => 'إزالة الصورة';
+
+  @override
+  String get teacherProfilePhotoRemoveTitle => 'إزالة صورتك؟';
+
+  @override
+  String get teacherProfilePhotoRemoveBody =>
+      'سيظهر ملفك بالأحرف الأولى من اسمك بدلاً من الصورة.';
+
+  @override
+  String get teacherProfilePhotoUploading => 'جارٍ رفع الصورة…';
+
+  @override
+  String get teacherProfilePhotoBadType =>
+      'اختر صورة بصيغة JPEG أو PNG أو WebP.';
+
+  @override
+  String get teacherProfilePhotoTooLarge => 'حجم الصورة أكبر من ٥ ميجابايت.';
+
+  @override
+  String get teacherProfileCertificateSave => 'حفظ الشهادة';
 }
