@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { LocalFsBlobStore } from './blob-store';
+import { resolveLocalPublicBaseUrl } from './storage-config';
 
 /**
  * PLATFORM SEAM. Binary content never touches Postgres.
@@ -53,6 +54,18 @@ export interface ObjectStorage {
 }
 
 /**
+ * What `SignedLocalObjectStorage` needs to mint a reachable URL.
+ *
+ * Both optional: an empty object means "resolve from the environment", which is
+ * what every direct construction in tests and harnesses relies on.
+ */
+export interface LocalStorageUrlConfig {
+  /** Absolute, http(s), no trailing slash -- see `resolveLocalPublicBaseUrl`. */
+  publicBaseUrl?: string;
+  signedUrlTtlSeconds?: number;
+}
+
+/**
  * Reference implementation: HMAC-signed, expiring URLs served by this API.
  * Production should point OBJECT_STORAGE at S3-compatible storage instead.
  */
@@ -75,8 +88,25 @@ export class SignedLocalObjectStorage implements ObjectStorage {
     }
     return secret;
   }
-  private readonly base = process.env.STORAGE_ENDPOINT ?? 'http://localhost:3000/storage';
-  private readonly ttl = Number(process.env.STORAGE_SIGNED_URL_TTL_SECONDS ?? 300);
+  /**
+   * The public base URL these signed URLs point at.
+   *
+   * Taken from the caller when the provider constructs this class, so the
+   * variable is read and validated in ONE place; resolved from the environment
+   * otherwise, so a test or a harness that says `new SignedLocalObjectStorage()`
+   * gets the same answer as production rather than a second opinion.
+   *
+   * It is NOT `STORAGE_ENDPOINT`. That variable selects the S3 backend, and
+   * reading it here is what made a local deployment unbootable. See
+   * `storage-config.ts`.
+   */
+  private readonly base: string;
+  private readonly ttl: number;
+
+  constructor(config: LocalStorageUrlConfig = {}) {
+    this.base = config.publicBaseUrl ?? resolveLocalPublicBaseUrl().value;
+    this.ttl = config.signedUrlTtlSeconds ?? Number(process.env.STORAGE_SIGNED_URL_TTL_SECONDS ?? 300);
+  }
 
   async authorizeUpload(params: {
     prefix: string;

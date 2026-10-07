@@ -924,13 +924,19 @@ authorization for *this* thread.
 ### Impact
 - The MIME allowlist (which correctly rejects `text/html` and `image/svg+xml`)
   is bypassed entirely, and the declared MIME is what every client renders.
-- The reference signer's built-in default is
+- The reference signer's built-in default was
   `STORAGE_ENDPOINT=http://localhost:3000/storage` — the API's own origin — so
   with the variable unset a stored HTML/SVG payload is same-origin stored XSS
   against anything served from the API host. (`.env.example` points the variable
   at MinIO on `:9000` instead, which is a different origin — but see RT-022:
   the reference signer cannot serve from MinIO at all, so it is not clear which
   value production will carry.)
+  **Variable superseded:** the reference signer no longer reads
+  `STORAGE_ENDPOINT` at all. Its public base URL is `STORAGE_PUBLIC_BASE_URL`,
+  defaulting to `http://localhost:3000/api/v1/storage`. Do not set
+  `STORAGE_ENDPOINT` to reach the local route: its presence selects the S3
+  backend, so a partial S3 configuration refuses to start. The same-origin
+  concern this bullet describes is unchanged by the rename.
 - The size ceiling is advisory only.
 - Nothing binds an object key to the thread it was authorized for.
 

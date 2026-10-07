@@ -63,6 +63,14 @@ STORAGE_SIGNING_SECRET	storage	yes	req	req	req
 # survive a restart. Setting this names a path; it does not make that path
 # durable or shared. Durability is a hosting decision, not a manifest one.
 STORAGE_LOCAL_ROOT	storage	no	opt	opt	opt
+# The public base URL of this API's own /storage route, used ONLY by the local
+# reference storage to mint signed URLs a client can reach. Optional everywhere
+# because the code defaults it to localhost -- which is correct on a laptop and
+# wrong on anything a client reaches over a network, so any such deployment that
+# runs the local implementation must set it. It is NOT an alternative spelling of
+# STORAGE_ENDPOINT: that variable is the S3 service endpoint, and its presence is
+# what selects the S3 backend. Neither falls back to the other.
+STORAGE_PUBLIC_BASE_URL	storage	no	opt	opt	opt
 OUTBOX_POLL_MS	worker	no	opt	opt	opt
 OUTBOX_BATCH_SIZE	worker	no	opt	opt	opt
 OUTBOX_IDLE_BACKOFF_MS	worker	no	opt	opt	opt
