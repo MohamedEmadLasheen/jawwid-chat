@@ -138,7 +138,7 @@ List<Override> _httpOverrides() {
       HttpStoryRepository(client: client),
     ),
     teacherProfileRepositoryProvider.overrideWithValue(
-      HttpTeacherProfileRepository(client: client),
+      HttpTeacherProfileRepository(client: client, tokens: tokens),
     ),
 
     // --- Calling, realtime and push (the communication branch) -------------

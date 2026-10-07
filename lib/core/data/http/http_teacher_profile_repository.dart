@@ -32,19 +32,32 @@ import '../wire/wire_mappers.dart';
 ///
 /// 1. ask for an authorization — the server mints the destination and returns an
 ///    opaque token;
-/// 2. PUT the bytes to the returned URL, on a bare Dio with no auth
-///    interceptor: that URL is already a capability, and attaching the session
-///    bearer to a storage host would hand it a token it has no use for;
+/// 2. PUT the bytes to the returned URL, carrying the session's Authorization
+///    header. The signature authorizes the OBJECT; the header authenticates the
+///    CALLER, and the storage route requires both. An earlier version of this
+///    client sent no header, reasoning that a signed URL is already a
+///    capability -- QA proved that wrong against the reference storage, which
+///    returns 401. The URL itself is used exactly as the server returned it:
+///    no credential is ever appended to it;
 /// 3. hand the token back, which creates the claim.
 ///
 /// The token is passed through untouched. It is the server's object key and the
 /// client never parses it, builds one, or stores it.
 class HttpTeacherProfileRepository implements TeacherProfileRepository {
-  HttpTeacherProfileRepository({required ApiClient client, Dio? uploader})
-      : _client = client,
+  HttpTeacherProfileRepository({
+    required ApiClient client,
+    required TokenProvider tokens,
+    Dio? uploader,
+  })  : _client = client,
+        _tokens = tokens,
         _uploader = uploader ?? Dio();
 
   final ApiClient _client;
+
+  /// The SAME [TokenProvider] the authenticated client uses — the session's one
+  /// and only, because refresh rotation revokes account-wide and a second
+  /// provider would race the first. Read per upload, never stored here.
+  final TokenProvider _tokens;
 
   /// Separate from [_client] on purpose — see the class comment.
   final Dio _uploader;
@@ -105,7 +118,11 @@ class HttpTeacherProfileRepository implements TeacherProfileRepository {
       throw const FormatException('upload authorization was incomplete');
     }
 
-    // 2. The bytes.
+    // 2. The bytes, authenticated as this session.
+    //
+    // The token is read at the moment of upload and not retained: holding one
+    // for a feature would outlive the refresh that rotates it.
+    final token = await _tokens.accessToken();
     await _uploader.put<void>(
       uploadUrl,
       data: File(file.filePath).openRead(),
@@ -113,6 +130,8 @@ class HttpTeacherProfileRepository implements TeacherProfileRepository {
         headers: {
           Headers.contentTypeHeader: file.mimeType,
           Headers.contentLengthHeader: file.byteSize,
+          // Never in the URL, the query string or the object key.
+          if (token != null) 'Authorization': 'Bearer $token',
         },
       ),
       onSendProgress: onProgress,
