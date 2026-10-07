@@ -490,5 +490,8 @@
   "teacherProfileCertificateFileRequired": "اختر ملفًا أولًا.",
   "teacherProfileCertificateBadType": "اختر ملف PDF أو JPEG أو PNG.",
   "teacherProfileCertificateTooLarge": "حجم الملف أكبر من ١٠ ميجابايت.",
-  "teacherProfileTooManyLanguages": "حتى ١٠ لغات."
+  "teacherProfileTooManyLanguages": "حتى ١٠ لغات.",
+  "teacherProfileCertificateEdit": "تعديل",
+  "teacherProfileCertificateEditTitle": "تعديل الشهادة",
+  "teacherProfileCertificateEditNote": "تعديل البيانات يُعيد إرسال الشهادة للمراجعة. الملف نفسه لا يتغير."
 }

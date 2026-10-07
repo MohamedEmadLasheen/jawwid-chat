@@ -444,6 +444,18 @@ abstract interface class TeacherProfileRepository {
     void Function(int sent, int total)? onProgress,
   });
 
+  /// Edit a credential's metadata on the OPEN revision.
+  ///
+  /// The FILE is not a parameter and does not move. The server returns the
+  /// claim to `pending` -- a reviewer approved those words, not the file in the
+  /// abstract -- so an edited credential needs deciding again.
+  Future<TeacherProfile> updateCertificate(
+    String certificateId, {
+    required String title,
+    String? issuingOrganization,
+    DateTime? issuedOn,
+  });
+
   /// Drop a credential from the OPEN revision. A published revision keeps its
   /// own copy; the server refuses to touch it.
   Future<TeacherProfile> removeCertificate(String certificateId);

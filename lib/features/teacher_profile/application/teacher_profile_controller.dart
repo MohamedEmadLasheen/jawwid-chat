@@ -90,6 +90,21 @@ class TeacherProfileController extends AsyncNotifier<TeacherProfile> {
             onProgress: onProgress,
           ));
 
+  /// Rename a credential. The server re-pends it; the screen learns that from
+  /// the response rather than assuming it.
+  Future<void> updateCertificate(
+    String certificateId, {
+    required String title,
+    String? issuingOrganization,
+    DateTime? issuedOn,
+  }) =>
+      _mutate((repository) => repository.updateCertificate(
+            certificateId,
+            title: title,
+            issuingOrganization: issuingOrganization,
+            issuedOn: issuedOn,
+          ));
+
   Future<void> removeCertificate(String certificateId) =>
       _mutate((repository) => repository.removeCertificate(certificateId));
 

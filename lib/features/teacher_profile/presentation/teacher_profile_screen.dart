@@ -498,12 +498,25 @@ class _CertificateTile extends ConsumerWidget {
             tooltip: l10n.teacherProfileCertificateOpen,
             onPressed: () => _open(context, ref),
           ),
-          if (editable)
+          if (editable) ...[
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: l10n.teacherProfileCertificateEdit,
+              onPressed: () => showModalBottomSheet<void>(
+                context: context,
+                isScrollControlled: true,
+                // The SAME sheet as adding one. Editing and adding differ only
+                // in whether a file is chosen, so a second form would be a
+                // second place for the validation rules to drift.
+                builder: (_) => AddCertificateSheet(editing: certificate),
+              ),
+            ),
             IconButton(
               icon: const Icon(Icons.delete_outline),
               tooltip: l10n.teacherProfileCertificateRemove,
               onPressed: () => _confirmRemove(context, ref),
             ),
+          ],
         ],
       ),
     );
@@ -569,7 +582,12 @@ class _CertificateTile extends ConsumerWidget {
 /// checked before the bytes move so the teacher is told early, and the server
 /// checks again because this one is a courtesy.
 class AddCertificateSheet extends ConsumerStatefulWidget {
-  const AddCertificateSheet({super.key});
+  const AddCertificateSheet({super.key, this.editing});
+
+  /// When set, the sheet edits this credential's METADATA. The file is not
+  /// re-chosen and not re-uploaded: renaming a certificate must not be able to
+  /// become substituting one.
+  final ProfileCertificate? editing;
 
   @override
   ConsumerState<AddCertificateSheet> createState() => _AddCertificateSheetState();
@@ -585,6 +603,19 @@ class _AddCertificateSheetState extends ConsumerState<AddCertificateSheet> {
   String? _titleError;
   bool _uploading = false;
   double? _progress;
+
+  bool get _isEditing => widget.editing != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final editing = widget.editing;
+    if (editing != null) {
+      _title.text = editing.title;
+      _issuer.text = editing.issuingOrganization ?? '';
+      _year.text = editing.issuedOn?.year.toString() ?? '';
+    }
+  }
 
   @override
   void dispose() {
@@ -609,8 +640,23 @@ class _AddCertificateSheetState extends ConsumerState<AddCertificateSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(l10n.teacherProfileAddCertificate,
-              style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            _isEditing
+                ? l10n.teacherProfileCertificateEditTitle
+                : l10n.teacherProfileAddCertificate,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          if (_isEditing) ...[
+            const SizedBox(height: Spacing.spacing2),
+            // Said plainly, because re-review is the surprising part: a teacher
+            // fixing a typo on an approved credential has just un-approved it.
+            ContentText(
+              l10n.teacherProfileCertificateEditNote,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: JawwidTokens.of(context).colorTextSecondary,
+                  ),
+            ),
+          ],
           const SizedBox(height: Spacing.spacing4),
           TextField(
             controller: _title,
@@ -638,6 +684,7 @@ class _AddCertificateSheetState extends ConsumerState<AddCertificateSheet> {
             ),
           ),
           const SizedBox(height: Spacing.spacing4),
+          if (!_isEditing)
           // Every button in this theme is full-width (`Size.fromHeight`), so a
           // themed button cannot be a non-flex child of a Row -- Flex hands
           // those an unbounded width and the minimum size then forces infinity.
@@ -665,7 +712,7 @@ class _AddCertificateSheetState extends ConsumerState<AddCertificateSheet> {
               ],
             ],
           ),
-          if (_fileError != null)
+          if (_fileError != null && !_isEditing)
             Padding(
               padding: const EdgeInsets.only(top: Spacing.spacing2),
               child: Text(
@@ -684,7 +731,11 @@ class _AddCertificateSheetState extends ConsumerState<AddCertificateSheet> {
           const SizedBox(height: Spacing.spacing5),
           FilledButton(
             onPressed: _uploading ? null : _upload,
-            child: Text(l10n.teacherProfileAddCertificate),
+            child: Text(
+              _isEditing
+                  ? l10n.teacherProfileSave
+                  : l10n.teacherProfileAddCertificate,
+            ),
           ),
         ],
       ),
@@ -731,13 +782,17 @@ class _AddCertificateSheetState extends ConsumerState<AddCertificateSheet> {
     final navigator = Navigator.of(context);
 
     final file = _file;
+    final editing = widget.editing;
     setState(() {
       _titleError = _title.text.trim().isEmpty
           ? l10n.teacherProfileCertificateTitleRequired
           : null;
-      _fileError = file == null ? l10n.teacherProfileCertificateFileRequired : _fileError;
+      _fileError = editing == null && file == null
+          ? l10n.teacherProfileCertificateFileRequired
+          : _fileError;
     });
-    if (_titleError != null || file == null) return;
+    if (_titleError != null) return;
+    if (editing == null && file == null) return;
 
     setState(() {
       _uploading = true;
@@ -745,17 +800,30 @@ class _AddCertificateSheetState extends ConsumerState<AddCertificateSheet> {
     });
     try {
       final year = int.tryParse(_year.text.trim());
-      await ref.read(teacherProfileControllerProvider.notifier).addCertificate(
-            file: file,
-            title: _title.text.trim(),
-            issuingOrganization:
-                _issuer.text.trim().isEmpty ? null : _issuer.text.trim(),
-            issuedOn: year == null ? null : DateTime(year),
-            onProgress: (sent, total) {
-              if (!mounted || total <= 0) return;
-              setState(() => _progress = sent / total);
-            },
-          );
+      final issuer = _issuer.text.trim().isEmpty ? null : _issuer.text.trim();
+      final issuedOn = year == null ? null : DateTime(year);
+      final controller = ref.read(teacherProfileControllerProvider.notifier);
+
+      if (editing != null) {
+        // Metadata only. No bytes move, and the server re-pends the claim.
+        await controller.updateCertificate(
+          editing.id,
+          title: _title.text.trim(),
+          issuingOrganization: issuer,
+          issuedOn: issuedOn,
+        );
+      } else {
+        await controller.addCertificate(
+          file: file!,
+          title: _title.text.trim(),
+          issuingOrganization: issuer,
+          issuedOn: issuedOn,
+          onProgress: (sent, total) {
+            if (!mounted || total <= 0) return;
+            setState(() => _progress = sent / total);
+          },
+        );
+      }
       navigator.pop();
     } on AppError catch (error) {
       messenger.showSnackBar(

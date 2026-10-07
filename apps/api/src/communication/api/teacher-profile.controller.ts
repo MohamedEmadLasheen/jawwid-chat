@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Param, Post, UseFilters } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseFilters,
+} from '@nestjs/common';
 import {
   TeacherProfileService,
   type AddCertificateInput,
@@ -112,6 +121,23 @@ export class TeacherProfileController {
       uploadToken: String(body?.uploadToken ?? ''),
     };
     return this.profiles.addCertificate(actorId, input);
+  }
+
+  /**
+   * Edit a credential's metadata. The file is not a parameter: there is no field
+   * here through which a caller could repoint a claim at other bytes.
+   */
+  @Patch('me/teacher-profile/certificates/:id')
+  async updateCertificate(
+    @ActorId() actorId: string,
+    @Param('id') id: string,
+    @Body() body: { title?: string; issuingOrganization?: string; issuedOn?: string },
+  ) {
+    return this.profiles.updateCertificate(actorId, id, {
+      title: String(body?.title ?? ''),
+      issuingOrganization: body?.issuingOrganization,
+      issuedOn: body?.issuedOn ? new Date(body.issuedOn) : null,
+    });
   }
 
   @Delete('me/teacher-profile/certificates/:id')

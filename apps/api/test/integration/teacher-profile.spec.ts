@@ -308,6 +308,231 @@ describe('the certificate gate', () => {
   });
 });
 
+describe('certificate metadata edit', () => {
+  it('a teacher edits a credential on their OWN open revision', async () => {
+    await g.teacherProfiles.saveDraft(s.teacherId, { bio: 'edit me' });
+    const authorization = await g.teacherProfiles.authorizeCertificateUpload(s.teacherId, {
+      mimeType: 'application/pdf',
+      byteSize: 500,
+    });
+    await g.teacherProfiles.addCertificate(s.teacherId, {
+      title: 'Typo in titel',
+      mimeType: 'application/pdf',
+      byteSize: 500,
+      uploadToken: authorization.uploadToken,
+    });
+
+    const before = await g.teacherProfiles.myProfile(s.teacherId);
+    const id = before.draft!.certificates[0].id;
+
+    const after = await g.teacherProfiles.updateCertificate(s.teacherId, id, {
+      title: 'Typo in title',
+      issuingOrganization: 'Al-Azhar',
+      issuedOn: new Date('2019-06-01'),
+    });
+
+    expect(after.draft!.certificates[0].title).toBe('Typo in title');
+    expect(after.draft!.certificates[0].issuingOrganization).toBe('Al-Azhar');
+  });
+
+  it('the stored file is NOT moved, duplicated or repointed', async () => {
+    await publishProfile(s.teacherId, 'files stay put');
+    await g.teacherProfiles.saveDraft(s.teacherId, { bio: 'next' });
+
+    const before = await g.prisma.teacherProfileCertificate.findMany({
+      where: { revision: { profile: { teacherId: s.teacherId } } },
+      orderBy: { createdAt: 'asc' },
+    });
+    const view = await g.teacherProfiles.myProfile(s.teacherId);
+    const id = view.draft!.certificates[0].id;
+
+    await g.teacherProfiles.updateCertificate(s.teacherId, id, { title: 'Renamed' });
+
+    const after = await g.prisma.teacherProfileCertificate.findMany({
+      where: { revision: { profile: { teacherId: s.teacherId } } },
+      orderBy: { createdAt: 'asc' },
+    });
+    const edited = after.find((c) => c.id === id)!;
+    const original = before.find((c) => c.id === id)!;
+
+    // Same key, same bytes, same number of rows: a rename is a rename.
+    expect(edited.objectKey).toBe(original.objectKey);
+    expect(edited.mimeType).toBe(original.mimeType);
+    expect(edited.byteSize).toBe(original.byteSize);
+    expect(after).toHaveLength(before.length);
+  });
+
+  it('editing a CARRIED-FORWARD APPROVED credential returns it to pending', async () => {
+    await publishProfile(s.teacherId, 'v1');
+    await g.teacherProfiles.saveDraft(s.teacherId, { bio: 'v2' });
+
+    const carried = await g.teacherProfiles.myProfile(s.teacherId);
+    expect(carried.draft!.certificates[0].state).toBe('approved');
+
+    const after = await g.teacherProfiles.updateCertificate(
+      s.teacherId,
+      carried.draft!.certificates[0].id,
+      { title: 'Retitled after approval' },
+    );
+
+    // The reviewer approved a CLAIM, not a file in the abstract. New words need
+    // a new decision, or a teacher could inherit approval for anything.
+    expect(after.draft!.certificates[0].state).toBe('pending');
+  });
+
+  it('... and the PUBLISHED revision keeps its own approved claim, unchanged',
+    async () => {
+    await publishProfile(s.teacherId, 'v1');
+    await g.teacherProfiles.saveDraft(s.teacherId, { bio: 'v2' });
+    const view = await g.teacherProfiles.myProfile(s.teacherId);
+    const publishedTitle = view.published!.certificates[0].title;
+
+    await g.teacherProfiles.updateCertificate(
+      s.teacherId,
+      view.draft!.certificates[0].id,
+      { title: 'Changed on the draft only' },
+    );
+
+    const after = await g.teacherProfiles.myProfile(s.teacherId);
+    expect(after.published!.certificates[0].title).toBe(publishedTitle);
+    expect(after.published!.certificates[0].state).toBe('approved');
+    // And the family still reads the approved one.
+    const family = await g.teacherProfiles.publishedProfile(s.teacherId);
+    expect(family!.certificates[0].title).toBe(publishedTitle);
+  });
+
+  it('a re-pended credential blocks approval until it is decided again', async () => {
+    await publishProfile(s.teacherId, 'v1');
+    await g.teacherProfiles.saveDraft(s.teacherId, { bio: 'v2' });
+    const view = await g.teacherProfiles.myProfile(s.teacherId);
+    await g.teacherProfiles.updateCertificate(
+      s.teacherId,
+      view.draft!.certificates[0].id,
+      { title: 'Retitled' },
+    );
+    await g.teacherProfiles.submit(s.teacherId);
+
+    const queue = await g.teacherProfiles.reviewQueue(s.ownerId);
+    expect(queue[0].pendingCertificates).toBe(1);
+    expect(await codeOf(() => g.teacherProfiles.approve(s.ownerId, queue[0].revisionId)))
+      .toBe(CommErrorCode.TEACHER_PROFILE_CERTIFICATES_UNDECIDED);
+  });
+
+  it('a certificate on an APPROVED revision cannot be edited', async () => {
+    await publishProfile(s.teacherId, 'approved');
+    const view = await g.teacherProfiles.myProfile(s.teacherId);
+    const publishedCertificateId = view.published!.certificates[0].id;
+
+    // Not reachable: the lookup is scoped to the OPEN revision, and there is
+    // none. The code is the CERTIFICATE one rather than the profile one on
+    // purpose -- the caller asked about a certificate, and whether they have a
+    // profile at all is not a fact the answer should turn on.
+    expect(
+      await codeOf(() =>
+        g.teacherProfiles.updateCertificate(s.teacherId, publishedCertificateId, {
+          title: 'Rewriting history',
+        }),
+      ),
+    ).toBe(CommErrorCode.TEACHER_CERTIFICATE_NOT_FOUND);
+  });
+
+  it('a certificate on a SUPERSEDED revision cannot be edited', async () => {
+    await publishProfile(s.teacherId, 'v1');
+    const first = await g.teacherProfiles.myProfile(s.teacherId);
+    const supersededCertificateId = first.published!.certificates[0].id;
+
+    // Publish a second revision, retiring the first.
+    await g.teacherProfiles.saveDraft(s.teacherId, { bio: 'v2' });
+    await g.teacherProfiles.submit(s.teacherId);
+    const queue = await g.teacherProfiles.reviewQueue(s.ownerId);
+    await g.teacherProfiles.approve(s.ownerId, queue[0].revisionId);
+
+    expect(
+      await codeOf(() =>
+        g.teacherProfiles.updateCertificate(s.teacherId, supersededCertificateId, {
+          title: 'Rewriting last year',
+        }),
+      ),
+    ).toBe(CommErrorCode.TEACHER_CERTIFICATE_NOT_FOUND);
+  });
+
+  it('another teacher cannot edit it', async () => {
+    await g.teacherProfiles.saveDraft(s.teacherId, { bio: 'mine' });
+    const authorization = await g.teacherProfiles.authorizeCertificateUpload(s.teacherId, {
+      mimeType: 'application/pdf',
+      byteSize: 500,
+    });
+    await g.teacherProfiles.addCertificate(s.teacherId, {
+      title: 'Mine',
+      mimeType: 'application/pdf',
+      byteSize: 500,
+      uploadToken: authorization.uploadToken,
+    });
+    const mine = await g.teacherProfiles.myProfile(s.teacherId);
+    const id = mine.draft!.certificates[0].id;
+
+    // The other teacher has their own open revision, so the failure is about
+    // ownership rather than about having no draft at all.
+    await g.teacherProfiles.saveDraft(s.newTeacherId, { bio: 'theirs' });
+
+    expect(
+      await codeOf(() =>
+        g.teacherProfiles.updateCertificate(s.newTeacherId, id, { title: 'Hijacked' }),
+      ),
+    ).toBe(CommErrorCode.TEACHER_CERTIFICATE_NOT_FOUND);
+
+    const after = await g.teacherProfiles.myProfile(s.teacherId);
+    expect(after.draft!.certificates[0].title).toBe('Mine');
+  });
+
+  it('a non-teacher cannot edit a certificate at all', async () => {
+    await g.teacherProfiles.saveDraft(s.teacherId, { bio: 'mine' });
+    const authorization = await g.teacherProfiles.authorizeCertificateUpload(s.teacherId, {
+      mimeType: 'application/pdf',
+      byteSize: 500,
+    });
+    await g.teacherProfiles.addCertificate(s.teacherId, {
+      title: 'Mine',
+      mimeType: 'application/pdf',
+      byteSize: 500,
+      uploadToken: authorization.uploadToken,
+    });
+    const mine = await g.teacherProfiles.myProfile(s.teacherId);
+    const id = mine.draft!.certificates[0].id;
+
+    for (const actor of [s.ownerId, s.parentId]) {
+      expect(
+        await codeOf(() =>
+          g.teacherProfiles.updateCertificate(actor, id, { title: 'Not yours' }),
+        ),
+      ).toBe(CommErrorCode.TEACHER_PROFILE_NOT_A_TEACHER);
+    }
+  });
+
+  it('an empty title is refused', async () => {
+    await g.teacherProfiles.saveDraft(s.teacherId, { bio: 'mine' });
+    const authorization = await g.teacherProfiles.authorizeCertificateUpload(s.teacherId, {
+      mimeType: 'application/pdf',
+      byteSize: 500,
+    });
+    await g.teacherProfiles.addCertificate(s.teacherId, {
+      title: 'Has a title',
+      mimeType: 'application/pdf',
+      byteSize: 500,
+      uploadToken: authorization.uploadToken,
+    });
+    const mine = await g.teacherProfiles.myProfile(s.teacherId);
+
+    expect(
+      await codeOf(() =>
+        g.teacherProfiles.updateCertificate(s.teacherId, mine.draft!.certificates[0].id, {
+          title: '   ',
+        }),
+      ),
+    ).toBe(CommErrorCode.TEACHER_CERTIFICATE_INVALID_TYPE);
+  });
+});
+
 describe('who may review', () => {
   it('a teacher cannot approve their own revision', async () => {
     await g.teacherProfiles.saveDraft(s.teacherId, { bio: 'self approve' });

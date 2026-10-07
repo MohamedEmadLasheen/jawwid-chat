@@ -916,4 +916,14 @@ class L10nEn extends L10n {
 
   @override
   String get teacherProfileTooManyLanguages => 'Up to 10 languages.';
+
+  @override
+  String get teacherProfileCertificateEdit => 'Edit';
+
+  @override
+  String get teacherProfileCertificateEditTitle => 'Edit certificate';
+
+  @override
+  String get teacherProfileCertificateEditNote =>
+      'Editing the details sends this certificate for review again. The file is not changed.';
 }

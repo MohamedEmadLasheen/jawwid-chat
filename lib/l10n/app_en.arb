@@ -504,5 +504,8 @@
   "teacherProfileCertificateFileRequired": "Choose a file first.",
   "teacherProfileCertificateBadType": "Choose a PDF, JPEG or PNG.",
   "teacherProfileCertificateTooLarge": "That file is larger than 10 MB.",
-  "teacherProfileTooManyLanguages": "Up to 10 languages."
+  "teacherProfileTooManyLanguages": "Up to 10 languages.",
+  "teacherProfileCertificateEdit": "Edit",
+  "teacherProfileCertificateEditTitle": "Edit certificate",
+  "teacherProfileCertificateEditNote": "Editing the details sends this certificate for review again. The file is not changed."
 }

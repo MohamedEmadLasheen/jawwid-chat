@@ -624,8 +624,23 @@ begin
     return new;
   end if;
 
-  -- The credential set changed: the revision goes back to draft and must be
-  -- resubmitted, so nobody approves a claim nobody read.
+  -- The credential set changed. Two consequences, and the second is the one that
+  -- is easy to miss:
+  --
+  -- 1. the revision goes back to draft and must be resubmitted;
+  -- 2. THIS CLAIM returns to `pending`.
+  --
+  -- Without (2), editing the title of a carried-forward APPROVED certificate
+  -- would leave it approved -- so a teacher could have "Ijazah in Tajweed,
+  -- Al-Azhar" approved and then retitle it to anything at all, and the new words
+  -- would inherit the old decision. The approval was of a claim, not of a file.
+  if tg_op = 'UPDATE' then
+    new.state       := 'pending';
+    new.reviewed_at := null;
+    new.reviewed_by := null;
+    new.review_note := null;
+  end if;
+
   update chat.teacher_profile_revision
      set state        = 'draft',
          submitted_at = null,

@@ -16,6 +16,7 @@ import '../wire/wire_mappers.dart';
 /// | POST   | `/me/teacher-profile/submit`                  | the same           |
 /// | POST   | `/me/teacher-profile/certificates/upload`     | an authorization   |
 /// | POST   | `/me/teacher-profile/certificates`            | the same profile   |
+/// | PATCH  | `/me/teacher-profile/certificates/:id`        | the same profile   |
 /// | DELETE | `/me/teacher-profile/certificates/:id`        | the same profile   |
 /// | GET    | `/teacher-profiles/certificates/:id/download` | `{url}`            |
 ///
@@ -127,6 +128,26 @@ class HttpTeacherProfileRepository implements TeacherProfileRepository {
         'mimeType': file.mimeType,
         'byteSize': file.byteSize,
         'uploadToken': uploadToken,
+      },
+    );
+    return WireMappers.teacherProfile(response.data ?? const {});
+  }
+
+  @override
+  Future<TeacherProfile> updateCertificate(
+    String certificateId, {
+    required String title,
+    String? issuingOrganization,
+    DateTime? issuedOn,
+  }) async {
+    // Metadata only. There is no field here for the file, so a rename cannot
+    // become a substitution.
+    final response = await _client.patch<Map<String, Object?>>(
+      '/me/teacher-profile/certificates/$certificateId',
+      data: {
+        'title': title,
+        'issuingOrganization': issuingOrganization,
+        'issuedOn': issuedOn?.toIso8601String(),
       },
     );
     return WireMappers.teacherProfile(response.data ?? const {});

@@ -594,6 +594,115 @@ void main() {
       expect(find.textContaining('ok.pdf'), findsOneWidget);
     });
 
+    testWidgets('edit: the row offers Edit, which opens the sheet pre-filled',
+        (tester) async {
+      await pumpScreen(
+        tester,
+        harness(
+          repository: FakeTeacherProfileRepository(
+            profile: TeacherProfile(
+              draft: revision(certificates: [certificate(id: 'c7', title: 'Typo in titel')]),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byIcon(Icons.edit_outlined));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Edit certificate'), findsOneWidget);
+      // Pre-filled from the claim, so a typo is a correction rather than a retype.
+      expect(find.widgetWithText(TextField, 'Typo in titel'), findsOneWidget);
+      expect(find.widgetWithText(TextField, 'Al-Azhar'), findsOneWidget);
+      // Says plainly that this re-opens review.
+      expect(
+        find.textContaining('sends this certificate for review again'),
+        findsOneWidget,
+      );
+      // No file picker: a rename must not be able to become a substitution.
+      expect(find.widgetWithText(OutlinedButton, 'Choose file'), findsNothing);
+    });
+
+    testWidgets('edit: sends metadata only, and never touches the file',
+        (tester) async {
+      final repository = FakeTeacherProfileRepository(
+        profile: TeacherProfile(draft: revision()),
+      );
+      await pumpScreen(
+        tester,
+        harness(
+          repository: repository,
+          child: Scaffold(
+            body: AddCertificateSheet(
+              editing: ProfileCertificate(
+                id: 'c7',
+                title: 'Typo in titel',
+                state: CertificateState.approved,
+                issuingOrganization: 'Al-Azhar',
+                issuedOn: DateTime.utc(2019),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.enterText(find.byType(TextField).at(0), 'Typo in title');
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      expect(repository.calls, contains('updateCertificate:c7'));
+      expect(repository.lastCertificate?.title, 'Typo in title');
+      // The upload path was never entered.
+      expect(repository.calls, isNot(contains('addCertificate')));
+    });
+
+    testWidgets('edit: an empty title is refused before any request',
+        (tester) async {
+      final repository = FakeTeacherProfileRepository(
+        profile: TeacherProfile(draft: revision()),
+      );
+      await pumpScreen(
+        tester,
+        harness(
+          repository: repository,
+          child: const Scaffold(
+            body: AddCertificateSheet(
+              editing: ProfileCertificate(
+                id: 'c7',
+                title: 'Has a title',
+                state: CertificateState.pending,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.enterText(find.byType(TextField).at(0), '   ');
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Give the certificate a title.'), findsOneWidget);
+      expect(repository.calls.where((c) => c.startsWith('updateCertificate')), isEmpty);
+    });
+
+    testWidgets('edit: a read-only revision offers no Edit', (tester) async {
+      await pumpScreen(
+        tester,
+        harness(
+          repository: FakeTeacherProfileRepository(
+            profile: TeacherProfile(
+              draft: revision(
+                state: RevisionState.pendingReview,
+                certificates: [certificate()],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byIcon(Icons.edit_outlined), findsNothing);
+    });
+
     testWidgets('remove: confirms, and says the published version is untouched',
         (tester) async {
       final repository = FakeTeacherProfileRepository(

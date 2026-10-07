@@ -109,6 +109,20 @@ class FakeTeacherProfileRepository implements TeacherProfileRepository {
   }
 
   @override
+  Future<TeacherProfile> updateCertificate(
+    String certificateId, {
+    required String title,
+    String? issuingOrganization,
+    DateTime? issuedOn,
+  }) async {
+    calls.add('updateCertificate:$certificateId');
+    if (mutationDelay > Duration.zero) await Future<void>.delayed(mutationDelay);
+    lastCertificate = (title: title, issuer: issuingOrganization, issuedOn: issuedOn);
+    if (mutationError != null) throw mutationError!;
+    return _resolve();
+  }
+
+  @override
   Future<TeacherProfile> removeCertificate(String certificateId) async {
     calls.add('removeCertificate');
     if (mutationDelay > Duration.zero) await Future<void>.delayed(mutationDelay);

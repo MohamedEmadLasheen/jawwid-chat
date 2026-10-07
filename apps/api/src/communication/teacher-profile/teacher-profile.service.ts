@@ -234,6 +234,66 @@ export class TeacherProfileService {
     return this.myProfile(actorId);
   }
 
+  /**
+   * Edit a credential's metadata on the OPEN revision.
+   *
+   * The FILE does not move: `objectKey`, `mimeType` and `byteSize` are not
+   * parameters and are never written here, so editing a title cannot repoint a
+   * claim at different bytes and cannot duplicate them.
+   *
+   * The claim returns to `pending`, enforced by the database trigger rather than
+   * here. That matters most for a carried-forward approved credential: the
+   * reviewer approved "Ijazah in Tajweed, Al-Azhar", not the file in the
+   * abstract, so new words need a new decision. The published revision keeps its
+   * own claim and is untouched.
+   *
+   * Scoped to `draftRevisionId`, which is what makes an approved or superseded
+   * revision unreachable from here -- the lookup simply does not find it. The
+   * database refuses those too.
+   */
+  async updateCertificate(
+    actorId: string,
+    certificateId: string,
+    input: CertificateMetadataInput,
+  ): Promise<TeacherProfileView> {
+    const actor = await this.requireTeacher(actorId);
+
+    const title = input.title?.trim() ?? '';
+    if (!title) {
+      throw new CommError(
+        CommErrorCode.TEACHER_CERTIFICATE_INVALID_TYPE,
+        'a certificate needs a title',
+        400,
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const profile = await this.requireProfile(tx, actor.actorId);
+      const certificate = await tx.teacherProfileCertificate.findUnique({
+        where: { id: certificateId },
+      });
+
+      if (!certificate || certificate.revisionId !== profile.draftRevisionId) {
+        throw new CommError(
+          CommErrorCode.TEACHER_CERTIFICATE_NOT_FOUND,
+          'certificate not found',
+          404,
+        );
+      }
+
+      await tx.teacherProfileCertificate.update({
+        where: { id: certificate.id },
+        data: {
+          title,
+          issuingOrganization: input.issuingOrganization?.trim() || null,
+          issuedOn: input.issuedOn ?? null,
+        },
+      });
+    });
+
+    return this.myProfile(actorId);
+  }
+
   /** Drop a credential from the OPEN revision. The published one keeps its own. */
   async removeCertificate(actorId: string, certificateId: string): Promise<TeacherProfileView> {
     const actor = await this.requireTeacher(actorId);
@@ -860,6 +920,13 @@ export interface ProfileContentInput {
 export interface CertificateUploadInput {
   mimeType: string;
   byteSize: number;
+}
+
+/// What may be edited after upload. Notably absent: the file itself.
+export interface CertificateMetadataInput {
+  title: string;
+  issuingOrganization?: string | null;
+  issuedOn?: Date | null;
 }
 
 export interface AddCertificateInput extends CertificateUploadInput {

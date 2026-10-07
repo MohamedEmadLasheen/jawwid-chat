@@ -1764,6 +1764,24 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Up to 10 languages.'**
   String get teacherProfileTooManyLanguages;
+
+  /// No description provided for @teacherProfileCertificateEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get teacherProfileCertificateEdit;
+
+  /// No description provided for @teacherProfileCertificateEditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit certificate'**
+  String get teacherProfileCertificateEditTitle;
+
+  /// No description provided for @teacherProfileCertificateEditNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Editing the details sends this certificate for review again. The file is not changed.'**
+  String get teacherProfileCertificateEditNote;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

@@ -914,4 +914,14 @@ class L10nAr extends L10n {
 
   @override
   String get teacherProfileTooManyLanguages => 'حتى ١٠ لغات.';
+
+  @override
+  String get teacherProfileCertificateEdit => 'تعديل';
+
+  @override
+  String get teacherProfileCertificateEditTitle => 'تعديل الشهادة';
+
+  @override
+  String get teacherProfileCertificateEditNote =>
+      'تعديل البيانات يُعيد إرسال الشهادة للمراجعة. الملف نفسه لا يتغير.';
 }
