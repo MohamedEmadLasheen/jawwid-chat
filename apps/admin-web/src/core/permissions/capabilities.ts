@@ -25,6 +25,7 @@ export type NavArea =
   | 'coverage'
   | 'dashboard'
   | 'stories'
+  | 'teacher-profiles'
   | 'settings'
 
 /** Roles that operate the customer relationship. */
@@ -48,14 +49,22 @@ export function isManager(role: StaffRole): boolean {
 /** Which nav areas this role may even attempt to open. */
 export function visibleAreas(role: StaffRole): NavArea[] {
   if (isManager(role)) {
-    return ['inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'settings']
+    return [
+      'inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories',
+      'teacher-profiles', 'settings',
+    ]
   }
   if (isOperator(role)) {
     // No coverage configuration, no manager dashboard, no config editing.
     // Stories IS here: admin and coverage hold the publisher role server-side
     // (AuthorizationService.canPublishStory), and a nav entry that hid a page
     // the server would happily serve is a worse lie than one that shows it.
-    return ['inbox', 'families', 'tasks', 'stories']
+    // teacher-profiles is here for the same reason stories is: admin and
+    // coverage hold the reviewer role server-side
+    // (AuthorizationService.canReviewTeacherProfile), and a nav entry that hid
+    // a page the server would happily serve is a worse lie than one that shows
+    // it.
+    return ['inbox', 'families', 'tasks', 'stories', 'teacher-profiles']
   }
   if (isDepartment(role)) {
     // Departments get tasks and nothing else — they may not open family records.

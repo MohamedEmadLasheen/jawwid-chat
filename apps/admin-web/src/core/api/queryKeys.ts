@@ -10,6 +10,10 @@ export const qk = {
   config: ['config'] as const,
   staff: ['staff'] as const,
 
+  teacherProfileReviews: ['teacher-profile-reviews'] as const,
+  teacherProfileReview: (revisionId: string) =>
+    ['teacher-profile-reviews', revisionId] as const,
+
   inbox: (section: AttentionBucket | 'covering') => ['inbox', section] as const,
   inboxAll: ['inbox'] as const,
   awaySummary: ['inbox', 'away-summary'] as const,

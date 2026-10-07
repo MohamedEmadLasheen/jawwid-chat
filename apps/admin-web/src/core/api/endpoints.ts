@@ -314,3 +314,84 @@ export const storyApi = {
   remove: (id: string, reason: string) =>
     api.delete<{ ok: true; alreadyDeleted: boolean }>(`/stories/${id}`, { reason }),
 }
+
+/**
+ * Teacher professional profile review.
+ *
+ * Mirrors the API exactly and adds nothing. In particular the shapes carry NO
+ * object key, NO storage path and NO reviewer id -- the server does not send
+ * them, so there is nothing here to render by accident.
+ *
+ * `revisionId` IS present, because it is the resource handle every mutation
+ * takes, exactly as a story id is. It is used in paths and query keys and is
+ * never displayed.
+ */
+export interface ReviewCertificate {
+  id: string
+  title: string
+  issuingOrganization: string | null
+  issuedOn: string | null
+  state: 'pending' | 'approved' | 'rejected'
+  reviewNote: string | null
+  mimeType: string
+  byteSize: number
+}
+
+export interface ReviewRevision {
+  revisionId: string
+  /** From chat.teacher through the server's join. Never stored client-side. */
+  teacherName: string
+  state: 'draft' | 'pending_review' | 'changes_requested' | 'approved' | 'superseded'
+  revisionNumber: number
+  bio: string | null
+  specialization: string | null
+  qualifications: string | null
+  experience: string | null
+  languages: string[]
+  reviewNote: string | null
+  submittedAt: string | null
+  approvedAt: string | null
+  pendingCertificates: number
+  certificates: ReviewCertificate[]
+}
+
+export const teacherProfileReviewApi = {
+  pending: () =>
+    api
+      .get<{ revisions: ReviewRevision[] }>('/teacher-profiles/review')
+      .then((r) => r.revisions),
+
+  get: (revisionId: string) =>
+    api.get<ReviewRevision>(`/teacher-profiles/review/${revisionId}`),
+
+  approve: (revisionId: string) =>
+    api.post<ReviewRevision>(
+      `/teacher-profiles/review/${revisionId}/approve`,
+      undefined,
+      newIdempotencyKey(),
+    ),
+
+  requestChanges: (revisionId: string, note: string) =>
+    api.post<ReviewRevision>(
+      `/teacher-profiles/review/${revisionId}/request-changes`,
+      { note },
+      newIdempotencyKey(),
+    ),
+
+  decideCertificate: (certificateId: string, approved: boolean, note?: string) =>
+    api.post<ReviewRevision>(
+      `/teacher-profiles/certificates/${certificateId}/decide`,
+      { approved, note },
+      newIdempotencyKey(),
+    ),
+
+  /**
+   * A fresh short-lived signed URL. Requested at the moment of opening and
+   * never cached: it expires, and a held URL outlives the authorization it was
+   * granted under.
+   */
+  certificateUrl: (certificateId: string) =>
+    api
+      .get<{ url: string }>(`/teacher-profiles/certificates/${certificateId}/download`)
+      .then((r) => r.url),
+}

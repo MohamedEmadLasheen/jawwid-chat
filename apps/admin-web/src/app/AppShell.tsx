@@ -13,6 +13,7 @@ const AREA_PATH: Record<NavArea, string> = {
   coverage: '/coverage',
   dashboard: '/dashboard',
   stories: '/stories',
+  'teacher-profiles': '/teacher-profiles',
   settings: '/settings',
 }
 
