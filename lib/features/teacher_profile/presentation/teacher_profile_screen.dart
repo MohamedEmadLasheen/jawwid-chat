@@ -332,7 +332,7 @@ class _HeaderState extends ConsumerState<_Header> {
     final l10n = L10n.of(context);
     final messenger = ScaffoldMessenger.of(context);
 
-    final picked = await ref.read(mediaPickerProvider).pickFile();
+    final picked = await ref.read(mediaPickerProvider).pickImage();
     if (picked == null) return;
 
     final file = PendingPhotoFile(
