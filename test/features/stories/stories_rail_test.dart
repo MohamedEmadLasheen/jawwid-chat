@@ -8,10 +8,12 @@ import 'package:jawwid_chat/app/providers.dart';
 import 'package:jawwid_chat/app/retry_policy.dart';
 import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/design/theme.dart';
+import 'package:jawwid_chat/design/widgets/jawwid_avatar.dart';
 import 'package:jawwid_chat/features/stories/application/stories_controller.dart';
 import 'package:jawwid_chat/features/stories/presentation/stories_rail.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/story.dart';
+import 'package:jawwid_chat/shared/models/user_role.dart';
 
 import 'fake_story_repository.dart';
 
@@ -21,15 +23,25 @@ import 'fake_story_repository.dart';
 /// tests are about it NOT appearing. A rail that renders a row of grey circles when the
 /// academy has published nothing costs 106dp of the most valuable space on the screen to
 /// say "nothing here".
+///
+/// ## The role is part of the harness
+///
+/// The label under a ring is rendered for a parent only, so every test that renders an
+/// entry states which reader it is rendering for. [harness] defaults to `parent`, which is
+/// the behaviour every test here predates. A ring is named by [storyRingKey] rather than by
+/// its label, because a teacher's ring has no label to name it by.
 void main() {
   Widget harness({
     required List<Override> overrides,
     Locale locale = const Locale('ar'),
     void Function(Story story)? onOpenStory,
+    UserRole role = UserRole.parent,
   }) {
     return ProviderScope(
       retry: JawwidRetryPolicy.policy,
-      overrides: overrides,
+      // The role first, so an explicit override in `overrides` would win -- and `overrides`
+      // is where a test that needs something unusual puts it.
+      overrides: [currentRoleProvider.overrideWithValue(role), ...overrides],
       child: MaterialApp(
         locale: locale,
         theme: JawwidTheme.light(isArabic: locale.languageCode == 'ar'),
@@ -208,6 +220,188 @@ void main() {
     });
   });
 
+  /// The label under the ring is a parent's content.
+  ///
+  /// Written as PAIRS on the same story, so "hidden" can only mean "hidden for this role".
+  /// A single-role test would pass just as well if the label had been deleted outright,
+  /// which is the change that must not happen.
+  group('the label under the ring is rendered for a parent only', () {
+    /// One story, titled. 'Jawwid' is the publisher the rail labels an untitled story with,
+    /// and 'J' is the initial the avatar draws inside the ring -- so asserting on all three
+    /// separates "no label" from "no ring".
+    List<Override> oneTitledStory() => [
+          repo(FakeStoryRepository(
+            stories: [story(id: 'a', title: 'QA smoke test')],
+          )),
+        ];
+
+    testWidgets('a TEACHER gets the ring with NOTHING written under it', (tester) async {
+      await tester.pumpWidget(harness(
+        locale: const Locale('en'),
+        overrides: oneTitledStory(),
+        role: UserRole.teacher,
+      ));
+      await tester.pumpAndSettle();
+
+      // The ring is still there: the entry, the avatar, and the initial drawn inside it.
+      expect(find.byKey(storyRingKey('a')), findsOneWidget);
+      expect(find.byType(JawwidAvatar), findsOneWidget);
+      expect(find.text('J'), findsOneWidget, reason: 'the avatar initial, inside the ring');
+
+      // And nothing underneath it: neither the title nor the publisher fallback.
+      expect(find.text('QA smoke test'), findsNothing);
+      expect(find.text('Jawwid'), findsNothing);
+    });
+
+    testWidgets('a PARENT gets that same ring WITH its label', (tester) async {
+      await tester.pumpWidget(harness(
+        locale: const Locale('en'),
+        overrides: oneTitledStory(),
+        role: UserRole.parent,
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(storyRingKey('a')), findsOneWidget);
+      expect(find.byType(JawwidAvatar), findsOneWidget);
+      expect(find.text('J'), findsOneWidget);
+
+      // Unchanged from before this role branch existed.
+      expect(find.text('QA smoke test'), findsOneWidget);
+    });
+
+    testWidgets('an UNTITLED story loses its publisher fallback for a teacher too',
+        (tester) async {
+      // The fallback is a label like any other. A teacher gets no line of text at all.
+      await tester.pumpWidget(harness(
+        locale: const Locale('en'),
+        overrides: [repo(FakeStoryRepository(stories: [story(id: 'a', title: null)]))],
+        role: UserRole.teacher,
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(storyRingKey('a')), findsOneWidget);
+      expect(find.text('Jawwid'), findsNothing);
+    });
+
+    testWidgets('the rail costs the SAME height for both roles', (tester) async {
+      for (final role in [UserRole.teacher, UserRole.parent]) {
+        await tester.pumpWidget(harness(
+          locale: const Locale('en'),
+          overrides: oneTitledStory(),
+          role: role,
+        ));
+        await tester.pumpAndSettle();
+
+        expect(
+          tester.getSize(find.byType(StoriesRail)).height,
+          StoriesRail.railHeight,
+          reason: 'stories must not cost a different slice of the screen per role ($role)',
+        );
+      }
+    });
+
+    testWidgets("a TEACHER's ring is CENTRED in the band, not left floating at the top",
+        (tester) async {
+      // Hiding the label leaves its space behind. A ring pinned to the top of a rail that
+      // is still 106dp tall reads as a layout bug, so the band is shared evenly instead.
+      await tester.pumpWidget(harness(
+        locale: const Locale('en'),
+        overrides: oneTitledStory(),
+        role: UserRole.teacher,
+      ));
+      await tester.pumpAndSettle();
+
+      final rail = tester.getRect(find.byType(StoriesRail));
+      final ring = tester.getRect(find.byType(JawwidAvatar));
+
+      // Tolerant by a couple of logical pixels: the rail paints a bottom border inside its
+      // own box, so the two gaps are equal to within its width, not to the micron.
+      expect(
+        ring.top - rail.top,
+        closeTo(rail.bottom - ring.bottom, 2.0),
+        reason: 'equal space above and below the ring',
+      );
+    });
+
+    testWidgets("a PARENT's ring still sits ABOVE centre, where the label needs it",
+        (tester) async {
+      await tester.pumpWidget(harness(
+        locale: const Locale('en'),
+        overrides: oneTitledStory(),
+        role: UserRole.parent,
+      ));
+      await tester.pumpAndSettle();
+
+      final rail = tester.getRect(find.byType(StoriesRail));
+      final ring = tester.getRect(find.byType(JawwidAvatar));
+
+      expect(
+        ring.top - rail.top,
+        lessThan(rail.bottom - ring.bottom),
+        reason: 'the label occupies the space beneath it',
+      );
+    });
+
+    testWidgets('a TEACHER can still tap a ring, and the right story is reported',
+        (tester) async {
+      // There is no label to tap and none to find the ring by, which is exactly why the
+      // entry carries a key.
+      final tapped = <String>[];
+      await tester.pumpWidget(harness(
+        locale: const Locale('en'),
+        overrides: [
+          repo(FakeStoryRepository(stories: [
+            story(id: 'first', title: 'First', publishedAt: DateTime.now()),
+            story(
+              id: 'second',
+              title: 'Second',
+              publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
+            ),
+          ])),
+        ],
+        role: UserRole.teacher,
+        onOpenStory: (s) => tapped.add(s.id),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('First'), findsNothing);
+      expect(find.text('Second'), findsNothing);
+
+      await tester.tap(find.byKey(storyRingKey('second')));
+      await tester.pumpAndSettle();
+      expect(tapped, ['second']);
+    });
+
+    testWidgets("a TEACHER's screen reader hears the publisher, never the hidden title",
+        (tester) async {
+      // A title withheld from the screen but read out by VoiceOver would be hidden from a
+      // sighted teacher and handed to one using a screen reader. The ring stays labelled --
+      // and still announces its viewed state -- using the publisher instead.
+      await tester.pumpWidget(harness(
+        locale: const Locale('en'),
+        overrides: [
+          repo(FakeStoryRepository(stories: [
+            story(id: 'a', title: 'Fresh', publishedAt: DateTime.now()),
+            story(
+              id: 'b',
+              title: 'Seen',
+              isViewed: true,
+              publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
+            ),
+          ])),
+        ],
+        role: UserRole.teacher,
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.bySemanticsLabel('Unviewed story: Jawwid'), findsOneWidget);
+      expect(find.bySemanticsLabel('Viewed story: Jawwid'), findsOneWidget);
+      // The withheld titles are nowhere in the semantics tree either.
+      expect(find.bySemanticsLabel('Unviewed story: Fresh'), findsNothing);
+      expect(find.bySemanticsLabel('Viewed story: Seen'), findsNothing);
+    });
+  });
+
   group('there is no publishing affordance anywhere', () {
     testWidgets('no "your story" entry, no add button', (tester) async {
       await tester.pumpWidget(
@@ -275,7 +469,10 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           retry: JawwidRetryPolicy.policy,
-          overrides: [repo(fake)],
+          overrides: [
+            currentRoleProvider.overrideWithValue(UserRole.parent),
+            repo(fake),
+          ],
           child: Consumer(
             builder: (context, ref, _) {
               container = ProviderScope.containerOf(context);
@@ -316,7 +513,10 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           retry: JawwidRetryPolicy.policy,
-          overrides: [repo(fake)],
+          overrides: [
+            currentRoleProvider.overrideWithValue(UserRole.parent),
+            repo(fake),
+          ],
           child: Consumer(
             builder: (context, ref, _) {
               container = ProviderScope.containerOf(context);

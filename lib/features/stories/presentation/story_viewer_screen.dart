@@ -8,6 +8,7 @@ import '../../../core/media/story_video_player.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/story.dart';
+import '../../../shared/models/user_role.dart';
 import '../application/stories_controller.dart';
 
 /// The full-screen story viewer.
@@ -372,6 +373,10 @@ class _StoryViewerScreenState extends ConsumerState<StoryViewerScreen>
                   _enter(index);
                 },
                 itemBuilder: (context, index) => _StoryPage(
+                  // Keyed by story id so that "which story is on screen" is answerable
+                  // without reading the caption off the page -- the caption is not rendered
+                  // for every role.
+                  key: ValueKey(_stories[index].id),
                   story: _stories[index],
                   isCurrent: index == _index,
                   videoStatus: _videoStatus,
@@ -483,8 +488,22 @@ class _StoryViewerScreenState extends ConsumerState<StoryViewerScreen>
 }
 
 /// One story: its media if it has any, and its words.
-class _StoryPage extends StatelessWidget {
+///
+/// ## A teacher sees the media alone
+///
+/// The caption block under the media is rendered for a `parent` only. A teacher reads the
+/// same academy publication, but without its title and body: the words are for the families
+/// the publication addresses. Only the caption is withheld -- the media, the progress
+/// segments, the navigation and the duration behaviour are identical for both roles.
+///
+/// The role is read from [currentRoleProvider] rather than passed down, so that a session
+/// ending takes the branch with it instead of leaving a stale role captured in a prop. A
+/// null role (signing out, or not yet known) is NOT treated as a teacher: the caption is a
+/// parent's content, so the branch asks for `teacher` explicitly and anything else keeps
+/// today's behaviour.
+class _StoryPage extends ConsumerWidget {
   const _StoryPage({
+    super.key,
     required this.story,
     required this.isCurrent,
     required this.videoStatus,
@@ -503,8 +522,9 @@ class _StoryPage extends StatelessWidget {
   final Future<void> Function() onRetryVideo;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final tokens = JawwidTokens.of(context);
+    final isTeacher = ref.watch(currentRoleProvider) == UserRole.teacher;
 
     return Column(
       children: [
@@ -524,7 +544,7 @@ class _StoryPage extends StatelessWidget {
             },
           ),
         ),
-        if (story.title != null || story.body != null)
+        if (!isTeacher && (story.title != null || story.body != null))
           Container(
             width: double.infinity,
             // Directional, not physical: the caption block must mirror in Arabic.

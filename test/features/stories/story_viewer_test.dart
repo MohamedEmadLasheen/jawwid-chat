@@ -11,6 +11,7 @@ import 'package:jawwid_chat/features/stories/application/stories_controller.dart
 import 'package:jawwid_chat/features/stories/presentation/story_viewer_screen.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/story.dart';
+import 'package:jawwid_chat/shared/models/user_role.dart';
 
 import 'fake_story_repository.dart';
 import 'fake_story_video_player.dart';
@@ -31,6 +32,15 @@ import 'fake_story_video_player.dart';
 /// `errorBuilder`. That is actually the useful half — it proves the failure path is wired —
 /// and the success path is proved by the widget being built with the URL the server sent,
 /// which these tests assert directly.
+///
+/// ## Which story is on screen is asserted by KEY, not by caption
+///
+/// Each page carries a `ValueKey(story.id)`, and [storyPage] is how these tests ask "is b
+/// the page I am looking at". Reading the title off the page used to be the way, and it
+/// quietly conflated two different claims: "the viewer paged to b" and "b's caption is
+/// rendered". The caption is a parent's content and a teacher never sees it, so a
+/// navigation test written that way would have proved nothing at all for half the roles.
+/// Caption text is now asserted only by the tests that are ABOUT the caption.
 void main() {
   late FakeStoryRepository fake;
   late FakeStoryVideoPlayer video;
@@ -59,6 +69,13 @@ void main() {
     }
   }
 
+  /// The page for one story, found by the key the viewer puts on it.
+  ///
+  /// Independent of the caption, so it answers "which story is on screen" for a teacher and
+  /// a parent alike. Only the page the reader is actually on is in the tree at rest, so
+  /// `findsOneWidget` means current and `findsNothing` means not reached.
+  Finder storyPage(String id) => find.byKey(ValueKey(id));
+
   /// Flush a `setState` raised from a stream event without advancing the clock.
   Future<void> flush(WidgetTester tester) async {
     await tester.pump();
@@ -72,6 +89,7 @@ void main() {
     required List<Story> stories,
     required String storyId,
     Locale locale = const Locale('en'),
+    UserRole role = UserRole.parent,
   }) async {
     fake.setStories(stories);
     late ProviderContainer container;
@@ -84,6 +102,9 @@ void main() {
           // A factory, because the viewer owns the player's lifecycle. Returning the same
           // instance each call is what lets a test assert it was disposed.
           storyVideoPlayerFactoryProvider.overrideWithValue(() => video),
+          // The viewer renders the caption for a parent only, so the role is part of the
+          // harness rather than something each test sets up for itself.
+          currentRoleProvider.overrideWithValue(role),
         ],
         child: Consumer(
           builder: (context, ref, _) {
@@ -142,14 +163,16 @@ void main() {
         storyId: 'b',
       );
 
-      expect(find.text('Second'), findsOneWidget);
+      expect(storyPage('b'), findsOneWidget);
+      expect(storyPage('a'), findsNothing);
     });
 
-    testWidgets('shows the title and the body', (tester) async {
+    testWidgets('shows the title and the body to a PARENT', (tester) async {
       await pumpViewer(
         tester,
         stories: [story(id: 'a', title: 'Term starts', body: 'On Sunday.')],
         storyId: 'a',
+        role: UserRole.parent,
       );
 
       expect(find.text('Term starts'), findsOneWidget);
@@ -184,6 +207,10 @@ void main() {
           overrides: [
             storyRepositoryProvider.overrideWithValue(fake),
             storyVideoPlayerFactoryProvider.overrideWithValue(() => video),
+            // This test builds its own scope rather than going through `pumpViewer`, so it
+            // supplies the role itself. Not optional: `currentRoleProvider` reads the auth
+            // controller, which throws unless it is overridden.
+            currentRoleProvider.overrideWithValue(UserRole.parent),
           ],
           child: MaterialApp(
             locale: const Locale('en'),
@@ -209,7 +236,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 120));
       await settleRoute(tester);
 
-      expect(find.text('Arrived late'), findsOneWidget);
+      expect(storyPage('a'), findsOneWidget);
       expect(fake.viewed, ['a']);
     });
 
@@ -267,7 +294,7 @@ void main() {
       await pumpViewer(tester, stories: [story(id: 'a', title: 'Still here')], storyId: 'a');
 
       expect(tester.takeException(), isNull);
-      expect(find.text('Still here'), findsOneWidget);
+      expect(storyPage('a'), findsOneWidget);
       expect(find.byType(StoryViewerScreen), findsOneWidget);
     });
 
@@ -312,7 +339,7 @@ void main() {
       await tester.tap(find.bySemanticsLabel('Next story'));
       await settleRoute(tester);
 
-      expect(find.text('B'), findsOneWidget);
+      expect(storyPage('b'), findsOneWidget);
       expect(fake.viewed, ['a', 'b']);
     });
 
@@ -332,7 +359,7 @@ void main() {
 
       await tester.tap(find.bySemanticsLabel('Previous story'));
       await settleRoute(tester);
-      expect(find.text('A'), findsOneWidget);
+      expect(storyPage('a'), findsOneWidget);
     });
 
     testWidgets('previous on the FIRST story restarts it rather than leaving',
@@ -344,7 +371,7 @@ void main() {
 
       // Mistiming a back-tap must not cost the reader their place.
       expect(find.byType(StoryViewerScreen), findsOneWidget);
-      expect(find.text('Only'), findsOneWidget);
+      expect(storyPage('a'), findsOneWidget);
     });
 
     testWidgets('next on the LAST story closes the viewer', (tester) async {
@@ -408,10 +435,10 @@ void main() {
         storyId: 'a',
       );
 
-      expect(find.text('A'), findsOneWidget);
+      expect(storyPage('a'), findsOneWidget);
       await tester.pump(StoryViewerScreen.imageDuration);
       await settleRoute(tester);
-      expect(find.text('B'), findsOneWidget);
+      expect(storyPage('b'), findsOneWidget);
 
       // And the last story closes rather than looping.
       await tester.pump(StoryViewerScreen.imageDuration);
@@ -462,10 +489,169 @@ void main() {
       await tester.pump(StoryViewerScreen.imageDuration * 2);
 
       // Still on A: the clock is paused, not merely slow.
-      expect(find.text('A'), findsOneWidget);
+      expect(storyPage('a'), findsOneWidget);
 
       await hold.up();
       await settleRoute(tester);
+    });
+  });
+
+  /// The caption under the media is a parent's content.
+  ///
+  /// A teacher reads the same publication without its words. These tests are written as
+  /// PAIRS on the same story so that "hidden" can only mean "hidden for this role" -- a
+  /// single-role test would also pass if the caption had been deleted outright, which is
+  /// exactly the change that must not happen.
+  group('the caption is rendered for a parent only', () {
+    /// An image story with both halves of the caption set.
+    Story captioned() => story(
+          id: 'a',
+          title: 'Term starts',
+          body: 'Classes resume on Sunday.',
+          mediaKind: StoryMediaKind.image,
+          mediaUrl: 'https://storage.test/stories/term.png?sig=abc',
+        );
+
+    testWidgets('a TEACHER sees the media and neither the title nor the body',
+        (tester) async {
+      await pumpViewer(
+        tester,
+        stories: [captioned()],
+        storyId: 'a',
+        role: UserRole.teacher,
+      );
+
+      // The media is still there, still the URL the server minted.
+      final image = tester.widget<Image>(find.byType(Image));
+      expect((image.image as NetworkImage).url,
+          'https://storage.test/stories/term.png?sig=abc');
+
+      expect(find.text('Term starts'), findsNothing);
+      expect(find.text('Classes resume on Sunday.'), findsNothing);
+    });
+
+    testWidgets('a PARENT sees the media AND the title AND the body', (tester) async {
+      await pumpViewer(
+        tester,
+        stories: [captioned()],
+        storyId: 'a',
+        role: UserRole.parent,
+      );
+
+      final image = tester.widget<Image>(find.byType(Image));
+      expect((image.image as NetworkImage).url,
+          'https://storage.test/stories/term.png?sig=abc');
+
+      expect(find.text('Term starts'), findsOneWidget);
+      expect(find.text('Classes resume on Sunday.'), findsOneWidget);
+    });
+
+    /// A VIDEO story, so the page holds no text of its own.
+    ///
+    /// An image in a widget test always fails to load and its error builder writes a message
+    /// INSIDE the page, so an image story cannot prove "no text under the media". A loaded
+    /// video surface renders no text at all, which makes the whole caption section -- scrim
+    /// included, not just the two strings -- assertable by its absence.
+    Story captionedVideo() => story(
+          id: 'a',
+          title: 'Trip on Thursday',
+          body: 'Permission slips by Tuesday.',
+          mediaKind: StoryMediaKind.video,
+          mediaUrl: 'https://storage.test/stories/trip.mp4?sig=abc',
+        );
+
+    testWidgets('a TEACHER gets NO text under the media at all, not just no title/body',
+        (tester) async {
+      await pumpViewer(
+        tester,
+        stories: [captionedVideo()],
+        storyId: 'a',
+        role: UserRole.teacher,
+      );
+
+      // The media itself is playing.
+      expect(find.byKey(fakeVideoSurface), findsOneWidget);
+      // Nothing textual anywhere inside the story page: the caption block is not rendered,
+      // rather than rendered empty. The viewer's own chrome (close, previous, next) sits
+      // outside the page and is deliberately not covered by this finder.
+      expect(
+        find.descendant(of: storyPage('a'), matching: find.byType(Text)),
+        findsNothing,
+      );
+    });
+
+    testWidgets('a PARENT gets that same page WITH its caption', (tester) async {
+      await pumpViewer(
+        tester,
+        stories: [captionedVideo()],
+        storyId: 'a',
+        role: UserRole.parent,
+      );
+
+      expect(find.byKey(fakeVideoSurface), findsOneWidget);
+      expect(
+        find.descendant(of: storyPage('a'), matching: find.text('Trip on Thursday')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: storyPage('a'), matching: find.text('Permission slips by Tuesday.')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a TEACHER can still page forwards and backwards', (tester) async {
+      // Navigation and page selection must not depend on the caption being on screen.
+      final now = DateTime.now();
+      await pumpViewer(
+        tester,
+        stories: [
+          story(id: 'a', title: 'A', publishedAt: now),
+          story(id: 'b', title: 'B', publishedAt: now.subtract(const Duration(hours: 1))),
+        ],
+        storyId: 'a',
+        role: UserRole.teacher,
+      );
+
+      expect(storyPage('a'), findsOneWidget);
+
+      await tester.tap(find.bySemanticsLabel('Next story'));
+      await settleRoute(tester);
+      expect(storyPage('b'), findsOneWidget);
+      expect(storyPage('a'), findsNothing);
+
+      await tester.tap(find.bySemanticsLabel('Previous story'));
+      await settleRoute(tester);
+      expect(storyPage('a'), findsOneWidget);
+      expect(storyPage('b'), findsNothing);
+
+      // And the caption stayed hidden throughout.
+      expect(find.text('A'), findsNothing);
+      expect(find.text('B'), findsNothing);
+    });
+
+    testWidgets('a TEACHER on a story that HAS no caption renders exactly as before',
+        (tester) async {
+      // The branch must short-circuit, not produce an empty scrim band.
+      await pumpViewer(
+        tester,
+        stories: [
+          story(
+            id: 'a',
+            title: null,
+            body: null,
+            mediaKind: StoryMediaKind.video,
+            mediaUrl: 'https://storage.test/stories/silent.mp4',
+          ),
+        ],
+        storyId: 'a',
+        role: UserRole.teacher,
+      );
+
+      expect(find.byKey(fakeVideoSurface), findsOneWidget);
+      expect(
+        find.descendant(of: storyPage('a'), matching: find.byType(Text)),
+        findsNothing,
+      );
     });
   });
 
@@ -594,7 +780,7 @@ void main() {
       await settleRoute(tester);
 
       expect(find.text('This video could not be played.'), findsOneWidget);
-      expect(find.text('B'), findsNothing);
+      expect(storyPage('b'), findsNothing);
       expect(fake.viewed, ['a']);
     });
 
@@ -652,8 +838,8 @@ void main() {
       await tester.pump(StoryViewerScreen.imageDuration * 5);
       await settleRoute(tester);
 
-      expect(find.text('A'), findsOneWidget);
-      expect(find.text('B'), findsNothing);
+      expect(storyPage('a'), findsOneWidget);
+      expect(storyPage('b'), findsNothing);
     });
 
     testWidgets('a video story advances when PLAYBACK COMPLETES, exactly once',
@@ -685,9 +871,9 @@ void main() {
       video.completePlayback();
       await settleRoute(tester);
 
-      expect(find.text('B'), findsOneWidget);
+      expect(storyPage('b'), findsOneWidget);
       // Exactly one story further on, not two: a completion event must not advance twice.
-      expect(find.text('C'), findsNothing);
+      expect(storyPage('c'), findsNothing);
       expect(fake.viewed, ['a', 'b']);
     });
 
@@ -805,14 +991,14 @@ void main() {
         await settleRoute(tester);
       });
 
-      expect(find.text('B'), findsOneWidget);
+      expect(storyPage('b'), findsOneWidget);
       expect(video.pauseCalls, greaterThan(0));
 
       // The stale completion for story A lands now. The gate must drop it.
       video.completePlayback();
       await settleRoute(tester);
 
-      expect(find.text('B'), findsOneWidget, reason: 'still on B, not closed past it');
+      expect(storyPage('b'), findsOneWidget, reason: 'still on B, not closed past it');
       expect(find.byType(StoryViewerScreen), findsOneWidget);
     });
 
@@ -836,7 +1022,7 @@ void main() {
       await tester.tap(find.bySemanticsLabel('Previous story'));
       await settleRoute(tester);
 
-      expect(find.text('A'), findsOneWidget);
+      expect(storyPage('a'), findsOneWidget);
       // Moving to an image releases the video rather than leaving a decoder running.
       expect(video.stopCalls, greaterThan(0));
       expect(video.holdsVideo, isFalse);
@@ -891,14 +1077,14 @@ void main() {
       await tester.pump(StoryViewerScreen.imageDuration * 2);
       await settleRoute(tester);
 
-      expect(find.text('A'), findsOneWidget);
-      expect(find.text('B'), findsNothing);
+      expect(storyPage('a'), findsOneWidget);
+      expect(storyPage('b'), findsNothing);
 
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await flush(tester);
       await tester.pump(StoryViewerScreen.imageDuration);
       await settleRoute(tester);
-      expect(find.text('B'), findsOneWidget);
+      expect(storyPage('b'), findsOneWidget);
     });
   });
 
@@ -922,20 +1108,20 @@ void main() {
       );
 
       // Image: duration.
-      expect(find.text('I1'), findsOneWidget);
+      expect(storyPage('i1'), findsOneWidget);
       await tester.pump(StoryViewerScreen.imageDuration);
       await settleRoute(tester);
-      expect(find.text('V1'), findsOneWidget);
+      expect(storyPage('v1'), findsOneWidget);
 
       // Video: NOT duration.
       await tester.pump(StoryViewerScreen.imageDuration * 3);
       await settleRoute(tester);
-      expect(find.text('V1'), findsOneWidget);
+      expect(storyPage('v1'), findsOneWidget);
 
       // Video: completion.
       video.completePlayback();
       await settleRoute(tester);
-      expect(find.text('I2'), findsOneWidget);
+      expect(storyPage('i2'), findsOneWidget);
       // The decoder was released on the way out.
       expect(video.holdsVideo, isFalse);
 
@@ -975,11 +1161,11 @@ void main() {
 
       video.completePlayback();
       await settleRoute(tester);
-      expect(find.text('I1'), findsOneWidget);
+      expect(storyPage('i1'), findsOneWidget);
 
       await tester.pump(StoryViewerScreen.imageDuration);
       await settleRoute(tester);
-      expect(find.text('V2'), findsOneWidget);
+      expect(storyPage('v2'), findsOneWidget);
 
       // A second video loaded its own URL, and only after the first was released.
       expect(video.loaded, ['https://storage.test/one.mp4', 'https://storage.test/two.mp4']);

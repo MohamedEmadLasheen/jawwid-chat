@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/providers.dart';
 import '../../../design/tokens.dart';
 import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/story.dart';
+import '../../../shared/models/user_role.dart';
 import '../application/stories_controller.dart';
 
 /// The horizontally scrolling stories rail, above the conversation list.
@@ -32,6 +34,16 @@ import '../application/stories_controller.dart';
 /// There is no "Your story" entry. This client authenticates only as `parent` or `teacher`
 /// and can never publish, so an entry that opened a composer would be a control that exists
 /// only to fail.
+///
+/// ## A teacher gets the ring without the label
+///
+/// The line of text under each ring is a parent's content, the same rule the full-screen
+/// viewer applies to the caption. A teacher sees the ring, its viewed/unviewed state, and
+/// nothing written underneath it.
+///
+/// The rail keeps [railHeight] either way. A role does not change how much of the screen
+/// stories cost, so the rail is not two different heights depending on who is signed in --
+/// the ring is centred in the same band instead.
 class StoriesRail extends ConsumerWidget {
   const StoriesRail({super.key, this.onOpenStory});
 
@@ -48,6 +60,9 @@ class StoriesRail extends ConsumerWidget {
 
     final l10n = L10n.of(context);
     final tokens = JawwidTokens.of(context);
+    // Read once for the rail rather than once per entry, and deliberately AFTER the early
+    // return: a rail with nothing to show must not depend on knowing who is signed in.
+    final showLabel = ref.watch(currentRoleProvider) != UserRole.teacher;
 
     return Container(
       height: railHeight,
@@ -65,8 +80,13 @@ class StoriesRail extends ConsumerWidget {
         ),
         itemCount: stories.length,
         itemBuilder: (context, index) => _StoryEntry(
+          // Keyed by story id so that "which ring is this" is answerable without reading
+          // the label off it -- a teacher has no label to read. Prefixed, so a rail entry
+          // and a viewer page for the same story can never answer to the same finder.
+          key: storyRingKey(stories[index].id),
           story: stories[index],
           publisherName: l10n.appName,
+          showLabel: showLabel,
           onTap: () => onOpenStory?.call(stories[index]),
         ),
       ),
@@ -74,22 +94,39 @@ class StoriesRail extends ConsumerWidget {
   }
 }
 
+/// The key on the rail entry for one story.
+///
+/// Public so a test can name a ring without depending on its label.
+ValueKey<String> storyRingKey(String storyId) => ValueKey('story-ring-$storyId');
+
 class _StoryEntry extends StatelessWidget {
   const _StoryEntry({
+    super.key,
     required this.story,
     required this.publisherName,
+    required this.showLabel,
     this.onTap,
   });
 
   final Story story;
   final String publisherName;
+
+  /// Whether the line of text under the ring is this reader's to see.
+  ///
+  /// False for a teacher. It governs the SPOKEN label as well as the written one: a title
+  /// withheld from the screen but read out by VoiceOver would be hidden from a sighted
+  /// teacher and handed to a teacher using a screen reader, which is not a sensible place
+  /// to land. The ring stays labelled either way -- it falls back to the publisher, exactly
+  /// as an untitled story already does -- so nobody is left with an unnamed button.
+  final bool showLabel;
+
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
     final theme = Theme.of(context);
-    final label = story.title ?? publisherName;
+    final label = showLabel ? (story.title ?? publisherName) : publisherName;
 
     // Viewed state reaches a screen reader as WORDS. The ring colour alone would be the only
     // indication for a sighted user and no indication at all for anyone else.
@@ -108,6 +145,12 @@ class _StoryEntry extends StatelessWidget {
             width: 76,
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              // A horizontal ListView hands its children a TIGHT height, so without the
+              // label the ring would sit at the top of the band with the label's space left
+              // empty beneath it. Centring keeps it in the middle of the same rail: the
+              // ring's own size and the rail's height are both untouched.
+              mainAxisAlignment:
+                  showLabel ? MainAxisAlignment.start : MainAxisAlignment.center,
               children: [
                 _AvatarRing(
                   viewed: story.isViewed,
@@ -116,19 +159,20 @@ class _StoryEntry extends StatelessWidget {
                     size: Sizes.avatarLg,
                   ),
                 ),
-                const SizedBox(height: Spacing.spacing2),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    fontWeight: story.isViewed ? FontWeight.w400 : FontWeight.w700,
-                    color: story.isViewed
-                        ? theme.colorScheme.onSurfaceVariant
-                        : theme.colorScheme.onSurface,
+                if (showLabel) const SizedBox(height: Spacing.spacing2),
+                if (showLabel)
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      fontWeight: story.isViewed ? FontWeight.w400 : FontWeight.w700,
+                      color: story.isViewed
+                          ? theme.colorScheme.onSurfaceVariant
+                          : theme.colorScheme.onSurface,
+                    ),
                   ),
-                ),
               ],
             ),
           ),
