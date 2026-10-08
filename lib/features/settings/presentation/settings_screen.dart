@@ -63,6 +63,10 @@ class SettingsScreen extends ConsumerWidget {
                         JawwidAvatar(
                           displayName: user.displayName,
                           imageUrl: user.avatarUrl,
+                          // Empty while the token resolves, and null when the URL signs
+                          // itself, which is why one avatar never carries two auth types.
+                          imageHeaders:
+                              ref.watch(signedImageHeadersProvider).value,
                           size: Sizes.avatarLg,
                         ),
                         const SizedBox(width: Spacing.spacing4),

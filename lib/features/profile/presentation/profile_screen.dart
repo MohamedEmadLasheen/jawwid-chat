@@ -251,13 +251,13 @@ class ProfileBody extends ConsumerWidget {
 }
 
 /// Large avatar, name, and one quiet line of role or context.
-class ProfileHeader extends StatelessWidget {
+class ProfileHeader extends ConsumerWidget {
   const ProfileHeader({super.key, required this.view});
 
   final ProfileView view;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = L10n.of(context);
     final theme = Theme.of(context);
     final tokens = JawwidTokens.of(context);
@@ -281,6 +281,9 @@ class ProfileHeader extends StatelessWidget {
           JawwidAvatar(
             displayName: view.subject.displayName,
             imageUrl: view.subject.avatarUrl,
+            // Empty while the token resolves, and null when the URL signs itself,
+            // which is why one avatar never carries two auth types.
+            imageHeaders: ref.watch(signedImageHeadersProvider).value,
             size: Sizes.avatarXl,
           ),
           const SizedBox(height: Spacing.spacing5),
@@ -314,7 +317,7 @@ class ProfileHeader extends StatelessWidget {
 /// anything. [onMessage] null means no affordance at all, and the caller decides
 /// that from `CommunicationPolicy` — which answers "may this client offer it",
 /// not "is it allowed". The server decides allowed, per action.
-class MemberTile extends StatelessWidget {
+class MemberTile extends ConsumerWidget {
   const MemberTile({
     super.key,
     required this.member,
@@ -332,7 +335,7 @@ class MemberTile extends StatelessWidget {
   final bool isOpening;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = L10n.of(context);
     final theme = Theme.of(context);
     final tokens = JawwidTokens.of(context);
@@ -356,6 +359,9 @@ class MemberTile extends StatelessWidget {
             JawwidAvatar(
               displayName: name,
               imageUrl: member.avatarUrl,
+              // Empty while the token resolves, and null when the URL signs
+              // itself, which is why one avatar never carries two auth types.
+              imageHeaders: ref.watch(signedImageHeadersProvider).value,
               size: Sizes.avatarMd,
             ),
             const SizedBox(width: Spacing.spacing4),

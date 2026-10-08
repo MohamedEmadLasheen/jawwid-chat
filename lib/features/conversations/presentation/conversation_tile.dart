@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/providers.dart';
 import '../../../design/tokens.dart';
 import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../l10n/app_localizations.dart';
@@ -17,7 +19,7 @@ import '../../../shared/utils/text_direction.dart';
 ///
 /// The unread state is carried by a count badge *and* by weight — never by colour alone,
 /// which §53 forbids.
-class ConversationTile extends StatelessWidget {
+class ConversationTile extends ConsumerWidget {
   const ConversationTile({
     super.key,
     required this.conversation,
@@ -37,7 +39,7 @@ class ConversationTile extends StatelessWidget {
   final VoidCallback? onOpenProfile;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = L10n.of(context);
     final theme = Theme.of(context);
     final tokens = JawwidTokens.of(context);
@@ -90,6 +92,11 @@ class ConversationTile extends StatelessWidget {
                     child: JawwidAvatar(
                       displayName: conversation.title,
                       imageUrl: conversation.avatarUrl,
+                      // Empty while the token resolves, and null when the URL
+                      // signs itself, which is why one avatar never carries two
+                      // auth types.
+                      imageHeaders:
+                          ref.watch(signedImageHeadersProvider).value,
                       size: Sizes.avatarLg,
                     ),
                   ),

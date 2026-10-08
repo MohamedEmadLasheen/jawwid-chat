@@ -42,6 +42,7 @@ class ChatScreen extends ConsumerStatefulWidget {
     super.key,
     required this.conversationId,
     required this.title,
+    this.avatarUrl,
     this.subtitle,
     this.kind = ConversationKind.jawwidSupport,
     this.requiresApproval = false,
@@ -52,6 +53,10 @@ class ChatScreen extends ConsumerStatefulWidget {
 
   final String conversationId;
   final String title;
+
+  /// The conversation's avatar, as the stable URL the backend published — the same
+  /// one the chat list row renders, so the header and the row cannot disagree.
+  final String? avatarUrl;
 
   /// e.g. the owner line on the Jawwid thread. Never an internal handler id.
   final String? subtitle;
@@ -481,6 +486,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               children: [
                 JawwidAvatar(
                   displayName: widget.title,
+                  imageUrl: widget.avatarUrl,
+                  // Empty while the token resolves, and null when the URL signs
+                  // itself, which is why one avatar never carries two auth types.
+                  imageHeaders: ref.watch(signedImageHeadersProvider).value,
                   size: Sizes.avatarSm,
                 ),
                 const SizedBox(width: Spacing.spacing3),

@@ -27,6 +27,8 @@ void main() {
     required UserRole role,
     required Widget child,
     Locale locale = const Locale('en'),
+    String? avatarUrl,
+    Map<String, String>? imageHeaders,
   }) {
     final backend = FakeBackend(role: role);
     addTearDown(backend.dispose);
@@ -34,6 +36,11 @@ void main() {
     return ProviderScope(
       overrides: [
         currentRoleProvider.overrideWithValue(role),
+        // Synchronous on purpose: the production provider awaits a token, and a test
+        // that pumped a pending future would read null headers and pass for the
+        // wrong reason.
+        if (imageHeaders != null)
+          signedImageHeadersProvider.overrideWith((ref) => imageHeaders),
         conversationRepositoryProvider
             .overrideWithValue(FakeConversationRepository(backend)),
         messageRepositoryProvider
@@ -47,6 +54,7 @@ void main() {
               id: role == UserRole.parent ? 'u_parent' : 'u_teacher',
               displayName: role == UserRole.parent ? 'ولي أمر' : 'معلم',
               role: role,
+              avatarUrl: avatarUrl,
             ),
           ),
         ),
@@ -327,6 +335,85 @@ void main() {
       expect(
         Shells.destinations.map((d) => d.route),
         ['/chats', '/calls', '/settings'],
+      );
+    });
+  });
+
+  group('the account avatar in Settings is authenticated exactly once', () {
+    /// `AuthUser.avatarUrl` is a STABLE application URL, held for the life of the
+    /// session, so it carries no credential of its own and needs the bearer token.
+    /// Settings read `user.avatarUrl` from the day the field existed but never passed
+    /// headers, so the photo 401ed and fell back to initials — indistinguishable from
+    /// "no photo set", which is why this looked like "the avatar never changes".
+    NetworkImage accountImage(WidgetTester tester) {
+      final provider = tester
+          .widgetList<Image>(find.descendant(
+            of: find.byType(JawwidAvatar),
+            matching: find.byType(Image),
+          ))
+          .first
+          .image;
+      // `cacheWidth`/`cacheHeight` make `Image.network` wrap the provider in a
+      // `ResizeImage`, so unwrap one layer before reading the headers.
+      return (provider is ResizeImage ? provider.imageProvider : provider)
+          as NetworkImage;
+    }
+
+    testWidgets('a STABLE avatar url is fetched WITH the session token',
+        (tester) async {
+      await tester.pumpWidget(
+        harness(
+          role: UserRole.parent,
+          avatarUrl: 'http://api.test/api/v1/me/avatar/image',
+          imageHeaders: const {'Authorization': 'Bearer session-token'},
+          child: const SettingsScreen(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(accountImage(tester).url, 'http://api.test/api/v1/me/avatar/image');
+      expect(
+        accountImage(tester).headers?['Authorization'],
+        'Bearer session-token',
+        reason: 'a stable application URL carries no credential of its own',
+      );
+    });
+
+    testWidgets('a PRESIGNED avatar url is fetched with NO token',
+        (tester) async {
+      await tester.pumpWidget(
+        harness(
+          role: UserRole.parent,
+          avatarUrl: 'http://storage.test/a.jpg'
+              '?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=deadbeef',
+          // Headers ARE available: the suppression must come from the URL shape, not
+          // from an absent token.
+          imageHeaders: const {'Authorization': 'Bearer session-token'},
+          child: const SettingsScreen(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        accountImage(tester).headers?.containsKey('Authorization') ?? false,
+        isFalse,
+        reason: 'object storage rejects a request carrying two auth types',
+      );
+    });
+
+    testWidgets('no avatar url shows initials and requests nothing',
+        (tester) async {
+      await tester.pumpWidget(
+        harness(role: UserRole.parent, child: const SettingsScreen()),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byType(JawwidAvatar),
+          matching: find.byType(Image),
+        ),
+        findsNothing,
       );
     });
   });

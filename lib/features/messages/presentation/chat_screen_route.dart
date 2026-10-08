@@ -54,6 +54,7 @@ class ChatScreenRoute extends ConsumerWidget {
       AsyncData(:final value) => ChatScreen(
           conversationId: conversationId,
           title: value.title,
+          avatarUrl: value.avatarUrl,
           onOpenProfile: () =>
               context.push(Routes.conversationProfile(conversationId)),
           // Two different things, and never invented.
