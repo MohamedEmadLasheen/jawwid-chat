@@ -57,11 +57,30 @@ void main() {
   ({
     HttpTeacherProfileRepository repository,
     List<RequestOptions> requests,
+    _Tokens tokens,
   }) build({
     String? token = 'session-token-abc123',
     int uploadStatus = 201,
+    bool presigned = false,
   }) {
     final requests = <RequestOptions>[];
+
+    // The two backends hand back two different SHAPES of URL. The reference
+    // storage signs with its own `expires`/`sig` pair on its own route; S3
+    // presigns with the SigV4 parameter set. Everything else about the upload
+    // is identical, which is why one switch covers both cases.
+    const sigV4 = 'X-Amz-Algorithm=AWS4-HMAC-SHA256'
+        '&X-Amz-Credential=AKIAEXAMPLE%2F20261008%2Fauto%2Fs3%2Faws4_request'
+        '&X-Amz-Date=20261008T120000Z'
+        '&X-Amz-Expires=300'
+        '&X-Amz-SignedHeaders=host'
+        '&X-Amz-Signature=0123456789abcdef';
+    final certificateUpload = presigned
+        ? 'http://minio.example:9010/bucket/teacher-certificates/t1/obj_1?$sigV4'
+        : 'https://storage.example/api/v1/storage/obj_1?expires=1&sig=abc';
+    final photoUpload = presigned
+        ? 'http://minio.example:9010/bucket/teacher-photos/t1/photo_1?$sigV4'
+        : 'https://storage.example/api/v1/storage/photo_1?expires=1&sig=xyz';
 
     final apiDio = Dio(BaseOptions(baseUrl: 'https://api.example/api/v1'));
     apiDio.httpClientAdapter = _Adapter((options) {
@@ -69,14 +88,14 @@ void main() {
       final path = options.path;
       if (path.endsWith('/certificates/upload')) {
         return _json({
-          'uploadUrl': 'https://storage.example/api/v1/storage/obj_1?expires=1&sig=abc',
+          'uploadUrl': certificateUpload,
           'uploadToken': 'teacher-certificates/t1/obj_1',
           'expiresAt': '2030-01-01T00:00:00.000Z',
         });
       }
       if (path.endsWith('/photo/upload')) {
         return _json({
-          'uploadUrl': 'https://storage.example/api/v1/storage/photo_1?expires=1&sig=xyz',
+          'uploadUrl': photoUpload,
           'uploadToken': 'teacher-photos/t1/photo_1',
           'expiresAt': '2030-01-01T00:00:00.000Z',
         });
@@ -90,13 +109,15 @@ void main() {
       return ResponseBody.fromString('', uploadStatus);
     });
 
+    final uploadTokens = _Tokens(token);
     return (
       repository: HttpTeacherProfileRepository(
         client: ApiClient(dio: apiDio, tokens: _Tokens(token)),
-        tokens: _Tokens(token),
+        tokens: uploadTokens,
         uploader: uploadDio,
       ),
       requests: requests,
+      tokens: uploadTokens,
     );
   }
 
@@ -111,6 +132,78 @@ void main() {
         mimeType: 'image/jpeg',
         byteSize: file.lengthSync(),
       );
+
+  // --- Which backend signed the URL decides who authenticates ------------
+  //
+  // S3 presigns: the credential, the signature and their scope ride in the
+  // query string, and S3 -- MinIO included -- rejects a request that ALSO
+  // carries an `Authorization` header with "request has multiple
+  // authentication types, please use one". The reference storage is the
+  // opposite: its route is not `@Public()` and answers 401 without the session
+  // header (03051fe). Both are asserted, because a fix for either one alone is
+  // a regression for the other.
+
+  test('a PRESIGNED SigV4 url is uploaded with NO Authorization header',
+      () async {
+    final h = build(presigned: true);
+    await h.repository.addCertificate(file: pending(), title: 'Ijazah');
+
+    final put = h.requests.firstWhere((r) => r.method == 'PUT');
+    expect(put.headers.containsKey('Authorization'), isFalse,
+        reason: 'SigV4 in the query string IS the authentication');
+    // Everything else about the upload is unchanged.
+    expect(put.headers[Headers.contentTypeHeader], 'application/pdf');
+    expect(put.headers[Headers.contentLengthHeader], file.lengthSync());
+  });
+
+  test('a presigned upload never even reads the session token', () async {
+    // Not merely omitted from the headers: there is nothing to authenticate
+    // with it, so the provider is left alone rather than refreshed for nothing.
+    final h = build(presigned: true);
+    await h.repository.addCertificate(file: pending(), title: 'Ijazah');
+
+    expect(h.tokens.reads, 0);
+  });
+
+  test('a presigned PHOTO url is uploaded with NO Authorization header',
+      () async {
+    final h = build(presigned: true);
+    await h.repository.setPhoto(file: pendingPhoto());
+
+    final put = h.requests.firstWhere((r) => r.method == 'PUT');
+    expect(put.headers.containsKey('Authorization'), isFalse);
+    expect(put.headers[Headers.contentTypeHeader], 'image/jpeg');
+    expect(put.headers[Headers.contentLengthHeader], file.lengthSync());
+  });
+
+  test('a presigned url is still used verbatim, and progress still reports',
+      () async {
+    final h = build(presigned: true);
+    final seen = <int>[];
+    await h.repository.setPhoto(
+      file: pendingPhoto(),
+      onProgress: (sent, total) => seen.add(sent),
+    );
+
+    final put = h.requests.firstWhere((r) => r.method == 'PUT');
+    // The signature the server minted is untouched -- not re-encoded, not
+    // stripped, not appended to.
+    expect(put.uri.queryParameters['X-Amz-Signature'], '0123456789abcdef');
+    expect(put.uri.queryParameters['X-Amz-Algorithm'], 'AWS4-HMAC-SHA256');
+    expect(seen, isNotEmpty);
+  });
+
+  test('a lookalike url with only sig/expires is NOT treated as presigned',
+      () async {
+    // The reference storage's own shape. If this were mistaken for SigV4 the
+    // session header would be dropped and every upload would 401.
+    final h = build();
+    await h.repository.addCertificate(file: pending(), title: 'Ijazah');
+
+    final put = h.requests.firstWhere((r) => r.method == 'PUT');
+    expect(put.uri.queryParameters.keys, containsAll(<String>['sig', 'expires']));
+    expect(put.headers['Authorization'], 'Bearer session-token-abc123');
+  });
 
   test('the upload PUT carries the session Authorization header', () async {
     final h = build();

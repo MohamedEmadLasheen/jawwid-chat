@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 
 import '../../../shared/models/teacher_profile.dart';
+import '../../../shared/utils/signed_url.dart';
 import '../../network/api_client.dart';
 import '../repositories.dart';
 import '../wire/wire_mappers.dart';
@@ -234,9 +235,21 @@ class HttpTeacherProfileRepository implements TeacherProfileRepository {
       throw const FormatException('upload authorization was incomplete');
     }
 
+    // A presigned URL is ALREADY a complete authentication: the credential, the
+    // signature and their scope travel in the query string, and S3 -- MinIO
+    // included -- refuses a request that also carries an `Authorization`
+    // header, with "request has multiple authentication types, please use one".
+    // The reference storage is the exact opposite: its route is not `@Public()`
+    // and answers 401 without the session header (03051fe). So the two backends
+    // want opposite things, and the URL the server just handed us is the only
+    // thing that says which one this is. Read from the URL rather than from
+    // configuration, which this client never sees.
+    //
     // The token is read at the moment of upload and not retained: holding one
-    // for a feature would outlive the refresh that rotates it.
-    final token = await _tokens.accessToken();
+    // for a feature would outlive the refresh that rotates it. For a presigned
+    // URL it is not read at all -- there is nothing to authenticate with it.
+    final token =
+        urlAuthenticatesItself(uploadUrl) ? null : await _tokens.accessToken();
     await _uploader.put<void>(
       uploadUrl,
       data: File(filePath).openRead(),
