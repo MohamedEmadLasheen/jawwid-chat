@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../shared/utils/signed_url.dart';
 import '../tokens.dart';
 
 /// An identity avatar.
@@ -52,7 +53,16 @@ class JawwidAvatar extends StatelessWidget {
             ? _Initials(displayName: displayName, size: size)
             : Image.network(
                 url,
-                headers: imageHeaders,
+                // Withheld when the URL already authenticates itself: an S3
+                // presigned URL carries SigV4 in its query string, and S3 --
+                // MinIO included -- rejects a request that ALSO sends an
+                // `Authorization` header. `Image.network` then fails and the
+                // initials below take over, which on screen is indistinguishable
+                // from "the photo never changed". The reference storage is the
+                // opposite and still needs the header, so the URL decides. This
+                // widget owns both values, which is why the decision lives here
+                // rather than at each call site.
+                headers: urlAuthenticatesItself(url) ? null : imageHeaders,
                 fit: BoxFit.cover,
                 cacheWidth: pixels,
                 cacheHeight: pixels,

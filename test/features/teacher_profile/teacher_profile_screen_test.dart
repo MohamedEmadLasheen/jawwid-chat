@@ -178,6 +178,38 @@ void main() {
       await tester.pumpAndSettle();
     });
 
+    // The photo is served from object storage by a SHORT-LIVED SIGNED URL, and
+    // which credential the request may carry depends on who signed it. An S3
+    // presigned URL authenticates itself and S3 rejects a second mechanism
+    // ("request has multiple authentication types"), at which point
+    // `Image.network` falls back to initials -- indistinguishable on screen
+    // from a photo that never changed. This asserts the wiring end to end: the
+    // screen still offers its authenticated headers, and the avatar withholds
+    // them for a presigned URL.
+    testWidgets('a PRESIGNED photoUrl is fetched without Authorization',
+        (tester) async {
+      final repository = FakeTeacherProfileRepository();
+      repository.profile = profile(
+        photoUrl: 'http://minio.test:9010/bucket/teacher-photos/t1/abc'
+            '?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=sig',
+      );
+      await pumpScreen(tester, harness(repository: repository));
+
+      final provider = _networkImage(tester);
+      expect(provider.url, contains('X-Amz-Signature=sig'));
+      expect(provider.headers?.containsKey('Authorization') ?? false, isFalse);
+    });
+
+    testWidgets('a LOCAL reference photoUrl keeps Authorization', (tester) async {
+      final repository = FakeTeacherProfileRepository();
+      repository.profile = profile(
+        photoUrl: 'http://api.test/api/v1/storage/photo_1?expires=1&sig=abc',
+      );
+      await pumpScreen(tester, harness(repository: repository));
+
+      expect(_networkImage(tester).headers?['Authorization'], 'Bearer session-token');
+    });
+
     testWidgets('an empty profile invites the teacher to build one', (tester) async {
       await pumpScreen(tester, harness(repository: FakeTeacherProfileRepository()));
 
@@ -876,6 +908,17 @@ void main() {
 
 /// A token provider standing in for the session, so the avatar can be given an
 /// Authorization header without a real sign-in.
+/// The avatar's underlying network provider, unwrapped.
+///
+/// `cacheWidth`/`cacheHeight` make `Image.network` wrap its provider in a
+/// `ResizeImage`, so one layer comes off before the headers are readable.
+NetworkImage _networkImage(WidgetTester tester) => tester
+    .widgetList<Image>(find.byType(Image))
+    .map((image) => image.image)
+    .map((provider) => provider is ResizeImage ? provider.imageProvider : provider)
+    .whereType<NetworkImage>()
+    .first;
+
 class _FakeTokens implements TokenProvider {
   @override
   Future<String?> accessToken() async => 'session-token';
