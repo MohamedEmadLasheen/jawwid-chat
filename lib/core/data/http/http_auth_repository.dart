@@ -244,10 +244,17 @@ class HttpAuthRepository implements AuthRepository {
     final displayName = actor['displayName'];
     final locale = actor['locale'];
 
+    // The principal carries the account's avatar as a *stable* URL the app may hold for the
+    // life of the session — never a presigned URL, an object key, or a storage host. A
+    // session outlives any signature, so a URL that expires would rot in memory; the one
+    // here stays valid and is signed server-side on each read.
+    final avatarUrl = actor['avatarUrl'];
+
     return AuthUser(
       id: id,
       displayName: displayName is String ? displayName : '',
       role: roleFor(actor['kind']),
+      avatarUrl: avatarUrl is String && avatarUrl.isNotEmpty ? avatarUrl : null,
       locale: locale is String && locale.isNotEmpty ? locale : null,
     );
   }
