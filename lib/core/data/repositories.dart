@@ -454,13 +454,6 @@ abstract interface class ProfileRepository {
   /// `GET /me/profile`.
   Future<ParentProfile> me();
 
-  /// `GET /me/avatar` — the caller's own name and photo, whatever kind of account.
-  ///
-  /// A staff member or a teacher can call this and [me] is not available to them: a parent
-  /// profile is a family thing and they have no family. The answer is the same model with
-  /// `children` EMPTY, so nothing above this has to branch on who is signed in.
-  Future<ParentProfile> myAvatar();
-
   /// `PATCH /me/profile` — save the caller's own name and/or About.
   ///
   /// An omitted field is left untouched; passing `about: ''` clears it. That distinction is

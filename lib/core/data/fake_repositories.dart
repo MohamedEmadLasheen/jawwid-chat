@@ -280,18 +280,6 @@ class FakeProfileRepository implements ProfileRepository {
   );
 
   @override
-  Future<ParentProfile> myAvatar() async {
-    // The fake has only a parent to be, so this is `me` without the children -- which is
-    // exactly what the server returns for an account that has no family.
-    final full = await me();
-    return ParentProfile(
-      displayName: full.displayName,
-      avatarUrl: full.avatarUrl,
-      children: const [],
-    );
-  }
-
-  @override
   Future<ParentProfile> me() async {
     final error = loadError;
     if (error != null) throw error;

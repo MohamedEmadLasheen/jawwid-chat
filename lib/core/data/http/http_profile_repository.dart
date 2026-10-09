@@ -47,12 +47,6 @@ class HttpProfileRepository implements ProfileRepository {
   }
 
   @override
-  Future<ParentProfile> myAvatar() async {
-    final response = await _client.get<Map<String, Object?>>('/me/avatar');
-    return _profile(response.data);
-  }
-
-  @override
   Future<ParentProfile> updateMe({String? name, String? about}) async {
     final response = await _client.patch<Map<String, Object?>>(
       '/me/profile',

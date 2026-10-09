@@ -25,8 +25,6 @@ datasource db {
 model Staff {
   /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
   organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
-  /// Chat-owned account profile; the avatar lives here, never on this row.
-  profile        StaffProfile?
   id             String    @id @default(uuid()) @db.Uuid
   name           String
   role           String
@@ -664,9 +662,6 @@ model Teacher {
   account       Account?  @relation(fields: [accountId], references: [id])
   name          String
   /// Set when Jawwid Core gains a teacher entity.
-  /// Chat-owned ACCOUNT profile. Separate from the professional profile, and separate
-  /// from this row so a Core sync cannot overwrite it.
-  profile       TeacherProfile?
   coreTeacherId String?   @unique @map("core_teacher_id") @db.Uuid
   syncedAt      DateTime? @map("synced_at") @db.Timestamptz
   isActive      Boolean   @map("is_active") @default(true)
@@ -778,40 +773,6 @@ model StoryView {
 ///
 /// Holds NO NAME. `chat.contact.name` is the only source of truth for that, and duplicating
 /// it here would be the second identity this feature exists to avoid.
-model StaffProfile {
-  organizationId  String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
-  /// The primary key IS the staff member: one profile per person.
-  staffId         String   @id @map("staff_id") @db.Uuid
-  staff           Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
-  /// Private object-storage key. Never a URL, and never serialised to a client.
-  avatarObjectKey String?  @map("avatar_object_key")
-  createdAt       DateTime @map("created_at") @db.Timestamptz @default(now())
-  updatedAt       DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
-
-  @@map("staff_profile")
-  @@schema("chat")
-}
-
-/// The teacher's ACCOUNT avatar, and nothing else.
-///
-/// A sibling of `chat.teacher` rather than a column on it, because that row projects a
-/// Jawwid Core teacher: a Chat-owned column there is one ingestion enumeration away from
-/// being wiped, protected only by a comment.
-///
-/// NOT `TeacherProfessionalProfile`, which is the separate Teacher Profile V2 feature with
-/// its reviewed photo and certificates. Neither reads the other.
-model TeacherProfile {
-  organizationId  String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
-  teacherId       String   @id @map("teacher_id") @db.Uuid
-  teacher         Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  avatarObjectKey String?  @map("avatar_object_key")
-  createdAt       DateTime @map("created_at") @db.Timestamptz @default(now())
-  updatedAt       DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
-
-  @@map("teacher_profile")
-  @@schema("chat")
-}
-
 model ContactProfile {
   organizationId  String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   /// The primary key IS the contact: one profile per person, enforced by the key itself.

@@ -50,18 +50,6 @@ export class ParentProfileController {
    * Authorize a photo upload. The signature is bound to the exact type and size authorized
    * here, so a file that changed afterwards is refused by storage rather than accepted.
    */
-  /**
-   * The caller's own name and photo, whatever kind of account they are.
-   *
-   * Separate from `GET profile` because a staff member and a teacher have no family and so
-   * no parent profile, but every account can have a face. The answer is the same DTO with
-   * an empty `children`, so one client model covers both.
-   */
-  @Get('avatar')
-  async myAvatar(@ActorId() actorId: string) {
-    return this.profile.myAvatar(actorId);
-  }
-
   @Post('avatar/authorize')
   async authorizeAvatar(
     @ActorId() actorId: string,
