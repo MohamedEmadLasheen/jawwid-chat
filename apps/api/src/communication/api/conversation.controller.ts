@@ -2,7 +2,7 @@ import { Body, Controller, Get, Inject, Param, Post, Query, UseFilters } from '@
 import type { ConversationMember } from '@prisma/client';
 import { ConversationService } from '../conversations/conversation.service';
 import { MessageService } from '../messages/message.service';
-import { DIRECTORY_SERVICE } from '../../platform/tokens';
+import { DIRECTORY_SERVICE, OBJECT_STORAGE } from '../../platform/tokens';
 import type { ActorRef, DirectoryService } from '../../platform/directory.service';
 import { AuthorizationService } from '../../platform/authorization.service';
 import { CallService } from '../calls/call.service';
@@ -14,6 +14,8 @@ import {
   type ConversationLastMessageDto,
   type ConversationWithLearner,
 } from '../contracts/dto';
+import type { ObjectStorage } from '../attachments/object-storage';
+import { signDirectoryAvatars } from '../profile/avatar-urls';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
 
@@ -34,6 +36,10 @@ export class ConversationController {
     @Inject(DIRECTORY_SERVICE) private readonly directory: DirectoryService,
     private readonly authz: AuthorizationService,
     private readonly calls: CallService,
+    // Group Info shows each member's photo, and a photo is an object read: the URL has to
+    // be signed per request. The seam is held here rather than in the directory because
+    // `platform` never imports `communication`.
+    @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
   ) {}
 
   /**
@@ -202,12 +208,20 @@ export class ConversationController {
       members.map((m: ConversationMember) => ({ actorId: m.actorId, actorKind: m.actorKind })),
     );
 
+    // Signed only AFTER `readWithMembers` has established that this actor is a member of
+    // this conversation, and only for the members it returned. That is the whole access
+    // rule for seeing someone's photo: you see the people you are in a conversation with.
+    // No id from the request reaches this -- `members` comes from the authorized read --
+    // so a parent cannot name an actor or an object key and be handed their picture.
+    const avatarUrls = await signDirectoryAvatars(this.storage, directory);
+
     return toConversationDto(conversation, members, {
       unreadCount: await this.messages.unreadCount(id, actorId),
       viewerRequiresApproval: this.authz.requiresApprovalFor(actor, conversation),
       counterpart: counterpart ? { ...counterpart, displayName: null } : null,
       viewerState,
       directory,
+      avatarUrls,
     });
   }
 

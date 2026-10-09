@@ -29,15 +29,34 @@ import { ActorKind } from '../communication/contracts/vocab';
  * proved it may read -- conversation membership, message authorship -- and new
  * callers must do the same.
  *
- * The returned shape carries a name and a kind and NOTHING ELSE. No phone (the
- * schema has no such column, G-07), no email, no family id, no capability
- * flags: a field added to `chat.contact` cannot reach a client through here,
- * because every field is enumerated by hand exactly as the DTO mappers are.
+ * The returned shape carries a name, a kind, an avatar KEY and NOTHING ELSE. No
+ * phone (the schema has no such column, G-07), no email, no family id, no
+ * capability flags: a field added to `chat.contact` cannot reach a client
+ * through here, because every field is enumerated by hand exactly as the DTO
+ * mappers are.
  */
 export interface DisplayIdentity {
   readonly actorId: string;
   readonly kind: string;
   readonly displayName: string;
+  /**
+   * The storage key for this actor's photo, or null when they have none.
+   *
+   * A KEY, not a URL, and deliberately so: this file sits in `platform`, which
+   * never imports `communication` -- and `ObjectStorage` lives there. Signing is
+   * therefore the caller's act, in the layer that already holds the storage
+   * seam, which is also the layer that knows whether the reader is entitled to
+   * see this actor at all.
+   *
+   * A key is a NAME, not a capability (see the object-storage authorization
+   * rule): it grants nothing on its own. But it must still never be serialised
+   * to a client, and it is not -- no DTO carries this field; the mappers
+   * enumerate `avatarUrl`, which is always a signed, short-lived URL.
+   *
+   * Contacts, staff and teachers can all have one; the system actor cannot, and
+   * resolves to null rather than to a guess.
+   */
+  readonly avatarObjectKey: string | null;
 }
 
 /** One actor to resolve. The kind narrows the lookup to a single table. */
@@ -91,6 +110,7 @@ export class PrismaDirectoryService implements DirectoryService {
             actorId: ref.actorId,
             kind: ActorKind.SYSTEM,
             displayName: SYSTEM_ACTOR.displayName,
+            avatarObjectKey: null,
           });
           break;
         default:
@@ -103,31 +123,49 @@ export class PrismaDirectoryService implements DirectoryService {
       staffIds.size
         ? this.prisma.staff.findMany({
             where: { id: { in: [...staffIds] } },
-            select: { id: true, name: true },
+            select: { id: true, name: true, avatarObjectKey: true },
           })
         : Promise.resolve([]),
       contactIds.size
         ? this.prisma.contact.findMany({
             where: { id: { in: [...contactIds] } },
-            select: { id: true, name: true },
+            select: { id: true, name: true, avatarObjectKey: true },
           })
         : Promise.resolve([]),
       teacherIds.size
         ? this.prisma.teacher.findMany({
             where: { id: { in: [...teacherIds] } },
-            select: { id: true, name: true },
+            select: { id: true, name: true, avatarObjectKey: true },
           })
         : Promise.resolve([]),
     ]);
 
     for (const row of staff) {
-      resolved.set(row.id, { actorId: row.id, kind: ActorKind.STAFF, displayName: row.name });
+      resolved.set(row.id, {
+        actorId: row.id,
+        kind: ActorKind.STAFF,
+        displayName: row.name,
+        avatarObjectKey: row.avatarObjectKey ?? null,
+      });
     }
     for (const row of contacts) {
-      resolved.set(row.id, { actorId: row.id, kind: ActorKind.CONTACT, displayName: row.name });
+      resolved.set(row.id, {
+        actorId: row.id,
+        kind: ActorKind.CONTACT,
+        displayName: row.name,
+        // `?? null` because the interface promises `string | null`: a row that somehow
+        // arrives without the column must not put `undefined` into a field a DTO mapper
+        // will serialise.
+        avatarObjectKey: row.avatarObjectKey ?? null,
+      });
     }
     for (const row of teachers) {
-      resolved.set(row.id, { actorId: row.id, kind: ActorKind.TEACHER, displayName: row.name });
+      resolved.set(row.id, {
+        actorId: row.id,
+        kind: ActorKind.TEACHER,
+        displayName: row.name,
+        avatarObjectKey: row.avatarObjectKey ?? null,
+      });
     }
 
     return resolved;

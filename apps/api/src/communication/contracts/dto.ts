@@ -73,6 +73,18 @@ export interface MessageDto {
    * never a fallback (boundary doc 25).
    */
   authorName: string | null;
+  /**
+   * A short-lived SIGNED URL for the author's photo, or null.
+   *
+   * Resolved from the SAME `DisplayIdentity` as `authorName`, which is the point: a message
+   * cannot say "QA Teacher" and show the admin's face, because one lookup produces both. If
+   * the name is null the avatar is null too.
+   *
+   * Null is ordinary -- the principal has no photo, is the system actor, or was not
+   * resolved -- and the client draws initials, as it already did for everyone. Never an
+   * object key, and never cached as identity: it expires, and the next read re-signs it.
+   */
+  authorAvatarUrl: string | null;
   onBehalfMode: string | null;
   type: string;
   body: string | null;
@@ -102,6 +114,15 @@ export interface ConversationMemberDto {
    * and must never fall back to the id.
    */
   displayName: string | null;
+  /**
+   * A short-lived SIGNED URL for this member's photo, or null when they have none or
+   * their kind cannot have one. Never an object key.
+   *
+   * Null means "show the initials", which is what the client already does, and is why a
+   * member without a photo is not a degraded case. The URL expires, so it is fetched and
+   * rendered, never persisted by the client as though it were the member's identity.
+   */
+  avatarUrl: string | null;
 }
 
 /**
@@ -284,6 +305,17 @@ export interface ConversationExtras {
   lastMessage?: ConversationLastMessageDto | null;
   /** Names for `members` and for `counterpart`. Absent leaves both unresolved. */
   directory?: Map<string, DisplayIdentity>;
+  /**
+   * Signed photo URLs by actor id, from `signDirectoryAvatars`. Absent, or missing an
+   * entry, renders the initials fallback.
+   *
+   * Separate from `directory` for one reason: signing is asynchronous and this mapper is
+   * not. Minting a URL inside a synchronous field list is impossible, and making the whole
+   * mapper async would ripple through every caller for one optional field. So the caller
+   * -- which holds the storage seam and has already decided the reader is entitled to see
+   * these actors -- signs first and passes the result in.
+   */
+  avatarUrls?: ReadonlyMap<string, string>;
 }
 
 /**
@@ -366,6 +398,7 @@ export function toConversationDto(
       memberRole: m.memberRole,
       isSilent: m.isSilent,
       displayName: extra?.directory?.get(m.actorId)?.displayName ?? null,
+      avatarUrl: extra?.avatarUrls?.get(m.actorId) ?? null,
     })),
     counterpart:
       extra?.counterpart === undefined
@@ -426,6 +459,16 @@ export function toMessageDto(
   m: MessageWithRelations,
   signedUrls: Map<string, { url: string; thumbnailUrl: string | null }> = new Map(),
   directory?: Map<string, DisplayIdentity>,
+  /**
+   * Signed author photos by actor id, from `signDirectoryAvatars`. Absent, or missing an
+   * entry, renders initials.
+   *
+   * Separate from `directory` for one reason only: signing is asynchronous and this mapper
+   * is not. The caller -- which holds the storage seam and has ALREADY applied the
+   * visibility filter -- signs first and passes the result in. It must be derived from the
+   * same `directory` passed here, so a name and a face can never come from different rows.
+   */
+  avatarUrls?: ReadonlyMap<string, string>,
 ): MessageDto {
   const hidden = m.deletedForAll;
   const isSystem = m.authorType === ActorKind.SYSTEM || m.type === MessageType.SYSTEM;
@@ -437,6 +480,8 @@ export function toMessageDto(
     authorKind: m.authorType,
     authorId: m.authorId,
     authorName: m.authorId ? (directory?.get(m.authorId)?.displayName ?? null) : null,
+    // Same id, same resolved identity, same breath as the name above.
+    authorAvatarUrl: m.authorId ? (avatarUrls?.get(m.authorId) ?? null) : null,
     onBehalfMode: m.onBehalfMode,
     type: m.type,
     // A message deleted for everyone keeps its row for auditability, but its

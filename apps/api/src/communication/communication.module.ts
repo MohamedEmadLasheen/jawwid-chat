@@ -17,6 +17,7 @@ import { AttachmentService } from './attachments/attachment.service';
 import { selectObjectStorage } from './attachments/storage.provider';
 import { LocalFsBlobStore } from './attachments/blob-store';
 import { StoryService } from './stories/story.service';
+import { ProfileService } from './profile/profile.service';
 import { StoryAudienceResolver } from './stories/story-audience.resolver';
 import { StorySweeper } from './stories/story-sweeper.service';
 import { OutboxService } from './outbox/outbox.service';
@@ -43,6 +44,7 @@ import { MediaPresenceService } from './calls/media-presence.service';
 import { NotificationController } from './api/notification.controller';
 import { StorageController } from './api/storage.controller';
 import { StoryController } from './api/story.controller';
+import { ProfileController } from './api/profile.controller';
 
 @Module({
   // AuthModule exports AuthService, which RealtimeGateway uses to verify the
@@ -58,6 +60,7 @@ import { StoryController } from './api/story.controller';
     NotificationController,
     StorageController,
     StoryController,
+    ProfileController,
   ],
   providers: [
     redisProvider,
@@ -69,6 +72,7 @@ import { StoryController } from './api/story.controller';
     LiveKitWebhookVerifier,
     AttachmentService,
     StoryService,
+    ProfileService,
     StoryAudienceResolver,
     StorySweeper,
     OutboxService,

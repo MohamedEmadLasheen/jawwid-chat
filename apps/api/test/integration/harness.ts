@@ -5,6 +5,7 @@ import { AppConfigService } from '@platform/app-config.service';
 import { PrismaIdentityService } from '@platform/identity.service';
 import { PrismaDirectoryService } from '@platform/directory.service';
 import { PrismaAuditService } from '@platform/audit.service';
+import { ProfileService } from '@communication/profile/profile.service';
 import type { CoverageService } from '@platform/coverage.service';
 import { ConversationService } from '@communication/conversations/conversation.service';
 import { MessageService } from '@communication/messages/message.service';
@@ -53,7 +54,7 @@ export function buildGraph() {
     prisma, authz, outbox, identity, coverage, audit, relationships,
   );
   const attachments = new AttachmentService(prisma, authz, conversations, storage);
-  const messages = new MessageService(prisma, authz, conversations, outbox, config, attachments, audit, directory);
+  const messages = new MessageService(prisma, authz, conversations, outbox, config, attachments, audit, directory, storage);
   const approvals = new ApprovalService(prisma, authz, conversations, attachments, outbox, audit);
   const templates = new TemplateService(prisma);
   const quietHours = new QuietHoursService(prisma);
@@ -68,6 +69,7 @@ export function buildGraph() {
     prisma, authz, storyAudience, outbox, config, identity, storage, audit,
   );
   const storySweeper = new StorySweeper(prisma, config, outbox, storage);
+  const profile = new ProfileService(prisma, identity, storage, audit);
 
   // A worker whose realtime publisher is a no-op: these suites assert on what
   // reaches the DATABASE (notifications, outbox status), and a socket server in
@@ -78,7 +80,7 @@ export function buildGraph() {
   return {
     prisma, coverage, identity, directory, authz, conversations, messages, approvals,
     attachments, notifications, reminders, templates, quietHours, calls,
-    stories, storyAudience, storySweeper, storage, outboxWorker,
+    stories, storyAudience, storySweeper, storage, outboxWorker, profile, audit,
     relationships,
     // Exposed so a suite can drive the outbox itself: config for a worker it
     // builds, outbox to enqueue inside its own transaction.

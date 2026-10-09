@@ -41,6 +41,7 @@ beforeEach(async () => {
     g.directory,
     g.authz,
     g.calls,
+    g.storage,
   );
 });
 

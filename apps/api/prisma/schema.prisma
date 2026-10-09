@@ -27,6 +27,9 @@ model Staff {
   organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   id             String    @id @default(uuid()) @db.Uuid
   name           String
+  /// Private object-storage key for this staff member's photo, set by that staff member.
+  /// Never a URL: reads are short-lived signed URLs minted per request.
+  avatarObjectKey String?  @map("avatar_object_key")
   role           String
   presence       String    @default("offline")
   lastActivityAt DateTime? @map("last_activity_at") @db.Timestamptz
@@ -80,6 +83,9 @@ model Contact {
   familyId          String   @map("family_id") @db.Uuid
   family            Family   @relation(fields: [familyId], references: [id])
   name              String
+  /// Private object-storage key for this contact's photo. Never a URL: reads go through
+  /// a short-lived signed URL minted per request, so the key alone grants nothing.
+  avatarObjectKey   String?  @map("avatar_object_key")
   relationship      String?
   rolePreset        String   @map("role_preset")
   canMessage        Boolean  @map("can_message") @default(false)
@@ -105,6 +111,9 @@ model Learner {
   familyId    String    @map("family_id") @db.Uuid
   family      Family    @relation(fields: [familyId], references: [id])
   name        String
+  /// Private object-storage key for this learner's photo, managed by an authorized
+  /// contact in the SAME family. Same signed-read rule as the contact's.
+  avatarObjectKey String? @map("avatar_object_key")
   level       String?
   /// Now a real relationship: chat.teacher landed in the PR-A identity
   /// foundation and learner.teacher_id is a foreign key to it.
@@ -653,6 +662,14 @@ model Teacher {
   accountId     String?   @unique @map("account_id") @db.Uuid
   account       Account?  @relation(fields: [accountId], references: [id])
   name          String
+  /// Private object-storage key for this teacher's photo.
+  ///
+  /// CHAT-OWNED state, despite living on a row that projects a Core teacher. The teacher
+  /// sets it themselves; Core neither knows nor supplies it. A future ingestion path MUST
+  /// enumerate the academic columns it owns and MUST NOT write this one, or every teacher's
+  /// photo disappears on the next sync. See the migration
+  /// `20261005160000_chat_staff_teacher_avatars.sql`.
+  avatarObjectKey String?  @map("avatar_object_key")
   /// Set when Jawwid Core gains a teacher entity.
   coreTeacherId String?   @unique @map("core_teacher_id") @db.Uuid
   syncedAt      DateTime? @map("synced_at") @db.Timestamptz

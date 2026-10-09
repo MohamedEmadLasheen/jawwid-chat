@@ -108,6 +108,18 @@ export enum CommErrorCode {
   /** The authored audience resolves to nobody the author may address. */
   STORY_AUDIENCE_EMPTY = 'COMM.STORY_AUDIENCE_EMPTY',
   STORY_AUDIENCE_INVALID = 'COMM.STORY_AUDIENCE_INVALID',
+
+  /**
+   * A learner the caller may not manage, and one that does not exist, answer alike.
+   *
+   * Deliberately one code and one status, for the same reason STORY_NOT_FOUND is: a
+   * distinct "forbidden" would turn `PUT /me/children/:id/avatar` into an oracle that
+   * confirms which learner ids are real, which is precisely what an IDOR probe wants.
+   */
+  LEARNER_NOT_FOUND = 'COMM.LEARNER_NOT_FOUND',
+
+  /** The caller is authenticated but is not a family contact, so has no parent profile. */
+  PROFILE_NOT_AVAILABLE = 'COMM.PROFILE_NOT_AVAILABLE',
 }
 
 export class CommError extends Error {

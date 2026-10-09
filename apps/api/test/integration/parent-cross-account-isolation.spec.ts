@@ -67,7 +67,7 @@ beforeEach(async () => {
   b = await seedSecondFamily(g.prisma);
   g.coverage.onDutyId = a.ownerId;
 
-  conversations = new ConversationController(g.conversations, g.messages, g.directory, g.authz, g.calls);
+  conversations = new ConversationController(g.conversations, g.messages, g.directory, g.authz, g.calls, g.storage);
   messages = new MessageController(g.messages, g.attachments);
   stories = new StoryController(g.stories);
   approvals = new ApprovalController(g.approvals);

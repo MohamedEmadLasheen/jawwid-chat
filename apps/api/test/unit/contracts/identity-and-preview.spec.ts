@@ -28,7 +28,15 @@ function fakePrisma() {
     contact: {
       findMany: async ({ where }: { where: { id: { in: string[] } } }) => {
         calls.contact += 1;
-        return where.id.in.filter((id) => id.startsWith('c')).map((id) => ({ id, name: `contact-${id}` }));
+        return where.id.in
+          .filter((id) => id.startsWith('c'))
+          .map((id) => ({
+            id,
+            name: `contact-${id}`,
+            // `c1` has a photo, every other contact does not -- so both branches of the
+            // avatar path are exercised by the existing fixtures.
+            avatarObjectKey: id === 'c1' ? 'avatars/c1-photo' : null,
+          }));
       },
     },
     teacher: {
@@ -114,15 +122,62 @@ describe('DirectoryService resolves many actors without an N+1', () => {
     expect(prisma.calls).toEqual({ staff: 0, contact: 0, teacher: 0 });
   });
 
-  it('carries a name and a kind and nothing else', async () => {
+  it('carries a name, a kind, an avatar key, and nothing else', async () => {
     // The privacy invariant the DTO mappers hold: fields are enumerated, never
     // spread, so a column added to chat.contact cannot arrive through here.
+    //
+    // `avatarObjectKey` was added deliberately, so Group Info could show a member's face
+    // instead of generated initials. The pin is EXHAUSTIVE on purpose: it is the thing
+    // that makes adding a field a conscious act rather than a side effect of widening a
+    // `select`. Anything new showing up here should fail this test until someone has
+    // decided it belongs.
     const prisma = fakePrisma();
     const directory = new PrismaDirectoryService(prisma as never);
 
     const resolved = await directory.resolveMany([{ actorId: 'c1', actorKind: 'contact' }]);
 
-    expect(Object.keys(resolved.get('c1')!).sort()).toEqual(['actorId', 'displayName', 'kind']);
+    expect(Object.keys(resolved.get('c1')!).sort()).toEqual([
+      'actorId',
+      'avatarObjectKey',
+      'displayName',
+      'kind',
+    ]);
+  });
+
+  it('the avatar it carries is a KEY, never a url -- signing belongs to the caller', async () => {
+    // This file sits in `platform`, which has no object-storage seam and must not acquire
+    // one: a signed url is a short-lived capability and may only be minted by the layer
+    // that has decided the reader is entitled to see this actor. If this ever starts
+    // returning something fetchable, that decision has moved to the wrong place.
+    const prisma = fakePrisma();
+    const directory = new PrismaDirectoryService(prisma as never);
+
+    const resolved = await directory.resolveMany([{ actorId: 'c1', actorKind: 'contact' }]);
+    const key = resolved.get('c1')!.avatarObjectKey;
+
+    if (key !== null) {
+      expect(key).not.toMatch(/^https?:/);
+      expect(key).not.toMatch(/sig=/);
+    }
+  });
+
+  it('a kind with no avatar column resolves to null, not to a borrowed photo', async () => {
+    // `chat.staff` and `chat.teacher` genuinely have no avatar column. Null is the honest
+    // answer; deriving one, or reusing a contact's, would put the wrong face on a name.
+    const prisma = fakePrisma();
+    const directory = new PrismaDirectoryService(prisma as never);
+
+    const resolved = await directory.resolveMany([
+      { actorId: 's1', actorKind: 'staff' },
+      { actorId: 't1', actorKind: 'teacher' },
+      { actorId: '00000000-0000-0000-0000-000000000000', actorKind: 'system' },
+    ]);
+
+    expect(resolved.get('s1')!.avatarObjectKey).toBeNull();
+    expect(resolved.get('t1')!.avatarObjectKey).toBeNull();
+    expect(
+      resolved.get('00000000-0000-0000-0000-000000000000')!.avatarObjectKey,
+    ).toBeNull();
   });
 
   it('ignores an unknown actor kind instead of guessing a table', async () => {

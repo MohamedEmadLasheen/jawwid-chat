@@ -4,12 +4,14 @@ import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
 import { AppConfigService } from '../../platform/app-config.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
-import { AUDIT_SERVICE, DIRECTORY_SERVICE } from '../../platform/tokens';
+import { AUDIT_SERVICE, DIRECTORY_SERVICE, OBJECT_STORAGE } from '../../platform/tokens';
 import type { AuditService } from '../../platform/audit.service';
 import type { DirectoryService } from '../../platform/directory.service';
 import { Actor } from '../../platform/types';
 import { ConversationService } from '../conversations/conversation.service';
 import { AttachmentService } from '../attachments/attachment.service';
+import type { ObjectStorage } from '../attachments/object-storage';
+import { signDirectoryAvatars } from '../profile/avatar-urls';
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
 import { MessageDto, toMessageDto, needsReply, conversationState } from '../contracts/dto';
@@ -72,6 +74,11 @@ export class MessageService {
     private readonly attachments: AttachmentService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
     @Inject(DIRECTORY_SERVICE) private readonly directory: DirectoryService,
+    // A group message shows its sender's face, and a photo is an object read: the URL is
+    // signed per request. Attachments are signed through AttachmentService because the
+    // service owns their lifecycle; an avatar has no message lifecycle, so it is signed
+    // here from the directory that resolved the author's name.
+    @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
   ) {}
 
   // -------------------------------------------------------------------
@@ -427,7 +434,12 @@ export class MessageService {
         .filter((m) => m.authorId !== null)
         .map((m) => ({ actorId: m.authorId as string, actorKind: m.authorType })),
     );
-    const messages = rows.map((m) => toMessageDto(m, signed, directory));
+    // Author photos for the page, signed from the SAME directory that named them. Signing
+    // happens here, after `visibilityFilter` and after the directory resolve, so a URL is
+    // only ever minted for an author whose message this actor was already permitted to
+    // read. An id appearing in a payload is never reason enough to sign anybody.
+    const avatarUrls = await signDirectoryAvatars(this.storage, directory);
+    const messages = rows.map((m) => toMessageDto(m, signed, directory, avatarUrls));
     const nextBefore =
       !ascending && rows.length === limit ? (rows[rows.length - 1].seq?.toString() ?? null) : null;
 

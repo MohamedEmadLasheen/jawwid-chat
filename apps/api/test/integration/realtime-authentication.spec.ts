@@ -115,7 +115,7 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
     config,
     attachments,
     audit,
-    new PrismaDirectoryService(prisma),
+    new PrismaDirectoryService(prisma),    new SignedLocalObjectStorage(),
   );
 
   // Redis-backed; neither is exercised by the assertions below, and a missing
