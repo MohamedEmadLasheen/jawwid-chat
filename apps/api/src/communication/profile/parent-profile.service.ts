@@ -206,19 +206,17 @@ export class ParentProfileService {
     actorId: string,
     params: { mimeType: unknown; byteSize: unknown; learnerId?: unknown },
   ): Promise<UploadAuthorization> {
-    const contact = await this.requireContact(actorId);
-
-    // The key names its subject, so the grant has to know whose photo this is. Absent means
-    // the caller's own; a learnerId is resolved against the caller's family FIRST, so a
-    // grant is never minted for a child that is not theirs -- the refusal happens here
-    // rather than at commit, which is one round trip earlier and leaks nothing either way.
-    const subject: { kind: AvatarSubjectKind; id: string } =
-      params.learnerId === undefined || params.learnerId === null
-        ? { kind: 'contacts', id: contact.id }
-        : {
-            kind: 'learners',
-            id: (await this.requireOwnLearner(contact.familyId, params.learnerId)).id,
-          };
+    // The key names its subject, so the grant has to know whose photo this is. Absent
+    // learnerId means the caller's own -- whatever kind of account they are. A learnerId is
+    // a parent-only request and is resolved against the caller's family FIRST, so a grant
+    // is never minted for a child that is not theirs: the refusal happens here rather than
+    // at commit, one round trip earlier, and answers the same either way.
+    let subject = await this.requireAvatarSubject(actorId);
+    if (params.learnerId !== undefined && params.learnerId !== null) {
+      const contact = await this.requireContact(actorId);
+      const learner = await this.requireOwnLearner(contact.familyId, params.learnerId);
+      subject = { kind: 'learners', id: learner.id, displayName: learner.name };
+    }
 
     const mimeType = typeof params.mimeType === 'string' ? params.mimeType : '';
     const byteSize = typeof params.byteSize === 'number' ? params.byteSize : Number.NaN;
@@ -245,12 +243,33 @@ export class ParentProfileService {
     });
   }
 
-  /** Set or replace the caller's own photo. */
+  /**
+   * The caller's own name and photo, whatever kind of account they are.
+   *
+   * `GET /me/avatar`. A staff member or a teacher can call this and [me] is not available
+   * to them: a parent profile is a family thing, and neither has a family. The answer
+   * carries a name and a photo, so `children` is EMPTY for them -- a parent wanting the
+   * richer answer calls [me]. One model rather than two, because every consumer of this
+   * reads exactly those two fields.
+   */
+  async myAvatar(actorId: string): Promise<ParentProfileDto> {
+    const subject = await this.requireAvatarSubject(actorId);
+    if (subject.kind === 'contacts') return this.me(actorId);
+    return this.avatarOnlyDto(subject);
+  }
+
+  /**
+   * Set or replace the caller's own photo -- contact, staff or teacher.
+   *
+   * ONE contract for an operation every kind of account performs. The caller's kind decides
+   * which profile row is written and nothing else: the route, the grant, the key shape and
+   * the refusals are identical, so a client never asks who it is before setting a photo.
+   */
   async setAvatar(actorId: string, objectKey: unknown): Promise<ParentProfileDto> {
-    const contact = await this.requireContact(actorId);
-    const key = this.requireOwnAvatarKey(objectKey, 'contacts', contact.id);
-    await this.writeAvatar('contact', contact.id, key, 'contact set their own profile photo');
-    return this.me(actorId);
+    const subject = await this.requireAvatarSubject(actorId);
+    const key = this.requireOwnAvatarKey(objectKey, subject.kind, subject.id);
+    await this.writeAvatar(subject.kind, subject.id, key, `${SUBJECT_NOUN[subject.kind]} set their own profile photo`);
+    return this.myAvatar(actorId);
   }
 
   /**
@@ -261,9 +280,9 @@ export class ParentProfileService {
    * photo unreachable, because every read is signed from the key.
    */
   async removeAvatar(actorId: string): Promise<ParentProfileDto> {
-    const contact = await this.requireContact(actorId);
-    await this.writeAvatar('contact', contact.id, null, 'contact removed their own profile photo');
-    return this.me(actorId);
+    const subject = await this.requireAvatarSubject(actorId);
+    await this.writeAvatar(subject.kind, subject.id, null, `${SUBJECT_NOUN[subject.kind]} removed their own profile photo`);
+    return this.myAvatar(actorId);
   }
 
   async setChildAvatar(
@@ -275,7 +294,7 @@ export class ParentProfileService {
     const learner = await this.requireOwnLearner(contact.familyId, learnerId);
     const key = this.requireOwnAvatarKey(objectKey, 'learners', learner.id);
     await this.writeAvatar(
-      'learner',
+      'learners',
       learner.id,
       key,
       'authorized contact set a learner photo in their family',
@@ -288,7 +307,7 @@ export class ParentProfileService {
     const contact = await this.requireContact(actorId);
     const learner = await this.requireOwnLearner(contact.familyId, learnerId);
     await this.writeAvatar(
-      'learner',
+      'learners',
       learner.id,
       null,
       'authorized contact removed a learner photo in their family',
@@ -306,6 +325,103 @@ export class ParentProfileService {
    * parameter through which a caller could name somebody else, which is what makes editing
    * another parent structurally impossible rather than merely forbidden.
    */
+  /**
+   * Resolve the caller to the SUBJECT whose photo they own.
+   *
+   * The only input is the actor id the guard took from the verified token, so there is no
+   * parameter through which a caller could name somebody else -- the same property
+   * [requireContact] has, extended to the kinds that have no family.
+   *
+   * A learner is never returned here: a learner is not an account and cannot call anything.
+   * Their photo is reached through the child routes, by a contact of their family.
+   */
+  private async requireAvatarSubject(actorId: string): Promise<AvatarSubject> {
+    const actor = await this.identity.resolveActor(actorId);
+    if (!actor) throw new CommError(CommErrorCode.UNKNOWN_ACTOR, 'unknown actor', 401);
+    if (!actor.isActive) {
+      throw new CommError(CommErrorCode.ACTOR_INACTIVE, 'this account is not active', 403);
+    }
+
+    if (actor.kind === ActorKind.CONTACT) {
+      const contact = await this.requireContact(actorId);
+      return { kind: 'contacts', id: contact.id, displayName: contact.name };
+    }
+
+    if (actor.kind === ActorKind.STAFF) {
+      const staff = await this.prisma.staff.findFirst({
+        where: { id: actor.actorId, isActive: true },
+        select: { id: true, name: true },
+      });
+      if (!staff) throw new CommError(CommErrorCode.UNKNOWN_ACTOR, 'unknown actor', 401);
+      return { kind: 'staff', id: staff.id, displayName: staff.name };
+    }
+
+    if (actor.kind === ActorKind.TEACHER) {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: { id: actor.actorId, isActive: true },
+        select: { id: true, name: true },
+      });
+      if (!teacher) throw new CommError(CommErrorCode.UNKNOWN_ACTOR, 'unknown actor', 401);
+      return { kind: 'teachers', id: teacher.id, displayName: teacher.name };
+    }
+
+    // The system actor, and anything added later that is not a person.
+    throw new CommError(
+      CommErrorCode.PROFILE_NOT_AVAILABLE,
+      'this kind of account has no profile photo',
+      403,
+    );
+  }
+
+  /**
+   * What a caller with no family is told about themselves.
+   *
+   * The same DTO a parent gets, with `children` EMPTY and the family-shaped fields null --
+   * rather than a second response type that every client would have to branch on.
+   */
+  private async avatarOnlyDto(subject: AvatarSubject): Promise<ParentProfileDto> {
+    const key = await this.readAvatarKey(subject);
+    return {
+      displayName: subject.displayName,
+      relationship: null,
+      signInIdentity: null,
+      about: null,
+      avatarUrl: await this.signAvatar(key),
+      canMessage: true,
+      children: [],
+    };
+  }
+
+  /** The stored key for one subject, or null. */
+  private async readAvatarKey(subject: AvatarSubject): Promise<string | null> {
+    if (subject.kind === 'staff') {
+      const row = await this.prisma.staffProfile.findUnique({
+        where: { staffId: subject.id },
+        select: { avatarObjectKey: true },
+      });
+      return row?.avatarObjectKey ?? null;
+    }
+    if (subject.kind === 'teachers') {
+      const row = await this.prisma.teacherProfile.findUnique({
+        where: { teacherId: subject.id },
+        select: { avatarObjectKey: true },
+      });
+      return row?.avatarObjectKey ?? null;
+    }
+    if (subject.kind === 'learners') {
+      const row = await this.prisma.learnerProfile.findUnique({
+        where: { learnerId: subject.id },
+        select: { avatarObjectKey: true },
+      });
+      return row?.avatarObjectKey ?? null;
+    }
+    const row = await this.prisma.contactProfile.findUnique({
+      where: { contactId: subject.id },
+      select: { avatarObjectKey: true },
+    });
+    return row?.avatarObjectKey ?? null;
+  }
+
   private async requireContact(actorId: string): Promise<ContactRow> {
     const actor = await this.identity.resolveActor(actorId);
     if (!actor) throw new CommError(CommErrorCode.UNKNOWN_ACTOR, 'unknown actor', 401);
@@ -402,25 +518,44 @@ export class ParentProfileService {
     });
   }
 
-  /** Write one avatar key on the profile row, with an audit entry. */
+  /**
+   * Write one avatar key on the subject's profile row, with an audit entry.
+   *
+   * Four kinds, four sibling tables, one shape: an identity row never holds a photo key, so
+   * there is no case here where the write lands on `chat.contact`, `chat.learner`,
+   * `chat.staff` or `chat.teacher` itself. That is what keeps a future Core sync unable to
+   * overwrite Chat-owned state.
+   */
   private async writeAvatar(
-    kind: 'contact' | 'learner',
+    kind: AvatarSubjectKind,
     id: string,
     key: string | null,
     reason: string,
     auditActorId?: string,
   ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
-      if (kind === 'contact') {
+      if (kind === 'contacts') {
         await tx.contactProfile.upsert({
           where: { contactId: id },
           create: { contactId: id, avatarObjectKey: key },
           update: { avatarObjectKey: key },
         });
-      } else {
+      } else if (kind === 'learners') {
         await tx.learnerProfile.upsert({
           where: { learnerId: id },
           create: { learnerId: id, avatarObjectKey: key },
+          update: { avatarObjectKey: key },
+        });
+      } else if (kind === 'staff') {
+        await tx.staffProfile.upsert({
+          where: { staffId: id },
+          create: { staffId: id, avatarObjectKey: key },
+          update: { avatarObjectKey: key },
+        });
+      } else {
+        await tx.teacherProfile.upsert({
+          where: { teacherId: id },
+          create: { teacherId: id, avatarObjectKey: key },
           update: { avatarObjectKey: key },
         });
       }
@@ -429,8 +564,8 @@ export class ParentProfileService {
       await this.audit.audit(tx, {
         actorId: auditActorId ?? id,
         action:
-          kind === 'contact' ? `profile.avatar.${verb}` : `profile.child.avatar.${verb}`,
-        entity: kind,
+          kind === 'learners' ? `profile.child.avatar.${verb}` : `profile.avatar.${verb}`,
+        entity: SUBJECT_ENTITY[kind],
         entityId: id,
         // Deliberately NOT the key, the bytes, or a url. That a photo changed is the
         // auditable fact; the object name is a storage detail and a signed url is a
@@ -517,6 +652,34 @@ export class ParentProfileService {
     return key;
   }
 }
+
+/** A subject whose photo the caller owns, resolved from the token and never from a request. */
+interface AvatarSubject {
+  kind: AvatarSubjectKind;
+  id: string;
+  displayName: string;
+}
+
+/**
+ * The word used in an audit `reason`, per kind.
+ *
+ * A table rather than a conditional so adding a kind is one line here and a compile error
+ * everywhere it was forgotten.
+ */
+const SUBJECT_NOUN: Record<AvatarSubjectKind, string> = {
+  contacts: 'contact',
+  learners: 'learner',
+  staff: 'staff member',
+  teachers: 'teacher',
+};
+
+/** The audit `entity` name, per kind. Singular, matching the table it describes. */
+const SUBJECT_ENTITY: Record<AvatarSubjectKind, string> = {
+  contacts: 'contact',
+  learners: 'learner',
+  staff: 'staff',
+  teachers: 'teacher',
+};
 
 /** Images only, and only the formats a phone camera or gallery actually produces. */
 const AVATAR_TYPES = /^image\/(jpeg|png|webp)$/;

@@ -135,6 +135,22 @@ void main() {
       expect(profile.hasPhoto, isFalse);
     });
 
+    test('GET /me/avatar is the kind-agnostic read, and carries no children', () async {
+      // What a staff member or a teacher calls: they have no family, so `me` is not
+      // available to them. The same DTO comes back with `children` empty, which is why
+      // nothing above this layer has to branch on who is signed in.
+      server.on('GET', '/me/avatar', [
+        Reply.ok(profileBody(displayName: 'QA Teacher', children: const [])),
+      ]);
+
+      final profile = await repository.myAvatar();
+
+      expect(server.requests.single.path, '/me/avatar');
+      expect(profile.displayName, 'QA Teacher');
+      expect(profile.children, isEmpty);
+      expect(profile.hasPhoto, isTrue);
+    });
+
     test('a body-less response fails diagnosably rather than as a null crash', () async {
       server.on('GET', '/me/profile', [const Reply(200, '')]);
 

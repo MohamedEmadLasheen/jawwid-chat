@@ -422,10 +422,101 @@ describe('photos', () => {
       });
     }
 
-    it('a teacher cannot mint a profile-photo grant', async () => {
+    it('a teacher mints a grant for their OWN photo, in their own namespace', async () => {
+      // This used to be a refusal, and the change is deliberate: every kind of account has
+      // a face. What a teacher still cannot do is reach a PARENT profile or a learner --
+      // asserted immediately below, because "they can now do something" is only safe
+      // alongside "and still cannot do these".
+      const grant = await profile.authorizeAvatarUpload(s.teacherId, {
+        mimeType: 'image/jpeg',
+        byteSize: 1000,
+      });
+
+      expect(grant.objectKey.startsWith(`avatars/teachers/${s.teacherId}/`)).toBe(true);
+    });
+
+    it('a teacher still has no parent profile and no reach into a family', async () => {
+      await expect(profile.me(s.teacherId)).rejects.toMatchObject({
+        code: CommErrorCode.PROFILE_NOT_AVAILABLE,
+      });
       await expect(
-        profile.authorizeAvatarUpload(s.teacherId, { mimeType: 'image/jpeg', byteSize: 1000 }),
+        profile.updateMe(s.teacherId, { name: 'Taken Over' }),
       ).rejects.toMatchObject({ code: CommErrorCode.PROFILE_NOT_AVAILABLE });
+      await expect(
+        profile.updateChild(s.teacherId, s.learnerId, { name: 'Taken Over' }),
+      ).rejects.toMatchObject({ code: CommErrorCode.PROFILE_NOT_AVAILABLE });
+      await expect(
+        profile.setChildAvatar(s.teacherId, s.learnerId, 'avatars/learners/x/y'),
+      ).rejects.toMatchObject({ code: CommErrorCode.PROFILE_NOT_AVAILABLE });
+      // And cannot ask for a grant against somebody's child either.
+      await expect(
+        profile.authorizeAvatarUpload(s.teacherId, {
+          mimeType: 'image/jpeg',
+          byteSize: 1000,
+          learnerId: s.learnerId,
+        }),
+      ).rejects.toMatchObject({ code: CommErrorCode.PROFILE_NOT_AVAILABLE });
+    });
+
+    it("a teacher's photo round-trips, and is keyed on the teacher", async () => {
+      const grant = await profile.authorizeAvatarUpload(s.teacherId, {
+        mimeType: 'image/jpeg',
+        byteSize: 1000,
+      });
+
+      const saved = await profile.setAvatar(s.teacherId, grant.objectKey);
+      expect(saved.avatarUrl).toBeTruthy();
+      // No family, so no children -- the same DTO, honestly empty rather than absent.
+      expect(saved.children).toEqual([]);
+
+      const reread = await profile.myAvatar(s.teacherId);
+      expect(reread.avatarUrl).toBeTruthy();
+
+      const cleared = await profile.removeAvatar(s.teacherId);
+      expect(cleared.avatarUrl).toBeNull();
+    });
+
+    it("a teacher cannot claim a CONTACT's key, nor a contact a teacher's", async () => {
+      // The namespace is what makes this structural rather than a rule someone remembers.
+      const mine = await profile.authorizeAvatarUpload(s.parentId, {
+        mimeType: 'image/jpeg',
+        byteSize: 1000,
+      });
+      const theirs = await profile.authorizeAvatarUpload(s.teacherId, {
+        mimeType: 'image/jpeg',
+        byteSize: 1000,
+      });
+
+      await expect(profile.setAvatar(s.teacherId, mine.objectKey)).rejects.toMatchObject({
+        code: CommErrorCode.ATTACHMENT_TYPE_NOT_ALLOWED,
+      });
+      await expect(profile.setAvatar(s.parentId, theirs.objectKey)).rejects.toMatchObject({
+        code: CommErrorCode.ATTACHMENT_TYPE_NOT_ALLOWED,
+      });
+    });
+
+    it('an avatar key never lands on an identity row', async () => {
+      // The whole reason these are sibling tables. If a future change moved the column back
+      // onto chat.teacher, this is what would catch it.
+      const grant = await profile.authorizeAvatarUpload(s.teacherId, {
+        mimeType: 'image/jpeg',
+        byteSize: 1000,
+      });
+      await profile.setAvatar(s.teacherId, grant.objectKey);
+
+      const columns = await prisma.$queryRawUnsafe<{ table_name: string }[]>(
+        `select table_name from information_schema.columns
+          where table_schema = 'chat'
+            and column_name = 'avatar_object_key'
+          order by table_name`,
+      );
+
+      expect(columns.map((c) => c.table_name)).toEqual([
+        'contact_profile',
+        'learner_profile',
+        'staff_profile',
+        'teacher_profile',
+      ]);
     });
   });
 
