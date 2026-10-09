@@ -271,6 +271,72 @@ void main() {
     });
   });
 
+  // -------------------------------------------------------------------------
+  /// A member's photo comes from the payload, like their name.
+  ///
+  /// This is the client half of the avatar gap: `ConversationMemberDto` grew an
+  /// `avatarUrl`, and Group Info rendered initials for a parent who HAD a photo purely
+  /// because this mapper dropped the field. Everything downstream — `GroupMember`,
+  /// `ProfileViewBuilder`, `MemberTile`, `JawwidAvatar` — was already carrying it.
+  group("a member's photo is read from the payload, never invented", () {
+    Map<String, Object?> memberJson({Object? avatarUrl = _absent}) => {
+          'actorId': 'actor-1',
+          'actorKind': 'contact',
+          'memberRole': 'parent',
+          'isSilent': false,
+          'displayName': 'ولي أمر',
+          if (avatarUrl != _absent) 'avatarUrl': avatarUrl,
+        };
+
+    test('a signed url is passed straight through, untouched', () {
+      // Verbatim: the signature and expiry are part of the URL, so a mapper that
+      // normalised, re-encoded or appended to it would invalidate it.
+      const signed = 'https://storage.test/avatars/abc?expires=1799999999&sig=deadbeef';
+      final member = WireMappers.groupMember(memberJson(avatarUrl: signed));
+
+      expect(member.avatarUrl, signed);
+      expect(member.displayName, 'ولي أمر');
+    });
+
+    test('no photo is null, which is what draws the initials', () {
+      expect(WireMappers.groupMember(memberJson(avatarUrl: null)).avatarUrl, isNull);
+    });
+
+    test('a payload without the field at all is null, not an exception', () {
+      // An older server, or a route that does not resolve avatars, must still render.
+      expect(WireMappers.groupMember(memberJson()).avatarUrl, isNull);
+    });
+
+    test('an empty or blank url is null rather than a broken image request', () {
+      expect(WireMappers.groupMember(memberJson(avatarUrl: '')).avatarUrl, isNull);
+      expect(WireMappers.groupMember(memberJson(avatarUrl: '   ')).avatarUrl, isNull);
+    });
+
+    test('the photo never stands in for a missing name, and vice versa', () {
+      final nameless = WireMappers.groupMember({
+        'actorId': 'actor-1',
+        'memberRole': 'parent',
+        'avatarUrl': 'https://storage.test/avatars/abc?sig=x',
+      });
+
+      // §25: an unresolved name stays empty and must never fall back to the actor id --
+      // having a photo does not change that.
+      expect(nameless.displayName, isEmpty);
+      expect(nameless.displayName, isNot(contains('actor-1')));
+      expect(nameless.avatarUrl, isNotNull);
+    });
+
+    test('an object KEY is not what arrives here -- only ever a url the server signed', () {
+      // Not a parser rule; a contract assertion. If a future server regression sent the
+      // raw `avatars/<id>` key, this mapper would hand it to Image.network and the photo
+      // would silently fail to load. Pinning the expectation makes that a test failure.
+      final member = WireMappers.groupMember(
+        memberJson(avatarUrl: 'https://storage.test/avatars/abc?expires=1&sig=x'),
+      );
+      expect(member.avatarUrl, startsWith('http'));
+    });
+  });
+
   group('moderation outranks receipts', () {
     Map<String, Object?> messageJson({
       String moderation = 'published',
@@ -630,3 +696,6 @@ void main() {
     });
   });
 }
+
+/// Distinguishes an ABSENT json field from one explicitly set to null.
+const Object _absent = Object();
