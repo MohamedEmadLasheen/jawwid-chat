@@ -325,6 +325,33 @@ void main() {
 
       final commit = server.lastRequestTo('POST', '/me/children/learner-1/avatar')!;
       expect((commit.body as Map).keys, ['objectKey']);
+
+      // The grant must name the SUBJECT, because the key the server mints contains it.
+      // Without this the server would mint a key under the PARENT's namespace and then
+      // refuse the very commit it just authorized.
+      final grant = (server.lastRequestTo('POST', '/me/avatar/authorize')!.body as Map)
+          .cast<String, Object?>();
+      expect(grant['learnerId'], 'learner-1');
+    });
+
+    test("the caller's OWN photo names no subject at all", () async {
+      // Absent, not null: absent is what the server reads as "the caller themselves", and
+      // an explicit null would be a different claim.
+      server.on('POST', '/me/avatar/authorize', [
+        const Reply.ok({
+          'objectKey': 'avatars/contacts/c1/abc',
+          'uploadUrl': 'https://storage.test/upload?sig=xyz',
+          'headers': <String, String>{},
+        }),
+      ]);
+      server.on('POST', '/me/avatar', [Reply.ok(profileBody())]);
+
+      await repository.setAvatar(image());
+
+      final grant = (server.lastRequestTo('POST', '/me/avatar/authorize')!.body as Map)
+          .cast<String, Object?>();
+      expect(grant.containsKey('learnerId'), isFalse);
+      expect(grant.keys.toSet(), {'mimeType', 'byteSize'});
     });
   });
 

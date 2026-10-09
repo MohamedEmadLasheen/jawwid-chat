@@ -5,7 +5,11 @@ import { AUDIT_SERVICE, IDENTITY_SERVICE, OBJECT_STORAGE } from '../../platform/
 import type { AuditService, Tx } from '../../platform/audit.service';
 import type { IdentityService } from '../../platform/identity.service';
 import type { ObjectStorage, UploadAuthorization } from '../attachments/object-storage';
-import { avatarPrefix, objectKeyBelongsToFamily } from '../attachments/object-key';
+import {
+  avatarPrefix,
+  objectKeyBelongsToSubject,
+  type AvatarSubjectKind,
+} from '../attachments/object-key';
 import { ActorKind } from '../contracts/vocab';
 
 /**
@@ -200,9 +204,21 @@ export class ParentProfileService {
    */
   async authorizeAvatarUpload(
     actorId: string,
-    params: { mimeType: unknown; byteSize: unknown },
+    params: { mimeType: unknown; byteSize: unknown; learnerId?: unknown },
   ): Promise<UploadAuthorization> {
     const contact = await this.requireContact(actorId);
+
+    // The key names its subject, so the grant has to know whose photo this is. Absent means
+    // the caller's own; a learnerId is resolved against the caller's family FIRST, so a
+    // grant is never minted for a child that is not theirs -- the refusal happens here
+    // rather than at commit, which is one round trip earlier and leaks nothing either way.
+    const subject: { kind: AvatarSubjectKind; id: string } =
+      params.learnerId === undefined || params.learnerId === null
+        ? { kind: 'contacts', id: contact.id }
+        : {
+            kind: 'learners',
+            id: (await this.requireOwnLearner(contact.familyId, params.learnerId)).id,
+          };
 
     const mimeType = typeof params.mimeType === 'string' ? params.mimeType : '';
     const byteSize = typeof params.byteSize === 'number' ? params.byteSize : Number.NaN;
@@ -223,7 +239,7 @@ export class ParentProfileService {
     }
 
     return this.storage.authorizeUpload({
-      prefix: avatarPrefix(contact.familyId),
+      prefix: avatarPrefix(subject.kind, subject.id),
       mimeType,
       byteSize,
     });
@@ -232,7 +248,7 @@ export class ParentProfileService {
   /** Set or replace the caller's own photo. */
   async setAvatar(actorId: string, objectKey: unknown): Promise<ParentProfileDto> {
     const contact = await this.requireContact(actorId);
-    const key = this.requireOwnAvatarKey(objectKey, contact.familyId);
+    const key = this.requireOwnAvatarKey(objectKey, 'contacts', contact.id);
     await this.writeAvatar('contact', contact.id, key, 'contact set their own profile photo');
     return this.me(actorId);
   }
@@ -257,7 +273,7 @@ export class ParentProfileService {
   ): Promise<ParentProfileDto> {
     const contact = await this.requireContact(actorId);
     const learner = await this.requireOwnLearner(contact.familyId, learnerId);
-    const key = this.requireOwnAvatarKey(objectKey, contact.familyId);
+    const key = this.requireOwnAvatarKey(objectKey, 'learners', learner.id);
     await this.writeAvatar(
       'learner',
       learner.id,
@@ -467,26 +483,31 @@ export class ParentProfileService {
   }
 
   /**
-   * `avatars/<the caller's own family>/<safe name>` and nothing else.
+   * `avatars/<kind>/<this subject's id>/<safe name>` and nothing else.
    *
    * The key is a NAME, so the only protection is refusing names that are not ours to sign --
-   * and "ours" has to mean this family, not merely "shaped like an avatar key". Checking the
-   * shape alone refuses story media and attachments, but accepts another FAMILY's photo:
-   * a parent who had seen one of their keys could set it as their own and have this API sign
-   * reads of it for them for as long as they liked. [objectKeyBelongsToFamily] is the same
+   * and "ours" has to mean THIS SUBJECT, not merely "shaped like an avatar key". Checking the
+   * shape alone refuses story media and attachments, but accepts somebody else's photo: a
+   * parent who had seen another's key could set it as their own and have this API sign reads
+   * of it for them for as long as they liked. [objectKeyBelongsToSubject] is the same
    * structural check attachments have always had against their conversation.
    *
-   * [familyId] comes from the contact row the token resolved to. Nothing a client sends
-   * reaches it.
+   * [subjectId] comes from a row the server read -- the caller's own contact, or a learner
+   * already resolved inside their family. Nothing a client sends reaches it. Note that this
+   * is NOT the permission check: that happened before we got here.
    *
    * One refusal for both failures, deliberately: a malformed key and another family's key
    * are answered identically, so the error cannot be used to confirm that a key exists.
    */
-  private requireOwnAvatarKey(raw: unknown, familyId: string): string {
+  private requireOwnAvatarKey(
+    raw: unknown,
+    kind: AvatarSubjectKind,
+    subjectId: string,
+  ): string {
     const key = typeof raw === 'string' ? raw.trim() : '';
-    const leaf = key.split('/')[2] ?? '';
+    const leaf = key.split('/')[3] ?? '';
 
-    if (!objectKeyBelongsToFamily(familyId, key) || !AVATAR_LEAF.test(leaf)) {
+    if (!objectKeyBelongsToSubject(kind, subjectId, key) || !AVATAR_LEAF.test(leaf)) {
       throw new CommError(
         CommErrorCode.ATTACHMENT_TYPE_NOT_ALLOWED,
         'that is not an avatar object key',

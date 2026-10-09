@@ -82,7 +82,7 @@ class HttpProfileRepository implements ProfileRepository {
 
   @override
   Future<ParentProfile> setChildAvatar(String childId, PendingAttachment image) async {
-    final key = await _authorizeAndPut(image);
+    final key = await _authorizeAndPut(image, learnerId: childId);
     final response = await _client.post<Map<String, Object?>>(
       '/me/children/$childId/avatar',
       data: {'objectKey': key},
@@ -114,10 +114,17 @@ class HttpProfileRepository implements ProfileRepository {
   /// The server decides the type and size rules; this sends what the picker produced and
   /// lets the API refuse it. A client-side check here would be a convenience, never the
   /// control — and duplicating the rule is how the two drift apart.
-  Future<String> _authorizeAndPut(PendingAttachment image) async {
+  Future<String> _authorizeAndPut(PendingAttachment image, {String? learnerId}) async {
     final authorized = await _client.post<Map<String, Object?>>(
       '/me/avatar/authorize',
-      data: {'mimeType': image.mimeType, 'byteSize': image.byteSize},
+      // The key the server mints names its SUBJECT, so the grant has to say whose photo
+      // this is. Omitted means the caller's own. The id is still only a request for the
+      // server to check against the caller's family -- it decides, not us.
+      data: {
+        'mimeType': image.mimeType,
+        'byteSize': image.byteSize,
+        'learnerId': ?learnerId,
+      },
     );
 
     final grant = authorized.data;

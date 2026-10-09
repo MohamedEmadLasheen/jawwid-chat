@@ -111,9 +111,14 @@ void main() {
   });
 
   group('a person keeps their colour', () {
-    test('the tint still comes only from the five palette entries', () {
+    test('the tint still comes only from the palette, which is now a token role', () {
+      // The SOURCE changed and the PROPERTY did not. `tintFor` used to assemble a list
+      // from the status foregrounds; it now reads `colorAvatarTints`, which exists so an
+      // avatar's colour is not borrowed from ink that inverts with the theme. What this
+      // still guarantees is the thing worth guaranteeing: a tint is always one of the
+      // declared entries and never an arbitrary colour.
       for (final tokens in [JawwidTokens.light, JawwidTokens.dark]) {
-        final allowed = _palette(tokens).map((e) => e.$2).toSet();
+        final allowed = tokens.colorAvatarTints.toSet();
         for (final name in [
           'QA Learner',
           'ولي أمر',

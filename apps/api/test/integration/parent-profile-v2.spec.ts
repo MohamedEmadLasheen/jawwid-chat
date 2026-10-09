@@ -35,14 +35,18 @@ let profile: ParentProfileService;
 let s: Scenario;
 
 /**
- * Well-formed keys in the only namespace the server will sign for a given family.
+ * Well-formed keys in the only namespace the server will sign for a given SUBJECT.
  *
- * The family id is PART of the key, because that is what makes a key one family's to use:
- * see `objectKeyBelongsToFamily`. A key is therefore written relative to a family rather
- * than as a constant -- a constant could only ever be right for one of them.
+ * The subject is part of the key -- `avatars/<kind>/<id>/<leaf>` -- because that is what
+ * makes a key one subject's to use: see `objectKeyBelongsToSubject`. A key is therefore
+ * written relative to whose photo it is, and a parent's key is not valid for their child
+ * or anybody else's.
  */
-const keyIn = (familyId: string, leaf = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa') =>
-  `avatars/${familyId}/${leaf}`;
+const keyFor = (
+  kind: 'contacts' | 'learners',
+  subjectId: string,
+  leaf = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+) => `avatars/${kind}/${subjectId}/${leaf}`;
 
 /** A whole second family, so cross-family denial is tested against real rows. */
 interface OtherFamily {
@@ -150,8 +154,8 @@ describe('reading your own profile', () => {
   });
 
   it('never exposes an object key, at any depth', async () => {
-    await profile.setAvatar(s.parentId, keyIn(s.familyId));
-    await profile.setChildAvatar(s.parentId, s.learnerId, keyIn(s.familyId, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'));
+    await profile.setAvatar(s.parentId, keyFor('contacts', s.parentId));
+    await profile.setChildAvatar(s.parentId, s.learnerId, keyFor('learners', s.learnerId, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'));
 
     const json = JSON.stringify(await profile.me(s.parentId));
     expect(json).not.toMatch(/avatarObjectKey/);
@@ -281,7 +285,7 @@ describe('nobody can reach anybody else\'s profile', () => {
     const other = await seedOtherFamily();
 
     await expect(
-      profile.setChildAvatar(s.parentId, other.learnerId, keyIn(s.familyId)),
+      profile.setChildAvatar(s.parentId, other.learnerId, keyFor('learners', other.learnerId)),
     ).rejects.toBeInstanceOf(CommError);
     await expect(
       profile.updateChild(s.parentId, other.learnerId, { about: 'hijacked' }),
@@ -347,12 +351,12 @@ describe('nobody can reach anybody else\'s profile', () => {
 // ---------------------------------------------------------------------------
 describe('photos', () => {
   it('set, replace and remove the parent\'s own', async () => {
-    const set = await profile.setAvatar(s.parentId, keyIn(s.familyId));
+    const set = await profile.setAvatar(s.parentId, keyFor('contacts', s.parentId));
     expect(set.avatarUrl).toMatch(/^https?:\/\//);
-    expect((await contactProfile(s.parentId))?.avatarObjectKey).toBe(keyIn(s.familyId));
+    expect((await contactProfile(s.parentId))?.avatarObjectKey).toBe(keyFor('contacts', s.parentId));
 
-    await profile.setAvatar(s.parentId, keyIn(s.familyId, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'));
-    expect((await contactProfile(s.parentId))?.avatarObjectKey).toBe(keyIn(s.familyId, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'));
+    await profile.setAvatar(s.parentId, keyFor('contacts', s.parentId, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'));
+    expect((await contactProfile(s.parentId))?.avatarObjectKey).toBe(keyFor('contacts', s.parentId, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'));
 
     const removed = await profile.removeAvatar(s.parentId);
     expect(removed.avatarUrl).toBeNull();
@@ -360,8 +364,8 @@ describe('photos', () => {
   });
 
   it('set, replace and remove a child\'s', async () => {
-    await profile.setChildAvatar(s.parentId, s.learnerId, keyIn(s.familyId));
-    expect((await learnerProfile(s.learnerId))?.avatarObjectKey).toBe(keyIn(s.familyId));
+    await profile.setChildAvatar(s.parentId, s.learnerId, keyFor('learners', s.learnerId));
+    expect((await learnerProfile(s.learnerId))?.avatarObjectKey).toBe(keyFor('learners', s.learnerId));
 
     await profile.removeChildAvatar(s.parentId, s.learnerId);
     expect((await learnerProfile(s.learnerId))?.avatarObjectKey).toBeNull();
@@ -375,16 +379,16 @@ describe('photos', () => {
   });
 
   it('the read is a SIGNED, expiring url -- never the key', async () => {
-    await profile.setAvatar(s.parentId, keyIn(s.familyId));
+    await profile.setAvatar(s.parentId, keyFor('contacts', s.parentId));
     const url = (await profile.me(s.parentId)).avatarUrl!;
 
     expect(url).toMatch(/sig=/);
     expect(url).toMatch(/expires=/);
-    expect(url).not.toBe(keyIn(s.familyId));
+    expect(url).not.toBe(keyFor('contacts', s.parentId));
   });
 
   it('removal leaves the stored object alone -- retention is a separate concern', async () => {
-    await profile.setAvatar(s.parentId, keyIn(s.familyId));
+    await profile.setAvatar(s.parentId, keyFor('contacts', s.parentId));
     await profile.removeAvatar(s.parentId);
     // Nulling the key is what makes it unreachable; the bytes are not this service's to
     // reclaim, and deleting them here would make a mis-click irreversible.
@@ -435,11 +439,15 @@ describe('photos', () => {
       'avatars/',
       '',
       'https://evil.test/avatars/abc',
-      // Shaped like the old namespace: well-formed, under `avatars/`, and now refused
-      // because it names no family at all.
+      // Two segments: the shape before the namespace existed.
       'avatars/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-      // Three segments, but the middle one is not a family the caller belongs to.
+      // Three segments: the FAMILY-scoped shape this namespace replaced. Well-formed once,
+      // meaningless now, and refused rather than quietly reinterpreted.
       'avatars/ffffffff-ffff-4fff-8fff-ffffffffffff/abc',
+      // Four segments, but an unknown kind.
+      'avatars/families/ffffffff-ffff-4fff-8fff-ffffffffffff/abc',
+      // Four segments, right kind, somebody else's id.
+      'avatars/contacts/ffffffff-ffff-4fff-8fff-ffffffffffff/abc',
       // A traversal that tries to re-enter another namespace from inside ours.
       'avatars/x/../../stories/abc',
     ]) {
@@ -479,7 +487,7 @@ describe('the audit trail', () => {
   });
 
   it('records that a photo changed, WITHOUT the key or a url', async () => {
-    await profile.setAvatar(s.parentId, keyIn(s.familyId));
+    await profile.setAvatar(s.parentId, keyFor('contacts', s.parentId));
     const [row] = await rows('profile.avatar.set');
 
     expect(JSON.stringify(row?.after)).toContain('hasPhoto');
@@ -597,30 +605,63 @@ describe('the name stays single-source-of-truth', () => {
       expect(saved.avatarUrl).toBeTruthy();
     });
 
-    it("a grant names the caller's own family, and no other", async () => {
+    it('a grant names its SUBJECT, and no other', async () => {
       const other = await seedOtherFamily();
 
-      const ours = await profile.authorizeAvatarUpload(s.parentId, {
+      const mine = await profile.authorizeAvatarUpload(s.parentId, {
         mimeType: 'image/jpeg',
         byteSize: 1000,
+      });
+      const myChild = await profile.authorizeAvatarUpload(s.parentId, {
+        mimeType: 'image/jpeg',
+        byteSize: 1000,
+        learnerId: s.learnerId,
       });
       const theirs = await profile.authorizeAvatarUpload(other.parentId, {
         mimeType: 'image/jpeg',
         byteSize: 1000,
       });
 
-      expect(ours.objectKey.startsWith(`avatars/${s.familyId}/`)).toBe(true);
-      expect(theirs.objectKey.startsWith(`avatars/${other.familyId}/`)).toBe(true);
-      expect(ours.objectKey).not.toContain(other.familyId);
-      expect(theirs.objectKey).not.toContain(s.familyId);
+      expect(mine.objectKey.startsWith(`avatars/contacts/${s.parentId}/`)).toBe(true);
+      expect(myChild.objectKey.startsWith(`avatars/learners/${s.learnerId}/`)).toBe(true);
+      expect(theirs.objectKey.startsWith(`avatars/contacts/${other.parentId}/`)).toBe(true);
+
+      // No key carries a family id at all any more: the namespace names whose photo it is,
+      // not who is allowed to change it.
+      for (const key of [mine.objectKey, myChild.objectKey, theirs.objectKey]) {
+        expect(key).not.toContain(s.familyId);
+        expect(key).not.toContain(other.familyId);
+      }
+      // And my own key is not usable for my own child, which is the point of subject
+      // scoping -- the family-scoped version could not tell these apart.
+      await expect(
+        profile.setChildAvatar(s.parentId, s.learnerId, mine.objectKey),
+      ).rejects.toMatchObject({ code: CommErrorCode.ATTACHMENT_TYPE_NOT_ALLOWED });
     });
 
-    it('a co-parent may use a key minted by the other parent of the same family', async () => {
-      // The reason the namespace is the FAMILY and not the contact: either guardian may set
-      // a child's photo, and one uploading while the other commits must not be a refusal.
+    it("a grant is refused for a learner that is not the caller's", async () => {
+      // Refused at AUTHORIZE, before a key exists, rather than at commit. One round trip
+      // earlier, and the same code either way so it still confirms nothing.
+      const other = await seedOtherFamily();
+
+      await expect(
+        profile.authorizeAvatarUpload(s.parentId, {
+          mimeType: 'image/jpeg',
+          byteSize: 1000,
+          learnerId: other.learnerId,
+        }),
+      ).rejects.toMatchObject({ code: CommErrorCode.LEARNER_NOT_IN_FAMILY });
+    });
+
+    it('a co-parent may commit a key the other parent minted for the same child', async () => {
+      // Subject scoping keys a child's photo on the CHILD, so it does not matter which
+      // guardian obtained the grant. Either may set it, which is the permission model --
+      // and the earlier family-scoped namespace got this right only by accident, because
+      // both parents happened to share a family id.
       const minted = await profile.authorizeAvatarUpload(s.parentId, {
         mimeType: 'image/jpeg',
         byteSize: 1000,
+        learnerId: s.learnerId,
       });
 
       const saved = await profile.setChildAvatar(

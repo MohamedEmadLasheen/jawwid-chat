@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../shared/utils/signed_url.dart';
 import '../tokens.dart';
 
 /// An identity avatar.
@@ -19,6 +20,7 @@ class JawwidAvatar extends StatelessWidget {
     this.imageUrl,
     this.size = Sizes.avatarMd,
     this.badge,
+    this.imageHeaders,
     this.onImageError,
   });
 
@@ -28,6 +30,20 @@ class JawwidAvatar extends StatelessWidget {
 
   /// Small overlay, e.g. a muted indicator.
   final Widget? badge;
+
+  /// Headers for the image request -- in practice the session bearer.
+  ///
+  /// Sent only when the URL does NOT authenticate itself. Two storage backends sit behind
+  /// this one widget and want opposite things: an S3 presigned URL carries SigV4 in its
+  /// query and S3 REFUSES a request that also sends `Authorization` ("multiple
+  /// authentication types"), while a stable application URL is authenticated by the header
+  /// and by nothing else. [urlAuthenticatesItself] is the single predicate that decides,
+  /// and the decision lives here because this widget is the only place holding both values.
+  ///
+  /// Getting it wrong is invisible in one direction and fatal in the other: an extra header
+  /// makes a presigned read fail, and `Image.network` then falls back to initials, which on
+  /// screen is indistinguishable from "this person has no photo".
+  final Map<String, String>? imageHeaders;
 
   /// Called when the image fails to load, having already fallen back to initials.
   ///
@@ -58,6 +74,11 @@ class JawwidAvatar extends StatelessWidget {
             ? _Initials(displayName: displayName, size: size)
             : Image.network(
                 url,
+                // See [imageHeaders]: withheld from a self-authenticating URL, sent to one
+                // that needs it. The local reference storage signs the OBJECT and its route
+                // is `@Public()`, so neither choice breaks it; S3 and a stable application
+                // URL each break under the wrong one.
+                headers: urlAuthenticatesItself(url) ? null : imageHeaders,
                 fit: BoxFit.cover,
                 cacheWidth: pixels,
                 cacheHeight: pixels,
@@ -116,16 +137,22 @@ class _Initials extends StatelessWidget {
 
   /// Stable per-name tint, so the same person keeps the same colour between sessions.
   ///
-  /// Drawn from the brand and status foregrounds, all of which are contrast-checked against
-  /// white in §2.2 — the initials sit on this colour, so it must stay legible.
+  /// The palette is a token role of its own ([JawwidTokens.colorAvatarTints]) rather than a
+  /// list assembled here from status foregrounds. It used to be the latter, and that was
+  /// wrong in a way only the dark theme revealed: a status foreground is INK, so in dark it
+  /// inverts to pale in order to be readable *on* a surface — while an avatar uses the
+  /// colour *as* the surface, with the initials on top. Three of the five slots became
+  /// near-white circles carrying white letters at around 1.15:1.
+  ///
+  /// The hash is unchanged, so everybody keeps the slot they already had.
+  ///
+  /// [inkFor] still measures the initials colour against whichever tint comes back. The two
+  /// are belt and braces on purpose: the tints are chosen to clear 4.5:1 against
+  /// [JawwidTokens.colorBrandOnPrimary], so the measurement normally agrees with that and
+  /// changes nothing — but it is what keeps a future edit to the palette from silently
+  /// reintroducing unreadable initials.
   static Color tintFor(String name, JawwidTokens tokens) {
-    final palette = [
-      tokens.colorBrandPrimary,
-      tokens.colorBrandPrimaryPressed,
-      tokens.colorStatusInfoFg,
-      tokens.colorStatusSuccessFg,
-      tokens.colorTextSecondary,
-    ];
+    final palette = tokens.colorAvatarTints;
     final hash = name.codeUnits.fold<int>(0, (acc, unit) => (acc * 31 + unit) & 0xFFFF);
     return palette[hash % palette.length];
   }

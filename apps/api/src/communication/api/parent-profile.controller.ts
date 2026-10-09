@@ -53,9 +53,13 @@ export class ParentProfileController {
   @Post('avatar/authorize')
   async authorizeAvatar(
     @ActorId() actorId: string,
-    @Body() body: { mimeType?: unknown; byteSize?: unknown },
+    @Body() body: { mimeType?: unknown; byteSize?: unknown; learnerId?: unknown },
   ) {
     return this.profile.authorizeAvatarUpload(actorId, {
+      // Whose photo this grant is for. Absent means the caller's own; a learnerId is
+      // checked against the caller's family before any key is minted. The key names its
+      // subject, so the grant cannot be issued without knowing it.
+      learnerId: body?.learnerId,
       mimeType: body?.mimeType,
       byteSize: body?.byteSize,
     });

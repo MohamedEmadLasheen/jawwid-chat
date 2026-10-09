@@ -131,41 +131,59 @@ export function assertObjectKeyBelongsToConversation(
 // ---------------------------------------------------------------- avatars
 
 /**
- * The namespace an upload authorized for a contact of [familyId] may write into.
+ * The kinds of principal that can own a photo, as they appear in a key.
  *
- * Keyed on the FAMILY and not the contact, because a family's photos have two kinds of
- * subject -- the parents themselves and their children -- and either co-parent may set
- * either. A contact-keyed namespace would make a photo uploaded by one parent unusable by
- * the other for the same child, which is not the permission model.
+ * Plural, because the segment names a COLLECTION the id lives in -- `avatars/contacts/<id>`
+ * reads as a path, not as a type annotation. Staff and teachers are listed here even though
+ * only contacts and learners are wired today: the namespace has to be decided once, and
+ * adding a kind later would otherwise mean re-deciding the shape of every existing key.
  */
-export function avatarPrefix(familyId: string): string {
-  return `${AVATAR_PREFIX}/${familyId}`;
+export type AvatarSubjectKind = 'contacts' | 'learners' | 'teachers' | 'staff';
+
+/**
+ * The namespace an upload authorized for one SUBJECT may write into.
+ *
+ * ## Why the subject, and not the family
+ *
+ * An earlier version keyed this on the family -- `avatars/<familyId>/<uuid>` -- which did
+ * stop one family claiming another's object, but did it by encoding an AUTHORIZATION
+ * ANSWER into a NAME. Two things were wrong with that. It cannot express a staff member or
+ * a teacher at all, because neither has a family; and it conflates "who may change this
+ * photo" with "whose photo this is", which are different questions that drift apart the
+ * moment anyone but the owner may set a photo.
+ *
+ * So the key names its SUBJECT and nothing else. Whether the caller may write it is decided
+ * in the service, against rows the server read -- never inferred from the string.
+ */
+export function avatarPrefix(kind: AvatarSubjectKind, subjectId: string): string {
+  return `${AVATAR_PREFIX}/${kind}/${subjectId}`;
 }
 
 /**
- * Whether [objectKey] names an object inside [familyId]'s photo namespace.
+ * Whether [objectKey] names an object inside this subject's photo namespace.
  *
- * ## Why this has to exist
+ * ## What this does and does not protect
  *
- * The invariant at the top of this file -- knowing a key must never be enough to read an
- * object -- held for attachments, which are checked against the conversation the server
- * stored, and did NOT hold for profile photos. An avatar key was validated for SHAPE only:
- * `avatars/<something safe>`. That refused traversal and every other prefix, so a parent
- * could not aim their row at story media or somebody's attachment -- but WITHIN `avatars/`
- * any key was accepted. A parent who had somehow seen another family's key could set it as
- * their own photo and have this API sign reads of it for them indefinitely, turning a
- * five-minute disclosure of one URL into a permanent one. The closure QA demonstrated it
- * end to end before this function existed.
+ * It answers one question: does this key name THIS subject? That is what stops a caller
+ * handing in a well-formed key belonging to somebody else and having the server sign reads
+ * of it for them -- a real finding, demonstrated end to end before the namespace existed,
+ * where one family could claim another's object and keep reading it indefinitely.
  *
- * Exact structural match for the same reasons the conversation check gives: exactly three
- * segments, so neither a `startsWith` collision between two ids nor a traversal that
- * re-enters another namespace is representable.
+ * It is NOT the permission check. Whether the caller may write this subject at all is
+ * decided separately, from rows, before this is ever called. Both ids passed here must come
+ * from the database; nothing from the request reaches them.
  *
- * [familyId] must come from the database -- resolved from the caller's token -- never from
- * the request.
+ * Exact structural match, four segments, for the same reason the conversation check gives:
+ * a `startsWith` test accepts `avatars/contacts/<idA><idB>/x` whenever one id is a prefix of
+ * another, and a traversal that re-enters another namespace is unrepresentable rather than
+ * filtered.
  */
-export function objectKeyBelongsToFamily(familyId: string, objectKey: string): boolean {
-  if (!familyId) return false;
+export function objectKeyBelongsToSubject(
+  kind: AvatarSubjectKind,
+  subjectId: string,
+  objectKey: string,
+): boolean {
+  if (!subjectId) return false;
 
   try {
     assertSafeObjectKey(objectKey);
@@ -175,6 +193,9 @@ export function objectKeyBelongsToFamily(familyId: string, objectKey: string): b
 
   const segments = objectKey.split('/');
   return (
-    segments.length === 3 && segments[0] === AVATAR_PREFIX && segments[1] === familyId
+    segments.length === 4 &&
+    segments[0] === AVATAR_PREFIX &&
+    segments[1] === kind &&
+    segments[2] === subjectId
   );
 }
