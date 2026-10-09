@@ -45,6 +45,8 @@ import { StorageController } from './api/storage.controller';
 import { StoryController } from './api/story.controller';
 import { TeacherProfileController } from './api/teacher-profile.controller';
 import { TeacherProfileService } from './teacher-profile/teacher-profile.service';
+import { ProfileController } from './api/profile.controller';
+import { ProfileService } from './profile/profile.service';
 
 @Module({
   // AuthModule exports AuthService, which RealtimeGateway uses to verify the
@@ -61,11 +63,13 @@ import { TeacherProfileService } from './teacher-profile/teacher-profile.service
     StorageController,
     StoryController,
     TeacherProfileController,
+    ProfileController,
   ],
   providers: [
     redisProvider,
     ConversationService,
     TeacherProfileService,
+    ProfileService,
     MessageService,
     ApprovalService,
     CallService,

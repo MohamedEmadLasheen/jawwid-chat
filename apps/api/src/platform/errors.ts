@@ -135,6 +135,18 @@ export enum CommErrorCode {
   TEACHER_CERTIFICATE_NOT_FOUND = 'COMM.TEACHER_CERTIFICATE_NOT_FOUND',
   TEACHER_CERTIFICATE_INVALID_TYPE = 'COMM.TEACHER_CERTIFICATE_INVALID_TYPE',
   TEACHER_CERTIFICATE_TOO_LARGE = 'COMM.TEACHER_CERTIFICATE_TOO_LARGE',
+
+  /**
+   * A learner the caller may not manage, and one that does not exist, answer alike.
+   *
+   * Deliberately one code and one status, for the same reason STORY_NOT_FOUND is: a
+   * distinct "forbidden" would turn `POST /me/children/:id/avatar` into an oracle that
+   * confirms which learner ids are real, which is precisely what an IDOR probe wants.
+   */
+  LEARNER_NOT_FOUND = 'COMM.LEARNER_NOT_FOUND',
+
+  /** The caller is authenticated but is not a family contact, so has no parent profile. */
+  PROFILE_NOT_AVAILABLE = 'COMM.PROFILE_NOT_AVAILABLE',
 }
 
 export class CommError extends Error {
