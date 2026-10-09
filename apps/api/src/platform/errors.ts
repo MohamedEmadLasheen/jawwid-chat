@@ -147,6 +147,15 @@ export enum CommErrorCode {
 
   /** The caller is authenticated but is not a family contact, so has no parent profile. */
   PROFILE_NOT_AVAILABLE = 'COMM.PROFILE_NOT_AVAILABLE',
+
+  /**
+   * The caller has no account photo.
+   *
+   * Safe by construction rather than by care: this route resolves the actor from the
+   * bearer token and takes no target, so "has no photo" is a statement about the caller
+   * themselves and leaks nothing about anybody else.
+   */
+  AVATAR_NOT_FOUND = 'COMM.AVATAR_NOT_FOUND',
 }
 
 export class CommError extends Error {

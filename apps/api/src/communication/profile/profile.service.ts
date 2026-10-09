@@ -189,6 +189,28 @@ export class ProfileService {
   }
 
   /**
+   * The caller's own photo as a freshly signed read URL.
+   *
+   * The stable application endpoint `GET /me/avatar/image` is what identity carries —
+   * `ActorDto.avatarUrl` — and it redirects here-and-now to a short-lived signed URL. That
+   * indirection is the whole point: a session outlives any signature, so an identity that
+   * carried the signed URL itself would render once and then rot, which on screen is
+   * indistinguishable from "the photo never changed".
+   *
+   * Reuses `requireAvatarOwner` and `signAvatar` exactly as `myAvatar` does and adds no
+   * authorization of its own. Throws rather than returning null, because the route's answer
+   * for "no photo" is a status, not a body.
+   */
+  async myAvatarImageUrl(actorId: string): Promise<string> {
+    const owner = await this.requireAvatarOwner(actorId);
+    const url = await this.signAvatar(owner.avatarObjectKey);
+    if (!url) {
+      throw new CommError(CommErrorCode.AVATAR_NOT_FOUND, 'no account photo', 404);
+    }
+    return url;
+  }
+
+  /**
    * Set or replace a child's photo.
    *
    * `learnerId` arrives from the client and is treated as untrusted: it is used only

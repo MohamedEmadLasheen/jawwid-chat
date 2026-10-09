@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Post, UseFilters } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Header,
+  Param,
+  Post,
+  Redirect,
+  UseFilters,
+} from '@nestjs/common';
 import { ProfileService } from '../profile/profile.service';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
@@ -48,6 +58,27 @@ export class ProfileController {
   @Get('avatar')
   async myAvatar(@ActorId() actorId: string) {
     return this.profile.myAvatar(actorId);
+  }
+
+  /**
+   * The STABLE image endpoint. This is the URL identity carries.
+   *
+   * Takes no target — not in the path, not in the query — so the only photo it can serve
+   * is the caller's own, resolved from the bearer token by `requireAvatarOwner`. A caller
+   * cannot name whose face it wants.
+   *
+   * It answers 302 to a short-lived signed URL rather than proxying the bytes: the object
+   * never passes through this process, and nothing here serialises the key or the signature
+   * into a body. 404 when the caller has no photo, which the client renders as initials.
+   *
+   * `no-store` because the destination expires. A shared cache that kept this redirect
+   * would hand a later reader a dead URL, or one it was never entitled to.
+   */
+  @Get('avatar/image')
+  @Redirect('', 302)
+  @Header('Cache-Control', 'private, no-store')
+  async myAvatarImage(@ActorId() actorId: string) {
+    return { url: await this.profile.myAvatarImageUrl(actorId), statusCode: 302 };
   }
 
   /**
