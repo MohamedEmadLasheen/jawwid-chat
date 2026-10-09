@@ -37,6 +37,9 @@ model Staff {
   /// only this model was missing it, which is why PR-B adds a field and no DDL.
   accountId      String?   @unique @map("account_id") @db.Uuid
   account        Account?  @relation(fields: [accountId], references: [id])
+  /// Private object-storage key for this staff member's photo, set by that staff member.
+  /// Never a URL: reads are short-lived signed URLs minted per request.
+  avatarObjectKey String?  @map("avatar_object_key")
   createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
   updatedAt      DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
@@ -93,6 +96,9 @@ model Contact {
   accountId         String?  @map("account_id") @db.Uuid
   account           Account? @relation(fields: [accountId], references: [id])
   isActive          Boolean  @map("is_active") @default(true)
+  /// Private object-storage key for this contact's photo. Never a URL: reads go through
+  /// a short-lived signed URL minted per request, so the key alone grants nothing.
+  avatarObjectKey   String?  @map("avatar_object_key")
   createdAt         DateTime @map("created_at") @db.Timestamptz @default(now())
   updatedAt         DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
@@ -113,6 +119,9 @@ model Learner {
   teacherId   String?   @map("teacher_id") @db.Uuid
   teacher     Teacher?  @relation(fields: [teacherId], references: [id])
   nextClassAt DateTime? @map("next_class_at") @db.Timestamptz
+  /// Private object-storage key for this learner's photo, managed by an authorized
+  /// contact in the SAME family. Same signed-read rule as the contact's.
+  avatarObjectKey String? @map("avatar_object_key")
   createdAt   DateTime  @map("created_at") @db.Timestamptz @default(now())
   updatedAt   DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
@@ -660,6 +669,14 @@ model Teacher {
   syncedAt      DateTime? @map("synced_at") @db.Timestamptz
   isActive      Boolean   @map("is_active") @default(true)
   leftAt        DateTime? @map("left_at") @db.Timestamptz
+  /// Private object-storage key for this teacher's photo.
+  ///
+  /// CHAT-OWNED state, despite living on a row that projects a Core teacher. The teacher
+  /// sets it themselves; Core neither knows nor supplies it. A future ingestion path MUST
+  /// enumerate the academic columns it owns and MUST NOT write this one, or every teacher's
+  /// photo disappears on the next sync. See the migration
+  /// `20261005160000_chat_staff_teacher_avatars.sql`.
+  avatarObjectKey String?  @map("avatar_object_key")
   createdAt     DateTime  @map("created_at") @db.Timestamptz @default(now())
   updatedAt     DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
