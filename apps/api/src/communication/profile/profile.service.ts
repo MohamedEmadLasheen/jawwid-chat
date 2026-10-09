@@ -102,10 +102,9 @@ export class ProfileService {
     params: { mimeType: string; byteSize: number },
   ): Promise<UploadAuthorization> {
     // Any principal that can OWN a photo may ask for an upload grant -- contact, staff or
-    // teacher. The grant is bound to a type and a size and names no actor, so it confers
-    // nothing beyond "you may put these bytes at this key"; ownership is decided when the
-    // key is committed, below.
-    await this.requireAvatarOwner(actorId);
+    // teacher. The grant is bound to a type, a size AND the caller's own key prefix, so the
+    // key it mints is one only this caller can later commit.
+    const owner = await this.requireAvatarOwner(actorId);
 
     if (!AVATAR_TYPES.test(params.mimeType)) {
       throw new CommError(
@@ -127,7 +126,7 @@ export class ProfileService {
     }
 
     return this.storage.authorizeUpload({
-      prefix: 'avatars',
+      prefix: avatarPrefixFor(owner),
       mimeType: params.mimeType,
       byteSize: params.byteSize,
     });
@@ -146,7 +145,7 @@ export class ProfileService {
    */
   async setAvatar(actorId: string, objectKey: string): Promise<ParentProfileDto | ActorAvatarDto> {
     const owner = await this.requireAvatarOwner(actorId);
-    const key = this.requireAvatarKey(objectKey);
+    const key = this.requireAvatarKey(objectKey, avatarPrefixFor(owner));
 
     await this.writeOwnAvatar(owner, key);
 
@@ -224,7 +223,10 @@ export class ProfileService {
   ): Promise<ParentProfileDto> {
     const { contact } = await this.requireContact(actorId);
     const learner = await this.requireOwnLearner(contact.familyId, learnerId);
-    const key = this.requireAvatarKey(objectKey);
+    const key = this.requireAvatarKey(
+      objectKey,
+      avatarPrefixFor({ kind: ActorKind.CONTACT, id: contact.id }),
+    );
 
     await this.prisma.$transaction(async (tx) => {
       // Conditional on the family as well as the id: belt and braces, so even a future
@@ -430,12 +432,20 @@ export class ProfileService {
    * or a traversal -- and have the row point at it, turning a profile update into a read
    * of somebody else's object the next time it is signed.
    */
-  private requireAvatarKey(objectKey: unknown): string {
+  /**
+   * A key the CALLER may commit, not merely a well-formed one.
+   *
+   * Shape and ownership are both checked: the grant minted the key under the caller's own
+   * prefix, so a key from anywhere else was never issued to them. Reads are deliberately
+   * NOT subject to this -- `signAvatar` signs whatever is stored, so keys written before
+   * the prefix existed keep resolving.
+   */
+  private requireAvatarKey(objectKey: unknown, prefix: string): string {
     const key = typeof objectKey === 'string' ? objectKey.trim() : '';
-    if (!AVATAR_KEY.test(key)) {
+    if (!AVATAR_KEY.test(key) || !key.startsWith(`${prefix}/`)) {
       throw new CommError(
         CommErrorCode.ATTACHMENT_TYPE_NOT_ALLOWED,
-        'that is not an avatar object key',
+        'that is not an avatar object key you may claim',
         400,
       );
     }
@@ -455,8 +465,30 @@ export class ProfileService {
 const AVATAR_TYPES = /^image\/(jpeg|png|webp|heic)$/;
 const MAX_AVATAR_BYTES = 8 * 1024 * 1024;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/** `avatars/<uuid-ish name>` and nothing else -- no traversal, no other prefix. */
-const AVATAR_KEY = /^avatars\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+/**
+ * `avatars/<kind>/<ownerId>/<name>` and nothing else -- no traversal, no other prefix.
+ *
+ * The owner is IN THE KEY, which is what makes a committed key checkable. A flat
+ * `avatars/<uuid>` was not: a presigned read URL carries its object key in the path, and
+ * this feature deliberately hands other people's avatar URLs to every group member and
+ * message reader. Anyone could therefore lift a key out of a URL they were entitled to see
+ * and POST it as their own photo -- not a leak of anything they could not already view, but
+ * an impersonation: a parent could wear a teacher's face.
+ */
+const AVATAR_KEY =
+  /^avatars\/(?:contact|staff|teacher)\/[0-9a-fA-F-]{36}\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+
+/**
+ * Where this owner's photos live, and the only prefix they may claim a key under.
+ *
+ * Scoped by ACTOR rather than by family, because staff and teachers have no family: a
+ * family-scoped rule cannot express them, while every actor that can own a photo has a kind
+ * and an id. A learner's photo sits under the prefix of the contact who set it, which is
+ * already the only principal allowed to manage that learner.
+ */
+function avatarPrefixFor(owner: { kind: string; id: string }): string {
+  return `avatars/${owner.kind}/${owner.id}`;
+}
 
 type ContactRow = {
   id: string;
