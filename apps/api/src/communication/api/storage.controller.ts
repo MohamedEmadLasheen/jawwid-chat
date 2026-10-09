@@ -1,4 +1,5 @@
 import { Controller, Get, Inject, Param, Put, Query, Req, Res } from '@nestjs/common';
+import { Public } from '../../platform/auth/auth.guard';
 import { OBJECT_STORAGE } from '../../platform/tokens';
 import type { ObjectStorage } from '../attachments/object-storage';
 import { SignedLocalObjectStorage } from '../attachments/object-storage';
@@ -40,7 +41,24 @@ interface ResponseLike {
  *
  * In production OBJECT_STORAGE points at S3 and these handlers are dead code --
  * the signed URLs address the bucket directly and never reach this process.
+ *
+ * ## @Public() is what makes the paragraph above TRUE
+ *
+ * `AuthenticatedGuard` is registered globally and protects every route by default, so
+ * "unauthenticated by design" was a design the code did not implement: without this
+ * decorator every request here was refused 401 before a signature was ever examined. An
+ * upload PUT stored nothing and a read GET served nothing, so with the local reference
+ * storage no attachment, voice note, story image or avatar could be fetched at all -- and
+ * not because of the signature, which was never reached.
+ *
+ * A bearer token cannot be the control on this route in any case. These URLs are handed to
+ * things that do not carry tokens -- an <img>, Flutter's `Image.network`, an audio element
+ * -- which is the whole reason the authorization is folded into the URL instead. And the
+ * guard was never a control HERE even when it rejected: it establishes only that SOMEBODY is
+ * signed in, and checks nothing about the object, so any logged-in actor's token would have
+ * passed it. The signature is the decision, as the paragraphs above describe.
  */
+@Public()
 @Controller('storage')
 export class StorageController {
   constructor(

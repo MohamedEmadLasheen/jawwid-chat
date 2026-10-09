@@ -75,7 +75,37 @@ export class SignedLocalObjectStorage implements ObjectStorage {
     }
     return secret;
   }
-  private readonly base = process.env.STORAGE_ENDPOINT ?? 'http://localhost:3000/storage';
+  /**
+   * Where a CLIENT should reach these signed URLs.
+   *
+   * `STORAGE_PUBLIC_BASE_URL`, deliberately NOT `STORAGE_ENDPOINT`. The two look
+   * interchangeable and are not: `STORAGE_ENDPOINT` is a member of `S3_VARS`, so its mere
+   * presence makes `selectObjectStorage` choose the S3 path -- and if the other four S3
+   * variables are absent, startup throws "partially configured" instead. Setting it just to
+   * make a phone-reachable URL therefore takes the API down rather than fixing the URL,
+   * which is exactly what happened once already.
+   *
+   * This variable selects nothing. It only answers "what host should the client use", which
+   * is a different question from "which storage backend is this".
+   *
+   * `STORAGE_ENDPOINT` is still honoured as a fallback so existing local setups keep
+   * working.
+   *
+   * THE DEFAULT INCLUDES `/api/v1`, because the route it has to address does. `main.ts`
+   * calls `setGlobalPrefix('api/v1')` and excludes only the health probes, so
+   * `StorageController` is served at `/api/v1/storage/:objectKey` -- and the previous
+   * default, `http://localhost:3000/storage`, therefore pointed at a path that does not
+   * exist. Every signed URL it minted 404'd. Nothing caught it because the suites construct
+   * this class directly and verify SIGNATURES, which are correct either way; it takes an
+   * actual HTTP GET of a minted URL to see it, which is what the closure QA did.
+   *
+   * A value supplied through either variable must likewise name the full base path, prefix
+   * included.
+   */
+  private readonly base =
+    process.env.STORAGE_PUBLIC_BASE_URL ??
+    process.env.STORAGE_ENDPOINT ??
+    'http://localhost:3000/api/v1/storage';
   private readonly ttl = Number(process.env.STORAGE_SIGNED_URL_TTL_SECONDS ?? 300);
 
   async authorizeUpload(params: {

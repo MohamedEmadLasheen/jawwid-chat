@@ -750,4 +750,89 @@ class L10nEn extends L10n {
 
   @override
   String get storyVideoRetry => 'Try again';
+
+  @override
+  String get myProfileTitle => 'My profile';
+
+  @override
+  String get myProfileSettingsSubtitle => 'Your photo, name and about';
+
+  @override
+  String get profileAboutLabel => 'About';
+
+  @override
+  String get profileAboutHint => 'A little about you';
+
+  @override
+  String get profileAboutEmpty => 'Nothing added yet';
+
+  @override
+  String get profileNameLabel => 'Name';
+
+  @override
+  String get profileNameEmptyError => 'Please enter a name';
+
+  @override
+  String get profileNameTooLongError => 'That name is too long';
+
+  @override
+  String get profileAboutTooLongError => 'That is too long';
+
+  @override
+  String get profileEdit => 'Edit';
+
+  @override
+  String get profileSave => 'Save';
+
+  @override
+  String get profileCancel => 'Cancel';
+
+  @override
+  String get profileSaved => 'Saved';
+
+  @override
+  String get profileSaveFailed => 'That could not be saved. Please try again.';
+
+  @override
+  String get profilePhotoTitle => 'Profile photo';
+
+  @override
+  String get profilePhotoAdd => 'Add photo';
+
+  @override
+  String get profilePhotoChange => 'Change photo';
+
+  @override
+  String get profilePhotoRemove => 'Remove photo';
+
+  @override
+  String get profilePhotoFailed =>
+      'That photo could not be uploaded. Please try again.';
+
+  @override
+  String get profilePhotoRemoveFailed =>
+      'That photo could not be removed. Please try again.';
+
+  @override
+  String get profilePhotoEditLabel => 'Change your photo';
+
+  @override
+  String profileChildPhotoEditLabel(String name) {
+    return 'Change $name\'s photo';
+  }
+
+  @override
+  String profileChildEditTitle(String name) {
+    return '$name\'s profile';
+  }
+
+  @override
+  String get profileSignInIdentity => 'Sign-in';
+
+  @override
+  String get profileSignInIdentityNote =>
+      'Contact the academy to change how you sign in.';
+
+  @override
+  String get profileLoadFailed => 'Your profile could not be loaded.';
 }

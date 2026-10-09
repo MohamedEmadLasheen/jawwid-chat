@@ -439,5 +439,38 @@
   "storyUnavailable": "هذه الحالة لم تعد متاحة.",
   "storyVideoLabel": "فيديو الحالة",
   "storyVideoFailed": "لم نتمكّن من تشغيل هذا الفيديو.",
-  "storyVideoRetry": "إعادة المحاولة"
+  "storyVideoRetry": "إعادة المحاولة",
+
+  "myProfileTitle": "ملفي الشخصي",
+  "myProfileSettingsSubtitle": "صورتك واسمك ونبذتك",
+  "profileAboutLabel": "نبذة",
+  "profileAboutHint": "نبذة قصيرة عنك",
+  "profileAboutEmpty": "لا توجد نبذة بعد",
+  "profileNameLabel": "الاسم",
+  "profileNameEmptyError": "يُرجى إدخال الاسم",
+  "profileNameTooLongError": "الاسم طويل جدًا",
+  "profileAboutTooLongError": "النص طويل جدًا",
+  "profileEdit": "تعديل",
+  "profileSave": "حفظ",
+  "profileCancel": "إلغاء",
+  "profileSaved": "تم الحفظ",
+  "profileSaveFailed": "تعذّر الحفظ. يُرجى المحاولة مرة أخرى.",
+  "profilePhotoTitle": "الصورة الشخصية",
+  "profilePhotoAdd": "إضافة صورة",
+  "profilePhotoChange": "تغيير الصورة",
+  "profilePhotoRemove": "إزالة الصورة",
+  "profilePhotoFailed": "تعذّر رفع الصورة. يُرجى المحاولة مرة أخرى.",
+  "profilePhotoRemoveFailed": "تعذّر إزالة الصورة. يُرجى المحاولة مرة أخرى.",
+  "profilePhotoEditLabel": "تغيير صورتك",
+  "profileChildPhotoEditLabel": "تغيير صورة {name}",
+  "@profileChildPhotoEditLabel": {
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "profileChildEditTitle": "ملف {name}",
+  "@profileChildEditTitle": {
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "profileSignInIdentity": "بيانات الدخول",
+  "profileSignInIdentityNote": "للتغيير، يُرجى التواصل مع الأكاديمية.",
+  "profileLoadFailed": "تعذّر تحميل ملفك الشخصي."
 }

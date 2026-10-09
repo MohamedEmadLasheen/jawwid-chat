@@ -94,6 +94,10 @@ model Contact {
   createdAt         DateTime @map("created_at") @db.Timestamptz @default(now())
   updatedAt         DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
+  /// The Chat-owned About + photo. A SIBLING, never columns on this row -- see
+  /// `20261008120000_chat_parent_profile.sql` for why ownership is kept separate.
+  profile           ContactProfile?
+
   @@map("contact")
   @@schema("chat")
 }
@@ -115,6 +119,10 @@ model Learner {
   updatedAt   DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
   conversations Conversation[]
+
+  /// Chat-owned About + photo, deliberately NOT columns on this row: a learner is an
+  /// academy entity and a future Core projection must not be able to overwrite it.
+  profile     LearnerProfile?
 
   @@map("learner")
   @@schema("chat")
@@ -758,5 +766,41 @@ model StoryView {
 
   @@id([storyId, actorId])
   @@map("story_view")
+  @@schema("chat")
+}
+
+/// A family contact's own About and photo.
+///
+/// Holds NO NAME. `chat.contact.name` is the only source of truth for that, and duplicating
+/// it here would be the second identity this feature exists to avoid.
+model ContactProfile {
+  organizationId  String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  /// The primary key IS the contact: one profile per person, enforced by the key itself.
+  contactId       String   @id @map("contact_id") @db.Uuid
+  contact         Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  about           String?
+  /// Private object-storage key. Never a URL, and never serialised to a client: a read is a
+  /// short-lived signed URL minted per request for a caller already proven entitled.
+  avatarObjectKey String?  @map("avatar_object_key")
+  createdAt       DateTime @map("created_at") @db.Timestamptz @default(now())
+  updatedAt       DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  @@map("contact_profile")
+  @@schema("chat")
+}
+
+/// A learner's About and photo, managed by an authorized contact of the SAME family.
+///
+/// Holds no name, for the same reason as [ContactProfile]: `chat.learner.name` owns it.
+model LearnerProfile {
+  organizationId  String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  learnerId       String   @id @map("learner_id") @db.Uuid
+  learner         Learner  @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  about           String?
+  avatarObjectKey String?  @map("avatar_object_key")
+  createdAt       DateTime @map("created_at") @db.Timestamptz @default(now())
+  updatedAt       DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  @@map("learner_profile")
   @@schema("chat")
 }

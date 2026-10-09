@@ -43,6 +43,8 @@ import { MediaPresenceService } from './calls/media-presence.service';
 import { NotificationController } from './api/notification.controller';
 import { StorageController } from './api/storage.controller';
 import { StoryController } from './api/story.controller';
+import { ParentProfileController } from './api/parent-profile.controller';
+import { ParentProfileService } from './profile/parent-profile.service';
 
 @Module({
   // AuthModule exports AuthService, which RealtimeGateway uses to verify the
@@ -58,6 +60,7 @@ import { StoryController } from './api/story.controller';
     NotificationController,
     StorageController,
     StoryController,
+    ParentProfileController,
   ],
   providers: [
     redisProvider,
@@ -68,6 +71,7 @@ import { StoryController } from './api/story.controller';
     MediaPresenceService,
     LiveKitWebhookVerifier,
     AttachmentService,
+    ParentProfileService,
     StoryService,
     StoryAudienceResolver,
     StorySweeper,

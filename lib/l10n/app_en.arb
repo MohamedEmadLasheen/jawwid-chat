@@ -439,5 +439,38 @@
   "storyUnavailable": "This story is no longer available.",
   "storyVideoLabel": "Story video",
   "storyVideoFailed": "This video could not be played.",
-  "storyVideoRetry": "Try again"
+  "storyVideoRetry": "Try again",
+
+  "myProfileTitle": "My profile",
+  "myProfileSettingsSubtitle": "Your photo, name and about",
+  "profileAboutLabel": "About",
+  "profileAboutHint": "A little about you",
+  "profileAboutEmpty": "Nothing added yet",
+  "profileNameLabel": "Name",
+  "profileNameEmptyError": "Please enter a name",
+  "profileNameTooLongError": "That name is too long",
+  "profileAboutTooLongError": "That is too long",
+  "profileEdit": "Edit",
+  "profileSave": "Save",
+  "profileCancel": "Cancel",
+  "profileSaved": "Saved",
+  "profileSaveFailed": "That could not be saved. Please try again.",
+  "profilePhotoTitle": "Profile photo",
+  "profilePhotoAdd": "Add photo",
+  "profilePhotoChange": "Change photo",
+  "profilePhotoRemove": "Remove photo",
+  "profilePhotoFailed": "That photo could not be uploaded. Please try again.",
+  "profilePhotoRemoveFailed": "That photo could not be removed. Please try again.",
+  "profilePhotoEditLabel": "Change your photo",
+  "profileChildPhotoEditLabel": "Change {name}'s photo",
+  "@profileChildPhotoEditLabel": {
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "profileChildEditTitle": "{name}'s profile",
+  "@profileChildEditTitle": {
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "profileSignInIdentity": "Sign-in",
+  "profileSignInIdentityNote": "Contact the academy to change how you sign in.",
+  "profileLoadFailed": "Your profile could not be loaded."
 }

@@ -1,6 +1,7 @@
 import '../../shared/models/auth.dart';
 import '../../shared/models/conversation.dart';
 import '../../shared/models/message.dart';
+import '../../shared/models/parent_profile.dart';
 import '../../shared/models/story.dart';
 import '../../shared/models/user_role.dart';
 
@@ -435,6 +436,43 @@ abstract interface class GroupRepository {
 /// NO AUTHORIZATION LIVES HERE. Each method asks the server and reports what it
 /// said. Errors keep the server's `COMM.*` code so a caller can tell a revoked
 /// relationship from a call that has already ended — see [WireErrors].
+/// The signed-in parent's own profile, and their children's.
+///
+/// ## None of these take an owner id
+///
+/// There is no `parentId` and no `familyId` anywhere below, because the server reads the
+/// caller from the bearer token. This client could not ask for — or write — somebody else's
+/// profile if it tried. `childId` is the one id that travels, and the server resolves it
+/// only inside the caller's own family, so it carries no authority.
+///
+/// ## Every mutation answers with the WHOLE profile
+///
+/// So a caller never has to re-fetch to learn what a save did, and the screen never has to
+/// guess. It is also what makes "save and immediately see the result" true rather than
+/// optimistic: what is shown is what the server stored.
+abstract interface class ProfileRepository {
+  /// `GET /me/profile`.
+  Future<ParentProfile> me();
+
+  /// `PATCH /me/profile` — save the caller's own name and/or About.
+  ///
+  /// An omitted field is left untouched; passing `about: ''` clears it. That distinction is
+  /// what stops a one-field save from wiping the other.
+  Future<ParentProfile> updateMe({String? name, String? about});
+
+  /// `PATCH /me/children/:id` — the same, for a child of the caller's family.
+  Future<ParentProfile> updateChild(String childId, {String? name, String? about});
+
+  /// Upload [image] and make it the caller's own photo, replacing any existing one.
+  Future<ParentProfile> setAvatar(PendingAttachment image);
+
+  Future<ParentProfile> removeAvatar();
+
+  Future<ParentProfile> setChildAvatar(String childId, PendingAttachment image);
+
+  Future<ParentProfile> removeChildAvatar(String childId);
+}
+
 abstract interface class CallRepository {
   /// `GET /conversations/:id/call-capability`.
   ///

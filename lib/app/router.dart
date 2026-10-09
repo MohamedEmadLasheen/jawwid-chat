@@ -9,6 +9,7 @@ import '../features/calls/presentation/calls_screen.dart';
 import '../features/conversations/presentation/chats_screen.dart';
 import '../features/messages/presentation/chat_screen_route.dart';
 import '../features/messages/presentation/conversation_media_screen.dart';
+import '../features/profile/presentation/my_profile_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/stories/presentation/story_viewer_screen.dart';
@@ -48,6 +49,11 @@ abstract final class Routes {
   /// The signed-in user's own account. Deliberately under Settings rather than alongside
   /// the profiles above: "my account" and "someone else's profile" are different things.
   static const myAccount = '/settings/account';
+
+  /// The parent's own EDITABLE profile — photo, name and About, and the same three for each
+  /// of their children. Separate from [myAccount], which is a read-only summary shared with
+  /// the teacher role: conflating them would hand a teacher controls that do not apply.
+  static const myProfile = '/settings/profile';
 
   /// One story, opened full-screen from the rail.
   ///
@@ -132,6 +138,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.myAccount,
         builder: (context, state) => const MyAccountScreen(),
+      ),
+      GoRoute(
+        path: Routes.myProfile,
+        builder: (context, state) => const MyProfileScreen(),
       ),
       // Full-screen, above the tab bar: a story is the whole viewport for as long as it is
       // open, and a tab bar underneath it would be something to tap by accident.

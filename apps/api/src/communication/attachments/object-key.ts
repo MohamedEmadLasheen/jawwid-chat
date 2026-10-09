@@ -29,6 +29,9 @@ import { CommError, CommErrorCode } from '../../platform/errors';
 /** The single namespace segment every attachment key begins with. */
 const CONVERSATION_PREFIX = 'conversations';
 
+/** The namespace segment every profile-photo key begins with. */
+const AVATAR_PREFIX = 'avatars';
+
 /**
  * The one place a key's shape is checked.
  *
@@ -123,4 +126,55 @@ export function assertObjectKeyBelongsToConversation(
       403,
     );
   }
+}
+
+// ---------------------------------------------------------------- avatars
+
+/**
+ * The namespace an upload authorized for a contact of [familyId] may write into.
+ *
+ * Keyed on the FAMILY and not the contact, because a family's photos have two kinds of
+ * subject -- the parents themselves and their children -- and either co-parent may set
+ * either. A contact-keyed namespace would make a photo uploaded by one parent unusable by
+ * the other for the same child, which is not the permission model.
+ */
+export function avatarPrefix(familyId: string): string {
+  return `${AVATAR_PREFIX}/${familyId}`;
+}
+
+/**
+ * Whether [objectKey] names an object inside [familyId]'s photo namespace.
+ *
+ * ## Why this has to exist
+ *
+ * The invariant at the top of this file -- knowing a key must never be enough to read an
+ * object -- held for attachments, which are checked against the conversation the server
+ * stored, and did NOT hold for profile photos. An avatar key was validated for SHAPE only:
+ * `avatars/<something safe>`. That refused traversal and every other prefix, so a parent
+ * could not aim their row at story media or somebody's attachment -- but WITHIN `avatars/`
+ * any key was accepted. A parent who had somehow seen another family's key could set it as
+ * their own photo and have this API sign reads of it for them indefinitely, turning a
+ * five-minute disclosure of one URL into a permanent one. The closure QA demonstrated it
+ * end to end before this function existed.
+ *
+ * Exact structural match for the same reasons the conversation check gives: exactly three
+ * segments, so neither a `startsWith` collision between two ids nor a traversal that
+ * re-enters another namespace is representable.
+ *
+ * [familyId] must come from the database -- resolved from the caller's token -- never from
+ * the request.
+ */
+export function objectKeyBelongsToFamily(familyId: string, objectKey: string): boolean {
+  if (!familyId) return false;
+
+  try {
+    assertSafeObjectKey(objectKey);
+  } catch {
+    return false;
+  }
+
+  const segments = objectKey.split('/');
+  return (
+    segments.length === 3 && segments[0] === AVATAR_PREFIX && segments[1] === familyId
+  );
 }

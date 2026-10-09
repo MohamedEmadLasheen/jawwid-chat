@@ -108,6 +108,19 @@ export enum CommErrorCode {
   /** The authored audience resolves to nobody the author may address. */
   STORY_AUDIENCE_EMPTY = 'COMM.STORY_AUDIENCE_EMPTY',
   STORY_AUDIENCE_INVALID = 'COMM.STORY_AUDIENCE_INVALID',
+
+  /** The caller is authenticated but is not a family contact, so has no parent profile. */
+  PROFILE_NOT_AVAILABLE = 'COMM.PROFILE_NOT_AVAILABLE',
+  /** A submitted name or About failed server-side validation. */
+  PROFILE_FIELD_INVALID = 'COMM.PROFILE_FIELD_INVALID',
+  /**
+   * The learner is not in the caller's family.
+   *
+   * Deliberately ONE code for "no such learner" and "not your learner" alike: telling them
+   * apart would turn every child route into an oracle for which learner ids exist, which is
+   * the same reasoning STORY_NOT_FOUND above is written for.
+   */
+  LEARNER_NOT_IN_FAMILY = 'COMM.LEARNER_NOT_IN_FAMILY',
 }
 
 export class CommError extends Error {

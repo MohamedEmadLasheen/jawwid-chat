@@ -19,6 +19,7 @@ class JawwidAvatar extends StatelessWidget {
     this.imageUrl,
     this.size = Sizes.avatarMd,
     this.badge,
+    this.onImageError,
   });
 
   final String displayName;
@@ -27,6 +28,22 @@ class JawwidAvatar extends StatelessWidget {
 
   /// Small overlay, e.g. a muted indicator.
   final Widget? badge;
+
+  /// Called when the image fails to load, having already fallen back to initials.
+  ///
+  /// Exists because an avatar URL here is a SHORT-LIVED SIGNED url, and the only place its
+  /// expiry is observable is inside this widget: the failure is an HTTP status, not
+  /// something the model can see. A caller that can re-sign — by refetching from the
+  /// authenticated API — uses this to do so.
+  ///
+  /// Optional and null by default, so every existing call site behaves exactly as before:
+  /// initials, and no retry.
+  ///
+  /// A caller that supplies it MUST bound how many times it answers, because this fires
+  /// again after every re-sign. Bounding it per URL is not enough: a freshly signed URL is a
+  /// URL never seen before, so an image that can never load would recur forever. Bound the
+  /// COUNT.
+  final VoidCallback? onImageError;
 
   @override
   Widget build(BuildContext context) {
@@ -44,8 +61,18 @@ class JawwidAvatar extends StatelessWidget {
                 fit: BoxFit.cover,
                 cacheWidth: pixels,
                 cacheHeight: pixels,
-                errorBuilder: (context, _, _) =>
-                    _Initials(displayName: displayName, size: size),
+                errorBuilder: (context, _, _) {
+                  // Initials render NOW either way -- a failed image must never leave a
+                  // hole. The notification is a separate concern: it lets a caller that can
+                  // re-sign an expired URL do so, and the next build then shows the photo.
+                  final notify = onImageError;
+                  if (notify != null) {
+                    // After this frame: errorBuilder runs during build, and refetching from
+                    // here would mutate provider state mid-build.
+                    WidgetsBinding.instance.addPostFrameCallback((_) => notify());
+                  }
+                  return _Initials(displayName: displayName, size: size);
+                },
                 loadingBuilder: (context, child, progress) => progress == null
                     ? child
                     : ColoredBox(color: JawwidTokens.of(context).colorSurfaceMuted),

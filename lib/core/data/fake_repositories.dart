@@ -3,6 +3,7 @@ import 'dart:async';
 import '../../shared/models/auth.dart';
 import '../../shared/models/conversation.dart';
 import '../../shared/models/message.dart';
+import '../../shared/models/parent_profile.dart';
 import '../errors/app_error.dart';
 import '../storage/secure_token_store.dart';
 import 'fake_backend.dart';
@@ -245,4 +246,150 @@ class FakeCallRepository implements CallRepository {
     required String conversationId,
   }) async =>
       const [];
+}
+
+/// An in-memory parent profile, for tests and for working on the screen with no backend.
+///
+/// Behaves like the real contract in the ways the UI depends on: every mutation answers with
+/// the WHOLE profile, an omitted field is left alone, and a blank About is a clear. It also
+/// reproduces the two failure shapes a screen has to handle — a load that throws and a
+/// mutation that throws — because those are what the error and retry paths are built for.
+class FakeProfileRepository implements ProfileRepository {
+  FakeProfileRepository({
+    ParentProfile? initial,
+    this.loadError,
+    this.mutationError,
+  }) : _profile = initial ?? _seed;
+
+  ParentProfile _profile;
+
+  /// Thrown by [me]. The screen should show its error state and offer a retry.
+  final AppError? loadError;
+
+  /// Thrown by every mutation. The screen should say so and keep what it was showing.
+  final AppError? mutationError;
+
+  static const _seed = ParentProfile(
+    displayName: 'ولي أمر',
+    relationship: 'والدة',
+    signInIdentity: 'qa.parent@qa.jawwid.test',
+    children: [
+      ChildProfile(id: 'learner-1', displayName: 'أحمد', level: 'الصف الرابع'),
+      ChildProfile(id: 'learner-2', displayName: 'مريم', level: 'الصف الثاني'),
+    ],
+  );
+
+  @override
+  Future<ParentProfile> me() async {
+    final error = loadError;
+    if (error != null) throw error;
+    return _profile;
+  }
+
+  @override
+  Future<ParentProfile> updateMe({String? name, String? about}) async {
+    _guard();
+    _profile = ParentProfile(
+      // Absent means "leave it alone"; a blank About is an explicit clear.
+      displayName: name ?? _profile.displayName,
+      relationship: _profile.relationship,
+      signInIdentity: _profile.signInIdentity,
+      about: about == null ? _profile.about : (about.trim().isEmpty ? null : about.trim()),
+      avatarUrl: _profile.avatarUrl,
+      canMessage: _profile.canMessage,
+      children: _profile.children,
+    );
+    return _profile;
+  }
+
+  @override
+  Future<ParentProfile> updateChild(String childId, {String? name, String? about}) async {
+    _guard();
+    return _withChild(
+      childId,
+      (child) => ChildProfile(
+        id: child.id,
+        displayName: name ?? child.displayName,
+        level: child.level,
+        about: about == null ? child.about : (about.trim().isEmpty ? null : about.trim()),
+        avatarUrl: child.avatarUrl,
+      ),
+    );
+  }
+
+  @override
+  Future<ParentProfile> setAvatar(PendingAttachment image) async {
+    _guard();
+    _profile = _copyWithAvatar('https://fake.test/avatars/${image.fileName}');
+    return _profile;
+  }
+
+  @override
+  Future<ParentProfile> removeAvatar() async {
+    _guard();
+    _profile = _copyWithAvatar(null);
+    return _profile;
+  }
+
+  @override
+  Future<ParentProfile> setChildAvatar(String childId, PendingAttachment image) async {
+    _guard();
+    return _withChild(
+      childId,
+      (child) => ChildProfile(
+        id: child.id,
+        displayName: child.displayName,
+        level: child.level,
+        about: child.about,
+        avatarUrl: 'https://fake.test/avatars/${child.id}-${image.fileName}',
+      ),
+    );
+  }
+
+  @override
+  Future<ParentProfile> removeChildAvatar(String childId) async {
+    _guard();
+    return _withChild(
+      childId,
+      (child) => ChildProfile(
+        id: child.id,
+        displayName: child.displayName,
+        level: child.level,
+        about: child.about,
+      ),
+    );
+  }
+
+  void _guard() {
+    final error = mutationError;
+    if (error != null) throw error;
+  }
+
+  ParentProfile _copyWithAvatar(String? avatarUrl) => ParentProfile(
+        displayName: _profile.displayName,
+        relationship: _profile.relationship,
+        signInIdentity: _profile.signInIdentity,
+        about: _profile.about,
+        avatarUrl: avatarUrl,
+        canMessage: _profile.canMessage,
+        children: _profile.children,
+      );
+
+  /// Replace exactly one child and leave every sibling untouched — the property the screen
+  /// depends on when a parent edits one of several children.
+  ParentProfile _withChild(String childId, ChildProfile Function(ChildProfile) change) {
+    _profile = ParentProfile(
+      displayName: _profile.displayName,
+      relationship: _profile.relationship,
+      signInIdentity: _profile.signInIdentity,
+      about: _profile.about,
+      avatarUrl: _profile.avatarUrl,
+      canMessage: _profile.canMessage,
+      children: [
+        for (final child in _profile.children)
+          if (child.id == childId) change(child) else child,
+      ],
+    );
+    return _profile;
+  }
 }

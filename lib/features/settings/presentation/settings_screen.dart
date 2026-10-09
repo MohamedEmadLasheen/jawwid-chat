@@ -103,6 +103,21 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
             ),
+          // Parent only, and deliberately a SEPARATE row from the identity header above.
+          //
+          // The header opens My account, a read-only summary both roles share. This opens
+          // the parent's own editable profile — their photo, name and About, and the same
+          // three for each child. A teacher has no parent profile (the server refuses them
+          // outright), so offering them the row would be offering a screen that can only
+          // fail.
+          if (user != null && !user.isTeacher)
+            ListTile(
+              leading: const Icon(Icons.badge_outlined),
+              title: Text(l10n.myProfileTitle),
+              subtitle: Text(l10n.myProfileSettingsSubtitle),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => context.push(Routes.myProfile),
+            ),
           const Divider(),
 
           _SectionHeading(text: l10n.settingsLanguage),
