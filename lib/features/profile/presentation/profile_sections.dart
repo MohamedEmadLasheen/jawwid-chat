@@ -76,9 +76,15 @@ class ProfileNote extends StatelessWidget {
 /// otherwise meet fifteen labelled rows on opening their own account, which is the admin
 /// panel this screen must not become.
 class ChildTile extends StatelessWidget {
-  const ChildTile({super.key, required this.child});
+  const ChildTile({super.key, required this.child, this.leading});
 
   final ProfileChild child;
+
+  /// The child's photo, when the viewer is their own parent and may change it. It sits in
+  /// the LEADING slot so the row reads as a compact profile row — and so the tile keeps
+  /// its own expand chevron, which an override of `trailing` would have taken away.
+  /// Null leaves the tile exactly as it was for every other viewer.
+  final Widget? leading;
 
   @override
   Widget build(BuildContext context) {
@@ -91,7 +97,14 @@ class ChildTile extends StatelessWidget {
       // open; both fight the flat treatment the rest of the screen uses.
       data: theme.copyWith(dividerColor: Colors.transparent),
       child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(horizontal: Spacing.spacing5),
+        leading: leading,
+        tilePadding: const EdgeInsetsDirectional.fromSTEB(
+          Spacing.spacing5,
+          Spacing.spacing1,
+          Spacing.spacing4,
+          Spacing.spacing1,
+        ),
+        minTileHeight: 72,
         childrenPadding: const EdgeInsetsDirectional.only(
           start: Spacing.spacing5,
           end: Spacing.spacing5,

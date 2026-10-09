@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/providers.dart';
 import '../../../app/router.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/errors/error_presenter.dart';
@@ -15,6 +16,7 @@ import '../../../shared/utils/text_direction.dart';
 import '../../conversations/application/conversations_controller.dart';
 import '../application/profile_controller.dart';
 import '../domain/profile_view.dart';
+import 'parent_account_view.dart';
 import 'profile_sections.dart';
 
 /// A person's profile, or a group's info.
@@ -78,6 +80,12 @@ class MyAccountScreen extends ConsumerWidget {
     final l10n = L10n.of(context);
     final state = ref.watch(myAccountProvider);
 
+    // A parent additionally gets photo management, layered ONTO this screen rather than
+    // replacing it: the children section, its progressive disclosure and the academic
+    // detail inside it are existing functionality and stay exactly as they are.
+    final user = ref.watch(authControllerProvider).user;
+    final isParent = user?.isParent ?? false;
+
     return Scaffold(
       appBar: AppBar(title: Text(l10n.myAccountTitle)),
       body: switch (state) {
@@ -86,7 +94,25 @@ class MyAccountScreen extends ConsumerWidget {
             error: error,
             onRetry: () => ref.invalidate(myAccountProvider),
           ),
-        AsyncData(:final value) => ProfileBody(view: value),
+        AsyncData(:final value) => ProfileBody(
+            view: value,
+            // Everyone signed in owns their own photo; only the ROUTE that answers "who am
+            // I" differs, because a parent profile is a family thing and a teacher has no
+            // family. Generalised deliberately rather than by dropping the role check: a
+            // teacher reading the parent route is refused by the server, so handing them
+            // the parent-backed control would have shown a broken panel.
+            header: isParent
+                ? const EditableProfilePhoto()
+                : const EditableProfilePhoto.own(),
+            // Children stay parent-only. A teacher has none, and must never be given a
+            // control that could only fail.
+            childLeading: isParent
+                ? (child) => ChildPhotoAvatar(
+                      learnerId: child.learner.id,
+                      displayName: child.learner.displayName,
+                    )
+                : null,
+          ),
       },
     );
   }
@@ -94,9 +120,23 @@ class MyAccountScreen extends ConsumerWidget {
 
 /// The shared body: header, then whatever sections this viewer is entitled to.
 class ProfileBody extends StatelessWidget {
-  const ProfileBody({super.key, required this.view, this.actions = const []});
+  const ProfileBody({
+    super.key,
+    required this.view,
+    this.actions = const [],
+    this.header,
+    this.childLeading,
+  });
 
   final ProfileView view;
+
+  /// Replaces the read-only header when the viewer owns this profile and may change
+  /// their own photo. Null everywhere else, which is every profile that is not yours.
+  final Widget? header;
+
+  /// The leading widget for each child's row — their photo, for a parent looking at their
+  /// own family. Null means the row stays exactly as it was.
+  final Widget Function(ProfileChild child)? childLeading;
 
   /// Conversation-scoped controls, rendered under the header. Empty on an
   /// account profile, which has no conversation to act on.
@@ -109,7 +149,7 @@ class ProfileBody extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.only(bottom: Spacing.spacing9),
       children: [
-        ProfileHeader(view: view),
+        header ?? ProfileHeader(view: view),
 
         if (actions.isNotEmpty) ...[
           const ProfileDivider(),
@@ -131,7 +171,8 @@ class ProfileBody extends StatelessWidget {
           if (view.children.isEmpty)
             ProfileNote(text: l10n.childrenEmpty)
           else
-            for (final child in view.children) ChildTile(child: child),
+            for (final child in view.children)
+              ChildTile(child: child, leading: childLeading?.call(child)),
         ],
 
         if (view.isGroup) ...[

@@ -35,6 +35,7 @@ class JawwidTokens extends ThemeExtension<JawwidTokens> {
     required this.colorBrandOnPrimary,
     required this.colorBrandSubtle,
     required this.colorAccent,
+    required this.colorAvatarTints,
     required this.colorStatusSuccessFg,
     required this.colorStatusSuccessBg,
     required this.colorStatusWarningFg,
@@ -88,6 +89,23 @@ class JawwidTokens extends ThemeExtension<JawwidTokens> {
   final Color colorBrandOnPrimary;
   final Color colorBrandSubtle;
   final Color colorAccent;
+
+  /// Identity tints for initials avatars, in a fixed order.
+  ///
+  /// A role of its own, and deliberately NOT the status foregrounds this list used to
+  /// borrow. Those are INK: in the dark theme they invert to pale so they stay readable
+  /// ON a dark surface. An avatar uses a colour the other way round -- as the surface,
+  /// with white initials drawn on top -- so borrowing them produced near-white circles
+  /// carrying white letters at 1.14:1.
+  ///
+  /// Order is part of the contract: the tint is chosen by hashing a name into this list,
+  /// so reordering or resizing it reassigns everybody's colour. Light and dark hold the
+  /// same five entries in the same slots, and only slot 1 differs between them -- the
+  /// deepest teal is legible against a light page but nearly invisible against a dark one.
+  ///
+  /// Every entry must clear 4.5:1 against [colorBrandOnPrimary] AND stay visibly separated
+  /// from its own theme's page. `test/design/avatar_tint_test.dart` enforces both.
+  final List<Color> colorAvatarTints;
 
   // --- §2.2 status -------------------------------------------------------------------
   final Color colorStatusSuccessFg;
@@ -153,6 +171,9 @@ class JawwidTokens extends ThemeExtension<JawwidTokens> {
     colorBrandOnPrimary: _neutral0,
     colorBrandSubtle: _primary50,
     colorAccent: _accent500,
+    // Exactly the five colours the old hard-coded palette resolved to in this theme,
+    // so light-mode avatars are unchanged.
+    colorAvatarTints: [_primary500, _primary700, _blue600, _green600, _neutral600],
     colorStatusSuccessFg: _green600,
     colorStatusSuccessBg: _green100,
     colorStatusWarningFg: _amber600,
@@ -202,6 +223,11 @@ class JawwidTokens extends ThemeExtension<JawwidTokens> {
     colorBrandOnPrimary: _neutral0,
     colorBrandSubtle: Color(0xFF0B2E2B),
     colorAccent: _accent500,
+    // Same five slots, same hues, chosen to work as SURFACES on the dark page rather
+    // than as ink on it. Slot 1 is `_primary600` instead of light's `_primary700`:
+    // #084B46 clears 9.98:1 against the initials but only 1.78:1 against the page, so
+    // the circle itself disappears -- the opposite failure to the pale ones, equally wrong.
+    colorAvatarTints: [_primary500, _primary600, _blue600, _green600, _neutral600],
     colorStatusSuccessFg: _green100,
     colorStatusSuccessBg: _green700,
     colorStatusWarningFg: _amber100,

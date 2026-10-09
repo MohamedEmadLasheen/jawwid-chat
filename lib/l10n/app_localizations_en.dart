@@ -797,4 +797,62 @@ class L10nEn extends L10n {
 
   @override
   String get storyVideoRetry => 'Try again';
+
+  @override
+  String get profilePhotoTitle => 'Profile photo';
+
+  @override
+  String get profilePhotoChange => 'Change photo';
+
+  @override
+  String get profilePhotoAdd => 'Add profile photo';
+
+  @override
+  String get profilePhotoRemove => 'Remove photo';
+
+  @override
+  String get profilePhotoUploading => 'Uploading…';
+
+  @override
+  String get profilePhotoFailed =>
+      'The photo could not be saved. Nothing was changed.';
+
+  @override
+  String get profilePhotoRemoveFailed => 'The photo could not be removed.';
+
+  @override
+  String get profilePhotoInvalid =>
+      'That image cannot be used. Choose a JPEG, PNG or WebP under 8 MB.';
+
+  @override
+  String get profileSignInIdentity => 'Sign-in';
+
+  @override
+  String get profileSignInIdentityNote =>
+      'Your sign-in is managed by the academy and cannot be changed here.';
+
+  @override
+  String get profilePersonalTitle => 'Personal information';
+
+  @override
+  String profileChildPhotoTitle(String name) {
+    return '$name\'s photo';
+  }
+
+  @override
+  String get profileRetry => 'Try again';
+
+  @override
+  String get profileCopied => 'Copied';
+
+  @override
+  String get profilePhotoEditLabel => 'Profile photo. Double tap to change it.';
+
+  @override
+  String profileChildPhotoEditLabel(String name) {
+    return '$name\'s photo. Double tap to change it.';
+  }
+
+  @override
+  String get profileCopyIdentity => 'Copy sign-in';
 }

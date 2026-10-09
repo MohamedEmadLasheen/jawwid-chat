@@ -129,6 +129,7 @@ class Message {
     this.authorId,
     this.authorName = '',
     this.authorRole = ParticipantRole.unknown,
+    this.authorAvatarUrl,
     this.body = '',
     this.attachments = const [],
     this.replyTo,
@@ -156,6 +157,17 @@ class Message {
   final String? authorId;
   final String authorName;
   final ParticipantRole authorRole;
+
+  /// A short-lived SIGNED url for the sender's photo, or null.
+  ///
+  /// Comes from the same resolved identity as [authorName], so the two cannot disagree --
+  /// a bubble can never read "QA Teacher" over somebody else's face. Null is ordinary and
+  /// means "draw the initials", which is what every sender looked like before.
+  ///
+  /// Not identity data and never persisted: it expires, and the next read of the page
+  /// brings a fresh one. A chat held open past the expiry falls back to initials rather
+  /// than showing a broken image.
+  final String? authorAvatarUrl;
   final MessageKind kind;
   final String body;
   final List<Attachment> attachments;
@@ -211,6 +223,7 @@ class Message {
         authorId: authorId,
         authorName: authorName,
         authorRole: authorRole,
+        authorAvatarUrl: authorAvatarUrl,
         kind: kind,
         body: body,
         attachments: attachments,
@@ -245,6 +258,7 @@ class Message {
       authorId: authorId,
       authorName: authorName,
       authorRole: authorRole,
+      authorAvatarUrl: authorAvatarUrl,
       kind: kind,
       body: body,
       attachments: attachments,

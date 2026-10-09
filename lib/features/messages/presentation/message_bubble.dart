@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../design/tokens.dart';
+import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/message.dart';
 import '../../../shared/models/user_role.dart';
@@ -108,7 +109,11 @@ class MessageBubble extends StatelessWidget {
 
     return Align(
       alignment: mine ? AlignmentDirectional.centerEnd : AlignmentDirectional.centerStart,
-      child: ConstrainedBox(
+      child: _withSenderAvatar(
+        context,
+        l10n,
+        mine: mine,
+        child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth:
               MediaQuery.sizeOf(context).width * Sizes.maxBubbleWidthFraction,
@@ -210,6 +215,59 @@ class MessageBubble extends StatelessWidget {
           ),
         ),
       ),
+      ),
+    );
+  }
+
+  /// Put the sender's face beside an incoming bubble.
+  ///
+  /// ## Why the gutter is always there
+  ///
+  /// The avatar is drawn only on the FIRST bubble of a run -- the same boundary that already
+  /// decides whether to print the sender's name, so grouping is reused rather than
+  /// reinvented. But the empty space is reserved on every bubble in the run, so a
+  /// conversation does not shift sideways as a run continues. Reserving the gutter is what
+  /// makes "don't repeat the avatar" look deliberate instead of broken.
+  ///
+  /// ## Why outgoing messages are untouched
+  ///
+  /// Your own messages get no avatar and no gutter: you know who you are, and the existing
+  /// right-aligned geometry is unchanged. A system message never reaches here at all -- it
+  /// returned as `_SystemMessage` before the bubble was built.
+  ///
+  /// Row follows the ambient direction, so in Arabic the gutter sits on the right without
+  /// any explicit mirroring.
+  Widget _withSenderAvatar(
+    BuildContext context,
+    L10n l10n, {
+    required bool mine,
+    required Widget child,
+  }) {
+    if (mine) return child;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          // Lines the avatar up with the bubble's own first line rather than its box.
+          padding: const EdgeInsetsDirectional.only(
+            start: Spacing.spacing4,
+            top: Spacing.spacing1,
+          ),
+          child: SizedBox(
+            width: Sizes.avatarSm,
+            child: showAuthor
+                ? JawwidAvatar(
+                    displayName: _authorLabel(message, l10n),
+                    imageUrl: message.authorAvatarUrl,
+                    size: Sizes.avatarSm,
+                  )
+                : null,
+          ),
+        ),
+        Flexible(child: child),
+      ],
     );
   }
 

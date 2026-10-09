@@ -465,5 +465,36 @@
   "storyUnavailable": "هذه الحالة لم تعد متاحة.",
   "storyVideoLabel": "فيديو الحالة",
   "storyVideoFailed": "لم نتمكّن من تشغيل هذا الفيديو.",
-  "storyVideoRetry": "إعادة المحاولة"
+  "storyVideoRetry": "إعادة المحاولة",
+  "profilePhotoTitle": "صورة الملف الشخصي",
+  "profilePhotoChange": "تغيير الصورة",
+  "profilePhotoAdd": "إضافة صورة الملف الشخصي",
+  "profilePhotoRemove": "إزالة الصورة",
+  "profilePhotoUploading": "جارٍ الرفع…",
+  "profilePhotoFailed": "تعذّر حفظ الصورة. لم يتغيّر شيء.",
+  "profilePhotoRemoveFailed": "تعذّرت إزالة الصورة.",
+  "profilePhotoInvalid": "لا يمكن استخدام هذه الصورة. اختر JPEG أو PNG أو WebP بحجم أقل من 8 ميجابايت.",
+  "profileSignInIdentity": "تسجيل الدخول",
+  "profileSignInIdentityNote": "يدير الأكاديمية بيانات تسجيل دخولك ولا يمكن تغييرها هنا.",
+  "profilePersonalTitle": "المعلومات الشخصية",
+  "profileChildPhotoTitle": "صورة {name}",
+  "profileRetry": "إعادة المحاولة",
+  "profileCopied": "تم النسخ",
+  "@profileChildPhotoTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "profilePhotoEditLabel": "صورة الملف الشخصي. انقر نقرًا مزدوجًا لتغييرها.",
+  "profileChildPhotoEditLabel": "صورة {name}. انقر نقرًا مزدوجًا لتغييرها.",
+  "profileCopyIdentity": "نسخ بيانات الدخول",
+  "@profileChildPhotoEditLabel": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  }
 }

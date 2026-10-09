@@ -3,11 +3,13 @@ import 'dart:async';
 import '../../shared/models/auth.dart';
 import '../../shared/models/conversation.dart';
 import '../../shared/models/message.dart';
+import '../../shared/models/parent_profile.dart';
 import '../../shared/utils/search_text.dart';
 import '../errors/app_error.dart';
 import '../storage/secure_token_store.dart';
 import 'fake_backend.dart';
 import 'repositories.dart';
+
 
 /// Repository implementations backed by [FakeBackend].
 ///
@@ -230,4 +232,120 @@ class FakeCallRepository implements CallRepository {
     required String conversationId,
   }) async =>
       const [];
+}
+
+/// A parent profile backed by memory, for development and widget tests.
+///
+/// Deliberately a real little state machine rather than a stub that returns a constant:
+/// the flows worth testing are set -> replace -> remove and the failures around them, and
+/// a repository that always answers the same thing cannot exercise any of them.
+///
+/// It is NOT a security model. Ownership and the parent↔child boundary are decided by the
+/// server; this fixture simply does what it is told, which is why every authorization test
+/// lives in `apps/api/test/integration/parent-profile.spec.ts` against the real service.
+class FakeProfileRepository implements ProfileRepository {
+  FakeProfileRepository({
+    ParentProfile? initial,
+    this.loadError,
+    this.mutationError,
+  }) : _profile = initial ?? _seed;
+
+  ParentProfile _profile;
+
+  /// Thrown by [me], to exercise the screen's error and retry states.
+  final Object? loadError;
+
+  /// Thrown by every mutation, to exercise upload/remove failure handling.
+  final Object? mutationError;
+
+  static const _seed = ParentProfile(
+    displayName: 'ولي أمر',
+    relationship: 'mother',
+    signInIdentity: 'qa.parent@qa.jawwid.test',
+    children: [
+      ChildProfile(id: 'learner-1', displayName: 'أحمد', level: 'المستوى الثالث'),
+      ChildProfile(id: 'learner-2', displayName: 'مريم'),
+    ],
+  );
+
+  @override
+  Future<ParentProfile> me() async {
+    final error = loadError;
+    if (error != null) throw error;
+    return _profile;
+  }
+
+  @override
+  Future<ParentProfile> myAvatar() async {
+    final error = loadError;
+    if (error != null) throw error;
+    // Name and photo only, exactly as the route behaves for a teacher or an admin.
+    return ParentProfile(
+      displayName: _profile.displayName,
+      avatarUrl: _profile.avatarUrl,
+      children: const [],
+    );
+  }
+
+  @override
+  Future<ParentProfile> setAvatar(PendingAttachment image) async {
+    _failIfAsked();
+    _profile = _copy(avatarUrl: 'https://fake.test/${image.fileName ?? 'avatar'}?sig=1');
+    return _profile;
+  }
+
+  @override
+  Future<ParentProfile> removeAvatar() async {
+    _failIfAsked();
+    _profile = _copy(avatarUrl: null, clearAvatar: true);
+    return _profile;
+  }
+
+  @override
+  Future<ParentProfile> setChildAvatar(String childId, PendingAttachment image) async {
+    _failIfAsked();
+    _profile = _copyChildren(childId, 'https://fake.test/$childId?sig=1');
+    return _profile;
+  }
+
+  @override
+  Future<ParentProfile> removeChildAvatar(String childId) async {
+    _failIfAsked();
+    _profile = _copyChildren(childId, null);
+    return _profile;
+  }
+
+  void _failIfAsked() {
+    final error = mutationError;
+    if (error != null) throw error;
+  }
+
+  ParentProfile _copy({String? avatarUrl, bool clearAvatar = false}) => ParentProfile(
+        displayName: _profile.displayName,
+        relationship: _profile.relationship,
+        signInIdentity: _profile.signInIdentity,
+        avatarUrl: clearAvatar ? null : (avatarUrl ?? _profile.avatarUrl),
+        canMessage: _profile.canMessage,
+        children: _profile.children,
+      );
+
+  ParentProfile _copyChildren(String childId, String? avatarUrl) => ParentProfile(
+        displayName: _profile.displayName,
+        relationship: _profile.relationship,
+        signInIdentity: _profile.signInIdentity,
+        avatarUrl: _profile.avatarUrl,
+        canMessage: _profile.canMessage,
+        children: [
+          for (final child in _profile.children)
+            if (child.id == childId)
+              ChildProfile(
+                id: child.id,
+                displayName: child.displayName,
+                level: child.level,
+                avatarUrl: avatarUrl,
+              )
+            else
+              child,
+        ],
+      );
 }

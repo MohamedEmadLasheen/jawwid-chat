@@ -60,6 +60,14 @@ final callRepositoryProvider = Provider<CallRepository>((ref) {
   throw UnimplementedError('callRepositoryProvider must be overridden');
 });
 
+/// The signed-in parent's own profile and the photos they may manage.
+///
+/// Throws until a composition root wires it, like every other repository here: a build
+/// that forgot it must fail loudly rather than quietly show an empty profile.
+final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
+  throw UnimplementedError('profileRepositoryProvider must be overridden');
+});
+
 /// Stories, read-only.
 ///
 /// Registered by the HTTP composition root only. The development composition root

@@ -1506,6 +1506,108 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Try again'**
   String get storyVideoRetry;
+
+  /// No description provided for @profilePhotoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile photo'**
+  String get profilePhotoTitle;
+
+  /// No description provided for @profilePhotoChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Change photo'**
+  String get profilePhotoChange;
+
+  /// No description provided for @profilePhotoAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add profile photo'**
+  String get profilePhotoAdd;
+
+  /// No description provided for @profilePhotoRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove photo'**
+  String get profilePhotoRemove;
+
+  /// No description provided for @profilePhotoUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading…'**
+  String get profilePhotoUploading;
+
+  /// No description provided for @profilePhotoFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The photo could not be saved. Nothing was changed.'**
+  String get profilePhotoFailed;
+
+  /// No description provided for @profilePhotoRemoveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The photo could not be removed.'**
+  String get profilePhotoRemoveFailed;
+
+  /// No description provided for @profilePhotoInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'That image cannot be used. Choose a JPEG, PNG or WebP under 8 MB.'**
+  String get profilePhotoInvalid;
+
+  /// No description provided for @profileSignInIdentity.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-in'**
+  String get profileSignInIdentity;
+
+  /// No description provided for @profileSignInIdentityNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Your sign-in is managed by the academy and cannot be changed here.'**
+  String get profileSignInIdentityNote;
+
+  /// No description provided for @profilePersonalTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Personal information'**
+  String get profilePersonalTitle;
+
+  /// No description provided for @profileChildPhotoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}\'s photo'**
+  String profileChildPhotoTitle(String name);
+
+  /// No description provided for @profileRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get profileRetry;
+
+  /// No description provided for @profileCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get profileCopied;
+
+  /// No description provided for @profilePhotoEditLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile photo. Double tap to change it.'**
+  String get profilePhotoEditLabel;
+
+  /// No description provided for @profileChildPhotoEditLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}\'s photo. Double tap to change it.'**
+  String profileChildPhotoEditLabel(String name);
+
+  /// No description provided for @profileCopyIdentity.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy sign-in'**
+  String get profileCopyIdentity;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

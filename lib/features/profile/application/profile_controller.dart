@@ -13,8 +13,26 @@ import '../domain/profile_view.dart';
 /// The conversation is fetched by id rather than read from the list already in memory: the
 /// backend stays the authority on whether this viewer may see it, so a profile opened from
 /// a stale row or a deep link fails at the boundary instead of rendering from a cache (§52).
+///
+/// ## `autoDispose` is load-bearing
+///
+/// Two reasons, and either on its own would be enough.
+///
+/// A member's `avatarUrl` is a SHORT-LIVED SIGNED URL, minted for the response that
+/// carried it. Cached for the life of the session, this view would eventually hold URLs
+/// that have expired, and Group Info would show broken images instead of faces. Dropping
+/// the view when the screen closes means re-opening it mints fresh ones.
+///
+/// And the photos themselves change: a parent who sets a new profile picture should see it
+/// in Group Info the next time they look, without restarting the app. The refresh comes
+/// from refetching the authoritative response -- not from a second local copy of the photo
+/// and not from a cache-busting parameter on a URL the server already signed.
+///
+/// This also matches every other conversation-scoped family here
+/// (`conversationCallsProvider`, `callCapabilityProvider`), none of which may outlive the
+/// screen that asked.
 final conversationProfileProvider =
-    FutureProvider.family<ProfileView, String>((ref, conversationId) async {
+    FutureProvider.autoDispose.family<ProfileView, String>((ref, conversationId) async {
   final role = ref.watch(currentRoleProvider);
   if (role == null) {
     throw const AppErrorPlaceholder();

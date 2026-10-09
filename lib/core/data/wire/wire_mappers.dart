@@ -172,9 +172,12 @@ abstract final class WireMappers {
   /// child a conversation belongs to, and a client that guesses will
   /// eventually guess wrong in front of a parent with two children.
   ///
-  /// `avatarUrl` stays null because `chat.learner` has no avatar column. An
-  /// absent field is rendered as absent rather than filled in with an initial
-  /// dressed up as data.
+  /// `avatarUrl` stays null because the CONVERSATION contract does not carry one:
+  /// `chat.learner` gained an `avatar_object_key` with the profile feature, but
+  /// conversation and membership DTOs still describe nobody's photo, and this mapper
+  /// reads only what the wire actually sends. A learner's photo reaches the app through
+  /// `GET /me/profile`, scoped to that learner's own family. An absent field is rendered
+  /// as absent rather than filled in with an initial dressed up as data.
   static LearnerRef? learner(Object? raw) {
     if (raw is! Map) return null;
 
@@ -341,6 +344,10 @@ abstract final class WireMappers {
       // the bubble says a role word rather than an id in that case (§25).
       authorName: ((json['authorName'] as String?) ?? '').trim(),
       authorRole: authorRole(json['authorKind'] as String?),
+      // Signed server-side, from the same identity that produced the name above. Read
+      // straight through: the signature and expiry are part of the url, so normalising or
+      // appending to it would invalidate it.
+      authorAvatarUrl: _nonEmpty(json['authorAvatarUrl']),
       systemEvent: SystemEvent.fromJson(json['systemEvent']),
       kind: messageKind(json['type'] as String?),
       body: (json['body'] as String?) ?? '',
@@ -431,11 +438,18 @@ abstract final class WireMappers {
   /// override, and so the fake backend keeps working. An unresolved name stays
   /// EMPTY -- the UI shows a neutral word for that and must never fall back to
   /// the actor id (§25).
+  ///
+  /// `avatarUrl` is a short-lived SIGNED url the server minted for this response. It is
+  /// read straight through and never cached or persisted: when it expires the next read of
+  /// the conversation brings a fresh one, which is why there is no second copy of a photo
+  /// anywhere in this app. Null is the ordinary case -- it means "no photo", and
+  /// [JawwidAvatar] draws the member's initials, as it already did for everyone.
   static GroupMember groupMember(Map<String, Object?> json, {String? displayName}) {
     return GroupMember(
       id: (json['actorId'] as String?) ?? '',
       displayName: displayName ?? ((json['displayName'] as String?) ?? '').trim(),
       role: memberRole(json['memberRole'] as String?),
+      avatarUrl: _nonEmpty(json['avatarUrl']),
     );
   }
 

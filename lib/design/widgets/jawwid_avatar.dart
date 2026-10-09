@@ -87,16 +87,16 @@ class _Initials extends StatelessWidget {
 
   /// Stable per-name tint, so the same person keeps the same colour between sessions.
   ///
-  /// Drawn from the brand and status foregrounds, all of which are contrast-checked against
-  /// white in §2.2 — the initials sit on this colour, so it must stay legible.
+  /// The palette is a token role of its own ([JawwidTokens.colorAvatarTints]) rather than a
+  /// list assembled here from status foregrounds. It used to be the latter, and that was
+  /// wrong in a way only the dark theme revealed: a status foreground is INK, so in dark it
+  /// inverts to pale in order to be readable *on* a surface — while an avatar uses the
+  /// colour *as* the surface, with white initials on top. Three of the five slots became
+  /// near-white circles carrying white letters at around 1.15:1.
+  ///
+  /// The hash is unchanged, so everybody keeps the slot they already had.
   static Color tintFor(String name, JawwidTokens tokens) {
-    final palette = [
-      tokens.colorBrandPrimary,
-      tokens.colorBrandPrimaryPressed,
-      tokens.colorStatusInfoFg,
-      tokens.colorStatusSuccessFg,
-      tokens.colorTextSecondary,
-    ];
+    final palette = tokens.colorAvatarTints;
     final hash = name.codeUnits.fold<int>(0, (acc, unit) => (acc * 31 + unit) & 0xFFFF);
     return palette[hash % palette.length];
   }
@@ -126,3 +126,7 @@ class _Initials extends StatelessWidget {
 /// Exposed for tests.
 @visibleForTesting
 String avatarInitialsOf(String name) => _Initials.initialsOf(name);
+
+/// Exposed for tests, so the contrast of every tint can be checked without rendering.
+@visibleForTesting
+Color avatarTintFor(String name, JawwidTokens tokens) => _Initials.tintFor(name, tokens);
