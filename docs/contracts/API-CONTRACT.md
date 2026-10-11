@@ -279,6 +279,16 @@ ConversationMemberDto { actorId, actorKind: 'contact'|'staff'|'teacher'|'system'
   memberRole: 'parent'|'teacher'|'admin'|'observer', isSilent: boolean,
   displayName: string,                            // '' when the actor no longer
                                                   // resolves; never an id (O3)
+  avatarUrl: string|null,                         // SHORT-LIVED SIGNED url for this
+                                                  // member's photo, or null when they have
+                                                  // none. NEVER an object key. Signed per
+                                                  // read by the layer that already
+                                                  // established the reader may see these
+                                                  // members, and not to be cached by a
+                                                  // client as identity -- it expires. The
+                                                  // stable, holdable url is
+                                                  // ActorDto.avatarUrl, which exists only
+                                                  // for the signed-in actor.
   canOpenDirect: boolean }                        // PD-6 advisory, per requesting
                                                   // actor: may YOU open a 1:1 with
                                                   // this member? Computed by the same
@@ -292,6 +302,11 @@ ConversationMemberDto { actorId, actorKind: 'contact'|'staff'|'teacher'|'system'
                                                   // the value for an unknown viewer.
 MessageDto {
   id, conversationId: string|null, seq: string|null, authorKind, authorId: string|null,
+  authorAvatarUrl: string|null,                   // SHORT-LIVED SIGNED url for the
+                                                  // author's photo, or null. From the SAME
+                                                  // resolved Actor as authorDisplayName, so
+                                                  // a message cannot show one person's name
+                                                  // over another's face. Never a key.
   authorDisplayName: string|null,                 // canonical Actor.displayName (O3).
                                                   // null for a system message and for
                                                   // an author who no longer resolves.
@@ -316,6 +331,15 @@ ActorDto {
   actorId, kind: 'contact'|'staff'|'teacher', displayName, locale: 'ar'|'en', isActive,
   staffRole?: 'admin'|'coverage'|'manager'|'finance'|'technical'|'academic',   // kind=staff
   familyId?: string, canMessage?: boolean,                                       // kind=contact
+  avatarUrl: string|null,                                  // STABLE application path,
+                                                           // '/api/v1/me/avatar/image', when
+                                                           // this actor has a photo; null
+                                                           // otherwise. NOT a presigned url
+                                                           // and NOT a key: /me performs no
+                                                           // signing, because a session
+                                                           // outlives any signature. The
+                                                           // client resolves the path
+                                                           // against its own API base.
   organizationId, permissions: string[]                                          // UX only
 }
 TokenPairDto { tokenType: 'Bearer', accessToken, expiresIn: number /* seconds */, refreshToken,

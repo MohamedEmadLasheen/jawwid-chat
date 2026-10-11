@@ -187,18 +187,31 @@ describe('GET /conversations/:id — members, with names (O3)', () => {
     );
   });
 
-  it('exposes no member field beyond the six on the contract', async () => {
+  it('exposes no member field beyond the seven on the contract', async () => {
     const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
 
     const dto = await controller.get(s.teacherId, group.id);
 
     // Exact equality, not a subset: this is the tripwire that stops a widened
     // Prisma include or a convenience field reaching a client through the member
-    // list. `canOpenDirect` is the sixth and is declared in API-CONTRACT.md; a
-    // seventh should fail here until it is declared there too.
+    // list. `avatarUrl` is the seventh and IS declared in API-CONTRACT.md — it was
+    // added to this list deliberately, after declaring it there, which is the order
+    // this tripwire exists to force. An eighth should fail here until it is too.
+    //
+    // Note what is still absent: `avatarObjectKey`. `ResolvedMember` carries the key
+    // server-side so the caller can sign it, and this assertion is what proves the key
+    // does not ride out to a client behind the URL.
     for (const member of dto.members!) {
       expect(Object.keys(member).sort()).toEqual(
-        ['actorId', 'actorKind', 'canOpenDirect', 'displayName', 'isSilent', 'memberRole'],
+        [
+          'actorId',
+          'actorKind',
+          'avatarUrl',
+          'canOpenDirect',
+          'displayName',
+          'isSilent',
+          'memberRole',
+        ],
       );
     }
   });
