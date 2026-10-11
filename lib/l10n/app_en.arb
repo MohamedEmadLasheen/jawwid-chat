@@ -509,5 +509,36 @@
   "teacherProfilePhotoUploading": "Uploading photo…",
   "teacherProfilePhotoBadType": "Choose a JPEG, PNG or WebP image.",
   "teacherProfilePhotoTooLarge": "That image is larger than 5 MB.",
-  "teacherProfileCertificateSave": "Save certificate"
+  "teacherProfileCertificateSave": "Save certificate",
+  "profilePhotoTitle": "Profile photo",
+  "profilePhotoChange": "Change photo",
+  "profilePhotoAdd": "Add profile photo",
+  "profilePhotoRemove": "Remove photo",
+  "profilePhotoUploading": "Uploading…",
+  "profilePhotoFailed": "The photo could not be saved. Nothing was changed.",
+  "profilePhotoRemoveFailed": "The photo could not be removed.",
+  "profilePhotoInvalid": "That image cannot be used. Choose a JPEG, PNG or WebP under 8 MB.",
+  "profileSignInIdentity": "Sign-in",
+  "profileSignInIdentityNote": "Your sign-in is managed by the academy and cannot be changed here.",
+  "profilePersonalTitle": "Personal information",
+  "profileChildPhotoTitle": "{name}'s photo",
+  "profileRetry": "Try again",
+  "profileCopied": "Copied",
+  "@profileChildPhotoTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "profilePhotoEditLabel": "Profile photo. Double tap to change it.",
+  "profileChildPhotoEditLabel": "{name}'s photo. Double tap to change it.",
+  "profileCopyIdentity": "Copy sign-in",
+  "@profileChildPhotoEditLabel": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  }
 }

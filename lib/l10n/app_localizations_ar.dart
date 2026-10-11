@@ -929,4 +929,62 @@ class L10nAr extends L10n {
 
   @override
   String get teacherProfileCertificateSave => 'حفظ الشهادة';
+
+  @override
+  String get profilePhotoTitle => 'صورة الملف الشخصي';
+
+  @override
+  String get profilePhotoChange => 'تغيير الصورة';
+
+  @override
+  String get profilePhotoAdd => 'إضافة صورة الملف الشخصي';
+
+  @override
+  String get profilePhotoRemove => 'إزالة الصورة';
+
+  @override
+  String get profilePhotoUploading => 'جارٍ الرفع…';
+
+  @override
+  String get profilePhotoFailed => 'تعذّر حفظ الصورة. لم يتغيّر شيء.';
+
+  @override
+  String get profilePhotoRemoveFailed => 'تعذّرت إزالة الصورة.';
+
+  @override
+  String get profilePhotoInvalid =>
+      'لا يمكن استخدام هذه الصورة. اختر JPEG أو PNG أو WebP بحجم أقل من 8 ميجابايت.';
+
+  @override
+  String get profileSignInIdentity => 'تسجيل الدخول';
+
+  @override
+  String get profileSignInIdentityNote =>
+      'يدير الأكاديمية بيانات تسجيل دخولك ولا يمكن تغييرها هنا.';
+
+  @override
+  String get profilePersonalTitle => 'المعلومات الشخصية';
+
+  @override
+  String profileChildPhotoTitle(String name) {
+    return 'صورة $name';
+  }
+
+  @override
+  String get profileRetry => 'إعادة المحاولة';
+
+  @override
+  String get profileCopied => 'تم النسخ';
+
+  @override
+  String get profilePhotoEditLabel =>
+      'صورة الملف الشخصي. انقر نقرًا مزدوجًا لتغييرها.';
+
+  @override
+  String profileChildPhotoEditLabel(String name) {
+    return 'صورة $name. انقر نقرًا مزدوجًا لتغييرها.';
+  }
+
+  @override
+  String get profileCopyIdentity => 'نسخ بيانات الدخول';
 }
