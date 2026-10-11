@@ -17,13 +17,19 @@ import 'package:jawwid_chat/design/widgets/jawwid_avatar.dart';
 /// Initials are text, so they are held to the text bar, not the 3:1 UI bar.
 const _textContrastFloor = 4.5;
 
-/// The five palette entries, named as the implementation names them.
+/// The palette entries, read from the token the implementation reads.
+///
+/// It used to enumerate the five status/brand foregrounds this list was ASSEMBLED from.
+/// The palette is now a token role of its own (`colorAvatarTints`), built to work as
+/// surfaces, so naming its sources here would be describing a list that no longer exists —
+/// and a test that hard-coded them would keep passing while the real palette drifted.
+///
+/// The dark-mode tests below still name `colorStatusInfoFg` and friends directly, on
+/// purpose: they assert what `inkFor` does with a NEAR-WHITE tint, which is a property of
+/// the measurement and stays worth holding whether or not such a colour is in the palette.
 List<(String, Color)> _palette(JawwidTokens t) => [
-      ('colorBrandPrimary', t.colorBrandPrimary),
-      ('colorBrandPrimaryPressed', t.colorBrandPrimaryPressed),
-      ('colorStatusInfoFg', t.colorStatusInfoFg),
-      ('colorStatusSuccessFg', t.colorStatusSuccessFg),
-      ('colorTextSecondary', t.colorTextSecondary),
+      for (final (index, tint) in t.colorAvatarTints.indexed)
+        ('colorAvatarTints[$index]', tint),
     ];
 
 void main() {
