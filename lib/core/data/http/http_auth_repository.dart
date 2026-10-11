@@ -2,6 +2,7 @@ import '../../../shared/models/auth.dart';
 import '../../../shared/models/user_role.dart';
 import '../../errors/app_error.dart';
 import '../../network/api_client.dart';
+import '../../network/api_config.dart';
 import '../../network/device_descriptor.dart';
 import '../../network/http_stack.dart';
 import '../repositories.dart';
@@ -232,7 +233,7 @@ class HttpAuthRepository implements AuthRepository {
   ///
   /// Visible for testing: this is the mapping that decides who may hold a session on a
   /// phone, so it is exercised directly rather than only through a scripted login.
-  static AuthUser principalFrom(Map<String, Object?> actor) {
+  static AuthUser principalFrom(Map<String, Object?> actor, {String? baseUrl}) {
     final id = actor['actorId'];
     if (id is! String || id.isEmpty) {
       throw const AppError(
@@ -244,19 +245,44 @@ class HttpAuthRepository implements AuthRepository {
     final displayName = actor['displayName'];
     final locale = actor['locale'];
 
-    // The principal carries the account's avatar as a *stable* URL the app may hold for the
-    // life of the session — never a presigned URL, an object key, or a storage host. A
-    // session outlives any signature, so a URL that expires would rot in memory; the one
-    // here stays valid and is signed server-side on each read.
-    final avatarUrl = actor['avatarUrl'];
-
     return AuthUser(
       id: id,
       displayName: displayName is String ? displayName : '',
       role: roleFor(actor['kind']),
-      avatarUrl: avatarUrl is String && avatarUrl.isNotEmpty ? avatarUrl : null,
+      avatarUrl: avatarImageUrl(actor['avatarUrl'], baseUrl: baseUrl),
       locale: locale is String && locale.isNotEmpty ? locale : null,
     );
+  }
+
+  /// The account avatar as an ABSOLUTE url the image stack can fetch.
+  ///
+  /// The server publishes a *stable* root-relative path (`/api/v1/me/avatar/image`) and
+  /// never a presigned URL, an object key or a storage host: a session outlives any
+  /// signature, so a URL that expires would rot in memory, and on screen that is
+  /// indistinguishable from "the photo never changed". The signature is minted per read, by
+  /// the endpoint this points at.
+  ///
+  /// Resolution happens HERE and only here. `Uri.resolve` against the configured API base
+  /// replaces the path and keeps scheme and authority, so a base that already carries
+  /// `/api/v1` does not gain a second one — and an absolute URL, should the contract ever
+  /// send one, passes through untouched. Widgets receive a finished URL and own no
+  /// prefixing logic.
+  ///
+  /// Visible for testing so the join is asserted directly rather than through a login.
+  static String? avatarImageUrl(Object? raw, {String? baseUrl}) {
+    if (raw is! String || raw.isEmpty) return null;
+
+    final base = baseUrl ??
+        (ApiConfig.isConfigured ? ApiConfig.configuredBaseUrl : null);
+    if (base == null || base.isEmpty) return raw;
+
+    final Uri parsed;
+    try {
+      parsed = Uri.parse(base);
+    } on FormatException {
+      return raw;
+    }
+    return parsed.resolve(raw).toString();
   }
 
   /// `ActorDto.kind` -> [UserRole].

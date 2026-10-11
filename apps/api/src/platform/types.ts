@@ -32,6 +32,19 @@ export interface Actor {
    * tenant boundary. Optional because SYSTEM_ACTOR belongs to no organization.
    */
   organizationId?: string;
+
+  /**
+   * The storage key for this actor's photo, or null when they have none.
+   *
+   * A KEY, not a URL, and deliberately so. This file is the platform seam, which
+   * never imports `communication` -- and the storage seam lives there. Signing is
+   * therefore the caller's act, performed in the layer that already holds the
+   * storage seam AND already knows whether the reader is entitled to see this
+   * actor at all. A key is a name, not a capability: it grants nothing on its own,
+   * but it must never be serialised to a client, which is why every DTO mapper
+   * enumerates its fields by hand.
+   */
+  avatarObjectKey?: string | null;
 }
 
 export const SYSTEM_ACTOR: Actor = {

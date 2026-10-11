@@ -222,6 +222,7 @@ export class PrismaIdentityService implements IdentityService {
 function toStaffActor(staff: {
   id: string;
   name: string;
+  avatarObjectKey?: string | null;
   role: string;
   isActive: boolean;
   leftAt: Date | null;
@@ -235,12 +236,14 @@ function toStaffActor(staff: {
     isActive: staff.isActive && staff.leftAt === null,
     staffRole: staff.role as StaffRole,
     organizationId: staff.organizationId,
+    avatarObjectKey: staff.avatarObjectKey ?? null,
   };
 }
 
 function toContactActor(contact: {
   id: string;
   name: string;
+  avatarObjectKey?: string | null;
   isActive: boolean;
   familyId: string;
   canMessage: boolean;
@@ -256,12 +259,14 @@ function toContactActor(contact: {
     familyId: contact.familyId,
     canMessage: contact.canMessage,
     organizationId: contact.organizationId,
+    avatarObjectKey: contact.avatarObjectKey ?? null,
   };
 }
 
 function toTeacherActor(teacher: {
   id: string;
   name: string;
+  avatarObjectKey?: string | null;
   isActive: boolean;
   leftAt: Date | null;
   organizationId: string;
@@ -275,5 +280,6 @@ function toTeacherActor(teacher: {
     // left is inactive even if nobody flipped is_active in the same statement.
     isActive: teacher.isActive && teacher.leftAt === null,
     organizationId: teacher.organizationId,
+    avatarObjectKey: teacher.avatarObjectKey ?? null,
   };
 }

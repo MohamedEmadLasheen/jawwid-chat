@@ -8,7 +8,12 @@
  */
 import { MeController, AuthController } from '@platform/auth/auth.controller';
 import { AuthError, AuthErrorCode } from '@platform/auth/auth.errors';
-import { PERMISSIONS_DEFERRED, toActorDto, toTokenPairDto } from '@platform/auth/auth.dto';
+import {
+  ACTOR_AVATAR_IMAGE_PATH,
+  PERMISSIONS_DEFERRED,
+  toActorDto,
+  toTokenPairDto,
+} from '@platform/auth/auth.dto';
 import type { AuthService } from '@platform/auth/auth.service';
 import type { Actor } from '@platform/types';
 import { LoginRateLimiter } from '@platform/auth/login-rate-limit';
@@ -39,6 +44,7 @@ const EXPECTED_KEYS = [
   'canMessage',
   'organizationId',
   'permissions',
+  'avatarUrl',
 ].sort();
 
 describe('GET /me', () => {
@@ -138,6 +144,53 @@ describe('the DTO boundary carries no private data', () => {
       ['accessToken', 'actor', 'expiresIn', 'refreshToken', 'session', 'tokenType'].sort(),
     );
     expect(JSON.stringify(dto)).not.toContain('refreshTokenHash');
+  });
+});
+
+describe('the account photo is published as a STABLE path (M2)', () => {
+  it('an actor with a photo gets the one published path, not a signed url', () => {
+    const dto = toActorDto(contactActor({ avatarObjectKey: 'avatars/contact/abc/def' }));
+
+    expect(dto.avatarUrl).toBe(ACTOR_AVATAR_IMAGE_PATH);
+    expect(dto.avatarUrl).toBe('/api/v1/me/avatar/image');
+  });
+
+  it('an actor with no photo gets null, which the client renders as initials', () => {
+    expect(toActorDto(contactActor()).avatarUrl).toBeNull();
+    expect(toActorDto(contactActor({ avatarObjectKey: null })).avatarUrl).toBeNull();
+  });
+
+  it('/me NEVER signs: no key, no signature, no storage host in the identity', () => {
+    // The whole reason the path is indirect. A signature outlives nothing; a session
+    // outlives it, so an identity carrying one would render once and then rot.
+    const dto = toActorDto(
+      contactActor({ avatarObjectKey: 'avatars/contact/11111111-1111-1111-1111-111111111111/p' }),
+    );
+    const serialised = JSON.stringify(dto);
+
+    expect(serialised).not.toContain('avatars/');
+    expect(serialised).not.toContain('X-Amz-Signature');
+    expect(serialised).not.toContain('X-Amz-Algorithm');
+    expect(serialised).not.toContain('X-Amz-Credential');
+    expect(serialised).not.toContain('9010');
+    expect(dto).not.toHaveProperty('avatarObjectKey');
+  });
+
+  it('every kind that can own a photo publishes the SAME path, revealing nothing', () => {
+    const key = 'avatars/staff/22222222-2222-2222-2222-222222222222/p';
+    expect(toActorDto(staffActor({ avatarObjectKey: key })).avatarUrl).toBe(
+      ACTOR_AVATAR_IMAGE_PATH,
+    );
+    expect(toActorDto(teacherActor({ avatarObjectKey: key })).avatarUrl).toBe(
+      ACTOR_AVATAR_IMAGE_PATH,
+    );
+  });
+
+  it('the path is root-relative, so the client resolves it against its own base', () => {
+    // A server-side public-base variable was rejected: the only one that exists
+    // (STORAGE_PUBLIC_BASE_URL) configures the local signer and is ignored under S3.
+    expect(ACTOR_AVATAR_IMAGE_PATH.startsWith('/')).toBe(true);
+    expect(ACTOR_AVATAR_IMAGE_PATH).not.toContain('://');
   });
 });
 
