@@ -1,6 +1,7 @@
 import '../../shared/models/auth.dart';
 import '../../shared/models/conversation.dart';
 import '../../shared/models/message.dart';
+import '../../shared/models/parent_profile.dart';
 import '../../shared/models/story.dart';
 import '../../shared/models/teacher_profile.dart';
 import '../../shared/models/user_role.dart';
@@ -552,4 +553,36 @@ abstract interface class CallRepository {
   /// global call history on the server, and this interface does not pretend
   /// otherwise; `docs/mobile/backend-dependencies.md` carries the gap.
   Future<List<CallHistoryEntry>> callHistory({required String conversationId});
+}
+
+/// The signed-in parent's own profile, and the photos they may manage.
+///
+/// Every method is first-person: none takes a parent id, because the server reads the
+/// caller from the bearer token. The one id that does travel is a CHILD's, on the photo
+/// methods, and the server re-checks it against the caller's own family on every call —
+/// this client's job is to send it, never to decide whether it is allowed.
+///
+/// Each method answers with the WHOLE profile, so a mutation never leaves the caller
+/// guessing what changed or needing a second request to find out.
+abstract interface class ProfileRepository {
+  Future<ParentProfile> me();
+
+  /// The caller's own name and photo, whatever kind of account they are.
+  ///
+  /// `GET /me/avatar`, which a teacher or an admin can call and [me] is not: a parent
+  /// profile is a family thing and staff have no family. The response carries only a name
+  /// and a photo, so `children` comes back EMPTY here -- a parent wanting the richer answer
+  /// calls [me]. Kept as one model rather than two because every consumer of this reads
+  /// exactly those two fields.
+  Future<ParentProfile> myAvatar();
+
+  /// Upload [image] and make it the caller's own photo, replacing any existing one.
+  Future<ParentProfile> setAvatar(PendingAttachment image);
+
+  Future<ParentProfile> removeAvatar();
+
+  /// The same, for a child of the caller's family. The server decides whether it is.
+  Future<ParentProfile> setChildAvatar(String childId, PendingAttachment image);
+
+  Future<ParentProfile> removeChildAvatar(String childId);
 }

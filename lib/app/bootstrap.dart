@@ -8,6 +8,7 @@ import '../core/data/http/http_call_repository.dart';
 import '../core/data/http/http_conversation_repository.dart';
 import '../core/data/http/http_group_repository.dart';
 import '../core/data/http/http_message_repository.dart';
+import '../core/data/http/http_profile_repository.dart';
 import '../core/data/http/http_story_repository.dart';
 import '../core/data/http/http_teacher_profile_repository.dart';
 import '../core/errors/app_error.dart';
@@ -137,6 +138,12 @@ List<Override> _httpOverrides() {
     storyRepositoryProvider.overrideWithValue(
       HttpStoryRepository(client: client),
     ),
+    // THE SAME `client` again: the profile rides the one authenticated stack, so the
+    // avatar upload travels under the same interceptor chain, TokenProvider and refresh
+    // lifecycle as everything else.
+    profileRepositoryProvider.overrideWithValue(
+      HttpProfileRepository(client: client),
+    ),
     teacherProfileRepositoryProvider.overrideWithValue(
       HttpTeacherProfileRepository(client: client, tokens: tokens),
     ),
@@ -199,6 +206,7 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
     messageRepositoryProvider.overrideWithValue(FakeMessageRepository(backend)),
     groupRepositoryProvider.overrideWithValue(FakeGroupRepository(backend)),
     callRepositoryProvider.overrideWithValue(FakeCallRepository(backend)),
+    profileRepositoryProvider.overrideWithValue(FakeProfileRepository()),
     authControllerProvider.overrideWith(
       () => AuthController(
         repository: authRepository,
