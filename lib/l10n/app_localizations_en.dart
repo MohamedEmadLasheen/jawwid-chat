@@ -750,4 +750,10 @@ class L10nEn extends L10n {
 
   @override
   String get storyVideoRetry => 'Try again';
+
+  @override
+  String get storiesEmpty => 'No stories yet';
+
+  @override
+  String get storiesEmptyBody => 'Stories published to you will appear here.';
 }

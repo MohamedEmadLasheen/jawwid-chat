@@ -34,7 +34,21 @@ import '../../../shared/models/conversation.dart';
 /// action, which is a narrower and purely cosmetic question.
 class OpenDirectController extends Notifier<OpenDirectState> {
   @override
-  OpenDirectState build() => const OpenDirectState.idle();
+  OpenDirectState build() {
+    // THE SESSION BOUNDARY. This holds an actor id the previous principal was opening a
+    // channel with; a change of session must drop it rather than leave the next person's
+    // first tap resolving somebody else's pairing.
+    //
+    // Done inline rather than through `SessionScoped`, which is a mixin on AsyncNotifier:
+    // this is a plain Notifier whose empty state is a value rather than `AsyncLoading`. Same
+    // two steps in the same order — reset, then rebuild.
+    ref.listen(principalIdProvider, (previous, next) {
+      if (previous == next) return;
+      state = const OpenDirectState.idle();
+      ref.invalidateSelf();
+    });
+    return const OpenDirectState.idle();
+  }
 
   /// Opens (or resolves) the channel with [withActorId].
   ///

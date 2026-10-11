@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart';
 
 import '../core/audio/voice_player.dart';
 import '../core/audio/voice_recorder.dart';
@@ -71,6 +72,66 @@ final callRepositoryProvider = Provider<CallRepository>((ref) {
 final storyRepositoryProvider = Provider<StoryRepository>((ref) {
   throw UnimplementedError('storyRepositoryProvider must be overridden');
 });
+
+/// How a provider declares that its state belongs to one signed-in person.
+///
+/// ## Rebuilding is not enough — the value has to be thrown away
+///
+/// The obvious implementations do not work, and both were measured against riverpod 3.4.3
+/// rather than assumed:
+///
+///   * `ref.watch(principalIdProvider)` rebuilds, but as a *reload*, and
+///   * `ref.invalidateSelf()` rebuilds too, with or without `asReload`.
+///
+/// Every one of those paths ends in `AsyncValue.copyWithPrevious`, which is the whole point
+/// of the design: a refresh should not blank the screen it is refreshing. So the outgoing
+/// person's data stays readable through `AsyncValue.value` for as long as the incoming
+/// person's request takes — which is precisely the leak, just shorter.
+///
+/// Nor can the state simply be set back to `AsyncLoading`: assigning it goes through the same
+/// transition, so it too comes back carrying the old value. The only assignment that reliably
+/// displaces the outgoing person's data is one that supplies REAL data — hence
+/// [sessionEmptyValue], the value this controller holds when it belongs to nobody. Reset to
+/// that, then rebuild.
+///
+/// That is why this is a mixin on the notifier rather than an extension on `Ref`: assigning
+/// `state` needs the notifier, and nothing reachable from a bare `Ref` can do it.
+mixin SessionScoped<ValueT> on AsyncNotifier<ValueT> {
+  /// What this controller holds when it belongs to nobody — an empty list, for every
+  /// controller that currently mixes this in.
+  ///
+  /// Displayed for at most the frame between the old session ending and the new load being
+  /// issued, and it must be genuinely empty rather than a placeholder: it is the one thing a
+  /// user could see that belongs to neither session.
+  ValueT get sessionEmptyValue;
+
+  /// Drop this controller's state the moment the authenticated principal changes.
+  ///
+  /// Call it FIRST in `build()`, from anything that caches one person's data: their stories,
+  /// their chat list, their call history. One line is the whole declaration, and
+  /// [principalIdProvider] is the single place the boundary itself is defined.
+  ///
+  /// `listen`, never `watch`: watching would add a dependency and rebuild this provider as a
+  /// reload, which is the behaviour being avoided.
+  ///
+  /// ## What it does NOT do
+  ///
+  /// It does not clear private fields. Riverpod reuses the notifier INSTANCE across rebuilds
+  /// — `build()` runs again on the same object — so a controller holding mutable state of its
+  /// own must reset it at the top of `build()`, and must never assign a `late final` there,
+  /// because the second build would throw.
+  void bindToSession() {
+    ref.listen(principalIdProvider, (previous, next) {
+      if (previous == next) return;
+
+      // Order matters. Resetting first means the rebuild's `copyWithPrevious` has only the
+      // empty value to import, so nothing of the outgoing session survives into the incoming
+      // one — not even for the single frame between the two.
+      state = AsyncData(sessionEmptyValue);
+      ref.invalidateSelf();
+    });
+  }
+}
 
 /// The realtime transport, as a seam.
 ///
@@ -168,6 +229,68 @@ NotifierProvider<AuthController, AuthState> buildAuthController(Ref ref) {
 final currentRoleProvider = Provider<UserRole?>(
   (ref) => ref.watch(authControllerProvider).user?.role,
 );
+
+/// THE SESSION BOUNDARY: the authenticated principal's id, or null when signed out.
+///
+/// ─────────────────────────────────────────────────────────────────────────────────────
+///  THE INVARIANT, for anything added later:
+///
+///  User-scoped state MUST be bound to the authenticated PRINCIPAL ID — not to the role,
+///  not to a screen's lifecycle, and not to someone remembering to pull-to-refresh.
+///  When the principal changes, the previous principal's state must not remain observable
+///  to the new one.
+///
+///  In practice that means: a provider that caches anything belonging to one signed-in
+///  person binds itself here (`SessionScoped.bindToSession`, or the same two steps inline),
+///  and never reaches a user-scoped dependency through a bare `ref.read` that leaves the
+///  dependency undeclared. Both halves of that sentence have already been shipped as bugs.
+/// ─────────────────────────────────────────────────────────────────────────────────────
+///
+/// ## What this is for
+///
+/// Every provider that caches data belonging to ONE signed-in person watches this, and
+/// Riverpod then rebuilds it the moment the principal changes. Without it a provider's state
+/// outlives the session that produced it, and the next person to sign in on the device sees
+/// the previous one's data until something happens to refetch — which is exactly the leak
+/// this exists to close: a teacher was shown a story addressed to `all_families`, on a feed
+/// the server had correctly scoped to two stories, because the rail still held the parent's
+/// three.
+///
+/// ## Why the ID and not the role
+///
+/// `currentRoleProvider` is NOT a session boundary. Parent A -> Parent B is a principal
+/// change with no role change at all, so anything keyed on role alone survives it. Identity
+/// is the only thing that distinguishes two people, so identity is what this carries.
+///
+/// ## Bind to it with [SessionScopedRef.bindToSession], never with `watch`
+///
+/// `ref.watch(principalIdProvider)` is the obvious move and it is WRONG here. A dependency
+/// change is a *reload*: Riverpod keeps the old value on screen as `AsyncLoading(previous)`
+/// while the new one is fetched, so the incoming principal would still be shown the outgoing
+/// one's data for the length of a round trip. `invalidateSelf(asReload: false)` is the one
+/// that discards it, which is why [SessionScopedRef.bindToSession] listens and invalidates
+/// instead of watching. Both behaviours were verified against riverpod 3.4.3, not assumed.
+///
+/// ## A build with no auth wired yields null rather than throwing
+///
+/// [authControllerProvider] throws until the composition root overrides it, and this is
+/// watched from deep inside feature controllers that previously had no opinion about
+/// authentication at all. Propagating that would turn "this container has no auth" into a
+/// broken chat list, which is a worse answer than "nobody is signed in" — and it is the same
+/// judgement `pushRegistrarProvider` and `CallsController` already make for an unregistered
+/// provider. Only [UnimplementedError] is swallowed; anything else is a real fault and is
+/// rethrown.
+final principalIdProvider = Provider<String?>((ref) {
+  try {
+    return ref.watch(authControllerProvider.select((state) => state.user?.id));
+  } catch (error) {
+    // Riverpod wraps whatever a provider's create function throws, so the composition root's
+    // UnimplementedError arrives one layer down. Unwrap before deciding.
+    final cause = error is ProviderException ? error.exception : error;
+    if (cause is UnimplementedError) return null;
+    rethrow;
+  }
+});
 
 /// Development-only fake backend, selected by role.
 final fakeBackendProvider = Provider.family<FakeBackend, UserRole>((ref, role) {

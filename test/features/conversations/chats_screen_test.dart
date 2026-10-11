@@ -230,7 +230,7 @@ void main() {
   });
 
   group('nothing on this screen is fabricated', () {
-    testWidgets('an empty story feed costs no vertical space at all',
+    testWidgets('an empty story feed says so rather than disappearing',
         (tester) async {
       await tester.pumpWidget(
         harness(
@@ -243,16 +243,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // No placeholder circles, no skeleton implying data is on the way.
-      expect(find.byType(StoriesRail), findsNothing);
-
-      final offstage = find.byType(StoriesRail, skipOffstage: false);
-      expect(offstage, findsOneWidget);
+      // Present, and honest about being empty: the Stories area stays part of the screen
+      // between publications instead of the whole feature vanishing when the last one
+      // expires.
       expect(
-        tester.getSize(offstage).height,
-        0,
-        reason: 'an empty rail must cost no vertical space at all',
+        tester.getSize(find.byType(StoriesRail)).height,
+        StoriesRail.emptyHeight,
       );
+      expect(find.text('لا توجد حالات بعد'), findsOneWidget);
+
+      // Still no skeleton implying data is on the way.
+      expect(find.byType(CircularProgressIndicator), findsNothing);
     });
 
     testWidgets('a build with NO story backend also shows nothing, and does not error',

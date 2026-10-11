@@ -1458,6 +1458,18 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Try again'**
   String get storyVideoRetry;
+
+  /// Shown in the stories rail when the signed-in account has no live stories.
+  ///
+  /// In en, this message translates to:
+  /// **'No stories yet'**
+  String get storiesEmpty;
+
+  /// No description provided for @storiesEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Stories published to you will appear here.'**
+  String get storiesEmptyBody;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

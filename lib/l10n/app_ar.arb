@@ -439,5 +439,7 @@
   "storyUnavailable": "هذه الحالة لم تعد متاحة.",
   "storyVideoLabel": "فيديو الحالة",
   "storyVideoFailed": "لم نتمكّن من تشغيل هذا الفيديو.",
-  "storyVideoRetry": "إعادة المحاولة"
+  "storyVideoRetry": "إعادة المحاولة",
+  "storiesEmpty": "لا توجد حالات بعد",
+  "storiesEmptyBody": "ستظهر هنا الحالات المنشورة إليك."
 }

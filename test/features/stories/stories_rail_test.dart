@@ -8,6 +8,7 @@ import 'package:jawwid_chat/app/providers.dart';
 import 'package:jawwid_chat/app/retry_policy.dart';
 import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/design/theme.dart';
+import 'package:jawwid_chat/design/widgets/jawwid_avatar.dart';
 import 'package:jawwid_chat/features/stories/application/stories_controller.dart';
 import 'package:jawwid_chat/features/stories/presentation/stories_rail.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
@@ -18,9 +19,16 @@ import 'fake_story_repository.dart';
 /// The stories rail.
 ///
 /// The rail's whole job is to be honest about how much there is to see, so most of these
-/// tests are about it NOT appearing. A rail that renders a row of grey circles when the
-/// academy has published nothing costs 106dp of the most valuable space on the screen to
-/// say "nothing here".
+/// tests are about what it shows when it has no stories. It still refuses to render a row of
+/// grey circles — a ring means a story, and 106dp is too much space to spend on an absence —
+/// but "nothing at all" turned out to be its own kind of dishonesty: because every story
+/// expires after 24 hours, an empty feed made the whole feature disappear from the app, and
+/// it was twice reported as Stories having been deleted.
+///
+/// So there are now three outcomes to hold apart, and the line between them is whether an
+/// absence has actually been established: rings when there are stories, a short line when the
+/// server really did answer "none", and nothing at all while loading, when the feed failed,
+/// or when this build has no story backend at all.
 void main() {
   Widget harness({
     required List<Override> overrides,
@@ -49,15 +57,26 @@ void main() {
       storyRepositoryProvider.overrideWithValue(fake);
 
   group('the rail appears only when there is something to show', () {
-    testWidgets('no stories: renders nothing and takes no height', (tester) async {
+    testWidgets('no stories: says so, instead of vanishing', (tester) async {
       await tester.pumpWidget(harness(overrides: [repo(FakeStoryRepository())]));
       await tester.pumpAndSettle();
 
-      expect(find.byType(SizedBox), findsWidgets);
+      // The regression this guards: an empty feed used to render nothing at all, so a
+      // 24-hour expiry removed the entire feature from the screen and was twice reported as
+      // Stories having been deleted from the app.
       expect(
         tester.getSize(find.byType(StoriesRail)).height,
-        0,
-        reason: 'an empty rail must cost no vertical space',
+        StoriesRail.emptyHeight,
+        reason: 'an empty feed must still show the Stories area',
+      );
+      expect(find.text('لا توجد حالات بعد'), findsOneWidget);
+
+      // But it must not fabricate a story to say it. No rings, no placeholder avatars.
+      expect(find.byType(JawwidAvatar), findsNothing);
+      expect(
+        tester.getSize(find.byType(StoriesRail)).height,
+        lessThan(StoriesRail.railHeight),
+        reason: 'an absence must cost less room than the thing it stands in for',
       );
     });
 
@@ -321,6 +340,9 @@ void main() {
             builder: (context, ref, _) {
               container = ProviderScope.containerOf(context);
               return MaterialApp(
+                // Pinned, so the strings this test matches do not depend on the locale of
+                // whatever machine runs it.
+                locale: const Locale('ar'),
                 theme: JawwidTheme.light(isArabic: true),
                 supportedLocales: JawwidApp.supportedLocales,
                 localizationsDelegates: const [
@@ -342,7 +364,9 @@ void main() {
       await container.read(storiesControllerProvider.notifier).refresh();
       await tester.pumpAndSettle();
 
-      expect(tester.getSize(find.byType(StoriesRail)).height, 0);
+      // Collapses from the rings to the empty line — not to nothing.
+      expect(tester.getSize(find.byType(StoriesRail)).height, StoriesRail.emptyHeight);
+      expect(find.text('لا توجد حالات بعد'), findsOneWidget);
     });
   });
 }
