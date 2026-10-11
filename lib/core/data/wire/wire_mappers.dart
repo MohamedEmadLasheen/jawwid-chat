@@ -172,9 +172,12 @@ abstract final class WireMappers {
   /// child a conversation belongs to, and a client that guesses will
   /// eventually guess wrong in front of a parent with two children.
   ///
-  /// `avatarUrl` stays null because `chat.learner` has no avatar column. An
-  /// absent field is rendered as absent rather than filled in with an initial
-  /// dressed up as data.
+  /// `avatarUrl` stays null because `ConversationLearnerDto` carries `{id, name}` and
+  /// nothing else — deliberately, since a conversation payload is not a profile. The
+  /// column DOES exist now (`chat.learner.avatar_object_key`); a child's photo reaches the
+  /// client through their own parent's profile instead, where ownership is already
+  /// established. An absent field is rendered as absent rather than filled in with an
+  /// initial dressed up as data.
   static LearnerRef? learner(Object? raw) {
     if (raw is! Map) return null;
 
@@ -276,6 +279,9 @@ abstract final class WireMappers {
       sequence: parseSeq(json['seq']),
       authorId: authorId,
       authorName: _nonEmpty(json['authorDisplayName']) ?? '',
+      // From the SAME resolved actor as the name above, so a bubble cannot show one
+      // person's name over another's face.
+      authorAvatarUrl: _nonEmpty(json['authorAvatarUrl']),
       authorRole: authorRole(json['authorKind'] as String?),
       kind: messageKind(json['type'] as String?),
       body: (json['body'] as String?) ?? '',
@@ -421,6 +427,9 @@ abstract final class WireMappers {
       id: (json['actorId'] as String?) ?? '',
       displayName: _nonEmpty(json['displayName']) ?? '',
       role: memberRole(json['memberRole'] as String?),
+      // A short-lived signed URL, or null for a member with no photo. Blank reads as
+      // absent: `Image.network('')` throws instead of falling back to initials.
+      avatarUrl: _nonEmpty(json['avatarUrl']),
       // Absent or non-boolean reads as false: an advisory that defaulted to
       // "you may" would offer actions the server then refuses.
       canOpenDirect: json['canOpenDirect'] == true,

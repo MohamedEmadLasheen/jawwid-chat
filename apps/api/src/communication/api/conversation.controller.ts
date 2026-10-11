@@ -1,4 +1,7 @@
-import { Body, Controller, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Post, Query, UseFilters } from '@nestjs/common';
+import { OBJECT_STORAGE } from '../../platform/tokens';
+import type { ObjectStorage } from '../attachments/object-storage';
+import { signMemberAvatars } from '../profile/avatar-urls';
 import { ConversationService } from '../conversations/conversation.service';
 import { MessageService } from '../messages/message.service';
 import { CallService } from '../calls/call.service';
@@ -21,6 +24,10 @@ export class ConversationController {
     private readonly conversations: ConversationService,
     private readonly messages: MessageService,
     private readonly calls: CallService,
+    // The storage seam, because signing a member's photo is this layer's act: it is the
+    // layer that holds the seam AND the one that has just established the reader may see
+    // these members at all.
+    @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
   ) {}
 
   /**
@@ -108,9 +115,14 @@ export class ConversationController {
     // them through the one batch primitive. Only on this route: the LIST
     // endpoint deliberately does not load members, because that would be an
     // identity batch per row for a screen that renders none of them.
-    return toConversationDto(conversation, members, {
-      unreadCount: await this.messages.unreadCount(id, actorId),
-    });
+    // Signed AFTER readWithMembers ran canRead, so a refused reader never reaches a
+    // signature. One batch for the whole roster rather than one call per face.
+    const [unreadCount, avatarUrls] = await Promise.all([
+      this.messages.unreadCount(id, actorId),
+      signMemberAvatars(this.storage, members),
+    ]);
+
+    return toConversationDto(conversation, members, { unreadCount, avatarUrls });
   }
 
   /**

@@ -44,7 +44,7 @@ beforeEach(async () => {
   await truncate(g.prisma);
   s = await seed(g.prisma);
   g.coverage.onDutyId = s.ownerId;
-  controller = new ConversationController(g.conversations, g.messages, g.calls);
+  controller = new ConversationController(g.conversations, g.messages, g.calls, g.storage);
 });
 
 /** The authorized teacher↔parent direct channel PD-6 permits. */

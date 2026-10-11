@@ -63,11 +63,9 @@ export function buildGraph(
   );
   const attachments = new AttachmentService(prisma, authz, conversations, storage);
   const messages = new MessageService(
-    prisma, authz, conversations, outbox, config, attachments, audit, identity,
-  );
+    prisma, authz, conversations, outbox, config, attachments, audit, identity, storage);
   const approvals = new ApprovalService(
-    prisma, authz, conversations, attachments, outbox, audit, identity,
-  );
+    prisma, authz, conversations, attachments, outbox, audit, identity, storage);
   const templates = new TemplateService(prisma);
   const quietHours = new QuietHoursService(prisma);
   const notifications = new NotificationService(prisma, templates, quietHours, config, new LoggingPushProvider());

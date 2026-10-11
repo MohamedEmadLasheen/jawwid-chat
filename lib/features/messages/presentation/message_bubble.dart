@@ -2,9 +2,12 @@ import 'dart:io';
 
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../app/providers.dart';
 import '../../../design/tokens.dart';
+import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/message.dart';
 import '../../../shared/models/user_role.dart';
@@ -19,7 +22,7 @@ import 'voice_message_player.dart';
 /// "Delivered" unless the backend said so, and §15/§26 require a pending-approval message to
 /// read as *not yet visible to anyone else*. Both live in [_StatusLine] rather than being
 /// spread across the widget.
-class MessageBubble extends StatelessWidget {
+class MessageBubble extends ConsumerWidget {
   const MessageBubble({
     super.key,
     required this.message,
@@ -66,7 +69,7 @@ class MessageBubble extends StatelessWidget {
   final bool isHighlighted;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (message.isSystem) return _SystemMessage(message: message);
 
     final l10n = L10n.of(context);
@@ -107,7 +110,12 @@ class MessageBubble extends StatelessWidget {
 
     return Align(
       alignment: mine ? AlignmentDirectional.centerEnd : AlignmentDirectional.centerStart,
-      child: ConstrainedBox(
+      child: _withSenderAvatar(
+        context,
+        l10n,
+        ref,
+        mine: mine,
+        child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth:
               MediaQuery.sizeOf(context).width * Sizes.maxBubbleWidthFraction,
@@ -209,6 +217,64 @@ class MessageBubble extends StatelessWidget {
           ),
         ),
       ),
+      ),
+    );
+  }
+
+  /// Put the sender's face beside an incoming bubble.
+  ///
+  /// ## Why the gutter is always there
+  ///
+  /// The avatar is drawn only on the FIRST bubble of a run — the same boundary that already
+  /// decides whether to print the sender's name, so grouping is reused rather than
+  /// reinvented. But the empty space is reserved on every bubble in the run, so a
+  /// conversation does not shift sideways as a run continues. Reserving the gutter is what
+  /// makes "don't repeat the avatar" look deliberate instead of broken.
+  ///
+  /// ## Why outgoing messages are untouched
+  ///
+  /// Your own messages get no avatar and no gutter: you know who you are, and the existing
+  /// right-aligned geometry is unchanged. A system message never reaches here at all — it
+  /// returned as `_SystemMessage` before the bubble was built.
+  ///
+  /// Row follows the ambient direction, so in Arabic the gutter sits on the right without
+  /// any explicit mirroring.
+  Widget _withSenderAvatar(
+    BuildContext context,
+    L10n l10n,
+    WidgetRef ref, {
+    required bool mine,
+    required Widget child,
+  }) {
+    if (mine) return child;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          // Lines the avatar up with the bubble's own first line rather than its box.
+          padding: const EdgeInsetsDirectional.only(
+            start: Spacing.spacing4,
+            top: Spacing.spacing1,
+          ),
+          child: SizedBox(
+            width: Sizes.avatarSm,
+            child: showAuthor
+                ? JawwidAvatar(
+                    displayName: _authorLabel(message, l10n),
+                    imageUrl: message.authorAvatarUrl,
+                    // An author photo is signed per read, so the widget withholds the
+                    // bearer for it — and still sends one for the reference storage,
+                    // whose URLs authenticate differently. The decision is the widget's.
+                    imageHeaders: ref.watch(signedImageHeadersProvider).value,
+                    size: Sizes.avatarSm,
+                  )
+                : null,
+          ),
+        ),
+        Flexible(child: child),
+      ],
     );
   }
 

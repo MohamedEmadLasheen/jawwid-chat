@@ -4,7 +4,7 @@ import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
 import { AppConfigService } from '../../platform/app-config.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
-import { AUDIT_SERVICE, IDENTITY_SERVICE } from '../../platform/tokens';
+import { AUDIT_SERVICE, IDENTITY_SERVICE, OBJECT_STORAGE } from '../../platform/tokens';
 import type { AuditService } from '../../platform/audit.service';
 import type {
   ActorRef,
@@ -23,6 +23,8 @@ import {
   needsReply,
   conversationState,
 } from '../contracts/dto';
+import type { ObjectStorage } from '../attachments/object-storage';
+import { signActorAvatars } from '../profile/avatar-urls';
 import {
   ActorKind,
   ApprovalDecision,
@@ -82,6 +84,9 @@ export class MessageService {
     private readonly attachments: AttachmentService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
+    // Signing an author's photo happens here, in the layer that already applied the
+    // visibility filter deciding which messages this reader may see at all.
+    @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
   ) {}
 
   /**
@@ -108,6 +113,20 @@ export class MessageService {
       if (ref) refs.push(ref);
     }
     return this.identity.resolveActors(refs);
+  }
+
+  /**
+   * The authors AND their signed photos, from one resolution.
+   *
+   * Deliberately one call: a message must never say one person's name and show another's
+   * face, and the way to guarantee that is for both to come from the same `Actor`. Keyed by
+   * `actorRefKey`, so `STAFF:x` and `TEACHER:x` stay two different people.
+   */
+  private async authorsWithAvatars(
+    rows: ReadonlyArray<Pick<Message, 'authorId' | 'authorType'>>,
+  ): Promise<[ResolvedActors, Map<string, string>]> {
+    const actors = await this.authorsFor(rows);
+    return [actors, await signActorAvatars(this.storage, actors)];
   }
 
   // -------------------------------------------------------------------
@@ -357,11 +376,13 @@ export class MessageService {
       // Sign this message's attachment URLs too. Without it a sender's own
       // voice note comes back with url: null and is unplayable until the thread
       // is re-fetched -- the message is there, but it cannot be heard.
-      return toMessageDto(
-        created,
-        await this.attachments.signUrlsForMessages([created.id]),
-        await this.authorsFor([created]),
-      );
+      const [authors, avatarUrls] = await this.authorsWithAvatars([created]);
+        return toMessageDto(
+          created,
+          await this.attachments.signUrlsForMessages([created.id]),
+          authors,
+          avatarUrls,
+        );
     } catch (e) {
       // Concurrent duplicate submission of the same client_message_id.
       if (
@@ -392,10 +413,12 @@ export class MessageService {
     // The idempotent-replay path returns the original message, so it must carry
     // the same playable URLs a first send does.
     if (!found) return null;
+    const [authors, avatarUrls] = await this.authorsWithAvatars([found]);
     return toMessageDto(
       found,
       await this.attachments.signUrlsForMessages([found.id]),
-      await this.authorsFor([found]),
+      authors,
+      avatarUrls,
     );
   }
 
@@ -464,8 +487,8 @@ export class MessageService {
     // ONE identity batch for the whole page, before the map. Resolving inside the
     // map would be one round trip per message -- the shape this whole change exists
     // to remove.
-    const authors = await this.authorsFor(rows);
-    const messages = rows.map((m) => toMessageDto(m, signed, authors));
+    const [authors, avatarUrls] = await this.authorsWithAvatars(rows);
+    const messages = rows.map((m) => toMessageDto(m, signed, authors, avatarUrls));
     const nextBefore =
       !ascending && rows.length === limit ? (rows[rows.length - 1].seq?.toString() ?? null) : null;
 

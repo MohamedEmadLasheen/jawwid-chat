@@ -42,6 +42,15 @@ export interface MessageDto {
   authorId: string | null;
 
   /**
+   * A short-lived SIGNED url for the author's photo, or null.
+   *
+   * Resolved from the SAME `Actor` as `authorDisplayName`, which is the point: a message
+   * cannot say one person's name and show another's face, because one lookup produces both.
+   * If the name is unresolved the avatar is null too.
+   */
+  authorAvatarUrl: string | null;
+
+  /**
    * The author's canonical display name (mobile gap O3, author half).
    *
    * Resolved server-side from `Actor.displayName` — the same single source as
@@ -80,6 +89,17 @@ export interface ConversationMemberDto {
   actorKind: string;
   memberRole: string;
   isSilent: boolean;
+
+  /**
+   * A short-lived SIGNED url for this member's photo, or null when they have none.
+   *
+   * Null is ordinary, not a degraded case: the client already draws initials for every
+   * member, and that is what it keeps doing. Never an object key, and never persisted by a
+   * client as though it were the member's identity — it expires, and the next read re-signs
+   * it. The stable, holdable URL is the one `ActorDto.avatarUrl` carries for the signed-in
+   * actor alone.
+   */
+  avatarUrl: string | null;
 
   /**
    * The member's display name (mobile gap O3).
@@ -219,12 +239,19 @@ export interface ResolvedMember {
   displayName: string;
   /** Advisory; see ConversationMemberDto.canOpenDirect. False when unknown. */
   canOpenDirect: boolean;
+
+  /**
+   * The member's photo KEY, for the caller to sign. Server-internal and never emitted:
+   * `toConversationDto` enumerates its fields by hand, and what it publishes is the signed
+   * URL. Null when this member has no photo or their kind cannot have one.
+   */
+  avatarObjectKey: string | null;
 }
 
 export function toConversationDto(
   c: ConversationWithLearner,
   members?: ResolvedMember[],
-  extra?: { unreadCount?: number },
+  extra?: { unreadCount?: number; avatarUrls?: ReadonlyMap<string, string> },
 ): ConversationDto {
   return {
     id: c.id,
@@ -246,6 +273,13 @@ export function toConversationDto(
       isSilent: m.isSilent,
       displayName: m.displayName,
       canOpenDirect: m.canOpenDirect,
+      // Signed by the caller — the layer that holds the storage seam and has ALREADY
+      // decided this reader may see these members. Keyed by `actorRefKey`, so a staff id
+      // can never collide with a teacher id that happens to match.
+      avatarUrl:
+        extra?.avatarUrls?.get(
+          actorRefKey({ actorId: m.actorId, actorKind: m.actorKind }),
+        ) ?? null,
     })),
     // Two fields enumerated by hand, like every other field here: the Learner
     // row is never spread, so `level`, `nextClassAt` and `teacherId` cannot
@@ -309,6 +343,7 @@ export function toMessageDto(
   m: MessageWithRelations,
   signedUrls: Map<string, { url: string; thumbnailUrl: string | null }> = new Map(),
   authors: ResolvedActors = new Map(),
+  avatarUrls: ReadonlyMap<string, string> = new Map(),
 ): MessageDto {
   const hidden = m.deletedForAll;
   const author = messageAuthorRef(m);
@@ -319,6 +354,8 @@ export function toMessageDto(
     authorKind: m.authorType,
     authorId: m.authorId,
     authorDisplayName: author ? (authors.get(actorRefKey(author))?.displayName ?? null) : null,
+    // Same id, same resolved actor, same breath as the name above.
+    authorAvatarUrl: author ? (avatarUrls.get(actorRefKey(author)) ?? null) : null,
     onBehalfMode: m.onBehalfMode,
     type: m.type,
     // A message deleted for everyone keeps its row for auditability, but its

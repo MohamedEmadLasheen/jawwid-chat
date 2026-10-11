@@ -223,6 +223,11 @@ export class ConversationService {
       displayName:
         actors.get(actorRefKey({ actorId: m.actorId, actorKind: m.actorKind }))?.displayName ?? '',
       canOpenDirect: openable.has(actorRefKey({ actorId: m.actorId, actorKind: m.actorKind })),
+      // From the actors this method ALREADY resolved — no second query, and no second
+      // member-resolution path for a photo to be present on one route and absent on another.
+      avatarObjectKey:
+        actors.get(actorRefKey({ actorId: m.actorId, actorKind: m.actorKind }))
+          ?.avatarObjectKey ?? null,
     }));
   }
 

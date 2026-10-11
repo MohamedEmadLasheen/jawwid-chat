@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
-import { AUDIT_SERVICE, IDENTITY_SERVICE } from '../../platform/tokens';
+import { AUDIT_SERVICE, IDENTITY_SERVICE, OBJECT_STORAGE } from '../../platform/tokens';
 import type { AuditService } from '../../platform/audit.service';
 import type { ActorRef, IdentityService } from '../../platform/identity.service';
 import { ConversationService } from '../conversations/conversation.service';
@@ -11,6 +11,8 @@ import { AttachmentService } from '../attachments/attachment.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
 import { messageAuthorRef, toMessageDto, MessageDto } from '../contracts/dto';
+import type { ObjectStorage } from '../attachments/object-storage';
+import { signActorAvatars } from '../profile/avatar-urls';
 import { ActorKind, ApprovalDecision, Moderation, ReceiptState, Visibility } from '../contracts/vocab';
 
 export interface PendingApprovalDto {
@@ -43,6 +45,10 @@ export class ApprovalService {
     private readonly outbox: OutboxService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
+    // So a pending message in the approval queue shows the same author face the thread
+    // does. A DTO field populated on one route and null on another is the kind of
+    // inconsistency the display-name work already had to go back and fix.
+    @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
   ) {}
 
   /** The approval queue, scoped to what this actor is allowed to decide. */
@@ -108,6 +114,7 @@ export class ApprovalService {
       if (ref) refs.push(ref);
     }
     const authors = await this.identity.resolveActors(refs);
+    const avatarUrls = await signActorAvatars(this.storage, authors);
 
     return rows.map((r) => ({
       approvalId: r.id,
@@ -116,7 +123,7 @@ export class ApprovalService {
       requestedBy: r.requestedBy,
       approverId: r.approverId,
       createdAt: r.createdAt.toISOString(),
-      message: toMessageDto(r.message, signed, authors),
+      message: toMessageDto(r.message, signed, authors, avatarUrls),
     }));
   }
 

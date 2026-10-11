@@ -627,4 +627,74 @@ void main() {
       expect(message.attachments, isEmpty);
     });
   });
+  group('other people\'s photos come off the wire (Tier 2)', () {
+    test('a member\'s signed photo url is read', () {
+      final member = WireMappers.groupMember({
+        'actorId': 'a1',
+        'displayName': 'Umm Yusuf',
+        'memberRole': 'parent',
+        'avatarUrl': 'http://storage.test/avatars/contact/x/p.jpg?X-Amz-Signature=s',
+      });
+
+      expect(member.avatarUrl,
+          'http://storage.test/avatars/contact/x/p.jpg?X-Amz-Signature=s');
+    });
+
+    test('an absent or blank member photo is null, never an empty string', () {
+      // `Image.network('')` throws rather than falling back to initials, so blank must
+      // not survive the mapping.
+      expect(WireMappers.groupMember({'actorId': 'a1', 'memberRole': 'parent'}).avatarUrl,
+          isNull);
+      expect(
+        WireMappers.groupMember(
+            {'actorId': 'a1', 'memberRole': 'parent', 'avatarUrl': '   '}).avatarUrl,
+        isNull,
+      );
+      // A NON-STRING is deliberately not asserted here. `_nonEmpty` casts with
+      // `as String?`, as every mapper in this file does: the wire type is trusted, and a
+      // number in a string field is a server contract violation that should surface
+      // loudly rather than be quietly swallowed into "no photo".
+    });
+
+    test('a message author\'s signed photo url is read', () {
+      final message = WireMappers.message({
+        'id': 'm1',
+        'conversationId': 'c1',
+        'type': 'text',
+        'createdAt': '2026-10-11T08:00:00.000Z',
+        'authorId': 'a9',
+        'authorDisplayName': 'Ahmed',
+        'authorKind': 'teacher',
+        'authorAvatarUrl': 'http://storage.test/avatars/teacher/y/p.jpg?X-Amz-Signature=s',
+      }, viewerActorId: 'me');
+
+      expect(message.authorName, 'Ahmed');
+      expect(message.authorAvatarUrl,
+          'http://storage.test/avatars/teacher/y/p.jpg?X-Amz-Signature=s');
+    });
+
+    test('an author with no photo maps to null, and the name still arrives', () {
+      final message = WireMappers.message({
+        'id': 'm1',
+        'conversationId': 'c1',
+        'type': 'text',
+        'createdAt': '2026-10-11T08:00:00.000Z',
+        'authorId': 'a9',
+        'authorDisplayName': 'Ahmed',
+        'authorKind': 'teacher',
+      }, viewerActorId: 'me');
+
+      expect(message.authorName, 'Ahmed');
+      expect(message.authorAvatarUrl, isNull);
+    });
+
+    test('a learner on a conversation still carries no photo, by contract', () {
+      // `ConversationLearnerDto` is {id, name}: a conversation payload is not a profile.
+      // The column exists, but a child's photo reaches the client through their own
+      // parent's profile, where ownership is already established.
+      final learner = WireMappers.learner({'id': 'l1', 'name': 'أحمد'});
+      expect(learner?.avatarUrl, isNull);
+    });
+  });
+
 }

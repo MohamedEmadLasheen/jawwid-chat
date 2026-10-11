@@ -126,6 +126,7 @@ class Message {
     this.sequence,
     this.authorId,
     this.authorName = '',
+    this.authorAvatarUrl,
     this.authorRole = ParticipantRole.unknown,
     this.body = '',
     this.attachments = const [],
@@ -138,6 +139,14 @@ class Message {
     this.isDeleted = false,
     this.failureCode,
   });
+
+  /// The author's photo as a SHORT-LIVED signed URL, or null.
+  ///
+  /// Comes from the same resolved actor as [authorName], so a bubble can never say one
+  /// person's name and show another's face. Null is ordinary — no photo, the system actor,
+  /// or an author who no longer resolves — and renders as initials, which is what every
+  /// bubble did before. Never held as identity: it expires, and the next read re-signs it.
+  final String? authorAvatarUrl;
 
   /// Server id. Null until the server has accepted the message.
   final String? id;

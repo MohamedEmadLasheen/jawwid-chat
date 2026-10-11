@@ -1,4 +1,5 @@
 import type { ObjectStorage } from '../attachments/object-storage';
+import { actorRefKey, type ResolvedActors } from '../../platform/identity.service';
 
 /**
  * Turning a stored avatar key into something a client may fetch.
@@ -43,4 +44,72 @@ export function signAvatar(
 ): Promise<string | null> {
   if (!objectKey) return Promise.resolve(null);
   return storage.signedReadUrl(objectKey, avatarReadTtlSeconds());
+}
+
+/**
+ * Sign a batch of avatar keys that are ALREADY keyed the way the reader will look them up.
+ *
+ * One signing implementation, two callers — resolved actors and conversation members —
+ * because two implementations would eventually disagree about what "no photo" means.
+ *
+ * An entry exists ONLY for a key that signed successfully, so a caller reading
+ * `.get(k) ?? null` gets null for "no photo" without telling it apart from "not resolved".
+ *
+ * Adds NO authorization and is not a place to put any: it signs what it is given, which is
+ * why every call site sits behind a membership or family check.
+ */
+export async function signAvatarsByKey(
+  storage: ObjectStorage,
+  entries: Iterable<readonly [string, string | null | undefined]>,
+): Promise<Map<string, string>> {
+  const withPhotos = [...entries].filter(([, objectKey]) => objectKey);
+  if (withPhotos.length === 0) return new Map();
+
+  // In parallel: a group of thirty members must not cost thirty sequential signings.
+  const signed = await Promise.all(
+    withPhotos.map(([, objectKey]) => signAvatar(storage, objectKey ?? null)),
+  );
+
+  const urls = new Map<string, string>();
+  withPhotos.forEach(([key], index) => {
+    const url = signed[index];
+    if (url) urls.set(key, url);
+  });
+  return urls;
+}
+
+/**
+ * Sign the photos of already-resolved actors, keyed by the SAME `actorRefKey` the resolver
+ * keys its own map on — so no caller invents a second spelling.
+ *
+ * That matters more than it looks: `chat.staff`, `chat.contact` and `chat.teacher` have
+ * independently generated uuids, so an id alone names nobody. `STAFF:x` and `TEACHER:x` are
+ * different actors, and a map keyed on the id alone would hand one person's face to another.
+ */
+export function signActorAvatars(
+  storage: ObjectStorage,
+  actors: ResolvedActors,
+): Promise<Map<string, string>> {
+  return signAvatarsByKey(
+    storage,
+    [...actors.entries()].map(([key, actor]) => [key, actor.avatarObjectKey] as const),
+  );
+}
+
+/** The same, for the members of one conversation. */
+export function signMemberAvatars(
+  storage: ObjectStorage,
+  members: readonly {
+    actorId: string;
+    actorKind: string;
+    avatarObjectKey: string | null;
+  }[],
+): Promise<Map<string, string>> {
+  return signAvatarsByKey(
+    storage,
+    members.map(
+      (m) =>
+        [actorRefKey({ actorId: m.actorId, actorKind: m.actorKind }), m.avatarObjectKey] as const,
+    ),
+  );
 }

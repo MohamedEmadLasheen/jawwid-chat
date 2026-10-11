@@ -100,12 +100,8 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
     audit,
     relationships,
   );
-  const attachments = new AttachmentService(
-    prisma,
-    authz,
-    conversations,
-    new SignedLocalObjectStorage(),
-  );
+  const storage = new SignedLocalObjectStorage();
+  const attachments = new AttachmentService(prisma, authz, conversations, storage);
   const messages = new MessageService(
     prisma,
     authz,
@@ -117,6 +113,8 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
     // O3: MessageService resolves author display names through the canonical
     // identity service, so it takes one.
     identity,
+    // Author photos are signed through the same storage seam attachments already use.
+    storage,
   );
 
   // Redis-backed; neither is exercised by the assertions below, and a missing
