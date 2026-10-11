@@ -101,12 +101,44 @@ class MessagesController extends Notifier<MessagesState> {
 
   Timer? _drainTimer;
 
-  late final MessageRepository _messages;
+  /// Captured at build rather than read through `ref` after an await, which would throw if
+  /// the user left the conversation while a request was in flight.
+  ///
+  /// NOT `late final`: `build()` runs again when the principal changes (below), and a second
+  /// assignment to a `late final` throws `LateInitializationError`.
+  late MessageRepository _messages;
 
   @override
   MessagesState build() {
-    // Captured once, at build. Reading it through `ref` after an await would throw if the
-    // user left the conversation while a request was in flight.
+    // THE SESSION BOUNDARY. A conversation can have members from more than one account —
+    // a student group holds the parent AND the teacher — so the same conversation id is
+    // reachable by two principals in turn on one device. This provider is a family keyed by
+    // that id and is not autoDispose, so without this the SECOND principal is handed the
+    // first one's loaded log and no refetch ever happens: measured, not assumed, and the
+    // messages are not necessarily theirs to read (a message hidden for one member, or one
+    // still awaiting approval, is in the other's page).
+    //
+    // Inline rather than through `SessionScoped`, which is a mixin on AsyncNotifier: this is
+    // a plain Notifier whose empty state is a value. Same two steps in the same order —
+    // reset to empty, then rebuild.
+    ref.listen(principalIdProvider, (previous, next) {
+      if (previous == next) return;
+      state = MessagesState(log: MessageLog.empty(), isLoadingInitial: true);
+      ref.invalidateSelf();
+    });
+
+    // Reset EVERYTHING this notifier owns. Riverpod reuses the instance across rebuilds, so
+    // anything left here is inherited by the next principal — and the outbox is the dangerous
+    // one: an unsent message composed by the previous account must never be retried, and so
+    // delivered, as the account that replaced it. Losing an unsent draft is the correct
+    // trade.
+    _drainTimer?.cancel();
+    _drainTimer = null;
+    _outbox.clear();
+    _pendingBodies.clear();
+    _pendingVoiceFiles.clear();
+    _pendingAttachmentFiles.clear();
+
     _messages = ref.read(messageRepositoryProvider);
 
     ref.onDispose(() {

@@ -12,7 +12,8 @@ import '../domain/conversation_list.dart';
 /// Pin/mute/archive are applied optimistically and rolled back on failure — these are cheap,
 /// user-private preferences (§42), and making the user wait on a round trip for a pin would
 /// feel broken on the slow networks this audience is on (§47).
-class ConversationsController extends AsyncNotifier<List<ConversationSection>> {
+class ConversationsController extends AsyncNotifier<List<ConversationSection>>
+    with SessionScoped<List<ConversationSection>> {
   List<Conversation> _conversations = const [];
   bool _includeArchived = false;
 
@@ -41,7 +42,34 @@ class ConversationsController extends AsyncNotifier<List<ConversationSection>> {
   bool get includeArchived => _includeArchived;
 
   @override
-  Future<List<ConversationSection>> build() => _load();
+  List<ConversationSection> get sessionEmptyValue => const [];
+
+  @override
+  Future<List<ConversationSection>> build() {
+    // THE SESSION BOUNDARY — see `bindToSession`. Without it the previous person's chat list
+    // stays on screen after somebody else signs in on the same device.
+    bindToSession();
+
+    // WATCHED, not read. `_sectioned()` reads the role to decide the sections, which made it
+    // a hidden dependency: during a sign-in the principal changes a beat before the role is
+    // readable, so the rebuild this controller does for the new session could section its
+    // conversations against a null role and settle on an empty list — a signed-in teacher
+    // looking at "no conversations yet" until they pulled to refresh. Declaring the
+    // dependency means the role arriving rebuilds the list that needs it.
+    ref.watch(currentRoleProvider);
+
+    // Reset EVERY field this notifier owns, because the notifier instance is reused across
+    // rebuilds: Riverpod re-runs `build()` on the same object rather than constructing a new
+    // one, so anything not cleared here is inherited by the next principal. The unread
+    // bookkeeping is the dangerous part — a watermark carried over from another account
+    // suppresses badges for conversations this one has never opened.
+    _conversations = const [];
+    _readBeforeLoaded.clear();
+    _reportedThrough.clear();
+    _includeArchived = false;
+
+    return _load();
+  }
 
   Future<List<ConversationSection>> _load() async {
     final repository = ref.read(conversationRepositoryProvider);

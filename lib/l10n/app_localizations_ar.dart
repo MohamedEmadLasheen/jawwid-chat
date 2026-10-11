@@ -751,4 +751,10 @@ class L10nAr extends L10n {
 
   @override
   String get storyVideoRetry => 'إعادة المحاولة';
+
+  @override
+  String get storiesEmpty => 'لا توجد حالات بعد';
+
+  @override
+  String get storiesEmptyBody => 'ستظهر هنا الحالات المنشورة إليك.';
 }

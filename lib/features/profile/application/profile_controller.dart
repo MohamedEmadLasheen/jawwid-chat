@@ -15,6 +15,17 @@ import '../domain/profile_view.dart';
 /// a stale row or a deep link fails at the boundary instead of rendering from a cache (§52).
 final conversationProfileProvider =
     FutureProvider.family<ProfileView, String>((ref, conversationId) async {
+  // THE SESSION BOUNDARY. Watching the ROLE is not enough: Parent A -> Parent B changes the
+  // person without changing the role, and this is a family keyed by conversation id that is
+  // not autoDispose — so a profile fetched for one principal would be served to the next
+  // from cache, with no refetch, exactly as the message log was.
+  //
+  // `watch` rather than the `SessionScoped` reset, because a FutureProvider has no state to
+  // assign. That leaves the previous value readable during the reload, which is safe HERE
+  // and only here: signing out routes to the sign-in screen, so no profile screen can still
+  // be mounted when the next principal arrives, and their first visit flushes this.
+  ref.watch(principalIdProvider);
+
   final role = ref.watch(currentRoleProvider);
   if (role == null) {
     throw const AppErrorPlaceholder();

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 
+import '../../../app/providers.dart';
 import '../../../core/data/repositories.dart';
 import '../../../core/errors/app_error.dart';
 import '../data/account_call_history.dart';
@@ -22,9 +23,19 @@ import '../data/account_call_history.dart';
 ///   The description above used to say calling was not wired at all, because no call
 ///   endpoint had been published when this was written. M4/W3 published them and
 ///   registered the repository; the guard is still right, its explanation was not.
-class CallsController extends AsyncNotifier<List<CallHistoryEntry>> {
+class CallsController extends AsyncNotifier<List<CallHistoryEntry>>
+    with SessionScoped<List<CallHistoryEntry>> {
   @override
-  Future<List<CallHistoryEntry>> build() => _load();
+  List<CallHistoryEntry> get sessionEmptyValue => const [];
+
+  @override
+  Future<List<CallHistoryEntry>> build() {
+    // THE SESSION BOUNDARY — see `bindToSession`. Account call history is as personal as the
+    // chat list: who this person rang, and who rang them. It must not survive into the next
+    // session on the device.
+    bindToSession();
+    return _load();
+  }
 
   Future<List<CallHistoryEntry>> _load() async {
     final AccountCallHistoryRepository history;

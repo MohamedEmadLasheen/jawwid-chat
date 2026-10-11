@@ -439,5 +439,10 @@
   "storyUnavailable": "This story is no longer available.",
   "storyVideoLabel": "Story video",
   "storyVideoFailed": "This video could not be played.",
-  "storyVideoRetry": "Try again"
+  "storyVideoRetry": "Try again",
+  "storiesEmpty": "No stories yet",
+  "@storiesEmpty": {
+    "description": "Shown in the stories rail when the signed-in account has no live stories."
+  },
+  "storiesEmptyBody": "Stories published to you will appear here."
 }
