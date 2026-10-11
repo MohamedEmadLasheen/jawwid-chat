@@ -6,16 +6,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jawwid_chat/app/app.dart';
 import 'package:jawwid_chat/app/providers.dart';
+import 'package:jawwid_chat/core/data/fake_backend.dart';
 import 'package:jawwid_chat/core/data/fake_repositories.dart';
 import 'package:jawwid_chat/core/data/repositories.dart';
 import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/core/media/media_picker.dart';
+import 'package:jawwid_chat/core/storage/secure_token_store.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/design/widgets/jawwid_avatar.dart';
+import 'package:jawwid_chat/features/auth/application/auth_controller.dart';
+import 'package:jawwid_chat/features/auth/domain/auth_state.dart';
 import 'package:jawwid_chat/features/profile/presentation/parent_account_view.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
+import 'package:jawwid_chat/shared/models/auth.dart';
 import 'package:jawwid_chat/shared/models/message.dart';
 import 'package:jawwid_chat/shared/models/parent_profile.dart';
+import 'package:jawwid_chat/shared/models/user_role.dart';
 
 
 /// The parent's own account screen.
@@ -42,6 +48,9 @@ void main() {
     return ProviderScope(
       overrides: [
         profileRepositoryProvider.overrideWithValue(repository),
+        // A successful own-avatar mutation refreshes the signed-in identity (M4),
+        // so these flows need a session exactly as the real screen has one.
+        authControllerProvider.overrideWith(_SignedInParent.new),
         mediaPickerProvider.overrideWithValue(picker ?? _Picker(image)),
       ],
       child: MaterialApp(
@@ -302,6 +311,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           profileRepositoryProvider.overrideWithValue(repo),
+          authControllerProvider.overrideWith(_SignedInParent.new),
           mediaPickerProvider.overrideWithValue(_Picker(image)),
         ],
       );
@@ -332,6 +342,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           profileRepositoryProvider.overrideWithValue(repo),
+          authControllerProvider.overrideWith(_SignedInParent.new),
           mediaPickerProvider.overrideWithValue(_Picker(image)),
         ],
       );
@@ -358,6 +369,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           profileRepositoryProvider.overrideWithValue(repo),
+          authControllerProvider.overrideWith(_SignedInParent.new),
           mediaPickerProvider.overrideWithValue(_Picker(image)),
         ],
       );
@@ -489,4 +501,29 @@ class _CountingRepository implements ProfileRepository {
   @override
   Future<ParentProfile> removeChildAvatar(String childId) =>
       _inner.removeChildAvatar(childId);
+}
+
+/// A signed-in parent, so the M4 identity refresh after a photo mutation has a session to
+/// re-read. It counts nothing: what that refresh does is asserted in
+/// `avatar_identity_refresh_test.dart`; here it only has to exist.
+class _SignedInParent extends AuthController {
+  _SignedInParent()
+      : super(
+          repository: FakeAuthRepository(
+            backend: FakeBackend(role: UserRole.parent),
+            tokens: InMemoryTokenStore(),
+          ),
+          tokens: InMemoryTokenStore(),
+          clearLocalData: _noop,
+        );
+
+  static Future<void> _noop() async {}
+
+  @override
+  AuthState build() => const AuthAuthenticated(
+        AuthUser(id: 'u_parent', displayName: 'ولي أمر', role: UserRole.parent),
+      );
+
+  @override
+  Future<void> refreshIdentity() async {}
 }

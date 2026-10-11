@@ -77,20 +77,6 @@ abstract class AvatarNotifier extends AsyncNotifier<ParentProfile> {
       // Local state FIRST: this screen shows what the server last said, and it should
       // show the new photo whether or not the identity read that follows succeeds.
       state = AsyncData(updated);
-
-      if (refreshesIdentity) {
-        // The auth session holds the identity that Settings, the chat list, message
-        // authors and every participant list render. Re-reading it ONCE is what makes a
-        // new photo visible there without this feature knowing those screens exist —
-        // the same seam the teacher profile already renames through.
-        //
-        // No retry and no polling. `refreshIdentity` already decides what a failure
-        // means: it ends the session when the error is terminal and otherwise logs and
-        // moves on, so a failed refresh cannot turn a photo that WAS saved into a
-        // reported failure.
-        await ref.read(authControllerProvider.notifier).refreshIdentity();
-      }
-      return null;
     } catch (error, stack) {
       // Put the caller back where they were. The photo did not change; the screen should
       // not pretend otherwise, and should not lose the rest of the profile either.
@@ -101,6 +87,22 @@ abstract class AvatarNotifier extends AsyncNotifier<ParentProfile> {
       }
       return error is AppError ? error : const AppError(AppErrorKind.unknown);
     }
+
+    if (refreshesIdentity) {
+      // OUTSIDE the try, deliberately. The auth session holds the identity that Settings,
+      // the chat list, message authors and every participant list render, and re-reading
+      // it ONCE is what makes a new photo visible there without this feature knowing
+      // those screens exist — the same seam the teacher profile already renames through.
+      //
+      // It sits outside because the photo is ALREADY SAVED by this point. Inside the try,
+      // a throw from the refresh would roll the screen back and report failure for a
+      // mutation that actually succeeded — which is the one thing this must never do.
+      //
+      // No retry and no polling: `refreshIdentity` owns what a failure means, ending the
+      // session when the error is terminal and otherwise logging and moving on.
+      await ref.read(authControllerProvider.notifier).refreshIdentity();
+    }
+    return null;
   }
 }
 
