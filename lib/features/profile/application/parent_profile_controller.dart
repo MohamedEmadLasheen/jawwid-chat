@@ -45,19 +45,26 @@ abstract class AvatarNotifier extends AsyncNotifier<ParentProfile> {
   }
 
   Future<AppError?> setAvatar(PendingAttachment image) =>
-      mutate((repo) => repo.setAvatar(image));
+      mutate((repo) => repo.setAvatar(image), refreshesIdentity: true);
 
-  Future<AppError?> removeAvatar() => mutate((repo) => repo.removeAvatar());
+  Future<AppError?> removeAvatar() =>
+      mutate((repo) => repo.removeAvatar(), refreshesIdentity: true);
 
   /// Run one photo operation, keeping the screen coherent whatever happens.
   ///
   /// Returns null on success and the failure otherwise, so the caller can say something
   /// specific. Nothing here inspects the error: mapping it to words is the screen's job
   /// and the localisation's, not this layer's.
+  /// Set for a mutation that changes WHOSE FACE THE SIGNED-IN ACTOR HAS.
+  ///
+  /// True for the caller's own photo, false for a child's. A child's avatar is not the
+  /// signed-in actor's identity, so refreshing after it would be a request that could
+  /// change nothing — and the contract says exactly one refresh per own-avatar mutation.
   @protected
   Future<AppError?> mutate(
-    Future<ParentProfile> Function(ProfileRepository repo) run,
-  ) async {
+    Future<ParentProfile> Function(ProfileRepository repo) run, {
+    bool refreshesIdentity = false,
+  }) async {
     // Deliberately no intermediate AsyncLoading: the screen keeps showing the profile it
     // has while the photo uploads, so the whole page does not blink for one avatar.
     final previous = switch (state) {
@@ -67,7 +74,22 @@ abstract class AvatarNotifier extends AsyncNotifier<ParentProfile> {
 
     try {
       final updated = await run(ref.read(profileRepositoryProvider));
+      // Local state FIRST: this screen shows what the server last said, and it should
+      // show the new photo whether or not the identity read that follows succeeds.
       state = AsyncData(updated);
+
+      if (refreshesIdentity) {
+        // The auth session holds the identity that Settings, the chat list, message
+        // authors and every participant list render. Re-reading it ONCE is what makes a
+        // new photo visible there without this feature knowing those screens exist —
+        // the same seam the teacher profile already renames through.
+        //
+        // No retry and no polling. `refreshIdentity` already decides what a failure
+        // means: it ends the session when the error is terminal and otherwise logs and
+        // moves on, so a failed refresh cannot turn a photo that WAS saved into a
+        // reported failure.
+        await ref.read(authControllerProvider.notifier).refreshIdentity();
+      }
       return null;
     } catch (error, stack) {
       // Put the caller back where they were. The photo did not change; the screen should
