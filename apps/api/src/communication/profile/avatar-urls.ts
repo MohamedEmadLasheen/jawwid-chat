@@ -12,11 +12,11 @@ import { actorRefKey, type ResolvedActors } from '../../platform/identity.servic
  * signing has to happen at the point where the entitlement is known, and that is why a
  * signed URL is never stored, cached, or put in a column next to the key.
  *
- * ## Why it lives in `communication` rather than in the directory
+ * ## Why it lives in `communication` rather than beside the resolver
  *
- * `PrismaDirectoryService` sits in `platform`, which never imports `communication`, and the
- * [ObjectStorage] seam is a communication provider. The directory therefore resolves what
- * an actor IS -- name, kind, avatar key -- and this layer resolves what the caller may SEE.
+ * `IdentityService` sits in `platform`, which never imports `communication`, and the
+ * [ObjectStorage] seam is a communication provider. The resolver therefore answers what an
+ * actor IS -- name, kind, avatar key -- and this layer answers what the caller may SEE.
  *
  * ## One rule, one place
  *
