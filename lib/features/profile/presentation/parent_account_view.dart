@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
+import '../../../core/errors/app_error.dart';
+import '../../../core/errors/error_presenter.dart';
 import '../../../design/tokens.dart';
 import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../l10n/app_localizations.dart';
@@ -234,7 +236,11 @@ class _EditablePhotoState extends ConsumerState<EditableProfilePhoto> {
       final failure = await action(ref.read(_source.notifier));
       if (!mounted || failure == null) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(failureMessage)),
+        SnackBar(
+          content: Text(
+            avatarFailureText(failure, L10n.of(context), failureMessage),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -371,9 +377,13 @@ class _ChildPhotoAvatarState extends ConsumerState<ChildPhotoAvatar> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            choice == _PhotoAction.remove
-                ? l10n.profilePhotoRemoveFailed
-                : l10n.profilePhotoFailed,
+            avatarFailureText(
+              failure,
+              l10n,
+              choice == _PhotoAction.remove
+                  ? l10n.profilePhotoRemoveFailed
+                  : l10n.profilePhotoFailed,
+            ),
           ),
         ),
       );
@@ -509,4 +519,29 @@ class _InfoRow extends StatelessWidget {
             ),
     );
   }
+}
+
+/// What to tell someone whose photo operation failed.
+///
+/// A photo operation fails for two unrelated reasons, and saying the same thing for both is
+/// how a lost network comes to look like a broken feature. [specific] is this feature's own
+/// copy -- "The photo could not be saved. Nothing was changed." -- which is exactly right
+/// when the SERVER refused, because it tells them their existing photo is intact. It is
+/// actively misleading when the request never arrived.
+///
+/// That was not theoretical. A device that could not reach the API at all reported "could
+/// not be saved" here, while the teacher-profile screen on the same device correctly
+/// reported "No connection" -- and the mismatch sent an investigation looking for a
+/// persistence bug that did not exist.
+///
+/// So a TRANSPORT failure is deferred to [ErrorPresenter], the one bridge between the error
+/// taxonomy and the UI, rather than given a second opinion here. Everything else keeps this
+/// feature's wording, which is more specific than anything the presenter would say.
+@visibleForTesting
+String avatarFailureText(Object? failure, L10n l10n, String specific) {
+  if (failure is AppError &&
+      (failure.kind == AppErrorKind.network || failure.kind == AppErrorKind.timeout)) {
+    return ErrorPresenter.present(failure, l10n).title;
+  }
+  return specific;
 }

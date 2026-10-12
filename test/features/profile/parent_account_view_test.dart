@@ -213,7 +213,34 @@ void main() {
       expect(find.byType(SnackBar), findsNothing);
     });
 
-    testWidgets('a failed upload says so AND keeps the profile on screen', (tester) async {
+    testWidgets('a SERVER refusal says the photo was not saved', (tester) async {
+      await tester.pumpWidget(harness(
+        repository: FakeProfileRepository(
+          mutationError: const AppError(AppErrorKind.server),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      final l10n = await L10n.delegate.load(const Locale('en'));
+      await openSheet(tester, l10n.profilePhotoAdd);
+      await tester.tap(find.text(l10n.profilePhotoAdd).last);
+      await tester.pumpAndSettle();
+
+      // The feature's own wording is right here: the server answered, and it refused, so
+      // "nothing was changed" is information the caller can act on.
+      expect(find.text(l10n.profilePhotoFailed), findsOneWidget);
+      // The profile is still on screen and the avatar did not pretend to change.
+      expect(find.text('ولي أمر'), findsWidgets);
+      expect(avatarNamed(tester, 'ولي أمر').imageUrl, isNull);
+    });
+
+    testWidgets('a NETWORK failure says there is no connection, not "not saved"',
+        (tester) async {
+      // CHANGED deliberately, and this is the regression. This case used to assert
+      // `profilePhotoFailed` -- the same words a server refusal gets. On a physical device
+      // that could not reach the API at all, that is what it said, while the
+      // teacher-profile screen on the same device correctly said "No connection"; the
+      // mismatch sent an investigation hunting a persistence bug that did not exist.
       await tester.pumpWidget(harness(
         repository: FakeProfileRepository(
           mutationError: const AppError(AppErrorKind.network),
@@ -226,10 +253,28 @@ void main() {
       await tester.tap(find.text(l10n.profilePhotoAdd).last);
       await tester.pumpAndSettle();
 
-      expect(find.text(l10n.profilePhotoFailed), findsOneWidget);
-      // The profile is still on screen and the avatar did not pretend to change.
+      expect(find.text(l10n.errorNetworkTitle), findsOneWidget);
+      expect(find.text(l10n.profilePhotoFailed), findsNothing);
+      // And the profile is still intact either way.
       expect(find.text('ولي أمر'), findsWidgets);
       expect(avatarNamed(tester, 'ولي أمر').imageUrl, isNull);
+    });
+
+    testWidgets('a TIMEOUT is also reported as a transport failure', (tester) async {
+      await tester.pumpWidget(harness(
+        repository: FakeProfileRepository(
+          mutationError: const AppError(AppErrorKind.timeout),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      final l10n = await L10n.delegate.load(const Locale('en'));
+      await openSheet(tester, l10n.profilePhotoAdd);
+      await tester.tap(find.text(l10n.profilePhotoAdd).last);
+      await tester.pumpAndSettle();
+
+      expect(find.text(l10n.errorTimeoutTitle), findsOneWidget);
+      expect(find.text(l10n.profilePhotoFailed), findsNothing);
     });
 
     testWidgets("a child's photo can be set from their own control", (tester) async {
