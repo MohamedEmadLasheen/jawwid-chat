@@ -1,7 +1,9 @@
 import { Body, Controller, Get, Inject, Param, Post, Query, UseFilters } from '@nestjs/common';
 import { OBJECT_STORAGE } from '../../platform/tokens';
 import type { ObjectStorage } from '../attachments/object-storage';
-import { signMemberAvatars } from '../profile/avatar-urls';
+import { signActorAvatars, signMemberAvatars } from '../profile/avatar-urls';
+import { actorRefKey } from '../../platform/identity.service';
+import type { Actor } from '../../platform/types';
 import { ConversationService } from '../conversations/conversation.service';
 import { MessageService } from '../messages/message.service';
 import { CallService } from '../calls/call.service';
@@ -39,19 +41,43 @@ export class ConversationController {
    * request, so it cannot be asked about a conversation this actor may not see
    * -- and being scoped to their own receipts, it could not answer if it were.
    *
-   * One count query for the whole list, not one per row (mobile gap O1).
+   * One count query for the whole list, not one per row (mobile gap O1). The row FACES
+   * follow the same discipline: one membership query, one identity batch and one signing
+   * batch for the entire page, deduplicated by actor -- never per conversation.
    */
   @Get()
   async list(@ActorId() actorId: string) {
     const rows = await this.conversations.listForActor(actorId);
-    const unread = await this.messages.unreadCountsFor(
-      rows.map((c) => c.id),
-      actorId,
-    );
+    const [unread, counterparts] = await Promise.all([
+      this.messages.unreadCountsFor(
+        rows.map((c) => c.id),
+        actorId,
+      ),
+      this.conversations.counterpartsFor(rows, actorId),
+    ]);
+
+    // Keyed by actorRefKey so one person appearing on two rows is signed ONCE, and so a
+    // staff id can never collide with a teacher id that happens to match.
+    const unique: Map<string, Actor> = new Map();
+    for (const actor of counterparts.values()) {
+      unique.set(actorRefKey({ actorId: actor.actorId, actorKind: actor.kind }), actor);
+    }
+    const signed = await signActorAvatars(this.storage, unique);
+
+    const avatarFor = (conversationId: string): string | null => {
+      const actor = counterparts.get(conversationId);
+      if (!actor) return null;
+      return (
+        signed.get(actorRefKey({ actorId: actor.actorId, actorKind: actor.kind })) ?? null
+      );
+    };
 
     return {
       conversations: rows.map((c) =>
-        toConversationDto(c, undefined, { unreadCount: unread.get(c.id) ?? 0 }),
+        toConversationDto(c, undefined, {
+          unreadCount: unread.get(c.id) ?? 0,
+          avatarUrl: avatarFor(c.id),
+        }),
       ),
     };
   }
@@ -117,12 +143,22 @@ export class ConversationController {
     // identity batch per row for a screen that renders none of them.
     // Signed AFTER readWithMembers ran canRead, so a refused reader never reaches a
     // signature. One batch for the whole roster rather than one call per face.
-    const [unreadCount, avatarUrls] = await Promise.all([
+    // The row face comes from the SAME rule the list uses, rather than a second derivation
+    // over `members` -- one question, one answer, even though both are available here.
+    const [unreadCount, avatarUrls, counterparts] = await Promise.all([
       this.messages.unreadCount(id, actorId),
       signMemberAvatars(this.storage, members),
+      this.conversations.counterpartsFor([conversation], actorId),
     ]);
 
-    return toConversationDto(conversation, members, { unreadCount, avatarUrls });
+    const counterpart = counterparts.get(conversation.id);
+    const avatarUrl = counterpart
+      ? (avatarUrls.get(
+          actorRefKey({ actorId: counterpart.actorId, actorKind: counterpart.kind }),
+        ) ?? null)
+      : null;
+
+    return toConversationDto(conversation, members, { unreadCount, avatarUrls, avatarUrl });
   }
 
   /**

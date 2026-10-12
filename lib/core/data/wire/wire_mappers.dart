@@ -212,6 +212,10 @@ abstract final class WireMappers {
       id: json['id']! as String,
       kind: conversationKind(json['type'] as String?, members: json['members']),
       title: (json['title'] as String?) ?? '',
+      // The other person's face on a 1:1 row: a short-lived signed url, or null for a
+      // group and for a counterpart with no photo. Blank reads as absent, because
+      // `Image.network('')` throws instead of falling back to initials.
+      avatarUrl: _nonEmpty(json['avatarUrl']),
       // Both from the DTO. They used to be parameters this mapper's caller had
       // to supply, because the payload carried neither — which meant the child
       // sections and the unread badge worked against fixtures and were blank

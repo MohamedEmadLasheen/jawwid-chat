@@ -12,7 +12,7 @@ import {
 } from '../../platform/tokens';
 import type { RelationshipService } from '../../platform/relationship.service';
 import type { IdentityService } from '../../platform/identity.service';
-import { actorRefKey } from '../../platform/identity.service';
+import { actorRefKey, type ActorRef } from '../../platform/identity.service';
 import type { ResolvedActors } from '../../platform/identity.service';
 import type { CoverageService } from '../../platform/coverage.service';
 import type { AuditService } from '../../platform/audit.service';
@@ -229,6 +229,77 @@ export class ConversationService {
         actors.get(actorRefKey({ actorId: m.actorId, actorKind: m.actorKind }))
           ?.avatarObjectKey ?? null,
     }));
+  }
+
+  /**
+   * The COUNTERPART of each direct conversation on a page, resolved in one batch.
+   *
+   * The chat list renders one face per row, and that face is the other person in a 1:1.
+   * Getting it needs membership, which this route deliberately does not load per row --
+   * `toConversationDto` is called with no members precisely because resolving them per row
+   * would be an identity batch per conversation. So the work is done ONCE for the whole
+   * page: one membership query for every direct id, then one `resolveActors` call.
+   *
+   * ## When a row gets no counterpart, and why that is the safe answer
+   *
+   * Only when the VIEWER IS A MEMBER and there is exactly ONE other live member. Both
+   * conditions matter:
+   *
+   *   * a staff actor lists every conversation, member or not (`listForActor`), so for a
+   *     1:1 they are outside there is no "other" person -- there are two strangers, and
+   *     picking either would disclose somebody's face on a row that is not their chat;
+   *   * a direct conversation holds two members by construction, so a third live row means
+   *     the data is not what this code believes. Showing nothing is better than showing a
+   *     plausible wrong face.
+   *
+   * Group conversations are excluded entirely: a group is not a person, and its members'
+   * faces are already carried by `ConversationMemberDto` on the detail route.
+   */
+  async counterpartsFor(
+    conversations: readonly { id: string; type: string }[],
+    viewerActorId: string,
+  ): Promise<Map<string, Actor>> {
+    const directIds = conversations
+      .filter((c) => c.type === ConversationType.DIRECT)
+      .map((c) => c.id);
+    if (directIds.length === 0) return new Map();
+
+    // ONE query for the whole page, not one per conversation.
+    const rows = await this.prisma.conversationMember.findMany({
+      where: { conversationId: { in: directIds }, leftAt: null },
+      select: { conversationId: true, actorId: true, actorKind: true },
+    });
+
+    const others = new Map<string, ActorRef[]>();
+    const viewerIsMember = new Set<string>();
+    for (const row of rows) {
+      if (row.actorId === viewerActorId) {
+        viewerIsMember.add(row.conversationId);
+        continue;
+      }
+      const list = others.get(row.conversationId) ?? [];
+      list.push({ actorId: row.actorId, actorKind: row.actorKind });
+      others.set(row.conversationId, list);
+    }
+
+    const chosen = new Map<string, ActorRef>();
+    for (const [conversationId, candidates] of others) {
+      if (!viewerIsMember.has(conversationId) || candidates.length !== 1) continue;
+      chosen.set(conversationId, candidates[0]);
+    }
+    if (chosen.size === 0) return new Map();
+
+    // ONE identity batch for every counterpart on the page, through the canonical
+    // resolver -- at most one query per actor KIND, never one per conversation.
+    const actors = await this.identity.resolveActors([...chosen.values()]);
+
+    const resolved = new Map<string, Actor>();
+    for (const [conversationId, ref] of chosen) {
+      const actor = actors.get(actorRefKey(ref));
+      // Absent means unresolved, never "no name": the row simply gets no face.
+      if (actor) resolved.set(conversationId, actor);
+    }
+    return resolved;
   }
 
   /**

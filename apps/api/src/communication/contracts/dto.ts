@@ -178,6 +178,18 @@ export interface ConversationDto {
   archivedAt: string | null;
   teacherRequiresApproval: boolean;
   parentRequiresApproval: boolean;
+  /**
+   * The face for this ROW: a short-lived SIGNED url for the other person in a 1:1, or null.
+   *
+   * Null for a group -- a group is not a person, and its members' faces are carried by
+   * `members` on the detail route -- and null for a 1:1 whose counterpart has no photo, is
+   * unresolved, or cannot be identified unambiguously. Never an object key.
+   *
+   * Signed once per PAGE, from one batched resolution, so a list of two hundred rows costs a
+   * bounded number of queries rather than one per row.
+   */
+  avatarUrl: string | null;
+
   members?: ConversationMemberDto[];
 
   /**
@@ -251,7 +263,12 @@ export interface ResolvedMember {
 export function toConversationDto(
   c: ConversationWithLearner,
   members?: ResolvedMember[],
-  extra?: { unreadCount?: number; avatarUrls?: ReadonlyMap<string, string> },
+  extra?: {
+    unreadCount?: number;
+    avatarUrls?: ReadonlyMap<string, string>;
+    /** The signed counterpart photo for THIS conversation, from the page-wide batch. */
+    avatarUrl?: string | null;
+  },
 ): ConversationDto {
   return {
     id: c.id,
@@ -284,6 +301,7 @@ export function toConversationDto(
     // Two fields enumerated by hand, like every other field here: the Learner
     // row is never spread, so `level`, `nextClassAt` and `teacherId` cannot
     // reach a client because somebody widened an include.
+    avatarUrl: extra?.avatarUrl ?? null,
     learner: c.learner ? { id: c.learner.id, name: c.learner.name } : undefined,
     unreadCount: extra?.unreadCount,
   };

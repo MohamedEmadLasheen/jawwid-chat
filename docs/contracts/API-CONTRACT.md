@@ -268,6 +268,13 @@ ConversationDto {
   state: 'open'|'waiting_on_customer'|'waiting_on_jawwid'|'resolved',   // computed
   needsReply: boolean, lastSeq: string, lastActivityAt: string, archivedAt: string|null,
   teacherRequiresApproval: boolean, parentRequiresApproval: boolean,
+  avatarUrl: string|null,                         // the ROW's face: a short-lived SIGNED
+                                                  // url for the other person in a 1:1, or
+                                                  // null for a group and for a counterpart
+                                                  // with no photo / unresolved / ambiguous.
+                                                  // Never an object key. Signed ONCE PER
+                                                  // PAGE from one batched resolution, so a
+                                                  // 200-row list stays bounded.
   members?: ConversationMemberDto[],                                      // detail only
   learner?: ConversationLearnerDto|null,        // list + detail; null when the conversation
                                                 // is about the family, not one child

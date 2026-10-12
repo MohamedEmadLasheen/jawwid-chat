@@ -688,6 +688,41 @@ void main() {
       expect(message.authorAvatarUrl, isNull);
     });
 
+    test('a conversation row carries the counterpart\'s signed photo', () {
+      final c = WireMappers.conversation(
+        {
+          'id': 'c1',
+          'type': 'direct',
+          'title': 'Umm Yusuf',
+          'lastActivityAt': '2026-10-11T08:00:00.000Z',
+          'avatarUrl':
+              'http://storage.test/avatars/contact/x/p.jpg?X-Amz-Signature=sig',
+        },
+        viewerRole: UserRole.parent,
+      );
+
+      expect(c.avatarUrl,
+          'http://storage.test/avatars/contact/x/p.jpg?X-Amz-Signature=sig');
+    });
+
+    test('a row with no counterpart photo maps to null, never an empty string', () {
+      // The absent case and the blank cases, which must all read as "no photo":
+      // `Image.network('')` throws rather than falling back to initials.
+      for (final raw in <String?>[null, '', '   ']) {
+        final json = <String, Object?>{
+          'id': 'c1',
+          'type': 'student_group',
+          'title': 'Group',
+          'lastActivityAt': '2026-10-11T08:00:00.000Z',
+          'avatarUrl': ?raw,
+        };
+        expect(
+          WireMappers.conversation(json, viewerRole: UserRole.parent).avatarUrl,
+          isNull,
+        );
+      }
+    });
+
     test('a learner on a conversation still carries no photo, by contract', () {
       // `ConversationLearnerDto` is {id, name}: a conversation payload is not a profile.
       // The column exists, but a child's photo reaches the client through their own
