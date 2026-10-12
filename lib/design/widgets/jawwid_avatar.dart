@@ -19,6 +19,7 @@ class JawwidAvatar extends StatelessWidget {
     required this.displayName,
     this.imageUrl,
     this.imageHeaders,
+    this.trustedBaseUrl,
     this.size = Sizes.avatarMd,
     this.badge,
   });
@@ -35,6 +36,14 @@ class JawwidAvatar extends StatelessWidget {
   /// every other caller.
   final Map<String, String>? imageHeaders;
 
+  /// The API base this build talks to: the ONLY origin [imageHeaders] may reach.
+  ///
+  /// Passed in rather than read here because `design` does not import `core`, and because
+  /// the configured API base is already the one source of truth for where this app sends
+  /// credentials. Null fails closed — no header goes anywhere, and a relative URL is left
+  /// unresolved so the failure is visible rather than silently credentialled.
+  final String? trustedBaseUrl;
+
   final double size;
 
   /// Small overlay, e.g. a muted indicator.
@@ -45,6 +54,12 @@ class JawwidAvatar extends StatelessWidget {
     final url = imageUrl;
     final pixels = (size * MediaQuery.devicePixelRatioOf(context)).round();
 
+    // Resolved AND judged in one place: a relative application path becomes absolute
+    // against the configured base, and only then can its origin be compared.
+    final request = (url == null || url.isEmpty)
+        ? (url: '', trusted: false)
+        : applicationImageRequest(url, appBaseUrl: trustedBaseUrl);
+
     final avatar = ClipOval(
       child: SizedBox(
         width: size,
@@ -52,17 +67,19 @@ class JawwidAvatar extends StatelessWidget {
         child: url == null || url.isEmpty
             ? _Initials(displayName: displayName, size: size)
             : Image.network(
-                url,
-                // Withheld when the URL already authenticates itself: an S3
+                request.url,
+                // Sent ONLY to the origin this build was configured to talk to: an S3
                 // presigned URL carries SigV4 in its query string, and S3 --
                 // MinIO included -- rejects a request that ALSO sends an
                 // `Authorization` header. `Image.network` then fails and the
                 // initials below take over, which on screen is indistinguishable
                 // from "the photo never changed". The reference storage is the
-                // opposite and still needs the header, so the URL decides. This
+                // opposite and still needs it. And a non-SigV4 URL on a FOREIGN
+                  // host looked exactly like that second case while being neither
+                  // ours nor signed -- which is what the origin check now stops. This
                 // widget owns both values, which is why the decision lives here
                 // rather than at each call site.
-                headers: urlAuthenticatesItself(url) ? null : imageHeaders,
+                headers: request.trusted ? imageHeaders : null,
                 fit: BoxFit.cover,
                 cacheWidth: pixels,
                 cacheHeight: pixels,

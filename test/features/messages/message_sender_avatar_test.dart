@@ -54,6 +54,7 @@ void main() {
           // Synchronous on purpose: a pending future would read null headers and let a
           // test pass for the wrong reason.
           signedImageHeadersProvider.overrideWith((ref) => headers),
+          apiBaseUrlProvider.overrideWithValue('http://api.test/api/v1'),
       ],
       child: MaterialApp(
         locale: const Locale('en'),

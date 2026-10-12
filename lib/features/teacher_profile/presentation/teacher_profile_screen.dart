@@ -296,6 +296,7 @@ class _HeaderState extends ConsumerState<_Header> {
                 // Empty while the token resolves, which renders initials rather
                 // than a broken image.
                 imageHeaders: ref.watch(signedImageHeadersProvider).value,
+                trustedBaseUrl: ref.watch(apiBaseUrlProvider),
                 size: Sizes.avatarXl,
               ),
               PositionedDirectional(

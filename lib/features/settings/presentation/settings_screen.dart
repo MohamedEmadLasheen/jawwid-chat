@@ -67,6 +67,7 @@ class SettingsScreen extends ConsumerWidget {
                           // itself, which is why one avatar never carries two auth types.
                           imageHeaders:
                               ref.watch(signedImageHeadersProvider).value,
+                          trustedBaseUrl: ref.watch(apiBaseUrlProvider),
                           size: Sizes.avatarLg,
                         ),
                         const SizedBox(width: Spacing.spacing4),

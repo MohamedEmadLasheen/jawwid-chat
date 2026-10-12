@@ -324,6 +324,7 @@ class ProfileHeader extends ConsumerWidget {
             // Empty while the token resolves, and null when the URL signs itself,
             // which is why one avatar never carries two auth types.
             imageHeaders: ref.watch(signedImageHeadersProvider).value,
+            trustedBaseUrl: ref.watch(apiBaseUrlProvider),
             size: Sizes.avatarXl,
           ),
           const SizedBox(height: Spacing.spacing5),
@@ -402,6 +403,7 @@ class MemberTile extends ConsumerWidget {
               // Empty while the token resolves, and null when the URL signs
               // itself, which is why one avatar never carries two auth types.
               imageHeaders: ref.watch(signedImageHeadersProvider).value,
+              trustedBaseUrl: ref.watch(apiBaseUrlProvider),
               size: Sizes.avatarMd,
             ),
             const SizedBox(width: Spacing.spacing4),

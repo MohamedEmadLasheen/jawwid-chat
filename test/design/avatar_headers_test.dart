@@ -41,6 +41,7 @@ void main() {
           // test that pumped a pending future would read null headers and pass for
           // the wrong reason.
           signedImageHeadersProvider.overrideWith((ref) => headers),
+          apiBaseUrlProvider.overrideWithValue('http://api.test/api/v1'),
         ],
         child: MaterialApp(
           locale: const Locale('en'),
@@ -185,6 +186,7 @@ void main() {
         ProviderScope(
           overrides: [
             signedImageHeadersProvider.overrideWith((ref) => headers),
+            apiBaseUrlProvider.overrideWithValue('http://api.test/api/v1'),
             conversationRepositoryProvider
                 .overrideWithValue(_WithAvatar(backend, stableUrl)),
             messageRepositoryProvider

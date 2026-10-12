@@ -60,3 +60,72 @@ bool urlAuthenticatesItself(String url) {
   }
   return hasSignature && hasAlgorithm;
 }
+
+/// What to fetch for an image, and whether it may carry THIS APP's session credential.
+///
+/// `urlAuthenticatesItself` answers "does this URL carry its own credential". That is the
+/// right question for a presigned URL and the wrong one on its own, because it has no
+/// opinion about where a URL points: a non-SigV4 absolute URL on a stranger's host looked
+/// exactly like the reference storage and would have been handed the session bearer.
+///
+/// So the credential decision is positive rather than negative — the header goes out only
+/// to the ORIGIN THIS BUILD WAS CONFIGURED TO TALK TO, and to nowhere else:
+///
+/// | URL                                        | sent? |
+/// |--------------------------------------------|-------|
+/// | relative `/api/v1/me/avatar/image`         | yes, resolved against the base first |
+/// | absolute, same origin as the API base      | yes — the reference storage's own route |
+/// | absolute, SigV4 presigned                  | no — it authenticates itself, and S3 refuses both |
+/// | absolute, any other origin                 | no |
+/// | unparseable                                | no |
+/// | no base configured                         | no — fails closed |
+///
+/// [appBaseUrl] is the API base this build already uses for every other request; it is
+/// passed in rather than read here because `shared` does not import `core`, and because one
+/// configured base is the only source of truth worth having.
+({String url, bool trusted}) applicationImageRequest(
+  String url, {
+  String? appBaseUrl,
+}) {
+  final Uri parsed;
+  try {
+    parsed = Uri.parse(url);
+  } on FormatException {
+    // Unparseable: fetch it as given and let the request fail on its own terms. What we
+    // must not do is attach a credential on the strength of a string we could not read.
+    return (url: url, trusted: false);
+  }
+
+  // A presigned URL is already authenticated, and S3 rejects a request carrying two
+  // credentials. Checked before the origin, because this holds wherever it points.
+  if (urlAuthenticatesItself(url)) return (url: url, trusted: false);
+
+  Uri? base;
+  if (appBaseUrl != null && appBaseUrl.isNotEmpty) {
+    try {
+      base = Uri.parse(appBaseUrl);
+    } on FormatException {
+      base = null;
+    }
+  }
+  if (base == null || !base.hasAuthority) {
+    // No trustworthy base: nothing can be shown to be ours, so nothing is trusted. A
+    // relative URL is also unfetchable in that state, and is returned unchanged so the
+    // failure is visible rather than silently credentialled.
+    return (url: url, trusted: false);
+  }
+
+  if (!parsed.hasAuthority) {
+    // Relative — resolve against the configured base, exactly as the identity mapping
+    // does. `Uri.resolve` replaces the path and keeps scheme and authority, so a base
+    // already carrying `/api/v1` does not gain a second one.
+    return (url: base.resolve(url).toString(), trusted: true);
+  }
+
+  // `Uri.port` substitutes the scheme's default when absent, so `http://h` and
+  // `http://h:80` compare equal rather than looking like different origins.
+  final sameOrigin = parsed.scheme == base.scheme &&
+      parsed.host == base.host &&
+      parsed.port == base.port;
+  return (url: url, trusted: sameOrigin);
+}

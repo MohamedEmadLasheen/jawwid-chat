@@ -268,6 +268,7 @@ class MessageBubble extends ConsumerWidget {
                     // bearer for it — and still sends one for the reference storage,
                     // whose URLs authenticate differently. The decision is the widget's.
                     imageHeaders: ref.watch(signedImageHeadersProvider).value,
+                    trustedBaseUrl: ref.watch(apiBaseUrlProvider),
                     size: Sizes.avatarSm,
                   )
                 : null,

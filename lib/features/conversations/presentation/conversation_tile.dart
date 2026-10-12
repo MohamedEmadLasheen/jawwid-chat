@@ -97,6 +97,7 @@ class ConversationTile extends ConsumerWidget {
                       // auth types.
                       imageHeaders:
                           ref.watch(signedImageHeadersProvider).value,
+                      trustedBaseUrl: ref.watch(apiBaseUrlProvider),
                       size: Sizes.avatarLg,
                     ),
                   ),

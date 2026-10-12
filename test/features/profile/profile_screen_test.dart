@@ -41,6 +41,7 @@ void main() {
         // wrong reason.
         if (imageHeaders != null)
           signedImageHeadersProvider.overrideWith((ref) => imageHeaders),
+          apiBaseUrlProvider.overrideWithValue('http://api.test/api/v1'),
         conversationRepositoryProvider
             .overrideWithValue(FakeConversationRepository(backend)),
         messageRepositoryProvider

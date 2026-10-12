@@ -490,6 +490,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   // Empty while the token resolves, and null when the URL signs
                   // itself, which is why one avatar never carries two auth types.
                   imageHeaders: ref.watch(signedImageHeadersProvider).value,
+                  trustedBaseUrl: ref.watch(apiBaseUrlProvider),
                   size: Sizes.avatarSm,
                 ),
                 const SizedBox(width: Spacing.spacing3),

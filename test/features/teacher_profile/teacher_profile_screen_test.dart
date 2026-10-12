@@ -110,6 +110,9 @@ void main() {
         // than left unimplemented, because a private photo URL is unreachable
         // without it.
         realtimeTokenProvider.overrideWithValue(_FakeTokens()),
+        // And WHERE that header may be sent. The reference storage route is served by
+        // the API itself, so its URLs share this origin; anything else gets nothing.
+        apiBaseUrlProvider.overrideWithValue('http://api.test/api/v1'),
         if (picker != null) mediaPickerProvider.overrideWithValue(picker),
         if (opener != null) attachmentOpenerProvider.overrideWithValue(opener),
         conversationRepositoryProvider

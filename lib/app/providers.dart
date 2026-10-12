@@ -9,8 +9,8 @@ import '../core/logging/redacting_logger.dart';
 import '../core/media/attachment_opener.dart';
 import '../core/media/media_picker.dart';
 import '../core/media/story_video_player.dart';
-
 import '../core/network/api_client.dart' show TokenProvider;
+import '../core/network/api_config.dart';
 import '../core/realtime/realtime_socket.dart';
 import '../core/storage/secure_token_store.dart';
 import '../features/auth/application/auth_controller.dart';
@@ -115,6 +115,16 @@ final signedImageHeadersProvider = FutureProvider<Map<String, String>>((ref) asy
   final token = await ref.watch(realtimeTokenProvider).accessToken();
   if (token == null || token.isEmpty) return const {};
   return {'Authorization': 'Bearer $token'};
+});
+
+/// The API base this build talks to, as a credential boundary.
+///
+/// Reads [ApiConfig] — the same single source every request already uses — and exposes it
+/// as a seam so `JawwidAvatar` can be told which origin may receive the session header
+/// without the design layer importing `core`. Null when unconfigured, which fails closed:
+/// no base, no credential, anywhere.
+final apiBaseUrlProvider = Provider<String?>((ref) {
+  return ApiConfig.isConfigured ? ApiConfig.configuredBaseUrl : null;
 });
 
 /// The SAME TokenProvider the HTTP stack uses — `StoredTokenProvider`, whose

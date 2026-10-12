@@ -47,7 +47,11 @@ void main() {
     /// The provider `Image.network` actually built. Reading it is the existing
     /// seam the story-viewer tests use; no mocking framework is involved, and
     /// the image never has to load for the headers to be inspectable.
-    Future<NetworkImage> pumpAvatar(WidgetTester tester, String url) async {
+    Future<NetworkImage> pumpAvatar(
+      WidgetTester tester,
+      String url, {
+      String? trustedBaseUrl = 'https://api.test/api/v1',
+    }) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: JawwidTheme.light(isArabic: false),
@@ -56,6 +60,7 @@ void main() {
               displayName: 'Ahmed Hassan',
               imageUrl: url,
               imageHeaders: headers,
+              trustedBaseUrl: trustedBaseUrl,
               size: 48,
             ),
           ),
@@ -80,30 +85,69 @@ void main() {
           reason: 'SigV4 in the query string IS the authentication');
     });
 
-    testWidgets('a LOCAL reference url keeps the Authorization header',
+    testWidgets('a LOCAL reference url on OUR origin keeps the Authorization header',
         (tester) async {
+      // The reference storage route is served by the API itself -- which is what
+      // `STORAGE_PUBLIC_BASE_URL` documents it to be -- so its URLs share the API
+      // origin and legitimately need the session header.
+      final image = await pumpAvatar(
+        tester,
+        'https://api.test/api/v1/storage/photo.jpg?expires=123&sig=abc',
+      );
+
+      expect(image.headers?['Authorization'], 'Bearer test-token');
+    });
+
+    testWidgets('the same url on a FOREIGN origin gets NO header', (tester) async {
+      // The hole this closes. Not SigV4, so the old "does it authenticate itself?"
+      // question answered "no" and the session bearer went to a host that is not ours.
       final image = await pumpAvatar(
         tester,
         'https://storage.example/api/v1/storage/photo.jpg?expires=123&sig=abc',
       );
 
+      expect(image.headers?.containsKey('Authorization') ?? false, isFalse,
+          reason: 'a credential minted for our origin must not travel elsewhere');
+    });
+
+    testWidgets('a RELATIVE application path resolves and is trusted', (tester) async {
+      final image = await pumpAvatar(tester, '/api/v1/me/avatar/image');
+
+      expect(image.url, 'https://api.test/api/v1/me/avatar/image',
+          reason: 'root-relative resolution replaces the path, it does not append');
       expect(image.headers?['Authorization'], 'Bearer test-token');
+    });
+
+    testWidgets('with NO base configured nothing is trusted', (tester) async {
+      final image = await pumpAvatar(
+        tester,
+        'https://api.test/api/v1/storage/photo.jpg?expires=123&sig=abc',
+        trustedBaseUrl: null,
+      );
+
+      expect(image.headers?.containsKey('Authorization') ?? false, isFalse,
+          reason: 'no configured origin means nothing can be shown to be ours');
     });
 
     testWidgets('a lookalike sig/expires url is NOT treated as presigned',
         (tester) async {
       // The reference storage's own shape. Mistaking it for SigV4 would strip
       // the header it depends on and 401 every image.
-      final image = await pumpAvatar(tester, 'https://e.test/p.jpg?sig=abc&expires=123');
+      final image =
+          await pumpAvatar(tester, 'https://api.test/p.jpg?sig=abc&expires=123');
 
       expect(image.headers?['Authorization'], 'Bearer test-token');
     });
 
-    testWidgets('a malformed url keeps the header rather than guessing',
-        (tester) async {
+    testWidgets('a malformed url gets NO header', (tester) async {
+      // CHANGED deliberately. This used to KEEP the header, reasoning that a string we
+      // could not parse should not decide the credential question. That was backwards: a
+      // credential must never be attached to a target we could not read, and the request
+      // fails on its own terms either way.
       final image = await pumpAvatar(tester, ':://not a url?X-Amz-Signature=x');
 
-      expect(image.headers?['Authorization'], 'Bearer test-token');
+      expect(image.headers?.containsKey('Authorization') ?? false, isFalse,
+          reason: 'unparseable is not trusted');
     });
 
     testWidgets('everything else about the image is unchanged', (tester) async {
@@ -200,4 +244,85 @@ void main() {
       );
     });
   });
+  group('applicationImageRequest decides WHERE a credential may go', () {
+    const base = 'https://api.test/api/v1';
+
+    test('a relative application path is resolved and trusted', () {
+      final r = applicationImageRequest('/api/v1/me/avatar/image', appBaseUrl: base);
+      expect(r.url, 'https://api.test/api/v1/me/avatar/image');
+      expect(r.trusted, isTrue);
+    });
+
+    test('a base already carrying /api/v1 does not gain a second one', () {
+      expect(
+        applicationImageRequest('/api/v1/me/avatar/image', appBaseUrl: base).url,
+        'https://api.test/api/v1/me/avatar/image',
+      );
+    });
+
+    test('an absolute url on the SAME origin is trusted', () {
+      final r = applicationImageRequest(
+        'https://api.test/api/v1/storage/p.jpg?expires=1&sig=a',
+        appBaseUrl: base,
+      );
+      expect(r.trusted, isTrue);
+      expect(r.url, contains('storage/p.jpg'));
+    });
+
+    test('a default port and an explicit one are the same origin', () {
+      // `Uri.port` substitutes the scheme default, so these must not look different.
+      expect(
+        applicationImageRequest('https://api.test:443/x.jpg', appBaseUrl: base).trusted,
+        isTrue,
+      );
+      expect(
+        applicationImageRequest('http://api.test/x.jpg',
+                appBaseUrl: 'http://api.test:80/api/v1')
+            .trusted,
+        isTrue,
+      );
+    });
+
+    test('a FOREIGN origin is never trusted, however ordinary it looks', () {
+      for (final url in [
+        'https://storage.example/api/v1/storage/p.jpg?expires=1&sig=a',
+        'https://api.test.evil.example/api/v1/me/avatar/image',
+        'http://api.test/x.jpg', // scheme differs from the https base
+        'https://api.test:8443/x.jpg', // port differs
+      ]) {
+        expect(applicationImageRequest(url, appBaseUrl: base).trusted, isFalse,
+            reason: url);
+      }
+    });
+
+    test('a presigned url is never trusted, even on our OWN origin', () {
+      // Belt and braces: S3 refuses two credentials wherever the object is served from.
+      final r = applicationImageRequest(
+        'https://api.test/b/k.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=s',
+        appBaseUrl: base,
+      );
+      expect(r.trusted, isFalse);
+    });
+
+    test('an unparseable url is not trusted, and does not throw', () {
+      final r = applicationImageRequest(':://not a url', appBaseUrl: base);
+      expect(r.trusted, isFalse);
+      expect(r.url, ':://not a url');
+    });
+
+    test('no base, or an unusable one, trusts nothing', () {
+      for (final b in <String?>[null, '', 'not-a-url', '/relative/only']) {
+        expect(
+          applicationImageRequest('https://api.test/x.jpg', appBaseUrl: b).trusted,
+          isFalse,
+          reason: 'base=$b',
+        );
+        // And a relative URL is handed back unchanged, so the failure is visible.
+        final r = applicationImageRequest('/api/v1/me/avatar/image', appBaseUrl: b);
+        expect(r.url, '/api/v1/me/avatar/image');
+        expect(r.trusted, isFalse);
+      }
+    });
+  });
+
 }
