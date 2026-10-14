@@ -1,77 +1,368 @@
-import type { ReactNode } from 'react'
-import { NavLink } from 'react-router-dom'
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FocusEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+  type RefObject,
+} from 'react'
+import { Link, NavLink, useLocation } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
 import { useRealtime } from '@/core/realtime/RealtimeProvider'
-import { isSuperAdmin, visibleAreas, type NavArea } from '@/core/permissions/capabilities'
-import { ADMIN_SECTIONS, adminSectionPath } from '@/features/admin/sections'
+import { isSuperAdmin } from '@/core/permissions/capabilities'
+import { TEXT, useText } from '@/features/admin/copy'
 import { ShiftEndBanner } from '@/features/inbox/ShiftEndBanner'
+import { Avatar } from '@/shared/components/Avatar'
+import { BrandLogo } from '@/shared/components/BrandLogo'
+import { Icon } from '@/shared/components/Icon'
+import { useMediaQuery } from '@/shared/hooks/useMediaQuery'
+import {
+  destinationForPath,
+  destinationsFor,
+  soleEntry,
+  type Destination,
+  type DestinationKey,
+  type NavEntry,
+} from './navigation'
 
-const AREA_PATH: Record<NavArea, string> = {
-  inbox: '/inbox',
-  families: '/families',
-  tasks: '/tasks',
-  coverage: '/coverage',
-  dashboard: '/dashboard',
-  stories: '/stories',
-  settings: '/settings',
-}
-
-/** Nav is a data-driven registry: adding a module is one entry, not a refactor. */
-function Nav() {
-  const { t } = useI18n()
-  const { staff } = useSession()
-  if (!staff) return null
-  if (isSuperAdmin(staff.role)) return <AdminNav />
-
-  return (
-    <nav className="rail" aria-label={t('app.title')}>
-      <div className="rail__group">
-        {visibleAreas(staff.role)
-          // Settings has no page in MVP; it stays out of the rail until it does.
-          .filter((area) => area !== 'settings')
-          .map((area) => (
-            <NavLink key={area} to={AREA_PATH[area]} className="rail__item">
-              <span>{t(`nav.${area}` as const)}</span>
-            </NavLink>
-          ))}
-      </div>
-    </nav>
-  )
-}
+/* ------------------------------------------------------------- navigation */
 
 /**
- * The super admin's rail: EVERY planned section, including the unfinished ones,
- * each carrying its real status. Hiding an unbuilt section would hide how much
- * is left; showing it as if it worked would be worse.
+ * From this width up the navigation is a compact icon rail; below it, the
+ * same destinations open as a drawer from the top bar's menu button.
  */
-function AdminNav() {
-  const { t, locale } = useI18n()
+const RAIL_QUERY = '(min-width: 1024px)'
+
+function useDestinations(): Destination[] {
+  const { staff } = useSession()
+  return useMemo(() => (staff ? destinationsFor(staff.role) : []), [staff])
+}
+
+function useEntryLabel() {
+  const { t } = useI18n()
+  const tx = useText()
+  return useCallback(
+    (entry: NavEntry) => ('text' in entry.label ? tx(entry.label.text) : t(entry.label.message)),
+    [t, tx],
+  )
+}
+
+function useNavLabel(): string {
+  const { t } = useI18n()
+  const tx = useText()
+  const { staff } = useSession()
+  return staff && isSuperAdmin(staff.role) ? tx(TEXT.adminPortal) : t('app.title')
+}
+
+/** Marks a placeholder page, visibly and for assistive technology. */
+function PendingMark() {
+  const tx = useText()
   return (
-    <nav className="rail" aria-label={t('app.title')}>
-      <div className="rail__group">
-        {ADMIN_SECTIONS.map((section) => (
-          <NavLink
-            key={section.key}
-            to={adminSectionPath(section.key)}
-            className="rail__item"
-            // The status sits UNDER the label: beside it, "In development" wraps
-            // and crowds a 200px rail. A plain span, so the narrow-rail rule
-            // (labels hidden, icons only) hides it together with the label.
-            style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 0 }}
-          >
-            <span>{locale === 'ar' ? section.label.ar : section.label.en}</span>
-            {section.status === 'in_development' && (
-              <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-subtle)' }}>
-                {locale === 'ar' ? 'قيد التطوير' : 'In development'}
-              </span>
-            )}
-          </NavLink>
-        ))}
-      </div>
+    <>
+      <span className="status-ring" aria-hidden="true" />{' '}
+      <span className="sr-only">{tx(TEXT.inDevelopment)}</span>
+    </>
+  )
+}
+
+function pendingTitle(label: string, entry: NavEntry, inDevelopment: string): string | undefined {
+  return entry.inDevelopment ? `${label} · ${inDevelopment}` : undefined
+}
+
+/* The drawer: every destination open, every page one tap away. */
+
+function DrawerLink({ entry }: { entry: NavEntry }) {
+  const tx = useText()
+  const label = useEntryLabel()(entry)
+  return (
+    <NavLink
+      to={entry.path}
+      className={entry.inDevelopment ? 'nav__item nav__item--pending' : 'nav__item'}
+      title={pendingTitle(label, entry, tx(TEXT.inDevelopment))}
+    >
+      <Icon name={entry.icon} />
+      <span className="nav__label">{label}</span>
+      {entry.inDevelopment && <PendingMark />}
+    </NavLink>
+  )
+}
+
+function DrawerNav() {
+  const tx = useText()
+  const destinations = useDestinations()
+  return (
+    <nav className="sidebar__nav" aria-label={useNavLabel()}>
+      {destinations.map((d) => {
+        const sole = soleEntry(d)
+        if (sole) {
+          return (
+            <div className="nav__group" key={d.key}>
+              <ul className="nav__list">
+                <li>
+                  <DrawerLink entry={sole} />
+                </li>
+              </ul>
+            </div>
+          )
+        }
+        const labelId = `nav-destination-${d.key}`
+        return (
+          <div className="nav__group" key={d.key} role="group" aria-labelledby={labelId}>
+            <p className="nav__group-label" id={labelId}>
+              {tx(d.label)}
+            </p>
+            {d.groups.map((g) => (
+              <Fragment key={g.key}>
+                {g.label && <p className="nav__subgroup-label">{tx(g.label)}</p>}
+                <ul className="nav__list">
+                  {g.entries.map((e) => (
+                    <li key={e.key}>
+                      <DrawerLink entry={e} />
+                    </li>
+                  ))}
+                </ul>
+              </Fragment>
+            ))}
+          </div>
+        )
+      })}
     </nav>
   )
 }
+
+/* The rail: one icon per destination. A destination with one page links
+   straight to it; one with several opens a short menu beside the rail. */
+
+function MenuLink({ entry }: { entry: NavEntry }) {
+  const tx = useText()
+  const label = useEntryLabel()(entry)
+  return (
+    <NavLink
+      to={entry.path}
+      className={entry.inDevelopment ? 'rail__menu-link rail__menu-link--pending' : 'rail__menu-link'}
+      title={pendingTitle(label, entry, tx(TEXT.inDevelopment))}
+    >
+      <Icon name={entry.icon} />
+      <span className="rail__menu-label">{label}</span>
+      {entry.inDevelopment && <PendingMark />}
+    </NavLink>
+  )
+}
+
+/** Up and down arrows move between a menu's links, wrapping at the ends. */
+function onMenuKeyDown(e: ReactKeyboardEvent<HTMLDivElement>) {
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+  const links = [...e.currentTarget.querySelectorAll<HTMLAnchorElement>('a')]
+  if (links.length === 0) return
+  e.preventDefault()
+  const at = links.indexOf(document.activeElement as HTMLAnchorElement)
+  const step = e.key === 'ArrowDown' ? 1 : -1
+  links[(at + step + links.length) % links.length]?.focus()
+}
+
+function RailItem({
+  destination: d,
+  current,
+  open,
+  onToggle,
+  onOpenAndEnter,
+  onLeave,
+}: {
+  destination: Destination
+  current: boolean
+  open: boolean
+  onToggle: () => void
+  onOpenAndEnter: () => void
+  onLeave: () => void
+}) {
+  const tx = useText()
+  const entryLabel = useEntryLabel()
+  const sole = soleEntry(d)
+  // More sits at the foot of the rail, apart from the everyday destinations.
+  const itemClass = d.key === 'more' ? 'rail__item rail__item--end' : 'rail__item'
+
+  if (sole) {
+    return (
+      <li className={itemClass}>
+        <NavLink to={sole.path} className="rail__link" data-destination={d.key}>
+          <Icon name={sole.icon} size={22} />
+          <span className="rail__tip">{entryLabel(sole)}</span>
+          {sole.inDevelopment && <PendingMark />}
+        </NavLink>
+      </li>
+    )
+  }
+
+  const menuId = `rail-menu-${d.key}`
+  return (
+    <li
+      className={itemClass}
+      onBlur={(e: FocusEvent<HTMLLIElement>) => {
+        // Tabbing out of an open menu closes it; a click elsewhere is handled
+        // by the rail, so a focus loss to nothing (a click on the menu's own
+        // padding) does not.
+        const next = e.relatedTarget as Node | null
+        if (next && !e.currentTarget.contains(next)) onLeave()
+      }}
+    >
+      <button
+        type="button"
+        className="rail__link"
+        data-destination={d.key}
+        aria-expanded={open}
+        aria-controls={menuId}
+        aria-current={current ? 'true' : undefined}
+        onClick={onToggle}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            onOpenAndEnter()
+          }
+        }}
+      >
+        <Icon name={d.icon} size={22} />
+        <span className="rail__tip">{tx(d.label)}</span>
+      </button>
+      <div className="rail__menu" id={menuId} hidden={!open} onKeyDown={onMenuKeyDown}>
+        <p className="rail__menu-title" aria-hidden="true">
+          {tx(d.label)}
+        </p>
+        {d.groups.map((g) => (
+          <div className="rail__menu-group" key={g.key} role={g.label ? 'group' : undefined} aria-label={g.label ? tx(g.label) : undefined}>
+            {g.label && (
+              <p className="rail__menu-heading" aria-hidden="true">
+                {tx(g.label)}
+              </p>
+            )}
+            <ul className="rail__menu-list">
+              {g.entries.map((e) => (
+                <li key={e.key}>
+                  <MenuLink entry={e} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </li>
+  )
+}
+
+function RailNav() {
+  const destinations = useDestinations()
+  const { pathname } = useLocation()
+  const [openKey, setOpenKey] = useState<DestinationKey | null>(null)
+  // Set when a menu was opened from the keyboard (ArrowDown): focus its first link.
+  const [enterKey, setEnterKey] = useState<DestinationKey | null>(null)
+  const navRef = useRef<HTMLElement>(null)
+  const current = destinationForPath(destinations, pathname)
+
+  // Choosing a page is the end of a menu's job.
+  useEffect(() => setOpenKey(null), [pathname])
+
+  useEffect(() => {
+    if (!openKey) return
+    const onMouseDown = (e: MouseEvent) => {
+      if (!navRef.current?.contains(e.target as Node)) setOpenKey(null)
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      setOpenKey(null)
+      navRef.current?.querySelector<HTMLElement>(`[data-destination="${openKey}"]`)?.focus()
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [openKey])
+
+  useEffect(() => {
+    if (!enterKey || openKey !== enterKey) return
+    navRef.current?.querySelector<HTMLElement>(`#rail-menu-${enterKey} a`)?.focus()
+    setEnterKey(null)
+  }, [enterKey, openKey])
+
+  const openAndEnter = (key: DestinationKey) => {
+    setOpenKey(key)
+    setEnterKey(key)
+  }
+
+  return (
+    <nav className="rail" aria-label={useNavLabel()} ref={navRef}>
+      <ul className="rail__list">
+        {destinations.map((d) => (
+          <RailItem
+            key={d.key}
+            destination={d}
+            current={current === d.key}
+            open={openKey === d.key}
+            onToggle={() => setOpenKey((k) => (k === d.key ? null : d.key))}
+            onOpenAndEnter={() => openAndEnter(d.key)}
+            onLeave={() => setOpenKey((k) => (k === d.key ? null : k))}
+          />
+        ))}
+      </ul>
+    </nav>
+  )
+}
+
+function Sidebar({
+  onClose,
+  closeRef,
+}: {
+  onClose: () => void
+  closeRef: RefObject<HTMLButtonElement>
+}) {
+  const { t } = useI18n()
+  const tx = useText()
+  const { staff } = useSession()
+  const superAdmin = staff ? isSuperAdmin(staff.role) : false
+  const rail = useMediaQuery(RAIL_QUERY)
+
+  if (rail) {
+    return (
+      <aside className="sidebar sidebar--rail" id="app-sidebar">
+        <RailNav />
+      </aside>
+    )
+  }
+
+  return (
+    <aside className="sidebar" id="app-sidebar">
+      <div className="sidebar__brand">
+        <Link to="/" className="sidebar__brand-link" aria-label="Jawwid">
+          <BrandLogo />
+          <span className="sidebar__product">{superAdmin ? tx(TEXT.adminPortal) : tx(TEXT.operations)}</span>
+        </Link>
+        <button
+          type="button"
+          ref={closeRef}
+          className="btn btn--ghost btn--icon btn--sm sidebar__close"
+          onClick={onClose}
+          aria-label={t('shell.closeMenu')}
+        >
+          <Icon name="close" />
+        </button>
+      </div>
+      <DrawerNav />
+      {superAdmin && (
+        <div className="sidebar__footer">
+          <span className="status-ring" aria-hidden="true" />
+          <span>{tx(TEXT.inDevelopment)}</span>
+        </div>
+      )}
+    </aside>
+  )
+}
+
+/* ----------------------------------------------------------------- topbar */
 
 function ConnectionBanner() {
   const { t } = useI18n()
@@ -93,53 +384,143 @@ function DutyIndicator() {
   const { t, time } = useI18n()
   const { staff, duty } = useSession()
   if (!staff) return null
+  if (!duty?.in_shift && !(duty && duty.covering_for.length > 0)) return null
 
   return (
-    <div className="header__duty">
-      <strong>{staff.name}</strong>
-      {duty?.in_shift && duty.shift_ends_at && <> · {time(duty.shift_ends_at)}</>}
+    <span className="topbar__user-role">
+      {duty?.in_shift && duty.shift_ends_at && time(duty.shift_ends_at)}
       {duty && duty.covering_for.length > 0 && <> · {t('bucket.covering')}</>}
-    </div>
+    </span>
   )
 }
 
-function LocaleToggle() {
-  const { locale, setLocale } = useI18n()
+function LanguageToggle() {
+  const { t, locale, setLocale } = useI18n()
   return (
     <button
       type="button"
-      className="btn btn--sm btn--ghost"
+      className="btn btn--ghost btn--sm"
       onClick={() => setLocale(locale === 'ar' ? 'en' : 'ar')}
-      aria-label={locale === 'ar' ? 'Switch to English' : 'التحويل إلى العربية'}
+      aria-label={t('shell.switchLanguageLabel')}
+      lang={locale === 'ar' ? 'en' : 'ar'}
     >
-      {locale === 'ar' ? 'EN' : 'ع'}
+      <Icon name="globe" size={16} />
+      {t('shell.switchLanguage')}
     </button>
   )
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+function Topbar({
+  navOpen,
+  onOpenNav,
+  menuRef,
+}: {
+  navOpen: boolean
+  onOpenNav: () => void
+  menuRef: RefObject<HTMLButtonElement>
+}) {
   const { t } = useI18n()
-  const { signOut } = useSession()
+  const tx = useText()
+  const { staff, signOut } = useSession()
+  const superAdmin = staff ? isSuperAdmin(staff.role) : false
 
   return (
-    <div className="shell">
-      <header className="header">
-        <div className="header__brand">{t('app.title')}</div>
-        <div className="header__spacer" />
-        <DutyIndicator />
-        <LocaleToggle />
-        <button type="button" className="btn btn--sm btn--ghost" onClick={() => void signOut()}>
-          {t('common.signOut')}
-        </button>
-      </header>
-      <div className="shell__body">
-        <Nav />
-        <main className="main">
-          <div className="column column--center" style={{ flex: 1 }}>
-            <ConnectionBanner />
-            <ShiftEndBanner />
-            <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>{children}</div>
+    <header className="topbar">
+      <button
+        type="button"
+        ref={menuRef}
+        className="btn btn--ghost btn--icon topbar__menu"
+        onClick={onOpenNav}
+        aria-label={t('shell.openMenu')}
+        aria-expanded={navOpen}
+        aria-controls="app-sidebar"
+      >
+        <Icon name="menu" size={20} />
+      </button>
+      {/* The rail has no room for the lockup, so the top bar carries it at every width. */}
+      <Link to="/" className="topbar__brand" aria-label="Jawwid">
+        <BrandLogo />
+        <span className="topbar__product" aria-hidden="true">
+          {superAdmin ? tx(TEXT.adminPortal) : tx(TEXT.operations)}
+        </span>
+      </Link>
+      <div className="topbar__spacer" />
+      {superAdmin && (
+        <span className="readonly-chip" title={tx(TEXT.readOnlyAccessHint)}>
+          <Icon name="eye" size={14} />
+          <span className="readonly-chip__text">{tx(TEXT.readOnlyAccess)}</span>
+          <span className="sr-only">{tx(TEXT.readOnlyAccessHint)}</span>
+        </span>
+      )}
+      <LanguageToggle />
+      {staff && (
+        <>
+          <span className="topbar__divider" aria-hidden="true" />
+          <div className="topbar__user">
+            <Avatar name={staff.name} seed={staff.id} size="sm" />
+            <span className="topbar__user-text">
+              <span className="topbar__user-name">{staff.name}</span>
+              {superAdmin ? (
+                <span className="topbar__user-role">{t('role.super_admin')}</span>
+              ) : (
+                <DutyIndicator />
+              )}
+            </span>
           </div>
+        </>
+      )}
+      <button
+        type="button"
+        className="btn btn--ghost btn--icon"
+        onClick={() => void signOut()}
+        aria-label={t('common.signOut')}
+        title={t('common.signOut')}
+      >
+        <Icon name="signOut" />
+      </button>
+    </header>
+  )
+}
+
+/* ------------------------------------------------------------------ shell */
+
+export function AppShell({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation()
+  const { staff } = useSession()
+  const [navOpen, setNavOpen] = useState(false)
+  const menuRef = useRef<HTMLButtonElement>(null)
+  const closeRef = useRef<HTMLButtonElement>(null)
+
+  const closeNav = useCallback(() => {
+    setNavOpen(false)
+    menuRef.current?.focus()
+  }, [])
+
+  // Navigating is the end of the off-canvas menu's job.
+  useEffect(() => setNavOpen(false), [pathname])
+
+  useEffect(() => {
+    if (!navOpen) return
+    closeRef.current?.focus()
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeNav()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [navOpen, closeNav])
+
+  return (
+    <div className={navOpen ? 'shell shell--nav-open' : 'shell'}>
+      <Sidebar onClose={closeNav} closeRef={closeRef} />
+      <div className="sidebar-backdrop" onClick={closeNav} aria-hidden="true" />
+      <div className="shell__main">
+        <Topbar navOpen={navOpen} onOpenNav={() => setNavOpen(true)} menuRef={menuRef} />
+        <main className="shell__content">
+          <ConnectionBanner />
+          {/* Shifts belong to operator roles; the super admin has none, and the
+              banner's endpoint would only ever answer it with a 404. */}
+          {staff && !isSuperAdmin(staff.role) && <ShiftEndBanner />}
+          <div className="shell__view">{children}</div>
         </main>
       </div>
     </div>

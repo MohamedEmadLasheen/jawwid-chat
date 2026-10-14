@@ -34,8 +34,10 @@ function SuperAdminOnly({ children }: { children: ReactElement }) {
   return isSuperAdmin(staff.role) ? children : <ForbiddenPage />
 }
 
+/** Where "/" (and so a fresh sign-in with no deep link) lands: the role's
+ *  conversations. The Dashboard stays at its own URL, under More. */
 function homeFor(role: Parameters<typeof isDepartment>[0]): string {
-  if (isSuperAdmin(role)) return adminSectionPath('dashboard')
+  if (isSuperAdmin(role)) return adminSectionPath('conversations')
   // Departments have no inbox — they only ever see their own tasks.
   return isDepartment(role) ? '/tasks' : '/inbox'
 }
