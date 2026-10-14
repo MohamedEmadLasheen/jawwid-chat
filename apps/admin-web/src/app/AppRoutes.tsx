@@ -5,6 +5,7 @@ import { LoadingState } from '@/shared/components/States'
 import { AppShell } from './AppShell'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { InboxPage } from '@/features/inbox/InboxPage'
+import { ChatPage } from '@/features/chat/ChatPage'
 import { FamiliesPage } from '@/features/family/FamiliesPage'
 import { TasksPage } from '@/features/tasks/TasksPage'
 import { CoveragePage } from '@/features/coverage/CoveragePage'
@@ -39,8 +40,9 @@ function SuperAdminOnly({ children }: { children: ReactElement }) {
  *  conversations. The Dashboard stays at its own URL, under More. */
 function homeFor(role: Parameters<typeof isDepartment>[0]): string {
   if (isSuperAdmin(role)) return adminSectionPath('conversations')
-  // Departments have no inbox — they only ever see their own tasks.
-  return isDepartment(role) ? '/tasks' : '/inbox'
+  // Departments have no inbox — they only ever see their own tasks. Operators
+  // land in their conversations: the chat workspace on the real API.
+  return isDepartment(role) ? '/tasks' : '/chat'
 }
 
 export function AppRoutes() {
@@ -53,6 +55,8 @@ export function AppRoutes() {
     <AppShell>
       <Routes>
         <Route path="/" element={<Navigate to={homeFor(staff.role)} replace />} />
+        <Route path="/chat" element={<Area area="chat"><ChatPage /></Area>} />
+        <Route path="/chat/:conversationId" element={<Area area="chat"><ChatPage /></Area>} />
         <Route path="/inbox" element={<Area area="inbox"><InboxPage /></Area>} />
         <Route path="/inbox/:familyId" element={<Area area="inbox"><InboxPage /></Area>} />
         <Route path="/families" element={<Area area="families"><FamiliesPage /></Area>} />

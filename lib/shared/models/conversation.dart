@@ -1,13 +1,12 @@
 /// The kinds of conversation this client can render.
 ///
-/// PD-6 (2026-09-23) added [teacherParentDirect]. An earlier revision of this file said
-/// "there is deliberately no 'direct chat with a teacher/parent' kind — the type system
-/// itself refuses to represent the forbidden channel". That channel is no longer forbidden
-/// when the server authorizes the relationship, so the type must now be able to name it.
+/// PD-6 (2026-09-23) added [teacherParentDirect]. PD-7 (2026-10-14) forbids creating that
+/// channel again (BR-1), but the conversations PD-6 created still exist and stay readable,
+/// so the type must still be able to name them — read-only (`wire_mappers.dart`).
 ///
 /// This enum is **presentation and domain mapping only**. It never grants anything: the
-/// server decides who may speak to whom and refuses anything else with
-/// `COMM.TEACHER_PARENT_NOT_AUTHORIZED`, whatever this client believes a row to be.
+/// server decides who may speak to whom and refuses anything else (a teacher<->parent
+/// direct with `COMM.BR1_TEACHER_PARENT_DIRECT`), whatever this client believes a row to be.
 enum ConversationKind {
   /// The family's single continuous support thread. Exactly one per family, and its identity
   /// survives a change of handling admin (§12).
@@ -19,7 +18,8 @@ enum ConversationKind {
   /// A 1:1 with Jawwid staff. Available to both parents and teachers.
   adminDirect,
 
-  /// A 1:1 between a parent and a teacher the server has authorized (PD-6).
+  /// A 1:1 between a parent and a teacher created under PD-6 (2026-09-23 to
+  /// 2026-10-14). Read-only since PD-7: history, no new messages, calls or reactions.
   ///
   /// Only ever produced when the payload actually says so — exactly one `contact` member
   /// and exactly one `teacher` member. It is never inferred from the conversation type,

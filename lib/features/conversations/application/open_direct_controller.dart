@@ -27,8 +27,8 @@ import '../../../shared/models/conversation.dart';
 ///
 /// Whether the two actors may share a channel. That is
 /// `AuthorizationService.canOpenDirect`, server-side, evaluated per action —
-/// PD-6 resolves a Teacher↔Parent pairing from the live teaching relationship,
-/// which no client can know. A refusal arrives as a typed [AppError] and is
+/// since PD-7 it refuses every Teacher↔Parent pairing (BR-1); staff pairings
+/// depend on live membership and scope, which no client can know. A refusal arrives as a typed [AppError] and is
 /// surfaced with its own message; it is never retried, and it is never guessed
 /// at in advance. `CommunicationPolicy` decides only whether to *offer* the
 /// action, which is a narrower and purely cosmetic question.

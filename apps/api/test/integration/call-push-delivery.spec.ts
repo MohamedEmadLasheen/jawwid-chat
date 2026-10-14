@@ -91,10 +91,14 @@ const device = (
   isVoip: boolean,
 ) => notifications.registerDevice({ actorId, token, platform, isVoip });
 
-/** A teacher -> parent call, which schedules `incoming_call` for the parent. */
+/**
+ * An admin -> parent call (the family's owner, on duty), which schedules
+ * `incoming_call` for the parent. It was a teacher -> parent call until PD-7
+ * (2026-10-14) restored BR-1: no direct teacher<->parent channel exists.
+ */
 async function directCall() {
-  const conv = await g.conversations.getOrCreateDirect(s.parentId, s.teacherId);
-  const { callId } = await g.calls.start(conv.id, s.teacherId);
+  const conv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
+  const { callId } = await g.calls.start(conv.id, s.ownerId);
   return { conversationId: conv.id, callId };
 }
 
@@ -105,12 +109,12 @@ async function groupCall() {
   return { conversationId: group.id, callId };
 }
 
-/** A message from the teacher, which schedules `new_message` for the parent. */
+/** A message from the admin, which schedules `new_message` for the parent. */
 async function message() {
-  const conv = await g.conversations.getOrCreateDirect(s.parentId, s.teacherId);
+  const conv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
   await g.messages.send({
     conversationId: conv.id,
-    senderId: s.teacherId,
+    senderId: s.ownerId,
     body: "hello",
     clientMessageId: `client-${Date.now()}`,
   });
@@ -268,7 +272,7 @@ describe("3/4/5. the call id in the payload", () => {
 // =========================================================================
 describe("6/7/8. who is notified — unchanged by W8-W1", () => {
   it("6. the caller is not notified of their own call", async () => {
-    await device(s.teacherId, "teacher-voip", "ios", true);
+    await device(s.ownerId, "admin-voip", "ios", true);
     await device(s.parentId, "parent-voip", "ios", true);
 
     await directCall();

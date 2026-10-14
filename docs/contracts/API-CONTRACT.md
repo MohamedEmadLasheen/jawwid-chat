@@ -50,8 +50,9 @@ Source of truth: `apps/api/src/platform/errors.ts`. Default HTTP status of a `Co
 
 | Code | HTTP | Raised when |
 |---|---|---|
-| `COMM.TEACHER_PARENT_NOT_AUTHORIZED` | 403 | A teacher and a parent would share a 1:1 conversation or call **without an authorized relationship** (`canOpenDirect`, `canSend`, `canCall`; PD-6). Never retry. |
-| `COMM.BR1_TEACHER_PARENT_DIRECT` | 403 | **DEPRECATED (PD-6, 2026-09-23).** No longer emitted: the blanket teacher↔parent 1:1 prohibition was re-versioned. Clients keep treating it as terminal so older builds behave correctly. |
+| `COMM.BR1_TEACHER_PARENT_DIRECT` | 403 | **Active (PD-7, 2026-10-14).** A teacher and a parent may never share a direct 1:1 conversation or call, whatever their relationship: refused on open, send (either side), new reaction, call start/join/token. Never retry. |
+| `COMM.TEACHER_PARENT_NOT_AUTHORIZED` | 403 | **DEPRECATED (PD-7).** PD-6's relationship refusal; no longer emitted. Clients keep treating it as terminal so older builds behave correctly. |
+| `COMM.STAFF_OUT_OF_SCOPE` | 403 | Staff scope (2026-10-14): the conversation is not in this admin's charge. Never retry. |
 | `COMM.BR1_ADMIN_PRESENCE_REQUIRED` | 403 | Teacher and parent in a group with no live Jawwid admin member (C-4), or presence could not be established (fail closed). |
 | `COMM.ROLE_CANNOT_MESSAGE_FAMILY` | 403 | Staff role is finance / technical / academic. |
 | `COMM.TEACHER_TEACHER_DISABLED` | 403 | Teacher ↔ teacher direct. |
@@ -281,7 +282,7 @@ ConversationMemberDto { actorId, actorKind: 'contact'|'staff'|'teacher'|'system'
   memberRole: 'parent'|'teacher'|'admin'|'observer', isSilent: boolean,
   displayName: string,                            // '' when the actor no longer
                                                   // resolves; never an id (O3)
-  canOpenDirect: boolean }                        // PD-6 advisory, per requesting
+  canOpenDirect: boolean }                        // advisory (canOpenDirect), per requesting
                                                   // actor: may YOU open a 1:1 with
                                                   // this member? Computed by the same
                                                   // AuthorizationService.canOpenDirect
@@ -308,7 +309,7 @@ MessageDto {
   receipts: {actorId, state: 'sent'|'delivered'|'read', deliveredAt, readAt}[]   // RT-012, see §5
 }
 AttachmentDto { id, kind: 'image'|'video'|'voice'|'file', mimeType, byteSize, originalName,
-  durationMs, width, height, url: string|null /* signed, short-lived */, thumbnailUrl }
+  durationMs, width, height, url: string|null /* absolute link to GET /media/attachments/:id, bound to the reader, re-authorized on every request (RT-037) */, thumbnailUrl }
 ```
 
 Phase 1 DTOs (normative):
@@ -418,8 +419,9 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 ### 3.4 Conversations
 
 **GET /conversations** — EXISTS → RECONCILE (`conversation.controller.ts#list`, `conversation.service.ts#listForActor`)
-- Auth: required. Permission: `conversations.read`. Scope today: contact / teacher → conversations where the actor is a live member; **staff (family-facing) → every conversation in the system, `take: 200`, no scope (RT-011)**; other staff → `COMM.ROLE_CANNOT_MESSAGE_FAMILY` 403.
-- Query today: none. Response today: `{ conversations: ConversationDto[] }` (no `members`), ordered `lastActivityAt desc`. Each row carries `learner` (resolved from `conversation.learner_id`, null when there is none) and `unreadCount` (always a number on this route).
+- Auth: required. Permission: `conversations.read`. Scope: contact / teacher → conversations where the actor is a live member; **staff (2026-10-14, "staff scope")**: `manager` → every conversation of their organization; `admin` / `coverage` → conversations of their organization where they are a live member, OR whose family they own (`family.owner_id`), OR whose family they are on duty for (`chat.families_on_duty`), OR whose live sticky handler they are; `take: 200`. Exactly the set `canRead` (below) admits, so a row in the list always opens. Other staff → `COMM.ROLE_CANNOT_MESSAGE_FAMILY` 403. (RT-011's "every conversation in the system" is closed for the list and every read path.)
+- **Staff scope on every read path.** `GET /conversations/:id`, `GET/POST …/messages`, `…/read`, attachments, approvals (`GET /approvals/pending` is filtered to conversations the caller may read), calls, and realtime `conversation.subscribe` / delivery all run `AuthorizationService.canRead(actor, conv, membership, staffInScope)`: another organization's conversation → `COMM.CONVERSATION_NOT_FOUND` 404; an admin outside their charge → `COMM.STAFF_OUT_OF_SCOPE` 403. `staffInScope` is resolved server-side (`ConversationService.staffInScope`), never from the request.
+- Query today: none. Response today: `{ conversations: ConversationDto[] }`, ordered `lastActivityAt desc`. Since 2026-10-14 each row carries `members` (live members with `displayName` and the `canOpenDirect` advisory for the caller), resolved for the whole list in one membership query plus one identity batch. Each row carries `learner` (resolved from `conversation.learner_id`, null when there is none) and `unreadCount` (always a number on this route).
 - **`unreadCount`** is derived from `chat.message_receipt` — the existing read-state architecture, which `markReadUpTo` already writes — and counts messages where the actor holds a receipt in `sent|delivered`, excluding `message_hidden_for` rows and `deleted_for_all`. Receipts are written only for live members other than the author and never for a pending message, so an actor's own messages, messages awaiting approval and (for a contact) internal notes have no receipt and cannot be counted. One grouped query per list request, never one per row (this is the cost that kept the field off the DTO: mobile gap O1).
 - **`learner`** rides the same membership join that authorizes the list, so a contact can only receive the learner of a conversation they are a live member of. `learnerId` is unchanged and remains the authority on whether a conversation has a learner at all.
 - **Phase 1:** query `familyId?`, `section?: 'needs_reply'|'pending_approval'|'unanswered'|'all'` (default `all`), `includeArchived?` (default false), `cursor`, `limit` (default 30, max 100); response `Page<ConversationDto>`; staff scope = family scope rule (§3.3) plus conversations the staff is a live member of. Section definitions: `needs_reply` = `needsReply === true`; `pending_approval` = at least one `message_approval` with `decision='pending'`; `unanswered` = `needsReply === true` and `lastStaffMessageAt is null` (never answered; a subset of `needs_reply`) — *this definition is proposed [B], to be confirmed by product*; `all` = no filter. Contacts and teachers may pass `section` but not `familyId`.
@@ -427,12 +429,12 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 - Audit / Realtime: none.
 
 **POST /conversations/direct** — EXISTS (`getOrCreateDirect`)
-- Auth: required. Permission: `conversations.read` (opening one's own channel) + `AuthorizationService.canOpenDirect`. Scope: allowed pairs only: contact ↔ family-facing staff, teacher ↔ family-facing staff, and **contact ↔ teacher when the relationship predicate authorizes it** (PD-6; `AUTHORIZATION-MODEL.md` §4.1). The relationship is resolved server-side from Jawwid Core data — `withActorId` is a lookup key, never evidence.
+- Auth: required. Permission: `conversations.read` (opening one's own channel) + `AuthorizationService.canOpenDirect`. Scope: allowed pairs only: contact ↔ family-facing staff, teacher ↔ family-facing staff. **contact ↔ teacher is refused, whatever their relationship** (PD-7, 2026-10-14, superseding PD-6): `COMM.BR1_TEACHER_PARENT_DIRECT` 403. `withActorId` is a lookup key, never evidence.
 - Request: `{ withActorId: string }`. Response: `200 ConversationDto` (existing or created; `familyId` = the contact's family; `directKey` is the sorted pair, so the pair is unique).
-- Errors: `COMM.UNKNOWN_ACTOR` 401 (either side) · `COMM.ACTOR_INACTIVE` · `COMM.INVALID_PARTICIPANTS` · `COMM.TEACHER_PARENT_NOT_AUTHORIZED` · `COMM.TEACHER_TEACHER_DISABLED` · `COMM.STAFF_STAFF_DISABLED` · `COMM.ROLE_CANNOT_MESSAGE_FAMILY` (all 403).
+- Errors: `COMM.UNKNOWN_ACTOR` 401 (either side) · `COMM.ACTOR_INACTIVE` · `COMM.INVALID_PARTICIPANTS` · `COMM.BR1_TEACHER_PARENT_DIRECT` · `COMM.TEACHER_TEACHER_DISABLED` · `COMM.STAFF_STAFF_DISABLED` · `COMM.ROLE_CANNOT_MESSAGE_FAMILY` (all 403).
 - Idempotency: natural (get-or-create; unique `direct_key`, P2002 re-read).
 - Audit: `event_log` `{type:'conversation_created', familyId, actorKind, actorId, payload:{conversationId, type:'direct'}}` on create only.
-- Realtime: none (no outbox row on create).
+- Realtime (2026-10-14): on create only, `conversation.membership_changed` `{conversationId, added:[both], removed:[]}`, which also reaches each member's actor room as `conversation.added` (§4).
 
 **POST /conversations/student-group** — EXISTS → RECONCILE (`ensureStudentGroup`)
 - Auth (2026-10-12): bearer required. Checked **before** the learner is looked up: the actor must be active family-facing staff (`admin`, `coverage`, `manager`) with an organization, else `COMM.CANNOT_PROVISION_STUDENT_GROUP` 403 — identical for a real and an unknown learner id. Then: a learner (or its family) in another organization → `COMM.CONVERSATION_NOT_FOUND` 404, exactly as an unknown learner; a `manager` may provision for any family in their organization; `admin` / `coverage` only for a family they own (`family.owner_id`), else 403. On-duty cover is not scope (PD-3). Decided by `AuthorizationService.canProvisionStudentGroup` / `canProvisionStudentGroupFor`. Permission key `conversations.manage` remains Phase 1.
@@ -458,8 +460,8 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 - Auth: required. Permission: `conversations.read` **then** the call decision. Scope: `canRead` establishes access to the conversation first; only then is `canCall` evaluated. A caller who fails `canRead` receives that refusal, so this cannot be used to probe a conversation they could not open.
 - Response: `{ canCall: boolean, code: string | null }`. `code` is a stable `COMM.*` value when `canCall` is false, `null` when true. **Nothing else** — no identifier, no display name, no relationship detail, no prose reason.
 - **Advisory, not an authorization.** It is the policy's answer at that instant and does not promise the next `POST /calls` will succeed; a relationship revoked in between is refused there. `POST /calls` re-decides from scratch and remains the only thing that authorizes a call. Not cached, client-side or server-side.
-- **One policy.** It calls `CallService.callCapability`, which shares `decideInitiate` with `CallService.start` — same participant resolution, same family owner, same live members, same PD-6 pairing, same `AuthorizationService.canCall` with `CallIntent.INITIATE`. There is no second call-authorization path; `call-capability.spec.ts` asserts the two agree case for case, including the refusal code.
-- Why it exists: `docs/design/screens/call.md` §4 requires the call affordance to be **absent** where the backend does not authorize the pairing, and forbids the client inferring which pairings those are. Since PD-6 that set is data, and a conversation's existence proves only that the relationship held when it was created.
+- **One policy.** It calls `CallService.callCapability`, which shares `decideInitiate` with `CallService.start` — same participant resolution, same family owner, same live members, same `AuthorizationService.canCall` (BR-1 per PD-7) with `CallIntent.INITIATE`. There is no second call-authorization path; `call-capability.spec.ts` asserts the two agree case for case, including the refusal code.
+- Why it exists: `docs/design/screens/call.md` §4 requires the call affordance to be **absent** where the backend does not authorize the pairing, and forbids the client inferring which pairings those are. Under PD-6 that set was data; under PD-7 it is again empty for teacher↔parent, and a conversation's existence proves only that the relationship held when it was created.
 - Errors (from the read gate): `COMM.CONVERSATION_NOT_FOUND` 404 · `COMM.NOT_CONVERSATION_MEMBER` 403 · `COMM.ROLE_CANNOT_MESSAGE_FAMILY` 403 · `COMM.ACTOR_INACTIVE` 403 · `COMM.UNKNOWN_ACTOR` 403.
 - Audit: none. Read-only; it creates no call and writes no row.
 
@@ -484,7 +486,7 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 **GET /conversations/:conversationId/messages**
 - Auth: required. Permission: `messages.read`. Scope: `canRead`.
 - Query: `before?: string(seq)`, `after?: string(seq)`, `limit?: number`. `after` → ascending; otherwise descending. Limit capped at `communication.page_size_max`.
-- Response: `{ messages: MessageDto[], nextBefore: string|null }`. Visibility filter (single place, `visibilityFilter`): contacts/teachers never see `internal`; nobody sees their own `deleted for me` rows; `pending` visible only to the author and family-facing staff; `rejected` only to the author. Attachment `url`/`thumbnailUrl` are signed per read (`STORAGE_SIGNED_URL_TTL_SECONDS`, default 300 s). A message `deletedForAll` has `body: null, attachments: []`.
+- Response: `{ messages: MessageDto[], nextBefore: string|null }`. Visibility filter (single place, `visibilityFilter`): contacts/teachers never see `internal`; nobody sees their own `deleted for me` rows; `pending` visible only to the author and family-facing staff; `rejected` only to the author. Attachment `url`/`thumbnailUrl` are minted per read for THIS reader (link expiry `STORAGE_SIGNED_URL_TTL_SECONDS`, default 300 s) and point at `GET /media/attachments/:id` (RT-037) — never at the storage bucket. A message `deletedForAll` has `body: null, attachments: []`.
 - Errors: `COMM.CONVERSATION_NOT_FOUND` 404 · `COMM.NOT_CONVERSATION_MEMBER` 403 · `COMM.ROLE_CANNOT_MESSAGE_FAMILY` 403.
 - Audit / Realtime: none.
 
@@ -535,7 +537,13 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 - Request: `{ kind: 'image'|'video'|'voice'|'file', mimeType: string, byteSize: number }`. Limits: image 10 MiB, video 100 MiB, voice 16 MiB, file 25 MiB (env-tunable); MIME allow-lists per kind.
 - Response: `{ objectKey, uploadUrl, method: 'PUT', headers: Record<string,string>, expiresAt }` (`UploadAuthorization`). Client PUTs to `uploadUrl`, then sends the message with `attachments[].objectKey`. Limits are re-validated on send.
 - Errors: `COMM.ATTACHMENT_TYPE_NOT_ALLOWED` 400 · `COMM.ATTACHMENT_TOO_LARGE` 400 · `canRead` codes.
-- Audit / Realtime: none. Download: never a permanent URL — `AttachmentDto.url` is signed per read.
+- Audit / Realtime: none. Download: never a permanent URL — `AttachmentDto.url` is minted per read and served by the media route below.
+
+### GET /media/attachments/:attachmentId · GET /media/stories/:storyId (RT-037, 2026-10-14)
+
+- Auth: **`@Public()` to the bearer guard** — an `<img>`, a link or a player cannot send a header. The URL carries `v` (o|t), `a` (the reader's actor id), `e` (expiry, unix s) and `s` (HMAC-SHA256 over kind, id, variant, actor, expiry with a key derived from `JWT_ACCESS_SECRET`). **The signature is not the decision.** On every request: signature + expiry (403), the reader is live — principal and login (403), and the reader may read this message / story NOW — conversation scope, membership, visibility, deleted-for-me, deleted-for-everyone; story audience, publication, expiry, deletion (404). Only then are the bytes read from storage and streamed.
+- Response: the bytes, `Content-Type` as stored, `X-Content-Type-Options: nosniff`, `Content-Disposition: inline`, `Cache-Control: private, no-store`, `Accept-Ranges: bytes`; single-range requests → 206 with `Content-Range`; out-of-range → 416. No storage URL is ever returned.
+- Guarantee: a deactivation, a removal or a deletion refuses the very NEXT request on a link minted earlier. Not covered: bytes already delivered, and one response already streaming when the change commits.
 
 ### 3.7 Approvals (`approval.controller.ts`, `approval.service.ts`)
 
@@ -634,10 +642,10 @@ then disappears stays ACTIVE indefinitely. A stale-active reconciliation is a se
 unauthorized lifecycle rule.
 
 **POST /calls** — EXISTS
-- Auth: required. Permission: `calls.start`. Scope: `canCall(intent = initiate)` = `canSend` (customer visibility) + the authorized-relationship check on a direct teacher/parent pair (**PD-6**) + C-4 + **PD-2**. Participants = live, active, non-silent members (server-derived; never client-supplied). Room name minted server-side.
+- Auth: required. Permission: `calls.start`. Scope: `canCall(intent = initiate)` = `canSend` (customer visibility) + refusal of any direct teacher/parent pair (**BR-1, PD-7**) + C-4 + **PD-2**. Participants = live, active, non-silent members (server-derived; never client-supplied). Room name minted server-side.
 - **PD-2:** a family contact may not start a `student_group` or `class_group` call. A parent's 1:1 call to their handler is unaffected.
 - Request: `{ conversationId: string }`. Response: `{ callId, roomName }`.
-- Errors: matrix codes; `COMM.TEACHER_PARENT_NOT_AUTHORIZED` 403; `COMM.PARENT_CANNOT_START_GROUP_CALL` 403.
+- Errors: matrix codes; `COMM.BR1_TEACHER_PARENT_DIRECT` 403; `COMM.PARENT_CANNOT_START_GROUP_CALL` 403.
 - Audit: `event_log` `call_started`. Realtime: `call.incoming { callId, conversationId, type, initiatorId, initiatorName }` to the conversation room. **`roomName` was removed from this payload 2026-09-24:** the room handle comes back from `POST /calls/:id/token` with the token that makes it usable, so broadcasting it added nothing and put a media handle in a fan-out.
 
 **POST /calls/:id/token** — EXISTS
@@ -669,7 +677,7 @@ unauthorized lifecycle rule.
 >
 > **Not verified:** that LiveKit accepts these tokens. `scripts/infra/livekit-probe.sh`
 > asks the real service and needs credentials the repository does not contain.
-- Auth: required. Permission: `calls.accept`. Scope: recorded participant, call not ended, still a member, `canCall(intent = join)` re-evaluated — including the PD-6 relationship predicate, so a teacher–parent relationship revoked in Jawwid Core refuses the next join even mid-call. This is the JOIN path, so a parent is allowed here (**PD-2**). Response: `{ token, url, roomName, expiresAt }`; TTL `call.token_ttl_seconds` (120); `canPublish = !isSilent`.
+- Auth: required. Permission: `calls.accept`. Scope: recorded participant, call not ended, still a member, `canCall(intent = join)` re-evaluated — including the BR-1 refusal of a direct teacher–parent call (PD-7; under PD-6 this was the relationship predicate, so a relationship revoked in Jawwid Core refuses the next join even mid-call. This is the JOIN path, so a parent is allowed here (**PD-2**). Response: `{ token, url, roomName, expiresAt }`; TTL `call.token_ttl_seconds` (120); `canPublish = !isSilent`.
 - Errors: `COMM.CALL_NOT_FOUND` 404 · `COMM.CALL_ALREADY_ENDED` 409 · `COMM.CALL_NOT_A_PARTICIPANT` 403 · matrix codes. Audit / Realtime: none.
 
 **POST /calls/:id/accept** — EXISTS · Permission `calls.accept` · Scope: **the full join authorization chain**, identical to `POST /calls/:id/token` — actor active, recorded participant, `left_at` null, call not ended, still a conversation member, communication matrix, C-4, PD-2, and the **PD-6 relationship re-resolved now** (starting a call does not guarantee it may still be answered). `joinedAt` set; `ringing → active` with `answeredAt`, decided under `SELECT … FOR UPDATE` so concurrent accept/decline/end cannot tear the state. Answering twice is an idempotent no-op. Response `{ ok: true }`. Errors: matrix codes; `COMM.CALL_PARTICIPANT_LEFT` 409; `COMM.CALL_ALREADY_ENDED` 409; `COMM.CALL_ALREADY_DECLINED` 409; `COMM.CALL_NOT_A_PARTICIPANT` 403. **A refused accept writes nothing** — no `joinedAt`, no `answeredAt`, no status change, no event. Realtime: **`call.accepted { callId, conversationId, actorId }`** to `conversation:<id>`. **Changed 2026-09-24:** this used to emit `call.participant_joined` with no `conversationId`, which the outbox could not route and silently discarded. `participant_joined` means MEDIA presence and is emitted only by something that has observed it — `POST /livekit/webhook` and nothing else (§3.9, built 2026-09-27). An HTTP accept does not assert a media connection, and the two facts are stored in different columns: `joined_at` is the accept, `media_joined_at` is the room. Audit: none.
@@ -703,7 +711,7 @@ Declining again is refused with `COMM.CALL_ALREADY_ENDED` (was `COMM.CALL_PARTIC
 > An expired call cannot then be accepted, declined, or issued a media token.
 
 **POST /livekit/webhook** — EXISTS (added 2026-09-27, `livekit-webhook.controller.ts`)
-- Auth: **not a Jawwid session.** LiveKit carries no actor and no bearer of ours; it authenticates with an HS256 JWT signed by the project API secret, whose `sha256` claim is a hash of the RAW body. Verified by `WebhookReceiver` from `livekit-server-sdk` — the official verifier, not a hand-rolled HMAC. `main.ts` sets `rawBody: true` because the hash is over the bytes as they arrived. A participant access token is never accepted here: that is a credential we send a device, this is one LiveKit sends us.
+- Auth: **not a Jawwid session.** LiveKit carries no actor and no bearer of ours; it authenticates with an HS256 JWT signed by the project API secret, whose `sha256` claim is a hash of the RAW body. Verified by `WebhookReceiver` from `livekit-server-sdk` — the official verifier, not a hand-rolled HMAC. `main.ts` sets `rawBody: true` because the hash is over the bytes as they arrived, and `applyInfrastructure` claims `application/webhook+json` (LiveKit's content type) with the raw bytes kept. The controller is `@Public()` to the bearer guard: its authentication is the LiveKit signature (both fixed 2026-10-14 — before, every real delivery was refused; see findings RT-038). **Join-time enforcement (RT-037):** a `participant_joined` for an identity that is no longer live is undone via RoomService.RemoveParticipant; if that fails the webhook answers 503 so LiveKit retries. A participant access token is never accepted here: that is a credential we send a device, this is one LiveKit sends us.
 - Events consumed: **`participant_joined` and `participant_left`, and nothing else.** `room_started`, `room_finished`, `track_published`, `track_unpublished`, `participant_connection_aborted` and the egress/ingress family are verified and ignored — W5 establishes presence, and consuming more would be a media-analytics system.
 - Room → call: `chat.call.room_name`, which is UNIQUE and server-minted. Never a conversation id, never participant metadata.
 - Identity → participant: the LiveKit participant `identity`, which is the actor id the server put in the token (`CallService.issueToken`). Never a display name, never metadata. A non-uuid identity fails closed rather than reaching the database.
@@ -777,7 +785,7 @@ either: every handler takes the authenticated actor from `@ActorId()`.
 **GET /stories/feed** — EXISTS
 - Auth: required. Scope: `canReadStories` — any active actor; a contact must hold `can_message`. Returns only stories joined through the caller's own `chat.story_recipient` rows, with `state = 'published' AND expires_at > now() AND deleted_at IS NULL`. Page size `story.feed_page_size` (50), newest first.
 - **There is no `state` or `expired` filter.** A client cannot ask to see expired stories.
-- Response: `{ stories: StoryFeedItem[] }`. `mediaUrl` is signed and short-lived, minted per request; `null` once media is purged. A story that is expired, deleted or purged signs nothing on any surface — `mediaUrl` is `null`, never a URL that would 404 or outlive access.
+- Response: `{ stories: StoryFeedItem[] }`. `mediaUrl` is a link to `GET /media/stories/:id` bound to the reader, minted per request and re-authorized on every use (RT-037); `null` once media is purged. A story that is expired, deleted or purged signs nothing on any surface — `mediaUrl` is `null`, never a URL that would 404 or outlive access.
 - Errors: `COMM.STORY_CANNOT_READ` 403 · `COMM.ACTOR_INACTIVE` 403.
 
 **GET /stories?drafts=true|false** — EXISTS
@@ -945,7 +953,7 @@ Transport: socket.io on the **default namespace** at the API origin (Redis adapt
 
 | Event | Payload | Rule |
 |---|---|---|
-| `conversation.subscribe` | `{ conversationId }` | Authorized (`canRead`); `code` on refusal (`COMM.NOT_CONVERSATION_MEMBER`, `COMM.CONVERSATION_NOT_FOUND`, `COMM.UNKNOWN_ACTOR`). |
+| `conversation.subscribe` | `{ conversationId }` | Authorized (`canRead`, staff scope included); `code` on refusal (`COMM.NOT_CONVERSATION_MEMBER`, `COMM.STAFF_OUT_OF_SCOPE`, `COMM.CONVERSATION_NOT_FOUND`, `COMM.UNKNOWN_ACTOR` — the last is the connect/authenticate race and is the only one worth retrying). |
 | `conversation.unsubscribe` | `{ conversationId }` | |
 | `typing.start` | `{ conversationId }` | Authorized; server-side debounce (`realtime.typing_ttl_seconds` = 8). |
 | `typing.stop` | `{ conversationId }` | |
@@ -965,7 +973,8 @@ Transport: socket.io on the **default namespace** at the API origin (Redis adapt
 | `conversation.updated` | `{ conversationId, familyId, state, needsReply, lastActivityAt, handlerId }` | conversation room | `send` (always) |
 | `story.published` | `{ storyId, publishedAt, expiresAt, hasMedia, recipientCount }` — a hint; **no title, no body, no media URL** | the resolved audience's actor rooms, one per recipient. Never a broadcast: there is no room meaning "everyone" | `StoryService.publish` via outbox |
 | `story.retired` | `{ storyId, reason: 'expired'\|'deleted', at }` | the same actor rooms | `StorySweeper.expireDue`, `StoryService.remove` |
-| `conversation.membership_changed` | `{ conversationId, added: string[], removed: string[] }` | conversation room | `setMembership`, `syncStudentGroup` |
+| `conversation.membership_changed` | `{ conversationId, added: string[], removed: string[] }` | conversation room | `setMembership`, `syncStudentGroup`, and (2026-10-14) creation in `getOrCreateDirect` / `ensureStudentGroup` |
+| `conversation.added` | `{ conversationId }` — nothing else | **each added member's own actor room** | the worker, from every `conversation.membership_changed` with a non-empty `added` (2026-10-14): the added people are not in the conversation room yet, so this is how their devices learn the conversation exists. |
 | `approval.requested` | `{ conversationId, messageId, approvalId, requestedBy }` | **staff actor rooms only** | `send` (pending) |
 | `approval.decided` | `{ conversationId, messageId, approvalId, decision, rejectionReason }` | conversation room | `decide` |
 | `call.incoming` | `{ callId, conversationId, type, initiatorId, initiatorName }` | conversation room | `start`. **No `roomName`** — removed 2026-09-24; the room handle comes back from `POST /calls/:id/token`. |
@@ -980,7 +989,7 @@ Transport: socket.io on the **default namespace** at the API origin (Redis adapt
 
 Routing rules in the worker: `call.*`, `reaction.*`, `message.deleted`, `conversation.*`, `approval.decided` → conversation room; `message.created` with `visibility: 'internal'` and `approval.requested` → staff member actor rooms; events without `conversationId` are dropped (`default` branch). Guarantees: transactional outbox (`chat.outbox_event`), at-least-once (dedupe on `messageId` / `callId` / `approvalId`), `message.created` carries no body, a pending message emits nothing to the group.
 
-Reconnect: re-subscribe, `GET …/messages?after=<last seq held>` per conversation, then `message.delivered` for anything new.
+Reconnect: re-subscribe, then (only once rejoined) `GET …/messages?after=<last seq held>` per open conversation until nothing newer returns, re-read the newest page (deletions / reactions / approvals do not move a seq), re-read the list, then `message.delivered` for anything new. A `message.created` for an APPROVED message carries its original (send-time) seq, which may be below the client's watermark: fetch `?after=<seq - 1>`. See `docs/communication/realtime-events.md`.
 
 **Admin Web `/staff` events → canonical**
 

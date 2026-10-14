@@ -58,6 +58,13 @@ import type { PresenceService } from '@communication/realtime/presence.service';
 import { CommEvent, CONVERSATION_ACCESS_REVOKED } from '@communication/contracts/events';
 import { RealtimeRelay } from '../../src/infra/realtime/realtime-relay.service';
 import { RelayRealtimePublisher } from '../../src/infra/realtime/relay.publisher';
+import { RevocationConfirmer } from '@communication/realtime/revocation-confirmer.service';
+import { realtimeMetricsSnapshot } from '@platform/realtime-metrics';
+import { OutboxWorker } from '@communication/outbox/outbox.worker';
+import { NotificationService } from '@communication/notifications/notification.service';
+import { TemplateService } from '@communication/notifications/template.service';
+import { QuietHoursService } from '@communication/notifications/quiet-hours.service';
+import { LoggingPushProvider } from '@communication/notifications/push.provider';
 import { PinnedCoverage, withAssignmentGate } from './harness';
 
 process.env.JWT_ACCESS_SECRET ??= 'integration-access-secret-32-chars-min!';
@@ -1043,6 +1050,168 @@ describe('the window after the final liveness check — one node', () => {
   });
 });
 
+// ===========================================================================
+// RT-032 -- A DEACTIVATION WRITTEN DIRECTLY TO THE DATABASE.
+//
+// The writer is raw SQL on a server-side connection (an operator, a sync job,
+// chat.offboard_staff): it RETURNS at its own commit and runs no barrier. Its
+// transaction also wrote a chat.principal_revocation row (20261014150000), and
+// the deactivation is COMPLETE only when an API node's RevocationConfirmer has
+// run the completion barrier for that row and stamped confirmed_at. These tests
+// hold a delivery in the post-liveness window, end its transaction for real,
+// write the deactivation, and release the stale decision on either side of the
+// confirmation.
+// ===========================================================================
+async function revocationOf(principalId: string) {
+  const rows = await prisma.$queryRawUnsafe<{ id: string; confirmed_at: Date | null; confirmed_by: string | null }[]>(
+    `select id::text, confirmed_at, confirmed_by from chat.principal_revocation
+      where principal_id = '${principalId}'::uuid order by recorded_at desc limit 1`);
+  return rows[0];
+}
+
+describe('RT-032 · a direct-database deactivation, completed by the barrier', () => {
+  beforeEach(async () => {
+    // Only this suite's database; each test starts with an empty journal.
+    await prisma.$executeRawUnsafe(`truncate chat.principal_revocation`);
+  });
+  afterEach(() => {
+    node.gateway.afterLivenessCheck = undefined;
+    node.conversations.deliveryTransactionTimeoutMs = 15_000;
+  });
+
+  it('connection LOST after the check, contact deactivated by raw SQL: once CONFIRMED, the stale decision is never emitted to them', async () => {
+    const p = await connect(node, (await login('parent')).accessToken);
+    const p2 = await connect(node, (await login('parent2')).accessToken);
+    await p.subscribe(groupId);
+    await p2.subscribe(groupId);
+    const confirmer = new RevocationConfirmer(prisma, node.hub);
+    await expectNoEmitAfterSuccessfulReturn({
+      deliveringNode: node,
+      deliver: publishVia(node, groupId),
+      endIt: killHeldDeliveryConnection,
+      revoke: () =>
+        withoutPushes(node, async () => {
+          await prisma.$executeRawUnsafe(`update chat.contact set is_active = false where id = '${ids.parent}'::uuid`);
+          expect((await revocationOf(ids.parent)).confirmed_at).toBeNull(); // the commit is not completion
+          expect(await confirmer.confirmPending()).toBe(1); // the barrier ran after the commit
+          expect((await revocationOf(ids.parent)).confirmed_at).not.toBeNull();
+        }),
+      revoked: p,
+      control: p2,
+      afterwards: () => deliveredOnlyTo(node, groupId, p2, [p]),
+    });
+  });
+
+  it('transaction TIMED OUT after the check, the ACCOUNT suspended by raw SQL: once confirmed, nothing reaches it', async () => {
+    const p = await connect(node, (await login('parent')).accessToken);
+    const p2 = await connect(node, (await login('parent2')).accessToken);
+    await p.subscribe(groupId);
+    await p2.subscribe(groupId);
+    node.conversations.deliveryTransactionTimeoutMs = 400; // this test only
+    const confirmer = new RevocationConfirmer(prisma, node.hub);
+    await expectNoEmitAfterSuccessfulReturn({
+      deliveringNode: node,
+      deliver: publishVia(node, groupId),
+      endIt: () => waitUntil(async () => (await heldDeliveryBackends()).length === 0, 'rolled back by the timeout'),
+      revoke: () =>
+        withoutPushes(node, async () => {
+          await prisma.$executeRawUnsafe(`update chat.account set is_active = false, status = 'suspended' where id = '${ids.parentAccount}'::uuid`);
+          expect(await confirmer.confirmPending()).toBe(1);
+        }),
+      revoked: p,
+      control: p2,
+      afterwards: async () => {
+        node.conversations.deliveryTransactionTimeoutMs = 15_000;
+        await deliveredOnlyTo(node, groupId, p2, [p]);
+      },
+    });
+  });
+
+  it('the window is exactly commit -> confirmation: a stale decision released BEFORE the barrier can still emit, and its revocation is then unconfirmed', async () => {
+    // This is RT-032 as found. It is not closed by making the window vanish --
+    // emits are not transactional -- but by never calling a deactivation
+    // complete inside it. The assertion that matters is the second one.
+    const p = await connect(node, (await login('parent')).accessToken);
+    const p2 = await connect(node, (await login('parent2')).accessToken);
+    await p.subscribe(groupId);
+    await p2.subscribe(groupId);
+    const held = holdAfterLivenessCheck(node);
+    const marker = randomUUID();
+    const delivery = publishVia(node, groupId)(marker);
+    try {
+      await held.reached;
+      await killHeldDeliveryConnection();
+      await withoutPushes(node, () =>
+        prisma.$executeRawUnsafe(`update chat.contact set is_active = false where id = '${ids.parent}'::uuid`));
+    } finally {
+      held.release();
+    }
+    await delivery;
+    await p.waitFor(CommEvent.MESSAGE_CREATED, marker); // emitted after the commit...
+    expect((await revocationOf(ids.parent)).confirmed_at).toBeNull(); // ...and nobody was told it was complete
+    expect(await new RevocationConfirmer(prisma, node.hub).confirmPending()).toBe(1);
+    await deliveredOnlyTo(node, groupId, p2, [p]); // from the confirmation on: nothing
+  });
+
+  it('confirmation disconnects the person’s sockets at once (no wait for the 15 s sweep); others are untouched', async () => {
+    const p = await connect(node, (await login('parent')).accessToken);
+    const p2 = await connect(node, (await login('parent2')).accessToken);
+    await p.subscribe(groupId);
+    await p2.subscribe(groupId);
+    node.gateway.startRevalidation(600_000); // the sweep is out of the picture
+    try {
+      await prisma.$executeRawUnsafe(`update chat.contact set is_active = false where id = '${ids.parent}'::uuid`);
+      expect(await new RevocationConfirmer(prisma, node.hub).confirmPending()).toBe(1);
+      await waitUntil(async () => p.disconnectedByServer(), 'the deactivated parent is disconnected', 2_000);
+      expect(p2.socket.connected).toBe(true);
+      await deliveredOnlyTo(node, groupId, p2, [p]);
+    } finally {
+      node.gateway.startRevalidation(15_000);
+    }
+  });
+
+  it('refusals are counted, not only logged: a refused delivery and a confirmed deactivation move the readiness counters', async () => {
+    const p = await connect(node, (await login('parent')).accessToken);
+    const p2 = await connect(node, (await login('parent2')).accessToken);
+    await p.subscribe(groupId);
+    await p2.subscribe(groupId);
+    const before = realtimeMetricsSnapshot();
+    await withoutPushes(node, async () => {
+      await prisma.$executeRawUnsafe(`update chat.contact set is_active = false where id = '${ids.parent}'::uuid`);
+      await deliveredOnlyTo(node, groupId, p2, [p]); // refused at delivery, still subscribed (no push)
+      expect(await new RevocationConfirmer(prisma, node.hub).confirmPending()).toBe(1);
+    });
+    const after = realtimeMetricsSnapshot();
+    expect(after.deliveryRefusedIdentity + after.deliveryRefusedRead)
+      .toBeGreaterThan(before.deliveryRefusedIdentity + before.deliveryRefusedRead);
+    expect(after.deactivationsConfirmed).toBe(before.deactivationsConfirmed + 1);
+  });
+
+  it('deactivation vs outbox publication: an event written BEFORE the deactivation and published after it is refused to them', async () => {
+    const p = await connect(node, (await login('parent')).accessToken);
+    const p2 = await connect(node, (await login('parent2')).accessToken);
+    await p.subscribe(groupId);
+    await p2.subscribe(groupId);
+    const outbox = new OutboxService();
+    const config = new AppConfigService(prisma);
+    const notifications = new NotificationService(prisma, new TemplateService(prisma), new QuietHoursService(prisma), config, new LoggingPushProvider());
+    const worker = new OutboxWorker(prisma, notifications, node.gateway as never, identity);
+    // Nothing else pending, so the drain below publishes exactly this event.
+    await prisma.$executeRawUnsafe(`update chat.outbox_event set status = 'published' where status = 'pending'`);
+    const marker = randomUUID();
+    await prisma.$transaction((tx) =>
+      outbox.enqueue(tx, CommEvent.MESSAGE_CREATED, { conversationId: groupId, messageId: marker, seq: '1' } as never));
+    await withoutPushes(node, async () => {
+      await prisma.$executeRawUnsafe(`update chat.contact set is_active = false where id = '${ids.parent}'::uuid`);
+      expect(await new RevocationConfirmer(prisma, node.hub).confirmPending()).toBe(1);
+    });
+    expect(await worker.drain()).toBeGreaterThanOrEqual(1);
+    await p2.waitFor(CommEvent.MESSAGE_CREATED, marker);
+    await sleep(GRACE_MS);
+    expect(p.has(CommEvent.MESSAGE_CREATED, marker)).toBe(false);
+  });
+});
+
 describe('fail closed', () => {
   it('when current authorization cannot be established, nothing is delivered and the sockets are dropped', async () => {
     const p = await connect(node, (await login('parent')).accessToken);
@@ -1748,6 +1917,56 @@ const REDIS_URL = process.env.REALTIME_REVOCATION_REDIS_URL;
       p2OnB,
       [parentA, pOnB],
     );
+  });
+
+  it('RT-032 across nodes: B loses its delivery connection after the check, a raw-SQL deactivation commits, A CONFIRMS -- B emits nothing to them', async () => {
+    await prisma.$executeRawUnsafe(`truncate chat.principal_revocation`);
+    const { pOnB, p2OnB } = await parentsOnB();
+    const confirmer = new RevocationConfirmer(prisma, a.hub);
+    await expectNoEmitAfterSuccessfulReturn({
+      deliveringNode: b,
+      deliver: (marker) => workerPublish(marker),
+      endIt: killHeldDeliveryConnection,
+      revoke: () =>
+        withoutPushes(a, async () => {
+          await prisma.$executeRawUnsafe(`update chat.contact set is_active = false where id = '${ids.parent}'::uuid`);
+          expect(await confirmer.confirmPending()).toBe(1); // confirmed only once B acknowledged the fence
+        }),
+      revoked: pOnB,
+      control: p2OnB,
+      afterwards: () => deliveredOnlyTo(a, groupId, p2OnB, [pOnB]),
+    });
+  });
+
+  it('RT-032: a node that does not acknowledge keeps the deactivation UNCONFIRMED (and could still emit); once it answers, it is confirmed', async () => {
+    await prisma.$executeRawUnsafe(`truncate chat.principal_revocation`);
+    const { pOnB, p2OnB } = await parentsOnB();
+    const confirmer = new RevocationConfirmer(prisma, a.hub);
+    const deaf = dropFenceRequests(b);
+    const held = holdAfterLivenessCheck(b);
+    const marker = randomUUID();
+    try {
+      await workerPublish(marker);
+      await held.reached;
+      await killHeldDeliveryConnection();
+      await withoutPushes(a, async () => {
+        await prisma.$executeRawUnsafe(`update chat.contact set is_active = false where id = '${ids.parent}'::uuid`);
+        expect(await confirmer.confirmPending()).toBe(0); // B never answered: not confirmed
+      });
+      expect(deaf.dropped()).toBeGreaterThan(0);
+      const [pending] = await prisma.$queryRawUnsafe<{ confirmed_at: Date | null; last_error: string | null }[]>(
+        `select confirmed_at, last_error from chat.principal_revocation where principal_id = '${ids.parent}'::uuid`);
+      expect(pending.confirmed_at).toBeNull();
+      expect(pending.last_error).toMatch(/could not be confirmed stopped on every server/);
+      // Why it must stay unconfirmed: B's stale decision is still live, and does emit.
+      held.release();
+      await pOnB.waitFor(CommEvent.MESSAGE_CREATED, marker);
+    } finally {
+      held.release();
+      deaf.restore();
+    }
+    await withoutPushes(a, async () => expect(await confirmer.confirmPending()).toBe(1));
+    await deliveredOnlyTo(a, groupId, p2OnB, [pOnB]);
   });
 
   // LAST in this block: it leaves a freshly recreated registry behind, which

@@ -1,4 +1,5 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { MediaUrlSigner } from '../../platform/media-url';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
@@ -43,6 +44,9 @@ export class AttachmentService {
     private readonly authz: AuthorizationService,
     private readonly conversations: ConversationService,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
+    // RT-037. Optional so the many direct constructions in tests stay valid;
+    // the default derives its key from JWT_ACCESS_SECRET.
+    @Optional() private readonly mediaUrls: MediaUrlSigner = new MediaUrlSigner(),
   ) {}
 
   /**
@@ -102,10 +106,6 @@ export class AttachmentService {
       family?.ownerId ?? null,
       members.map((m) => m.actorKind),
       await this.conversations.liveMembersOf(conv.id),
-      // PD-6: uploading into a channel is sending into it. Authorizing the
-      // upload without the relationship check would leave a way to put content
-      // in a conversation whose relationship has been revoked.
-      await this.conversations.pairingAuthorizedAmong(members),
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
@@ -199,6 +199,9 @@ export class AttachmentService {
    */
   async signUrlsForMessages(
     messageIds: string[],
+    // RT-037: the URL is bound to the actor who is being shown it, and the
+    // media route re-checks that actor's access on every request.
+    actorId: string,
   ): Promise<Map<string, { url: string; thumbnailUrl: string | null }>> {
     const out = new Map<string, { url: string; thumbnailUrl: string | null }>();
     if (messageIds.length === 0) return out;
@@ -237,11 +240,10 @@ export class AttachmentService {
         );
       }
 
+      // RT-037: links to the media route, never presigned storage URLs.
       out.set(a.id, {
-        url: await this.storage.signedReadUrl(a.objectKey, ttl),
-        thumbnailUrl: thumbnailAllowed
-          ? await this.storage.signedReadUrl(thumbnail, ttl)
-          : null,
+        url: this.mediaUrls.url('attachments', a.id, 'o', actorId, ttl),
+        thumbnailUrl: thumbnailAllowed ? this.mediaUrls.url('attachments', a.id, 't', actorId, ttl) : null,
       });
     }
     return out;

@@ -239,15 +239,32 @@ describe('GET /conversations/:id — members, with names (O3)', () => {
     }
   });
 
-  it('the LIST route still carries no members, so a list is not N identity queries',
+  it('the LIST route carries named members, at a bounded cost: one membership query and one identity batch',
     async () => {
+      // 2026-10-14: the list names the other side of every direct conversation
+      // (the admin inbox needs it). The property this test always guarded --
+      // a list is NOT one identity lookup per row -- is asserted directly now.
       await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
+      await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
 
-      const body = await listBody(s.teacherId);
+      const identity = (g.conversations as unknown as { identity: { resolveActors: (...a: unknown[]) => unknown } }).identity;
+      const batches = jest.spyOn(identity, 'resolveActors');
+      const memberQueries = jest.spyOn(g.prisma.conversationMember, 'findMany');
+      try {
+        const body = await listBody(s.ownerId);
 
-      expect(body.conversations.length).toBeGreaterThan(0);
-      for (const c of body.conversations) {
-        expect(c.members).toBeUndefined();
+        expect(body.conversations.length).toBeGreaterThanOrEqual(2);
+        for (const c of body.conversations) {
+          expect(c.members?.length).toBeGreaterThan(0);
+          for (const m of c.members!) expect(m.displayName).not.toBe(m.actorId);
+        }
+        const direct = body.conversations.find((c) => c.type === 'direct')!;
+        expect(direct.members!.map((m) => m.actorId).sort()).toEqual([s.ownerId, s.parentId].sort());
+        expect(batches).toHaveBeenCalledTimes(1);
+        expect(memberQueries).toHaveBeenCalledTimes(1);
+      } finally {
+        batches.mockRestore();
+        memberQueries.mockRestore();
       }
     });
 });

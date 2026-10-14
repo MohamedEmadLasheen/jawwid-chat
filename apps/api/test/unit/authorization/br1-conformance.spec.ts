@@ -1,23 +1,22 @@
 /**
  * BR-1 conformance matrix (QA release gate G-01).
  *
- * RE-VERSIONED 2026-09-23 BY PD-6. The rule this file asserts changed:
+ * RE-VERSIONED 2026-10-14 BY PD-7, which supersedes PD-6. The rule this file
+ * asserts changed back:
  *
- *   WAS  Teacher <-> Parent direct 1:1 communication is FORBIDDEN, for
- *        messaging and calling alike.
+ *   PD-6 (2026-09-23)  Teacher <-> Parent direct 1:1 communication ALLOWED for
+ *                      an authorized relationship.
  *
- *   NOW  Teacher <-> Parent direct 1:1 communication is ALLOWED for an
- *        AUTHORIZED relationship, and forbidden for every other pairing.
+ *   PD-7 (2026-10-14)  Teacher <-> Parent direct 1:1 communication FORBIDDEN,
+ *                      for messaging and calling alike, whatever the
+ *                      relationship. They speak only inside the Student Group,
+ *                      with a live Jawwid admin present (C-4).
  *
- * Nothing was deleted to make the new rule pass. Each former DENY became a
- * PAIR -- unauthorized denies, authorized allows -- because a test that only
- * proved "allowed" would no longer be testing a boundary at all. The denial
- * code moved from BR1_TEACHER_PARENT_DIRECT to TEACHER_PARENT_NOT_AUTHORIZED;
- * the old code is asserted to be unreachable rather than removed.
- *
- * The relationship arrives as a RESOLVED FACT -- the last argument to each
- * decision -- because AuthorizationService must not read a database. Which is
- * why these remain pure unit tests with no server behind them.
+ * The PD-6 pairs (unauthorized denies / authorized allows) became pairs of
+ * DENIALS in both directions, so the file still proves both sides of every
+ * channel rather than one. The relationship is no longer an input to the
+ * decision at all: the refusal is made from the participant kinds, which is
+ * why no call below can pass one.
  *
  * These assertions exercise the server-side decision directly. They pass with
  * any client behaviour whatsoever, which is the point: this is a server rule.
@@ -39,205 +38,121 @@ import {
 
 const NOW = new Date('2026-09-06T10:00:00Z');
 
-/** The resolved relationship fact, named so each call site reads as English. */
-const AUTHORIZED = true;
-const UNAUTHORIZED = false;
+const expectBr1 = (d: { allowed: boolean; code?: string }) => {
+  expect(d.allowed).toBe(false);
+  if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_TEACHER_PARENT_DIRECT);
+};
 
-describe('PD-6 — the direct teacher/parent channel is decided by the RELATIONSHIP', () => {
+describe('PD-7 — no direct teacher/parent channel, whatever the relationship', () => {
   const authz = authzWithOnDuty();
 
-  it('BR1-01 teacher opens a 1:1 with an UNAUTHORIZED parent -> DENY', () => {
-    const d = authz.canOpenDirect(teacher(), parent(), UNAUTHORIZED);
-    expect(d.allowed).toBe(false);
-    if (!d.allowed) expect(d.code).toBe(CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED);
+  it('BR1-01 a teacher may not open a 1:1 with a parent -> DENY', () => {
+    expectBr1(authz.canOpenDirect(teacher(), parent()));
   });
 
-  it('BR1-01b teacher opens a 1:1 with an AUTHORIZED parent -> ALLOW', () => {
-    const d = authz.canOpenDirect(teacher(), parent(), AUTHORIZED);
-    expect(d.allowed).toBe(true);
+  it('BR1-02 a parent may not open a 1:1 with a teacher -> DENY (order does not matter)', () => {
+    expectBr1(authz.canOpenDirect(parent(), teacher()));
   });
 
-  it('BR1-02 parent opens a 1:1 with an UNAUTHORIZED teacher -> DENY (order does not matter)', () => {
-    const d = authz.canOpenDirect(parent(), teacher(), UNAUTHORIZED);
-    expect(d.allowed).toBe(false);
-    if (!d.allowed) expect(d.code).toBe(CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED);
-  });
-
-  it('BR1-02b parent opens a 1:1 with an AUTHORIZED teacher -> ALLOW (order does not matter)', () => {
-    const d = authz.canOpenDirect(parent(), teacher(), AUTHORIZED);
-    expect(d.allowed).toBe(true);
-  });
-
-  it('the relationship defaults to UNAUTHORIZED: a caller that does not state it is denied', () => {
-    // Fail closed. A call site that forgets to resolve the relationship keeps
-    // the pre-PD-6 behaviour instead of opening a channel by omission.
-    const d = authz.canOpenDirect(teacher(), parent());
-    expect(d.allowed).toBe(false);
-    if (!d.allowed) expect(d.code).toBe(CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED);
-  });
-
-  it('BR1-03 teacher sends into a direct conversation with an UNAUTHORIZED parent -> DENY', async () => {
+  it('BR1-03 a teacher may not send into a direct conversation with a parent -> DENY', async () => {
+    // A conversation opened under PD-6 still exists; it is history now.
     const t = teacher();
-    const d = await authz.canSend(
-      t,
-      conversation({ type: 'direct' }),
-      member(t),
-      { visibility: 'customer' },
-      NOW,
-      null,
-      // The participant set is what the rule is decided on: a contact is present.
-      ['teacher', 'contact'],
-      [],
-      UNAUTHORIZED,
+    expectBr1(
+      await authz.canSend(
+        t,
+        conversation({ type: 'direct' }),
+        member(t),
+        { visibility: 'customer' },
+        NOW,
+        null,
+        // The participant set is what the rule is decided on: a contact is present.
+        ['teacher', 'contact'],
+        [],
+      ),
     );
-    expect(d.allowed).toBe(false);
-    if (!d.allowed) expect(d.code).toBe(CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED);
   });
 
-  it('BR1-03b teacher sends into a direct conversation with an AUTHORIZED parent -> ALLOW', async () => {
-    const t = teacher();
-    const d = await authz.canSend(
-      t,
-      conversation({ type: 'direct' }),
-      member(t),
-      { visibility: 'customer' },
-      NOW,
-      null,
-      ['teacher', 'contact'],
-      [],
-      AUTHORIZED,
-    );
-    expect(d.allowed).toBe(true);
-    // PD-6: no admin approval on the direct channel. It publishes immediately,
-    // exactly as every other authorized direct channel does (BR-6).
-    if (d.allowed) expect(d.moderation).toBe('published');
-  });
-
-  it('PD-6: the PARENT\'s side is checked too — an unauthorized parent cannot send either', async () => {
-    // Before PD-6 only the teacher branch carried this check, because the
-    // channel could not exist and a parent could never be in one. Now it can,
-    // and a revoked relationship must close BOTH directions, not half of them.
+  it("BR1-03b the PARENT's side is closed too -> DENY", async () => {
     const p = parent();
-    const d = await authz.canSend(
-      p,
-      conversation({ type: 'direct' }),
-      member(p),
-      { visibility: 'customer' },
-      NOW,
-      null,
-      ['teacher', 'contact'],
-      [],
-      UNAUTHORIZED,
+    expectBr1(
+      await authz.canSend(
+        p,
+        conversation({ type: 'direct' }),
+        member(p),
+        { visibility: 'customer' },
+        NOW,
+        null,
+        ['teacher', 'contact'],
+        [],
+      ),
     );
-    expect(d.allowed).toBe(false);
-    if (!d.allowed) expect(d.code).toBe(CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED);
   });
 
-  it('PD-6: the parent may send when the relationship IS authorized', async () => {
-    const p = parent();
-    const d = await authz.canSend(
-      p,
-      conversation({ type: 'direct' }),
-      member(p),
-      { visibility: 'customer' },
-      NOW,
-      null,
-      ['teacher', 'contact'],
-      [],
-      AUTHORIZED,
-    );
-    expect(d.allowed).toBe(true);
-  });
-
-  it('BR1-04/05 a direct call pairing a teacher and an UNAUTHORIZED parent -> DENY', async () => {
+  it("the actor's own kind counts: an incomplete participant list cannot escape the check", async () => {
     const t = teacher();
-    const d = await authz.canCall(
-      t,
-      conversation({ type: 'direct' }),
-      member(t),
-      [teacher(), parent()],
-      NOW,
-      null,
-      [],
-      undefined,
-      UNAUTHORIZED,
+    expectBr1(
+      await authz.canSend(t, conversation({ type: 'direct' }), member(t), { visibility: 'customer' }, NOW, null, ['contact']),
     );
-    expect(d.allowed).toBe(false);
-    if (!d.allowed) expect(d.code).toBe(CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED);
   });
 
-  it('BR1-04b a direct call pairing a teacher and an AUTHORIZED parent -> ALLOW', async () => {
+  it('BR1-04/05 a direct call pairing a teacher and a parent -> DENY', async () => {
     const t = teacher();
-    const d = await authz.canCall(
-      t,
-      conversation({ type: 'direct' }),
-      member(t),
-      [teacher(), parent()],
-      NOW,
-      null,
-      [],
-      undefined,
-      AUTHORIZED,
+    expectBr1(
+      await authz.canCall(t, conversation({ type: 'direct' }), member(t), [teacher(), parent()], NOW, null, []),
     );
-    expect(d.allowed).toBe(true);
   });
 
-  it('BR1-04c the parent may place the call too — PD-6 is symmetric', async () => {
+  it('BR1-04b the parent may not place that call either', async () => {
     const p = parent();
-    const d = await authz.canCall(
-      p,
-      conversation({ type: 'direct' }),
-      member(p),
-      [teacher(), parent()],
-      NOW,
-      null,
-      [],
-      undefined,
-      AUTHORIZED,
+    expectBr1(
+      await authz.canCall(p, conversation({ type: 'direct' }), member(p), [teacher(), parent()], NOW, null, []),
     );
-    expect(d.allowed).toBe(true);
   });
 
-  it('calling is never more permissive than messaging: same relationship, same verdict', async () => {
+  it('BR1-04c the call path refuses on its OWN participant set, even with a staff-only member list', async () => {
+    // canSend sees teacher+staff (allowed); the call's participants pair a
+    // teacher with a parent. The call must not be more permissive.
+    const t = teacher();
+    expectBr1(
+      await authz.canCall(
+        t, conversation({ type: 'direct', familyId: null }), member(t), [teacher(), parent()], NOW, null, [],
+      ),
+    );
+  });
+
+  it('calling is never more permissive than messaging: same channel, same verdict', async () => {
     const t = teacher();
     const conv = conversation({ type: 'direct' });
-    for (const pairing of [AUTHORIZED, UNAUTHORIZED]) {
-      const send = await authz.canSend(
-        t, conv, member(t), { visibility: 'customer' }, NOW, null,
-        ['teacher', 'contact'], [], pairing,
-      );
-      const call = await authz.canCall(
-        t, conv, member(t), [teacher(), parent()], NOW, null, [], undefined, pairing,
-      );
-      expect({ pairing, call: call.allowed }).toEqual({ pairing, call: send.allowed });
-    }
+    const send = await authz.canSend(t, conv, member(t), { visibility: 'customer' }, NOW, null, ['teacher', 'contact'], []);
+    const call = await authz.canCall(t, conv, member(t), [teacher(), parent()], NOW, null, []);
+    expect({ call: call.allowed, code: (call as { code?: string }).code }).toEqual({
+      call: send.allowed,
+      code: (send as { code?: string }).code,
+    });
   });
 
-  it('the deprecated BR1_TEACHER_PARENT_DIRECT code is no longer emitted by any decision', async () => {
-    // PD-6 keeps the constant for shipped clients that treat it as terminal,
-    // but nothing in the policy may still raise it.
+  it('the PD-6 code TEACHER_PARENT_NOT_AUTHORIZED is no longer emitted by any decision', async () => {
+    // Kept as a constant for shipped clients; nothing in the policy raises it.
     const decisions = [
-      authz.canOpenDirect(teacher(), parent(), UNAUTHORIZED),
-      authz.canOpenDirect(parent(), teacher(), UNAUTHORIZED),
+      authz.canOpenDirect(teacher(), parent()),
+      authz.canOpenDirect(parent(), teacher()),
       await authz.canSend(
         teacher(), conversation({ type: 'direct' }), member(teacher()),
-        { visibility: 'customer' }, NOW, null, ['teacher', 'contact'], [], UNAUTHORIZED,
+        { visibility: 'customer' }, NOW, null, ['teacher', 'contact'], [],
       ),
       await authz.canCall(
         teacher(), conversation({ type: 'direct' }), member(teacher()),
-        [teacher(), parent()], NOW, null, [], undefined, UNAUTHORIZED,
+        [teacher(), parent()], NOW, null, [],
       ),
     ];
     for (const d of decisions) {
       expect(d.allowed).toBe(false);
-      if (!d.allowed) expect(d.code).not.toBe(CommErrorCode.BR1_TEACHER_PARENT_DIRECT);
+      if (!d.allowed) expect(d.code).not.toBe(CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED);
     }
   });
 
   it('BR1-06 group co-members get no direct channel from group membership alone', () => {
-    // Sharing a student group is not a relationship. Only the learner link is.
-    const d = authz.canOpenDirect(teacher('teacher-in-group'), parent('parent-in-group'), UNAUTHORIZED);
-    expect(d.allowed).toBe(false);
+    expectBr1(authz.canOpenDirect(teacher('teacher-in-group'), parent('parent-in-group')));
   });
 
   it('teacher-to-teacher direct messaging is off by default', () => {

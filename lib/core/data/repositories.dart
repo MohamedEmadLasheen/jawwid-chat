@@ -36,8 +36,9 @@ class GroupMember {
   /// Advisory, exactly like the call capability: it decides what the UI may
   /// OFFER, never what the server will allow. PD-6 made the teacher/parent
   /// pairing undecidable from roles alone, so the client stopped guessing and
-  /// asks. Defaults to false, which is what a server that does not send the
-  /// field — an older build — correctly yields.
+  /// asks; since PD-7 the server answers false for that pairing always. Defaults
+  /// to false, which is what a server that does not send the field — an older
+  /// build — correctly yields.
   final bool canOpenDirect;
 }
 

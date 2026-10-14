@@ -57,6 +57,11 @@ STORAGE_ACCESS_KEY	storage	yes	req	req	req
 STORAGE_SECRET_KEY	storage	yes	req	req	req
 STORAGE_SIGNED_URL_TTL_SECONDS	storage	no	opt	req	req
 STORAGE_SIGNING_SECRET	storage	yes	req	req	req
+# RT-037 (2026-10-14): attachment and story media links point at THIS API's
+# access-checked media route. The base is MEDIA_PUBLIC_BASE_URL when set (the
+# public origin + /api/v1, e.g. behind a CDN or a path-rewriting proxy), else the
+# origin each request reached the API at. Optional everywhere.
+MEDIA_PUBLIC_BASE_URL	storage	no	opt	opt	opt
 # Where the local reference blob store keeps bytes. Optional everywhere because
 # the code defaults it (blob-store.ts) -- but the default is the OS temp
 # directory, which no deployment should rely on: it is per-instance and does not

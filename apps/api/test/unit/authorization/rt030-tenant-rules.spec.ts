@@ -25,7 +25,7 @@ describe('canOpenDirect -- both participants must share one organization', () =>
       [manager(), inOrg(teacher(), 'org-2')],
     ];
     for (const [a, b] of pairs) {
-      const d = authz.canOpenDirect(a, b, true);
+      const d = authz.canOpenDirect(a, b);
       expect(d.allowed).toBe(false);
       if (!d.allowed) expect([d.code, d.reason]).toEqual([CommErrorCode.UNKNOWN_ACTOR, 'unknown actor']);
     }

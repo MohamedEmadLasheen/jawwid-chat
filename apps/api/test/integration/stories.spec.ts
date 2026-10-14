@@ -19,6 +19,10 @@ import { CommErrorCode } from '@platform/errors';
 import { StoryAudienceKind, StoryState } from '@communication/contracts/vocab';
 import { CommEvent } from '@communication/contracts/events';
 
+// RT-037: story media is a link to the access-checked media route, bound to the
+// reader -- not a presigned storage URL.
+const STORY_MEDIA_LINK = /\/media\/stories\/[0-9a-f-]{36}\?v=o&a=[0-9a-f-]{36}&e=\d+&s=[A-Za-z0-9_-]{43}$/;
+
 const g = buildGraph();
 const { prisma, stories, storySweeper } = g;
 
@@ -511,8 +515,7 @@ describe('the reader’s feed', () => {
     await stories.publish(draft.id, s.ownerId);
 
     const [item] = await stories.feed(s.parentId);
-    expect(item.mediaUrl).toContain('sig=');
-    expect(item.mediaUrl).toContain('expires=');
+    expect(item.mediaUrl).toMatch(STORY_MEDIA_LINK);
     expect(JSON.stringify(item)).not.toContain('mediaObjectKey');
   });
 });

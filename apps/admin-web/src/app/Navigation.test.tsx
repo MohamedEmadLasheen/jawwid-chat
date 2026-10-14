@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { useLocation } from 'react-router-dom'
 import { AppRoutes } from '@/app/AppRoutes'
 import { tokenStore } from '@/core/auth/tokens'
-import { visibleAreas, type NavArea } from '@/core/permissions/capabilities'
+import { navAreas, visibleAreas, type NavArea } from '@/core/permissions/capabilities'
 import { ADMIN_SECTIONS } from '@/features/admin/sections'
 import type { StaffRole } from '@/shared/types/domain'
 import { makeStaff, renderWithProviders } from '@/test/utils'
@@ -72,10 +72,17 @@ describe('The navigation registry', () => {
   it('lists for each role exactly the pages it may open: nothing hidden, nothing extra', () => {
     for (const role of OPERATOR_ROLES) {
       const listed = destinationsFor(role).flatMap((d) => entriesOf(d).map((e) => e.path))
-      const allowed = visibleAreas(role)
+      // Exactly the openable areas, with ONE deliberate exception: the legacy
+      // Inbox stays routable (old links) but is never offered -- its API
+      // routes (/inbox, /families/*) exist on no branch.
+      const allowed = navAreas(role)
         .filter((a): a is Exclude<NavArea, 'settings'> => a !== 'settings')
         .map((a) => AREA_PATH[a])
       expect([...listed].sort(), role).toEqual([...allowed].sort())
+      expect(listed, role).not.toContain('/inbox')
+      expect(visibleAreas(role).filter((a) => !navAreas(role).includes(a)), role).toEqual(
+        visibleAreas(role).includes('inbox') ? ['inbox'] : [],
+      )
       expect(listed.some((p) => p.startsWith('/admin/')), role).toBe(false)
     }
     // And the super admin's navigation is the portal, not the operator screens.
@@ -88,9 +95,9 @@ describe('Landing and deep links', () => {
   it('"/" opens each role\'s conversations, and a department\'s tasks', async () => {
     const expected: [StaffRole, string][] = [
       ['super_admin', '/admin/conversations'],
-      ['manager', '/inbox'],
-      ['admin', '/inbox'],
-      ['coverage', '/inbox'],
+      ['manager', '/chat'],
+      ['admin', '/chat'],
+      ['coverage', '/chat'],
       ['finance', '/tasks'],
     ]
     for (const [role, home] of expected) {
@@ -211,8 +218,9 @@ describe('The desktop rail', () => {
   it('gives each operator role only its own destinations, and links a one-page destination directly', async () => {
     const cases: [StaffRole, string[], string[], string[]][] = [
       // role, destinations, direct links, menus
-      ['manager', ['conversations', 'people', 'stories', 'more'], ['Inbox', 'Stories'], ['People & teams', 'More']],
-      ['admin', ['conversations', 'people', 'stories', 'more'], ['Inbox', 'Families', 'Stories', 'Tasks'], []],
+      // Conversations is a direct link to /chat: the legacy Inbox is not offered.
+      ['manager', ['conversations', 'people', 'stories', 'more'], ['Conversations', 'Stories'], ['People & teams', 'More']],
+      ['admin', ['conversations', 'people', 'stories', 'more'], ['Conversations', 'Families', 'Stories', 'Tasks'], []],
       ['finance', ['more'], ['Tasks'], []],
     ]
     for (const [role, keys, links, menus] of cases) {
@@ -224,6 +232,28 @@ describe('The desktop rail', () => {
       expect(within(nav).queryAllByRole('button').map((b) => b.textContent), role).toEqual(menus)
       unmount()
     }
+  })
+})
+
+describe('The legacy Inbox is not offered as a destination', () => {
+  it('no role is shown a link to /inbox (menus opened); operators\' Conversations goes to /chat; /inbox itself still routes', async () => {
+    for (const role of ['manager', 'admin', 'coverage', 'finance'] as StaffRole[]) {
+      vi.stubGlobal('fetch', routeFetch({}))
+      const { unmount } = renderWithProviders(<AppRoutes />, { staff: staff(role), route: '/' })
+      const nav = await screen.findByRole('navigation', { name: 'Jawwid Operations' })
+      for (const b of within(nav).queryAllByRole('button')) await userEvent.click(b)
+      const hrefs = [...document.querySelectorAll('a[href]')].map((a) => a.getAttribute('href'))
+      expect(hrefs.filter((h) => h?.startsWith('/inbox')), role).toEqual([])
+      if (role !== 'finance') {
+        expect(within(nav).getByRole('link', { name: 'Conversations' }), role).toHaveAttribute('href', '/chat')
+      }
+      unmount()
+    }
+    vi.stubGlobal('fetch', routeFetch({}))
+    renderWithProviders(<AppRoutes />, { staff: staff('admin'), route: '/inbox' })
+    await screen.findByRole('navigation', { name: 'Jawwid Operations' })
+    // Routed to the Inbox page itself, not refused: an old link still lands.
+    expect(document.querySelector('.state--forbidden')).toBeNull()
   })
 })
 

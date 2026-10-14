@@ -31,9 +31,9 @@ abstract final class WireMappers {
   /// Classify a conversation from its wire payload.
   ///
   /// Before PD-6 the type alone decided this: a `direct` conversation could only be with
-  /// staff, because BR-1 refused every other 1:1. Since PD-6 a `direct` conversation may be
-  /// Parent <-> Admin, Teacher <-> Admin **or** Parent <-> Teacher, and the type no longer
-  /// distinguishes them.
+  /// staff, because BR-1 refused every other 1:1. During PD-6 (2026-09-23 to 2026-10-14) a
+  /// `direct` conversation could also be Parent <-> Teacher; PD-7 refuses new ones, but the
+  /// rows PD-6 created still exist (read-only), so the type still does not distinguish them.
   ///
   /// So the participants decide, and only the participants the payload actually states.
   ///
@@ -204,9 +204,11 @@ abstract final class WireMappers {
         ? json['teacherRequiresApproval'] == true
         : json['parentRequiresApproval'] == true;
 
+    final kind = conversationKind(json['type'] as String?, members: json['members']);
+
     return Conversation(
       id: json['id']! as String,
-      kind: conversationKind(json['type'] as String?, members: json['members']),
+      kind: kind,
       title: (json['title'] as String?) ?? '',
       // Both from the DTO. They used to be parameters this mapper's caller had
       // to supply, because the payload carried neither — which meant the child
@@ -228,8 +230,10 @@ abstract final class WireMappers {
       handledByLabel: handledByLabel,
       requiresApproval: requiresApproval,
       // An archived conversation is read-only for this client; the backend also refuses
-      // with CONVERSATION_ARCHIVED.
-      isReadOnly: archivedAt != null,
+      // with CONVERSATION_ARCHIVED. So is a direct teacher<->parent conversation: PD-7
+      // (2026-10-14) forbids that channel again, and one left over from the PD-6 window is
+      // history -- the backend refuses every send into it with BR1_TEACHER_PARENT_DIRECT.
+      isReadOnly: archivedAt != null || kind == ConversationKind.teacherParentDirect,
     );
   }
 

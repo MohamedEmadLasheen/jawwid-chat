@@ -14,7 +14,13 @@ const socket = {
   disconnect: vi.fn(),
 }
 
-vi.mock('socket.io-client', () => ({ io: () => socket }))
+const ioCalls: Array<{ url: unknown; options: Record<string, unknown> }> = []
+vi.mock('socket.io-client', () => ({
+  io: (url: unknown, options: Record<string, unknown>) => {
+    ioCalls.push({ url, options })
+    return socket
+  },
+}))
 
 function emit(event: string, payload: unknown) {
   handlers.get(event)?.(payload)
@@ -41,6 +47,29 @@ describe('realtime', () => {
     )
     return queryClient
   }
+
+  it('connects on the API contract: default namespace, bearer token in the handshake, no cookie', async () => {
+    const { tokenStore } = await import('@/core/auth/tokens')
+    tokenStore.set({ accessToken: 'access-1', refreshToken: 'refresh-1' })
+    ioCalls.length = 0
+    mount()
+    await waitFor(() => expect(ioCalls.length).toBeGreaterThan(0))
+
+    const { url, options } = ioCalls[0]!
+    // A URL path would be read by socket.io as a NAMESPACE; the server has only '/'.
+    expect(String(url ?? '')).not.toContain('/staff')
+    expect(options.withCredentials).toBeUndefined()
+    const auth = options.auth as (cb: (d: { token: string | null }) => void) => void
+    let presented: string | null = null
+    auth((d) => (presented = d.token))
+    expect(presented).toBe('access-1')
+
+    // Re-evaluated per connection: a rotated token is what the NEXT handshake carries.
+    tokenStore.set({ accessToken: 'access-2', refreshToken: 'refresh-2' })
+    auth((d) => (presented = d.token))
+    expect(presented).toBe('access-2')
+    tokenStore.clear()
+  })
 
   it('subscribes to the events the operator’s workspace depends on', async () => {
     mount()

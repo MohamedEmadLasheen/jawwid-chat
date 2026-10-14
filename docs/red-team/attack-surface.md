@@ -99,9 +99,19 @@ proxy) can use it until it expires.
 |---|---|
 | **Surface** | `GET /health`, `/health/live`, `/health/ready` — unauthenticated by design. |
 | **Threat** | Information disclosure via probe errors; restart storms from a slow dependency. |
-| **Existing control** | Errors reduced to the exception *class* by `sanitiseProbeError`; every probe timeout-bounded; liveness deliberately independent of dependencies. |
+| **Existing control** | Errors reduced to the exception *class* by `sanitiseProbeError`; every probe timeout-bounded; liveness deliberately independent of dependencies. **2026-10-14 (uncommitted):** readiness also reports `checks.revocations` (count and age of unconfirmed deactivations — non-blocking) and `realtime` (delivery/revocation counters of this process since start). Aggregate counts only — no ids, names, content or connection strings; they do reveal that deactivations happened, which is accepted as operational telemetry. |
 | **Verification** | Read. |
 | **Risk** | ⚪ — **the strongest module in the tree.** It is the model the rest should follow. |
+
+### 1.6b Media route (RT-037, 2026-10-14, uncommitted)
+
+| | |
+|---|---|
+| **Surface** | `GET /api/v1/media/attachments/:id`, `GET /api/v1/media/stories/:id` — `@Public()` to the bearer guard (links must work in `<img>` and players). |
+| **Threat** | A forged, replayed, transferred or stale link; enumeration of ids; a deactivated or removed reader keeping access. |
+| **Existing control** | HMAC link bound to kind, id, variant, reader and expiry (key derived from `JWT_ACCESS_SECRET`); then on EVERY request: reader live (principal + login), reader may read the message / story now (the list's own `visibilityFilter`, deletion, story audience/expiry); every refusal reads as 403/404 without saying which; bytes streamed by the API, never a storage URL; `Cache-Control: private, no-store`. |
+| **Verification** | `rt037-media-revocation.spec.ts` §A/§B (mutation-tested); live QA probe. |
+| **Risk** | ⚪ low. A link forwarded to someone else works while the original reader is live and entitled, until it expires (≤ `STORAGE_SIGNED_URL_TTL_SECONDS`) — the same exposure as the bytes themselves. |
 
 ### 1.7 Database
 

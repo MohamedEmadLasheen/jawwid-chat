@@ -41,10 +41,17 @@ export class ConversationController {
       rows.map((c) => c.id),
       actorId,
     );
+    // Members with display names, batched for the whole list: a direct row can
+    // then say who it is with (the admin inbox and the mobile list both need
+    // it). Same ids, so the same authorization boundary.
+    const members = await this.conversations.membersOfMany(
+      rows.map((c) => c.id),
+      await this.conversations.requireActor(actorId),
+    );
 
     return {
       conversations: rows.map((c) =>
-        toConversationDto(c, undefined, { unreadCount: unread.get(c.id) ?? 0 }),
+        toConversationDto(c, members.get(c.id), { unreadCount: unread.get(c.id) ?? 0 }),
       ),
     };
   }
@@ -52,10 +59,9 @@ export class ConversationController {
   /**
    * Get or create the 1:1 channel with another actor.
    *
-   * PD-6: a teacher/parent pair is permitted only where the server-resolved
-   * relationship authorizes it, and refused otherwise with
-   * COMM.TEACHER_PARENT_NOT_AUTHORIZED. `withActorId` selects the other party;
-   * it asserts nothing about the relationship with them.
+   * BR-1 (PD-7): a teacher/parent pair is refused outright with
+   * COMM.BR1_TEACHER_PARENT_DIRECT, whatever their relationship. `withActorId`
+   * selects the other party; it asserts nothing about them.
    */
   @Post('direct')
   async direct(@ActorId() actorId: string, @Body() body: { withActorId: string }) {

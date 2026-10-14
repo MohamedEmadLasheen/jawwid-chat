@@ -6,23 +6,20 @@
 export enum CommErrorCode {
   // --- BR-1 and the communication matrix ---
   /**
-   * PD-6 (2026-09-23). A teacher and a parent would share a direct 1:1
-   * conversation or call with NO authorized relationship between them.
+   * DEPRECATED by PD-7 (2026-10-14). PD-6's refusal for a teacher/parent pair
+   * with no authorized relationship. Nothing in src/ raises it any more: PD-7
+   * forbids the direct channel for every pair (BR1_TEACHER_PARENT_DIRECT).
    *
-   * "Authorized" is the relationship predicate: a learner in the contact's
-   * family, taught by that teacher, both sides live, one organization. It is
-   * resolved from Jawwid Core data and never from anything the client sent.
+   * Kept, not deleted: shipped clients treat it as terminal (never retried),
+   * and removing the constant would delete the contract those builds were
+   * written against. Asserted by test/unit/authorization/br1-conformance.spec.ts.
    */
   TEACHER_PARENT_NOT_AUTHORIZED = 'COMM.TEACHER_PARENT_NOT_AUTHORIZED',
   /**
-   * DEPRECATED by PD-6. The server no longer emits this for any authorization
-   * decision: the blanket teacher<->parent prohibition it named is gone, and
-   * an unauthorized pairing now reports TEACHER_PARENT_NOT_AUTHORIZED above.
-   *
-   * Kept, not deleted, for exactly one reason: shipped clients treat this code
-   * as terminal (never retried), and removing the constant would delete the
-   * contract those builds were written against. Nothing in src/ raises it.
-   * Asserted by test/unit/authorization/br1-conformance.spec.ts.
+   * BR-1, restored by PD-7 (2026-10-14). A teacher and a parent may never share
+   * a direct 1:1 conversation or call, whatever their relationship: refused on
+   * open, on send (either side) and on call. They speak only in the Student
+   * Group, with a live admin present (C-4).
    */
   BR1_TEACHER_PARENT_DIRECT = 'COMM.BR1_TEACHER_PARENT_DIRECT',
   BR1_ADMIN_PRESENCE_REQUIRED = 'COMM.BR1_ADMIN_PRESENCE_REQUIRED',
@@ -36,6 +33,12 @@ export enum CommErrorCode {
   ASSIST_NOT_PERMITTED = 'COMM.ASSIST_NOT_PERMITTED',
   ESCALATION_NOT_PERMITTED = 'COMM.ESCALATION_NOT_PERMITTED',
   NOT_CONVERSATION_MEMBER = 'COMM.NOT_CONVERSATION_MEMBER',
+  /**
+   * 403. Family-facing staff, same organization, but the conversation's family
+   * is not in this admin's charge: not a member, not the family's owner, not on
+   * duty for it, not its live sticky handler. Managers are never refused this.
+   */
+  STAFF_OUT_OF_SCOPE = 'COMM.STAFF_OUT_OF_SCOPE',
   CONTACT_CANNOT_MESSAGE = 'COMM.CONTACT_CANNOT_MESSAGE',
   CONTACT_CANNOT_WRITE_INTERNAL = 'COMM.CONTACT_CANNOT_WRITE_INTERNAL',
   TEACHER_CANNOT_WRITE_INTERNAL = 'COMM.TEACHER_CANNOT_WRITE_INTERNAL',

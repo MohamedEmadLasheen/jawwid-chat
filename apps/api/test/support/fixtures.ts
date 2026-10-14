@@ -60,6 +60,7 @@ type Conv = Parameters<AuthorizationService['canRead']>[1];
 export const conversation = (over: Partial<Conv> = {}): Conv => ({
   id: 'conv-1',
   type: 'direct',
+  organizationId: ORG,
   familyId: 'family-1',
   stickyHandlerId: null,
   stickyUntil: null,

@@ -21,15 +21,25 @@
  *
  * A refusal that still wrote `answered_at` would pass a test that only checked
  * the throw.
+ *
+ * RE-VERSIONED 2026-10-14 BY PD-7. The direct call used here was the PD-6
+ * teacher<->parent channel, and "revoked" meant the relationship. PD-7 restores
+ * BR-1, so that channel cannot be opened any more: the call is now the PRD §9
+ * "1:1 call Parent<->Admin" with the family's owner as the caller, and a
+ * revocation is the parent losing `can_message` (or the admin going off duty).
+ * BR-1 itself is asserted on a call that was already ringing in a PD-6-era
+ * teacher<->parent conversation when the rule changed: it can be ended, never
+ * answered or declined.
  */
 import { randomUUID } from "node:crypto";
 import { CommErrorCode } from "@platform/errors";
 import {
   Scenario,
   buildGraph,
+  legacyTeacherParentCall,
+  legacyTeacherParentDirect,
   seed,
   truncate,
-  withAssignmentGate,
 } from "./harness";
 
 jest.setTimeout(60_000);
@@ -66,19 +76,31 @@ const callEvents = async (callId: string) => {
     .map((r) => r.type);
 };
 
-/** The authorized direct parent <-> teacher channel the harness seeds. */
+/** The Parent <-> Admin 1:1 (the family's owner, on duty), the admin calling. */
 async function directCall() {
-  const conv = await g.conversations.getOrCreateDirect(s.parentId, s.teacherId);
-  const { callId } = await g.calls.start(conv.id, s.teacherId);
+  const conv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
+  const { callId } = await g.calls.start(conv.id, s.ownerId);
   return { conversationId: conv.id, callId };
 }
 
-const revokeRelationship = () =>
-  withAssignmentGate(
-    g.prisma,
-    `update chat.learner set teacher_id = '${s.unrelatedTeacherId}'::uuid
-      where id = '${s.learnerId}'::uuid`,
+/** The parent loses the capability to message, and therefore to call. */
+const revokeParent = () =>
+  g.prisma.contact.update({
+    where: { id: s.parentId },
+    data: { canMessage: false },
+  });
+
+/** A call already ringing in a PD-6-era teacher <-> parent conversation. */
+async function legacyCall() {
+  const conversationId = await legacyTeacherParentDirect(
+    g.prisma, s.teacherId, s.parentId, s.familyId,
   );
+  const callId = await legacyTeacherParentCall(
+    g.prisma, conversationId, s.teacherId,
+    { teacherId: s.teacherId, parentId: s.parentId }, s.familyId,
+  );
+  return { conversationId, callId };
+}
 
 beforeAll(async () => {
   await g.prisma.$connect();
@@ -152,7 +174,7 @@ describe("accept — the happy path still works", () => {
       first.participants.find((p) => p.actorId === s.parentId)?.leftAt,
     ).toBeInstanceOf(Date);
     expect(
-      first.participants.find((p) => p.actorId === s.teacherId)?.leftAt,
+      first.participants.find((p) => p.actorId === s.ownerId)?.leftAt,
     ).toBeNull();
 
     await expect(g.calls.decline(callId, s.parentId)).rejects.toMatchObject({
@@ -170,15 +192,15 @@ describe("accept — the happy path still works", () => {
 
 // -------------------------------------------------------------------------
 describe("accept — authorization is re-run, and a refusal leaves no trace", () => {
-  it("a revoked PD-6 relationship cannot answer: no ACTIVE, no answered_at, no event", async () => {
+  it("a revoked parent cannot answer: no ACTIVE, no answered_at, no event", async () => {
     const { callId } = await directCall();
     const before = await snapshot(callId);
     expect(before.status).toBe("ringing");
 
-    await revokeRelationship();
+    await revokeParent();
 
     await expect(g.calls.accept(callId, s.parentId)).rejects.toMatchObject({
-      code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
+      code: CommErrorCode.CONTACT_CANNOT_MESSAGE,
     });
 
     // The whole record, not just the status.
@@ -186,30 +208,32 @@ describe("accept — authorization is re-run, and a refusal leaves no trace", ()
     expect(await callEvents(callId)).toEqual(["call.incoming"]);
   });
 
-  it("the reverse direction: teacher starts, relationship revoked, parent cannot answer", async () => {
+  it("the reverse direction: parent starts, admin goes off duty, admin cannot answer", async () => {
     const conv = await g.conversations.getOrCreateDirect(
-      s.teacherId,
+      s.ownerId,
       s.parentId,
     );
     const { callId } = await g.calls.start(conv.id, s.parentId);
     const before = await snapshot(callId);
 
-    await revokeRelationship();
+    // Coverage moves to the other admin. The owner still READS the family's
+    // conversations (staff scope), but may no longer act in them.
+    g.coverage.onDutyId = s.otherAdminId;
 
-    await expect(g.calls.accept(callId, s.teacherId)).rejects.toMatchObject({
-      code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
+    await expect(g.calls.accept(callId, s.ownerId)).rejects.toMatchObject({
+      code: CommErrorCode.NOT_ON_DUTY,
     });
     expect(await snapshot(callId)).toEqual(before);
   });
 
-  it("a revoked relationship cannot decline either", async () => {
+  it("a revoked parent cannot decline either", async () => {
     const { callId } = await directCall();
     const before = await snapshot(callId);
 
-    await revokeRelationship();
+    await revokeParent();
 
     await expect(g.calls.decline(callId, s.parentId)).rejects.toMatchObject({
-      code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
+      code: CommErrorCode.CONTACT_CANNOT_MESSAGE,
     });
     expect(await snapshot(callId)).toEqual(before);
   });
@@ -219,11 +243,36 @@ describe("accept — authorization is re-run, and a refusal leaves no trace", ()
     // accept defect leaked no audio. Asserted so a future change cannot quietly
     // make accept strict and the token path loose.
     const { callId } = await directCall();
-    await revokeRelationship();
+    await revokeParent();
 
     await expect(g.calls.issueToken(callId, s.parentId)).rejects.toMatchObject({
-      code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
+      code: CommErrorCode.CONTACT_CANNOT_MESSAGE,
     });
+  });
+
+  it("PD-7: a teacher<->parent call ringing when BR-1 was restored cannot be answered, from either side", async () => {
+    // PD-6 let the teacher ring the parent directly. Re-running authorization
+    // on accept is exactly what makes PD-7 reach a call that was already
+    // ringing: the relationship still holds, and neither side may answer.
+    const { callId } = await legacyCall();
+    const before = await snapshot(callId);
+    expect(before.status).toBe("ringing");
+
+    await expect(g.calls.accept(callId, s.parentId)).rejects.toMatchObject({
+      code: CommErrorCode.BR1_TEACHER_PARENT_DIRECT,
+    });
+    await expect(g.calls.accept(callId, s.teacherId)).rejects.toMatchObject({
+      code: CommErrorCode.BR1_TEACHER_PARENT_DIRECT,
+    });
+    await expect(g.calls.decline(callId, s.parentId)).rejects.toMatchObject({
+      code: CommErrorCode.BR1_TEACHER_PARENT_DIRECT,
+    });
+    await expect(g.calls.issueToken(callId, s.parentId)).rejects.toMatchObject({
+      code: CommErrorCode.BR1_TEACHER_PARENT_DIRECT,
+    });
+
+    expect(await snapshot(callId)).toEqual(before);
+    expect(await callEvents(callId)).toEqual([]);
   });
 
   it("a deactivated actor cannot answer", async () => {
@@ -319,7 +368,7 @@ describe("state transitions that must not happen", () => {
     // accept already knew the call was dead, but the record did not say so
     // until a sweep relabelled it `missed`. The refusal now comes from the
     // terminal state itself.
-    await expect(g.calls.accept(callId, s.teacherId)).rejects.toMatchObject({
+    await expect(g.calls.accept(callId, s.ownerId)).rejects.toMatchObject({
       code: CommErrorCode.CALL_ALREADY_ENDED,
     });
     const after = await snapshot(callId);
@@ -330,7 +379,7 @@ describe("state transitions that must not happen", () => {
 
   it("ENDED → ACTIVE: an ended call cannot be answered, and nothing is written", async () => {
     const { callId } = await directCall();
-    await g.calls.end(callId, s.teacherId);
+    await g.calls.end(callId, s.ownerId);
     const afterEnd = await snapshot(callId);
     expect(afterEnd.status).toBe("ended");
 
@@ -344,7 +393,7 @@ describe("state transitions that must not happen", () => {
 
   it("ENDED → DECLINED: an ended call cannot be declined", async () => {
     const { callId } = await directCall();
-    await g.calls.end(callId, s.teacherId);
+    await g.calls.end(callId, s.ownerId);
     const afterEnd = await snapshot(callId);
 
     await expect(g.calls.decline(callId, s.parentId)).rejects.toMatchObject({
@@ -427,7 +476,7 @@ describe("concurrency — one winner, no torn state", () => {
 
     await Promise.allSettled([
       g.calls.accept(callId, s.parentId),
-      g.calls.end(callId, s.teacherId),
+      g.calls.end(callId, s.ownerId),
     ]);
 
     const after = await snapshot(callId);
@@ -454,14 +503,14 @@ describe("concurrency — one winner, no torn state", () => {
 describe("history correctness — the point of the whole phase", () => {
   it("a call nobody could answer is never recorded as answered", async () => {
     const { callId } = await directCall();
-    await revokeRelationship();
+    await revokeParent();
 
     await expect(g.calls.accept(callId, s.parentId)).rejects.toThrow();
 
     // The caller gives up and hangs up. Under the old behaviour the accept
     // above would have succeeded, answered_at would be set, and this would
     // record `answered` -- a conversation that never happened.
-    await g.calls.end(callId, s.teacherId);
+    await g.calls.end(callId, s.ownerId);
 
     const after = await snapshot(callId);
     expect(after.outcome).toBe("missed");
@@ -472,23 +521,36 @@ describe("history correctness — the point of the whole phase", () => {
   it("duration is still measured from the real answer when one happened", async () => {
     const { callId } = await directCall();
     await g.calls.accept(callId, s.parentId);
-    await g.calls.end(callId, s.teacherId);
+    await g.calls.end(callId, s.ownerId);
 
     const after = await snapshot(callId);
     expect(after.outcome).toBe("answered");
     expect(after.answeredAt).toBeInstanceOf(Date);
   });
 
-  it("ending still works after the relationship is revoked — no call is stranded", async () => {
+  it("ending still works after the parent is revoked — no call is stranded", async () => {
     // The deliberate asymmetry: joining re-runs authorization, ending does not.
-    // If a revoked relationship could block `end`, a call would sit ACTIVE
-    // forever, which is a worse failure than the one this phase fixes.
+    // If a revocation could block `end`, a call would sit ACTIVE forever,
+    // which is a worse failure than the one this phase fixes.
     const { callId } = await directCall();
     await g.calls.accept(callId, s.parentId);
 
-    await revokeRelationship();
+    await revokeParent();
+
+    await expect(g.calls.end(callId, s.ownerId)).resolves.toBeUndefined();
+    expect((await snapshot(callId)).status).toBe("ended");
+  });
+
+  it("PD-7: a teacher<->parent call ringing when BR-1 was restored can still be ended", async () => {
+    // The same asymmetry across the policy change. BR-1 refuses the answer;
+    // it must not strand the call. The database refuses a teacher<->parent
+    // participant set on INSERT only, so the lifecycle UPDATE goes through.
+    const { callId } = await legacyCall();
 
     await expect(g.calls.end(callId, s.teacherId)).resolves.toBeUndefined();
-    expect((await snapshot(callId)).status).toBe("ended");
+    const after = await snapshot(callId);
+    expect(after.status).toBe("ended");
+    expect(after.outcome).toBe("missed");
+    expect(after.answeredAt).toBeNull();
   });
 });

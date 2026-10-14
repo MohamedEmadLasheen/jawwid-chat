@@ -18,7 +18,7 @@ import { actorRefKey } from '../../platform/identity.service';
 import type { ResolvedActors } from '../../platform/identity.service';
 import type { CoverageService } from '../../platform/coverage.service';
 import type { AuditService } from '../../platform/audit.service';
-import { Actor, SYSTEM_ACTOR } from '../../platform/types';
+import { Actor, SYSTEM_ACTOR, isFamilyFacingStaff } from '../../platform/types';
 import { OutboxService } from '../outbox/outbox.service';
 import type { ConversationWithLearner, ResolvedMember } from '../contracts/dto';
 import { CommEvent } from '../contracts/events';
@@ -30,6 +30,15 @@ import {
   Origin,
   Visibility,
 } from '../contracts/vocab';
+
+/**
+ * Ids arrive from URLs and bodies. One that is not a uuid cannot name any row,
+ * so it is answered exactly as an unknown one -- not handed to Postgres, which
+ * rejects it with an error that surfaced as a 500.
+ */
+export const isUuid = (value: unknown): value is string =>
+  typeof value === 'string' &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
 export interface MemberSpec {
   actorId: string;
@@ -47,6 +56,9 @@ export class ConversationService {
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
     @Inject(COVERAGE_SERVICE) private readonly coverage: CoverageService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    // Unused since PD-7 (BR-1 no longer consults a relationship). Kept in the
+    // constructor so the positional construction shared by the test harnesses
+    // and the parallel worktrees does not shift.
     @Inject(RELATIONSHIP_SERVICE) private readonly relationships: RelationshipService,
     // RT-009: a removed member's live sockets leave the room when the removal
     // commits, instead of receiving the conversation until they disconnect.
@@ -54,31 +66,6 @@ export class ConversationService {
     @Inject(REALTIME_REVOCATION)
     private readonly revocation: RealtimeRevocation = NO_REALTIME_REVOCATION,
   ) {}
-
-  /**
-   * PD-6. The resolved teacher<->parent relationship behind a participant set.
-   *
-   * Every service that authorizes an operation on a conversation already holds
-   * its participants, so the fact is resolved from those rather than re-read,
-   * and this one method is the only place that decides which participant is
-   * the teacher and which is the parent. Three call sites doing that
-   * separately is three chances to get the direction backwards, and a backwards
-   * lookup denies a legitimate pair silently.
-   *
-   * Exactly one live teacher and exactly one live contact is the only shape
-   * that can be a teacher/parent pairing. Anything else -- a group, a
-   * staff-only channel, a malformed set -- is false, which the policy ignores
-   * for every conversation type but `direct`.
-   */
-  async pairingAuthorizedAmong(
-    participants: ReadonlyArray<{ actorId: string; actorKind: string }>,
-  ): Promise<boolean> {
-    const teachers = participants.filter((p) => p.actorKind === ActorKind.TEACHER);
-    const contacts = participants.filter((p) => p.actorKind === ActorKind.CONTACT);
-    if (teachers.length !== 1 || contacts.length !== 1) return false;
-
-    return this.relationships.teacherParentAuthorized(teachers[0].actorId, contacts[0].actorId);
-  }
 
   async requireActor(actorId: string): Promise<Actor> {
     const actor = await this.identity.resolveActor(actorId);
@@ -97,6 +84,9 @@ export class ConversationService {
    * does not want the learner simply does not read it.
    */
   async requireConversation(id: string): Promise<ConversationWithLearner> {
+    if (!isUuid(id)) {
+      throw new CommError(CommErrorCode.CONVERSATION_NOT_FOUND, 'conversation not found', 404);
+    }
     const conv = await this.prisma.conversation.findUnique({
       where: { id },
       include: { learner: true },
@@ -179,6 +169,70 @@ export class ConversationService {
   /** RT-009: Prisma's bound on one delivery transaction. Lowered only by a test. */
   deliveryTransactionTimeoutMs = 15_000;
 
+  /**
+   * RT-032 -- linearizes a state-changing operation with a deactivation.
+   *
+   * The actor was resolved when the request authenticated; a deactivation can
+   * commit between that read and this operation's commit. Called INSIDE the
+   * operation's transaction, this takes FOR SHARE on the actor's login account
+   * and principal row -- in the order deliveries lock them (account, then
+   * principal), so neither deadlocks the other -- and re-reads liveness from
+   * the locked rows. A deactivation that committed first is what the locked
+   * read returns (refused); one that arrives later waits for this transaction,
+   * so the operation is ordered strictly BEFORE it. Either way nothing an
+   * inactive actor did commits after their deactivation.
+   */
+  async assertActorLive(tx: Prisma.TransactionClient, actor: Actor): Promise<void> {
+    type Row = { live: boolean; account_id: string | null };
+    // One fixed statement per principal table (tagged, parameterized -- no
+    // identifier is ever interpolated). `bound` reads the login without a lock;
+    // `locked` takes the principal row FOR SHARE after the account row.
+    let bound: (id: string) => Promise<Row[]>;
+    let locked: (id: string) => Promise<Row[]>;
+    switch (actor.kind) {
+      case ActorKind.CONTACT:
+        bound = (id) => tx.$queryRaw<Row[]>`
+          SELECT is_active AS live, account_id::text AS account_id FROM chat.contact WHERE id = ${id}::uuid`;
+        locked = (id) => tx.$queryRaw<Row[]>`
+          SELECT is_active AS live, account_id::text AS account_id FROM chat.contact WHERE id = ${id}::uuid FOR SHARE`;
+        break;
+      case ActorKind.STAFF:
+        bound = (id) => tx.$queryRaw<Row[]>`
+          SELECT (is_active AND left_at IS NULL) AS live, account_id::text AS account_id FROM chat.staff WHERE id = ${id}::uuid`;
+        locked = (id) => tx.$queryRaw<Row[]>`
+          SELECT (is_active AND left_at IS NULL) AS live, account_id::text AS account_id FROM chat.staff WHERE id = ${id}::uuid FOR SHARE`;
+        break;
+      case ActorKind.TEACHER:
+        bound = (id) => tx.$queryRaw<Row[]>`
+          SELECT (is_active AND left_at IS NULL) AS live, account_id::text AS account_id FROM chat.teacher WHERE id = ${id}::uuid`;
+        locked = (id) => tx.$queryRaw<Row[]>`
+          SELECT (is_active AND left_at IS NULL) AS live, account_id::text AS account_id FROM chat.teacher WHERE id = ${id}::uuid FOR SHARE`;
+        break;
+      default:
+        return; // the system actor has no row to deactivate
+    }
+    const accountId = (await bound(actor.actorId))[0]?.account_id ?? null;
+    let accountLive = true;
+    if (accountId) {
+      const a = await tx.$queryRaw<{ live: boolean }[]>`
+        SELECT (is_active AND status = 'active') AS live FROM chat.account WHERE id = ${accountId}::uuid FOR SHARE`;
+      accountLive = a[0]?.live === true;
+    }
+    const p = await locked(actor.actorId);
+    // A login re-bound in between is not the identity that authenticated.
+    if (p[0]?.live !== true || !accountLive || (p[0].account_id ?? null) !== accountId) {
+      throw new CommError(CommErrorCode.ACTOR_INACTIVE, 'this account is no longer active');
+    }
+    if (this.afterLiveLock) await this.afterLiveLock(actor.actorId);
+  }
+
+  /**
+   * TEST SEAM ONLY -- undefined in production, and then not even awaited. Runs
+   * while assertActorLive's locks are held, so a test can race a deactivation
+   * against an operation that has already passed its live check.
+   */
+  afterLiveLock?: (actorId: string) => Promise<void>;
+
   /** RT-009: live memberships of several actors in one query, keyed by actorId. */
   async liveMembershipsOf(
     conversationId: string,
@@ -189,6 +243,51 @@ export class ConversationService {
       where: { conversationId, actorId: { in: [...actorIds] }, leftAt: null },
     });
     return new Map(rows.map((m) => [m.actorId, m]));
+  }
+
+  /**
+   * The staff-scope fact `AuthorizationService.canRead` decides on, resolved
+   * from server-owned rows: the family's owner and the coverage engine. Free
+   * for anybody who is not staff (no query).
+   */
+  async staffInScope(
+    actor: Actor,
+    conv: Pick<Conversation, 'familyId' | 'stickyHandlerId' | 'stickyUntil'>,
+    now = new Date(),
+  ): Promise<boolean> {
+    if (actor.kind !== ActorKind.STAFF) return false;
+    const family = conv.familyId
+      ? await this.prisma.family.findUnique({ where: { id: conv.familyId }, select: { ownerId: true } })
+      : null;
+    return this.authz.staffInScope(actor, conv, family?.ownerId ?? null, now);
+  }
+
+  /**
+   * PD-7: is this a DIRECT conversation pairing a teacher with a family contact?
+   * Such a conversation can exist only from the PD-6 window; it is readable
+   * history and accepts nothing new -- not a message (canSend), not a call
+   * (canCall), and not the side channels that are not messages: a new reaction,
+   * a typing indicator.
+   */
+  async isDirectTeacherParent(conversationId: string): Promise<boolean> {
+    const rows = await this.prisma.$queryRaw<Array<{ hit: boolean }>>`
+      SELECT (c.type = 'direct'
+              AND bool_or(m.actor_kind = 'teacher')
+              AND bool_or(m.actor_kind = 'contact')) AS hit
+        FROM chat.conversation c
+        JOIN chat.conversation_member m ON m.conversation_id = c.id AND m.left_at IS NULL
+       WHERE c.id = ${conversationId}::uuid
+       GROUP BY c.type`;
+    return rows[0]?.hit === true;
+  }
+
+  /** canRead with the staff-scope fact resolved: the one read check every path uses. */
+  async canReadResolved(
+    actor: Actor,
+    conv: Conversation,
+    membership: Pick<ConversationMember, 'actorId' | 'actorKind' | 'memberRole' | 'isSilent' | 'leftAt'> | null,
+  ) {
+    return this.authz.canRead(actor, conv, membership, await this.staffInScope(actor, conv));
   }
 
   async membershipOf(conversationId: string, actorId: string): Promise<ConversationMember | null> {
@@ -228,7 +327,7 @@ export class ConversationService {
     const conversation = await this.requireConversation(conversationId);
     const membership = await this.membershipOf(conversation.id, actor.actorId);
 
-    const decision = this.authz.canRead(actor, conversation, membership);
+    const decision = await this.canReadResolved(actor, conversation, membership);
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
     // Delegates rather than querying again: one member-resolution path, so the
@@ -295,8 +394,27 @@ export class ConversationService {
    * advisory becomes a lie. See ConversationMemberDto.canOpenDirect.
    */
   async membersOf(conversationId: string, viewer?: Actor): Promise<ResolvedMember[]> {
+    return (await this.membersOfMany([conversationId], viewer)).get(conversationId) ?? [];
+  }
+
+  /**
+   * `membersOf` for a whole list at once: ONE membership query and ONE identity
+   * batch (at most one query per actor kind), whatever the number of
+   * conversations -- so the chat list can name the other side of every direct
+   * conversation without a request per row (gap O3, list half).
+   *
+   * Same rule as `membersOf`: THE CALLER AUTHORIZES FIRST. The list route hands
+   * it exactly the ids `listForActor` returned.
+   */
+  async membersOfMany(
+    conversationIds: readonly string[],
+    viewer?: Actor,
+  ): Promise<Map<string, ResolvedMember[]>> {
+    const out = new Map<string, ResolvedMember[]>(conversationIds.map((id) => [id, []]));
+    if (conversationIds.length === 0) return out;
+
     const rows = await this.prisma.conversationMember.findMany({
-      where: { conversationId, leftAt: null },
+      where: { conversationId: { in: [...conversationIds] }, leftAt: null },
       orderBy: { joinedAt: 'asc' },
     });
 
@@ -304,17 +422,20 @@ export class ConversationService {
       rows.map((m) => ({ actorId: m.actorId, actorKind: m.actorKind })),
     );
 
-    const openable = await this.openableFor(viewer, rows, actors);
+    const openable = this.openableFor(viewer, rows, actors);
 
-    return rows.map((m) => ({
-      actorId: m.actorId,
-      actorKind: m.actorKind,
-      memberRole: m.memberRole,
-      isSilent: m.isSilent,
-      displayName:
-        actors.get(actorRefKey({ actorId: m.actorId, actorKind: m.actorKind }))?.displayName ?? '',
-      canOpenDirect: openable.has(actorRefKey({ actorId: m.actorId, actorKind: m.actorKind })),
-    }));
+    for (const m of rows) {
+      const key = actorRefKey({ actorId: m.actorId, actorKind: m.actorKind });
+      out.get(m.conversationId)?.push({
+        actorId: m.actorId,
+        actorKind: m.actorKind,
+        memberRole: m.memberRole,
+        isSilent: m.isSilent,
+        displayName: actors.get(key)?.displayName ?? '',
+        canOpenDirect: openable.has(key),
+      });
+    }
+    return out;
   }
 
   /**
@@ -322,27 +443,14 @@ export class ConversationService {
    *
    * The decision is `AuthorizationService.canOpenDirect` -- the same method the
    * `POST /conversations/direct` request runs -- so the advisory cannot drift
-   * from the enforcement. What it adds is the PD-6 relationship argument, which
-   * only the server can resolve.
-   *
-   * COST. The relationship predicate is consulted only for the pair that needs
-   * it: exactly one of the viewer and the member is a teacher and the other a
-   * family contact. Every other pairing (staff, system, same-kind, self) is
-   * decided from the actors alone with no query at all. A member list is a single
-   * conversation's roster, so this is bounded by the contacts in one group, not
-   * by anything that grows with the tenant.
-   *
-   * It deliberately reuses the existing single-pair `pairingAuthorized` rather
-   * than adding a batched variant: the predicate is written twice on purpose,
-   * once here and once in the database (`chat.teacher_parent_authorized`), and a
-   * third implementation written for speed is a third place for the answers to
-   * diverge.
+   * from the enforcement. It is decided from the two actors alone (BR-1 under
+   * PD-7 needs no relationship lookup), so it costs no query per member.
    */
-  private async openableFor(
+  private openableFor(
     viewer: Actor | undefined,
     rows: ReadonlyArray<{ actorId: string; actorKind: string }>,
     actors: ResolvedActors,
-  ): Promise<Set<string>> {
+  ): Set<string> {
     const openable = new Set<string>();
     if (!viewer) return openable;
 
@@ -350,18 +458,10 @@ export class ConversationService {
       const key = actorRefKey({ actorId: row.actorId, actorKind: row.actorKind });
       const other = actors.get(key);
       // An unresolved member is not a correspondent. Same actor is refused by
-      // canOpenDirect itself, but skipping it here saves a pointless query.
+      // canOpenDirect itself.
       if (!other || other.actorId === viewer.actorId) continue;
 
-      const needsRelationship =
-        (viewer.kind === ActorKind.TEACHER && other.kind === ActorKind.CONTACT) ||
-        (viewer.kind === ActorKind.CONTACT && other.kind === ActorKind.TEACHER);
-
-      const pairingAuthorized = needsRelationship
-        ? await this.relationships.pairingAuthorized(viewer, other)
-        : false;
-
-      if (this.authz.canOpenDirect(viewer, other, pairingAuthorized).allowed) {
+      if (this.authz.canOpenDirect(viewer, other).allowed) {
         openable.add(key);
       }
     }
@@ -386,14 +486,14 @@ export class ConversationService {
    * is unique, and a lost race re-reads rather than trusting our own check.
    */
   async getOrCreateDirect(requesterId: string, otherId: string): Promise<Conversation> {
+    // `otherId` is the one id here that comes straight from a request body.
+    if (!isUuid(otherId)) throw new CommError(CommErrorCode.UNKNOWN_ACTOR, 'unknown actor', 401);
     const a = await this.requireActor(requesterId);
     const b = await this.requireActor(otherId);
 
-    // PD-6. The relationship is resolved from server-owned data BEFORE the
-    // policy runs. `otherId` selected a row; it asserted nothing about it.
-    const pairingAuthorized = await this.relationships.pairingAuthorized(a, b);
-
-    const decision = this.authz.canOpenDirect(a, b, pairingAuthorized);
+    // BR-1 (PD-7): a teacher<->parent pair is refused here from the two
+    // actors' kinds alone. `otherId` selected a row; it asserted nothing.
+    const decision = this.authz.canOpenDirect(a, b);
     if (!decision.allowed) {
       // Another organization's actor is answered exactly as `requireActor`
       // answers an unknown one: same code, same status, same message.
@@ -442,6 +542,14 @@ export class ConversationService {
           actorId: a.actorId,
           type: 'conversation_created',
           payload: { conversationId: conv.id, type: ConversationType.DIRECT },
+        });
+
+        // Realtime: both members' devices learn the channel exists (each gets
+        // `conversation.added` in its own actor room) without a manual refresh.
+        await this.outbox.enqueue(tx, CommEvent.MEMBERSHIP_CHANGED, {
+          conversationId: conv.id,
+          added: [a.actorId, b.actorId],
+          removed: [],
         });
 
         return conv;
@@ -568,6 +676,13 @@ export class ConversationService {
         actorId: null,
         type: 'student_group_created',
         payload: { conversationId: conv.id, learnerId },
+      });
+
+      // Realtime: every member's devices learn the group exists.
+      await this.outbox.enqueue(tx, CommEvent.MEMBERSHIP_CHANGED, {
+        conversationId: conv.id,
+        added: members.map((m) => m.actorId),
+        removed: [],
       });
 
       return conv;
@@ -922,24 +1037,48 @@ export class ConversationService {
     return this.coverage.onDuty(conv.familyId, now);
   }
 
-  /** RBAC-scoped chat list. A contact or teacher only ever sees their own. */
+  /**
+   * RBAC-scoped chat list. A contact or teacher only ever sees their own.
+   *
+   * Staff see exactly what `AuthorizationService.canRead` would let them open
+   * (staff scope, 2026-10-14): a manager, their organization; an admin or
+   * coverage admin, conversations they are a live member of plus those of the
+   * families they own, are on duty for, or are the live sticky handler of. The
+   * on-duty set comes from AI #1's `chat.families_on_duty`, the same coverage
+   * engine `on_duty()` answers from, so the list and the per-conversation
+   * check cannot disagree about who is covering whom.
+   */
   async listForActor(actorId: string): Promise<ConversationWithLearner[]> {
     const actor = await this.requireActor(actorId);
 
     if (actor.kind === ActorKind.STAFF) {
-      const probe = this.authz.canRead(actor, {
-        id: '',
-        type: ConversationType.DIRECT,
-        familyId: null,
-        stickyHandlerId: null,
-        stickyUntil: null,
-        teacherRequiresApproval: false,
-        parentRequiresApproval: false,
-        archivedAt: null,
-      }, null);
-      if (!probe.allowed) throw new CommError(probe.code, probe.reason);
+      if (!actor.isActive) {
+        throw new CommError(CommErrorCode.ACTOR_INACTIVE, 'actor is inactive');
+      }
+      if (!isFamilyFacingStaff(actor)) {
+        throw new CommError(
+          CommErrorCode.ROLE_CANNOT_MESSAGE_FAMILY,
+          `role ${actor.staffRole} may not access conversations`,
+        );
+      }
+      if (!actor.organizationId) return [];
+
+      const where: Prisma.ConversationWhereInput = { organizationId: actor.organizationId };
+      if (actor.staffRole !== 'manager') {
+        const now = new Date();
+        const onDuty = await this.prisma.$queryRaw<Array<{ family_id: string }>>`
+          SELECT family_id FROM chat.families_on_duty(${actor.actorId}::uuid, ${now}::timestamptz)
+        `;
+        where.OR = [
+          { members: { some: { actorId: actor.actorId, leftAt: null } } },
+          { family: { ownerId: actor.actorId } },
+          { familyId: { in: onDuty.map((r) => r.family_id) } },
+          { stickyHandlerId: actor.actorId, stickyUntil: { gt: now } },
+        ];
+      }
 
       return this.prisma.conversation.findMany({
+        where,
         include: { learner: true },
         orderBy: { lastActivityAt: 'desc' },
         take: 200,
@@ -967,7 +1106,7 @@ export class ConversationService {
     const actor = await this.requireActor(actorId);
     const conv = await this.requireConversation(conversationId);
     const membership = await this.membershipOf(conv.id, actor.actorId);
-    const decision = this.authz.canRead(actor, conv, membership);
+    const decision = await this.canReadResolved(actor, conv, membership);
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
     const patch = {

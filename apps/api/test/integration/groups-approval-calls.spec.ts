@@ -235,10 +235,23 @@ describe('message approval', () => {
   });
 
   it('an admin who is not the active handler cannot decide', async () => {
-    const { msg } = await groupWithPendingTeacherMessage();
+    const { group, msg } = await groupWithPendingTeacherMessage();
+    // In the group (so in scope since 2026-10-14) but not the handler: the
+    // approval rule itself refuses.
+    await g.prisma.conversationMember.create({
+      data: { conversationId: group.id, actorId: s.otherAdminId, actorKind: 'staff', memberRole: 'admin' },
+    });
     const approval = await g.prisma.messageApproval.findUnique({ where: { messageId: msg.id } });
     await expect(g.approvals.approve(approval!.id, s.otherAdminId)).rejects.toMatchObject({
       code: CommErrorCode.CANNOT_APPROVE,
+    });
+  });
+
+  it('an admin outside the family is refused earlier, by staff scope', async () => {
+    const { msg } = await groupWithPendingTeacherMessage();
+    const approval = await g.prisma.messageApproval.findUnique({ where: { messageId: msg.id } });
+    await expect(g.approvals.approve(approval!.id, s.otherAdminId)).rejects.toMatchObject({
+      code: CommErrorCode.STAFF_OUT_OF_SCOPE,
     });
   });
 

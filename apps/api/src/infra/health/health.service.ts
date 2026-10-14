@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import Redis from 'ioredis';
 import { PrismaService } from '../../platform/prisma.service';
 import { BuildInfo, readBuildInfo } from '../build-info';
+import { realtimeMetricsSnapshot, type RealtimeMetrics } from '../../platform/realtime-metrics';
 
 export type ProbeStatus = 'up' | 'down' | 'skipped';
 
@@ -20,6 +21,8 @@ export interface HealthReport {
   readonly build: BuildInfo;
   readonly uptimeSeconds: number;
   readonly checks: Record<string, ProbeResult>;
+  /** Realtime delivery/revocation counters of THIS process since it started (counts only). */
+  readonly realtime?: RealtimeMetrics;
 }
 
 /**
@@ -68,6 +71,29 @@ export class HealthService {
     return this.probe('database', () => this.prisma.$queryRaw`select 1`);
   }
 
+  /**
+   * RT-032. Deactivations committed but not yet confirmed by the realtime
+   * completion barrier. 'down' once one has waited longer than
+   * REVOCATION_UNCONFIRMED_ALERT_SECONDS: some API node is not acknowledging
+   * fences, so nobody can be told a deactivation is complete. Reported, never
+   * blocking -- taking API nodes out of rotation would not help them confirm.
+   */
+  async revocations(): Promise<ProbeResult & { unconfirmed?: number; oldestSeconds?: number }> {
+    const alertAfter = Number(process.env.REVOCATION_UNCONFIRMED_ALERT_SECONDS ?? 30);
+    let counts: { unconfirmed: number; oldest: number } = { unconfirmed: 0, oldest: 0 };
+    const result = await this.probe('revocations', async () => {
+      const rows = await this.prisma.$queryRaw<{ unconfirmed: bigint; oldest: number | null }[]>`
+        select count(*) as unconfirmed,
+               extract(epoch from now() - min(recorded_at))::float8 as oldest
+          from chat.principal_revocation where confirmed_at is null`;
+      counts = { unconfirmed: Number(rows[0]?.unconfirmed ?? 0), oldest: Math.round(rows[0]?.oldest ?? 0) };
+      if (counts.unconfirmed > 0 && counts.oldest > alertAfter) {
+        throw new Error(`${counts.unconfirmed} deactivation(s) unconfirmed, oldest ${counts.oldest}s`);
+      }
+    });
+    return { ...result, unconfirmed: counts.unconfirmed, oldestSeconds: counts.oldest };
+  }
+
   async redisProbe(): Promise<ProbeResult> {
     const client = this.redisClient();
     if (!client) return { status: 'skipped', latencyMs: 0 };
@@ -86,14 +112,20 @@ export class HealthService {
    * make this instance unable to serve the requests that do not touch Core.
    */
   async readiness(): Promise<HealthReport> {
-    const [database, redis] = await Promise.all([this.database(), this.redisProbe()]);
-    const checks = { database, redis };
-    const blocking = Object.values(checks).filter((c) => c.status === 'down');
+    const [database, redis, revocations] = await Promise.all([
+      this.database(),
+      this.redisProbe(),
+      this.revocations(),
+    ]);
+    const checks = { database, redis, revocations };
+    // `revocations` is a signal, not a dependency (see revocations()).
+    const blocking = [database, redis].filter((c) => c.status === 'down');
     return {
       status: blocking.length === 0 ? 'ok' : 'degraded',
       build: this.build,
       uptimeSeconds: Math.round((Date.now() - this.startedAt) / 1000),
       checks,
+      realtime: realtimeMetricsSnapshot(),
     };
   }
 

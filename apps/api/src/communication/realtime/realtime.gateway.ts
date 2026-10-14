@@ -21,10 +21,12 @@ import {
 } from '../contracts/events';
 import { RealtimePublisher } from './realtime.publisher';
 import { TypingService } from './typing.service';
+import { RevocationConfirmer } from './revocation-confirmer.service';
+import { realtimeMetrics } from '../../platform/realtime-metrics';
 import { PresenceService } from './presence.service';
 import { MessageService } from '../messages/message.service';
 import { ConversationService } from '../conversations/conversation.service';
-import { ReceiptState } from '../contracts/vocab';
+import { ActorKind, ReceiptState } from '../contracts/vocab';
 import { AuthService } from '../../platform/auth/auth.service';
 import { bearerToken } from '../../platform/auth/auth.guard';
 import {
@@ -272,6 +274,9 @@ export class RealtimeGateway
     // RT-009. Optional only so a test can build the gateway without the module;
     // in the application PlatformModule always provides it.
     @Optional() private readonly revocationHub?: RealtimeRevocationHub,
+    // RT-032. Confirms deactivations written to the database (by any writer)
+    // with this node's completion barrier. Optional for the same reason.
+    @Optional() private readonly revocationConfirmer?: RevocationConfirmer,
   ) {}
 
   /**
@@ -295,6 +300,7 @@ export class RealtimeGateway
     });
     this.startRevalidation(REALTIME_REVALIDATE_INTERVAL_MS);
     this.startLease(NODE_LEASE_RENEW_MS);
+    this.revocationConfirmer?.start();
   }
 
   /** RT-009. (Re)starts the periodic re-validation; a test may shorten it. */
@@ -325,6 +331,7 @@ export class RealtimeGateway
   }
 
   async onModuleDestroy(): Promise<void> {
+    this.revocationConfirmer?.stop();
     if (this.sweep) clearInterval(this.sweep);
     // Fence first, then leave the registry: nothing decided before this line
     // is emitted, so a revoker that no longer counts this node is right not to.
@@ -424,7 +431,9 @@ export class RealtimeGateway
         if (!superseded) throw e;
       }
       if (!superseded) return;
+      realtimeMetrics.deliverySuperseded++;
     }
+    realtimeMetrics.deliveryDropped++;
     this.log.error('a delivery was superseded on every attempt and was dropped (fail closed)');
   }
 
@@ -450,6 +459,25 @@ export class RealtimeGateway
    * below consults with the same rules the REST path uses.
    */
   async handleConnection(client: AuthedSocket): Promise<void> {
+    // Nest does not await this hook's promise, so a rejection here was an
+    // UNHANDLED rejection -- and that terminates the process. A database blip
+    // during one handshake (observed on a live stack: Prisma P1001 from
+    // AuthService.authenticate) took the whole API down with every other
+    // socket and request on it. Fail closed for THIS socket only.
+    try {
+      await this.connect(client);
+    } catch (e) {
+      realtimeMetrics.handshakeFailed++;
+      this.log.error(`realtime handshake failed; closing that socket: ${(e as Error).name}`);
+      // Close the TRANSPORT, not `disconnect(true)`: clients read a server
+      // disconnect as "your credential was refused" and spend their one
+      // refresh on it, while a transport close is an ordinary drop they retry
+      // with backoff -- which is what an infrastructure error is.
+      client.conn?.close();
+    }
+  }
+
+  private async connect(client: AuthedSocket): Promise<void> {
     const token = handshakeToken(client);
     if (!token) {
       // No credential is a refusal, not an anonymous connection. A socket that
@@ -477,12 +505,19 @@ export class RealtimeGateway
     // (refresh-token reuse revokes every session).
     await client.join(room.session(authenticated.sessionId));
     await client.join(room.account(authenticated.accountId));
-    await this.presence.online(authenticated.actor.actorId, client.id);
+    // Presence is a nicety; a Redis hiccup recording it must not refuse the
+    // socket that has just authenticated.
+    await this.presence.online(authenticated.actor.actorId, client.id).catch((e: Error) =>
+      this.log.warn(`presence not recorded: ${e.name}`),
+    );
   }
 
   async handleDisconnect(client: AuthedSocket): Promise<void> {
     if (!client.actor) return;
-    await this.presence.offline(client.actor.actorId, client.id);
+    // Not awaited by Nest either: a rejection here would end the process.
+    await this.presence.offline(client.actor.actorId, client.id).catch((e: Error) =>
+      this.log.warn(`presence not cleared: ${e.name}`),
+    );
   }
 
   @SubscribeMessage('conversation.subscribe')
@@ -532,6 +567,9 @@ export class RealtimeGateway
     const actor = await this.currentActor(client);
     if (!actor) return { ok: false };
     if (!(await this.authorize(actor, body.conversationId)).ok) return { ok: false };
+    // PD-7: "is typing" is a signal too; a direct teacher<->parent
+    // conversation carries none.
+    if (await this.conversations.isDirectTeacherParent(body.conversationId)) return { ok: false };
 
     // Server-side debounce: a repeat ping inside the TTL only refreshes the key,
     // so a chatty client cannot amplify fan-out.
@@ -628,6 +666,7 @@ export class RealtimeGateway
     try {
       answers = known.length ? await this.auth.revalidateRealtime(known) : [];
     } catch (e) {
+      realtimeMetrics.revalidationFailed++;
       this.log.error(`realtime re-validation failed; refusing delivery: ${(e as Error).name}`);
       return sockets.map(() => null);
     }
@@ -651,6 +690,7 @@ export class RealtimeGateway
   private serialize(key: string, task: () => Promise<void>): Promise<void> {
     const previous = this.queues.get(key) ?? Promise.resolve();
     const next = previous.then(task).catch((e) => {
+      realtimeMetrics.deliveryFailed++;
       this.log.error(`realtime delivery failed (${key}): ${(e as Error).name}`);
     });
     this.queues.set(key, next);
@@ -695,9 +735,25 @@ export class RealtimeGateway
           conv.id,
           actors.filter((a): a is Actor => !!a).map((a) => a.actorId),
         );
+        // Staff scope is a resolved fact, decided once per staff actor rather
+        // than once per socket (one person, several tabs).
+        const inScope = new Map<string, boolean>();
+        for (const actor of actors) {
+          if (actor && actor.kind === ActorKind.STAFF && !inScope.has(actor.actorId)) {
+            inScope.set(actor.actorId, await this.conversations.staffInScope(actor, conv));
+          }
+        }
         const allowed = sockets.map((socket, i) => {
           const actor = actors[i];
-          return !!actor && this.authz.canRead(actor, conv, members.get(actor.actorId) ?? null).allowed;
+          return (
+            !!actor &&
+            this.authz.canRead(
+              actor,
+              conv,
+              members.get(actor.actorId) ?? null,
+              inScope.get(actor.actorId) ?? false,
+            ).allowed
+          );
         });
         await this.deliveryBarrier?.();
         // Must be the last await before the emits: proves the locks are still
@@ -708,9 +764,12 @@ export class RealtimeGateway
         // node acknowledges a revocation only between turns of its event loop,
         // so either these emits finish first, or the fence already voided them.
         if (!permitted()) return;
+        let refusedIdentity = 0;
+        let refusedRead = 0;
         sockets.forEach((socket, i) => {
           const actor = actors[i];
           if (!actor) {
+            refusedIdentity++;
             socket.disconnect(true);
             return;
           }
@@ -719,9 +778,21 @@ export class RealtimeGateway
             socket.emit(event, payload);
             return;
           }
+          refusedRead++;
           void socket.leave(name);
           socket.emit(CONVERSATION_ACCESS_REVOKED, { conversationId });
         });
+        // Never silent. A socket in the room that is refused at delivery is
+        // either a revocation working as designed or a wrong denial -- and the
+        // only way to tell them apart afterwards is that it was recorded.
+        // Counts and the event name only: no ids, no content.
+        if (refusedIdentity + refusedRead > 0) {
+          realtimeMetrics.deliveryRefusedIdentity += refusedIdentity;
+          realtimeMetrics.deliveryRefusedRead += refusedRead;
+          this.log.warn(
+            `${event}: delivery refused to ${refusedIdentity} socket(s) with no live identity and ${refusedRead} that may no longer read the conversation`,
+          );
+        }
       });
     }));
   }
@@ -913,6 +984,7 @@ export class RealtimeGateway
     }
     const missing = expected.filter((uid) => uid !== cluster.uid && !acked.includes(uid));
     if (missing.length > 0) {
+      realtimeMetrics.barrierUnconfirmed++;
       this.log.error(`revocation not confirmed: ${missing.length} live node(s) did not acknowledge the fence`);
       throw new RevocationUnconfirmedError(`${missing.length} server(s) did not acknowledge`);
     }
@@ -925,7 +997,7 @@ export class RealtimeGateway
     try {
       const conv = await this.conversations.requireConversation(conversationId);
       const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
-      const decision = this.authz.canRead(actor, conv, membership);
+      const decision = await this.conversations.canReadResolved(actor, conv, membership);
       return decision.allowed ? { ok: true } : { ok: false, code: decision.code };
     } catch {
       return { ok: false, code: 'COMM.CONVERSATION_NOT_FOUND' };

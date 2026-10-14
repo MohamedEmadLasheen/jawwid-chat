@@ -1,4 +1,5 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { MediaUrlSigner } from '../../platform/media-url';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
 import { AppConfigService } from '../../platform/app-config.service';
@@ -93,6 +94,8 @@ export class StoryService {
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    // RT-037: story media links go through the access-checked media route.
+    @Optional() private readonly mediaUrls: MediaUrlSigner = new MediaUrlSigner(),
   ) {}
 
   // -------------------------------------------------------------------------
@@ -368,7 +371,7 @@ export class StoryService {
         title: s.title,
         body: s.body,
         mediaKind: s.mediaKind,
-        mediaUrl: await this.signMedia(s),
+        mediaUrl: await this.signMedia(s, actor.actorId),
         publishedAt: s.publishedAt!.toISOString(),
         expiresAt: s.expiresAt!.toISOString(),
         viewed: s.views.length > 0,
@@ -393,7 +396,7 @@ export class StoryService {
       include: { audiences: true, _count: { select: { recipients: true, views: true } } },
     });
 
-    return Promise.all(stories.map((s) => this.toAdminItem(s)));
+    return Promise.all(stories.map((s) => this.toAdminItem(s, actor.actorId)));
   }
 
   /**
@@ -613,23 +616,72 @@ export class StoryService {
    * defaults to five minutes -- the window is bounded by the TTL, not unbounded by
    * the story's lifetime.
    */
-  private async signMedia(story: {
+  private mediaReadable(story: {
     mediaObjectKey: string | null;
     mediaPurgedAt: Date | null;
     state: string;
     expiresAt: Date | null;
     deletedAt: Date | null;
-  }): Promise<string | null> {
-    if (!story.mediaObjectKey || story.mediaPurgedAt) return null;
-    if (story.deletedAt || story.state === StoryState.DELETED) return null;
-    if (story.state === StoryState.EXPIRED) return null;
+  }): boolean {
+    if (!story.mediaObjectKey || story.mediaPurgedAt) return false;
+    if (story.deletedAt || story.state === StoryState.DELETED) return false;
+    if (story.state === StoryState.EXPIRED) return false;
     // Checked against the clock, not the state column: the sweep may not have
     // relabelled it yet, and that must not buy an extra URL.
     if (story.state === StoryState.PUBLISHED && (!story.expiresAt || story.expiresAt <= new Date())) {
-      return null;
+      return false;
     }
+    return true;
+  }
+
+  /**
+   * RT-037: the link now points at the access-checked media route, bound to
+   * the reader, instead of a presigned storage URL -- so the readability gate
+   * above, the audience and the reader's liveness are all re-checked on every
+   * request (`authorizeMediaRead`), and an issued link stops working the moment
+   * any of them stops holding.
+   */
+  private async signMedia(
+    story: {
+      id: string;
+      mediaObjectKey: string | null;
+      mediaPurgedAt: Date | null;
+      state: string;
+      expiresAt: Date | null;
+      deletedAt: Date | null;
+    },
+    viewerId: string,
+  ): Promise<string | null> {
+    if (!this.mediaReadable(story)) return null;
     const ttl = Number(process.env.STORAGE_SIGNED_URL_TTL_SECONDS ?? 300);
-    return this.storage.signedReadUrl(story.mediaObjectKey, ttl);
+    return this.mediaUrls.url('stories', story.id, 'o', viewerId, ttl);
+  }
+
+  /**
+   * RT-037 -- the access-time decision behind a story media link. The same two
+   * ways a story's media is shown, re-decided now: a PUBLISHER of the story's
+   * organization (drafts included, as the publisher's list shows them), or a
+   * READER who is one of its recipients while it is published and unexpired.
+   * Every refusal reads as absent.
+   */
+  async authorizeMediaRead(storyId: string, actorId: string): Promise<{ objectKey: string }> {
+    const absent = () => new CommError(CommErrorCode.STORY_NOT_FOUND, 'story not found', 404);
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(storyId)) throw absent();
+    const actor = await this.requireActor(actorId);
+    if (!actor.isActive) throw absent();
+    const story = await this.prisma.story.findFirst({
+      where: { id: storyId, ...this.orgScope(actor) },
+      select: { id: true, mediaObjectKey: true, mediaPurgedAt: true, state: true, expiresAt: true, deletedAt: true },
+    });
+    if (!story || !this.mediaReadable(story) || !story.mediaObjectKey) throw absent();
+    if (this.authz.canPublishStory(actor).allowed) return { objectKey: story.mediaObjectKey };
+    if (!this.authz.canReadStories(actor).allowed || story.state !== StoryState.PUBLISHED) throw absent();
+    const recipient = await this.prisma.storyRecipient.findFirst({
+      where: { storyId, actorId: actor.actorId },
+      select: { storyId: true },
+    });
+    if (!recipient) throw absent();
+    return { objectKey: story.mediaObjectKey };
   }
 
   private async adminItem(storyId: string, actor: Actor): Promise<StoryAdminItem> {
@@ -638,7 +690,7 @@ export class StoryService {
       include: { audiences: true, _count: { select: { recipients: true, views: true } } },
     });
     if (!s) throw new CommError(CommErrorCode.STORY_NOT_FOUND, 'story not found', 404);
-    return this.toAdminItem(s);
+    return this.toAdminItem(s, actor.actorId);
   }
 
   private async toAdminItem(s: {
@@ -655,13 +707,13 @@ export class StoryService {
     createdBy: string;
     audiences: Array<{ kind: string; refId: string | null }>;
     _count: { recipients: number; views: number };
-  }): Promise<StoryAdminItem> {
+  }, viewerId: string): Promise<StoryAdminItem> {
     return {
       id: s.id,
       title: s.title,
       body: s.body,
       mediaKind: s.mediaKind,
-      mediaUrl: await this.signMedia(s),
+      mediaUrl: await this.signMedia(s, viewerId),
       state: s.state,
       publishedAt: s.publishedAt?.toISOString() ?? null,
       expiresAt: s.expiresAt?.toISOString() ?? null,

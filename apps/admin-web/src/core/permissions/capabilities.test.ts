@@ -6,8 +6,10 @@ import {
   isSuperAdmin,
   isOperator,
   managerOnly,
+  navAreas,
   ownershipActions,
   taskScopeFor,
+  UNLISTED_AREAS,
   visibleAreas,
 } from './capabilities'
 import { ROLES } from '@/test/utils'
@@ -93,5 +95,31 @@ describe('role → navigation', () => {
     expect(taskScopeFor('manager')).toBe('team')
     expect(taskScopeFor('finance')).toBe('department')
     expect(taskScopeFor('super_admin')).toBe('team')
+  })
+})
+
+describe('the legacy Inbox is routable but never offered', () => {
+  // Its page calls /inbox and /families/*, which no API on any current branch
+  // serves. Offering it would present a destination that cannot load.
+  it('no role sees Inbox in navigation', () => {
+    for (const role of ROLES) expect(navAreas(role)).not.toContain('inbox')
+    expect(UNLISTED_AREAS.has('inbox')).toBe(true)
+  })
+
+  it('its route still opens for every role that could open it before (old links keep working)', () => {
+    for (const role of ROLES) expect(canOpenArea(role, 'inbox')).toBe(visibleAreas(role).includes('inbox'))
+    expect(canOpenArea('admin', 'inbox')).toBe(true)
+  })
+
+  it('operators and managers are offered Chat exactly once, and no navigation list repeats an entry', () => {
+    for (const role of ROLES) {
+      const areas = navAreas(role)
+      expect(new Set(areas).size).toBe(areas.length)
+      if (isManager(role) || isOperator(role)) expect(areas.filter((a) => a === 'chat')).toHaveLength(1)
+    }
+  })
+
+  it('nothing else is hidden: navigation is the openable areas minus Inbox', () => {
+    for (const role of ROLES) expect(navAreas(role)).toEqual(visibleAreas(role).filter((a) => a !== 'inbox'))
   })
 })

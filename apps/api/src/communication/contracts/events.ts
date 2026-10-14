@@ -20,6 +20,14 @@ export const CommEvent = {
   PRESENCE_CHANGED: 'presence.changed',
   CONVERSATION_UPDATED: 'conversation.updated',
   MEMBERSHIP_CHANGED: 'conversation.membership_changed',
+  /**
+   * To each ADDED member's own actor room: "a conversation you belong to now
+   * exists for you". The thread-room copy of MEMBERSHIP_CHANGED cannot reach
+   * them -- a client subscribes only to conversations it already knows -- so
+   * without this a parent learns of a new conversation only on a manual
+   * refresh. Carries the id and nothing else; the client re-reads its list.
+   */
+  CONVERSATION_ADDED: 'conversation.added',
   APPROVAL_REQUESTED: 'approval.requested',
   APPROVAL_DECIDED: 'approval.decided',
   /** A call was created and is ringing. */
@@ -109,6 +117,10 @@ export interface MembershipChangedPayload {
   conversationId: string;
   added: string[];
   removed: string[];
+}
+
+export interface ConversationAddedPayload {
+  conversationId: string;
 }
 
 export interface ApprovalRequestedPayload {
@@ -215,6 +227,7 @@ export interface CommEventPayloads {
   [CommEvent.PRESENCE_CHANGED]: PresencePayload;
   [CommEvent.CONVERSATION_UPDATED]: ConversationUpdatedPayload;
   [CommEvent.MEMBERSHIP_CHANGED]: MembershipChangedPayload;
+  [CommEvent.CONVERSATION_ADDED]: ConversationAddedPayload;
   [CommEvent.APPROVAL_REQUESTED]: ApprovalRequestedPayload;
   [CommEvent.APPROVAL_DECIDED]: ApprovalDecidedPayload;
   [CommEvent.CALL_INCOMING]: CallPayload;

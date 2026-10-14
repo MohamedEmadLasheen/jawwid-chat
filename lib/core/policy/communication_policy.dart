@@ -2,11 +2,16 @@ import '../../shared/models/user_role.dart';
 
 /// Client-side expression of which affordances this build offers, by role pair.
 ///
-/// **PD-6 (2026-09-23) changed what this file can honestly claim.** It used to encode
+/// **PD-7 (2026-10-14) restored BR-1 and superseded PD-6:**
 ///
 /// > Teacher and Parent communicate ONLY inside the official Student Group.
 ///
-/// That rule is retired. An authorized parent and teacher may now hold a direct
+/// The server refuses every direct teacher<->parent conversation and call with
+/// `COMM.BR1_TEACHER_PARENT_DIRECT`, whatever the relationship, so the two refusals
+/// below again mean "the product forbids this". The rest of this note is the PD-6
+/// reasoning, kept because the code it explains did not have to change:
+///
+/// Under PD-6 (2026-09-23, superseded) an authorized parent and teacher could hold a direct
 /// conversation and a direct call — but *authorized* is a property of the relationship
 /// between two specific people, resolved by the server from Jawwid Core data. **A pair of
 /// roles cannot express it.** `(parent, teacher)` is no longer a decidable question at this
@@ -23,9 +28,9 @@ import '../../shared/models/user_role.dart';
 /// a conversation type, a title or an id. That work belongs with the call UI; until then
 /// this build offers nothing, which is correct and merely incomplete.
 ///
-/// It remains **defence in depth only**: the backend is the authority and refuses an
-/// unauthorized pairing with `COMM.TEACHER_PARENT_NOT_AUTHORIZED` whatever any client
-/// believes or requests.
+/// It remains **defence in depth only**: the backend is the authority and refuses the
+/// pairing (`COMM.BR1_TEACHER_PARENT_DIRECT` since PD-7) whatever any client believes or
+/// requests.
 ///
 /// Deliberately written as a total function over the pair of roles rather than as scattered
 /// `if` checks in widgets, so that the rule has exactly one home and can be exhaustively
@@ -34,9 +39,8 @@ abstract final class CommunicationPolicy {
   /// Whether [viewer] may hold a 1:1 conversation with a participant of role [other].
   static bool allowsDirectConversation(UserRole viewer, ParticipantRole other) {
     return switch ((viewer, other)) {
-      // PD-6: not "forbidden" any more — *undecidable from roles alone*. The server
-      // authorizes this pairing per relationship; this client is not told the relationship
-      // here, so it offers nothing rather than guessing. See the class doc.
+      // PD-7: forbidden (BR-1). Under PD-6 this was "undecidable from roles alone";
+      // either way this client offers nothing. See the class doc.
       (UserRole.parent, ParticipantRole.teacher) => false,
       (UserRole.teacher, ParticipantRole.parent) => false,
 

@@ -103,8 +103,14 @@ export class CallService {
     const roomName = `jawwid-${conv.id}-${randomUUID()}`;
 
     return this.prisma.$transaction(async (tx) => {
+      // RT-032: the initiator is still live under lock.
+      await this.conversations.assertActorLive(tx, initiator);
       const call = await tx.call.create({
         data: {
+          // RT-031: filed under the conversation's organization, never the
+          // column default (organization A) -- the database guard
+          // call_same_organization refuses any other value.
+          organizationId: conv.organizationId,
           conversationId: conv.id,
           familyId: conv.familyId,
           initiatorId: initiator.actorId,
@@ -170,7 +176,11 @@ export class CallService {
     const participantActors: Actor[] = [];
     for (const m of members) {
       const a = await this.identity.resolveActor(m.actorId);
-      if (a && a.isActive && !m.isSilent) participantActors.push(a);
+      // RT-031: a member row naming an actor of another organization is not a
+      // participant, however it got there.
+      if (a && a.isActive && !m.isSilent && a.organizationId === conv.organizationId) {
+        participantActors.push(a);
+      }
     }
 
     const family = conv.familyId
@@ -193,9 +203,6 @@ export class CallService {
       // PD-2: this is the START path. A parent is refused here and allowed on
       // the join path.
       CallIntent.INITIATE,
-      // PD-6: the teacher<->parent relationship, resolved from the conversation
-      // membership rather than from anything the caller sent.
-      await this.conversations.pairingAuthorizedAmong(members),
     );
 
     return { decision, participantActors };
@@ -236,7 +243,7 @@ export class CallService {
     const conv = await this.conversations.requireConversation(conversationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
 
-    const readable = this.authz.canRead(actor, conv, membership);
+    const readable = await this.conversations.canReadResolved(actor, conv, membership);
     if (!readable.allowed) throw new CommError(readable.code, readable.reason);
 
     const { decision } = await this.decideInitiate(actor, conv, membership, new Date());
@@ -260,12 +267,18 @@ export class CallService {
     const { call, membership, actor } = await this.authorizeJoin(callId, actorId);
 
     const ttl = await this.config.get('call.token_ttl_seconds');
-    const issued = await this.media.issue({
-      roomName: call.roomName,
-      identity: actor.actorId,
-      name: actor.displayName,
-      canPublish: !membership?.isSilent,
-      ttlSeconds: ttl,
+    // RT-032: minted while the actor is live under lock, so a token is never
+    // issued after a deactivation committed. (Once issued it is a bearer
+    // credential until it expires -- see RT-037.)
+    const issued = await this.prisma.$transaction(async (tx) => {
+      await this.conversations.assertActorLive(tx, actor);
+      return this.media.issue({
+        roomName: call.roomName,
+        identity: actor.actorId,
+        name: actor.displayName,
+        canPublish: !membership?.isSilent,
+        ttlSeconds: ttl,
+      });
     });
 
     return { ...issued, roomName: call.roomName };
@@ -315,6 +328,8 @@ export class CallService {
       if (status === CallStatus.ENDED) {
         throw new CommError(CommErrorCode.CALL_ALREADY_ENDED, 'this call has ended', 409);
       }
+      // RT-032: the answering actor is still live under lock.
+      await this.conversations.assertActorLive(tx, actor);
 
       // Re-read under the lock. The participant could have left, or every other
       // participant could have declined, between authorization and here.
@@ -754,7 +769,7 @@ export class CallService {
     const actor = await this.conversations.requireActor(actorId);
     const conv = await this.conversations.requireConversation(conversationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
-    const readable = this.authz.canRead(actor, conv, membership);
+    const readable = await this.conversations.canReadResolved(actor, conv, membership);
     if (!readable.allowed) throw new CommError(readable.code, readable.reason);
 
     const calls = await this.prisma.call.findMany({
@@ -990,11 +1005,6 @@ export class CallService {
       // PD-2: joining an existing call, which a parent may do. The call was
       // already started by a teacher or an admin.
       CallIntent.JOIN,
-      // PD-6. Re-resolved HERE, never inherited from the moment the call was
-      // created. A call is not a standing grant: if the learner was reassigned,
-      // the contact deactivated or the teacher offboarded in the seconds since
-      // `start`, this is refused.
-      await this.conversations.pairingAuthorizedAmong(call.participants),
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 

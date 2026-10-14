@@ -173,3 +173,19 @@ describe('object keys cannot leave their conversation', () => {
     ).not.toThrow();
   });
 });
+
+describe('RT-039: no deployed API on the localhost:3000 storage default', () => {
+  it('outside local/test/ci, local storage with no STORAGE_ENDPOINT refuses to start', () => {
+    for (const APP_ENV of ['staging', 'production']) {
+      expect(() => selectObjectStorage({ APP_ENV }, silent)).toThrow(/localhost:3000/);
+    }
+  });
+  it('a deployed API with S3 configured is unaffected', () => {
+    expect(selectObjectStorage({ ...s3Env(), APP_ENV: 'production' }, silent).kind).toBe('s3');
+  });
+  it('developer and test environments keep the default', () => {
+    for (const APP_ENV of [undefined, 'local', 'test', 'ci']) {
+      expect(selectObjectStorage(APP_ENV ? { APP_ENV } : {}, silent).kind).toBe('local');
+    }
+  });
+});

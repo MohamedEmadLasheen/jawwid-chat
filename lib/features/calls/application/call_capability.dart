@@ -13,8 +13,9 @@ import '../../../core/data/repositories.dart';
 /// only thing that authorizes a call. The interface uses this for ONE purpose —
 /// whether to draw the affordance — and for nothing else.
 ///
-/// NOT CACHED, AND THAT IS THE POINT. `autoDispose` is load-bearing: since PD-6
-/// the set of authorized pairs is DATA, so a remembered `true` is a remembered
+/// NOT CACHED, AND THAT IS THE POINT. `autoDispose` is load-bearing: who may
+/// call whom depends on live server data (membership, activity, scope; under
+/// PD-6 also the teaching relationship), so a remembered `true` is a remembered
 /// permission. When the conversation screen goes away the answer goes with it,
 /// and reopening asks again. A conversation existing is not evidence either — it
 /// proves the relationship held when the conversation was CREATED, not that it

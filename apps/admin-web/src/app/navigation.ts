@@ -1,4 +1,4 @@
-import { isSuperAdmin, visibleAreas, type NavArea } from '@/core/permissions/capabilities'
+import { isSuperAdmin, navAreas, type NavArea } from '@/core/permissions/capabilities'
 import type { StaffRole } from '@/shared/types/domain'
 import {
   ADMIN_GROUPS,
@@ -84,6 +84,7 @@ export const SECTION_DESTINATION: Record<AdminSectionKey, DestinationKey> = {
 
 /** Operator areas. `settings` has no page, so it has no place (as before). */
 export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
+  chat: 'conversations',
   inbox: 'conversations',
   families: 'people',
   coverage: 'people',
@@ -94,6 +95,7 @@ export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
 }
 
 export const AREA_PATH: Record<OperatorArea, string> = {
+  chat: '/chat',
   inbox: '/inbox',
   families: '/families',
   tasks: '/tasks',
@@ -103,6 +105,7 @@ export const AREA_PATH: Record<OperatorArea, string> = {
 }
 
 const AREA_ICON: Record<OperatorArea, IconName> = {
+  chat: 'conversations',
   inbox: 'conversations',
   families: 'users',
   tasks: 'tasks',
@@ -143,7 +146,8 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
 
 function operatorDestinations(role: StaffRole): Map<DestinationKey, NavEntryGroup[]> {
   const out = new Map<DestinationKey, NavEntryGroup[]>()
-  for (const area of visibleAreas(role)) {
+  // navAreas, not visibleAreas: the legacy Inbox stays routable but is never offered.
+  for (const area of navAreas(role)) {
     const dest = AREA_DESTINATION[area]
     if (dest === null || area === 'settings') continue
     const groups = out.get(dest) ?? [{ key: dest, label: null, entries: [] }]

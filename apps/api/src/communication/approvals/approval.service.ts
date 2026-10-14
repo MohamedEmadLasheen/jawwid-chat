@@ -64,7 +64,20 @@ export class ApprovalService {
       take: 200,
     });
 
-    return this.withSignedAttachments(rows);
+    // Staff scope (2026-10-14): a held message is shown only to staff who may
+    // read its conversation -- the same check, per conversation, that opening
+    // it would run. Without this every admin saw every family's pending text.
+    const readable = new Map<string, boolean>();
+    for (const conversationId of new Set(rows.map((r) => r.conversationId))) {
+      const conv = await this.prisma.conversation.findUnique({ where: { id: conversationId } });
+      const membership = conv ? await this.conversations.membershipOf(conv.id, actor.actorId) : null;
+      readable.set(
+        conversationId,
+        !!conv && (await this.conversations.canReadResolved(actor, conv, membership)).allowed,
+      );
+    }
+
+    return this.withSignedAttachments(rows.filter((r) => readable.get(r.conversationId)), actor.actorId);
   }
 
   /** What the sender sees: their own pending/rejected messages with status. */
@@ -76,7 +89,7 @@ export class ApprovalService {
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
-    return this.withSignedAttachments(rows);
+    return this.withSignedAttachments(rows, actor.actorId);
   }
 
   /**
@@ -94,8 +107,9 @@ export class ApprovalService {
       createdAt: Date;
       message: Parameters<typeof toMessageDto>[0];
     }>,
+    viewerId: string,
   ): Promise<PendingApprovalDto[]> {
-    const signed = await this.attachments.signUrlsForMessages(rows.map((r) => r.messageId));
+    const signed = await this.attachments.signUrlsForMessages(rows.map((r) => r.messageId), viewerId);
 
     // Authors, in one batch for the whole queue — the same shape as the signed
     // URLs above and for the same reason. An approver is deciding about a
@@ -159,6 +173,13 @@ export class ApprovalService {
     }
 
     const conv = await this.conversations.requireConversation(approval.conversationId);
+    // Deciding is acting on the conversation, so it is never wider than READING
+    // it: tenant, staff scope and activity all apply. Without this a manager of
+    // another organization could decide an approval by its id.
+    const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
+    const readable = await this.conversations.canReadResolved(actor, conv, membership);
+    if (!readable.allowed) throw new CommError(readable.code, readable.reason);
+
     // The approver is the family's active handler, resolved through AI #1's
     // coverage engine - coverage logic is never duplicated here.
     const activeHandler = await this.conversations.activeHandler(conv);
@@ -170,8 +191,16 @@ export class ApprovalService {
     const approved = decisionValue === ApprovalDecision.APPROVED;
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.messageApproval.update({
-        where: { id: approvalId },
+      // RT-032: the approver is still live under lock, or this decision is
+      // ordered before their deactivation commits.
+      await this.conversations.assertActorLive(tx, actor);
+      // CLAIM, don't overwrite. The PENDING check above ran outside this
+      // transaction, so two decisions made at once (approve + reject, or two
+      // approvals) could both pass it and both write -- publishing a message
+      // that ends up rejected, or announcing it twice. Only the decision that
+      // flips the row from PENDING proceeds; the other is told it was decided.
+      const claimed = await tx.messageApproval.updateMany({
+        where: { id: approvalId, decision: ApprovalDecision.PENDING },
         data: {
           decision: decisionValue,
           approverId: actor.actorId,
@@ -179,6 +208,13 @@ export class ApprovalService {
           rejectionReason: reason,
         },
       });
+      if (claimed.count === 0) {
+        throw new CommError(
+          CommErrorCode.APPROVAL_ALREADY_DECIDED,
+          'this approval has already been decided',
+          409,
+        );
+      }
 
       await tx.message.update({
         where: { id: approval.messageId },
@@ -251,7 +287,7 @@ export class ApprovalService {
     const actor = await this.conversations.requireActor(actorId);
     const conv = await this.conversations.requireConversation(conversationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
-    const readable = this.authz.canRead(actor, conv, membership);
+    const readable = await this.conversations.canReadResolved(actor, conv, membership);
     if (!readable.allowed) throw new CommError(readable.code, readable.reason);
     if (!this.authz.canReadInternal(actor)) {
       throw new CommError(CommErrorCode.CANNOT_APPROVE, 'approval history is staff-only');

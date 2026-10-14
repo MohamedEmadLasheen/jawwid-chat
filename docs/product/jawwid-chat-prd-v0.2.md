@@ -1,5 +1,10 @@
 # Jawwid Chat — PRD v0.2
 
+> **SUPERSEDED ON BR-1 BY PD-7 (product owner, 2026-10-14).** Direct Teacher ↔ Parent
+> chat and calls are **forbidden again**, whatever the relationship; Teacher–Parent
+> communication happens only in the Student Group with a live admin (C-4). The PD-6
+> text below is kept as the decision history. Record: [`JAWUID-CHAT-PRODUCT-BOUNDARY.md`](JAWUID-CHAT-PRODUCT-BOUNDARY.md) §4 PD-7.
+
 Status: **CANONICAL** · Approved by the product owner **2026-09-23**
 Amends: [`jawwid-chat-prd-v0.1.md`](jawwid-chat-prd-v0.1.md) (retained, historical for the sections below)
 Decision of record: [`JAWUID-CHAT-PRODUCT-BOUNDARY.md`](JAWUID-CHAT-PRODUCT-BOUNDARY.md) §4 **PD-6**

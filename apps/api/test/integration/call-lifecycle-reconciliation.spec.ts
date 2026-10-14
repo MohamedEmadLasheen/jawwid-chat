@@ -81,10 +81,15 @@ const eventsFor = async (callId: string) => {
 const countOf = async (callId: string, type: string) =>
   (await eventsFor(callId)).filter((t) => t === type).length;
 
-/** An authorized teacher <-> parent direct call, ringing. Two participants. */
+/**
+ * A Parent <-> Admin direct call (the family's owner calling), ringing. Two
+ * participants. It was the PD-6 teacher <-> parent channel until PD-7
+ * (2026-10-14) restored BR-1; the lifecycle under test is the same for any
+ * direct call.
+ */
 async function directCall() {
-  const conv = await g.conversations.getOrCreateDirect(s.parentId, s.teacherId);
-  const { callId, roomName } = await g.calls.start(conv.id, s.teacherId);
+  const conv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
+  const { callId, roomName } = await g.calls.start(conv.id, s.ownerId);
   return { conversationId: conv.id, callId, roomName };
 }
 
@@ -151,7 +156,7 @@ describe('1. decline is the terminal transition', () => {
     // did. An ended call may carry a participant whose `left_at` is null --
     // terminal state is `call.status`, which is what every guard checks.
     const decliner = after.participants.find((p) => p.actorId === s.parentId)!;
-    const caller = after.participants.find((p) => p.actorId === s.teacherId)!;
+    const caller = after.participants.find((p) => p.actorId === s.ownerId)!;
     expect(decliner.leftAt).toBeInstanceOf(Date);
     expect(caller.leftAt).toBeNull();
   });
@@ -235,7 +240,7 @@ describe('1. decline is the terminal transition', () => {
     // the same rule.
     const { callId } = await directCall();
 
-    await g.calls.decline(callId, s.teacherId);
+    await g.calls.decline(callId, s.ownerId);
 
     const after = await snapshot(callId);
     expect(after.status).toBe('ended');
@@ -346,7 +351,7 @@ describe('3. an accepted call is answered, media or no media', () => {
     // No media presence has ever been observed.
     expect(active.participants.every((p) => p.mediaJoinedAt === null)).toBe(true);
 
-    await g.calls.end(callId, s.teacherId);
+    await g.calls.end(callId, s.ownerId);
 
     const after = await snapshot(callId);
     expect(after.outcome).toBe('answered');
@@ -387,7 +392,7 @@ describe('3. an accepted call is answered, media or no media', () => {
       at: mediaJoin,
     })).toBe('reconciled');
 
-    await g.calls.end(callId, s.teacherId);
+    await g.calls.end(callId, s.ownerId);
 
     const after = await snapshot(callId);
     expect(after.outcome).toBe('answered');
@@ -428,7 +433,7 @@ describe('4. media presence never moves the lifecycle', () => {
     await presence.participantJoined({ roomName, identity: s.parentId, at: new Date() });
     await presence.participantLeft({ roomName, identity: s.parentId, at: new Date() });
 
-    await g.calls.end(callId, s.teacherId);
+    await g.calls.end(callId, s.ownerId);
 
     expect((await snapshot(callId)).outcome).toBe('answered');
   });
@@ -436,7 +441,7 @@ describe('4. media presence never moves the lifecycle', () => {
   it('4c. an empty room is not an ending: BOTH parties leaving still leaves it ACTIVE', async () => {
     const { callId, roomName } = await directCall();
     await g.calls.accept(callId, s.parentId);
-    for (const id of [s.parentId, s.teacherId]) {
+    for (const id of [s.parentId, s.ownerId]) {
       await presence.participantJoined({ roomName, identity: id, at: new Date() });
       await presence.participantLeft({ roomName, identity: id, at: new Date() });
     }
@@ -495,7 +500,7 @@ describe('5. nothing resurrects a terminal call', () => {
     const { callId, roomName } = await directCall();
     await g.calls.accept(callId, s.parentId);
     await presence.participantJoined({ roomName, identity: s.parentId, at: new Date() });
-    await g.calls.end(callId, s.teacherId);
+    await g.calls.end(callId, s.ownerId);
     const ended = await snapshot(callId);
     expect(ended.outcome).toBe('answered');
 
@@ -522,7 +527,7 @@ describe('5. nothing resurrects a terminal call', () => {
     await g.calls.decline(callId, s.parentId);
     const declined = await snapshot(callId);
 
-    await expect(g.calls.end(callId, s.teacherId)).resolves.toBeUndefined();
+    await expect(g.calls.end(callId, s.ownerId)).resolves.toBeUndefined();
 
     expect(await snapshot(callId)).toEqual(declined);
     expect(await countOf(callId, CommEvent.CALL_ENDED)).toBe(1);
@@ -532,11 +537,11 @@ describe('5. nothing resurrects a terminal call', () => {
     const { callId } = await directCall();
     await g.calls.accept(callId, s.parentId);
     await backdateAnswer(callId, 30);
-    await g.calls.end(callId, s.teacherId);
+    await g.calls.end(callId, s.ownerId);
     const ended = await snapshot(callId);
 
     await g.calls.end(callId, s.parentId);
-    await g.calls.end(callId, s.teacherId);
+    await g.calls.end(callId, s.ownerId);
 
     expect(await snapshot(callId)).toEqual(ended);
     expect(ended.durationSeconds).toBeGreaterThanOrEqual(29);
@@ -549,7 +554,7 @@ describe('5. nothing resurrects a terminal call', () => {
     expect(await g.calls.expireRingingCalls()).toBe(1);
     const missed = await snapshot(callId);
 
-    await g.calls.end(callId, s.teacherId);
+    await g.calls.end(callId, s.ownerId);
 
     expect(await snapshot(callId)).toEqual(missed);
     expect(missed.outcome).toBe('missed');
@@ -581,7 +586,7 @@ describe('6. races settle on exactly one terminal outcome', () => {
       expect(expired.status === 'fulfilled' ? expired.value : -1).toBe(0);
       expect(await countOf(callId, CommEvent.CALL_ENDED)).toBe(0);
       // And ending it now records the answer, not a miss.
-      await g.calls.end(callId, s.teacherId);
+      await g.calls.end(callId, s.ownerId);
       expect((await snapshot(callId)).outcome).toBe('answered');
     } else {
       expect(after.status).toBe('ended');
@@ -660,7 +665,7 @@ describe('6. races settle on exactly one terminal outcome', () => {
 
     await Promise.allSettled([
       presence.participantJoined({ roomName, identity: s.parentId, at: new Date() }),
-      g.calls.end(callId, s.teacherId),
+      g.calls.end(callId, s.ownerId),
     ]);
 
     const after = await snapshot(callId);
@@ -676,7 +681,7 @@ describe('6. races settle on exactly one terminal outcome', () => {
 
     await Promise.allSettled([
       presence.participantLeft({ roomName, identity: s.parentId, at: new Date() }),
-      g.calls.end(callId, s.teacherId),
+      g.calls.end(callId, s.ownerId),
     ]);
 
     const after = await snapshot(callId);
@@ -694,7 +699,7 @@ describe('6. races settle on exactly one terminal outcome', () => {
 
     await Promise.allSettled([
       g.calls.accept(callId, s.parentId),
-      g.calls.end(callId, s.teacherId),
+      g.calls.end(callId, s.ownerId),
     ]);
 
     const after = await snapshot(callId);
@@ -731,7 +736,7 @@ describe('6. races settle on exactly one terminal outcome', () => {
       });
 
     try {
-      await g.calls.end(callId, s.teacherId);
+      await g.calls.end(callId, s.ownerId);
     } finally {
       spy.mockRestore();
     }
@@ -749,7 +754,7 @@ describe('6. races settle on exactly one terminal outcome', () => {
     await g.calls.accept(callId, s.parentId);
 
     await Promise.allSettled(
-      Array.from({ length: 4 }, () => g.calls.end(callId, s.teacherId)),
+      Array.from({ length: 4 }, () => g.calls.end(callId, s.ownerId)),
     );
 
     expect((await snapshot(callId)).outcome).toBe('answered');
@@ -800,12 +805,12 @@ describe('7. no client names its own call history', () => {
     // answered <- end() on an ACTIVE call
     const answered = await directCall();
     await g.calls.accept(answered.callId, s.parentId);
-    await g.calls.end(answered.callId, s.teacherId);
+    await g.calls.end(answered.callId, s.ownerId);
     expect((await snapshot(answered.callId)).outcome).toBe('answered');
 
     // missed <- end() on a RINGING call, or the sweep
     const hungUp = await directCall();
-    await g.calls.end(hungUp.callId, s.teacherId);
+    await g.calls.end(hungUp.callId, s.ownerId);
     expect((await snapshot(hungUp.callId)).outcome).toBe('missed');
 
     const swept = await directCall();

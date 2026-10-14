@@ -7,6 +7,7 @@ import { StorySweeper } from './communication/stories/story-sweeper.service';
 import { CallService } from './communication/calls/call.service';
 import { NotificationService } from './communication/notifications/notification.service';
 import { readBuildInfo } from './infra/build-info';
+import { listenForOutboxWake, OutboxPacer } from './communication/outbox/outbox-wake';
 
 /**
  * Background worker entrypoint. Same image as the API, different command
@@ -52,6 +53,15 @@ const STORY_SWEEP_MS = Number(process.env.STORY_SWEEP_MS ?? 60_000);
  * replica for a table that is almost always empty of ringing calls.
  */
 const CALL_SWEEP_MS = Number(process.env.CALL_SWEEP_INTERVAL_MS ?? 5000);
+
+/**
+ * After a wake hint (outbox-wake.ts), how long to keep polling at
+ * WAKE_POLL_MS before falling back to the idle backoff. The hint can arrive
+ * before the enqueuing transaction commits, so one read is not enough; a short
+ * window of fast reads is, and costs nothing while the system is quiet.
+ */
+const WAKE_WINDOW_MS = 2000;
+const WAKE_POLL_MS = 50;
 
 async function bootstrap(): Promise<void> {
   const log = new Logger('Worker');
@@ -99,6 +109,20 @@ async function bootstrap(): Promise<void> {
 
   let nextStorySweep = 0;
   let lastSweepAt = 0;
+
+  // Realtime latency: a hint that a row was enqueued cuts the current sleep
+  // short (OutboxPacer). Without Redis there are no hints and the loop simply
+  // polls -- correctness never depends on one.
+  const pacer = new OutboxPacer({
+    pollMs: POLL_MS,
+    idleMs: IDLE_BACKOFF_MS,
+    wakePollMs: WAKE_POLL_MS,
+    wakeWindowMs: WAKE_WINDOW_MS,
+  });
+  const closeWake = await listenForOutboxWake(() => pacer.wake()).catch((e) => {
+    log.warn(`outbox wake hints unavailable, polling only: ${e instanceof Error ? e.message : 'unknown'}`);
+    return null;
+  });
 
   while (running) {
     let published = 0;
@@ -166,13 +190,12 @@ async function bootstrap(): Promise<void> {
     }
     if (!running) break;
     // Back off when there is nothing to do, so an idle deployment is not
-    // hammering the database once a second for no reason.
-    await sleep(published > 0 ? POLL_MS : IDLE_BACKOFF_MS);
+    // hammering the database once a second for no reason -- unless a wake hint
+    // just said a row is on its way, in which case poll fast for a moment.
+    // Either sleep is cut short by the next hint.
+    await pacer.pause(pacer.delayAfter(published));
   }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  await closeWake?.();
 }
 
 void bootstrap().catch((error: unknown) => {

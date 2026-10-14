@@ -36,6 +36,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { LocalFsBlobStore } from '@communication/attachments/blob-store';
 import { StorageController } from '@communication/api/storage.controller';
+import { MediaController } from '@communication/api/media.controller';
 import { SignedLocalObjectStorage } from '@communication/attachments/object-storage';
 import { buildGraph, seed, truncate, Scenario } from './harness';
 
@@ -62,9 +63,25 @@ function fakeRes() {
     send(body?: string | Buffer) {
       state.body = body;
     },
+    write(chunk: Uint8Array) {
+      state.body = Buffer.concat([Buffer.isBuffer(state.body) ? state.body : Buffer.alloc(0), Buffer.from(chunk)]);
+      return true;
+    },
     end() {},
   };
   return { res, state };
+}
+
+/** RT-037: a media-route link, read the way the route reads it. */
+function mediaPartsOf(url: string) {
+  const parsed = new URL(url, 'http://api.test');
+  return {
+    attachmentId: parsed.pathname.split('/media/attachments/')[1],
+    v: String(parsed.searchParams.get('v')),
+    a: String(parsed.searchParams.get('a')),
+    e: String(parsed.searchParams.get('e')),
+    s: String(parsed.searchParams.get('s')),
+  };
 }
 
 function fakeReq(headers: Record<string, string>, body?: Buffer) {
@@ -99,6 +116,7 @@ const durationMs = 7_000;
 const originalRoot = process.env.STORAGE_LOCAL_ROOT;
 let root: string;
 let controller: StorageController;
+let media: MediaController;
 
 beforeAll(async () => {
   await g.prisma.$connect();
@@ -117,6 +135,7 @@ beforeEach(async () => {
   root = mkdtempSync(join(tmpdir(), 'jawwid-voice-lifecycle-'));
   process.env.STORAGE_LOCAL_ROOT = root;
   controller = new StorageController(new SignedLocalObjectStorage(), new LocalFsBlobStore());
+  media = new MediaController(g.prisma, g.messages, new SignedLocalObjectStorage(), g.stories);
 
   await truncate(g.prisma);
   s = await seed(g.prisma);
@@ -197,18 +216,21 @@ describe('a voice note from authorization to playback', () => {
     expect(attachment.byteSize).toBe(bytes.length);
     expect(attachment.durationMs).toBe(durationMs);
 
-    // 5 — the signed read URL. The DTO deliberately never carries the object
-    // key, so the key's stability is asserted through the URL that addresses it.
+    // 5 — the read link (RT-037). It addresses the ATTACHMENT through the media
+    // route, bound to the reader, and never carries the object key; the key's
+    // stability is asserted on the row the route will read.
     expect(attachment.url).toBeTruthy();
-    const get = partsOf(attachment.url!);
-    expect(get.key).toBe(auth.objectKey);
-    expect(get.sig).toMatch(/^[0-9a-f]{64}$/);
-    expect(get.sig).not.toBe(put.sig); // a read signature is not a write one
-    expect(get.expires).toBeGreaterThan(Math.floor(Date.now() / 1000));
+    expect(attachment.url).not.toContain(auth.objectKey);
+    const get = mediaPartsOf(attachment.url!);
+    expect(get.attachmentId).toBe(attachment.id);
+    expect(get.a).toBe(s.parentId);
+    expect(Number(get.e)).toBeGreaterThan(Math.floor(Date.now() / 1000));
+    const row = await g.prisma.messageAttachment.findUniqueOrThrow({ where: { id: attachment.id } });
+    expect(row.objectKey).toBe(auth.objectKey);
 
-    // 6 — fetch through that URL, and get back exactly what was uploaded.
+    // 6 — fetch through that link, and get back exactly what was uploaded.
     const read = fakeRes();
-    await controller.download(get.key, String(get.expires), get.sig, fakeReq({}), read.res);
+    await media.attachment(get.attachmentId, get.v, get.a, get.e, get.s, fakeReq({}), read.res);
 
     expect(read.state.status).toBe(200);
     expect(read.state.headers['Content-Type']).toBe(mime);
@@ -219,7 +241,7 @@ describe('a voice note from authorization to playback', () => {
     expect(Buffer.compare(read.state.body as Buffer, bytes)).toBe(0);
   });
 
-  it('a read signature cannot be spent on another message\'s object', async () => {
+  it('a read link cannot be spent on another message\'s attachment', async () => {
     // Two notes in the same conversation, so only the object key differs. The
     // signature is per object; swapping keys under a valid signature is the
     // cheapest way to prove the read URL is not merely a capability to /storage.
@@ -239,14 +261,27 @@ describe('a voice note from authorization to playback', () => {
       ],
     });
 
+    const other = await g.messages.send({
+      conversationId: conv.id,
+      senderId: s.parentId,
+      type: 'voice',
+      clientMessageId: 'c-voice-lifecycle-3',
+      attachments: [
+        { kind: 'voice', objectKey: second.auth.objectKey, mimeType: mime, byteSize: bytes.length, durationMs },
+      ],
+    });
+
     const page = await g.messages.list({ conversationId: conv.id, actorId: s.parentId });
-    const url = partsOf(page.messages.find((m) => m.id === sent.id)!.attachments[0].url!);
+    const url = mediaPartsOf(page.messages.find((m) => m.id === sent.id)!.attachments[0].url!);
+    const otherId = page.messages.find((m) => m.id === other.id)!.attachments[0].id;
 
     const stolen = fakeRes();
-    await controller.download(
-      second.auth.objectKey, // a real, stored object -- but not the signed one
-      String(url.expires),
-      url.sig,
+    await media.attachment(
+      otherId, // a real attachment the reader may read -- but not the signed one
+      url.v,
+      url.a,
+      url.e,
+      url.s,
       fakeReq({}),
       stolen.res,
     );

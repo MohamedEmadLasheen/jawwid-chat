@@ -13,8 +13,8 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 
 | Code | Meaning |
 |---|---|
-| `COMM.TEACHER_PARENT_NOT_AUTHORIZED` | A teacher and a parent were about to share a 1:1 channel or call with **no authorized relationship** between them. Never retry. |
-| `COMM.BR1_TEACHER_PARENT_DIRECT` | **DEPRECATED (PD-6).** No longer emitted by the server. Clients still treat it as terminal so older builds behave correctly. |
+| `COMM.BR1_TEACHER_PARENT_DIRECT` | **Active again (PD-7, 2026-10-14).** A teacher and a parent may never share a direct 1:1 conversation or call, whatever their relationship; refused on open, on send (either side, including a conversation left over from the PD-6 window) and on call. They speak only in the Student Group. Never retry. |
+| `COMM.TEACHER_PARENT_NOT_AUTHORIZED` | **DEPRECATED (PD-7).** The PD-6 relationship refusal; no longer emitted. Clients still treat it as terminal so older builds behave correctly. |
 | `COMM.ROLE_CANNOT_MESSAGE_FAMILY` | Finance/technical/academic staff may never take part in family communication. |
 | `COMM.TEACHER_TEACHER_DISABLED` | Teacher-to-teacher DMs are off by default. |
 | `COMM.STAFF_STAFF_DISABLED` | Staff-to-staff DMs are not in MVP; use internal notes. |
@@ -31,6 +31,7 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.ASSIST_NOT_PERMITTED` | Assist needs a server-evaluated grant. A client-supplied mode never grants access. |
 | `COMM.ESCALATION_NOT_PERMITTED` | As above, for escalation. |
 | `COMM.NOT_CONVERSATION_MEMBER` | Actor is not a live member. |
+| `COMM.STAFF_OUT_OF_SCOPE` | 403. Family-facing staff of the right organization, but the conversation is not in this admin's charge: not a member, not the family's owner, not on duty for it, not its live sticky handler. Managers are never refused this. Also the answer to a realtime `conversation.subscribe`. Never retry; the admin list only ever shows conversations in charge. |
 | `COMM.CONTACT_CANNOT_MESSAGE` | The contact lacks `can_message`. |
 | `COMM.CONTACT_CANNOT_WRITE_INTERNAL` | Contacts cannot write internal notes. |
 | `COMM.TEACHER_CANNOT_WRITE_INTERNAL` | Teachers cannot write internal notes. |

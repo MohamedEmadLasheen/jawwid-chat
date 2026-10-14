@@ -32,18 +32,31 @@ import { ActorKind, ConversationType, OnBehalfMode, StaffRole, Visibility } from
 const OWNER = 'staff_owner_a';
 const INTRUDER = 'staff_admin_b';
 const FAMILY = 'fam_0001';
+const ORG = 'org-1';
 const NOW = new Date('2026-09-06T12:00:00Z');
 
 const dutyOf = (id: string | null): CoverageService => ({ onDuty: async () => id });
 
 const staff = (actorId: string, staffRole: string, over: Partial<Actor> = {}): Actor => ({
   actorId, kind: ActorKind.STAFF, displayName: 'synthetic', locale: 'ar',
-  staffRole: staffRole as Actor['staffRole'], isActive: true, ...over,
+  staffRole: staffRole as Actor['staffRole'], isActive: true, organizationId: ORG, ...over,
 });
+
+/**
+ * Staff scope (2026-10-14): an admin reads -- and so can send in -- only
+ * conversations in their charge. The intruder below is therefore a live MEMBER
+ * who is not on duty: in scope, so the request genuinely reaches the
+ * assist/escalation branch these tests guard. An out-of-scope admin is refused
+ * earlier, by scope; that is asserted separately.
+ */
+const intruderMember = {
+  actorId: INTRUDER, actorKind: ActorKind.STAFF, memberRole: 'admin', isSilent: false, leftAt: null,
+} as never;
 
 const conv = {
   id: 'conv_1',
   type: ConversationType.DIRECT,
+  organizationId: ORG,
   familyId: FAMILY,
   stickyHandlerId: null,
   stickyUntil: null,
@@ -57,13 +70,23 @@ describe('JC-005 — a client-supplied on_behalf_mode must never widen authority
   const intruder = staff(INTRUDER, StaffRole.ADMIN);
 
   it('denies a not-on-duty admin with no requested mode', async () => {
-    const d = await svc.canSend(intruder, conv, null, { visibility: Visibility.CUSTOMER }, NOW, OWNER);
+    const d = await svc.canSend(intruder, conv, intruderMember, { visibility: Visibility.CUSTOMER }, NOW, OWNER);
     expect(d.allowed).toBe(false);
+  });
+
+  it('an admin OUTSIDE the family is refused by scope before any mode is read', async () => {
+    for (const mode of Object.values(OnBehalfMode)) {
+      const d = await svc.canSend(
+        intruder, conv, null,
+        { visibility: Visibility.CUSTOMER, requestedMode: mode }, NOW, OWNER,
+      );
+      expect({ mode, code: d.allowed ? null : d.code }).toEqual({ mode, code: CommErrorCode.STAFF_OUT_OF_SCOPE });
+    }
   });
 
   it('ASSIST does not by itself grant access', async () => {
     const d = await svc.canSend(
-      intruder, conv, null,
+      intruder, conv, intruderMember,
       { visibility: Visibility.CUSTOMER, requestedMode: OnBehalfMode.ASSIST }, NOW, OWNER,
     );
     expect(d.allowed).toBe(false);
@@ -72,7 +95,7 @@ describe('JC-005 — a client-supplied on_behalf_mode must never widen authority
 
   it('ESCALATION does not by itself grant access', async () => {
     const d = await svc.canSend(
-      intruder, conv, null,
+      intruder, conv, intruderMember,
       { visibility: Visibility.CUSTOMER, requestedMode: OnBehalfMode.ESCALATION }, NOW, OWNER,
     );
     expect(d.allowed).toBe(false);
@@ -82,7 +105,7 @@ describe('JC-005 — a client-supplied on_behalf_mode must never widen authority
   it('no value of requestedMode grants access to a not-on-duty admin', async () => {
     for (const mode of Object.values(OnBehalfMode)) {
       const d = await svc.canSend(
-        intruder, conv, null,
+        intruder, conv, intruderMember,
         { visibility: Visibility.CUSTOMER, requestedMode: mode }, NOW, OWNER,
       );
       expect({ mode, allowed: d.allowed }).toEqual({ mode, allowed: false });
@@ -137,12 +160,31 @@ describe('legitimate access must survive the fail-closed fix', () => {
     expect(d.allowed).toBe(true);
   });
 
-  it('an off-duty admin may still write an internal note', async () => {
+  it('an off-duty admin may still write an internal note in a conversation in their charge', async () => {
+    const svc = new AuthorizationService(dutyOf(OWNER));
+    const d = await svc.canSend(
+      staff(INTRUDER, StaffRole.ADMIN), conv, intruderMember,
+      { visibility: Visibility.INTERNAL }, NOW, OWNER,
+    );
+    expect(d.allowed).toBe(true);
+  });
+
+  it('the family OWNER may write an internal note while off duty', async () => {
+    const svc = new AuthorizationService(dutyOf('someone-covering'));
+    const d = await svc.canSend(
+      staff(OWNER, StaffRole.ADMIN), conv, null,
+      { visibility: Visibility.INTERNAL }, NOW, OWNER,
+    );
+    expect(d.allowed).toBe(true);
+  });
+
+  it('...but an admin outside the family may not, even as a note (staff scope)', async () => {
     const svc = new AuthorizationService(dutyOf(OWNER));
     const d = await svc.canSend(
       staff(INTRUDER, StaffRole.ADMIN), conv, null,
       { visibility: Visibility.INTERNAL }, NOW, OWNER,
     );
-    expect(d.allowed).toBe(true);
+    expect(d.allowed).toBe(false);
+    if (!d.allowed) expect(d.code).toBe(CommErrorCode.STAFF_OUT_OF_SCOPE);
   });
 });
