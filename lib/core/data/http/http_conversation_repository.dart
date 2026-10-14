@@ -26,14 +26,22 @@ class HttpConversationRepository implements ConversationRepository {
   HttpConversationRepository({
     required ApiClient client,
     required UserRole Function() viewerRole,
+    String Function()? viewerActorId,
   })  : _client = client,
-        _viewerRole = viewerRole;
+        _viewerRole = viewerRole,
+        _viewerActorId = viewerActorId ?? _noActor;
+
+  static String _noActor() => '';
 
   final ApiClient _client;
 
   /// The signed-in role, read per call. Approval policy is per role, so the same DTO maps
   /// differently for a parent and a teacher (§26).
   final UserRole Function() _viewerRole;
+
+  /// The signed-in actor, read per call: a direct row is named after the OTHER members,
+  /// so the viewer must be told apart from them (`WireMappers.conversationTitle`).
+  final String Function() _viewerActorId;
 
   @override
   Future<List<Conversation>> list({bool includeArchived = false}) async {
@@ -44,7 +52,11 @@ class HttpConversationRepository implements ConversationRepository {
     for (final row in rows) {
       if (row is! Map<String, Object?>) continue;
       conversations.add(
-        WireMappers.conversation(row, viewerRole: _viewerRole()),
+        WireMappers.conversation(
+          row,
+          viewerRole: _viewerRole(),
+          viewerActorId: _viewerActorId(),
+        ),
       );
     }
 
@@ -68,7 +80,11 @@ class HttpConversationRepository implements ConversationRepository {
         debugDetail: 'conversation response carried no id',
       );
     }
-    return WireMappers.conversation(data, viewerRole: _viewerRole());
+    return WireMappers.conversation(
+      data,
+      viewerRole: _viewerRole(),
+      viewerActorId: _viewerActorId(),
+    );
   }
 
   /// `POST /conversations/direct` — the first conversation-CREATION call this
@@ -100,7 +116,11 @@ class HttpConversationRepository implements ConversationRepository {
         debugDetail: 'direct conversation response carried no id',
       );
     }
-    return WireMappers.conversation(data, viewerRole: _viewerRole());
+    return WireMappers.conversation(
+      data,
+      viewerRole: _viewerRole(),
+      viewerActorId: _viewerActorId(),
+    );
   }
 
   @override

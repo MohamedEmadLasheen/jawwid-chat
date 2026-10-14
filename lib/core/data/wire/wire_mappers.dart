@@ -162,6 +162,32 @@ abstract final class WireMappers {
     return best;
   }
 
+  /// What a conversation row is called: the server's title when it set one (a Student
+  /// Group's), else who it is WITH -- the display names the server sent for the other
+  /// members, never names this client resolved itself. A direct conversation has no
+  /// title, so before this every direct row (Parent<->Admin, Teacher<->Admin, a PD-6-era
+  /// Teacher<->Parent one) rendered as an empty name with a "?" avatar. Empty only when
+  /// the payload names nobody else -- the viewer is excluded by actor id.
+  static String conversationTitle(
+    Map<String, Object?> json, {
+    String viewerActorId = '',
+  }) {
+    final title = _nonEmpty(json['title']);
+    if (title != null) return title;
+    final members = json['members'];
+    if (members is! List) return '';
+    final others = <String>[];
+    for (final entry in members) {
+      if (entry is! Map) continue;
+      if (viewerActorId.isNotEmpty && entry['actorId'] == viewerActorId) {
+        continue;
+      }
+      final name = _nonEmpty(entry['displayName']);
+      if (name != null) others.add(name);
+    }
+    return others.join(', ');
+  }
+
   /// The learner a conversation is about, straight off `ConversationDto`.
   ///
   /// Null for a conversation that has none — the family's own thread with
@@ -190,6 +216,7 @@ abstract final class WireMappers {
   static Conversation conversation(
     Map<String, Object?> json, {
     required UserRole viewerRole,
+    String viewerActorId = '',
     String lastMessagePreview = '',
     bool isPinned = false,
     bool isMuted = false,
@@ -209,7 +236,7 @@ abstract final class WireMappers {
     return Conversation(
       id: json['id']! as String,
       kind: kind,
-      title: (json['title'] as String?) ?? '',
+      title: conversationTitle(json, viewerActorId: viewerActorId),
       // Both from the DTO. They used to be parameters this mapper's caller had
       // to supply, because the payload carried neither — which meant the child
       // sections and the unread badge worked against fixtures and were blank
