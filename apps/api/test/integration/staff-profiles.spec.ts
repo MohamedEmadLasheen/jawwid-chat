@@ -27,6 +27,12 @@ import { StaffProfileService } from '../../src/staff-profile/staff-profile.servi
 import { StaffWorkloadService } from '../../src/staff-profile/staff-workload.service';
 import { buildGraph, seed, truncate, Scenario, withAssignmentGate } from './harness';
 import { png } from '../support/images';
+import { SignedLocalObjectStorage } from '@communication/attachments/object-storage';
+import { MediaUrlSigner } from '@platform/media-url';
+import { StaffPhotoController } from '../../src/staff-profile/staff-photo.controller';
+
+// RT-037: a staff photo link is a link to the access-checked media route.
+const STAFF_PHOTO_LINK = /\/media\/staff\/[0-9a-f-]{36}\?v=o&a=[0-9a-f-]{36}&e=\d+&s=[A-Za-z0-9_-]{43}$/;
 
 jest.setTimeout(90_000);
 
@@ -638,7 +644,7 @@ describe('profile photos', () => {
     await put(grant.objectKey, 'image/png', photo);
 
     const set = await profiles.commitAvatar(me, 'me', { objectKey: grant.objectKey });
-    expect(set.avatarUrl).toMatch(/sig=/);
+    expect(set.avatarUrl).toMatch(STAFF_PHOTO_LINK); // RT-037: the media route, bound to the reader
     expect((await g.prisma.staff.findUniqueOrThrow({ where: { id: w.ownerId } })).avatarObjectKey).toBe(grant.objectKey);
 
     const next = await profiles.authorizeAvatarUpload(me, 'me', { mimeType: 'image/png', byteSize: photo.length });
@@ -720,7 +726,7 @@ describe('profile photos', () => {
     await put(grant.objectKey, 'image/png', png(128, 128));
     await profiles.commitAvatar(me, 'me', { objectKey: grant.objectKey });
 
-    expect((await profiles.profile(await actor(w.managerId), w.ownerId)).avatarUrl).toMatch(/sig=/);
+    expect((await profiles.profile(await actor(w.managerId), w.ownerId)).avatarUrl).toMatch(STAFF_PHOTO_LINK);
     await expectCode(profiles.profile(await actor(w.otherAdminId), w.ownerId), CommErrorCode.STAFF_PROFILE_NOT_FOUND, 404);
   });
 });
@@ -814,5 +820,94 @@ describe('audit and database policy', () => {
   it('with no subject, chat_app sees nothing', async () => {
     const seen = await asSubject('', async (tx) => count(tx, 'staff_profile'));
     expect(seen).toBe(0);
+  });
+});
+
+// ===========================================================================
+// RT-037 -- staff photos are served through the access-checked media route.
+// The reader must be live, and may read a photo exactly where the service
+// shows it: a profile they may view, the reporting-manager card of such a
+// profile, or the organization overview. Re-decided on every request.
+// ===========================================================================
+describe('RT-037 · profile photos through the access-checked media route', () => {
+  const withIdentity = new StaffProfileService(g.prisma, g.authz, workload, g.storage, scoped, g.identity);
+  const route = () => new StaffPhotoController(g.prisma, new SignedLocalObjectStorage(), withIdentity);
+  async function fetchPhoto(url: string) {
+    const u = new URL(url, 'http://api.test');
+    const id = u.pathname.split('/media/staff/')[1];
+    const state: { status: number; body: Buffer } = { status: 0, body: Buffer.alloc(0) as Buffer };
+    const res = {
+      status(c: number) { state.status = c; return res; },
+      setHeader() {},
+      send(b?: string | Buffer) { state.body = Buffer.isBuffer(b) ? b : Buffer.from(b ?? ''); },
+      write(c: Uint8Array) { state.body = Buffer.concat([state.body, Buffer.from(c)]); return true; },
+      end() {},
+    };
+    await route().photo(id, u.searchParams.get('v')!, u.searchParams.get('a')!, u.searchParams.get('e')!, u.searchParams.get('s')!, { headers: {} }, res);
+    return state;
+  }
+  async function photoOf(staffId: string): Promise<{ key: string; bytes: Buffer }> {
+    const who = await actor(staffId);
+    const bytes = png(160, 160);
+    const grant = await profiles.authorizeAvatarUpload(who, 'me', { mimeType: 'image/png', byteSize: bytes.length });
+    await blobs.put(grant.objectKey, 'image/png', bytes);
+    await profiles.commitAvatar(who, 'me', { objectKey: grant.objectKey });
+    return { key: grant.objectKey, bytes };
+  }
+  const forged = (staffId: string, readerId: string, ttl = 300) => new MediaUrlSigner().url('staff', staffId, 'o', readerId, ttl);
+
+  it('legitimate readers get the bytes: self, the manager of the profile, the reporting-manager card, the organization overview', async () => {
+    const owner = await photoOf(w.ownerId);
+    const mgr = await photoOf(w.managerId);
+    const self = await withIdentity.profile(await actor(w.ownerId), 'me');
+    expect((await fetchPhoto(self.avatarUrl!)).body.equals(owner.bytes)).toBe(true);
+    const asManager = await withIdentity.profile(await actor(w.managerId), w.ownerId);
+    expect((await fetchPhoto(asManager.avatarUrl!)).status).toBe(200);
+    // The reporting-manager card on the owner's own profile shows manager_c's photo.
+    const card = self.reportingManager!.avatarUrl!;
+    const fromCard = await fetchPhoto(card);
+    expect(fromCard.status).toBe(200);
+    expect(fromCard.body.equals(mgr.bytes)).toBe(true);
+    const org = await withIdentity.organization(await actor(w.superAdminId));
+    const anyPhoto = JSON.stringify(org).match(/"avatarUrl":"([^"]+)"/)![1];
+    expect((await fetchPhoto(anyPhoto)).status).toBe(200);
+  });
+
+  it('no object key or storage-provider URL reaches the client', async () => {
+    const owner = await photoOf(w.ownerId);
+    const dto = JSON.stringify(await withIdentity.profile(await actor(w.managerId), w.ownerId));
+    expect(dto).not.toContain(owner.key);
+    expect(dto).not.toMatch(/\/storage\/|X-Amz-|expires=|sig=/);
+  });
+
+  it('cross-account: a peer admin, a manager of ANOTHER team, and a parent are refused even with a validly signed link', async () => {
+    await photoOf(w.ownerId);
+    for (const reader of [w.otherAdminId, w.otherManagerId, w.parentId]) {
+      expect((await fetchPhoto(forged(w.ownerId, reader))).status).toBe(404);
+    }
+  });
+
+  it('forged, tampered and expired links are refused', async () => {
+    await photoOf(w.ownerId);
+    const good = (await withIdentity.profile(await actor(w.managerId), w.ownerId)).avatarUrl!;
+    const u = new URL(good, 'http://api.test');
+    u.searchParams.set('s', u.searchParams.get('s')!.replace(/.$/, (c) => (c === 'A' ? 'B' : 'A')));
+    expect((await fetchPhoto(u.toString())).status).toBe(403);
+    const longer = new URL(good, 'http://api.test');
+    longer.searchParams.set('e', String(Number(longer.searchParams.get('e')) + 600));
+    expect((await fetchPhoto(longer.toString())).status).toBe(403);
+    expect((await fetchPhoto(forged(w.ownerId, w.managerId, -1))).status).toBe(403);
+  });
+
+  it('deactivation, and losing the reporting line, refuse the SAME link on the next request', async () => {
+    await photoOf(w.ownerId);
+    const link = (await withIdentity.profile(await actor(w.managerId), w.ownerId)).avatarUrl!;
+    expect((await fetchPhoto(link)).status).toBe(200);
+    await g.prisma.$executeRawUnsafe(`delete from chat.staff_reporting_line where staff_id = '${w.ownerId}'::uuid`);
+    expect((await fetchPhoto(link)).status).toBe(404); // no longer the owner's manager
+    await g.prisma.$executeRawUnsafe(`insert into chat.staff_reporting_line (staff_id, manager_id) values ('${w.ownerId}'::uuid, '${w.managerId}'::uuid)`);
+    expect((await fetchPhoto(link)).status).toBe(200);
+    await g.prisma.$executeRawUnsafe(`update chat.staff set is_active = false, left_at = now() where id = '${w.managerId}'::uuid`);
+    expect((await fetchPhoto(link)).status).toBe(403); // the reader is no longer live
   });
 });

@@ -4,6 +4,7 @@ import { PrismaService } from '../platform/prisma.service';
 import { ActorScopedDatabase } from '../platform/actor-database';
 import { selectObjectStorage } from '../communication/attachments/storage.provider';
 import { StaffProfileController } from './staff-profile.controller';
+import { StaffPhotoController } from './staff-photo.controller';
 import { StaffProfileService } from './staff-profile.service';
 import { StaffWorkloadService } from './staff-workload.service';
 
@@ -21,7 +22,7 @@ import { StaffWorkloadService } from './staff-workload.service';
  * without it, on the owner connection as the rest of the API does.
  */
 @Module({
-  controllers: [StaffProfileController],
+  controllers: [StaffProfileController, StaffPhotoController],
   providers: [
     StaffProfileService,
     StaffWorkloadService,

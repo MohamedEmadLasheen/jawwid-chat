@@ -2,7 +2,9 @@ import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { AuthorizationService } from '../platform/authorization.service';
-import { OBJECT_STORAGE } from '../platform/tokens';
+import { IDENTITY_SERVICE, OBJECT_STORAGE } from '../platform/tokens';
+import type { IdentityService } from '../platform/identity.service';
+import { MediaUrlSigner } from '../platform/media-url';
 import type { Tx } from '../platform/audit.service';
 import { ActorScopedDatabase } from '../platform/actor-database';
 import { CommError, CommErrorCode } from '../platform/errors';
@@ -252,6 +254,10 @@ export class StaffProfileService {
      * the owner connection exactly as before.
      */
     @Optional() private readonly scoped?: ActorScopedDatabase,
+    // RT-037: photo links go through the access-checked media route; the
+    // route resolves the reader through identity, never from the link alone.
+    @Optional() @Inject(IDENTITY_SERVICE) private readonly identity?: IdentityService,
+    @Optional() private readonly mediaUrls: MediaUrlSigner = new MediaUrlSigner(),
   ) {}
 
   /**
@@ -313,12 +319,12 @@ export class StaffProfileService {
       signInIdentity: access.relation === 'self' ? (login?.subject ?? null) : null,
       jobTitle: staff.profile?.jobTitle ?? null,
       about: staff.profile?.about ?? null,
-      avatarUrl: await this.sign(staff.avatarObjectKey),
+      avatarUrl: await this.sign(staff.id, staff.avatarObjectKey, actor.actorId),
       version: iso(staff.profile?.updatedAt ?? null),
       profileUpdatedAt: iso(staff.profile?.updatedAt ?? null),
       profileUpdatedBy: person(names, staff.profile?.updatedBy ?? null),
       reportingManager: staff.reportingLine
-        ? await this.personDto(staff.reportingLine.manager)
+        ? await this.personDto(staff.reportingLine.manager, actor.actorId)
         : null,
       // History (ended rows) only for someone who may manage them or read audit.
       responsibilities: (access.canManageResponsibilities || access.canReadAudit ? responsibilities : active).map(
@@ -366,7 +372,7 @@ export class StaffProfileService {
     const summaries = await this.summaries(db, actor, organizationId, members);
 
     return {
-      manager: await this.personDto(me),
+      manager: await this.personDto(me, actor.actorId),
       members: summaries,
       totals: sumWorkload(summaries.filter((m) => m.isActive).map((m) => m.workload)),
       distinctTeachers: await this.workload.distinctTeachers(
@@ -436,7 +442,7 @@ export class StaffProfileService {
           .filter((s) => s.reportingLine?.managerId === m.id && isLive(s) && !NEVER_A_TEAM_MEMBER.has(s.role))
           .map((s) => s.id);
         return {
-          manager: { ...(await this.personDto(m)), isActive: isLive(m) },
+          manager: { ...(await this.personDto(m, actor.actorId)), isActive: isLive(m) },
           memberCount: memberIds.length,
           totals: sumWorkload(memberIds.map((id) => byId.get(id)!.workload)),
           distinctTeachers: await this.workload.distinctTeachers(organizationId, memberIds, db),
@@ -446,7 +452,7 @@ export class StaffProfileService {
 
     const sumOfTeams = sumWorkload(teams.map((t) => t.totals));
     const live = staff.filter(isLive);
-    const people = new Map(await Promise.all(staff.map(async (s) => [s.id, await this.personDto(s)] as const)));
+    const people = new Map(await Promise.all(staff.map(async (s) => [s.id, await this.personDto(s, actor.actorId)] as const)));
 
     return {
       generatedAt: new Date().toISOString(),
@@ -928,7 +934,7 @@ export class StaffProfileService {
           displayName: s.name,
           role: s.role,
           jobTitle: s.profile?.jobTitle ?? null,
-          avatarUrl: await this.sign(s.avatarObjectKey),
+          avatarUrl: await this.sign(s.id, s.avatarObjectKey, actor.actorId),
           isActive: isLive(s),
           account: { hasLogin: facts.get(s.id)?.hasLogin ?? false, status: facts.get(s.id)?.status ?? null },
           lastActivityAt: iso(s.lastActivityAt),
@@ -1028,13 +1034,13 @@ export class StaffProfileService {
     role: string;
     avatarObjectKey: string | null;
     profile?: { jobTitle: string | null } | null;
-  }): Promise<ProfilePersonDto> {
+  }, viewerId: string): Promise<ProfilePersonDto> {
     return {
       staffId: s.id,
       displayName: s.name,
       role: s.role,
       jobTitle: s.profile?.jobTitle ?? null,
-      avatarUrl: await this.sign(s.avatarObjectKey),
+      avatarUrl: await this.sign(s.id, s.avatarObjectKey, viewerId),
     };
   }
 
@@ -1059,11 +1065,57 @@ export class StaffProfileService {
       ${reason})`;
   }
 
-  /** Signed only after the caller was authorized to see the profile it belongs to. */
-  private sign(objectKey: string | null): Promise<string | null> {
+  /**
+   * Minted only after the caller was authorized to see the profile it belongs
+   * to -- and, since RT-037, not a storage URL: a link to the access-checked
+   * media route (`GET /media/staff/:staffId`), bound to this reader, which
+   * re-decides the same visibility on EVERY request (`authorizePhotoRead`).
+   * No object key or storage-provider URL reaches the client.
+   */
+  private sign(staffId: string, objectKey: string | null, viewerId: string): Promise<string | null> {
     if (!objectKey) return Promise.resolve(null);
     const ttl = Number(process.env.STORAGE_SIGNED_URL_TTL_SECONDS ?? 300);
-    return this.storage.signedReadUrl(objectKey, Number.isFinite(ttl) && ttl > 0 ? ttl : 300);
+    return Promise.resolve(this.mediaUrls.url('staff', staffId, 'o', viewerId, Number.isFinite(ttl) && ttl > 0 ? ttl : 300));
+  }
+
+  /**
+   * RT-037 -- the access-time decision behind a staff photo link. The photo is
+   * readable exactly where this service shows it today, re-decided now:
+   *   1. the reader may view that staff member's profile (`staffProfileAccess`
+   *      -- self, team, organization; the same rule `profile()` applies);
+   *   2. it is the REPORTING MANAGER card of a profile the reader may view
+   *      (`profile()` shows it; `team()` shows the reader's own);
+   *   3. the reader may view the organization overview, which lists everyone.
+   * Nothing wider. Every refusal reads as absent.
+   */
+  async authorizePhotoRead(actorId: string, staffId: string): Promise<{ objectKey: string }> {
+    if (!this.identity || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(staffId)) throw notFound();
+    const actor = await this.identity.resolveActor(actorId);
+    if (!actor) throw notFound();
+    let organizationId: string;
+    try {
+      organizationId = this.requireStaffActor(actor);
+    } catch {
+      throw notFound();
+    }
+    // Any refusal on the way -- including the restricted runtime path's own
+    // actor checks -- reads as absent: a link must not tell its holder WHY.
+    return this.run(actor, async (db) => {
+      const target = await this.findStaff(db, organizationId, staffId);
+      if (!target?.avatarObjectKey) throw notFound();
+      if (this.accessFor(actor, target).canView) return { objectKey: target.avatarObjectKey };
+      const reports = await db.staff.findMany({
+        where: { organizationId, reportingLine: { managerId: staffId } },
+        include: STAFF_INCLUDE,
+        take: DIRECTORY_LIMIT,
+      });
+      if (reports.some((r) => this.accessFor(actor, r).canView)) return { objectKey: target.avatarObjectKey };
+      if (this.authz.canViewOrganizationProfiles(actor).allowed) return { objectKey: target.avatarObjectKey };
+      throw notFound();
+    }).catch((e: unknown) => {
+      if (e instanceof CommError) throw notFound();
+      throw e;
+    });
   }
 
   /** Best effort: a failed delete leaves an unreferenced object, never a broken profile. */
