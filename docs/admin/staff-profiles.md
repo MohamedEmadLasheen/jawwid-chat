@@ -221,6 +221,9 @@ Readable through `GET /staff-profiles/:id/activity` by holders of
   `20261013150000`, `20261014090000`, `20261014100000`): this module's
   functions for the `chat_app` path. Both are forward-only, touch no data, and
   end in catalog self-assertions.
+* `20261014130000_chat_avatar_key_format` (needs `20261005140000`,
+  `20261005160000`): one key format, as a CHECK; stops if existing keys do not
+  conform.
 * `test/unit/migrations/security-regression-guard.spec.ts` refuses a duplicate
   version, a redefinition of a protected function with a timestamp older than
   `20261014090000` (it would run after the fixes), a caller-named actor in an
@@ -388,42 +391,51 @@ out: the super admin cannot be deactivated through any function, and
 No API route calls these functions yet; when one does, it calls the
 `AuthorizationService` check first and the function second.
 
-## Integration plan (nothing merged automatically)
+## Integration (done locally 2026-10-14, branch `integration/admin-profile-2026-10-14`)
 
-Order, each step verified on a disposable database before the next:
+Not pushed. Every source worktree's full working state is kept under
+`refs/checkpoints/20261014/*` (made with a throwaway index; no source worktree
+was modified).
 
-1. **Super-admin bootstrap** (`jawwid-super-admin-bootstrap-944e17`, 31 paths).
-   This branch carries a checksum-identical copy; after it lands, this branch's
-   diff shrinks to its own hunks. 22 overlapping files are identical; the other
-   9 auto-merge (0 conflict hunks).
-2. **Security remediation** (`jawwid-admin-portal-audit-81f31f`): one conflict
-   hunk in `apps/api/src/platform/errors.ts` (both add codes; keep both).
-   `authorization.service.ts` and `error-codes.md` auto-merge.
-3. **This branch**: migrations `20261013150000` … `20261014110100` apply in
-   filename order after the bootstrap's `20261013120000`.
-4. **`feat/account-avatar`** (`251fa2f` + uncommitted): `schema.prisma` merges
-   with one `avatarObjectKey` (same text and position). Real decisions:
-   * it adds its own Admin Web `/profile` route and
-     `features/profile/{ProfilePage.tsx, ProfilePage.test.tsx, api.ts}` (add/add
-     conflicts with this branch's files of the same names, plus 2 hunks in
-     `AppRoutes.tsx`);
-   * it has a second staff-photo pipeline (`/me/avatar`) whose keys are
-     `avatars/<name>`, not owner-scoped and not tied to the uploader. On
-     `chat_app`, `guard_staff_request_writes` refuses such a key for a staff row.
-     Recommendation: staff photos go through `/staff-profiles/:id/avatar`
-     (owner-prefixed keys, byte inspection); keep `/me/avatar` for parents and
-     teachers, or make it issue `avatars/staff/<id>/<uuid>` keys for staff;
-   * its `20260929120000_chat_app_runtime_grants.sql` must not land as is (it
-     grants UPDATE on `chat.account`, and INSERT on `chat.audit_log`, which RLS
-     refuses).
-5. **Admin Portal redesign** (`jawwid-admin-portal-redesign-eca27b`, built on a
-   copy of the bootstrap): 2 conflict hunks in `AppShell.tsx` (header link to
-   `/profile`) and 1 in `features/admin/sections.ts` (teams note); the rest
-   auto-merge.
-6. **Phase-7 RBAC** is reference only. Its `20260907100100_chat_phase1_rbac.sql`
-   redefines `transfer_ownership` / `offboard_staff` with `coalesce(p_actor_id, …)`
-   and an older timestamp; the migration guard refuses it. Port its ideas into a
-   new, later migration that keeps `trusted_staff_actor`.
+| Order | Source | How | Conflicts and resolution |
+|---|---|---|---|
+| 1 | super-admin bootstrap (`jawwid-super-admin-bootstrap-944e17`) | commit `topic/super-admin-bootstrap` on `main@09512c0` | — |
+| 2 | security remediation (`jawwid-admin-portal-audit-81f31f`) | merge `topic/security-remediation` | `errors.ts`: both sides appended codes; both kept |
+| 3 | this branch | merge `topic/admin-profile` (built on step 1) | `errors.ts`: both kept |
+| 4 | `feat/account-avatar`, the compatible part | cherry-pick `d2cdba2` (avatar columns) + `20261014130000` | none |
+| 5 | Admin Portal redesign (`jawwid-admin-portal-redesign-eca27b`) | merge `topic/admin-portal-redesign` (built on step 1) | `AppShell.tsx`: redesign header kept, its user block is the `/profile` link; `sections.ts`: redesign's placement, profile branch's note |
+
+### One avatar key format
+
+`20261014130000_chat_avatar_key_format` makes `avatars/<kind>/<row id>/<uuid>`
+(kind = staff, contact, learner, teacher) a CHECK constraint, so a flat
+`avatars/<name>` key is refused for every writer, the owner connection
+included. Contact, learner and teacher `avatar_object_key` have no request-role
+writer; staff keeps its guarded grant. Tested by `avatar-key-format.spec.ts`; the
+migration guard refuses a re-grant.
+
+### What was NOT integrated from `feat/account-avatar`, and why
+
+* **Its API** (`2917661`, `/me/avatar`, signed photo URLs for contacts,
+  learners, teachers): it builds on `5fdecbe` and `986fa33`, a ~2,000-line
+  rework of the conversation controller, DTOs, conversation and message
+  services and authorization that never reached `main`, and that overlaps the
+  security remediation in the same files. A full merge of the branch conflicts
+  in 28 files. It also issues flat keys, now refused by the database. To land
+  it: rebase that line onto this branch and issue `avatars/<kind>/<id>/<uuid>`.
+* **Its Admin Web slice** (`251fa2f`) and its uncommitted `/profile` routing:
+  superseded. `/profile` is this branch's page alone; it already covers a staff
+  member's own photo, with byte inspection.
+* **Its mobile commits** (`a19bf84`, `ccf23d4`, …): depend on that API.
+* **`20260929120000_chat_app_runtime_grants`** (`67fe1e5`): not integrated.
+  It grants UPDATE on `chat.account` and an INSERT on `chat.audit_log` that RLS
+  refuses; the profile runtime here (`20261014110100`) replaces what it was for.
+* **That worktree's 66 uncommitted paths** (cookie transport, story lifetime,
+  Flutter branding, iOS entitlements): unrelated in-progress work; preserved in
+  `refs/checkpoints/20261014/account-avatar-worktree`, not integrated.
+
+Phase-7 RBAC remains reference only; the migration guard refuses its
+older-timestamp redefinitions.
 
 ## Baseline
 
