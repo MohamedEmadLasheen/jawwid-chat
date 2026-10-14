@@ -1,0 +1,640 @@
+/*
+ * Jawwid design-system layer.
+ *
+ * WHY THIS FILE EXISTS: app.css owns the shared component rules, but it has
+ * uncommitted changes in another worktree (feat/account-avatar), so it cannot
+ * be edited here without risking that work. This layer is loaded right after
+ * app.css and restyles the same selectors -- every section and every role
+ * picks it up -- while app.css stays byte-for-byte untouched.
+ *
+ * INTEGRATION STEP (separate, needs approval): once the other worktrees land,
+ * fold these rules into app.css and delete this file and its import in
+ * main.tsx. Until then: removing that one import restores the previous look.
+ *
+ * Rules mirror app.css selectors (same specificity), change appearance only,
+ * and never change positioning that behaviour depends on (the off-canvas
+ * sidebar, the panes, the sheets).
+ */
+
+/* ================================================================== base */
+
+h1, h2, h3 { font-weight: var(--fw-semibold); letter-spacing: -0.005em; }
+html[lang='ar'] h1, html[lang='ar'] h2, html[lang='ar'] h3 { letter-spacing: 0; }
+.num, .kpi-card__value, .attn-tile__count, .status-tile__count, .metric__value { font-variant-numeric: tabular-nums; }
+::selection { background: var(--brand-100); color: var(--text); }
+
+/* ================================================================= shell */
+
+.shell { background: var(--bg); }
+
+/* The brand surface. */
+.sidebar {
+  background: var(--sidebar-bg);
+  border-inline-end: 0;
+  color: var(--sidebar-fg);
+}
+.sidebar__brand {
+  border-block-end: 1px solid var(--sidebar-line);
+  padding-inline: var(--space-4) var(--space-3);
+}
+/* The full-colour lockup on a white tile: on teal the logo's own teal vanishes. */
+.sidebar__brand-link .brand {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+.sidebar__brand-link .brand-logo { block-size: 20px; }
+.sidebar__product {
+  color: var(--sidebar-muted);
+  border-inline-start-color: var(--sidebar-line);
+  font-weight: var(--fw-medium);
+}
+.sidebar .sidebar__close { color: var(--sidebar-muted); }
+.sidebar .sidebar__close:hover:not(:disabled) { background: var(--sidebar-hover); color: var(--sidebar-fg); }
+
+.sidebar__nav { padding: var(--space-4) var(--space-3) var(--space-5); }
+.nav__group + .nav__group { margin-block-start: var(--space-4); }
+.nav__group-toggle,
+.nav__group-label {
+  color: var(--sidebar-subtle);
+  font-size: 11.5px;
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding-block: 6px;
+}
+html[lang='ar'] .nav__group-toggle, html[lang='ar'] .nav__group-label { text-transform: none; letter-spacing: 0; font-size: var(--fs-xs); }
+.nav__group-toggle:hover { color: var(--sidebar-fg); background: var(--sidebar-hover); }
+
+.nav__item {
+  min-block-size: 40px;
+  margin-block: 1px;
+  color: var(--sidebar-muted);
+  border-radius: var(--radius);
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.nav__item .icon { color: var(--sidebar-subtle); }
+.nav__item:hover { background: var(--sidebar-hover); color: var(--sidebar-fg); }
+.nav__item:hover .icon { color: var(--sidebar-fg); }
+.nav__item[aria-current='page'] {
+  background: var(--sidebar-active);
+  color: var(--sidebar-fg);
+  font-weight: var(--fw-semibold);
+}
+.nav__item[aria-current='page'] .icon { color: var(--gold-400); }
+.nav__item[aria-current='page']::before { background: var(--gold-400); inset-block: 9px; inline-size: 3px; }
+.nav__item--pending { color: var(--sidebar-subtle); }
+.sidebar .status-ring { color: var(--sidebar-subtle); }
+.sidebar__footer { border-block-start-color: var(--sidebar-line); color: var(--sidebar-subtle); }
+
+/* Teal focus would vanish on teal: the sidebar focuses in light gold. */
+.sidebar :focus-visible { outline-color: var(--sidebar-focus); }
+
+.topbar {
+  background: var(--surface);
+  border-block-end: 1px solid var(--border);
+  box-shadow: var(--shadow-xs);
+  gap: var(--space-2);
+}
+.topbar__user-name { font-size: var(--fs-sm); }
+.topbar__divider { block-size: 28px; }
+.topbar .btn--ghost { color: var(--text-muted); }
+
+/* Logo variants: light surfaces show the teal lockup, dark surfaces the light one. */
+.brand { display: inline-flex; }
+.brand-logo--dark { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .brand-logo--light { display: none; }
+  :root:not([data-theme='light']) .brand-logo--dark { display: block; }
+}
+/* ...except on the sidebar's white tile, which always takes the teal lockup. */
+:root .sidebar .brand-logo--light { display: block; }
+:root .sidebar .brand-logo--dark { display: none; }
+
+/* In the drawer a destination with several pages is headed by its name; inside
+   More, the registry group names each run of pages, one step quieter and indented. */
+.nav__group[role='group'] > .nav__group-label { color: var(--sidebar-muted); margin: 0 0 2px; padding-inline: var(--space-3); }
+html[lang='ar'] .nav__group[role='group'] > .nav__group-label { font-size: var(--fs-sm); }
+.nav__subgroup-label {
+  margin: var(--space-2) 0 2px;
+  padding-inline: var(--space-5) var(--space-3);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  color: var(--sidebar-subtle);
+}
+
+/* ============================================================== icon rail */
+/* Desktop navigation: one icon per destination on the brand surface, a
+   tooltip naming it, and a short menu for a destination with several pages.
+   Below 1024px the same destinations open as the drawer above. */
+
+@media (min-width: 1024px) {
+  :root { --sidebar-w: 76px; }
+  /* The rail has no room for the lockup; the top bar carries it. */
+  .topbar__brand { display: flex; align-items: center; gap: var(--space-3); text-decoration: none; }
+}
+.topbar__product {
+  padding-inline-start: var(--space-3);
+  border-inline-start: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+}
+@media (max-width: 1023px) { .topbar__product { display: none; } }
+
+.sidebar--rail { position: relative; z-index: 30; }
+.rail { flex: 1; display: flex; min-block-size: 0; padding-block: var(--space-4); }
+.rail__list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rail__item { position: relative; }
+/* More stands apart at the foot, where a messaging app keeps its settings. */
+.rail__item--end { margin-block-start: auto; }
+
+.rail__link {
+  position: relative;
+  display: grid;
+  place-items: center;
+  inline-size: 48px;
+  block-size: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--sidebar-muted);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.rail__link:hover { background: var(--sidebar-hover); color: var(--sidebar-fg); }
+.rail__link[aria-expanded='true'] { background: var(--sidebar-hover); color: var(--sidebar-fg); }
+.rail__link[aria-current] { background: var(--sidebar-active); color: var(--sidebar-fg); }
+.rail__link[aria-current] .icon { color: var(--gold-400); }
+/* The current destination also carries the gold edge mark the old sidebar used. */
+.rail__link[aria-current]::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: -14px;
+  inset-block: 12px;
+  inline-size: 4px;
+  border-start-end-radius: 4px;
+  border-end-end-radius: 4px;
+  background: var(--gold-400);
+}
+.rail__link:focus-visible { outline: 2px solid var(--sidebar-focus); outline-offset: 2px; }
+.rail__link .status-ring { position: absolute; inset-block-start: 7px; inset-inline-end: 7px; }
+
+/* The name, shown beside the icon on hover and keyboard focus. It is always in
+   the accessibility tree (opacity, not display), so the icon is never nameless. */
+.rail__tip {
+  position: absolute;
+  inset-inline-start: calc(100% + 12px);
+  inset-block-start: 50%;
+  transform: translateY(-50%);
+  z-index: 50;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  line-height: 1.3;
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+.rail__link:hover .rail__tip,
+.rail__link:focus-visible .rail__tip { opacity: 1; }
+.rail__link[aria-expanded='true'] .rail__tip { opacity: 0; }
+
+.rail__menu {
+  position: absolute;
+  inset-inline-start: calc(100% + 14px);
+  inset-block-start: 0;
+  z-index: 45;
+  inline-size: 288px;
+  max-block-size: calc(100vh - var(--space-6));
+  overflow-y: auto;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+}
+.rail__menu[hidden] { display: none; }
+.rail__item--end .rail__menu { inset-block-start: auto; inset-block-end: 0; }
+.rail__menu-title { margin: 0; padding: 8px 10px 6px; font-size: var(--fs-md); font-weight: var(--fw-semibold); }
+.rail__menu-group + .rail__menu-group { margin-block-start: var(--space-1); padding-block-start: var(--space-1); border-block-start: 1px solid var(--border); }
+.rail__menu-heading {
+  margin: 0;
+  padding: 8px 10px 4px;
+  font-size: 11.5px;
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+html[lang='ar'] .rail__menu-heading { text-transform: none; letter-spacing: 0; font-size: var(--fs-xs); }
+.rail__menu-list { margin: 0; padding: 0; list-style: none; }
+.rail__menu-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-block-size: 40px;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+}
+.rail__menu-link .icon { flex: none; color: var(--text-subtle); }
+.rail__menu-label { flex: 1; min-inline-size: 0; }
+.rail__menu-link:hover { background: var(--surface-hover); }
+.rail__menu-link[aria-current='page'] { background: var(--accent-soft); color: var(--text-link); font-weight: var(--fw-semibold); }
+.rail__menu-link[aria-current='page'] .icon { color: var(--text-link); }
+.rail__menu-link--pending { color: var(--text-muted); font-weight: var(--fw-regular); }
+/* The menu is a light surface inside the teal aside: undo the aside's light-gold focus and ring. */
+.sidebar .rail__menu :focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.sidebar .rail__menu .status-ring { color: var(--text-subtle); }
+
+/* Shell banners (connection, shift end). */
+.banner { padding: 10px var(--space-5); font-weight: var(--fw-medium); border-block-end: 1px solid transparent; }
+.banner--warn { border-block-end-color: var(--gold-100); }
+
+/* ============================================================ page header */
+
+.page { padding: var(--space-6) var(--space-6) var(--space-7); }
+.page__title { font-size: var(--fs-title); font-weight: var(--fw-semibold); line-height: var(--lh-tight); margin-block-end: var(--space-5); }
+.page-header { margin-block-end: var(--space-5); align-items: flex-end; }
+.page-header__eyebrow {
+  display: block;
+  margin-block-end: 4px;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--text-link);
+  letter-spacing: 0.02em;
+}
+.page-header__title { font-size: var(--fs-title); line-height: var(--lh-tight); }
+.page-header__subtitle { margin-block-start: 6px; font-size: var(--fs-md); }
+@media (max-width: 767px) {
+  .page { padding: var(--space-4) var(--space-4) var(--space-6); }
+  .page__title, .page-header__title { font-size: var(--fs-xl); }
+  .page-header { align-items: flex-start; }
+}
+
+/* =============================================================== buttons */
+
+.btn {
+  min-block-size: var(--control-h);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: var(--fw-medium);
+  box-shadow: var(--shadow-xs);
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.btn:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--border-control); }
+.btn:active:not(:disabled) { box-shadow: none; }
+.btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-inverse);
+  font-weight: var(--fw-semibold);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), var(--shadow-xs);
+}
+.btn--primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn--danger { background: var(--danger); border-color: var(--danger); color: var(--text-inverse); font-weight: var(--fw-semibold); }
+.btn--danger:hover:not(:disabled) { filter: brightness(0.94); background: var(--danger); }
+.btn--ghost { border-color: transparent; background: transparent; box-shadow: none; color: var(--text-muted); }
+.btn--ghost:hover:not(:disabled) { background: var(--surface-hover); border-color: transparent; color: var(--text); }
+.btn--sm { min-block-size: var(--control-h-sm); padding: 0 var(--space-3); font-size: var(--fs-sm); border-radius: 8px; }
+.btn--icon { inline-size: var(--control-h); padding: 0; }
+.btn--icon.btn--sm { inline-size: var(--control-h-sm); }
+.btn:disabled { opacity: 0.5; box-shadow: none; }
+.btn:focus-visible { outline-offset: 2px; }
+
+/* ========================================================== form controls */
+
+.field { margin-block-end: var(--space-4); }
+.field__label { font-size: var(--fs-sm); font-weight: var(--fw-medium); color: var(--text); margin-block-end: 6px; }
+.field__hint { font-size: var(--fs-xs); color: var(--text-subtle); }
+.field__error { font-size: var(--fs-sm); color: var(--danger); font-weight: var(--fw-medium); }
+
+.input, .select, .textarea, .composer__input {
+  min-block-size: var(--control-h);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius);
+  /* background-color, not background: app.css draws the select's chevron as an image. */
+  background-color: var(--surface);
+  color: var(--text);
+  box-shadow: inset 0 1px 1px rgba(16, 32, 40, 0.03);
+}
+.input:hover, .select:hover, .textarea:hover { border-color: var(--text-subtle); }
+.input:focus, .select:focus, .textarea:focus, .composer__input:focus {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.select--inline { min-block-size: var(--control-h); }
+.select--sm { min-block-size: var(--control-h-sm); }
+.textarea { padding-block: 10px; }
+
+.search .input { background-color: var(--surface); }
+.search .icon { color: var(--text-subtle); }
+
+.chip {
+  min-block-size: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-weight: var(--fw-medium);
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.chip:hover { border-color: var(--border-control); color: var(--text); background: var(--surface); }
+.chip[aria-pressed='true'] { background: var(--brand-700); border-color: var(--brand-700); color: #ffffff; }
+.chip[aria-pressed='true'] .chip__count { color: rgba(255, 255, 255, 0.85); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .chip[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); }
+  /* The dark accent is lighter: a faded count drops to 3.8:1, so it stays solid. */
+  :root:not([data-theme='light']) .chip[aria-pressed='true'] .chip__count { color: #ffffff; }
+}
+
+.toolbar { gap: var(--space-3); margin-block-end: var(--space-4); }
+
+/* Composer tabs and similar toggles share the chip language. */
+.composer__tab { min-block-size: 32px; border-color: var(--border-strong); font-weight: var(--fw-medium); }
+.composer__tab[aria-pressed='true'] { background: var(--brand-700); border-color: var(--brand-700); color: #ffffff; }
+.composer__tab--internal[aria-pressed='true'] { background: var(--internal); border-color: var(--internal); color: #ffffff; }
+
+@media (pointer: coarse) {
+  .chip, .composer__tab { min-block-size: var(--tap); }
+  .input, .select, .textarea { min-block-size: 44px; }
+}
+
+/* ======================================================= badges & chips */
+
+.badge { padding: 3px 10px; font-size: var(--fs-xs); font-weight: var(--fw-semibold); letter-spacing: 0.01em; }
+.badge__dot { inline-size: 7px; block-size: 7px; }
+.readonly-chip { padding: 5px 12px; border: 1px solid var(--gold-100); }
+
+/* ============================================================ containers */
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  padding: var(--space-5);
+}
+.card--flush { padding: 0; }
+.card__title { font-size: var(--fs-lg); font-weight: var(--fw-semibold); }
+.card--flush .card__header { padding: var(--space-4) var(--space-5) 0; }
+
+.panel { padding: var(--space-4) var(--space-5); }
+.panel__title { font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-subtle); letter-spacing: 0.03em; margin-block-end: var(--space-3); }
+.kv { padding-block: 5px; font-size: var(--fs-sm); border-block-end: 1px dashed var(--border); }
+.kv:last-child { border-block-end: 0; }
+.kv__k { color: var(--text-muted); }
+.kv__v { font-weight: var(--fw-medium); }
+
+.details dt { font-size: var(--fs-xs); }
+.details dd { font-size: var(--fs-md); }
+
+/* ================================================================ tables */
+
+.table-wrap { border-radius: var(--radius-lg); box-shadow: var(--shadow-xs); }
+.table { font-size: var(--fs-md); }
+.table th {
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.02em;
+  padding-block: 10px;
+  border-block-end: 1px solid var(--border);
+}
+.table td { padding-block: 12px; border-block-end: 1px solid var(--border); }
+.table tbody tr { transition: background var(--dur-fast) var(--ease); }
+.table tbody tr:hover { background: var(--surface-hover); }
+.table--interactive tbody tr:hover .entity__name { color: var(--text-link); }
+/* Tables set straight into a padded card (the operator screens') align with its text. */
+.card:not(.card--flush) > .table th:first-child, .card:not(.card--flush) > .table td:first-child { padding-inline-start: 0; }
+.card:not(.card--flush) > .table th { background: transparent; }
+
+/* ================================================================ states */
+
+.state { gap: var(--space-2); padding-block: var(--space-7); }
+.state__icon {
+  inline-size: 56px;
+  block-size: 56px;
+  border-radius: var(--radius-lg);
+  background: var(--accent-soft);
+  color: var(--text-link);
+}
+.state[role='alert'] .state__icon { background: var(--danger-soft); color: var(--danger); }
+.state__title { font-size: var(--fs-lg); }
+.state--compact { padding-block: var(--space-5); }
+.state--compact .state__icon { inline-size: 44px; block-size: 44px; border-radius: var(--radius); }
+/* Not permitted is not an error: a card in the brand tone, not a red alarm. */
+.state--forbidden {
+  max-inline-size: 480px;
+  margin: var(--space-7) auto 0;
+  padding: var(--space-7) var(--space-6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.state--forbidden.state[role='alert'] .state__icon { background: var(--accent-soft); color: var(--accent); }
+.spinner { inline-size: 22px; block-size: 22px; border-width: 2.5px; border-block-start-color: var(--accent); }
+
+.notice { border-radius: var(--radius); padding: var(--space-3) var(--space-4); }
+
+/* ======================================================= dialogs & sheets */
+
+.dialog-backdrop { backdrop-filter: blur(2px); }
+.dialog {
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-5) var(--space-6) var(--space-6);
+  border: 1px solid var(--border);
+}
+.dialog__title { font-size: var(--fs-xl); font-weight: var(--fw-semibold); }
+.dialog__actions { gap: var(--space-2); margin-block-start: var(--space-6); }
+.dialog--sheet { border-radius: 0; border-block: 0; border-inline-end: 0; padding: var(--space-5); }
+.dialog--sheet .dialog__header { padding-block-end: var(--space-4); margin-block-end: var(--space-5); border-block-end: 1px solid var(--border); }
+
+/* ================================================== operator workspaces */
+
+/* Three-column workspace used by the operator inbox and family screens. */
+.column--list, .column--panel { background: var(--surface); }
+.column--center { background: var(--chat-bg); }
+.column__header {
+  min-block-size: 60px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  font-weight: var(--fw-semibold);
+}
+
+/* Inbox rows */
+.row { padding: 14px var(--space-4); transition: background var(--dur-fast) var(--ease); }
+.row:hover { background: var(--surface-hover); }
+.row[aria-current='true'] { background: var(--surface-selected); box-shadow: inset 3px 0 0 var(--accent-line); }
+[dir='rtl'] .row[aria-current='true'] { box-shadow: inset -3px 0 0 var(--accent-line); }
+.row__name { font-size: var(--fs-md); }
+.row__reason { font-size: var(--fs-sm); }
+
+/* Operator thread: the same bubble language as the admin thread. */
+.thread { padding: var(--space-4) var(--space-5); gap: 6px; }
+.msg__bubble {
+  padding: 8px 12px;
+  border-radius: 14px;
+  border: 0;
+  background: var(--bubble-in);
+  box-shadow: 0 1px 1px rgba(16, 32, 40, 0.07);
+}
+.msg--contact .msg__bubble { border-start-start-radius: 4px; }
+.msg--staff .msg__bubble { background: var(--bubble-out); border-start-end-radius: 4px; }
+.msg--internal .msg__bubble { background: var(--internal-soft); border: 1px dashed var(--internal); box-shadow: none; }
+.msg--system .msg__bubble { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-full); box-shadow: none; }
+.msg__meta { font-size: 11px; }
+
+.composer { padding: var(--space-3) var(--space-4); }
+.composer__input { padding: 10px var(--space-3); }
+.composer__input--internal { background: var(--internal-soft); border-color: var(--internal); }
+
+.voice__toggle { border-color: var(--border-strong); background: var(--surface); }
+.voice__toggle:hover { background: var(--surface-hover); }
+
+/* Manager dashboard tiles share the KPI card language. */
+.grid--metrics { gap: var(--space-4); }
+.metric {
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  box-shadow: var(--shadow-xs);
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--space-1);
+}
+.metric__value { font-size: var(--fs-kpi); line-height: 1.1; }
+.metric__label { font-weight: var(--fw-medium); color: var(--text-muted); }
+.metric--alert { border-color: var(--danger-soft); }
+/* A tile with nowhere to go is a disabled <button>: it is a reading, not an
+   unavailable control, so it must not take the global button:disabled fade. */
+.metric { color: var(--text); }
+.metric:disabled { opacity: 1; color: var(--text); cursor: default; }
+.metric:disabled:hover { background: var(--surface); }
+
+/* ============================================== unclassed legacy controls */
+/* The operator Stories publisher (features/stories, owned by another
+   worktree) renders bare <input>, <textarea>, <select> and <button> with no
+   component class. :not([class]) keeps every rule here off any control that
+   carries a class, so nothing designed elsewhere changes. */
+
+/* :where() keeps this base rule below the textarea and select rules after it. */
+.page :where(input:not([type]), input[type='text'], input[type='search'], textarea, select):not([class]) {
+  min-block-size: var(--control-h);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius);
+  background-color: var(--surface);
+  color: var(--text);
+  font: inherit;
+  box-shadow: inset 0 1px 1px rgba(16, 32, 40, 0.03);
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+.page :is(input, textarea):not([class])::placeholder { color: var(--text-subtle); }
+.page :is(input, textarea, select):not([class]):focus {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.page textarea:not([class]) { min-block-size: 96px; resize: vertical; }
+.page select:not([class]) {
+  appearance: none;
+  padding-inline-end: var(--space-6);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2366737a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+[dir='rtl'] .page select:not([class]) { background-position: left 10px center; }
+.page input[type='checkbox']:not([class]) { inline-size: 16px; block-size: 16px; margin: 0; accent-color: var(--accent); }
+.page input[type='file']:not([class]) { font-size: var(--fs-sm); color: var(--text-muted); }
+
+.page button:not([class]),
+.page input[type='file']:not([class])::file-selector-button {
+  min-block-size: var(--control-h-sm);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  box-shadow: var(--shadow-xs);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.page input[type='file']:not([class])::file-selector-button { margin-inline-end: var(--space-3); }
+.page button:not([class]):hover:not(:disabled),
+.page input[type='file']:not([class])::file-selector-button:hover { background: var(--surface-hover); border-color: var(--border-control); }
+.page button:not([class]):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.page button:not([class]):disabled { opacity: 0.5; box-shadow: none; cursor: not-allowed; }
+.page button[type='submit']:not([class]) {
+  min-block-size: var(--control-h);
+  padding: 0 var(--space-4);
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--text-inverse);
+  font-size: var(--fs-md, inherit);
+  font-weight: var(--fw-semibold);
+}
+.page button[type='submit']:not([class]):hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+/* The publisher's own containers: a stacked form, a sunken audience group, and
+   a story list whose actions sit at the row's end. */
+.page > form.card { display: grid; gap: var(--space-3); justify-items: start; }
+.page > form.card > :is(input, textarea, fieldset, div) { inline-size: 100%; }
+.page > form.card > h2 { margin: 0; font-size: var(--fs-lg); font-weight: var(--fw-semibold); }
+.page fieldset.card {
+  margin: 0;
+  min-inline-size: 0;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-sunken);
+  box-shadow: none;
+}
+.page fieldset.card > legend { padding-inline: var(--space-2); font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
+.page fieldset.card label { font-size: var(--fs-sm); }
+.page > ul.card { list-style: none; padding: 0; overflow: hidden; }
+.page > ul.card > li.row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-4) var(--space-5); }
+.page > ul.card > li.row:last-child { border-block-end: 0; }
+.page > ul.card > li.row strong { font-weight: var(--fw-semibold); }
+.page > ul.card > li.row strong + .badge { margin-inline-start: var(--space-2); }
+.page > ul.card > li.row p { margin: var(--space-1) 0 0; color: var(--text-muted); font-size: var(--fs-sm); }
+
+/* ============================================================== motion */
+
+.dialog { animation: dialog-in var(--dur) var(--ease); }
+.dialog--sheet { animation-name: sheet-in; }
+[dir='rtl'] .dialog--sheet { animation-name: sheet-in-rtl; }
+@keyframes dialog-in { from { transform: translateY(8px) scale(0.99); } }

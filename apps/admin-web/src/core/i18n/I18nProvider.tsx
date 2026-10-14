@@ -20,7 +20,7 @@ interface I18nValue {
 const I18nContext = createContext<I18nValue | null>(null)
 
 const STORAGE_KEY = 'jawwid.locale'
-const LOCALE_TAG: Record<Locale, string> = { ar: 'ar-EG', en: 'en-GB' }
+export const LOCALE_TAG: Record<Locale, string> = { ar: 'ar-EG', en: 'en-GB' }
 
 function readStoredLocale(): Locale {
   try {
