@@ -232,4 +232,16 @@ export interface CommEventPayloads {
 export const room = {
   conversation: (id: string) => `conversation:${id}`,
   actor: (id: string) => `actor:${id}`,
+  /** RT-009: every socket of one session (rebound on refresh rotation). */
+  session: (id: string) => `session:${id}`,
+  /** RT-009: every socket of one account. */
+  account: (id: string) => `account:${id}`,
 };
+
+/**
+ * RT-009. Sent by the gateway itself -- never through the outbox -- to a socket
+ * the moment it is removed from a conversation room because its access ended.
+ * Clients that do not know it ignore it; the security property is the room
+ * removal, not the notice.
+ */
+export const CONVERSATION_ACCESS_REVOKED = 'conversation.access_revoked';

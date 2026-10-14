@@ -66,7 +66,9 @@ Source of truth: `apps/api/src/platform/errors.ts`. Default HTTP status of a `Co
 | `COMM.TEACHER_CANNOT_WRITE_INTERNAL` | 403 | Teacher sends `visibility: "internal"`. |
 | `COMM.MEMBER_IS_SILENT` | 403 | Member has `isSilent`. |
 | `COMM.ACTOR_INACTIVE` | 403 | Deactivated / offboarded actor. |
-| `COMM.CANNOT_MANAGE_MEMBERSHIP` | 403 | Non-family-facing actor calls `POST /conversations/:id/members`. |
+| `COMM.CANNOT_MANAGE_MEMBERSHIP` | 403 | `POST /conversations/:id/members` by a non-family-facing actor, by staff outside the conversation's family scope, or on any `direct` conversation. |
+| `COMM.CANNOT_PROVISION_STUDENT_GROUP` | 403 | `POST /conversations/student-group` or `…/:learnerId/sync` by a parent, a teacher, department staff, or family-facing staff outside the family's scope. |
+| `COMM.REVOCATION_UNCONFIRMED` | 503 | RT-009 completion barrier. `POST /conversations/:id/members` (`remove`), `POST /conversations/student-group/:learnerId/sync`, `POST /auth/logout`: the change is committed, but not every API node confirmed it can no longer deliver to the revoked recipient on an earlier decision. Not a success; retry is safe and idempotent. |
 | `COMM.CANNOT_APPROVE` | 403 | Not the active handler or a manager; also returned by `GET /approvals/history/:conversationId` for non-staff. |
 | `COMM.NOT_MESSAGE_AUTHOR` | 403 | Delete-for-everyone by neither the author nor a manager. |
 | `COMM.DELETE_WINDOW_EXPIRED` | 403 | Author past `communication.delete_for_everyone_window_minutes` (60). |
@@ -141,10 +143,10 @@ One row per distinct (method, path). Paths are relative to `/api/v1` unless mark
 |---|---|---|---|---|
 | GET | `/conversations` | API, Flutter | RECONCILE | Gains `familyId`, `section`, `cursor`/`limit`; response → `{items,nextCursor}`; staff scope narrowed (RT-011). §3.4 |
 | POST | `/conversations/direct` | API | EXISTS | §3.4 |
-| POST | `/conversations/student-group` | API | RECONCILE | No actor/permission check today; Phase 1 requires `conversations.manage`. §3.4 |
-| POST | `/conversations/student-group/:learnerId/sync` | API | RECONCILE | **No actor at all.** Phase 1: `conversations.manage` or internal-only (worker). §3.4, §5 |
+| POST | `/conversations/student-group` | API | RECONCILE | Gated (2026-10-12): family-facing staff with the learner's family in scope; tenant-isolated. Permission key `conversations.manage` still Phase 1. §3.4 |
+| POST | `/conversations/student-group/:learnerId/sync` | API | RECONCILE | Gated (2026-10-12), same rule; the route now carries the actor. §3.4, §5 |
 | GET | `/conversations/:id` | API, Flutter | RECONCILE | Must include `members[]` (promised by `mobile-contract.md`, not passed by the controller). Side-effect upsert removed. §3.4 |
-| POST | `/conversations/:id/members` | API | RECONCILE | `reason` must be validated (400) rather than failing at the DB NOT NULL. §3.4 |
+| POST | `/conversations/:id/members` | API | RECONCILE | Scoped and validated (2026-10-12): family scope, tenant isolation, direct conversations immutable, member judged from their own row, `COMMON.VALIDATION` 400. Permission key still Phase 1. §3.4 |
 | POST | `/conversations/:id/preferences` | API, Flutter | EXISTS | §3.4 |
 | GET | `/conversations/:id/call-capability` | API, Flutter | **EXISTS (new 2026-09-24)** | Advisory: may the caller START a call here. Same `canCall` as `POST /calls`; never a grant. §3.4 |
 | GET | `/conversations/:conversationId/messages` | API, Flutter | EXISTS | seq pagination unchanged. §3.5 |
@@ -345,6 +347,7 @@ Page<T> { items: T[], nextCursor: string|null }
 **POST /auth/logout**
 - Auth: required. Permission: `sessions.manage`. Scope: current session only.
 - Request: `{}`. Response: `{ ok: true }`. Idempotent by nature (second call → `{ok:true}`).
+- RT-009 (2026-10-12): `{ ok: true }` is returned only once every API node has confirmed it can no longer deliver to this session on a decision made before the revocation; otherwise `COMM.REVOCATION_UNCONFIRMED` 503 — the session IS revoked; retry. A repeat is held to the same confirmation.
 - Side effects: session revoked; device tokens registered under this session deactivated (`chat.device_token.is_active=false`); sockets of this session disconnected.
 - Audit: `audit_log` `{action:'session.revoked', entity:'session', entityId, reason:'logout'}`. Realtime: none to others.
 
@@ -432,17 +435,18 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 - Realtime: none (no outbox row on create).
 
 **POST /conversations/student-group** — EXISTS → RECONCILE (`ensureStudentGroup`)
-- Auth today: **none enforced** — the controller passes the header actor only as `addedBy`; there is no `requireActor` and no permission check. Phase 1: auth required, Permission `conversations.manage`, Scope: family-facing staff with the learner's family in scope.
+- Auth (2026-10-12): bearer required. Checked **before** the learner is looked up: the actor must be active family-facing staff (`admin`, `coverage`, `manager`) with an organization, else `COMM.CANNOT_PROVISION_STUDENT_GROUP` 403 — identical for a real and an unknown learner id. Then: a learner (or its family) in another organization → `COMM.CONVERSATION_NOT_FOUND` 404, exactly as an unknown learner; a `manager` may provision for any family in their organization; `admin` / `coverage` only for a family they own (`family.owner_id`), else 403. On-duty cover is not scope (PD-3). Decided by `AuthorizationService.canProvisionStudentGroup` / `canProvisionStudentGroupFor`. Permission key `conversations.manage` remains Phase 1.
 - Request: `{ learnerId: string }`. Response: `200 ConversationDto` (existing live group, or created with members derived from Core: contacts with `canMessage`, `family.ownerId` as `admin`, `learner.teacherId` as `teacher`; title `"<learner name> · Jawwid"`).
-- Errors: `COMM.CONVERSATION_NOT_FOUND` 404 (unknown learner).
+- Errors: `COMM.CANNOT_PROVISION_STUDENT_GROUP` 403 · `COMM.ACTOR_INACTIVE` 403 · `COMM.UNKNOWN_ACTOR` 401 · `COMM.CONVERSATION_NOT_FOUND` 404 (unknown learner, or a learner in another organization).
 - Idempotency: natural (one live group per learner; partial unique index).
 - Audit: `event_log` `student_group_created` (actorKind `system`); a `system` message `group.created` is written as `seq 1`.
 - Realtime: none on create (the system message does not enqueue `message.created`).
 
 **POST /conversations/student-group/:learnerId/sync** — EXISTS → RECONCILE (`syncStudentGroup`)
-- Auth today: **none** (no `@ActorId`). Phase 1: either `conversations.manage` (staff, family scope) or removed from the public surface and invoked only by the worker on Core relationship changes. Flagged in §5.
+- Auth (2026-10-12): bearer required; the route passes `@ActorId()`. Same rule as `POST /conversations/student-group`, except that a learner in another organization answers `{ synced: false }` exactly as an unknown learner does. Whether the route should later leave the public surface for a worker-only path is still open (§5).
 - Request: none. Response: `200 ConversationDto`, or `{ synced: false }` when the learner or live group does not exist.
 - Side effects: members added / `leftAt` set to match Core; `system` message `group.membership_changed`.
+- Completion (RT-009, 2026-10-12): as for `remove` above — `COMM.REVOCATION_UNCONFIRMED` 503 when the realtime completion cannot be confirmed, including on a repeat that finds nothing left to change.
 - Audit: `event_log` `student_group_membership_synced`. Realtime: `conversation.membership_changed { conversationId, added[], removed[] }` (only when something changed).
 
 **GET /conversations/:id** — EXISTS → RECONCILE (`conversation.controller.ts#get`)
@@ -460,8 +464,12 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 - Audit: none. Read-only; it creates no call and writes no row.
 
 **POST /conversations/:id/members** — EXISTS → RECONCILE (`setMembership`)
-- Auth: required. Permission: `conversations.manage`. Scope: family-facing staff (`canManageMembership`); Phase 1 additionally requires the conversation's family in scope.
-- Request: `{ action: 'add'|'remove', actorId, actorKind, memberRole, isSilent?: boolean, reason: string }`. `reason` is required: today a missing reason reaches `audit_log.reason NOT NULL` and fails as a 500; Phase 1 returns `COMMON.VALIDATION` 400. `add` of an existing live member violates the member uniqueness and surfaces as a 500 today (Phase 1: 409 `COMMON.IDEMPOTENCY_CONFLICT` or no-op).
+- Auth (2026-10-12): required. Gate: active family-facing staff with an organization (`canManageMembership`), else `COMM.ACTOR_INACTIVE` / `COMM.CANNOT_MANAGE_MEMBERSHIP` 403. Scope (`canManageMembershipIn`): a conversation in another organization → `COMM.CONVERSATION_NOT_FOUND` 404, as an unknown one; **`direct` → 403 for everyone** (its identity is its two members, `direct_key`); a `manager` for any conversation in their organization; `admin` / `coverage` only for a conversation of a family they own (on-duty is not scope, PD-3); a family-less conversation only through live `admin` membership of it. Permission key `conversations.manage` remains Phase 1.
+- Request: `{ action: 'add'|'remove', actorId, actorKind, memberRole, isSilent?: boolean, reason: string }`. Shape errors → `COMMON.VALIDATION` 400 naming the field: `action` not add/remove, blank `reason`, non-uuid `actorId` or conversation id, unknown `actorKind`, non-boolean `isSilent`.
+- `add` (`canAddMember`): the member is judged from **their own row**, never from the request. contact → only as `parent`, active, `canMessage`, of the conversation's family; teacher → only as `teacher`, active, and only into the Student Group of a learner they teach; staff → only as `admin`/`observer`, active, family-facing. Anything else, an unknown id, or another organization's row → `COMM.INVALID_PARTICIPANTS` 403 (one answer for all three). Contacts and teachers are refused in class groups and official conversations until Phase 2 defines them. Re-adding an identical live member is a no-op (200, nothing written); in a different role → `COMMON.VALIDATION` 400.
+- `remove`: acts on the live membership row; the request's `actorKind` / `memberRole` are ignored, and the audit records the row's role. Removing a non-member is a no-op (200, nothing written).
+- `remove` completion (RT-009, 2026-10-12): `200` only once every API node has confirmed it can no longer deliver to the removed member on a decision made before the removal; otherwise `COMM.REVOCATION_UNCONFIRMED` 503 with the removal committed. A retry — including the no-op repeat — is held to the same confirmation, never answered `200` on the strength of the first attempt.
+- Every refusal happens before the transaction and writes nothing. A concurrent identical add is absorbed by the live-member unique index (one row, one audit, one event).
 - Response: `{ ok: true }`. Idempotency: `Idempotency-Key` recommended.
 - Audit: `audit_log` `{action:'conversation.member_add'|'conversation.member_remove', entity:'conversation', entityId, after:{actorId, memberRole}, reason}`.
 - Realtime: `conversation.membership_changed`. Note: BR-1 membership constraints are also enforced by DB triggers (`chat.enforce_direct_conversation_rules`, `chat.assert_conversation_br1`); a trigger violation surfaces as a 500 today.
@@ -997,8 +1005,8 @@ Reconnect: re-subscribe, `GET …/messages?after=<last seq held>` per conversati
 | # | Gap | Evidence | Fix | Phase |
 |---|---|---|---|---|
 | S-1 | **No authentication.** `x-actor-id` header and `auth.actorId` handshake are trusted after identity resolution; any caller can act as any active actor. | `api/actor.decorator.ts`; `realtime.gateway.ts#handleConnection`; `docs/integration/auth-current-state.md` | Bearer tokens, guard populating `request.user`, WS token verification (§1, §3.1, §4). | 1 |
-| S-2 | **Routes with no actor at all**: `POST /conversations/student-group/:learnerId/sync`, `DELETE /notifications/devices/:token`, `POST /notifications/:id/delivered`. Anyone can resync any group, silence any device's push, or corrupt delivery metrics. | `conversation.controller.ts#sync`, `notification.controller.ts#unregister`, `#delivered` | Auth required on all three; sync becomes `conversations.manage` (or worker-internal); device / delivered scoped to owner / recipient. **`unregister` closed 2026-09-24** (scoped to the authenticated owner); `sync` and `delivered` remain open. | 1 |
-| S-3 | `POST /conversations/student-group` performs no actor or permission check (header only used as `addedBy`). | `conversation.controller.ts#studentGroup`, `ensureStudentGroup` | `conversations.manage` + family scope. | 1 |
+| S-2 | **Routes with no actor at all**: `POST /conversations/student-group/:learnerId/sync`, `DELETE /notifications/devices/:token`, `POST /notifications/:id/delivered`. Anyone can resync any group, silence any device's push, or corrupt delivery metrics. | `conversation.controller.ts#sync`, `notification.controller.ts#unregister`, `#delivered` | Auth required on all three; sync becomes `conversations.manage` (or worker-internal); device / delivered scoped to owner / recipient. **`unregister` closed 2026-09-24** (scoped to the authenticated owner); **`sync` closed 2026-10-12** (actor required; family-scoped, tenant-isolated); `delivered` remains open. | 1 |
+| S-3 | `POST /conversations/student-group` performs no actor or permission check (header only used as `addedBy`). | `conversation.controller.ts#studentGroup`, `ensureStudentGroup` | `conversations.manage` + family scope. **Closed 2026-10-12**: staff gate before lookup, owner-or-manager scope, tenant isolation. | 1 |
 | S-4 | **RT-011 — unscoped staff lists.** `GET /conversations` returns every conversation (`take: 200`) to any family-facing staff; `GET /approvals/pending` returns every pending approval; `canRead` allows any family-facing staff into any conversation. | `conversation.service.ts#listForActor`; `approval.service.ts#listPending`; `authorization.service.ts#canRead`; `docs/red-team/findings.md` RT-011 | Family scope rule (§3.3) applied to `listForActor`, `listPending`, `canRead` for non-managers; cursor pagination. Lists are built from an authorization-derived filter, never a probe. | 1 |
 | S-5 | **RT-012 — receipt roster disclosure.** `MessageDto.receipts` maps every receipt row (`actorId`, `deliveredAt`, `readAt`) to every reader, so a parent learns staff ids and read times. | `dto.ts#toMessageDto`; findings RT-012 | Receipts scoped to the requester's own row plus an aggregate (`readCount`, `deliveredCount`) for the author; staff see the roster for staff-authored messages only. Shape change is a breaking DTO change — announce with the Phase 1 DTO. | 1 |
 | S-6 | Device token re-binding: registering a token already owned by another actor silently moves it. | `notification.service.ts#registerDevice` (`update: { actorId }`) | Bind tokens to actor + session (§3.9). | 1 |

@@ -18,7 +18,7 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.ROLE_CANNOT_MESSAGE_FAMILY` | Finance/technical/academic staff may never take part in family communication. |
 | `COMM.TEACHER_TEACHER_DISABLED` | Teacher-to-teacher DMs are off by default. |
 | `COMM.STAFF_STAFF_DISABLED` | Staff-to-staff DMs are not in MVP; use internal notes. |
-| `COMM.INVALID_PARTICIPANTS` | The pair cannot form a conversation (two parents, self-chat, no staff side). |
+| `COMM.INVALID_PARTICIPANTS` | The pair cannot form a conversation (two parents, self-chat, no staff side); or a membership add names someone who may not join this conversation in that role. |
 | `COMM.CALL_PARTICIPANT_LEFT` | 409. The actor is on this call's participant list but has already left it — they were dropped, or left a group call that continued without them. Terminal: the call is over for them. Since 2026-09-27 a decline ENDS the call, so a repeat decline reports `COMM.CALL_ALREADY_ENDED` instead; this code still appears on a concurrent-decline race and on the token/accept paths. |
 | `COMM.CALL_NOT_RINGING` | 409. The call is no longer ringing, so there is nothing to decline. An answered call is left by ending it. |
 | `COMM.CALL_ALREADY_DECLINED` | 409. Every other participant has left, so the call was already refused. Answering it would record an answer nobody gave. A backstop since 2026-09-27: a decline now ends the call, so that state is normally reported as `COMM.CALL_ALREADY_ENDED`. |
@@ -36,7 +36,8 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.TEACHER_CANNOT_WRITE_INTERNAL` | Teachers cannot write internal notes. |
 | `COMM.MEMBER_IS_SILENT` | Present in the conversation but may not post. |
 | `COMM.ACTOR_INACTIVE` | Deactivated or offboarded actor. |
-| `COMM.CANNOT_MANAGE_MEMBERSHIP` | Only Jawwid admins change membership. |
+| `COMM.CANNOT_MANAGE_MEMBERSHIP` | Only Jawwid staff with the conversation's family in scope change membership; a direct conversation's membership never changes. |
+| `COMM.CANNOT_PROVISION_STUDENT_GROUP` | Only the family's supervisor (admin / coverage owner) or a manager of the same organization may create or re-sync a Student Group. |
 | `COMM.CANNOT_APPROVE` | Only the active handler or a manager may decide. |
 | `COMM.NOT_MESSAGE_AUTHOR` | Only the author (or a manager) may delete for everyone. |
 | `COMM.DELETE_WINDOW_EXPIRED` | Past `communication.delete_for_everyone_window_minutes`. |
@@ -55,6 +56,7 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.ATTACHMENT_TYPE_NOT_ALLOWED` | 400 | MIME type not allowed for that kind. |
 | `COMM.APPROVAL_ALREADY_DECIDED` | 409 | Someone else decided first. Refresh the queue. |
 | `COMM.APPROVAL_REASON_REQUIRED` | 400 | A rejection must state a reason. |
+| `COMM.REVOCATION_UNCONFIRMED` | 503 | RT-009. A membership removal, Student Group sync, logout or session/account revocation **is committed**, but not every API server confirmed it can no longer deliver realtime events to the revoked person on an earlier decision — so it is not reported as done. Retry the same request; it is idempotent and succeeds once every server confirms. |
 
 ## Calling
 
@@ -95,5 +97,7 @@ Source of truth: `apps/api/src/platform/errors.ts`.
   are free and return the original message.
 - `COMM.APPROVAL_ALREADY_DECIDED` means refresh, not retry.
 - Treat unknown `COMM.*` codes as a generic failure and show the `message`.
+- **Retry** `COMM.REVOCATION_UNCONFIRMED` with the same request: the change is
+  already saved; only its realtime completion is unconfirmed. Do not undo it.
 - **Never retry** `COMM.STORY_EXPIRED` or `COMM.STORY_DELETED`: both are final
   states, not transient failures. Drop the story from the view instead.

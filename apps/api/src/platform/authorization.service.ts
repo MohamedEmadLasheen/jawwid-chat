@@ -7,6 +7,7 @@ import { CommErrorCode } from './errors';
 import {
   ActorKind,
   ConversationType,
+  FAMILY_FACING_STAFF_ROLES,
   MemberRole,
   Moderation,
   OnBehalfMode,
@@ -127,6 +128,14 @@ export class AuthorizationService {
     /** PD-6: resolved by RelationshipService. Defaults to the strict value. */
     pairingAuthorized = false,
   ): Decision {
+    // Tenant first (RT-030). A direct conversation is filed under its two
+    // participants' organization, so they must share one -- and an actor in
+    // another organization is answered exactly as an unknown one, before any
+    // other property of theirs (activity, role) can be read off the refusal.
+    // SYSTEM has no organization and therefore never opens a direct channel.
+    if (!a.organizationId || a.organizationId !== b.organizationId) {
+      return deny(CommErrorCode.UNKNOWN_ACTOR, 'unknown actor');
+    }
     if (!a.isActive || !b.isActive) {
       return deny(CommErrorCode.ACTOR_INACTIVE, 'one of the participants is inactive');
     }
@@ -563,12 +572,224 @@ export class AuthorizationService {
   /**
    * Teachers and parents can never change a group's membership. Managers can;
    * so can the family's admins. The client is never the source of truth.
+   *
+   * This is the gate, asked before the conversation is loaded. Which
+   * conversation, and which member, are `canManageMembershipIn` and
+   * `canAddMember` -- passing the gate grants neither.
    */
   canManageMembership(actor: Actor): Decision {
+    if (!actor.isActive) return deny(CommErrorCode.ACTOR_INACTIVE, 'actor is inactive');
     if (!isFamilyFacingStaff(actor)) {
       return deny(CommErrorCode.CANNOT_MANAGE_MEMBERSHIP, 'only Jawwid admins may change membership');
     }
+    if (!actor.organizationId) {
+      return deny(CommErrorCode.CANNOT_MANAGE_MEMBERSHIP, 'an actor with no organization cannot change membership');
+    }
     return allow();
+  }
+
+  /**
+   * May this actor change the membership of THIS conversation?
+   *
+   * Scope (docs/contracts/API-CONTRACT.md `POST /conversations/:id/members`,
+   * `conversations.manage` + the conversation's family in scope;
+   * AUTHORIZATION-MODEL.md section 6): a manager for any conversation in their
+   * organization; an admin or coverage admin for a conversation of a family
+   * they own; a conversation with no family only through live admin membership
+   * of it. Being on duty is not scope (PD-3).
+   *
+   * A `direct` conversation's membership is never changed by anyone: its
+   * identity IS its two members (`direct_key`), so removing one and adding
+   * another would not edit a conversation, it would hijack one.
+   *
+   * Another organization's conversation reads as NOT FOUND.
+   */
+  canManageMembershipIn(
+    actor: Actor,
+    conv: {
+      type: string;
+      organizationId: string;
+      familyId: string | null;
+      familyOwnerId: string | null;
+      /** The actor's own live member_role in this conversation, or null. */
+      actorMemberRole: string | null;
+    },
+  ): Decision {
+    const gate = this.canManageMembership(actor);
+    if (!gate.allowed) return gate;
+    if (conv.organizationId !== actor.organizationId) {
+      return deny(CommErrorCode.CONVERSATION_NOT_FOUND, 'conversation not found');
+    }
+    if (conv.type === ConversationType.DIRECT) {
+      return deny(
+        CommErrorCode.CANNOT_MANAGE_MEMBERSHIP,
+        'a direct conversation is defined by its two members; its membership never changes',
+      );
+    }
+    if (actor.staffRole === 'manager') return allow();
+    if (conv.familyId !== null) {
+      if (conv.familyOwnerId === actor.actorId) return allow();
+      return deny(
+        CommErrorCode.CANNOT_MANAGE_MEMBERSHIP,
+        "only the family's supervisor or a manager may change this conversation's membership",
+      );
+    }
+    if (conv.actorMemberRole === MemberRole.ADMIN) return allow();
+    return deny(
+      CommErrorCode.CANNOT_MANAGE_MEMBERSHIP,
+      'only an admin of this conversation or a manager may change its membership',
+    );
+  }
+
+  /**
+   * May this candidate be ADDED to this conversation in this role?
+   *
+   * Every fact is read from the candidate's own row by the caller; nothing the
+   * client sent is trusted beyond which row to look up and which role is asked
+   * for. An unknown candidate and one in another organization get the same
+   * answer, so this cannot be used to probe for ids across a tenant boundary.
+   *
+   * The roles each kind may hold mirror how membership is built
+   * (`ensureStudentGroup` / `syncStudentGroup`): a contact is a parent, a
+   * teacher is a teacher, staff are admin or observer. A contact belongs only
+   * in their own family's conversations; a teacher only in the Student Group of
+   * a learner they teach (PD-1: membership "exactly as built"). Class groups and
+   * official conversations have no product rules for contacts or teachers yet
+   * (Phase 2), so those adds are refused rather than guessed.
+   */
+  canAddMember(
+    conv: {
+      type: string;
+      organizationId: string;
+      familyId: string | null;
+      learnerTeacherId: string | null;
+    },
+    requestedRole: string,
+    candidate:
+      | { kind: 'contact'; organizationId: string; isActive: boolean; familyId: string; canMessage: boolean }
+      | { kind: 'teacher'; actorId: string; organizationId: string; isActive: boolean; leftAt: Date | null }
+      | { kind: 'staff'; organizationId: string; isActive: boolean; leftAt: Date | null; staffRole: string }
+      | null,
+  ): Decision {
+    const ineligible = (reason: string) => deny(CommErrorCode.INVALID_PARTICIPANTS, reason);
+    if (!candidate || candidate.organizationId !== conv.organizationId) {
+      return ineligible('no such member can join this conversation');
+    }
+    switch (candidate.kind) {
+      case 'contact':
+        if (requestedRole !== MemberRole.PARENT) return ineligible('a family contact joins as parent');
+        if (!candidate.isActive || !candidate.canMessage) return ineligible('this contact may not communicate');
+        if (conv.familyId === null || candidate.familyId !== conv.familyId) {
+          return ineligible("a contact joins only their own family's conversations");
+        }
+        return allow();
+      case 'teacher':
+        if (requestedRole !== MemberRole.TEACHER) return ineligible('a teacher joins as teacher');
+        if (!candidate.isActive || candidate.leftAt !== null) return ineligible('this teacher is not active');
+        if (conv.type !== ConversationType.STUDENT_GROUP || conv.learnerTeacherId !== candidate.actorId) {
+          return ineligible("a teacher joins only the Student Group of a learner they teach");
+        }
+        return allow();
+      case 'staff':
+        if (requestedRole !== MemberRole.ADMIN && requestedRole !== MemberRole.OBSERVER) {
+          return ineligible('staff join as admin or observer');
+        }
+        if (!candidate.isActive || candidate.leftAt !== null) return ineligible('this staff member is not active');
+        if (!FAMILY_FACING_STAFF_ROLES.has(candidate.staffRole)) {
+          return ineligible('this staff role does not take part in family communication');
+        }
+        return allow();
+    }
+  }
+
+  /**
+   * May this actor write into a record of this organization? (RT-030)
+   *
+   * Every write that is attributed to a conversation's organization must first
+   * establish that the actor belongs to it; otherwise correcting the attribution
+   * would turn a write the database used to refuse (default tenant vs the
+   * conversation's) into one it accepts. SYSTEM belongs to no organization and
+   * acts for all of them; nothing reachable over HTTP is SYSTEM.
+   */
+  canActInOrganization(actor: Actor, organizationId: string): Decision {
+    if (actor.kind === ActorKind.SYSTEM) return allow();
+    if (!actor.organizationId || actor.organizationId !== organizationId) {
+      return deny(CommErrorCode.CONVERSATION_NOT_FOUND, 'conversation not found');
+    }
+    return allow();
+  }
+
+  /**
+   * May this actor provision (create or re-sync) a Student Group at all?
+   *
+   * Asked BEFORE the learner is looked up, so a refused caller learns nothing
+   * about whether the learner id exists: a real id and a random one get the
+   * same answer. A Student Group is provisioning, not communication -- its
+   * membership is derived from the academy's own relationships -- so a parent
+   * or a teacher is its subject and never its author.
+   *
+   * SYSTEM is allowed because Core ingestion and the fixtures that stand in for
+   * it provision with no person behind the call. HTTP cannot reach that branch:
+   * every route resolves its actor from a verified bearer token.
+   */
+  canProvisionStudentGroup(actor: Actor): Decision {
+    if (!actor.isActive) return deny(CommErrorCode.ACTOR_INACTIVE, 'actor is inactive');
+    if (actor.kind === ActorKind.SYSTEM) return allow();
+    if (!isFamilyFacingStaff(actor)) {
+      return deny(
+        CommErrorCode.CANNOT_PROVISION_STUDENT_GROUP,
+        'a Student Group is provisioned by Jawwid staff, never by a family member or a teacher',
+      );
+    }
+    // A staff actor with no tenant cannot be scoped. Every real actor carries
+    // one, so this refuses a state the identity layer does not produce -- but
+    // the alternative is a comparison that silently passes on undefined.
+    if (!actor.organizationId) {
+      return deny(
+        CommErrorCode.CANNOT_PROVISION_STUDENT_GROUP,
+        'an actor with no organization cannot provision a Student Group',
+      );
+    }
+    return allow();
+  }
+
+  /**
+   * May this actor provision the Student Group of THIS learner?
+   *
+   * Asked after `canProvisionStudentGroup` has passed and the learner is loaded.
+   * The facts are resolved by the caller; this method reads no database.
+   *
+   * Tenant: a learner in another organization is reported as NOT FOUND, not as
+   * forbidden, so a tenant boundary never confirms that an id exists. Both the
+   * learner's and the family's organization must match: the database does not
+   * yet tie them together (RT-029), so neither is trusted alone.
+   *
+   * Scope (docs/contracts/API-CONTRACT.md, `conversations.manage` + family
+   * scope; docs/architecture/SUPERVISOR-OWNERSHIP.md): a manager provisions for
+   * any family in their organization; an admin or coverage admin only for a
+   * family they own. Being on duty for a family is NOT scope here -- `on_duty()`
+   * is deprecated and nothing new may depend on it (PD-3).
+   */
+  canProvisionStudentGroupFor(
+    actor: Actor,
+    target: { learnerOrganizationId: string; familyOrganizationId: string; familyOwnerId: string },
+  ): Decision {
+    const gate = this.canProvisionStudentGroup(actor);
+    if (!gate.allowed) return gate;
+    if (actor.kind === ActorKind.SYSTEM) return allow();
+
+    if (
+      target.learnerOrganizationId !== actor.organizationId ||
+      target.familyOrganizationId !== actor.organizationId
+    ) {
+      return deny(CommErrorCode.CONVERSATION_NOT_FOUND, 'learner not found');
+    }
+    if (actor.staffRole === 'manager') return allow();
+    if (target.familyOwnerId === actor.actorId) return allow();
+    return deny(
+      CommErrorCode.CANNOT_PROVISION_STUDENT_GROUP,
+      'only the family\'s supervisor or a manager may provision its Student Group',
+    );
   }
 
   /**

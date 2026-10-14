@@ -118,6 +118,13 @@ export class MessageService {
     const now = new Date();
     const actor = await this.conversations.requireActor(input.senderId);
     const conv = await this.conversations.requireConversation(input.conversationId);
+    // RT-030: the sender must belong to the conversation's organization, and
+    // this must be the FIRST thing asked of a loaded conversation. Another
+    // tenant's conversation is answered exactly as an unknown one; any check
+    // placed before this one (attachment MIME, object-key namespace,
+    // idempotency) would answer differently for a conversation that exists.
+    const tenant = this.authz.canActInOrganization(actor, conv.organizationId);
+    if (!tenant.allowed) throw new CommError(tenant.code, tenant.reason, 404);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
 
     // Idempotency fast path. The unique index is the real guarantee; this only
@@ -213,16 +220,22 @@ export class MessageService {
       const created = await this.prisma.$transaction(async (tx) => {
         // Serialize sequence assignment. Ordering is decided by the server,
         // never by a device clock.
-        const locked = await tx.$queryRaw<Array<{ last_seq: bigint }>>`
-          SELECT last_seq FROM chat.conversation WHERE id = ${conv.id}::uuid FOR UPDATE
+        // The locked row is also the authority for the message's tenant
+        // (RT-030): the column default is the seeded organization, and
+        // message_same_organization refuses it for every other tenant.
+        const locked = await tx.$queryRaw<Array<{ last_seq: bigint; organization_id: string }>>`
+          SELECT last_seq, organization_id::text AS organization_id
+            FROM chat.conversation WHERE id = ${conv.id}::uuid FOR UPDATE
         `;
         if (locked.length === 0) {
           throw new CommError(CommErrorCode.CONVERSATION_NOT_FOUND, 'conversation not found', 404);
         }
         const seq = locked[0].last_seq + BigInt(1);
+        const organizationId = locked[0].organization_id;
 
         const message = await tx.message.create({
           data: {
+            organizationId,
             conversationId: conv.id,
             authorType: actor.kind,
             authorId: actor.kind === ActorKind.SYSTEM ? null : actor.actorId,
@@ -282,6 +295,9 @@ export class MessageService {
           // event is broadcast, so the message cannot leak to the group.
           const approval = await tx.messageApproval.create({
             data: {
+              // No trigger guards this column, so a default would be filed
+              // under the wrong tenant silently rather than refused.
+              organizationId,
               messageId: message.id,
               conversationId: conv.id,
               requestedBy: actor.actorId,
