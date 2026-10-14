@@ -670,7 +670,24 @@ export class ConversationService {
       }, null);
       if (!probe.allowed) throw new CommError(probe.code, probe.reason);
 
+      // Decision 2 (2026-10-14): family-facing staff read every conversation OF
+      // THEIR OWN ORGANIZATION, and the boundary is in the query. It used to be
+      // the 200 most recent conversations of every organization, so another
+      // tenant's activity could both leak in and push this organization's own
+      // conversations out of the cap. This is the ORGANIZATION boundary only:
+      // the narrower staff scope of AUTHORIZATION-MODEL section 6 (owned
+      // families, assignments, membership) is not decided here and belongs to
+      // the dedicated scope change. Until it lands, an admin or coverage admin
+      // still lists their whole organization -- known defect A-1 / RT-011.
+      //
+      // The organization is the staff row's, resolved by IdentityService; the
+      // request carries none. An actor without one is scoped to nothing -- and
+      // must be refused HERE, because Prisma reads `organizationId: undefined`
+      // as no filter at all.
+      if (!actor.organizationId) return [];
+
       return this.prisma.conversation.findMany({
+        where: { organizationId: actor.organizationId },
         include: { learner: true },
         orderBy: { lastActivityAt: 'desc' },
         take: 200,

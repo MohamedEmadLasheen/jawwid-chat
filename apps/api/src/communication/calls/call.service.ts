@@ -84,6 +84,7 @@ export class CallService {
     const now = new Date();
     const initiator = await this.conversations.requireActor(initiatorId);
     const conv = await this.conversations.requireConversation(conversationId);
+    this.requireConversationOrganization(initiator, conv.organizationId);
     const membership = await this.conversations.membershipOf(conv.id, initiator.actorId);
 
     const { decision, participantActors } = await this.decideInitiate(
@@ -105,6 +106,10 @@ export class CallService {
     return this.prisma.$transaction(async (tx) => {
       const call = await tx.call.create({
         data: {
+          // RT-031: the conversation's organization, never the column default.
+          // chat.call has no same-organization trigger, so a default here is
+          // not refused -- it is silently filed under the wrong tenant.
+          organizationId: conv.organizationId,
           conversationId: conv.id,
           familyId: conv.familyId,
           initiatorId: initiator.actorId,
@@ -197,8 +202,15 @@ export class CallService {
       // membership rather than from anything the caller sent.
       await this.conversations.pairingAuthorizedAmong(members),
     );
+    if (!decision.allowed) return { decision, participantActors };
 
-    return { decision, participantActors };
+    // PD-A: the caller must be one of the participants this call would ring.
+    // Asked here, inside the one initiation decision, so start() and
+    // callCapability() cannot disagree about it.
+    return {
+      decision: this.authz.canStartCallAsParticipant(initiator, participantActors),
+      participantActors,
+    };
   }
 
   /**
@@ -234,6 +246,7 @@ export class CallService {
   ): Promise<{ canCall: boolean; code: string | null }> {
     const actor = await this.conversations.requireActor(actorId);
     const conv = await this.conversations.requireConversation(conversationId);
+    this.requireConversationOrganization(actor, conv.organizationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
 
     const readable = this.authz.canRead(actor, conv, membership);
@@ -597,7 +610,7 @@ export class CallService {
    */
   async end(callId: string, actorId: string): Promise<void> {
     const actor = await this.conversations.requireActor(actorId);
-    const call = await this.requireLiveParticipant(callId, actor.actorId);
+    const call = await this.requireLiveParticipant(callId, actor);
 
     await this.prisma.$transaction(async (tx) => {
       const locked = await this.lockCall(tx, callId);
@@ -753,6 +766,7 @@ export class CallService {
   async history(conversationId: string, actorId: string) {
     const actor = await this.conversations.requireActor(actorId);
     const conv = await this.conversations.requireConversation(conversationId);
+    this.requireConversationOrganization(actor, conv.organizationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
     const readable = this.authz.canRead(actor, conv, membership);
     if (!readable.allowed) throw new CommError(readable.code, readable.reason);
@@ -942,6 +956,13 @@ export class CallService {
       include: { participants: true },
     });
     if (!call) throw new CommError(CommErrorCode.CALL_NOT_FOUND, 'call not found', 404);
+
+    // D3: before anything about the call is read back -- its state, its
+    // participants -- another organization's call is answered exactly as a
+    // missing one. Even a participant row cannot reach across the boundary.
+    const conv = await this.conversations.requireConversation(call.conversationId);
+    this.requireCallOrganization(actor, conv.organizationId);
+
     if (call.status === CallStatus.ENDED) {
       throw new CommError(CommErrorCode.CALL_ALREADY_ENDED, 'this call has ended', 409);
     }
@@ -961,7 +982,6 @@ export class CallService {
       );
     }
 
-    const conv = await this.conversations.requireConversation(call.conversationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
 
     const participantActors: Actor[] = [];
@@ -1016,18 +1036,45 @@ export class CallService {
    * the right question for hanging up. Joining, answering and obtaining media
    * go through authorizeJoin() instead.
    */
-  private async requireLiveParticipant(callId: string, actorId: string) {
+  private async requireLiveParticipant(callId: string, actor: Actor) {
     const call = await this.prisma.call.findUnique({
       where: { id: callId },
-      include: { participants: true },
+      include: { participants: true, conversation: { select: { organizationId: true } } },
     });
     if (!call) throw new CommError(CommErrorCode.CALL_NOT_FOUND, 'call not found', 404);
-    if (!call.participants.some((p) => p.actorId === actorId)) {
+    // D3. The tenant boundary is not an authorization of the call -- hanging up
+    // stays cleanup, as above -- it is whether the call exists for this actor
+    // at all.
+    this.requireCallOrganization(actor, call.conversation.organizationId);
+    if (!call.participants.some((p) => p.actorId === actor.actorId)) {
       throw new CommError(
         CommErrorCode.CALL_NOT_A_PARTICIPANT,
         'actor is not a participant of this call',
       );
     }
     return call;
+  }
+
+  /**
+   * D3, the tenant boundary for an operation addressed to a CONVERSATION.
+   *
+   * The decision is RT-030's `canActInOrganization` -- the one organization
+   * rule, shared with message sending -- and the organization is the
+   * conversation's own column, never a request field. A refusal is the same
+   * 404 an unknown conversation gets, so the boundary does not confirm that an
+   * id exists.
+   */
+  private requireConversationOrganization(actor: Actor, organizationId: string): void {
+    const tenant = this.authz.canActInOrganization(actor, organizationId);
+    if (!tenant.allowed) throw new CommError(tenant.code, tenant.reason, 404);
+  }
+
+  /**
+   * D3, the same boundary for an operation addressed to a CALL. Same decision;
+   * the refusal is the one an unknown call id gets.
+   */
+  private requireCallOrganization(actor: Actor, organizationId: string): void {
+    const tenant = this.authz.canActInOrganization(actor, organizationId);
+    if (!tenant.allowed) throw new CommError(CommErrorCode.CALL_NOT_FOUND, 'call not found', 404);
   }
 }

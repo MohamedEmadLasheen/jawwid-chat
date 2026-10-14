@@ -712,17 +712,24 @@ export class AuthorizationService {
      *  token. A call is not a standing grant. */
     pairingAuthorized = false,
   ): Promise<Decision> {
-    const sendable = await this.canSend(
-      actor,
-      conv,
-      membership,
-      { visibility: Visibility.CUSTOMER },
-      now,
-      familyOwnerId,
-      participants.map((p) => p.kind),
-      liveMembers,
-      pairingAuthorized,
-    );
+    // PD-B (2026-10-14): a STAFF member answering a call they were rung for is
+    // not sending a message, and is not held to the on-duty rule that governs
+    // starting one. Every other actor, and every initiation, still goes through
+    // canSend exactly as before.
+    const sendable =
+      intent === CallIntent.JOIN && actor.kind === ActorKind.STAFF
+        ? this.canStaffJoinCall(actor, conv, membership)
+        : await this.canSend(
+            actor,
+            conv,
+            membership,
+            { visibility: Visibility.CUSTOMER },
+            now,
+            familyOwnerId,
+            participants.map((p) => p.kind),
+            liveMembers,
+            pairingAuthorized,
+          );
     if (!sendable.allowed) return sendable;
 
     // PD-6. canSend already applied requireAuthorizedPairing for a direct
@@ -730,7 +737,10 @@ export class AuthorizationService {
     // message in the same channel -- which is the property C-2 asks for and the
     // reason calling routes through canSend at all. Restated here on the call's
     // own participant set, because the two are supplied separately and a caller
-    // that assembles them inconsistently must not slip through.
+    // that assembles them inconsistently must not slip through. On the staff
+    // ANSWER path (canStaffJoinCall) canSend did not run, so this restatement is
+    // the check there -- and a staff member is never one side of a direct
+    // teacher/parent pair, so PD-6 cannot be loosened by that path.
     const callPairing = this.requireAuthorizedPairing(
       actor,
       conv,
@@ -760,5 +770,73 @@ export class AuthorizationService {
     }
 
     return allow();
+  }
+
+  /**
+   * PD-B (2026-10-14). May a STAFF member answer, decline or take media for a
+   * call they are already a participant of?
+   *
+   * WHY NOT canSend. canSend decides whether staff may SPEAK FOR JAWWID in a
+   * family conversation, and for an ordinary admin that is the on-duty rule.
+   * Answering is a different act: the server already chose this person when it
+   * rang them -- from conversation membership, under the full initiation policy
+   * -- so "is somebody else on shift right now" is not a question about them.
+   * Running canSend here refused an off-duty owner the call their own parent
+   * placed to them (NOT_ON_DUTY), while the admin who WAS on duty had never
+   * been rung.
+   *
+   * WHAT IS STILL ASKED, all of it from server-side facts:
+   *   - canRead: the actor is active and a family-facing role.
+   *   - the conversation is not archived (canSend's rule, kept).
+   *   - LIVE MEMBERSHIP. canSend never required it of staff, because family-
+   *     facing staff may read any conversation; here membership is the
+   *     authority, so a staff participant removed from the conversation after
+   *     being rung cannot answer.
+   * The caller (CallService.authorizeJoin) has already established that the
+   * actor is a participant who has not left, that the call is live, and that
+   * the actor belongs to the conversation's organization. An unrelated on-duty
+   * admin therefore still cannot answer: they hold no participant row.
+   *
+   * Only the JOIN intent reaches this. Starting a call keeps canSend, the
+   * on-duty rule included.
+   */
+  private canStaffJoinCall(actor: Actor, conv: Conv, membership: Member | null): Decision {
+    const readable = this.canRead(actor, conv, membership);
+    if (!readable.allowed) return readable;
+    if (conv.archivedAt) {
+      return deny(CommErrorCode.CONVERSATION_ARCHIVED, 'conversation is archived');
+    }
+    if (!membership || membership.leftAt !== null) {
+      return deny(CommErrorCode.NOT_CONVERSATION_MEMBER, 'actor is not a member of this conversation');
+    }
+    return allow();
+  }
+
+  /**
+   * PD-A (2026-10-14). Whoever starts a call must be ON it.
+   *
+   * `canCall(INITIATE)` asks whether the actor may start a call in this
+   * conversation; for staff that is canSend, which does not require membership
+   * of a manager, of an on-duty admin in a family conversation, or of any
+   * family-facing staff in a family-less group. The call's participants,
+   * however, are the conversation's live members. Allowing such a caller
+   * created a PHANTOM call: everyone else rang, and the caller -- holding no
+   * participant row -- could neither join its media nor hang it up.
+   *
+   * Asked AFTER canCall, so every refusal canCall already gives keeps its code.
+   * A contact or a teacher who passes canCall is always a live, non-silent
+   * member and therefore always a participant, so this changes nothing for
+   * them; it exists for staff. It adds no participant and changes no
+   * membership: a caller who is not on the call is refused, nothing more.
+   */
+  canStartCallAsParticipant(
+    actor: Pick<Actor, 'actorId'>,
+    participants: ReadonlyArray<Pick<Actor, 'actorId'>>,
+  ): Decision {
+    if (participants.some((p) => p.actorId === actor.actorId)) return allow();
+    return deny(
+      CommErrorCode.NOT_CONVERSATION_MEMBER,
+      'the caller would not be a participant of this call',
+    );
   }
 }

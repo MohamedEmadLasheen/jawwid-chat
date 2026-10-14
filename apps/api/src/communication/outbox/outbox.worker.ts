@@ -319,7 +319,9 @@ export class OutboxWorker {
 
     const call = await this.prisma.call.findUnique({
       where: { id: callId },
-      include: { participants: true },
+      // The conversation's organization is the call's tenant (Decision 3): a
+      // trusted row, never the event payload.
+      include: { participants: true, conversation: { select: { organizationId: true } } },
     });
     if (!call) return;
 
@@ -343,6 +345,7 @@ export class OutboxWorker {
         locale: recipient.locale,
         familyId: call.familyId,
         conversationId: call.conversationId,
+        organizationId: call.conversation.organizationId,
         variables: { caller_name: initiator?.displayName ?? 'Jawwid' },
       });
     }
@@ -366,7 +369,7 @@ export class OutboxWorker {
 
     const call = await this.prisma.call.findUnique({
       where: { id: callId },
-      include: { participants: true },
+      include: { participants: true, conversation: { select: { organizationId: true } } },
     });
     if (!call) return;
 
@@ -388,6 +391,7 @@ export class OutboxWorker {
         locale: recipient.locale,
         familyId: call.familyId,
         conversationId: call.conversationId,
+        organizationId: call.conversation.organizationId,
         variables: { caller_name: initiator?.displayName ?? 'Jawwid' },
       });
     }

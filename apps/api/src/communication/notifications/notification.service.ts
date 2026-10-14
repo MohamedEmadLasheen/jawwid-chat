@@ -24,6 +24,14 @@ export interface ScheduleInput {
   priority?: string;
   familyId?: string | null;
   conversationId?: string | null;
+  /**
+   * The tenant to file the notification under, resolved by the CALLER from a
+   * trusted row. Optional and, today, supplied only for call notifications
+   * (Decision 3, 2026-10-14): when absent the row takes the column default
+   * exactly as it always has, so message, story and reminder notifications
+   * are written unchanged.
+   */
+  organizationId?: string | null;
   variables?: Record<string, unknown>;
   scheduledAt: Date;
   respectQuietHours?: boolean;
@@ -74,6 +82,8 @@ export class NotificationService {
           priority: input.priority ?? 'normal',
           familyId: input.familyId ?? null,
           conversationId: input.conversationId ?? null,
+          // Only when stated: omitting the field keeps the column default.
+          ...(input.organizationId ? { organizationId: input.organizationId } : {}),
           variables: (input.variables ?? {}) as Prisma.InputJsonValue,
           status: NotificationStatus.SCHEDULED,
           scheduledAt,
@@ -332,6 +342,8 @@ export class NotificationService {
       locale?: string;
       familyId?: string | null;
       conversationId?: string | null;
+      /** See ScheduleInput.organizationId. */
+      organizationId?: string | null;
       variables?: Record<string, unknown>;
       now?: Date;
     },
@@ -354,6 +366,7 @@ export class NotificationService {
       priority: rule.priority,
       familyId: input.familyId ?? null,
       conversationId: input.conversationId ?? null,
+      organizationId: input.organizationId ?? null,
       variables: input.variables,
       scheduledAt: new Date(base.getTime() + rule.offsetSeconds * 1000),
       respectQuietHours: rule.respectQuietHours,
