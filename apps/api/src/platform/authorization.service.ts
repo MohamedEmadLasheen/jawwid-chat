@@ -10,6 +10,7 @@ import {
   MemberRole,
   Moderation,
   OnBehalfMode,
+  StaffRole,
   Visibility,
 } from '../communication/contracts/vocab';
 
@@ -650,6 +651,43 @@ export class AuthorizationService {
    */
   canReadStoryViewers(actor: Actor): Decision {
     return this.canPublishStory(actor);
+  }
+
+  /**
+   * May this actor inspect the whole organization -- every account, every
+   * conversation and its messages, every story -- through the Admin Portal's
+   * read-only `/admin` surface?
+   *
+   * `super_admin` only (PD-5; AUTHORIZATION-MODEL §3 `users.manage`, which no
+   * other role holds). A manager also sees every family in the organization by
+   * §6, but `/admin` lists ACCOUNTS, and account inspection is user management.
+   *
+   * READ-ONLY BY CONSTRUCTION. This answers "may you look", never "may you act":
+   * no route behind it writes. Acting in a family conversation is still decided
+   * by canSend / canPublishStory / canApprove, which do not admit super_admin
+   * yet, because the SQL helpers they agree with do not either.
+   *
+   * The organization is required for the same reason canPublishStory requires
+   * it: every query behind this verdict is filtered on it, and a missing tenant
+   * would be a `where` clause that silently omits its filter -- failing open.
+   */
+  canInspectOrganization(actor: Actor): Decision {
+    if (!actor.isActive) {
+      return deny(CommErrorCode.ACTOR_INACTIVE, 'an inactive actor may not inspect the organization');
+    }
+    if (actor.kind !== ActorKind.STAFF || actor.staffRole !== StaffRole.SUPER_ADMIN) {
+      return deny(
+        CommErrorCode.ADMIN_INSPECTION_DENIED,
+        'only the super admin may inspect the organization',
+      );
+    }
+    if (!actor.organizationId) {
+      return deny(
+        CommErrorCode.ADMIN_INSPECTION_DENIED,
+        'an actor with no organization cannot be scoped',
+      );
+    }
+    return allow();
   }
 
   /** The approver is the family's active handler, or any manager. */

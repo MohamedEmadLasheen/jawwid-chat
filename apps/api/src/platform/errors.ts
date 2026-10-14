@@ -108,6 +108,10 @@ export enum CommErrorCode {
   /** The authored audience resolves to nobody the author may address. */
   STORY_AUDIENCE_EMPTY = 'COMM.STORY_AUDIENCE_EMPTY',
   STORY_AUDIENCE_INVALID = 'COMM.STORY_AUDIENCE_INVALID',
+
+  // --- Admin Portal ---
+  /** Not the super admin. The `/admin` inspection surface is theirs alone. Never retry. */
+  ADMIN_INSPECTION_DENIED = 'COMM.ADMIN_INSPECTION_DENIED',
 }
 
 export class CommError extends Error {

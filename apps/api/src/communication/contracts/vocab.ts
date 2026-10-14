@@ -21,6 +21,15 @@ export const StaffRole = {
   FINANCE: 'finance',
   TECHNICAL: 'technical',
   ACADEMIC: 'academic',
+  /**
+   * PD-5: the organization owner. Granted only by the bootstrap procedure
+   * (20261013120000 guards the column). NOT in FAMILY_FACING_STAFF_ROLES yet:
+   * the SQL helpers that admit family-facing staff still list
+   * ('admin', 'coverage', 'manager'), and the API must not allow a write the
+   * database will refuse. Its authority today is organization inspection --
+   * AuthorizationService.canInspectOrganization.
+   */
+  SUPER_ADMIN: 'super_admin',
 } as const;
 export type StaffRole = (typeof StaffRole)[keyof typeof StaffRole];
 

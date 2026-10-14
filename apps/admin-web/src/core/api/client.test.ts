@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { api, newIdempotencyKey, request, setUnauthenticatedHandler } from './client'
 import { ApiError, NetworkError } from './errors'
+import { tokenStore } from '@/core/auth/tokens'
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -19,11 +20,22 @@ describe('api client', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     setUnauthenticatedHandler(() => {})
+    tokenStore.clear()
   })
 
-  it('sends the session cookie rather than a token held in JavaScript', async () => {
+  // The API is Bearer-only (PR-B) and sets no cookie; the cookie client this
+  // replaced could not sign anybody in.
+  it('sends the bearer token, and never an ambient cookie', async () => {
+    tokenStore.set({ accessToken: 'access-1', refreshToken: 'refresh-1' })
     await api.get('/me')
-    expect(fetchMock.mock.calls[0]![1].credentials).toBe('include')
+    const init = fetchMock.mock.calls[0]![1]
+    expect(init.headers['Authorization']).toBe('Bearer access-1')
+    expect(init.credentials).toBe('omit')
+  })
+
+  it('sends no Authorization header without a session', async () => {
+    await api.get('/me')
+    expect(fetchMock.mock.calls[0]![1].headers['Authorization']).toBeUndefined()
   })
 
   it('drops empty query parameters instead of sending bare filters', async () => {
@@ -72,6 +84,49 @@ describe('api client', () => {
     await expect(api.get('/dashboard/header')).rejects.toMatchObject({
       status: 500,
       messageEn: 'Something went wrong on our side.',
+    })
+  })
+
+  it('rotates an expired access token ONCE for a burst of 401s, then retries', async () => {
+    tokenStore.set({ accessToken: 'stale', refreshToken: 'refresh-1' })
+    let refreshes = 0
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
+      if (url.endsWith('/auth/refresh')) {
+        refreshes++
+        expect(JSON.parse(String(init.body))).toEqual({ refreshToken: 'refresh-1' })
+        return jsonResponse({ accessToken: 'fresh', refreshToken: 'refresh-2' })
+      }
+      const auth = (init.headers as Record<string, string>)['Authorization']
+      return auth === 'Bearer fresh' ? jsonResponse({ ok: true }) : jsonResponse({}, 401)
+    })
+
+    // The API revokes every session on a replayed refresh token, so five
+    // concurrent expiries must cost exactly one rotation.
+    const results = await Promise.all([1, 2, 3, 4, 5].map(() => api.get('/admin/overview')))
+    expect(results.every((r) => (r as { ok: boolean }).ok)).toBe(true)
+    expect(refreshes).toBe(1)
+    expect(tokenStore.access()).toBe('fresh')
+    expect(tokenStore.refresh()).toBe('refresh-2')
+  })
+
+  it('ends the session when the refresh is refused', async () => {
+    const onUnauthenticated = vi.fn()
+    setUnauthenticatedHandler(onUnauthenticated)
+    tokenStore.set({ accessToken: 'stale', refreshToken: 'revoked' })
+    fetchMock.mockResolvedValue(jsonResponse({ error: { code: 'AUTH.SESSION_REVOKED' } }, 401))
+
+    await expect(api.get('/me')).rejects.toBeInstanceOf(ApiError)
+    expect(tokenStore.hasSession()).toBe(false)
+    expect(onUnauthenticated).toHaveBeenCalledTimes(1)
+  })
+
+  it("shows the API's own single-language message when that is all it sends", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ error: { code: 'COMM.ADMIN_INSPECTION_DENIED', message: 'only the super admin may inspect' } }, 403),
+    )
+    await expect(api.get('/admin/users')).rejects.toMatchObject({
+      code: 'COMM.ADMIN_INSPECTION_DENIED',
+      messageEn: 'only the super admin may inspect',
     })
   })
 

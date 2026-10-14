@@ -82,6 +82,12 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.STORY_AUDIENCE_EMPTY` | 400 | The authored audience resolves to nobody you may address. |
 | `COMM.STORY_AUDIENCE_INVALID` | 400 | A clause is malformed, names an unknown kind, or names a record outside your organization. Loud rather than silent, so an operator learns while composing. |
 
+## Admin Portal
+
+| Code | HTTP | Meaning |
+|---|---|---|
+| `COMM.ADMIN_INSPECTION_DENIED` | 403 | The read-only `/admin` inspection surface belongs to `super_admin` alone (PD-5, `users.manage`). Every other role, every contact and every teacher receives this. Never retry. |
+
 ## Client guidance
 
 - **Never retry** a BR-1 or role denial: it is a rule, not a transient failure.
