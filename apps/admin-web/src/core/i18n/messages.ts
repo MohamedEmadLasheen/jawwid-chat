@@ -16,6 +16,7 @@ export const messages = {
     'nav.dashboard': 'Dashboard',
     'nav.stories': 'Stories',
     'nav.settings': 'Settings',
+    'nav.profile': 'My profile',
 
     'bucket.now': 'Now',
     'bucket.today': 'Today',
@@ -196,6 +197,7 @@ export const messages = {
     'nav.dashboard': 'لوحة المتابعة',
     'nav.stories': 'الحالات',
     'nav.settings': 'الإعدادات',
+    'nav.profile': 'ملفي الشخصي',
 
     'bucket.now': 'الآن',
     'bucket.today': 'اليوم',

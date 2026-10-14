@@ -5,6 +5,14 @@ import type { CoverageService } from './coverage.service';
 import { Actor, isFamilyFacingStaff } from './types';
 import { CommErrorCode } from './errors';
 import {
+  NEVER_A_TEAM_MEMBER,
+  NO_PROFILE_ACCESS,
+  StaffProfilePermission,
+  profilePermissionsFor,
+  type StaffProfileAccess,
+  type StaffProfileTarget,
+} from './staff-profile-policy';
+import {
   ActorKind,
   ConversationType,
   MemberRole,
@@ -686,6 +694,165 @@ export class AuthorizationService {
         CommErrorCode.ADMIN_INSPECTION_DENIED,
         'an actor with no organization cannot be scoped',
       );
+    }
+    return allow();
+  }
+
+  // ------------------------------------------------------------------
+  // Staff profiles
+  // ------------------------------------------------------------------
+
+  /**
+   * What `actor` may do with the profile of `target`.
+   *
+   * THE RELATION IS AN INPUT, NOT A LOOKUP -- the same arrangement as PD-6.
+   * StaffProfileService resolves `target` (role, organization, activity, and
+   * whether it reports to the actor) from the database and hands it here; this
+   * method compares no ids it fetched itself and has no database dependency.
+   *
+   * Three relations, checked in order, and nothing else is visible:
+   *   self          the actor's own row
+   *   organization  the actor holds org_profiles.view (super_admin), same tenant
+   *   team          the target reports DIRECTLY to the actor, the actor holds
+   *                 team_profiles.view, and the target is not a manager or the
+   *                 super admin
+   *
+   * WHAT NO BRANCH GRANTS: a change to role, permissions, account status, login
+   * identity or credentials. Those fields have no setter behind this decision at
+   * all. The reporting line is never editable on one's own profile, and a
+   * responsibility is never assignable to oneself unless one is the super admin
+   * (whom nobody else could assign). An inactive actor gets nothing; an
+   * inactive target is viewable by whoever could view it, and editable by
+   * nobody but the super admin.
+   */
+  staffProfileAccess(actor: Actor, target: StaffProfileTarget): StaffProfileAccess {
+    if (actor.kind !== ActorKind.STAFF || !actor.isActive || !actor.organizationId) {
+      return NO_PROFILE_ACCESS;
+    }
+    if (target.organizationId !== actor.organizationId) return NO_PROFILE_ACCESS;
+
+    const keys = profilePermissionsFor(actor.staffRole);
+    const has = (key: StaffProfilePermission) => keys.has(key);
+    const isSelf = target.staffId === actor.actorId;
+    const audit = has(StaffProfilePermission.PROFILE_AUDIT_READ);
+
+    if (isSelf) {
+      return {
+        relation: 'self',
+        canView: true,
+        canEditProfessional: has(StaffProfilePermission.SELF_EDIT),
+        canEditPhoto: has(StaffProfilePermission.SELF_EDIT),
+        canEditDisplayName: has(StaffProfilePermission.ORG_EDIT_IDENTITY),
+        canManageResponsibilities: has(StaffProfilePermission.ORG_RESPONSIBILITIES_MANAGE),
+        // Never one's own: a staff member cannot choose who manages them.
+        canManageReportingLine: false,
+        canReadAudit: audit,
+      };
+    }
+
+    if (has(StaffProfilePermission.ORG_VIEW)) {
+      const editable = target.isActive;
+      return {
+        relation: 'organization',
+        canView: true,
+        canEditProfessional: editable && has(StaffProfilePermission.ORG_EDIT_PROFESSIONAL),
+        canEditPhoto: editable && has(StaffProfilePermission.ORG_EDIT_IDENTITY),
+        canEditDisplayName: editable && has(StaffProfilePermission.ORG_EDIT_IDENTITY),
+        canManageResponsibilities: editable && has(StaffProfilePermission.ORG_RESPONSIBILITIES_MANAGE),
+        canManageReportingLine:
+          editable &&
+          has(StaffProfilePermission.REPORTING_LINES_MANAGE) &&
+          target.role !== StaffRole.SUPER_ADMIN,
+        canReadAudit: audit,
+      };
+    }
+
+    if (
+      target.reportsToActor &&
+      actor.staffRole === StaffRole.MANAGER &&
+      !NEVER_A_TEAM_MEMBER.has(target.role) &&
+      has(StaffProfilePermission.TEAM_VIEW)
+    ) {
+      const editable = target.isActive;
+      return {
+        relation: 'team',
+        canView: true,
+        canEditProfessional: editable && has(StaffProfilePermission.TEAM_EDIT_PROFESSIONAL),
+        // A photo and a name are the person's own; a manager edits neither.
+        canEditPhoto: false,
+        canEditDisplayName: false,
+        canManageResponsibilities: editable && has(StaffProfilePermission.TEAM_RESPONSIBILITIES_MANAGE),
+        // Team membership is user management: super admin only.
+        canManageReportingLine: false,
+        canReadAudit: audit,
+      };
+    }
+
+    return NO_PROFILE_ACCESS;
+  }
+
+  /**
+   * May this actor see the organization-wide staff overview (every account,
+   * every team, every responsibility, global workload)? `org_profiles.view`,
+   * which only the super admin holds.
+   */
+  canViewOrganizationProfiles(actor: Actor): Decision {
+    if (!actor.isActive) {
+      return deny(CommErrorCode.ACTOR_INACTIVE, 'an inactive actor may not view the organization');
+    }
+    if (
+      actor.kind !== ActorKind.STAFF ||
+      !actor.organizationId ||
+      !profilePermissionsFor(actor.staffRole).has(StaffProfilePermission.ORG_VIEW)
+    ) {
+      return deny(CommErrorCode.STAFF_DIRECTORY_DENIED, 'only the super admin may view the organization overview');
+    }
+    return allow();
+  }
+
+  // ------------------------------------------------------------------
+  // Ownership and offboarding (approved policy, 20261014110000)
+  // ------------------------------------------------------------------
+  //
+  // The SQL functions are the enforcement (chat.require_family_assigner /
+  // chat.require_super_admin, server-side only); these are the same rules for
+  // any API route that offers the action, so the API never offers what the
+  // database will refuse. Separate actions, separate rules:
+  //   families.assign            manager or super_admin, same organization
+  //   move a staff member's families (offboarding, part 1)
+  //                              manager (not another manager's or the super
+  //                              admin's) or super_admin
+  //   deactivate a staff account super_admin only; never the super admin, never self
+
+  canAssignFamilies(actor: Actor, target: { organizationId: string }): Decision {
+    return this.ownershipAuthority(actor, target.organizationId, ['manager', 'super_admin'], 'assign families');
+  }
+
+  canTransferStaffFamilies(actor: Actor, target: { organizationId: string; role: string }): Decision {
+    const base = this.ownershipAuthority(actor, target.organizationId, ['manager', 'super_admin'], 'move families');
+    if (!base.allowed) return base;
+    if (actor.staffRole === StaffRole.MANAGER && NEVER_A_TEAM_MEMBER.has(target.role)) {
+      return deny(CommErrorCode.STAFF_ASSIGNMENT_DENIED, "a manager cannot move another manager's or the super admin's families");
+    }
+    return base;
+  }
+
+  canDeactivateStaff(actor: Actor, target: { staffId: string; organizationId: string; role: string }): Decision {
+    const base = this.ownershipAuthority(actor, target.organizationId, ['super_admin'], 'deactivate staff');
+    if (!base.allowed) return base;
+    if (target.role === StaffRole.SUPER_ADMIN || target.staffId === actor.actorId) {
+      return deny(CommErrorCode.STAFF_ASSIGNMENT_DENIED, 'the super admin cannot be deactivated, and nobody deactivates themselves');
+    }
+    return base;
+  }
+
+  private ownershipAuthority(actor: Actor, organizationId: string, roles: string[], what: string): Decision {
+    if (!actor.isActive) return deny(CommErrorCode.ACTOR_INACTIVE, `an inactive actor may not ${what}`);
+    if (actor.kind !== ActorKind.STAFF || !actor.organizationId || actor.organizationId !== organizationId) {
+      return deny(CommErrorCode.STAFF_ASSIGNMENT_DENIED, `only staff of this organization may ${what}`);
+    }
+    if (!roles.includes(actor.staffRole ?? '')) {
+      return deny(CommErrorCode.STAFF_ASSIGNMENT_DENIED, `${actor.staffRole} may not ${what}`);
     }
     return allow();
   }

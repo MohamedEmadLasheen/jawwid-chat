@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
-import { managerOnly } from '@/core/permissions/capabilities'
+import { ownershipActions } from '@/core/permissions/capabilities'
 import { ReasonDialog } from './ReasonDialog'
 import { TransferOwnershipDialog } from './TransferOwnershipDialog'
 import { CreateTaskDialog } from '@/features/tasks/CreateTaskDialog'
@@ -34,7 +34,7 @@ export function FamilyActions({
   const { pinHandler, deferToOwner } = useHandlingActions(familyId)
 
   const canTransfer =
-    staff != null && managerOnly.transferOwnership(staff.role) && detail.capabilities.can_transfer_ownership
+    staff != null && ownershipActions.transferOwnership(staff.role) && detail.capabilities.can_transfer_ownership
 
   return (
     <div className="column__header" style={{ flexWrap: 'wrap', gap: 8 }}>

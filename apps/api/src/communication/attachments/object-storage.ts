@@ -50,6 +50,22 @@ export interface ObjectStorage {
    * contract is that it stops existing.
    */
   delete(objectKey: string): Promise<void>;
+  /**
+   * The first `maxBytes` of a stored object, its total size and the content
+   * type storage recorded for it -- or null when the object does not exist.
+   *
+   * For a caller that must look at what was ACTUALLY uploaded before it commits
+   * to it (a profile photo is checked for its real image signature and its
+   * dimensions, not for the type the client declared). Bounded on purpose: a
+   * validator never needs, and never gets, the whole object in memory.
+   */
+  readHead(objectKey: string, maxBytes: number): Promise<StoredObjectHead | null>;
+}
+
+export interface StoredObjectHead {
+  head: Buffer;
+  byteSize: number;
+  contentType: string | null;
 }
 
 /**
@@ -123,6 +139,16 @@ export class SignedLocalObjectStorage implements ObjectStorage {
   }
 
   private readonly blobs = new LocalFsBlobStore();
+
+  async readHead(objectKey: string, maxBytes: number): Promise<StoredObjectHead | null> {
+    const blob = await this.blobs.get(objectKey);
+    if (!blob) return null;
+    return {
+      head: blob.bytes.subarray(0, Math.max(0, maxBytes)),
+      byteSize: blob.bytes.length,
+      contentType: blob.mimeType,
+    };
+  }
 
   /**
    * A PUT is verifiable only against the MIME type and byte size it was

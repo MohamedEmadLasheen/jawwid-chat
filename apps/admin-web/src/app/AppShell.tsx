@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { NavLink } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
 import { useRealtime } from '@/core/realtime/RealtimeProvider'
@@ -96,7 +96,11 @@ function DutyIndicator() {
 
   return (
     <div className="header__duty">
-      <strong>{staff.name}</strong>
+      {/* The way to one's own profile. In the header, not the rail: it is the
+          person, not a module. */}
+      <Link to="/profile" className="header__profile" aria-label={`${staff.name} — ${t('nav.profile')}`}>
+        <strong>{staff.name}</strong>
+      </Link>
       {duty?.in_shift && duty.shift_ends_at && <> · {time(duty.shift_ends_at)}</>}
       {duty && duty.covering_for.length > 0 && <> · {t('bucket.covering')}</>}
     </div>

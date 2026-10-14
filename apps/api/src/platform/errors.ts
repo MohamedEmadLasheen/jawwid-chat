@@ -112,6 +112,28 @@ export enum CommErrorCode {
   // --- Admin Portal ---
   /** Not the super admin. The `/admin` inspection surface is theirs alone. Never retry. */
   ADMIN_INSPECTION_DENIED = 'COMM.ADMIN_INSPECTION_DENIED',
+
+  // --- Staff profiles ---
+  /**
+   * The profile does not exist, is in another organization, or is not one the
+   * caller may see. One code for all three, so the route is not an existence
+   * oracle for staff ids. 404.
+   */
+  STAFF_PROFILE_NOT_FOUND = 'COMM.STAFF_PROFILE_NOT_FOUND',
+  /** The caller may see this profile but may not change this part of it. 403. */
+  STAFF_PROFILE_EDIT_DENIED = 'COMM.STAFF_PROFILE_EDIT_DENIED',
+  /** A field failed validation (length, characters, unknown field). 400. */
+  STAFF_PROFILE_INVALID = 'COMM.STAFF_PROFILE_INVALID',
+  /** Someone saved the profile after the caller loaded it. Reload, then retry. 409. */
+  STAFF_PROFILE_CONFLICT = 'COMM.STAFF_PROFILE_CONFLICT',
+  /** The uploaded bytes are not an acceptable profile photo. 400. */
+  STAFF_AVATAR_INVALID = 'COMM.STAFF_AVATAR_INVALID',
+  /** An official assignment (responsibility, reporting line) was refused. 403. */
+  STAFF_ASSIGNMENT_DENIED = 'COMM.STAFF_ASSIGNMENT_DENIED',
+  /** The assignment is not a lawful shape (hierarchy, duplicate, already ended). 409. */
+  STAFF_ASSIGNMENT_INVALID = 'COMM.STAFF_ASSIGNMENT_INVALID',
+  /** The organization-wide profile overview belongs to the super admin. 403. */
+  STAFF_DIRECTORY_DENIED = 'COMM.STAFF_DIRECTORY_DENIED',
 }
 
 export class CommError extends Error {

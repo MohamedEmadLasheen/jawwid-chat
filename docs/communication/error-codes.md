@@ -88,6 +88,19 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 |---|---|---|
 | `COMM.ADMIN_INSPECTION_DENIED` | 403 | The read-only `/admin` inspection surface belongs to `super_admin` alone (PD-5, `users.manage`). Every other role, every contact and every teacher receives this. Never retry. |
 
+## Staff profiles
+
+| Code | HTTP | Meaning |
+|---|---|---|
+| `COMM.STAFF_PROFILE_NOT_FOUND` | 404 | No such profile, another organization's, or one the caller may not see. Deliberately one code. |
+| `COMM.STAFF_PROFILE_EDIT_DENIED` | 403 | The caller may see the profile but may not change that field group (e.g. an admin editing another admin, a manager editing a name). Never retry. |
+| `COMM.STAFF_PROFILE_INVALID` | 400 | A field is too long, contains control characters, or is not an editable field. |
+| `COMM.STAFF_PROFILE_CONFLICT` | 409 | The profile changed after it was loaded. Reload and re-apply the edit. |
+| `COMM.STAFF_AVATAR_INVALID` | 400 | The uploaded object is not a JPEG/PNG/WebP of acceptable size and dimensions, or its bytes do not match the declared type. The object is deleted. |
+| `COMM.STAFF_ASSIGNMENT_DENIED` | 403 | The caller may not assign or end this responsibility or reporting line (self-assignment, outside their team, not the super admin). Never retry. |
+| `COMM.STAFF_ASSIGNMENT_INVALID` | 409 | The assignment is not lawful: already active, already ended, or it breaks the reporting hierarchy. |
+| `COMM.STAFF_DIRECTORY_DENIED` | 403 | The organization-wide staff overview belongs to `super_admin` alone. |
+
 ## Client guidance
 
 - **Never retry** a BR-1 or role denial: it is a rule, not a transient failure.
