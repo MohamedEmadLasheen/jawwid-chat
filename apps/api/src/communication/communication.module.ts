@@ -31,7 +31,7 @@ import { RealtimeGateway } from './realtime/realtime.gateway';
 import { RevocationConfirmer } from './realtime/revocation-confirmer.service';
 import { TypingService } from './realtime/typing.service';
 import { PresenceService } from './realtime/presence.service';
-import { redisProvider } from './realtime/redis.provider';
+import { RedisClientShutdown, redisProvider } from './realtime/redis.provider';
 import { RelayRealtimePublisher } from '../infra/realtime/relay.publisher';
 import { RealtimeRelay } from '../infra/realtime/realtime-relay.service';
 
@@ -66,6 +66,7 @@ import { StoryController } from './api/story.controller';
   ],
   providers: [
     redisProvider,
+    RedisClientShutdown,
     ConversationService,
     MessageService,
     ApprovalService,

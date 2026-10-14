@@ -100,11 +100,14 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // The presence connection (REDIS_CLIENT) is lazy and opened by the gateway
-  // test's handshake; no provider closes it on shutdown, so the suite does --
-  // as auth-trusted-proxy.spec closes its own Redis -- or jest never exits.
-  await app.get<Redis>(REDIS_CLIENT).quit().catch(() => undefined);
+  // The presence connection (REDIS_CLIENT) is opened by the gateway test's
+  // handshake. app.close() itself must end it (RedisClientShutdown): if it did
+  // not, this suite's jest process would never exit.
+  const presence = app.get<Redis>(REDIS_CLIENT);
   await app.close();
+  // QUIT resolves on the server's reply; the status turns 'end' when the socket closes.
+  for (let i = 0; i < 40 && presence.status !== 'end'; i++) await new Promise((r) => setTimeout(r, 50));
+  expect(presence.status).toBe('end');
   await truncate(g.prisma);
   await g.prisma.$executeRawUnsafe(`delete from chat.account where subject like '%@${DOMAIN}'`);
   await g.prisma.$disconnect();
