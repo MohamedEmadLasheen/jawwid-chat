@@ -2,7 +2,7 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Conversation, ConversationMember, Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
-import type { LiveMember } from '../../platform/authorization.service';
+import type { Decision, LiveMember, StaffScopeFacts } from '../../platform/authorization.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
 import {
   AUDIT_SERVICE,
@@ -920,6 +920,60 @@ export class ConversationService {
     }
     if (!conv.familyId) return null;
     return this.coverage.onDuty(conv.familyId, now);
+  }
+
+  /**
+   * THE scoped read decision for a loaded conversation: AuthorizationService
+   * .canRead with the staff-scope facts resolved here, from the database.
+   *
+   * Facts are resolved LAZILY and only when the decision can depend on them
+   * (AuthorizationService.readScopeFactsNeeded): a parent, a teacher, a
+   * manager, a live member, or an actor already refused by organization,
+   * status or role costs no query at all. For an admin the family owner is read
+   * first, and the active handler -- `activeHandler()`, unchanged, which may
+   * call chat.on_duty() -- only if ownership did not already decide.
+   *
+   * Nothing comes from the request but the conversation id that loaded `conv`:
+   * the organization, owner and handler are all read from rows.
+   */
+  async canReadResolved(
+    actor: Actor,
+    conv: Conversation,
+    membership: ConversationMember | null,
+    now = new Date(),
+  ): Promise<Decision> {
+    const needed = this.authz.readScopeFactsNeeded(actor, conv, membership);
+    const facts: StaffScopeFacts = { familyOwnerId: null, activeHandlerId: null };
+
+    if (needed.familyOwner && conv.familyId) {
+      const family = await this.prisma.family.findUnique({
+        where: { id: conv.familyId },
+        select: { ownerId: true },
+      });
+      facts.familyOwnerId = family?.ownerId ?? null;
+      const byOwnership = this.authz.canRead(actor, conv, membership, facts);
+      if (byOwnership.allowed) return byOwnership;
+    }
+    if (needed.activeHandler) {
+      facts.activeHandlerId = await this.activeHandler(conv, now);
+    }
+    return this.authz.canRead(actor, conv, membership, facts);
+  }
+
+  /**
+   * canReadResolved, refusing with the status the decision carries: 404 for
+   * another organization's conversation -- the same code, message and status
+   * as a conversation that does not exist -- and 403 otherwise. The one throw
+   * path for a scoped read, so no caller can turn a 404 into a 403.
+   */
+  async requireReadable(
+    actor: Actor,
+    conv: Conversation,
+    membership: ConversationMember | null,
+    now = new Date(),
+  ): Promise<void> {
+    const decision = await this.canReadResolved(actor, conv, membership, now);
+    if (!decision.allowed) throw new CommError(decision.code, decision.reason, decision.status ?? 403);
   }
 
   /** RBAC-scoped chat list. A contact or teacher only ever sees their own. */

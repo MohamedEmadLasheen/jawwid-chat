@@ -17,9 +17,75 @@ import {
 
 export type Decision =
   | { allowed: true; onBehalfMode: string | null; moderation: string }
-  | { allowed: false; code: CommErrorCode; reason: string };
+  | {
+      allowed: false;
+      code: CommErrorCode;
+      reason: string;
+      /**
+       * The HTTP status this refusal must be answered with, when it is not the
+       * default 403. Carried ON the decision so a caller cannot turn a
+       * cross-organization refusal -- which must be indistinguishable from a
+       * conversation that does not exist (404) -- into a 403 that confirms the
+       * conversation is there. See ConversationService.requireReadable.
+       */
+      status?: 404;
+    };
 
 const deny = (code: CommErrorCode, reason: string): Decision => ({ allowed: false, code, reason });
+
+/**
+ * Another organization's conversation, answered exactly as a missing one is
+ * (ConversationService.requireConversation): same code, same message, 404.
+ */
+const conversationNotFound = (): Decision => ({
+  allowed: false,
+  code: CommErrorCode.CONVERSATION_NOT_FOUND,
+  reason: 'conversation not found',
+  status: 404,
+});
+
+/**
+ * The server-resolved facts a STAFF read can depend on (AUTHORIZATION-MODEL
+ * section 6, as approved 2026-10-14). Resolved by ConversationService from the
+ * database -- never from a request -- and passed in, so this class stays
+ * database-free.
+ *
+ *   familyOwnerId    chat.family.owner_id of the conversation's family, or null
+ *                    when it has no family. Grants scope to the ADMIN role only.
+ *   activeHandlerId  ConversationService.activeHandler(conv): the live sticky
+ *                    handler, otherwise chat.on_duty() for the family. The
+ *                    INTERIM routing exception (PD-3): it lets the staff member
+ *                    who handles the conversation right now read it, and
+ *                    nothing else -- it is not a call or answering right. It is
+ *                    removed when explicit temporary assignments exist.
+ *
+ * A fact the decision cannot depend on may be left null (see
+ * readScopeFactsNeeded), so resolving it can be skipped.
+ */
+export interface StaffScopeFacts {
+  familyOwnerId: string | null;
+  activeHandlerId: string | null;
+}
+
+/**
+ * TRANSITIONAL. The read decision as it was before staff scope: family-facing
+ * staff read every conversation, with no organization check. Kept only so the
+ * call sites can move onto resolved facts one reviewed phase at a time
+ * (Changesets C2-C4); C4 deletes it and makes `scope` mandatory.
+ *
+ * Never pass it from new code. `legacy-read-sentinel.guard.spec.ts` pins the
+ * exact set of call sites still relying on it, so a new one fails the build.
+ */
+export const UNSCOPED_LEGACY_READ: unique symbol = Symbol('UNSCOPED_LEGACY_READ');
+export type ReadScope = StaffScopeFacts | typeof UNSCOPED_LEGACY_READ;
+
+/** Well-formed facts: both fields present, each a string id or null. Anything else fails closed. */
+function isStaffScopeFacts(value: unknown): value is StaffScopeFacts {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  const field = (x: unknown) => x === null || (typeof x === 'string' && x.length > 0);
+  return 'familyOwnerId' in v && 'activeHandlerId' in v && field(v.familyOwnerId) && field(v.activeHandlerId);
+}
 const allow = (onBehalfMode: string | null = null, moderation: string = Moderation.PUBLISHED): Decision => ({
   allowed: true,
   onBehalfMode,
@@ -59,7 +125,11 @@ type Conv = Pick<
   | 'teacherRequiresApproval'
   | 'parentRequiresApproval'
   | 'archivedAt'
->;
+> &
+  // Optional in the TYPE only because callers still on UNSCOPED_LEGACY_READ do
+  // not need it. A scoped read without it fails closed: no organization proven,
+  // no access (canRead answers "not found").
+  Partial<Pick<Conversation, 'organizationId'>>;
 
 type Member = Pick<ConversationMember, 'actorId' | 'actorKind' | 'memberRole' | 'isSilent' | 'leftAt'>;
 
@@ -193,7 +263,115 @@ export class AuthorizationService {
   // Reading
   // ------------------------------------------------------------------
 
-  canRead(actor: Actor, conv: Conv, membership: Member | null): Decision {
+  /**
+   * May this actor read this conversation? THE read decision.
+   *
+   * With resolved `StaffScopeFacts` (ConversationService.canReadResolved):
+   *
+   *   1. organization first -- another organization's conversation reads as
+   *      NOT FOUND (404), before anything else about the actor or the
+   *      conversation can be read off the answer. SYSTEM belongs to none and
+   *      is not reachable over HTTP (bearer tokens resolve only staff, contact
+   *      and teacher actors).
+   *   2. account status, then role: super_admin and department staff are not
+   *      family-facing and never read a family conversation by role.
+   *   3. scope (AUTHORIZATION-MODEL section 6, approved 2026-10-14):
+   *        manager          every conversation of their organization
+   *        any staff        a conversation they are a live member of
+   *        admin            a conversation of a family they own
+   *        admin, coverage  a conversation they are the ACTIVE HANDLER of
+   *                         (interim, PD-3 routing; read/reply only)
+   *        contact, teacher a conversation they are a live member of (PD-6
+   *                         unchanged: the relationship is enforced on send
+   *                         and call, not here)
+   *      anything else in the organization: NOT_CONVERSATION_MEMBER (403).
+   *
+   * Reading is not sending and not calling: canSend and canCall still apply
+   * their own rules on top of this.
+   *
+   * With NO scope argument, or UNSCOPED_LEGACY_READ (transitional): the
+   * pre-scope decision, unchanged, for the call sites not yet migrated --
+   * pinned one by one by legacy-read-sentinel.guard.spec.ts.
+   *
+   * NO FALLBACK. Only those two spellings reach the legacy decision. A scope
+   * argument that is present but is not well-formed StaffScopeFacts --
+   * `undefined` passed explicitly, `null`, a partial object -- is refused as
+   * not found: a scoped caller with a bug fails closed, it never quietly
+   * becomes an unscoped one. (A default parameter would have treated an
+   * explicit `undefined` as "legacy"; this signature cannot.)
+   */
+  canRead(actor: Actor, conv: Conv, membership: Member | null, ...scope: [] | [ReadScope]): Decision {
+    if (scope.length === 0 || scope[0] === UNSCOPED_LEGACY_READ) {
+      return this.legacyCanRead(actor, conv, membership);
+    }
+    const facts = scope[0];
+    if (!isStaffScopeFacts(facts)) return conversationNotFound();
+
+    if (actor.kind === ActorKind.SYSTEM) return allow();
+    if (!actor.organizationId || !conv.organizationId || actor.organizationId !== conv.organizationId) {
+      return conversationNotFound();
+    }
+    if (!actor.isActive) return deny(CommErrorCode.ACTOR_INACTIVE, 'actor is inactive');
+
+    const isLiveMember = membership !== null && membership.leftAt === null;
+
+    if (actor.kind === ActorKind.STAFF) {
+      if (!isFamilyFacingStaff(actor)) {
+        return deny(
+          CommErrorCode.ROLE_CANNOT_MESSAGE_FAMILY,
+          `role ${actor.staffRole} may not access conversations`,
+        );
+      }
+      if (actor.staffRole === StaffRole.MANAGER) return allow();
+      if (isLiveMember) return allow();
+      // Ownership is the ADMIN's assignment; a coverage-role actor who happens
+      // to be recorded as owner gains nothing from it (decision U2).
+      if (
+        actor.staffRole === StaffRole.ADMIN &&
+        conv.familyId !== null &&
+        facts.familyOwnerId !== null &&
+        facts.familyOwnerId === actor.actorId
+      ) {
+        return allow();
+      }
+      // INTERIM (PD-3 routing): the conversation's active handler right now.
+      if (facts.activeHandlerId !== null && facts.activeHandlerId === actor.actorId) return allow();
+      return deny(
+        CommErrorCode.NOT_CONVERSATION_MEMBER,
+        'this conversation is outside the staff member\'s scope',
+      );
+    }
+
+    if (!isLiveMember) {
+      return deny(CommErrorCode.NOT_CONVERSATION_MEMBER, 'actor is not a member of this conversation');
+    }
+    return allow();
+  }
+
+  /**
+   * Which `StaffScopeFacts` the scoped decision for this actor can depend on,
+   * so ConversationService resolves only those -- none at all for a parent, a
+   * teacher, a manager, a live member, or an actor already refused by
+   * organization, status or role. Pure: it mirrors canRead's branches above.
+   */
+  readScopeFactsNeeded(
+    actor: Actor,
+    conv: Conv,
+    membership: Member | null,
+  ): { familyOwner: boolean; activeHandler: boolean } {
+    const none = { familyOwner: false, activeHandler: false };
+    if (actor.kind !== ActorKind.STAFF || !actor.isActive || !isFamilyFacingStaff(actor)) return none;
+    if (!actor.organizationId || actor.organizationId !== conv.organizationId) return none;
+    if (actor.staffRole === StaffRole.MANAGER) return none;
+    if (membership !== null && membership.leftAt === null) return none;
+    return {
+      familyOwner: actor.staffRole === StaffRole.ADMIN && conv.familyId !== null,
+      activeHandler: true,
+    };
+  }
+
+  /** The pre-scope read decision, verbatim. Reached only via UNSCOPED_LEGACY_READ. */
+  private legacyCanRead(actor: Actor, conv: Conv, membership: Member | null): Decision {
     if (!actor.isActive) return deny(CommErrorCode.ACTOR_INACTIVE, 'actor is inactive');
     if (actor.kind === ActorKind.SYSTEM) return allow();
 
