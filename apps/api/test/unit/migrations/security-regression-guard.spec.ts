@@ -94,15 +94,16 @@ export function auditMigrations(dir: string, schemaPath: string): string[] {
     }
     if (version > '20261013160000') {
       const tableUpdate = new RegExp(
-        `grant\\s+(all|update|[a-z, ]*\\bupdate\\b)(?!\\s*\\()[^;]*\\bon\\s+(table\\s+)?chat\\.(staff|family|learner|contact)\\b[^;]*\\bto\\b[^;]*\\b${REQUEST_ROLES}\\b`, 'i');
+        `grant\\s+(all|update|[a-z, ]*\\bupdate\\b)(?!\\s*\\()[^;]*\\bon\\s+(table\\s+)?chat\\.(staff|family|learner|contact|teacher)\\b[^;]*\\bto\\b[^;]*\\b${REQUEST_ROLES}\\b`, 'i');
       if (tableUpdate.test(sql)) violations.push(`${file} grants table-level UPDATE on a protected table to a request role`);
       const columnUpdate = new RegExp(
-        `grant\\s+update\\s*\\(([^)]*)\\)\\s*on\\s+chat\\.(staff|family|learner|contact)\\b[^;]*\\bto\\b[^;]*\\b${REQUEST_ROLES}\\b`, 'gi');
+        `grant\\s+(?:update|insert)\\s*\\(([^)]*)\\)\\s*on\\s+chat\\.(staff|family|learner|contact|teacher)\\b[^;]*\\bto\\b[^;]*\\b${REQUEST_ROLES}\\b`, 'gi');
       const forbidden: Record<string, string[]> = {
         staff: ['role', 'is_active', 'left_at', 'account_id', 'organization_id'],
         family: ['owner_id'],
-        learner: ['teacher_id'],
-        contact: ['account_id'],
+        learner: ['teacher_id', 'avatar_object_key'],
+        contact: ['account_id', 'avatar_object_key'],
+        teacher: ['avatar_object_key'],
       };
       for (const m of sql.matchAll(columnUpdate)) {
         const cols = m[1].split(',').map((c) => c.trim().replace(/"/g, ''));
@@ -154,6 +155,7 @@ begin end; $$;`;
           '20261101000001_regrant.sql':
             'grant execute on function chat.write_audit(uuid, text, text, uuid, text, jsonb, jsonb) to authenticated;\n' +
             'grant update (owner_id) on chat.family to authenticated;\n' +
+            'grant update (avatar_object_key) on chat.contact to chat_app;\n' +
             'grant update on chat.staff to chat_app;',
           '20261101000001_duplicate.sql': 'select 1;',
         }),
@@ -161,6 +163,7 @@ begin end; $$;`;
       ).join('\n');
       expect(v).toMatch(/re-grants EXECUTE/);
       expect(v).toMatch(/protected chat.family column\(s\) owner_id/);
+      expect(v).toMatch(/protected chat.contact column\(s\) avatar_object_key/);
       expect(v).toMatch(/table-level UPDATE on a protected table/);
       expect(v).toMatch(/duplicate migration version/);
     });
