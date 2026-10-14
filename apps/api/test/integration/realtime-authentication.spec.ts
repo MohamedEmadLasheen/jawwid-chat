@@ -76,6 +76,30 @@ class FakeSocket {
   }
 }
 
+/**
+ * RT-009: the rooms a verified socket joins, exactly -- its own actor room plus
+ * the session and account rooms revocation is pushed through.
+ *
+ * The expected list is built from the INTENDED identity, not read back from the
+ * implementation: the actor id and its account id are the fixture's, and the
+ * session must be a live row in the database that belongs to that account. A
+ * gateway that joined the wrong account's or a dead session's room would fail
+ * here even though it wrote the same ids onto the socket.
+ */
+async function expectIdentityRooms(socket: FakeSocket, actorId: string, accountId: string): Promise<void> {
+  expect(socket.accountId).toBe(accountId);
+  const session = await new PrismaService().session.findUnique({
+    where: { id: socket.sessionId as string },
+    select: { accountId: true, revokedAt: true },
+  });
+  expect(session).toEqual({ accountId, revokedAt: null });
+  expect(socket.rooms).toEqual([
+    room.actor(actorId),
+    room.session(socket.sessionId as string),
+    room.account(accountId),
+  ]);
+}
+
 const socketWith = (
   auth: Record<string, unknown>,
   headers: Record<string, unknown> = {},
@@ -346,7 +370,7 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
         actorId: ids.parent,
         kind: "contact",
       });
-      expect(socket.rooms).toEqual([room.actor(ids.parent)]);
+      await expectIdentityRooms(socket, ids.parent, ids.parentAccount);
       expect(socket.sessionId).toEqual(expect.any(String));
     });
 
@@ -358,7 +382,7 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
         actorId: ids.teacher,
         kind: "teacher",
       });
-      expect(socket.rooms).toEqual([room.actor(ids.teacher)]);
+      await expectIdentityRooms(socket, ids.teacher, ids.teacherAccount);
     });
 
     it("3. a missing token is refused", async () => {
@@ -449,7 +473,7 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
         actorId: ids.parent,
         kind: "contact",
       });
-      expect(socket.rooms).toEqual([room.actor(ids.parent)]);
+      await expectIdentityRooms(socket, ids.parent, ids.parentAccount);
       expect(socket.rooms).not.toContain(room.actor(ids.teacher));
     });
 
@@ -461,7 +485,7 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
         actorId: ids.teacher,
         kind: "teacher",
       });
-      expect(socket.rooms).toEqual([room.actor(ids.teacher)]);
+      await expectIdentityRooms(socket, ids.teacher, ids.teacherAccount);
       expect(socket.rooms).not.toContain(room.actor(ids.parent));
     });
 
@@ -592,7 +616,7 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
       const socket = await connected(parentToken);
       const result = await gateway.subscribe(socket as never, {});
       expect(result.ok).toBe(false);
-      expect(socket.rooms).toEqual([room.actor(ids.parent)]);
+      await expectIdentityRooms(socket, ids.parent, ids.parentAccount);
     });
 
     it("an unauthenticated socket cannot subscribe at all", async () => {
@@ -647,7 +671,7 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
       });
 
       expect(result.ok).toBe(false);
-      expect(stranger.rooms).toEqual([room.actor(ids.strangerTeacher)]);
+      await expectIdentityRooms(stranger, ids.strangerTeacher, ids.strangerTeacherAccount);
       expect(stranger.rooms).not.toContain(
         room.conversation(authorizedConversationId),
       );
@@ -664,7 +688,7 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
 
       // The actor room is named from the verified actor, so the forgery buys
       // nothing: it is the stranger's own room or none.
-      expect(impostor.rooms).toEqual([room.actor(ids.strangerTeacher)]);
+      await expectIdentityRooms(impostor, ids.strangerTeacher, ids.strangerTeacherAccount);
 
       const result = await gateway.subscribe(impostor as never, {
         conversationId: authorizedConversationId,

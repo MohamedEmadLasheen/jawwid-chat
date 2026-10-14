@@ -198,6 +198,17 @@ become the source of truth for customer data: it is configured `appendonly yes`
 so queued jobs survive a restart, and `maxmemory-policy noeviction` so a queue
 backend cannot evict pending work under memory pressure.
 
+RT-009 (realtime revocation) makes three further demands of it. **Every API
+replica of an environment must use the same Redis** — the API refuses to boot
+without `REDIS_URL` outside `APP_ENV=local`, but it cannot tell two replicas
+pointed at two different Redis servers apart, so a single `REDIS_URL` per
+environment (this manifest) is what guarantees it. **Leave the idle-client
+`timeout` at 0** (the default) and keep `tcp-keepalive` enabled: a replica that
+is alive but frozen must keep its connection, because that connection is how a
+revocation tells "frozen" from "dead". **`CLIENT LIST`, `CLIENT SETNAME` and
+`EVAL` must be allowed** for the API's user; if they are not, revocations fail
+closed (503 `COMM.REVOCATION_UNCONFIRMED`) rather than succeed unverified.
+
 **`QUEUE_PREFIX`** — namespaces BullMQ keys per environment. Without it, a
 staging worker pointed at a shared Redis will consume production jobs.
 

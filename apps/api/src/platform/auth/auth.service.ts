@@ -1,6 +1,11 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { AUDIT_SERVICE, IDENTITY_SERVICE } from '../tokens';
+import { AUDIT_SERVICE, IDENTITY_SERVICE, REALTIME_REVOCATION } from '../tokens';
+import {
+  NO_REALTIME_REVOCATION,
+  RevocationUnconfirmedError,
+  type RealtimeRevocation,
+} from '../realtime-revocation';
 import type { IdentityService } from '../identity.service';
 import type { AuditService, Tx } from '../audit.service';
 import type { Actor } from '../types';
@@ -89,6 +94,11 @@ const PLATFORMS = new Set(['ios', 'android', 'web']);
  * lookup per request, and it is what makes logout, revocation and deactivation
  * take effect immediately rather than at token expiry (IDENTITY-MODEL §2).
  */
+/** For requests refused regardless: only an UNCONFIRMED barrier is swallowed, never another error. */
+function ignoreUnconfirmed(e: unknown): void {
+  if (!(e instanceof RevocationUnconfirmedError)) throw e;
+}
+
 @Injectable()
 export class AuthService {
   private readonly log = new Logger(AuthService.name);
@@ -98,6 +108,10 @@ export class AuthService {
     private readonly prisma: PrismaService,
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    // RT-009: revocations reach sockets already open, not only the next request.
+    @Optional()
+    @Inject(REALTIME_REVOCATION)
+    private readonly revocation: RealtimeRevocation = NO_REALTIME_REVOCATION,
   ) {}
 
   /**
@@ -425,16 +439,79 @@ export class AuthService {
     // The session must belong to the account the token names. Without this a
     // valid token for account A plus a session id belonging to B would pass.
     if (account.subject !== claims.sub) return null;
-    if (!account.isActive || account.status !== ACTIVE_STATUS) return null;
 
-    const actor = await this.identity.resolveForAccount(account);
-    if (!actor || !actor.isActive) return null;
-
-    // The token asserted an actor; the database decided one. If they disagree,
-    // the token is stale or tampered with -- refuse rather than prefer either.
-    if (actor.actorId !== claims.act || actor.kind !== claims.knd) return null;
+    // The token asserted an actor; the database decides one (gates 3 and 4).
+    const actor = await this.liveActorOf(account, claims.act, claims.knd);
+    if (!actor) return null;
 
     return { actor, accountId: account.id, sessionId: session.id, claims };
+  }
+
+  /**
+   * RT-009. The realtime re-check: is each socket's identity still entitled to
+   * live data, as of NOW?
+   *
+   * A socket outlives its access token (15 minutes) by design -- disconnecting
+   * on token expiry would churn every mobile client -- so it cannot re-run
+   * `authenticate()`. It re-runs the same gates from the database instead:
+   *   - SESSION-PRECISE: one of the socket's OWN sessions -- the one it
+   *     connected with, or a successor `refresh` rebound it to -- is still
+   *     live and belongs to its account. Another live session of the same
+   *     account never vouches for it: logging out one device ends that
+   *     device's sockets even while another device stays signed in;
+   *   - the account is active (gate 3);
+   *   - the principal still resolves, is active, and is the SAME actor the
+   *     socket connected as (gate 4), read fresh -- a role change, a
+   *     deactivation or a withdrawn contact is never answered from the socket.
+   *
+   * Batched: one session query for every socket asked about, one principal
+   * resolution per distinct account. Returns, per input index, the CURRENT
+   * actor or null. Fails closed: anything not established is null.
+   */
+  async revalidateRealtime(
+    sockets: ReadonlyArray<{ accountId: string; sessionIds: readonly string[]; actorId: string; kind: string }>,
+  ): Promise<Array<Actor | null>> {
+    const sessionIds = [...new Set(sockets.flatMap((s) => s.sessionIds))];
+    if (sessionIds.length === 0) return sockets.map(() => null);
+    const live = await this.prisma.session.findMany({
+      where: { id: { in: sessionIds }, revokedAt: null, expiresAt: { gt: new Date() } },
+      select: {
+        id: true,
+        accountId: true,
+        account: {
+          select: { id: true, subject: true, kind: true, isActive: true, status: true, organizationId: true },
+        },
+      },
+    });
+    const byId = new Map(live.map((row) => [row.id, row]));
+    const actorByAccount = new Map<string, Promise<Actor | null>>();
+    return Promise.all(
+      sockets.map(async (s) => {
+        const session = s.sessionIds.map((id) => byId.get(id)).find((row) => row?.accountId === s.accountId);
+        if (!session) return null;
+        const key = `${s.accountId}:${s.actorId}:${s.kind}`;
+        if (!actorByAccount.has(key)) actorByAccount.set(key, this.liveActorOf(session.account, s.actorId, s.kind));
+        return (await actorByAccount.get(key)) ?? null;
+      }),
+    );
+  }
+
+  /**
+   * Gates 3 and 4, in ONE place, for both callers above: the account is
+   * active, its principal resolves and is active, and it is the actor that was
+   * asserted. A disagreement means stale or tampered -- refuse rather than
+   * prefer either side.
+   */
+  private async liveActorOf(
+    account: { id: string; subject: string; kind: string; isActive: boolean; status: string; organizationId: string },
+    actorId: string,
+    kind: string,
+  ): Promise<Actor | null> {
+    if (!account.isActive || account.status !== ACTIVE_STATUS) return null;
+    const actor = await this.identity.resolveForAccount(account);
+    if (!actor || !actor.isActive) return null;
+    if (actor.actorId !== actorId || actor.kind !== kind) return null;
+    return actor;
   }
 
   /** Best-effort liveness marker. Never blocks or fails a request. */
@@ -488,13 +565,13 @@ export class AuthService {
 
     const account = session.account;
     if (!account.isActive || account.status !== ACTIVE_STATUS) {
-      await this.revoke(session.id, 'account is not active');
+      await this.revokeBeforeRefusing(session.id, 'account is not active');
       throw new AuthError(AuthErrorCode.ACCOUNT_DISABLED);
     }
 
     const actor = await this.identity.resolveForAccount(account);
     if (!actor || !actor.isActive) {
-      await this.revoke(session.id, 'principal is not active');
+      await this.revokeBeforeRefusing(session.id, 'principal is not active');
       throw new AuthError(AuthErrorCode.ACCOUNT_DISABLED);
     }
 
@@ -503,7 +580,12 @@ export class AuthService {
     // exists, so an interruption between them leaves the caller logged out
     // rather than holding two live sessions.
     await this.revoke(session.id, 'rotated', undefined, actor.actorId);
-    return this.issue(account, actor, { ...context, deviceId: session.deviceId }, 'refresh');
+    const pair = await this.issue(account, actor, { ...context, deviceId: session.deviceId }, 'refresh');
+    // RT-009: rotation is the same login continuing, not a revocation. Sockets
+    // bound to the retired session now also answer to its successor, so a
+    // later logout of the successor still reaches them.
+    this.revocation.sessionRotated(session.id, pair.sessionId);
+    return pair;
   }
 
   /**
@@ -550,6 +632,11 @@ export class AuthService {
         reason: REUSE_REASON,
       });
     });
+    // RT-009: committed above, so enforce it on sockets already open, and fence
+    // every node. This request is refused whatever happens, so an unconfirmed
+    // barrier changes nothing it reports -- it is attempted, not required.
+    this.revocation.disconnectAccount(accountId);
+    await this.revocation.confirmRevoked().catch(ignoreUnconfirmed);
   }
 
   // -------------------------------------------------------------------------
@@ -567,7 +654,7 @@ export class AuthService {
     revokedBy?: string,
     actorId?: string,
   ): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
+    const revoked = await this.prisma.$transaction(async (tx) => {
       const result = await tx.session.updateMany({
         where: { id: sessionId, revokedAt: null },
         data: { revokedAt: new Date(), revokedReason: reason, revokedBy: revokedBy ?? null },
@@ -577,7 +664,7 @@ export class AuthService {
       // writes NO audit row, because nothing changed -- an audit trail that
       // records a revocation that did not happen is worse than one that is
       // quiet. API-CONTRACT §3.1 keeps the response {ok:true} either way.
-      if (result.count === 0) return;
+      if (result.count === 0) return false;
 
       await this.audit.audit(tx, {
         actorId: actorId ?? revokedBy ?? null,
@@ -587,16 +674,31 @@ export class AuthService {
         after: { revokedBy: revokedBy ?? null },
         reason,
       });
+      return true;
     });
+    // RT-009: a real revocation (logout, a disabled account or principal)
+    // ends the sockets bound to this session. Rotation is NOT a revocation --
+    // `refresh` rebinds those sockets to the successor instead.
+    if (reason === 'rotated') return;
+    if (revoked) this.revocation.disconnectSessions([sessionId]);
+    // The completion barrier -- also when nothing was live, since this may be
+    // the retry of a revocation that committed and was not confirmed. Throws
+    // RevocationUnconfirmedError (503) rather than report an unconfirmed end.
+    await this.revocation.confirmRevoked();
+  }
+
+  /** A revocation on a request that is refused anyway: its barrier cannot change the answer. */
+  private async revokeBeforeRefusing(sessionId: string, reason: string): Promise<void> {
+    await this.revoke(sessionId, reason).catch(ignoreUnconfirmed);
   }
 
   async revokeAllForAccount(accountId: string, reason: string): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
+    const revoked = await this.prisma.$transaction(async (tx) => {
       const result = await tx.session.updateMany({
         where: { accountId, revokedAt: null },
         data: { revokedAt: new Date(), revokedReason: reason },
       });
-      if (result.count === 0) return;
+      if (result.count === 0) return false;
 
       await this.audit.audit(tx, {
         actorId: null,
@@ -606,7 +708,12 @@ export class AuthService {
         after: { revokedSessions: result.count },
         reason,
       });
+      return true;
     });
+    // RT-009: every session is gone, so every socket of the account goes too;
+    // and, as for a single session, not reported complete until confirmed.
+    if (revoked) this.revocation.disconnectAccount(accountId);
+    await this.revocation.confirmRevoked();
   }
 
   /**

@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useSession } from '@/core/auth/SessionProvider'
-import { canOpenArea, isDepartment, type NavArea } from '@/core/permissions/capabilities'
+import { canOpenArea, isDepartment, isSuperAdmin, type NavArea } from '@/core/permissions/capabilities'
 import { LoadingState } from '@/shared/components/States'
 import { AppShell } from './AppShell'
 import { LoginPage } from '@/features/auth/LoginPage'
@@ -10,6 +10,8 @@ import { TasksPage } from '@/features/tasks/TasksPage'
 import { CoveragePage } from '@/features/coverage/CoveragePage'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { StoriesPage } from '@/features/stories/StoriesPage'
+import { AdminSectionPage } from '@/features/admin/AdminSectionPage'
+import { adminSectionPath } from '@/features/admin/sections'
 import { ForbiddenPage } from './ForbiddenPage'
 import type { ReactElement } from 'react'
 
@@ -24,7 +26,16 @@ function Area({ area, children }: { area: NavArea; children: ReactElement }) {
   return canOpenArea(staff.role, area) ? children : <ForbiddenPage />
 }
 
+/** The Admin Portal sections. Same rule as Area: UX, not security -- every
+ *  `/admin/*` request is refused server-side for anyone but super_admin. */
+function SuperAdminOnly({ children }: { children: ReactElement }) {
+  const { staff } = useSession()
+  if (!staff) return null
+  return isSuperAdmin(staff.role) ? children : <ForbiddenPage />
+}
+
 function homeFor(role: Parameters<typeof isDepartment>[0]): string {
+  if (isSuperAdmin(role)) return adminSectionPath('dashboard')
   // Departments have no inbox — they only ever see their own tasks.
   return isDepartment(role) ? '/tasks' : '/inbox'
 }
@@ -46,6 +57,10 @@ export function AppRoutes() {
         <Route path="/coverage" element={<Area area="coverage"><CoveragePage /></Area>} />
         <Route path="/dashboard" element={<Area area="dashboard"><DashboardPage /></Area>} />
         <Route path="/stories" element={<Area area="stories"><StoriesPage /></Area>} />
+        <Route
+          path="/admin/:section"
+          element={<SuperAdminOnly><AdminSectionPage /></SuperAdminOnly>}
+        />
         {/*
           Reserved seams (docs/admin/backend-contract-required.md §10):
           /approvals and /calls are intentionally unregistered. They exist in

@@ -6,10 +6,12 @@ import { PrismaAuditService } from './audit.service';
 import { AuthorizationService } from './authorization.service';
 import { AppConfigService } from './app-config.service';
 import { PrismaRelationshipService } from './relationship.service';
+import { RealtimeRevocationHub } from './realtime-revocation';
 import {
   AUDIT_SERVICE,
   COVERAGE_SERVICE,
   IDENTITY_SERVICE,
+  REALTIME_REVOCATION,
   RELATIONSHIP_SERVICE,
 } from './tokens';
 
@@ -34,6 +36,10 @@ import {
     // token and hand the resolved boolean to AuthorizationService, which stays
     // database-free. Nothing else may answer this question.
     { provide: RELATIONSHIP_SERVICE, useClass: PrismaRelationshipService },
+    // RT-009. One hub per process: services push revocations into it, and the
+    // RealtimeGateway (API process only) attaches itself to carry them out.
+    RealtimeRevocationHub,
+    { provide: REALTIME_REVOCATION, useExisting: RealtimeRevocationHub },
   ],
   exports: [
     PrismaService,
@@ -43,6 +49,8 @@ import {
     COVERAGE_SERVICE,
     AUDIT_SERVICE,
     RELATIONSHIP_SERVICE,
+    RealtimeRevocationHub,
+    REALTIME_REVOCATION,
   ],
 })
 export class PlatformModule {}

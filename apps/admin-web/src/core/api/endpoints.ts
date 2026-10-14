@@ -1,4 +1,6 @@
-import { api, newIdempotencyKey } from './client'
+import { api, newIdempotencyKey, request } from './client'
+import { tokenStore } from '@/core/auth/tokens'
+import { ApiError } from './errors'
 import type {
   Absence,
   AttentionBucket,
@@ -26,12 +28,85 @@ export interface DutyState {
   sticky_threads: number
 }
 
+/** The principal the API reports (API-CONTRACT §3.2, `ActorDto`). */
+export interface ActorDto {
+  actorId: string
+  kind: 'contact' | 'staff' | 'teacher' | 'system'
+  displayName: string
+  locale: string
+  isActive: boolean
+  staffRole: string | null
+  organizationId: string | null
+}
+
+interface TokenPairDto {
+  tokenType: 'Bearer'
+  accessToken: string
+  expiresIn: number
+  refreshToken: string
+  actor: ActorDto
+}
+
+/** Raised when a non-staff login (a parent, a teacher) reaches Admin Web. */
+export const NOT_STAFF_CODE = 'admin.not_staff'
+
+/**
+ * Admin Web is for staff. A parent or teacher whose credentials are valid is
+ * still refused here -- FAIL CLOSED: an unknown kind or a missing role is a
+ * refusal, never a default role. The server enforces the same independently.
+ */
+export function toStaff(actor: ActorDto): Staff {
+  if (actor.kind !== 'staff' || !actor.staffRole) {
+    throw new ApiError({
+      status: 403,
+      code: NOT_STAFF_CODE,
+      messageEn: 'This account cannot use the Admin Portal.',
+      messageAr: 'هذا الحساب لا يمكنه استخدام بوابة الإدارة.',
+    })
+  }
+  return {
+    id: actor.actorId,
+    name: actor.displayName,
+    role: actor.staffRole as Staff['role'],
+    presence: 'online',
+    is_active: actor.isActive,
+  }
+}
+
 export const sessionApi = {
-  me: () => api.get<Staff>('/me'),
+  /** Null without a session, so a signed-out load never sends a request. */
+  me: async (): Promise<Staff | null> => {
+    if (!tokenStore.hasSession()) return null
+    return toStaff(await api.get<ActorDto>('/me'))
+  },
   duty: () => api.get<DutyState>('/me/duty'),
-  login: (email: string, password: string) =>
-    api.post<Staff>('/auth/login', { email, password }),
-  logout: () => api.post<void>('/auth/logout'),
+  /**
+   * `username` is the wire name of `chat.account.subject` (the decision gate
+   * §5); for staff it is their email address.
+   */
+  login: async (username: string, password: string): Promise<Staff> => {
+    const pair = await request<TokenPairDto>('/auth/login', {
+      method: 'POST',
+      body: { username, password, device: { platform: 'web', name: 'Admin Web' } },
+      anonymous: true,
+    })
+    tokenStore.set(pair)
+    try {
+      return toStaff(pair.actor)
+    } catch (refusal) {
+      // A parent/teacher login is valid, just not here: end the session it
+      // just opened so no token outlives the refusal.
+      await sessionApi.logout()
+      throw refusal
+    }
+  },
+  logout: async (): Promise<void> => {
+    try {
+      if (tokenStore.access()) await api.post<void>('/auth/logout')
+    } finally {
+      tokenStore.clear()
+    }
+  },
 }
 
 /**
@@ -313,4 +388,85 @@ export const storyApi = {
   /** Soft delete. The reason is required and lands in chat.audit_log. */
   remove: (id: string, reason: string) =>
     api.delete<{ ok: true; alreadyDeleted: boolean }>(`/stories/${id}`, { reason }),
+}
+
+/* ------------------------------------------------------------------ admin */
+
+/** GET /admin/* -- read-only, super_admin only (COMM.ADMIN_INSPECTION_DENIED otherwise). */
+export interface AdminOverview {
+  organization: { id: string; slug: string; displayName: string }
+  accounts: Record<string, { active: number; inactive: number }>
+  staffByRole: Record<string, number>
+  teachers: number
+  families: number
+  contacts: number
+  conversationsByType: Record<string, number>
+  messages: number
+  storiesByState: Record<string, number>
+  generatedAt: string
+}
+
+export interface AdminUser {
+  principalKind: 'staff' | 'teacher' | 'contact'
+  id: string
+  displayName: string
+  staffRole: string | null
+  familyId: string | null
+  isActive: boolean
+  hasLogin: boolean
+  accountStatus: string | null
+  lastLoginAt: string | null
+  createdAt: string
+}
+
+export interface AdminConversation {
+  id: string
+  type: string
+  state: string
+  title: string | null
+  familyId: string | null
+  familyName: string | null
+  liveMembers: number
+  lastActivityAt: string
+  createdAt: string
+  archivedAt: string | null
+}
+
+export interface AdminMessage {
+  id: string
+  seq: string | null
+  authorKind: string
+  authorName: string | null
+  type: string
+  visibility: string
+  moderation: string
+  body: string | null
+  deleted: boolean
+  attachments: number
+  createdAt: string
+}
+
+export interface AdminStory {
+  id: string
+  title: string | null
+  state: string
+  creatorName: string
+  recipients: number
+  views: number
+  createdAt: string
+  publishedAt: string | null
+  expiresAt: string | null
+  deletedAt: string | null
+}
+
+export const adminApi = {
+  overview: () => api.get<AdminOverview>('/admin/overview'),
+  users: () => api.get<{ users: AdminUser[]; truncated: boolean }>('/admin/users'),
+  conversations: () =>
+    api.get<{ conversations: AdminConversation[]; truncated: boolean }>('/admin/conversations'),
+  messages: (conversationId: string) =>
+    api
+      .get<{ messages: AdminMessage[] }>(`/admin/conversations/${encodeURIComponent(conversationId)}/messages`)
+      .then((r) => r.messages),
+  stories: () => api.get<{ stories: AdminStory[]; truncated: boolean }>('/admin/stories'),
 }

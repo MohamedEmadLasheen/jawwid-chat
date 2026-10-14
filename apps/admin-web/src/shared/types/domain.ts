@@ -5,7 +5,9 @@
  * and the contract in docs/admin/backend-contract-required.md.
  *
  * Rules that these types deliberately encode:
- *  - There is no `super_admin` role.
+ *  - `super_admin` exists (PD-5, closed 2026-09-07; the earlier "there is no
+ *    super_admin" rule was withdrawn as D-1). It is the organization owner and
+ *    the only role that reaches the read-only `/admin` inspection surface.
  *  - `workload_level` has no CRITICAL level.
  *  - Attention is a server-computed `bucket` + `top_reason` TEXT. There is no
  *    client-visible score, and no P1/P2/P3.
@@ -19,6 +21,7 @@ export type StaffRole =
   | 'finance'
   | 'technical'
   | 'academic'
+  | 'super_admin'
   | 'system'
 
 export type Presence = 'online' | 'away' | 'offline'

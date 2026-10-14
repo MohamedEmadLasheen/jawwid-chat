@@ -12,7 +12,8 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
 
   const login = useMutation({
-    mutationFn: () => sessionApi.login(email, password),
+    // The login identifier is the account subject; for staff, their email.
+    mutationFn: () => sessionApi.login(email.trim(), password),
     onSuccess: (staff) => {
       queryClient.setQueryData(qk.me, staff)
       void queryClient.invalidateQueries()

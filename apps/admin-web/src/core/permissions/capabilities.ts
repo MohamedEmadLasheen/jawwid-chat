@@ -45,8 +45,21 @@ export function isManager(role: StaffRole): boolean {
   return role === 'manager'
 }
 
+/**
+ * The organization owner (PD-5). Sees every Admin Portal section, including the
+ * ones still in development, plus every legacy screen. Seeing a section is not
+ * being allowed to act in it: the API answers each request on its own, and
+ * today it gives super_admin read-only inspection and nothing more.
+ */
+export function isSuperAdmin(role: StaffRole): boolean {
+  return role === 'super_admin'
+}
+
 /** Which nav areas this role may even attempt to open. */
 export function visibleAreas(role: StaffRole): NavArea[] {
+  if (isSuperAdmin(role)) {
+    return ['inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'settings']
+  }
   if (isManager(role)) {
     return ['inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'settings']
   }
@@ -82,7 +95,7 @@ export const managerOnly = {
 
 /** The task scope a role should request from the API. */
 export function taskScopeFor(role: StaffRole): 'mine' | 'team' | 'department' {
-  if (isManager(role)) return 'team'
+  if (isManager(role) || isSuperAdmin(role)) return 'team'
   if (isDepartment(role)) return 'department'
   return 'mine'
 }
