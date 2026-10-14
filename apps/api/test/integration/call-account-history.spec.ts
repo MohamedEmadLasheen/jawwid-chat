@@ -390,11 +390,12 @@ describe('11/12/13. what a history row may carry', () => {
 describe('3. tenancy', () => {
   it('3. cross-tenant isolation is not exercisable here, and this records why',
     async () => {
-      // RT-030: `getOrCreateDirect` never sets `organization_id`, so every
-      // conversation this harness can create lands in the default organization
-      // and a second tenant's call cannot be produced through the service at
-      // all. Asserted rather than left as a silent gap — the same statement the
-      // ring-timeout suite makes.
+      // This suite seeds one organization only. Since RT-030 (closed
+      // 2026-10-12) a second tenant's conversation CAN be created through the
+      // service, but a call in it would still be filed under the default
+      // organization (RT-031: `call.create` sets no `organization_id`), so a
+      // cross-tenant call assertion waits on RT-031. Asserted rather than left
+      // as a silent gap — the same statement the ring-timeout suite makes.
       await callBetween(s.parentId, s.ownerId, s.ownerId);
 
       const organizations = new Set(

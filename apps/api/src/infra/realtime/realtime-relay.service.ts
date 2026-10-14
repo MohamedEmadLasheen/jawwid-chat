@@ -1,7 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import Redis from 'ioredis';
 import type { Server } from 'socket.io';
-import { room } from '../../communication/contracts/events';
 import { RealtimeGateway } from '../../communication/realtime/realtime.gateway';
 import { decodeEnvelope, realtimeChannel } from './realtime-channel';
 
@@ -52,12 +51,17 @@ export class RealtimeRelay implements OnModuleDestroy {
       const server = (this.gateway as unknown as { server?: Server }).server;
       if (!server) return;
 
-      const rooms =
-        envelope.target === 'room'
-          ? envelope.ids.map(room.conversation)
-          : envelope.ids.map(room.actor);
-
-      server.local.to(rooms).emit(envelope.event, envelope.payload);
+      // RT-009: never a raw room emit. Each recipient on THIS node is
+      // authorized at delivery (live membership, session-precise identity,
+      // canRead), so a revocation that has committed is honoured here even if
+      // no eviction message ever reached this node.
+      if (envelope.target === 'room') {
+        for (const id of envelope.ids) {
+          void this.gateway.deliverToConversationLocally(id, envelope.event, envelope.payload);
+        }
+      } else {
+        void this.gateway.deliverToActorsLocally(envelope.ids, envelope.event, envelope.payload);
+      }
     });
 
     await this.subscriber.subscribe(realtimeChannel());

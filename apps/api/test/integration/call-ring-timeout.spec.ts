@@ -519,10 +519,11 @@ describe('Q/R/S/T — security and isolation', () => {
     // over every tenant's overdue calls, and adding a tenant filter would mean
     // deciding WHOSE clock it runs on.
     //
-    // A cross-tenant test cannot be written today regardless: RT-030 --
-    // getOrCreateDirect never sets organization_id, so every conversation lands
-    // in the default organization and a second tenant's call cannot be created
-    // through the service at all. Asserted rather than left as a silent gap.
+    // A cross-tenant call test waits on RT-031: since RT-030 (closed
+    // 2026-10-12) a second tenant's conversation can be created, but
+    // `call.create` sets no organization_id, so its call would be filed under
+    // the default organization. This suite seeds one organization only.
+    // Asserted rather than left as a silent gap.
     const conversations = await g.prisma.conversation.findMany({
       select: { organizationId: true },
     });

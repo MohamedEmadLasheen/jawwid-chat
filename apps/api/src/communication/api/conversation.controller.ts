@@ -79,8 +79,8 @@ export class ConversationController {
   }
 
   @Post('student-group/:learnerId/sync')
-  async sync(@Param('learnerId') learnerId: string) {
-    const conv = await this.conversations.syncStudentGroup(learnerId);
+  async sync(@ActorId() actorId: string, @Param('learnerId') learnerId: string) {
+    const conv = await this.conversations.syncStudentGroup(learnerId, actorId);
     return conv ? toConversationDto(conv) : { synced: false };
   }
 
@@ -153,17 +153,19 @@ export class ConversationController {
       reason: string;
     },
   ) {
+    // Passed through as received: the service validates every field and judges
+    // the member from their own row, so nothing here is trusted.
     await this.conversations.setMembership(
       id,
       actorId,
       {
-        actorId: body.actorId,
-        actorKind: body.actorKind,
-        memberRole: body.memberRole,
-        isSilent: body.isSilent,
+        actorId: body?.actorId,
+        actorKind: body?.actorKind,
+        memberRole: body?.memberRole,
+        isSilent: body?.isSilent,
       },
-      body.action,
-      body.reason,
+      body?.action,
+      body?.reason,
     );
     return { ok: true };
   }

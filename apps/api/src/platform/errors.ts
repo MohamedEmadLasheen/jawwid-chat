@@ -42,7 +42,20 @@ export enum CommErrorCode {
   MEMBER_IS_SILENT = 'COMM.MEMBER_IS_SILENT',
   ACTOR_INACTIVE = 'COMM.ACTOR_INACTIVE',
   CANNOT_MANAGE_MEMBERSHIP = 'COMM.CANNOT_MANAGE_MEMBERSHIP',
+  /**
+   * A Student Group is provisioned by Jawwid staff for a family in their scope:
+   * a manager for any family in their organization, an admin or coverage admin
+   * for a family they own. Never by a parent, a teacher or department staff.
+   */
+  CANNOT_PROVISION_STUDENT_GROUP = 'COMM.CANNOT_PROVISION_STUDENT_GROUP',
   CANNOT_APPROVE = 'COMM.CANNOT_APPROVE',
+  /**
+   * A request body that fails validation (API-CONTRACT section 1: 400, the
+   * message names the field). Shared with every route; first emitted by
+   * `POST /conversations/:id/members`, whose missing reason used to reach the
+   * audit_log NOT NULL constraint and fail as a 500.
+   */
+  VALIDATION = 'COMMON.VALIDATION',
   NOT_MESSAGE_AUTHOR = 'COMM.NOT_MESSAGE_AUTHOR',
   DELETE_WINDOW_EXPIRED = 'COMM.DELETE_WINDOW_EXPIRED',
 
@@ -108,6 +121,17 @@ export enum CommErrorCode {
   /** The authored audience resolves to nobody the author may address. */
   STORY_AUDIENCE_EMPTY = 'COMM.STORY_AUDIENCE_EMPTY',
   STORY_AUDIENCE_INVALID = 'COMM.STORY_AUDIENCE_INVALID',
+
+  // --- Realtime revocation (RT-009) ---
+  /**
+   * 503. The revocation (a membership removal, a logout, a session or account
+   * revocation) IS committed and durable -- but not every API node confirmed
+   * that it can no longer deliver to the revoked recipient on a decision made
+   * before it. The operation is therefore NOT reported as complete. Retrying
+   * the same request is safe and idempotent; it succeeds once every node
+   * confirms.
+   */
+  REVOCATION_UNCONFIRMED = 'COMM.REVOCATION_UNCONFIRMED',
 }
 
 export class CommError extends Error {
