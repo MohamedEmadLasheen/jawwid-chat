@@ -126,6 +126,14 @@ export class AuthorizationService {
     /** PD-6: resolved by RelationshipService. Defaults to the strict value. */
     pairingAuthorized = false,
   ): Decision {
+    // Tenant first (RT-030). A direct conversation is filed under its two
+    // participants' organization, so they must share one -- and an actor in
+    // another organization is answered exactly as an unknown one, before any
+    // other property of theirs (activity, role) can be read off the refusal.
+    // SYSTEM has no organization and therefore never opens a direct channel.
+    if (!a.organizationId || a.organizationId !== b.organizationId) {
+      return deny(CommErrorCode.UNKNOWN_ACTOR, 'unknown actor');
+    }
     if (!a.isActive || !b.isActive) {
       return deny(CommErrorCode.ACTOR_INACTIVE, 'one of the participants is inactive');
     }
@@ -566,6 +574,23 @@ export class AuthorizationService {
   canManageMembership(actor: Actor): Decision {
     if (!isFamilyFacingStaff(actor)) {
       return deny(CommErrorCode.CANNOT_MANAGE_MEMBERSHIP, 'only Jawwid admins may change membership');
+    }
+    return allow();
+  }
+
+  /**
+   * May this actor write into a record of this organization? (RT-030)
+   *
+   * Every write that is attributed to a conversation's organization must first
+   * establish that the actor belongs to it; otherwise correcting the attribution
+   * would turn a write the database used to refuse (default tenant vs the
+   * conversation's) into one it accepts. SYSTEM belongs to no organization and
+   * acts for all of them; nothing reachable over HTTP is SYSTEM.
+   */
+  canActInOrganization(actor: Actor, organizationId: string): Decision {
+    if (actor.kind === ActorKind.SYSTEM) return allow();
+    if (!actor.organizationId || actor.organizationId !== organizationId) {
+      return deny(CommErrorCode.CONVERSATION_NOT_FOUND, 'conversation not found');
     }
     return allow();
   }

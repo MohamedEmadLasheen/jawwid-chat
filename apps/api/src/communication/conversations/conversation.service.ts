@@ -303,7 +303,15 @@ export class ConversationService {
     const pairingAuthorized = await this.relationships.pairingAuthorized(a, b);
 
     const decision = this.authz.canOpenDirect(a, b, pairingAuthorized);
-    if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+    if (!decision.allowed) {
+      // Another organization's actor is answered exactly as `requireActor`
+      // answers an unknown one: same code, same status, same message.
+      const status = decision.code === CommErrorCode.UNKNOWN_ACTOR ? 401 : 403;
+      throw new CommError(decision.code, decision.reason, status);
+    }
+    // canOpenDirect has established that both sides share this organization;
+    // each value was read from the principal's own row by IdentityService.
+    const organizationId = a.organizationId as string;
 
     const key = ConversationService.directKey(a.actorId, b.actorId);
     const existing = await this.prisma.conversation.findUnique({ where: { directKey: key } });
@@ -317,6 +325,10 @@ export class ConversationService {
       return await this.prisma.$transaction(async (tx) => {
         const conv = await tx.conversation.create({
           data: {
+            // RT-030: the participants' shared organization, never the column
+            // default. With a family side, conversation_same_organization
+            // independently checks it against the family.
+            organizationId,
             type: ConversationType.DIRECT,
             directKey: key,
             familyId,
@@ -412,6 +424,13 @@ export class ConversationService {
     return this.prisma.$transaction(async (tx) => {
       const conv = await tx.conversation.create({
         data: {
+          // RT-030. The learner's own row is the authority for the group's
+          // tenant -- never the column default, which is the seeded
+          // organization, and never the request. The database keeps the
+          // learner in its family's organization (learner_same_organization)
+          // and checks this conversation against the family
+          // (conversation_same_organization), so a wrong value cannot land.
+          organizationId: learner.organizationId,
           type: ConversationType.STUDENT_GROUP,
           familyId: learner.familyId,
           learnerId: learner.id,
@@ -702,13 +721,21 @@ export class ConversationService {
     kind: string,
     payload: Record<string, unknown>,
   ): Promise<void> {
-    const locked = await tx.$queryRaw<Array<{ last_seq: bigint }>>`
-      SELECT last_seq FROM chat.conversation WHERE id = ${conversationId}::uuid FOR UPDATE
+    // The conversation's own row, locked, is the authority for the message's
+    // tenant (RT-030): the column default is the seeded organization, which is
+    // wrong for every other tenant and is refused by message_same_organization.
+    const locked = await tx.$queryRaw<Array<{ last_seq: bigint; organization_id: string }>>`
+      SELECT last_seq, organization_id::text AS organization_id
+        FROM chat.conversation WHERE id = ${conversationId}::uuid FOR UPDATE
     `;
-    const seq = (locked[0]?.last_seq ?? BigInt(0)) + BigInt(1);
+    if (locked.length === 0) {
+      throw new CommError(CommErrorCode.CONVERSATION_NOT_FOUND, 'conversation not found', 404);
+    }
+    const seq = locked[0].last_seq + BigInt(1);
 
     await tx.message.create({
       data: {
+        organizationId: locked[0].organization_id,
         conversationId,
         authorType: ActorKind.SYSTEM,
         authorId: null,
