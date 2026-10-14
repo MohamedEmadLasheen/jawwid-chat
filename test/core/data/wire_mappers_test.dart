@@ -219,6 +219,22 @@ void main() {
         viewerRole: UserRole.parent,
       );
       expect(conversation.kind, ConversationKind.teacherParentDirect);
+      // PD-7: such a conversation is history -- no composer is offered.
+      expect(conversation.isReadOnly, isTrue);
+    });
+
+    test('PD-7: only the teacher<->parent direct is read-only; a parent<->admin direct is not', () {
+      final adminDirect = WireMappers.conversation(
+        {
+          'id': 'c3',
+          'type': 'direct',
+          'title': 'Jawwid',
+          'lastActivityAt': '2026-10-14T10:00:00Z',
+          'members': [member('contact', role: 'parent'), member('staff', role: 'admin')],
+        },
+        viewerRole: UserRole.parent,
+      );
+      expect(adminDirect.isReadOnly, isFalse);
     });
 
     test('the full conversation mapper fails closed when the payload omits members', () {

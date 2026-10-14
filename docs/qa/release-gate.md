@@ -1,7 +1,7 @@
 # Jawwid Chat — Release Gate
 
-Date: 2026-09-05 · Owner: AI #5 · **G-01 re-versioned 2026-09-23 (PD-6)**
-Authoritative scope: `docs/qa/authoritative-scope.md` (PRD v0.1) → superseded on BR-1 by **PRD v0.2 / PD-6**
+Date: 2026-09-05 · Owner: AI #5 · **G-01 re-versioned 2026-09-23 (PD-6) and again 2026-10-14 (PD-7)**
+Authoritative scope: `docs/qa/authoritative-scope.md` (PRD v0.1) → superseded on BR-1 by **PRD v0.2 / PD-6**, itself superseded by **PD-7 (2026-10-14): BR-1 as in v0.1 is in force**
 (`docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4)
 
 A release is **BLOCKED** if any gate is failing **or unverified**. The two are
@@ -25,7 +25,7 @@ passing, 1 failing, and that failure is JC-008 rather than a test defect.
 
 | # | Gate | Status |
 |---|---|---|
-| **G-01** | **BR-1 (PD-6): a Teacher↔Parent 1:1 conversation or call exists ONLY for an authorized relationship — enforced server-side AND independently in the database, verified with client-side policy disabled** | **PASS — verified 2026-09-23.** All five proofs below execute. The gate was re-versioned, not weakened: it gained the positive half it never had. Old condition recorded beneath this table. |
+| **G-01** | **BR-1 (PD-7, 2026-10-14): NO Teacher↔Parent 1:1 conversation or call, whatever the relationship (PD-6 wording, kept as history: "exists ONLY for an authorized relationship") — enforced server-side AND independently in the database, verified with client-side policy disabled** | **PASS — verified 2026-09-23.** All five proofs below execute. The gate was re-versioned, not weakened: it gained the positive half it never had. Old condition recorded beneath this table. |
 
 **G-01 pass condition, and where each half is proven.** No client is involved in
 any of it; every assertion drives the server decision or the database directly,

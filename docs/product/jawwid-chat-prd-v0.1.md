@@ -26,6 +26,10 @@
 
 # Jawwid Chat
 
+> **2026-10-14 — PD-7.** BR-1 as written in THIS document (no direct Teacher ↔ Parent
+> chat or call) is the rule in force again: PD-7 superseded PD-6. See
+> [`JAWUID-CHAT-PRODUCT-BOUNDARY.md`](JAWUID-CHAT-PRODUCT-BOUNDARY.md) §4 PD-7.
+
 A customer communication and customer operations system for Jawwid Online Quran & Arabic Academy. Familiar like WhatsApp, owned and operated by Jawwid.
 
 Version0.1**Draft for review**

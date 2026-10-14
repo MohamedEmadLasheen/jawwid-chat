@@ -229,8 +229,15 @@ void main() {
     await c.resync();
     await waitUntil(() => read().log.length == 2, describe: 'resync');
 
-    final resyncRequest = server.lastRequestTo('GET', '/conversations/c1/messages')!;
-    expect(resyncRequest.query['after'], '5');
+    // The catch-up follows the watermark: first after the highest seq held
+    // (5), then after what that returned (6), stopping when nothing is newer.
+    final afters = [
+      for (final r in server.requests)
+        if (r.method == 'GET' && r.path == '/conversations/c1/messages' && r.query['after'] != null)
+          r.query['after'],
+    ];
+    expect(afters.first, '5');
+    expect(afters, everyElement(anyOf('5', '6')));
     expect(read().log.length, 2);
   });
 

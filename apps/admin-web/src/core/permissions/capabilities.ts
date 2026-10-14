@@ -19,6 +19,7 @@
 import type { StaffRole } from '@/shared/types/domain'
 
 export type NavArea =
+  | 'chat'
   | 'inbox'
   | 'families'
   | 'tasks'
@@ -45,17 +46,34 @@ export function isManager(role: StaffRole): boolean {
   return role === 'manager'
 }
 
+/**
+ * The organization owner (PD-5). Sees every Admin Portal section, including the
+ * ones still in development, plus every legacy screen. Seeing a section is not
+ * being allowed to act in it: the API answers each request on its own, and
+ * today it gives super_admin read-only inspection and nothing more.
+ */
+export function isSuperAdmin(role: StaffRole): boolean {
+  return role === 'super_admin'
+}
+
 /** Which nav areas this role may even attempt to open. */
 export function visibleAreas(role: StaffRole): NavArea[] {
-  if (isManager(role)) {
+  if (isSuperAdmin(role)) {
     return ['inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'settings']
+  }
+  if (isManager(role)) {
+    return ['chat', 'inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'settings']
   }
   if (isOperator(role)) {
     // No coverage configuration, no manager dashboard, no config editing.
     // Stories IS here: admin and coverage hold the publisher role server-side
     // (AuthorizationService.canPublishStory), and a nav entry that hid a page
     // the server would happily serve is a worse lie than one that shows it.
-    return ['inbox', 'families', 'tasks', 'stories']
+    //
+    // Chat is first: the conversation workspace on the real conversation API
+    // (the same conversations parents and teachers are in). The server decides
+    // which ones this admin may open -- staff scope -- not this list.
+    return ['chat', 'inbox', 'families', 'tasks', 'stories']
   }
   if (isDepartment(role)) {
     // Departments get tasks and nothing else — they may not open family records.
@@ -66,6 +84,19 @@ export function visibleAreas(role: StaffRole): NavArea[] {
 
 export function canOpenArea(role: StaffRole, area: NavArea): boolean {
   return visibleAreas(role).includes(area)
+}
+
+/**
+ * Areas that stay ROUTABLE (old links, bookmarks) but are not OFFERED in any
+ * navigation. The legacy Inbox calls `/inbox` and `/families/*`, which no API
+ * on any current branch serves, so presenting it as a destination would offer
+ * a page that cannot load. The working conversation interface is `/chat`.
+ */
+export const UNLISTED_AREAS: ReadonlySet<NavArea> = new Set<NavArea>(['inbox'])
+
+/** What navigation shows: the areas this role may open, minus the unlisted ones. */
+export function navAreas(role: StaffRole): NavArea[] {
+  return visibleAreas(role).filter((area) => !UNLISTED_AREAS.has(area))
 }
 
 /** Manager-only, per the brief's invariants and AI #5's matrix. */
@@ -82,7 +113,7 @@ export const managerOnly = {
 
 /** The task scope a role should request from the API. */
 export function taskScopeFor(role: StaffRole): 'mine' | 'team' | 'department' {
-  if (isManager(role)) return 'team'
+  if (isManager(role) || isSuperAdmin(role)) return 'team'
   if (isDepartment(role)) return 'department'
   return 'mine'
 }

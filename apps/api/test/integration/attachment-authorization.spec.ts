@@ -111,10 +111,24 @@ describe('a member who may read but may not send is refused', () => {
 
   it('refuses an off-duty admin for a customer-visible attachment', async () => {
     const conv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
-    // Nobody is on duty, and this admin does not own the family.
+    // Nobody is on duty. The family's owner still READS its conversations
+    // (staff scope, 2026-10-14) -- which is what makes this the read-but-not-
+    // send case -- but may not post customer-visible content off duty.
     g.coverage.onDutyId = null;
 
-    expect(await refusalCode(conv.id, s.otherAdminId)).toBe(CommErrorCode.NOT_ON_DUTY);
+    expect(await refusalCode(conv.id, s.ownerId)).toBe(CommErrorCode.NOT_ON_DUTY);
+  });
+
+  it('refuses an admin outside the family\'s charge before anything else', async () => {
+    const conv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
+    g.coverage.onDutyId = null;
+
+    // Not the owner, not on duty, not a member, not sticky: this admin may not
+    // even read the conversation (staff scope, 2026-10-14), so no lane opens.
+    expect(await refusalCode(conv.id, s.otherAdminId)).toBe(CommErrorCode.STAFF_OUT_OF_SCOPE);
+    expect(await refusalCode(conv.id, s.otherAdminId, { visibility: 'internal' })).toBe(
+      CommErrorCode.STAFF_OUT_OF_SCOPE,
+    );
   });
 
   it('refuses a deactivated actor', async () => {
@@ -132,10 +146,11 @@ describe('visibility is judged as the send path judges it', () => {
     const conv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
     g.coverage.onDutyId = null;
 
-    // Any family-facing admin may write an internal note at any time, so the
-    // attachment for one must be authorizable too.
+    // Any family-facing admin who may READ the conversation may write an
+    // internal note at any time, on duty or not, so the attachment for one must
+    // be authorizable too. Since staff scope that reader is the family owner.
     await expect(
-      authorizeAs(conv.id, s.otherAdminId, { visibility: 'internal' }),
+      authorizeAs(conv.id, s.ownerId, { visibility: 'internal' }),
     ).resolves.toBeDefined();
   });
 

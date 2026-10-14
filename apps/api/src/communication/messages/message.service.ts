@@ -12,8 +12,9 @@ import type {
   ResolvedActors,
 } from '../../platform/identity.service';
 import { Actor } from '../../platform/types';
-import { ConversationService } from '../conversations/conversation.service';
+import { ConversationService, isUuid } from '../conversations/conversation.service';
 import { AttachmentService } from '../attachments/attachment.service';
+import { objectKeyBelongsToConversation } from '../attachments/object-key';
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
 import {
@@ -118,6 +119,13 @@ export class MessageService {
     const now = new Date();
     const actor = await this.conversations.requireActor(input.senderId);
     const conv = await this.conversations.requireConversation(input.conversationId);
+    // RT-030: the sender must belong to the conversation's organization, and
+    // this must be the FIRST thing asked of a loaded conversation. Another
+    // tenant's conversation is answered exactly as an unknown one; any check
+    // placed before this one (attachment MIME, object-key namespace,
+    // idempotency) would answer differently for a conversation that exists.
+    const tenant = this.authz.canActInOrganization(actor, conv.organizationId);
+    if (!tenant.allowed) throw new CommError(tenant.code, tenant.reason, 404);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
 
     // Idempotency fast path. The unique index is the real guarantee; this only
@@ -186,10 +194,6 @@ export class MessageService {
       // C-4: admin presence is evaluated at post time, not only as committed
       // membership state.
       await this.conversations.liveMembersOf(conv.id),
-      // PD-6: and so is the teacher<->parent relationship. A conversation
-      // outlives the relationship that justified opening it, so this is
-      // resolved per message rather than trusted from creation time.
-      await this.conversations.pairingAuthorizedAmong(members),
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
@@ -213,16 +217,25 @@ export class MessageService {
       const created = await this.prisma.$transaction(async (tx) => {
         // Serialize sequence assignment. Ordering is decided by the server,
         // never by a device clock.
-        const locked = await tx.$queryRaw<Array<{ last_seq: bigint }>>`
-          SELECT last_seq FROM chat.conversation WHERE id = ${conv.id}::uuid FOR UPDATE
+        // The locked row is also the authority for the message's tenant
+        // (RT-030): the column default is the seeded organization, and
+        // message_same_organization refuses it for every other tenant.
+        const locked = await tx.$queryRaw<Array<{ last_seq: bigint; organization_id: string }>>`
+          SELECT last_seq, organization_id::text AS organization_id
+            FROM chat.conversation WHERE id = ${conv.id}::uuid FOR UPDATE
         `;
         if (locked.length === 0) {
           throw new CommError(CommErrorCode.CONVERSATION_NOT_FOUND, 'conversation not found', 404);
         }
         const seq = locked[0].last_seq + BigInt(1);
+        const organizationId = locked[0].organization_id;
+        // RT-032: the author is still live under lock, or this send is ordered
+        // before their deactivation commits.
+        await this.conversations.assertActorLive(tx, actor);
 
         const message = await tx.message.create({
           data: {
+            organizationId,
             conversationId: conv.id,
             authorType: actor.kind,
             authorId: actor.kind === ActorKind.SYSTEM ? null : actor.actorId,
@@ -282,6 +295,9 @@ export class MessageService {
           // event is broadcast, so the message cannot leak to the group.
           const approval = await tx.messageApproval.create({
             data: {
+              // No trigger guards this column, so a default would be filed
+              // under the wrong tenant silently rather than refused.
+              organizationId,
               messageId: message.id,
               conversationId: conv.id,
               requestedBy: actor.actorId,
@@ -359,7 +375,7 @@ export class MessageService {
       // is re-fetched -- the message is there, but it cannot be heard.
       return toMessageDto(
         created,
-        await this.attachments.signUrlsForMessages([created.id]),
+        await this.attachments.signUrlsForMessages([created.id], actor.actorId),
         await this.authorsFor([created]),
       );
     } catch (e) {
@@ -394,7 +410,7 @@ export class MessageService {
     if (!found) return null;
     return toMessageDto(
       found,
-      await this.attachments.signUrlsForMessages([found.id]),
+      await this.attachments.signUrlsForMessages([found.id], authorId),
       await this.authorsFor([found]),
     );
   }
@@ -443,7 +459,7 @@ export class MessageService {
     const conv = await this.conversations.requireConversation(input.conversationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
 
-    const decision = this.authz.canRead(actor, conv, membership);
+    const decision = await this.conversations.canReadResolved(actor, conv, membership);
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
     const maxLimit = await this.config.get('communication.page_size_max');
@@ -460,7 +476,7 @@ export class MessageService {
 
     // Signed URLs are minted per read, scoped to messages this actor is already
     // permitted to see, and they expire.
-    const signed = await this.attachments.signUrlsForMessages(rows.map((m) => m.id));
+    const signed = await this.attachments.signUrlsForMessages(rows.map((m) => m.id), actor.actorId);
     // ONE identity batch for the whole page, before the map. Resolving inside the
     // map would be one round trip per message -- the shape this whole change exists
     // to remove.
@@ -538,7 +554,7 @@ export class MessageService {
     const actor = await this.conversations.requireActor(actorId);
     const conv = await this.conversations.requireConversation(conversationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
-    const decision = this.authz.canRead(actor, conv, membership);
+    const decision = await this.conversations.canReadResolved(actor, conv, membership);
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
     const target = BigInt(seq);
@@ -643,7 +659,17 @@ export class MessageService {
 
   async react(messageId: string, actorId: string, emoji: string): Promise<void> {
     const { actor, message } = await this.loadForActor(messageId, actorId);
+    // PD-7: a reaction is a signal from one side to the other; a direct
+    // teacher<->parent conversation accepts none. (Removing one's own earlier
+    // reaction, `unreact`, stays allowed: it sends nothing new.)
+    if (await this.conversations.isDirectTeacherParent(message.conversationId!)) {
+      throw new CommError(
+        CommErrorCode.BR1_TEACHER_PARENT_DIRECT,
+        'BR-1: a teacher and a parent communicate only inside the Student Group, never directly',
+      );
+    }
     await this.prisma.$transaction(async (tx) => {
+      await this.conversations.assertActorLive(tx, actor); // RT-032
       await tx.messageReaction.upsert({
         where: { messageId_actorId: { messageId, actorId: actor.actorId } },
         create: { messageId, actorId: actor.actorId, emoji },
@@ -741,8 +767,44 @@ export class MessageService {
     });
   }
 
+  /**
+   * RT-037 -- the access-time decision behind a media URL. A URL proves only
+   * that it was minted for this actor and this attachment; whether the bytes
+   * may be served is decided HERE, now, by the same rules that decide whether
+   * the message itself is readable: the conversation (tenant, staff scope,
+   * membership, activity), internal / pending / rejected visibility, "deleted
+   * for me" (`visibilityFilter`, the single place that decides it), and
+   * "deleted for everyone". Every refusal reads as absent.
+   */
+  async authorizeAttachmentRead(
+    attachmentId: string,
+    actorId: string,
+    variant: 'o' | 't',
+  ): Promise<{ objectKey: string }> {
+    const absent = () => new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'attachment not found', 404);
+    if (!isUuid(attachmentId)) throw absent();
+    const attachment = await this.prisma.messageAttachment.findUnique({
+      where: { id: attachmentId },
+      include: { message: { select: { id: true, conversationId: true, deletedForAll: true } } },
+    });
+    if (!attachment?.message?.conversationId || attachment.message.deletedForAll) throw absent();
+
+    const { actor, conv } = await this.loadForActor(attachment.message.id, actorId);
+    const visible = await this.prisma.message.count({
+      where: { ...this.visibilityFilter(actor, conv.id, {} as ListMessagesInput), id: attachment.message.id },
+    });
+    if (visible === 0) throw absent();
+
+    const objectKey = variant === 't' ? attachment.thumbnailObjectKey : attachment.objectKey;
+    // The same namespace rule that decides signing: a key outside its own
+    // conversation is never served, whatever row points at it.
+    if (!objectKey || !objectKeyBelongsToConversation(conv.id, objectKey)) throw absent();
+    return { objectKey };
+  }
+
   private async loadForActor(messageId: string, actorId: string) {
     const actor = await this.conversations.requireActor(actorId);
+    if (!isUuid(messageId)) throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'message not found', 404);
     const message = await this.prisma.message.findUnique({ where: { id: messageId } });
     if (!message || !message.conversationId) {
       throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'message not found', 404);
@@ -750,7 +812,7 @@ export class MessageService {
     const conv = await this.conversations.requireConversation(message.conversationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
 
-    const decision = this.authz.canRead(actor, conv, membership);
+    const decision = await this.conversations.canReadResolved(actor, conv, membership);
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
     // A message the actor may not see must look absent, not forbidden.

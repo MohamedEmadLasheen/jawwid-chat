@@ -465,23 +465,28 @@ end;
 $$;
 
 -- ===========================================================================
--- H · The backstop now enforces the predicate
+-- H · The backstop no longer consults the predicate (PD-7)
 --
--- RE-VERSIONED 2026-09-23 by the PD-6 authorization switch. Until that switch
--- landed, this section asserted the OPPOSITE -- that the old BR-1 rule still
--- refused every direct teacher<->parent conversation -- and it is what caught
--- the switch the moment it was made. It now asserts the rule that replaced it.
+-- RE-VERSIONED TWICE. Before PD-6 this section asserted that the old BR-1 rule
+-- refused every direct teacher<->parent conversation; PD-6 (2026-09-23) made it
+-- assert that an AUTHORIZED pair was permitted; PD-7 (2026-10-14) restored
+-- BR-1, so it asserts the refusal again -- for an authorized pair too. H1
+-- first proves the predicate DOES authorize that pair, so the refusal cannot
+-- be explained by a predicate that happens to say no.
 --
--- db/tests/br1_invariants.sql carries the full backstop matrix. These two
--- assertions exist here so that this file, which owns the predicate, also
--- proves the predicate is actually WIRED to something. A predicate that is
--- correct and connected to nothing enforces nothing.
+-- The predicate itself (A-G above) is unchanged and still the academy's
+-- answer to "is this teacher this family's teacher"; it just opens no channel.
+-- db/tests/br1_invariants.sql carries the full backstop matrix.
 -- ===========================================================================
 
 do $$
 declare
   v_conv uuid := 'cc000000-0000-0000-0000-000000000001';
 begin
+  if not chat.teacher_parent_authorized('7e000000-0000-0000-0000-000000000001',
+                                        'c0000000-0000-0000-0000-000000000001') then
+    raise exception 'FAIL [H1]: precondition: the predicate should authorize this pair';
+  end if;
   begin
     insert into chat.conversation (id, organization_id, type, direct_key, family_id)
     values (v_conv, '00000000-0000-0000-0000-000000000001', 'direct',
@@ -491,13 +496,16 @@ begin
       (v_conv, 'c0000000-0000-0000-0000-000000000001', 'contact', 'parent');
     set constraints all immediate;
     set constraints all deferred;
-    raise notice 'pass  H1 the backstop PERMITS a direct channel for an authorized relationship';
+    raise exception
+      'FAIL [H1]: the backstop ACCEPTED a direct teacher/parent conversation (PD-7 forbids it even for an authorized pair)';
   exception
+    when check_violation or restrict_violation then
+      raise notice 'pass  H1 PD-7: the backstop REFUSES a direct channel even for an authorized relationship';
     when others then
-      raise exception
-        'FAIL [H1]: the backstop REFUSED an authorized teacher/parent direct conversation: % (%)',
-        sqlerrm, sqlstate;
+      if sqlerrm like 'FAIL [H1]%' then raise; end if;
+      raise exception 'FAIL [H1]: wrong error: % (%)', sqlerrm, sqlstate;
   end;
+  set constraints all deferred;
 end;
 $$;
 
@@ -519,7 +527,7 @@ begin
       'FAIL [H2]: the backstop ACCEPTED a direct teacher/parent conversation with no authorized relationship';
   exception
     when check_violation or restrict_violation then
-      raise notice 'pass  H2 the backstop REFUSES a direct channel with no authorized relationship';
+      raise notice 'pass  H2 the backstop REFUSES a direct channel with no authorized relationship either';
     when others then
       if sqlerrm like 'FAIL [H2]%' then raise; end if;
       raise exception 'FAIL [H2]: wrong error: % (%)', sqlerrm, sqlstate;

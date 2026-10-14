@@ -38,7 +38,11 @@ import { RealtimeGateway } from "@communication/realtime/realtime.gateway";
 import { TypingService } from "@communication/realtime/typing.service";
 import { PresenceService } from "@communication/realtime/presence.service";
 import { room } from "@communication/contracts/events";
-import { PinnedCoverage, withAssignmentGate } from "./harness";
+import {
+  PinnedCoverage,
+  legacyTeacherParentDirect,
+  withAssignmentGate,
+} from "./harness";
 
 process.env.JWT_ACCESS_SECRET ??= "integration-access-secret-32-chars-min!";
 process.env.JWT_REFRESH_SECRET ??= "integration-refresh-secret-32-chars-min!";
@@ -74,6 +78,30 @@ class FakeSocket {
     this.disconnected = true;
     this.forcedDisconnect = force === true;
   }
+}
+
+/**
+ * RT-009: the rooms a verified socket joins, exactly -- its own actor room plus
+ * the session and account rooms revocation is pushed through.
+ *
+ * The expected list is built from the INTENDED identity, not read back from the
+ * implementation: the actor id and its account id are the fixture's, and the
+ * session must be a live row in the database that belongs to that account. A
+ * gateway that joined the wrong account's or a dead session's room would fail
+ * here even though it wrote the same ids onto the socket.
+ */
+async function expectIdentityRooms(socket: FakeSocket, actorId: string, accountId: string): Promise<void> {
+  expect(socket.accountId).toBe(accountId);
+  const session = await new PrismaService().session.findUnique({
+    where: { id: socket.sessionId as string },
+    select: { accountId: true, revokedAt: true },
+  });
+  expect(session).toEqual({ accountId, revokedAt: null });
+  expect(socket.rooms).toEqual([
+    room.actor(actorId),
+    room.session(socket.sessionId as string),
+    room.account(accountId),
+  ]);
 }
 
 const socketWith = (
@@ -179,7 +207,8 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
   let teacherToken = "";
   let strangerToken = "";
   let otherOrgParentToken = "";
-  let authorizedConversationId = "";
+  let sharedConversationId = "";
+  let legacyDirectId = "";
   let unrelatedConversationId = "";
 
   beforeAll(async () => {
@@ -227,9 +256,9 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
          ('${ids.parent}'::uuid, '${org}'::uuid, '${ids.family}'::uuid, 'parent_p', 'primary_guardian', true, '${ids.parentAccount}'::uuid),
          ('${ids.otherParent}'::uuid, '${otherOrg}'::uuid, '${ids.otherFamily}'::uuid, 'parent_q', 'primary_guardian', true, '${ids.otherParentAccount}'::uuid)`,
     );
-    // The learner link is what authorizes parent <-> teacher (PD-6). teacher_id
-    // is the academy's fact, writable only through the ingestion gate, so this
-    // fixture opens it exactly as ingestion would.
+    // The learner link is what puts parent and teacher in one Student Group.
+    // teacher_id is the academy's fact, writable only through the ingestion
+    // gate, so this fixture opens it exactly as ingestion would.
     await withAssignmentGate(
       prisma,
       `insert into chat.learner (id, organization_id, family_id, name, teacher_id)
@@ -248,10 +277,18 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
       await auth.login(`rt001-other-parent-${RUN}`, PASSWORD)
     ).accessToken;
 
-    // PD-6 authorizes this pair, so the conversation is real and legitimate.
-    authorizedConversationId = (
-      await conversations.getOrCreateDirect(ids.parent, ids.teacher)
-    ).id;
+    // The conversation parent and teacher legitimately share: the learner's
+    // Student Group, with the family's owner as its live admin (C-4). It was
+    // their PD-6 direct channel until PD-7 (2026-10-14) restored BR-1.
+    sharedConversationId = (await conversations.ensureStudentGroup(ids.learner)).id;
+    // And the direct channel PD-6 used to open, as the PD-6 window left it:
+    // BR-1 now refuses to create it, so it is written with triggers bypassed.
+    legacyDirectId = await legacyTeacherParentDirect(
+      prisma,
+      ids.teacher,
+      ids.parent,
+      ids.family,
+    );
     // A channel the parent is not in: the stranger teacher and the admin.
     unrelatedConversationId = (
       await conversations.getOrCreateDirect(ids.strangerTeacher, ids.staff)
@@ -288,9 +325,11 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
       }
     };
 
-    const convs = [authorizedConversationId, unrelatedConversationId].filter(
-      Boolean,
-    );
+    const convs = [
+      sharedConversationId,
+      unrelatedConversationId,
+      legacyDirectId,
+    ].filter(Boolean);
     if (convs.length > 0) {
       await run(
         `delete from chat.conversation_member where conversation_id in (${quoted(convs)})`,
@@ -346,7 +385,7 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
         actorId: ids.parent,
         kind: "contact",
       });
-      expect(socket.rooms).toEqual([room.actor(ids.parent)]);
+      await expectIdentityRooms(socket, ids.parent, ids.parentAccount);
       expect(socket.sessionId).toEqual(expect.any(String));
     });
 
@@ -358,7 +397,7 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
         actorId: ids.teacher,
         kind: "teacher",
       });
-      expect(socket.rooms).toEqual([room.actor(ids.teacher)]);
+      await expectIdentityRooms(socket, ids.teacher, ids.teacherAccount);
     });
 
     it("3. a missing token is refused", async () => {
@@ -449,7 +488,7 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
         actorId: ids.parent,
         kind: "contact",
       });
-      expect(socket.rooms).toEqual([room.actor(ids.parent)]);
+      await expectIdentityRooms(socket, ids.parent, ids.parentAccount);
       expect(socket.rooms).not.toContain(room.actor(ids.teacher));
     });
 
@@ -461,7 +500,7 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
         actorId: ids.teacher,
         kind: "teacher",
       });
-      expect(socket.rooms).toEqual([room.actor(ids.teacher)]);
+      await expectIdentityRooms(socket, ids.teacher, ids.teacherAccount);
       expect(socket.rooms).not.toContain(room.actor(ids.parent));
     });
 
@@ -512,11 +551,11 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
       for (const token of [parentToken, teacherToken]) {
         const socket = await connected(token);
         const result = await gateway.subscribe(socket as never, {
-          conversationId: authorizedConversationId,
+          conversationId: sharedConversationId,
         });
         expect(result).toEqual({ ok: true });
         expect(socket.rooms).toContain(
-          room.conversation(authorizedConversationId),
+          room.conversation(sharedConversationId),
         );
       }
     });
@@ -533,40 +572,44 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
       );
     });
 
-    it("11. a revoked PD-6 relationship does not stop the existing membership, and grants no NEW channel", async () => {
-      // Revoking the learner link closes the channel for new messages and calls
-      // (PD-6, proven in relationship-predicate.spec.ts). It does not delete the
-      // conversation, and the member may still subscribe to read its history --
-      // which is the documented behaviour, not an oversight.
+    it("11. a PD-6-era direct teacher<->parent conversation is readable history, and no direct channel opens", async () => {
+      // RE-VERSIONED 2026-10-14 BY PD-7. Under PD-6 this asserted that a
+      // REVOKED relationship closed the direct channel to new traffic but kept
+      // it subscribable. PD-7 closes every direct teacher<->parent channel to
+      // new traffic, relationship or not (proven in relationship-predicate.spec
+      // and call-accept-decline.spec); what stays is the same documented
+      // behaviour for the history: its members may still subscribe to read it.
+      for (const token of [teacherToken, parentToken]) {
+        const socket = await connected(token);
+        const existing = await gateway.subscribe(socket as never, {
+          conversationId: legacyDirectId,
+        });
+        expect(existing).toEqual({ ok: true });
+      }
+
+      // get-or-create is refused for the pair while the relationship HOLDS --
+      // canOpenDirect runs before the existing-conversation lookup, so the pair
+      // cannot re-open the channel they already have through this endpoint.
+      await expect(
+        conversations.getOrCreateDirect(ids.parent, ids.teacher),
+      ).rejects.toMatchObject({ code: "COMM.BR1_TEACHER_PARENT_DIRECT" });
+
       await withAssignmentGate(
         prisma,
         `update chat.learner set teacher_id = '${ids.strangerTeacher}'::uuid
           where id = '${ids.learner}'::uuid`,
       );
       try {
-        const socket = await connected(teacherToken);
-        const existing = await gateway.subscribe(socket as never, {
-          conversationId: authorizedConversationId,
-        });
-        expect(existing).toEqual({ ok: true });
-
-        // And get-or-create is refused for the revoked pair. Note this is
-        // STRICTER than "no new channel": canOpenDirect runs before the
-        // existing-conversation lookup, so the pair cannot re-open the channel
-        // they already have through this endpoint either. Reading its history
-        // still works through GET /conversations/:id and the list, which
-        // canRead governs -- so PD-6's "history is preserved" holds.
-        await expect(
-          conversations.getOrCreateDirect(ids.parent, ids.teacher),
-        ).rejects.toMatchObject({ code: "COMM.TEACHER_PARENT_NOT_AUTHORIZED" });
-
-        // And the stranger, who now teaches the learner but shares no
-        // conversation, still cannot subscribe to this one.
+        // The stranger, who now teaches the learner but shares no conversation
+        // with the parent, still cannot subscribe to it, and gains no channel.
         const stranger = await connected(strangerToken);
         const denied = await gateway.subscribe(stranger as never, {
-          conversationId: authorizedConversationId,
+          conversationId: legacyDirectId,
         });
         expect(denied.ok).toBe(false);
+        await expect(
+          conversations.getOrCreateDirect(ids.parent, ids.strangerTeacher),
+        ).rejects.toMatchObject({ code: "COMM.BR1_TEACHER_PARENT_DIRECT" });
       } finally {
         await withAssignmentGate(
           prisma,
@@ -579,12 +622,12 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
     it("12. tenant isolation holds: another organization's parent cannot subscribe", async () => {
       const socket = await connected(otherOrgParentToken);
       const result = await gateway.subscribe(socket as never, {
-        conversationId: authorizedConversationId,
+        conversationId: sharedConversationId,
       });
 
       expect(result.ok).toBe(false);
       expect(socket.rooms).not.toContain(
-        room.conversation(authorizedConversationId),
+        room.conversation(sharedConversationId),
       );
     });
 
@@ -592,14 +635,14 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
       const socket = await connected(parentToken);
       const result = await gateway.subscribe(socket as never, {});
       expect(result.ok).toBe(false);
-      expect(socket.rooms).toEqual([room.actor(ids.parent)]);
+      await expectIdentityRooms(socket, ids.parent, ids.parentAccount);
     });
 
     it("an unauthenticated socket cannot subscribe at all", async () => {
       const socket = socketWith({ actorId: ids.parent });
       await gateway.handleConnection(socket as never);
       const result = await gateway.subscribe(socket as never, {
-        conversationId: authorizedConversationId,
+        conversationId: sharedConversationId,
       });
       expect(result).toEqual({ ok: false, code: "COMM.UNKNOWN_ACTOR" });
     });
@@ -627,11 +670,11 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
 
       for (const socket of [caller, callee]) {
         const result = await gateway.subscribe(socket as never, {
-          conversationId: authorizedConversationId,
+          conversationId: sharedConversationId,
         });
         expect(result).toEqual({ ok: true });
         expect(socket.rooms).toContain(
-          room.conversation(authorizedConversationId),
+          room.conversation(sharedConversationId),
         );
       }
       // And each holds its own actor room, which is where a targeted call
@@ -643,13 +686,13 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
     it("15. an unrelated actor reaches neither room, so it receives no call event", async () => {
       const stranger = await connected(strangerToken);
       const result = await gateway.subscribe(stranger as never, {
-        conversationId: authorizedConversationId,
+        conversationId: sharedConversationId,
       });
 
       expect(result.ok).toBe(false);
-      expect(stranger.rooms).toEqual([room.actor(ids.strangerTeacher)]);
+      await expectIdentityRooms(stranger, ids.strangerTeacher, ids.strangerTeacherAccount);
       expect(stranger.rooms).not.toContain(
-        room.conversation(authorizedConversationId),
+        room.conversation(sharedConversationId),
       );
       expect(stranger.rooms).not.toContain(room.actor(ids.parent));
       expect(stranger.rooms).not.toContain(room.actor(ids.teacher));
@@ -664,10 +707,10 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
 
       // The actor room is named from the verified actor, so the forgery buys
       // nothing: it is the stranger's own room or none.
-      expect(impostor.rooms).toEqual([room.actor(ids.strangerTeacher)]);
+      await expectIdentityRooms(impostor, ids.strangerTeacher, ids.strangerTeacherAccount);
 
       const result = await gateway.subscribe(impostor as never, {
-        conversationId: authorizedConversationId,
+        conversationId: sharedConversationId,
       });
       expect(result.ok).toBe(false);
     });

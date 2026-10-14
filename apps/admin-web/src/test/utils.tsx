@@ -191,5 +191,6 @@ export const ROLES: StaffRole[] = [
   'finance',
   'technical',
   'academic',
+  'super_admin',
   'system',
 ]

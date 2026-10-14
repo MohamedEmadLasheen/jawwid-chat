@@ -91,16 +91,36 @@ a record. No gaps, no duplicates.
 | Severity | Count | IDs | Still open |
 |---|---|---|---|
 | **P0** | **5** | RT-001, RT-002, RT-023, RT-024, RT-026 | **0** — RT-001 closed 2026-09-23 (Phase 8) |
-| **P1** | **9** | RT-003, RT-004, RT-005, RT-006, RT-007, RT-008, RT-009, RT-010, RT-025 | 3 — RT-006, RT-009, RT-010 (partial) |
+| **P1** | **9** | RT-003, RT-004, RT-005, RT-006, RT-007, RT-008, RT-009, RT-010, RT-025 | 2 — RT-006, RT-010 (partial) · RT-009 closed 2026-10-12 for API-driven revocations; its residual RT-032 closed 2026-10-14 for every deactivation writer |
 | **P2** | **6** | RT-011, RT-012, RT-013, RT-014, RT-027, RT-028 | 5 — RT-011, RT-012, RT-013, RT-014, RT-028 |
 | **P3** | **7** | RT-016, RT-017, RT-018, RT-019, RT-020, RT-021, RT-022 | 7 (RT-020 partial) |
 | Closed | 1 | RT-015 | — |
-| | **28** | | **15 open · 12 resolved · 1 closed** |
+| | **28** | | **14 open · 13 resolved · 1 closed** |
+
+> **Findings after RT-028 are not in the tally above** (it predates them):
+> RT-029 P2 OPEN · RT-030 P2 CLOSED 2026-10-12 · RT-031 P2 CLOSED 2026-10-14 ·
+> RT-032 P3 CLOSED 2026-10-14 · RT-033 P1, RT-034 P1, RT-035 P2, RT-036 P1 CLOSED
+> 2026-10-14 · **RT-037 P2 OPEN — implemented and verified locally, release-blocking on external verification** · **RT-038 P1 FIXED (uncommitted; W5 reopen pending authorization)** · RT-039 P3 OPEN (dev/QA only).
+> The 2026-10-14 closures are uncommitted in worktree
+> `jawwid-realtime-chat-accounts-386689`.
 
 **Of the five P0s, three were proven by execution** (RT-002, RT-023, RT-024);
 RT-001 and RT-026 are CONFIRMED (static). An earlier verbal summary of this audit
 said "four proven by execution" — that was wrong; the figure is three.
 
+> **RT-032 CLOSED 2026-10-14** for every deactivation writer: the deactivating
+> transaction journals the deactivation (ENABLE ALWAYS triggers; request roles
+> refused), and it is complete only when an API node has run the completion
+> barrier for it (`RevocationConfirmer`). See the register row and
+> `docs/security/DEACTIVATION.md`.
+>
+> **RT-032 added 2026-10-12** (P3, the residual of RT-009). RT-009 is closed
+> for revocations made through the API; a deactivation written DIRECTLY to the
+> database cannot wait for the API's completion barrier, so a single in-flight
+> event can still reach the person if that delivery's connection is lost (or its
+> transaction times out) in the instant before it emits. Recorded separately so
+> the protected scope is stated exactly and does not hold unrelated work open.
+>
 > **RT-030 added 2026-09-23** (P2, section A). A conversation's
 > `organization_id` is never set from the family, so it always takes the default
 > tenant. Fails closed — the cross-organization trigger refuses the row — and is
@@ -159,8 +179,9 @@ this register records what closed it.
 |---|---|---|---|---|---|---|
 | **RT-023** | **P0** | Apply the committed migration series to an empty database. | **Original:** `ERROR: relation "chat.family" does not exist` at `20260905093000`; five tables referenced by FK and created by nothing. **Closed:** the 13 platform migrations were brought onto the integration branch from `feat/backend-foundation`, and `20260905091150_chat_application_roles` creates the three role names the RLS policies are written against (`ERROR: role "authenticated" does not exist` was the last remaining break). Verified on a bare `postgres:17`: **20 migrations apply from empty, re-apply is 20 skip**, `db/tests/schema_acceptance.sql` passes 58 structural assertions including zero non-`chat` tables and no `auth` schema. Branch composition, the Core shim and the identity stub are removed from CI and from `integration-db.sh`. | `supabase/migrations/*`, CI gate G-19 | **RESOLVED · verified on an empty database** | No |
 | **RT-010** | P1 | None — architectural fork. | **Half closed.** `schema.prisma:18` is now `schemas = ["chat"]`, so the duplicate `public`-schema model is gone and the two definitions no longer disagree. **Unchanged:** `20260905090000_chat_foundation.sql:3-7` still states Jawwid Chat "lives in the `chat` schema inside the Jawwid Core Supabase database", which contradicts `docs/qa/authoritative-scope.md` §2. | schema, infra | **OPEN (partial)** · CONFIRMED (static) — *schema divergence resolved; the tenancy question is not* | No |
-| **RT-029** | P2 | Insert a `chat.learner` row in organization A whose `teacher_id` points at a teacher in organization B. | **CONFIRMED (runtime), 2026-09-23, found during the PD-6 authorization switch.** `chat.enforce_same_organization()` exists and is attached to the family-scoped tables, but **not to `chat.learner`**, so the cross-organization row is accepted rather than refused at write time. **Not currently exploitable:** `chat.teacher_parent_authorized()` requires `learner.organization_id = contact.organization_id = teacher.organization_id`, so a bridged row authorizes nothing, and `PrismaRelationshipService` carries the same term independently. Both are asserted — `db/tests/relationship_predicate.sql` D4, and "cross-tenant data cannot satisfy the predicate even through a learner row" in `apps/api/test/integration/relationship-predicate.spec.ts`. The defect is that the invalid row is storable at all, which leaves the tenant boundary resting on every reader restating it rather than on the data being well-formed. **Appropriate control:** a `chat.enforce_same_organization('teacher', 'teacher_id')` trigger on `chat.learner`, plus the same audit for every other FK that crosses a root entity. | `chat.learner`, `chat.enforce_same_organization()` | **OPEN** · CONFIRMED (runtime) — *contained by the PD-6 predicate; not a live leak* | No |
-| **RT-030** | P2 | Create a direct conversation for a family in organization B; observe the conversation row's `organization_id`. | **CONFIRMED (runtime), 2026-09-23, found while writing the Phase 8 realtime tests.** `ConversationService.getOrCreateDirect` does not set `organization_id`, so every conversation takes the column default `chat.default_organization_id()` — organization A — regardless of which organization the family belongs to. `chat.enforce_same_organization()` then rejects the insert outright for any non-default tenant, which is the trigger working correctly and is how this was found: `cross-organization reference: chat.conversation row belongs to organization …0001, parent chat.family belongs to …`. **Not currently exploitable:** the deployment is single-tenant, so every family is already in the default organization and the defect is invisible; and where it would matter the row is refused rather than mis-filed, so it fails closed. **Appropriate control:** derive `organization_id` from the family (or from the resolved actors) at creation, never from a client field, and audit `ensureStudentGroup` / `syncStudentGroup` for the same omission. Deliberately not fixed inside the calling work. | `conversation.service.ts#getOrCreateDirect`, `chat.conversation.organization_id` | **OPEN** · CONFIRMED (runtime) — *fails closed; blocks multi-tenancy, not security today* | No |
+| **RT-029** | P2 | Insert a `chat.learner` row in organization A whose `teacher_id` points at a teacher in organization B. | **CONFIRMED (runtime), 2026-09-23, found during the PD-6 authorization switch.** `chat.enforce_same_organization()` exists and is attached to the family-scoped tables, but **not to `chat.learner`**, so the cross-organization row is accepted rather than refused at write time. **Not currently exploitable:** `chat.teacher_parent_authorized()` requires `learner.organization_id = contact.organization_id = teacher.organization_id`, so a bridged row authorizes nothing, and `PrismaRelationshipService` carries the same term independently. Both are asserted — `db/tests/relationship_predicate.sql` D4, and "cross-tenant data cannot satisfy the predicate even through a learner row" in `apps/api/test/integration/relationship-predicate.spec.ts`. The defect is that the invalid row is storable at all, which leaves the tenant boundary resting on every reader restating it rather than on the data being well-formed. **Appropriate control:** a `chat.enforce_same_organization('teacher', 'teacher_id')` trigger on `chat.learner`, plus the same audit for every other FK that crosses a root entity. **2026-10-14 (PD-7):** the predicate no longer opens any channel (direct teacher↔parent is refused whatever it says), so the containment argument above no longer carries weight for direct conversations; the defect itself -- the row is storable -- is unchanged. | `chat.learner`, `chat.enforce_same_organization()` | **OPEN** · CONFIRMED (runtime) — *not a live leak* | No |
+| **RT-030** | P2 | Create a direct conversation for a family in organization B; observe the conversation row's `organization_id`. | **CONFIRMED (runtime), 2026-09-23, found while writing the Phase 8 realtime tests.** `ConversationService.getOrCreateDirect` does not set `organization_id`, so every conversation takes the column default `chat.default_organization_id()` — organization A — regardless of which organization the family belongs to. `chat.enforce_same_organization()` then rejects the insert outright for any non-default tenant, which is the trigger working correctly and is how this was found: `cross-organization reference: chat.conversation row belongs to organization …0001, parent chat.family belongs to …`. **Not currently exploitable:** the deployment is single-tenant, so every family is already in the default organization and the defect is invisible; and where it would matter the row is refused rather than mis-filed, so it fails closed. **Appropriate control:** derive `organization_id` from the family (or from the resolved actors) at creation, never from a client field, and audit `ensureStudentGroup` / `syncStudentGroup` for the same omission. Deliberately not fixed inside the calling work. **CLOSED 2026-10-12.** Every affected path now files its row under a trusted organization and refuses a cross-organization write explicitly: `ensureStudentGroup` from the learner row; `systemMessage` (create / sync / archive) and `MessageService.send` (message and `message_approval`) from the conversation row locked `FOR UPDATE`; `getOrCreateDirect` from the two participants' shared organization. Correct attribution alone would have turned the triggers' accidental refusals into accepted cross-tenant writes, so `canOpenDirect` now requires one organization (a foreign actor reads as unknown) and `send` requires the sender to be in the conversation's organization (a foreign conversation reads as unknown). Proven on a real database with two organizations by `test/integration/rt030-organization-attribution.spec.ts` and `student-group-provisioning.spec.ts`, each attribution line and each tenant check mutation-tested. Also closes a latent 500: naming the SYSTEM actor as a direct participant. Final independent audit (2026-10-12) found and fixed one defect in the fix itself: `send` ran its tenant check AFTER the attachment MIME and object-key checks, so a foreign conversation answered 403 `ATTACHMENT_NOT_IN_CONVERSATION` where an unknown one answered 404 -- an existence oracle; the tenant check now runs first, guarded by a regression test proven red before the change. Out of scope and tracked separately: RT-031. **Historical-data caveat (conditional, UNVERIFIED):** a direct conversation created BEFORE this fix between participants of a non-default organization would carry the default `organization_id`; after the fix its own participants are refused (404) when sending into it. Verified only in the disposable test database: new rows are filed correctly. NOT verified: whether any such historical rows exist in any deployed database -- no deployed, staging, shared or remote database was accessed or queried. The repository's single-organization seed migration and `docs/infrastructure/production-readiness.md` describe intent and documented status only; they do not establish the actual contents of any deployed database. No data repair or migration is proposed. | `conversation.service.ts#getOrCreateDirect`, `chat.conversation.organization_id` | **CLOSED** 2026-10-12 · CONFIRMED (runtime) | No |
+| **RT-031** | P2 | Start a call, or schedule a notification, in a conversation of organization B; observe the new row's `organization_id`. | **CONFIRMED (code reading), 2026-10-12, found while closing RT-030.** `CallService` (`tx.call.create`, `call.service.ts:106`) and `NotificationService.schedule` (`notification.create`, `notification.service.ts:65`) set no `organization_id`, so both take the seeded default. Unlike RT-030 no trigger guards `chat.call` or `chat.notification`, so the row is not refused but **silently mis-filed** under organization A. Became reachable once RT-030 made second-tenant conversations creatable. **Not currently exploitable:** single-tenant deployment, and neither table is read under organization scope today. **Appropriate control:** take `organization_id` from the conversation (call) / recipient (notification) row, and add same-organization guards. **CLOSED 2026-10-14 (worktree jawwid-realtime-chat-accounts, uncommitted).** API: `CallService.start` files the call under its conversation's organization; `NotificationService.schedule` files a notification under the recipient's own organization and refuses (writes nothing) one whose recipient resolves nowhere or whose conversation is in another organization; the outbox worker delivers call events and call/missed-call pushes only to participants whose own row is in the call's organization. Database (`20261014140000_chat_rt031_call_notification_tenant.sql`): `call_same_organization`, `notification_same_organization`, `call_participant_same_organization`, `notification_recipient_same_organization` (insert and tenant-column updates only, so historical rows can still be ended/sent). Regression: `test/integration/rt031-call-notification-tenant.spec.ts` -- 11 of 13 fail against the previous code and schema (the 2 that pass are positive controls), 13/13 pass now; includes forged, unknown and STALE (written past the guard) participants and cross-tenant notifications. | `call.service.ts#start`, `notification.service.ts#schedule` | **CLOSED** 2026-10-14 · CONFIRMED (runtime, regression proven red/green) | No |
 
 ### B · Authorization failures
 
@@ -171,7 +192,15 @@ this register records what closed it.
 | **RT-026** | **P0** | None — the control guarded tables no code used. | Original: `grep` for `chat.conversation` across `apps/api/src` returned nothing. **Closed:** `conversation.service.ts` and `call.service.ts` now exist and `schema.prisma` is `schemas = ["chat"]`. The application and the BR-1 triggers now target the same tables. | schema ↔ services seam | **RESOLVED** | No |
 | **RT-003** | P1 | Manager sends with `requestedMode: 'OWNER'` on a family they do not own. | Original: `authz-attacks.spec.ts` §RT-003, 2 assertions; survived `fa53ba7`. **Closed:** `authorization.service.ts:311-326` — `deriveMode` honours only `ESCALATION` from `requested`, returns `OWNER` solely when `actor.actorId === familyOwnerId`, and the manager branch is commented "may not choose their own attribution". | `AuthorizationService` | **RESOLVED** | No |
 | **RT-006** | P1 | Pass another family's message ids to the signing helper. | `attachment.service.ts:89-91` — still `signUrlsForMessages(messageIds: string[])`, no actor parameter, no thread or membership check. | `AttachmentService` | **OPEN · CONFIRMED (static)**; UNVERIFIED at runtime (no caller yet) | No |
-| **RT-009** | P1 | Disable an account while its socket is open; keep using it. | `realtime.gateway.ts` — `resolveActor` still appears exactly once (line 58, `handleConnection`); the `Actor` is cached on the socket for its lifetime. No TTL, no re-resolution, no revocation channel, no room eviction. | `RealtimeGateway` | **OPEN · CONFIRMED (static)** | No |
+| **RT-009** | P1 | Disable an account while its socket is open; keep using it. | `realtime.gateway.ts` — `resolveActor` still appears exactly once (line 58, `handleConnection`); the `Actor` is cached on the socket for its lifetime. No TTL, no re-resolution, no revocation channel, no room eviction. **CLOSED 2026-10-12 — for revocations made through the API** (membership removal, Student Group sync, logout, session and account-wide revocation, refresh-token reuse). Every realtime delivery is authorized per recipient AT DELIVERY (live membership, session-precise identity, `canRead`) under `FOR SHARE` row locks; and every API revocation passes a cross-node COMPLETION BARRIER before it reports success — each node with a live lease must fence its in-flight decisions and acknowledge, else 503 `COMM.REVOCATION_UNCONFIRMED` (committed, not reported complete). Closes the post-liveness window a lost connection or a transaction timeout opened, reproduced red before the fix. **Not in this scope:** deactivations written directly to the database — RT-032. See the RT-009 record. | `RealtimeGateway`, `RealtimeRelay`, `AuthService` | **CLOSED** 2026-10-12 · CONFIRMED (runtime) | No |
+| **RT-032** | P3 | While a protected event is being delivered, lose that delivery's database connection (or let its transaction time out) just after its final liveness check, and deactivate the recipient's account, contact, staff or teacher row DIRECTLY in the database. | **CONFIRMED (runtime), 2026-10-12, the residual of RT-009.** Deactivating an account or principal has no operation in this API: it is a write made directly to `chat.account` / `chat.contact` / `chat.staff` / `chat.teacher` (Jawwid Core sync or an operator). Such a write conflicts with the delivery row locks (it cannot commit while a delivery that read those rows holds its transaction, and every later delivery reads it), but it returns at its own commit and cannot wait for RT-009's completion barrier. In the window between a delivery's final liveness check and its emits — opened only by that delivery's connection being lost or its transaction timing out — such a write can commit and RETURN before the held decision emits: one event, already authorized a moment earlier, reaches the person after the deactivation returned. Reproduced deterministically with the RT-009 harness (contact `is_active=false` written directly; the held decision emitted; the very next delivery denied). **Bounded:** at most the one in-flight delivery per node, only in that failure coincidence; every later delivery is denied, and the 15 s sweep disconnects the socket. **Appropriate control:** route deactivations through an operation of this service that runs `confirmRevoked()` after its commit (an integration decision — Jawwid Core is out of scope here), or accept the residual explicitly. **Re-assessed 2026-10-14.** Still OPEN and RELEASE-BLOCKING by owner instruction. What a direct-DB deactivation DOES guarantee is now pinned by `test/integration/rt032-direct-deactivation.spec.ts` (7): authentication (REST and socket handshake), reads, sends, approvals, call start, media token and accept all refuse every operation that STARTS after the write; re-activation restores access (no cached verdict). Live (QA, real sockets): the deactivated parent's open socket received nothing after the write and was disconnected by the 15 s sweep. That spec also exposed and fixed a defect: `canApprove` ignored `isActive` (a deactivated manager could approve at the service layer). The residual itself -- ONE delivery already authorized under row locks whose DB connection dies after its final liveness check -- cannot be closed inside this API: it needs every deactivation writer to pass the completion barrier. Decision required (who writes deactivations: Jawwid Core sync / operators / `chat.deactivate_staff` on the integration branch): (a) route them through an API operation that calls `confirmRevoked()` after commit, optionally enforced by a DB gate that refuses ungated `is_active` writes; or (b) accept the bounded residual explicitly.  **CLOSED 2026-10-14 (uncommitted).** Writer inventory (evidence in `docs/security/DEACTIVATION.md` §1): the API writes no deactivation; `chat.offboard_staff` on this branch (= `main`) never commits (pre-existing `chat.log_event` defect, repaired on the staff-profile branch); the staff-profile branch's `chat.deactivate_staff` / `offboard_staff` are server-side-only SQL with no runtime caller; the Core consumer only activates; request roles could deactivate through RLS grants (reproduced); operators and fixtures write SQL. **Fix:** migration `20261014150000` -- every transaction that takes an account / contact / staff member / teacher out of service (UPDATE to not-live, or DELETE of a live row) writes a `chat.principal_revocation` row through eight ENABLE ALWAYS triggers, and request roles are refused (`chat.caller_is_server_side()`, from the invoking role; no GUC opens it); `RevocationConfirmer` on every API node claims each row, runs `confirmRevoked()` AFTER the commit and only then stamps `confirmed_at`. A deactivation is complete at `confirmed_at`; the operator CLI `deactivate-principal` waits for it (exit 75 = saved, not complete). State-changing operations re-read liveness under `FOR SHARE` in their own transactions (`assertActorLive`), so none commits after a deactivation. **Proven:** `rt032-revocation-journal.spec.ts` (35 + 1 history-dependent; incl. pending push notifications re-checked at send time and cancelled on confirmation) and 8 RT-032 tests in `realtime-revocation.spec.ts` -- the original window reproduced (a stale decision emits between commit and confirmation, while the revocation is unconfirmed) and closed (after confirmation, nothing; one node, two nodes, connection loss, transaction timeout, account suspension, outbox publication); mutation-tested red/green. **Not covered:** bearer credentials issued before the commit (RT-037); the schema owner/superuser (trust root). | `chat.account` / `contact` / `staff` / `teacher` writers; `RealtimeGateway` delivery; `RevocationConfirmer` | **CLOSED** 2026-10-14 · CONFIRMED (runtime, red/green) | No |
+| **RT-033** | P1 | Approve and reject the same held message concurrently (or approve twice). | **CONFIRMED (runtime), 2026-10-14, FIXED (uncommitted).** `ApprovalService.decide` checked "still pending?" outside its transaction and then overwrote the row: two decisions could both win -- a message announced by `message.created` (receipts written) and then stored as REJECTED, or announced twice. Fix: the decision CLAIMS the row (`updateMany where decision = pending`), the loser gets 409 `APPROVAL_ALREADY_DECIDED`. Regression: `approval-decision-integrity.spec.ts` (10 racing rounds each way) -- fails without the claim. | `approval.service.ts#decide` | **CLOSED** 2026-10-14 | No |
+| **RT-034** | P1 | As a manager of organization B (or an out-of-scope admin), approve organization A's held message by its approval id. | **CONFIRMED (runtime), 2026-10-14, FIXED (uncommitted).** `decide` never checked that the approver may READ the conversation, and `canApprove` allowed any manager -- of any organization. Fix: `decide` runs `canReadResolved` (tenant + staff scope + activity) before `canApprove`; `canApprove` refuses inactive actors. `GET /approvals/pending` was likewise unscoped (every family's held text to any admin) and is now filtered by `canRead`. Regression: `approval-decision-integrity.spec.ts`, `staff-scope-revocation.spec.ts`. | `approval.service.ts#decide`, `#listPending`, `authorization.service.ts#canApprove` | **CLOSED** 2026-10-14 | No |
+| **RT-035** | P2 | In a direct teacher<->parent conversation left from the PD-6 window, react to a message or emit `typing.start`. | **CONFIRMED (code + runtime), 2026-10-14, FIXED (uncommitted).** Under PD-7 such a conversation must accept nothing new, but reactions and typing indicators checked READ access only, leaving a side channel between a teacher and a parent outside the Student Group. Fix: `ConversationService.isDirectTeacherParent`; `react` refuses with `BR1_TEACHER_PARENT_DIRECT` (removing one's own reaction stays allowed), `typing.start` is refused. Regression: `pd7-side-channels.spec.ts`. | `message.service.ts#react`, `realtime.gateway.ts#typingStart` | **CLOSED** 2026-10-14 | No |
+| **RT-036** | P1 | Make the database unreachable for a moment while a client opens a socket. | **CONFIRMED (runtime), 2026-10-14, FIXED (uncommitted).** Nest does not await `handleConnection`; a Prisma error inside `AuthService.authenticate` became an unhandled rejection and terminated the API process (observed on the QA stack). Fix: the handshake is contained per socket (transport close, so clients retry with backoff instead of spending their refresh), presence errors are non-fatal. Regression: `test/unit/realtime/handshake-failure.spec.ts`; live: the API survived a Postgres pause with a handshake in flight. | `realtime.gateway.ts#handleConnection` | **CLOSED** 2026-10-14 | No |
+| **RT-037** | P2 | Obtain a media credential while authorized -- a pre-signed attachment URL, a LiveKit token, or a joined LiveKit session -- then be deactivated. (Also: a push notification already handed to APNs/FCM.) | **CONFIRMED 2026-10-14; IMPLEMENTED 2026-10-14 (uncommitted); still OPEN and RELEASE-BLOCKING on external verification.** **Attachments and story media:** no storage URL leaves the API any more; links point at `GET /media/attachments|stories/:id`, are bound to the reader, and EVERY request re-checks liveness (principal + login) and the reader's right to read the message / story now, then streams the bytes (Range supported). A deactivation, removal or deletion refuses the next request. Not recallable: bytes already delivered, one response already streaming. **Calls:** a deactivation is confirmed only after the person is removed from every live call room through LiveKit's RoomService (verified against a real LiveKit 1.8.4 server: removal disconnects; 'not found' = absent; bad credentials fail closed); a LiveKit `participant_joined` by an identity no longer live is undone at once (503 if it cannot be, so LiveKit retries). Measured: LiveKit 1.8.4 admits a token up to ~60 s past `exp` (JWT leeway), and a still-valid token re-joins after removal -- so token lifetime is NOT the control; join-time ejection is. **Push:** dispatch re-checks liveness at send time; confirmation cancels what is still scheduled; payloads carry no message text, link, key or token (tested). **Cross-account:** a call started / message sent by another, live account seats, rings and notifies no deactivated person (tested). **Why still OPEN:** (1) the join-time path depends on LiveKit delivering `participant_joined` for a MEDIA-connected participant to the API -- a signalling-only test client never becomes active, so this was driven with real signed payloads, not observed from LiveKit; it needs a real WebRTC client against staging LiveKit, with the webhook URL configured there; (2) between such a re-join and its webhook-driven removal the participant can receive media for the webhook round trip; (3) a push already accepted by APNs/FCM cannot be recalled (push TEXT is now generic: owner decision 3, migration `20261014160000`, W8-W1 reopened); (4) the W5 and W8-W1 code it touches needs the Critical Defect Reopen authorization. (5) Staff PROFILE PHOTOS (integration branch): served through the same media route since the owner's decision 2 -- integration patch `docs/communication/integration-patches/rt037-staff-profile-photos.patch`, verified in the trial (46/46 in both runtime modes, mutation-tested). Reopen record: `docs/release/REOPEN-W5-W8W1-2026-10-14.md`; staging procedure: `docs/qa/RT-037-STAGING-REAL-MEDIA-TEST.md`. Evidence: `rt037-media-revocation.spec.ts` (21 + 4 real-LiveKit), `livekit-webhook-http.spec.ts` (5), live QA probe 10/10, mutation-tested. | media route; `RevocationConfirmer`; `LiveKitWebhookController`; `NotificationService` | **OPEN** · implemented, verified locally; external verification pending | No |
+| **RT-038** | P1 | Have LiveKit deliver any webhook to a running API. | **CONFIRMED (runtime) 2026-10-14, FIXED (uncommitted).** Two independent faults made EVERY real LiveKit delivery fail before the controller verified it: (1) the global bearer guard (PR-B, after W5 closed) answered 401 -- LiveKit authenticates with its own signature; (2) LiveKit posts `application/webhook+json`, which no body parser claimed, so the signed raw body never arrived ("no body"). Consequence: W5 media presence never updated in any deployment, and RT-037's join-time enforcement could not run. Fix: `@Public()` on the webhook controller (the signature check in the handler is the authentication) and a raw-body parser for that one content type in `applyInfrastructure` (not `useBodyParser`, which would replace the JSON parser). Verified: over real HTTP (`livekit-webhook-http.spec.ts`) and live -- a real LiveKit 1.8.4 server's own deliveries accepted, 0 rejected. **Touches W5 (closed at `2be26b8`): Critical Defect Reopen authorization requested.** | `LiveKitWebhookController`, `infra/http/bootstrap.ts` | **FIXED** (uncommitted) · reopen pending | No |
+| **RT-039** | P3 | Upload an attachment in a local / QA environment from a client. | **CONFIRMED (runtime) 2026-10-14, OPEN, dev/QA only.** The local reference storage routes (`PUT|GET /storage/:key`) sit behind the global bearer guard, and the upload URL's base is `STORAGE_ENDPOINT` (default `http://localhost:3000/storage`), which is wrong for any API not on :3000. Production uses S3 directly and never reaches these routes; reads no longer use them at all (RT-037). **Assessed 2026-10-14:** `STORAGE_ENDPOINT` is one of the S3 settings, so local storage ALWAYS fell back to `http://localhost:3000/storage`, and `selectObjectStorage` allowed that in any `APP_ENV` (warning only) -- a deployed API with no S3 configuration would have handed clients developer-machine upload links. Now refused at startup outside `local/test/ci` (unit-tested). Media links never depend on it: `MEDIA_PUBLIC_BASE_URL`, else the request origin (X-Forwarded-Host honoured only behind a declared trusted proxy). The dev-only guard on `PUT /storage/:key` is unchanged. | `StorageController`, `SignedLocalObjectStorage` | **OPEN** · dev/QA only | No |
 | **RT-011** | P2 | List conversations as any operator. | `conversation.service.ts:420-445` — `listForActor` still returns `take: 200` with no coverage scoping for staff. The `familyId: '*'` probe is gone with `thread.service.ts`; **the unbounded staff scope is not.** | `ConversationService` | **OPEN (re-scoped)** · CONFIRMED (static) | No |
 | **RT-014** | P2 | Revoke authority between the decision and the commit. | `message.service.ts:124` — `canSend` is still evaluated before the transaction; the `SELECT last_seq … FOR UPDATE` lock is taken at line 158. | `MessageService` | **OPEN · CONFIRMED (static)** | No |
 
@@ -1061,6 +1090,227 @@ window; a subsequent `thread.subscribe` is refused.
 which is about `canReadInternal` ignoring `isActive` at all; this is about the
 check never re-running even once it is correct. **Fixing JC-006 alone does not
 close RT-009.**
+
+### Resolution — CLOSED 2026-10-12 for revocations made through the API (Fix 1d + completion barrier); residual: RT-032
+
+**Root cause, verified in code.** All realtime delivery is a Socket.IO room
+emit — in production the worker publishes to Redis and `RealtimeRelay` on every
+API node did `server.local.to(rooms).emit(...)`. Room membership therefore WAS
+the authorization, and nothing ever removed a socket from a room or re-read its
+identity: membership removal, logout, refresh-token reuse and deactivation all
+left open sockets receiving. `subscribe` decided on the actor cached at
+connect, and `typing.stop` broadcast into a room with no check at all.
+
+**The control: authorization at delivery, linearized with revocation.**
+`RealtimeGateway.deliverToConversationLocally` decides every recipient of every
+protected conversation event on the node that delivers, at the moment of
+delivery: the conversation's live membership, the socket's identity re-read
+**session-precisely** from its own session(s) (`AuthService.revalidateRealtime`),
+then `AuthorizationService.canRead`. A recipient that fails receives nothing.
+Both delivery paths go through it (the worker relay, and the in-process path,
+which forwards to other nodes for THEIR check). Actor-addressed events require a
+live identity. If the state cannot be read, nothing is delivered and the
+sockets are dropped.
+
+A check made at delivery is still a READ followed by a later EMIT; a final
+acceptance review established (and a deterministic test reproduced) that a
+revocation on another node could commit and RETURN between the two, after which
+the stale decision emitted. That is closed by
+`ConversationService.withDeliveryLocks`: each delivery runs in a short
+transaction that FIRST takes `FOR SHARE` on exactly the rows a revocation
+UPDATEs — the recipients' membership rows, sessions, accounts and principal
+rows — then decides and emits, then commits. A revocation that committed
+earlier is visible to every read; one that arrives later must wait for the
+delivery to commit, i.e. until after its emits. Deliveries are one serial queue
+per node (bounding the held transaction to one connection, and preserving
+order).
+
+**Why the locks are not the whole answer (found and reproduced 2026-10-12).**
+The locks linearize a delivery with a revocation only while the delivery's
+transaction is alive. `stillHeld()` — a `SELECT 1` on the locking transaction,
+the last await before the emits — proves the locks were held when the database
+ANSWERED. It cannot prove they are still held when the emits run. If the
+connection is lost, or Prisma's interactive-transaction timer rolls the
+transaction back (it does so on its own timer, independent of the callback),
+after that answer, the locks are released, a revocation commits without
+waiting, and the decision is still in hand. Emits cannot be part of a
+transaction, so no database lock can close that window. Reproduced
+deterministically on the previous code: a delivery held just after its liveness
+check, its backend killed with `pg_terminate_backend` (or its transaction timed
+out), a removal / logout that then RETURNED successfully, and the held decision
+emitted to the revoked member afterwards — 3 of 3 tests red.
+
+**The completion barrier (the fix).** Every API node keeps a FENCE GENERATION.
+A delivery takes it before it reads anything; after its last await it emits only
+if the generation is unchanged — synchronously, with no await until its last
+emit. A revoking operation, after its transaction commits and before it
+returns, calls `confirmRevoked()`: it bumps the generation on its own node, then
+asks every other node (Socket.IO's server-side emit with acknowledgement, over
+the existing Redis adapter) to do the same, and returns success only when each
+node with a live lease has acknowledged. A node's handler bumps FIRST and acks
+SECOND, on the same single thread as its deliveries — so either a delivery's
+emits completed before that node acknowledged (before the revocation could
+return), or the acknowledgement came first and the delivery's check refuses to
+emit. A refused delivery is re-decided from scratch, against the committed
+state (at most 3 attempts; then dropped — fail closed). The locks, `stillHeld()`
+and `lock_timeout` are unchanged and still serve every delivery.
+
+**Which nodes must acknowledge** comes from a registry of LEASES in Redis (a
+hash keyed like the adapter's own channels; expiry on Redis's clock), not from
+who happens to be subscribed: a node cut off from the bus stays registered until
+its lease runs out, and cannot be silently skipped. A node delivers only while
+it holds its own lease (30 s, renewed every 5 s) with a 10 s margin before the
+registration can expire; a renewal answered after its previous lease ran out
+voids every earlier decision. A node that shuts down fences itself, then leaves
+the registry. With no Redis adapter there is one node, and the local fence is
+the whole barrier — which is why the API refuses to boot without `REDIS_URL`
+outside `APP_ENV=local`.
+
+**An expired lease is not proof that a node stopped.** A node frozen between its
+final permit check and its emits (a GC pause, SIGSTOP, a frozen container)
+renews nothing and answers nothing, yet resumes mid-emit; and a Redis clock that
+leaps forward expires leases early. So a revoker leaves out an expired node ONLY
+if that node's own Redis connection — each node names it `rt009-node:<id>` on
+every renewal — is also gone (`CLIENT LIST`): a frozen process keeps its TCP
+connections, a dead one does not. An expired-but-connected node must still
+acknowledge, so it yields 503, never a false success. And a registry Redis has
+lost (restart without persistence, flush, eviction, failover) cannot vouch for
+who is missing from it: a registry younger than one lease (by its own
+`@created` field) is not trusted, and revocations answer 503 until it is.
+
+**Success and failure semantics — the same for every API revocation.** Durable:
+at its transaction's commit. New deliveries see it: from the commit (every
+decision reads committed state). In-flight deliveries: fenced on each node by
+the acknowledgement. Success: only after every live-leased node acknowledged.
+Otherwise the caller receives **503 `COMM.REVOCATION_UNCONFIRMED`**, whose
+message states that the change IS saved: a node that is unreachable,
+unresponsive, cut off from the bus, or slower than the step timeout (6 s) can
+never produce a success, and a timeout is never treated as one. Recovery: the
+same request again — idempotent, and held to the same barrier even when it
+finds nothing left to change, so a retry never succeeds on the strength of the
+first attempt's commit; the barrier is global, so any later confirmed
+revocation also fences whatever the failed one could not. Covered: membership
+removal, Student Group sync, logout, session revocation, account-wide
+revocation. Refresh-token reuse and refreshing a disabled account revoke and
+fence too, but those requests are refused regardless, so an unconfirmed fence
+does not change what they answer. Refresh ROTATION is not a revocation.
+
+**The closed scope, stated exactly.** RT-009 is closed for revocations made
+through this API: membership removal, Student Group sync, logout, session
+revocation, account-wide revocation and refresh-token reuse — on every node and
+both delivery paths (the worker relay and the in-process forward). It is NOT
+claimed for a deactivation of an account, contact, staff member or teacher
+written directly to the database (Jawwid Core sync or an operator; this API has
+no operation for it). Such a write still conflicts with the delivery locks and
+every later delivery reads it, but it returns at its own commit and cannot wait
+for the barrier, so in the window above it can return before one held decision
+emits — reproduced deterministically. That residual is **RT-032** (P3) --
+**closed 2026-10-14**: every deactivation is now journaled in its own transaction and
+completed by this same barrier (`RevocationConfirmer`); see `docs/security/DEACTIVATION.md`.
+The 15 s sweep bounds how long such a socket stays CONNECTED; it is not a
+delivery control.
+
+**Supported failure model (what the API guarantee covers).** Crashed, restarted
+or gracefully stopped nodes; nodes frozen for ANY length of time, at any point
+(GC, SIGSTOP, container freeze) — provided the freeze leaves the process's TCP
+connection to Redis open, which the kernel does; lost, delayed or duplicated
+messages; a node cut off from the bus; Redis restarts, data loss, eviction and
+failover; Redis clock jumps; database connection loss and transaction timeouts.
+In every one of these a revocation either confirms correctly or answers 503.
+**Explicit operational constraints (enforced by deployment, not by code).**
+(C1) Every API replica of an environment uses the same Redis: enforced in code
+only as far as "no Redis at all" (boot refused outside local); two replicas
+given two different Redis servers cannot be told apart without shared state in
+Postgres (a migration), so the single per-environment `REDIS_URL` of
+`infra/env/manifest.tsv` is the control. (C2) Redis keeps the idle-client
+`timeout` at 0 and `CLIENT LIST` / `CLIENT SETNAME` / `EVAL` allowed (if not,
+revocations fail closed). **The one residual outside the model:** a whole
+host or VM frozen (or partitioned) long enough for Redis to drop the node's
+connection — TCP keepalive, 300 s by default — where the freeze began exactly
+inside the few synchronous statements between that node's final permit check
+and its last emit, and its lease expired meanwhile. Nothing remote can tell
+such a node from a dead one; closing it would need the recipient's connection
+itself to refuse stale writes. Plus Postgres READ COMMITTED: a statement started
+after a commit sees it.
+
+**Evidence (all executed; isolated Postgres + isolated Redis; real Socket.IO
+clients; no sleeps used for ordering).** `realtime-revocation.spec.ts`, 53
+tests. The window, with the delivery held after its liveness check and its
+transaction ended for real: one node — removal (lost connection), removal
+(transaction timeout), logout, Student Group sync; two nodes — worker-relay
+delivery on B with removal on A, in-process forward, actor-addressed delivery
+with logout on A. Each asserts the revocation RETURNED successfully, the
+entitled control still received the event (re-decided), and the revoked
+recipient did not. Failure: a node that never acknowledges (the removal, and
+its retry, are refused with 503; the change is committed; and that node's held
+decision then DOES emit — which is why success would have been false); the
+same for logout, account-wide revocation and sync, including the no-op
+repeats; a node registered but cut off from the bus (refused). Recovery: a node
+whose lease lapsed emits nothing it decided before (a success without it is
+then sound); one that re-registers still never emits the stale decision; a node
+that shut down has left the registry. The failure model: a node frozen with its
+lease expired but its connection open is never left out (503); a lease Redis
+expired EARLY on a connected node does not leave it out (503); a registry Redis
+lost is refused until it is a lease old, then confirms. Unit: no `REDIS_URL`
+outside local refuses to boot. Concurrent and duplicate removals on both
+nodes under continuous publication: no deadlock, no leak. All previous tests
+(locks per row type, `lock_timeout`, fail-closed, sweep, two nodes) unchanged
+and passing.
+
+**Negative controls: 42 mutants on the final code, each compile-checked first
+and restored byte-identical after** (`realtime-revocation.spec.ts`, 50 tests;
+D32 against the unit spec). Barrier: D18a/D18b the final permit check on the
+conversation / actor path (8 / 1 tests failed); D19 the local fence (4); D20 the
+lease-registry check (1 — the cut-off node); D21 an unanswered fence treated as
+success (3); D22 the acknowledging node not fencing (3); D24 the lease deadline
+(3); D25 the bump on a lease gap (1 — re-registration); D26 / D30 the barrier
+on removal / sync (6 / 2); D27 / D29 / D31 the no-op repeat skipping it on
+removal / logout / sync (1 each); D28 on logout (3); D35 on account-wide
+revocation (1); D32 an unattached hub resolving (1, unit); D33 / D34
+deregistration and the closed-node check (2 / 1); D36 no re-decision of a
+superseded delivery (12 — availability, fails closed). Earlier controls,
+re-run: D0 original behaviour, barrier included (39/50 failed); D1–D5, D7–D15f
+and D17 each caught (1–12); D16 `stillHeld()` caught (11 — its first run hit the
+watchdog because a failed window test left a delivery held; the helper now
+always releases, and the rerun is valid). One survivor, by design: D6, the
+re-check after `subscribe` joins a room — room hygiene; delivery-time
+authorization is the control. D23 (ack before fence inside the same synchronous
+handler) was not run: it is equivalent by construction.
+
+**Failure-model controls (2026-10-13), 8 targeted mutants, each compile-checked
+and restored byte-identical:** D37 an expired node left out whatever its
+connection (2 tests failed — the frozen node and the early expiry); D38 the
+registry-age gate (1 — the lost registry); D39 the per-node connection name (2);
+D41 the boot refusal without `REDIS_URL` (2, unit); and, because their code or
+tests changed, D20 the registry check (3), D21 an unanswered fence treated as
+success (4), D24 the lease deadline (3), D25 the lease-gap bump (1). All caught.
+
+**Note on an earlier intermittent failure.** During the acceptance review one
+full run failed the continuous-publication race (its output was not captured;
+it did not reproduce afterwards). The helper used fixed 30 ms / 80 ms windows;
+it now waits on conditions with deadlines; its leak assertion is unchanged.
+
+**Limitations.** Not load-tested. Each delivered event costs a short locking
+transaction on each node holding sockets in the room; deliveries are ONE serial
+queue per node (bounded by `lock_timeout` 5 s and the 15 s transaction
+timeout). Each confirmed revocation costs a registry read and one cluster-wide
+acknowledgement round trip, and re-decides at most the one in-flight delivery
+per node; a storm of revocations could exhaust a delivery's 3 attempts and drop
+that event (fail closed — never a leak). Availability trade-offs, all failing
+closed: a node whose HOST dies without closing its connections keeps revocations
+answering 503 until Redis notices (TCP keepalive, ~5 min by default); a lost or
+new registry, for one lease; during a Redis outage revocations answer 503 (committed, unconfirmed)
+and, once its lease runs out, a node stops delivering realtime events; a node
+that crashes without deregistering makes revocations answer 503 for up to the
+30 s lease; a node delivers nothing in the moment before its first lease. If
+the cross-node rebind after a refresh is lost, that socket is refused and
+reconnects. Actor-addressed events trust the caller's audience (call
+participants, story recipients) and only re-check identity — calls are RT-031's
+territory. Staff read scope is still role-wide (RT-011, open), so removing a
+staff member from a conversation does not by itself revoke their read
+authorization under the current model.
+
+**Fixing JC-006 alone does not close RT-009.**
 
 ---
 

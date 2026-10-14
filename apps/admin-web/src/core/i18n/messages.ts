@@ -9,6 +9,7 @@
 export const messages = {
   en: {
     'app.title': 'Jawwid Operations',
+    'nav.chat': 'Conversations',
     'nav.inbox': 'Inbox',
     'nav.families': 'Families',
     'nav.tasks': 'Tasks',
@@ -189,6 +190,7 @@ export const messages = {
 
   ar: {
     'app.title': 'عمليات جَوِّد',
+    'nav.chat': 'المحادثات',
     'nav.inbox': 'الوارد',
     'nav.families': 'العائلات',
     'nav.tasks': 'المهام',

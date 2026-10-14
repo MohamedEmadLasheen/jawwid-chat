@@ -32,8 +32,16 @@ export class InfraIoAdapter extends IoAdapter {
    * Must be awaited before the app listens, or the first connections are
    * established without cross-instance fan-out.
    */
-  async connectToRedis(url: string | undefined): Promise<void> {
+  async connectToRedis(url: string | undefined, environment = process.env.APP_ENV ?? 'local'): Promise<void> {
     if (!url) {
+      // RT-009: without the Redis adapter this node believes it is the only one,
+      // so it is outside every other node's revocation completion barrier and
+      // would confirm its own revocations alone. REDIS_URL is `req` in every
+      // deployed environment (infra/env/manifest.tsv); refuse the boot rather
+      // than run a replica the barrier cannot see.
+      if (environment !== 'local') {
+        throw new Error(`REDIS_URL is required when APP_ENV=${environment}: realtime revocation cannot be confirmed without it`);
+      }
       this.log.warn(
         'REDIS_URL is not set: realtime runs single-instance only. ' +
           'Running more than one API replica in this state drops events.',

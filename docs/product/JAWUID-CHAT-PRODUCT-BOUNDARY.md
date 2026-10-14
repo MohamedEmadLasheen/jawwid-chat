@@ -2,8 +2,9 @@
 
 Status: **CANONICAL** · Locked in Phase 0 (2026-09-07)
 Authority order: this document → `jawwid-chat-prd-v0.2.md` (the PD-6 amendment: §4 BR-1 and
-the §9 Teacher ↔ Parent calling row) → `jawwid-chat-prd-v0.1.md` (product requirements,
-in force everywhere v0.2 does not amend) → everything else.
+the §9 Teacher ↔ Parent calling row — **superseded on that point by PD-7, §4 below**) →
+`jawwid-chat-prd-v0.1.md` (product requirements, in force everywhere v0.2 does not amend) →
+everything else.
 Supersedes as product direction: `docs/JAWWID_CHAT_BRIEF.{pdf,txt}` (Customer Success brief — **HISTORICAL**),
 `docs/architecture/decisions.md` ADR-001 ("build the brief" — **SUPERSEDED**),
 `docs/admin/backend-contract-required.md` (brief-derived — **HISTORICAL**).
@@ -119,13 +120,14 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-6 — CLOSED
+## 4. Product decisions PD-1 to PD-7 — CLOSED
 
 PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
 exit gate, before `main` was baselined. **PD-6 was closed by the product owner
 on 2026-09-23** and re-versions a rule the PRD calls constitutional; it follows
 the same six-field form. This section is the canonical record. Any document that
 contradicts it is superseded on that point, whatever its own status banner says.
+**PD-7 was closed by the product owner on 2026-10-14** and supersedes PD-6.
 
 | ID | Subject | Status |
 |---|---|---|
@@ -134,7 +136,8 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | PD-3 | Coverage model | **CLOSED** — explicit temporary assignment |
 | PD-4 | Representation of system-generated events | **CLOSED** — system messages |
 | PD-5 | Role model | **CLOSED** — `super_admin` exists from day one |
-| **PD-6** | **Direct Parent ↔ Teacher communication** | **CLOSED** — allowed for an authorized relationship; re-versions BR-1 |
+| PD-6 | Direct Parent ↔ Teacher communication | **SUPERSEDED by PD-7** (2026-10-14) — was: allowed for an authorized relationship |
+| **PD-7** | **Direct Parent ↔ Teacher communication, restored prohibition** | **CLOSED** — forbidden; BR-1 restored; Student Group only |
 
 ---
 
@@ -312,6 +315,9 @@ not govern whether the role exists.
 
 ### PD-6 · Teacher–Parent direct communication
 
+> **SUPERSEDED by PD-7 (2026-10-14).** Kept as the historical record of the
+> PD-6 window. Direct Teacher–Parent communication is forbidden again; see PD-7.
+
 **Closed 2026-09-23.**
 
 **Final decision.** An active teacher **may** directly message and directly call
@@ -439,9 +445,51 @@ parent they do not teach.
 
 ---
 
-### Decisions still open after PD-1 to PD-6
+### PD-7 · Teacher–Parent direct communication is forbidden again (supersedes PD-6)
 
-None. PD-6 is closed. Any new product question is recorded here with a new
+**Closed 2026-10-14** by the product owner.
+
+**Final decision.** Direct Teacher ↔ Parent one-to-one **conversations** and direct
+Teacher ↔ Parent **calls** are **forbidden**, whatever the relationship between the
+two. Teacher–Parent communication happens **only** inside the official Student
+Group (or another group conversation) with the assigned Jawwid admin present —
+BR-1 as the PRD originally wrote it, and C-4 (live admin presence) unchanged.
+
+**Canonical rule.** A direct conversation or a direct call may never pair an
+actor of kind `teacher` with an actor of kind `contact`. The decision is made
+from the participant **kinds** alone. The PD-6 relationship predicate
+(`chat.teacher_parent_authorized`, `RelationshipService`) still exists and still
+answers "is this teacher this family's teacher", but it no longer opens any
+channel and nothing may reintroduce it as an input to that decision.
+
+**Enforcement (server and database, never only the client).**
+`AuthorizationService.canOpenDirect` refuses the pair; `canSend` and `canCall`
+refuse any direct conversation whose participant set pairs them (both sides);
+the database refuses, with the application bypassed, any insert or revival of
+such a membership, any such direct call participant set, and any teacher- or
+parent-authored message into such a conversation
+(`20261014120000_chat_pd007_restore_br1_direct.sql`). Error code
+`COMM.BR1_TEACHER_PARENT_DIRECT` (no longer deprecated);
+`COMM.TEACHER_PARENT_NOT_AUTHORIZED` is no longer emitted.
+
+**Existing rows.** Direct Teacher–Parent conversations and calls created during
+the PD-6 window (2026-09-23 → 2026-10-14) are kept, not deleted: they remain
+readable to their members as history and accept nothing new. Their lifecycle
+writes (a call ending, a member leaving) still succeed.
+
+**Unchanged.** PD-2 (a parent may not start a group call), C-4, RT-024 type
+immutability, the two-participant ceiling, tenant isolation, BR-2.
+
+**Deprecated behaviour.** Everything PD-6 enabled: opening, messaging in, or
+calling on a direct Teacher–Parent channel; the client's "message the teacher"
+affordance (the server's `canOpenDirect` advisory now answers `false` for that
+pair, so a client following it hides the entry point without a client change).
+
+---
+
+### Decisions still open after PD-1 to PD-7
+
+None. PD-7 is closed. Any new product question is recorded here with a new
 `PD-n` and the same six fields: decision, canonical rule, implementation phase,
 consequences, deprecated behaviour, and the date it was closed.
 

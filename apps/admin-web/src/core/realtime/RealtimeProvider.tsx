@@ -4,20 +4,28 @@ import { io, type Socket } from 'socket.io-client'
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { qk } from '@/core/api/queryKeys'
 import { useSession } from '@/core/auth/SessionProvider'
+import { tokenStore } from '@/core/auth/tokens'
+import { refreshSession } from '@/core/api/client'
 import type { ConnectionState, ServerEvents } from './events'
 
 const REALTIME_URL = import.meta.env?.VITE_REALTIME_URL ?? ''
-const NAMESPACE = '/staff'
 
 interface RealtimeValue {
   state: ConnectionState
   /** True once a connection has been established and then lost. */
   hasEverConnected: boolean
+  /**
+   * The session's one socket, for features that subscribe to conversations
+   * (the chat workspace). Null while signed out. Features add and remove their
+   * own listeners on it; they never open a second connection.
+   */
+  socket: Socket | null
 }
 
 const RealtimeContext = createContext<RealtimeValue>({
   state: 'disconnected',
   hasEverConnected: false,
+  socket: null,
 })
 
 /**
@@ -98,6 +106,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useSession()
   const queryClient = useQueryClient()
   const [state, setState] = useState<ConnectionState>('disconnected')
+  const [current, setCurrent] = useState<Socket | null>(null)
   const hasEverConnected = useRef(false)
 
   useEffect(() => {
@@ -107,34 +116,56 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     }
 
     setState('connecting')
-    // The server subscribes this socket to only what this staff member may see.
-    // The client never joins rooms of its own choosing (brief §12).
-    const socket = io(`${REALTIME_URL}${NAMESPACE}`, {
-      withCredentials: true,
+    // The API's contract (API-CONTRACT §1): the DEFAULT namespace, and the
+    // bearer access token in the handshake `auth`. It sets no cookie, so the
+    // old `/staff` namespace with credentials could never have connected.
+    //
+    // `auth` is a function so every (re)connect presents the CURRENT access
+    // token: it rotates every 15 minutes, and a reconnect that replayed the
+    // first one would be refused. The server derives identity from the token
+    // alone; the client never names an actor or a room.
+    const socket = io(REALTIME_URL || undefined, {
       transports: ['websocket'],
+      auth: (cb: (data: { token: string | null }) => void) => cb({ token: tokenStore.access() }),
     })
+    setCurrent(socket)
+    let renewedOnce = false
 
     socket.on('connect', () => {
+      renewedOnce = false
       hasEverConnected.current = true
       setState('connected')
       // A reconnect means we may have missed events while offline; treat every
       // cached operational query as stale rather than trusting a gap.
       void queryClient.invalidateQueries()
     })
-    socket.on('disconnect', () => setState('disconnected'))
+    socket.on('disconnect', (reason: string) => {
+      setState('disconnected')
+      // The server closes a socket whose token it refuses (expired, revoked).
+      // socket.io does not retry that on its own. Rotate the session once --
+      // through the same single-flight refresh every HTTP 401 uses -- and try
+      // again; a second refusal in a row stays down rather than looping.
+      if (reason === 'io server disconnect' && !renewedOnce) {
+        renewedOnce = true
+        void refreshSession().then((ok) => {
+          if (ok) socket.connect()
+        })
+      }
+    })
     socket.on('connect_error', () => setState('disconnected'))
 
     registerHandlers(socket, queryClient)
 
     return () => {
+      setCurrent(null)
       socket.removeAllListeners()
       socket.disconnect()
     }
   }, [isAuthenticated, queryClient])
 
   const value = useMemo(
-    () => ({ state, hasEverConnected: hasEverConnected.current }),
-    [state],
+    () => ({ state, hasEverConnected: hasEverConnected.current, socket: current }),
+    [state, current],
   )
 
   return <RealtimeContext.Provider value={value}>{children}</RealtimeContext.Provider>

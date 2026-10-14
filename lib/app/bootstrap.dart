@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 
 import '../core/data/fake_backend.dart';
@@ -160,9 +161,19 @@ List<Override> _httpOverrides() {
     // same verifier the HTTP guard uses, and the actor is derived from it. The
     // retired `x-actor-id` seam is not reintroduced here in any form.
     realtimeTokenProvider.overrideWithValue(tokens),
-    realtimeSocketProvider.overrideWithValue(
-      SocketIoRealtimeSocket(baseUrl: config.baseUrl),
-    ),
+    // ONE SOCKET PER SESSION. The transport is keyed on the signed-in account
+    // exactly as `callRealtimeClientProvider` is, so a session that ends tears
+    // its socket down and the next session gets a fresh one. It used to be a
+    // single app-lifetime value: the first sign-out disposed it for good
+    // (`dispose()` is terminal), and every later session's `connect()` returned
+    // on `_disposed` without opening anything -- realtime silently dead until
+    // the app was restarted.
+    realtimeSocketProvider.overrideWith((ref) {
+      ref.watch(authControllerProvider.select((state) => state.user?.id));
+      final socket = SocketIoRealtimeSocket(baseUrl: config.baseUrl);
+      ref.onDispose(socket.dispose);
+      return socket;
+    }),
     authControllerProvider.overrideWith(
       () => AuthController(
         repository: auth,
@@ -195,6 +206,16 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
     messageRepositoryProvider.overrideWithValue(FakeMessageRepository(backend)),
     groupRepositoryProvider.overrideWithValue(FakeGroupRepository(backend)),
     callRepositoryProvider.overrideWithValue(FakeCallRepository(backend)),
+    // The fixture build has no server: a transport that opens nothing, so the
+    // session's realtime client runs its ordinary lifecycle instead of throwing
+    // on an unoverridden provider.
+    realtimeSocketProvider.overrideWith((ref) {
+      ref.watch(authControllerProvider.select((state) => state.user?.id));
+      final socket = SilentRealtimeSocket();
+      ref.onDispose(socket.dispose);
+      return socket;
+    }),
+    realtimeTokenProvider.overrideWithValue(const _NoRealtimeTokens()),
     authControllerProvider.overrideWith(
       () => AuthController(
         repository: authRepository,
@@ -240,3 +261,19 @@ class SessionContext {
 }
 
 typedef AppAuthState = AuthState;
+
+/// Realtime credentials for the fixture build: there is no server to present
+/// a token to, so there is none. The client reports `unauthorized` and stays
+/// quiet, which is exactly what a build with no backend should do.
+class _NoRealtimeTokens implements TokenProvider {
+  const _NoRealtimeTokens();
+
+  @override
+  Future<String?> accessToken() async => null;
+
+  @override
+  Future<String?> refresh() async => null;
+
+  @override
+  Future<void> onSessionEnded(AppError error) async {}
+}

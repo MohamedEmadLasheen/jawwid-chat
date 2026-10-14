@@ -10,6 +10,12 @@ export const qk = {
   config: ['config'] as const,
   staff: ['staff'] as const,
 
+  adminOverview: ['admin', 'overview'] as const,
+  adminUsers: ['admin', 'users'] as const,
+  adminConversations: ['admin', 'conversations'] as const,
+  adminMessages: (id: string) => ['admin', 'conversations', id, 'messages'] as const,
+  adminStories: ['admin', 'stories'] as const,
+
   inbox: (section: AttentionBucket | 'covering') => ['inbox', section] as const,
   inboxAll: ['inbox'] as const,
   awaySummary: ['inbox', 'away-summary'] as const,

@@ -267,20 +267,21 @@ describe('every path that returns a message signs its attachment URLs', () => {
     // The vulnerable form is a bare `toMessageDto(created)` with no second argument.
     expect(messageSource).not.toMatch(/return toMessageDto\(created\);/);
     expect(messageSource).toMatch(
-      /toMessageDto\(\s*created,\s*await this\.attachments\.signUrlsForMessages\(\[created\.id\]\)/,
+      // RT-037: and bound to the reader the response is for.
+      /toMessageDto\(\s*created,\s*await this\.attachments\.signUrlsForMessages\(\[created\.id\], actor\.actorId\)/,
     );
   });
 
   it('the idempotent-replay response carries signed URLs', () => {
     expect(messageSource).not.toMatch(/toMessageDto\(found\)/);
     expect(messageSource).toMatch(
-      /toMessageDto\(\s*found,\s*await this\.attachments\.signUrlsForMessages\(\[found\.id\]\)/,
+      /toMessageDto\(\s*found,\s*await this\.attachments\.signUrlsForMessages\(\[found\.id\], authorId\)/,
     );
   });
 
   it('the approval queue carries signed URLs', () => {
     expect(approvalSource).not.toMatch(/toMessageDto\(r\.message\)/);
-    expect(approvalSource).toMatch(/signUrlsForMessages\(rows\.map\(\(r\) => r\.messageId\)\)/);
+    expect(approvalSource).toMatch(/signUrlsForMessages\(rows\.map\(\(r\) => r\.messageId\), viewerId\)/);
     // Left open like the `found,` assertion above: what this guards is that
     // `signed` is the second argument, not that it is the LAST one. The mapper
     // gained a third (resolved authors, O3), and a pattern that forbade any

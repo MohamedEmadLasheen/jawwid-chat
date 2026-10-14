@@ -34,11 +34,10 @@ import 'profile_sections.dart';
 /// A member row may carry a **message** action, and only where
 /// `CommunicationPolicy.allowsDirectContactFromGroupMember` vouches for the role
 /// pair — today that is a Jawwid staff member and nothing else. **There is still
-/// no teacher↔parent 1:1 affordance here**: PD-6 permits an *authorized* pairing,
-/// but authorization is a property of the live teaching relationship and a role
-/// pair cannot express it, so this client offers nothing rather than offering a
-/// channel the server would refuse (`handoff-mobile.md` §5.7,
-/// `student-group.md` §1).
+/// no teacher↔parent 1:1 affordance here**: PD-7 (2026-10-14) forbids the pairing
+/// outright (BR-1). Under PD-6 it was allowed for an authorized relationship that a
+/// role pair cannot express; either way this client offers nothing
+/// (`handoff-mobile.md` §5.7, `student-group.md` §1).
 ///
 /// There is no **call** action: calling arrives with the call UI, and an
 /// affordance with no screen behind it is worse than none. Both absences are
@@ -158,11 +157,9 @@ class ProfileBody extends ConsumerWidget {
               member: member,
               // ONE place decides whether to offer this, and it decides from the
               // role pair only. `CommunicationPolicy` returns false for
-              // teacher↔parent in both directions — not because the product
-              // forbids it (PD-6 permits an authorized pairing) but because a
-              // role pair cannot express "authorized", and a client that guessed
-              // would offer a channel the server then refuses. So: no affordance
-              // until the server states the pairing per conversation.
+              // teacher↔parent in both directions — since PD-7 because the
+              // product forbids it (BR-1); under PD-6 because a role pair cannot
+              // express "authorized". Either way: no affordance.
               onMessage: _mayOffer(ref, member)
                   ? () => _openDirect(context, ref, member)
                   : null,
@@ -182,10 +179,9 @@ class ProfileBody extends ConsumerWidget {
   /// Two sources, and the offer needs only one of them to say yes:
   ///
   /// * `member.canOpenDirect` — the server's advisory, computed by the same
-  ///   `AuthorizationService.canOpenDirect` the request will run, with the PD-6
-  ///   relationship resolved. This is the only thing that can authorize a
-  ///   teacher↔parent pair, because that pairing is undecidable from roles alone
-  ///   and the client is not told the relationship.
+  ///   `AuthorizationService.canOpenDirect` the request will run. Since PD-7 it
+  ///   is false for every teacher↔parent pair; under PD-6 it was the only thing
+  ///   that could authorize one.
   /// * `allowsDirectContactFromGroupMember` — the role rule, kept so a server
   ///   that does not send the field yet still offers the channels that ARE
   ///   decidable from roles (today: a member whose role is `admin`).

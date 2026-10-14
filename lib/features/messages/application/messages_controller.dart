@@ -498,21 +498,71 @@ class MessagesController extends Notifier<MessagesState> {
 
   /// Called on reconnect. Resyncs from the highest sequence we hold rather than refetching
   /// the whole conversation, which is what §49 and the handoff both ask for.
+  ///
+  /// It follows the watermark until the server has nothing newer, so a gap longer than one
+  /// page is closed in full rather than up to the first page boundary. The bound is a guard
+  /// against a server that never stops answering, not an expected limit.
   Future<void> resync() async {
-    final watermark = state.log.highestSequence;
-    if (watermark == null) {
+    if (state.log.highestSequence == null) {
       await loadInitial();
       return;
     }
 
     try {
-      final missed = await _messages.since(
-        conversationId,
-        afterSequence: watermark,
-      );
-      if (!_alive) return;
-      state = state.copyWith(log: state.log.merge(missed), isOffline: false);
+      for (var page = 0; page < 20; page++) {
+        final watermark = state.log.highestSequence;
+        if (watermark == null) break;
+        final missed = await _messages.since(conversationId, afterSequence: watermark);
+        if (!_alive) return;
+        state = state.copyWith(log: state.log.merge(missed), isOffline: false);
+        final advanced = (state.log.highestSequence ?? watermark) > watermark;
+        if (missed.isEmpty || !advanced) break;
+      }
       await drain();
+    } catch (error) {
+      if (!_alive) return;
+      state = state.copyWith(
+        isOffline: ErrorMapper.map(error).kind == AppErrorKind.network,
+      );
+    }
+  }
+
+  /// A realtime `message.created` for this conversation.
+  ///
+  /// Events carry no body, so this always asks the server. Usually the new message is above
+  /// our watermark and [resync] fetches it. A message APPROVED after being held keeps the seq
+  /// it was given when it was sent, which can be BELOW the watermark -- "after my newest"
+  /// would never return it -- so that case is fetched from just below its own seq.
+  Future<void> onMessageCreated(int? seq) async {
+    final watermark = state.log.highestSequence;
+    if (seq == null || watermark == null || seq > watermark) {
+      await resync();
+      return;
+    }
+    try {
+      final arrived = await _messages.since(conversationId, afterSequence: seq - 1);
+      if (!_alive) return;
+      state = state.copyWith(log: state.log.merge(arrived), isOffline: false);
+    } catch (error) {
+      if (!_alive) return;
+      state = state.copyWith(
+        isOffline: ErrorMapper.map(error).kind == AppErrorKind.network,
+      );
+    }
+  }
+
+  /// An EXISTING message changed (deleted, reacted to, approved or rejected), or the
+  /// connection came back. Re-read the newest page and let the server's copy win: a change
+  /// does not move a seq, so the watermark catch-up alone would never see it.
+  Future<void> refreshLatest() async {
+    if (state.log.highestSequence == null) {
+      await loadInitial();
+      return;
+    }
+    try {
+      final page = await _messages.history(conversationId);
+      if (!_alive) return;
+      state = state.copyWith(log: state.log.merge(page.items), isOffline: false);
     } catch (error) {
       if (!_alive) return;
       state = state.copyWith(

@@ -811,8 +811,8 @@ class _DaySeparator extends StatelessWidget {
 /// The call affordance in the conversation header (W7).
 ///
 /// ABSENT, NOT DISABLED, wherever the server does not authorize a call —
-/// `screens/call.md` §4, and it matters more since PD-6 because the set of
-/// authorized pairs is DATA the client must never infer. Loading, an error and a
+/// `screens/call.md` §4 — who may call is live server data the client must never
+/// infer (PD-7: never a direct teacher<->parent call). Loading, an error and a
 /// refusal all render nothing, so there is no state in which this offers a call
 /// the server would refuse.
 ///

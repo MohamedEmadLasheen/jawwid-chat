@@ -24,6 +24,10 @@ import { StoryAudienceKind, StoryState } from '@communication/contracts/vocab';
 import { CommEvent } from '@communication/contracts/events';
 import { StorySweeper } from '@communication/stories/story-sweeper.service';
 
+// RT-037: story media is a link to the access-checked media route, bound to the
+// reader -- not a presigned storage URL.
+const STORY_MEDIA_LINK = /\/media\/stories\/[0-9a-f-]{36}\?v=o&a=[0-9a-f-]{36}&e=\d+&s=[A-Za-z0-9_-]{43}$/;
+
 const g = buildGraph();
 const { prisma, stories, storySweeper, outbox } = g;
 
@@ -149,7 +153,7 @@ describe('§A a story past access cannot mint media', () => {
       media: true,
     });
     // Live: the publisher sees a URL.
-    expect((await stories.list(s.ownerId)).find((x) => x.id === id)!.mediaUrl).toContain('sig=');
+    expect((await stories.list(s.ownerId)).find((x) => x.id === id)!.mediaUrl).toMatch(STORY_MEDIA_LINK);
 
     await prisma.story.update({
       where: { id },
@@ -187,14 +191,14 @@ describe('§A a story past access cannot mint media', () => {
       mediaMime: 'image/png',
       audiences: [{ kind: StoryAudienceKind.ALL_FAMILIES }],
     });
-    expect(draft.mediaUrl).toContain('sig=');
+    expect(draft.mediaUrl).toMatch(STORY_MEDIA_LINK);
   });
 
   it('a recipient gets no media URL once the story expires', async () => {
     const id = await publishedStory(s.ownerId, [{ kind: StoryAudienceKind.ALL_FAMILIES }], {
       media: true,
     });
-    expect((await stories.feed(s.parentId))[0].mediaUrl).toContain('sig=');
+    expect((await stories.feed(s.parentId))[0].mediaUrl).toMatch(STORY_MEDIA_LINK);
 
     await prisma.story.update({
       where: { id },
@@ -374,7 +378,10 @@ describe('§C two organizations cannot reach each other', () => {
   it('no media URL crosses the boundary — the only way to one is a scoped read', async () => {
     // A publishes, B lists: B never receives A's object key or a URL for it.
     const bView = await stories.list(orgB.staffId);
-    expect(JSON.stringify(bView)).not.toContain('stories/');
+    // No object key at all (a key is `stories/<uuid>`; B's own media links are
+    // `/media/stories/<B's story id>`), nothing naming A's story, and not A's key.
+    expect(JSON.stringify(bView)).not.toMatch(/(?<!media\/)stories\//);
+    expect(JSON.stringify(bView)).not.toContain(aStory);
     const aKey = (await prisma.story.findUniqueOrThrow({ where: { id: aStory } })).mediaObjectKey;
     expect(JSON.stringify(bView)).not.toContain(aKey!);
   });
@@ -473,7 +480,7 @@ describe('§D expiry holds with the sweeper never running', () => {
     });
     const feed = await stories.feed(s.parentId);
     expect(feed.map((f) => f.id)).toEqual([id]);
-    expect(feed[0].mediaUrl).toContain('sig=');
+    expect(feed[0].mediaUrl).toMatch(STORY_MEDIA_LINK);
     await expect(stories.markViewed(id, s.parentId)).resolves.toEqual({ ok: true });
     expect(refusingSweeper).toBeDefined();
   });

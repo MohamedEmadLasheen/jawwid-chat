@@ -25,9 +25,10 @@ import { OutboxService } from '@communication/outbox/outbox.service';
 import {
   Scenario,
   buildGraph,
+  legacyTeacherParentCall,
+  legacyTeacherParentDirect,
   seed,
   truncate,
-  withAssignmentGate,
 } from './harness';
 
 jest.setTimeout(60_000);
@@ -58,10 +59,13 @@ beforeEach(async () => {
   verifier = new LiveKitWebhookVerifier();
 });
 
-/** An authorized teacher<->parent call, ringing. */
+/**
+ * A Parent<->Admin call (the family's owner calling), ringing. Until PD-7
+ * (2026-10-14) restored BR-1 this was the PD-6 teacher<->parent channel.
+ */
 async function ringingCall(): Promise<{ callId: string; roomName: string }> {
-  const conv = await g.conversations.getOrCreateDirect(s.parentId, s.teacherId);
-  return g.calls.start(conv.id, s.teacherId);
+  const conv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
+  return g.calls.start(conv.id, s.ownerId);
 }
 
 /** The webhook body LiveKit sends, as JSON. */
@@ -262,7 +266,7 @@ describe('7–10. room resolution', () => {
 
   it('10. one room cannot mutate another call', async () => {
     const first = await ringingCall();
-    await g.calls.end(first.callId, s.teacherId);
+    await g.calls.end(first.callId, s.ownerId);
     const second = await ringingCall();
 
     await presence.participantJoined({
@@ -285,12 +289,12 @@ describe('11–14. participant identity', () => {
 
     const outcome = await presence.participantJoined({
       roomName,
-      identity: s.teacherId,
+      identity: s.ownerId,
       at: new Date(at(1) * 1000),
     });
 
     expect(outcome).toBe('reconciled');
-    expect((await participantRow(callId, s.teacherId)).mediaJoinedAt).not.toBeNull();
+    expect((await participantRow(callId, s.ownerId)).mediaJoinedAt).not.toBeNull();
   });
 
   it('12. an identity that is not on the call is refused, and creates nothing',
@@ -528,7 +532,7 @@ describe('20–24. participant left', () => {
       });
       await presence.participantLeft({
         roomName,
-        identity: s.teacherId,
+        identity: s.ownerId,
         at: new Date(at(10) * 1000),
       });
 
@@ -546,7 +550,7 @@ describe('20–24. participant left', () => {
 
   it('24. a webhook cannot resurrect an ended call', async () => {
     const { callId, roomName } = await joinedCall();
-    await g.calls.end(callId, s.teacherId);
+    await g.calls.end(callId, s.ownerId);
     const ended = await g.prisma.call.findUniqueOrThrow({
       where: { id: callId },
       select: { status: true, endedAt: true, outcome: true },
@@ -572,7 +576,7 @@ describe('20–24. participant left', () => {
 
   it('9. a join on an ended call cannot revive it either', async () => {
     const { callId, roomName } = await ringingCall();
-    await g.calls.end(callId, s.teacherId);
+    await g.calls.end(callId, s.ownerId);
 
     const outcome = await presence.participantJoined({
       roomName,
@@ -721,13 +725,13 @@ describe('30–38. security and transactional behaviour', () => {
     ).toBe('unknown_participant');
   });
 
-  it('33. a revoked relationship is not re-authorized by a webhook', async () => {
+  it('33. a revoked participant is not re-authorized by a webhook', async () => {
     const { callId, roomName } = await ringingCall();
-    await withAssignmentGate(
-      g.prisma,
-      `update chat.learner set teacher_id = '${s.unrelatedTeacherId}'::uuid
-        where id = '${s.learnerId}'::uuid`,
-    );
+    // The parent loses the capability to message, and so to call.
+    await g.prisma.contact.update({
+      where: { id: s.parentId },
+      data: { canMessage: false },
+    });
 
     // Presence is an observation, so it is still recorded for a participant who
     // is on the call...
@@ -743,9 +747,37 @@ describe('30–38. security and transactional behaviour', () => {
     // that decision belongs to AuthorizationService and the webhook cannot
     // widen it.
     await expect(g.calls.issueToken(callId, s.parentId)).rejects.toMatchObject({
-      code: 'COMM.TEACHER_PARENT_NOT_AUTHORIZED',
+      code: 'COMM.CONTACT_CANNOT_MESSAGE',
     });
   });
+
+  it('33b. PD-7: a webhook does not re-open a teacher<->parent call BR-1 now refuses',
+    async () => {
+      // A call left ringing from the PD-6 window. Media presence is still
+      // recorded for a participant on it; the token is still BR-1's to refuse.
+      const conversationId = await legacyTeacherParentDirect(
+        g.prisma, s.teacherId, s.parentId, s.familyId,
+      );
+      const callId = await legacyTeacherParentCall(
+        g.prisma, conversationId, s.teacherId,
+        { teacherId: s.teacherId, parentId: s.parentId }, s.familyId,
+      );
+      const { roomName } = await g.prisma.call.findUniqueOrThrow({ where: { id: callId } });
+
+      expect(
+        await presence.participantJoined({
+          roomName,
+          identity: s.teacherId,
+          at: new Date(at(2) * 1000),
+        }),
+      ).toBe('reconciled');
+
+      for (const actorId of [s.teacherId, s.parentId]) {
+        await expect(g.calls.issueToken(callId, actorId)).rejects.toMatchObject({
+          code: 'COMM.BR1_TEACHER_PARENT_DIRECT',
+        });
+      }
+    });
 
   it('34. no event payload carries a token, a secret or a room name', async () => {
     const { roomName } = await ringingCall();

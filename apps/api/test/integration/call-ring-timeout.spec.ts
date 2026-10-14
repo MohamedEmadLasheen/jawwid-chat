@@ -57,9 +57,14 @@ const terminalEvents = async (callId: string) => {
   );
 };
 
+/**
+ * The Parent <-> Admin 1:1 call, the family's owner (on duty) calling. Until
+ * PD-7 (2026-10-14) restored BR-1 it was the PD-6 teacher <-> parent channel;
+ * the sweep does not care who is on the call.
+ */
 async function directCall() {
-  const conv = await g.conversations.getOrCreateDirect(s.parentId, s.teacherId);
-  const { callId } = await g.calls.start(conv.id, s.teacherId);
+  const conv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
+  const { callId } = await g.calls.start(conv.id, s.ownerId);
   return { conversationId: conv.id, callId };
 }
 
@@ -214,7 +219,7 @@ describe('D/E/F/G — a call that already reached a terminal state', () => {
   it('F. an ended call is not touched, and its outcome is not rewritten', async () => {
     const { callId } = await directCall();
     await g.calls.accept(callId, s.parentId);
-    await g.calls.end(callId, s.teacherId);
+    await g.calls.end(callId, s.ownerId);
     const ended = await snapshot(callId);
     expect(ended.outcome).toBe('answered');
 
@@ -303,7 +308,7 @@ describe('H/I/J/K — races, against the real database', () => {
     await pastDeadline(callId);
 
     await Promise.allSettled([
-      g.calls.end(callId, s.teacherId),
+      g.calls.end(callId, s.ownerId),
       g.calls.expireRingingCalls(),
     ]);
 
@@ -442,6 +447,10 @@ describe('O/P — history tells the truth about an unanswered call', () => {
     await expect(g.calls.history(conversationId, s.unrelatedTeacherId)).rejects.toMatchObject({
       code: CommErrorCode.NOT_CONVERSATION_MEMBER,
     });
+    // Nor can an admin outside the family's charge (staff scope, 2026-10-14).
+    await expect(g.calls.history(conversationId, s.otherAdminId)).rejects.toMatchObject({
+      code: CommErrorCode.STAFF_OUT_OF_SCOPE,
+    });
   });
 });
 
@@ -503,7 +512,7 @@ describe('Q/R/S/T — security and isolation', () => {
 
   it('S. cross-conversation: expiring one call leaves another conversation\'s call ringing', async () => {
     const overdue = await directCall();
-    const otherConv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
+    const otherConv = await g.conversations.getOrCreateDirect(s.otherParentId, s.ownerId);
     const { callId: otherCall } = await g.calls.start(otherConv.id, s.ownerId);
 
     await pastDeadline(overdue.callId);
@@ -519,10 +528,11 @@ describe('Q/R/S/T — security and isolation', () => {
     // over every tenant's overdue calls, and adding a tenant filter would mean
     // deciding WHOSE clock it runs on.
     //
-    // A cross-tenant test cannot be written today regardless: RT-030 --
-    // getOrCreateDirect never sets organization_id, so every conversation lands
-    // in the default organization and a second tenant's call cannot be created
-    // through the service at all. Asserted rather than left as a silent gap.
+    // A cross-tenant call test waits on RT-031: since RT-030 (closed
+    // 2026-10-12) a second tenant's conversation can be created, but
+    // `call.create` sets no organization_id, so its call would be filed under
+    // the default organization. This suite seeds one organization only.
+    // Asserted rather than left as a silent gap.
     const conversations = await g.prisma.conversation.findMany({
       select: { organizationId: true },
     });

@@ -3,10 +3,12 @@ import { NavLink } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
 import { useRealtime } from '@/core/realtime/RealtimeProvider'
-import { visibleAreas, type NavArea } from '@/core/permissions/capabilities'
+import { isSuperAdmin, navAreas, type NavArea } from '@/core/permissions/capabilities'
+import { ADMIN_SECTIONS, adminSectionPath } from '@/features/admin/sections'
 import { ShiftEndBanner } from '@/features/inbox/ShiftEndBanner'
 
 const AREA_PATH: Record<NavArea, string> = {
+  chat: '/chat',
   inbox: '/inbox',
   families: '/families',
   tasks: '/tasks',
@@ -21,11 +23,12 @@ function Nav() {
   const { t } = useI18n()
   const { staff } = useSession()
   if (!staff) return null
+  if (isSuperAdmin(staff.role)) return <AdminNav />
 
   return (
     <nav className="rail" aria-label={t('app.title')}>
       <div className="rail__group">
-        {visibleAreas(staff.role)
+        {navAreas(staff.role)
           // Settings has no page in MVP; it stays out of the rail until it does.
           .filter((area) => area !== 'settings')
           .map((area) => (
@@ -38,10 +41,48 @@ function Nav() {
   )
 }
 
+/**
+ * The super admin's rail: EVERY planned section, including the unfinished ones,
+ * each carrying its real status. Hiding an unbuilt section would hide how much
+ * is left; showing it as if it worked would be worse.
+ */
+function AdminNav() {
+  const { t, locale } = useI18n()
+  return (
+    <nav className="rail" aria-label={t('app.title')}>
+      <div className="rail__group">
+        {ADMIN_SECTIONS.map((section) => (
+          <NavLink
+            key={section.key}
+            to={adminSectionPath(section.key)}
+            className="rail__item"
+            // The status sits UNDER the label: beside it, "In development" wraps
+            // and crowds a 200px rail. A plain span, so the narrow-rail rule
+            // (labels hidden, icons only) hides it together with the label.
+            style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 0 }}
+          >
+            <span>{locale === 'ar' ? section.label.ar : section.label.en}</span>
+            {section.status === 'in_development' && (
+              <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-subtle)' }}>
+                {locale === 'ar' ? 'قيد التطوير' : 'In development'}
+              </span>
+            )}
+          </NavLink>
+        ))}
+      </div>
+    </nav>
+  )
+}
+
 function ConnectionBanner() {
   const { t } = useI18n()
   const { state } = useRealtime()
+  const { staff } = useSession()
   if (state === 'connected') return null
+  // The /admin sections are request/response and never subscribe to realtime;
+  // a permanent "reconnecting" banner would claim a failure that affects
+  // nothing the super admin can see.
+  if (staff && isSuperAdmin(staff.role)) return null
   return (
     <div className="banner banner--warn" role="status" aria-live="polite">
       {t('common.offline')}

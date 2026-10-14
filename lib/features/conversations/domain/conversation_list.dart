@@ -54,9 +54,10 @@ abstract final class ConversationListBuilder {
     final groups =
         all.where((c) => c.kind == ConversationKind.studentGroup).toList();
 
-    // PD-6: every 1:1 shape, not only adminDirect. Testing `== adminDirect`
-    // here would make an authorized parent<->teacher chat vanish from the list
-    // entirely, which is a worse failure than showing it in the wrong section.
+    // Every 1:1 shape, not only adminDirect. Testing `== adminDirect` here
+    // would make a PD-6-era parent<->teacher chat (read-only since PD-7) vanish
+    // from the list entirely, which is a worse failure than showing it in the
+    // wrong section.
     final staff = all.where((c) => c.kind.isDirect).toList()..sort(_byRecency);
 
     final sections = <ConversationSection>[];

@@ -61,15 +61,14 @@ abstract final class Wire {
 /// Mirrors `apps/api/src/platform/errors.ts`. Everything else falls through to the generic
 /// mapping by HTTP status.
 abstract final class WireErrors {
-  /// PD-6: a teacher and a parent may hold a 1:1 only where the server authorizes the
-  /// relationship. This is the refusal for every other pairing — surfaced as a plain
-  /// "not available" and never retried, because no amount of retrying creates a
-  /// relationship.
+  /// DEPRECATED by PD-7 (2026-10-14): the PD-6 refusal of an unauthorized pairing. The
+  /// server no longer sends it (every pairing is now refused with BR-1, below). Kept, and
+  /// kept terminal, for servers still at PD-6.
   static const teacherParentNotAuthorized = 'COMM.TEACHER_PARENT_NOT_AUTHORIZED';
 
-  /// DEPRECATED by PD-6 (2026-09-23): the server no longer sends this. Kept, and kept
-  /// terminal, so a build that predates the change still behaves correctly against a
-  /// server that has been upgraded. Remove it only once no shipped build sends traffic.
+  /// ACTIVE again since PD-7 (2026-10-14): a teacher and a parent never hold a 1:1 —
+  /// only the Student Group. Terminal: surfaced as "not available", never retried.
+  /// (PD-6 had deprecated it from 2026-09-23 to 2026-10-14.)
   static const br1TeacherParentDirect = 'COMM.BR1_TEACHER_PARENT_DIRECT';
 
   static const notConversationMember = 'COMM.NOT_CONVERSATION_MEMBER';

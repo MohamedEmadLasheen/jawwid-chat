@@ -1,0 +1,354 @@
+diff --git a/apps/api/src/staff-profile/staff-photo.controller.ts b/apps/api/src/staff-profile/staff-photo.controller.ts
+new file mode 100644
+index 0000000..378e86d
+--- /dev/null
++++ b/apps/api/src/staff-profile/staff-photo.controller.ts
+@@ -0,0 +1,45 @@
++import { Controller, Get, Inject, Param, Query, Req, Res } from '@nestjs/common';
++import { Public } from '../platform/auth/auth.guard';
++import { MediaUrlSigner } from '../platform/media-url';
++import { PrismaService } from '../platform/prisma.service';
++import { OBJECT_STORAGE } from '../platform/tokens';
++import type { ObjectStorage } from '../communication/attachments/object-storage';
++import { serveAuthorizedMedia, type RequestLike, type ResponseLike } from '../communication/api/media-serve';
++import { StaffProfileService } from './staff-profile.service';
++
++/**
++ * RT-037 -- staff profile photos, served through the same access-checked media
++ * path as attachments and story media (`serveAuthorizedMedia`, one
++ * implementation): link signature + expiry, the reader LIVE now, and then
++ * `StaffProfileService.authorizePhotoRead` -- the profile-visibility rules this
++ * service already applies, re-decided on every request. `@Public()` to the
++ * bearer guard because an <img> cannot send a header; the link is the binding.
++ */
++@Public()
++@Controller('media')
++export class StaffPhotoController {
++  private readonly signer = new MediaUrlSigner();
++
++  constructor(
++    private readonly prisma: PrismaService,
++    @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
++    private readonly profiles: StaffProfileService,
++  ) {}
++
++  @Get('staff/:staffId')
++  async photo(
++    @Param('staffId') staffId: string,
++    @Query('v') variant: string,
++    @Query('a') actorId: string,
++    @Query('e') expires: string,
++    @Query('s') sig: string,
++    @Req() req: RequestLike,
++    @Res() res: ResponseLike,
++  ): Promise<void> {
++    return serveAuthorizedMedia(
++      { signer: this.signer, prisma: this.prisma, storage: this.storage },
++      'staff', staffId, variant, actorId, expires, sig, req, res,
++      () => this.profiles.authorizePhotoRead(actorId, staffId),
++    );
++  }
++}
+diff --git a/apps/api/src/staff-profile/staff-profile.module.ts b/apps/api/src/staff-profile/staff-profile.module.ts
+index 40b8f6b..9469a2b 100644
+--- a/apps/api/src/staff-profile/staff-profile.module.ts
++++ b/apps/api/src/staff-profile/staff-profile.module.ts
+@@ -4,6 +4,7 @@ import { PrismaService } from '../platform/prisma.service';
+ import { ActorScopedDatabase } from '../platform/actor-database';
+ import { selectObjectStorage } from '../communication/attachments/storage.provider';
+ import { StaffProfileController } from './staff-profile.controller';
++import { StaffPhotoController } from './staff-photo.controller';
+ import { StaffProfileService } from './staff-profile.service';
+ import { StaffWorkloadService } from './staff-workload.service';
+ 
+@@ -21,7 +22,7 @@ import { StaffWorkloadService } from './staff-workload.service';
+  * without it, on the owner connection as the rest of the API does.
+  */
+ @Module({
+-  controllers: [StaffProfileController],
++  controllers: [StaffProfileController, StaffPhotoController],
+   providers: [
+     StaffProfileService,
+     StaffWorkloadService,
+diff --git a/apps/api/src/staff-profile/staff-profile.service.ts b/apps/api/src/staff-profile/staff-profile.service.ts
+index 2095ba7..4160c5e 100644
+--- a/apps/api/src/staff-profile/staff-profile.service.ts
++++ b/apps/api/src/staff-profile/staff-profile.service.ts
+@@ -2,7 +2,9 @@ import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+ import { Prisma } from '@prisma/client';
+ import { PrismaService } from '../platform/prisma.service';
+ import { AuthorizationService } from '../platform/authorization.service';
+-import { OBJECT_STORAGE } from '../platform/tokens';
++import { IDENTITY_SERVICE, OBJECT_STORAGE } from '../platform/tokens';
++import type { IdentityService } from '../platform/identity.service';
++import { MediaUrlSigner } from '../platform/media-url';
+ import type { Tx } from '../platform/audit.service';
+ import { ActorScopedDatabase } from '../platform/actor-database';
+ import { CommError, CommErrorCode } from '../platform/errors';
+@@ -252,6 +254,10 @@ export class StaffProfileService {
+      * the owner connection exactly as before.
+      */
+     @Optional() private readonly scoped?: ActorScopedDatabase,
++    // RT-037: photo links go through the access-checked media route; the
++    // route resolves the reader through identity, never from the link alone.
++    @Optional() @Inject(IDENTITY_SERVICE) private readonly identity?: IdentityService,
++    @Optional() private readonly mediaUrls: MediaUrlSigner = new MediaUrlSigner(),
+   ) {}
+ 
+   /**
+@@ -313,12 +319,12 @@ export class StaffProfileService {
+       signInIdentity: access.relation === 'self' ? (login?.subject ?? null) : null,
+       jobTitle: staff.profile?.jobTitle ?? null,
+       about: staff.profile?.about ?? null,
+-      avatarUrl: await this.sign(staff.avatarObjectKey),
++      avatarUrl: await this.sign(staff.id, staff.avatarObjectKey, actor.actorId),
+       version: iso(staff.profile?.updatedAt ?? null),
+       profileUpdatedAt: iso(staff.profile?.updatedAt ?? null),
+       profileUpdatedBy: person(names, staff.profile?.updatedBy ?? null),
+       reportingManager: staff.reportingLine
+-        ? await this.personDto(staff.reportingLine.manager)
++        ? await this.personDto(staff.reportingLine.manager, actor.actorId)
+         : null,
+       // History (ended rows) only for someone who may manage them or read audit.
+       responsibilities: (access.canManageResponsibilities || access.canReadAudit ? responsibilities : active).map(
+@@ -366,7 +372,7 @@ export class StaffProfileService {
+     const summaries = await this.summaries(db, actor, organizationId, members);
+ 
+     return {
+-      manager: await this.personDto(me),
++      manager: await this.personDto(me, actor.actorId),
+       members: summaries,
+       totals: sumWorkload(summaries.filter((m) => m.isActive).map((m) => m.workload)),
+       distinctTeachers: await this.workload.distinctTeachers(
+@@ -436,7 +442,7 @@ export class StaffProfileService {
+           .filter((s) => s.reportingLine?.managerId === m.id && isLive(s) && !NEVER_A_TEAM_MEMBER.has(s.role))
+           .map((s) => s.id);
+         return {
+-          manager: { ...(await this.personDto(m)), isActive: isLive(m) },
++          manager: { ...(await this.personDto(m, actor.actorId)), isActive: isLive(m) },
+           memberCount: memberIds.length,
+           totals: sumWorkload(memberIds.map((id) => byId.get(id)!.workload)),
+           distinctTeachers: await this.workload.distinctTeachers(organizationId, memberIds, db),
+@@ -446,7 +452,7 @@ export class StaffProfileService {
+ 
+     const sumOfTeams = sumWorkload(teams.map((t) => t.totals));
+     const live = staff.filter(isLive);
+-    const people = new Map(await Promise.all(staff.map(async (s) => [s.id, await this.personDto(s)] as const)));
++    const people = new Map(await Promise.all(staff.map(async (s) => [s.id, await this.personDto(s, actor.actorId)] as const)));
+ 
+     return {
+       generatedAt: new Date().toISOString(),
+@@ -928,7 +934,7 @@ export class StaffProfileService {
+           displayName: s.name,
+           role: s.role,
+           jobTitle: s.profile?.jobTitle ?? null,
+-          avatarUrl: await this.sign(s.avatarObjectKey),
++          avatarUrl: await this.sign(s.id, s.avatarObjectKey, actor.actorId),
+           isActive: isLive(s),
+           account: { hasLogin: facts.get(s.id)?.hasLogin ?? false, status: facts.get(s.id)?.status ?? null },
+           lastActivityAt: iso(s.lastActivityAt),
+@@ -1028,13 +1034,13 @@ export class StaffProfileService {
+     role: string;
+     avatarObjectKey: string | null;
+     profile?: { jobTitle: string | null } | null;
+-  }): Promise<ProfilePersonDto> {
++  }, viewerId: string): Promise<ProfilePersonDto> {
+     return {
+       staffId: s.id,
+       displayName: s.name,
+       role: s.role,
+       jobTitle: s.profile?.jobTitle ?? null,
+-      avatarUrl: await this.sign(s.avatarObjectKey),
++      avatarUrl: await this.sign(s.id, s.avatarObjectKey, viewerId),
+     };
+   }
+ 
+@@ -1059,11 +1065,57 @@ export class StaffProfileService {
+       ${reason})`;
+   }
+ 
+-  /** Signed only after the caller was authorized to see the profile it belongs to. */
+-  private sign(objectKey: string | null): Promise<string | null> {
++  /**
++   * Minted only after the caller was authorized to see the profile it belongs
++   * to -- and, since RT-037, not a storage URL: a link to the access-checked
++   * media route (`GET /media/staff/:staffId`), bound to this reader, which
++   * re-decides the same visibility on EVERY request (`authorizePhotoRead`).
++   * No object key or storage-provider URL reaches the client.
++   */
++  private sign(staffId: string, objectKey: string | null, viewerId: string): Promise<string | null> {
+     if (!objectKey) return Promise.resolve(null);
+     const ttl = Number(process.env.STORAGE_SIGNED_URL_TTL_SECONDS ?? 300);
+-    return this.storage.signedReadUrl(objectKey, Number.isFinite(ttl) && ttl > 0 ? ttl : 300);
++    return Promise.resolve(this.mediaUrls.url('staff', staffId, 'o', viewerId, Number.isFinite(ttl) && ttl > 0 ? ttl : 300));
++  }
++
++  /**
++   * RT-037 -- the access-time decision behind a staff photo link. The photo is
++   * readable exactly where this service shows it today, re-decided now:
++   *   1. the reader may view that staff member's profile (`staffProfileAccess`
++   *      -- self, team, organization; the same rule `profile()` applies);
++   *   2. it is the REPORTING MANAGER card of a profile the reader may view
++   *      (`profile()` shows it; `team()` shows the reader's own);
++   *   3. the reader may view the organization overview, which lists everyone.
++   * Nothing wider. Every refusal reads as absent.
++   */
++  async authorizePhotoRead(actorId: string, staffId: string): Promise<{ objectKey: string }> {
++    if (!this.identity || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(staffId)) throw notFound();
++    const actor = await this.identity.resolveActor(actorId);
++    if (!actor) throw notFound();
++    let organizationId: string;
++    try {
++      organizationId = this.requireStaffActor(actor);
++    } catch {
++      throw notFound();
++    }
++    // Any refusal on the way -- including the restricted runtime path's own
++    // actor checks -- reads as absent: a link must not tell its holder WHY.
++    return this.run(actor, async (db) => {
++      const target = await this.findStaff(db, organizationId, staffId);
++      if (!target?.avatarObjectKey) throw notFound();
++      if (this.accessFor(actor, target).canView) return { objectKey: target.avatarObjectKey };
++      const reports = await db.staff.findMany({
++        where: { organizationId, reportingLine: { managerId: staffId } },
++        include: STAFF_INCLUDE,
++        take: DIRECTORY_LIMIT,
++      });
++      if (reports.some((r) => this.accessFor(actor, r).canView)) return { objectKey: target.avatarObjectKey };
++      if (this.authz.canViewOrganizationProfiles(actor).allowed) return { objectKey: target.avatarObjectKey };
++      throw notFound();
++    }).catch((e: unknown) => {
++      if (e instanceof CommError) throw notFound();
++      throw e;
++    });
+   }
+ 
+   /** Best effort: a failed delete leaves an unreferenced object, never a broken profile. */
+diff --git a/apps/api/test/integration/staff-profiles.spec.ts b/apps/api/test/integration/staff-profiles.spec.ts
+index 035eeda..279acdf 100644
+--- a/apps/api/test/integration/staff-profiles.spec.ts
++++ b/apps/api/test/integration/staff-profiles.spec.ts
+@@ -27,6 +27,12 @@ import { StaffProfileService } from '../../src/staff-profile/staff-profile.servi
+ import { StaffWorkloadService } from '../../src/staff-profile/staff-workload.service';
+ import { buildGraph, seed, truncate, Scenario, withAssignmentGate } from './harness';
+ import { png } from '../support/images';
++import { SignedLocalObjectStorage } from '@communication/attachments/object-storage';
++import { MediaUrlSigner } from '@platform/media-url';
++import { StaffPhotoController } from '../../src/staff-profile/staff-photo.controller';
++
++// RT-037: a staff photo link is a link to the access-checked media route.
++const STAFF_PHOTO_LINK = /\/media\/staff\/[0-9a-f-]{36}\?v=o&a=[0-9a-f-]{36}&e=\d+&s=[A-Za-z0-9_-]{43}$/;
+ 
+ jest.setTimeout(90_000);
+ 
+@@ -638,7 +644,7 @@ describe('profile photos', () => {
+     await put(grant.objectKey, 'image/png', photo);
+ 
+     const set = await profiles.commitAvatar(me, 'me', { objectKey: grant.objectKey });
+-    expect(set.avatarUrl).toMatch(/sig=/);
++    expect(set.avatarUrl).toMatch(STAFF_PHOTO_LINK); // RT-037: the media route, bound to the reader
+     expect((await g.prisma.staff.findUniqueOrThrow({ where: { id: w.ownerId } })).avatarObjectKey).toBe(grant.objectKey);
+ 
+     const next = await profiles.authorizeAvatarUpload(me, 'me', { mimeType: 'image/png', byteSize: photo.length });
+@@ -720,7 +726,7 @@ describe('profile photos', () => {
+     await put(grant.objectKey, 'image/png', png(128, 128));
+     await profiles.commitAvatar(me, 'me', { objectKey: grant.objectKey });
+ 
+-    expect((await profiles.profile(await actor(w.managerId), w.ownerId)).avatarUrl).toMatch(/sig=/);
++    expect((await profiles.profile(await actor(w.managerId), w.ownerId)).avatarUrl).toMatch(STAFF_PHOTO_LINK);
+     await expectCode(profiles.profile(await actor(w.otherAdminId), w.ownerId), CommErrorCode.STAFF_PROFILE_NOT_FOUND, 404);
+   });
+ });
+@@ -816,3 +822,92 @@ describe('audit and database policy', () => {
+     expect(seen).toBe(0);
+   });
+ });
++
++// ===========================================================================
++// RT-037 -- staff photos are served through the access-checked media route.
++// The reader must be live, and may read a photo exactly where the service
++// shows it: a profile they may view, the reporting-manager card of such a
++// profile, or the organization overview. Re-decided on every request.
++// ===========================================================================
++describe('RT-037 · profile photos through the access-checked media route', () => {
++  const withIdentity = new StaffProfileService(g.prisma, g.authz, workload, g.storage, scoped, g.identity);
++  const route = () => new StaffPhotoController(g.prisma, new SignedLocalObjectStorage(), withIdentity);
++  async function fetchPhoto(url: string) {
++    const u = new URL(url, 'http://api.test');
++    const id = u.pathname.split('/media/staff/')[1];
++    const state: { status: number; body: Buffer } = { status: 0, body: Buffer.alloc(0) as Buffer };
++    const res = {
++      status(c: number) { state.status = c; return res; },
++      setHeader() {},
++      send(b?: string | Buffer) { state.body = Buffer.isBuffer(b) ? b : Buffer.from(b ?? ''); },
++      write(c: Uint8Array) { state.body = Buffer.concat([state.body, Buffer.from(c)]); return true; },
++      end() {},
++    };
++    await route().photo(id, u.searchParams.get('v')!, u.searchParams.get('a')!, u.searchParams.get('e')!, u.searchParams.get('s')!, { headers: {} }, res);
++    return state;
++  }
++  async function photoOf(staffId: string): Promise<{ key: string; bytes: Buffer }> {
++    const who = await actor(staffId);
++    const bytes = png(160, 160);
++    const grant = await profiles.authorizeAvatarUpload(who, 'me', { mimeType: 'image/png', byteSize: bytes.length });
++    await blobs.put(grant.objectKey, 'image/png', bytes);
++    await profiles.commitAvatar(who, 'me', { objectKey: grant.objectKey });
++    return { key: grant.objectKey, bytes };
++  }
++  const forged = (staffId: string, readerId: string, ttl = 300) => new MediaUrlSigner().url('staff', staffId, 'o', readerId, ttl);
++
++  it('legitimate readers get the bytes: self, the manager of the profile, the reporting-manager card, the organization overview', async () => {
++    const owner = await photoOf(w.ownerId);
++    const mgr = await photoOf(w.managerId);
++    const self = await withIdentity.profile(await actor(w.ownerId), 'me');
++    expect((await fetchPhoto(self.avatarUrl!)).body.equals(owner.bytes)).toBe(true);
++    const asManager = await withIdentity.profile(await actor(w.managerId), w.ownerId);
++    expect((await fetchPhoto(asManager.avatarUrl!)).status).toBe(200);
++    // The reporting-manager card on the owner's own profile shows manager_c's photo.
++    const card = self.reportingManager!.avatarUrl!;
++    const fromCard = await fetchPhoto(card);
++    expect(fromCard.status).toBe(200);
++    expect(fromCard.body.equals(mgr.bytes)).toBe(true);
++    const org = await withIdentity.organization(await actor(w.superAdminId));
++    const anyPhoto = JSON.stringify(org).match(/"avatarUrl":"([^"]+)"/)![1];
++    expect((await fetchPhoto(anyPhoto)).status).toBe(200);
++  });
++
++  it('no object key or storage-provider URL reaches the client', async () => {
++    const owner = await photoOf(w.ownerId);
++    const dto = JSON.stringify(await withIdentity.profile(await actor(w.managerId), w.ownerId));
++    expect(dto).not.toContain(owner.key);
++    expect(dto).not.toMatch(/\/storage\/|X-Amz-|expires=|sig=/);
++  });
++
++  it('cross-account: a peer admin, a manager of ANOTHER team, and a parent are refused even with a validly signed link', async () => {
++    await photoOf(w.ownerId);
++    for (const reader of [w.otherAdminId, w.otherManagerId, w.parentId]) {
++      expect((await fetchPhoto(forged(w.ownerId, reader))).status).toBe(404);
++    }
++  });
++
++  it('forged, tampered and expired links are refused', async () => {
++    await photoOf(w.ownerId);
++    const good = (await withIdentity.profile(await actor(w.managerId), w.ownerId)).avatarUrl!;
++    const u = new URL(good, 'http://api.test');
++    u.searchParams.set('s', u.searchParams.get('s')!.replace(/.$/, (c) => (c === 'A' ? 'B' : 'A')));
++    expect((await fetchPhoto(u.toString())).status).toBe(403);
++    const longer = new URL(good, 'http://api.test');
++    longer.searchParams.set('e', String(Number(longer.searchParams.get('e')) + 600));
++    expect((await fetchPhoto(longer.toString())).status).toBe(403);
++    expect((await fetchPhoto(forged(w.ownerId, w.managerId, -1))).status).toBe(403);
++  });
++
++  it('deactivation, and losing the reporting line, refuse the SAME link on the next request', async () => {
++    await photoOf(w.ownerId);
++    const link = (await withIdentity.profile(await actor(w.managerId), w.ownerId)).avatarUrl!;
++    expect((await fetchPhoto(link)).status).toBe(200);
++    await g.prisma.$executeRawUnsafe(`delete from chat.staff_reporting_line where staff_id = '${w.ownerId}'::uuid`);
++    expect((await fetchPhoto(link)).status).toBe(404); // no longer the owner's manager
++    await g.prisma.$executeRawUnsafe(`insert into chat.staff_reporting_line (staff_id, manager_id) values ('${w.ownerId}'::uuid, '${w.managerId}'::uuid)`);
++    expect((await fetchPhoto(link)).status).toBe(200);
++    await g.prisma.$executeRawUnsafe(`update chat.staff set is_active = false, left_at = now() where id = '${w.managerId}'::uuid`);
++    expect((await fetchPhoto(link)).status).toBe(403); // the reader is no longer live
++  });
++});

@@ -1,4 +1,5 @@
 import { INestApplication, Logger } from '@nestjs/common';
+import { originOfRequest, runWithRequestOrigin } from '../../platform/request-origin';
 import { readClientAddressPolicy } from '../../platform/auth/client-address';
 
 /**
@@ -42,9 +43,65 @@ export function applyInfrastructure(
   options: InfrastructureOptions = {},
 ): void {
   applyTrustedProxy(app);
+  applyWebhookBodyParser(app);
+  applyRequestOrigin(app);
   applySecurityHeaders(app);
   applyCors(app, options.allowedOrigins ?? parseOrigins(process.env.CORS_ALLOWED_ORIGINS));
   applyGracefulShutdown(app, options.shutdownGraceMs ?? Number(process.env.SHUTDOWN_GRACE_MS ?? 15000));
+}
+
+/**
+ * LiveKit posts its webhooks as `Content-Type: application/webhook+json`, which
+ * the default JSON parser does not claim -- so `rawBody` (the signed bytes the
+ * webhook JWT hashes) was never captured and EVERY real LiveKit delivery was
+ * refused as "no body" (found 2026-10-14 against a real LiveKit 1.8 server;
+ * see RT-037 / W5 in findings.md). This parser claims exactly that type, keeps
+ * the raw bytes (the app is created with `rawBody: true`), and changes nothing
+ * for any other content type.
+ */
+function applyWebhookBodyParser(app: INestApplication): void {
+  // A plain middleware, deliberately NOT `useBodyParser('json', ...)`: that
+  // call replaces Nest's default application/json parser, and every JSON
+  // request (login included) then arrives unparsed.
+  const LIMIT = 1024 * 1024;
+  type Req = NodeJS.ReadableStream & {
+    headers: Record<string, string | string[] | undefined>;
+    rawBody?: Buffer;
+    body?: unknown;
+    destroy(): void;
+  };
+  app.use((req: Req, _res: unknown, next: (err?: unknown) => void) => {
+    const type = String(req.headers['content-type'] ?? '').toLowerCase();
+    if (!type.startsWith('application/webhook+json') || req.rawBody) return next();
+    const chunks: Buffer[] = [];
+    let size = 0;
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > LIMIT) req.destroy();
+      else chunks.push(chunk);
+    });
+    req.on('end', () => {
+      req.rawBody = Buffer.concat(chunks);
+      try {
+        req.body = JSON.parse(req.rawBody.toString('utf8'));
+      } catch {
+        req.body = {};
+      }
+      next();
+    });
+    req.on('error', next);
+  });
+}
+
+/**
+ * RT-037: remember the origin each request reached us at, for the absolute
+ * media links minted while serving it (platform/request-origin.ts). After the
+ * trust-proxy setting, so `req.protocol` already means what it should.
+ */
+function applyRequestOrigin(app: INestApplication): void {
+  app.use((req: Parameters<typeof originOfRequest>[0], _res: unknown, next: () => void) =>
+    runWithRequestOrigin(originOfRequest(req), next),
+  );
 }
 
 export function parseOrigins(raw: string | undefined): string[] {

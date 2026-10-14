@@ -4,10 +4,18 @@
  *
  * WHY THE ENDPOINT EXISTS. `screens/call.md` §4 requires the call affordance to
  * render only where the backend authorizes the pairing, and to be ABSENT rather
- * than disabled otherwise — "the client must never infer it". Since PD-6 the
- * set of authorized pairs is data, and the client cannot derive it: a
- * teacher↔parent conversation existing proves the relationship held when it was
- * CREATED, not that it holds now.
+ * than disabled otherwise — "the client must never infer it". A conversation
+ * existing proves only that it was allowed when it was CREATED, not that a call
+ * is allowed now.
+ *
+ * RE-VERSIONED 2026-10-14 BY PD-7. PD-6 made a direct teacher↔parent call
+ * depend on the academy relationship; PD-7 restores BR-1, so such a call is
+ * refused whatever the relationship (`BR1_TEACHER_PARENT_DIRECT`), and a
+ * teacher↔parent direct conversation left over from the PD-6 window is history
+ * that accepts nothing. The allowed 1:1 call used throughout is now the PRD §9
+ * "1:1 call Parent↔Admin" channel with the family's owner; the revocation the
+ * race cases need is the parent's `can_message` capability instead of the
+ * relationship.
  *
  * THE THREE PROPERTIES THIS SUITE DEFENDS
  *   1. ONE POLICY. The answer comes from the same AuthorizationService.canCall
@@ -23,6 +31,7 @@ import { ConversationController } from '@communication/api/conversation.controll
 import {
   Scenario,
   buildGraph,
+  legacyTeacherParentDirect,
   seed,
   truncate,
   withAssignmentGate,
@@ -47,10 +56,23 @@ beforeEach(async () => {
   controller = new ConversationController(g.conversations, g.messages, g.calls);
 });
 
-/** The authorized teacher↔parent direct channel PD-6 permits. */
-async function teacherParentConversation(): Promise<string> {
-  const conv = await g.conversations.getOrCreateDirect(s.parentId, s.teacherId);
+/** The PRD §9 "1:1 call Parent↔Admin" channel, with the family's owner. */
+async function parentAdminConversation(): Promise<string> {
+  const conv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
   return conv.id;
+}
+
+/** A direct teacher↔parent conversation from the PD-6 window (see harness). */
+async function legacyTeacherParentConversation(): Promise<string> {
+  return legacyTeacherParentDirect(g.prisma, s.teacherId, s.parentId, s.familyId);
+}
+
+/** The parent loses the capability to message (and so to call) after asking. */
+async function revokeParentCapability(): Promise<void> {
+  await g.prisma.contact.update({
+    where: { id: s.parentId },
+    data: { canMessage: false },
+  });
 }
 
 async function revokeRelationship(): Promise<void> {
@@ -62,42 +84,68 @@ async function revokeRelationship(): Promise<void> {
 }
 
 // -------------------------------------------------------------------------
-describe('1/2. the relationship decides', () => {
-  it('1. an authorized teacher↔parent pairing can call', async () => {
-    const conversationId = await teacherParentConversation();
-
-    const teacher = await controller.callCapability(s.teacherId, conversationId);
-    const parent = await controller.callCapability(s.parentId, conversationId);
-
-    // Both directions: PD-6 is symmetric, and so is the affordance.
-    expect(teacher).toEqual({ canCall: true, code: null });
-    expect(parent).toEqual({ canCall: true, code: null });
-  });
-
-  it('2. a revoked relationship cannot, and says which rule refused', async () => {
-    const conversationId = await teacherParentConversation();
-    await revokeRelationship();
-
-    const after = await controller.callCapability(s.teacherId, conversationId);
-
-    expect(after).toEqual({
-      canCall: false,
-      code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
-    });
-  });
-
-  it('2b. the same conversation answers differently before and after revocation',
+describe('1/2. BR-1 decides, not the relationship (PD-7)', () => {
+  it('1. a direct teacher↔parent conversation cannot call, from either side',
     async () => {
-      // The whole reason the endpoint exists. The conversation is unchanged --
-      // it is still there, still has the same two members -- so anything
-      // derived from its existence would answer `true` in both readings.
-      const conversationId = await teacherParentConversation();
+      const conversationId = await legacyTeacherParentConversation();
+
+      const teacher = await controller.callCapability(s.teacherId, conversationId);
+      const parent = await controller.callCapability(s.parentId, conversationId);
+
+      // Both directions, and the code names the constitutional rule.
+      expect(teacher).toEqual({
+        canCall: false,
+        code: CommErrorCode.BR1_TEACHER_PARENT_DIRECT,
+      });
+      expect(parent).toEqual({
+        canCall: false,
+        code: CommErrorCode.BR1_TEACHER_PARENT_DIRECT,
+      });
+    });
+
+  it('2. the relationship is not an input: held or revoked, the answer is the same',
+    async () => {
+      // PD-6 answered `true` here while the relationship held. PD-7 must not:
+      // the teacher DOES teach this family's learner, and the answer is still
+      // the BR-1 refusal -- and revoking the relationship changes nothing.
+      const conversationId = await legacyTeacherParentConversation();
+      expect(
+        await g.relationships.teacherParentAuthorized(s.teacherId, s.parentId),
+      ).toBe(true);
+
       const before = await controller.callCapability(s.teacherId, conversationId);
       await revokeRelationship();
       const after = await controller.callCapability(s.teacherId, conversationId);
 
+      expect(before).toEqual(after);
+      expect(before.code).toBe(CommErrorCode.BR1_TEACHER_PARENT_DIRECT);
+    });
+
+  it('2b. the Parent↔Admin 1:1 can call, in both directions', async () => {
+    const conversationId = await parentAdminConversation();
+
+    const admin = await controller.callCapability(s.ownerId, conversationId);
+    const parent = await controller.callCapability(s.parentId, conversationId);
+
+    expect(admin).toEqual({ canCall: true, code: null });
+    expect(parent).toEqual({ canCall: true, code: null });
+  });
+
+  it('2c. the same conversation answers differently before and after a revocation',
+    async () => {
+      // The whole reason the endpoint exists. The conversation is unchanged --
+      // it is still there, still has the same two members -- so anything
+      // derived from its existence would answer `true` in both readings.
+      const conversationId = await parentAdminConversation();
+      const before = await controller.callCapability(s.parentId, conversationId);
+      await revokeParentCapability();
+      const after = await controller.callCapability(s.parentId, conversationId);
+
       expect(before.canCall).toBe(true);
-      expect(after.canCall).toBe(false);
+      expect(after).toEqual({
+        canCall: false,
+        code: CommErrorCode.CONTACT_CANNOT_MESSAGE,
+      });
     });
 });
 
@@ -110,7 +158,7 @@ describe('3/4/5. a counterpart who is gone — what the policy ACTUALLY does', (
    * code, and what is asserted here is what both were measured doing.
    *
    * WHY IT HAPPENS. `decideInitiate` resolves participants through
-   * `identity.resolveActor` and keeps only the active ones, so a teacher who
+   * `identity.resolveActor` and keeps only the active ones, so an admin who
    * has left is simply not in the participant set. What remains is a direct
    * conversation with one live participant, which the matrix permits — a call
    * that rings nobody rather than a call that is refused.
@@ -123,15 +171,30 @@ describe('3/4/5. a counterpart who is gone — what the policy ACTUALLY does', (
    * capability that refused what start allows would be a second policy, which
    * is the thing this endpoint must never become.
    */
-  const gone: Array<[string, () => Promise<unknown>, () => string]> = [
+  // [name, mutation, caller, conversation]. The family OWNER cannot be
+  // deactivated (chat.staff refuses it until offboard_staff reassigns the
+  // family), so the deactivated-admin case uses the other admin's 1:1.
+  const gone: Array<[string, () => Promise<unknown>, () => string, () => Promise<string>]> = [
     [
-      'the teacher has left',
+      'the admin has left',
       () =>
-        g.prisma.teacher.update({
-          where: { id: s.teacherId },
+        g.prisma.staff.update({
+          where: { id: s.ownerId },
           data: { leftAt: new Date() },
         }),
       () => s.parentId,
+      parentAdminConversation,
+    ],
+    [
+      'the admin is deactivated',
+      () =>
+        g.prisma.staff.update({
+          where: { id: s.otherAdminId },
+          // staff_left_at_matches_is_active: an inactive staff row carries left_at.
+          data: { isActive: false, leftAt: new Date() },
+        }),
+      () => s.parentId,
+      async () => (await g.conversations.getOrCreateDirect(s.parentId, s.otherAdminId)).id,
     ],
     [
       'the teacher is deactivated',
@@ -140,7 +203,8 @@ describe('3/4/5. a counterpart who is gone — what the policy ACTUALLY does', (
           where: { id: s.teacherId },
           data: { isActive: false },
         }),
-      () => s.parentId,
+      () => s.ownerId,
+      async () => (await g.conversations.getOrCreateDirect(s.teacherId, s.ownerId)).id,
     ],
     [
       'the contact is deactivated',
@@ -149,13 +213,14 @@ describe('3/4/5. a counterpart who is gone — what the policy ACTUALLY does', (
           where: { id: s.parentId },
           data: { isActive: false },
         }),
-      () => s.teacherId,
+      () => s.ownerId,
+      parentAdminConversation,
     ],
   ];
 
-  for (const [name, mutate, caller] of gone) {
+  for (const [name, mutate, caller, conversation] of gone) {
     it(`capability matches start when ${name}`, async () => {
-      const conversationId = await teacherParentConversation();
+      const conversationId = await conversation();
       await mutate();
 
       const capability = await controller.callCapability(caller(), conversationId);
@@ -171,11 +236,11 @@ describe('3/4/5. a counterpart who is gone — what the policy ACTUALLY does', (
     });
   }
 
-  it('a call started to a departed teacher has only the live participant', async () => {
+  it('a call started to a departed admin has only the live participant', async () => {
     // The consequence, stated plainly: the call exists and rings nobody.
-    const conversationId = await teacherParentConversation();
-    await g.prisma.teacher.update({
-      where: { id: s.teacherId },
+    const conversationId = await parentAdminConversation();
+    await g.prisma.staff.update({
+      where: { id: s.ownerId },
       data: { leftAt: new Date() },
     });
 
@@ -197,7 +262,7 @@ describe('3/4/5. a counterpart who is gone — what the policy ACTUALLY does', (
 describe('6. it is not an oracle', () => {
   it('an actor who cannot read the conversation gets the READ refusal, not an answer',
     async () => {
-      const conversationId = await teacherParentConversation();
+      const conversationId = await parentAdminConversation();
 
       // A real, active teacher who teaches nobody in this family and is not a
       // member of this conversation.
@@ -208,10 +273,10 @@ describe('6. it is not an oracle', () => {
 
   it('the refusal is indistinguishable from any other unreadable conversation',
     async () => {
-      // Two conversations the outsider cannot read: one where the pairing IS
-      // authorized, one where it is not. Both must refuse identically, or the
-      // difference itself would report whether a relationship exists.
-      const authorized = await teacherParentConversation();
+      // Two conversations the outsider cannot read: one BR-1 refuses to call,
+      // one where a call is allowed. Both must refuse identically, or the
+      // difference itself would report who the conversation pairs.
+      const authorized = await legacyTeacherParentConversation();
       const otherParent = await g.conversations.getOrCreateDirect(
         s.otherParentId,
         s.ownerId,
@@ -233,8 +298,17 @@ describe('6. it is not an oracle', () => {
     ).rejects.toMatchObject({ code: CommErrorCode.CONVERSATION_NOT_FOUND });
   });
 
+  it('an out-of-scope admin gets the READ refusal, not an answer', async () => {
+    // Staff scope (2026-10-14): another admin, not the owner, not on duty, not
+    // a member. They learn only that the conversation is outside their charge.
+    const conversationId = await parentAdminConversation();
+    await expect(
+      controller.callCapability(s.otherAdminId, conversationId),
+    ).rejects.toMatchObject({ code: CommErrorCode.STAFF_OUT_OF_SCOPE });
+  });
+
   it('an unknown actor mints no answer', async () => {
-    const conversationId = await teacherParentConversation();
+    const conversationId = await parentAdminConversation();
     await expect(
       controller.callCapability(randomUUID(), conversationId),
     ).rejects.toMatchObject({ code: CommErrorCode.UNKNOWN_ACTOR });
@@ -244,11 +318,11 @@ describe('6. it is not an oracle', () => {
 // -------------------------------------------------------------------------
 describe('7. one policy, not two', () => {
   it('capability agrees with what start actually does — allowed', async () => {
-    const conversationId = await teacherParentConversation();
+    const conversationId = await parentAdminConversation();
 
-    const capability = await controller.callCapability(s.teacherId, conversationId);
+    const capability = await controller.callCapability(s.ownerId, conversationId);
     // And the real thing, which is the only authority.
-    const started = await g.calls.start(conversationId, s.teacherId);
+    const started = await g.calls.start(conversationId, s.ownerId);
 
     expect(capability.canCall).toBe(true);
     expect(started.callId).toEqual(expect.any(String));
@@ -256,8 +330,7 @@ describe('7. one policy, not two', () => {
 
   it('capability agrees with what start actually does — refused, same code',
     async () => {
-      const conversationId = await teacherParentConversation();
-      await revokeRelationship();
+      const conversationId = await legacyTeacherParentConversation();
 
       const capability = await controller.callCapability(s.teacherId, conversationId);
       const refusal = await g.calls
@@ -266,6 +339,7 @@ describe('7. one policy, not two', () => {
         .catch((error: { code: string }) => error.code);
 
       expect(capability.canCall).toBe(false);
+      expect(refusal).toBe(CommErrorCode.BR1_TEACHER_PARENT_DIRECT);
       // Not merely "both refused" — the SAME code, which is what one policy
       // means. Two implementations would drift here first.
       expect(capability.code).toBe(refusal);
@@ -294,20 +368,20 @@ describe('8. start remains authoritative', () => {
     async () => {
       // The race the client must never assume away: asked, allowed, revoked,
       // then called. start() decides again and refuses.
-      const conversationId = await teacherParentConversation();
-      const capability = await controller.callCapability(s.teacherId, conversationId);
+      const conversationId = await parentAdminConversation();
+      const capability = await controller.callCapability(s.parentId, conversationId);
       expect(capability.canCall).toBe(true);
 
-      await revokeRelationship();
+      await revokeParentCapability();
 
-      await expect(g.calls.start(conversationId, s.teacherId)).rejects.toMatchObject({
-        code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
+      await expect(g.calls.start(conversationId, s.parentId)).rejects.toMatchObject({
+        code: CommErrorCode.CONTACT_CANNOT_MESSAGE,
       });
     });
 
   it('asking for capability starts nothing', async () => {
-    const conversationId = await teacherParentConversation();
-    await controller.callCapability(s.teacherId, conversationId);
+    const conversationId = await parentAdminConversation();
+    await controller.callCapability(s.ownerId, conversationId);
     await controller.callCapability(s.parentId, conversationId);
 
     // Read-only. A capability query that created a call would be a way to ring
@@ -316,9 +390,9 @@ describe('8. start remains authoritative', () => {
   });
 
   it('a denied capability leaves no trace either', async () => {
-    const conversationId = await teacherParentConversation();
-    await revokeRelationship();
+    const conversationId = await legacyTeacherParentConversation();
     await controller.callCapability(s.teacherId, conversationId);
+    await controller.callCapability(s.parentId, conversationId);
 
     expect(await g.prisma.call.count()).toBe(0);
   });
@@ -327,10 +401,10 @@ describe('8. start remains authoritative', () => {
 // -------------------------------------------------------------------------
 describe('the response says only what the client needs', () => {
   it('exactly two fields, whatever the answer', async () => {
-    const conversationId = await teacherParentConversation();
-    const allowed = await controller.callCapability(s.teacherId, conversationId);
-    await revokeRelationship();
-    const denied = await controller.callCapability(s.teacherId, conversationId);
+    const conversationId = await parentAdminConversation();
+    const allowed = await controller.callCapability(s.parentId, conversationId);
+    await revokeParentCapability();
+    const denied = await controller.callCapability(s.parentId, conversationId);
 
     for (const body of [allowed, denied]) {
       expect(Object.keys(body).sort()).toEqual(['canCall', 'code']);
@@ -338,14 +412,14 @@ describe('the response says only what the client needs', () => {
   });
 
   it('no identifier, name or relationship detail reaches the caller', async () => {
-    const conversationId = await teacherParentConversation();
+    const conversationId = await legacyTeacherParentConversation();
     await revokeRelationship();
     const body = JSON.stringify(
       await controller.callCapability(s.teacherId, conversationId),
     );
 
-    // The denial must not describe the relationship it refused: not the learner
-    // it hangs on, not the teacher who no longer teaches them, not the family.
+    // The denial must not describe the pairing it refused: not the learner the
+    // relationship hangs on, not the teacher, not the parent, not the family.
     for (const id of [
       s.learnerId,
       s.teacherId,

@@ -81,17 +81,21 @@ describe('DEF-001 — the boundaries, with real membership rows', () => {
     const conv = await g.conversations.getOrCreateDirect(s.teacherId, s.ownerId);
 
     // otherAdminId is a real, active, family-facing admin who is simply not in
-    // this conversation. canRead would let them READ it, which is exactly why
-    // the send path has to carry its own membership check. The code names what is
-    // actually wrong: there is no duty roster on a conversation with no family,
-    // so NOT_ON_DUTY would be a misleading refusal here.
+    // this conversation. Under the old read rule canRead let them READ it, and
+    // the send path's own membership check was the refusal (NOT_CONVERSATION_
+    // MEMBER). Since staff scope (2026-10-14) they are refused one step
+    // earlier: a Teacher <-> Admin conversation has no family, so no owner and
+    // no duty roster can bring it into an admin's charge, and only membership
+    // (or a live sticky claim, see the next case) can. Either way: refused, and
+    // NOT_ON_DUTY would be a misleading code here.
     await expect(
       g.messages.send({
         conversationId: conv.id,
         senderId: s.otherAdminId,
         ...text('intrusion', 'def001-x1'),
       }),
-    ).rejects.toMatchObject({ code: CommErrorCode.NOT_CONVERSATION_MEMBER });
+    ).rejects.toMatchObject({ code: CommErrorCode.STAFF_OUT_OF_SCOPE });
+    expect(await g.prisma.message.count({ where: { conversationId: conv.id } })).toBe(0);
   });
 
   it('a departed admin is not rescued by the stickiness their own reply created', async () => {

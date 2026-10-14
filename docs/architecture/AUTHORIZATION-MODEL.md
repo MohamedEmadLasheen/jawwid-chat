@@ -2,7 +2,7 @@
 
 Status: **CANONICAL** · Locked in Phase 0 (2026-09-07) · Implemented in Phase 1
 Product decisions PD-2, PD-3, PD-5 and **PD-6** are CLOSED; the record is `../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4.
-**PD-6 (2026-09-23) re-versioned BR-1**: direct Parent ↔ Teacher chat and calls are allowed for an *authorized relationship*. See §4.1.
+**PD-7 (2026-10-14) supersedes PD-6 and restores BR-1**: direct Parent ↔ Teacher chat and calls are forbidden whatever the relationship (`COMM.BR1_TEACHER_PARENT_DIRECT`). PD-6 (2026-09-23) had allowed them for an *authorized relationship*; §4.1 is kept as that history. **Staff scope (2026-10-14):** a manager reads their organization; an admin/coverage admin reads conversations they are a member of, or whose family they own, are on duty for, or are the live sticky handler of (`canRead(..., staffInScope)`).
 Companions: `IDENTITY-MODEL.md`, `SUPERVISOR-OWNERSHIP.md`, `TENANCY-MODEL.md`,
 `../security/RLS-STRATEGY.md`, `../contracts/API-CONTRACT.md` §1.2.
 Supersedes: `docs/qa/rbac-matrix.md` role vocabulary (known wrong — no `super_admin`),
@@ -44,7 +44,7 @@ restored.
 |---|---|---|---|---|
 | `parent` | contact | mobile | A family contact who may message (`contact.can_message`) | member_role `parent` |
 | `student` | context only | — | Exists as a learner record; no login in MVP | — |
-| `teacher` | teacher | mobile | Teaches learners; communicates with a family inside Student Groups (live admin required, C-4) **and** 1:1 with an *authorized* parent (BR-1 as re-versioned by PD-6, §4.1) | synthesized (fixed in Phase 1) |
+| `teacher` | teacher | mobile | Teaches learners; communicates with a family inside Student Groups only (live admin required, C-4); never 1:1 with a parent (BR-1, restored by PD-7) | synthesized (fixed in Phase 1) |
 | `admin` | staff | web + mobile | A **supervisor**: the assigned owner of families; answers their conversations; moderates their groups | `staff.role='admin'` |
 | `coverage_admin` | staff | web + mobile | A supervisor acting for others for the duration of an explicit temporary assignment (PD-3), with the owner's permissions on that family and nothing more | `staff.role='coverage'` → **rename** |
 | `manager` | staff | web | Runs the operation: assigns supervisors, reads audit, edits settings, sees every family in the organization | `staff.role='manager'` |
@@ -99,20 +99,26 @@ for UX, and asserts the TypeScript mirror equals the table in a protected test.
 
 | Method | Exists | Decides | Extended in Phase 1 by |
 |---|---|---|---|
-| `canOpenDirect(a, b, pairing)` | ✔ | closed allow-list of direct pairs (Parent↔Admin, Teacher↔Admin); Teacher↔Parent allowed **only** when `pairing` says the relationship is authorized (PD-6, §4.1) | tenancy check |
+| `canOpenDirect(a, b, pairing)` | ✔ | closed allow-list of direct pairs (Parent↔Admin, Teacher↔Admin); Teacher↔Parent **always refused** (`BR1_TEACHER_PARENT_DIRECT`, PD-7); the `pairing` argument was removed | tenancy check |
 | `canRead(actor, conv, membership)` | ✔ | contacts/teachers must be live members; staff must be family-facing | **scope**: staff must be within supervisor scope of `conv.familyId` (§6); managers see the organization |
 | `canReadInternal(actor)` | ✔ | staff only | unchanged |
 | `canSend(actor, conv, membership, intent, now, familyOwnerId, participantKinds, liveMembers)` | ✔ | read → silence → C-4 admin presence → moderation policy for parents/teachers; ownership/coverage/stickiness → on-behalf mode for staff; assist/escalation fail closed (JC-005) | routing reads the **assignment** rather than `family.owner_id` + `on_duty()` (see `SUPERVISOR-OWNERSHIP.md` §6) |
 | `canManageMembership(actor)` | ✔ | staff only | scope + permission key |
 | `canApprove(actor, activeHandlerId)` | ✔ | active handler or manager | queue **listing** must also be scoped (§6) — today `approval.service.ts:45-61` lists every pending approval in the system |
-| `canCall(actor, conv, membership, participants, now, familyOwnerId, liveMembers, intent, pairing)` | ✔ | read + authorized-relationship check on a direct teacher/parent pair (PD-6) + C-4 + **PD-2** (a parent may join a group call, never start one) | scope; the PD-2 rule is already implemented |
+| `canCall(actor, conv, membership, participants, now, familyOwnerId, liveMembers, intent, pairing)` | ✔ | read + refusal of any direct teacher/parent pair (BR-1, PD-7) + C-4 + **PD-2** (a parent may join a group call, never start one) | scope; the PD-2 rule is already implemented |
 | `can(actor, permission, scope)` | ✘ | generic permission-key check for the new admin surface (families, assignment, staff, audit, config) | **new** — the single entry point for Phase 1 controllers |
 | `visibleFamilies(actor)` / `visibleConversationsWhere(actor)` | ✘ | the *query predicate* for lists, so every list endpoint is scoped by construction | **new** |
 
 Contract rule: every new endpoint calls exactly one of these; controllers never
 compare roles.
 
-### 4.1 The teacher–parent relationship predicate (PD-6)
+### 4.1 The teacher–parent relationship predicate (PD-6) — HISTORY
+
+> **Superseded by PD-7 (2026-10-14).** The predicate below still exists
+> (`chat.teacher_parent_authorized`, `RelationshipService`) but no longer opens any
+> channel: `canOpenDirect` / `canSend` / `canCall` refuse a direct teacher/parent pair
+> from the participant kinds alone, and the database refuses it on insert/revival
+> (`20261014120000_chat_pd007_restore_br1_direct.sql`).
 
 BR-1 used to be decidable from two `Actor` objects: `contact + teacher` was
 refused, full stop. Since PD-6 the decision depends on a *relationship*, which
@@ -240,6 +246,6 @@ broadcast audiences) and the realtime `conversation.subscribe` check. Solving
 |---|---|---|
 | Guard (Phase 1) | authenticates, attaches `Actor` | seam contained |
 | `AuthorizationService` | decides role + scope | role decisions exist; scope missing |
-| Database triggers | BR-1 as re-versioned (authorized relationship), immutable type, admin presence, family scope, org isolation | complete and tested |
+| Database triggers | BR-1 (PD-7: no direct teacher/parent channel, member, call or message), immutable type, admin presence, family scope, org isolation | complete and tested |
 | RLS | defence in depth once the API sets the actor context | defined, inert (see `RLS-STRATEGY.md`) |
 | Clients | UX affordances only | Admin Web has one client-only rule to move server-side |

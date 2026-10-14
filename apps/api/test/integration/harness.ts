@@ -53,8 +53,8 @@ export function buildGraph(
   const outbox = new OutboxService();
   const config = new AppConfigService(prisma);
   const storage = new SignedLocalObjectStorage();
-  // PD-6. The real implementation, against the same database: the harness must
-  // not be able to authorize a relationship the running system would refuse.
+  // The real relationship implementation, against the same database. Since
+  // PD-7 it opens no channel, but it is still wired as production wires it.
   const relationships = new PrismaRelationshipService(prisma);
 
   const conversations = new ConversationService(
@@ -106,10 +106,12 @@ export interface Scenario {
   otherParentId: string;
   teacherId: string;
   newTeacherId: string;
-  /** PD-6: a real, active teacher who teaches NOBODY in this family, so the
-   *  pair (unrelatedTeacherId, parentId) has no authorized relationship. The
-   *  negative half of every PD-6 assertion needs a teacher that exists --
-   *  a nonexistent id would prove only that unknown ids are denied. */
+  /** A real, active teacher who teaches NOBODY in this family, so the pair
+   *  (unrelatedTeacherId, parentId) has no authorized relationship, and who is
+   *  a member of nothing -- the outsider every isolation case needs. Under
+   *  PD-7 the relationship no longer opens a direct channel, but it is still
+   *  the academy's fact (chat.teacher_parent_authorized) and is still asserted
+   *  on its own. A nonexistent id would prove only that unknown ids are denied. */
   unrelatedTeacherId: string;
   learnerId: string;
 }
@@ -191,6 +193,83 @@ export async function seed(prisma: PrismaService): Promise<Scenario> {
   return ids;
 }
 
+/**
+ * A direct teacher <-> parent conversation as the PD-6 window left it.
+ *
+ * PD-7 (2026-10-14) restored BR-1: neither the API nor the database will
+ * create this conversation any more (canOpenDirect refuses, and
+ * chat.enforce_direct_conversation_rules raises check_violation on the member
+ * INSERT). But the rows PD-6 created still exist in a real database, and the
+ * rule for them -- readable history, nothing new accepted -- can only be
+ * proven against such a row. So the fixture writes it the one way that
+ * bypasses every trigger: `session_replication_role = replica`, LOCAL to one
+ * transaction so it cannot leak into a pooled connection. Exactly what the
+ * PD-6 code wrote: a direct conversation keyed like getOrCreateDirect, filed
+ * under the parent's family, with a parent and a teacher member.
+ */
+export async function legacyTeacherParentDirect(
+  prisma: PrismaService,
+  teacherId: string,
+  parentId: string,
+  familyId: string,
+): Promise<string> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`set local session_replication_role = replica`);
+    const conv = await tx.conversation.create({
+      data: {
+        type: 'direct',
+        directKey: ConversationService.directKey(teacherId, parentId),
+        familyId,
+        title: null,
+      },
+    });
+    await tx.conversationMember.createMany({
+      data: [
+        { conversationId: conv.id, actorId: parentId, actorKind: 'contact', memberRole: 'parent' },
+        { conversationId: conv.id, actorId: teacherId, actorKind: 'teacher', memberRole: 'teacher' },
+      ],
+    });
+    return conv.id;
+  });
+}
+
+/**
+ * A direct call still RINGING in a PD-6-era teacher <-> parent conversation
+ * (see legacyTeacherParentDirect). chat.enforce_call_participant_rules refuses
+ * the participant INSERT under PD-7, so it is written with triggers bypassed
+ * for the same reason and in the same transaction-local way. What it proves
+ * is the PD-7 rule for a call that was already ringing when the policy
+ * changed: it can be ended, never answered.
+ */
+export async function legacyTeacherParentCall(
+  prisma: PrismaService,
+  conversationId: string,
+  initiatorId: string,
+  participants: { teacherId: string; parentId: string },
+  familyId: string,
+): Promise<string> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`set local session_replication_role = replica`);
+    const call = await tx.call.create({
+      data: {
+        conversationId,
+        familyId,
+        initiatorId,
+        type: 'direct',
+        roomName: `jawwid-${conversationId}-${randomUUID()}`,
+        status: 'ringing',
+      },
+    });
+    await tx.callParticipant.createMany({
+      data: [
+        { callId: call.id, actorId: participants.parentId, actorKind: 'contact' },
+        { callId: call.id, actorId: participants.teacherId, actorKind: 'teacher' },
+      ],
+    });
+    return call.id;
+  });
+}
+
 /** Order matters: children before parents. */
 export async function truncate(prisma: PrismaService): Promise<void> {
   await prisma.$executeRawUnsafe(`
@@ -201,6 +280,6 @@ export async function truncate(prisma: PrismaService): Promise<void> {
              chat.conversation_participant_state, chat.conversation_member,
              chat.message, chat.conversation, chat.learner,
              chat.contact, chat.family, chat.staff, chat.teacher,
-             chat.event_log, chat.audit_log
+             chat.event_log, chat.audit_log, chat.principal_revocation
     restart identity cascade`);
 }

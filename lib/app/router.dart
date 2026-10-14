@@ -6,6 +6,7 @@ import '../features/auth/domain/auth_state.dart';
 import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/calls/presentation/active_call_screen.dart';
 import '../features/calls/presentation/calls_screen.dart';
+import '../features/conversations/application/chat_realtime.dart';
 import '../features/conversations/presentation/chats_screen.dart';
 import '../features/messages/presentation/chat_screen_route.dart';
 import '../features/messages/presentation/conversation_media_screen.dart';
@@ -204,6 +205,10 @@ class _RoleShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final role = ref.watch(currentRoleProvider);
     if (role == null) return const _SplashScreen();
+
+    // Live chat for as long as a signed-in shell is on screen: the list and
+    // open threads follow the server without a pull-to-refresh.
+    ref.watch(chatRealtimeProvider);
 
     return AppShell(
       role: role,

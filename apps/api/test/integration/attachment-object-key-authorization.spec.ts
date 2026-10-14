@@ -75,9 +75,9 @@ function imageAttachment(objectKey: string, thumbnailObjectKey?: string) {
   };
 }
 
-/** Signed URLs the read path would hand back for a message. */
+/** Signed URLs the read path would hand back for a message (to the parent reading it). */
 async function signedFor(messageId: string) {
-  return g.attachments.signUrlsForMessages([messageId]);
+  return g.attachments.signUrlsForMessages([messageId], s.parentId);
 }
 
 // -------------------------------------------------------------------------
@@ -241,7 +241,7 @@ describe('TEST 2 / TEST 3 — the signing boundary refuses independently', () =>
     });
     const carrier = await plantForeignAttachment(b.id, keyFromA);
 
-    const signed = await g.attachments.signUrlsForMessages([good.id, carrier]);
+    const signed = await g.attachments.signUrlsForMessages([good.id, carrier], s.parentId);
 
     // Exactly one entry: the legitimate attachment.
     expect(signed.size).toBe(1);
@@ -264,7 +264,11 @@ describe('TEST 4 / TEST 6 — legitimate access still works, including re-issue'
 
     const signed = await signedFor(message.id);
     expect(signed.size).toBe(1);
-    expect([...signed.values()][0].url).toContain('expires=');
+    // RT-037: a media-route link bound to this attachment, variant and reader,
+    // with an expiry and a signature -- never a presigned storage URL.
+    expect([...signed.values()][0].url).toMatch(
+      new RegExp(`/media/attachments/[0-9a-f-]{36}\\?v=o&a=${s.parentId}&e=\\d+&s=[A-Za-z0-9_-]{43}$`),
+    );
   });
 
   it('a legitimate thumbnail in the same conversation is signed', async () => {

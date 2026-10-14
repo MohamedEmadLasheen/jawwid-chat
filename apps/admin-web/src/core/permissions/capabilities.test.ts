@@ -3,9 +3,12 @@ import {
   canOpenArea,
   isDepartment,
   isManager,
+  isSuperAdmin,
   isOperator,
   managerOnly,
+  navAreas,
   taskScopeFor,
+  UNLISTED_AREAS,
   visibleAreas,
 } from './capabilities'
 import { ROLES } from '@/test/utils'
@@ -16,14 +19,23 @@ import { ROLES } from '@/test/utils'
  * hidden button is not a control.
  */
 describe('role → navigation', () => {
-  it('has no super_admin role', () => {
-    expect(ROLES).not.toContain('super_admin')
+  // PD-5 (closed 2026-09-07) replaced the old "has no super_admin role"
+  // assertion, which the product boundary recorded as known wrong.
+  it('has a super_admin role, and it is nobody else', () => {
+    expect(ROLES).toContain('super_admin')
+    for (const role of ROLES) expect(isSuperAdmin(role)).toBe(role === 'super_admin')
   })
 
-  it('gives only the manager coverage, dashboard and settings', () => {
+  it('gives the super admin every area, so no existing screen is hidden from it', () => {
+    expect(visibleAreas('super_admin')).toEqual(
+      expect.arrayContaining(['inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'settings']),
+    )
+  })
+
+  it('gives only the manager and the super admin coverage, dashboard and settings', () => {
     for (const role of ROLES) {
       const areas = visibleAreas(role)
-      if (role === 'manager') {
+      if (role === 'manager' || role === 'super_admin') {
         expect(areas).toEqual(
           expect.arrayContaining(['coverage', 'dashboard', 'settings']),
         )
@@ -51,6 +63,8 @@ describe('role → navigation', () => {
     expect(isOperator('coverage')).toBe(true)
   })
 
+  // super_admin is not a manager in the API either (it is read-only there), so
+  // the UI must not offer it a manager's buttons.
   it('restricts every manager-only action to the manager', () => {
     for (const role of ROLES) {
       const expected = role === 'manager'
@@ -66,5 +80,32 @@ describe('role → navigation', () => {
     expect(taskScopeFor('coverage')).toBe('mine')
     expect(taskScopeFor('manager')).toBe('team')
     expect(taskScopeFor('finance')).toBe('department')
+    expect(taskScopeFor('super_admin')).toBe('team')
+  })
+})
+
+describe('the legacy Inbox is routable but never offered', () => {
+  // Its page calls /inbox and /families/*, which no API on any current branch
+  // serves. Offering it would present a destination that cannot load.
+  it('no role sees Inbox in navigation', () => {
+    for (const role of ROLES) expect(navAreas(role)).not.toContain('inbox')
+    expect(UNLISTED_AREAS.has('inbox')).toBe(true)
+  })
+
+  it('its route still opens for every role that could open it before (old links keep working)', () => {
+    for (const role of ROLES) expect(canOpenArea(role, 'inbox')).toBe(visibleAreas(role).includes('inbox'))
+    expect(canOpenArea('admin', 'inbox')).toBe(true)
+  })
+
+  it('operators and managers are offered Chat exactly once, and no navigation list repeats an entry', () => {
+    for (const role of ROLES) {
+      const areas = navAreas(role)
+      expect(new Set(areas).size).toBe(areas.length)
+      if (isManager(role) || isOperator(role)) expect(areas.filter((a) => a === 'chat')).toHaveLength(1)
+    }
+  })
+
+  it('nothing else is hidden: navigation is the openable areas minus Inbox', () => {
+    for (const role of ROLES) expect(navAreas(role)).toEqual(visibleAreas(role).filter((a) => a !== 'inbox'))
   })
 })

@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../platform/prisma.service';
 import { IDENTITY_SERVICE, REALTIME_PUBLISHER } from '../../platform/tokens';
 import type { IdentityService } from '../../platform/identity.service';
+import { actorRefKey } from '../../platform/identity.service';
 import type { RealtimePublisher } from '../realtime/realtime.publisher';
 import { CommEvent, CommEventName, room } from '../contracts/events';
 import { NotificationService } from '../notifications/notification.service';
@@ -25,10 +26,17 @@ export class OutboxWorker {
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
   ) {}
 
-  async drain(batchSize = 100): Promise<number> {
-    const now = new Date();
+  async drain(batchSize = 100, now = new Date()): Promise<number> {
+    // CLAIM PRECISION (issue #29). `availableAt` is written by Prisma's
+    // client-side default and lands up to ONE millisecond after a clock read
+    // taken in the same millisecond (measured: 12.7% of inserts on Linux), so a
+    // row enqueued and drained within one millisecond failed `<= now` and waited
+    // for the next pass -- up to OUTBOX_IDLE_BACKOFF_MS when no wake hint
+    // arrived. One millisecond of tolerance claims it now. It cannot claim a row
+    // early in any way that matters: a retry's backoff is seconds.
+    const claimableUntil = new Date(now.getTime() + 1);
     const batch = await this.prisma.outboxEvent.findMany({
-      where: { status: 'pending', availableAt: { lte: now } },
+      where: { status: 'pending', availableAt: { lte: claimableUntil } },
       orderBy: { createdAt: 'asc' },
       take: batchSize,
     });
@@ -76,6 +84,22 @@ export class OutboxWorker {
           await this.realtime.toThread(conversationId, type, payload as never);
         }
         await this.notifyNewMessage(conversationId, payload);
+        return;
+      }
+
+      case CommEvent.MEMBERSHIP_CHANGED: {
+        if (!conversationId) return;
+        // Existing members watching the thread, exactly as before.
+        await this.realtime.toThread(conversationId, type, payload as never);
+        // And the people just added, who are not in that room yet. Their copy
+        // names the conversation only: who else joined is theirs to read from
+        // the conversation itself, through the authorized REST path.
+        const added = Array.isArray(payload.added)
+          ? (payload.added as unknown[]).filter((id): id is string => typeof id === 'string')
+          : [];
+        if (added.length > 0) {
+          await this.realtime.toUsers(added, CommEvent.CONVERSATION_ADDED, { conversationId });
+        }
         return;
       }
 
@@ -294,11 +318,28 @@ export class OutboxWorker {
     const callId = payload.callId;
     if (typeof callId !== 'string' || callId.length === 0) return [];
 
-    const participants = await this.prisma.callParticipant.findMany({
-      where: { callId },
-      select: { actorId: true },
+    const call = await this.prisma.call.findUnique({
+      where: { id: callId },
+      select: { organizationId: true, participants: { select: { actorId: true, actorKind: true } } },
     });
-    return participants.map((p) => p.actorId);
+    if (!call) return [];
+
+    // RT-031. A participant row is trusted for WHO, never for WHERE: an actor
+    // whose own row is in another organization than the call (a forged or
+    // stale row the database guard did not see) is not told about it.
+    const actors = await this.identity.resolveActors(
+      call.participants.map((p) => ({ actorId: p.actorId, actorKind: p.actorKind })),
+    );
+    const allowed: string[] = [];
+    for (const p of call.participants) {
+      const actor = actors.get(actorRefKey({ actorId: p.actorId, actorKind: p.actorKind }));
+      if (actor && actor.organizationId === call.organizationId) {
+        allowed.push(p.actorId);
+      } else {
+        this.log.error(`call ${callId}: a participant outside the call's organization was not delivered to`);
+      }
+    }
+    return allowed;
   }
 
   /**
@@ -327,13 +368,14 @@ export class OutboxWorker {
     // group. The rules differ in template, priority and quiet-hours treatment,
     // and the rule rows say which -- this only picks between them.
     const ruleKey = call.type === CallType.GROUP ? 'group_call_started' : 'incoming_call';
-    const initiator = await this.identity.resolveActor(call.initiatorId);
 
     for (const participant of call.participants) {
       if (participant.actorId === call.initiatorId) continue;
 
       const recipient = await this.identity.resolveActor(participant.actorId);
       if (!recipient || !recipient.isActive) continue;
+      // RT-031: never a push across a tenant boundary.
+      if (recipient.organizationId !== call.organizationId) continue;
 
       await this.notifications.scheduleByRule(ruleKey, {
         // One notification per call per recipient, forever. A replayed outbox
@@ -343,7 +385,9 @@ export class OutboxWorker {
         locale: recipient.locale,
         familyId: call.familyId,
         conversationId: call.conversationId,
-        variables: { caller_name: initiator?.displayName ?? 'Jawwid' },
+        // Push privacy (owner decision 2026-10-14): no caller name is stored
+        // or rendered -- the templates are generic.
+        variables: {},
       });
     }
   }
@@ -370,7 +414,6 @@ export class OutboxWorker {
     });
     if (!call) return;
 
-    const initiator = await this.identity.resolveActor(call.initiatorId);
 
     for (const participant of call.participants) {
       if (participant.actorId === call.initiatorId) continue;
@@ -379,6 +422,7 @@ export class OutboxWorker {
 
       const recipient = await this.identity.resolveActor(participant.actorId);
       if (!recipient || !recipient.isActive) continue;
+      if (recipient.organizationId !== call.organizationId) continue; // RT-031
 
       await this.notifications.scheduleByRule('missed_call', {
         // Keyed on the call, so re-running reconciliation -- or replaying the
@@ -388,7 +432,9 @@ export class OutboxWorker {
         locale: recipient.locale,
         familyId: call.familyId,
         conversationId: call.conversationId,
-        variables: { caller_name: initiator?.displayName ?? 'Jawwid' },
+        // Push privacy (owner decision 2026-10-14): no caller name is stored
+        // or rendered -- the templates are generic.
+        variables: {},
       });
     }
   }
@@ -404,7 +450,6 @@ export class OutboxWorker {
     const members = await this.prisma.conversationMember.findMany({
       where: { conversationId, leftAt: null },
     });
-    const author = authorId ? await this.identity.resolveActor(authorId) : null;
 
     const state = await this.prisma.conversationParticipantState.findMany({
       where: { conversationId },
@@ -429,10 +474,9 @@ export class OutboxWorker {
         recipientId: m.actorId,
         locale: recipient.locale,
         conversationId,
-        variables: {
-          sender_name: author?.displayName ?? 'Jawwid',
-          preview: '',
-        },
+        // Push privacy (owner decision 2026-10-14): no sender name and no
+        // preview are stored or rendered -- the template is generic.
+        variables: {},
         scheduledAt: now,
       });
     }

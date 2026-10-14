@@ -92,7 +92,9 @@ describe('1/8/9. the account list, ordered by the server', () => {
 
   it('8. newest first, and the order is the server\'s', async () => {
     const first = await callBetween(s.parentId, s.ownerId, s.ownerId);
-    const second = await callBetween(s.parentId, s.teacherId, s.teacherId);
+    // A second 1:1 of the same parent (PD-7: never with a teacher), started by
+    // the parent because this admin is not on duty for the family.
+    const second = await callBetween(s.parentId, s.otherAdminId, s.parentId);
     // Age the first so the order is unambiguous rather than same-millisecond.
     await g.prisma.$executeRawUnsafe(
       `update chat.call set started_at = now() - interval '1 hour' where id = '${first.callId}'::uuid`,
@@ -210,16 +212,28 @@ describe('2/4/6. authorization, through the existing contract', () => {
 
   it('6. family-facing staff see the conversations the canonical rule gives them',
     async () => {
-      // `listForActor` probes AuthorizationService.canRead for staff and then
-      // returns the conversation set. This asserts the CONSEQUENCE — an admin
-      // sees calls from conversations they are not a member of — which is the
-      // existing contract ("family-facing staff may open any family
-      // conversation"), not a new rule introduced here.
-      const parentAndTeacher = await callBetween(s.parentId, s.teacherId, s.teacherId);
+      // `listForActor` filters staff by the same rule AuthorizationService.canRead
+      // applies. This asserts the CONSEQUENCE at the boundary.
+      //
+      // RE-VERSIONED 2026-10-14 BY STAFF SCOPE. The contract used to be "any
+      // family-facing admin may open any family conversation". It is now: a
+      // manager reads the organization; an admin reads what they are a member
+      // of, or what belongs to a family they own, are on duty for, or hold as
+      // the live sticky handler. So the family OWNER still sees a call in a
+      // conversation they are not a member of, and an admin with none of
+      // those facts sees nothing.
+      const outsideAdminId = randomUUID();
+      await g.prisma.$executeRawUnsafe(
+        `insert into chat.staff (id, name, role, is_active)
+         values ('${outsideAdminId}'::uuid, 'admin_z', 'admin', true)`,
+      );
+      // The second parent's 1:1 with the OTHER admin: the owner is not in it.
+      const notOwners = await callBetween(s.otherParentId, s.otherAdminId, s.otherParentId);
 
-      const page = await g.calls.historyForActor(s.otherAdminId);
-
-      expect(idsOf(page)).toContain(parentAndTeacher.callId);
+      expect(idsOf(await g.calls.historyForActor(s.ownerId))).toContain(notOwners.callId);
+      expect(idsOf(await g.calls.historyForActor(s.managerId))).toContain(notOwners.callId);
+      expect(idsOf(await g.calls.historyForActor(s.otherAdminId))).toContain(notOwners.callId);
+      expect((await g.calls.historyForActor(outsideAdminId)).items).toEqual([]);
     });
 
   it('6b. a non-family-facing staff role is refused outright', async () => {
@@ -390,11 +404,12 @@ describe('11/12/13. what a history row may carry', () => {
 describe('3. tenancy', () => {
   it('3. cross-tenant isolation is not exercisable here, and this records why',
     async () => {
-      // RT-030: `getOrCreateDirect` never sets `organization_id`, so every
-      // conversation this harness can create lands in the default organization
-      // and a second tenant's call cannot be produced through the service at
-      // all. Asserted rather than left as a silent gap — the same statement the
-      // ring-timeout suite makes.
+      // This suite seeds one organization only. Since RT-030 (closed
+      // 2026-10-12) a second tenant's conversation CAN be created through the
+      // service, but a call in it would still be filed under the default
+      // organization (RT-031: `call.create` sets no `organization_id`), so a
+      // cross-tenant call assertion waits on RT-031. Asserted rather than left
+      // as a silent gap — the same statement the ring-timeout suite makes.
       await callBetween(s.parentId, s.ownerId, s.ownerId);
 
       const organizations = new Set(
