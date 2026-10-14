@@ -83,14 +83,29 @@ export function canOpenArea(role: StaffRole, area: NavArea): boolean {
 
 /** Manager-only, per the brief's invariants and AI #5's matrix. */
 export const managerOnly = {
-  transferOwnership: isManager,
   editCoverageConfig: isManager,
   editConfigWeights: isManager,
   readAuditLog: isManager,
-  offboardStaff: isManager,
   activateBackup: isManager,
   viewTeamWorkload: isManager,
   viewUnattended: isManager,
+} as const
+
+/**
+ * Ownership and offboarding -- the approved policy (DB: 20261014110000, API:
+ * AuthorizationService.canAssignFamilies / canTransferStaffFamilies /
+ * canDeactivateStaff). Separate actions, separate rules; the database refuses
+ * anything else whatever this says.
+ */
+export const ownershipActions = {
+  /** families.assign: transfer or assign a family's owner. */
+  transferOwnership: (role: StaffRole) => isManager(role) || isSuperAdmin(role),
+  /** Offboarding, part 1: move a staff member's families. */
+  moveStaffFamilies: (role: StaffRole) => isManager(role) || isSuperAdmin(role),
+  /** Offboarding, part 2: deactivate the account (users.manage). */
+  deactivateStaff: isSuperAdmin,
+  /** Both parts in one transaction, so it needs both authorities. */
+  offboardStaff: isSuperAdmin,
 } as const
 
 /** The task scope a role should request from the API. */

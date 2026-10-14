@@ -6,6 +6,7 @@ import {
   isSuperAdmin,
   isOperator,
   managerOnly,
+  ownershipActions,
   taskScopeFor,
   visibleAreas,
 } from './capabilities'
@@ -70,6 +71,19 @@ describe('role → navigation', () => {
       for (const [, check] of Object.entries(managerOnly)) {
         expect(check(role)).toBe(expected)
       }
+    }
+  })
+
+  // The approved ownership policy: families.assign and moving families are the
+  // manager's and the super admin's; deactivation (and so full offboarding) is
+  // the super admin's alone.
+  it('offers ownership and offboarding actions exactly per the approved policy', () => {
+    for (const role of ROLES) {
+      const assigner = role === 'manager' || role === 'super_admin'
+      expect(ownershipActions.transferOwnership(role)).toBe(assigner)
+      expect(ownershipActions.moveStaffFamilies(role)).toBe(assigner)
+      expect(ownershipActions.deactivateStaff(role)).toBe(role === 'super_admin')
+      expect(ownershipActions.offboardStaff(role)).toBe(role === 'super_admin')
     }
   })
 

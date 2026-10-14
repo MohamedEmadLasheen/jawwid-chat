@@ -27,6 +27,9 @@ model Staff {
   organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   id             String    @id @default(uuid()) @db.Uuid
   name           String
+  /// Private object-storage key for this staff member's photo, set by that staff member.
+  /// Never a URL: reads are short-lived signed URLs minted per request.
+  avatarObjectKey String?  @map("avatar_object_key")
   role           String
   presence       String    @default("offline")
   lastActivityAt DateTime? @map("last_activity_at") @db.Timestamptz
@@ -46,6 +49,11 @@ model Staff {
   storiesCreated   Story[] @relation("StoryCreatedBy")
   storiesPublished Story[] @relation("StoryPublishedBy")
   storiesDeleted   Story[] @relation("StoryDeletedBy")
+
+  profile         StaffProfile?
+  responsibilities StaffResponsibility[] @relation("ResponsibilityHolder")
+  reportingLine   StaffReportingLine?   @relation("ReportingLineMember")
+  directReports   StaffReportingLine[]  @relation("ReportingLineManager")
 
   @@map("staff")
   @@schema("chat")
@@ -758,5 +766,57 @@ model StoryView {
 
   @@id([storyId, actorId])
   @@map("story_view")
+  @@schema("chat")
+}
+
+// =====================================================================
+// Staff profiles -- 20261013150000_chat_staff_profile.sql owns the DDL.
+// None of these is an authorization input (see that migration's header).
+// =====================================================================
+
+/// Self-service descriptive fields. Not a permission, not a role.
+model StaffProfile {
+  staffId        String   @id @map("staff_id") @db.Uuid
+  staff          Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  organizationId String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  jobTitle       String?  @map("job_title")
+  about          String?
+  createdAt      DateTime @map("created_at") @db.Timestamptz @default(now())
+  updatedAt      DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+  updatedBy      String?  @map("updated_by") @db.Uuid
+
+  @@map("staff_profile")
+  @@schema("chat")
+}
+
+/// An official responsibility LABEL. Ended, never edited or deleted.
+model StaffResponsibility {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  staffId        String    @map("staff_id") @db.Uuid
+  staff          Staff     @relation("ResponsibilityHolder", fields: [staffId], references: [id], onDelete: Cascade)
+  category       String
+  scopeNote      String?   @map("scope_note")
+  assignedBy     String?   @map("assigned_by") @db.Uuid
+  assignedAt     DateTime  @map("assigned_at") @db.Timestamptz @default(now())
+  endedAt        DateTime? @map("ended_at") @db.Timestamptz
+  endedBy        String?   @map("ended_by") @db.Uuid
+  endReason      String?   @map("end_reason")
+
+  @@map("staff_responsibility")
+  @@schema("chat")
+}
+
+/// Who a staff member reports to. Decides PROFILE visibility only.
+model StaffReportingLine {
+  staffId        String   @id @map("staff_id") @db.Uuid
+  staff          Staff    @relation("ReportingLineMember", fields: [staffId], references: [id], onDelete: Cascade)
+  organizationId String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  managerId      String   @map("manager_id") @db.Uuid
+  manager        Staff    @relation("ReportingLineManager", fields: [managerId], references: [id])
+  assignedBy     String?  @map("assigned_by") @db.Uuid
+  assignedAt     DateTime @map("assigned_at") @db.Timestamptz @default(now())
+
+  @@map("staff_reporting_line")
   @@schema("chat")
 }

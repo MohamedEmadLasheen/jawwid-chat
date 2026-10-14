@@ -8,7 +8,7 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import type { ObjectStorage, UploadAuthorization } from './object-storage';
+import type { ObjectStorage, StoredObjectHead, UploadAuthorization } from './object-storage';
 import { assertSafeObjectKey, buildObjectKey } from './object-key';
 
 /**
@@ -170,6 +170,34 @@ export class S3ObjectStorage implements ObjectStorage {
     await this.client.send(
       new DeleteObjectCommand({ Bucket: this.bucket, Key: assertSafeObjectKey(objectKey) }),
     );
+  }
+
+  /**
+   * A ranged GET: the first `maxBytes` and nothing more cross the network. The
+   * total size comes from `Content-Range` (`bytes 0-N/TOTAL`); an object
+   * smaller than the range is answered whole, with no Content-Range, and then
+   * its length is the total.
+   */
+  async readHead(objectKey: string, maxBytes: number): Promise<StoredObjectHead | null> {
+    try {
+      const out = await this.client.send(
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: assertSafeObjectKey(objectKey),
+          Range: `bytes=0-${Math.max(0, maxBytes - 1)}`,
+        }),
+      );
+      const head = Buffer.from((await out.Body?.transformToByteArray()) ?? new Uint8Array());
+      const total = /\/(\d+)$/.exec(out.ContentRange ?? '')?.[1];
+      return {
+        head: head.subarray(0, maxBytes),
+        byteSize: total ? Number(total) : head.length,
+        contentType: out.ContentType ?? null,
+      };
+    } catch (error) {
+      if (isNotFound(error)) return null;
+      throw error;
+    }
   }
 
   /** Releases the underlying HTTP handler. */

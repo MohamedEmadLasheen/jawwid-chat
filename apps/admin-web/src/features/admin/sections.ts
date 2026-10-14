@@ -90,8 +90,8 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     status: 'in_development',
     label: { en: 'Team Management', ar: 'إدارة الفرق' },
     note: {
-      en: 'There is no team model in the database yet. Supervisor assignment (Phase 1) comes first.',
-      ar: 'لا يوجد نموذج للفرق في قاعدة البيانات بعد. تعيين المشرفين (المرحلة 1) يأتي أولًا.',
+      en: 'Reporting lines and official responsibilities are managed from My profile → Organization overview (/profile). A dedicated team screen and supervisor family assignment (Phase 1) are not built yet.',
+      ar: 'تُدار خطوط التبعية والمسؤوليات الرسمية من ملفي الشخصي ← نظرة عامة على المؤسسة (/profile). لم تُبنَ بعد شاشة مخصصة للفرق ولا تعيين الأسر للمشرفين (المرحلة 1).',
     },
     legacy: [{ path: '/coverage' }],
   },

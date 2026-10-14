@@ -4,6 +4,7 @@ import { AuthModule } from './platform/auth/auth.module';
 import { CommunicationModule } from './communication/communication.module';
 import { HealthModule } from './infra/health/health.module';
 import { AdminModule } from './admin/admin.module';
+import { StaffProfileModule } from './staff-profile/staff-profile.module';
 
 /**
  * The root module. Composition only -- it declares no provider and no
@@ -14,6 +15,8 @@ import { AdminModule } from './admin/admin.module';
  * controller, the realtime gateway and the outbox worker. HealthModule (AI #7)
  * adds the probes the runtime needs. AdminModule is the Admin Portal's
  * read-only `/admin` inspection surface (super admin only).
+ * StaffProfileModule serves `/staff-profiles` (profiles, responsibilities,
+ * teams, the super admin's organization overview).
  *
  * AuthModule (PR-B) registers the global AuthenticatedGuard, so importing it
  * here protects EVERY route in every other module at once. That is deliberate:
@@ -23,6 +26,6 @@ import { AdminModule } from './admin/admin.module';
  * Adding a feature means adding its module here, not adding code here.
  */
 @Module({
-  imports: [PlatformModule, AuthModule, CommunicationModule, HealthModule, AdminModule],
+  imports: [PlatformModule, AuthModule, CommunicationModule, HealthModule, AdminModule, StaffProfileModule],
 })
 export class AppModule {}

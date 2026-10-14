@@ -12,6 +12,7 @@ import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { StoriesPage } from '@/features/stories/StoriesPage'
 import { AdminSectionPage } from '@/features/admin/AdminSectionPage'
 import { adminSectionPath } from '@/features/admin/sections'
+import { ProfilePage } from '@/features/profile/ProfilePage'
 import { ForbiddenPage } from './ForbiddenPage'
 import type { ReactElement } from 'react'
 
@@ -57,6 +58,13 @@ export function AppRoutes() {
         <Route path="/coverage" element={<Area area="coverage"><CoveragePage /></Area>} />
         <Route path="/dashboard" element={<Area area="dashboard"><DashboardPage /></Area>} />
         <Route path="/stories" element={<Area area="stories"><StoriesPage /></Area>} />
+        {/*
+          Staff profiles: every staff role, no Area gate. What a profile shows
+          and what may be changed on it is decided by /staff-profiles per
+          request; the route only names which profile to ask for.
+        */}
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/profile/:staffId" element={<ProfilePage />} />
         <Route
           path="/admin/:section"
           element={<SuperAdminOnly><AdminSectionPage /></SuperAdminOnly>}
