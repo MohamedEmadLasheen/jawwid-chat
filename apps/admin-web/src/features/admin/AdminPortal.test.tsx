@@ -287,6 +287,32 @@ describe('Conversations', () => {
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
     expect(fetchMock.mock.calls.every(([, init]) => !init || !init.method || init.method === 'GET')).toBe(true)
   })
+
+  it('renders a system message from its { kind, ...facts } body, never the raw JSON', async () => {
+    const id = CONVERSATIONS.conversations[0]!.id
+    vi.stubGlobal('fetch', routeFetch({
+      '/admin/conversations': CONVERSATIONS,
+      [`/admin/conversations/${id}/messages`]: {
+        messages: [
+          {
+            id: 's1', seq: '1', authorKind: 'system', authorName: null, type: 'system',
+            visibility: 'customer', moderation: 'published', body: '{"kind":"group.created","learner":"Learner L"}',
+            deleted: false, attachments: 0, createdAt: NOW,
+          },
+          {
+            id: 's2', seq: '2', authorKind: 'system', authorName: null, type: 'system',
+            visibility: 'customer', moderation: 'published', body: '{"kind":"some.future.kind"}',
+            deleted: false, attachments: 0, createdAt: NOW,
+          },
+        ],
+      },
+    }))
+    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: `/admin/conversations?c=${id}` })
+
+    expect(await screen.findByText('Student Group created for Learner L')).toBeInTheDocument()
+    expect(screen.getByText('System update')).toBeInTheDocument()
+    expect(screen.queryByText(/"kind"/)).not.toBeInTheDocument()
+  })
 })
 
 describe('Users', () => {

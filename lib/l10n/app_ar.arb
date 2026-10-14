@@ -441,5 +441,10 @@
   "storyVideoFailed": "لم نتمكّن من تشغيل هذا الفيديو.",
   "storyVideoRetry": "إعادة المحاولة",
   "storiesEmpty": "لا توجد حالات بعد",
-  "storiesEmptyBody": "ستظهر هنا الحالات المنشورة إليك."
+  "storiesEmptyBody": "ستظهر هنا الحالات المنشورة إليك.",
+  "systemGroupCreated": "أُنشئت مجموعة الطالب لـ {learner}",
+  "systemGroupCreatedNoLearner": "أُنشئت مجموعة الطالب",
+  "systemGroupMembersUpdated": "تحدّث أعضاء المجموعة (+{added} / −{removed})",
+  "systemGroupArchived": "أُرشفت المجموعة",
+  "systemUpdate": "تحديث من النظام"
 }

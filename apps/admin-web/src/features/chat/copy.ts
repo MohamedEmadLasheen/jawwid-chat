@@ -89,3 +89,23 @@ export const chatCopy = {
 }
 
 export type ChatCopy = (typeof chatCopy)['en']
+
+/** The chat copy for a locale. */
+export function chatCopyFor(locale: string): ChatCopy {
+  return locale === 'ar' ? (chatCopy.ar as unknown as ChatCopy) : chatCopy.en
+}
+
+/**
+ * A system message's body is `{ kind, ...facts }` written by the backend; it is
+ * rendered, never shown raw. Shared by the chat workspace and the Admin Portal.
+ */
+export function systemText(body: string | null, copy: ChatCopy): string {
+  let parsed: Record<string, unknown> = {}
+  try {
+    parsed = body ? (JSON.parse(body) as Record<string, unknown>) : {}
+  } catch {
+    return copy.system.fallback!({})
+  }
+  const render = copy.system[String(parsed.kind)] ?? copy.system.fallback!
+  return render(parsed)
+}

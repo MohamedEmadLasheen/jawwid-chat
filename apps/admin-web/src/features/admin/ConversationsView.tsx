@@ -13,6 +13,7 @@ import { SearchField } from '@/shared/components/SearchField'
 import { Splitter, useResizableWidth } from '@/shared/components/Splitter'
 import { EmptyState, LoadingState, QueryBoundary } from '@/shared/components/States'
 import { useMediaQuery } from '@/shared/hooks/useMediaQuery'
+import { chatCopyFor, systemText } from '@/features/chat/copy'
 import { ConversationStateBadge, conversationName, matches } from './common'
 import {
   AUTHOR_KIND,
@@ -534,7 +535,7 @@ function MessageItem({ m, side, showAuthor }: { m: AdminMessage; side: Side; sho
   const tx = useText()
   const label = useLabel()
   const plural = usePlural()
-  const { time } = useI18n()
+  const { time, locale } = useI18n()
   const typeLabel = MESSAGE_TYPE[m.type] ? label(MESSAGE_TYPE, m.type) : null
   const hasAttachment = !m.deleted && (m.attachments > 0 || typeLabel !== null)
 
@@ -542,7 +543,8 @@ function MessageItem({ m, side, showAuthor }: { m: AdminMessage; side: Side; sho
     return (
       <li className="bubble-row bubble-row--system">
         <span className="sys-pill">
-          {m.body ?? label(AUTHOR_KIND, 'system')}
+          {/* The body is the backend's `{ kind, ...facts }`: rendered as the chat workspace renders it, never raw. */}
+          {m.body ? systemText(m.body, chatCopyFor(locale)) : label(AUTHOR_KIND, 'system')}
           <time dateTime={m.createdAt}>{time(m.createdAt)}</time>
         </span>
       </li>

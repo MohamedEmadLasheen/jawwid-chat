@@ -444,5 +444,28 @@
   "@storiesEmpty": {
     "description": "Shown in the stories rail when the signed-in account has no live stories."
   },
-  "storiesEmptyBody": "Stories published to you will appear here."
+  "storiesEmptyBody": "Stories published to you will appear here.",
+  "systemGroupCreated": "Student Group created for {learner}",
+  "@systemGroupCreated": {
+    "description": "A system message: the Student Group was provisioned for this learner.",
+    "placeholders": {
+      "learner": {
+        "type": "String"
+      }
+    }
+  },
+  "systemGroupCreatedNoLearner": "Student Group created",
+  "systemGroupMembersUpdated": "Group members updated (+{added} / −{removed})",
+  "@systemGroupMembersUpdated": {
+    "placeholders": {
+      "added": {
+        "type": "int"
+      },
+      "removed": {
+        "type": "int"
+      }
+    }
+  },
+  "systemGroupArchived": "Group archived",
+  "systemUpdate": "System update"
 }

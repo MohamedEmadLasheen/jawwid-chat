@@ -756,4 +756,23 @@ class L10nEn extends L10n {
 
   @override
   String get storiesEmptyBody => 'Stories published to you will appear here.';
+
+  @override
+  String systemGroupCreated(String learner) {
+    return 'Student Group created for $learner';
+  }
+
+  @override
+  String get systemGroupCreatedNoLearner => 'Student Group created';
+
+  @override
+  String systemGroupMembersUpdated(int added, int removed) {
+    return 'Group members updated (+$added / −$removed)';
+  }
+
+  @override
+  String get systemGroupArchived => 'Group archived';
+
+  @override
+  String get systemUpdate => 'System update';
 }

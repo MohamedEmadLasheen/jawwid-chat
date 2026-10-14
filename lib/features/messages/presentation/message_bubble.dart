@@ -11,6 +11,7 @@ import '../../../shared/models/user_role.dart';
 import '../../../shared/utils/byte_size_format.dart';
 import '../../../shared/utils/relative_time.dart';
 import '../../../shared/utils/text_direction.dart';
+import 'system_message_text.dart';
 import 'voice_message_player.dart';
 
 /// A single message bubble.
@@ -846,7 +847,7 @@ class _SystemMessage extends StatelessWidget {
             borderRadius: Radii.card,
           ),
           child: ContentText(
-            message.body,
+            systemMessageText(message.body, L10n.of(context)),
             textAlign: TextAlign.center,
             style: theme.textTheme.bodySmall?.copyWith(
               color: tokens.colorMessageSystemText,

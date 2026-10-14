@@ -8,12 +8,12 @@ import { ApiError } from '@/core/api/errors'
 import { Badge } from '@/shared/components/Badge'
 import { EmptyState, ErrorState, LoadingState } from '@/shared/components/States'
 import { bySeq, chatApi, chatKeys, type ChatConversation, type ChatMessage } from './chatApi'
-import { chatCopy, type ChatCopy } from './copy'
+import { chatCopyFor, systemText, type ChatCopy } from './copy'
 import { useChatRealtime } from './useChatRealtime'
 
 function useCopy(): ChatCopy {
   const { locale } = useI18n()
-  return locale === 'ar' ? (chatCopy.ar as unknown as ChatCopy) : chatCopy.en
+  return chatCopyFor(locale)
 }
 
 /** A row's name: the group's own title, else the other members, else its kind. */
@@ -23,18 +23,6 @@ export function conversationName(c: ChatConversation, selfId: string | undefined
   const others = (c.members ?? []).filter((m) => m.actorId !== selfId && m.displayName)
   if (others.length > 0) return others.map((m) => m.displayName).join('، ')
   return copy.kind[c.type] ?? c.type
-}
-
-/** A system message's body is `{ kind, ...facts }` written by the backend; it is rendered, never shown raw. */
-export function systemText(body: string | null, copy: ChatCopy): string {
-  let parsed: Record<string, unknown> = {}
-  try {
-    parsed = body ? (JSON.parse(body) as Record<string, unknown>) : {}
-  } catch {
-    return copy.system.fallback!({})
-  }
-  const render = copy.system[String(parsed.kind)] ?? copy.system.fallback!
-  return render(parsed)
 }
 
 function errorText(error: unknown, locale: string, fallback: string): string {

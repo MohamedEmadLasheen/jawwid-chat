@@ -1470,6 +1470,36 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Stories published to you will appear here.'**
   String get storiesEmptyBody;
+
+  /// A system message: the Student Group was provisioned for this learner.
+  ///
+  /// In en, this message translates to:
+  /// **'Student Group created for {learner}'**
+  String systemGroupCreated(String learner);
+
+  /// No description provided for @systemGroupCreatedNoLearner.
+  ///
+  /// In en, this message translates to:
+  /// **'Student Group created'**
+  String get systemGroupCreatedNoLearner;
+
+  /// No description provided for @systemGroupMembersUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Group members updated (+{added} / −{removed})'**
+  String systemGroupMembersUpdated(int added, int removed);
+
+  /// No description provided for @systemGroupArchived.
+  ///
+  /// In en, this message translates to:
+  /// **'Group archived'**
+  String get systemGroupArchived;
+
+  /// No description provided for @systemUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'System update'**
+  String get systemUpdate;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

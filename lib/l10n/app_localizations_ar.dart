@@ -757,4 +757,23 @@ class L10nAr extends L10n {
 
   @override
   String get storiesEmptyBody => 'ستظهر هنا الحالات المنشورة إليك.';
+
+  @override
+  String systemGroupCreated(String learner) {
+    return 'أُنشئت مجموعة الطالب لـ $learner';
+  }
+
+  @override
+  String get systemGroupCreatedNoLearner => 'أُنشئت مجموعة الطالب';
+
+  @override
+  String systemGroupMembersUpdated(int added, int removed) {
+    return 'تحدّث أعضاء المجموعة (+$added / −$removed)';
+  }
+
+  @override
+  String get systemGroupArchived => 'أُرشفت المجموعة';
+
+  @override
+  String get systemUpdate => 'تحديث من النظام';
 }
