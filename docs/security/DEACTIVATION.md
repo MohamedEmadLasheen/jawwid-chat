@@ -96,8 +96,9 @@ The operator procedure waits for step 2:
   not fire) or drop the objects. That is the trust root — the same as for every other
   guard.
 - **Pushes already handed to APNs / FCM** before the commit (or in flight at it) can still be
-  delivered from the provider's queue; no API can recall them (RT-037). Push bodies carry the
-  sender's name and no message text (`preview` is empty).
+  delivered from the provider's queue; no API can recall them (RT-037). Push titles and bodies
+  are generic -- no sender or caller name, no message text (owner decision 3, migration
+  `20261014160000`).
 - **RT-037 (OPEN pending external verification):** join-time ejection relies on LiveKit
   delivering `participant_joined` for a media-connected participant to the API — verified
   here with real signed payloads and a real LiveKit's own (non-media) deliveries, but not
@@ -112,6 +113,44 @@ The operator procedure waits for step 2:
   already passes the barrier.
 - `organization.is_active` is read by nothing in identity resolution; deactivating an
   organization grants or revokes nothing today.
+
+## 3b. Cold start: `503 REVOCATION_UNCONFIRMED` during the registry warm-up window
+
+The completion barrier refuses to confirm while the Redis node registry is younger than one
+lease minus its margin (`NODE_LEASE_MS - NODE_LEASE_MARGIN_MS` = 30 s - 10 s = **20 s**,
+`realtime.gateway.ts`, `nodesThatMustAcknowledge`): a registry Redis has just (re)created
+cannot yet say which node is missing. It is therefore normal, and intended, that right after
+Redis starts empty (first boot, a restart without persistence, a flush) every barrier-gated
+call answers **503 `COMM.REVOCATION_UNCONFIRMED`** for up to ~20 s. Restarting an API node
+against a Redis that kept its registry does not open the window. **Do not weaken the barrier
+to remove this response.**
+
+What a 503 here means, per caller. Rows marked **(runtime)** were verified 2026-10-14 on the
+integration tree `af7e99a` (disposable QA stack, fresh Redis; a session-scratchpad probe, not in
+the repo, 12/12); rows marked **(code)** are read from the code and were not exercised in the
+window:
+
+| Caller | Inside the window | State | Retry after the window |
+|---|---|---|---|
+| **(runtime)** Member removal `POST /conversations/:id/members {action:remove}` | 503 | removal COMMITTED (`left_at` set, one audit row) and ENFORCED at once (the member reads 403, receives nothing) | 201, idempotent: still one removal, one audit row |
+| **(code)** Student Group sync | 503 | the sync's removals committed | the no-change path still runs the barrier, so a retry reports completion only once confirmed |
+| **(runtime)** Logout `POST /auth/logout` | 503 | session COMMITTED as revoked (`revoked_reason = logout`); the access token gets 401; the refresh token cannot revive it (401 `AUTH.SESSION_REVOKED`) | the same token is refused 401 by the guard -- the retry cannot re-run the barrier. Both clients end the local session whatever logout returns (Admin Web `sessionApi.logout` clears in `finally`; Flutter `AuthController.signOut` ends the session on any `AppError`), so no user is stranded signed in |
+| **(code)** `revokeAllForAccount` | 503 | committed | idempotent; re-runs the barrier |
+| **(code)** Refresh-token reuse (theft) | the request is refused anyway; an unconfirmed barrier is ignored there (`ignoreUnconfirmed`) | committed | — |
+| **(code)** Deactivation (`deactivate-principal`, any journaled writer) | not confirmed yet: `RevocationConfirmer` retries every 1 s; the CLI keeps waiting (default `--timeout-ms` 30000), so it usually exits **0** once the window has passed, and exits **75** (saved, not complete) only if its timeout ends first | committed and journaled | the confirmer stamps `confirmed_at` once confirmed; re-running the CLI returns 0 with the same revocation id |
+
+No caller reports an unconfirmed revocation as success, and every one leaves the revocation
+committed and enforced by RT-009's delivery-time checks. Evidence: e2e on a cold stack
+(removal and logout 503; "a removed member receives no further message.created" and "a
+logged-out session receives no further message events" both PASS), that probe 12/12.
+Operators: a deploy that starts Redis empty should wait ~20 s before relying on revocation
+confirmations. Observability differs by path: a journaled deactivation that cannot be
+confirmed increments `realtime.barrierUnconfirmed`, logs a warning, records `last_error`, and
+`/health/ready`'s `revocations` check reports `down` (informational, never blocking) once one
+has stayed unconfirmed longer than `REVOCATION_UNCONFIRMED_ALERT_SECONDS` (default 30). An
+API-path revocation (removal, logout) refused in the warm-up window is NOT counted and NOT
+logged by the API -- `barrierUnconfirmed` is incremented only when a known node fails to
+acknowledge (`realtime.gateway.ts`, `confirmRevoked`); its only trace is the 503 response.
 
 ## 4. Why the trigger does so little
 
