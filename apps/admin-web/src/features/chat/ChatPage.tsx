@@ -12,6 +12,7 @@ import { chatCopyFor, systemText, type ChatCopy } from './copy'
 import { useChatRealtime } from './useChatRealtime'
 import { NewFamilyGroupDialog } from './NewFamilyGroupDialog'
 import { isOperator } from '@/core/permissions/capabilities'
+import { ConversationCallControls } from '@/features/calls/ConversationCallControls'
 
 function useCopy(): ChatCopy {
   const { locale } = useI18n()
@@ -344,6 +345,13 @@ function ThreadPane({ conversationId }: { conversationId: string }) {
           <span className="row__meta" aria-label={copy.members}>
             {conv.members.map((m) => `${m.displayName} (${copy.role[m.actorKind] ?? m.actorKind})`).join(' · ')}
           </span>
+        )}
+        {conv && (
+          <ConversationCallControls
+            conversationId={conversationId}
+            peerLabel={conversationName(conv, staff?.id, copy)}
+            isGroup={conv.type !== 'direct'}
+          />
         )}
       </div>
 

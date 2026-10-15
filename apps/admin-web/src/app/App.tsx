@@ -6,6 +6,8 @@ import { I18nProvider } from '@/core/i18n/I18nProvider'
 import { SessionProvider } from '@/core/auth/SessionProvider'
 import { RealtimeProvider } from '@/core/realtime/RealtimeProvider'
 import { AppRoutes } from './AppRoutes'
+import { CallProvider } from '@/features/calls/CallProvider'
+import { CallOverlay } from '@/features/calls/CallOverlay'
 
 export function App() {
   const [queryClient] = useState(createQueryClient)
@@ -15,9 +17,13 @@ export function App() {
       <QueryClientProvider client={queryClient}>
         <SessionProvider>
           <RealtimeProvider>
-            <BrowserRouter>
-              <AppRoutes />
-            </BrowserRouter>
+            {/* One call per signed-in admin; the panel rings on every page. */}
+            <CallProvider>
+              <BrowserRouter>
+                <AppRoutes />
+              </BrowserRouter>
+              <CallOverlay />
+            </CallProvider>
           </RealtimeProvider>
         </SessionProvider>
       </QueryClientProvider>

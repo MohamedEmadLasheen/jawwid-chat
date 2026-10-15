@@ -2,7 +2,7 @@
   "name": "@jawwid/admin-web",
   "version": "0.1.0",
   "private": true,
-  "description": "Jawwid Chat \u2014 internal Admin Web application (AI #4 domain)",
+  "description": "Jawwid Chat — internal Admin Web application (AI #4 domain)",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.62.0",
+    "livekit-client": "2.22.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0",
