@@ -1,0 +1,25 @@
+/* The call panel. Theme tokens only, so it follows light/dark and RTL. */
+.call-panel {
+  position: fixed;
+  inset-block-end: var(--space-4, 16px);
+  inset-inline-end: var(--space-4, 16px);
+  z-index: 50;
+  inline-size: min(360px, calc(100vw - 2 * var(--space-4, 16px)));
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-4, 16px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+}
+.call-panel--incoming { border-color: var(--accent); }
+.call-panel__title { font-weight: var(--fw-semibold, 600); font-size: var(--fs-md, 15px); margin: 0; }
+.call-panel__status { color: var(--text-muted); font-size: var(--fs-sm, 13px); margin: 0; }
+.call-panel__clock { font-family: var(--font-mono, ui-monospace, monospace); font-variant-numeric: tabular-nums; }
+.call-panel__alert { color: var(--danger); font-size: var(--fs-sm, 13px); margin: 0; }
+.call-panel__actions { display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
+.call-history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1, 4px); }
+.call-history li { display: flex; justify-content: space-between; gap: var(--space-2, 8px); font-size: var(--fs-sm, 13px); color: var(--text-muted); }
