@@ -32,12 +32,13 @@ import type {
   PushProvider,
   PushResult,
 } from "@communication/notifications/push.provider";
+import { CommErrorCode } from "@platform/errors";
 import {
   Scenario,
   buildGraph,
+  legacyTeacherParentDirect,
   seed,
   truncate,
-  withAssignmentGate,
 } from "./harness";
 
 jest.setTimeout(60_000);
@@ -77,9 +78,13 @@ const notificationsFor = (recipientId: string) =>
     orderBy: { scheduledAt: "asc" },
   });
 
+/**
+ * The Parent <-> Admin 1:1 call, the family's owner calling the parent. It was
+ * the PD-6 teacher <-> parent channel until PD-7 (2026-10-14) restored BR-1.
+ */
 async function directCall() {
-  const conv = await g.conversations.getOrCreateDirect(s.parentId, s.teacherId);
-  const { callId } = await g.calls.start(conv.id, s.teacherId);
+  const conv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
+  const { callId } = await g.calls.start(conv.id, s.ownerId);
   return { conversationId: conv.id, callId };
 }
 
@@ -217,8 +222,8 @@ describe("E/F/G — an incoming call notifies the callee, and only the callee", 
       isVoip: true,
     });
     await notifications.registerDevice({
-      actorId: s.teacherId,
-      token: "teacher-device",
+      actorId: s.ownerId,
+      token: "admin-device",
       platform: "android",
     });
   });
@@ -240,10 +245,10 @@ describe("E/F/G — an incoming call notifies the callee, and only the callee", 
   });
 
   it("F. the caller is not notified of their own call", async () => {
-    await directCall(); // started by the teacher
+    await directCall(); // started by the admin
     await drainOutbox();
 
-    expect(await notificationsFor(s.teacherId)).toHaveLength(0);
+    expect(await notificationsFor(s.ownerId)).toHaveLength(0);
   });
 
   it("G. an unrelated actor is notified of nothing", async () => {
@@ -255,6 +260,9 @@ describe("E/F/G — an incoming call notifies the callee, and only the callee", 
     expect(push.sent.map((m) => m.token)).toEqual(["parent-device"]);
   });
 
+  // W8-W1 REOPENED (owner, 2026-10-14) for push privacy: the caller's name is
+  // no longer on the lock screen. Delivery, routing and VoIP treatment are
+  // unchanged; only the rendered text is generic now.
   it("the push is delivered with the rule's VoIP treatment and the caller's name", async () => {
     await directCall();
     await drainOutbox();
@@ -266,7 +274,9 @@ describe("E/F/G — an incoming call notifies the callee, and only the callee", 
       isVoip: true,
     });
     expect(push.sent[0].title.length).toBeGreaterThan(0);
-    expect(push.sent[0].body).toContain("teacher_c"); // the rendered {caller_name}
+    // The rendered {caller_name}: since PD-7 the caller is the family's admin,
+    // not a teacher.
+    expect(push.sent[0].body).toContain("admin_a");
   });
 
   it("incoming_call ignores quiet hours, because the rule says it may", async () => {
@@ -393,7 +403,7 @@ describe("H/I — a missed call notifies whoever did not answer", () => {
   it("an answered call produces no missed_call at all", async () => {
     const { callId } = await directCall();
     await g.calls.accept(callId, s.parentId);
-    await g.calls.end(callId, s.teacherId);
+    await g.calls.end(callId, s.ownerId);
     await drainOutbox();
 
     expect(
@@ -412,7 +422,7 @@ describe("H/I — a missed call notifies whoever did not answer", () => {
     await g.calls.expireRingingCalls();
     await drainOutbox();
 
-    expect(await notificationsFor(s.teacherId)).toHaveLength(0);
+    expect(await notificationsFor(s.ownerId)).toHaveLength(0);
   });
 });
 
@@ -437,13 +447,13 @@ describe("J/K/R — transactional and idempotent", () => {
   it("J. a rolled-back call transaction leaves no outbox row and therefore no notification", async () => {
     const conv = await g.conversations.getOrCreateDirect(
       s.parentId,
-      s.teacherId,
+      s.ownerId,
     );
     const before = await g.prisma.outboxEvent.count();
 
     await expect(
       g.prisma.$transaction(async () => {
-        await g.calls.start(conv.id, s.teacherId);
+        await g.calls.start(conv.id, s.ownerId);
         throw new Error("rollback");
       }),
     ).rejects.toThrow("rollback");
@@ -572,25 +582,35 @@ describe("N/O/P/Q — security", () => {
     });
   });
 
-  it("N. a revoked relationship cannot create a new call notification", async () => {
-    const conv = await g.conversations.getOrCreateDirect(
-      s.parentId,
-      s.teacherId,
-    );
-    // Reassignment is an ingestion act, not a Chat-side edit:
-    // chat.guard_learner_assignment_change() refuses the latter. withAssignmentGate
-    // opens the same transaction-local gate ingestion opens, which is what makes
-    // this a faithful simulation of the relationship being revoked in Core
-    // rather than a test writing a fact the application may not author.
-    await withAssignmentGate(
-      g.prisma,
-      `update chat.learner set teacher_id = '${s.unrelatedTeacherId}'
-        where id = '${s.learnerId}'`,
+  it("N. a call BR-1 refuses creates no call notification (PD-7)", async () => {
+    // RE-VERSIONED 2026-10-14 BY PD-7. This was "a revoked relationship": under
+    // PD-6 the relationship decided whether a teacher could ring a parent. Now
+    // BR-1 refuses the direct teacher<->parent call whatever the relationship
+    // -- the teacher here still teaches the family's learner -- so a channel
+    // left over from the PD-6 window can ring nobody.
+    const conversationId = await legacyTeacherParentDirect(
+      g.prisma, s.teacherId, s.parentId, s.familyId,
     );
 
     // The call itself is refused, so there is no lifecycle event to notify on.
-    // The notification layer inherits PD-6 rather than re-implementing it.
-    await expect(g.calls.start(conv.id, s.teacherId)).rejects.toThrow();
+    // The notification layer inherits BR-1 rather than re-implementing it.
+    await expect(g.calls.start(conversationId, s.teacherId)).rejects.toMatchObject({
+      code: CommErrorCode.BR1_TEACHER_PARENT_DIRECT,
+    });
+    await drainOutbox();
+
+    expect(await notificationsFor(s.parentId)).toHaveLength(0);
+  });
+
+  it("N2. an admin no longer on duty cannot create a new call notification", async () => {
+    const conv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
+    // Coverage moves away from the owner: they may still read the family's
+    // conversations, but may not act -- and so may not ring anyone -- in them.
+    g.coverage.onDutyId = s.otherAdminId;
+
+    await expect(g.calls.start(conv.id, s.ownerId)).rejects.toMatchObject({
+      code: CommErrorCode.NOT_ON_DUTY,
+    });
     await drainOutbox();
 
     expect(await notificationsFor(s.parentId)).toHaveLength(0);

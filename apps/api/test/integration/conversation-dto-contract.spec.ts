@@ -18,7 +18,7 @@
 import { randomUUID } from 'node:crypto';
 import { ConversationController } from '@communication/api/conversation.controller';
 import type { ConversationDto } from '@communication/contracts/dto';
-import { buildGraph, seed, truncate, Scenario } from './harness';
+import { buildGraph, existingDirect, seed, truncate, Scenario } from './harness';
 
 jest.setTimeout(60_000);
 
@@ -152,12 +152,10 @@ describe('GET /conversations/:id — the detail response', () => {
           isActive: true,
         },
       });
-      const theirThread = await g.conversations.getOrCreateDirect(
-        otherContact.id,
-        s.otherAdminId,
-      );
+      // A pre-existing 1:1 (C0 Decision 5 would not let this admin open it today).
+      const theirThread = await existingDirect(g, otherContact.id, s.otherAdminId);
 
-      await expect(controller.get(s.teacherId, theirThread.id)).rejects.toThrow();
+      await expect(controller.get(s.teacherId, theirThread)).rejects.toThrow();
     });
 });
 

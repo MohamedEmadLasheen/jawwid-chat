@@ -79,6 +79,11 @@ export class AttachmentService {
     const now = new Date();
     const actor = await this.conversations.requireActor(params.actorId);
     const conv = await this.conversations.requireConversation(params.conversationId);
+    // RT-030, as MessageService.send asks it and FIRST: another organization's
+    // conversation is answered exactly as an unknown one, before anything else
+    // about it -- here, before an upload URL into its namespace can be minted.
+    const tenant = this.authz.canActInOrganization(actor, conv.organizationId);
+    if (!tenant.allowed) throw new CommError(tenant.code, tenant.reason, 404);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
 
     // The same inputs MessageService.send gathers. canSend derives owner and
@@ -102,12 +107,11 @@ export class AttachmentService {
       family?.ownerId ?? null,
       members.map((m) => m.actorKind),
       await this.conversations.liveMembersOf(conv.id),
-      // PD-6: uploading into a channel is sending into it. Authorizing the
-      // upload without the relationship check would leave a way to put content
-      // in a conversation whose relationship has been revoked.
-      await this.conversations.pairingAuthorizedAmong(members),
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+    // Uploading into a channel is sending into it (PD-7's refusal came from
+    // canSend above), so it is held to the same scoped read as a send (C3).
+    await this.conversations.requireReadable(actor, conv, membership, now);
 
     this.validate(params.kind, params.mimeType, params.byteSize);
 

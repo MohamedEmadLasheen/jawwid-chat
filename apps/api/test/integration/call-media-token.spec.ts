@@ -22,9 +22,10 @@ import { LiveKitTokenIssuer } from "@communication/calls/media-token";
 import {
   Scenario,
   buildGraph,
+  legacyTeacherParentCall,
+  legacyTeacherParentDirect,
   seed,
   truncate,
-  withAssignmentGate,
 } from "./harness";
 
 jest.setTimeout(60_000);
@@ -66,9 +67,14 @@ const EVERY_TRACK_SOURCE = [
 
 const videoGrant = (token: string) => decode(token, 1).video as VideoGrant;
 
+/**
+ * The Parent <-> Admin 1:1 call, the family's owner calling. Until PD-7
+ * (2026-10-14) restored BR-1 this was the PD-6 teacher <-> parent channel; a
+ * token's properties do not depend on which two people are on the call.
+ */
 async function directCall() {
-  const conv = await g.conversations.getOrCreateDirect(s.parentId, s.teacherId);
-  const { callId, roomName } = await g.calls.start(conv.id, s.teacherId);
+  const conv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
+  const { callId, roomName } = await g.calls.start(conv.id, s.ownerId);
   return { conversationId: conv.id, callId, roomName };
 }
 
@@ -105,16 +111,35 @@ describe("A–H — who may obtain a media token", () => {
     });
   });
 
-  it("C. a revoked PD-6 relationship is denied", async () => {
+  it("C. a participant whose authorization was revoked is denied", async () => {
     const { callId } = await directCall();
-    await withAssignmentGate(
-      g.prisma,
-      `update chat.learner set teacher_id = '${s.unrelatedTeacherId}'::uuid
-        where id = '${s.learnerId}'::uuid`,
+    // The parent loses the capability to message, and so to call.
+    await g.prisma.contact.update({
+      where: { id: s.parentId },
+      data: { canMessage: false },
+    });
+
+    await expect(g.calls.issueToken(callId, s.parentId)).rejects.toMatchObject({
+      code: CommErrorCode.CONTACT_CANNOT_MESSAGE,
+    });
+  });
+
+  it("C2. PD-7: neither side of a direct teacher<->parent call is issued a token", async () => {
+    // A call left ringing from the PD-6 window, between a teacher and a parent
+    // whose relationship still holds. BR-1 is restored and decides alone.
+    const conversationId = await legacyTeacherParentDirect(
+      g.prisma, s.teacherId, s.parentId, s.familyId,
+    );
+    const callId = await legacyTeacherParentCall(
+      g.prisma, conversationId, s.teacherId,
+      { teacherId: s.teacherId, parentId: s.parentId }, s.familyId,
     );
 
     await expect(g.calls.issueToken(callId, s.parentId)).rejects.toMatchObject({
-      code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
+      code: CommErrorCode.BR1_TEACHER_PARENT_DIRECT,
+    });
+    await expect(g.calls.issueToken(callId, s.teacherId)).rejects.toMatchObject({
+      code: CommErrorCode.BR1_TEACHER_PARENT_DIRECT,
     });
   });
 
@@ -175,7 +200,7 @@ describe("A–H — who may obtain a media token", () => {
 
   it("F. an ended call issues no token, which is the existing contract", async () => {
     const { callId } = await directCall();
-    await g.calls.end(callId, s.teacherId);
+    await g.calls.end(callId, s.ownerId);
 
     await expect(g.calls.issueToken(callId, s.parentId)).rejects.toMatchObject({
       code: CommErrorCode.CALL_ALREADY_ENDED,
@@ -297,11 +322,11 @@ describe("J/K/L — the room and the identity are the server's to choose", () =>
   it("J2. two calls in the same conversation never share a room", async () => {
     const conv = await g.conversations.getOrCreateDirect(
       s.parentId,
-      s.teacherId,
+      s.ownerId,
     );
-    const first = await g.calls.start(conv.id, s.teacherId);
-    await g.calls.end(first.callId, s.teacherId);
-    const second = await g.calls.start(conv.id, s.teacherId);
+    const first = await g.calls.start(conv.id, s.ownerId);
+    await g.calls.end(first.callId, s.ownerId);
+    const second = await g.calls.start(conv.id, s.ownerId);
 
     expect(second.roomName).not.toBe(first.roomName);
   });
@@ -314,7 +339,7 @@ describe("J/K/L — the room and the identity are the server's to choose", () =>
     const { callId, roomName } = await directCall();
     const bothSides = await Promise.all([
       g.calls.issueToken(callId, s.parentId),
-      g.calls.issueToken(callId, s.teacherId),
+      g.calls.issueToken(callId, s.ownerId),
     ]);
 
     // Both participants are put in the SAME room, chosen by the server.
@@ -327,13 +352,13 @@ describe("J/K/L — the room and the identity are the server's to choose", () =>
     const { callId } = await directCall();
 
     const parentToken = await g.calls.issueToken(callId, s.parentId);
-    const teacherToken = await g.calls.issueToken(callId, s.teacherId);
+    const adminToken = await g.calls.issueToken(callId, s.ownerId);
 
     expect(decode(parentToken.token, 1).sub).toBe(s.parentId);
-    expect(decode(teacherToken.token, 1).sub).toBe(s.teacherId);
+    expect(decode(adminToken.token, 1).sub).toBe(s.ownerId);
     // Two participants, two identities — never the same one twice.
     expect(decode(parentToken.token, 1).sub).not.toBe(
-      decode(teacherToken.token, 1).sub,
+      decode(adminToken.token, 1).sub,
     );
   });
 });

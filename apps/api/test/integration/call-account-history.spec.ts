@@ -22,7 +22,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { CommErrorCode } from '@platform/errors';
-import { Scenario, buildGraph, seed, truncate } from './harness';
+import { Scenario, buildGraph, legacyTeacherParentCall, legacyTeacherParentDirect, seed, truncate } from './harness';
 
 jest.setTimeout(60_000);
 
@@ -92,7 +92,10 @@ describe('1/8/9. the account list, ordered by the server', () => {
 
   it('8. newest first, and the order is the server\'s', async () => {
     const first = await callBetween(s.parentId, s.ownerId, s.ownerId);
-    const second = await callBetween(s.parentId, s.teacherId, s.teacherId);
+    // The parent's second call is a Student Group call the teacher starts --
+    // since PD-7 the only place a teacher and a parent share a call.
+    const group = await g.conversations.ensureStudentGroup(s.learnerId);
+    const second = await g.calls.start(group.id, s.teacherId);
     // Age the first so the order is unambiguous rather than same-millisecond.
     await g.prisma.$executeRawUnsafe(
       `update chat.call set started_at = now() - interval '1 hour' where id = '${first.callId}'::uuid`,
@@ -208,18 +211,28 @@ describe('2/4/6. authorization, through the existing contract', () => {
     });
   });
 
-  it('6. family-facing staff see the conversations the canonical rule gives them',
+  it('6. family-facing staff see the calls of the conversations their scope gives them -- and no others',
     async () => {
-      // `listForActor` probes AuthorizationService.canRead for staff and then
-      // returns the conversation set. This asserts the CONSEQUENCE — an admin
-      // sees calls from conversations they are not a member of — which is the
-      // existing contract ("family-facing staff may open any family
-      // conversation"), not a new rule introduced here.
-      const parentAndTeacher = await callBetween(s.parentId, s.teacherId, s.teacherId);
+      // `listForActor` is scoped (C2, AUTHORIZATION-MODEL section 6): a manager
+      // reads the organization, an admin the families they own, are members of
+      // or are the active handler for. This used to assert that ANY admin saw
+      // calls from conversations they had nothing to do with -- defect A-1 /
+      // RT-011, which C2 closes for the list and therefore for this history.
+      // A PD-6-era direct teacher<->parent call: PD-7 refuses to start one, but
+      // the history exists and is exactly as readable as its conversation.
+      const legacyConversation = await legacyTeacherParentDirect(g.prisma, s.teacherId, s.parentId, s.familyId);
+      const parentAndTeacher = {
+        callId: await legacyTeacherParentCall(
+          g.prisma, legacyConversation, s.teacherId,
+          { teacherId: s.teacherId, parentId: s.parentId }, s.familyId,
+        ),
+      };
 
-      const page = await g.calls.historyForActor(s.otherAdminId);
-
-      expect(idsOf(page)).toContain(parentAndTeacher.callId);
+      // An admin who neither owns the family, nor is a member, nor is on duty.
+      expect(idsOf(await g.calls.historyForActor(s.otherAdminId))).not.toContain(parentAndTeacher.callId);
+      // The family's owner and the manager keep exactly what the policy grants.
+      expect(idsOf(await g.calls.historyForActor(s.ownerId))).toContain(parentAndTeacher.callId);
+      expect(idsOf(await g.calls.historyForActor(s.managerId))).toContain(parentAndTeacher.callId);
     });
 
   it('6b. a non-family-facing staff role is refused outright', async () => {

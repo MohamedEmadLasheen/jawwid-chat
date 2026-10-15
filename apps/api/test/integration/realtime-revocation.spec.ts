@@ -1167,6 +1167,28 @@ describe('identity and account changes reach open sockets', () => {
 });
 
 // ===========================================================================
+describe('staff SCOPE is decided at delivery time, not only membership (C4)', () => {
+  it('a manager receives while they read the whole organization; demoted to an admin with no charge of this family, they receive nothing at the next delivery', async () => {
+    // The manager is not a member of the group: before C4 every family-facing
+    // staff member passed the delivery-time read, so the demoted admin would
+    // still have received. The scoped read admits an admin only for a family
+    // they own, are a member for, or handle -- none of which holds here.
+    const mgr = await connect(node, (await login('manager')).accessToken);
+    const p2 = await connect(node, (await login('parent2')).accessToken);
+    expect(await mgr.subscribe(groupId)).toEqual({ ok: true });
+    await p2.subscribe(groupId);
+    const before = await publish(node, groupId);
+    await mgr.waitFor(CommEvent.MESSAGE_CREATED, before); // positive control
+    try {
+      await prisma.$executeRawUnsafe(`update chat.staff set role = 'admin' where id = '${ids.manager}'::uuid`);
+      await deliveredOnlyTo(node, groupId, p2, [mgr]);
+    } finally {
+      await prisma.$executeRawUnsafe(`update chat.staff set role = 'manager' where id = '${ids.manager}'::uuid`);
+    }
+  });
+});
+
+// ===========================================================================
 describe('nothing the client says grants access', () => {
   it('a guessed conversation id is refused and delivers nothing', async () => {
     const stranger = await connect(node, (await login('stranger')).accessToken);

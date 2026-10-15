@@ -15,7 +15,7 @@ import { randomUUID } from 'node:crypto';
 import { CommError, CommErrorCode } from '@platform/errors';
 import type { Actor } from '@platform/types';
 import { CommErrorFilter } from '@communication/api/http-exception.filter';
-import { buildGraph, seed, truncate, Scenario } from './harness';
+import { buildGraph, existingDirect, legacyTeacherParentDirect, seed, truncate, Scenario } from './harness';
 
 jest.setTimeout(60_000);
 
@@ -140,14 +140,17 @@ beforeEach(async () => {
   );
 
   c = {
-    // Parent <-> otherAdmin: family-scoped; the family OWNER (ownerId) is not a member.
-    direct: (await g.conversations.getOrCreateDirect(s.parentId, s.otherAdminId)).id,
+    // Parent <-> otherAdmin: family-scoped; the family OWNER (ownerId) is not a
+    // member. A pre-existing row: C0 Decision 5 would not let otherAdmin open
+    // it today, which is exactly why reading it is a scope question.
+    direct: await existingDirect(g, s.parentId, s.otherAdminId),
     group: (await g.conversations.ensureStudentGroup(s.learnerId)).id,
     // Teacher <-> Admin: no family.
     teacherAdmin: (await g.conversations.getOrCreateDirect(s.teacherId, s.otherAdminId)).id,
-    // PD-6: the learner's teacher and the family's parent.
-    teacherParent: (await g.conversations.getOrCreateDirect(s.teacherId, s.parentId)).id,
-    covDirect: (await g.conversations.getOrCreateDirect(x.covContactId, s.otherAdminId)).id,
+    // A PD-6-era direct between the learner's teacher and the family's parent:
+    // PD-7 refuses to open one, but the rows exist and stay readable history.
+    teacherParent: await legacyTeacherParentDirect(g.prisma, s.teacherId, s.parentId, s.familyId),
+    covDirect: await existingDirect(g, x.covContactId, s.otherAdminId),
   };
 });
 
@@ -385,9 +388,21 @@ describe('read is not send, not call', () => {
 });
 
 // ===========================================================================
-describe('C1 changes no endpoint (transitional, flipped by C2)', () => {
-  it('an un-migrated path still answers as before: an unrelated admin reads conversation detail', async () => {
-    const { conversation } = await g.conversations.readWithMembers(c.direct, x.adminX);
-    expect(conversation.id).toBe(c.direct);
+describe('the transitional tripwire, flipped (C2-C4 migrated every read path)', () => {
+  it('an unrelated admin no longer reads conversation detail, messages, calls or approvals', async () => {
+    // Under C1 this asserted the OPPOSITE for readWithMembers -- the path was
+    // not yet migrated. Every path now makes the scoped read.
+    const attempts: Array<() => Promise<unknown>> = [
+      () => g.conversations.readWithMembers(c.direct, x.adminX),
+      () => g.conversations.setPreferences(c.direct, x.adminX, { pinned: true }),
+      () => g.messages.list({ conversationId: c.direct, actorId: x.adminX }),
+      () => g.messages.unreadCount(c.direct, x.adminX),
+      () => g.calls.history(c.direct, x.adminX),
+      () => g.calls.callCapability(c.direct, x.adminX),
+      () => g.approvals.history(c.direct, x.adminX),
+    ];
+    for (const attempt of attempts) {
+      expect((await refusal(attempt())).code).toBe(CommErrorCode.NOT_CONVERSATION_MEMBER);
+    }
   });
 });

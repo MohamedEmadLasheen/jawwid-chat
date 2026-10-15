@@ -7,7 +7,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { CommError, CommErrorCode } from '@platform/errors';
-import { buildGraph, seed, truncate, Scenario } from './harness';
+import { buildGraph, legacyTeacherParentDirect, seed, truncate, Scenario } from './harness';
 
 jest.setTimeout(60_000);
 
@@ -327,9 +327,26 @@ describe('Parent and Teacher messaging is unchanged', () => {
     expect(p.moderation).toBe('pending');
   });
 
-  it('a teacher and an authorized parent still open their PD-6 direct conversation', async () => {
-    const direct = await g.conversations.getOrCreateDirect(s.teacherId, s.parentId);
-    const m = await g.messages.send({ conversationId: direct.id, senderId: s.teacherId, body: 'about class' });
-    expect(m.moderation).toBe('published');
+  // RE-VERSIONED 2026-10-14 BY PD-7. This asserted that an authorized teacher
+  // and parent still open their PD-6 direct conversation. PD-7 restores BR-1:
+  // the group above is their only channel, and a direct one from the PD-6
+  // window is history that accepts nothing new.
+  it('a teacher and a parent may not open a direct conversation, however related (BR-1)', async () => {
+    await expect(g.conversations.getOrCreateDirect(s.teacherId, s.parentId)).rejects.toMatchObject({
+      code: CommErrorCode.BR1_TEACHER_PARENT_DIRECT,
+    });
+    expect(await g.prisma.conversation.count({ where: { type: 'direct' } })).toBe(0);
+  });
+
+  it('a PD-6-era direct teacher<->parent conversation stays readable and accepts nothing', async () => {
+    const legacy = await legacyTeacherParentDirect(g.prisma, s.teacherId, s.parentId, s.familyId);
+
+    for (const actorId of [s.teacherId, s.parentId]) {
+      await expect(g.messages.list({ conversationId: legacy, actorId })).resolves.toBeDefined();
+      await expect(
+        g.messages.send({ conversationId: legacy, senderId: actorId, body: 'about class' }),
+      ).rejects.toMatchObject({ code: CommErrorCode.BR1_TEACHER_PARENT_DIRECT });
+    }
+    expect(await g.prisma.message.count({ where: { conversationId: legacy } })).toBe(0);
   });
 });

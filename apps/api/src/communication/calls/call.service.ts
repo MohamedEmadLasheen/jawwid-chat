@@ -94,6 +94,11 @@ export class CallService {
       now,
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+    // And the scoped read (C4): starting a call is never possible where reading
+    // is not. Asked after the initiation decision so its refusals keep their
+    // codes; a caller who passed it is a live member, whom the scoped read
+    // always admits inside their own organization.
+    await this.conversations.requireReadable(initiator, conv, membership, now);
 
     const type =
       conv.type === ConversationType.STUDENT_GROUP || conv.type === ConversationType.CLASS_GROUP
@@ -198,9 +203,6 @@ export class CallService {
       // PD-2: this is the START path. A parent is refused here and allowed on
       // the join path.
       CallIntent.INITIATE,
-      // PD-6: the teacher<->parent relationship, resolved from the conversation
-      // membership rather than from anything the caller sent.
-      await this.conversations.pairingAuthorizedAmong(members),
     );
     if (!decision.allowed) return { decision, participantActors };
 
@@ -249,8 +251,8 @@ export class CallService {
     this.requireConversationOrganization(actor, conv.organizationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
 
-    const readable = this.authz.canRead(actor, conv, membership);
-    if (!readable.allowed) throw new CommError(readable.code, readable.reason);
+    // The scoped read (C4), the same one GET /conversations/:id makes.
+    await this.conversations.requireReadable(actor, conv, membership);
 
     const { decision } = await this.decideInitiate(actor, conv, membership, new Date());
     return decision.allowed
@@ -768,8 +770,10 @@ export class CallService {
     const conv = await this.conversations.requireConversation(conversationId);
     this.requireConversationOrganization(actor, conv.organizationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
-    const readable = this.authz.canRead(actor, conv, membership);
-    if (!readable.allowed) throw new CommError(readable.code, readable.reason);
+    // The scoped read (C4): a conversation's calls are exactly as readable as
+    // the conversation, which is also what the account-wide history inherits
+    // through listForActor.
+    await this.conversations.requireReadable(actor, conv, membership);
 
     const calls = await this.prisma.call.findMany({
       where: { conversationId },
@@ -791,10 +795,9 @@ export class CallService {
    *
    * AUTHORIZATION IS NOT RE-DERIVED HERE, and that is the whole design. It calls
    * `ConversationService.listForActor`, which IS the canonical "conversations
-   * this actor may read" surface: family-facing staff are probed through
-   * `AuthorizationService.canRead` and then see the conversation set, while a
-   * contact or a teacher gets live membership and nothing else. Calls follow from
-   * that set. There is no second authorization model here and no `canRead`
+   * this actor may read" surface: the scoped read policy as a query (C2) --
+   * organization, role and staff scope for staff, live membership for a
+   * contact or a teacher. Calls follow from that set. There is no second authorization model here and no `canRead`
    * reimplementation to drift from the original.
    *
    * IT NEVER QUERIES BY FAMILY. A family-scoped query -- `where family_id = ...`,
@@ -1010,13 +1013,10 @@ export class CallService {
       // PD-2: joining an existing call, which a parent may do. The call was
       // already started by a teacher or an admin.
       CallIntent.JOIN,
-      // PD-6. Re-resolved HERE, never inherited from the moment the call was
-      // created. A call is not a standing grant: if the learner was reassigned,
-      // the contact deactivated or the teacher offboarded in the seconds since
-      // `start`, this is refused.
-      await this.conversations.pairingAuthorizedAmong(call.participants),
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+    // The scoped read (C4), after canCall so its refusals keep their codes.
+    await this.conversations.requireReadable(actor, conv, membership, now);
 
     return { actor, call, participant, conv, membership };
   }

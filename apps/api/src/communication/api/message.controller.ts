@@ -114,8 +114,13 @@ export class MessageController {
   }
 
   @Post(':messageId/delivered')
-  async delivered(@ActorId() actorId: string, @Param('messageId') messageId: string) {
-    const updated = await this.messages.markState([messageId], actorId, ReceiptState.DELIVERED);
+  async delivered(
+    @ActorId() actorId: string,
+    @Param('conversationId') conversationId: string,
+    @Param('messageId') messageId: string,
+  ) {
+    // Only a message of THIS conversation, and only while the actor may read it.
+    const updated = await this.messages.markDelivered([messageId], actorId, conversationId);
     return { updated };
   }
 

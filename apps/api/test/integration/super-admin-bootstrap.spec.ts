@@ -323,6 +323,25 @@ describe('super admin bootstrap against Postgres', () => {
       expect(conversations).toHaveLength(1);
       await expect(inspection.messages(owner, conversations[0].id)).resolves.toEqual({ messages: [] });
 
+      // Decision 2026-10-14: inspection is METADATA ONLY. A real family message
+      // is listed -- author, kind, time -- but its text never leaves the server.
+      const direct = await prisma.conversation.create({
+        data: { type: 'direct', familyId: scenario.familyId, directKey: `inspect-${randomUUID()}` },
+      });
+      await prisma.conversationMember.create({
+        data: { conversationId: direct.id, actorId: scenario.parentId, actorKind: 'contact', memberRole: 'parent' },
+      });
+      await prisma.message.create({
+        data: {
+          conversationId: direct.id, authorType: 'contact', authorId: scenario.parentId,
+          body: 'a private family message', visibility: 'customer',
+        },
+      });
+      const inspected = await inspection.messages(owner, direct.id);
+      expect(inspected.messages).toHaveLength(1);
+      expect(inspected.messages[0]).toMatchObject({ authorKind: 'contact', type: 'text', body: null, deleted: false });
+      expect(JSON.stringify(inspected)).not.toContain('a private family message');
+
       const manager = await identity.resolveActor(scenario.managerId);
       const parentActor = await identity.resolveActor(scenario.parentId);
       const teacherActor = await identity.resolveActor(scenario.teacherId);

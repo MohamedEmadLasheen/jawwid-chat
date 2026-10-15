@@ -28,13 +28,7 @@ import { OutboxWorker } from "@communication/outbox/outbox.worker";
 import { NotificationService } from "@communication/notifications/notification.service";
 import { CommEvent, room } from "@communication/contracts/events";
 import type { RealtimePublisher } from "@communication/realtime/realtime.publisher";
-import {
-  Scenario,
-  buildGraph,
-  seed,
-  truncate,
-  withAssignmentGate,
-} from "./harness";
+import { Scenario, buildGraph, seed, truncate } from "./harness";
 
 jest.setTimeout(60_000);
 
@@ -114,12 +108,18 @@ function roomsOf(deliveries: Delivery[], event: string): Set<string> {
 
 /** The actor rooms a direct call's participants are reached in. */
 function directCallRooms(): Set<string> {
-  return new Set([room.actor(s.parentId), room.actor(s.teacherId)]);
+  return new Set([room.actor(s.parentId), room.actor(s.ownerId)]);
 }
 
+/**
+ * The PRD §9 "1:1 call Parent<->Admin": the family's owner (on duty) calls the
+ * parent. Until PD-7 (2026-10-14) this was the PD-6 teacher<->parent channel,
+ * which BR-1 no longer opens; the routing properties are the same for any two
+ * participants.
+ */
 async function directCall() {
-  const conv = await g.conversations.getOrCreateDirect(s.parentId, s.teacherId);
-  const { callId } = await g.calls.start(conv.id, s.teacherId);
+  const conv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
+  const { callId } = await g.calls.start(conv.id, s.ownerId);
   return { conversationId: conv.id, callId };
 }
 
@@ -166,7 +166,7 @@ describe("the lifecycle a client can follow", () => {
       callId,
       conversationId,
       type: "direct",
-      initiatorId: s.teacherId,
+      initiatorId: s.ownerId,
       initiatorName: expect.any(String),
     });
   });
@@ -218,7 +218,7 @@ describe("the lifecycle a client can follow", () => {
     await g.calls.accept(callId, s.parentId);
     await drain();
 
-    await g.calls.end(callId, s.teacherId);
+    await g.calls.end(callId, s.ownerId);
     const deliveries = await drain();
 
     const ended = deliveries.filter((d) => d.event === CommEvent.CALL_ENDED);
@@ -235,7 +235,7 @@ describe("the lifecycle a client can follow", () => {
   it("the full answered call is a complete, ordered, routable sequence", async () => {
     const { conversationId, callId } = await directCall();
     await g.calls.accept(callId, s.parentId);
-    await g.calls.end(callId, s.teacherId);
+    await g.calls.end(callId, s.ownerId);
 
     const deliveries = await drain();
     const sequence = deliveries.filter((d) => d.payload?.callId === callId);
@@ -262,7 +262,7 @@ describe("the lifecycle a client can follow", () => {
     await g.calls.decline(callId, s.parentId);
     // The caller's client hangs up after seeing the refusal. Since W6 the call
     // is already terminal, so this is a no-op and adds no second ending.
-    await g.calls.end(callId, s.teacherId);
+    await g.calls.end(callId, s.ownerId);
 
     const sequence = (await drain()).filter(
       (d) => d.payload?.callId === callId,
@@ -352,12 +352,12 @@ describe("7/8. media presence is not faked from an HTTP accept", () => {
 
 // -------------------------------------------------------------------------
 describe("15/16/17. a refused action emits nothing", () => {
+  // The parent loses the capability to message, and so to answer.
   const revoke = () =>
-    withAssignmentGate(
-      g.prisma,
-      `update chat.learner set teacher_id = '${s.unrelatedTeacherId}'::uuid
-        where id = '${s.learnerId}'::uuid`,
-    );
+    g.prisma.contact.update({
+      where: { id: s.parentId },
+      data: { canMessage: false },
+    });
 
   it("an unauthorized accept delivers no call.accepted", async () => {
     const { callId } = await directCall();
@@ -365,7 +365,7 @@ describe("15/16/17. a refused action emits nothing", () => {
     await revoke();
 
     await expect(g.calls.accept(callId, s.parentId)).rejects.toMatchObject({
-      code: CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
+      code: CommErrorCode.CONTACT_CANNOT_MESSAGE,
     });
 
     expect(await drain()).toEqual([]);
@@ -382,7 +382,7 @@ describe("15/16/17. a refused action emits nothing", () => {
 
   it("an invalid transition delivers nothing: accepting an ended call", async () => {
     const { callId } = await directCall();
-    await g.calls.end(callId, s.teacherId);
+    await g.calls.end(callId, s.ownerId);
     await drain();
 
     await expect(g.calls.accept(callId, s.parentId)).rejects.toMatchObject({
@@ -532,7 +532,7 @@ describe("18. retry and idempotency", () => {
     // Accept twice (the second is an idempotent no-op) and end once.
     await g.calls.accept(callId, s.parentId);
     await g.calls.accept(callId, s.parentId);
-    await g.calls.end(callId, s.teacherId);
+    await g.calls.end(callId, s.ownerId);
 
     const sequence = (await drain()).filter(
       (d) => d.payload?.callId === callId,
@@ -548,7 +548,7 @@ describe("10/11/12. routing is the security boundary", () => {
   it("every call event goes to a participant's actor room and nowhere else", async () => {
     const { conversationId, callId } = await directCall();
     await g.calls.accept(callId, s.parentId);
-    await g.calls.end(callId, s.teacherId);
+    await g.calls.end(callId, s.ownerId);
 
     const sequence = (await drain()).filter(
       (d) => d.payload?.callId === callId,
@@ -567,17 +567,24 @@ describe("10/11/12. routing is the security boundary", () => {
   });
 
   it("a second call reaches ITS participants only, never the first call's", async () => {
-    // The stronger form of the old cross-conversation check. The teacher is a
+    // The stronger form of the old cross-conversation check. The owner is a
     // member of the first conversation and a participant of the first call;
     // they are neither for the second. Under conversation-room routing the
     // guarantee was "a different room"; under participant routing it is "a
     // different set of PEOPLE", which is the property that actually matters.
     const { callId: firstCall } = await directCall();
+    // The parent is on both calls; each admin is on exactly one. Started by
+    // the parent, because the other admin is not on duty for the family. C0
+    // Decision 5: the other admin may hold a 1:1 with this family only while it
+    // is in their charge, so the channel is opened while they are on duty.
+    const owner = g.coverage.onDutyId;
+    g.coverage.onDutyId = s.otherAdminId;
     const otherConv = await g.conversations.getOrCreateDirect(
       s.parentId,
-      s.ownerId,
+      s.otherAdminId,
     );
-    const { callId: otherCall } = await g.calls.start(otherConv.id, s.ownerId);
+    g.coverage.onDutyId = owner;
+    const { callId: otherCall } = await g.calls.start(otherConv.id, s.parentId);
 
     const deliveries = await drain();
     const otherDeliveries = deliveries.filter(
@@ -589,15 +596,15 @@ describe("10/11/12. routing is the security boundary", () => {
 
     expect(otherDeliveries.length).toBeGreaterThan(0);
     expect(new Set(otherDeliveries.map((d) => d.room))).toEqual(
-      new Set([room.actor(s.parentId), room.actor(s.ownerId)]),
+      new Set([room.actor(s.parentId), room.actor(s.otherAdminId)]),
     );
-    // The teacher is on the FIRST call and hears nothing of the second.
+    // The owner is on the FIRST call and hears nothing of the second.
     expect(
-      otherDeliveries.some((d) => d.room === room.actor(s.teacherId)),
+      otherDeliveries.some((d) => d.room === room.actor(s.ownerId)),
     ).toBe(false);
-    // And the owner, who is on the second, hears nothing of the first.
+    // And the other admin, who is on the second, hears nothing of the first.
     expect(
-      firstDeliveries.some((d) => d.room === room.actor(s.ownerId)),
+      firstDeliveries.some((d) => d.room === room.actor(s.otherAdminId)),
     ).toBe(false);
   });
 
@@ -640,7 +647,7 @@ describe("10/11/12. routing is the security boundary", () => {
       // Non-participants, each unrelated to this call in a different way.
       const { callId } = await directCall();
       await g.calls.accept(callId, s.parentId);
-      await g.calls.end(callId, s.teacherId);
+      await g.calls.end(callId, s.ownerId);
 
       const deliveries = (await drain()).filter(
         (d) => d.payload?.callId === callId,
@@ -649,7 +656,7 @@ describe("10/11/12. routing is the security boundary", () => {
       for (const outsider of [
         s.otherParentId,
         s.unrelatedTeacherId,
-        s.ownerId,
+        s.teacherId,
         s.otherAdminId,
       ]) {
         expect(
@@ -665,7 +672,7 @@ describe("10/11/12. routing is the security boundary", () => {
     // chat.call_participant for the call id and from nothing else.
     const { callId } = await directCall();
     const elsewhere = await g.conversations.getOrCreateDirect(
-      s.parentId,
+      s.otherParentId,
       s.ownerId,
     );
     await g.prisma.outboxEvent.updateMany({
@@ -745,7 +752,7 @@ describe("10/11/12. routing is the security boundary", () => {
     // conversationId is an event nobody receives.
     const { callId } = await directCall();
     await g.calls.accept(callId, s.parentId);
-    await g.calls.end(callId, s.teacherId);
+    await g.calls.end(callId, s.ownerId);
 
     const sequence = (await drain()).filter(
       (d) => d.payload?.callId === callId,

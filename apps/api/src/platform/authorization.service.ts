@@ -33,6 +33,10 @@ export type Decision =
 
 const deny = (code: CommErrorCode, reason: string): Decision => ({ allowed: false, code, reason });
 
+/** PD-7: the one wording of the BR-1 refusal, wherever it is raised. */
+export const BR1_DIRECT_REASON =
+  'BR-1: a teacher and a parent communicate only inside the Student Group, never directly';
+
 /**
  * Another organization's conversation, answered exactly as a missing one is
  * (ConversationService.requireConversation): same code, same message, 404.
@@ -78,6 +82,32 @@ export interface StaffScopeFacts {
  */
 export const UNSCOPED_LEGACY_READ: unique symbol = Symbol('UNSCOPED_LEGACY_READ');
 export type ReadScope = StaffScopeFacts | typeof UNSCOPED_LEGACY_READ;
+
+/**
+ * The scoped read policy restated for a LIST: which conversations
+ * ConversationService.listForActor may return, as the shape of a query rather
+ * than a per-conversation verdict. It is not a second policy -- every branch
+ * mirrors canRead's scoped path, and conversation-list-scope.spec.ts proves the
+ * list equals canReadResolved over every conversation, actor by actor.
+ *
+ *   none          lists nothing (no organization to be scoped to)
+ *   organization  every conversation of the organization (manager)
+ *   staff         live membership, OR an owned family (admin only), OR the
+ *                 conversation's active handler: the live sticky handler, or
+ *                 -- when no sticky handler is live -- on duty for its family
+ *   member        live membership (contact, teacher)
+ *
+ * Every kind but `none` is bounded to the actor's own organization.
+ */
+export type ListScope =
+  | { kind: 'none' }
+  | { kind: 'organization'; organizationId: string }
+  | { kind: 'staff'; organizationId: string; actorId: string; ownership: boolean }
+  | { kind: 'member'; organizationId: string; actorId: string };
+
+export type ListScopeDecision =
+  | { allowed: true; scope: ListScope }
+  | { allowed: false; code: CommErrorCode; reason: string };
 
 /** Well-formed facts: both fields present, each a string id or null. Anything else fails closed. */
 function isStaffScopeFacts(value: unknown): value is StaffScopeFacts {
@@ -158,26 +188,24 @@ export interface LiveMember {
  * access decision. Messaging and calling both route through it, so a permission
  * can never be enforced for chat but forgotten for calls.
  *
- * BR-1 (as re-versioned by PD-6, 2026-09-23) -- a teacher and a parent may
- * share a direct 1:1 channel ONLY where an authorized relationship exists.
- * Defended three times over, exactly as the blanket prohibition was:
- *   1. canOpenDirect() below refuses to create an unauthorized channel.
- *   2. canSend()/canCall() refuse an unauthorized one even if it existed.
+ * BR-1, restored by PD-7 (2026-10-14, superseding PD-6) -- a teacher and a
+ * parent NEVER share a direct 1:1 channel, message or call, whatever their
+ * relationship. They communicate only inside the official Student Group, where
+ * a live Jawwid admin is present (C-4). Defended three times over:
+ *   1. canOpenDirect() below refuses to create the channel.
+ *   2. canSend()/canCall() refuse it even if it exists -- a direct
+ *      teacher<->parent conversation created under PD-6 stays readable as
+ *      history and accepts nothing new.
  *   3. Database triggers (chat.enforce_direct_conversation_rules,
- *      chat.enforce_call_participant_rules) refuse the row outright, so a
- *      compromised API or a manual SQL session cannot create one either.
+ *      chat.enforce_call_participant_rules, chat.enforce_br1_direct_message)
+ *      refuse the row outright, so a compromised API or a manual SQL session
+ *      cannot create one either.
  *
- * THE RELATIONSHIP IS AN INPUT, NOT A LOOKUP. This class does not know how a
- * relationship is established and must never find out: it receives
- * `pairingAuthorized` as a resolved fact from RelationshipService and decides
- * on it. That is what keeps this file -- the one place the communication
- * matrix lives -- free of a database dependency, and what lets every test of
- * it run without a server. See AUTHORIZATION-MODEL.md section 4.1.
- *
- * The parameter defaults to FALSE everywhere it appears. A caller that does
- * not state the relationship is refused rather than trusted, so a call site
- * that forgets to resolve it fails closed and keeps the pre-PD-6 behaviour
- * instead of opening a channel by omission.
+ * PD-6 made this decision depend on a resolved relationship. PD-7 removed that
+ * input: the refusal is decided from the participant KINDS alone, so no
+ * relationship answer, stale or forged, can open the channel again. The
+ * `pairingAuthorized` parameters below are kept only so existing callers and
+ * tests keep their signatures; NOTHING reads them, and `true` opens nothing.
  */
 @Injectable()
 export class AuthorizationService {
@@ -195,8 +223,8 @@ export class AuthorizationService {
   canOpenDirect(
     a: Actor,
     b: Actor,
-    /** PD-6: resolved by RelationshipService. Defaults to the strict value. */
-    pairingAuthorized = false,
+    /** PD-6 input, IGNORED since PD-7: a relationship opens no channel. */
+    _pairingAuthorized = false,
   ): Decision {
     // Tenant first (RT-030). A direct conversation is filed under its two
     // participants' organization, so they must share one -- and an actor in
@@ -215,18 +243,10 @@ export class AuthorizationService {
 
     const kinds = [a.kind, b.kind].sort().join('+');
 
-    // BR-1, as re-versioned by PD-6. The pairing is permitted, but only for a
-    // relationship the server established. Role is not evidence: "a teacher"
-    // and "a parent" may open a channel only when they are THIS learner's
-    // teacher and THIS family's parent.
+    // BR-1, restored by PD-7. Never a direct teacher<->parent channel, whatever
+    // their relationship; the Student Group is the only place they speak.
     if (kinds === 'contact+teacher') {
-      if (!pairingAuthorized) {
-        return deny(
-          CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
-          'no authorized relationship exists between this teacher and this parent',
-        );
-      }
-      return allow();
+      return deny(CommErrorCode.BR1_TEACHER_PARENT_DIRECT, BR1_DIRECT_REASON);
     }
     if (kinds === 'contact+contact') {
       return deny(CommErrorCode.INVALID_PARTICIPANTS, 'two family contacts cannot open a channel');
@@ -281,9 +301,9 @@ export class AuthorizationService {
    *        admin            a conversation of a family they own
    *        admin, coverage  a conversation they are the ACTIVE HANDLER of
    *                         (interim, PD-3 routing; read/reply only)
-   *        contact, teacher a conversation they are a live member of (PD-6
-   *                         unchanged: the relationship is enforced on send
-   *                         and call, not here)
+   *        contact, teacher a conversation they are a live member of (a
+   *                         PD-6-era direct teacher<->parent conversation
+   *                         stays readable; PD-7 refuses it on send and call)
    *      anything else in the organization: NOT_CONVERSATION_MEMBER (403).
    *
    * Reading is not sending and not calling: canSend and canCall still apply
@@ -370,6 +390,47 @@ export class AuthorizationService {
     };
   }
 
+  /**
+   * The list form of the scoped read decision (see ListScope). Refusals are
+   * the ones canRead gives the same actor, with the same codes and messages
+   * the pre-scope list probe gave: an inactive actor, then a role that is not
+   * family-facing (super_admin and department staff).
+   *
+   * SYSTEM lists nothing: it is not reachable over HTTP and has no
+   * organization to be scoped to.
+   */
+  listScope(actor: Actor): ListScopeDecision {
+    if (!actor.isActive) return { allowed: false, code: CommErrorCode.ACTOR_INACTIVE, reason: 'actor is inactive' };
+    if (actor.kind === ActorKind.SYSTEM) return { allowed: true, scope: { kind: 'none' } };
+    if (actor.kind === ActorKind.STAFF && !isFamilyFacingStaff(actor)) {
+      return {
+        allowed: false,
+        code: CommErrorCode.ROLE_CANNOT_MESSAGE_FAMILY,
+        reason: `role ${actor.staffRole} may not access conversations`,
+      };
+    }
+    // Scoped to nothing without an organization -- never "no filter".
+    if (!actor.organizationId) return { allowed: true, scope: { kind: 'none' } };
+    const organizationId = actor.organizationId;
+
+    if (actor.kind === ActorKind.STAFF) {
+      if (actor.staffRole === StaffRole.MANAGER) {
+        return { allowed: true, scope: { kind: 'organization', organizationId } };
+      }
+      return {
+        allowed: true,
+        scope: {
+          kind: 'staff',
+          organizationId,
+          actorId: actor.actorId,
+          // Ownership is the ADMIN's assignment (decision U2), as in canRead.
+          ownership: actor.staffRole === StaffRole.ADMIN,
+        },
+      };
+    }
+    return { allowed: true, scope: { kind: 'member', organizationId, actorId: actor.actorId } };
+  }
+
   /** The pre-scope read decision, verbatim. Reached only via UNSCOPED_LEGACY_READ. */
   private legacyCanRead(actor: Actor, conv: Conv, membership: Member | null): Decision {
     if (!actor.isActive) return deny(CommErrorCode.ACTOR_INACTIVE, 'actor is inactive');
@@ -421,10 +482,8 @@ export class AuthorizationService {
     /** Live membership with roles and resolved activity, for the C-4
      *  admin-presence check. When empty the check cannot run and says so. */
     liveMembers: LiveMember[] = [],
-    /** PD-6: is there an authorized teacher<->parent relationship behind this
-     *  direct conversation? Resolved by RelationshipService before the call.
-     *  Defaults to false, so an un-stated relationship denies. */
-    pairingAuthorized = false,
+    /** PD-6 input, IGNORED since PD-7: a relationship opens no channel. */
+    _pairingAuthorized = false,
   ): Promise<Decision> {
     const readable = this.canRead(actor, conv, membership);
     if (!readable.allowed) return readable;
@@ -446,11 +505,11 @@ export class AuthorizationService {
       if (membership?.isSilent) {
         return deny(CommErrorCode.MEMBER_IS_SILENT, 'this member is present but may not post');
       }
-      // PD-6. The parent's side of a direct teacher<->parent channel. A
-      // conversation outlives the relationship that justified it, so this is
-      // checked on every send and not only at creation.
-      const pairing = this.requireAuthorizedPairing(actor, conv, participantKinds, pairingAuthorized);
-      if (pairing) return pairing;
+      // BR-1 (PD-7). The parent's side of a direct teacher<->parent channel. A
+      // conversation created under PD-6 still exists, so this is checked on
+      // every send and not only at creation.
+      const direct = this.refuseDirectTeacherParent(actor, conv, participantKinds);
+      if (direct) return direct;
       const presence = this.requireAdminPresence(conv, liveMembers, participantKinds);
       if (presence) return presence;
       return allow(null, this.moderationFor(conv, MemberRole.PARENT));
@@ -461,12 +520,12 @@ export class AuthorizationService {
       if (intent.visibility === Visibility.INTERNAL) {
         return deny(CommErrorCode.TEACHER_CANNOT_WRITE_INTERNAL, 'teachers cannot write internal notes');
       }
-      // PD-6. A teacher may speak in a group, in a 1:1 whose other side is
-      // Jawwid staff, and in a 1:1 with a parent they are AUTHORIZED to reach.
-      // The check is on the participant set, not on the conversation type:
-      // Teacher <-> Admin is a permitted 1:1 and must not be caught here.
-      const pairing = this.requireAuthorizedPairing(actor, conv, participantKinds, pairingAuthorized);
-      if (pairing) return pairing;
+      // BR-1 (PD-7). A teacher may speak in a group and in a 1:1 whose other
+      // side is Jawwid staff -- never in a 1:1 with a parent. The check is on
+      // the participant set, not on the conversation type: Teacher <-> Admin is
+      // a permitted 1:1 and must not be caught here.
+      const direct = this.refuseDirectTeacherParent(actor, conv, participantKinds);
+      if (direct) return direct;
       if (membership?.isSilent) {
         return deny(CommErrorCode.MEMBER_IS_SILENT, 'this member is present but may not post');
       }
@@ -604,33 +663,26 @@ export class AuthorizationService {
 
   /** Group approval policy. Staff messages are never held. */
   /**
-   * PD-6. A DIRECT conversation that pairs a teacher with a family contact is
-   * permitted only for an authorized relationship.
+   * BR-1, restored by PD-7 (2026-10-14). A DIRECT conversation that pairs a
+   * teacher with a family contact accepts nothing -- no message, no call --
+   * whatever their relationship. Such a conversation can exist only from the
+   * PD-6 window; it stays readable as history.
    *
    * Evaluated on the participant SET, never on the conversation type alone:
    * Teacher <-> Admin and Parent <-> Admin are direct conversations too and
    * must not be caught here.
    *
-   * This is deliberately one method called from three places -- the contact
-   * branch of canSend, the teacher branch of canSend, and canCall -- rather
-   * than three similar conditions. Messaging and calling must never be able to
-   * disagree about who may speak to whom, and the surest way to guarantee that
-   * is to give them one implementation to disagree about.
-   *
-   * BOTH SIDES ARE CHECKED. Before PD-6 only the teacher branch carried a BR-1
-   * test, because the channel could not exist at all and a parent could never
-   * be in one. Now it can: a conversation created while a relationship was live
-   * outlives the relationship, and the parent's next message must be refused
-   * just as the teacher's is. Checking one side only would let a revoked
-   * relationship keep half a channel open.
+   * One method called from three places -- the contact branch of canSend, the
+   * teacher branch of canSend, and canCall -- so messaging and calling cannot
+   * disagree about who may speak to whom. Both sides are checked: a channel
+   * opened under PD-6 is closed for the parent exactly as for the teacher.
    *
    * Returns a denial, or null when the rule does not apply.
    */
-  private requireAuthorizedPairing(
+  private refuseDirectTeacherParent(
     actor: Actor,
     conv: Conv,
     participantKinds: string[],
-    pairingAuthorized: boolean,
   ): Decision | null {
     if (conv.type !== ConversationType.DIRECT) return null;
 
@@ -639,13 +691,7 @@ export class AuthorizationService {
     const kinds = new Set([...participantKinds, actor.kind]);
     if (!kinds.has(ActorKind.TEACHER) || !kinds.has(ActorKind.CONTACT)) return null;
 
-    if (!pairingAuthorized) {
-      return deny(
-        CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED,
-        'no authorized relationship exists between this teacher and this parent',
-      );
-    }
-    return null;
+    return deny(CommErrorCode.BR1_TEACHER_PARENT_DIRECT, BR1_DIRECT_REASON);
   }
 
   /**
@@ -1089,6 +1135,44 @@ export class AuthorizationService {
     return allow();
   }
 
+  /**
+   * C0 Decision 5 (2026-10-14). May this STAFF member hold a direct 1:1 with a
+   * contact of this family?
+   *
+   * canOpenDirect has already decided the pair (same organization, both
+   * active, a permitted pairing of kinds). This is the staff-scope half, which
+   * canOpenDirect cannot decide because it needs facts about the FAMILY:
+   *   manager    any family of their organization (same organization is
+   *              canOpenDirect's precondition);
+   *   admin      a family they own (decision U2: ownership is the ADMIN's
+   *              assignment), or one they are on duty for right now;
+   *   coverage   a family they are on duty for right now (interim PD-3
+   *              routing, the same exception the scoped read makes).
+   * Anything else -- including a super_admin or department staff, which
+   * canOpenDirect already refuses -- is refused. Without this, any admin could
+   * open a 1:1 with any parent of the organization, become its member, and
+   * read it: membership granted by the actor to themselves.
+   *
+   * Facts are server-resolved by ConversationService (chat.family.owner_id and
+   * chat.on_duty() for the contact's family); nothing comes from the request.
+   */
+  canStaffReachFamily(
+    staff: Actor,
+    facts: { familyOwnerId: string | null; onDutyId: string | null },
+  ): Decision {
+    if (staff.kind !== ActorKind.STAFF) return allow();
+    if (!staff.isActive) return deny(CommErrorCode.ACTOR_INACTIVE, 'actor is inactive');
+    if (!isFamilyFacingStaff(staff)) {
+      return deny(CommErrorCode.ROLE_CANNOT_MESSAGE_FAMILY, `role ${staff.staffRole} may not message families`);
+    }
+    if (staff.staffRole === StaffRole.MANAGER) return allow();
+    if (staff.staffRole === StaffRole.ADMIN && facts.familyOwnerId !== null && facts.familyOwnerId === staff.actorId) {
+      return allow();
+    }
+    if (facts.onDutyId !== null && facts.onDutyId === staff.actorId) return allow();
+    return deny(CommErrorCode.NOT_CONVERSATION_MEMBER, 'this family is outside the staff member\'s scope');
+  }
+
   /** The approver is the family's active handler, or any manager. */
   canApprove(actor: Actor, activeHandlerId: string | null): Decision {
     if (!isFamilyFacingStaff(actor)) {
@@ -1117,12 +1201,8 @@ export class AuthorizationService {
     /** PD-2: starting a group call is not the same permission as joining one.
      *  Defaults to the stricter INITIATE. */
     intent: CallIntent = CallIntent.INITIATE,
-    /** PD-6: the resolved teacher<->parent relationship. Defaults to false.
-     *
-     *  Re-resolved by the caller on BOTH the start path and the token path, so
-     *  a relationship revoked after a call was created refuses the next media
-     *  token. A call is not a standing grant. */
-    pairingAuthorized = false,
+    /** PD-6 input, IGNORED since PD-7: a relationship opens no call. */
+    _pairingAuthorized = false,
   ): Promise<Decision> {
     // PD-B (2026-10-14): a STAFF member answering a call they were rung for is
     // not sending a message, and is not held to the on-duty rule that governs
@@ -1140,26 +1220,23 @@ export class AuthorizationService {
             familyOwnerId,
             participants.map((p) => p.kind),
             liveMembers,
-            pairingAuthorized,
           );
     if (!sendable.allowed) return sendable;
 
-    // PD-6. canSend already applied requireAuthorizedPairing for a direct
-    // teacher/parent conversation, so a call cannot be more permissive than a
-    // message in the same channel -- which is the property C-2 asks for and the
-    // reason calling routes through canSend at all. Restated here on the call's
-    // own participant set, because the two are supplied separately and a caller
+    // BR-1 (PD-7). canSend already refused a direct teacher/parent
+    // conversation, so a call cannot be more permissive than a message in the
+    // same channel -- which is the property C-2 asks for and the reason calling
+    // routes through canSend at all. Restated here on the call's own
+    // participant set, because the two are supplied separately and a caller
     // that assembles them inconsistently must not slip through. On the staff
-    // ANSWER path (canStaffJoinCall) canSend did not run, so this restatement is
-    // the check there -- and a staff member is never one side of a direct
-    // teacher/parent pair, so PD-6 cannot be loosened by that path.
-    const callPairing = this.requireAuthorizedPairing(
+    // ANSWER path (canStaffJoinCall) canSend did not run, so this restatement
+    // is the check there.
+    const direct = this.refuseDirectTeacherParent(
       actor,
       conv,
       participants.map((p) => p.kind),
-      pairingAuthorized,
     );
-    if (callPairing) return callPairing;
+    if (direct) return direct;
 
     /**
      * PD-2 (closed 2026-09-07). A group call is the official Teacher <-> Parent
@@ -1213,7 +1290,14 @@ export class AuthorizationService {
    * on-duty rule included.
    */
   private canStaffJoinCall(actor: Actor, conv: Conv, membership: Member | null): Decision {
-    const readable = this.canRead(actor, conv, membership);
+    // The SCOPED read, with no fact resolved, and that is exact rather than a
+    // shortcut: a live member's read never depends on a fact
+    // (readScopeFactsNeeded returns none for them), and a non-member is refused
+    // below whatever the facts say -- answering is a member's act. So the
+    // organization, status and role rules of the scoped read apply here as
+    // they do everywhere else, and nothing is looked up to apply them.
+    const facts: StaffScopeFacts = { familyOwnerId: null, activeHandlerId: null };
+    const readable = this.canRead(actor, conv, membership, facts);
     if (!readable.allowed) return readable;
     if (conv.archivedAt) {
       return deny(CommErrorCode.CONVERSATION_ARCHIVED, 'conversation is archived');

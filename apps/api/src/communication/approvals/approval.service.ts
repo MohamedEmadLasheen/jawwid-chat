@@ -45,7 +45,13 @@ export class ApprovalService {
     @Inject(IDENTITY_SERVICE) private readonly identity: IdentityService,
   ) {}
 
-  /** The approval queue, scoped to what this actor is allowed to decide. */
+  /**
+   * The approval queue, scoped to what this actor is allowed to decide (C0
+   * Decision 6): their own organization, and within it the conversations they
+   * are the active handler of -- all of them for a manager. Decided IN the
+   * query, before the cap, so another tenant's or another handler's held
+   * messages (and their signed attachment URLs) never leave the database.
+   */
   async listPending(actorId: string, conversationId?: string): Promise<PendingApprovalDto[]> {
     const actor = await this.conversations.requireActor(actorId);
     const decision = this.authz.canApprove(actor, actor.actorId);
@@ -53,11 +59,14 @@ export class ApprovalService {
       // Non-staff never see the queue at all.
       throw new CommError(decision.code, decision.reason);
     }
+    const scope = await this.conversations.approvalScopeWhere(actor);
+    if (!scope) return [];
 
     const rows = await this.prisma.messageApproval.findMany({
       where: {
         decision: ApprovalDecision.PENDING,
         ...(conversationId ? { conversationId } : {}),
+        conversation: scope,
       },
       include: { message: { include: { attachments: true, reactions: true, receipts: true } } },
       orderBy: { createdAt: 'asc' },
@@ -150,6 +159,13 @@ export class ApprovalService {
     if (!approval) {
       throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'approval not found', 404);
     }
+    const conv = await this.conversations.requireConversation(approval.conversationId);
+    // RT-030 / Decision 6, FIRST: another organization's approval is answered
+    // exactly as a missing one -- before its state (decided or not) is read
+    // back, and whatever the organization-blind coverage engine says about who
+    // handles it.
+    const tenant = this.authz.canActInOrganization(actor, conv.organizationId);
+    if (!tenant.allowed) throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'approval not found', 404);
     if (approval.decision !== ApprovalDecision.PENDING) {
       throw new CommError(
         CommErrorCode.APPROVAL_ALREADY_DECIDED,
@@ -158,13 +174,20 @@ export class ApprovalService {
       );
     }
 
-    const conv = await this.conversations.requireConversation(approval.conversationId);
     // The approver is the family's active handler, resolved through AI #1's
     // coverage engine - coverage logic is never duplicated here.
     const activeHandler = await this.conversations.activeHandler(conv);
 
     const permitted = this.authz.canApprove(actor, activeHandler);
     if (!permitted.allowed) throw new CommError(permitted.code, permitted.reason);
+    // And the scoped read, so a decision is never possible where reading is
+    // not (an inactive actor included): the active handler and a manager of
+    // this organization always pass it, so no legitimate approver is refused.
+    await this.conversations.requireReadable(
+      actor,
+      conv,
+      await this.conversations.membershipOf(conv.id, actor.actorId),
+    );
 
     const now = new Date();
     const approved = decisionValue === ApprovalDecision.APPROVED;
@@ -251,8 +274,8 @@ export class ApprovalService {
     const actor = await this.conversations.requireActor(actorId);
     const conv = await this.conversations.requireConversation(conversationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
-    const readable = this.authz.canRead(actor, conv, membership);
-    if (!readable.allowed) throw new CommError(readable.code, readable.reason);
+    // The scoped read (C3): another organization's history is a 404.
+    await this.conversations.requireReadable(actor, conv, membership);
     if (!this.authz.canReadInternal(actor)) {
       throw new CommError(CommErrorCode.CANNOT_APPROVE, 'approval history is staff-only');
     }

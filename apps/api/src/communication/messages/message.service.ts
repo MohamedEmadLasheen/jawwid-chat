@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Message, Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
-import { AuthorizationService } from '../../platform/authorization.service';
+import { AuthorizationService, BR1_DIRECT_REASON } from '../../platform/authorization.service';
 import { AppConfigService } from '../../platform/app-config.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
 import { AUDIT_SERVICE, IDENTITY_SERVICE } from '../../platform/tokens';
@@ -193,12 +193,14 @@ export class MessageService {
       // C-4: admin presence is evaluated at post time, not only as committed
       // membership state.
       await this.conversations.liveMembersOf(conv.id),
-      // PD-6: and so is the teacher<->parent relationship. A conversation
-      // outlives the relationship that justified opening it, so this is
-      // resolved per message rather than trusted from creation time.
-      await this.conversations.pairingAuthorizedAmong(members),
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+    // C3: and the SCOPED read. Sending is never possible where reading is not:
+    // canSend's own staff rules (on duty, sticky, group, internal note) were
+    // written when family-facing staff could read everything, so they are
+    // applied on top of the scope, never instead of it. Asked after canSend so
+    // every refusal canSend already gives keeps its code.
+    await this.conversations.requireReadable(actor, conv, membership, now);
 
     this.validateContent(type, input);
     await this.validateReplyTarget(conv.id, input.replyToMessageId ?? null);
@@ -459,8 +461,7 @@ export class MessageService {
     const conv = await this.conversations.requireConversation(input.conversationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
 
-    const decision = this.authz.canRead(actor, conv, membership);
-    if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+    await this.conversations.requireReadable(actor, conv, membership);
 
     const maxLimit = await this.config.get('communication.page_size_max');
     const defaultLimit = await this.config.get('communication.page_size_default');
@@ -549,13 +550,46 @@ export class MessageService {
     return result.count;
   }
 
+  /**
+   * The client confirms it holds these messages on device (HTTP
+   * `POST .../:messageId/delivered` and the socket `message.delivered`).
+   *
+   * A receipt is the actor's own row, but a write to it is still an act IN the
+   * conversation: it changes what the sender is shown. So only messages of
+   * conversations the actor may read NOW are marked, each conversation decided
+   * by the scoped read; the rest are ignored, exactly as a message with no
+   * receipt for this actor is. `conversationId`, when the route names one,
+   * further confines the batch to it.
+   */
+  async markDelivered(messageIds: string[], actorId: string, conversationId?: string): Promise<number> {
+    if (messageIds.length === 0) return 0;
+    const actor = await this.conversations.requireActor(actorId);
+    const rows = await this.prisma.message.findMany({
+      where: {
+        id: { in: messageIds },
+        conversationId: conversationId ? conversationId : { not: null },
+      },
+      select: { id: true, conversationId: true },
+    });
+    const now = new Date();
+    const readable = new Set<string>();
+    for (const cid of new Set(rows.map((r) => r.conversationId as string))) {
+      const conv = await this.prisma.conversation.findUnique({ where: { id: cid } });
+      if (!conv) continue;
+      const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
+      const [decision] = await this.conversations.canReadResolvedMany([actor], conv, [membership], now);
+      if (decision.allowed) readable.add(cid);
+    }
+    const ids = rows.filter((r) => readable.has(r.conversationId as string)).map((r) => r.id);
+    return this.markState(ids, actor.actorId, ReceiptState.DELIVERED);
+  }
+
   /** Advance the read cursor; used for unread reconciliation after reconnect. */
   async markReadUpTo(conversationId: string, actorId: string, seq: string): Promise<void> {
     const actor = await this.conversations.requireActor(actorId);
     const conv = await this.conversations.requireConversation(conversationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
-    const decision = this.authz.canRead(actor, conv, membership);
-    if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+    await this.conversations.requireReadable(actor, conv, membership);
 
     const target = BigInt(seq);
     const ids = await this.prisma.message.findMany({
@@ -608,9 +642,18 @@ export class MessageService {
     };
   }
 
+  /**
+   * The unread badge for ONE conversation. Authorized here, with the scoped
+   * read, because `GET .../messages/unread` reaches it directly: a count is a
+   * read, and it must not outlive the actor's access to the conversation.
+   */
   async unreadCount(conversationId: string, actorId: string): Promise<number> {
+    const actor = await this.conversations.requireActor(actorId);
+    const conv = await this.conversations.requireConversation(conversationId);
+    const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
+    await this.conversations.requireReadable(actor, conv, membership);
     return this.prisma.message.count({
-      where: { conversationId, ...this.unreadWhere(actorId) },
+      where: { conversationId: conv.id, ...this.unreadWhere(actor.actorId) },
     });
   }
 
@@ -659,6 +702,12 @@ export class MessageService {
 
   async react(messageId: string, actorId: string, emoji: string): Promise<void> {
     const { actor, message } = await this.loadForActor(messageId, actorId);
+    // PD-7: a reaction is a signal from one side to the other; a direct
+    // teacher<->parent conversation accepts none. (Removing one's own earlier
+    // reaction, `unreact`, stays allowed: it sends nothing new.)
+    if (await this.conversations.isDirectTeacherParent(message.conversationId!)) {
+      throw new CommError(CommErrorCode.BR1_TEACHER_PARENT_DIRECT, BR1_DIRECT_REASON);
+    }
     await this.prisma.$transaction(async (tx) => {
       await tx.messageReaction.upsert({
         where: { messageId_actorId: { messageId, actorId: actor.actorId } },
@@ -766,8 +815,17 @@ export class MessageService {
     const conv = await this.conversations.requireConversation(message.conversationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
 
-    const decision = this.authz.canRead(actor, conv, membership);
-    if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+    // The scoped read. Another organization's message is answered exactly as a
+    // missing one -- MESSAGE_NOT_FOUND, not the conversation's 404 -- so a
+    // message id confirms nothing across the tenant boundary.
+    try {
+      await this.conversations.requireReadable(actor, conv, membership);
+    } catch (e) {
+      if (e instanceof CommError && e.status === 404) {
+        throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'message not found', 404);
+      }
+      throw e;
+    }
 
     // A message the actor may not see must look absent, not forbidden.
     if (message.visibility === Visibility.INTERNAL && !this.authz.canReadInternal(actor)) {

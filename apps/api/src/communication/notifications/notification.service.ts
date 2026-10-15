@@ -240,10 +240,15 @@ export class NotificationService {
     });
   }
 
-  /** Called by a client or a provider webhook. Never inferred. */
-  async markDelivered(notificationId: string): Promise<void> {
+  /**
+   * Reported by the RECIPIENT's client; never inferred. Scoped to the
+   * recipient exactly as markOpened is: a notification belonging to anyone
+   * else -- another person, another organization -- matches nothing and
+   * nothing happens, so an id alone writes no one else's delivery state.
+   */
+  async markDelivered(notificationId: string, recipientId: string): Promise<void> {
     await this.prisma.notification.updateMany({
-      where: { id: notificationId, status: NotificationStatus.SENT },
+      where: { id: notificationId, recipientId, status: NotificationStatus.SENT },
       data: { status: NotificationStatus.DELIVERED, deliveredAt: new Date() },
     });
   }

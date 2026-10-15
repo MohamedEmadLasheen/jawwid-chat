@@ -15,7 +15,7 @@ import { AuthorizationService } from '@platform/authorization.service';
 import { SqlCoverageService } from '@platform/coverage.service';
 import { PrismaAuditService } from '@platform/audit.service';
 import { ConversationService } from '@communication/conversations/conversation.service';
-import { buildGraph, seed, truncate, Scenario } from './harness';
+import { buildGraph, existingDirect, seed, truncate, Scenario } from './harness';
 
 jest.setTimeout(60_000);
 
@@ -120,8 +120,10 @@ beforeEach(async () => {
   );
 
   conv = {
-    f1: (await conversations.getOrCreateDirect(s.parentId, s.otherAdminId)).id,
-    f2: (await conversations.getOrCreateDirect(ids.contact2, s.otherAdminId)).id,
+    // Pre-existing directs with an admin who is not in either family's charge
+    // (C0 Decision 5 would not open them today): the scope question is reading.
+    f1: await existingDirect(g, s.parentId, s.otherAdminId),
+    f2: await existingDirect(g, ids.contact2, s.otherAdminId),
     familyLess: (await conversations.getOrCreateDirect(s.teacherId, s.otherAdminId)).id,
   };
 });

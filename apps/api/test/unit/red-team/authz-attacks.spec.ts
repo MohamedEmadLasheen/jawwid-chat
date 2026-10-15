@@ -122,36 +122,31 @@ describe('conversation-type confusion', () => {
   const authz = authzWithOnDuty();
 
   it('a teacher cannot post into a direct conversation with a parent by presenting a membership row', async () => {
-    // PD-6 re-versioned the rule but not this attack: a membership row is not a
-    // relationship. Holding a member row in a direct conversation with a
-    // contact buys nothing when the relationship says no.
+    // PD-7 restored BR-1: a membership row in a direct conversation with a
+    // contact buys nothing at all.
     const t = teacher();
     const d = await authz.canSend(
-      t, conversation({ type: 'direct' }), member(t), customer, NOW, null, ['teacher', 'contact'],
-      [], false /* pairingAuthorized */,
+      t, conversation({ type: 'direct' }), member(t), customer, NOW, null, ['teacher', 'contact'], [],
     );
     expect(d.allowed).toBe(false);
-    if (!d.allowed) expect(d.code).toBe(CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED);
+    if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_TEACHER_PARENT_DIRECT);
   });
 
-  it('...and the resolved relationship is the ONLY thing that changes that verdict', async () => {
+  it('...and the participant set, not the type, is what decides it', async () => {
     // The positive control for the attack above: same actor, same membership
-    // row, same participant set, only the server-resolved fact differs. Without
-    // this the assertion above could pass for the wrong reason.
+    // row, same conversation type, only the other participant's kind differs.
+    // Without this the assertion above could pass for the wrong reason.
     const t = teacher();
     const d = await authz.canSend(
-      t, conversation({ type: 'direct' }), member(t), customer, NOW, null, ['teacher', 'contact'],
-      [], true /* pairingAuthorized */,
+      t, conversation({ type: 'direct', familyId: null }), member(t), customer, NOW, null, ['teacher', 'staff'], [],
     );
     expect(d.allowed).toBe(true);
   });
 
   it('a client cannot widen its own authority: the fact comes from the server, not the request', async () => {
-    // RT-002/003/004 in PD-6 shape. There is no request field that reaches
-    // pairingAuthorized -- it is resolved by RelationshipService from Jawwid
-    // Core data before the policy runs. This asserts the policy's half of that
-    // contract: the parameter is positional and typed boolean, so no actor
-    // field, membership field or participant-kind string can reach it.
+    // RT-002/003/004. Under PD-7 the policy reads no relationship at all, so
+    // no actor field an attacker adds -- however it is named -- can open the
+    // channel.
     const t = teacher();
     const forged = {
       ...teacher(),
@@ -166,6 +161,6 @@ describe('conversation-type confusion', () => {
       ['teacher', 'contact'],
     );
     expect(d.allowed).toBe(false);
-    if (!d.allowed) expect(d.code).toBe(CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED);
+    if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_TEACHER_PARENT_DIRECT);
   });
 });

@@ -532,6 +532,9 @@ export class RealtimeGateway
     const actor = await this.currentActor(client);
     if (!actor) return { ok: false };
     if (!(await this.authorize(actor, body.conversationId)).ok) return { ok: false };
+    // PD-7: "is typing" is a signal too; a direct teacher<->parent
+    // conversation carries none.
+    if (await this.conversations.isDirectTeacherParent(body.conversationId)) return { ok: false };
 
     // Server-side debounce: a repeat ping inside the TTL only refreshes the key,
     // so a chatty client cannot amplify fan-out.
@@ -583,16 +586,18 @@ export class RealtimeGateway
     @ConnectedSocket() client: AuthedSocket,
     @MessageBody() body: { messageIds?: string[] },
   ): Promise<{ ok: boolean; updated: number }> {
-    const actor = client.actor;
-    if (!actor || !body?.messageIds?.length) return { ok: false, updated: 0 };
-    // Scoped to this actor's own receipt rows; a client cannot acknowledge for
-    // somebody else.
-    const updated = await this.messages.markState(
-      body.messageIds,
-      actor.actorId,
-      ReceiptState.DELIVERED,
-    );
-    return { ok: true, updated };
+    if (!body?.messageIds?.length) return { ok: false, updated: 0 };
+    // RT-009: the identity as it is NOW, not the one cached at connect time.
+    const actor = await this.currentActor(client);
+    if (!actor) return { ok: false, updated: 0 };
+    // Scoped to this actor's own receipt rows -- a client cannot acknowledge
+    // for somebody else -- and to conversations the actor may read now.
+    try {
+      const updated = await this.messages.markDelivered(body.messageIds, actor.actorId);
+      return { ok: true, updated };
+    } catch {
+      return { ok: false, updated: 0 };
+    }
   }
 
   /**
@@ -695,9 +700,18 @@ export class RealtimeGateway
           conv.id,
           actors.filter((a): a is Actor => !!a).map((a) => a.actorId),
         );
-        const allowed = sockets.map((socket, i) => {
+        // The SCOPED read (C4), per recipient: organization, role and staff
+        // scope, with the conversation-level facts resolved once for the batch.
+        const live = actors.filter((a): a is Actor => !!a);
+        const decisions = await this.conversations.canReadResolvedMany(
+          live,
+          conv,
+          live.map((a) => members.get(a.actorId) ?? null),
+        );
+        const readable = new Map(live.map((a, i) => [a, decisions[i].allowed] as const));
+        const allowed = sockets.map((_socket, i) => {
           const actor = actors[i];
-          return !!actor && this.authz.canRead(actor, conv, members.get(actor.actorId) ?? null).allowed;
+          return !!actor && readable.get(actor) === true;
         });
         await this.deliveryBarrier?.();
         // Must be the last await before the emits: proves the locks are still
@@ -925,7 +939,8 @@ export class RealtimeGateway
     try {
       const conv = await this.conversations.requireConversation(conversationId);
       const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
-      const decision = this.authz.canRead(actor, conv, membership);
+      // The SCOPED read (C4): the same decision as GET /conversations/:id.
+      const [decision] = await this.conversations.canReadResolvedMany([actor], conv, [membership]);
       return decision.allowed ? { ok: true } : { ok: false, code: decision.code };
     } catch {
       return { ok: false, code: 'COMM.CONVERSATION_NOT_FOUND' };

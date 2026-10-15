@@ -86,8 +86,14 @@ export interface AdminMessageDto {
   readonly type: string;
   readonly visibility: string;
   readonly moderation: string;
-  /** Null for a deleted message: inspection does not resurrect a deletion. */
-  readonly body: string | null;
+  /**
+   * ALWAYS null (decision 2026-10-14): super_admin gains no family-facing read
+   * by role, so inspection is metadata only -- who, when, what kind, whether
+   * deleted, how many attachments -- never what was said. The field stays so
+   * the response shape the Admin Web reads does not change; the body is not
+   * even read from the database.
+   */
+  readonly body: null;
   readonly deleted: boolean;
   readonly attachments: number;
   readonly createdAt: string;
@@ -233,11 +239,24 @@ export class AdminInspectionService {
       throw new CommError(CommErrorCode.CONVERSATION_NOT_FOUND, 'conversation not found', 404);
     }
 
+    // An explicit column list WITHOUT `body`: message content is never read
+    // on this path (decision 2026-10-14, super_admin has no family-facing read).
     const rows = await this.prisma.message.findMany({
       where: { conversationId: conversation.id, organizationId },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: ADMIN_MESSAGE_LIMIT,
-      include: { _count: { select: { attachments: true } } },
+      select: {
+        id: true,
+        seq: true,
+        authorType: true,
+        authorId: true,
+        type: true,
+        visibility: true,
+        moderation: true,
+        deletedAt: true,
+        createdAt: true,
+        _count: { select: { attachments: true } },
+      },
     });
 
     const authors = await this.identity.resolveActors(
@@ -260,7 +279,7 @@ export class AdminInspectionService {
           type: m.type,
           visibility: m.visibility,
           moderation: m.moderation,
-          body: deleted ? null : m.body,
+          body: null,
           deleted,
           attachments: m._count.attachments,
           createdAt: m.createdAt.toISOString(),

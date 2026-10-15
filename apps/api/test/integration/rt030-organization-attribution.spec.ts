@@ -131,9 +131,16 @@ describe('direct conversations', () => {
     expect(await orgOfConversation(conv.id)).toBe(b.orgId);
   });
 
-  it('second organization: an authorized Teacher<->Parent (PD-6) direct is filed under its tenant', async () => {
-    const conv = await g.conversations.getOrCreateDirect(b.teacherId, b.contactId);
-    expect(await orgOfConversation(conv.id)).toBe(b.orgId);
+  // RE-VERSIONED 2026-10-14 BY PD-7. This asserted that an authorized
+  // Teacher<->Parent (PD-6) direct was filed under its tenant. PD-7 restores
+  // BR-1, so there is no such row to file: the same-tenant, related pair is
+  // refused by BR-1 -- named as BR-1, not answered as an unknown actor, since
+  // both sides ARE in one organization -- and nothing is written.
+  it('second organization: a related Teacher<->Parent direct is refused by BR-1, with no writes', async () => {
+    const before = await footprint();
+    const e = await refusal(g.conversations.getOrCreateDirect(b.teacherId, b.contactId));
+    expect([e.code, e.status]).toEqual([CommErrorCode.BR1_TEACHER_PARENT_DIRECT, 403]);
+    expect(await footprint()).toEqual(before);
   });
 
   it('retrieving an existing direct, from either side, creates nothing new', async () => {

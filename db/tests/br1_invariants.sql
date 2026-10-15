@@ -1,24 +1,23 @@
 -- Jawwid Chat -- executable BR-1 invariant tests (red team, AI #9).
 --
--- RE-VERSIONED 2026-09-23 BY PD-6. The product rule changed; this suite was
--- not deleted and not weakened. Where it used to assert
+-- RE-VERSIONED 2026-10-14 BY PD-7, which supersedes PD-6 (2026-09-23).
 --
---     teacher + parent, direct  ->  ALWAYS REFUSED
+--     PD-6  teacher + AUTHORIZED parent, direct  ->  PERMITTED
+--     PD-7  teacher + ANY parent, direct         ->  REFUSED   (A1-A4, D1, D5, D7)
 --
--- it now asserts the pair the product actually forbids:
---
---     teacher + UNAUTHORIZED parent, direct  ->  REFUSED   (A1, A3, D1)
---     teacher + AUTHORIZED   parent, direct  ->  PERMITTED (A2, D5)
+-- The PD-6 "permitted" cases were turned into refusals, not deleted, and the
+-- PD-6 window gets its own section (H): a direct teacher<->parent conversation
+-- or call written before PD-7 stays readable and its lifecycle writes still
+-- succeed, but it accepts no new teacher/parent message and no revived member.
 --
 -- Every other assertion in this file is untouched and must keep passing:
 -- RT-024 type immutability (B1, B2, D2), RT-025 required admin presence on
 -- every group type (C1-C5), the participant ceilings, and every legitimate
--- channel (E1-E7). PD-6 changed one rule, not the file.
+-- channel (E1-E7).
 --
--- Proves, against a real database built by the migration chain, that an
--- UNAUTHORIZED Teacher<->Parent 1:1 channel cannot be constructed by ANY
--- route, that an AUTHORIZED one can, and that every other legitimate channel
--- still can.
+-- Proves, against a real database built by the migration chain, that a
+-- Teacher<->Parent 1:1 channel cannot be constructed by ANY route, whatever
+-- their relationship, and that every legitimate channel still can.
 --
 -- These are structural tests: they run as the database owner with the
 -- application entirely out of the picture, which is the threat model the
@@ -157,11 +156,10 @@ insert into chat.learner (id, family_id, name, teacher_id) values
 \set p_real  '''66666666-6666-6666-6666-666666666661'''
 
 -- ===========================================================================
--- A · PD-6 · Which direct teacher/parent channel may be CREATED
+-- A · PD-7 · No direct teacher/parent channel may be CREATED
 --
--- Before PD-6 this section asserted that no such channel could exist. It now
--- asserts the boundary that replaced that rule: the relationship decides, and
--- role does not.
+-- Under PD-6 this section separated authorized from unauthorized pairs. PD-7
+-- refuses both: the relationship no longer opens anything.
 -- ===========================================================================
 select pg_temp.expect_violation(
   'A1 direct conversation: teacher + UNRELATED parent is refused at creation',
@@ -173,8 +171,8 @@ select pg_temp.expect_violation(
              ('a0000000-0000-0000-0000-000000000001', 'contact', %L, 'parent');
   $f$, :fam, :teacher, :parent));
 
-select pg_temp.expect_ok(
-  'A2 PD-6: direct conversation teacher + AUTHORIZED parent is PERMITTED',
+select pg_temp.expect_violation(
+  'A2 PD-7: direct conversation teacher + AUTHORIZED parent is REFUSED too',
   format($f$
     insert into chat.conversation (id, type, family_id, direct_key)
       values ('a0000000-0000-0000-0000-00000000000a', 'direct', %L, 'pd6-a2');
@@ -184,7 +182,7 @@ select pg_temp.expect_ok(
   $f$, :fam, :t_real, :p_real));
 
 select pg_temp.expect_violation(
-  'A3 PD-6: a REAL teacher with no learner in that family is still refused',
+  'A3 a REAL teacher with no learner in that family is refused',
   format($f$
     insert into chat.conversation (id, type, family_id, direct_key)
       values ('a0000000-0000-0000-0000-00000000000b', 'direct', %L, 'pd6-a3');
@@ -196,7 +194,7 @@ select pg_temp.expect_violation(
 -- The relationship is not a role. A real teacher and a real parent of a real
 -- family, with the learner link pointing elsewhere, is refused.
 select pg_temp.expect_violation(
-  'A4 PD-6: revoking the learner link refuses a NEW channel for the same pair',
+  'A4 a revoked learner link refuses a NEW channel for the same pair',
   format($f$
     update chat.learner set teacher_id = %L
      where id = '33333333-3333-3333-3333-333333333336';
@@ -316,8 +314,8 @@ select pg_temp.expect_violation(
              ('c0000000-0000-0000-0000-000000000001', %L, 'contact');
   $f$, :fam, :learner, :teacher, :parent, :admin, :fam, :teacher, :teacher, :parent));
 
-select pg_temp.expect_ok(
-  'D5 PD-6: a direct call between a teacher and an AUTHORIZED parent is PERMITTED',
+select pg_temp.expect_violation(
+  'D5 PD-7: a direct call between a teacher and an AUTHORIZED parent is REFUSED too',
   format($f$
     insert into chat.conversation (id, type, family_id, direct_key)
       values ('b0000000-0000-0000-0000-00000000000a', 'direct', %L, 'pd6-d5');
@@ -332,24 +330,9 @@ select pg_temp.expect_ok(
              ('c0000000-0000-0000-0000-00000000000a', %L, 'contact');
   $f$, :fam, :t_real, :p_real, :fam, :t_real, :t_real, :p_real));
 
--- The call lifecycle must survive a relationship that changes mid-call. If the
--- database re-checked the relationship on UPDATE, a reassignment during a call
--- would make ending it impossible and strand the call ACTIVE forever.
-select pg_temp.expect_ok(
-  'D6 PD-6: an in-progress call can still be ENDED after the relationship is revoked',
-  format($f$
-    update chat.learner set teacher_id = %L
-     where id = '33333333-3333-3333-3333-333333333336';
-    update chat.call
-       set status = 'ended', ended_at = now(), outcome = 'answered', duration_seconds = 30
-     where id = 'c0000000-0000-0000-0000-00000000000a';
-    update chat.learner set teacher_id = %L
-     where id = '33333333-3333-3333-3333-333333333336';
-  $f$, :t_other, :t_real));
-
 -- ...but a NEW call for the revoked pair is refused.
 select pg_temp.expect_violation(
-  'D7 PD-6: a NEW direct call is refused once the relationship is revoked',
+  'D7 a NEW direct call is refused once the relationship is revoked',
   format($f$
     update chat.learner set teacher_id = %L
      where id = '33333333-3333-3333-3333-333333333336';
@@ -485,6 +468,80 @@ select pg_temp.expect_ok(
     update chat.call_participant set left_at = now()
      where call_id = 'e0000000-0000-0000-0000-000000000005' and actor_kind = 'staff';
   $f$));
+
+-- ===========================================================================
+-- H · PD-7 · The PD-6 window: history stays, nothing new gets in
+--
+-- PD-6 (2026-09-23 .. 2026-10-14) allowed direct teacher<->parent
+-- conversations and calls for an authorized pair, so such rows may exist. They
+-- are written here with triggers disabled, which is how a row from before
+-- 20261014120000 looks to the database today.
+-- ===========================================================================
+set session_replication_role = replica;
+insert into chat.conversation (id, type, family_id, direct_key)
+  values ('f0000000-0000-0000-0000-000000000001', 'direct', :fam, 'pd6-era');
+insert into chat.conversation_member (conversation_id, actor_kind, actor_id, member_role)
+  values ('f0000000-0000-0000-0000-000000000001', 'teacher', :t_real, 'teacher'),
+         ('f0000000-0000-0000-0000-000000000001', 'contact', :p_real, 'parent');
+insert into chat.call (id, conversation_id, family_id, initiator_id, type, room_name)
+  values ('f1000000-0000-0000-0000-000000000001',
+          'f0000000-0000-0000-0000-000000000001', :fam, :t_real, 'direct', 'pd6-era-room');
+insert into chat.call_participant (call_id, actor_id, actor_kind)
+  values ('f1000000-0000-0000-0000-000000000001', :t_real, 'teacher'),
+         ('f1000000-0000-0000-0000-000000000001', :p_real, 'contact');
+set session_replication_role = origin;
+
+-- The call lifecycle must survive: re-checking BR-1 on UPDATE would strand a
+-- PD-6-era call ACTIVE forever.
+select pg_temp.expect_ok(
+  'D6 a PD-6-era direct call can still be ENDED',
+  $f$
+    update chat.call
+       set status = 'ended', ended_at = now(), outcome = 'answered', duration_seconds = 30
+     where id = 'f1000000-0000-0000-0000-000000000001';
+  $f$);
+
+select pg_temp.expect_violation(
+  'H1 PD-7: the TEACHER may not post into a PD-6-era direct conversation',
+  format($f$
+    insert into chat.message (conversation_id, author_type, author_id, body, visibility)
+      values ('f0000000-0000-0000-0000-000000000001', 'teacher', %L, 'hello', 'customer');
+  $f$, :t_real));
+
+select pg_temp.expect_violation(
+  'H2 PD-7: the PARENT may not post into it either',
+  format($f$
+    insert into chat.message (conversation_id, author_type, author_id, body, visibility)
+      values ('f0000000-0000-0000-0000-000000000001', 'contact', %L, 'hello', 'customer');
+  $f$, :p_real));
+
+select pg_temp.expect_ok(
+  'H3 a SYSTEM message into it is still accepted (the backend may annotate history)',
+  $f$
+    insert into chat.message (conversation_id, author_type, author_id, body, visibility, origin)
+      values ('f0000000-0000-0000-0000-000000000001', 'system', null, '{"kind":"note"}', 'customer', 'automation');
+  $f$);
+
+select pg_temp.expect_ok(
+  'H4 a member may still LEAVE the PD-6-era conversation',
+  format($f$
+    update chat.conversation_member set left_at = now()
+     where conversation_id = 'f0000000-0000-0000-0000-000000000001' and actor_id = %L;
+  $f$, :p_real));
+
+select pg_temp.expect_violation(
+  'H5 PD-7: reviving the departed parent re-creates the pairing and is refused',
+  format($f$
+    update chat.conversation_member set left_at = null
+     where conversation_id = 'f0000000-0000-0000-0000-000000000001' and actor_id = %L;
+  $f$, :p_real));
+
+select pg_temp.expect_ok(
+  'H6 a teacher message into a Teacher <-> Admin direct is untouched by the message guard',
+  format($f$
+    insert into chat.message (conversation_id, author_type, author_id, body, visibility)
+      values ('d0000000-0000-0000-0000-000000000001', 'teacher', %L, 'hello admin', 'customer');
+  $f$, :teacher));
 
 rollback;
 

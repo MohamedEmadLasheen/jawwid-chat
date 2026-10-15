@@ -5,7 +5,7 @@ import { AppConfigService } from '@platform/app-config.service';
 import { PrismaIdentityService } from '@platform/identity.service';
 import type { IdentityService } from '@platform/identity.service';
 import { PrismaAuditService } from '@platform/audit.service';
-import type { CoverageService } from '@platform/coverage.service';
+import type { CoverageListing } from '@platform/coverage.service';
 import { ConversationService } from '@communication/conversations/conversation.service';
 import { MessageService } from '@communication/messages/message.service';
 import { ApprovalService } from '@communication/approvals/approval.service';
@@ -28,10 +28,24 @@ import { PrismaRelationshipService } from '@platform/relationship.service';
 process.env.DATABASE_URL ??= 'postgres://postgres:postgres@localhost:55433/jawwid_chat_int';
 
 /** on_duty() is AI #1's engine; tests pin it so they assert OUR behaviour. */
-export class PinnedCoverage implements CoverageService {
-  constructor(public onDutyId: string | null = null) {}
+export class PinnedCoverage implements CoverageListing {
+  constructor(
+    public onDutyId: string | null = null,
+    private readonly prisma?: PrismaService,
+  ) {}
   async onDuty(): Promise<string | null> {
     return this.onDutyId;
+  }
+  /**
+   * The pinned answer, listed: onDuty() names the pinned staff member for EVERY
+   * family, so they are on duty for every family of the organization, and
+   * anybody else for none. Kept exactly consistent with onDuty() above.
+   */
+  async familiesOnDutyFor(staffId: string, organizationId: string): Promise<string[]> {
+    if (!this.prisma) throw new Error('PinnedCoverage needs a PrismaService to list families');
+    if (this.onDutyId === null || this.onDutyId !== staffId) return [];
+    const rows = await this.prisma.family.findMany({ where: { organizationId }, select: { id: true } });
+    return rows.map((r) => r.id);
   }
 }
 
@@ -46,7 +60,7 @@ export function buildGraph(
   wrapIdentity: (inner: IdentityService) => IdentityService = (inner) => inner,
 ) {
   const prisma = new PrismaService();
-  const coverage = new PinnedCoverage();
+  const coverage = new PinnedCoverage(null, prisma);
   const identity = wrapIdentity(new PrismaIdentityService(prisma));
   const audit = new PrismaAuditService();
   const authz = new AuthorizationService(coverage);
@@ -189,6 +203,135 @@ export async function seed(prisma: PrismaService): Promise<Scenario> {
      values ('${randomUUID()}'::uuid, '${ids.familyId}'::uuid, 'learner_m', '${ids.newTeacherId}'::uuid)`,
   );
   return ids;
+}
+
+/**
+ * A direct conversation that ALREADY EXISTS, written with exactly the columns
+ * ConversationService.getOrCreateDirect writes, triggers ON.
+ *
+ * For the read-scope suites, whose subject is who may READ a conversation once
+ * it exists -- not who may open one. Since C0 Decision 5 a staff member may
+ * open a 1:1 only with a family in their charge, so a direct between a parent
+ * and an admin who is NOT in that family's charge (the case those suites are
+ * about) can exist only from before: opened while the family was theirs, or
+ * before the rule. It is that pre-existing row. Every database rule still
+ * applies (a teacher/parent pair is refused here too; use
+ * legacyTeacherParentDirect for that).
+ */
+export async function existingDirect(
+  g: { prisma: PrismaService; identity: IdentityService },
+  aId: string,
+  bId: string,
+): Promise<string> {
+  const a = await g.identity.resolveActor(aId);
+  const b = await g.identity.resolveActor(bId);
+  if (!a || !b) throw new Error('existingDirect: both actors must resolve');
+  const contact = a.kind === 'contact' ? a : b.kind === 'contact' ? b : null;
+  const roleOf = (k: string) => (k === 'contact' ? 'parent' : k === 'teacher' ? 'teacher' : 'admin');
+  return g.prisma.$transaction(async (tx) => {
+    const conv = await tx.conversation.create({
+      data: {
+        organizationId: a.organizationId as string,
+        type: 'direct',
+        directKey: ConversationService.directKey(a.actorId, b.actorId),
+        familyId: contact?.familyId ?? null,
+        title: null,
+      },
+    });
+    await tx.conversationMember.createMany({
+      data: [a, b].map((x) => ({
+        conversationId: conv.id,
+        actorId: x.actorId,
+        actorKind: x.kind,
+        memberRole: roleOf(x.kind),
+      })),
+    });
+    return conv.id;
+  });
+}
+
+/**
+ * A direct teacher <-> parent conversation as the PD-6 window left it.
+ *
+ * PD-7 (2026-10-14) restored BR-1: neither the API nor the database will
+ * create this conversation any more (canOpenDirect refuses, and
+ * chat.enforce_direct_conversation_rules raises check_violation on the member
+ * INSERT). But rows PD-6 created can still exist in a real database, and the
+ * rule for them -- readable history, nothing new accepted -- can only be proven
+ * against such a row. So the fixture writes it the one way that bypasses every
+ * trigger, `session_replication_role = replica`, LOCAL to one transaction so it
+ * cannot leak into a pooled connection. Exactly what the PD-6 code wrote: a
+ * direct conversation keyed like getOrCreateDirect, filed under the family's
+ * organization, with a parent and a teacher member.
+ */
+export async function legacyTeacherParentDirect(
+  prisma: PrismaService,
+  teacherId: string,
+  parentId: string,
+  familyId: string,
+): Promise<string> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`set local session_replication_role = replica`);
+    const family = await tx.family.findUniqueOrThrow({ where: { id: familyId }, select: { organizationId: true } });
+    const conv = await tx.conversation.create({
+      data: {
+        organizationId: family.organizationId,
+        type: 'direct',
+        directKey: ConversationService.directKey(teacherId, parentId),
+        familyId,
+        title: null,
+      },
+    });
+    await tx.conversationMember.createMany({
+      data: [
+        { conversationId: conv.id, actorId: parentId, actorKind: 'contact', memberRole: 'parent' },
+        { conversationId: conv.id, actorId: teacherId, actorKind: 'teacher', memberRole: 'teacher' },
+      ],
+    });
+    return conv.id;
+  });
+}
+
+/**
+ * A direct call still RINGING in a PD-6-era teacher <-> parent conversation
+ * (see legacyTeacherParentDirect). chat.enforce_call_participant_rules refuses
+ * the participant INSERT under PD-7, so it is written with triggers bypassed
+ * for the same reason and in the same transaction-local way. What it proves is
+ * the PD-7 rule for a call that was already ringing when the policy changed:
+ * it can be ended, never answered.
+ */
+export async function legacyTeacherParentCall(
+  prisma: PrismaService,
+  conversationId: string,
+  initiatorId: string,
+  participants: { teacherId: string; parentId: string },
+  familyId: string,
+): Promise<string> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`set local session_replication_role = replica`);
+    const conv = await tx.conversation.findUniqueOrThrow({
+      where: { id: conversationId },
+      select: { organizationId: true },
+    });
+    const call = await tx.call.create({
+      data: {
+        organizationId: conv.organizationId,
+        conversationId,
+        familyId,
+        initiatorId,
+        type: 'direct',
+        roomName: `jawwid-${conversationId}-${randomUUID()}`,
+        status: 'ringing',
+      },
+    });
+    await tx.callParticipant.createMany({
+      data: [
+        { callId: call.id, actorId: participants.parentId, actorKind: 'contact' },
+        { callId: call.id, actorId: participants.teacherId, actorKind: 'teacher' },
+      ],
+    });
+    return call.id;
+  });
 }
 
 /** Order matters: children before parents. */
