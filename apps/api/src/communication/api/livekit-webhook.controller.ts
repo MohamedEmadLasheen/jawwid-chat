@@ -8,6 +8,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { MediaPresenceService } from '../calls/media-presence.service';
+import { Public } from '../../platform/auth/auth.guard';
 import {
   LiveKitWebhookVerifier,
   MEDIA_WEBHOOK_EVENTS,
@@ -42,6 +43,17 @@ interface RawBodyRequest {
  * as they arrived, because the JWT's `sha256` claim is a hash of exactly those.
  * A re-serialized object hashes differently and every webhook would fail.
  */
+/**
+ * PUBLIC to the bearer-token guard, because LiveKit is not a user: it
+ * authenticates with ITS signature (an HS256 JWT over the exact body, verified
+ * below before anything is read), never with a Jawwid access token. Without
+ * `@Public()` the global guard answered every LiveKit delivery 401 before this
+ * controller ran, so no media-presence webhook could ever be accepted by a
+ * running API (D4 / RT-038; W5, closed at 2be26b8, reopened by the owner on
+ * 2026-10-15 -- docs/release/REOPEN-W5-D4-2026-10-15.md). An unsigned or
+ * tampered delivery is still refused 401, by the controller's own check.
+ */
+@Public()
 @Controller('livekit')
 export class LiveKitWebhookController {
   private readonly log = new Logger(LiveKitWebhookController.name);

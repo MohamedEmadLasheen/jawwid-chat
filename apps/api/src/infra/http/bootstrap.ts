@@ -42,9 +42,53 @@ export function applyInfrastructure(
   options: InfrastructureOptions = {},
 ): void {
   applyTrustedProxy(app);
+  applyWebhookBodyParser(app);
   applySecurityHeaders(app);
   applyCors(app, options.allowedOrigins ?? parseOrigins(process.env.CORS_ALLOWED_ORIGINS));
   applyGracefulShutdown(app, options.shutdownGraceMs ?? Number(process.env.SHUTDOWN_GRACE_MS ?? 15000));
+}
+
+/**
+ * LiveKit posts its webhooks as `Content-Type: application/webhook+json`, which
+ * the default JSON parser does not claim -- so `rawBody` (the signed bytes the
+ * webhook JWT hashes) was never captured and EVERY real LiveKit delivery was
+ * refused as "no body" (D4 / RT-038; W5 reopened 2026-10-15,
+ * docs/release/REOPEN-W5-D4-2026-10-15.md). This parser claims exactly that
+ * type, keeps the raw bytes (the app is created with `rawBody: true`), and
+ * changes nothing for any other content type.
+ */
+function applyWebhookBodyParser(app: INestApplication): void {
+  // A plain middleware, deliberately NOT `useBodyParser('json', ...)`: that
+  // call replaces Nest's default application/json parser, and every JSON
+  // request (login included) then arrives unparsed.
+  const LIMIT = 1024 * 1024;
+  type Req = NodeJS.ReadableStream & {
+    headers: Record<string, string | string[] | undefined>;
+    rawBody?: Buffer;
+    body?: unknown;
+    destroy(): void;
+  };
+  app.use((req: Req, _res: unknown, next: (err?: unknown) => void) => {
+    const type = String(req.headers['content-type'] ?? '').toLowerCase();
+    if (!type.startsWith('application/webhook+json') || req.rawBody) return next();
+    const chunks: Buffer[] = [];
+    let size = 0;
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > LIMIT) req.destroy();
+      else chunks.push(chunk);
+    });
+    req.on('end', () => {
+      req.rawBody = Buffer.concat(chunks);
+      try {
+        req.body = JSON.parse(req.rawBody.toString('utf8'));
+      } catch {
+        req.body = {};
+      }
+      next();
+    });
+    req.on('error', next);
+  });
 }
 
 export function parseOrigins(raw: string | undefined): string[] {
