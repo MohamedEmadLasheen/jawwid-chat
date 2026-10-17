@@ -30,8 +30,8 @@ export class NotificationController {
 
   /** Delivery and open are reported by the client; they are never inferred. */
   @Post(':id/delivered')
-  async delivered(@Param('id') id: string) {
-    await this.notifications.markDelivered(id);
+  async delivered(@ActorId() actorId: string, @Param('id') id: string) {
+    await this.notifications.markDelivered(id, actorId);
     return { ok: true };
   }
 
