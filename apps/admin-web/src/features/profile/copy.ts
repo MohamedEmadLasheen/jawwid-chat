@@ -146,7 +146,7 @@ export const T = {
   workloadOf: { en: 'Responsibilities at a glance', ar: 'المسؤوليات في لمحة' },
   workloadHint: {
     en: 'Counted live from the families currently assigned to this person (churned families excluded). No names are shown.',
-    ar: 'تُحسب مباشرةً من الأسر المسندة حاليًا لهذا الشخص (باستثناء الأسر المنتهي اشتراكها). لا تُعرض أي أسماء.',
+    ar: 'تُحسب مباشرةً من الأسر المسندة حاليًا لهذا الشخص (باستثناء الأسر المنتهي اشتراكها). لا يُعرض اسم أيّ أسرة.',
   },
   asOf: { en: 'As of {when}', ar: 'حتى {when}' },
   notTracked: { en: 'Not tracked in Jawwid Chat', ar: 'غير متتبَّع في جوّد شات' },
