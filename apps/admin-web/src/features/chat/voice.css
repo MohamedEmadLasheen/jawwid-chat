@@ -1,0 +1,58 @@
+/* Voice notes in the chat workspace. Theme tokens only, so they follow light/dark and RTL. */
+.voice-recorder {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2, 8px);
+  margin-inline-end: auto;
+}
+.voice-recorder__mic {
+  inline-size: var(--control-h, 36px);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.voice-recorder__live {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  color: var(--danger);
+  font-size: var(--fs-sm, 13px);
+  font-weight: var(--fw-medium, 500);
+}
+.voice-recorder__dot {
+  inline-size: 10px;
+  block-size: 10px;
+  border-radius: var(--radius-full, 999px);
+  background: var(--danger);
+  animation: voice-pulse 1s ease-in-out infinite alternate;
+}
+.voice-recorder__clock,
+.voice-note__length {
+  font-variant-numeric: tabular-nums;
+}
+.voice-recorder__preview { block-size: 32px; max-inline-size: 240px; }
+.voice-recorder__error {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--fs-sm, 13px);
+}
+.voice-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  margin-block: var(--space-1, 4px);
+}
+.voice-note audio { block-size: 32px; max-inline-size: 260px; }
+.voice-note__length { color: var(--text-muted); font-size: var(--fs-xs, 12px); }
+.voice-note--unavailable { color: var(--text-muted); font-size: var(--fs-sm, 13px); font-style: italic; }
+
+@keyframes voice-pulse {
+  from { opacity: 1; }
+  to { opacity: 0.35; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .voice-recorder__dot { animation: none; }
+}

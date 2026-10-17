@@ -17,12 +17,13 @@ export function App() {
       <QueryClientProvider client={queryClient}>
         <SessionProvider>
           <RealtimeProvider>
-            {/* One call per signed-in admin; the panel rings on every page. */}
+            {/* One call per signed-in admin; the call window rings on every page. */}
             <CallProvider>
               <BrowserRouter>
                 <AppRoutes />
+                {/* Inside the router: the call window opens the call's conversation. */}
+                <CallOverlay />
               </BrowserRouter>
-              <CallOverlay />
             </CallProvider>
           </RealtimeProvider>
         </SessionProvider>

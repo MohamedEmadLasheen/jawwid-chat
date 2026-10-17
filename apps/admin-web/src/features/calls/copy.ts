@@ -35,6 +35,19 @@ export interface CallCopy {
   noHistory: string
   duration: (seconds: number) => string
   regionLabel: string
+  /** Under the name while it rings out. */
+  calling: string
+  incomingStatus: string
+  incomingGroupStatus: string
+  /** `missed` on a call this side placed. */
+  noAnswer: string
+  /** `missed` on a call that rang here. */
+  missedIncoming: string
+  message: string
+  callAgain: string
+  recordVoice: string
+  windowTitle: string
+  moveWindow: string
 }
 
 const ar: CallCopy = {
@@ -48,7 +61,7 @@ const ar: CallCopy = {
   decline: 'رفض',
   hangUp: 'إنهاء المكالمة',
   cancel: 'إلغاء',
-  connecting: 'جارٍ الاتصال…',
+  connecting: 'جارٍ تجهيز الصوت…',
   reconnecting: 'جارٍ إعادة الاتصال…',
   live: 'المكالمة جارية',
   waitingForAudio: 'بانتظار صوت الطرف الآخر',
@@ -75,6 +88,16 @@ const ar: CallCopy = {
   noHistory: 'لا توجد مكالمات في هذه المحادثة بعد.',
   duration: (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`,
   regionLabel: 'المكالمة',
+  calling: 'جارٍ الاتصال…',
+  incomingStatus: 'مكالمة صوتية واردة',
+  incomingGroupStatus: 'مكالمة جماعية واردة',
+  noAnswer: 'لم يتم الرد',
+  missedIncoming: 'مكالمة فائتة',
+  message: 'رسالة',
+  callAgain: 'معاودة الاتصال',
+  recordVoice: 'تسجيل رسالة صوتية',
+  windowTitle: 'مكالمة جوّد الصوتية',
+  moveWindow: 'اسحب لتحريك نافذة المكالمة',
 }
 
 const en: CallCopy = {
@@ -115,6 +138,16 @@ const en: CallCopy = {
   noHistory: 'No calls in this conversation yet.',
   duration: (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`,
   regionLabel: 'Call',
+  calling: 'Calling…',
+  incomingStatus: 'Incoming voice call',
+  incomingGroupStatus: 'Incoming group call',
+  noAnswer: 'No answer',
+  missedIncoming: 'Missed call',
+  message: 'Message',
+  callAgain: 'Call again',
+  recordVoice: 'Record voice message',
+  windowTitle: 'Jawwid voice call',
+  moveWindow: 'Drag to move the call window',
 }
 
 export function callCopyFor(locale: string): CallCopy {
