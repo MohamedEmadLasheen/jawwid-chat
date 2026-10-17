@@ -204,7 +204,8 @@ export interface NotificationCreatedPayload {
 export interface StoryPublishedPayload {
   storyId: string;
   publishedAt: string;
-  expiresAt: string;
+  /** Null: stories published since 2026-10-17 do not expire. */
+  expiresAt: string | null;
   hasMedia: boolean;
   recipientCount: number;
 }

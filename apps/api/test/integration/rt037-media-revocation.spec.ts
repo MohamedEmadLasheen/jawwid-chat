@@ -226,7 +226,8 @@ describe('B · story media: the same access-time rule', () => {
     const key = `stories/${randomUUID()}`;
     await new LocalFsBlobStore().put(key, 'image/png', bytes);
     const draft = await g.stories.create(s.ownerId, {
-      body: 'hello', mediaObjectKey: key, mediaKind: 'image', mediaMime: 'image/png',
+      // No body: a photo story carries no caption (2026-10-17).
+      mediaObjectKey: key, mediaKind: 'image', mediaMime: 'image/png',
       audiences: [{ kind: StoryAudienceKind.ALL_FAMILIES }],
     } as never);
     await g.stories.publish(draft.id, s.ownerId);
@@ -259,7 +260,7 @@ describe('B · story media: the same access-time rule', () => {
     expect((await fetchLink(new MediaUrlSigner().url('stories', st.id, 'o', s.unrelatedTeacherId, 300))).status).toBe(404);
     const key = `stories/${randomUUID()}`;
     await new LocalFsBlobStore().put(key, 'image/png', bytes);
-    const draft = await g.stories.create(s.ownerId, { body: 'd', mediaObjectKey: key, mediaKind: 'image', mediaMime: 'image/png', audiences: [{ kind: StoryAudienceKind.ALL_FAMILIES }] } as never);
+    const draft = await g.stories.create(s.ownerId, { mediaObjectKey: key, mediaKind: 'image', mediaMime: 'image/png', audiences: [{ kind: StoryAudienceKind.ALL_FAMILIES }] } as never);
     expect(draft.mediaUrl).toBeTruthy();
     expect((await fetchLink(draft.mediaUrl!)).status).toBe(200);
     expect((await fetchLink(new MediaUrlSigner().url('stories', draft.id, 'o', s.parentId, 300))).status).toBe(404); // not published

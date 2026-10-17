@@ -234,10 +234,11 @@ export class OutboxWorker {
    *
    * The recipient set is read from chat.story_recipient -- the same rows the feed
    * joins against -- so a notification can never reach somebody the story was not
-   * published to. The body carries the TITLE only, never the story body and never
-   * a media URL: a lock-screen preview is not the place to spend a publication's
-   * privacy, and the client refetches the feed (audience- and expiry-checked) to
-   * render anything more.
+   * published to. It carries no story content: since 2026-10-17 a story has no
+   * title, and the active `story_published` template (20261017120000) says only
+   * that a new story is waiting. Never the body, never a media URL: a lock-screen
+   * preview is not the place to spend a publication's privacy, and the client
+   * refetches the feed (audience-checked) to render anything more.
    *
    * Muting: story notifications honour quiet hours through
    * NotificationService.schedule like every other notification. There is no

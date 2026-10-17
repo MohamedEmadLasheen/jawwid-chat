@@ -764,18 +764,32 @@ Declining again is refused with `COMM.CALL_ALREADY_ENDED` (was `COMM.CALL_PARTIC
 
 ### 3.8b Stories (`story.controller.ts`, `story.service.ts`) — all EXISTS
 
-Canonical design: `../product/STORIES.md`.
+Canonical design: `../product/STORIES.md` (§12: the 2026-10-17 owner decisions — no
+expiry, no caption, voice, one button, analytics, segment targeting, super admin publishes).
 
 ```
-StoryFeedItem  { id, title: string|null, body: string|null, mediaKind: 'image'|'video'|null,
-  mediaUrl: string|null, publishedAt, expiresAt, viewed: boolean }
-StoryAdminItem { id, title, body, mediaKind, mediaUrl, state: 'draft'|'published'|'expired'|'deleted',
-  publishedAt: string|null, expiresAt: string|null, createdBy,
-  audiences: { kind, refId: string|null }[], recipientCount: number, viewCount: number }
-StoryViewer    { actorId, displayName, actorKind, viewedAt }
+StoryFeedItem  { id, kind: 'text'|'image'|'video'|'voice', body: string|null /* text stories only */,
+  background: string|null, mediaKind: 'image'|'video'|'audio'|null, mediaUrl: string|null,
+  mediaDurationMs: number|null, cta: StoryCtaDto|null, publishedAt,
+  expiresAt: string|null /* null since 2026-10-17: does not expire */, viewed: boolean }
+StoryCtaDto    { kind: 'whatsapp'|'message_publisher'|'link', label: string|null,
+  url: string|null /* built by the server: the link, or https://wa.me/<digits>; null for message_publisher */ }
+StoryAdminItem { id, kind, internalName: string|null, title: string|null /* legacy only */, body,
+  background, mediaKind, mediaUrl, mediaDurationMs, cta: (StoryCtaDto & { phone: string|null })|null,
+  state: 'draft'|'published'|'expired'|'deleted', createdAt, publishedAt: string|null,
+  expiresAt: string|null, deletedAt: string|null, createdBy, creatorName,
+  audiences: { kind, refId: string|null, filter: SegmentFilter|null }[],
+  recipientCount: number, viewCount: number, ctaTapCount: number, ctaTapperCount: number }
+StoryViewer    { actorId, displayName, actorKind, viewedAt, ctaTaps: number }
 AudienceClause { kind: 'all_families'|'all_teachers'|'assigned_families'|'family'|'teacher'
-  |'contact'|'conversation', refId?: string|null }
+  |'contact'|'conversation'|'segment', refId?: string|null, filter?: SegmentFilter }
+SegmentFilter  { who: 'everyone'|'families'|'teachers', planMonths?: (1|3|6|12)[],
+  children?: (1|2|3|4)[] /* 4 = four or more */, countries?: string[] /* ISO alpha-2 */ }
+  /* planMonths/children/countries only with who = 'families'; empty = any; dimensions AND */
 ```
+
+**`internalName` and `cta.phone` never reach a reader.** The feed carries neither, nor a
+title; a non-empty `title` on create is refused (`COMM.STORY_CAPTION_NOT_ALLOWED`).
 
 **No route accepts a recipient list.** A client states an AUDIENCE and the server
 resolves it, so "may this publisher address an arbitrary person?" is not a check
@@ -783,30 +797,44 @@ that can be forgotten — it is unrepresentable. No route accepts an actor id
 either: every handler takes the authenticated actor from `@ActorId()`.
 
 **GET /stories/feed** — EXISTS
-- Auth: required. Scope: `canReadStories` — any active actor; a contact must hold `can_message`. Returns only stories joined through the caller's own `chat.story_recipient` rows, with `state = 'published' AND expires_at > now() AND deleted_at IS NULL`. Page size `story.feed_page_size` (50), newest first.
+- Auth: required. Scope: `canReadStories` — any active actor; a contact must hold `can_message`. Returns only stories joined through the caller's own `chat.story_recipient` rows, with `state = 'published' AND (expires_at IS NULL OR expires_at > now()) AND deleted_at IS NULL`. Page size `story.feed_page_size` (50), newest first. `body` is sent for text stories only.
 - **There is no `state` or `expired` filter.** A client cannot ask to see expired stories.
 - Response: `{ stories: StoryFeedItem[] }`. `mediaUrl` is a link to `GET /media/stories/:id` bound to the reader, minted per request and re-authorized on every use (RT-037); `null` once media is purged. A story that is expired, deleted or purged signs nothing on any surface — `mediaUrl` is `null`, never a URL that would 404 or outlive access.
 - Errors: `COMM.STORY_CANNOT_READ` 403 · `COMM.ACTOR_INACTIVE` 403.
 
 **GET /stories?drafts=true|false** — EXISTS
-- Auth: required. Scope: `canPublishStory` + own organization. `take: 100`, newest created first.
+- Auth: required. Scope: `canPublishStory` (admin, coverage, manager, **super_admin** since 2026-10-17) + own organization. `take: 200`, newest created first.
 - Response: `{ stories: StoryAdminItem[] }`. Deleted stories are never returned. Expired ones are (this is the reporting surface) but carry `mediaUrl: null`. Errors: `COMM.STORY_CANNOT_PUBLISH` 403.
 
 **POST /stories/media** — EXISTS
 - Auth: required. Scope: `canPublishStory`. Request `{ mimeType, byteSize }`. Reuses the attachment object-storage seam with prefix `stories/`; the signature is bound to the MIME type and byte size.
-- Accepted: `image/jpeg|png|webp|heic` ≤ 10 MB, `video/mp4|quicktime|webm` ≤ 100 MB.
+- Accepted: `image/jpeg|png|webp|heic` ≤ 10 MB, `video/mp4|quicktime|webm` ≤ 100 MB, `audio/mp4|mpeg|aac|wav` ≤ 20 MB (voice; webm/ogg refused because iOS cannot play them).
 - Response: `UploadAuthorization { objectKey, uploadUrl, method: 'PUT', headers, expiresAt }`.
 - Errors: `COMM.ATTACHMENT_TYPE_NOT_ALLOWED` 400 · `COMM.ATTACHMENT_TOO_LARGE` 400.
 
 **POST /stories** — EXISTS
 - Auth: required. Scope: `canPublishStory`. Creates a **draft**; the audience is validated against the author's scope but not yet materialised.
-- Request `{ title?, body?, mediaObjectKey?, mediaKind?, mediaMime?, audiences: AudienceClause[] }`. Idempotency-Key honoured.
+- Request `{ body?, internalName?, background?, mediaObjectKey?, mediaKind?: 'image'|'video'|'audio', mediaMime?, mediaDurationMs?, cta?: { kind, label?, url?, phone? }, audiences: AudienceClause[] }`. Idempotency-Key honoured. A text story is `body` (+ `background`, default `teal`); a photo/video/voice story carries **no** body. `cta.phone` accepts common notations and is stored as E.164 digits; `cta.url` must be https.
 - Response: `StoryAdminItem`. Audit: `audit_log` `story.created`.
-- Errors: `COMM.STORY_EMPTY` 400 · `COMM.STORY_TOO_LONG` 400 · `COMM.STORY_AUDIENCE_EMPTY` 400 · `COMM.STORY_AUDIENCE_INVALID` 400 · `COMM.ATTACHMENT_TYPE_NOT_ALLOWED` 400.
+- Errors: `COMM.STORY_EMPTY` 400 · `COMM.STORY_TOO_LONG` 400 · `COMM.STORY_CAPTION_NOT_ALLOWED` 400 · `COMM.STORY_CTA_INVALID` 400 · `COMM.STORY_AUDIENCE_EMPTY` 400 · `COMM.STORY_AUDIENCE_INVALID` 400 · `COMM.ATTACHMENT_TYPE_NOT_ALLOWED` 400.
+
+**GET /stories/:id** — EXISTS (2026-10-17)
+- Auth: required. Scope: `canPublishStory` + own organization. Response `StoryAdminItem`. Errors: `COMM.STORY_NOT_FOUND` 404.
+
+**GET /stories/audience/facts** — EXISTS (2026-10-17)
+- Auth: required. Scope: `canPublishStory` + own organization. **Counts only.** Response `{ families, contacts, teachers, countries: {code, families}[], plans: {months, families}[], children: {bucket, families}[], unknownCountry, unknownPlan, noChildren }`.
+
+**POST /stories/audience/estimate** — EXISTS (2026-10-17)
+- Auth: required. Scope: `canPublishStory`. Request `{ audiences: AudienceClause[], ctaKind?: string|null }`. Runs the same resolution `publish` runs, including the reply scope below. **Counts only.** Response `{ recipients, contacts, teachers, families, excludedByReplyScope }`.
+
+**GET /stories/audience/families?search=&missing=true** · **POST /stories/audience/families/:familyId** — EXISTS (2026-10-17)
+- Auth: required. Scope: `canManageStoryAudienceData` — **super_admin and managers only**, own organization. GET lists `{ families: { id, displayName, countryCode, subscriptionPlanMonths, childCount, segmentSource, segmentUpdatedAt }[], truncated }` (≤ 500). POST `{ countryCode?: string|null, subscriptionPlanMonths?: 1|3|6|12|null }` sets them, `segment_source = 'admin'`; audit `family.audience_data_set`. Number of children is derived from `chat.learner`, never stored. These are Jawwid Core's facts; the Core projection will write the same columns.
+- Errors: `COMM.STORY_AUDIENCE_DATA_DENIED` 403 · `COMM.STORY_FAMILY_NOT_FOUND` 404 · `COMM.STORY_AUDIENCE_INVALID` 400.
 
 **POST /stories/:id/publish** — EXISTS
-- Auth: required. Scope: `canPublishStory`, own organization, and the author **or** a manager (an admin may not publish another admin's draft).
-- Resolves the audience **again** under the publisher's live scope and writes `chat.story_recipient` in the same transaction as the state change. `expires_at = now + story.default_lifetime_hours` (24).
+- Auth: required. Scope: `canPublishStory`, own organization, and the author, a manager **or the super admin** (an admin may not publish another admin's draft).
+- Resolves the audience **again** under the publisher's live scope and writes `chat.story_recipient` in the same transaction as the state change. **`expires_at = NULL`** (2026-10-17: stories do not expire; `story.default_lifetime_hours` is unused).
+- **Reply scope.** With `cta.kind = 'message_publisher'`, contacts are kept only when the publisher reaches their family (PD-8 `reachesFamily`; the super admin reaches all); teachers are always kept. The estimate reports how many were left out.
 - Response: `StoryAdminItem`. Audit: `audit_log` `story.published` with `recipientCount` / `familyCount`. Realtime: `story.published` to each recipient's actor room; notification `story_published` per recipient.
 - Errors: `COMM.STORY_NOT_FOUND` 404 · `COMM.STORY_ALREADY_PUBLISHED` 409 · `COMM.STORY_EXPIRED` 410 · `COMM.STORY_AUDIENCE_EMPTY` 400.
 
@@ -814,13 +842,22 @@ either: every handler takes the authenticated actor from `@ActorId()`.
 - Auth: required. Scope: `canReadStories` **and** a `chat.story_recipient` row for the caller — the recipient join is part of the lookup, not a check after it, so a non-recipient gets `STORY_NOT_FOUND` and learns nothing. Expiry is checked against the clock, not the state column. Idempotent (composite PK).
 - Response `{ ok: true }`. Errors: `COMM.STORY_NOT_FOUND` 404 · `COMM.STORY_EXPIRED` 410 · `COMM.STORY_DELETED` 410 · `COMM.STORY_NOT_PUBLISHED` 409.
 
+**POST /stories/:id/cta** — EXISTS (2026-10-17)
+- Auth: required. Scope: `canReadStories` + a `chat.story_recipient` row for the caller (same lookup as `/view`; every refusal reads as not found). Records a tap in `chat.story_cta_click` (every tap, not idempotent). For `message_publisher` it opens the direct conversation with the publisher through `getOrCreateDirect` (BR-1/PD-8 re-applied) and records the tap only once that succeeds.
+- Response `{ kind, url: string|null, conversationId: string|null }`. Errors: `COMM.STORY_NOT_FOUND` 404 · `COMM.STORY_EXPIRED` 410 · `COMM.STORY_DELETED` 410 · `COMM.STORY_NO_CTA` 409 · the direct-conversation codes (e.g. `COMM.STAFF_OUT_OF_SCOPE` 403).
+
+**GET /stories/:id/analytics?tz=<IANA>** — EXISTS (2026-10-17)
+- Auth: required. Scope: `canReadStoryViewers` + own organization. Every figure is a query over `story_recipient`, `story_view`, `story_cta_click`. `tz` (validated) decides where a day starts.
+- Response `{ storyId, state, publishedAt, reach: {total, contacts, teachers, families}, views: {total, contacts, teachers}, cta: {kind, taps, tappers}, rates: {view, tapOfViews, tapOfReach}, firstViewAt, lastViewAt, daily: {date, views, taps}[] /* ≤ 90 days */, byCountry: {code|null, reach, views, tappers}[] }`. Names nobody.
+- Errors: `COMM.STORY_CANNOT_PUBLISH` 403 · `COMM.STORY_NOT_FOUND` 404 · `COMM.STORY_AUDIENCE_INVALID` 400 (unknown time zone).
+
 **GET /stories/:id/viewers** — EXISTS
 - Auth: required. Scope: `canReadStoryViewers` (= `canPublishStory`) + own organization. **Deliberately not available to recipients.** `take: 500`, newest first.
-- Response `{ viewers: StoryViewer[] }` — display names and times only; the `Actor` contract carries no phone or email, so neither can appear.
+- Response `{ viewers: StoryViewer[] }` — display names, times and each viewer's tap count; the `Actor` contract carries no phone or email, so neither can appear.
 - Errors: `COMM.STORY_CANNOT_PUBLISH` 403 · `COMM.STORY_NOT_FOUND` 404.
 
 **DELETE /stories/:id?reason=…** — EXISTS
-- Auth: required. Scope: `canPublishStory`, own organization, author **or** manager. Soft delete: access ends immediately, the row survives as the audit trail, media is purged by the retention sweep. Idempotent.
+- Auth: required. Scope: `canPublishStory`, own organization, author, manager **or super admin**. Soft delete: access ends immediately, the row survives as the audit trail, media is purged by the retention sweep. Idempotent.
 - `reason` is a **query parameter and required** (no default, unlike `DELETE /messages/:id`): an academy publication removed without a stated reason is a gap in the audit trail.
 - Response `{ ok: true, alreadyDeleted: boolean }`. Audit: `audit_log` `story.deleted`. Realtime: `story.retired { reason: 'deleted' }`.
 - Errors: `COMM.STORY_DELETE_REASON_REQUIRED` 400 · `COMM.STORY_CANNOT_PUBLISH` 403 · `COMM.STORY_NOT_FOUND` 404.

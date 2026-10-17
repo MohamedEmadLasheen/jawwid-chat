@@ -191,6 +191,14 @@ final storyVideoPlayerFactoryProvider = Provider<StoryVideoPlayer Function()>(
   (ref) => VideoPlayerStoryVideoPlayer.new,
 );
 
+/// Makes a player for a VOICE story -- one per story viewer, for the same reason as
+/// [storyVideoPlayerFactoryProvider]: the viewer owns it and disposes it, so a closed story
+/// can never keep talking. Deliberately not [voicePlayerProvider], which is the chat's shared
+/// player and lives as long as the container.
+final storyVoicePlayerFactoryProvider = Provider<VoicePlayer Function()>(
+  (ref) => JustAudioVoicePlayer.new,
+);
+
 /// Audio playback. Like the recorder, a device capability with a real default;
 /// tests override it so no suite opens a platform audio session.
 final voicePlayerProvider = Provider<VoicePlayer>((ref) {

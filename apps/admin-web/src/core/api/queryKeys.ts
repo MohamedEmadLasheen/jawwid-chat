@@ -44,7 +44,16 @@ export const qk = {
   thisWeek: ['dashboard', 'this-week'] as const,
   dashboardAll: ['dashboard'] as const,
 
-  stories: (includeDrafts: boolean) => ['stories', { includeDrafts }] as const,
-  storyViewers: (id: string) => ['stories', id, 'viewers'] as const,
-  storiesAll: ['stories'] as const,
+  // Stories studio: everything under ['stories'], so one invalidation of
+  // studioAll refreshes the list, a story, its numbers and its viewers.
+  studioAll: ['stories'] as const,
+  studioStories: ['stories', 'list'] as const,
+  studioStory: (id: string) => ['stories', 'one', id] as const,
+  storyAnalytics: (id: string, tz: string) => ['stories', 'one', id, 'analytics', tz] as const,
+  storyViewers: (id: string) => ['stories', 'one', id, 'viewers'] as const,
+  storyAudienceFacts: ['stories', 'audience', 'facts'] as const,
+  storyEstimateAll: ['stories', 'audience', 'estimate'] as const,
+  storyEstimate: (key: string) => ['stories', 'audience', 'estimate', key] as const,
+  storyFamiliesAll: ['stories', 'audience', 'families'] as const,
+  storyFamilies: (filters: Record<string, unknown>) => ['stories', 'audience', 'families', filters] as const,
 }

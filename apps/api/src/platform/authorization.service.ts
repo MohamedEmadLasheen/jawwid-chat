@@ -864,10 +864,12 @@ export class AuthorizationService {
     if (!actor.isActive) {
       return deny(CommErrorCode.ACTOR_INACTIVE, 'an inactive actor may not publish');
     }
-    if (!isFamilyFacingStaff(actor)) {
+    // 2026-10-17: the super admin publishes too -- the Admin Portal is its
+    // publishing surface, and PD-8 already gave it full write.
+    if (!isFamilyFacingStaff(actor) && actor.staffRole !== StaffRole.SUPER_ADMIN) {
       return deny(
         CommErrorCode.STORY_CANNOT_PUBLISH,
-        'only Jawwid admins, coverage admins and managers may publish a story',
+        'only Jawwid admins, coverage admins, managers and the super admin may publish a story',
       );
     }
     // A publisher with no tenant cannot be scoped, and an unscoped audience
@@ -920,6 +922,35 @@ export class AuthorizationService {
    */
   canReadStoryViewers(actor: Actor): Decision {
     return this.canPublishStory(actor);
+  }
+
+  /**
+   * May this actor read and set a family's targeting attributes (country,
+   * subscription plan)?
+   *
+   * The super admin and managers. These are organization-wide customer facts
+   * that Jawwid Core owns, and a supervisor editing them for the families they
+   * happen to supervise would make targeting depend on who typed what. A
+   * supervisor still TARGETS by them: estimating and publishing a segment is
+   * canPublishStory, and the estimate returns counts, never a family list.
+   */
+  canManageStoryAudienceData(actor: Actor): Decision {
+    if (!actor.isActive) {
+      return deny(CommErrorCode.ACTOR_INACTIVE, 'an inactive actor may not edit audience data');
+    }
+    if (
+      actor.kind !== ActorKind.STAFF ||
+      (actor.staffRole !== StaffRole.SUPER_ADMIN && actor.staffRole !== StaffRole.MANAGER)
+    ) {
+      return deny(
+        CommErrorCode.STORY_AUDIENCE_DATA_DENIED,
+        'only the super admin and managers may manage family audience data',
+      );
+    }
+    if (!actor.organizationId) {
+      return deny(CommErrorCode.STORY_AUDIENCE_DATA_DENIED, 'an actor with no organization cannot be scoped');
+    }
+    return allow();
   }
 
   /**

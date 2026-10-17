@@ -11,8 +11,9 @@ import '../wire/wire_mappers.dart';
 /// |---|---|---|
 /// | GET | `/stories/feed` | `{ stories: StoryFeedItem[] }` |
 /// | POST | `/stories/:id/view` | `{ ok: true }` |
+/// | POST | `/stories/:id/cta` | `{ kind, url, conversationId }` |
 ///
-/// Those two are the whole read surface, and nothing here reaches for the others. `GET
+/// Those three are the whole read surface, and nothing here reaches for the others. `GET
 /// /stories` is the publisher's list, `GET /stories/:id/viewers` is publisher-only, and
 /// `POST /stories`, `/publish`, `/media` and `DELETE` are all publishing — none of which this
 /// client may do. Calling any of them would return a permission error, so none is wrapped.
@@ -41,9 +42,8 @@ class HttpStoryRepository implements StoryRepository {
     for (final row in rows) {
       if (row is! Map<String, Object?>) continue;
       final story = WireMappers.story(row);
-      // A row the server could not describe fully (no publishedAt, no expiresAt) is dropped
-      // rather than shown with a guessed clock: the expiry is what the viewer stops on, and
-      // a story with an invented one would outstay its welcome.
+      // A row with no id or publication time is dropped. A row with no expiry is NOT: that
+      // is a story that does not expire.
       if (story != null) stories.add(story);
     }
     return stories;
@@ -57,5 +57,16 @@ class HttpStoryRepository implements StoryRepository {
     // on a flaky network. A failed view is recoverable by the reader simply being there; it
     // is never worth a retry storm.
     await _client.post<Map<String, Object?>>('/stories/$storyId/view');
+  }
+
+  @override
+  Future<StoryCtaTap> tapCta(String storyId) async {
+    // Not idempotent, deliberately: every tap is a tap, and the transport must not replay one.
+    final response = await _client.post<Map<String, Object?>>('/stories/$storyId/cta');
+    final tap = WireMappers.storyCtaTap(response.data ?? const {});
+    if (tap == null) {
+      throw StateError('POST /stories/$storyId/cta answered without a known kind');
+    }
+    return tap;
   }
 }

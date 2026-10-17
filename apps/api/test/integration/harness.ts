@@ -79,7 +79,7 @@ export function buildGraph(
   );
   const storyAudience = new StoryAudienceResolver(prisma);
   const stories = new StoryService(
-    prisma, authz, storyAudience, outbox, config, identity, storage, audit,
+    prisma, authz, storyAudience, outbox, config, identity, storage, audit, undefined, conversations,
   );
   const storySweeper = new StorySweeper(prisma, config, outbox, storage);
 
@@ -404,7 +404,7 @@ export async function legacyTeacherParentCall(
 /** Order matters: children before parents. */
 export async function truncate(prisma: PrismaService): Promise<void> {
   await prisma.$executeRawUnsafe(`
-    truncate chat.story_view, chat.story_recipient, chat.story_audience, chat.story,
+    truncate chat.story_cta_click, chat.story_view, chat.story_recipient, chat.story_audience, chat.story,
              chat.message_receipt, chat.message_reaction, chat.message_attachment,
              chat.message_hidden_for, chat.message_approval, chat.call_participant,
              chat.call, chat.notification, chat.outbox_event,
