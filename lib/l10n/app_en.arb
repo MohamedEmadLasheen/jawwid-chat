@@ -300,6 +300,10 @@
   "@attachmentVoiceLabel": {
     "description": "Stands in for a voice note where a message has no text."
   },
+  "attachmentVideoLabel": "Video",
+  "@attachmentVideoLabel": {
+    "description": "Stands in for a video where a message has no text (chat list preview)."
+  },
   "attachmentSendTitle": "Send this?",
   "@attachmentSendTitle": {
     "description": "Header of the preview shown before an attachment is sent."

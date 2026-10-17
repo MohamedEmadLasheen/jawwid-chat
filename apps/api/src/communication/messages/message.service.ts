@@ -500,7 +500,7 @@ export class MessageService {
    */
   private visibilityFilter(
     actor: Actor,
-    conversationId: string,
+    conversationId: string | { in: string[] },
     input: ListMessagesInput,
   ): Prisma.MessageWhereInput {
     const where: Prisma.MessageWhereInput = { conversationId };
@@ -523,6 +523,30 @@ export class MessageService {
       : [{ moderation: Moderation.PUBLISHED }, { authorId: actor.actorId }];
 
     return where;
+  }
+
+  /**
+   * The newest message THIS viewer may see in each conversation, for a chat
+   * list row. THE CALLER AUTHORIZES THE IDS (the list route passes exactly what
+   * listForActor returned); the per-message rule is `visibilityFilter`, the one
+   * the message page uses, so a preview can never show a parent an internal
+   * note, someone else's held message, or what they deleted for themselves.
+   *
+   * One indexed lookup per conversation (conversation_id, seq), run together;
+   * the list is capped at 200 rows.
+   */
+  async lastVisibleMessages(conversationIds: readonly string[], actor: Actor): Promise<Map<string, Message>> {
+    const out = new Map<string, Message>();
+    const found = await Promise.all(
+      conversationIds.map((id) =>
+        this.prisma.message.findFirst({
+          where: this.visibilityFilter(actor, id, {} as ListMessagesInput),
+          orderBy: { seq: 'desc' },
+        }),
+      ),
+    );
+    for (const m of found) if (m?.conversationId) out.set(m.conversationId, m);
+    return out;
   }
 
   // -------------------------------------------------------------------
