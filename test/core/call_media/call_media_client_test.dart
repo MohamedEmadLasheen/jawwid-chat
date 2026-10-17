@@ -44,6 +44,13 @@ class FakeMediaRoom implements MediaRoom {
   /// Set to make a mute attempt throw.
   bool refuseMute = false;
 
+  /// Set to make leaving throw, as the real SDK does: `Room.disconnect()` on a
+  /// room that never connected times out waiting for an event that never comes.
+  bool failDisconnect = false;
+
+  /// Set to make the final release throw.
+  bool failDispose = false;
+
   @override
   Stream<MediaRoomEvent> get events => _events.stream;
 
@@ -65,10 +72,16 @@ class FakeMediaRoom implements MediaRoom {
   }
 
   @override
-  Future<void> disconnect() async => disconnectCalls++;
+  Future<void> disconnect() async {
+    disconnectCalls++;
+    if (failDisconnect) throw TimeoutException('disconnect never confirmed');
+  }
 
   @override
-  Future<void> dispose() async => disposeCalls++;
+  Future<void> dispose() async {
+    disposeCalls++;
+    if (failDispose) throw StateError('dispose failed');
+  }
 
   // Drivers.
   void arrive() => _emit(const MediaRoomConnected());
@@ -243,6 +256,98 @@ void main() {
   });
 
   // -----------------------------------------------------------------------
+  group('a failure is always reported, even when leaving fails too (W4 reopen)',
+      () {
+    test('a refused connection whose disconnect times out still fails cleanly',
+        () async {
+      build();
+      room.refuseConnection = true;
+      room.failDisconnect = true;
+
+      await client.connect(callId: _callId);
+
+      expect(client.snapshot.phase, CallMediaPhase.failed);
+      expect(client.snapshot.failure, CallMediaFailure.connectionFailed);
+      // Every release step is still attempted.
+      expect(room.disconnectCalls, 1);
+      expect(room.disposeCalls, 1);
+    });
+
+    test('a release that fails at both steps still reports the failure',
+        () async {
+      build();
+      room.refuseConnection = true;
+      room.failDisconnect = true;
+      room.failDispose = true;
+
+      await client.connect(callId: _callId);
+
+      expect(client.snapshot.failure, CallMediaFailure.connectionFailed);
+    });
+
+    test('a failed publish whose leave times out still reports publishFailed',
+        () async {
+      build();
+      room.refusePublish = true;
+      room.failDisconnect = true;
+
+      await client.connect(callId: _callId);
+
+      expect(client.snapshot.failure, CallMediaFailure.publishFailed);
+      expect(room.disposeCalls, 1);
+    });
+
+    test('a refused connection can be tried again afterwards', () async {
+      build();
+      room.refuseConnection = true;
+      room.failDisconnect = true;
+      await client.connect(callId: _callId);
+      expect(client.snapshot.phase, CallMediaPhase.failed);
+
+      await client.connect(callId: _callId);
+
+      expect(room.connects, hasLength(2), reason: 'not stuck in connecting');
+    });
+
+    test('hanging up when leaving times out still ends disconnected', () async {
+      build();
+      await client.connect(callId: _callId);
+      room.arrive();
+      room.publishLocalMic();
+      await pumpEventQueue();
+      room.failDisconnect = true;
+
+      await client.disconnect();
+
+      expect(client.snapshot.phase, CallMediaPhase.disconnected);
+    });
+
+    test('after the server closes the room, joining again is not blocked',
+        () async {
+      build();
+      await client.connect(callId: _callId);
+      room.arrive();
+      room.publishLocalMic();
+      await pumpEventQueue();
+      room.closeByServer();
+      await pumpEventQueue();
+      expect(client.snapshot.phase, CallMediaPhase.disconnected);
+
+      await client.connect(callId: _callId).timeout(const Duration(seconds: 2));
+
+      expect(room.connects, hasLength(2));
+    });
+
+    test('dispose never throws, even when the room does', () async {
+      build();
+      await client.connect(callId: _callId);
+      room.failDisconnect = true;
+      room.failDispose = true;
+
+      await expectLater(client.dispose(), completes);
+    });
+  });
+
   group('5/6. microphone permission', () {
     test('5. granted permission leads to a publish attempt', () async {
       build();
