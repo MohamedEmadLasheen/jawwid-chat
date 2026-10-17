@@ -22,7 +22,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { CommErrorCode } from '@platform/errors';
-import { Scenario, buildGraph, seed, truncate } from './harness';
+import { Scenario, buildGraph, seed, truncate, splitFamily } from './harness';
 
 jest.setTimeout(60_000);
 
@@ -92,8 +92,9 @@ describe('1/8/9. the account list, ordered by the server', () => {
 
   it('8. newest first, and the order is the server\'s', async () => {
     const first = await callBetween(s.parentId, s.ownerId, s.ownerId);
-    // A second 1:1 of the same parent (PD-7: never with a teacher), started by
-    // the parent because this admin is not on duty for the family.
+    // A second 1:1 of the same parent (PD-7: never with a teacher), with the
+    // supervisor of the family's OTHER child (PD-8 splitFamily), started by the parent.
+    await splitFamily(g.prisma, s);
     const second = await callBetween(s.parentId, s.otherAdminId, s.parentId);
     // Age the first so the order is unambiguous rather than same-millisecond.
     await g.prisma.$executeRawUnsafe(
@@ -210,29 +211,30 @@ describe('2/4/6. authorization, through the existing contract', () => {
     });
   });
 
-  it('6. family-facing staff see the conversations the canonical rule gives them',
+  it('6. staff see the calls the canonical rule gives them -- and a co-supervisor sees none of the other\'s (PD-8)',
     async () => {
       // `listForActor` filters staff by the same rule AuthorizationService.canRead
-      // applies. This asserts the CONSEQUENCE at the boundary.
+      // applies (chat.staff_conversation_access). This asserts the CONSEQUENCE
+      // at the boundary.
       //
-      // RE-VERSIONED 2026-10-14 BY STAFF SCOPE. The contract used to be "any
-      // family-facing admin may open any family conversation". It is now: a
-      // manager reads the organization; an admin reads what they are a member
-      // of, or what belongs to a family they own, are on duty for, or hold as
-      // the live sticky handler. So the family OWNER still sees a call in a
-      // conversation they are not a member of, and an admin with none of
-      // those facts sees nothing.
+      // RE-VERSIONED 2026-10-15 BY PD-8. Family ownership no longer opens a
+      // family's conversations: each supervisor reaches the family through
+      // THEIR OWN child, and a 1:1 is visible to its staff member, their active
+      // backup, their department manager and the super admin -- never to the
+      // family's other supervisor.
       const outsideAdminId = randomUUID();
       await g.prisma.$executeRawUnsafe(
         `insert into chat.staff (id, name, role, is_active)
          values ('${outsideAdminId}'::uuid, 'admin_z', 'admin', true)`,
       );
-      // The second parent's 1:1 with the OTHER admin: the owner is not in it.
+      // learner_m is admin_b's: the second parent's 1:1 with admin_b.
+      await splitFamily(g.prisma, s);
       const notOwners = await callBetween(s.otherParentId, s.otherAdminId, s.otherParentId);
 
-      expect(idsOf(await g.calls.historyForActor(s.ownerId))).toContain(notOwners.callId);
-      expect(idsOf(await g.calls.historyForActor(s.managerId))).toContain(notOwners.callId);
       expect(idsOf(await g.calls.historyForActor(s.otherAdminId))).toContain(notOwners.callId);
+      expect(idsOf(await g.calls.historyForActor(s.managerId))).toContain(notOwners.callId);
+      // admin_a supervises the family's other child -- and still sees nothing of admin_b's channel.
+      expect(idsOf(await g.calls.historyForActor(s.ownerId))).not.toContain(notOwners.callId);
       expect((await g.calls.historyForActor(outsideAdminId)).items).toEqual([]);
     });
 

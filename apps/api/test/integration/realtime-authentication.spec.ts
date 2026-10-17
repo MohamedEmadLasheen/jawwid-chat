@@ -23,6 +23,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { PrismaService } from "@platform/prisma.service";
+import { SqlStaffScope } from "@platform/staff-scope";
 import { PrismaIdentityService } from "@platform/identity.service";
 import { PrismaAuditService } from "@platform/audit.service";
 import { AuthService } from "@platform/auth/auth.service";
@@ -42,6 +43,7 @@ import {
   PinnedCoverage,
   legacyTeacherParentDirect,
   withAssignmentGate,
+  supervise,
 } from "./harness";
 
 process.env.JWT_ACCESS_SECRET ??= "integration-access-secret-32-chars-min!";
@@ -114,7 +116,8 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
   const identity = new PrismaIdentityService(prisma);
   const auth = new AuthService(prisma, identity, new PrismaAuditService());
   const coverage = new PinnedCoverage();
-  const authz = new AuthorizationService(coverage);
+  // PD-8: the real SQL staff scope, as production wires it.
+  const authz = new AuthorizationService(coverage, new SqlStaffScope(prisma));
   const relationships = new PrismaRelationshipService(prisma);
   const outbox = new OutboxService();
   const audit = new PrismaAuditService();
@@ -264,6 +267,9 @@ describe("RT-001 — the socket authenticates, it does not take the client's wor
       `insert into chat.learner (id, organization_id, family_id, name, teacher_id)
        values ('${ids.learner}'::uuid, '${org}'::uuid, '${ids.family}'::uuid, 'learner_l', '${ids.teacher}'::uuid)`,
     );
+
+    // PD-8: admin_a supervises the child, so the Student Group carries them as its admin.
+    await supervise(prisma, ids.staff, [ids.learner]);
 
     for (const accountId of accounts.map(([id]) => id)) {
       await auth.setPassword(accountId, PASSWORD);

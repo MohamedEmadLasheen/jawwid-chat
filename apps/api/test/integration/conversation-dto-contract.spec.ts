@@ -152,9 +152,10 @@ describe('GET /conversations/:id — the detail response', () => {
           isActive: true,
         },
       });
+      // PD-8: a parent's 1:1 is with staff in charge of the family -- the supervisor.
       const theirThread = await g.conversations.getOrCreateDirect(
         otherContact.id,
-        s.otherAdminId,
+        s.ownerId,
       );
 
       await expect(controller.get(s.teacherId, theirThread.id)).rejects.toThrow();

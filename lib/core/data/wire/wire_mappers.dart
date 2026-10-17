@@ -61,6 +61,10 @@ abstract final class WireMappers {
         Wire.conversationOfficial => ConversationKind.jawwidSupport,
         Wire.conversationStudentGroup => ConversationKind.studentGroup,
         Wire.conversationClassGroup => ConversationKind.studentGroup,
+        // PD-8: a supervisor-created group. A group in every respect the client
+        // cares about (moderated, admin present, several members); it may be
+        // about more than one child, so it can arrive without a single learner.
+        Wire.conversationFamilyGroup => ConversationKind.studentGroup,
         Wire.conversationDirect => _directKind(members),
         // An unknown type is not a direct conversation this client understands.
         // adminDirect remains the pre-PD-6 default for backward compatibility;

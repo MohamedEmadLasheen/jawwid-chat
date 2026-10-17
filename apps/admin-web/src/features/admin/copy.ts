@@ -281,6 +281,7 @@ export const CONVERSATION_TYPE: Record<string, Bilingual> = {
   direct: { en: 'Direct', ar: 'مباشرة' },
   student_group: { en: 'Student group', ar: 'مجموعة طالب' },
   class_group: { en: 'Class group', ar: 'مجموعة صف' },
+  family_group: { en: 'Family group', ar: 'مجموعة عائلة' },
   official: { en: 'Official', ar: 'رسمية' },
 }
 

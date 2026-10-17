@@ -43,7 +43,7 @@ import type { AdminSection } from './sections'
  */
 const TYPE_VIEWS = ['direct', 'groups', 'official'] as const
 type TypeView = (typeof TYPE_VIEWS)[number]
-const GROUP_TYPES: ReadonlySet<string> = new Set(['student_group', 'class_group'])
+const GROUP_TYPES: ReadonlySet<string> = new Set(['student_group', 'class_group', 'family_group'])
 const VIEWED_TYPES: ReadonlySet<string> = new Set(['direct', 'official', ...GROUP_TYPES])
 
 function typeMatches(type: string, view: string): boolean {
@@ -63,6 +63,7 @@ const SORTS: readonly SortKey[] = ['recent', 'oldest', 'name']
 const TYPE_GLYPH: Record<string, IconName | undefined> = {
   student_group: 'users',
   class_group: 'academy',
+  family_group: 'users',
   official: 'notifications',
 }
 

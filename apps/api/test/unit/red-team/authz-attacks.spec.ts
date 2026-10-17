@@ -8,9 +8,11 @@
  * vulnerability is ever reintroduced.
  */
 import { CommErrorCode } from '@platform/errors';
+import { StaffAccessBasis } from '@platform/staff-scope';
 import {
   admin,
   authzWithOnDuty,
+  authzWithScope,
   conversation,
   manager,
   member,
@@ -47,10 +49,10 @@ describe('RT-003 (fixed) · on_behalf_mode cannot be asserted by the client', ()
     if (d.allowed) expect(d.onBehalfMode).toBe('owner');
   });
 
-  it('an on-duty admin who is not the owner is attributed COVERAGE, not OWNER', async () => {
+  it('an ACTIVE backup who is not the supervisor is attributed COVERAGE, not OWNER (PD-8)', async () => {
     const cov = admin('coverage-admin', 'coverage');
-    const authz = authzWithOnDuty('coverage-admin');
-    const d = await authz.canSend(cov, conversation(), member(cov), customer, NOW, OWNER);
+    const authz = authzWithScope({ 'coverage-admin': StaffAccessBasis.BACKUP });
+    const d = await authz.canSend(cov, conversation(), member(cov), { ...customer, requestedMode: 'owner' }, NOW, OWNER);
     expect(d.allowed).toBe(true);
     if (d.allowed) expect(d.onBehalfMode).toBe('coverage');
   });
@@ -73,12 +75,18 @@ describe('RT-003 (fixed) · on_behalf_mode cannot be asserted by the client', ()
 });
 
 describe('RT-004 (fixed) · COVERAGE is never asserted without a coverage assignment', () => {
-  it('an internal note by an off-duty non-owner is attributed ASSIST, not COVERAGE', async () => {
-    const a = admin('bystander');
-    const authz = authzWithOnDuty('somebody-else');
-    const d = await authz.canSend(a, conversation(), member(a), internal, NOW, OWNER);
+  it('an internal note by a department manager is attributed ASSIST, not COVERAGE (PD-8)', async () => {
+    const m = manager('manager-x');
+    const authz = authzWithScope({ 'manager-x': StaffAccessBasis.MANAGER });
+    const d = await authz.canSend(m, conversation(), null, { ...internal, requestedMode: 'coverage' }, NOW, OWNER);
     expect(d.allowed).toBe(true);
     if (d.allowed) expect(d.onBehalfMode).toBe('assist');
+  });
+
+  it('a membership row without a basis writes nothing, not even a note', async () => {
+    const a = admin('bystander');
+    const d = await authzWithScope().canSend(a, conversation(), member(a), internal, NOW, OWNER);
+    expect(d.allowed).toBe(false);
   });
 
   it('an internal note by the owner is attributed OWNER', async () => {
@@ -113,11 +121,13 @@ describe('RT-002 (fixed) · authorization is a function of the participant set, 
     expect(d.allowed).toBe(false);
   });
 
-  it('control: family-facing staff open what is in their charge, and a manager the whole organization', () => {
-    // Staff scope (2026-10-14). The scope is a server-resolved fact; without
-    // it a non-member admin is refused, with it they are admitted.
+  it('control: staff open what is in their charge -- a manager too, and only through the resolved basis (PD-8)', () => {
+    // The scope is a server-resolved fact; without it a non-member admin is
+    // refused, with it they are admitted. A manager's role alone no longer
+    // opens the whole organization: they read their department.
     expect(authz.canRead(admin(), studentGroup(), null, true).allowed).toBe(true);
-    expect(authz.canRead(manager(), studentGroup(), null).allowed).toBe(true);
+    expect(authz.canRead(manager(), studentGroup(), null, true).allowed).toBe(true);
+    expect(authz.canRead(manager(), studentGroup(), null).allowed).toBe(false);
     const outside = authz.canRead(admin(), studentGroup(), null);
     expect(outside.allowed).toBe(false);
     if (!outside.allowed) expect(outside.code).toBe(CommErrorCode.STAFF_OUT_OF_SCOPE);

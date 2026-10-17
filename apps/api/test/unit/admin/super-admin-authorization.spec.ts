@@ -16,10 +16,12 @@
  */
 import { CommErrorCode } from '@platform/errors';
 import { StaffRole } from '@communication/contracts/vocab';
+import { StaffAccessBasis } from '@platform/staff-scope';
 import {
   academicStaff,
   admin,
   authzWithOnDuty,
+  authzWithScope,
   conversation,
   financeStaff,
   manager,
@@ -73,18 +75,31 @@ describe('who may inspect the organization (/admin)', () => {
   });
 });
 
-describe('super_admin is not a family-facing role in this milestone', () => {
-  it('may not read a family conversation through the communication engine', () => {
+describe('super_admin takes part in conversations (PD-8, owner decision 2026-10-15: full read + write)', () => {
+  it('reads a family conversation on its resolved basis, and only on it', () => {
+    expect(authz.canRead(superAdmin(), conversation(), null, true).allowed).toBe(true);
+    // Fail closed: an unresolved basis is still a refusal, for the super admin too.
     expect(authz.canRead(superAdmin(), conversation(), null).allowed).toBe(false);
+    // ...and never another organization's.
+    expect(authz.canRead(superAdmin(), conversation({ organizationId: 'org-2' }), null, true).allowed).toBe(false);
   });
 
-  it('may not publish a story, approve a message, or manage membership', () => {
-    expect(authz.canPublishStory(superAdmin()).allowed).toBe(false);
+  it('approves and manages membership on its basis; stories stay with the family-facing roles', () => {
+    expect(authz.canApprove(superAdmin(), StaffAccessBasis.SUPER_ADMIN).allowed).toBe(true);
     expect(authz.canApprove(superAdmin(), null).allowed).toBe(false);
-    expect(authz.canManageMembership(superAdmin()).allowed).toBe(false);
+    expect(authz.canManageMembership(superAdmin()).allowed).toBe(true);
+    expect(authz.canPublishStory(superAdmin()).allowed).toBe(false);
   });
 
-  it('may not open a direct conversation with a parent', () => {
-    expect(authz.canOpenDirect(superAdmin(), parent()).allowed).toBe(false);
+  it('opens a direct conversation with a parent (it reaches every family of its organization)', () => {
+    expect(authz.canOpenDirect(superAdmin(), parent(), true).allowed).toBe(true);
+    expect(authz.canOpenDirect(superAdmin(), parent(), false).allowed).toBe(false);
+  });
+
+  it('sends as a step-in, attributed ASSIST', async () => {
+    const scoped = authzWithScope({ 'super-1': StaffAccessBasis.SUPER_ADMIN });
+    const d = await scoped.canSend(superAdmin(), conversation(), null, { visibility: 'customer' }, new Date());
+    expect(d.allowed).toBe(true);
+    if (d.allowed) expect(d.onBehalfMode).toBe('assist');
   });
 });

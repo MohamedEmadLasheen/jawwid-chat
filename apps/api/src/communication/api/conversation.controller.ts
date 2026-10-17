@@ -77,6 +77,21 @@ export class ConversationController {
     );
   }
 
+  /**
+   * PD-8: a supervisor creates a group about one or more of their children in
+   * ONE family, with the parents and teachers they choose from that family and
+   * those children. Every participant is validated server side and by the
+   * database; see ConversationService.createFamilyGroup.
+   */
+  @Post('family-group')
+  async familyGroup(@ActorId() actorId: string, @Body() body: Record<string, unknown>) {
+    const conv = await this.conversations.createFamilyGroup(actorId, body ?? {});
+    return toConversationDto(
+      conv,
+      await this.conversations.membersOf(conv.id, await this.conversations.requireActor(actorId)),
+    );
+  }
+
   /** The official group for a learner, created from Core relationships. */
   @Post('student-group')
   async studentGroup(@ActorId() actorId: string, @Body() body: { learnerId: string }) {

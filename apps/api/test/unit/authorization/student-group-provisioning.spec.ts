@@ -17,14 +17,22 @@ import { ConversationService } from '@communication/conversations/conversation.s
 import {
   academicStaff,
   admin,
-  authzWithOnDuty,
+  authzWithScope,
   financeStaff,
   manager,
   parent,
   teacher,
 } from '../../support/fixtures';
 
-const authz = authzWithOnDuty();
+/**
+ * PD-8: how each staff id acts for the learner's supervisor (admin-1) --
+ * chat.staff_acts_for(), stubbed. admin-1 IS the supervisor, cov-1 is their
+ * ACTIVE backup, m / manager-1 their department manager. Nobody else.
+ */
+const authz = authzWithScope(
+  {},
+  { 'admin-1': 'self', 'cov-1': 'backup', m: 'manager', 'manager-1': 'manager' },
+);
 const ORG = 'org-1';
 const OTHER_ORG = 'org-2';
 
@@ -32,7 +40,8 @@ const coverageAdmin = (id = 'coverage-1') => admin(id, 'coverage');
 const target = (over: Partial<Parameters<typeof authz.canProvisionStudentGroupFor>[1]> = {}) => ({
   learnerOrganizationId: ORG,
   familyOrganizationId: ORG,
-  familyOwnerId: 'admin-1',
+  supervisorId: 'admin-1' as string | null,
+  actorActsFor: null as 'self' | 'backup' | 'manager' | null,
   ...over,
 });
 
@@ -76,41 +85,53 @@ describe('canProvisionStudentGroup -- the gate asked before any lookup', () => {
   });
 });
 
-describe('canProvisionStudentGroupFor -- tenant and supervisor scope', () => {
-  it("the family's owner may provision", () => {
-    expect(authz.canProvisionStudentGroupFor(admin('admin-1'), target()).allowed).toBe(true);
+describe('canProvisionStudentGroupFor -- tenant and supervisor scope (PD-8)', () => {
+  it("the learner's supervisor may provision", () => {
+    expect(authz.canProvisionStudentGroupFor(admin('admin-1'), target({ actorActsFor: 'self' })).allowed).toBe(true);
   });
 
-  it('a coverage admin who owns the family may provision', () => {
+  it('their ACTIVE backup may provision', () => {
     expect(
-      authz.canProvisionStudentGroupFor(coverageAdmin('cov-1'), target({ familyOwnerId: 'cov-1' })).allowed,
+      authz.canProvisionStudentGroupFor(coverageAdmin('cov-1'), target({ actorActsFor: 'backup' })).allowed,
     ).toBe(true);
   });
 
-  it('a manager may provision for any family in their organization', () => {
-    expect(authz.canProvisionStudentGroupFor(manager(), target({ familyOwnerId: 'someone-else' })).allowed).toBe(
-      true,
-    );
+  it('their department manager and the super admin may provision', () => {
+    expect(authz.canProvisionStudentGroupFor(manager(), target({ actorActsFor: 'manager' })).allowed).toBe(true);
+    expect(authz.canProvisionStudentGroupFor(admin('s', 'super_admin'), target()).allowed).toBe(true);
   });
 
-  it('an admin who does not own the family is refused', () => {
+  it('a manager of ANOTHER department is refused: the role alone is not scope', () => {
+    deniedWith(authz.canProvisionStudentGroupFor(manager(), target()), CommErrorCode.CANNOT_PROVISION_STUDENT_GROUP);
+  });
+
+  it('an admin who is not the supervisor is refused', () => {
     deniedWith(
-      authz.canProvisionStudentGroupFor(admin('admin-2'), target({ familyOwnerId: 'admin-1' })),
+      authz.canProvisionStudentGroupFor(admin('admin-2'), target()),
       CommErrorCode.CANNOT_PROVISION_STUDENT_GROUP,
     );
   });
 
-  it('a coverage admin who does not own the family is refused (on-duty is not scope)', () => {
+  it('a coverage admin with no active backup link is refused (on-duty is not scope)', () => {
     deniedWith(
-      authz.canProvisionStudentGroupFor(coverageAdmin(), target({ familyOwnerId: 'admin-1' })),
+      authz.canProvisionStudentGroupFor(coverageAdmin(), target()),
       CommErrorCode.CANNOT_PROVISION_STUDENT_GROUP,
     );
   });
 
-  it("another organization's learner reads as NOT FOUND, even to a manager and even to the 'owner'", () => {
+  it('a learner with NO supervisor has no group yet, whoever asks -- there would be no admin for BR-1', () => {
+    for (const actor of [manager(), admin('s', 'super_admin'), SYSTEM_ACTOR]) {
+      deniedWith(
+        authz.canProvisionStudentGroupFor(actor, target({ supervisorId: null, actorActsFor: 'manager' })),
+        CommErrorCode.LEARNER_UNSUPERVISED,
+      );
+    }
+  });
+
+  it("another organization's learner reads as NOT FOUND, even to a manager and even to the 'supervisor'", () => {
     for (const actor of [manager(), admin('admin-1')]) {
       deniedWith(
-        authz.canProvisionStudentGroupFor(actor, target({ learnerOrganizationId: OTHER_ORG })),
+        authz.canProvisionStudentGroupFor(actor, target({ learnerOrganizationId: OTHER_ORG, actorActsFor: 'self' })),
         CommErrorCode.CONVERSATION_NOT_FOUND,
       );
     }
@@ -118,7 +139,7 @@ describe('canProvisionStudentGroupFor -- tenant and supervisor scope', () => {
 
   it("a learner whose FAMILY is in another organization reads as NOT FOUND (RT-029: neither is trusted alone)", () => {
     deniedWith(
-      authz.canProvisionStudentGroupFor(manager(), target({ familyOrganizationId: OTHER_ORG })),
+      authz.canProvisionStudentGroupFor(manager(), target({ familyOrganizationId: OTHER_ORG, actorActsFor: 'manager' })),
       CommErrorCode.CONVERSATION_NOT_FOUND,
     );
   });
@@ -126,7 +147,7 @@ describe('canProvisionStudentGroupFor -- tenant and supervisor scope', () => {
   it('the per-learner check repeats the gate, so it is safe to call on its own', () => {
     deniedWith(authz.canProvisionStudentGroupFor(parent(), target()), CommErrorCode.CANNOT_PROVISION_STUDENT_GROUP);
     deniedWith(
-      authz.canProvisionStudentGroupFor({ ...admin('admin-1'), isActive: false }, target()),
+      authz.canProvisionStudentGroupFor({ ...admin('admin-1'), isActive: false }, target({ actorActsFor: 'self' })),
       CommErrorCode.ACTOR_INACTIVE,
     );
   });
@@ -175,6 +196,8 @@ function stubService(opts: {
     return { id: 'conv-new' };
   };
   const prisma = {
+    // PD-8: the learner's supervisor is admin-1.
+    learnerSupervision: { findUnique: async () => ({ supervisorId: 'admin-1' }) },
     learner: {
       findUnique: async () => {
         state.learnerLookups += 1;
@@ -247,7 +270,7 @@ describe('ConversationService.ensureStudentGroup', () => {
     expect(s.writes).toBe(0);
   });
 
-  it('refuses an admin who does not own the family (403), with no writes', async () => {
+  it('refuses an admin who is not the supervisor (403), with no writes', async () => {
     const s = stubService({ actors: { a2: admin('a2') }, learner: sameOrgLearner });
     const e = await refusal(s.service.ensureStudentGroup('learner-1', 'a2'));
     expect([e.code, e.status]).toEqual([CommErrorCode.CANNOT_PROVISION_STUDENT_GROUP, 403]);
@@ -276,13 +299,13 @@ describe('ConversationService.ensureStudentGroup', () => {
     expect(e.code).toBe(CommErrorCode.CANNOT_PROVISION_STUDENT_GROUP);
   });
 
-  it("lets the family's owner through to the existing group", async () => {
+  it("lets the learner's supervisor through to the existing group", async () => {
     const s = stubService({ actors: { 'admin-1': admin('admin-1') }, learner: sameOrgLearner, existingGroup: true });
     await expect(s.service.ensureStudentGroup('learner-1', 'admin-1')).resolves.toEqual({ id: 'conv-existing' });
     expect(s.writes).toBe(0);
   });
 
-  it('lets a manager of the same organization create the group', async () => {
+  it("lets the supervisor's department manager create the group", async () => {
     const s = stubService({ actors: { m: manager('m') }, learner: sameOrgLearner });
     await expect(s.service.ensureStudentGroup('learner-1', 'm')).resolves.toBeDefined();
     expect(s.writes).toBeGreaterThan(0);
@@ -317,7 +340,7 @@ describe('ConversationService.syncStudentGroup', () => {
     expect(s.learnerLookups).toBe(0);
   });
 
-  it('refuses an admin who does not own the family, with no writes', async () => {
+  it('refuses an admin who is not the supervisor, with no writes', async () => {
     const s = stubService({ actors: { a2: admin('a2') }, learner: sameOrgLearner, existingGroup: true });
     const e = await refusal(s.service.syncStudentGroup('learner-1', 'a2'));
     expect([e.code, e.status]).toEqual([CommErrorCode.CANNOT_PROVISION_STUDENT_GROUP, 403]);
@@ -334,7 +357,7 @@ describe('ConversationService.syncStudentGroup', () => {
     expect(s.writes).toBe(0);
   });
 
-  it("lets the family's owner reconcile", async () => {
+  it("lets the learner's supervisor reconcile", async () => {
     // The stub group has no live members, so the owner is missing from it and
     // the reconcile writes -- which is the point: it got past the gate.
     const s = stubService({ actors: { 'admin-1': admin('admin-1') }, learner: sameOrgLearner, existingGroup: true });

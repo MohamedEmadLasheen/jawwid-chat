@@ -14,6 +14,7 @@ jest.setTimeout(60_000);
 const g = buildGraph();
 let s: Scenario;
 let coverageId: string;
+let backupLinkId: string;
 let financeId: string;
 let otherFamilyContactId: string;
 let other: { orgId: string; staffId: string; familyId: string; conversationId: string };
@@ -40,6 +41,17 @@ beforeEach(async () => {
        ('${coverageId}'::uuid, 'coverage_d', 'coverage', true),
        ('${financeId}'::uuid, 'finance_e', 'finance', true)`,
   );
+  // PD-8: coverage_d is admin_a's backup supervisor -- a DORMANT link, so they
+  // are in charge of nothing until it is activated.
+  await g.prisma.$executeRawUnsafe(
+    `insert into chat.department_member (staff_id, organization_id, department_id, position)
+     values ('${coverageId}'::uuid, chat.default_organization_id(), '${s.departmentId}'::uuid, 'backup_supervisor')`,
+  );
+  backupLinkId = (
+    await g.prisma.supervisorBackup.create({
+      data: { organizationId: (await g.prisma.staff.findUniqueOrThrow({ where: { id: s.ownerId } })).organizationId, primaryId: s.ownerId, backupId: coverageId },
+    })
+  ).id;
 
   // A second family in the SAME organization, owned by the same admin, so that
   // "a contact of another family" is tested without a tenant boundary in play.
@@ -160,7 +172,7 @@ describe('out-of-scope and unauthorized callers are refused without writes', () 
     expect(await footprint()).toEqual(before);
   });
 
-  it('a coverage admin who does not own the family is refused, even while on duty for it', async () => {
+  it('a coverage admin whose backup link is DORMANT is refused, even while on_duty() names them (PD-8)', async () => {
     const group = await studentGroup();
     g.coverage.onDutyId = coverageId;
     const before = await footprint();
@@ -241,7 +253,16 @@ describe('malformed requests are 400, not 500', () => {
 });
 
 describe('legitimate membership changes still work', () => {
-  it("the family's owner adds a staff observer: one member row, one audit row, one event", async () => {
+  // PD-8: coverage_d now covers admin_a (an ACTIVE backup link), so they are in
+  // charge of the group and may be seated in it.
+  beforeEach(async () => {
+    await g.prisma.supervisorBackup.update({
+      where: { id: backupLinkId },
+      data: { activatedAt: new Date(Date.now() - 1000) },
+    });
+  });
+
+  it("the children's supervisor seats their active backup as observer: one member row, one audit row, one event", async () => {
     const group = await studentGroup();
     const before = await footprint();
     await add(group.id, s.ownerId, coverageId, 'staff', 'observer', 'covering the holidays');
@@ -265,7 +286,7 @@ describe('legitimate membership changes still work', () => {
     expect(audit?.after).toEqual({ actorId: s.otherParentId, memberRole: 'parent' });
   });
 
-  it('a manager may change membership in their organization', async () => {
+  it('the department manager may change membership', async () => {
     const group = await studentGroup();
     await add(group.id, s.managerId, coverageId, 'staff', 'observer');
     expect(await g.conversations.membershipOf(group.id, coverageId)).not.toBeNull();

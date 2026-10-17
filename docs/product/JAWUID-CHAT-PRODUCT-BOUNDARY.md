@@ -138,6 +138,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | PD-5 | Role model | **CLOSED** — `super_admin` exists from day one |
 | PD-6 | Direct Parent ↔ Teacher communication | **SUPERSEDED by PD-7** (2026-10-14) — was: allowed for an authorized relationship |
 | **PD-7** | **Direct Parent ↔ Teacher communication, restored prohibition** | **CLOSED** — forbidden; BR-1 restored; Student Group only |
+| **PD-8** | **Organization structure and conversation scope** (2026-10-15) | **CLOSED** — departments + per-child supervision + activated backups; staff read only on a PD-8 basis; super admin full read/write; supersedes BR-4 for scope. Record: `../architecture/ORG-SCOPE-PD8.md` |
 
 ---
 

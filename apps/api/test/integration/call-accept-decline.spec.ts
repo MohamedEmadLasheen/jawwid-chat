@@ -40,6 +40,7 @@ import {
   legacyTeacherParentDirect,
   seed,
   truncate,
+  moveFamily,
 } from "./harness";
 
 jest.setTimeout(60_000);
@@ -208,7 +209,7 @@ describe("accept — authorization is re-run, and a refusal leaves no trace", ()
     expect(await callEvents(callId)).toEqual(["call.incoming"]);
   });
 
-  it("the reverse direction: parent starts, admin goes off duty, admin cannot answer", async () => {
+  it("the reverse direction: parent starts, the family moves to another supervisor, the former one cannot answer", async () => {
     const conv = await g.conversations.getOrCreateDirect(
       s.ownerId,
       s.parentId,
@@ -216,12 +217,12 @@ describe("accept — authorization is re-run, and a refusal leaves no trace", ()
     const { callId } = await g.calls.start(conv.id, s.parentId);
     const before = await snapshot(callId);
 
-    // Coverage moves to the other admin. The owner still READS the family's
-    // conversations (staff scope), but may no longer act in them.
-    g.coverage.onDutyId = s.otherAdminId;
+    // PD-8: the children move to the other supervisor. The former one keeps a
+    // membership row and a call participant row, and neither is scope.
+    await moveFamily(g.prisma, s, s.otherAdminId);
 
     await expect(g.calls.accept(callId, s.ownerId)).rejects.toMatchObject({
-      code: CommErrorCode.NOT_ON_DUTY,
+      code: CommErrorCode.STAFF_OUT_OF_SCOPE,
     });
     expect(await snapshot(callId)).toEqual(before);
   });

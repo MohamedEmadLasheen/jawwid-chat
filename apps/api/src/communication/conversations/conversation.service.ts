@@ -18,7 +18,8 @@ import { actorRefKey } from '../../platform/identity.service';
 import type { ResolvedActors } from '../../platform/identity.service';
 import type { CoverageService } from '../../platform/coverage.service';
 import type { AuditService } from '../../platform/audit.service';
-import { Actor, SYSTEM_ACTOR, isFamilyFacingStaff } from '../../platform/types';
+import type { StaffAccessBasis } from '../../platform/staff-scope';
+import { Actor, SYSTEM_ACTOR, isConversationStaff } from '../../platform/types';
 import { OutboxService } from '../outbox/outbox.service';
 import type { ConversationWithLearner, ResolvedMember } from '../contracts/dto';
 import { CommEvent } from '../contracts/events';
@@ -246,20 +247,26 @@ export class ConversationService {
   }
 
   /**
-   * The staff-scope fact `AuthorizationService.canRead` decides on, resolved
-   * from server-owned rows: the family's owner and the coverage engine. Free
-   * for anybody who is not staff (no query).
+   * The staff-scope fact `AuthorizationService.canRead` decides on: PD-8's
+   * chat.staff_conversation_access(), the one rule. Free for anybody who is
+   * not staff (no query).
    */
   async staffInScope(
     actor: Actor,
-    conv: Pick<Conversation, 'familyId' | 'stickyHandlerId' | 'stickyUntil'>,
+    conv: Pick<Conversation, 'id' | 'organizationId'>,
     now = new Date(),
   ): Promise<boolean> {
-    if (actor.kind !== ActorKind.STAFF) return false;
-    const family = conv.familyId
-      ? await this.prisma.family.findUnique({ where: { id: conv.familyId }, select: { ownerId: true } })
-      : null;
-    return this.authz.staffInScope(actor, conv, family?.ownerId ?? null, now);
+    return (await this.staffAccess(actor, conv, now)) !== null;
+  }
+
+  /** The staff actor's scope BASIS on the conversation (PD-8), or null. */
+  async staffAccess(
+    actor: Actor,
+    conv: Pick<Conversation, 'id' | 'organizationId'>,
+    now = new Date(),
+  ): Promise<StaffAccessBasis | null> {
+    if (actor.kind !== ActorKind.STAFF) return null;
+    return this.authz.staffAccess(actor, conv, now);
   }
 
   /**
@@ -422,7 +429,7 @@ export class ConversationService {
       rows.map((m) => ({ actorId: m.actorId, actorKind: m.actorKind })),
     );
 
-    const openable = this.openableFor(viewer, rows, actors);
+    const openable = await this.openableFor(viewer, rows, actors);
 
     for (const m of rows) {
       const key = actorRefKey({ actorId: m.actorId, actorKind: m.actorKind });
@@ -446,27 +453,46 @@ export class ConversationService {
    * from the enforcement. It is decided from the two actors alone (BR-1 under
    * PD-7 needs no relationship lookup), so it costs no query per member.
    */
-  private openableFor(
+  private async openableFor(
     viewer: Actor | undefined,
     rows: ReadonlyArray<{ actorId: string; actorKind: string }>,
     actors: ResolvedActors,
-  ): Set<string> {
+  ): Promise<Set<string>> {
     const openable = new Set<string>();
     if (!viewer) return openable;
 
+    const others: Actor[] = [];
     for (const row of rows) {
-      const key = actorRefKey({ actorId: row.actorId, actorKind: row.actorKind });
-      const other = actors.get(key);
+      const other = actors.get(actorRefKey({ actorId: row.actorId, actorKind: row.actorKind }));
       // An unresolved member is not a correspondent. Same actor is refused by
       // canOpenDirect itself.
-      if (!other || other.actorId === viewer.actorId) continue;
+      if (other && other.actorId !== viewer.actorId) others.push(other);
+    }
 
-      if (this.authz.canOpenDirect(viewer, other).allowed) {
-        openable.add(key);
+    // PD-8: a Parent <-> staff pair needs the staff side to reach the family.
+    // One batched query for every such pair on the page.
+    const pairs = others
+      .map((other) => ConversationService.staffFamilyPair(viewer, other))
+      .filter((p): p is { staffId: string; familyId: string } => p !== null);
+    const reach = await this.authz.reachesFamilyMany(pairs, new Date());
+
+    for (const other of others) {
+      const pair = ConversationService.staffFamilyPair(viewer, other);
+      const reaches = pair !== null && reach.has(`${pair.staffId}:${pair.familyId}`);
+      if (this.authz.canOpenDirect(viewer, other, reaches).allowed) {
+        openable.add(actorRefKey({ actorId: other.actorId, actorKind: other.kind }));
       }
     }
 
     return openable;
+  }
+
+  /** The (staff, family) pair whose reach a Parent <-> staff channel depends on. */
+  private static staffFamilyPair(a: Actor, b: Actor): { staffId: string; familyId: string } | null {
+    const staff = a.kind === ActorKind.STAFF ? a : b.kind === ActorKind.STAFF ? b : null;
+    const contact = a.kind === ActorKind.CONTACT ? a : b.kind === ActorKind.CONTACT ? b : null;
+    if (!staff || !contact?.familyId) return null;
+    return { staffId: staff.actorId, familyId: contact.familyId };
   }
 
   /** Canonical, order-independent identity of a 1:1 channel. */
@@ -493,7 +519,12 @@ export class ConversationService {
 
     // BR-1 (PD-7): a teacher<->parent pair is refused here from the two
     // actors' kinds alone. `otherId` selected a row; it asserted nothing.
-    const decision = this.authz.canOpenDirect(a, b);
+    // PD-8: a Parent <-> staff pair also needs the staff side to be in charge
+    // of the parent's family, resolved here from server-owned rows.
+    const pair = ConversationService.staffFamilyPair(a, b);
+    const staffSide = pair ? (a.actorId === pair.staffId ? a : b) : null;
+    const reaches = pair && staffSide ? await this.authz.reachesFamily(staffSide, pair.familyId, new Date()) : false;
+    const decision = this.authz.canOpenDirect(a, b, reaches);
     if (!decision.allowed) {
       // Another organization's actor is answered exactly as `requireActor`
       // answers an unknown one: same code, same status, same message.
@@ -604,7 +635,11 @@ export class ConversationService {
     if (!learner) {
       throw new CommError(CommErrorCode.CONVERSATION_NOT_FOUND, 'learner not found', 404);
     }
-    const scoped = this.authz.canProvisionStudentGroupFor(actor, provisioningTarget(learner));
+    const supervisorId = await this.supervisorOf(learner.id);
+    const scoped = this.authz.canProvisionStudentGroupFor(
+      actor,
+      provisioningTarget(learner, supervisorId, await this.actsForOrNull(actor, supervisorId)),
+    );
     if (!scoped.allowed) throw provisioningRefusal(scoped);
 
     const existing = await this.prisma.conversation.findFirst({
@@ -625,7 +660,9 @@ export class ConversationService {
           memberRole: MemberRole.PARENT,
         })),
       {
-        actorId: learner.family.ownerId,
+        // PD-8: the CHILD's supervisor, not the family owner -- children of one
+        // family may have different supervisors.
+        actorId: supervisorId as string,
         actorKind: ActorKind.STAFF,
         memberRole: MemberRole.ADMIN,
       },
@@ -704,7 +741,11 @@ export class ConversationService {
       include: { family: { include: { contacts: { where: { isActive: true } } } } },
     });
     if (!learner) return null;
-    const scoped = this.authz.canProvisionStudentGroupFor(actor, provisioningTarget(learner));
+    const supervisorId = await this.supervisorOf(learner.id);
+    const scoped = this.authz.canProvisionStudentGroupFor(
+      actor,
+      provisioningTarget(learner, supervisorId, await this.actsForOrNull(actor, supervisorId)),
+    );
     if (!scoped.allowed) {
       // Another tenant's learner is answered exactly as an unknown one is.
       if (scoped.code === CommErrorCode.CONVERSATION_NOT_FOUND) return null;
@@ -724,8 +765,8 @@ export class ConversationService {
         memberRole: MemberRole.PARENT,
       });
     }
-    desired.set(learner.family.ownerId, {
-      actorId: learner.family.ownerId,
+    desired.set(supervisorId as string, {
+      actorId: supervisorId as string,
       actorKind: ActorKind.STAFF,
       memberRole: MemberRole.ADMIN,
     });
@@ -825,6 +866,282 @@ export class ConversationService {
     });
   }
 
+  // ------------------------------------------------------------------
+  // PD-8: per-learner supervision and supervisor-created family groups
+  // ------------------------------------------------------------------
+
+  /** The child's supervisor (chat.learner_supervision), or null when unassigned. */
+  async supervisorOf(learnerId: string): Promise<string | null> {
+    const row = await this.prisma.learnerSupervision.findUnique({
+      where: { learnerId },
+      select: { supervisorId: true },
+    });
+    return row?.supervisorId ?? null;
+  }
+
+  /** How a staff actor acts for `principalId`; null for anybody else or no principal. */
+  private async actsForOrNull(actor: Actor, principalId: string | null) {
+    if (principalId === null || actor.kind !== ActorKind.STAFF) return null;
+    return this.authz.actsFor(actor, principalId, new Date());
+  }
+
+  /** Teachers of a family group's learners: the only teachers it may admit. */
+  private async anchorTeacherIds(conversationId: string): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<Array<{ teacher_id: string }>>`
+      SELECT DISTINCT l.teacher_id::text AS teacher_id
+        FROM chat.conversation_learner cl
+        JOIN chat.learner l ON l.id = cl.learner_id
+       WHERE cl.conversation_id = ${conversationId}::uuid AND l.teacher_id IS NOT NULL`;
+    return rows.map((r) => r.teacher_id);
+  }
+
+  /**
+   * PD-8: a supervisor creates a group about one or more children of ONE family
+   * who are all theirs, and chooses which of the family's parents and which of
+   * those children's teachers join it.
+   *
+   * Every participant is checked against server-owned rows before anything is
+   * written, and again by the database (chat.guard_family_group_member,
+   * chat.assert_family_group_coherent), so no request can associate a parent,
+   * teacher or child with a group that is not theirs:
+   *   - learners: same family, same organization, ONE supervisor;
+   *   - actor: that supervisor, their active backup, their manager, or the
+   *     super admin;
+   *   - parents: active, can_message contacts of THAT family;
+   *   - teachers: each teaches at least one of the group's children.
+   * The supervisor is always a member (BR-1 requires a live admin).
+   */
+  async createFamilyGroup(
+    actorId: string,
+    input: { learnerIds?: unknown; contactIds?: unknown; teacherIds?: unknown; title?: unknown },
+  ): Promise<Conversation> {
+    const actor = await this.requireActor(actorId);
+    const gate = this.authz.canProvisionStudentGroup(actor);
+    if (!gate.allowed) throw new CommError(gate.code, gate.reason);
+
+    const request = validateFamilyGroupRequest(input);
+    const learners = await this.prisma.learner.findMany({
+      where: { id: { in: request.learnerIds } },
+      include: { family: { select: { id: true, organizationId: true } } },
+    });
+    // Unknown and foreign learners are answered alike: never confirm an id.
+    if (
+      learners.length !== request.learnerIds.length ||
+      learners.some((l) => l.organizationId !== actor.organizationId)
+    ) {
+      throw new CommError(CommErrorCode.CONVERSATION_NOT_FOUND, 'learner not found', 404);
+    }
+    const familyIds = new Set(learners.map((l) => l.familyId));
+    if (familyIds.size !== 1) {
+      throw new CommError(
+        CommErrorCode.ORG_STRUCTURE_INVALID,
+        "a family group is about one family's children only",
+        409,
+      );
+    }
+    const familyId = learners[0].familyId;
+
+    const supervision = await this.prisma.learnerSupervision.findMany({
+      where: { learnerId: { in: request.learnerIds } },
+    });
+    if (supervision.length !== learners.length) {
+      throw new CommError(
+        CommErrorCode.LEARNER_UNSUPERVISED,
+        'every child in the group needs a supervisor first',
+        409,
+      );
+    }
+    const supervisors = new Set(supervision.map((r) => r.supervisorId));
+    if (supervisors.size !== 1) {
+      throw new CommError(
+        CommErrorCode.ORG_STRUCTURE_INVALID,
+        'a family group is about children of one supervisor; children with different supervisors get separate groups',
+        409,
+      );
+    }
+    const supervisorId = supervision[0].supervisorId;
+    const scoped = this.authz.canProvisionStudentGroupFor(
+      actor,
+      provisioningTarget(learners[0], supervisorId, await this.actsForOrNull(actor, supervisorId)),
+    );
+    if (!scoped.allowed) throw provisioningRefusal(scoped);
+
+    const contacts = await this.prisma.contact.findMany({ where: { id: { in: request.contactIds } } });
+    if (
+      contacts.length !== request.contactIds.length ||
+      contacts.some((c) => c.familyId !== familyId || !c.isActive || !c.canMessage)
+    ) {
+      throw new CommError(
+        CommErrorCode.INVALID_PARTICIPANTS,
+        "a family group admits only this family's messaging parents",
+      );
+    }
+    const teachersOfChildren = new Set(learners.map((l) => l.teacherId).filter((t): t is string => !!t));
+    const teachers = await this.prisma.teacher.findMany({ where: { id: { in: request.teacherIds } } });
+    if (
+      teachers.length !== request.teacherIds.length ||
+      teachers.some((t) => !teachersOfChildren.has(t.id) || !t.isActive || t.leftAt !== null)
+    ) {
+      throw new CommError(
+        CommErrorCode.INVALID_PARTICIPANTS,
+        "a family group admits only active teachers of the group's children",
+      );
+    }
+
+    const members: MemberSpec[] = [
+      { actorId: supervisorId, actorKind: ActorKind.STAFF, memberRole: MemberRole.ADMIN },
+      ...contacts.map((c) => ({ actorId: c.id, actorKind: ActorKind.CONTACT, memberRole: MemberRole.PARENT })),
+      ...teachers.map((t) => ({ actorId: t.id, actorKind: ActorKind.TEACHER, memberRole: MemberRole.TEACHER })),
+    ];
+    const title = request.title ?? `${learners.map((l) => l.name).join(' · ')} · Jawwid`;
+
+    return this.prisma.$transaction(async (tx) => {
+      await this.assertActorLive(tx, actor);
+      const conv = await tx.conversation.create({
+        data: {
+          organizationId: learners[0].organizationId,
+          type: ConversationType.FAMILY_GROUP,
+          familyId,
+          learnerId: null,
+          title,
+        },
+      });
+      // Anchors first: the member guard admits a teacher only of an anchored child.
+      await tx.conversationLearner.createMany({
+        data: learners.map((l) => ({
+          conversationId: conv.id,
+          learnerId: l.id,
+          organizationId: conv.organizationId,
+          addedBy: actor.kind === ActorKind.STAFF ? actor.actorId : null,
+        })),
+      });
+      await tx.conversationMember.createMany({
+        data: members.map((m) => ({
+          conversationId: conv.id,
+          actorId: m.actorId,
+          actorKind: m.actorKind,
+          memberRole: m.memberRole,
+          addedBy: actor.kind === ActorKind.STAFF ? actor.actorId : null,
+        })),
+      });
+      await this.systemMessage(tx, conv.id, 'group.created', { learner: learners.map((l) => l.name).join(', ') });
+      await this.audit.audit(tx, {
+        actorId: actor.kind === ActorKind.STAFF ? actor.actorId : null,
+        action: 'family_group.created',
+        entity: 'conversation',
+        entityId: conv.id,
+        after: {
+          learnerIds: learners.map((l) => l.id),
+          supervisorId,
+          contactIds: contacts.map((c) => c.id),
+          teacherIds: teachers.map((t) => t.id),
+        },
+        reason: 'family group created',
+      });
+      await this.outbox.enqueue(tx, CommEvent.MEMBERSHIP_CHANGED, {
+        conversationId: conv.id,
+        added: members.map((m) => m.actorId),
+        removed: [],
+      });
+      return conv;
+    });
+  }
+
+  /**
+   * PD-8: a child moved from `oldSupervisorId` to `newSupervisorId`. Called by
+   * OrgStructureService INSIDE the transaction that writes the new
+   * chat.learner_supervision row, so the deferred coherence trigger judges the
+   * result, not the steps.
+   *
+   *   - the child's Student Group: the old supervisor's admin seat goes to the
+   *     new one (the group IS the child's, so it follows the child);
+   *   - a family group about this child only: transferred the same way;
+   *   - a family group about this child AND others: the child is detached and
+   *     the group stays with the old supervisor's remaining children (its
+   *     teachers who teach none of them leave -- chat.prune_family_group_teachers).
+   *
+   * Access to everything else follows by itself: staff scope is computed from
+   * chat.learner_supervision at every read. Returns the members removed per
+   * conversation, for the caller to evict from realtime rooms after commit.
+   */
+  async reconcileSupervisionChange(
+    tx: Prisma.TransactionClient,
+    learnerId: string,
+    oldSupervisorId: string | null,
+    newSupervisorId: string,
+    actorId: string | null,
+  ): Promise<Array<{ conversationId: string; removed: string[] }>> {
+    const evictions: Array<{ conversationId: string; removed: string[] }> = [];
+    const swapAdmin = async (conversationId: string) => {
+      const removed: string[] = [];
+      if (oldSupervisorId && oldSupervisorId !== newSupervisorId) {
+        const ended = await tx.conversationMember.updateMany({
+          where: { conversationId, actorId: oldSupervisorId, actorKind: ActorKind.STAFF, leftAt: null },
+          data: { leftAt: new Date() },
+        });
+        if (ended.count > 0) removed.push(oldSupervisorId);
+      }
+      const present = await tx.conversationMember.findFirst({
+        where: { conversationId, actorId: newSupervisorId, leftAt: null },
+      });
+      if (!present) {
+        await tx.conversationMember.create({
+          data: {
+            conversationId,
+            actorId: newSupervisorId,
+            actorKind: ActorKind.STAFF,
+            memberRole: MemberRole.ADMIN,
+            addedBy: actorId,
+          },
+        });
+      }
+      await this.systemMessage(tx, conversationId, 'group.supervisor_changed', {});
+      await this.outbox.enqueue(tx, CommEvent.MEMBERSHIP_CHANGED, {
+        conversationId,
+        added: present ? [] : [newSupervisorId],
+        removed,
+      });
+      evictions.push({ conversationId, removed });
+    };
+
+    const studentGroups = await tx.conversation.findMany({
+      where: { learnerId, type: ConversationType.STUDENT_GROUP, archivedAt: null },
+      select: { id: true },
+    });
+    for (const g of studentGroups) await swapAdmin(g.id);
+
+    const anchored = await tx.conversationLearner.findMany({ where: { learnerId }, select: { conversationId: true } });
+    for (const { conversationId } of anchored) {
+      const group = await tx.conversation.findUnique({ where: { id: conversationId }, select: { archivedAt: true } });
+      if (!group || group.archivedAt) continue;
+      const others = await tx.conversationLearner.count({
+        where: { conversationId, learnerId: { not: learnerId } },
+      });
+      if (others === 0) {
+        await swapAdmin(conversationId);
+        continue;
+      }
+      const teachersBefore = await tx.conversationMember.findMany({
+        where: { conversationId, actorKind: ActorKind.TEACHER, leftAt: null },
+        select: { actorId: true },
+      });
+      await tx.conversationLearner.delete({ where: { conversationId_learnerId: { conversationId, learnerId } } });
+      const teachersAfter = new Set(
+        (
+          await tx.conversationMember.findMany({
+            where: { conversationId, actorKind: ActorKind.TEACHER, leftAt: null },
+            select: { actorId: true },
+          })
+        ).map((m) => m.actorId),
+      );
+      const removed = teachersBefore.map((m) => m.actorId).filter((id) => !teachersAfter.has(id));
+      await this.systemMessage(tx, conversationId, 'group.learner_detached', {});
+      await this.outbox.enqueue(tx, CommEvent.MEMBERSHIP_CHANGED, { conversationId, added: [], removed });
+      evictions.push({ conversationId, removed });
+    }
+    return evictions;
+  }
+
   /**
    * Membership mutations are staff-only. A teacher or a parent calling this is
    * rejected regardless of what the client sends.
@@ -851,20 +1168,17 @@ export class ConversationService {
 
     const conv = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
-      include: {
-        family: { select: { ownerId: true } },
-        learner: { select: { teacherId: true } },
-      },
+      include: { learner: { select: { teacherId: true } } },
     });
     if (!conv) {
       throw new CommError(CommErrorCode.CONVERSATION_NOT_FOUND, 'conversation not found', 404);
     }
+    const now = new Date();
     const own = await this.membershipOf(conv.id, actor.actorId);
     const scoped = this.authz.canManageMembershipIn(actor, {
       type: conv.type,
       organizationId: conv.organizationId,
-      familyId: conv.familyId,
-      familyOwnerId: conv.family?.ownerId ?? null,
+      actorBasis: await this.authz.staffAccess(actor, conv, now),
       actorMemberRole: own?.memberRole ?? null,
     });
     if (!scoped.allowed) {
@@ -919,13 +1233,14 @@ export class ConversationService {
       );
     }
 
-    const candidate = await this.memberCandidate(request.actorKind, request.actorId);
+    const candidate = await this.memberCandidate(request.actorKind, request.actorId, conv, now);
     const eligible = this.authz.canAddMember(
       {
         type: conv.type,
         organizationId: conv.organizationId,
         familyId: conv.familyId,
         learnerTeacherId: conv.learner?.teacherId ?? null,
+        anchorTeacherIds: conv.type === ConversationType.FAMILY_GROUP ? await this.anchorTeacherIds(conv.id) : [],
       },
       request.memberRole,
       candidate,
@@ -983,7 +1298,12 @@ export class ConversationService {
    * row of that kind -- which `canAddMember` answers exactly as it answers a
    * row in another organization.
    */
-  private async memberCandidate(kind: string, id: string) {
+  private async memberCandidate(
+    kind: string,
+    id: string,
+    conv: Pick<Conversation, 'id' | 'organizationId'>,
+    now: Date,
+  ) {
     switch (kind) {
       case ActorKind.CONTACT: {
         const c = await this.prisma.contact.findUnique({ where: { id } });
@@ -1007,12 +1327,29 @@ export class ConversationService {
       }
       case ActorKind.STAFF: {
         const st = await this.prisma.staff.findUnique({ where: { id } });
-        return st && {
+        if (!st) return null;
+        // PD-8: the candidate's OWN scope on this conversation, by the same rule
+        // every read uses -- a staff member joins only what they are in charge of.
+        const access = await this.authz.staffAccess(
+          {
+            actorId: st.id,
+            kind: ActorKind.STAFF,
+            displayName: st.name,
+            locale: 'ar',
+            isActive: st.isActive && st.leftAt === null,
+            staffRole: st.role as Actor['staffRole'],
+            organizationId: st.organizationId,
+          },
+          conv,
+          now,
+        );
+        return {
           kind: 'staff' as const,
           organizationId: st.organizationId,
           isActive: st.isActive,
           leftAt: st.leftAt,
           staffRole: st.role,
+          access,
         };
       }
       default:
@@ -1025,28 +1362,24 @@ export class ConversationService {
   // ------------------------------------------------------------------
 
   /**
-   * The staff member currently responsible: the sticky handler while live,
-   * otherwise AI #1's on_duty(). Null means Unattended, never a silent
-   * assignment.
+   * PD-8: the supervisor responsible for a group -- the default approver of its
+   * held messages. Null for a conversation that is not a group about
+   * supervised learners. (Was the sticky handler / on_duty(); neither decides
+   * anything since PD-8.)
    */
-  async activeHandler(conv: Conversation, now = new Date()): Promise<string | null> {
-    if (conv.stickyHandlerId && conv.stickyUntil && conv.stickyUntil > now) {
-      return conv.stickyHandlerId;
-    }
-    if (!conv.familyId) return null;
-    return this.coverage.onDuty(conv.familyId, now);
+  async responsibleSupervisor(conv: Pick<Conversation, 'id'>): Promise<string | null> {
+    return this.authz.responsibleSupervisor(conv.id);
   }
 
   /**
    * RBAC-scoped chat list. A contact or teacher only ever sees their own.
    *
    * Staff see exactly what `AuthorizationService.canRead` would let them open
-   * (staff scope, 2026-10-14): a manager, their organization; an admin or
-   * coverage admin, conversations they are a live member of plus those of the
-   * families they own, are on duty for, or are the live sticky handler of. The
-   * on-duty set comes from AI #1's `chat.families_on_duty`, the same coverage
-   * engine `on_duty()` answers from, so the list and the per-conversation
-   * check cannot disagree about who is covering whom.
+   * (PD-8): the ids come from chat.staff_visible_conversation_ids, which filters
+   * every candidate through chat.staff_conversation_access -- the same function
+   * the per-conversation check asks -- so the list and the check cannot
+   * disagree. The organization filter is restated here as a second, independent
+   * bound.
    */
   async listForActor(actorId: string): Promise<ConversationWithLearner[]> {
     const actor = await this.requireActor(actorId);
@@ -1055,7 +1388,7 @@ export class ConversationService {
       if (!actor.isActive) {
         throw new CommError(CommErrorCode.ACTOR_INACTIVE, 'actor is inactive');
       }
-      if (!isFamilyFacingStaff(actor)) {
+      if (!isConversationStaff(actor)) {
         throw new CommError(
           CommErrorCode.ROLE_CANNOT_MESSAGE_FAMILY,
           `role ${actor.staffRole} may not access conversations`,
@@ -1063,22 +1396,10 @@ export class ConversationService {
       }
       if (!actor.organizationId) return [];
 
-      const where: Prisma.ConversationWhereInput = { organizationId: actor.organizationId };
-      if (actor.staffRole !== 'manager') {
-        const now = new Date();
-        const onDuty = await this.prisma.$queryRaw<Array<{ family_id: string }>>`
-          SELECT family_id FROM chat.families_on_duty(${actor.actorId}::uuid, ${now}::timestamptz)
-        `;
-        where.OR = [
-          { members: { some: { actorId: actor.actorId, leftAt: null } } },
-          { family: { ownerId: actor.actorId } },
-          { familyId: { in: onDuty.map((r) => r.family_id) } },
-          { stickyHandlerId: actor.actorId, stickyUntil: { gt: now } },
-        ];
-      }
-
+      const ids = await this.authz.visibleConversationIds(actor, new Date());
+      if (ids.length === 0) return [];
       return this.prisma.conversation.findMany({
-        where,
+        where: { id: { in: ids }, organizationId: actor.organizationId },
         include: { learner: true },
         orderBy: { lastActivityAt: 'desc' },
         take: 200,
@@ -1163,24 +1484,64 @@ export class ConversationService {
 }
 
 /** The facts `canProvisionStudentGroupFor` decides on, read from a loaded learner. */
-function provisioningTarget(learner: {
-  organizationId: string;
-  family: { organizationId: string; ownerId: string };
-}) {
+function provisioningTarget(
+  learner: { organizationId: string; family: { organizationId: string } },
+  supervisorId: string | null,
+  actorActsFor: 'self' | 'backup' | 'manager' | null,
+) {
   return {
     learnerOrganizationId: learner.organizationId,
     familyOrganizationId: learner.family.organizationId,
-    familyOwnerId: learner.family.ownerId,
+    supervisorId,
+    actorActsFor,
   };
 }
 
-/** A tenant mismatch reads as an unknown learner (404); anything else is 403. */
+/** A tenant mismatch reads as an unknown learner (404); no supervisor is 409; anything else is 403. */
 function provisioningRefusal(decision: { code: CommErrorCode; reason: string }): CommError {
-  const status = decision.code === CommErrorCode.CONVERSATION_NOT_FOUND ? 404 : 403;
+  const status =
+    decision.code === CommErrorCode.CONVERSATION_NOT_FOUND
+      ? 404
+      : decision.code === CommErrorCode.LEARNER_UNSUPERVISED
+        ? 409
+        : 403;
   return new CommError(decision.code, decision.reason, status);
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Shape checks for `POST /conversations/family-group`, before anything is read. */
+function validateFamilyGroupRequest(input: {
+  learnerIds?: unknown;
+  contactIds?: unknown;
+  teacherIds?: unknown;
+  title?: unknown;
+}): { learnerIds: string[]; contactIds: string[]; teacherIds: string[]; title: string | null } {
+  const invalid = (field: string, why: string) =>
+    new CommError(CommErrorCode.VALIDATION, `${field}: ${why}`, 400);
+  const ids = (field: string, value: unknown, min: number, max: number): string[] => {
+    if (value === undefined && min === 0) return [];
+    if (!Array.isArray(value)) throw invalid(field, 'must be an array of uuids');
+    if (value.length < min || value.length > max) throw invalid(field, `must hold ${min}..${max} ids`);
+    if (!value.every((v) => typeof v === 'string' && UUID.test(v))) throw invalid(field, 'must be an array of uuids');
+    const unique = [...new Set(value.map((v: string) => v.toLowerCase()))];
+    if (unique.length !== value.length) throw invalid(field, 'must not repeat an id');
+    return unique;
+  };
+  let title: string | null = null;
+  if (input.title !== undefined && input.title !== null) {
+    if (typeof input.title !== 'string' || input.title.trim().length === 0 || input.title.trim().length > 120) {
+      throw invalid('title', 'must be 1..120 characters');
+    }
+    title = input.title.trim();
+  }
+  return {
+    learnerIds: ids('learnerIds', input.learnerIds, 1, 10),
+    contactIds: ids('contactIds', input.contactIds, 0, 20),
+    teacherIds: ids('teacherIds', input.teacherIds, 0, 20),
+    title,
+  };
+}
 const MEMBER_KINDS: ReadonlySet<string> = new Set([ActorKind.CONTACT, ActorKind.TEACHER, ActorKind.STAFF]);
 
 /**

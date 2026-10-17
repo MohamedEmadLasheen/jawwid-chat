@@ -35,6 +35,7 @@ export const chatCopy = {
       direct: 'محادثة مباشرة',
       student_group: 'مجموعة الطالب',
       class_group: 'مجموعة الفصل',
+      family_group: 'مجموعة العائلة',
     } as Record<string, string>,
     role: { contact: 'ولي أمر', teacher: 'معلم', staff: 'جوّد', system: 'النظام' } as Record<string, string>,
     system: {
@@ -76,6 +77,7 @@ export const chatCopy = {
       direct: 'Direct conversation',
       student_group: 'Student Group',
       class_group: 'Class Group',
+      family_group: 'Family group',
     } as Record<string, string>,
     role: { contact: 'Parent', teacher: 'Teacher', staff: 'Jawwid', system: 'System' } as Record<string, string>,
     system: {

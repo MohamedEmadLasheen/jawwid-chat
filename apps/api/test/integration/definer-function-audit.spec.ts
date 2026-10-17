@@ -40,6 +40,8 @@ const REQUEST_ROLE_ALLOWLIST: Record<string, string> = {
   organization_workload_totals: 'super admin of the organization only',
   staff_profile_activity: 'profile audit rows; managers and the super admin, viewable profiles',
   record_staff_profile_audit: 'audit write whose actor is chat.trusted_staff_actor',
+  // 20261015120000 (PD-8) -- read-only, answers for chat.current_staff_id() only:
+  current_staff_conversation_access: "PD-8 policy helper: the caller's own scope on one conversation",
 };
 
 let s: Scenario;

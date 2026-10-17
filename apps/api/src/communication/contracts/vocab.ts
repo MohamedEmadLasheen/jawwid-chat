@@ -23,11 +23,10 @@ export const StaffRole = {
   ACADEMIC: 'academic',
   /**
    * PD-5: the organization owner. Granted only by the bootstrap procedure
-   * (20261013120000 guards the column). NOT in FAMILY_FACING_STAFF_ROLES yet:
-   * the SQL helpers that admit family-facing staff still list
-   * ('admin', 'coverage', 'manager'), and the API must not allow a write the
-   * database will refuse. Its authority today is organization inspection --
-   * AuthorizationService.canInspectOrganization.
+   * (20261013120000 guards the column). NOT in FAMILY_FACING_STAFF_ROLES: that
+   * set also decides stories and the legacy SQL helpers. PD-8 (2026-10-15)
+   * gives it full read AND write in every conversation of its organization,
+   * through CONVERSATION_STAFF_ROLES below.
    */
   SUPER_ADMIN: 'super_admin',
 } as const;
@@ -44,12 +43,35 @@ export const FAMILY_FACING_STAFF_ROLES: ReadonlySet<string> = new Set([
   StaffRole.MANAGER,
 ]);
 
+/**
+ * PD-8: staff roles that take part in conversations -- the family-facing roles
+ * plus the super admin, who has full read and write (owner decision 2026-10-15).
+ * Which conversations is decided by chat.staff_conversation_access, never by
+ * the role alone.
+ */
+export const CONVERSATION_STAFF_ROLES: ReadonlySet<string> = new Set([
+  ...FAMILY_FACING_STAFF_ROLES,
+  StaffRole.SUPER_ADMIN,
+]);
+
 export const ConversationType = {
   DIRECT: 'direct',
   STUDENT_GROUP: 'student_group',
   CLASS_GROUP: 'class_group',
   OFFICIAL: 'official',
+  /**
+   * PD-8: a group a supervisor creates about one or more children of ONE
+   * family (chat.conversation_learner). Moderated like a Student Group.
+   */
+  FAMILY_GROUP: 'family_group',
 } as const;
+
+/** Group conversations: BR-1 admin presence, moderation and PD-2 apply. */
+export const GROUP_CONVERSATION_TYPES: ReadonlySet<string> = new Set([
+  ConversationType.STUDENT_GROUP,
+  ConversationType.CLASS_GROUP,
+  ConversationType.FAMILY_GROUP,
+]);
 export type ConversationType = (typeof ConversationType)[keyof typeof ConversationType];
 
 export const ConversationState = {

@@ -15,3 +15,5 @@ export const REALTIME_REVOCATION = Symbol('RealtimeRevocation');
  * it opens no channel -- direct teacher<->parent is refused whatever it says.
  */
 export const RELATIONSHIP_SERVICE = Symbol('RelationshipService');
+/** PD-8: the staff conversation scope (chat.staff_conversation_access). */
+export const STAFF_SCOPE = Symbol('StaffScope');

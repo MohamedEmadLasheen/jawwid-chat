@@ -2,7 +2,7 @@
 
 Status: **CANONICAL** · Locked in Phase 0 (2026-09-07) · Implemented in Phase 1
 Product decisions PD-2, PD-3, PD-5 and **PD-6** are CLOSED; the record is `../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4.
-**PD-7 (2026-10-14) supersedes PD-6 and restores BR-1**: direct Parent ↔ Teacher chat and calls are forbidden whatever the relationship (`COMM.BR1_TEACHER_PARENT_DIRECT`). PD-6 (2026-09-23) had allowed them for an *authorized relationship*; §4.1 is kept as that history. **Staff scope (2026-10-14):** a manager reads their organization; an admin/coverage admin reads conversations they are a member of, or whose family they own, are on duty for, or are the live sticky handler of (`canRead(..., staffInScope)`).
+**PD-7 (2026-10-14) supersedes PD-6 and restores BR-1**: direct Parent ↔ Teacher chat and calls are forbidden whatever the relationship (`COMM.BR1_TEACHER_PARENT_DIRECT`). PD-6 (2026-09-23) had allowed them for an *authorized relationship*; §4.1 is kept as that history. **Staff scope — PD-8 (2026-10-15), superseding the 2026-10-14 rule:** a staff member reads a conversation only on a basis from `chat.staff_conversation_access` — supervisor of the child(ren), live member who still reaches the family, ACTIVE backup, department manager, or the super admin (full read/write). Family ownership, on duty and sticky grant nothing. Record: `ORG-SCOPE-PD8.md`.
 Companions: `IDENTITY-MODEL.md`, `SUPERVISOR-OWNERSHIP.md`, `TENANCY-MODEL.md`,
 `../security/RLS-STRATEGY.md`, `../contracts/API-CONTRACT.md` §1.2.
 Supersedes: `docs/qa/rbac-matrix.md` role vocabulary (known wrong — no `super_admin`),

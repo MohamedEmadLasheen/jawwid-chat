@@ -14,8 +14,8 @@ const authz = authzWithOnDuty();
 const inOrg = <T extends Actor>(a: T, organizationId: string | undefined): T => ({ ...a, organizationId });
 
 describe('canOpenDirect -- both participants must share one organization', () => {
-  it('same organization: the existing matrix is unchanged (parent<->admin allowed)', () => {
-    expect(authz.canOpenDirect(parent(), admin()).allowed).toBe(true);
+  it('same organization: the existing matrix is unchanged (parent<->admin allowed when the admin reaches the family, PD-8)', () => {
+    expect(authz.canOpenDirect(parent(), admin(), true).allowed).toBe(true);
   });
 
   it('a cross-organization pair is refused as an UNKNOWN actor, for every kind of pair', () => {

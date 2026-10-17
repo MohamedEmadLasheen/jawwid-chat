@@ -15,7 +15,7 @@ import { randomUUID } from 'node:crypto';
 import { OutboxWorker } from '@communication/outbox/outbox.worker';
 import type { RealtimePublisher } from '@communication/realtime/realtime.publisher';
 import { CommEvent } from '@communication/contracts/events';
-import { buildGraph, seed, truncate, withAssignmentGate, Scenario } from './harness';
+import { buildGraph, seed, truncate, withAssignmentGate, Scenario, supervise } from './harness';
 
 jest.setTimeout(60_000);
 
@@ -86,6 +86,8 @@ beforeEach(async () => {
     `insert into chat.learner (id, family_id, name, teacher_id, organization_id)
      values ('${b.learnerId}'::uuid, '${b.familyId}'::uuid, 'learner_b1', '${b.teacherId}'::uuid, ${o})`,
   );
+  // PD-8: org B's admin supervises org B's child.
+  await supervise(g.prisma, b.adminId, [b.learnerId]);
 });
 
 /** The org-B parent calls the org-B admin; returns the call id. */

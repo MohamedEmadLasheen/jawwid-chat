@@ -48,36 +48,42 @@ export class ApprovalService {
   /** The approval queue, scoped to what this actor is allowed to decide. */
   async listPending(actorId: string, conversationId?: string): Promise<PendingApprovalDto[]> {
     const actor = await this.conversations.requireActor(actorId);
-    const decision = this.authz.canApprove(actor, actor.actorId);
-    if (!decision.allowed && actor.staffRole !== 'manager') {
+    const decision = this.authz.canApprove(actor);
+    if (!decision.allowed) {
       // Non-staff never see the queue at all.
       throw new CommError(decision.code, decision.reason);
     }
 
+    // PD-8: the queue is bounded to the conversations this actor may access
+    // BEFORE the cap (the same SQL scope every read uses), so another
+    // supervisor's backlog can neither appear here nor starve this one.
+    const now = new Date();
+    const visible = await this.authz.visibleConversationIds(actor, now);
+    const scope = conversationId ? visible.filter((id) => id === conversationId) : visible;
+    if (scope.length === 0) return [];
+
     const rows = await this.prisma.messageApproval.findMany({
       where: {
         decision: ApprovalDecision.PENDING,
-        ...(conversationId ? { conversationId } : {}),
+        conversationId: { in: scope },
+        organizationId: actor.organizationId,
       },
       include: { message: { include: { attachments: true, reactions: true, receipts: true } } },
       orderBy: { createdAt: 'asc' },
       take: 200,
     });
 
-    // Staff scope (2026-10-14): a held message is shown only to staff who may
-    // read its conversation -- the same check, per conversation, that opening
-    // it would run. Without this every admin saw every family's pending text.
-    const readable = new Map<string, boolean>();
-    for (const conversationId of new Set(rows.map((r) => r.conversationId))) {
-      const conv = await this.prisma.conversation.findUnique({ where: { id: conversationId } });
-      const membership = conv ? await this.conversations.membershipOf(conv.id, actor.actorId) : null;
-      readable.set(
-        conversationId,
-        !!conv && (await this.conversations.canReadResolved(actor, conv, membership)).allowed,
-      );
+    // Only what this actor may also DECIDE: reading a supervisor's group as a
+    // department manager or backup is enough; reading a 1:1 as its member is not
+    // a group with a queue at all.
+    const decidable = new Map<string, boolean>();
+    for (const id of new Set(rows.map((r) => r.conversationId))) {
+      const conv = await this.prisma.conversation.findUnique({ where: { id } });
+      const basis = conv ? await this.conversations.staffAccess(actor, conv, now) : null;
+      decidable.set(id, this.authz.canApprove(actor, basis).allowed);
     }
 
-    return this.withSignedAttachments(rows.filter((r) => readable.get(r.conversationId)), actor.actorId);
+    return this.withSignedAttachments(rows.filter((r) => decidable.get(r.conversationId)), actor.actorId);
   }
 
   /** What the sender sees: their own pending/rejected messages with status. */
@@ -180,11 +186,9 @@ export class ApprovalService {
     const readable = await this.conversations.canReadResolved(actor, conv, membership);
     if (!readable.allowed) throw new CommError(readable.code, readable.reason);
 
-    // The approver is the family's active handler, resolved through AI #1's
-    // coverage engine - coverage logic is never duplicated here.
-    const activeHandler = await this.conversations.activeHandler(conv);
-
-    const permitted = this.authz.canApprove(actor, activeHandler);
+    // PD-8: the approver is whoever is in charge of the group -- its children's
+    // supervisor, their active backup or department manager, the super admin.
+    const permitted = this.authz.canApprove(actor, await this.conversations.staffAccess(actor, conv));
     if (!permitted.allowed) throw new CommError(permitted.code, permitted.reason);
 
     const now = new Date();

@@ -203,7 +203,8 @@ export class MessageService {
     const moderation = decision.moderation;
     const isPending = moderation === Moderation.PENDING;
     const stickyMinutes = await this.config.get('handoff.grace_minutes');
-    const activeHandler = await this.conversations.activeHandler(conv, now);
+    // PD-8: the default approver of a held group message is the children's supervisor.
+    const activeHandler = await this.conversations.responsibleSupervisor(conv);
 
     // Recipients: live members other than the author. Internal notes never
     // reach a contact or a teacher.

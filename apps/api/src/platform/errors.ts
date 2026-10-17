@@ -161,13 +161,25 @@ export enum CommErrorCode {
   STAFF_ASSIGNMENT_INVALID = 'COMM.STAFF_ASSIGNMENT_INVALID',
   /** The organization-wide profile overview belongs to the super admin. 403. */
   STAFF_DIRECTORY_DENIED = 'COMM.STAFF_DIRECTORY_DENIED',
+  /** PD-8: the learner has no supervisor, so no group can carry the required admin. 409. */
+  LEARNER_UNSUPERVISED = 'COMM.LEARNER_UNSUPERVISED',
+  /** PD-8: the organization structure (departments, supervision, backups) may not be changed by this actor. 403. */
+  ORG_STRUCTURE_DENIED = 'COMM.ORG_STRUCTURE_DENIED',
+  /** PD-8: the requested structure is not lawful (wrong department, ended link, mixed supervisors). 409. */
+  ORG_STRUCTURE_INVALID = 'COMM.ORG_STRUCTURE_INVALID',
 }
 
 export class CommError extends Error {
   constructor(
     readonly code: CommErrorCode,
     message: string,
-    readonly status = 403,
+    // A refusal that says "not found" IS a 404, whoever throws it. Several call
+    // sites passed a canRead decision straight through and so answered another
+    // organization's conversation as 403 CONVERSATION_NOT_FOUND while an unknown
+    // id was 404 -- the status alone told a caller the id exists in another
+    // tenant (found by org-scope-pd8.spec, 2026-10-15). Deciding it here means
+    // no call site can forget it again.
+    readonly status: number = code.endsWith('_NOT_FOUND') ? 404 : 403,
   ) {
     super(message);
     this.name = 'CommError';

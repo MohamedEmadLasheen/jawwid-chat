@@ -184,8 +184,14 @@ describe('PD-7 — no direct teacher/parent channel, whatever the relationship',
 describe('BR-1 — permitted channels', () => {
   const authz = authzWithOnDuty();
 
-  it('parent <-> admin 1:1 -> ALLOW', () => {
-    expect(authz.canOpenDirect(parent(), admin()).allowed).toBe(true);
+  it('parent <-> admin 1:1 -> ALLOW when the admin is in charge of the family (PD-8)', () => {
+    expect(authz.canOpenDirect(parent(), admin(), true).allowed).toBe(true);
+  });
+
+  it('parent <-> admin 1:1 -> REFUSED when the admin is not in charge of the family (PD-8 / BR-3)', () => {
+    const d = authz.canOpenDirect(parent(), admin(), false);
+    expect(d.allowed).toBe(false);
+    if (!d.allowed) expect(d.code).toBe('COMM.STAFF_OUT_OF_SCOPE');
   });
 
   it('teacher <-> admin 1:1 -> ALLOW', () => {
@@ -193,7 +199,7 @@ describe('BR-1 — permitted channels', () => {
   });
 
   it('coverage admin counts as family-facing', () => {
-    expect(authz.canOpenDirect(parent(), admin('cov-1', 'coverage')).allowed).toBe(true);
+    expect(authz.canOpenDirect(parent(), admin('cov-1', 'coverage'), true).allowed).toBe(true);
   });
 
   it('a teacher may post in a Teacher<->Admin 1:1: no contact is present', async () => {

@@ -114,9 +114,13 @@ describe('DEF-001 — the boundaries, with real membership rows', () => {
       data: { leftAt: new Date() },
     });
 
+    // PD-8: with no live staff member left in the channel nobody's scope
+    // reaches it any more, so the refusal now comes from the read check --
+    // earlier than the DEF-001 branch, and still not rescued by the sticky row.
     await expect(
       g.messages.send({ conversationId: conv.id, senderId: s.ownerId, ...text('b', 'def001-s2') }),
-    ).rejects.toMatchObject({ code: CommErrorCode.NOT_CONVERSATION_MEMBER });
+    ).rejects.toMatchObject({ code: CommErrorCode.STAFF_OUT_OF_SCOPE });
+    expect(await g.prisma.message.count({ where: { conversationId: conv.id } })).toBe(1);
   });
 
   it('an admin who LEFT the conversation can no longer send', async () => {
@@ -136,41 +140,56 @@ describe('DEF-001 — the boundaries, with real membership rows', () => {
     ).rejects.toBeInstanceOf(CommError);
   });
 
-  it('a family-scoped conversation still refuses an off-duty admin', async () => {
+  it('a family-scoped conversation follows the PD-8 scope: on_duty() grants and refuses nothing', async () => {
+    // The coverage engine names the OTHER Operations supervisor...
+    g.coverage.onDutyId = s.otherAdminId;
     const direct = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
     expect(direct.familyId).not.toBeNull();
 
+    // ...the children's supervisor still answers the parent, as OWNER,
+    const posted = await g.messages.send({
+      conversationId: direct.id,
+      senderId: s.ownerId,
+      ...text('the supervisor answers', 'def001-x3'),
+    });
+    expect(posted.onBehalfMode).toBe('owner');
+
+    // ...and the "on duty" admin with no charge over the family can neither
+    // write into this 1:1 nor open their own with the parent.
     await expect(
-      g.messages.send({
-        conversationId: direct.id,
-        senderId: s.ownerId,
-        ...text('off duty on a family', 'def001-x3'),
-      }),
-    ).rejects.toMatchObject({ code: CommErrorCode.NOT_ON_DUTY });
+      g.messages.send({ conversationId: direct.id, senderId: s.otherAdminId, ...text('x', 'def001-x4') }),
+    ).rejects.toMatchObject({ code: CommErrorCode.STAFF_OUT_OF_SCOPE });
+    await expect(g.conversations.getOrCreateDirect(s.parentId, s.otherAdminId)).rejects.toMatchObject({
+      code: CommErrorCode.STAFF_OUT_OF_SCOPE,
+    });
+    expect(await g.prisma.message.count({ where: { conversationId: direct.id } })).toBe(1);
   });
 
   it('a family-scoped GROUP is still governed by the family path, not the new branch', async () => {
     const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
     expect(group.familyId).not.toBeNull();
 
-    // The `else if (isGroup)` branch is only reached when familyId is NULL, so a
-    // group that HAS a family goes through on-duty like any other family
-    // conversation. Off duty it is refused -- unchanged by this fix, and asserted
-    // here so the fix cannot later be widened into groups by accident.
+    // PD-8: a group that HAS a family is governed by the scope of its child's
+    // supervisor, never by the DEF-001 membership branch and never by
+    // on_duty(). An admin the coverage engine names, who supervises nobody
+    // here, is refused and writes nothing -- asserted so the fix cannot later
+    // be widened into groups by accident.
+    g.coverage.onDutyId = s.otherAdminId;
+    const before = await g.prisma.message.count({ where: { conversationId: group.id } });
     await expect(
       g.messages.send({
         conversationId: group.id,
-        senderId: s.ownerId,
-        ...text('off duty in a group', 'def001-g1'),
+        senderId: s.otherAdminId,
+        ...text('on duty but not in charge', 'def001-g1'),
       }),
-    ).rejects.toMatchObject({ code: CommErrorCode.NOT_ON_DUTY });
+    ).rejects.toMatchObject({ code: CommErrorCode.STAFF_OUT_OF_SCOPE });
+    expect(await g.prisma.message.count({ where: { conversationId: group.id } })).toBe(before);
 
-    // On duty, the same admin posts normally.
-    g.coverage.onDutyId = s.ownerId;
+    // The child's supervisor posts normally, whatever the coverage engine says.
     const posted = await g.messages.send({
       conversationId: group.id,
       senderId: s.ownerId,
-      ...text('on duty in a group', 'def001-g2'),
+      ...text('the supervisor in the group', 'def001-g2'),
     });
     expect(posted.moderation).toBe('published');
   });

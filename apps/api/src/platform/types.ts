@@ -1,4 +1,10 @@
-import { ActorKind, FAMILY_FACING_STAFF_ROLES, Locale, StaffRole } from '../communication/contracts/vocab';
+import {
+  ActorKind,
+  CONVERSATION_STAFF_ROLES,
+  FAMILY_FACING_STAFF_ROLES,
+  Locale,
+  StaffRole,
+} from '../communication/contracts/vocab';
 
 /**
  * PLATFORM SEAM - AI #1 OWNS THIS CONTRACT.
@@ -44,4 +50,9 @@ export const SYSTEM_ACTOR: Actor = {
 
 export function isFamilyFacingStaff(actor: Actor): boolean {
   return actor.kind === 'staff' && FAMILY_FACING_STAFF_ROLES.has(actor.staffRole ?? '');
+}
+
+/** PD-8: staff who take part in conversations at all (family-facing + super admin). */
+export function isConversationStaff(actor: Actor): boolean {
+  return actor.kind === 'staff' && CONVERSATION_STAFF_ROLES.has(actor.staffRole ?? '');
 }

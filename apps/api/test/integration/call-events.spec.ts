@@ -28,7 +28,7 @@ import { OutboxWorker } from "@communication/outbox/outbox.worker";
 import { NotificationService } from "@communication/notifications/notification.service";
 import { CommEvent, room } from "@communication/contracts/events";
 import type { RealtimePublisher } from "@communication/realtime/realtime.publisher";
-import { Scenario, buildGraph, seed, truncate } from "./harness";
+import { Scenario, buildGraph, seed, truncate, splitFamily } from "./harness";
 
 jest.setTimeout(60_000);
 
@@ -573,8 +573,10 @@ describe("10/11/12. routing is the security boundary", () => {
     // guarantee was "a different room"; under participant routing it is "a
     // different set of PEOPLE", which is the property that actually matters.
     const { callId: firstCall } = await directCall();
-    // The parent is on both calls; each admin is on exactly one. Started by
-    // the parent, because the other admin is not on duty for the family.
+    // The parent is on both calls; each admin is on exactly one. PD-8: the
+    // family's second child is admin_b's, so admin_b reaches the family through
+    // their own child. Started by the parent.
+    await splitFamily(g.prisma, s);
     const otherConv = await g.conversations.getOrCreateDirect(
       s.parentId,
       s.otherAdminId,

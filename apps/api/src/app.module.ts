@@ -5,6 +5,7 @@ import { CommunicationModule } from './communication/communication.module';
 import { HealthModule } from './infra/health/health.module';
 import { AdminModule } from './admin/admin.module';
 import { StaffProfileModule } from './staff-profile/staff-profile.module';
+import { OrgStructureModule } from './org/org-structure.module';
 
 /**
  * The root module. Composition only -- it declares no provider and no
@@ -26,6 +27,14 @@ import { StaffProfileModule } from './staff-profile/staff-profile.module';
  * Adding a feature means adding its module here, not adding code here.
  */
 @Module({
-  imports: [PlatformModule, AuthModule, CommunicationModule, HealthModule, AdminModule, StaffProfileModule],
+  imports: [
+    PlatformModule,
+    AuthModule,
+    CommunicationModule,
+    HealthModule,
+    AdminModule,
+    StaffProfileModule,
+    OrgStructureModule,
+  ],
 })
 export class AppModule {}

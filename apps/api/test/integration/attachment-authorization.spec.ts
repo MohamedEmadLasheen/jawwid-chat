@@ -109,14 +109,15 @@ describe('a member who may read but may not send is refused', () => {
     );
   });
 
-  it('refuses an off-duty admin for a customer-visible attachment', async () => {
-    const conv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
-    // Nobody is on duty. The family's owner still READS its conversations
-    // (staff scope, 2026-10-14) -- which is what makes this the read-but-not-
-    // send case -- but may not post customer-visible content off duty.
-    g.coverage.onDutyId = null;
+  it('refuses a department manager who may READ a supervisor\'s teacher channel but is not a party to it', async () => {
+    // PD-8: manager_c runs Operations, so they read admin_a's Teacher<->Admin
+    // 1:1 -- which is what makes this the read-but-not-send case -- but it is
+    // a channel between two other people, answerable only by its members.
+    const conv = await g.conversations.getOrCreateDirect(s.teacherId, s.ownerId);
+    const manager = await g.conversations.requireActor(s.managerId);
+    expect(await g.conversations.staffInScope(manager, conv)).toBe(true);
 
-    expect(await refusalCode(conv.id, s.ownerId)).toBe(CommErrorCode.NOT_ON_DUTY);
+    expect(await refusalCode(conv.id, s.managerId)).toBe(CommErrorCode.NOT_CONVERSATION_MEMBER);
   });
 
   it('refuses an admin outside the family\'s charge before anything else', async () => {

@@ -140,12 +140,17 @@ describe('a newly provisioned, empty Student Group', () => {
     expect(queue.map((p) => p.messageId)).toContain(sent.id);
   });
 
-  it('the duty rule is not relaxed for an empty group: the seated admin, OFF duty, is refused and nothing is written', async () => {
+  it('the scope rule is not relaxed for an empty group: once the child moves to another supervisor, the seated admin is refused and nothing is written (PD-8)', async () => {
     const id = await provisionEmptyGroup();
-    g.coverage.onDutyId = null;
+    // The coverage engine decides nothing; the child's supervision does.
+    g.coverage.onDutyId = s.ownerId;
+    await g.prisma.learnerSupervision.update({
+      where: { learnerId: s.learnerId },
+      data: { supervisorId: s.otherAdminId },
+    });
     await expect(
-      g.messages.send({ conversationId: id, senderId: s.ownerId, body: 'off duty', clientMessageId: 'off-duty' }),
-    ).rejects.toMatchObject({ name: 'CommError' });
+      g.messages.send({ conversationId: id, senderId: s.ownerId, body: 'not mine any more', clientMessageId: 'moved' }),
+    ).rejects.toMatchObject({ name: 'CommError', code: 'COMM.STAFF_OUT_OF_SCOPE' });
     expect(await authoredIn(id)).toEqual([]);
   });
 
