@@ -1,8 +1,8 @@
 # Reopen record — W4, a failed media connection that is never reported (2026-10-17)
 
-**State: REOPENED BY EXPLICIT AUTHORIZATION** under the Critical Defect Reopen Protocol (product
-owner, 2026-10-17, in session: *"i approve"* — fix the phone stuck on "Connecting…"). **Not
-closed**: closure needs the evidence in §4 and the owner's explicit CLOSED authorization.
+**State: CLOSED / IMMUTABLE at `cf74606`** (product owner, 2026-10-17, in session: *"close
+W4"*). Reopened the same day under the Critical Defect Reopen Protocol (*"i approve"* — fix the
+phone stuck on "Connecting…"). Only that protocol may touch W4 again.
 
 | Workstream | Previous CLOSED SHA | Branch it was closed on |
 |---|---|---|
@@ -47,7 +47,7 @@ path showed no stall there, so it is unchanged (no change without a failing test
 | Red before the fix | the 6 new `call_media_client_test` cases fail on `e41576b`'s logic (a room whose `disconnect()` times out / `dispose()` throws); the screen-level test still showed "Connecting…" with only the `try`, and passes only with the un-awaited cancel |
 | Green after | `call_media_client_test` 44/44 (37 existing unchanged + 7 new, one a rejoin guard); `call_screen_test` adds "an unreachable media room shows the failure, never Connecting… forever"; full phone suite **1150 passed**, 17 skipped (pre-existing env-gated live-server tests); `flutter analyze` clean |
 | Live (iOS simulator, QA LiveKit deliberately stopped, 2026-10-17 12:15) | the phone shows "The call could not connect. Check your connection and try again." with Close / Send a message / Try again within seconds; 0 unhandled exceptions in the device log (before: "Connecting…" forever and `Unhandled Exception: TimeoutException`) |
-| Owner's explicit CLOSED authorization | pending |
+| Owner's explicit CLOSED authorization | **given 2026-10-17** — CLOSED at `cf74606` |
 
 ## 5. Noted, not in this scope
 
