@@ -47,6 +47,12 @@ export interface CallState {
   /** Who is on the other end, as the server named them (never a phone number). */
   peerLabel: string
   isGroup: boolean
+  /**
+   * Who placed the call, as THIS client saw it happen: `start` is outgoing, a
+   * `call.incoming` is incoming. Presentation only -- it picks the words for an
+   * outcome the server already named ("No answer" vs "Missed call").
+   */
+  direction: 'outgoing' | 'incoming' | null
   /** From `call.ended` only. Null until the server says. */
   outcome: string | null
   durationSeconds: number | null
@@ -66,6 +72,7 @@ export const IDLE_CALL: CallState = {
   conversationId: null,
   peerLabel: '',
   isGroup: false,
+  direction: null,
   outcome: null,
   durationSeconds: null,
   failure: null,
@@ -146,6 +153,11 @@ export class CallController {
     return this.state.phase !== 'idle'
   }
 
+  /** Only a record of a call remains: ended, or a start the server never took. */
+  private isOver(): boolean {
+    return this.state.phase === 'ended' || (this.state.phase === 'failed' && !this.state.callId)
+  }
+
   // ------------------------------------------------------------ outgoing
 
   /**
@@ -157,7 +169,14 @@ export class CallController {
     if (this.isPresent) return
     this.mediaRetryUsed = false
     this.rejoining = false
-    this.set({ ...IDLE_CALL, phase: 'starting', conversationId: args.conversationId, peerLabel: args.peerLabel, isGroup: args.isGroup })
+    this.set({
+      ...IDLE_CALL,
+      phase: 'starting',
+      direction: 'outgoing',
+      conversationId: args.conversationId,
+      peerLabel: args.peerLabel,
+      isGroup: args.isGroup,
+    })
     try {
       const started = await this.api.start(args.conversationId)
       if (!this.alive || this.phaseNow() !== 'starting') return
@@ -255,6 +274,19 @@ export class CallController {
     await this.start({ conversationId, peerLabel, isGroup })
   }
 
+  /**
+   * "Call again" after a call that is over: a NEW call in the same conversation,
+   * authorized by the server like any other. Only from `ended` -- a failed call
+   * may still exist on the server, and that one is hung up, not replaced.
+   */
+  async callAgain(): Promise<void> {
+    const { phase, conversationId, peerLabel, isGroup } = this.state
+    if (phase !== 'ended' || !conversationId) return
+    await this.teardownMedia()
+    this.set(IDLE_CALL)
+    await this.start({ conversationId, peerLabel, isGroup })
+  }
+
   // ------------------------------------------------------------ server events
 
   onServerEvent(e: CallServerEvent): void {
@@ -262,13 +294,19 @@ export class CallController {
     switch (e.event) {
       case 'call.incoming': {
         // One call at a time. A second call arriving during a call is not
-        // presented; the server records it as missed when it times out.
-        if (this.isPresent) return
+        // presented; the server records it as missed when it times out
+        // (call.md §7). But a FINISHED call is not a call: a screen that only
+        // says how the last one ended gives way to the new ring, instead of
+        // silently swallowing it. Anything that may still exist on the server
+        // (a failure with a callId included) is never interrupted.
+        if (this.isPresent && !this.isOver()) return
+        if (this.isPresent) void this.teardownMedia()
         this.mediaRetryUsed = false
         this.rejoining = false
         this.set({
           ...IDLE_CALL,
           phase: 'incomingRinging',
+          direction: 'incoming',
           callId: e.payload.callId,
           conversationId: e.payload.conversationId,
           peerLabel: e.payload.initiatorName,

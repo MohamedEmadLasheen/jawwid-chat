@@ -51,17 +51,28 @@ export const IDLE_MEDIA: CallMediaSnapshot = {
 export const createLiveKitMedia: CallMediaFactory = () => {
   let snapshot: CallMediaSnapshot = { ...IDLE_MEDIA }
   const listeners = new Set<(s: CallMediaSnapshot) => void>()
-  const players = new Map<string, HTMLMediaElement[]>()
+  // Keyed by the track OBJECT, and we remove our own elements: LiveKit may
+  // detach a track before it reports the unsubscribe (a full reconnect does),
+  // so `track.detach()` can return nothing and the element would be orphaned.
+  const players = new Map<object, HTMLMediaElement>()
   let room: import('livekit-client').Room | null = null
   let leaving = false
+  // Set only when a LIVE call starts reconnecting. A reconnect must restore
+  // what was there before it -- never promote a failure (no microphone) to live.
+  let reconnecting = false
 
   const emit = (patch: Partial<CallMediaSnapshot>) => {
     snapshot = { ...snapshot, ...patch }
     for (const l of listeners) l(snapshot)
   }
 
+  const dropPlayer = (track: object) => {
+    players.get(track)?.remove()
+    players.delete(track)
+  }
+
   const releasePlayers = () => {
-    for (const elements of players.values()) for (const el of elements) el.remove()
+    for (const el of players.values()) el.remove()
     players.clear()
   }
 
@@ -73,28 +84,38 @@ export const createLiveKitMedia: CallMediaFactory = () => {
       const lk = await import('livekit-client')
       const r = new lk.Room({ adaptiveStream: false, dynacast: false })
       room = r
+      reconnecting = false
 
       r.on(lk.RoomEvent.TrackSubscribed, (track, _pub, participant) => {
         if (track.kind !== lk.Track.Kind.Audio) return
+        dropPlayer(track)
         const el = track.attach()
         el.setAttribute('data-call-audio', participant.identity)
         el.style.display = 'none'
         document.body.appendChild(el)
-        const key = track.sid ?? participant.identity
-        players.set(key, [...(players.get(key) ?? []), el])
+        players.set(track, el)
         emit({ remoteAudio: true })
       })
-      r.on(lk.RoomEvent.TrackUnsubscribed, (track, _pub, participant) => {
-        for (const el of track.detach()) el.remove()
-        players.delete(track.sid ?? participant.identity)
+      r.on(lk.RoomEvent.TrackUnsubscribed, (track) => {
+        track.detach()
+        dropPlayer(track)
         emit({ remoteAudio: players.size > 0 })
       })
       r.on(lk.RoomEvent.AudioPlaybackStatusChanged, () => emit({ audioBlocked: !r.canPlaybackAudio }))
-      r.on(lk.RoomEvent.Reconnecting, () => emit({ phase: 'connecting' }))
-      r.on(lk.RoomEvent.Reconnected, () => emit({ phase: 'live' }))
+      r.on(lk.RoomEvent.Reconnecting, () => {
+        if (snapshot.phase !== 'live') return
+        reconnecting = true
+        emit({ phase: 'connecting' })
+      })
+      r.on(lk.RoomEvent.Reconnected, () => {
+        if (!reconnecting) return
+        reconnecting = false
+        emit({ phase: 'live' })
+      })
       r.on(lk.RoomEvent.Disconnected, () => {
         releasePlayers()
         room = null
+        reconnecting = false
         // Our own leave is not a drop; anything else is, and a drop is NOT an
         // ending -- the controller decides what to do about it.
         if (!leaving) emit({ phase: 'disconnected', remoteAudio: false })

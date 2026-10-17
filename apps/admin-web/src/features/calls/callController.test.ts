@@ -131,6 +131,77 @@ describe('outgoing call', () => {
   })
 })
 
+describe('a new ring after a finished call', () => {
+  it('replaces a screen that only shows how the last call ended', async () => {
+    await c.start({ conversationId: 'conv-1', peerLabel: 'P', isGroup: false })
+    c.onServerEvent({ event: 'call.ended', payload: { callId: 'call-1', outcome: 'missed', durationSeconds: null } })
+    expect(c.getSnapshot().phase).toBe('ended')
+
+    incoming('call-9')
+    expect(c.getSnapshot()).toMatchObject({ phase: 'incomingRinging', callId: 'call-9', direction: 'incoming', outcome: null })
+  })
+
+  it('replaces a start the server refused (no call exists)', async () => {
+    api.start.mockRejectedValueOnce(refused(403, 'COMM.NOT_ON_DUTY'))
+    await c.start({ conversationId: 'conv-1', peerLabel: 'P', isGroup: false })
+    incoming('call-9')
+    expect(c.getSnapshot()).toMatchObject({ phase: 'incomingRinging', callId: 'call-9' })
+  })
+
+  it('never interrupts a call that may still exist: ringing, live, or failed with a callId', async () => {
+    await c.start({ conversationId: 'conv-1', peerLabel: 'P', isGroup: false })
+    incoming('call-9')
+    expect(c.getSnapshot()).toMatchObject({ phase: 'outgoingRinging', callId: 'call-1' })
+
+    api.end.mockRejectedValueOnce(refused(500, 'X'))
+    await c.hangUp()
+    expect(c.getSnapshot()).toMatchObject({ phase: 'failed', callId: 'call-1' })
+    incoming('call-9')
+    expect(c.getSnapshot()).toMatchObject({ phase: 'failed', callId: 'call-1' })
+  })
+})
+
+describe('call again', () => {
+  it('after a call that ended, places a NEW call in the same conversation, as outgoing', async () => {
+    incoming('call-9')
+    c.onServerEvent({ event: 'call.ended', payload: { callId: 'call-9', outcome: 'missed', durationSeconds: null } })
+    expect(c.getSnapshot()).toMatchObject({ phase: 'ended', direction: 'incoming', outcome: 'missed' })
+
+    await c.callAgain()
+    expect(api.start).toHaveBeenCalledWith('conv-1')
+    expect(c.getSnapshot()).toMatchObject({
+      phase: 'outgoingRinging',
+      callId: 'call-1',
+      direction: 'outgoing',
+      peerLabel: 'Parent P',
+      outcome: null,
+    })
+  })
+
+  it('never replaces a call that may still exist: nothing from failed or a live call', async () => {
+    await c.start({ conversationId: 'conv-1', peerLabel: 'P', isGroup: false })
+    api.end.mockRejectedValueOnce(refused(500, 'X'))
+    await c.hangUp()
+    expect(c.getSnapshot()).toMatchObject({ phase: 'failed', callId: 'call-1' })
+    await c.callAgain()
+    expect(api.start).toHaveBeenCalledTimes(1)
+
+    const live = new CallController(api, () => fakeMedia(), () => 1)
+    await live.start({ conversationId: 'conv-1', peerLabel: 'P', isGroup: false })
+    await live.callAgain()
+    expect(api.start).toHaveBeenCalledTimes(2) // only live.start itself
+  })
+
+  it('a refused call-again is a failure with the server\'s reason, not a retry loop', async () => {
+    await c.start({ conversationId: 'conv-1', peerLabel: 'P', isGroup: false })
+    c.onServerEvent({ event: 'call.ended', payload: { callId: 'call-1', outcome: 'missed', durationSeconds: null } })
+    api.start.mockRejectedValueOnce(refused(403, 'COMM.NOT_ON_DUTY'))
+    await c.callAgain()
+    expect(c.getSnapshot()).toMatchObject({ phase: 'failed', failure: 'notAllowed', callId: null })
+    expect(api.start).toHaveBeenCalledTimes(2)
+  })
+})
+
 describe('incoming call', () => {
   it('rings, and answering asks the server BEFORE joining media', async () => {
     incoming()

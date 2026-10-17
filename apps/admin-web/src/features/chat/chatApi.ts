@@ -40,6 +40,17 @@ export interface ChatAttachment {
   mimeType: string
   url: string | null
   originalName?: string | null
+  /** Voice notes only: the recorded length, as the sender reported it. */
+  durationMs?: number | null
+}
+
+/** A signed, single-object upload (POST .../attachments/authorize). */
+export interface UploadGrant {
+  objectKey: string
+  uploadUrl: string
+  method?: string
+  headers?: Record<string, string>
+  expiresAt?: string
 }
 
 export interface ChatMessage {
@@ -96,6 +107,32 @@ export const chatApi = {
       visibility: input.visibility,
       clientMessageId: input.clientMessageId,
     }),
+  /** Step 1 of an attachment: the server checks membership, MIME and size, then signs. */
+  authorizeAttachment: (
+    id: string,
+    input: { kind: string; mimeType: string; byteSize: number; visibility?: 'customer' | 'internal' },
+  ) =>
+    api.post<UploadGrant>(`${conv(id)}/messages/attachments/authorize`, input),
+  /** Step 3 of a voice note, after the bytes are uploaded. Retry-safe like `send`. */
+  sendVoice: (
+    id: string,
+    input: {
+      clientMessageId: string
+      visibility: 'customer' | 'internal'
+      attachment: { objectKey: string; mimeType: string; byteSize: number; durationMs: number }
+    },
+  ) =>
+    api.post<ChatMessage>(
+      `${conv(id)}/messages`,
+      {
+        type: 'voice',
+        body: '',
+        visibility: input.visibility,
+        clientMessageId: input.clientMessageId,
+        attachments: [{ kind: 'voice', ...input.attachment }],
+      },
+      input.clientMessageId,
+    ),
   markRead: (id: string, upToSeq: string) =>
     api.post<{ ok: boolean }>(`${conv(id)}/messages/read`, { upToSeq }),
   /** Held teacher/parent messages in this conversation that the caller may see. */

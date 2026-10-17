@@ -1,25 +1,133 @@
-/* The call panel. Theme tokens only, so it follows light/dark and RTL. */
-.call-panel {
+/*
+ * The call window. Always dark, in both themes, like a messenger's call window:
+ * a call is a different mode from the portal around it. Its colours are named
+ * once here; white on each fill clears 4.5:1. Logical properties only, so RTL
+ * mirrors the layout (the glyphs themselves never mirror).
+ */
+.call-window {
+  --call-bg: #111b21;
+  --call-raised: #1f2c33;
+  --call-fg: #e9edef;
+  --call-muted: #aebac1;
+  --call-line: rgba(255, 255, 255, 0.1);
+  --call-control: rgba(255, 255, 255, 0.12);
+  --call-control-hover: rgba(255, 255, 255, 0.2);
+  --call-control-on: #e9edef;
+  --call-hangup: #d92d20;
+  --call-accept: #18794e;
+  --call-alert: #ffb4a8;
+
   position: fixed;
-  inset-block-end: var(--space-4, 16px);
-  inset-inline-end: var(--space-4, 16px);
-  z-index: 50;
-  inline-size: min(360px, calc(100vw - 2 * var(--space-4, 16px)));
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg, 12px);
-  box-shadow: var(--shadow-lg);
-  padding: var(--space-4, 16px);
+  inset-block-end: var(--space-5, 20px);
+  inset-inline-end: var(--space-5, 20px);
+  z-index: 60;
+  inline-size: min(340px, calc(100vw - 2 * var(--space-4, 16px)));
+  background: var(--call-bg);
+  color: var(--call-fg);
+  border: 1px solid var(--call-line);
+  border-radius: var(--radius-xl, 16px);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
   display: flex;
   flex-direction: column;
-  gap: var(--space-3, 12px);
+  overflow: hidden;
+  touch-action: none;
 }
-.call-panel--incoming { border-color: var(--accent); }
-.call-panel__title { font-weight: var(--fw-semibold, 600); font-size: var(--fs-md, 15px); margin: 0; }
-.call-panel__status { color: var(--text-muted); font-size: var(--fs-sm, 13px); margin: 0; }
-.call-panel__clock { font-family: var(--font-mono, ui-monospace, monospace); font-variant-numeric: tabular-nums; }
-.call-panel__alert { color: var(--danger); font-size: var(--fs-sm, 13px); margin: 0; }
+.call-window--incoming { animation: call-ring 1.2s ease-in-out infinite alternate; }
+
+.call-window__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2, 8px);
+  padding: var(--space-2, 8px) var(--space-4, 16px);
+  background: var(--call-raised);
+  color: var(--call-muted);
+  font-size: var(--fs-xs, 12px);
+  cursor: grab;
+  user-select: none;
+}
+.call-window__bar:active { cursor: grabbing; }
+.call-window__bar-title { display: inline-flex; align-items: center; gap: var(--space-1, 4px); }
+
+.call-window__identity {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-1, 4px);
+  padding: var(--space-6, 28px) var(--space-4, 16px) var(--space-4, 16px);
+}
+.call-window__avatar .avatar {
+  inline-size: 96px;
+  block-size: 96px;
+  font-size: 34px;
+  box-shadow: 0 0 0 4px var(--call-raised);
+  margin-block-end: var(--space-3, 12px);
+}
+.call-window__name { margin: 0; font-size: var(--fs-xl, 20px); font-weight: var(--fw-semibold, 600); }
+.call-window__sub { margin: 0; color: var(--call-muted); font-size: var(--fs-sm, 13px); }
+.call-window__status { margin: 0; color: var(--call-muted); font-size: var(--fs-md, 15px); min-block-size: 1.4em; }
+.call-window__clock { font-variant-numeric: tabular-nums; color: var(--call-fg); }
+.call-window__alert { margin: var(--space-2, 8px) 0 0; color: var(--call-alert); font-size: var(--fs-sm, 13px); }
+.call-window__unblock { margin: 0 var(--space-4, 16px) var(--space-3, 12px); }
+
+.call-window__controls {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-evenly;
+  gap: var(--space-3, 12px);
+  padding: var(--space-4, 16px) var(--space-4, 16px) var(--space-5, 20px);
+  background: var(--call-raised);
+  border-start-start-radius: var(--radius-xl, 16px);
+  border-start-end-radius: var(--radius-xl, 16px);
+}
+/* Mute and Message sit together; Hang up is a separate group, never adjacent to Mute. */
+.call-window__secondary {
+  display: flex;
+  gap: var(--space-3, 12px);
+  padding-inline-end: var(--space-4, 16px);
+  border-inline-end: 1px solid var(--call-line);
+}
+
+.call-window__action { display: flex; flex-direction: column; align-items: center; gap: var(--space-1, 4px); min-inline-size: 64px; }
+.call-window__action-label { color: var(--call-muted); font-size: var(--fs-xs, 12px); text-align: center; max-inline-size: 84px; }
+
+.call-window__round {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--call-fg);
+  background: var(--call-control);
+  transition: background var(--dur-fast, 120ms) var(--ease, ease), transform var(--dur-fast, 120ms) var(--ease, ease);
+}
+.call-window__round--md { inline-size: 52px; block-size: 52px; }
+.call-window__round--lg { inline-size: 64px; block-size: 64px; }
+.call-window__round:hover:not(:disabled) { background: var(--call-control-hover); }
+.call-window__round:active:not(:disabled) { transform: scale(0.96); }
+.call-window__round:focus-visible { outline: 3px solid var(--call-fg); outline-offset: 2px; }
+.call-window__round:disabled { opacity: 0.45; cursor: default; }
+.call-window__round[aria-pressed='true'] { background: var(--call-control-on); color: var(--call-bg); }
+.call-window__round--danger,
+.call-window__round--danger:hover:not(:disabled) { background: var(--call-hangup); color: #fff; }
+.call-window__round--accept,
+.call-window__round--accept:hover:not(:disabled) { background: var(--call-accept); color: #fff; }
+.call-window__round--danger:hover:not(:disabled),
+.call-window__round--accept:hover:not(:disabled) { filter: brightness(1.1); }
+
+@keyframes call-ring {
+  from { box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45), 0 0 0 0 rgba(24, 121, 78, 0.6); }
+  to { box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45), 0 0 0 8px rgba(24, 121, 78, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .call-window--incoming { animation: none; }
+  .call-window__round { transition: none; }
+}
+
+/* The conversation header's call button and history (not the window). */
 .call-panel__actions { display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
+.call-panel__status { color: var(--text-muted); font-size: var(--fs-sm, 13px); margin: 0; }
 .call-history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1, 4px); }
 .call-history li { display: flex; justify-content: space-between; gap: var(--space-2, 8px); font-size: var(--fs-sm, 13px); color: var(--text-muted); }

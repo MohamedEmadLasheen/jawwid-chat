@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { act, fireEvent, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { useLocation } from 'react-router-dom'
 import { renderWithProviders, makeStaff } from '@/test/utils'
 import { IDLE_MEDIA, type CallMedia, type CallMediaSnapshot } from './callMedia'
 
@@ -86,14 +87,34 @@ function stubApi(opts: { canCall: boolean; history?: unknown[] }) {
   )
 }
 
+/** Where the router is, so a test can see the window open a conversation. */
+function Where() {
+  const l = useLocation()
+  return <output data-testid="where">{l.pathname + l.search}</output>
+}
+
 function renderScreen(isGroup = false) {
   return renderWithProviders(
     <CallProvider createMedia={createMedia}>
       <ConversationCallControls conversationId="conv-1" peerLabel="Parent P" isGroup={isGroup} />
       <CallOverlay />
+      <Where />
     </CallProvider>,
     { staff: ADMIN },
   )
+}
+
+const where = () => screen.getByTestId('where').textContent
+const callWindow = () => screen.getByRole('region', { name: 'Call' })
+const callStarts = () => requests.filter((r) => r.method === 'POST' && r.path === '/calls')
+
+/** Place a call from the header and let it ring out as the server reports. */
+async function placeCallThatEnds(outcome: string, durationSeconds: number | null = null) {
+  stubApi({ canCall: true })
+  renderScreen()
+  fireEvent.click(await screen.findByRole('button', { name: 'Call' }))
+  await within(await screen.findByRole('region', { name: 'Call' })).findByText('Calling…')
+  act(() => fakeSocket.serverEmits('call.ended', { callId: 'call-1', conversationId: 'conv-1', outcome, durationSeconds }))
 }
 
 beforeEach(() => {
@@ -123,7 +144,12 @@ describe('an outgoing call, end to end in the UI', () => {
     renderScreen()
     fireEvent.click(await screen.findByRole('button', { name: 'Call' }))
 
-    await screen.findByText('Calling Parent P…')
+    const win = await screen.findByRole('region', { name: 'Call' })
+    expect(within(win).getByText('Parent P')).toBeTruthy()
+    expect(await within(win).findByText('Calling…')).toBeTruthy()
+    // While it rings there is nothing to mute yet; leaving is "Cancel".
+    expect(within(win).getByRole('button', { name: 'Mute' })).toHaveProperty('disabled', true)
+    expect(within(win).getByRole('button', { name: 'Cancel' })).toBeTruthy()
     expect(requests.find((r) => r.method === 'POST' && r.path === '/calls')?.body).toEqual({ conversationId: 'conv-1' })
     expect(requests.some((r) => r.path.endsWith('/token'))).toBe(false) // nobody joins while ringing
 
@@ -140,6 +166,97 @@ describe('an outgoing call, end to end in the UI', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Call' })).toBeNull())
+  })
+
+  it('keeps Hang up apart from Mute, and the biggest control (call.md §6)', async () => {
+    stubApi({ canCall: true })
+    renderScreen()
+    fireEvent.click(await screen.findByRole('button', { name: 'Call' }))
+    await within(await screen.findByRole('region', { name: 'Call' })).findByText('Calling…')
+    act(() => fakeSocket.serverEmits('call.accepted', { callId: 'call-1', conversationId: 'conv-1', actorId: 'parent-1' }))
+    await waitFor(() => expect(media?.connects).toHaveLength(1))
+    act(() => media!.play({ phase: 'live', remoteAudio: true }))
+    const mute = await within(callWindow()).findByRole('button', { name: 'Mute' })
+    const hangUp = within(callWindow()).getByRole('button', { name: 'Hang up' })
+    // Not siblings: Mute lives in the secondary group, Hang up outside it.
+    expect(mute.closest('.call-window__secondary')).not.toBeNull()
+    expect(hangUp.closest('.call-window__secondary')).toBeNull()
+    expect(hangUp.className).toContain('call-window__round--lg')
+    expect(mute.className).not.toContain('call-window__round--lg')
+  })
+
+  it('Message opens the conversation and the call carries on', async () => {
+    stubApi({ canCall: true })
+    renderScreen()
+    fireEvent.click(await screen.findByRole('button', { name: 'Call' }))
+    await within(await screen.findByRole('region', { name: 'Call' })).findByText('Calling…')
+    act(() => fakeSocket.serverEmits('call.accepted', { callId: 'call-1', conversationId: 'conv-1', actorId: 'parent-1' }))
+    await waitFor(() => expect(media?.connects).toHaveLength(1))
+    act(() => media!.play({ phase: 'live', remoteAudio: true }))
+    fireEvent.click(await within(callWindow()).findByRole('button', { name: 'Message' }))
+    expect(where()).toBe('/chat/conv-1')
+    expect(within(callWindow()).getByRole('button', { name: 'Hang up' })).toBeTruthy()
+    expect(requests.some((r) => r.path === '/calls/call-1/end')).toBe(false)
+  })
+})
+
+describe('after a call that did not connect', () => {
+  it('names the server\'s `missed` as "No answer" on a call this side placed', async () => {
+    await placeCallThatEnds('missed')
+    expect(await within(callWindow()).findByText('No answer')).toBeTruthy()
+    for (const name of ['Close', 'Record voice message', 'Call again']) {
+      expect(within(callWindow()).getByRole('button', { name })).toBeTruthy()
+    }
+  })
+
+  it('Call again asks the server for a NEW call in the same conversation', async () => {
+    await placeCallThatEnds('missed')
+    expect(callStarts()).toHaveLength(1)
+    fireEvent.click(await within(callWindow()).findByRole('button', { name: 'Call again' }))
+    await waitFor(() => expect(callStarts()).toHaveLength(2))
+    expect(callStarts()[1]!.body).toEqual({ conversationId: 'conv-1' })
+    expect(await within(callWindow()).findByText('Calling…')).toBeTruthy()
+  })
+
+  it('Call again that the server refuses is shown, not retried', async () => {
+    await placeCallThatEnds('missed')
+    const real = globalThis.fetch as unknown as (i: string, init?: RequestInit) => Promise<Response>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        if (String(input).endsWith('/calls') && init?.method === 'POST') {
+          requests.push({ method: 'POST', path: '/calls', body: JSON.parse(String(init.body)) })
+          return new Response(JSON.stringify({ error: { code: 'COMM.NOT_ON_DUTY', message: 'Not on duty' } }), {
+            status: 403,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        }
+        return real(input, init)
+      }),
+    )
+    fireEvent.click(await within(callWindow()).findByRole('button', { name: 'Call again' }))
+    expect(await within(callWindow()).findByRole('alert')).toBeTruthy()
+    expect(callStarts()).toHaveLength(2)
+    expect(within(callWindow()).queryByRole('button', { name: 'Call again' })).toBeNull()
+  })
+
+  it('Record voice message closes the window and opens the chat recording', async () => {
+    await placeCallThatEnds('missed')
+    fireEvent.click(await within(callWindow()).findByRole('button', { name: 'Record voice message' }))
+    expect(where()).toBe('/chat/conv-1?voice=1')
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Call' })).toBeNull())
+    expect(callStarts()).toHaveLength(1)
+  })
+
+  it('a ring that was missed HERE reads "Missed call"', async () => {
+    stubApi({ canCall: true })
+    renderScreen()
+    act(() =>
+      fakeSocket.serverEmits('call.incoming', { callId: 'call-9', conversationId: 'conv-1', type: 'direct', initiatorName: 'Parent P' }),
+    )
+    await screen.findByRole('alertdialog', { name: 'Incoming call from Parent P' })
+    act(() => fakeSocket.serverEmits('call.ended', { callId: 'call-9', conversationId: 'conv-1', outcome: 'missed', durationSeconds: null }))
+    expect(await within(callWindow()).findByText('Missed call')).toBeTruthy()
   })
 })
 
