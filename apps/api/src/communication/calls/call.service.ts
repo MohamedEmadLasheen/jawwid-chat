@@ -84,6 +84,7 @@ export class CallService {
     const now = new Date();
     const initiator = await this.conversations.requireActor(initiatorId);
     const conv = await this.conversations.requireConversation(conversationId);
+    this.requireConversationOrganization(initiator, conv.organizationId);
     const membership = await this.conversations.membershipOf(conv.id, initiator.actorId);
 
     const { decision, participantActors } = await this.decideInitiate(
@@ -201,8 +202,15 @@ export class CallService {
       // the join path.
       CallIntent.INITIATE,
     );
+    if (!decision.allowed) return { decision, participantActors };
 
-    return { decision, participantActors };
+    // D1 (ported from 33a347a, PD-A). Whoever starts a call must be ON it. The
+    // participants are the conversation's live members; since PD-8 a department
+    // manager, an ACTIVE backup or the super admin may SEND into a conversation
+    // they are not a member of -- and so, through canCall, could start a call
+    // that rings everyone else while the caller holds no seat in it: a phantom
+    // call. Starting a call is taking part in it, so it needs membership.
+    return { decision: this.authz.canStartCallAsParticipant(initiator, participantActors), participantActors };
   }
 
   /**
@@ -238,6 +246,7 @@ export class CallService {
   ): Promise<{ canCall: boolean; code: string | null }> {
     const actor = await this.conversations.requireActor(actorId);
     const conv = await this.conversations.requireConversation(conversationId);
+    this.requireConversationOrganization(actor, conv.organizationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
 
     const readable = await this.conversations.canReadResolved(actor, conv, membership);
@@ -609,7 +618,7 @@ export class CallService {
    */
   async end(callId: string, actorId: string): Promise<void> {
     const actor = await this.conversations.requireActor(actorId);
-    const call = await this.requireLiveParticipant(callId, actor.actorId);
+    const call = await this.requireLiveParticipant(callId, actor);
 
     await this.prisma.$transaction(async (tx) => {
       const locked = await this.lockCall(tx, callId);
@@ -765,6 +774,7 @@ export class CallService {
   async history(conversationId: string, actorId: string) {
     const actor = await this.conversations.requireActor(actorId);
     const conv = await this.conversations.requireConversation(conversationId);
+    this.requireConversationOrganization(actor, conv.organizationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
     const readable = await this.conversations.canReadResolved(actor, conv, membership);
     if (!readable.allowed) throw new CommError(readable.code, readable.reason);
@@ -954,6 +964,9 @@ export class CallService {
       include: { participants: true },
     });
     if (!call) throw new CommError(CommErrorCode.CALL_NOT_FOUND, 'call not found', 404);
+    // D3: another organization's call reads exactly as an unknown one, before
+    // its status or its participants can be read off the refusal.
+    this.requireCallOrganization(actor, call.organizationId);
     if (call.status === CallStatus.ENDED) {
       throw new CommError(CommErrorCode.CALL_ALREADY_ENDED, 'this call has ended', 409);
     }
@@ -1023,18 +1036,36 @@ export class CallService {
    * the right question for hanging up. Joining, answering and obtaining media
    * go through authorizeJoin() instead.
    */
-  private async requireLiveParticipant(callId: string, actorId: string) {
+  private async requireLiveParticipant(callId: string, actor: Actor) {
     const call = await this.prisma.call.findUnique({
       where: { id: callId },
       include: { participants: true },
     });
     if (!call) throw new CommError(CommErrorCode.CALL_NOT_FOUND, 'call not found', 404);
-    if (!call.participants.some((p) => p.actorId === actorId)) {
+    this.requireCallOrganization(actor, call.organizationId);
+    if (!call.participants.some((p) => p.actorId === actor.actorId)) {
       throw new CommError(
         CommErrorCode.CALL_NOT_A_PARTICIPANT,
         'actor is not a participant of this call',
       );
     }
     return call;
+  }
+
+  /**
+   * D3 (ported from 33a347a; RT-030's rule). Every call operation first
+   * establishes the conversation's organization: another organization's
+   * conversation is answered exactly like an unknown one (404), before
+   * membership, scope or call state can be read off the refusal.
+   */
+  private requireConversationOrganization(actor: Actor, organizationId: string): void {
+    const tenant = this.authz.canActInOrganization(actor, organizationId);
+    if (!tenant.allowed) throw new CommError(CommErrorCode.CONVERSATION_NOT_FOUND, 'conversation not found', 404);
+  }
+
+  /** The same for a call addressed by id: another organization's call is an unknown call. */
+  private requireCallOrganization(actor: Actor, organizationId: string): void {
+    const tenant = this.authz.canActInOrganization(actor, organizationId);
+    if (!tenant.allowed) throw new CommError(CommErrorCode.CALL_NOT_FOUND, 'call not found', 404);
   }
 }

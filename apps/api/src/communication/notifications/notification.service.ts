@@ -39,6 +39,9 @@ export interface ScheduleInput {
  * outbox events, re-run reminder sweeps and duplicate source events all
  * converge on exactly one delivery.
  */
+/** An id from a URL that is not a uuid names no row; it is answered as one that does not exist. */
+const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+
 @Injectable()
 export class NotificationService {
   private readonly log = new Logger(NotificationService.name);
@@ -281,14 +284,23 @@ export class NotificationService {
   }
 
   /** Called by a client or a provider webhook. Never inferred. */
-  async markDelivered(notificationId: string): Promise<void> {
+  /**
+   * Only the RECIPIENT reports their own notification delivered (as for
+   * opened). It used to take the id alone, so any authenticated caller could
+   * rewrite another person's delivery state (ported from the parallel branch's
+   * scoped-read work). A foreign or malformed id changes nothing and says so to
+   * nobody: the response is the same either way.
+   */
+  async markDelivered(notificationId: string, actorId: string): Promise<void> {
+    if (!isUuid(notificationId)) return;
     await this.prisma.notification.updateMany({
-      where: { id: notificationId, status: NotificationStatus.SENT },
+      where: { id: notificationId, recipientId: actorId, status: NotificationStatus.SENT },
       data: { status: NotificationStatus.DELIVERED, deliveredAt: new Date() },
     });
   }
 
   async markOpened(notificationId: string, actorId: string): Promise<void> {
+    if (!isUuid(notificationId)) return;
     await this.prisma.notification.updateMany({
       where: {
         id: notificationId,
