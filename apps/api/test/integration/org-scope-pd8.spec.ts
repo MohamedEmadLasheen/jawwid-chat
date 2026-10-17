@@ -47,6 +47,15 @@ process.env.STORAGE_SIGNING_SECRET ??= 'integration-storage-secret-32-chars-ok!'
 
 jest.setTimeout(300_000);
 
+// This suite logs in and opens a realtime connection, so it needs Redis: the
+// login limiter refuses every login without a store, and the presence client
+// would wait on localhost:6379. CI sets no REDIS_URL. Until 2026-10-17 this
+// suite borrowed the one auth-trusted-proxy.spec.ts leaves in the worker's
+// environment, and so passed or failed on Jest's scheduling order. It names
+// its own, and gives the environment back as it found it.
+const REDIS_URL = process.env.AUTH_TEST_REDIS_URL ?? process.env.REDIS_URL ?? 'redis://localhost:6410';
+const inheritedRedisUrl = process.env.REDIS_URL;
+
 const PASSWORD = 'pd8-scope-spec-password-1';
 const DOMAIN = 'pd8scope.qa.jawwid.test';
 
@@ -201,6 +210,7 @@ beforeAll(async () => {
   });
   activeBackups = m.backupLinks.filter((l) => l.active).map((l) => ({ primaryId: l.primaryId, backupId: l.backupId }));
 
+  process.env.REDIS_URL = REDIS_URL;
   const moduleRef = await Test.createTestingModule({
     imports: [PlatformModule, AuthModule, CommunicationModule, OrgStructureModule],
   }).compile();
@@ -220,6 +230,8 @@ afterAll(async () => {
   await g.prisma.$executeRawUnsafe(`delete from chat.account where subject like '%@${DOMAIN}'`);
   await g.prisma.$executeRawUnsafe(`delete from chat.organization where slug like 'pd8-%'`);
   await g.prisma.$disconnect();
+  if (inheritedRedisUrl === undefined) delete process.env.REDIS_URL;
+  else process.env.REDIS_URL = inheritedRedisUrl;
 });
 
 // ===========================================================================
