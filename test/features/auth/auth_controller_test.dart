@@ -202,7 +202,11 @@ void main() {
 
       await controller().restore();
 
-      expect(container.read(provider), isA<AuthSignedOut>());
+      // Not AuthSignedOut: that looked exactly like a sign-out, with no way back but the
+      // password. Unreachable keeps the session and offers a retry.
+      final state = container.read(provider);
+      expect(state, isA<AuthUnreachable>());
+      expect(state.isAuthenticated, isFalse, reason: 'nothing protected renders unconfirmed');
       expect(
         await tokens.read(),
         isNotNull,

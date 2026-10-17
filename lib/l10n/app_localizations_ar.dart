@@ -51,6 +51,10 @@ class L10nAr extends L10n {
   String get sessionExpiredBody => 'انتهت جلستك. برجاء تسجيل الدخول مرة أخرى.';
 
   @override
+  String get sessionUnreachableBody =>
+      'تعذّر الوصول إلى جَوِّد لفتح جلستك. ما زلت مسجّلًا للدخول — تحقق من اتصالك وحاول مرة أخرى.';
+
+  @override
   String get signOutAction => 'تسجيل الخروج';
 
   @override

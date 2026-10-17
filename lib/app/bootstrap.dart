@@ -23,7 +23,9 @@ import '../features/auth/application/session_termination.dart';
 import '../features/auth/domain/auth_state.dart';
 import '../features/calls/data/account_call_history.dart';
 import '../features/calls/data/http_account_call_history.dart';
+import '../features/settings/application/locale_preference.dart';
 import '../shared/models/user_role.dart';
+import 'app.dart';
 import 'providers.dart';
 
 /// Which data source this build talks to.
@@ -119,6 +121,8 @@ List<Override> _httpOverrides() {
   client = buildApiClient(config: config, tokens: tokens);
 
   return [
+    // The language choice survives a restart (see PersistedLocaleController).
+    localeOverrideProvider.overrideWith(PersistedLocaleController.new),
     tokenStoreProvider.overrideWithValue(tokenStore),
     authRepositoryProvider.overrideWithValue(auth),
     conversationRepositoryProvider.overrideWithValue(
@@ -203,6 +207,7 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
   final authRepository = FakeAuthRepository(backend: backend, tokens: tokens);
 
   return [
+    localeOverrideProvider.overrideWith(PersistedLocaleController.new),
     tokenStoreProvider.overrideWithValue(tokens),
     authRepositoryProvider.overrideWithValue(authRepository),
     conversationRepositoryProvider
