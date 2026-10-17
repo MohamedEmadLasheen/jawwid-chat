@@ -10,7 +10,9 @@ import { FamiliesPage } from '@/features/family/FamiliesPage'
 import { TasksPage } from '@/features/tasks/TasksPage'
 import { CoveragePage } from '@/features/coverage/CoveragePage'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
-import { StoriesPage } from '@/features/stories/StoriesPage'
+import { StoriesStudio } from '@/features/stories/StoriesStudio'
+import { StoryComposer } from '@/features/stories/StoryComposer'
+import { StoryInsights } from '@/features/stories/StoryInsights'
 import { AdminSectionPage } from '@/features/admin/AdminSectionPage'
 import { adminSectionPath } from '@/features/admin/sections'
 import { ProfilePage } from '@/features/profile/ProfilePage'
@@ -65,7 +67,14 @@ export function AppRoutes() {
         <Route path="/tasks" element={<Area area="tasks"><TasksPage /></Area>} />
         <Route path="/coverage" element={<Area area="coverage"><CoveragePage /></Area>} />
         <Route path="/dashboard" element={<Area area="dashboard"><DashboardPage /></Area>} />
-        <Route path="/stories" element={<Area area="stories"><StoriesPage /></Area>} />
+        {/*
+          Stories: one studio, two homes. Operators (admin, coverage, manager)
+          publish under /stories; the super admin under /admin/stories. The
+          server decides every request on its own (canPublishStory).
+        */}
+        <Route path="/stories" element={<Area area="stories"><StoriesStudio basePath="/stories" /></Area>} />
+        <Route path="/stories/new" element={<Area area="stories"><StoryComposer basePath="/stories" /></Area>} />
+        <Route path="/stories/:storyId" element={<Area area="stories"><StoryInsights basePath="/stories" /></Area>} />
         {/*
           Staff profiles: every staff role, no Area gate. What a profile shows
           and what may be changed on it is decided by /staff-profiles per
@@ -76,6 +85,14 @@ export function AppRoutes() {
         <Route
           path="/admin/:section"
           element={<SuperAdminOnly><AdminSectionPage /></SuperAdminOnly>}
+        />
+        <Route
+          path="/admin/stories/new"
+          element={<SuperAdminOnly><StoryComposer basePath={adminSectionPath('stories')} /></SuperAdminOnly>}
+        />
+        <Route
+          path="/admin/stories/:storyId"
+          element={<SuperAdminOnly><StoryInsights basePath={adminSectionPath('stories')} /></SuperAdminOnly>}
         />
         {/*
           Reserved seams (docs/admin/backend-contract-required.md §10):

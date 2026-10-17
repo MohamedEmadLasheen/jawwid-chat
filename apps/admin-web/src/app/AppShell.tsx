@@ -445,13 +445,8 @@ function Topbar({
         </span>
       </Link>
       <div className="topbar__spacer" />
-      {superAdmin && (
-        <span className="readonly-chip" title={tx(TEXT.readOnlyAccessHint)}>
-          <Icon name="eye" size={14} />
-          <span className="readonly-chip__text">{tx(TEXT.readOnlyAccess)}</span>
-          <span className="sr-only">{tx(TEXT.readOnlyAccessHint)}</span>
-        </span>
-      )}
+      {/* No "Read-only access" chip: the super admin has written in conversations
+          since PD-8 and publishes stories since 2026-10-17, so the claim was false. */}
       <LanguageToggle />
       {staff && (
         <>

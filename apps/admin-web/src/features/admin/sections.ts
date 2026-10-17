@@ -120,28 +120,18 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     key: 'stories',
     group: 'communication',
     icon: 'stories',
-    status: 'read_only',
+    // 2026-10-17: the super admin publishes. Create, target, publish, delete
+    // and the analytics all act against the real /stories API.
+    status: 'managed',
     label: { en: 'Stories', ar: 'الحالات' },
     purpose: {
-      en: 'Every story in the organization, with its audience and reach.',
-      ar: 'كل الحالات في المؤسسة، مع جمهورها ومدى وصولها.',
+      en: 'Publish stories to exactly the people they are for, and see how each one performs.',
+      ar: 'انشر الحالات للأشخاص المقصودين بالضبط، وتابع أداء كل حالة.',
     },
     note: {
-      en: 'Creating, publishing and deleting stories are not available to this account.',
-      ar: 'إنشاء الحالات ونشرها وحذفها غير متاح لهذا الحساب.',
+      en: 'Country and subscription plan come from Jawwid Core once it is connected; until then they are set under Audience data.',
+      ar: 'تأتي الدولة وباقة الاشتراك من نظام جوّد الأساسي عند ربطه، وحتى ذلك الحين تُعيَّن من «بيانات الجمهور».',
     },
-    legacy: [
-      {
-        path: '/stories',
-        // GET /stories is the PUBLISHER's list (canPublishStory: admin,
-        // coverage, manager). super_admin is refused there with
-        // COMM.STORY_CANNOT_PUBLISH on purpose -- it is not family-facing yet.
-        note: {
-          en: 'The publisher screen is for admin, coverage and manager roles. It is unsupported for Super Admin by design, and the server refuses it.',
-          ar: 'شاشة النشر مخصّصة لأدوار المشرف والتغطية والمدير، وهي غير مدعومة لمدير النظام عن قصد ويرفضها الخادم.',
-        },
-      },
-    ],
   },
   {
     key: 'notifications',

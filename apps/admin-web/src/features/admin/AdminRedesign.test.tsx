@@ -68,17 +68,19 @@ const CONVERSATIONS = {
 
 function story(id: string, over: Record<string, unknown> = {}) {
   return {
-    id, title: `Story ${id}`, state: 'published', creatorName: 'Admin A', recipients: 20, views: 10,
-    createdAt: ago(2 * DAY), publishedAt: ago(2 * DAY), expiresAt: new Date(NOW + 5 * HOUR).toISOString(), deletedAt: null, ...over,
+    id, kind: 'text', internalName: `Story ${id}`, title: null, body: 'hello', background: 'teal',
+    mediaKind: null, mediaUrl: null, mediaDurationMs: null, cta: null, state: 'published',
+    createdAt: ago(2 * DAY), publishedAt: ago(2 * DAY), expiresAt: null, deletedAt: null,
+    createdBy: 'a', creatorName: 'Admin A', audiences: [{ kind: 'segment', refId: null, filter: { who: 'everyone' } }],
+    recipientCount: 20, viewCount: 10, ctaTapCount: 0, ctaTapperCount: 0, ...over,
   }
 }
 
 const STORIES = {
-  truncated: false,
   stories: [
-    story('one', { views: 5 }),
-    story('two', { views: 18 }),
-    story('three', { state: 'draft', recipients: 0, views: 0, publishedAt: null, expiresAt: null }),
+    story('one', { viewCount: 5 }),
+    story('two', { viewCount: 18 }),
+    story('three', { state: 'draft', recipientCount: 0, viewCount: 0, publishedAt: null }),
   ],
 }
 
@@ -186,31 +188,31 @@ describe('Conversations', () => {
 })
 
 describe('Stories', () => {
-  it('filters by status through links, never through publish or delete buttons', async () => {
-    vi.stubGlobal('fetch', routeFetch({ '/admin/stories': STORIES }))
+  it('filters by status through links that keep the filter in the URL', async () => {
+    vi.stubGlobal('fetch', routeFetch({ '/stories': STORIES }))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/stories' })
-    await screen.findByRole('button', { name: 'Story one' })
+    await screen.findByRole('link', { name: 'Story one' })
 
     const tiles = screen.getByRole('navigation', { name: 'Status' })
     // Every state is shown, with its real count, including zero.
     expect(within(tiles).getByRole('link', { name: /Deleted\s*0/ })).toBeInTheDocument()
     await userEvent.click(within(tiles).getByRole('link', { name: /Draft\s*1/ }))
-    expect(screen.getByRole('button', { name: 'Story three' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Story one' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Story three' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Story one' })).not.toBeInTheDocument()
     expect(within(tiles).getByRole('link', { name: /Draft\s*1/ })).toHaveAttribute('aria-current', 'true')
-
-    expect(screen.queryByRole('button', { name: /publish|create|delete|edit|approve/i })).not.toBeInTheDocument()
+    // A draft is published from its row.
+    expect(screen.getByRole('button', { name: 'Publish' })).toBeInTheDocument()
   })
 
   it('sorts by views and shows reach as "N of M viewed"', async () => {
-    vi.stubGlobal('fetch', routeFetch({ '/admin/stories': STORIES }))
+    vi.stubGlobal('fetch', routeFetch({ '/stories': STORIES }))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/stories' })
-    await screen.findByRole('button', { name: 'Story one' })
+    await screen.findByRole('link', { name: 'Story one' })
     expect(screen.getByText('18 of 20 viewed')).toBeInTheDocument()
     expect(screen.getByText('Not published')).toBeInTheDocument()
 
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Sort' }), 'views')
-    const titles = [...document.querySelectorAll('.story-table .entity__name')].map((n) => n.textContent)
+    const titles = [...document.querySelectorAll('.story-row__name')].map((n) => n.textContent)
     expect(titles).toEqual(['Story two', 'Story one', 'Story three'])
   })
 })

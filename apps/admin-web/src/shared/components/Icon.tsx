@@ -220,6 +220,41 @@ const PATHS = {
       <path d="m17.6 15.6 3.9-3.9-2.3-2.3-1-.2-1.5-1.5V6.3L14 3.6c-1.6-1.5-4-1.5-5.6-.1l3.1 3.1v1.7l3.5 3.5.3 1.3Z" />
     </>
   ),
+  // Stories studio (2026-10-17).
+  text: <path d="M5 6V4.5h14V6M12 4.5v15M9 19.5h6" />,
+  image: (
+    <>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+      <circle cx="9" cy="10" r="1.75" />
+      <path d="m20.5 16-4.8-4.8a1.5 1.5 0 0 0-2.1 0L5 19.5" />
+    </>
+  ),
+  video: (
+    <>
+      <rect x="3" y="6" width="13" height="12" rx="2.5" />
+      <path d="m16 10.5 5-3v9l-5-3" />
+    </>
+  ),
+  mic: (
+    <>
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" />
+    </>
+  ),
+  link: (
+    <>
+      <path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1" />
+      <path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1" />
+    </>
+  ),
+  plus: <path d="M12 5v14M5 12h14" />,
+  play: <path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z" />,
+  pause: <path d="M8 5v14M16 5v14" />,
+  stop: <rect x="6" y="6" width="12" height="12" rx="2" />,
+  trash: <path d="M4.5 7h15M10 11v6M14 11v6M6 7l1 12.5a1.5 1.5 0 0 0 1.5 1.5h7a1.5 1.5 0 0 0 1.5-1.5L18 7M9 7V4.5h6V7" />,
+  chart: <path d="M4 20h16M7 16v-5M12 16V6M17 16v-8" />,
+  upload: <path d="M12 16V4M7 9l5-5 5 5M4.5 15v3.5A1.5 1.5 0 0 0 6 20h12a1.5 1.5 0 0 0 1.5-1.5V15" />,
+  send: <path d="m4 12 16-8-6 16-2.5-6.5L4 12ZM11.5 13.5 20 4" />,
 } satisfies Record<string, ReactElement>
 
 export type IconName = keyof typeof PATHS
