@@ -51,6 +51,10 @@ class L10nEn extends L10n {
   String get sessionExpiredBody => 'Your session ended. Please sign in again.';
 
   @override
+  String get sessionUnreachableBody =>
+      'Couldn\'t reach Jawwid to open your session. You\'re still signed in — check your connection and try again.';
+
+  @override
   String get signOutAction => 'Sign out';
 
   @override

@@ -106,6 +106,25 @@ class AppError implements Exception {
   /// the backend rotates refresh tokens and treats a replayed one as theft.
   bool get isRefreshable => kind == AppErrorKind.unauthenticated;
 
+  /// True only when the request provably never reached the server: no connection could be
+  /// opened, or the server turned it away unprocessed (rate limiting). Anything else that
+  /// failed in transit -- a read timeout, a dropped connection, a 5xx -- may have been
+  /// processed with only the answer lost.
+  ///
+  /// The distinction exists for `POST /auth/refresh`, which rotates: repeating a refresh the
+  /// server DID process presents a retired token, which the backend reads as theft and
+  /// answers by revoking every session on the account. Only a refresh that never arrived is
+  /// safe to try again.
+  bool get neverReachedServer =>
+      kind == AppErrorKind.rateLimited ||
+      (kind == AppErrorKind.network && code == connectFailed) ||
+      (kind == AppErrorKind.timeout && code == connectTimeout);
+
+  /// Set by `ErrorMapper` on the two transport failures that happen before a connection
+  /// exists. Every other transport failure is ambiguous about whether the server saw it.
+  static const connectFailed = 'connect_failed';
+  static const connectTimeout = 'connect_timeout';
+
   @override
   String toString() => 'AppError(${kind.name}${code == null ? '' : ', $code'})';
 }
