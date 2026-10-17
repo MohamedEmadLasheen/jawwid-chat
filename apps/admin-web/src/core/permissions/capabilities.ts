@@ -26,6 +26,7 @@ export type NavArea =
   | 'coverage'
   | 'dashboard'
   | 'stories'
+  | 'organization'
   | 'settings'
 
 /** Roles that operate the customer relationship. */
@@ -62,7 +63,8 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     return ['inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'settings']
   }
   if (isManager(role)) {
-    return ['chat', 'inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'settings']
+    // PD-8: the department's structure -- children's supervisors and backups.
+    return ['chat', 'inbox', 'families', 'organization', 'tasks', 'coverage', 'dashboard', 'stories', 'settings']
   }
   if (isOperator(role)) {
     // No coverage configuration, no manager dashboard, no config editing.

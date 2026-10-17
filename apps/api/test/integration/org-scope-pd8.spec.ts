@@ -681,6 +681,40 @@ describe('4c. supervisor-created groups over HTTP: no incorrect association is p
     expect(await g.prisma.conversation.count({ where: { organizationId: orgId } })).toBe(before);
   });
 
+  it('the group picker offers exactly the children each person acts for -- and nothing to anyone else', async () => {
+    type Candidates = { families: Array<{ familyId: string; parents: Array<{ id: string }>; children: Array<{ id: string; supervisor: { id: string } }> }> };
+    const childrenOf = async (subject: string) => {
+      const r = await http(subject, 'GET', '/org/group-candidates');
+      expect(r.status).toBe(200);
+      return (r.json as unknown as Candidates).families.flatMap((f) => f.children);
+    };
+    const supervisedBy = (ids: string[]) =>
+      m.families.flatMap((f) => f.children).filter((c) => ids.includes(c.supervisorId)).map((c) => c.id).sort();
+    const nowSupervising = async (staffId: string) =>
+      (await g.prisma.learnerSupervision.findMany({ where: { supervisorId: staffId } })).map((r) => r.learnerId).sort();
+
+    // A supervisor: their own children, never a colleague's (even in a shared family).
+    const salmaKids = await childrenOf(sup(SALMA).subject);
+    expect(salmaKids.map((c) => c.id).sort()).toEqual(await nowSupervising(sup(SALMA).id));
+    expect(salmaKids.every((c) => c.supervisor.id === sup(SALMA).id)).toBe(true);
+    // The active backup (Dalia for Mona): Mona's children; not Reem's, whom Dalia only backs up dormant.
+    expect((await childrenOf(m.backups[1].subject)).map((c) => c.id).sort()).toEqual(await nowSupervising(sup(MONA).id));
+    // The Operations Manager: every Operations child; the Sales manager: nothing.
+    expect((await childrenOf(m.operationsManager.subject)).length).toBe(m.families.reduce((n, f) => n + f.children.length, 0));
+    expect(await childrenOf(m.salesManager.subject)).toEqual([]);
+    expect(supervisedBy([sup(SALMA).id]).length).toBeGreaterThan(0);
+    // Parents offered are that family's messaging parents only.
+    const r = await http(sup(SALMA).subject, 'GET', '/org/group-candidates');
+    for (const f of (r.json as unknown as Candidates).families) {
+      const family = m.families.find((x) => x.id === f.familyId)!;
+      expect(f.parents.map((p) => p.id)).toEqual([family.parent.id]);
+    }
+    // Teachers and parents are refused the picker outright.
+    for (const subject of [m.teachers[0].subject, m.families[0].parent.subject]) {
+      expect((await http(subject, 'GET', '/org/group-candidates')).status).toBe(403);
+    }
+  });
+
   it('the database refuses an incorrect association even when the API is bypassed', async () => {
     const f = m.families.find((x) => x.groups.length > 0 && x.scenario === 'A')!;
     const group = f.groups[0];

@@ -18,6 +18,12 @@ export class OrgStructureController {
     return this.org.structure(actorId);
   }
 
+  /** The families, parents, children and teachers this staff member may put in a family group. */
+  @Get('group-candidates')
+  groupCandidates(@ActorId() actorId: string) {
+    return this.org.groupCandidates(actorId);
+  }
+
   @Get('learners')
   learners(
     @ActorId() actorId: string,

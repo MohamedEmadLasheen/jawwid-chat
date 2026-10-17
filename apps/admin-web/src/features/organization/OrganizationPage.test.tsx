@@ -1,0 +1,202 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { AppRoutes } from '@/app/AppRoutes'
+import { tokenStore } from '@/core/auth/tokens'
+import { makeStaff, renderWithProviders } from '@/test/utils'
+import type { Department, LearnerAssignment } from './api'
+
+/**
+ * PD-8 organization page, through the real routes and the real API client,
+ * with `fetch` answered at the network boundary. What these prove is the page's
+ * side of the contract -- the right request, with a reason, and the server's
+ * refusal shown as it is. The refusals themselves are proven server-side
+ * (apps/api test/integration/org-scope-pd8.spec.ts); hiding a control is not
+ * security. Synthetic people only.
+ */
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+}
+
+type Handler = (url: string, init: RequestInit) => Response | Promise<Response>
+let routes: Array<[RegExp, string, Handler]>
+let fetchMock: ReturnType<typeof vi.fn>
+function on(method: string, pattern: RegExp, handler: Handler) {
+  routes.unshift([pattern, method, handler])
+}
+const calls = (method: string, pattern: RegExp) =>
+  fetchMock.mock.calls.filter(([u, i]) => pattern.test(String(u)) && ((i as RequestInit)?.method ?? 'GET') === method)
+const bodyOf = (call: unknown[]) => JSON.parse(String((call[1] as RequestInit).body))
+
+const person = (id: string, name: string, role = 'admin') => ({ id, name, role, isActive: true })
+
+const OPERATIONS: Department = {
+  id: 'dept-ops',
+  kind: 'operations',
+  displayName: 'Operations',
+  manager: person('mgr-ops', 'Ops Manager', 'manager'),
+  members: [
+    { ...person('sup-1', 'Supervisor One'), position: 'supervisor', learnerCount: 2 },
+    { ...person('sup-2', 'Supervisor Two'), position: 'supervisor', learnerCount: 0 },
+    { ...person('bak-1', 'Backup One', 'coverage'), position: 'backup_supervisor', learnerCount: 0 },
+  ],
+  backups: [
+    { id: 'link-1', primary: person('sup-1', 'Supervisor One'), backup: person('bak-1', 'Backup One', 'coverage'), status: 'dormant', activatedAt: null, activeUntil: null },
+    { id: 'link-2', primary: person('sup-2', 'Supervisor Two'), backup: person('bak-1', 'Backup One', 'coverage'), status: 'active', activatedAt: '2026-10-15T08:00:00Z', activeUntil: '2026-10-22T08:00:00Z' },
+  ],
+}
+
+const LEARNERS: LearnerAssignment[] = [
+  { learnerId: 'l-1', name: 'Child Alpha', family: { id: 'f-1', displayName: 'Family One' }, teacher: { id: 't-1', name: 'Teacher T' }, supervisor: { id: 'sup-1', name: 'Supervisor One' } },
+  { learnerId: 'l-2', name: 'Child Beta', family: { id: 'f-2', displayName: 'Family Two' }, teacher: null, supervisor: null },
+]
+
+const opsManager = makeStaff({ id: 'mgr-ops', name: 'Ops Manager', role: 'manager' })
+
+beforeEach(() => {
+  routes = []
+  fetchMock = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+    const url = String(input)
+    const method = (init.method ?? 'GET').toUpperCase()
+    for (const [pattern, m, handler] of routes) {
+      if (m === method && pattern.test(url)) return handler(url, init)
+    }
+    return json({ error: { code: 'unrouted', message: `no mock for ${method} ${url}` } }, 404)
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  tokenStore.set({ accessToken: 'access-1', refreshToken: 'refresh-1' })
+  on('GET', /\/org\/structure$/, () => json({ departments: [OPERATIONS] }))
+  on('GET', /\/org\/learners$/, () => json({ learners: LEARNERS }))
+})
+afterEach(() => {
+  vi.unstubAllGlobals()
+  tokenStore.clear()
+})
+
+describe('children and their supervisors', () => {
+  it('lists every child the server returns, with the unassigned ones marked', async () => {
+    renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/organization' })
+    const table = await screen.findByRole('table')
+    expect(within(table).getByText('Child Alpha')).toBeInTheDocument()
+    const beta = within(table).getByText('Child Beta').closest('tr')!
+    expect(within(beta).getByText('Unassigned')).toBeInTheDocument()
+    expect(within(beta).getByRole('button', { name: 'Assign — Child Beta' })).toBeInTheDocument()
+  })
+
+  it('filters to the children without a supervisor', async () => {
+    renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/organization' })
+    await screen.findByText('Child Alpha')
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Show' }), 'unassigned')
+    expect(screen.queryByText('Child Alpha')).not.toBeInTheDocument()
+    expect(screen.getByText('Child Beta')).toBeInTheDocument()
+  })
+
+  it('assigns a supervisor with a reason; without one nothing is sent', async () => {
+    on('POST', /\/org\/learners\/l-2\/supervisor$/, () => json({ learnerId: 'l-2', supervisorId: 'sup-2', changed: true }, 201))
+    renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/organization' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Assign — Child Beta' }))
+    const dialog = await screen.findByRole('dialog')
+
+    // Only Operations PRIMARY supervisors are offered -- never the backup.
+    const select = within(dialog).getByRole('combobox', { name: 'New supervisor' })
+    expect(within(select).queryByRole('option', { name: /Backup One/ })).not.toBeInTheDocument()
+    await userEvent.selectOptions(select, 'sup-2')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    expect(within(dialog).getByText('Required.')).toBeInTheDocument()
+    expect(calls('POST', /\/org\/learners\//)).toHaveLength(0)
+
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'Reason (required)' }), 'balancing the caseload')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(calls('POST', /\/org\/learners\/l-2\/supervisor$/)).toHaveLength(1))
+    expect(bodyOf(calls('POST', /\/org\/learners\/l-2\/supervisor$/)[0]!)).toEqual({
+      supervisorId: 'sup-2',
+      reason: 'balancing the caseload',
+    })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it("shows the server's refusal as it is, and keeps the dialog open", async () => {
+    on('POST', /\/org\/learners\/l-2\/supervisor$/, () =>
+      json({ error: { code: 'COMM.ORG_STRUCTURE_DENIED', message: 'manager may not assign learners to supervisors' } }, 403),
+    )
+    renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/organization' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Assign — Child Beta' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'New supervisor' }), 'sup-2')
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'Reason (required)' }), 'x')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('You are not allowed to make this change.')
+  })
+})
+
+describe('departments and backup supervisors', () => {
+  it('shows each link with its status, and only the actions that status allows', async () => {
+    renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/organization' })
+    await userEvent.click(await screen.findByRole('tab', { name: 'Departments & backups' }))
+    const links = await screen.findAllByRole('listitem')
+    const dormant = links.find((li) => li.textContent?.includes('covers Supervisor One'))!
+    const active = links.find((li) => li.textContent?.includes('covers Supervisor Two'))!
+    expect(within(dormant).getByText('Dormant')).toBeInTheDocument()
+    expect(within(dormant).getByRole('button', { name: 'Activate — Backup One covers Supervisor One' })).toBeInTheDocument()
+    expect(within(active).getByText('Active')).toBeInTheDocument()
+    expect(within(active).getByRole('button', { name: 'Deactivate — Backup One covers Supervisor Two' })).toBeInTheDocument()
+    expect(within(active).queryByRole('button', { name: /^Activate/ })).not.toBeInTheDocument()
+  })
+
+  it('activates a dormant link with a reason and an end date', async () => {
+    on('POST', /\/org\/backups\/link-1\/activate$/, () => json({ id: 'link-1', status: 'active' }, 201))
+    renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/organization' })
+    await userEvent.click(await screen.findByRole('tab', { name: 'Departments & backups' }))
+    const dormant = (await screen.findAllByRole('listitem')).find((li) => li.textContent?.includes('covers Supervisor One'))!
+    await userEvent.click(within(dormant).getByRole('button', { name: 'Activate — Backup One covers Supervisor One' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.type(within(dialog).getByLabelText('Active until (optional)'), '2026-11-01')
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'Reason (required)' }), 'annual leave')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(calls('POST', /\/org\/backups\/link-1\/activate$/)).toHaveLength(1))
+    const body = bodyOf(calls('POST', /\/org\/backups\/link-1\/activate$/)[0]!)
+    expect(body.reason).toBe('annual leave')
+    expect(new Date(body.until).getFullYear()).toBe(2026)
+  })
+
+  it('creates a new link as dormant: a primary supervisor and another member of the department', async () => {
+    on('POST', /\/org\/backups$/, () => json({ id: 'link-3', status: 'dormant' }, 201))
+    renderWithProviders(<AppRoutes />, { staff: opsManager, route: '/organization' })
+    await userEvent.click(await screen.findByRole('tab', { name: 'Departments & backups' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Add backup link' }))
+    const dialog = await screen.findByRole('dialog')
+    const primary = within(dialog).getByRole('combobox', { name: 'Supervisor' })
+    // A backup supervisor is never offered as the PRIMARY.
+    expect(within(primary).queryByRole('option', { name: 'Backup One' })).not.toBeInTheDocument()
+    await userEvent.selectOptions(primary, 'sup-1')
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Backup' }), 'bak-1')
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'Reason (required)' }), 'coverage plan')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(calls('POST', /\/org\/backups$/)).toHaveLength(1))
+    expect(bodyOf(calls('POST', /\/org\/backups$/)[0]!)).toEqual({ primaryId: 'sup-1', backupId: 'bak-1', reason: 'coverage plan' })
+  })
+})
+
+describe('who reaches the page', () => {
+  it('a manager whose department is not Operations sees the structure, and no children tab', async () => {
+    const teachersDept: Department = { ...OPERATIONS, id: 'dept-t', kind: 'teachers', backups: [] }
+    on('GET', /\/org\/structure$/, () => json({ departments: [teachersDept] }))
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ id: 'mgr-t', role: 'manager' }), route: '/organization' })
+    expect(await screen.findByRole('heading', { level: 2, name: 'Teachers' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Children & supervisors' })).not.toBeInTheDocument()
+    expect(calls('GET', /\/org\/learners/)).toHaveLength(0)
+  })
+
+  it('a supervisor is not offered the page (and the server would refuse it anyway)', async () => {
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ id: 'sup-1', role: 'admin' }), route: '/organization' })
+    expect(await screen.findByText(/not available|permission|forbidden/i)).toBeInTheDocument()
+    expect(calls('GET', /\/org\//)).toHaveLength(0)
+  })
+
+  it('the super admin reaches it as the Organization section of the Admin Portal', async () => {
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ id: 'owner', role: 'super_admin' }), route: '/admin/teams' })
+    expect(await screen.findByRole('heading', { level: 1, name: 'Organization' })).toBeInTheDocument()
+    expect(await screen.findByText('Child Alpha')).toBeInTheDocument()
+  })
+})

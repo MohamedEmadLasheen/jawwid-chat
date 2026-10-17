@@ -10,6 +10,8 @@ import { EmptyState, ErrorState, LoadingState } from '@/shared/components/States
 import { bySeq, chatApi, chatKeys, type ChatConversation, type ChatMessage } from './chatApi'
 import { chatCopyFor, systemText, type ChatCopy } from './copy'
 import { useChatRealtime } from './useChatRealtime'
+import { NewFamilyGroupDialog } from './NewFamilyGroupDialog'
+import { isOperator } from '@/core/permissions/capabilities'
 
 function useCopy(): ChatCopy {
   const { locale } = useI18n()
@@ -473,6 +475,8 @@ export function ChatPage() {
   const navigate = useNavigate()
   const { conversationId } = useParams<{ conversationId: string }>()
   const { state } = useRealtime()
+  const { staff } = useSession()
+  const [creatingGroup, setCreatingGroup] = useState(false)
 
   const list = useQuery({
     queryKey: chatKeys.list,
@@ -488,8 +492,15 @@ export function ChatPage() {
   return (
     <>
       <div className="column column--list">
-        <div className="column__header">
+        <div className="column__header" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
           <strong>{copy.title}</strong>
+          {/* PD-8: supervisors create family groups. Offered to the operating
+              roles; the server decides which children each may use. */}
+          {staff && isOperator(staff.role) && (
+            <button type="button" className="btn btn--sm chat-list__new" onClick={() => setCreatingGroup(true)}>
+              {copy.newGroup}
+            </button>
+          )}
         </div>
         {state !== 'connected' && (
           <div className="banner banner--warn" role="status">
@@ -514,6 +525,15 @@ export function ChatPage() {
         <div className="column column--center">
           <EmptyState title={copy.pick} />
         </div>
+      )}
+      {creatingGroup && (
+        <NewFamilyGroupDialog
+          onClose={() => setCreatingGroup(false)}
+          onCreated={(id) => {
+            setCreatingGroup(false)
+            navigate(`/chat/${encodeURIComponent(id)}`)
+          }}
+        />
       )}
     </>
   )

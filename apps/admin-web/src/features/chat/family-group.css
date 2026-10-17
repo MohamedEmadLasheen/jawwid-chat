@@ -1,0 +1,5 @@
+/* PD-8 family-group dialog. */
+.fg-set { border: none; margin: 0; padding: 0; min-inline-size: 0; }
+.fg-check { display: flex; gap: var(--space-2); align-items: center; padding-block: var(--space-1); cursor: pointer; }
+.fg-check input:disabled + span { color: var(--text-muted); cursor: not-allowed; }
+.chat-list__new { margin-inline-start: auto; }

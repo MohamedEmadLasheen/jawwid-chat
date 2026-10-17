@@ -8,6 +8,7 @@ import { ConversationsView } from './ConversationsView'
 import { UsersView } from './UsersView'
 import { StoriesView } from './StoriesView'
 import { DevelopmentPlaceholder } from './DevelopmentPlaceholder'
+import { OrganizationPage } from '@/features/organization/OrganizationPage'
 
 /**
  * One route, `/admin/:section`, for every Admin Portal section. The four built
@@ -37,6 +38,8 @@ export function AdminSectionPage() {
       return <UsersView section={section} />
     case 'stories':
       return <StoriesView section={section} />
+    case 'teams':
+      return <OrganizationPage />
     default:
       return <DevelopmentPlaceholder section={section} />
   }

@@ -95,6 +95,16 @@ All behind the global bearer guard; POST for updates (the admin-web client has n
 | `POST /org/backups {primaryId, backupId, reason}` → dormant | super admin, the primary's department manager |
 | `POST /org/backups/:id/activate {until?, reason}` · `/deactivate` · `/end` | same |
 | `POST /conversations/family-group {learnerIds, contactIds?, teacherIds?, title?}` | the children's supervisor, their active backup, their manager, the super admin |
+| `GET /org/group-candidates` | conversation staff: the families whose children they act for (same principals as the scope), with messaging parents and active teachers |
+
+**Admin Web.** *Organization* (`/organization` for managers; the Admin Portal's
+*Organization* section, `/admin/teams`, for the super admin): a children tab
+(search, filter, assign / change supervisor with a reason) and a departments &
+backups tab (team, caseloads, backup links with status, create / activate with
+an optional end date / deactivate / end). *Chat* → **New family group** for
+operating staff: family → children (one supervisor per group, others disabled
+with the reason) → that family's messaging parents and the chosen children's
+teachers. The screens offer what the server allows; the server decides.
 
 Every change writes `chat.audit_log` (who, before, after, reason). Changes that
 can reduce access run the RT-009 completion barrier before reporting success.
@@ -127,9 +137,11 @@ can reduce access run the RT-009 completion barrier before reporting success.
 
 ## 7. Not done / follow-ups
 
-* **Admin Web / mobile UI** for the structure screens and group creation: the
-  API is complete; clients only learned to display `family_group` (mobile maps
-  it to a group and keeps learner-less groups listed; Admin Web labels it).
+* Group creation in the **mobile** app (staff use Admin Web; the mobile app is
+  for parents and teachers, who never create groups). Mobile displays
+  `family_group` and keeps learner-less groups listed.
+* Department and manager set-up has an API (super admin) but no screen yet;
+  it is a one-time configuration (or the seed CLI).
 * Family/contact/learner **directory** RLS (`chat.staff_can_see_family`) still
   admits every family-facing staff member for request roles; the API never
   exposes those tables directly, and narrowing them needs the staff-profile

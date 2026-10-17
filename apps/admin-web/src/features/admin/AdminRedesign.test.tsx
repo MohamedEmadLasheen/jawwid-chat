@@ -281,12 +281,14 @@ describe('Users summary and sort', () => {
 describe('Section placeholders', () => {
   it('points to the sections in the same group that work today, and to nothing else', async () => {
     vi.stubGlobal('fetch', routeFetch({}))
-    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/teams' })
+    // Notifications is unbuilt; its group (Communication) has two built sections.
+    // (Teams was the example here until PD-8 built it as Organization.)
+    renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/notifications' })
     await screen.findByTestId('development-placeholder')
 
     const aside = screen.getByRole('complementary', { name: 'Available now in this group' })
     const links = within(aside).getAllByRole('link')
-    expect(links.map((l) => l.getAttribute('href'))).toEqual(['/admin/users'])
+    expect(links.map((l) => l.getAttribute('href'))).toEqual(['/admin/conversations', '/admin/stories'])
     expect(within(screen.getByTestId('development-placeholder')).queryByRole('button')).not.toBeInTheDocument()
   })
 

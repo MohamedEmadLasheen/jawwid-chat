@@ -6,7 +6,7 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import { AUDIT_SERVICE, REALTIME_REVOCATION } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import { NO_REALTIME_REVOCATION, type RealtimeRevocation } from '../platform/realtime-revocation';
-import type { Actor } from '../platform/types';
+import { isConversationStaff, type Actor } from '../platform/types';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
 import { StaffRole } from '../communication/contracts/vocab';
 
@@ -19,6 +19,8 @@ const POSITIONS: ReadonlySet<string> = new Set(Object.values(DepartmentPosition)
 const MAX_ACTIVATION_DAYS = 90;
 
 export type BackupStatus = 'dormant' | 'active' | 'expired' | 'deactivated' | 'ended';
+
+type SupervisedRow = { learner_id: string; supervisor_id: string };
 
 /**
  * PD-8: the organization structure -- departments, who supervises which child,
@@ -192,6 +194,83 @@ export class OrgStructureService {
           return true;
         }),
     };
+  }
+
+  /**
+   * What a staff member may put in a family group: the families whose children
+   * they act for (their own, an ACTIVE backup's primary's, their department's,
+   * or -- the super admin -- every one), each with its messaging parents and
+   * each child's supervisor and teacher. The same principals chat.staff_principals
+   * gives the conversation scope, so the picker never offers a child the
+   * creation request would refuse (POST /conversations/family-group re-checks
+   * everything anyway).
+   */
+  async groupCandidates(actorId: string) {
+    const actor = await this.conversations.requireActor(actorId);
+    if (!isConversationStaff(actor) || !actor.isActive || !actor.organizationId) {
+      throw new CommError(CommErrorCode.CANNOT_PROVISION_STUDENT_GROUP, 'only Jawwid staff create family groups');
+    }
+    const org = actor.organizationId;
+    const now = new Date();
+    const rows =
+      actor.staffRole === StaffRole.SUPER_ADMIN
+        ? await this.prisma.$queryRaw<SupervisedRow[]>`
+            SELECT ls.learner_id::text AS learner_id, ls.supervisor_id::text AS supervisor_id
+              FROM chat.learner_supervision ls WHERE ls.organization_id = ${org}::uuid`
+        : await this.prisma.$queryRaw<SupervisedRow[]>`
+            SELECT ls.learner_id::text AS learner_id, ls.supervisor_id::text AS supervisor_id
+              FROM chat.learner_supervision ls
+             WHERE ls.organization_id = ${org}::uuid
+               AND ls.supervisor_id IN (SELECT chat.staff_principals(${actor.actorId}::uuid, ${now}::timestamptz))`;
+    if (rows.length === 0) return { families: [] };
+
+    const supervisorOf = new Map(rows.map((r) => [r.learner_id, r.supervisor_id]));
+    const learners = await this.prisma.learner.findMany({
+      where: { id: { in: rows.map((r) => r.learner_id) }, organizationId: org },
+      include: { family: { select: { id: true, displayName: true } }, teacher: { select: { id: true, name: true, isActive: true, leftAt: true } } },
+      orderBy: [{ familyId: 'asc' }, { name: 'asc' }],
+    });
+    const familyIds = [...new Set(learners.map((l) => l.familyId))];
+    const contacts = await this.prisma.contact.findMany({
+      where: { familyId: { in: familyIds }, organizationId: org, isActive: true, canMessage: true },
+      select: { id: true, name: true, familyId: true },
+      orderBy: { name: 'asc' },
+    });
+    const supervisors = await this.prisma.staff.findMany({
+      where: { id: { in: [...new Set(rows.map((r) => r.supervisor_id))] } },
+      select: { id: true, name: true },
+    });
+    const nameOf = new Map(supervisors.map((x) => [x.id, x.name]));
+
+    const families = new Map<string, {
+      familyId: string;
+      displayName: string;
+      parents: Array<{ id: string; name: string }>;
+      children: Array<{
+        id: string;
+        name: string;
+        supervisor: { id: string; name: string };
+        teacher: { id: string; name: string } | null;
+      }>;
+    }>();
+    for (const l of learners) {
+      const f = families.get(l.familyId) ?? {
+        familyId: l.familyId,
+        displayName: l.family.displayName,
+        parents: contacts.filter((c) => c.familyId === l.familyId).map((c) => ({ id: c.id, name: c.name })),
+        children: [],
+      };
+      const supervisorId = supervisorOf.get(l.id)!;
+      f.children.push({
+        id: l.id,
+        name: l.name,
+        supervisor: { id: supervisorId, name: nameOf.get(supervisorId) ?? '' },
+        // Only an active teacher can be seated (the creation request refuses others).
+        teacher: l.teacher && l.teacher.isActive && l.teacher.leftAt === null ? { id: l.teacher.id, name: l.teacher.name } : null,
+      });
+      families.set(l.familyId, f);
+    }
+    return { families: [...families.values()].sort((a, b) => a.displayName.localeCompare(b.displayName)) };
   }
 
   // ------------------------------------------------------------------
