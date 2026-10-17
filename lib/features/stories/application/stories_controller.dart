@@ -115,6 +115,26 @@ class StoriesController extends AsyncNotifier<List<Story>>
       return null;
     }
   }
+
+  /// The reader tapped a story's button.
+  ///
+  /// Returns what the server resolved it to, or the error to show. Unlike a view, a failed
+  /// tap is the reader's business: they pressed something and it did not work, so it is
+  /// reported rather than swallowed. A story that has gone (`storyGone`) is reported as such,
+  /// and the viewer leaves it exactly as it does for a refused view.
+  Future<({StoryCtaTap? tap, AppError? error})> tapCta(String storyId) async {
+    try {
+      final tap = await ref.read(storyRepositoryProvider).tapCta(storyId);
+      return (tap: tap, error: null);
+    } on AppError catch (error) {
+      return (tap: null, error: error);
+    } catch (error) {
+      return (
+        tap: null,
+        error: AppError(AppErrorKind.unknown, code: 'story_cta_failed', debugDetail: '$error'),
+      );
+    }
+  }
 }
 
 final storiesControllerProvider =

@@ -440,6 +440,42 @@
   "storyVideoLabel": "Story video",
   "storyVideoFailed": "This video could not be played.",
   "storyVideoRetry": "Try again",
+  "storyTextLabel": "Story",
+  "@storyTextLabel": {
+    "description": "Stories viewer (2026-10-17): storyTextLabel"
+  },
+  "storyVoiceLabel": "Voice story",
+  "@storyVoiceLabel": {
+    "description": "Stories viewer (2026-10-17): storyVoiceLabel"
+  },
+  "storyVoiceFailed": "This voice note could not be played.",
+  "@storyVoiceFailed": {
+    "description": "Stories viewer (2026-10-17): storyVoiceFailed"
+  },
+  "storyVoicePlay": "Play voice story",
+  "@storyVoicePlay": {
+    "description": "Stories viewer (2026-10-17): storyVoicePlay"
+  },
+  "storyVoicePause": "Pause voice story",
+  "@storyVoicePause": {
+    "description": "Stories viewer (2026-10-17): storyVoicePause"
+  },
+  "storyCtaWhatsApp": "Chat on WhatsApp",
+  "@storyCtaWhatsApp": {
+    "description": "Stories viewer (2026-10-17): storyCtaWhatsApp"
+  },
+  "storyCtaMessage": "Send a message",
+  "@storyCtaMessage": {
+    "description": "Stories viewer (2026-10-17): storyCtaMessage"
+  },
+  "storyCtaLink": "Learn more",
+  "@storyCtaLink": {
+    "description": "Stories viewer (2026-10-17): storyCtaLink"
+  },
+  "storyCtaFailed": "That didn't open. Please try again.",
+  "@storyCtaFailed": {
+    "description": "Stories viewer (2026-10-17): storyCtaFailed"
+  },
   "storiesEmpty": "No stories yet",
   "@storiesEmpty": {
     "description": "Shown in the stories rail when the signed-in account has no live stories."

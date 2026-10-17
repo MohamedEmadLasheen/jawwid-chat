@@ -91,6 +91,9 @@ class StoriesRail extends ConsumerWidget {
         ),
         itemCount: stories.length,
         itemBuilder: (context, index) => _StoryEntry(
+          // Rings all carry the academy's name now that a story has no title, so the key is
+          // what tells them apart -- for tests, and for Flutter's element reuse on reorder.
+          key: ValueKey('story-ring-${stories[index].id}'),
           story: stories[index],
           publisherName: l10n.appName,
           onTap: () => onOpenStory?.call(stories[index]),
@@ -177,6 +180,7 @@ class _EmptyRail extends StatelessWidget {
 
 class _StoryEntry extends StatelessWidget {
   const _StoryEntry({
+    super.key,
     required this.story,
     required this.publisherName,
     this.onTap,
@@ -190,7 +194,8 @@ class _StoryEntry extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
     final theme = Theme.of(context);
-    final label = story.title ?? publisherName;
+    // A story has no title (2026-10-17); every ring is the academy's.
+    final label = publisherName;
 
     // Viewed state reaches a screen reader as WORDS. The ring colour alone would be the only
     // indication for a sighted user and no indication at all for anyone else.

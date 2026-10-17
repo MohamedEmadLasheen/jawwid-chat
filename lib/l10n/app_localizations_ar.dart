@@ -753,6 +753,33 @@ class L10nAr extends L10n {
   String get storyVideoRetry => 'إعادة المحاولة';
 
   @override
+  String get storyTextLabel => 'حالة';
+
+  @override
+  String get storyVoiceLabel => 'حالة صوتية';
+
+  @override
+  String get storyVoiceFailed => 'لم نتمكّن من تشغيل هذه الرسالة الصوتية.';
+
+  @override
+  String get storyVoicePlay => 'تشغيل الحالة الصوتية';
+
+  @override
+  String get storyVoicePause => 'إيقاف الحالة الصوتية مؤقتًا';
+
+  @override
+  String get storyCtaWhatsApp => 'تواصل عبر واتساب';
+
+  @override
+  String get storyCtaMessage => 'أرسل رسالة';
+
+  @override
+  String get storyCtaLink => 'اعرف المزيد';
+
+  @override
+  String get storyCtaFailed => 'لم يُفتح. حاول مرة أخرى.';
+
+  @override
   String get storiesEmpty => 'لا توجد حالات بعد';
 
   @override

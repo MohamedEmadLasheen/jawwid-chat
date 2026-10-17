@@ -417,6 +417,10 @@ abstract interface class StoryRepository {
 
   /// Record that the signed-in actor opened this story. Idempotent on the server.
   Future<void> markViewed(String storyId);
+
+  /// The reader tapped the story's button. The server records the tap and answers where to
+  /// go: a URL to open, or -- for "message the publisher" -- the conversation to open.
+  Future<StoryCtaTap> tapCta(String storyId);
 }
 
 abstract interface class GroupRepository {

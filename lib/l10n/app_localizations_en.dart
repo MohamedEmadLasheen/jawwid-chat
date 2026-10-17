@@ -752,6 +752,33 @@ class L10nEn extends L10n {
   String get storyVideoRetry => 'Try again';
 
   @override
+  String get storyTextLabel => 'Story';
+
+  @override
+  String get storyVoiceLabel => 'Voice story';
+
+  @override
+  String get storyVoiceFailed => 'This voice note could not be played.';
+
+  @override
+  String get storyVoicePlay => 'Play voice story';
+
+  @override
+  String get storyVoicePause => 'Pause voice story';
+
+  @override
+  String get storyCtaWhatsApp => 'Chat on WhatsApp';
+
+  @override
+  String get storyCtaMessage => 'Send a message';
+
+  @override
+  String get storyCtaLink => 'Learn more';
+
+  @override
+  String get storyCtaFailed => 'That didn\'t open. Please try again.';
+
+  @override
   String get storiesEmpty => 'No stories yet';
 
   @override

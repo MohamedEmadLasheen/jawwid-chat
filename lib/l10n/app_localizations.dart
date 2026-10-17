@@ -1459,6 +1459,60 @@ abstract class L10n {
   /// **'Try again'**
   String get storyVideoRetry;
 
+  /// Stories viewer (2026-10-17): storyTextLabel
+  ///
+  /// In en, this message translates to:
+  /// **'Story'**
+  String get storyTextLabel;
+
+  /// Stories viewer (2026-10-17): storyVoiceLabel
+  ///
+  /// In en, this message translates to:
+  /// **'Voice story'**
+  String get storyVoiceLabel;
+
+  /// Stories viewer (2026-10-17): storyVoiceFailed
+  ///
+  /// In en, this message translates to:
+  /// **'This voice note could not be played.'**
+  String get storyVoiceFailed;
+
+  /// Stories viewer (2026-10-17): storyVoicePlay
+  ///
+  /// In en, this message translates to:
+  /// **'Play voice story'**
+  String get storyVoicePlay;
+
+  /// Stories viewer (2026-10-17): storyVoicePause
+  ///
+  /// In en, this message translates to:
+  /// **'Pause voice story'**
+  String get storyVoicePause;
+
+  /// Stories viewer (2026-10-17): storyCtaWhatsApp
+  ///
+  /// In en, this message translates to:
+  /// **'Chat on WhatsApp'**
+  String get storyCtaWhatsApp;
+
+  /// Stories viewer (2026-10-17): storyCtaMessage
+  ///
+  /// In en, this message translates to:
+  /// **'Send a message'**
+  String get storyCtaMessage;
+
+  /// Stories viewer (2026-10-17): storyCtaLink
+  ///
+  /// In en, this message translates to:
+  /// **'Learn more'**
+  String get storyCtaLink;
+
+  /// Stories viewer (2026-10-17): storyCtaFailed
+  ///
+  /// In en, this message translates to:
+  /// **'That didn\'t open. Please try again.'**
+  String get storyCtaFailed;
+
   /// Shown in the stories rail when the signed-in account has no live stories.
   ///
   /// In en, this message translates to:
