@@ -32,7 +32,11 @@ void main() {
     backend.dispose();
   });
 
-  Widget harness({Locale locale = const Locale('en')}) {
+  Widget harness({
+    Locale locale = const Locale('en'),
+    bool startVoiceRecording = false,
+    bool isReadOnly = false,
+  }) {
     return ProviderScope(
       overrides: [
         voiceRecorderProvider.overrideWithValue(recorder),
@@ -52,6 +56,8 @@ void main() {
         home: ChatScreen(
           conversationId: backend.listConversations().first.id,
           title: 'Jawwid',
+          startVoiceRecording: startVoiceRecording,
+          isReadOnly: isReadOnly,
         ),
       ),
     );
@@ -74,6 +80,34 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
   }
+
+  group('"Record voice message" from the call screen', () {
+    testWidgets('opens the chat already recording, without a tap', (tester) async {
+      await tester.pumpWidget(harness(startVoiceRecording: true));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(recorder.startCount, 1);
+      expect(find.byIcon(Icons.stop), findsOneWidget);
+    });
+
+    testWidgets('a read-only conversation never starts one', (tester) async {
+      await tester.pumpWidget(
+        harness(startVoiceRecording: true, isReadOnly: true),
+      );
+      await tester.pumpAndSettle();
+
+      expect(recorder.startCount, 0);
+    });
+
+    testWidgets('an ordinary visit records nothing until asked', (tester) async {
+      await tester.pumpWidget(harness());
+      await tester.pumpAndSettle();
+
+      expect(recorder.startCount, 0);
+      expect(find.byIcon(Icons.mic), findsOneWidget);
+    });
+  });
 
   group('the composer offers recording without changing the chat screen', () {
     testWidgets('the microphone shows while the field is empty', (tester) async {

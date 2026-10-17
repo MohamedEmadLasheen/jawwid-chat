@@ -721,6 +721,42 @@ abstract class L10n {
   /// **'Send a message instead'**
   String get callSendMessageInstead;
 
+  /// No description provided for @callNoAnswer.
+  ///
+  /// In en, this message translates to:
+  /// **'No answer'**
+  String get callNoAnswer;
+
+  /// No description provided for @callMissedIncoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Missed call'**
+  String get callMissedIncoming;
+
+  /// No description provided for @callAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Call again'**
+  String get callAgain;
+
+  /// No description provided for @callRecordVoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Record voice message'**
+  String get callRecordVoice;
+
+  /// No description provided for @callMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Message'**
+  String get callMessage;
+
+  /// No description provided for @callVoiceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Jawwid voice call'**
+  String get callVoiceTitle;
+
   /// No description provided for @notificationsTitle.
   ///
   /// In en, this message translates to:

@@ -333,6 +333,25 @@ abstract final class Motion {
       MediaQuery.disableAnimationsOf(context) ? motionInstant : duration;
 }
 
+/// The call screen's own colours. The call screen is ALWAYS dark, in both app
+/// themes, like a messenger's call screen: a call is a different mode from the
+/// app around it. Named once here; white on each fill clears 4.5:1. The Admin
+/// Web call window uses the same values (`features/calls/calls.css`).
+abstract final class CallPalette {
+  static const background = Color(0xFF111B21);
+  static const panel = Color(0xFF1F2C33);
+  static const foreground = Color(0xFFE9EDEF);
+  static const muted = Color(0xFFAEBAC1);
+  static const control = Color(0x1FFFFFFF);
+  static const controlOn = Color(0xFFE9EDEF);
+  static const hangUp = Color(0xFFD92D20);
+  static const accept = Color(0xFF18794E);
+  static const alert = Color(0xFFFFB4A8);
+
+  /// Glyphs on a solid fill (End, Accept, Call again).
+  static const onFill = Color(0xFFFFFFFF);
+}
+
 /// Sizes that are not in the token spec but follow from it plus the accessibility floor.
 abstract final class Sizes {
   /// 48dp accessibility floor for anything tappable.
