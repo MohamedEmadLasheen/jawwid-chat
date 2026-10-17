@@ -9,7 +9,8 @@ class ConversationSection {
     this.learner,
   });
 
-  /// Stable identifier: `'primary'`, `'staff'`, or `'learner:<id>'`. The visible heading is
+  /// Stable identifier: `'primary'`, `'staff'`, `'groups'` (groups about no single child,
+  /// PD-8) or `'learner:<id>'`. The visible heading is
   /// resolved through localisation at render time, never stored here (§46).
   final String key;
 
@@ -70,10 +71,17 @@ abstract final class ConversationListBuilder {
     // needs attention surfaces first.
     final byLearner = <String, List<Conversation>>{};
     final learners = <String, LearnerRef>{};
+    // A group about no single child -- a supervisor's family group (PD-8) can be
+    // about several -- still has to be listed. Skipping it would make it vanish
+    // from the chat list, the failure `isDirect` exists to prevent for 1:1s.
+    final familyGroups = <Conversation>[];
 
     for (final conversation in groups) {
       final learner = conversation.learner;
-      if (learner == null) continue;
+      if (learner == null) {
+        familyGroups.add(conversation);
+        continue;
+      }
       byLearner.putIfAbsent(learner.id, () => []).add(conversation);
       learners[learner.id] = learner;
     }
@@ -94,6 +102,11 @@ abstract final class ConversationListBuilder {
           conversations: forLearner,
         ),
       );
+    }
+
+    if (familyGroups.isNotEmpty) {
+      familyGroups.sort(_byRecency);
+      sections.add(ConversationSection(key: 'groups', conversations: familyGroups));
     }
 
     if (staff.isNotEmpty) {

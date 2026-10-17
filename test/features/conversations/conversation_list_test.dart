@@ -173,5 +173,19 @@ void main() {
 
       expect(sections.any((s) => s.key.startsWith('learner:')), isFalse);
     });
+
+    test('PD-8: a group about no single child (a family group) is still listed, never dropped', () {
+      final sections = ConversationListBuilder.build(
+        role: UserRole.parent,
+        conversations: [
+          conv(id: 'family_group', kind: ConversationKind.studentGroup, minutesAgo: 3),
+          conv(id: 'g_ahmed', kind: ConversationKind.studentGroup, learner: ahmed, minutesAgo: 1),
+        ],
+      );
+
+      final ids = [for (final s in sections) ...s.conversations.map((c) => c.id)];
+      expect(ids, containsAll(['family_group', 'g_ahmed']));
+      expect(sections.singleWhere((s) => s.key == 'groups').conversations.single.id, 'family_group');
+    });
   });
 }

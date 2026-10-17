@@ -13,7 +13,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { CommError, CommErrorCode } from '@platform/errors';
-import { buildGraph, seed, truncate, withAssignmentGate, Scenario } from './harness';
+import { buildGraph, seed, truncate, withAssignmentGate, Scenario, supervise } from './harness';
 
 jest.setTimeout(60_000);
 
@@ -81,6 +81,8 @@ beforeEach(async () => {
     `insert into chat.learner (id, family_id, name, teacher_id, organization_id)
      values ('${b.learnerId}'::uuid, '${b.familyId}'::uuid, 'learner_b1', '${b.teacherId}'::uuid, ${o})`,
   );
+  // PD-8: org B's admin supervises org B's child (manager_b1 runs its Operations).
+  await supervise(g.prisma, b.adminId, [b.learnerId], { managerId: b.managerId });
 });
 
 async function footprint(): Promise<Record<string, number | string>> {

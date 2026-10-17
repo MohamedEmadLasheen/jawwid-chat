@@ -22,7 +22,7 @@ export function useDocumentTitle(title: string | null) {
 /** Shown beside an unbuilt section's title. A built section needs no badge. */
 export function StatusBadge({ status }: { status: AdminSectionStatus }) {
   const tx = useText()
-  if (status === 'read_only') return null
+  if (status !== 'in_development') return null
   return (
     <Badge tone="outline">
       <span className="status-ring" aria-hidden="true" />

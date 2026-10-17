@@ -1,18 +1,14 @@
 /**
- * `super_admin` may not post into a family conversation -- proven at the ROUTE.
+ * `super_admin` in a family conversation -- proven at the ROUTE.
  *
- * The unit spec (test/unit/admin/super-admin-authorization.spec.ts) proves the
- * decision: canRead/canSend refuse a role outside FAMILY_FACING_STAFF_ROLES.
- * This proves the real request path agrees: a genuinely authenticated
- * super_admin (bootstrapped the supported way, logged in over HTTP) calling
- * POST /api/v1/conversations/:id/messages on a live Student Group is refused
- * with 403 COMM.ROLE_CANNOT_MESSAGE_FAMILY, and nothing follows from the
- * attempt: no message row, no approval, no outbox entry (the only path by which
- * a message event ever reaches a socket), and the realtime gateway refuses the
- * same account's subscription to the group, so it joins no conversation room.
- *
- * The Admin Portal's /admin conversation view is this role's read-only
- * inspection surface by design; this pins that no write path hides behind it.
+ * PD-8 (owner decision 2026-10-15) REVERSED the 2026-10-14 rule this file used
+ * to pin: the super admin now has full read AND write in every conversation of
+ * its organization. A genuinely authenticated super_admin (bootstrapped the
+ * supported way, logged in over HTTP) posts into a live Student Group through
+ * POST /api/v1/conversations/:id/messages, reads it back over the same route,
+ * and the realtime gateway admits its subscription. The unit spec
+ * (test/unit/admin/super-admin-authorization.spec.ts) proves the decision;
+ * org-scope-pd8.spec.ts proves the boundary (never another organization's).
  * Synthetic fixtures only.
  */
 import { randomUUID } from 'node:crypto';
@@ -131,7 +127,11 @@ describe('POST /conversations/:id/messages as super_admin', () => {
     expect(JSON.stringify(await me.json())).toContain('super_admin');
   });
 
-  it('is refused 403 COMM.ROLE_CANNOT_MESSAGE_FAMILY, and nothing is persisted or enqueued', async () => {
+  // PD-8 (owner decision 2026-10-15): the super admin has FULL read and write
+  // in every conversation of its organization. These three cases asserted the
+  // 2026-10-14 refusal; they now assert the reversal, through the real route.
+
+  it('posts into the group: 201, persisted once, attributed as a step-in (assist)', async () => {
     const token = await login(email, PASSWORD);
     const before = await footprint();
 
@@ -140,29 +140,29 @@ describe('POST /conversations/:id/messages as super_admin', () => {
       headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
       body: JSON.stringify({ type: 'text', body: 'super admin route probe', clientMessageId: randomUUID() }),
     });
-    expect(r.status).toBe(403);
-    expect(((await r.json()) as { error?: { code?: string } }).error?.code).toBe('COMM.ROLE_CANNOT_MESSAGE_FAMILY');
-
-    expect(await footprint()).toEqual(before);
-    expect(await g.prisma.message.count({ where: { body: 'super admin route probe' } })).toBe(0);
+    expect(r.status).toBe(201);
+    const rows = await g.prisma.message.findMany({ where: { body: 'super admin route probe' } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].onBehalfMode).toBe('assist');
+    expect(rows[0].moderation).toBe('published');
+    expect(await footprint()).not.toEqual(before);
   });
 
-  it('cannot read the group over the same route either', async () => {
+  it('reads the group over the same route', async () => {
     const token = await login(email, PASSWORD);
     const r = await fetch(`${base}/conversations/${groupId}/messages`, { headers: { authorization: `Bearer ${token}` } });
-    expect(r.status).toBe(403);
-    expect(((await r.json()) as { error?: { code?: string } }).error?.code).toBe('COMM.ROLE_CANNOT_MESSAGE_FAMILY');
+    expect(r.status).toBe(200);
   });
 
-  it('the realtime gateway refuses its subscription to the group: no conversation room is joined', async () => {
+  it('the realtime gateway admits its subscription to the group', async () => {
     const token = await login(email, PASSWORD);
     const gateway = app.get(RealtimeGateway);
     const socket = new FakeSocket({ auth: { token } });
     await gateway.handleConnection(socket as never);
-    expect(socket.disconnected).toBe(false); // an authenticated, live identity may connect...
+    expect(socket.disconnected).toBe(false);
 
     const ack = await gateway.subscribe(socket as never, { conversationId: groupId });
-    expect(ack).toEqual({ ok: false, code: 'COMM.ROLE_CANNOT_MESSAGE_FAMILY' });
-    expect(socket.rooms).not.toContain(room.conversation(groupId)); // ...but may follow no family conversation.
+    expect(ack).toEqual(expect.objectContaining({ ok: true }));
+    expect(socket.rooms).toContain(room.conversation(groupId));
   });
 });

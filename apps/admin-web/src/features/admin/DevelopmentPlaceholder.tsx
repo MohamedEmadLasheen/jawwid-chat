@@ -14,7 +14,7 @@ import { adminSectionPath, sectionsInGroup, type AdminSection } from './sections
 export function DevelopmentPlaceholder({ section }: { section: AdminSection }) {
   const tx = useText()
   const eyebrow = useEyebrow(section)
-  const available = sectionsInGroup(section.group).filter((s) => s.status === 'read_only' && s.key !== section.key)
+  const available = sectionsInGroup(section.group).filter((s) => s.status !== 'in_development' && s.key !== section.key)
 
   return (
     <div className="page">

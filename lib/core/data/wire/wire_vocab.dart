@@ -9,6 +9,8 @@ abstract final class Wire {
   static const conversationStudentGroup = 'student_group';
   static const conversationClassGroup = 'class_group';
   static const conversationOfficial = 'official';
+  /// PD-8: a group a supervisor creates about one or more children of one family.
+  static const conversationFamilyGroup = 'family_group';
 
   // MemberRole
   static const memberParent = 'parent';

@@ -14,6 +14,7 @@ import { StoriesPage } from '@/features/stories/StoriesPage'
 import { AdminSectionPage } from '@/features/admin/AdminSectionPage'
 import { adminSectionPath } from '@/features/admin/sections'
 import { ProfilePage } from '@/features/profile/ProfilePage'
+import { OrganizationPage } from '@/features/organization/OrganizationPage'
 import { ForbiddenPage } from './ForbiddenPage'
 import type { ReactElement } from 'react'
 
@@ -60,6 +61,7 @@ export function AppRoutes() {
         <Route path="/inbox" element={<Area area="inbox"><InboxPage /></Area>} />
         <Route path="/inbox/:familyId" element={<Area area="inbox"><InboxPage /></Area>} />
         <Route path="/families" element={<Area area="families"><FamiliesPage /></Area>} />
+        <Route path="/organization" element={<Area area="organization"><OrganizationPage /></Area>} />
         <Route path="/tasks" element={<Area area="tasks"><TasksPage /></Area>} />
         <Route path="/coverage" element={<Area area="coverage"><CoveragePage /></Area>} />
         <Route path="/dashboard" element={<Area area="dashboard"><DashboardPage /></Area>} />

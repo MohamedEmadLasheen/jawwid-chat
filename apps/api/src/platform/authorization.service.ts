@@ -1,8 +1,9 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Conversation, ConversationMember } from '@prisma/client';
-import { COVERAGE_SERVICE } from './tokens';
+import { COVERAGE_SERVICE, STAFF_SCOPE } from './tokens';
 import type { CoverageService } from './coverage.service';
-import { Actor, isFamilyFacingStaff } from './types';
+import { NO_STAFF_SCOPE, StaffAccessBasis, type ActsFor, type StaffScope } from './staff-scope';
+import { Actor, isConversationStaff, isFamilyFacingStaff } from './types';
 import { CommErrorCode } from './errors';
 import {
   NEVER_A_TEAM_MEMBER,
@@ -14,8 +15,9 @@ import {
 } from './staff-profile-policy';
 import {
   ActorKind,
+  CONVERSATION_STAFF_ROLES,
   ConversationType,
-  FAMILY_FACING_STAFF_ROLES,
+  GROUP_CONVERSATION_TYPES,
   MemberRole,
   Moderation,
   OnBehalfMode,
@@ -116,7 +118,15 @@ export interface LiveMember {
  */
 @Injectable()
 export class AuthorizationService {
-  constructor(@Inject(COVERAGE_SERVICE) private readonly coverage: CoverageService) {}
+  constructor(
+    // Kept for the positional construction the harnesses share. Since PD-8 the
+    // coverage engine (on_duty) decides NOTHING here: backup access is an
+    // explicit, activated chat.supervisor_backup link, read through `scope`.
+    @Inject(COVERAGE_SERVICE) private readonly coverage: CoverageService,
+    // PD-8: the staff conversation scope. Defaults to nobody-in-scope, so a
+    // construction that forgets it narrows staff access instead of widening it.
+    @Optional() @Inject(STAFF_SCOPE) private readonly scope: StaffScope = NO_STAFF_SCOPE,
+  ) {}
 
   // ------------------------------------------------------------------
   // Opening a 1:1 channel
@@ -130,6 +140,13 @@ export class AuthorizationService {
   canOpenDirect(
     a: Actor,
     b: Actor,
+    /**
+     * PD-8: for a Parent <-> staff pair, does the staff side reach the parent's
+     * family (chat.staff_reaches_family -- supervises one of its children, or
+     * acts for whoever does)? Resolved by the caller. Defaults to false: a
+     * caller that does not resolve it cannot open a family channel.
+     */
+    staffReachesFamily = false,
   ): Decision {
     // Tenant first (RT-030). A direct conversation is filed under its two
     // participants' organization, so they must share one -- and an actor in
@@ -172,17 +189,23 @@ export class AuthorizationService {
       );
     }
 
-    // Allowed: contact <-> staff, teacher <-> staff. The staff side must be
-    // family-facing: finance / technical / academic staff never message families.
+    // Allowed: contact <-> staff, teacher <-> staff. The staff side must take
+    // part in conversations: finance / technical / academic staff never do.
     const staff = a.kind === ActorKind.STAFF ? a : b.kind === ActorKind.STAFF ? b : null;
     if (!staff) {
       return deny(CommErrorCode.INVALID_PARTICIPANTS, 'a direct conversation requires a staff participant');
     }
-    if (!isFamilyFacingStaff(staff)) {
+    if (!isConversationStaff(staff)) {
       return deny(
         CommErrorCode.ROLE_CANNOT_MESSAGE_FAMILY,
         `role ${staff.staffRole} may never take part in family communication`,
       );
+    }
+    // PD-8 / BR-3: a family is reached by the staff in charge of it -- the
+    // supervisor of one of its children, their active backup, their department
+    // manager, or the super admin. Never an open directory, in either direction.
+    if (kinds === 'contact+staff' && !staffReachesFamily) {
+      return deny(CommErrorCode.STAFF_OUT_OF_SCOPE, 'this family is outside the staff member\'s charge');
     }
     return allow();
   }
@@ -196,20 +219,18 @@ export class AuthorizationService {
    *
    * A teacher or a parent must be a live member.
    *
-   * STAFF SCOPE (2026-10-14). Family-facing staff used to read every
-   * conversation in the database. They now read only what the academy's own
-   * records put in their charge -- no new table, only facts that already
-   * exist:
+   * STAFF SCOPE (PD-8, 2026-10-15). A staff member reads a conversation only on
+   * a BASIS chat.staff_conversation_access() returns (see platform/staff-scope):
+   * responsible supervisor of the group's learners, a live member who still
+   * reaches the family, an active backup of either, their department manager,
+   * or the super admin. That arrives here as `staffInScope`, a RESOLVED FACT --
+   * the same shape as every other fact this class decides on. It defaults to
+   * FALSE, so a call site that forgets to resolve it narrows, never widens.
    *
-   *   manager           every conversation of their organization;
-   *   admin / coverage  conversations they are a live member of, plus those of
-   *                     families they own (family.owner_id), are on duty for
-   *                     (chat.on_duty) or are the live sticky handler of.
-   *
-   * The second line arrives as `staffInScope`, a RESOLVED FACT computed by the
-   * caller (ConversationService.staffInScope / this.staffInScope) -- the same
-   * shape as every other fact this class decides on. It defaults to FALSE, so a
-   * call site that forgets to resolve it narrows, never widens.
+   * Neither a manager role nor a membership row grants staff access on its own
+   * any more: a manager reads their department, and a supervisor whose children
+   * were reassigned loses the families' conversations even though the
+   * membership rows remain.
    *
    * Another organization's conversation reads as not found, for every staff
    * role, before anything else about it is revealed.
@@ -221,7 +242,7 @@ export class AuthorizationService {
     const isLiveMember = !!membership && membership.leftAt === null;
 
     if (actor.kind === ActorKind.STAFF) {
-      if (!isFamilyFacingStaff(actor)) {
+      if (!isConversationStaff(actor)) {
         return deny(
           CommErrorCode.ROLE_CANNOT_MESSAGE_FAMILY,
           `role ${actor.staffRole} may not access conversations`,
@@ -230,7 +251,7 @@ export class AuthorizationService {
       if (!actor.organizationId || conv.organizationId !== actor.organizationId) {
         return deny(CommErrorCode.CONVERSATION_NOT_FOUND, 'conversation not found');
       }
-      if (actor.staffRole === 'manager' || isLiveMember || staffInScope) return allow();
+      if (staffInScope) return allow();
       return deny(
         CommErrorCode.STAFF_OUT_OF_SCOPE,
         'this conversation belongs to a family outside your charge',
@@ -244,26 +265,73 @@ export class AuthorizationService {
   }
 
   /**
-   * The staff-scope fact for canRead, resolved from server-owned data.
-   *
-   * True when the staff actor is the family's owner, is on duty for it now, or
-   * is the conversation's live sticky handler (the one who just answered keeps
-   * it for the grace window -- canSend honours the same stickiness below).
-   * Membership and the manager role are decided by canRead itself.
+   * The basis on which a staff actor may access this conversation, or null.
+   * The one place the API asks chat.staff_conversation_access(). Never for a
+   * non-staff, inactive or tenant-less actor.
+   */
+  async staffAccess(
+    actor: Actor,
+    conv: Pick<Conv, 'id' | 'organizationId'>,
+    now: Date,
+  ): Promise<StaffAccessBasis | null> {
+    if (actor.kind !== ActorKind.STAFF || !actor.isActive || !actor.organizationId) return null;
+    if (!isConversationStaff(actor) || conv.organizationId !== actor.organizationId) return null;
+    return this.scope.conversationAccess(actor.actorId, conv.id, now);
+  }
+
+  /**
+   * The staff-scope fact for canRead. Kept under its old name and shape so the
+   * call sites that resolve it did not have to move; the family owner argument
+   * is no longer an input (PD-8).
    */
   async staffInScope(
     actor: Actor,
-    conv: Pick<Conv, 'familyId' | 'stickyHandlerId' | 'stickyUntil'>,
-    familyOwnerId: string | null,
+    conv: Pick<Conv, 'id' | 'organizationId'>,
+    _familyOwnerId: string | null,
     now: Date,
   ): Promise<boolean> {
-    if (actor.kind !== ActorKind.STAFF || !actor.isActive) return false;
-    if (conv.stickyHandlerId === actor.actorId && conv.stickyUntil !== null && conv.stickyUntil > now) {
-      return true;
-    }
-    if (!conv.familyId) return false;
-    if (familyOwnerId !== null && familyOwnerId === actor.actorId) return true;
-    return (await this.coverage.onDuty(conv.familyId, now)) === actor.actorId;
+    return (await this.staffAccess(actor, conv, now)) !== null;
+  }
+
+  /** PD-8: how `staff` may act for `principal` ('self' | 'backup' | 'manager'), or null. */
+  async actsFor(staff: Actor, principalId: string, now: Date): Promise<ActsFor> {
+    if (staff.kind !== ActorKind.STAFF || !staff.isActive) return null;
+    return this.scope.actsFor(staff.actorId, principalId, now);
+  }
+
+  /**
+   * PD-8: does this staff actor reach the family (supervise one of its
+   * children, or act for whoever does)? The input canOpenDirect decides a
+   * Parent <-> staff channel on.
+   */
+  async reachesFamily(staff: Actor, familyId: string, now: Date): Promise<boolean> {
+    if (staff.kind !== ActorKind.STAFF || !staff.isActive || !isConversationStaff(staff)) return false;
+    return (await this.scope.familyReach(staff.actorId, familyId, now)) !== null;
+  }
+
+  /** `reachesFamily` for many (staffId, familyId) pairs; keyed `${staffId}:${familyId}`. */
+  async reachesFamilyMany(
+    pairs: ReadonlyArray<{ staffId: string; familyId: string }>,
+    now: Date,
+  ): Promise<Set<string>> {
+    const reach = await this.scope.familyReachMany(pairs, now);
+    return new Set([...reach.entries()].filter(([, v]) => v !== null).map(([k]) => k));
+  }
+
+  /**
+   * The conversation ids a staff actor may access, for list queries. Computed
+   * by the same SQL function as `staffAccess`, so a list can never be wider
+   * than the per-conversation check.
+   */
+  async visibleConversationIds(actor: Actor, now: Date): Promise<string[]> {
+    if (actor.kind !== ActorKind.STAFF || !actor.isActive || !actor.organizationId) return [];
+    if (!isConversationStaff(actor)) return [];
+    return this.scope.visibleConversationIds(actor.actorId, now);
+  }
+
+  /** PD-8: the supervisor responsible for a group (who decides its held messages), or null. */
+  responsibleSupervisor(conversationId: string): Promise<string | null> {
+    return this.scope.responsibleSupervisor(conversationId);
   }
 
   /** Internal notes are invisible to contacts and to teachers. */
@@ -272,7 +340,7 @@ export class AuthorizationService {
     // access on EVERY path, not only the one that happens to check first. Each
     // public method of this service must be independently safe to call.
     if (!actor.isActive) return false;
-    return isFamilyFacingStaff(actor);
+    return isConversationStaff(actor);
   }
 
   // ------------------------------------------------------------------
@@ -295,12 +363,8 @@ export class AuthorizationService {
      *  admin-presence check. When empty the check cannot run and says so. */
     liveMembers: LiveMember[] = [],
   ): Promise<Decision> {
-    const readable = this.canRead(
-      actor,
-      conv,
-      membership,
-      await this.staffInScope(actor, conv, familyOwnerId, now),
-    );
+    const basis = await this.staffAccess(actor, conv, now);
+    const readable = this.canRead(actor, conv, membership, basis !== null);
     if (!readable.allowed) return readable;
 
     if (conv.archivedAt) {
@@ -350,70 +414,22 @@ export class AuthorizationService {
     }
 
     // --- staff ---
-    // Internal notes: any family-facing admin, any family, any time. The
-    // capacity is still derived from facts, never asserted by the client.
+    // canRead above admitted the actor on a scope basis (PD-8); what follows
+    // decides only the SHAPE of the send and its recorded capacity, which is
+    // derived from that basis and never taken from the client.
     if (intent.visibility === Visibility.INTERNAL) {
-      const mode = await this.deriveMode(actor, conv, familyOwnerId, now);
-      return allow(mode, Moderation.PUBLISHED);
+      return allow(this.modeFor(basis), Moderation.PUBLISHED);
     }
-
-    // A manager may act on anything, but may not choose their own attribution:
-    // only assist/escalation are honourable requests, everything else is derived.
-    if (actor.staffRole === 'manager') {
-      const mode = await this.deriveMode(actor, conv, familyOwnerId, now, intent.requestedMode);
-      return allow(mode, Moderation.PUBLISHED);
-    }
-
-    // Staff messages in a group are always published; approval applies to
-    // teachers and parents only.
-    const isGroup =
-      conv.type === ConversationType.STUDENT_GROUP || conv.type === ConversationType.CLASS_GROUP;
 
     // DEF-001. A DIRECT staff conversation that is not family-scoped: the
     // Teacher <-> Admin channel (decision C-2, "never family-scoped").
     //
-    // Nothing below can reach it. `onDuty()` takes a familyId and there is no
-    // family, so the coverage branch is skipped; it is not a group, so the group
-    // branch is skipped; control fell through to NOT_ON_DUTY and an ordinary
-    // `admin` could never answer a teacher, while a manager and an internal note
-    // both could.
-    //
     // MEMBERSHIP IS THE AUTHORITY HERE, and it has to be stated explicitly:
-    // `canRead` above does NOT establish it: a manager may read any conversation
-    // of the organization, and an admin may read one through the staff-scope
-    // fact, without being a member. Without this check such a non-member could
-    // SEND into a non-family staff channel.
-    //
-    // WHY THIS IS NOT JC-005 AGAIN. That defect was ASSIST/ESCALATION granted
-    // from `intent.requestedMode` -- a field the client controls. This branch
-    // reads nothing the caller sent: `membership` is the server's own
-    // chat.conversation_member row, resolved before canSend is entered, and a
-    // null or departed membership falls straight through to the same deny as
-    // before. It also cannot widen anything family-scoped: `conv.familyId ===
-    // null` excludes every family conversation, which is where on-duty and
-    // coverage live.
-    //
-    // WHY IT SITS ABOVE STICKINESS. `MessageService.send` makes the replying
-    // staff member sticky for `handoff.grace_minutes`, so from the SECOND reply
-    // onwards the sticky branch below would match first and attribute the message
-    // through `deriveMode`, which -- with no family owner and no coverage to find
-    // -- falls through to ASSIST. That would be false (the admin is the
-    // counterpart here, not a stand-in) and `MessageService` writes a
-    // `message.assist` audit row for it, so every ordinary reply after the first
-    // would forge an assist event. Deciding this shape first keeps one honest
-    // attribution for every reply. Authorization is identical either way: both
-    // paths allow, so the order changes only the recorded capacity.
-    //
-    // IT DECIDES THE SHAPE OUTRIGHT, allow or deny, and does not fall through.
-    // That is deliberate. `MessageService.send` makes a replying staff member
-    // sticky, so once an admin has answered once, a LATER request from that same
-    // admin after they were removed from the conversation would reach the sticky
-    // branch below and be allowed on nothing but a stale `sticky_handler_id`.
-    // Falling through would therefore hand a departed member a grace window
-    // measured in `handoff.grace_minutes`. Before this fix that window was
-    // unreachable only because no admin could ever become sticky here; making the
-    // journey work is what made it reachable, so it is closed in the same change.
-    // A non-member gets the same refusal they got before, by name.
+    // `canRead` above admits a department manager or an active backup to READ
+    // a supervisor's teacher channel, but neither is a party to it. Without
+    // this check such a non-member could SEND into a 1:1 between two other
+    // people. This reads nothing the caller sent: `membership` is the server's
+    // own chat.conversation_member row.
     if (conv.type === ConversationType.DIRECT && conv.familyId === null) {
       if (membership !== null && membership.leftAt === null) {
         return allow(OnBehalfMode.OWNER, Moderation.PUBLISHED);
@@ -424,57 +440,26 @@ export class AuthorizationService {
       );
     }
 
-    // Stickiness wins while it is live.
-    if (
-      conv.stickyHandlerId === actor.actorId &&
-      conv.stickyUntil !== null &&
-      conv.stickyUntil > now
-    ) {
-      return allow(await this.deriveMode(actor, conv, familyOwnerId, now), Moderation.PUBLISHED);
-    }
-
-    // Otherwise the on-duty admin, resolved by AI #1's coverage engine.
-    if (conv.familyId) {
-      const onDutyId = await this.coverage.onDuty(conv.familyId, now);
-      if (onDutyId === actor.actorId) {
-        return allow(await this.deriveMode(actor, conv, familyOwnerId, now), Moderation.PUBLISHED);
-      }
-    } else if (isGroup) {
-      return allow(OnBehalfMode.OWNER, Moderation.PUBLISHED);
-    }
-
-    // JC-005 - FAIL CLOSED. (Re-applied after the conversation-model rewrite
-    // reverted it; see defects.md JC-011.)
-    //
-    // ASSIST and ESCALATION are the only paths that let a staff member act on a
-    // family they are not on duty for. They must be granted by a
-    // SERVER-EVALUATED precondition, never by a field the client controls.
-    //
-    // The real assist predicate (family in the NOW bucket, waited > 50% of the
-    // response target, on-duty admin has not opened it -- or the on-duty admin
-    // explicitly requested help) depends on the attention and response-target
-    // engines that AI #1 owns. QA does not invent that predicate here.
-    //
-    // AI #1: replace these branches with the real check. Do NOT restore an
-    // unconditional allow(), and do NOT move the gate into a caller - this
-    // service is contractually the only place an access decision is made.
-    if (intent.requestedMode === OnBehalfMode.ASSIST) {
+    // JC-005 - FAIL CLOSED. A client-supplied mode never grants anything and
+    // never chooses an attribution the facts do not support: only a manager or
+    // the super admin -- who are stepping in by definition -- may record a
+    // message as an escalation. Anyone else asking for ASSIST/ESCALATION is
+    // refused by name rather than silently re-attributed.
+    const steppingIn = basis === StaffAccessBasis.MANAGER || basis === StaffAccessBasis.SUPER_ADMIN;
+    if (intent.requestedMode === OnBehalfMode.ASSIST && !steppingIn) {
       return deny(
         CommErrorCode.ASSIST_NOT_PERMITTED,
         'assist requires a server-evaluated grant; a client-supplied mode never grants access',
       );
     }
-    if (intent.requestedMode === OnBehalfMode.ESCALATION) {
+    if (intent.requestedMode === OnBehalfMode.ESCALATION && !steppingIn) {
       return deny(
         CommErrorCode.ESCALATION_NOT_PERMITTED,
         'escalation requires a server-evaluated grant; a client-supplied mode never grants access',
       );
     }
 
-    return deny(
-      CommErrorCode.NOT_ON_DUTY,
-      'staff is not on duty for this family and did not request assist or escalation',
-    );
+    return allow(this.modeFor(basis, intent.requestedMode), Moderation.PUBLISHED);
   }
 
   /**
@@ -535,9 +520,7 @@ export class AuthorizationService {
     liveMembers: LiveMember[],
     participantKinds: string[],
   ): Decision | null {
-    const isGroup =
-      conv.type === ConversationType.STUDENT_GROUP || conv.type === ConversationType.CLASS_GROUP;
-    if (!isGroup) return null;
+    if (!GROUP_CONVERSATION_TYPES.has(conv.type)) return null;
 
     const kinds = liveMembers.length > 0 ? liveMembers.map((m) => m.actorKind) : participantKinds;
     const pairsTeacherAndParent =
@@ -570,40 +553,31 @@ export class AuthorizationService {
 
   /** Group approval policy. Staff messages are never held. */
   private moderationFor(conv: Conv, role: string): string {
-    if (conv.type !== ConversationType.STUDENT_GROUP && conv.type !== ConversationType.CLASS_GROUP) {
-      return Moderation.PUBLISHED;
-    }
+    if (!GROUP_CONVERSATION_TYPES.has(conv.type)) return Moderation.PUBLISHED;
     if (role === MemberRole.TEACHER && conv.teacherRequiresApproval) return Moderation.PENDING;
     if (role === MemberRole.PARENT && conv.parentRequiresApproval) return Moderation.PENDING;
     return Moderation.PUBLISHED;
   }
 
   /**
-   * on_behalf_mode is DERIVED, never accepted from the client.
+   * on_behalf_mode is DERIVED from the scope basis, never accepted from the
+   * client (PD-8):
    *
-   *   owner      the actor is the family's permanent Primary Owner
-   *   coverage   the actor is on duty for this family but does not own it
-   *   assist     neither, and acting anyway (always audited by the caller)
-   *   escalation only when explicitly requested as such
-   *
-   * A caller asking for "owner" gets whatever the facts say, which is why a
-   * manager cannot stamp a message as the family's owner.
+   *   owner      the responsible supervisor, or the staff party of a 1:1
+   *   coverage   acting for them through an active backup link
+   *   escalation a manager / the super admin who asked to record it as such
+   *   assist     a manager / the super admin stepping in otherwise (audited)
    */
-  private async deriveMode(
-    actor: Actor,
-    conv: Conv,
-    familyOwnerId: string | null,
-    now: Date,
-    requested?: string,
-  ): Promise<string> {
-    if (requested === OnBehalfMode.ESCALATION) return OnBehalfMode.ESCALATION;
-    if (familyOwnerId && actor.actorId === familyOwnerId) return OnBehalfMode.OWNER;
-    if (conv.familyId) {
-      const onDutyId = await this.coverage.onDuty(conv.familyId, now);
-      if (onDutyId === actor.actorId) return OnBehalfMode.COVERAGE;
+  private modeFor(basis: StaffAccessBasis | null, requested?: string): string {
+    switch (basis) {
+      case StaffAccessBasis.RESPONSIBLE:
+      case StaffAccessBasis.MEMBER:
+        return OnBehalfMode.OWNER;
+      case StaffAccessBasis.BACKUP:
+        return OnBehalfMode.COVERAGE;
+      default:
+        return requested === OnBehalfMode.ESCALATION ? OnBehalfMode.ESCALATION : OnBehalfMode.ASSIST;
     }
-    if (requested === OnBehalfMode.ASSIST) return OnBehalfMode.ASSIST;
-    return OnBehalfMode.ASSIST;
   }
 
   // ------------------------------------------------------------------
@@ -620,7 +594,7 @@ export class AuthorizationService {
    */
   canManageMembership(actor: Actor): Decision {
     if (!actor.isActive) return deny(CommErrorCode.ACTOR_INACTIVE, 'actor is inactive');
-    if (!isFamilyFacingStaff(actor)) {
+    if (!isConversationStaff(actor)) {
       return deny(CommErrorCode.CANNOT_MANAGE_MEMBERSHIP, 'only Jawwid admins may change membership');
     }
     if (!actor.organizationId) {
@@ -632,12 +606,10 @@ export class AuthorizationService {
   /**
    * May this actor change the membership of THIS conversation?
    *
-   * Scope (docs/contracts/API-CONTRACT.md `POST /conversations/:id/members`,
-   * `conversations.manage` + the conversation's family in scope;
-   * AUTHORIZATION-MODEL.md section 6): a manager for any conversation in their
-   * organization; an admin or coverage admin for a conversation of a family
-   * they own; a conversation with no family only through live admin membership
-   * of it. Being on duty is not scope (PD-3).
+   * PD-8: whoever is in charge of it -- the responsible supervisor of a group's
+   * learners, their active backup, their department manager, the super admin.
+   * A conversation that is neither a group nor a direct one (class group,
+   * official) only through live ADMIN membership of it.
    *
    * A `direct` conversation's membership is never changed by anyone: its
    * identity IS its two members (`direct_key`), so removing one and adding
@@ -650,8 +622,8 @@ export class AuthorizationService {
     conv: {
       type: string;
       organizationId: string;
-      familyId: string | null;
-      familyOwnerId: string | null;
+      /** The actor's resolved scope basis on this conversation (PD-8), or null. */
+      actorBasis: StaffAccessBasis | null;
       /** The actor's own live member_role in this conversation, or null. */
       actorMemberRole: string | null;
     },
@@ -667,18 +639,21 @@ export class AuthorizationService {
         'a direct conversation is defined by its two members; its membership never changes',
       );
     }
-    if (actor.staffRole === 'manager') return allow();
-    if (conv.familyId !== null) {
-      if (conv.familyOwnerId === actor.actorId) return allow();
-      return deny(
-        CommErrorCode.CANNOT_MANAGE_MEMBERSHIP,
-        "only the family's supervisor or a manager may change this conversation's membership",
-      );
+    switch (conv.actorBasis) {
+      case StaffAccessBasis.RESPONSIBLE:
+      case StaffAccessBasis.BACKUP:
+      case StaffAccessBasis.MANAGER:
+      case StaffAccessBasis.SUPER_ADMIN:
+        return allow();
+      case StaffAccessBasis.MEMBER:
+        if (conv.actorMemberRole === MemberRole.ADMIN) return allow();
+        break;
+      default:
+        break;
     }
-    if (conv.actorMemberRole === MemberRole.ADMIN) return allow();
     return deny(
       CommErrorCode.CANNOT_MANAGE_MEMBERSHIP,
-      'only an admin of this conversation or a manager may change its membership',
+      "only the children's supervisor, their backup or manager, or the super admin may change this conversation's membership",
     );
   }
 
@@ -704,12 +679,22 @@ export class AuthorizationService {
       organizationId: string;
       familyId: string | null;
       learnerTeacherId: string | null;
+      /** PD-8: teachers of a family group's learners (chat.conversation_learner). */
+      anchorTeacherIds?: readonly string[];
     },
     requestedRole: string,
     candidate:
       | { kind: 'contact'; organizationId: string; isActive: boolean; familyId: string; canMessage: boolean }
       | { kind: 'teacher'; actorId: string; organizationId: string; isActive: boolean; leftAt: Date | null }
-      | { kind: 'staff'; organizationId: string; isActive: boolean; leftAt: Date | null; staffRole: string }
+      | {
+          kind: 'staff';
+          organizationId: string;
+          isActive: boolean;
+          leftAt: Date | null;
+          staffRole: string;
+          /** PD-8: the candidate's own scope basis on this conversation. */
+          access: StaffAccessBasis | null;
+        }
       | null,
   ): Decision {
     const ineligible = (reason: string) => deny(CommErrorCode.INVALID_PARTICIPANTS, reason);
@@ -727,6 +712,12 @@ export class AuthorizationService {
       case 'teacher':
         if (requestedRole !== MemberRole.TEACHER) return ineligible('a teacher joins as teacher');
         if (!candidate.isActive || candidate.leftAt !== null) return ineligible('this teacher is not active');
+        if (conv.type === ConversationType.FAMILY_GROUP) {
+          if (!(conv.anchorTeacherIds ?? []).includes(candidate.actorId)) {
+            return ineligible('a teacher joins a family group only if they teach one of its children');
+          }
+          return allow();
+        }
         if (conv.type !== ConversationType.STUDENT_GROUP || conv.learnerTeacherId !== candidate.actorId) {
           return ineligible("a teacher joins only the Student Group of a learner they teach");
         }
@@ -736,8 +727,14 @@ export class AuthorizationService {
           return ineligible('staff join as admin or observer');
         }
         if (!candidate.isActive || candidate.leftAt !== null) return ineligible('this staff member is not active');
-        if (!FAMILY_FACING_STAFF_ROLES.has(candidate.staffRole)) {
+        if (!CONVERSATION_STAFF_ROLES.has(candidate.staffRole)) {
           return ineligible('this staff role does not take part in family communication');
+        }
+        // PD-8: a staff member joins only a conversation they are already in
+        // charge of. Adding another supervisor would hand them a family that
+        // is not theirs -- exactly what the scope exists to prevent.
+        if (candidate.access === null) {
+          return ineligible('this staff member is not in charge of this conversation');
         }
         return allow();
     }
@@ -776,7 +773,7 @@ export class AuthorizationService {
   canProvisionStudentGroup(actor: Actor): Decision {
     if (!actor.isActive) return deny(CommErrorCode.ACTOR_INACTIVE, 'actor is inactive');
     if (actor.kind === ActorKind.SYSTEM) return allow();
-    if (!isFamilyFacingStaff(actor)) {
+    if (!isConversationStaff(actor)) {
       return deny(
         CommErrorCode.CANNOT_PROVISION_STUDENT_GROUP,
         'a Student Group is provisioned by Jawwid staff, never by a family member or a teacher',
@@ -795,41 +792,51 @@ export class AuthorizationService {
   }
 
   /**
-   * May this actor provision the Student Group of THIS learner?
+   * May this actor provision a group about THESE learners -- a Student Group
+   * (one learner) or a supervisor-created family group (PD-8)?
    *
-   * Asked after `canProvisionStudentGroup` has passed and the learner is loaded.
-   * The facts are resolved by the caller; this method reads no database.
+   * Asked after `canProvisionStudentGroup` has passed and the learners are
+   * loaded. The facts are resolved by the caller; this method reads no database.
    *
    * Tenant: a learner in another organization is reported as NOT FOUND, not as
-   * forbidden, so a tenant boundary never confirms that an id exists. Both the
-   * learner's and the family's organization must match: the database does not
-   * yet tie them together (RT-029), so neither is trusted alone.
+   * forbidden, so a tenant boundary never confirms that an id exists.
    *
-   * Scope (docs/contracts/API-CONTRACT.md, `conversations.manage` + family
-   * scope; docs/architecture/SUPERVISOR-OWNERSHIP.md): a manager provisions for
-   * any family in their organization; an admin or coverage admin only for a
-   * family they own. Being on duty for a family is NOT scope here -- `on_duty()`
-   * is deprecated and nothing new may depend on it (PD-3).
+   * Scope (PD-8): the learners' supervisor, their active backup, their
+   * department manager, or the super admin. A learner nobody supervises has no
+   * group: there would be no admin to satisfy BR-1.
    */
   canProvisionStudentGroupFor(
     actor: Actor,
-    target: { learnerOrganizationId: string; familyOrganizationId: string; familyOwnerId: string },
+    target: {
+      learnerOrganizationId: string;
+      familyOrganizationId: string;
+      /** chat.learner_supervision.supervisor_id, or null when unassigned. */
+      supervisorId: string | null;
+      /** How the actor acts for that supervisor (chat.staff_acts_for), or null. */
+      actorActsFor: ActsFor;
+    },
   ): Decision {
     const gate = this.canProvisionStudentGroup(actor);
     if (!gate.allowed) return gate;
-    if (actor.kind === ActorKind.SYSTEM) return allow();
 
     if (
-      target.learnerOrganizationId !== actor.organizationId ||
-      target.familyOrganizationId !== actor.organizationId
+      actor.kind !== ActorKind.SYSTEM &&
+      (target.learnerOrganizationId !== actor.organizationId ||
+        target.familyOrganizationId !== actor.organizationId)
     ) {
       return deny(CommErrorCode.CONVERSATION_NOT_FOUND, 'learner not found');
     }
-    if (actor.staffRole === 'manager') return allow();
-    if (target.familyOwnerId === actor.actorId) return allow();
+    if (target.supervisorId === null) {
+      return deny(
+        CommErrorCode.LEARNER_UNSUPERVISED,
+        'this learner has no supervisor yet; the Operations Manager assigns one first',
+      );
+    }
+    if (actor.kind === ActorKind.SYSTEM || actor.staffRole === StaffRole.SUPER_ADMIN) return allow();
+    if (target.actorActsFor !== null) return allow();
     return deny(
       CommErrorCode.CANNOT_PROVISION_STUDENT_GROUP,
-      'only the family\'s supervisor or a manager may provision its Student Group',
+      "only the learner's supervisor, their backup or manager, or the super admin may provision its group",
     );
   }
 
@@ -1111,17 +1118,100 @@ export class AuthorizationService {
     return allow();
   }
 
-  /** The approver is the family's active handler, or any manager. */
-  canApprove(actor: Actor, activeHandlerId: string | null): Decision {
+  /**
+   * May this actor decide held messages in a conversation? PD-8: whoever is in
+   * charge of it -- the responsible supervisor, their active backup, their
+   * department manager, the super admin. `basis` is the actor's resolved scope
+   * basis on the conversation; `undefined` asks only "may you decide at all"
+   * (the queue gate), which every conversation-staff member passes.
+   */
+  canApprove(actor: Actor, basis?: StaffAccessBasis | null): Decision {
     // JC-006: every public method is independently safe -- a deactivated
     // manager decides nothing, whichever caller forgot to check first.
     if (!actor.isActive) return deny(CommErrorCode.ACTOR_INACTIVE, 'an inactive actor may not decide approvals');
-    if (!isFamilyFacingStaff(actor)) {
+    if (!isConversationStaff(actor)) {
       return deny(CommErrorCode.CANNOT_APPROVE, 'only Jawwid admins may decide approvals');
     }
-    if (actor.staffRole === 'manager') return allow();
-    if (activeHandlerId && activeHandlerId === actor.actorId) return allow();
-    return deny(CommErrorCode.CANNOT_APPROVE, 'only the active handler or a manager may decide');
+    if (basis === undefined) return allow();
+    if (
+      basis === StaffAccessBasis.RESPONSIBLE ||
+      basis === StaffAccessBasis.BACKUP ||
+      basis === StaffAccessBasis.MANAGER ||
+      basis === StaffAccessBasis.SUPER_ADMIN
+    ) {
+      return allow();
+    }
+    return deny(CommErrorCode.CANNOT_APPROVE, "only the children's supervisor, their backup or manager may decide");
+  }
+
+  // ------------------------------------------------------------------
+  // Organization structure (PD-8)
+  // ------------------------------------------------------------------
+
+  /**
+   * Departments: creating them, naming their manager, placing supervisors in
+   * them. That is the shape of the organization itself -- super admin only.
+   */
+  canManageDepartments(actor: Actor, target: { organizationId: string }): Decision {
+    return this.orgAuthority(actor, target.organizationId, (a) => a.staffRole === StaffRole.SUPER_ADMIN, 'change departments');
+  }
+
+  /**
+   * Assigning a child to a supervisor. The super admin, or the manager of the
+   * department BOTH supervisors belong to -- the new one and, if the child has
+   * one, the current one -- so a manager can neither pull a child out of
+   * another department nor push one into it. `actsForNew` / `actsForCurrent`
+   * are chat.staff_acts_for(actor, supervisor), resolved by the caller.
+   */
+  canAssignSupervision(
+    actor: Actor,
+    target: { organizationId: string; actsForNew: ActsFor; currentSupervisorId: string | null; actsForCurrent: ActsFor },
+  ): Decision {
+    return this.orgAuthority(
+      actor,
+      target.organizationId,
+      (a) =>
+        a.staffRole === StaffRole.SUPER_ADMIN ||
+        (a.staffRole === StaffRole.MANAGER &&
+          target.actsForNew === 'manager' &&
+          (target.currentSupervisorId === null || target.actsForCurrent === 'manager')),
+      'assign learners to supervisors',
+    );
+  }
+
+  /**
+   * Creating, activating, deactivating or ending a backup link for `primary`.
+   * The super admin, or the manager of the primary's department.
+   */
+  canConfigureBackup(actor: Actor, target: { organizationId: string; actsForPrimary: ActsFor }): Decision {
+    return this.orgAuthority(
+      actor,
+      target.organizationId,
+      (a) => a.staffRole === StaffRole.SUPER_ADMIN || (a.staffRole === StaffRole.MANAGER && target.actsForPrimary === 'manager'),
+      'configure backup supervisors',
+    );
+  }
+
+  /** Reading the structure: the super admin (all of it) and managers (their department). */
+  canViewOrgStructure(actor: Actor): Decision {
+    if (!actor.isActive) return deny(CommErrorCode.ACTOR_INACTIVE, 'an inactive actor may not view the structure');
+    if (
+      actor.kind !== ActorKind.STAFF ||
+      !actor.organizationId ||
+      (actor.staffRole !== StaffRole.SUPER_ADMIN && actor.staffRole !== StaffRole.MANAGER)
+    ) {
+      return deny(CommErrorCode.ORG_STRUCTURE_DENIED, 'only managers and the super admin may view the organization structure');
+    }
+    return allow();
+  }
+
+  private orgAuthority(actor: Actor, organizationId: string, permitted: (a: Actor) => boolean, what: string): Decision {
+    if (!actor.isActive) return deny(CommErrorCode.ACTOR_INACTIVE, `an inactive actor may not ${what}`);
+    if (actor.kind !== ActorKind.STAFF || !actor.organizationId || actor.organizationId !== organizationId) {
+      return deny(CommErrorCode.ORG_STRUCTURE_DENIED, `only staff of this organization may ${what}`);
+    }
+    if (!permitted(actor)) return deny(CommErrorCode.ORG_STRUCTURE_DENIED, `${actor.staffRole} may not ${what}`);
+    return allow();
   }
 
   /**
@@ -1179,8 +1269,7 @@ export class AuthorizationService {
      * Parent | Parent <-> Admin") is untouched: this rule is scoped to group
      * conversations.
      */
-    const isGroup =
-      conv.type === ConversationType.STUDENT_GROUP || conv.type === ConversationType.CLASS_GROUP;
+    const isGroup = GROUP_CONVERSATION_TYPES.has(conv.type);
     if (intent === CallIntent.INITIATE && isGroup && actor.kind === ActorKind.CONTACT) {
       return deny(
         CommErrorCode.PARENT_CANNOT_START_GROUP_CALL,

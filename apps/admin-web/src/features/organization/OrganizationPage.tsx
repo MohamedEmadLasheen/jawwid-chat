@@ -1,0 +1,269 @@
+import { useMemo, useState } from 'react'
+import { useSession } from '@/core/auth/SessionProvider'
+import { useI18n } from '@/core/i18n/I18nProvider'
+import { Badge, type Tone } from '@/shared/components/Badge'
+import { PageHeader } from '@/shared/components/PageHeader'
+import { SearchField } from '@/shared/components/SearchField'
+import { EmptyState, QueryBoundary } from '@/shared/components/States'
+import type { BackupLink, BackupStatus, Department, DepartmentMember, LearnerAssignment } from './api'
+import { DEPARTMENT_LABEL, POSITION_LABEL, STATUS_LABEL, T, useCopy } from './copy'
+import { useLearners, useStructure } from './hooks'
+import { AssignSupervisorDialog, BackupActionDialog, CreateBackupDialog } from './OrgDialogs'
+import type { BackupAction } from './hooks'
+import './organization.css'
+
+type Tab = 'children' | 'structure'
+
+/**
+ * PD-8: the organization structure -- for the super admin (the whole
+ * organization) and for managers (their own department). Which rows appear and
+ * which changes succeed is decided by the server for this viewer; the page
+ * shows controls, the API answers each request on its own.
+ */
+export function OrganizationPage() {
+  const tx = useCopy()
+  const structure = useStructure()
+  const departments = structure.data?.departments ?? []
+  const operations = departments.find((d) => d.kind === 'operations') ?? null
+  const [tab, setTab] = useState<Tab>('children')
+  const shown: Tab = operations ? tab : 'structure'
+  const tabs: Array<{ key: Tab; label: string }> = [
+    ...(operations ? [{ key: 'children' as const, label: tx(T.tabChildren) }] : []),
+    { key: 'structure', label: tx(T.tabStructure) },
+  ]
+
+  return (
+    <div className="page">
+      <div className="page__inner">
+        <PageHeader title={tx(T.title)} subtitle={tx(T.subtitle)} />
+        <QueryBoundary isLoading={structure.isLoading} error={structure.error} onRetry={() => void structure.refetch()}>
+          <div className="org-tabs" role="tablist" aria-label={tx(T.title)}>
+            {tabs.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                id={`org-tab-${t.key}`}
+                aria-selected={shown === t.key}
+                aria-controls={`org-panel-${t.key}`}
+                className="org-tab"
+                onClick={() => setTab(t.key)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div role="tabpanel" id={`org-panel-${shown}`} aria-labelledby={`org-tab-${shown}`}>
+            {shown === 'children' && operations ? (
+              <ChildrenTab operations={operations} />
+            ) : departments.length === 0 ? (
+              <EmptyState title={tx(T.noOperations)} />
+            ) : (
+              departments.map((d) => <DepartmentCard key={d.id} department={d} />)
+            )}
+          </div>
+        </QueryBoundary>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Children & supervisors
+// ---------------------------------------------------------------------------
+
+function ChildrenTab({ operations }: { operations: Department }) {
+  const tx = useCopy()
+  const { t, number } = useI18n()
+  const learners = useLearners(true)
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState<string>('all')
+  const [editing, setEditing] = useState<LearnerAssignment | null>(null)
+  const supervisors = operations.members.filter((m) => m.position === 'supervisor')
+
+  const rows = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return (learners.data?.learners ?? []).filter((l) => {
+      if (filter === 'unassigned' && l.supervisor) return false
+      if (filter !== 'all' && filter !== 'unassigned' && l.supervisor?.id !== filter) return false
+      if (!q) return true
+      return l.name.toLowerCase().includes(q) || l.family.displayName.toLowerCase().includes(q)
+    })
+  }, [learners.data, query, filter])
+
+  return (
+    <QueryBoundary isLoading={learners.isLoading} error={learners.error} onRetry={() => void learners.refetch()}>
+      <div className="toolbar">
+        <SearchField value={query} onChange={setQuery} label={tx(T.search)} clearLabel={t('common.cancel')} />
+        <div className="org-filter">
+          <label className="field__label" htmlFor="org-filter">{tx(T.filter)}</label>
+          <select id="org-filter" className="select" value={filter} onChange={(e) => setFilter(e.target.value)}>
+            <option value="all">{tx(T.filterAll)}</option>
+            <option value="unassigned">{tx(T.filterUnassigned)}</option>
+            {supervisors.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        </div>
+        <span className="toolbar__count">{tx(T.count, { n: number(rows.length) })}</span>
+      </div>
+      {rows.length === 0 ? (
+        <EmptyState title={tx(T.noChildren)} />
+      ) : (
+        <div className="table-wrap org-table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th scope="col">{tx(T.child)}</th>
+                <th scope="col">{tx(T.family)}</th>
+                <th scope="col">{tx(T.teacher)}</th>
+                <th scope="col">{tx(T.supervisor)}</th>
+                <th scope="col"><span className="sr-only">{tx(T.assign)}</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((l) => (
+                <tr key={l.learnerId}>
+                  <td dir="auto">{l.name}</td>
+                  <td dir="auto">{l.family.displayName}</td>
+                  <td dir="auto">{l.teacher?.name ?? <span className="org-muted">{tx(T.noTeacher)}</span>}</td>
+                  <td dir="auto">{l.supervisor?.name ?? <Badge tone="warn" dot>{tx(T.unassigned)}</Badge>}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--sm"
+                      onClick={() => setEditing(l)}
+                      aria-label={`${l.supervisor ? tx(T.change) : tx(T.assign)} — ${l.name}`}
+                    >
+                      {l.supervisor ? tx(T.change) : tx(T.assign)}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {editing && (
+        <AssignSupervisorDialog learner={editing} supervisors={supervisors} onClose={() => setEditing(null)} />
+      )}
+    </QueryBoundary>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Departments & backups
+// ---------------------------------------------------------------------------
+
+const STATUS_TONE: Record<BackupStatus, Tone> = {
+  active: 'ok',
+  dormant: 'neutral',
+  expired: 'warn',
+  deactivated: 'outline',
+  ended: 'outline',
+}
+
+function DepartmentCard({ department }: { department: Department }) {
+  const tx = useCopy()
+  const { staff } = useSession()
+  const [creating, setCreating] = useState(false)
+  const [acting, setActing] = useState<{ link: BackupLink; action: BackupAction } | null>(null)
+  const canManage = staff?.role === 'super_admin' || staff?.role === 'manager'
+  const headingId = `org-dept-${department.id}`
+
+  return (
+    <section className="card panel org-dept" aria-labelledby={headingId}>
+      <div className="org-dept__head">
+        <h2 id={headingId} className="org-dept__title">{tx(DEPARTMENT_LABEL[department.kind])}</h2>
+        <span className="org-muted">
+          {tx(T.manager)}: {department.manager?.name ?? tx(T.noManager)}
+        </span>
+      </div>
+
+      <h3>{tx(T.members)}</h3>
+      {department.members.length === 0 ? (
+        <p className="org-muted">{tx(T.noMembers)}</p>
+      ) : (
+        <div className="table-wrap org-table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th scope="col">{tx(T.personName)}</th>
+                <th scope="col">{tx(T.position)}</th>
+                <th scope="col">{tx(T.childrenCount)}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {department.members.map((m: DepartmentMember) => (
+                <tr key={m.id}>
+                  <td dir="auto">{m.name}</td>
+                  <td>{tx(POSITION_LABEL[m.position])}</td>
+                  <td>{m.learnerCount}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {department.kind === 'operations' && (
+        <>
+          <div className="org-dept__head">
+            <h3>{tx(T.backups)}</h3>
+            {canManage && (
+              <button type="button" className="btn btn--sm" onClick={() => setCreating(true)}>
+                {tx(T.addBackup)}
+              </button>
+            )}
+          </div>
+          <p className="field__hint">{tx(T.backupsHint)}</p>
+          {department.backups.length === 0 ? (
+            <p className="org-muted">{tx(T.noBackups)}</p>
+          ) : (
+            <ul className="org-backups">
+              {department.backups.map((link) => (
+                <BackupRow key={link.id} link={link} canManage={canManage} onAct={(action) => setActing({ link, action })} />
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+
+      {creating && <CreateBackupDialog members={department.members} onClose={() => setCreating(false)} />}
+      {acting && <BackupActionDialog link={acting.link} action={acting.action} onClose={() => setActing(null)} />}
+    </section>
+  )
+}
+
+function BackupRow({ link, canManage, onAct }: { link: BackupLink; canManage: boolean; onAct: (a: BackupAction) => void }) {
+  const tx = useCopy()
+  const { date } = useI18n()
+  const names = { backup: link.backup?.name ?? '', primary: link.primary?.name ?? '' }
+  return (
+    <li className="org-backup">
+      <span dir="auto">
+        {tx(T.covers, names)}{' '}
+        <Badge tone={STATUS_TONE[link.status]} dot>{tx(STATUS_LABEL[link.status])}</Badge>
+        {link.status === 'active' && link.activeUntil && (
+          <span className="org-muted"> {tx(T.until, { date: date(link.activeUntil) })}</span>
+        )}
+      </span>
+      {canManage && link.status !== 'ended' && (
+        <span className="org-backup__actions">
+          {link.status === 'active' ? (
+            <button type="button" className="btn btn--sm" onClick={() => onAct('deactivate')} aria-label={`${tx(T.deactivate)} — ${tx(T.covers, names)}`}>
+              {tx(T.deactivate)}
+            </button>
+          ) : (
+            <button type="button" className="btn btn--primary btn--sm" onClick={() => onAct('activate')} aria-label={`${tx(T.activate)} — ${tx(T.covers, names)}`}>
+              {tx(T.activate)}
+            </button>
+          )}
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => onAct('end')} aria-label={`${tx(T.end)} — ${tx(T.covers, names)}`}>
+            {tx(T.end)}
+          </button>
+        </span>
+      )}
+    </li>
+  )
+}

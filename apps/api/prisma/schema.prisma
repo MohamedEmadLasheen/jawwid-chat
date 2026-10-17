@@ -820,3 +820,83 @@ model StaffReportingLine {
   @@map("staff_reporting_line")
   @@schema("chat")
 }
+
+// =====================================================================
+// PD-8 organization structure -- 20261015120000_chat_pd008_org_structure.sql
+// owns the DDL. Staff references are plain columns (no Prisma relation) so the
+// Staff model, which other lineages also extend, is not touched.
+// Every row here IS an authorization input: chat.staff_conversation_access
+// reads them. Writes go through OrgStructureService only.
+// =====================================================================
+
+model Department {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  kind           String
+  displayName    String   @map("display_name")
+  managerId      String?  @map("manager_id") @db.Uuid
+  createdAt      DateTime @map("created_at") @db.Timestamptz @default(now())
+  updatedAt      DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  members DepartmentMember[]
+
+  @@unique([organizationId, kind])
+  @@map("department")
+  @@schema("chat")
+}
+
+model DepartmentMember {
+  staffId        String     @id @map("staff_id") @db.Uuid
+  organizationId String     @map("organization_id") @db.Uuid
+  departmentId   String     @map("department_id") @db.Uuid
+  department     Department @relation(fields: [departmentId], references: [id])
+  position       String
+  assignedBy     String?    @map("assigned_by") @db.Uuid
+  assignedAt     DateTime   @map("assigned_at") @db.Timestamptz @default(now())
+
+  @@map("department_member")
+  @@schema("chat")
+}
+
+model LearnerSupervision {
+  learnerId      String   @id @map("learner_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  supervisorId   String   @map("supervisor_id") @db.Uuid
+  assignedBy     String?  @map("assigned_by") @db.Uuid
+  assignedAt     DateTime @map("assigned_at") @db.Timestamptz @default(now())
+  reason         String?
+
+  @@map("learner_supervision")
+  @@schema("chat")
+}
+
+model SupervisorBackup {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  primaryId      String    @map("primary_id") @db.Uuid
+  backupId       String    @map("backup_id") @db.Uuid
+  createdBy      String?   @map("created_by") @db.Uuid
+  createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
+  activatedAt    DateTime? @map("activated_at") @db.Timestamptz
+  activeUntil    DateTime? @map("active_until") @db.Timestamptz
+  activatedBy    String?   @map("activated_by") @db.Uuid
+  deactivatedAt  DateTime? @map("deactivated_at") @db.Timestamptz
+  deactivatedBy  String?   @map("deactivated_by") @db.Uuid
+  endedAt        DateTime? @map("ended_at") @db.Timestamptz
+  endedBy        String?   @map("ended_by") @db.Uuid
+
+  @@map("supervisor_backup")
+  @@schema("chat")
+}
+
+model ConversationLearner {
+  conversationId String   @map("conversation_id") @db.Uuid
+  learnerId      String   @map("learner_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  addedBy        String?  @map("added_by") @db.Uuid
+  addedAt        DateTime @map("added_at") @db.Timestamptz @default(now())
+
+  @@id([conversationId, learnerId])
+  @@map("conversation_learner")
+  @@schema("chat")
+}

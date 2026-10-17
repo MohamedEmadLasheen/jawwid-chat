@@ -39,6 +39,7 @@ import {
   legacyTeacherParentDirect,
   seed,
   truncate,
+  moveFamily,
 } from "./harness";
 
 jest.setTimeout(60_000);
@@ -601,14 +602,15 @@ describe("N/O/P/Q — security", () => {
     expect(await notificationsFor(s.parentId)).toHaveLength(0);
   });
 
-  it("N2. an admin no longer on duty cannot create a new call notification", async () => {
+  it("N2. an admin no longer in charge of the family cannot create a new call notification", async () => {
     const conv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
-    // Coverage moves away from the owner: they may still read the family's
-    // conversations, but may not act -- and so may not ring anyone -- in them.
-    g.coverage.onDutyId = s.otherAdminId;
+    // PD-8: the family's children move to another supervisor. The former one
+    // keeps the membership row but no longer reaches the family -- and so may
+    // not ring anyone in it.
+    await moveFamily(g.prisma, s, s.otherAdminId);
 
     await expect(g.calls.start(conv.id, s.ownerId)).rejects.toMatchObject({
-      code: CommErrorCode.NOT_ON_DUTY,
+      code: CommErrorCode.STAFF_OUT_OF_SCOPE,
     });
     await drainOutbox();
 

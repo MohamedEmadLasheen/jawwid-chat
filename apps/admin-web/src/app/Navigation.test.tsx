@@ -197,7 +197,8 @@ describe('The desktop rail', () => {
     await userEvent.keyboard('{ArrowDown}')
     await waitFor(() => expect(document.activeElement).toHaveAccessibleName('Users'))
     await userEvent.keyboard('{ArrowDown}')
-    expect(document.activeElement).toHaveAccessibleName('Team management In development')
+    // PD-8: the people group's second page is the built Organization page (no badge).
+    expect(document.activeElement).toHaveAccessibleName('Organization')
     await userEvent.keyboard('{ArrowDown}')
     expect(document.activeElement).toHaveAccessibleName('Users')
     await userEvent.keyboard('{Escape}')

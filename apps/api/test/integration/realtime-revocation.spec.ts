@@ -35,6 +35,7 @@ import { Server, Socket } from 'socket.io';
 import Redis from 'ioredis';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { PrismaService } from '@platform/prisma.service';
+import { SqlStaffScope } from '@platform/staff-scope';
 import { PrismaIdentityService } from '@platform/identity.service';
 import { PrismaAuditService } from '@platform/audit.service';
 import { AuthService } from '@platform/auth/auth.service';
@@ -65,7 +66,7 @@ import { NotificationService } from '@communication/notifications/notification.s
 import { TemplateService } from '@communication/notifications/template.service';
 import { QuietHoursService } from '@communication/notifications/quiet-hours.service';
 import { LoggingPushProvider } from '@communication/notifications/push.provider';
-import { PinnedCoverage, withAssignmentGate } from './harness';
+import { PinnedCoverage, supervise, withAssignmentGate } from './harness';
 
 process.env.JWT_ACCESS_SECRET ??= 'integration-access-secret-32-chars-min!';
 process.env.JWT_REFRESH_SECRET ??= 'integration-refresh-secret-32-chars-min!';
@@ -120,7 +121,8 @@ async function startNode(adapter?: ReturnType<typeof createAdapter>): Promise<No
   const hub = new RealtimeRevocationHub();
   const auth = new AuthService(prisma, identity, audit, hub);
   const coverage = new PinnedCoverage();
-  const authz = new AuthorizationService(coverage);
+  // PD-8: the real SQL staff scope, as production wires it.
+  const authz = new AuthorizationService(coverage, new SqlStaffScope(prisma));
   const conversations = new ConversationService(
     prisma, authz, new OutboxService(), identity, coverage, audit, new PrismaRelationshipService(prisma), hub,
   );
@@ -357,6 +359,9 @@ beforeAll(async () => {
     ('${ids.otherParent}'::uuid, '${ids.otherOrg}'::uuid, '${ids.otherFamily}'::uuid, 'parent_r9z', 'primary_guardian', true, '${ids.otherAccount}'::uuid)`);
   await withAssignmentGate(prisma, `insert into chat.learner (id, organization_id, family_id, name, teacher_id)
     values ('${ids.learner}'::uuid, '${ORG}'::uuid, '${ids.family}'::uuid, 'learner_r9', '${ids.teacher}'::uuid)`);
+
+  // PD-8: the admin supervises the child; the manager runs their department.
+  await supervise(prisma, ids.staff, [ids.learner], { managerId: ids.manager });
 
   node = await startNode();
   for (const [id] of accounts) await node.auth.setPassword(id, PASSWORD);

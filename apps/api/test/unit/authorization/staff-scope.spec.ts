@@ -1,21 +1,24 @@
 /**
- * Staff scope (2026-10-14).
+ * Staff scope -- PD-8 (2026-10-15), superseding the 2026-10-14 rule.
  *
- * Family-facing staff used to read EVERY conversation in the database. They
- * now read only what the academy's own records put in their charge:
+ * A staff member reads a conversation only on a BASIS returned by
+ * chat.staff_conversation_access() (proven against a real database in
+ * test/integration/org-scope-pd8.spec.ts and db/tests). Here the basis is
+ * stubbed per staff id and what is asserted is the POLICY:
  *
- *   manager           every conversation of their organization;
- *   admin / coverage  conversations they are a live member of, plus those of
- *                     families they own, are on duty for, or are the live
- *                     sticky handler of (`staffInScope`, a resolved fact).
- *
- * Another organization's conversation reads as not found, for every role.
+ *   - canRead admits staff on the resolved fact ALONE: neither a manager role
+ *     nor a membership row grants access on its own any more;
+ *   - the fact defaults to false, so a forgotten resolution narrows;
+ *   - another organization reads as not found, for every role;
+ *   - the super admin takes part in conversations (owner decision 2026-10-15);
+ *   - canSend resolves the basis itself and derives the attribution from it.
  */
 import { CommErrorCode } from '@platform/errors';
+import { StaffAccessBasis } from '@platform/staff-scope';
 import {
   academicStaff,
   admin,
-  authzWithOnDuty,
+  authzWithScope,
   conversation,
   manager,
   member,
@@ -24,31 +27,27 @@ import {
   teacher,
 } from '../../support/fixtures';
 
-const NOW = new Date('2026-10-14T10:00:00Z');
+const NOW = new Date('2026-10-15T10:00:00Z');
 
 const code = (d: { allowed: boolean; code?: string }) => (d.allowed ? 'ALLOW' : d.code);
+const superAdmin = (id = 'super-1') => admin(id, 'super_admin');
 
-describe('canRead — staff scope', () => {
-  const authz = authzWithOnDuty();
+describe('canRead — staff scope (PD-8)', () => {
+  const authz = authzWithScope();
 
-  it('an admin with no tie to the family is refused, by name', () => {
+  it('an admin with no basis is refused, by name', () => {
     expect(code(authz.canRead(admin('outsider'), studentGroup(), null))).toBe(CommErrorCode.STAFF_OUT_OF_SCOPE);
   });
 
-  it('an admin is admitted by live membership', () => {
-    const a = admin('member-admin');
-    expect(code(authz.canRead(a, studentGroup(), member(a)))).toBe('ALLOW');
+  it('a live membership row alone does NOT admit staff: a supervisor whose children moved away loses the room', () => {
+    const a = admin('former-supervisor');
+    expect(code(authz.canRead(a, studentGroup(), member(a)))).toBe(CommErrorCode.STAFF_OUT_OF_SCOPE);
+    expect(code(authz.canRead(a, studentGroup(), member(a), true))).toBe('ALLOW');
   });
 
-  it('a DEPARTED admin member is refused unless the scope fact says otherwise', () => {
-    const a = admin('gone');
-    const gone = member(a, { leftAt: new Date('2026-10-01T00:00:00Z') });
-    expect(code(authz.canRead(a, studentGroup(), gone))).toBe(CommErrorCode.STAFF_OUT_OF_SCOPE);
-    expect(code(authz.canRead(a, studentGroup(), gone, true))).toBe('ALLOW');
-  });
-
-  it('an admin is admitted by the resolved scope fact', () => {
-    expect(code(authz.canRead(admin('owner'), studentGroup(), null, true))).toBe('ALLOW');
+  it('a manager role alone does NOT admit: a manager reads their department, through the resolved basis', () => {
+    expect(code(authz.canRead(manager(), studentGroup(), null))).toBe(CommErrorCode.STAFF_OUT_OF_SCOPE);
+    expect(code(authz.canRead(manager(), studentGroup(), null, true))).toBe('ALLOW');
   });
 
   it('coverage admins follow the same rule as admins', () => {
@@ -57,14 +56,15 @@ describe('canRead — staff scope', () => {
     expect(code(authz.canRead(c, studentGroup(), null, true))).toBe('ALLOW');
   });
 
-  it('a manager reads every conversation of their organization without membership or fact', () => {
-    expect(code(authz.canRead(manager(), studentGroup(), null))).toBe('ALLOW');
-    expect(code(authz.canRead(manager(), conversation({ familyId: null }), null))).toBe('ALLOW');
+  it('the super admin takes part in conversations; access still arrives as the resolved basis', () => {
+    expect(code(authz.canRead(superAdmin(), studentGroup(), null, true))).toBe('ALLOW');
+    expect(code(authz.canRead(superAdmin(), studentGroup(), null))).toBe(CommErrorCode.STAFF_OUT_OF_SCOPE);
   });
 
-  it('another organization reads as NOT FOUND, for a manager, a member and an in-scope admin alike', () => {
+  it('another organization reads as NOT FOUND, for a manager, a member, the super admin and an in-scope admin alike', () => {
     const foreign = studentGroup({ organizationId: 'org-2' });
-    expect(code(authz.canRead(manager(), foreign, null))).toBe(CommErrorCode.CONVERSATION_NOT_FOUND);
+    expect(code(authz.canRead(manager(), foreign, null, true))).toBe(CommErrorCode.CONVERSATION_NOT_FOUND);
+    expect(code(authz.canRead(superAdmin(), foreign, null, true))).toBe(CommErrorCode.CONVERSATION_NOT_FOUND);
     const a = admin('a');
     expect(code(authz.canRead(a, foreign, member(a), true))).toBe(CommErrorCode.CONVERSATION_NOT_FOUND);
   });
@@ -85,51 +85,70 @@ describe('canRead — staff scope', () => {
   });
 });
 
-describe('staffInScope — the fact, from server-owned data', () => {
+describe('staffAccess / staffInScope — the basis, from the scope resolver', () => {
   const conv = studentGroup({ familyId: 'family-1' });
-
-  it('the family OWNER is in scope', async () => {
-    expect(await authzWithOnDuty(null).staffInScope(admin('own'), conv, 'own', NOW)).toBe(true);
+  const authz = authzWithScope({
+    sup: StaffAccessBasis.RESPONSIBLE,
+    bak: StaffAccessBasis.BACKUP,
+    'manager-1': StaffAccessBasis.MANAGER,
   });
 
-  it('whoever is ON DUTY for the family is in scope', async () => {
-    expect(await authzWithOnDuty('cover').staffInScope(admin('cover', 'coverage'), conv, 'own', NOW)).toBe(true);
+  it('returns the resolver basis for active staff of the conversation organization', async () => {
+    expect(await authz.staffAccess(admin('sup'), conv, NOW)).toBe(StaffAccessBasis.RESPONSIBLE);
+    expect(await authz.staffAccess(admin('bak', 'coverage'), conv, NOW)).toBe(StaffAccessBasis.BACKUP);
+    expect(await authz.staffAccess(manager(), conv, NOW)).toBe(StaffAccessBasis.MANAGER);
+    expect(await authz.staffInScope(admin('sup'), conv, null, NOW)).toBe(true);
   });
 
-  it('the LIVE sticky handler is in scope; an expired one is not', async () => {
-    const live = studentGroup({ stickyHandlerId: 'sticky', stickyUntil: new Date('2026-10-14T10:05:00Z') });
-    const stale = studentGroup({ stickyHandlerId: 'sticky', stickyUntil: new Date('2026-10-14T09:55:00Z') });
-    expect(await authzWithOnDuty(null).staffInScope(admin('sticky'), live, 'own', NOW)).toBe(true);
-    expect(await authzWithOnDuty(null).staffInScope(admin('sticky'), stale, 'own', NOW)).toBe(false);
+  it('an unrelated admin has no basis', async () => {
+    expect(await authz.staffAccess(admin('other'), conv, NOW)).toBeNull();
+    expect(await authz.staffInScope(admin('other'), conv, null, NOW)).toBe(false);
   });
 
-  it('an unrelated admin is not', async () => {
-    expect(await authzWithOnDuty('cover').staffInScope(admin('other'), conv, 'own', NOW)).toBe(false);
+  it('never a basis for a non-staff, an inactive or a foreign-organization actor -- the resolver is not even asked', async () => {
+    expect(await authz.staffAccess(parent(), conv, NOW)).toBeNull();
+    expect(await authz.staffAccess({ ...admin('sup'), isActive: false }, conv, NOW)).toBeNull();
+    expect(await authz.staffAccess(admin('sup'), { ...conv, organizationId: 'org-2' }, NOW)).toBeNull();
+    expect(await authz.staffAccess(academicStaff('sup'), conv, NOW)).toBeNull();
   });
 
-  it('with no family there is nothing to own or cover', async () => {
-    expect(
-      await authzWithOnDuty('x').staffInScope(admin('x'), conversation({ familyId: null }), 'x', NOW),
-    ).toBe(false);
-  });
-
-  it('never true for anybody but active staff', async () => {
-    expect(await authzWithOnDuty('parent-1').staffInScope(parent(), conv, 'parent-1', NOW)).toBe(false);
-    expect(await authzWithOnDuty(null).staffInScope({ ...admin('own'), isActive: false }, conv, 'own', NOW)).toBe(false);
+  it('with no scope wired, nobody is in scope (fail closed)', async () => {
+    expect(await authzWithScope().staffAccess(admin('sup'), conv, NOW)).toBeNull();
   });
 });
 
-describe('canSend resolves the fact itself (no caller can forget it)', () => {
-  it('the on-duty admin may reply without being a member', async () => {
-    const a = admin('duty');
-    const d = await authzWithOnDuty('duty').canSend(a, conversation(), null, { visibility: 'customer' }, NOW, 'owner');
-    expect(d.allowed).toBe(true);
+describe('canSend resolves the basis itself (no caller can forget it)', () => {
+  const authz = authzWithScope({
+    sup: StaffAccessBasis.RESPONSIBLE,
+    bak: StaffAccessBasis.BACKUP,
+    'manager-1': StaffAccessBasis.MANAGER,
+    'super-1': StaffAccessBasis.SUPER_ADMIN,
+  });
+  const send = (actor: ReturnType<typeof admin>, requestedMode?: string) =>
+    authz.canSend(actor, conversation(), null, { visibility: 'customer', requestedMode }, NOW);
+
+  it('the responsible supervisor replies as OWNER without being a member', async () => {
+    const d = await send(admin('sup'));
+    expect(d.allowed && d.onBehalfMode).toBe('owner');
   });
 
-  it('an unrelated admin is refused before any duty rule runs', async () => {
-    const d = await authzWithOnDuty('someone').canSend(
-      admin('stranger'), conversation(), null, { visibility: 'customer' }, NOW, 'owner',
-    );
-    expect(code(d)).toBe(CommErrorCode.STAFF_OUT_OF_SCOPE);
+  it('an ACTIVE backup replies as COVERAGE', async () => {
+    const d = await send(admin('bak', 'coverage'));
+    expect(d.allowed && d.onBehalfMode).toBe('coverage');
+  });
+
+  it('a department manager and the super admin step in as ASSIST, or ESCALATION when they ask for it', async () => {
+    expect(((await send(manager())) as { onBehalfMode: string }).onBehalfMode).toBe('assist');
+    expect(((await send(manager(), 'escalation')) as { onBehalfMode: string }).onBehalfMode).toBe('escalation');
+    expect(((await send(superAdmin())) as { onBehalfMode: string }).onBehalfMode).toBe('assist');
+  });
+
+  it('an unrelated admin is refused before anything else runs', async () => {
+    expect(code(await send(admin('stranger')))).toBe(CommErrorCode.STAFF_OUT_OF_SCOPE);
+  });
+
+  it('a supervisor may not record their own reply as an assist or an escalation (JC-005)', async () => {
+    expect(code(await send(admin('sup'), 'assist'))).toBe(CommErrorCode.ASSIST_NOT_PERMITTED);
+    expect(code(await send(admin('sup'), 'escalation'))).toBe(CommErrorCode.ESCALATION_NOT_PERMITTED);
   });
 });

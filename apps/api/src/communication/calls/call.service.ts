@@ -15,7 +15,7 @@ import { Actor, SYSTEM_ACTOR } from '../../platform/types';
 import { ConversationService } from '../conversations/conversation.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
-import { CallOutcome, CallStatus, CallType, ConversationType } from '../contracts/vocab';
+import { CallOutcome, CallStatus, CallType, ConversationType, GROUP_CONVERSATION_TYPES } from '../contracts/vocab';
 
 /**
  * Calling.
@@ -94,10 +94,7 @@ export class CallService {
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
-    const type =
-      conv.type === ConversationType.STUDENT_GROUP || conv.type === ConversationType.CLASS_GROUP
-        ? CallType.GROUP
-        : CallType.DIRECT;
+    const type = GROUP_CONVERSATION_TYPES.has(conv.type) ? CallType.GROUP : CallType.DIRECT;
 
     // Unguessable and server-owned.
     const roomName = `jawwid-${conv.id}-${randomUUID()}`;

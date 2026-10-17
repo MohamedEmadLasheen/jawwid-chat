@@ -23,7 +23,8 @@
  */
 import type { IconName } from '@/shared/components/Icon'
 
-export type AdminSectionStatus = 'read_only' | 'in_development'
+/** `managed`: built, and its controls act (PD-8 organization structure). */
+export type AdminSectionStatus = 'read_only' | 'managed' | 'in_development'
 
 export type AdminSectionKey =
   | 'dashboard'
@@ -210,15 +211,15 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     key: 'teams',
     group: 'people',
     icon: 'teams',
-    status: 'in_development',
-    label: { en: 'Team management', ar: 'إدارة الفرق' },
+    status: 'managed',
+    label: { en: 'Organization', ar: 'الهيكل التنظيمي' },
     purpose: {
-      en: 'Organize staff into teams and assign supervisors.',
-      ar: 'تنظيم الموظفين في فرق وتعيين المشرفين.',
+      en: 'Departments, each child’s supervisor, and backup supervisors.',
+      ar: 'الأقسام، ومشرف كل طفل، والمشرفون البدلاء.',
     },
     note: {
-      en: 'Reporting lines and official responsibilities are managed from My profile → Organization overview (/profile). A dedicated team screen and supervisor family assignment (Phase 1) are not built yet.',
-      ar: 'تُدار خطوط التبعية والمسؤوليات الرسمية من ملفي الشخصي ← نظرة عامة على المؤسسة (/profile). لم تُبنَ بعد شاشة مخصصة للفرق ولا تعيين الأسر للمشرفين (المرحلة 1).',
+      en: 'Changes are checked by the server and recorded with their reason. Reporting lines and responsibilities stay in My profile → Organization overview.',
+      ar: 'يتحقق الخادم من التغييرات ويسجّلها مع سببها. تبقى خطوط التبعية والمسؤوليات في ملفي الشخصي ← نظرة عامة على المؤسسة.',
     },
     legacy: [{ path: '/coverage' }],
   },

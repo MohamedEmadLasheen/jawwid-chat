@@ -7,12 +7,14 @@ import { AuthorizationService } from './authorization.service';
 import { AppConfigService } from './app-config.service';
 import { PrismaRelationshipService } from './relationship.service';
 import { RealtimeRevocationHub } from './realtime-revocation';
+import { SqlStaffScope } from './staff-scope';
 import {
   AUDIT_SERVICE,
   COVERAGE_SERVICE,
   IDENTITY_SERVICE,
   REALTIME_REVOCATION,
   RELATIONSHIP_SERVICE,
+  STAFF_SCOPE,
 } from './tokens';
 
 /**
@@ -31,6 +33,8 @@ import {
     { provide: IDENTITY_SERVICE, useClass: PrismaIdentityService },
     { provide: COVERAGE_SERVICE, useClass: SqlCoverageService },
     { provide: AUDIT_SERVICE, useClass: PrismaAuditService },
+    // PD-8. The staff conversation scope; the rule itself is SQL.
+    { provide: STAFF_SCOPE, useClass: SqlStaffScope },
     // PD-6. The ONE place the teacher<->parent relationship is resolved.
     // ConversationService, MessageService and CallService read it through this
     // token and hand the resolved boolean to AuthorizationService, which stays
@@ -49,6 +53,7 @@ import {
     COVERAGE_SERVICE,
     AUDIT_SERVICE,
     RELATIONSHIP_SERVICE,
+    STAFF_SCOPE,
     RealtimeRevocationHub,
     REALTIME_REVOCATION,
   ],

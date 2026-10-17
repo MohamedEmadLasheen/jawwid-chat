@@ -20,7 +20,7 @@ export interface ChatMember {
 
 export interface ChatConversation {
   id: string
-  type: 'direct' | 'student_group' | 'class_group' | string
+  type: 'direct' | 'student_group' | 'class_group' | 'family_group' | string
   familyId: string | null
   learnerId: string | null
   title: string | null

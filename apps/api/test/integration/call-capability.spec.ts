@@ -35,6 +35,7 @@ import {
   seed,
   truncate,
   withAssignmentGate,
+  splitFamily,
 } from './harness';
 
 jest.setTimeout(60_000);
@@ -194,7 +195,11 @@ describe('3/4/5. a counterpart who is gone — what the policy ACTUALLY does', (
           data: { isActive: false, leftAt: new Date() },
         }),
       () => s.parentId,
-      async () => (await g.conversations.getOrCreateDirect(s.parentId, s.otherAdminId)).id,
+      // PD-8: admin_b reaches the family through the second child (splitFamily).
+      async () => {
+        await splitFamily(g.prisma, s);
+        return (await g.conversations.getOrCreateDirect(s.parentId, s.otherAdminId)).id;
+      },
     ],
     [
       'the teacher is deactivated',

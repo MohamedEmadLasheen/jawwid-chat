@@ -32,6 +32,7 @@ import {
   legacyTeacherParentCall,
   legacyTeacherParentDirect,
   withAssignmentGate,
+  supervise,
 } from "./harness";
 import {
   parent as parentActor,
@@ -214,6 +215,9 @@ beforeEach(async () => {
        ('${randomUUID()}'::uuid, '${ORG_A}'::uuid, '${w.familyTwo}'::uuid, 'learner_five',  '${w.teacherLeft}'::uuid),
        ('${randomUUID()}'::uuid, '${ORG_B}'::uuid, '${familyB}'::uuid,     'learner_b',     '${w.teacherB}'::uuid)`,
   );
+  // PD-8: admin_a supervises family_one's first child, so a Parent<->Admin
+  // 1:1 with them is a channel to staff in charge of the family.
+  await supervise(g.prisma, w.adminA, [w.learnerOne]);
 });
 
 // -------------------------------------------------------------------------

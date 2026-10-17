@@ -49,6 +49,24 @@ void main() {
       );
     });
 
+    test('PD-8: a supervisor-created family_group is a group', () {
+      expect(
+        WireMappers.conversationKind('family_group'),
+        ConversationKind.studentGroup,
+      );
+      expect(
+        WireMappers.conversationKind(
+          'family_group',
+          members: [
+            {'actorKind': 'contact', 'memberRole': 'parent'},
+            {'actorKind': 'teacher', 'memberRole': 'teacher'},
+            {'actorKind': 'staff', 'memberRole': 'admin'},
+          ],
+        ),
+        ConversationKind.studentGroup,
+      );
+    });
+
     test('an unknown type does not become a student group', () {
       expect(
         WireMappers.conversationKind('something_new'),

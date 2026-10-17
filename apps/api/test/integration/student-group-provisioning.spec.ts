@@ -9,7 +9,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { CommError, CommErrorCode } from '@platform/errors';
-import { buildGraph, seed, truncate, Scenario } from './harness';
+import { buildGraph, seed, truncate, Scenario, supervise } from './harness';
 
 jest.setTimeout(60_000);
 
@@ -88,6 +88,8 @@ beforeEach(async () => {
     `insert into chat.learner (id, family_id, name, organization_id)
      values ('${otherOrg.learnerId}'::uuid, '${otherOrg.familyId}'::uuid, 'learner_z', '${otherOrg.orgId}'::uuid)`,
   );
+  // PD-8: admin_z supervises the other tenant's child; admin_w is in charge of nothing.
+  await supervise(g.prisma, otherOrg.staffId, [otherOrg.learnerId]);
 });
 
 const DEFAULT_ORG = '00000000-0000-0000-0000-000000000001';
@@ -221,6 +223,21 @@ describe('POST /conversations/student-group (ensureStudentGroup)', () => {
     // Idempotent in that tenant too.
     const again = await g.conversations.ensureStudentGroup(otherOrg.learnerId, otherOrg.staffId);
     expect(again.id).toBe(group.id);
+  });
+
+  it('PD-8: a child NOBODY supervises gets no group -- 409 LEARNER_UNSUPERVISED for everyone, the super admin included, and nothing is written', async () => {
+    await g.prisma.learnerSupervision.delete({ where: { learnerId: s.learnerId } });
+    const superId = randomUUID();
+    await g.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`select set_config('chat.provisioning_super_admin', 'on', true)`);
+      await tx.$executeRawUnsafe(`insert into chat.staff (id, name, role, is_active) values ('${superId}'::uuid, 'super_s', 'super_admin', true)`);
+    });
+    const before = await footprint();
+    for (const by of [s.ownerId, s.managerId, superId, undefined]) {
+      const e = await refusal(g.conversations.ensureStudentGroup(s.learnerId, by));
+      expect([e.code, e.status]).toEqual([CommErrorCode.LEARNER_UNSUPERVISED, 409]);
+    }
+    expect(await footprint()).toEqual(before);
   });
 
   it('RT-030 regression: a default-organization group still lands in the default organization', async () => {

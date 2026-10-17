@@ -120,10 +120,12 @@ describe('Admin Portal registry and navigation', () => {
       }
     }
     expect(ADMIN_GROUPS.flatMap((g) => sectionsInGroup(g.key))).toHaveLength(17)
-    // Only the four sections with a real endpoint claim to be built.
+    // Only the sections with a real endpoint claim to be built: four read-only
+    // views, and Organization (PD-8), whose controls act.
     expect(ADMIN_SECTIONS.filter((s) => s.status === 'read_only').map((s) => s.key).sort()).toEqual(
       ['conversations', 'dashboard', 'stories', 'users'],
     )
+    expect(ADMIN_SECTIONS.filter((s) => s.status === 'managed').map((s) => s.key)).toEqual(['teams'])
   })
 
   it('every section is reachable from the navigation, and the unbuilt ones are marked', async () => {
