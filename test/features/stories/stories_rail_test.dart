@@ -210,21 +210,57 @@ void main() {
       expect(find.bySemanticsLabel('Viewed story: Jawwid'), findsOneWidget);
     });
 
-    testWidgets('every ring is the academy -- a story has no title to show', (tester) async {
+    testWidgets('a ring shows the story itself -- no initial, and no name under it', (tester) async {
+      // Owner decision 2026-10-17: rings like WhatsApp's status rings. Inside, a preview of
+      // the story; under it, nothing (every ring would have said "Jawwid").
+      final now = DateTime.now();
       await tester.pumpWidget(
         harness(
           locale: const Locale('en'),
           overrides: [
-            repo(FakeStoryRepository(stories: [story(id: 'a', body: 'Words are the story, not its name')])),
+            repo(FakeStoryRepository(stories: [
+              story(id: 't', body: 'Eid Mubarak', publishedAt: now),
+              story(
+                id: 'p',
+                mediaKind: StoryMediaKind.image,
+                mediaUrl: 'https://api.test/media/stories/p?sig=1',
+                publishedAt: now.subtract(const Duration(minutes: 1)),
+              ),
+              story(
+                id: 'v',
+                mediaKind: StoryMediaKind.audio,
+                mediaUrl: 'https://api.test/media/stories/v?sig=1',
+                publishedAt: now.subtract(const Duration(minutes: 2)),
+              ),
+              story(
+                id: 'm',
+                mediaKind: StoryMediaKind.video,
+                mediaUrl: 'https://api.test/media/stories/m?sig=1',
+                publishedAt: now.subtract(const Duration(minutes: 3)),
+              ),
+            ])),
           ],
         ),
       );
       await tester.pumpAndSettle();
 
-      // Not an invented author, and not the story's words under the ring: the publisher IS
-      // the academy, and a story's words belong inside it.
-      expect(find.text('Jawwid'), findsOneWidget);
-      expect(find.text('Words are the story, not its name'), findsNothing);
+      // No initial avatar, no caption row.
+      expect(find.byType(JawwidAvatar), findsNothing);
+      expect(find.text('Jawwid'), findsNothing);
+      expect(find.text('J'), findsNothing);
+
+      Finder inRing(String id, Finder f) =>
+          find.descendant(of: find.byKey(ValueKey('story-ring-$id')), matching: f);
+      // A text story shows its words; a photo its picture, from the server's signed URL;
+      // voice and video their mark.
+      expect(inRing('t', find.text('Eid Mubarak')), findsOneWidget);
+      final image = tester.widget<Image>(inRing('p', find.byType(Image)));
+      expect((image.image as NetworkImage).url, 'https://api.test/media/stories/p?sig=1');
+      expect(inRing('v', find.byIcon(Icons.mic_rounded)), findsOneWidget);
+      expect(inRing('m', find.byIcon(Icons.play_arrow_rounded)), findsOneWidget);
+
+      // The academy's name still reaches a screen reader, with the viewed state.
+      expect(find.bySemanticsLabel('Unviewed story: Jawwid'), findsNWidgets(4));
     });
   });
 

@@ -495,8 +495,11 @@ story would have been invisible on phones; that is now a regression test. The vi
 text on its background, voice with a play control (its own `VoicePlayer`, owned and disposed
 by the viewer), no caption anywhere, and the button: a link or WhatsApp opens outside the
 app; "message the publisher" replaces the viewer with the conversation the server opened.
-Story colours are tokens (`StoryPalette` in `lib/design/tokens.dart`). Rings carry the
-academy's name and are keyed by story id.
+Story colours are tokens (`StoryPalette` in `lib/design/tokens.dart`). Rings are keyed by
+story id and, like WhatsApp's, show **a preview of the story itself** — the photo, a text
+story's background and opening words, a mic or play mark for voice and video — with **no
+caption under them** (owner decision, 2026-10-17); the academy's name stays in the ring's
+semantic label for screen readers.
 
 ### 12.10 Tests added
 
