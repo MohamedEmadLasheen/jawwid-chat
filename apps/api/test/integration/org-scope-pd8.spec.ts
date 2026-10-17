@@ -28,6 +28,7 @@ import { PrismaClient } from '@prisma/client';
 import type Redis from 'ioredis';
 import { PlatformModule } from '@platform/platform.module';
 import { AuthModule } from '@platform/auth/auth.module';
+import { AuthService } from '@platform/auth/auth.service';
 import { hashPassword } from '@platform/auth/password';
 import { CommErrorCode } from '@platform/errors';
 import { CommunicationModule } from '@communication/communication.module';
@@ -111,16 +112,20 @@ const sup = (i: number) => m.supervisors[i];
 // HTTP helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Real tokens for real accounts, minted by the app's own AuthService (the same
+ * credential check, session and JWT the login route issues). Not through
+ * POST /auth/login: that route's per-source throttle is shared by every suite
+ * on 127.0.0.1, and ~20 logins here would exhaust it for the suites that run
+ * after this one (CI saw 429s). Every probe below still goes over real HTTP
+ * with the Bearer token.
+ */
 const tokens = new Map<string, string>();
 async function tokenFor(subject: string): Promise<string> {
   if (!tokens.has(subject)) {
-    const r = await fetch(`${base}/auth/login`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ username: subject, password: PASSWORD }),
-    });
-    expect(r.status).toBeLessThan(300);
-    tokens.set(subject, ((await r.json()) as { accessToken: string }).accessToken);
+    const { accessToken } = await app.get(AuthService).login(subject, PASSWORD);
+    expect(accessToken.split('.')).toHaveLength(3);
+    tokens.set(subject, accessToken);
   }
   return tokens.get(subject)!;
 }
