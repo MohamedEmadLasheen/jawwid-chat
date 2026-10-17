@@ -1,8 +1,8 @@
 # Reopen record — W7, the call screen redesign (2026-10-17)
 
-**State: REOPENED BY EXPLICIT AUTHORIZATION** (product owner, 2026-10-17, in session: *"Both
-now"* — redesign the phone and web call screens together). **Not closed**: closure needs the
-evidence in §4 and the owner's explicit CLOSED authorization.
+**State: CLOSED / IMMUTABLE at `a91c690`** (product owner, 2026-10-17, in session: *"close
+W7"*). Reopened the same day by explicit authorization (*"Both now"* — redesign the phone and
+web call screens together). Only the Critical Defect Reopen Protocol may touch W7 again.
 
 | Workstream | Previous CLOSED SHA | Branch it was closed on |
 |---|---|---|
@@ -84,8 +84,8 @@ S3 never reaches this route. The signature check is unchanged and is now the che
 | API: `storage-http.spec.ts` over real HTTP (signed PUT/GET with no bearer accepted; no / forged / expired / other object's / wrong MIME / oversize / read-as-write all refused by the SIGNATURE; other routes still 401) | 11/11; **10/11 red without the fix**; with the attachment, voice-attachment and webhook suites: 45/45 on a database migrated from this branch |
 | Mutation: 17 mutants over the new rules (web 10, phone 7) | **17/17 killed**, every file restored byte-identical |
 | Live, QA stack (API + real LiveKit 1.13.7), web pane ↔ iOS simulator | incoming (dark), in call (timer, Speaker/Mute, End), ended (Answered 0:28 · Close / Record voice message / Call again), No answer, "Record voice message" → chat recording → sent → admin web plays it (11 s); web voice note → plays on the phone; Call again both ways; a ring over a finished screen both ways |
-| Two-way audio with a real microphone on the web | **owner's Chrome** — the pane denies the microphone |
-| Owner's explicit CLOSED authorization | pending |
+| Two-way audio with a real microphone on the web | the owner's Chrome (2026-10-17 07:06Z, QA LiveKit 1.13.7): both sides published their microphone, one session each, server outcome answered (64 s). The redesign changed presentation only, not the media path. After the redesign the owner's calls hit a stale QA LiveKit port forward (Colima), not the code; after a container restart web and phone both went active (08:45Z) |
+| Owner's explicit CLOSED authorization | **given 2026-10-17** — CLOSED at `a91c690` |
 
 ## 5. Found while testing, not in this scope
 
