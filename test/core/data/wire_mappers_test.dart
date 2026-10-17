@@ -661,4 +661,69 @@ void main() {
       expect(message.attachments, isEmpty);
     });
   });
+
+  group('the viewer fields the server now sends (PR #27 contract, rebuilt on PD-8)', () {
+    final base = <String, Object?>{
+      'id': 'c1',
+      'type': 'direct',
+      'title': null,
+      'lastActivityAt': '2026-10-17T10:00:00.000Z',
+      // Stored flags default to true even on a 1:1; the viewer's rule is the authority.
+      'teacherRequiresApproval': true,
+      'parentRequiresApproval': true,
+    };
+
+    test('viewerRequiresApproval wins over the stored per-role flag', () {
+      final c = WireMappers.conversation({...base, 'viewerRequiresApproval': false},
+          viewerRole: UserRole.parent);
+      expect(c.requiresApproval, isFalse);
+    });
+
+    test('without it (an older server) the per-role flag is the fallback', () {
+      final c = WireMappers.conversation(base, viewerRole: UserRole.parent);
+      expect(c.requiresApproval, isTrue);
+    });
+
+    test('pin, mute and the viewer\'s own archive are read back from viewerState', () {
+      final c = WireMappers.conversation({
+        ...base,
+        'viewerState': {
+          'pinned': true,
+          'archived': true,
+          'mutedUntil': DateTime.now().add(const Duration(hours: 1)).toUtc().toIso8601String(),
+        },
+      }, viewerRole: UserRole.parent);
+      expect(c.isPinned, isTrue);
+      expect(c.isMuted, isTrue);
+      expect(c.isArchived, isTrue);
+      // A personal archive hides the row; it does not make the chat read-only.
+      expect(c.isReadOnly, isFalse);
+    });
+
+    test('a mute that has expired is not a mute', () {
+      final c = WireMappers.conversation({
+        ...base,
+        'viewerState': {'pinned': false, 'archived': false, 'mutedUntil': '2020-01-01T00:00:00.000Z'},
+      }, viewerRole: UserRole.parent);
+      expect(c.isMuted, isFalse);
+    });
+
+    test('a text preview is the text; anything else is named by kind, never shown as data', () {
+      Conversation withLast(Map<String, Object?> last) =>
+          WireMappers.conversation({...base, 'lastMessage': last}, viewerRole: UserRole.parent);
+
+      final text = withLast({'type': 'text', 'text': 'see you tomorrow', 'deleted': false, 'createdAt': '2026-10-17T11:00:00.000Z'});
+      expect([text.lastMessagePreview, text.lastMessageKind], ['see you tomorrow', null]);
+      expect(text.lastMessageAt!.isAtSameMomentAs(DateTime.parse('2026-10-17T11:00:00.000Z')), isTrue);
+
+      final photo = withLast({'type': 'image', 'text': null, 'deleted': false, 'createdAt': '2026-10-17T11:00:00.000Z'});
+      expect([photo.lastMessagePreview, photo.lastMessageKind], ['', 'image']);
+
+      final system = withLast({'type': 'system', 'text': null, 'systemKind': 'group.created', 'deleted': false, 'createdAt': '2026-10-17T11:00:00.000Z'});
+      expect(system.lastMessageKind, 'system:group.created');
+
+      final deleted = withLast({'type': 'text', 'text': null, 'deleted': true, 'createdAt': '2026-10-17T11:00:00.000Z'});
+      expect([deleted.lastMessagePreview, deleted.lastMessageKind], ['', 'deleted']);
+    });
+  });
 }

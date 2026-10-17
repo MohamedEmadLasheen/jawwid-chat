@@ -2,7 +2,8 @@ import { Body, Controller, Get, Param, Post, Query, UseFilters } from '@nestjs/c
 import { ConversationService } from '../conversations/conversation.service';
 import { MessageService } from '../messages/message.service';
 import { CallService } from '../calls/call.service';
-import { toConversationDto } from '../contracts/dto';
+import { toConversationDto, toLastMessageDto, type ConversationViewerStateDto, type ResolvedMember } from '../contracts/dto';
+import { AuthorizationService } from '../../platform/authorization.service';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
 
@@ -21,6 +22,7 @@ export class ConversationController {
     private readonly conversations: ConversationService,
     private readonly messages: MessageService,
     private readonly calls: CallService,
+    private readonly authz: AuthorizationService,
   ) {}
 
   /**
@@ -35,23 +37,38 @@ export class ConversationController {
    * One count query for the whole list, not one per row (mobile gap O1).
    */
   @Get()
-  async list(@ActorId() actorId: string) {
+  async list(@ActorId() actorId: string, @Query('q') q?: string) {
+    const actor = await this.conversations.requireActor(actorId);
     const rows = await this.conversations.listForActor(actorId);
-    const unread = await this.messages.unreadCountsFor(
-      rows.map((c) => c.id),
-      actorId,
-    );
-    // Members with display names, batched for the whole list: a direct row can
-    // then say who it is with (the admin inbox and the mobile list both need
-    // it). Same ids, so the same authorization boundary.
-    const members = await this.conversations.membersOfMany(
-      rows.map((c) => c.id),
-      await this.conversations.requireActor(actorId),
-    );
+    const ids = rows.map((c) => c.id);
+    // Every per-row fact is computed for exactly the ids listForActor
+    // authorized, each in one batch: unread counts (the caller's own
+    // receipts), members with names, the viewer's own preferences, and the
+    // newest message THIS viewer may see.
+    const [unread, members, states, last] = await Promise.all([
+      this.messages.unreadCountsFor(ids, actorId),
+      this.conversations.membersOfMany(ids, actor),
+      this.conversations.viewerStates(ids, actor.actorId),
+      this.messages.lastVisibleMessages(ids, actor),
+    ]);
+
+    // Search narrows the caller's own list -- it never widens it. A row matches
+    // on its title, its child's name, or a member's display name.
+    const needle = typeof q === 'string' ? q.trim().toLocaleLowerCase().slice(0, 100) : '';
+    const matches = (c: (typeof rows)[number]) =>
+      !needle ||
+      [c.title, c.learner?.name, ...(members.get(c.id) ?? []).map((m: ResolvedMember) => m.displayName)].some(
+        (text) => typeof text === 'string' && text.toLocaleLowerCase().includes(needle),
+      );
 
     return {
-      conversations: rows.map((c) =>
-        toConversationDto(c, members.get(c.id), { unreadCount: unread.get(c.id) ?? 0 }),
+      conversations: rows.filter(matches).map((c) =>
+        toConversationDto(c, members.get(c.id), {
+          unreadCount: unread.get(c.id) ?? 0,
+          viewerRequiresApproval: this.authz.viewerRequiresApproval(actor, c),
+          viewerState: viewerState(states.get(c.id)),
+          lastMessage: last.has(c.id) ? toLastMessageDto(last.get(c.id)!) : null,
+        }),
       ),
     };
   }
@@ -129,8 +146,16 @@ export class ConversationController {
     // them through the one batch primitive. Only on this route: the LIST
     // endpoint deliberately does not load members, because that would be an
     // identity batch per row for a screen that renders none of them.
+    const actor = await this.conversations.requireActor(actorId);
+    const [states, last] = await Promise.all([
+      this.conversations.viewerStates([conversation.id], actor.actorId),
+      this.messages.lastVisibleMessages([conversation.id], actor),
+    ]);
     return toConversationDto(conversation, members, {
       unreadCount: await this.messages.unreadCount(id, actorId),
+      viewerRequiresApproval: this.authz.viewerRequiresApproval(actor, conversation),
+      viewerState: viewerState(states.get(conversation.id)),
+      lastMessage: last.has(conversation.id) ? toLastMessageDto(last.get(conversation.id)!) : null,
     });
   }
 
@@ -205,4 +230,15 @@ export class ConversationController {
     });
     return { ok: true };
   }
+}
+
+/** The viewer's stored preferences, or the defaults when they never set any. */
+function viewerState(
+  row: { pinnedAt: Date | null; archivedAt: Date | null; mutedUntil: Date | null } | undefined,
+): ConversationViewerStateDto {
+  return {
+    pinned: !!row?.pinnedAt,
+    archived: !!row?.archivedAt,
+    mutedUntil: row?.mutedUntil?.toISOString() ?? null,
+  };
 }
