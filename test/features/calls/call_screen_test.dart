@@ -11,6 +11,8 @@
 ///      number, so the duration stays an LTR run while everything else mirrors.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -213,6 +215,30 @@ void main() {
       expect(find.text(l10n.callFailedNotAllowed), findsOneWidget);
       expect(find.text(l10n.retryAction), findsOneWidget);
       expect(find.text(l10n.callSendMessageInstead), findsOneWidget);
+    });
+
+    testWidgets(
+        'an unreachable media room shows the failure, never "Connecting…" forever',
+        (tester) async {
+      await tester.pumpWidget(harness());
+      await tester.pump();
+      room.connectError = StateError('unreachable');
+      room.disconnectError = TimeoutException('disconnect never confirmed');
+      final l10n = await L10n.delegate.load(const Locale('en'));
+
+      await controllerOf(tester).start(
+        conversationId: 'conv_1',
+        peerLabel: 'Mr. Ahmed',
+        isGroup: false,
+      );
+      socket.emit(CallEventNames.accepted, Frames.participant());
+      await tester.pumpAndSettle();
+
+      expect(find.text(l10n.callConnecting), findsNothing);
+      expect(find.text(l10n.callFailedNetwork), findsOneWidget);
+      expect(room.disconnects, 1, reason: 'the release still ran');
+      expect(room.disposes, 1);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('a group call says so', (tester) async {
