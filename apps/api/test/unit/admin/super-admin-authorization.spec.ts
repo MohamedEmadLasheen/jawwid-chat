@@ -84,11 +84,12 @@ describe('super_admin takes part in conversations (PD-8, owner decision 2026-10-
     expect(authz.canRead(superAdmin(), conversation({ organizationId: 'org-2' }), null, true).allowed).toBe(false);
   });
 
-  it('approves and manages membership on its basis; stories stay with the family-facing roles', () => {
+  it('approves and manages membership on its basis; publishes stories (owner decision 2026-10-17)', () => {
     expect(authz.canApprove(superAdmin(), StaffAccessBasis.SUPER_ADMIN).allowed).toBe(true);
     expect(authz.canApprove(superAdmin(), null).allowed).toBe(false);
     expect(authz.canManageMembership(superAdmin()).allowed).toBe(true);
-    expect(authz.canPublishStory(superAdmin()).allowed).toBe(false);
+    expect(authz.canPublishStory(superAdmin()).allowed).toBe(true);
+    expect(authz.canManageStoryAudienceData(superAdmin()).allowed).toBe(true);
   });
 
   it('opens a direct conversation with a parent (it reaches every family of its organization)', () => {

@@ -12,6 +12,7 @@
  */
 import { CommErrorCode } from '@platform/errors';
 import { StoryAudienceKind, UNSCOPED_STORY_AUDIENCE_KINDS } from '@communication/contracts/vocab';
+import { familyMatchesSegment, parseSegmentFilter } from '@communication/stories/story-audience.resolver';
 import {
   academicStaff,
   admin,
@@ -71,13 +72,96 @@ describe('who may publish a story', () => {
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.STORY_CANNOT_PUBLISH);
   });
 
-  it('there is no staff role named super_admin or coverage_admin to grant it to', () => {
-    // Those are the ABANDONED Phase 5 lineage's role names. If either ever
-    // resolves to a publisher, somebody has reintroduced a second role
-    // vocabulary that no other part of this product knows about.
-    for (const role of ['super_admin', 'coverage_admin']) {
-      expect(authz.canPublishStory(admin('x', role)).allowed).toBe(false);
+  it('the super admin may (owner decision 2026-10-17: the Admin Portal publishes)', () => {
+    // super_admin is a real role since PD-5 and has full write since PD-8; the
+    // Admin Portal's Stories page is its publishing surface.
+    expect(authz.canPublishStory(admin('x', 'super_admin')).allowed).toBe(true);
+    const d = authz.canPublishStory({ ...admin('x', 'super_admin'), isActive: false });
+    expect(d.allowed).toBe(false);
+    if (!d.allowed) expect(d.code).toBe(CommErrorCode.ACTOR_INACTIVE);
+  });
+
+  it('there is no staff role named coverage_admin to grant it to', () => {
+    // The ABANDONED Phase 5 lineage's role name. If it ever resolves to a
+    // publisher, somebody has reintroduced a second role vocabulary that no
+    // other part of this product knows about.
+    expect(authz.canPublishStory(admin('x', 'coverage_admin')).allowed).toBe(false);
+  });
+});
+
+describe('who may manage family audience data (country, plan)', () => {
+  it('the super admin and managers may', () => {
+    for (const actor of [admin('x', 'super_admin'), manager()]) {
+      expect(authz.canManageStoryAudienceData(actor).allowed).toBe(true);
     }
+  });
+
+  it('a supervisor publishes by it but may not edit it; nobody else may either', () => {
+    for (const actor of [admin(), coverageAdmin(), financeStaff(), parent(), teacher()]) {
+      const d = authz.canManageStoryAudienceData(actor);
+      expect(d.allowed).toBe(false);
+      if (!d.allowed) expect(d.code).toBe(CommErrorCode.STORY_AUDIENCE_DATA_DENIED);
+    }
+    expect(authz.canPublishStory(admin()).allowed).toBe(true);
+  });
+
+  it('a deactivated manager may not', () => {
+    const d = authz.canManageStoryAudienceData({ ...manager(), isActive: false });
+    expect(d.allowed).toBe(false);
+    if (!d.allowed) expect(d.code).toBe(CommErrorCode.ACTOR_INACTIVE);
+  });
+});
+
+describe('the segment audience filter', () => {
+  it('accepts the three user types with no narrowing', () => {
+    for (const who of ['everyone', 'families', 'teachers']) {
+      expect(parseSegmentFilter({ who })).toEqual({ who, planMonths: [], children: [], countries: [] });
+    }
+  });
+
+  it('accepts and de-duplicates the family dimensions', () => {
+    expect(
+      parseSegmentFilter({ who: 'families', planMonths: [6, 6, 12], children: [1, 4], countries: ['AE', 'KW'] }),
+    ).toEqual({ who: 'families', planMonths: [6, 12], children: [1, 4], countries: ['AE', 'KW'] });
+  });
+
+  it('refuses a family dimension on "everyone" or "teachers" -- it would silently drop every teacher', () => {
+    expect(() => parseSegmentFilter({ who: 'everyone', countries: ['AE'] })).toThrow(/families only/);
+    expect(() => parseSegmentFilter({ who: 'teachers', planMonths: [1] })).toThrow(/families only/);
+  });
+
+  it('refuses unknown values and unknown fields, loudly', () => {
+    const bad: unknown[] = [
+      null, [], 'families', { who: 'students' }, { who: 'families', planMonths: [2] },
+      { who: 'families', children: [0] }, { who: 'families', children: [5] },
+      { who: 'families', countries: ['uae'] }, { who: 'families', countries: ['ae'] },
+      { who: 'families', region: 'gcc' },
+    ];
+    for (const raw of bad) {
+      try {
+        parseSegmentFilter(raw);
+        throw new Error(`accepted ${JSON.stringify(raw)}`);
+      } catch (e) {
+        expect((e as { code?: string }).code).toBe(CommErrorCode.STORY_AUDIENCE_INVALID);
+      }
+    }
+  });
+
+  it('matches a family on every dimension at once, and an unrecorded fact matches no filter on it', () => {
+    const f = parseSegmentFilter({ who: 'families', planMonths: [6], children: [2, 4], countries: ['AE'] });
+    expect(familyMatchesSegment(f, { countryCode: 'AE', subscriptionPlanMonths: 6, childCount: 2 })).toBe(true);
+    expect(familyMatchesSegment(f, { countryCode: 'AE', subscriptionPlanMonths: 6, childCount: 7 })).toBe(true);
+    expect(familyMatchesSegment(f, { countryCode: 'KW', subscriptionPlanMonths: 6, childCount: 2 })).toBe(false);
+    expect(familyMatchesSegment(f, { countryCode: 'AE', subscriptionPlanMonths: 3, childCount: 2 })).toBe(false);
+    expect(familyMatchesSegment(f, { countryCode: 'AE', subscriptionPlanMonths: 6, childCount: 3 })).toBe(false);
+    expect(familyMatchesSegment(f, { countryCode: null, subscriptionPlanMonths: 6, childCount: 2 })).toBe(false);
+    expect(familyMatchesSegment(f, { countryCode: 'AE', subscriptionPlanMonths: null, childCount: 2 })).toBe(false);
+    expect(familyMatchesSegment(f, { countryCode: 'AE', subscriptionPlanMonths: 6, childCount: 0 })).toBe(false);
+  });
+
+  it('an empty filter matches every family, including ones with no recorded facts', () => {
+    const f = parseSegmentFilter({ who: 'families' });
+    expect(familyMatchesSegment(f, { countryCode: null, subscriptionPlanMonths: null, childCount: 0 })).toBe(true);
   });
 });
 
@@ -110,7 +194,7 @@ describe('who may read a story feed', () => {
 
 describe('who may see WHO viewed a story', () => {
   it('a publisher may', () => {
-    for (const actor of [admin(), coverageAdmin(), manager()]) {
+    for (const actor of [admin(), coverageAdmin(), manager(), admin('x', 'super_admin')]) {
       expect(authz.canReadStoryViewers(actor).allowed).toBe(true);
     }
   });
@@ -145,9 +229,9 @@ describe('the audience vocabulary matches this schema, not the abandoned lineage
     expect(Object.values(StoryAudienceKind)).toContain('conversation');
   });
 
-  it('marks exactly the three record-less kinds as unscoped', () => {
+  it('marks exactly the four record-less kinds as unscoped', () => {
     expect([...UNSCOPED_STORY_AUDIENCE_KINDS].sort()).toEqual(
-      ['all_families', 'all_teachers', 'assigned_families'].sort(),
+      ['all_families', 'all_teachers', 'assigned_families', 'segment'].sort(),
     );
   });
 

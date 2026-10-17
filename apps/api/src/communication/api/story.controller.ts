@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
-import { StoryService } from '../stories/story.service';
+import { StoryService, type StoryCtaInput } from '../stories/story.service';
 import type { AudienceClause } from '../stories/story-audience.resolver';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
@@ -35,10 +35,60 @@ export class StoryController {
     return { stories: await this.stories.feed(actorId) };
   }
 
-  /** The publisher's list, with delivery and view counts. Publisher-only. */
+  /** The publisher's list, with delivery, view and tap counts. Publisher-only. */
   @Get()
   async list(@ActorId() actorId: string, @Query('drafts') drafts?: string) {
     return { stories: await this.stories.list(actorId, drafts !== 'false') };
+  }
+
+  /**
+   * The shape of the organization's audience -- families per country, plan and
+   * number of children, and how many lack each fact. Counts only. Publisher-only.
+   */
+  @Get('audience/facts')
+  async audienceFacts(@ActorId() actorId: string) {
+    return this.stories.audienceFacts(actorId);
+  }
+
+  /**
+   * How many people an audience reaches if published now, with this call to
+   * action. Counts only. Publisher-only. A POST because the audience is a body.
+   */
+  @Post('audience/estimate')
+  async estimate(
+    @ActorId() actorId: string,
+    @Body() body: { audiences?: AudienceClause[]; ctaKind?: string | null },
+  ) {
+    return this.stories.estimate(actorId, {
+      audiences: Array.isArray(body?.audiences) ? body.audiences : [],
+      ctaKind: body?.ctaKind ?? null,
+    });
+  }
+
+  /**
+   * Families and their targeting attributes (country, plan, number of
+   * children). Super admin and managers only.
+   */
+  @Get('audience/families')
+  async families(
+    @ActorId() actorId: string,
+    @Query('search') search?: string,
+    @Query('missing') missing?: string,
+  ) {
+    return this.stories.familyAudienceData(actorId, { search, missing: missing === 'true' });
+  }
+
+  /** Set a family's country and/or plan. Super admin and managers only. */
+  @Post('audience/families/:familyId')
+  async setFamily(
+    @ActorId() actorId: string,
+    @Param('familyId') familyId: string,
+    @Body() body: { countryCode?: unknown; subscriptionPlanMonths?: unknown },
+  ) {
+    return this.stories.setFamilyAudienceData(actorId, familyId, {
+      countryCode: body?.countryCode,
+      subscriptionPlanMonths: body?.subscriptionPlanMonths,
+    });
   }
 
   /**
@@ -64,20 +114,46 @@ export class StoryController {
     body: {
       title?: string;
       body?: string;
+      internalName?: string;
+      background?: string;
       mediaObjectKey?: string;
       mediaKind?: string;
       mediaMime?: string;
+      mediaDurationMs?: number;
+      cta?: StoryCtaInput | null;
       audiences?: AudienceClause[];
     },
   ) {
     return this.stories.create(actorId, {
       title: body?.title,
       body: body?.body,
+      internalName: body?.internalName,
+      background: body?.background,
       mediaObjectKey: body?.mediaObjectKey,
       mediaKind: body?.mediaKind,
       mediaMime: body?.mediaMime,
+      mediaDurationMs:
+        body?.mediaDurationMs === undefined || body?.mediaDurationMs === null
+          ? null
+          : Number(body.mediaDurationMs),
+      cta: body?.cta ?? null,
       audiences: body?.audiences ?? [],
     });
+  }
+
+  /** One story as its publisher sees it. Publisher-only. */
+  @Get(':id')
+  async get(@ActorId() actorId: string, @Param('id') id: string) {
+    return this.stories.get(id, actorId);
+  }
+
+  /**
+   * One story's performance: reach, views, taps, rates, a daily series and a
+   * country breakdown. `tz` is the IANA zone a day is counted in. Publisher-only.
+   */
+  @Get(':id/analytics')
+  async analytics(@ActorId() actorId: string, @Param('id') id: string, @Query('tz') tz?: string) {
+    return this.stories.analytics(id, actorId, tz || 'UTC');
   }
 
   /** Resolve the audience and go live. Publisher-only, checked server-side. */
@@ -90,6 +166,16 @@ export class StoryController {
   @Post(':id/view')
   async view(@ActorId() actorId: string, @Param('id') id: string) {
     return this.stories.markViewed(id, actorId);
+  }
+
+  /**
+   * The caller tapped the story's button. Recorded, then answered: the URL to
+   * open, or -- for message-the-publisher -- the direct conversation to open.
+   * Recipients only; every refusal reads as "not found".
+   */
+  @Post(':id/cta')
+  async cta(@ActorId() actorId: string, @Param('id') id: string) {
+    return this.stories.tapCta(id, actorId);
   }
 
   /**

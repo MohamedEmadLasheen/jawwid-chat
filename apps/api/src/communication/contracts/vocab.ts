@@ -178,7 +178,8 @@ export const StoryState = {
 } as const;
 export type StoryState = (typeof StoryState)[keyof typeof StoryState];
 
-export const StoryMediaKind = { IMAGE: 'image', VIDEO: 'video' } as const;
+/** `audio` is a voice story (20261017120000). A story with no media is a text story. */
+export const StoryMediaKind = { IMAGE: 'image', VIDEO: 'video', AUDIO: 'audio' } as const;
 export type StoryMediaKind = (typeof StoryMediaKind)[keyof typeof StoryMediaKind];
 
 /**
@@ -199,6 +200,12 @@ export const StoryAudienceKind = {
   CONTACT: 'contact',
   /** The members of one student_group / class_group conversation. */
   CONVERSATION: 'conversation',
+  /**
+   * 20261017120000: a FILTER rather than a record -- user type, plus, for
+   * families, subscription plan length, number of children and country. See
+   * StorySegmentFilter in story-audience.resolver.ts.
+   */
+  SEGMENT: 'segment',
 } as const;
 export type StoryAudienceKind = (typeof StoryAudienceKind)[keyof typeof StoryAudienceKind];
 
@@ -207,7 +214,36 @@ export const UNSCOPED_STORY_AUDIENCE_KINDS: ReadonlySet<string> = new Set([
   StoryAudienceKind.ALL_FAMILIES,
   StoryAudienceKind.ALL_TEACHERS,
   StoryAudienceKind.ASSIGNED_FAMILIES,
+  StoryAudienceKind.SEGMENT,
 ]);
 
-/** Staff roles that may publish a story: the family-facing set, and only it. */
-export const STORY_PUBLISHER_ROLES: ReadonlySet<string> = FAMILY_FACING_STAFF_ROLES;
+/**
+ * Staff roles that may publish a story: the family-facing set plus the super
+ * admin (owner decision 2026-10-17 -- the Admin Portal is its publishing
+ * surface, and PD-8 already gave it full write). Mirrors
+ * chat.current_can_publish_story().
+ */
+export const STORY_PUBLISHER_ROLES: ReadonlySet<string> = new Set([
+  ...FAMILY_FACING_STAFF_ROLES,
+  StaffRole.SUPER_ADMIN,
+]);
+
+/** A story's one call to action. Mirrors `story_cta_shape`. */
+export const StoryCtaKind = {
+  /** Open the ACADEMY's WhatsApp number. */
+  WHATSAPP: 'whatsapp',
+  /** Open a direct conversation with the staff member who published it. */
+  MESSAGE_PUBLISHER: 'message_publisher',
+  /** Open an https link. */
+  LINK: 'link',
+} as const;
+export type StoryCtaKind = (typeof StoryCtaKind)[keyof typeof StoryCtaKind];
+
+/** Backgrounds a text or voice story may use. Mirrors `story_background_check`. */
+export const STORY_BACKGROUNDS = [
+  'teal', 'gold', 'plum', 'ink', 'rose', 'sky', 'forest', 'sunset',
+] as const;
+export type StoryBackground = (typeof STORY_BACKGROUNDS)[number];
+
+/** Subscription plan lengths, in months. Mirrors `family_subscription_plan_months_check`. */
+export const SUBSCRIPTION_PLAN_MONTHS = [1, 3, 6, 12] as const;

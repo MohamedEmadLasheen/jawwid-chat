@@ -124,6 +124,16 @@ export enum CommErrorCode {
   /** The authored audience resolves to nobody the author may address. */
   STORY_AUDIENCE_EMPTY = 'COMM.STORY_AUDIENCE_EMPTY',
   STORY_AUDIENCE_INVALID = 'COMM.STORY_AUDIENCE_INVALID',
+  /** The call to action is malformed: an unknown kind, a non-https link, a bad number. */
+  STORY_CTA_INVALID = 'COMM.STORY_CTA_INVALID',
+  /** The story has no call to action, so there is nothing to tap. */
+  STORY_NO_CTA = 'COMM.STORY_NO_CTA',
+  /** A photo, video or voice story carries no words: rule 2, no caption. */
+  STORY_CAPTION_NOT_ALLOWED = 'COMM.STORY_CAPTION_NOT_ALLOWED',
+  /** Family segmentation data (country, plan) is for the super admin and managers. */
+  STORY_AUDIENCE_DATA_DENIED = 'COMM.STORY_AUDIENCE_DATA_DENIED',
+  /** The family named for audience data does not exist in the caller's organization. */
+  STORY_FAMILY_NOT_FOUND = 'COMM.STORY_FAMILY_NOT_FOUND',
 
   // --- Admin Portal ---
   /** Not the super admin. The `/admin` inspection surface is theirs alone. Never retry. */
