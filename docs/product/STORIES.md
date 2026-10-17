@@ -2,6 +2,9 @@
 
 Status: **IMPLEMENTED END TO END** · backend + admin publishing + Flutter read client
 Landed 2026-09-28, hardened 2026-09-29, Flutter client 2026-09-29 · Migration `20260928120000_chat_stories.sql`
+**Stories v2, 2026-10-17** (owner decisions) · Migration `20261017120000_chat_stories_v2.sql` ·
+**read §12 first**: stories no longer expire, carry no caption, may be voice, carry one button,
+are measured, and are targeted by segment. Where an earlier section disagrees, §12 wins.
 Companions: `../security/RLS-STRATEGY.md`, `../architecture/AUTHORIZATION-MODEL.md`,
 `../contracts/API-CONTRACT.md`, `../contracts/DOMAIN-VOCABULARY.md`
 
@@ -9,10 +12,10 @@ Companions: `../security/RLS-STRATEGY.md`, `../architecture/AUTHORIZATION-MODEL.
 
 ## 1. What a story is
 
-A short-lived publication from the academy to a chosen slice of its people.
-A publisher writes some words and optionally attaches one image or video, names an
-**audience** rather than a list of people, and publishes. The story is readable by
-that audience for 24 hours and then stops being readable.
+A publication from the academy to a chosen slice of its people. A publisher makes a
+text, photo, video or voice story, optionally adds one button, names an **audience**
+rather than a list of people, and publishes. The story is readable by that audience until
+a publisher deletes it (§12; before 2026-10-17 it expired after 24 hours).
 
 It is not a message: there is no reply, no thread, no conversation. It is not a
 broadcast either — broadcast (Phase 2) reaches a family as an ordinary message
@@ -35,6 +38,7 @@ authorization model and three tables that do not exist on `main`. See §9.
 
 | | Publish | Read own feed | See viewer list | Delete |
 |---|---|---|---|---|
+| `super_admin` (§12) | ✅ | ✅ | ✅ | ✅ any |
 | `manager` | ✅ | ✅ | ✅ | ✅ any |
 | `admin` | ✅ | ✅ | ✅ | own only |
 | `coverage` | ✅ | ✅ | ✅ | own only |
@@ -367,3 +371,151 @@ schema acceptance, identity and BR-1 invariants, **story RLS**, integration suit
 The `mobile` job reports BLOCKED on the CI hosts, where no Flutter toolchain is installed; the
 Flutter suite (545 tests) runs locally on a host that has one. Closing that gap is a CI concern,
 not a code one.
+
+## 12. Stories v2 — the owner's rules (2026-10-17)
+
+Seven rules from the product owner, and what each one did. Built across the API, the
+database, Admin Web (`apps/admin-web/src/features/stories/`) and the Flutter reader.
+
+### 12.1 A story does not expire
+
+`publish` writes `expires_at = NULL`, meaning "readable until a publisher deletes it".
+The expiry machinery is **kept, not removed**: a story published before 2026-10-17 with an
+`expires_at` still ends on it, the read predicate is now `expires_at IS NULL OR expires_at >
+now()` (service and `story_visible_to_audience` alike), and the sweeper only ever retires
+rows that have an expiry. The migration made the stories that were **still live** permanent;
+already-expired ones stay expired, because resurrecting a publication would hand it to an
+audience snapshot that has gone stale (§5). Media of a live, non-expiring story is never
+purged — it is the publication; retention applies once access ends (deletion, or a legacy
+expiry). `story.default_lifetime_hours` is unused.
+
+### 12.2 No caption, no title
+
+A text story **is** its words, on one of eight backgrounds (`teal gold plum ink rose sky
+forest sunset`, `story_background_check`). A photo, video or voice story carries **no
+words**: `create` refuses a body with media and refuses any non-empty `title`
+(`COMM.STORY_CAPTION_NOT_ALLOWED`). The feed sends `body` only for text stories, so an older
+story that had a caption under its picture reaches readers without it. Enforced in the
+service rather than by a CHECK: a `NOT VALID` check still fires on the sweeper's next UPDATE
+of a legacy row, and would wedge it. `title` stays as a legacy column nothing writes; the
+publisher's own label is `internal_name`, which no reader surface carries.
+
+### 12.3 Text, photo, video, voice
+
+`media_kind` gains `audio`. Voice uploads are `audio/mp4|mpeg|aac|wav` ≤ 20 MB — **not**
+webm/ogg, which iOS cannot decode, so a story would be silent for every iPhone. Admin Web
+records only when the browser can produce MP4/AAC (Safari, recent Chrome) and otherwise
+offers upload. In the app a voice story, like a video, advances on **playback completion**,
+never a timer.
+
+### 12.4 One button per story
+
+`cta_kind` ∈ `whatsapp | message_publisher | link`, shape-checked by `story_cta_shape`:
+
+| Kind | Stored | What the reader gets |
+|---|---|---|
+| `whatsapp` | `cta_phone`: the ACADEMY's number, E.164 digits | `url = https://wa.me/<digits>`, built by the server |
+| `link` | `cta_url`, https only | `url` |
+| `message_publisher` | nothing — the publisher is `published_by` | on tap, a direct conversation with the publisher |
+
+A tap is `POST /stories/:id/cta`, recorded in `chat.story_cta_click` (every tap is a row;
+the audience guard `enforce_story_view_audience` is reused, RLS mirrors `story_view`).
+
+**The reply rule (PD-8).** "Message me" opens a direct conversation, and PD-8 lets a parent
+reach only staff in charge of their family. So a story with that button is published only
+to people the reply can actually reach: teachers (teacher ↔ staff is always open) and the
+contacts of families the publisher reaches — every family for the super admin. The audience
+is narrowed, not PD-8 widened; `POST /stories/audience/estimate` returns
+`excludedByReplyScope` and the composer says how many were left out and why. A reply tap is
+recorded only once `getOrCreateDirect` has succeeded.
+
+The phone number is the academy's, a property of the publication — not a family's contact
+details, which this product still does not model.
+
+### 12.5 Analytics
+
+`GET /stories/:id/analytics` — reach (by parents/teachers, and distinct families), views,
+taps and distinct tappers, view rate, tap-of-views and tap-of-reach rates, first and last
+view, a daily series (≤ 90 days, in the publisher's time zone) and a country breakdown
+(with "not set" as its own row). Every figure is a query over the rows that record the event,
+so none can drift. The publisher list carries `ctaTapCount` / `ctaTapperCount`; the viewer
+list carries each viewer's taps. Publisher-only, organization-scoped, names nobody.
+
+### 12.6 Targeting: the `segment` clause
+
+One clause, `{ kind: 'segment', filter }`, with `filter = { who, planMonths?, children?,
+countries? }`:
+
+| Dimension | Values | Source |
+|---|---|---|
+| `who` | `everyone` · `families` · `teachers` | — |
+| `planMonths` | 1, 3, 6, 12 — the **plan length** bought (owner's choice), not tenure | `chat.family.subscription_plan_months` |
+| `children` | 1, 2, 3, 4 (= four or more) | **derived**: count of `chat.learner` — never stored, so never stale |
+| `countries` | ISO 3166-1 alpha-2 | `chat.family.country_code` |
+
+Dimensions AND; an empty one means any; the family dimensions are refused with
+`everyone`/`teachers` (a teacher has none, so they would silently drop every teacher).
+A family with no recorded country or plan matches no filter on that dimension, and the
+composer says how many such families exist, with a link to fill them in. The resolver
+validates the filter at create and resolves it again at publish, like every clause (§4).
+
+**Plan and country belong to Jawwid Core.** The owner chose to add them to `chat.family`
+now (with `segment_source = admin|core` and `segment_updated_at`) so targeting works today:
+the super admin and managers set them under **Audience data**
+(`GET/POST /stories/audience/families`, `canManageStoryAudienceData`, audited), and the Core
+projection will write the same columns once it lands. They are NOT writable by the request
+roles: 20261014090000 enumerated `chat.family`'s UPDATE columns from the catalog, so a new
+column is not silently granted, and the migration asserts it.
+
+### 12.7 The super admin publishes
+
+`canPublishStory` and `chat.current_can_publish_story()` admit `super_admin` (PD-8 already
+gave it full write; the Admin Portal is its publishing surface). It may publish or delete
+another staff member's story, like a manager. The portal's Stories section is now `managed`,
+and the top bar's "Read-only access" chip is gone — it had been false since PD-8.
+
+### 12.8 Admin Web
+
+One studio, two homes: `/admin/stories` (super admin) and `/stories` (admin, coverage,
+manager), each with `/new` and `/:storyId`.
+
+* **List** — KPIs (live, reached, views, taps), status tiles (`?state=`), search, sort
+  (`?sort=`), one row per story with a thumbnail, its audience in words and a view-rate bar.
+* **Composer** — four short steps (content · button · audience · name) beside a live phone
+  preview and a live "will reach N people" estimate, confirmation before publishing.
+* **Insights** — the dedicated per-story page: KPIs, funnel, daily chart (with a data table
+  for screen readers), by audience, by country, and the viewer list on request only.
+* **Audience data** (super admin, managers) — each family's country and plan.
+
+### 12.9 Flutter reader
+
+`Story` gained `kind`, `background`, `mediaDuration`, `cta`; `expiresAt` is nullable and
+`title` is gone. **The wire mapper used to drop any row without `expiresAt`** — every new
+story would have been invisible on phones; that is now a regression test. The viewer renders
+text on its background, voice with a play control (its own `VoicePlayer`, owned and disposed
+by the viewer), no caption anywhere, and the button: a link or WhatsApp opens outside the
+app; "message the publisher" replaces the viewer with the conversation the server opened.
+Story colours are tokens (`StoryPalette` in `lib/design/tokens.dart`). Rings carry the
+academy's name and are keyed by story id.
+
+### 12.10 Tests added
+
+| Suite | Covers |
+|---|---|
+| `apps/api/test/integration/stories-v2.spec.ts` | content rules, button validation and DB shape check, reply scope, feed shape, every segment dimension, taps, analytics, audience data, super admin (51) |
+| `apps/api/test/unit/authorization/story-authorization.spec.ts` | super admin publishes; audience-data role matrix; segment parse/match (+11) |
+| `apps/api/test/unit/stories/story-service-wiring.spec.ts` | `ConversationService` is a real DI type (a type-only import made every reply tap fail in the running app; mutation-checked) |
+| `db/tests/story_rls.sql` §I | a non-expiring story stays visible; tap RLS and audience guard; super admin is a publisher |
+| `apps/admin-web/src/features/stories/StoriesStudio.test.tsx` | composer payloads, estimates, missing-data note, reply note, https check, no caption field, insights, viewers fetched on request, delete reason, audience data, Arabic (11) |
+| `test/features/stories/story_viewer_v2_test.dart` | voice playback and completion advance, voice failure/retry, link/WhatsApp/message taps, failures, gone stories, Arabic, no caption, no expiry, backgrounds (12) |
+| `test/core/data/http/stories_over_http_test.dart` | no-expiry rows kept, caption dropped, voice, buttons, `POST /cta` (+8) |
+
+### 12.11 Open items
+
+* **Core projection** of country and plan into `chat.family` (`segment_source = 'core'`).
+* **Analytics are snapshots of the audience**, like the audience itself (§4): a family that
+  joins after publication is not in a story's reach.
+* **Voice recording in Chrome** works only where Chrome can record MP4/AAC; otherwise the
+  publisher uploads a file.
+* **Video and voice completion** are not yet measured (a viewer who opened is a view, whether
+  or not they listened to the end).

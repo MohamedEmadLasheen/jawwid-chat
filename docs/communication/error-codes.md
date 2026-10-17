@@ -72,7 +72,7 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 
 | Code | HTTP | Meaning |
 |---|---|---|
-| `COMM.STORY_CANNOT_PUBLISH` | 403 | Not a publisher. Publishing is the family-facing staff roles (admin, coverage, manager). Also the answer to "may I read the viewer list?". Never retry. |
+| `COMM.STORY_CANNOT_PUBLISH` | 403 | Not a publisher. Publishing is the family-facing staff roles (admin, coverage, manager) and, since 2026-10-17, the super admin. Also the answer to "may I read the viewer list / analytics?". Never retry. |
 | `COMM.STORY_CANNOT_READ` | 403 | This contact is not a communicating contact for the family. |
 | `COMM.STORY_NOT_FOUND` | 404 | Deliberately returned for "does not exist", "not yours" and "not published to you" alike, with the same message. Distinguishing them would turn every story route into an existence oracle. |
 | `COMM.STORY_EMPTY` | 400 | A story needs a body or a piece of media. |
@@ -83,7 +83,12 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.STORY_DELETED` | 410 | Removed by an operator. Never retry. |
 | `COMM.STORY_DELETE_REASON_REQUIRED` | 400 | Deleting a story requires a reason; it is recorded in `chat.audit_log`. |
 | `COMM.STORY_AUDIENCE_EMPTY` | 400 | The authored audience resolves to nobody you may address. |
-| `COMM.STORY_AUDIENCE_INVALID` | 400 | A clause is malformed, names an unknown kind, or names a record outside your organization. Loud rather than silent, so an operator learns while composing. |
+| `COMM.STORY_AUDIENCE_INVALID` | 400 | A clause is malformed, names an unknown kind, or names a record outside your organization; a segment filter is malformed; or an analytics time zone is unknown. Loud rather than silent, so an operator learns while composing. |
+| `COMM.STORY_CAPTION_NOT_ALLOWED` | 400 | A photo, video or voice story carries no words, and no story has a title (2026-10-17). Name it for yourself with `internalName`. |
+| `COMM.STORY_CTA_INVALID` | 400 | The button is malformed: an unknown kind, a link that is not https, a WhatsApp number that is not international, or a label over 40 characters. |
+| `COMM.STORY_NO_CTA` | 409 | The story has no button to tap (or replies are not available for it). |
+| `COMM.STORY_AUDIENCE_DATA_DENIED` | 403 | Family country / plan data is for the super admin and managers. Never retry. |
+| `COMM.STORY_FAMILY_NOT_FOUND` | 404 | No such family in your organization. |
 
 ## Admin Portal
 
