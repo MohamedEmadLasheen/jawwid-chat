@@ -376,7 +376,9 @@ void main() {
     // tester's fake-async zone will not complete those futures on its own.
     await tester.runAsync(() => signIn(c, 'parentA'));
     await settle();
-    expect(find.text('parentA story'), findsOneWidget);
+    // The rail shows rings only; each story's title reaches the screen as its
+    // ring's semantic label (stories_rail.dart), so that is where it is looked for.
+    expect(storyRing('parentA story'), findsOneWidget);
     expect(tester.getSize(find.byType(StoriesRail)).height,
         StoriesRail.railHeight);
 
@@ -386,11 +388,14 @@ void main() {
     });
     await settle();
 
-    expect(find.text('parentA story'), findsNothing,
+    expect(storyRing('parentA story'), findsNothing,
         reason: "the parent's story must not be on a teacher's screen");
-    expect(find.text('teacherA story'), findsOneWidget);
+    expect(storyRing('teacherA story'), findsOneWidget);
   });
 }
+
+/// A story ring on screen, found by the title its semantic label carries.
+Finder storyRing(String title) => find.bySemanticsLabel(RegExp(RegExp.escape(title)));
 
 /// Lets a test drive the authenticated principal directly, without a whole auth stack.
 class _PrincipalHolder extends Notifier<String?> {

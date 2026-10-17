@@ -5,7 +5,6 @@ import 'package:jawwid_chat/core/data/http/http_auth_repository.dart';
 import 'package:jawwid_chat/core/data/http/http_conversation_repository.dart';
 import 'package:jawwid_chat/core/data/http/http_message_repository.dart';
 import 'package:jawwid_chat/core/data/repositories.dart';
-import 'package:jawwid_chat/core/data/wire/wire_vocab.dart';
 import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/core/network/api_client.dart';
 import 'package:jawwid_chat/core/network/api_config.dart';
@@ -15,6 +14,7 @@ import 'package:jawwid_chat/core/storage/secure_token_store.dart';
 import 'package:jawwid_chat/shared/models/conversation.dart';
 import 'package:jawwid_chat/shared/models/message.dart';
 import 'package:jawwid_chat/shared/models/user_role.dart';
+import 'package:jawwid_chat/core/data/wire/wire_vocab.dart';
 
 /// The mobile client against a **running Jawwid Chat backend and a real database**.
 ///
