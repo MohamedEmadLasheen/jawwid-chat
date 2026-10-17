@@ -14,6 +14,7 @@ import 'package:jawwid_chat/core/storage/secure_token_store.dart';
 import 'package:jawwid_chat/shared/models/conversation.dart';
 import 'package:jawwid_chat/shared/models/message.dart';
 import 'package:jawwid_chat/shared/models/user_role.dart';
+import 'package:jawwid_chat/core/data/wire/wire_vocab.dart';
 
 /// The mobile client against a **running Jawwid Chat backend and a real database**.
 ///
