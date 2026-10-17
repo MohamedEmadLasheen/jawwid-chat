@@ -55,6 +55,11 @@ enum CallUiPhase {
 
 /// Why a call could not be established, reduced to the three things a person can
 /// act on. Never a `COMM.*` code, and never a technical message.
+/// Who placed the call, as THIS device saw it happen: [CallController.start] is
+/// outgoing, a `call.incoming` is incoming. Presentation only — it picks the
+/// words for an outcome the server already named ("No answer" vs "Missed call").
+enum CallDirection { outgoing, incoming }
+
 enum CallUiFailure {
   /// The microphone is unavailable or was refused.
   microphone,
@@ -76,6 +81,7 @@ class CallUiState {
     this.conversationId,
     this.peerLabel,
     this.isGroup = false,
+    this.direction,
     this.microphoneMuted = false,
     this.speakerPreferred = false,
     this.canSwitchSpeaker = false,
@@ -98,6 +104,9 @@ class CallUiState {
   final String? peerLabel;
 
   final bool isGroup;
+
+  /// See [CallDirection]. Null only while idle.
+  final CallDirection? direction;
 
   /// Orthogonal to [phase], exactly as W4's snapshot is: a muted participant is
   /// still connected and still published.
@@ -139,6 +148,7 @@ class CallUiState {
     String? conversationId,
     String? peerLabel,
     bool? isGroup,
+    CallDirection? direction,
     bool? microphoneMuted,
     bool? speakerPreferred,
     bool? canSwitchSpeaker,
@@ -154,6 +164,7 @@ class CallUiState {
       conversationId: conversationId ?? this.conversationId,
       peerLabel: peerLabel ?? this.peerLabel,
       isGroup: isGroup ?? this.isGroup,
+      direction: direction ?? this.direction,
       microphoneMuted: microphoneMuted ?? this.microphoneMuted,
       speakerPreferred: speakerPreferred ?? this.speakerPreferred,
       canSwitchSpeaker: canSwitchSpeaker ?? this.canSwitchSpeaker,
@@ -284,6 +295,11 @@ class CallController extends Notifier<CallUiState> {
 
   bool get _alive => ref.mounted;
 
+  /// Only a record of a call remains: ended, or a start the server never took.
+  bool get _isOver =>
+      state.phase == CallUiPhase.ended ||
+      (state.phase == CallUiPhase.failed && state.callId == null);
+
   // ---------------------------------------------------------------- outgoing
 
   /// Place a call in a conversation.
@@ -301,6 +317,7 @@ class CallController extends Notifier<CallUiState> {
 
     state = CallUiState(
       phase: CallUiPhase.starting,
+      direction: CallDirection.outgoing,
       conversationId: conversationId,
       peerLabel: peerLabel,
       isGroup: isGroup,
@@ -456,6 +473,28 @@ class CallController extends Notifier<CallUiState> {
     );
   }
 
+  /// "Call again" after a call that is over: a NEW call in the same
+  /// conversation, which the server authorizes like any other.
+  ///
+  /// Only from [CallUiPhase.ended]. A failed call may still exist on the server,
+  /// and that one is hung up or retried, never replaced by a second.
+  Future<void> callAgain() async {
+    if (state.phase != CallUiPhase.ended) return;
+    final conversationId = state.conversationId;
+    if (conversationId == null) return;
+    final peerLabel = state.peerLabel ?? '';
+    final isGroup = state.isGroup;
+
+    await _teardownMedia();
+    if (!_alive) return;
+    state = CallUiState(canSwitchSpeaker: _audio?.canSwitch ?? false);
+    await start(
+      conversationId: conversationId,
+      peerLabel: peerLabel,
+      isGroup: isGroup,
+    );
+  }
+
   /// Leave the terminal screen and return to idle.
   void dismiss() {
     if (!state.isTerminal) return;
@@ -475,9 +514,16 @@ class CallController extends Notifier<CallUiState> {
         // One call at a time. `screens/call.md` §7: a second call arriving during
         // a call is declined with a missed entry — there is no call waiting in
         // MVP — and the SERVER records that, so this simply does not present it.
-        if (state.isPresent) return;
+        //
+        // But a FINISHED call is not a call: a screen that only says how the
+        // last one ended gives way to the new ring instead of silently
+        // swallowing it. Anything that may still exist on the server (a failure
+        // with a callId included) is never interrupted.
+        if (state.isPresent && !_isOver) return;
+        if (state.isPresent) unawaited(_teardownMedia());
         state = CallUiState(
           phase: CallUiPhase.incomingRinging,
+          direction: CallDirection.incoming,
           callId: callId,
           conversationId: conversationId,
           peerLabel: initiatorName,
