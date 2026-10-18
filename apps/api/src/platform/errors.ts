@@ -177,6 +177,14 @@ export enum CommErrorCode {
   ORG_STRUCTURE_DENIED = 'COMM.ORG_STRUCTURE_DENIED',
   /** PD-8: the requested structure is not lawful (wrong department, ended link, mixed supervisors). 409. */
   ORG_STRUCTURE_INVALID = 'COMM.ORG_STRUCTURE_INVALID',
+  /** PD-11: no such lesson, or none this caller may see. 404. */
+  LESSON_NOT_FOUND = 'COMM.LESSON_NOT_FOUND',
+  /** PD-11: this caller may see the lesson but may not record this on it. 403. */
+  LESSON_DENIED = 'COMM.LESSON_DENIED',
+  /** PD-11: the lesson is not in a state that allows this (already closed, not started, too late). 409. */
+  LESSON_STATE = 'COMM.LESSON_STATE',
+  /** PD-11: the teacher already has a lesson at that time. 409. */
+  LESSON_TEACHER_BUSY = 'COMM.LESSON_TEACHER_BUSY',
 }
 
 export class CommError extends Error {

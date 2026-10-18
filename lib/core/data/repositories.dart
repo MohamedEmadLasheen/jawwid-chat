@@ -1,5 +1,6 @@
 import '../../shared/models/auth.dart';
 import '../../shared/models/conversation.dart';
+import '../../shared/models/lesson.dart';
 import '../../shared/models/message.dart';
 import '../../shared/models/story.dart';
 import '../../shared/models/user_role.dart';
@@ -484,4 +485,46 @@ abstract interface class CallRepository {
   /// global call history on the server, and this interface does not pretend
   /// otherwise; `docs/mobile/backend-dependencies.md` carries the gap.
   Future<List<CallHistoryEntry>> callHistory({required String conversationId});
+}
+
+/// PD-9 / PD-11 lesson tickets. Every method is one endpoint; NO AUTHORIZATION LIVES
+/// HERE -- each call asks the server and reports what it said, keeping its `COMM.*` code.
+///
+/// Submitting returns nothing to draw: the card the ticket posts arrives in the chat
+/// through the ordinary message path, exactly like anyone else's message.
+abstract interface class LessonRepository {
+  /// `GET /conversations/:id/lesson-tickets` -- what "+" may offer here, now. Advisory.
+  Future<List<LessonTicket>> tickets(String conversationId);
+
+  /// `POST /lessons/:id/report`
+  Future<void> report(String lessonId, LessonReportDraft draft);
+
+  /// `POST /lessons/:id/absence`
+  Future<void> absence(String lessonId, {String? note});
+
+  /// `POST /lessons/:id/apology`, `/teacher-apology` or `/late-apology`, by [kind].
+  Future<void> apologise(String lessonId, LessonTicketKind kind, String reason);
+}
+
+/// The lesson repository of a build with no lesson server (the fixture build, tests
+/// that do not override it): it offers no ticket, so "+" shows only attachments, and
+/// it refuses every submission. A fixture lesson would be indistinguishable on screen
+/// from a real one, and a parent must never see a report that was not written.
+class NoLessonRepository implements LessonRepository {
+  const NoLessonRepository();
+
+  @override
+  Future<List<LessonTicket>> tickets(String conversationId) async => const [];
+
+  @override
+  Future<void> report(String lessonId, LessonReportDraft draft) =>
+      throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<void> absence(String lessonId, {String? note}) =>
+      throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<void> apologise(String lessonId, LessonTicketKind kind, String reason) =>
+      throw UnsupportedError('no lesson server in this build');
 }

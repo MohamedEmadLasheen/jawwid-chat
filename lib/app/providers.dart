@@ -58,6 +58,12 @@ final groupRepositoryProvider = Provider<GroupRepository>((ref) {
   throw UnimplementedError('groupRepositoryProvider must be overridden');
 });
 
+/// PD-11. Unlike the others this has a harmless default rather than a throw: a build
+/// without a lesson server simply offers no lesson ticket.
+final lessonRepositoryProvider = Provider<LessonRepository>((ref) {
+  return const NoLessonRepository();
+});
+
 final callRepositoryProvider = Provider<CallRepository>((ref) {
   throw UnimplementedError('callRepositoryProvider must be overridden');
 });

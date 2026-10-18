@@ -8,6 +8,7 @@ import '../core/data/http/http_auth_repository.dart';
 import '../core/data/http/http_call_repository.dart';
 import '../core/data/http/http_conversation_repository.dart';
 import '../core/data/http/http_group_repository.dart';
+import '../core/data/http/http_lesson_repository.dart';
 import '../core/data/http/http_message_repository.dart';
 import '../core/data/http/http_story_repository.dart';
 import '../core/errors/app_error.dart';
@@ -133,6 +134,9 @@ List<Override> _httpOverrides() {
     ),
     groupRepositoryProvider.overrideWithValue(
       HttpGroupRepository(client: client),
+    ),
+    lessonRepositoryProvider.overrideWithValue(
+      HttpLessonRepository(client: client),
     ),
     // Stories are read-only here. The development composition root below registers no
     // implementation on purpose -- a fixture story is indistinguishable on screen from a real

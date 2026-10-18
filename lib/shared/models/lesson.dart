@@ -1,0 +1,109 @@
+/// PD-9 / PD-11: lesson tickets and the cards they post.
+///
+/// NO AUTHORIZATION LIVES HERE. Which tickets a member may open in a chat is the
+/// server's answer (`GET /conversations/:id/lesson-tickets`), and each ticket is
+/// decided again when it is submitted. The client only draws what it is offered.
+library;
+
+/// A form under "+" that records what happened to one lesson.
+enum LessonTicketKind {
+  /// Teacher: the learner attended. Closes the lesson as held.
+  report,
+
+  /// Teacher: no apology, and the lesson time has passed.
+  absence,
+
+  /// Parent: the learner cannot attend, sent before the lesson starts.
+  apology,
+
+  /// Teacher: cannot teach this lesson, sent before it starts.
+  teacherApology,
+
+  /// Parent: an emergency apology after the start. A supervisor rules on it.
+  lateApology;
+
+  /// The server's spelling, or null for a ticket this build does not know --
+  /// which is then simply not offered.
+  static LessonTicketKind? parse(String? raw) => switch (raw) {
+        'report' => LessonTicketKind.report,
+        'absence' => LessonTicketKind.absence,
+        'apology' => LessonTicketKind.apology,
+        'teacher_apology' => LessonTicketKind.teacherApology,
+        'late_apology' => LessonTicketKind.lateApology,
+        _ => null,
+      };
+
+  /// Whether the form asks for a reason (and refuses to submit without one).
+  bool get needsReason =>
+      this == apology || this == teacherApology || this == lateApology;
+}
+
+/// One ticket the server offers for one lesson.
+class LessonTicket {
+  const LessonTicket({
+    required this.kind,
+    required this.lessonId,
+    required this.startsAt,
+    required this.endsAt,
+    this.learnerName = '',
+  });
+
+  final LessonTicketKind kind;
+  final String lessonId;
+
+  /// Which child the lesson is for -- a family group can hold several.
+  final String learnerName;
+  final DateTime startsAt;
+  final DateTime endsAt;
+}
+
+/// What a teacher writes about a lesson that took place. Only [covered] is required
+/// (PD-11 default template): a report has to be quick or it is not written at all.
+class LessonReportDraft {
+  const LessonReportDraft({
+    required this.covered,
+    this.homework,
+    this.rating,
+    this.note,
+  });
+
+  final String covered;
+  final String? homework;
+
+  /// 1 to 5, or null when the teacher gives none.
+  final int? rating;
+  final String? note;
+}
+
+/// The structured half of a message of type `card`.
+///
+/// [kind] stays a string: a card this build does not know is still a message, and
+/// it falls back to the plain-text body the server always sends alongside.
+class MessageCard {
+  const MessageCard({
+    required this.kind,
+    required this.payload,
+    this.lessonId,
+  });
+
+  final String kind;
+  final String? lessonId;
+  final Map<String, Object?> payload;
+
+  String? text(String key) {
+    final v = payload[key];
+    return v is String && v.trim().isNotEmpty ? v : null;
+  }
+
+  int? integer(String key) {
+    final v = payload[key];
+    return v is int ? v : (v is num ? v.toInt() : null);
+  }
+
+  DateTime? time(String key) {
+    final v = payload[key];
+    return v is String ? DateTime.tryParse(v)?.toLocal() : null;
+  }
+
+  bool flag(String key) => payload[key] == true;
+}

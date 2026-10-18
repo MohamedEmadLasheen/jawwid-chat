@@ -46,6 +46,8 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
    * regardless of this value; this only governs the bytes.
    */
   'story.media_retention_hours': 72,
+  /** PD-9: an open lesson this long after its end is escalated to the Teachers department. */
+  'lesson.escalation_after_minutes': 1440,
 } as const;
 
 export type CommunicationConfigKey = keyof typeof COMMUNICATION_CONFIG_DEFAULTS;

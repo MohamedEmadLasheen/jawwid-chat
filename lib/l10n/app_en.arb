@@ -503,5 +503,51 @@
     }
   },
   "systemGroupArchived": "Group archived",
-  "systemUpdate": "System update"
+  "systemUpdate": "System update",
+  "lessonTicketsHeader": "Lesson",
+  "@lessonTicketsHeader": {
+    "description": "Section header in the + menu for lesson tickets."
+  },
+  "ticketReport": "Lesson report",
+  "ticketAbsence": "Student absent",
+  "ticketApology": "Apologise for the lesson",
+  "ticketTeacherApology": "I can't teach this lesson",
+  "ticketLateApology": "Late apology (emergency)",
+  "ticketLessonAt": "Lesson of {when}",
+  "@ticketLessonAt": {
+    "description": "Subtitle naming which lesson a ticket is for.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "reportCoveredLabel": "What was covered",
+  "reportHomeworkLabel": "Homework (optional)",
+  "reportRatingLabel": "Rating (optional)",
+  "reportNoteLabel": "Note (optional)",
+  "ticketReasonLabel": "Reason",
+  "ticketAbsenceHint": "No apology was received and the lesson time has passed.",
+  "ticketLateApologyHint": "A supervisor will review it. Until then the lesson counts as an absence.",
+  "ticketTeacherApologyHint": "A make-up lesson will be arranged with the family.",
+  "ticketSubmit": "Send",
+  "ticketSent": "Sent",
+  "ticketFailed": "Couldn't send. Please try again.",
+  "ticketNoLongerAllowed": "This lesson can no longer be updated this way.",
+  "cardReportTitle": "Lesson report",
+  "cardAbsenceTitle": "Absent from the lesson",
+  "cardApologyTitle": "Apology",
+  "cardTeacherApologyTitle": "The teacher can't teach this lesson",
+  "cardCancelledTitle": "Lesson cancelled",
+  "cardTeacherAbsentTitle": "Lesson not held — the teacher was absent",
+  "cardLateApologyTitle": "Late apology",
+  "cardRulingExcusedTitle": "Apology accepted",
+  "cardRulingCreditedTitle": "Recorded as an absence",
+  "cardUnderReview": "Under review by the supervision team",
+  "cardMakeupOwed": "A make-up lesson will be arranged.",
+  "cardCovered": "Covered",
+  "cardHomework": "Homework",
+  "cardRating": "Rating",
+  "cardNote": "Note",
+  "cardReason": "Reason"
 }

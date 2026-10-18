@@ -3,6 +3,7 @@ import {
   Learner,
   Message,
   MessageAttachment,
+  MessageCard,
   MessageReaction,
   MessageReceipt,
 } from '@prisma/client';
@@ -73,6 +74,18 @@ export interface MessageDto {
   attachments: AttachmentDto[];
   reactions: Array<{ actorId: string; emoji: string }>;
   receipts: Array<{ actorId: string; state: string; deliveredAt: string | null; readAt: string | null }>;
+  /**
+   * PD-11: present only when `type` is `card` -- what a ticket recorded, for the
+   * client to draw as a card. `body` still carries a plain-text rendering, so a
+   * build that predates cards shows a readable message instead of nothing.
+   */
+  card: MessageCardDto | null;
+}
+
+export interface MessageCardDto {
+  kind: string;
+  lessonId: string | null;
+  payload: Record<string, unknown>;
 }
 
 export interface ConversationMemberDto {
@@ -295,6 +308,7 @@ type MessageWithRelations = Message & {
   attachments?: MessageAttachment[];
   reactions?: MessageReaction[];
   receipts?: MessageReceipt[];
+  card?: MessageCard | null;
 };
 
 /**
@@ -345,6 +359,10 @@ export function toMessageDto(
       deliveredAt: r.deliveredAt?.toISOString() ?? null,
       readAt: r.readAt?.toISOString() ?? null,
     })),
+    card:
+      !hidden && m.card
+        ? { kind: m.card.kind, lessonId: m.card.lessonId, payload: m.card.payload as Record<string, unknown> }
+        : null,
   };
 }
 

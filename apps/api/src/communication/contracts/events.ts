@@ -55,6 +55,12 @@ export const CommEvent = {
   NOTIFICATION_CREATED: 'notification.created',
   STORY_PUBLISHED: 'story.published',
   STORY_RETIRED: 'story.retired',
+  /**
+   * PD-9: a lesson closed with its outcome -- what Core needs to keep billing,
+   * credits and payroll right. Carries no conversationId on purpose: it is for
+   * Core, never fanned out to a thread.
+   */
+  LESSON_CLOSED: 'lesson.closed',
 } as const;
 
 export type CommEventName = (typeof CommEvent)[keyof typeof CommEvent];
@@ -240,6 +246,19 @@ export interface CommEventPayloads {
   [CommEvent.NOTIFICATION_CREATED]: NotificationCreatedPayload;
   [CommEvent.STORY_PUBLISHED]: StoryPublishedPayload;
   [CommEvent.STORY_RETIRED]: StoryRetiredPayload;
+  [CommEvent.LESSON_CLOSED]: LessonClosedPayload;
+}
+
+export interface LessonClosedPayload {
+  lessonId: string;
+  learnerId: string;
+  teacherId: string;
+  kind: string;
+  outcome: string;
+  startsAt: string;
+  endsAt: string;
+  /** True when a ruling changed an outcome Core was already told about. */
+  correction: boolean;
 }
 
 /** Rooms a socket may join. Never a client-supplied raw string. */
