@@ -9,6 +9,9 @@ import 'package:jawwid_chat/core/data/wire/wire_mappers.dart';
 import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/features/lessons/presentation/lesson_ticket_sheet.dart';
+import 'package:jawwid_chat/features/lessons/presentation/makeup_sheet.dart';
+import 'package:jawwid_chat/features/lessons/presentation/schedule_change_sheet.dart';
+import 'package:jawwid_chat/features/lessons/presentation/teacher_schedule_screen.dart';
 import 'package:jawwid_chat/features/messages/presentation/message_bubble.dart';
 import 'package:jawwid_chat/features/messages/presentation/message_composer.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
@@ -192,6 +195,84 @@ void main() {
       expect(find.text('fever'), findsOneWidget);
     });
   });
+  group('T2: make-ups, regular times and the Schedule', () {
+    testWidgets('a make-up is picked day first, then time, in the reader\'s clock, and booked as offered', (tester) async {
+      final day1 = DateTime(2026, 10, 20, 17);
+      final day2 = DateTime(2026, 10, 21, 9);
+      final repo = _RecordingLessons()
+        ..offer = MakeupOffer(durationMinutes: 30, slots: [day1, day1.add(const Duration(minutes: 30)), day2]);
+      const ticket = LessonTicket(kind: LessonTicketKind.bookMakeup, lessonId: 'l9', learnerName: 'learner_l');
+      await tester.pumpWidget(app(const MakeupSheet(ticket: ticket), lessons: repo));
+      await tester.pumpAndSettle();
+      // The first day is chosen: its two times show, the other day's does not.
+      expect(find.byKey(ValueKey('makeup-time-${day1.toUtc().toIso8601String()}')), findsOneWidget);
+      expect(find.byKey(ValueKey('makeup-time-${day2.toUtc().toIso8601String()}')), findsNothing);
+      final book = find.byKey(const ValueKey('makeup-book'));
+      expect(tester.widget<FilledButton>(book).onPressed, isNull);
+
+      await tester.tap(find.byKey(ValueKey('makeup-day-${DateTime(2026, 10, 21).toIso8601String()}')));
+      await tester.pump();
+      await tester.tap(find.byKey(ValueKey('makeup-time-${day2.toUtc().toIso8601String()}')));
+      await tester.pump();
+      await tester.tap(book);
+      await tester.pumpAndSettle();
+      expect(repo.booked, [day2]);
+    });
+
+    testWidgets('no free time says the supervision team will arrange it', (tester) async {
+      const ticket = LessonTicket(kind: LessonTicketKind.bookMakeup, lessonId: 'l9');
+      await tester.pumpWidget(app(const MakeupSheet(ticket: ticket), lessons: _RecordingLessons()));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('supervision team will arrange'), findsOneWidget);
+    });
+
+    testWidgets('a regular-time change sends exactly the times picked', (tester) async {
+      final mon = WeeklyOption(weekday: 1, start: '17:00', nextStartsAt: DateTime(2026, 10, 19, 17));
+      final wed = WeeklyOption(weekday: 3, start: '18:30', nextStartsAt: DateTime(2026, 10, 21, 18, 30));
+      final repo = _RecordingLessons()..options = [mon, wed];
+      const ticket = LessonTicket(kind: LessonTicketKind.requestScheduleChange, learnerId: 'k1', learnerName: 'learner_l');
+      await tester.pumpWidget(app(const ScheduleChangeSheet(ticket: ticket), lessons: repo));
+      await tester.pumpAndSettle();
+      expect(find.text('Monday 5:00 PM'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('weekly-3-18:30')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('schedule-change-send')));
+      await tester.pumpAndSettle();
+      expect(repo.requested.single.map((o) => '${o.weekday} ${o.start}'), ['3 18:30']);
+    });
+
+    testWidgets('the teacher\'s Schedule groups by day and flags a lesson that needs its report', (tester) async {
+      final repo = _RecordingLessons()
+        ..mine = [
+          ScheduledLesson(id: 'a', learnerName: 'learner_l', startsAt: DateTime(2026, 10, 18, 9), endsAt: DateTime(2026, 10, 18, 9, 30), kind: 'regular', phase: 'awaiting_close'),
+          ScheduledLesson(id: 'b', learnerName: 'learner_m', startsAt: DateTime(2026, 10, 19, 10), endsAt: DateTime(2026, 10, 19, 10, 30), kind: 'makeup', phase: 'upcoming'),
+          ScheduledLesson(id: 'c', learnerName: 'learner_n', startsAt: DateTime(2026, 10, 18, 8), endsAt: DateTime(2026, 10, 18, 8, 30), kind: 'regular', phase: 'closed', outcome: 'held'),
+        ];
+      await tester.pumpWidget(ProviderScope(
+        overrides: [lessonRepositoryProvider.overrideWithValue(repo)],
+        child: const MaterialApp(
+          locale: Locale('en'),
+          supportedLocales: JawwidApp.supportedLocales,
+          localizationsDelegates: [L10n.delegate, GlobalMaterialLocalizations.delegate, GlobalWidgetsLocalizations.delegate, GlobalCupertinoLocalizations.delegate],
+          home: TeacherScheduleScreen(),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('Needs report'), findsOneWidget);
+      expect(find.text('Held'), findsOneWidget);
+      expect(find.text('Upcoming'), findsOneWidget);
+      expect(find.textContaining('Make-up'), findsOneWidget);
+      // Two days, earliest lesson first.
+      final rows = tester.widgetList<ListTile>(find.byType(ListTile)).map((t) => (t.key as ValueKey).value).toList();
+      expect(rows, ['schedule-c', 'schedule-a', 'schedule-b']);
+    });
+
+    testWidgets('a supervisor\'s make-up decision reads as what was done', (tester) async {
+      final m = WireMappers.message(wireCard('lesson_makeup_resolved', {'learnerName': 'learner_l', 'action': 'family_credit'}), viewerActorId: 'p1');
+      await tester.pumpWidget(app(MessageBubble(message: m, showAuthor: true)));
+      expect(find.text('A credit to the family'), findsOneWidget);
+    });
+  });
 }
 
 class _RecordingLessons implements LessonRepository {
@@ -218,4 +299,32 @@ class _RecordingLessons implements LessonRepository {
 
   @override
   Future<void> apologise(String lessonId, LessonTicketKind kind, String reason) async => _maybeRefuse();
+
+  /// What makeupSlots answers; and what was booked / requested.
+  MakeupOffer offer = const MakeupOffer(durationMinutes: 30, slots: []);
+  List<WeeklyOption> options = const [];
+  final booked = <DateTime>[];
+  final requested = <List<WeeklyOption>>[];
+  List<ScheduledLesson> mine = const [];
+
+  @override
+  Future<MakeupOffer> makeupSlots(String lessonId) async => offer;
+
+  @override
+  Future<void> bookMakeup(String lessonId, DateTime startsAt) async {
+    _maybeRefuse();
+    booked.add(startsAt);
+  }
+
+  @override
+  Future<List<WeeklyOption>> scheduleOptions(String learnerId) async => options;
+
+  @override
+  Future<void> requestScheduleChange(String learnerId, List<WeeklyOption> slots, {String? note}) async {
+    _maybeRefuse();
+    requested.add(slots);
+  }
+
+  @override
+  Future<List<ScheduledLesson>> myLessons(DateTime from, DateTime to) async => mine;
 }

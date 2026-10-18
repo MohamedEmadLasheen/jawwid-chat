@@ -549,5 +549,67 @@
   "cardHomework": "Homework",
   "cardRating": "Rating",
   "cardNote": "Note",
-  "cardReason": "Reason"
+  "cardReason": "Reason",
+  "ticketBookMakeup": "Book a make-up lesson",
+  "ticketRequestScheduleChange": "Change regular lesson times",
+  "ticketFor": "For {name}",
+  "@ticketFor": {
+    "description": "Subtitle naming the child a ticket is about.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "makeupPickDay": "Choose a day",
+  "makeupPickTime": "Choose a time",
+  "makeupNoSlots": "No free times in the next two weeks. The supervision team will arrange the make-up.",
+  "makeupBook": "Book",
+  "makeupLength": "{minutes} minutes",
+  "@makeupLength": {
+    "description": "Length of the make-up lesson.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "scheduleChangePick": "Choose the new weekly times",
+  "scheduleChangeHint": "The supervision team will confirm the change.",
+  "scheduleChangeNoOptions": "There are no other free times right now.",
+  "scheduleChangeSend": "Send request",
+  "ticketLoadFailed": "Couldn't load the free times. Please try again.",
+  "cardMakeupBookedTitle": "Make-up lesson booked",
+  "cardMakeupResolvedTitle": "Missed lesson resolved",
+  "cardMakeupActionSubstitute": "A substitute teacher",
+  "cardMakeupActionCredit": "A credit to the family",
+  "cardMakeupActionExtension": "The package is extended",
+  "cardMakeupActionWaived": "No make-up needed",
+  "cardScheduleRequestedTitle": "Request to change the regular times",
+  "cardScheduleApprovedTitle": "New regular times confirmed",
+  "cardScheduleRejectedTitle": "The change of regular times was not approved",
+  "cardEveryWeek": "Every {when}",
+  "@cardEveryWeek": {
+    "description": "A regular weekly time, e.g. 'Every Monday 17:00'.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "tabSchedule": "Schedule",
+  "scheduleEmpty": "No lessons in the next two weeks.",
+  "scheduleLoadFailed": "Couldn't load your schedule.",
+  "phaseUpcoming": "Upcoming",
+  "phaseInProgress": "In progress",
+  "phaseAwaitingClose": "Needs report",
+  "phaseOverdue": "Report overdue",
+  "outcomeHeld": "Held",
+  "outcomeStudentApology": "Student apologised",
+  "outcomeTeacherApology": "Teacher apologised",
+  "outcomeAdminCancelled": "Cancelled",
+  "outcomeStudentNoShow": "Student absent",
+  "outcomeTeacherNoShow": "Teacher absent",
+  "outcomeRescheduled": "Moved",
+  "lessonKindMakeup": "Make-up"
 }

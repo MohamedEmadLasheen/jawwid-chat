@@ -20,7 +20,13 @@ enum LessonTicketKind {
   teacherApology,
 
   /// Parent: an emergency apology after the start. A supervisor rules on it.
-  lateApology;
+  lateApology,
+
+  /// Parent: book the make-up a teacher-cancelled lesson owes, into a free time.
+  bookMakeup,
+
+  /// Parent: ask for new regular lesson times. About a child, not one lesson.
+  requestScheduleChange;
 
   /// The server's spelling, or null for a ticket this build does not know --
   /// which is then simply not offered.
@@ -30,6 +36,8 @@ enum LessonTicketKind {
         'apology' => LessonTicketKind.apology,
         'teacher_apology' => LessonTicketKind.teacherApology,
         'late_apology' => LessonTicketKind.lateApology,
+        'book_makeup' => LessonTicketKind.bookMakeup,
+        'request_schedule_change' => LessonTicketKind.requestScheduleChange,
         _ => null,
       };
 
@@ -38,23 +46,76 @@ enum LessonTicketKind {
       this == apology || this == teacherApology || this == lateApology;
 }
 
-/// One ticket the server offers for one lesson.
+/// One ticket the server offers: for one lesson, or -- a regular-time change -- for a child.
 class LessonTicket {
   const LessonTicket({
     required this.kind,
-    required this.lessonId,
-    required this.startsAt,
-    required this.endsAt,
+    this.lessonId,
+    this.startsAt,
+    this.endsAt,
+    this.learnerId = '',
     this.learnerName = '',
   });
 
   final LessonTicketKind kind;
-  final String lessonId;
 
-  /// Which child the lesson is for -- a family group can hold several.
+  /// Null for a ticket about the child rather than one lesson.
+  final String? lessonId;
+
+  /// Which child -- a family group can hold several.
+  final String learnerId;
+  final String learnerName;
+  final DateTime? startsAt;
+  final DateTime? endsAt;
+}
+
+/// The free times a make-up may be booked into, as instants (shown in the reader's clock).
+class MakeupOffer {
+  const MakeupOffer({required this.durationMinutes, required this.slots});
+
+  final int durationMinutes;
+  final List<DateTime> slots;
+}
+
+/// One free regular weekly time. [weekday] and [start] are in the teacher's zone and are
+/// what is sent back; [nextStartsAt] is what is SHOWN, in the reader's own clock.
+class WeeklyOption {
+  const WeeklyOption({required this.weekday, required this.start, required this.nextStartsAt});
+
+  final int weekday;
+  final String start;
+  final DateTime nextStartsAt;
+
+  @override
+  bool operator ==(Object other) => other is WeeklyOption && other.weekday == weekday && other.start == start;
+
+  @override
+  int get hashCode => Object.hash(weekday, start);
+}
+
+/// A lesson as the teacher's Schedule shows it.
+class ScheduledLesson {
+  const ScheduledLesson({
+    required this.id,
+    required this.learnerName,
+    required this.startsAt,
+    required this.endsAt,
+    required this.kind,
+    required this.phase,
+    this.outcome,
+  });
+
+  final String id;
   final String learnerName;
   final DateTime startsAt;
   final DateTime endsAt;
+
+  /// regular / makeup.
+  final String kind;
+
+  /// upcoming / in_progress / awaiting_close / overdue / closed -- the server's.
+  final String phase;
+  final String? outcome;
 }
 
 /// What a teacher writes about a lesson that took place. Only [covered] is required

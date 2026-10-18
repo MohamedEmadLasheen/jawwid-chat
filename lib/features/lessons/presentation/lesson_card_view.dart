@@ -4,6 +4,7 @@ import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
 import '../../../shared/utils/text_direction.dart';
+import 'schedule_change_sheet.dart' show weeklyLabel;
 
 /// PD-11: a ticket's card, drawn inside its message bubble.
 ///
@@ -24,6 +25,12 @@ Widget? lessonCardView(BuildContext context, MessageCard card, Color foreground)
     'lesson_ruling' => card.text('decision') == 'excused'
         ? (Icons.check_circle_outline, l10n.cardRulingExcusedTitle)
         : (Icons.info_outline, l10n.cardRulingCreditedTitle),
+    'lesson_makeup_booked' => (Icons.event_available_outlined, l10n.cardMakeupBookedTitle),
+    'lesson_makeup_resolved' => (Icons.task_alt_outlined, l10n.cardMakeupResolvedTitle),
+    'schedule_change_requested' => (Icons.edit_calendar_outlined, l10n.cardScheduleRequestedTitle),
+    'schedule_change_decided' => card.text('decision') == 'approved'
+        ? (Icons.event_repeat_outlined, l10n.cardScheduleApprovedTitle)
+        : (Icons.info_outline, l10n.cardScheduleRejectedTitle),
     _ => null,
   };
   if (title == null) return null;
@@ -57,7 +64,22 @@ class _LessonCard extends StatelessWidget {
     final starts = card.time('startsAt');
     final rating = card.integer('rating');
 
+    final action = switch (card.text('action')) {
+      'substitute_teacher' => l10n.cardMakeupActionSubstitute,
+      'family_credit' => l10n.cardMakeupActionCredit,
+      'package_extension' => l10n.cardMakeupActionExtension,
+      'waived' => l10n.cardMakeupActionWaived,
+      _ => null,
+    };
+    // A requested change lists the asked-for times in the reader's own clock.
+    final weekly = <String>[
+      for (final raw in (card.payload['slots'] as List?) ?? const [])
+        if (raw is Map && raw['nextStartsAt'] is String && DateTime.tryParse(raw['nextStartsAt'] as String) != null)
+          l10n.cardEveryWeek(weeklyLabel(context, DateTime.parse(raw['nextStartsAt'] as String).toLocal())),
+    ];
     final rows = <(String, String)>[
+      ?action == null ? null : (l10n.cardMakeupResolvedTitle, action),
+      for (final w in weekly) ('', w),
       if (card.text('covered') case final v?) (l10n.cardCovered, v),
       if (card.text('homework') case final v?) (l10n.cardHomework, v),
       if (card.text('reason') case final v?) (l10n.cardReason, v),
@@ -105,7 +127,7 @@ class _LessonCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label, style: theme.textTheme.labelSmall?.copyWith(color: muted)),
+                  if (label.isNotEmpty) Text(label, style: theme.textTheme.labelSmall?.copyWith(color: muted)),
                   ContentText(value, style: theme.textTheme.bodyMedium?.copyWith(color: foreground)),
                 ],
               ),
@@ -125,7 +147,7 @@ class _LessonCard extends StatelessWidget {
                 ),
               ),
             ),
-          if (card.kind == 'lesson_late_apology')
+          if (card.kind == 'lesson_late_apology' || card.kind == 'schedule_change_requested')
             _Footnote(text: l10n.cardUnderReview, color: muted),
           if (card.flag('makeupOwed'))
             _Footnote(text: l10n.cardMakeupOwed, color: muted),

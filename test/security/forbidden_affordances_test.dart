@@ -162,10 +162,11 @@ void main() {
   });
 
   group('navigation shell', () {
-    testWidgets('both roles get exactly Chats, Calls and Settings', (tester) async {
-      // Three destinations, and no fourth. Home, Jawwid and Groups were all views of the
-      // same conversations; keeping them as destinations is what made "where are my
-      // chats?" a question with three answers.
+    testWidgets('a parent gets exactly Chats, Calls and Settings; a teacher adds only their Schedule', (tester) async {
+      // Three destinations for a parent, and no fourth. Home, Jawwid and Groups were all
+      // views of the same conversations; keeping them as destinations is what made "where
+      // are my chats?" a question with three answers. PD-9/PD-10 (2026-10-18) reopened the
+      // Teacher Account for exactly one more: the teacher's own Schedule.
       for (final role in UserRole.values) {
         await tester.pumpWidget(
           harness(
@@ -180,12 +181,16 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.byType(NavigationDestination), findsNWidgets(3));
+        expect(find.byType(NavigationDestination), findsNWidgets(role == UserRole.teacher ? 4 : 3));
       }
 
       expect(
-        Shells.destinations.map((d) => d.route),
+        Shells.forRole(UserRole.parent).map((d) => d.route),
         ['/chats', '/calls', '/settings'],
+      );
+      expect(
+        Shells.forRole(UserRole.teacher).map((d) => d.route),
+        ['/chats', '/schedule', '/calls', '/settings'],
       );
     });
 

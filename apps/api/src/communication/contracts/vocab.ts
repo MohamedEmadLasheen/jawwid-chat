@@ -264,6 +264,8 @@ export const LessonOutcome = {
   ADMIN_CANCELLED: 'admin_cancelled',
   STUDENT_NO_SHOW: 'student_no_show',
   TEACHER_NO_SHOW: 'teacher_no_show',
+  /** PD-11 T2: a future lesson replaced by a regular-time change. Not counted by statistics. */
+  RESCHEDULED: 'rescheduled',
 } as const;
 export type LessonOutcome = (typeof LessonOutcome)[keyof typeof LessonOutcome];
 
@@ -276,9 +278,25 @@ export const CardKind = {
   LESSON_CANCELLED: 'lesson_cancelled',
   LESSON_LATE_APOLOGY: 'lesson_late_apology',
   LESSON_RULING: 'lesson_ruling',
+  LESSON_MAKEUP_BOOKED: 'lesson_makeup_booked',
+  LESSON_MAKEUP_RESOLVED: 'lesson_makeup_resolved',
+  SCHEDULE_CHANGE_REQUESTED: 'schedule_change_requested',
+  SCHEDULE_CHANGE_DECIDED: 'schedule_change_decided',
 } as const;
 export type CardKind = (typeof CardKind)[keyof typeof CardKind];
 
-export const RulingKind = { LATE_APOLOGY: 'late_apology' } as const;
+export const RulingKind = { LATE_APOLOGY: 'late_apology', MAKEUP_FOLLOWUP: 'makeup_followup' } as const;
+
+/** PD-11: what a supervisor did about a teacher-cancelled lesson no make-up replaced. */
+export const MakeupAction = {
+  SUBSTITUTE_TEACHER: 'substitute_teacher',
+  FAMILY_CREDIT: 'family_credit',
+  PACKAGE_EXTENSION: 'package_extension',
+  WAIVED: 'waived',
+} as const;
+export type MakeupAction = (typeof MakeupAction)[keyof typeof MakeupAction];
+
+/** The outcomes that owe the family a make-up: the teacher did not give the lesson. */
+export const MAKEUP_OWING_OUTCOMES: ReadonlySet<string> = new Set(['teacher_apology', 'teacher_no_show']);
 export const RulingDecision = { EXCUSED: 'excused', TEACHER_CREDITED: 'teacher_credited' } as const;
 export type RulingDecision = (typeof RulingDecision)[keyof typeof RulingDecision];

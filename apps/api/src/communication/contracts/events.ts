@@ -61,6 +61,12 @@ export const CommEvent = {
    * Core, never fanned out to a thread.
    */
   LESSON_CLOSED: 'lesson.closed',
+  /**
+   * PD-11 T2: what a supervisor did about a teacher-cancelled lesson nobody
+   * replaced -- a family credit or a package extension is Core's to apply.
+   * For Core; no conversationId.
+   */
+  LESSON_MAKEUP_RESOLVED: 'lesson.makeup_resolved',
 } as const;
 
 export type CommEventName = (typeof CommEvent)[keyof typeof CommEvent];
@@ -247,6 +253,15 @@ export interface CommEventPayloads {
   [CommEvent.STORY_PUBLISHED]: StoryPublishedPayload;
   [CommEvent.STORY_RETIRED]: StoryRetiredPayload;
   [CommEvent.LESSON_CLOSED]: LessonClosedPayload;
+  [CommEvent.LESSON_MAKEUP_RESOLVED]: LessonMakeupResolvedPayload;
+}
+
+export interface LessonMakeupResolvedPayload {
+  lessonId: string;
+  learnerId: string;
+  teacherId: string;
+  action: string;
+  durationMinutes: number;
 }
 
 export interface LessonClosedPayload {

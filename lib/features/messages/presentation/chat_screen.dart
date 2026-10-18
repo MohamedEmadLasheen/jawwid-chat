@@ -219,7 +219,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// Open a lesson ticket's form. Its card arrives through the ordinary message path;
   /// the tickets are refetched because the one just used is no longer offered.
   Future<void> _openTicket(LessonTicket ticket) async {
-    final sent = await showLessonTicketSheet(context, ticket);
+    final sent = await openLessonTicket(context, ticket);
     if (!mounted) return;
     ref.invalidate(lessonTicketsProvider(widget.conversationId));
     if (!sent) return;

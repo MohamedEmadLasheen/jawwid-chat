@@ -419,12 +419,12 @@ Future<ComposerChoice?> showComposerMenu(
               ),
               for (final t in tickets)
                 ListTile(
-                  key: ValueKey('ticket-${t.kind.name}-${t.lessonId}'),
+                  key: ValueKey('ticket-${t.kind.name}-${t.lessonId ?? t.learnerId}'),
                   leading: Icon(lessonTicketIcon(t.kind)),
                   title: Text(lessonTicketLabel(l10n, t.kind)),
                   subtitle: Text([
                     if (t.learnerName.isNotEmpty) t.learnerName,
-                    lessonWhen(sheetContext, t.startsAt),
+                    if (t.startsAt != null) lessonWhen(sheetContext, t.startsAt!),
                   ].join(' · ')),
                   onTap: () => pick(TicketChoice(t)),
                 ),

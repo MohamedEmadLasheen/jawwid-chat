@@ -785,6 +785,30 @@ New Students (needs Core's subscription events); **T5** statistics.
 - New Chat → Core events: `lesson.closed`, `enrollment.paused`,
   `enrollment.resumed`, `enrollment.left`, `learner.transferred`.
 
+**T2 as built (2026-10-18).** Migration `20261018140000_chat_pd011_scheduling.sql`.
+- Weekly availability and dated days off are recorded by the Teachers department,
+  in the teacher's IANA time zone. Every conversion to an instant is done by
+  Postgres `at time zone`, so daylight saving is the database's job.
+- A learner's regular times are `chat.learner_schedule_slot` rows, ended and
+  never edited. Lessons are **materialized** from them 4 weeks ahead by the
+  worker (`chat.materialize_lessons`, idempotent).
+- A changed schedule turns the old slots' future open lessons into the new
+  outcome **`rescheduled`**, which statistics do not count.
+- A family books a make-up **only** for a `teacher_apology` / `teacher_no_show`
+  lesson, only into `chat.teacher_free_slots`, and the database keeps one live
+  make-up per missed lesson. A make-up after an excused student apology waits
+  for the academy's notice rule and is not offered yet.
+- An unreplaced teacher-cancelled lesson reaches the needs-action list after
+  `lesson.makeup_window_days` (7). The supervisor's action (`substitute_teacher`,
+  `family_credit`, `package_extension`, `waived`) is a `makeup_followup` ruling,
+  and `lesson.makeup_resolved` tells Core.
+- Reminders are data rules on event `lesson_scheduled`: the family 24 h and
+  30 min before, the teacher 15 min before. Templates name nobody (push privacy,
+  2026-10-14). A reminder whose moment has passed is skipped, never sent late,
+  and closing a lesson early cancels its reminders in the same transaction.
+- The teacher app gains its **Schedule** tab (Chats · Schedule · Calls ·
+  Settings); a parent's tabs are unchanged.
+
 **Deprecated behaviour.** None removed. Explicitly **not** built: a generic ticket
 or task entity; any stored package balance; parents changing their regular
 lesson times without approval.

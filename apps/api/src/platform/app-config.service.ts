@@ -48,6 +48,15 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'story.media_retention_hours': 72,
   /** PD-9: an open lesson this long after its end is escalated to the Teachers department. */
   'lesson.escalation_after_minutes': 1440,
+  /** PD-11 T2: a teacher-cancelled lesson with no make-up this many days later goes to a supervisor. */
+  'lesson.makeup_window_days': 7,
+  /** How far ahead lessons are materialized from regular times. */
+  'lesson.materialize_weeks': 4,
+  /** A family books a make-up at least this long ahead, and at most this many days out. */
+  'lesson.booking_lead_minutes': 120,
+  'lesson.makeup_horizon_days': 14,
+  /** Free times are offered on this grid (minutes). */
+  'lesson.slot_step_minutes': 30,
 } as const;
 
 export type CommunicationConfigKey = keyof typeof COMMUNICATION_CONFIG_DEFAULTS;

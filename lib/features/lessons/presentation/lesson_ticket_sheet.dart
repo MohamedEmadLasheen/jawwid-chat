@@ -6,6 +6,8 @@ import '../../../core/errors/app_error.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
+import 'makeup_sheet.dart';
+import 'schedule_change_sheet.dart';
 
 /// The tickets "+" may offer in one conversation. Prefetched while the chat is open so
 /// the menu opens instantly; invalidated after every submission, because a ticket
@@ -22,6 +24,8 @@ String lessonTicketLabel(L10n l10n, LessonTicketKind kind) => switch (kind) {
       LessonTicketKind.apology => l10n.ticketApology,
       LessonTicketKind.teacherApology => l10n.ticketTeacherApology,
       LessonTicketKind.lateApology => l10n.ticketLateApology,
+      LessonTicketKind.bookMakeup => l10n.ticketBookMakeup,
+      LessonTicketKind.requestScheduleChange => l10n.ticketRequestScheduleChange,
     };
 
 IconData lessonTicketIcon(LessonTicketKind kind) => switch (kind) {
@@ -29,6 +33,8 @@ IconData lessonTicketIcon(LessonTicketKind kind) => switch (kind) {
       LessonTicketKind.absence => Icons.event_busy_outlined,
       LessonTicketKind.apology || LessonTicketKind.teacherApology => Icons.front_hand_outlined,
       LessonTicketKind.lateApology => Icons.schedule_outlined,
+      LessonTicketKind.bookMakeup => Icons.event_available_outlined,
+      LessonTicketKind.requestScheduleChange => Icons.edit_calendar_outlined,
     };
 
 /// Which lesson a ticket is about, in the reader's own calendar and clock.
@@ -37,7 +43,16 @@ String lessonWhen(BuildContext context, DateTime startsAt) {
   return '${m.formatMediumDate(startsAt)} · ${m.formatTimeOfDay(TimeOfDay.fromDateTime(startsAt))}';
 }
 
-/// Open one ticket's form. Resolves true when it was sent.
+/// Open whichever sheet a ticket needs. Resolves true when something was sent.
+Future<bool> openLessonTicket(BuildContext context, LessonTicket ticket) {
+  return switch (ticket.kind) {
+    LessonTicketKind.bookMakeup => showMakeupSheet(context, ticket),
+    LessonTicketKind.requestScheduleChange => showScheduleChangeSheet(context, ticket),
+    _ => showLessonTicketSheet(context, ticket),
+  };
+}
+
+/// Open one lesson ticket's form. Resolves true when it was sent.
 ///
 /// Built to be finished in seconds: a report needs only "what was covered"; everything
 /// else is optional. The server decides again on submit, so a ticket that stopped being
@@ -102,7 +117,7 @@ class _LessonTicketFormState extends ConsumerState<LessonTicketForm> {
       _error = null;
     });
     final repo = ref.read(lessonRepositoryProvider);
-    final id = widget.ticket.lessonId;
+    final id = widget.ticket.lessonId!;
     try {
       switch (_kind) {
         case LessonTicketKind.report:
@@ -119,6 +134,8 @@ class _LessonTicketFormState extends ConsumerState<LessonTicketForm> {
           await repo.absence(id, note: _optional(_main));
         case LessonTicketKind.apology || LessonTicketKind.teacherApology || LessonTicketKind.lateApology:
           await repo.apologise(id, _kind, _main.text.trim());
+        case LessonTicketKind.bookMakeup || LessonTicketKind.requestScheduleChange:
+          return; // their own sheets (openLessonTicket)
       }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
@@ -156,10 +173,11 @@ class _LessonTicketFormState extends ConsumerState<LessonTicketForm> {
             children: [
               Text(lessonTicketLabel(l10n, _kind), style: theme.textTheme.titleLarge),
               const SizedBox(height: Spacing.spacing1),
-              Text(
-                l10n.ticketLessonAt(lessonWhen(context, widget.ticket.startsAt)),
-                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-              ),
+              if (widget.ticket.startsAt != null)
+                Text(
+                  l10n.ticketLessonAt(lessonWhen(context, widget.ticket.startsAt!)),
+                  style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
               if (hint != null) ...[
                 const SizedBox(height: Spacing.spacing3),
                 Text(hint, style: theme.textTheme.bodySmall),
@@ -230,4 +248,11 @@ class _LessonTicketFormState extends ConsumerState<LessonTicketForm> {
       ),
     );
   }
+}
+
+/// What a refused or failed ticket says: "no longer allowed" for a state the server
+/// refused (another device acted first), "try again" for anything else.
+String ticketErrorText(L10n l10n, Object error) {
+  final code = error is AppError ? error.code : null;
+  return code == 'COMM.LESSON_STATE' || code == 'COMM.LESSON_NOT_FOUND' ? l10n.ticketNoLongerAllowed : l10n.ticketFailed;
 }

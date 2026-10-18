@@ -194,6 +194,30 @@ describe('lesson tickets over HTTP, in a PD-8 family group', () => {
     expect(ok.json.outcome).toBe('student_apology');
   });
 
+  it('T2: the Teachers department sets availability; the parent books the make-up the teacher owes them', async () => {
+    expect((await http(null, 'GET', `/teachers/${fam.child.teacherId}/availability`)).status).toBe(401);
+    const set = await http(tsup, 'POST', `/teachers/${fam.child.teacherId}/availability`, {
+      timezone: 'Africa/Cairo',
+      windows: [1, 2, 3, 4, 5, 6, 7].map((weekday) => ({ weekday, start: '08:00', end: '22:00' })),
+    });
+    expect(set.status).toBe(201);
+    expect((await http(fam.teacher, 'GET', '/teachers/me/availability')).json.timezone).toBe('Africa/Cairo');
+    expect((await http(fam.parent, 'POST', `/teachers/${fam.child.teacherId}/availability`, { timezone: 'Africa/Cairo', windows: [] })).status).toBe(403);
+
+    const id = await schedule(5 * 24 * 60 * MIN);
+    expect((await http(fam.teacher, 'POST', `/lessons/${id}/teacher-apology`, { reason: 'ill' })).status).toBe(201);
+    const offered = await http(fam.parent, 'GET', `/conversations/${fam.groupId}/lesson-tickets`);
+    expect((offered.json.tickets as Array<{ ticket: string; lessonId: string }>).some((t) => t.ticket === 'book_makeup' && t.lessonId === id)).toBe(true);
+    const slots = await http(fam.parent, 'GET', `/lessons/${id}/makeup-slots`);
+    expect(slots.status).toBe(200);
+    const pick = (slots.json.slots as string[])[3];
+    const booked = await http(fam.parent, 'POST', `/lessons/${id}/makeup`, { startsAt: pick });
+    expect(booked.status).toBe(201);
+    expect(booked.json.kind).toBe('makeup');
+    // The sibling's teacher cannot see, let alone book, someone else's make-up.
+    expect((await http(fam.siblingTeacher, 'GET', `/lessons/${id}/makeup-slots`)).status).toBe(404);
+  });
+
   it('the needs-action queue is the Teachers department\'s; a client cannot send a card', async () => {
     expect((await http(fam.teacher, 'GET', '/lessons/needs-action')).status).toBe(403);
     expect((await http(tsup, 'GET', '/lessons/needs-action')).status).toBe(200);

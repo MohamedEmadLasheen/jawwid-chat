@@ -5,6 +5,7 @@ import { AppModule } from './app.module';
 import { OutboxWorker } from './communication/outbox/outbox.worker';
 import { StorySweeper } from './communication/stories/story-sweeper.service';
 import { CallService } from './communication/calls/call.service';
+import { SchedulingService } from './lessons/scheduling.service';
 import { NotificationService } from './communication/notifications/notification.service';
 import { readBuildInfo } from './infra/build-info';
 import { listenForOutboxWake, OutboxPacer } from './communication/outbox/outbox-wake';
@@ -55,6 +56,13 @@ const STORY_SWEEP_MS = Number(process.env.STORY_SWEEP_MS ?? 60_000);
 const CALL_SWEEP_MS = Number(process.env.CALL_SWEEP_INTERVAL_MS ?? 5000);
 
 /**
+ * PD-11 T2: how often lessons are materialized from regular times and their
+ * reminders scheduled. Both are idempotent (one lesson per slot and start, one
+ * notification per rule, lesson and recipient), so every replica may run it.
+ */
+const LESSON_SWEEP_MS = Number(process.env.LESSON_SWEEP_MS ?? 300_000);
+
+/**
  * After a wake hint (outbox-wake.ts), how long to keep polling at
  * WAKE_POLL_MS before falling back to the idle backoff. The hint can arrive
  * before the enqueuing transaction commits, so one read is not enough; a short
@@ -75,6 +83,7 @@ async function bootstrap(): Promise<void> {
   const stories = app.get(StorySweeper);
   const calls = app.get(CallService);
   const notifications = app.get(NotificationService);
+  const scheduling = app.get(SchedulingService);
 
   let running = true;
   let draining = false;
@@ -109,6 +118,7 @@ async function bootstrap(): Promise<void> {
 
   let nextStorySweep = 0;
   let lastSweepAt = 0;
+  let nextLessonSweep = 0;
 
   // Realtime latency: a hint that a row was enqueued cuts the current sleep
   // short (OutboxPacer). Without Redis there are no hints and the loop simply
@@ -171,6 +181,20 @@ async function bootstrap(): Promise<void> {
         // Same rule as the drain: a failed sweep is retried on the next pass.
         // The calls it did not expire are still ringing and still match.
         log.error(`call sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`);
+      }
+    }
+
+    // Lessons from regular times, and their reminders -- before dispatch, so a
+    // reminder scheduled now and already due goes out on this pass.
+    if (Date.now() >= nextLessonSweep) {
+      draining = true;
+      try {
+        await scheduling.sweep();
+      } catch (e) {
+        log.error(`lesson sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`);
+      } finally {
+        draining = false;
+        nextLessonSweep = Date.now() + LESSON_SWEEP_MS;
       }
     }
 

@@ -52,7 +52,12 @@ export type LessonAct =
   | 'cancel'
   | 'teacher_no_show'
   | 'late_apology'
-  | 'decide_ruling';
+  | 'decide_ruling'
+  | 'book_makeup'
+  | 'request_schedule_change'
+  | 'decide_schedule_change'
+  | 'resolve_makeup'
+  | 'read_schedule';
 
 /**
  * Who may record what (PD-11's table). The report is the teacher's own words,
@@ -69,6 +74,13 @@ const LESSON_ACTS: Readonly<Record<LessonAct, readonly LessonStanding[]>> = {
   teacher_no_show: ['manager'],
   late_apology: ['family'],
   decide_ruling: ['manager'],
+  // PD-11 T2: a family books the make-up it is owed itself, instantly; a
+  // regular-time change it may only ask for.
+  book_makeup: ['family', 'manager'],
+  request_schedule_change: ['family'],
+  decide_schedule_change: ['manager'],
+  resolve_makeup: ['manager'],
+  read_schedule: ['manager', 'supervisor', 'teacher', 'family'],
 };
 
 export interface SendIntent {

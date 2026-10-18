@@ -1764,6 +1764,234 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Reason'**
   String get cardReason;
+
+  /// No description provided for @ticketBookMakeup.
+  ///
+  /// In en, this message translates to:
+  /// **'Book a make-up lesson'**
+  String get ticketBookMakeup;
+
+  /// No description provided for @ticketRequestScheduleChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Change regular lesson times'**
+  String get ticketRequestScheduleChange;
+
+  /// Subtitle naming the child a ticket is about.
+  ///
+  /// In en, this message translates to:
+  /// **'For {name}'**
+  String ticketFor(String name);
+
+  /// No description provided for @makeupPickDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a day'**
+  String get makeupPickDay;
+
+  /// No description provided for @makeupPickTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a time'**
+  String get makeupPickTime;
+
+  /// No description provided for @makeupNoSlots.
+  ///
+  /// In en, this message translates to:
+  /// **'No free times in the next two weeks. The supervision team will arrange the make-up.'**
+  String get makeupNoSlots;
+
+  /// No description provided for @makeupBook.
+  ///
+  /// In en, this message translates to:
+  /// **'Book'**
+  String get makeupBook;
+
+  /// Length of the make-up lesson.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} minutes'**
+  String makeupLength(int minutes);
+
+  /// No description provided for @scheduleChangePick.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the new weekly times'**
+  String get scheduleChangePick;
+
+  /// No description provided for @scheduleChangeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The supervision team will confirm the change.'**
+  String get scheduleChangeHint;
+
+  /// No description provided for @scheduleChangeNoOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'There are no other free times right now.'**
+  String get scheduleChangeNoOptions;
+
+  /// No description provided for @scheduleChangeSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send request'**
+  String get scheduleChangeSend;
+
+  /// No description provided for @ticketLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the free times. Please try again.'**
+  String get ticketLoadFailed;
+
+  /// No description provided for @cardMakeupBookedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Make-up lesson booked'**
+  String get cardMakeupBookedTitle;
+
+  /// No description provided for @cardMakeupResolvedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Missed lesson resolved'**
+  String get cardMakeupResolvedTitle;
+
+  /// No description provided for @cardMakeupActionSubstitute.
+  ///
+  /// In en, this message translates to:
+  /// **'A substitute teacher'**
+  String get cardMakeupActionSubstitute;
+
+  /// No description provided for @cardMakeupActionCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'A credit to the family'**
+  String get cardMakeupActionCredit;
+
+  /// No description provided for @cardMakeupActionExtension.
+  ///
+  /// In en, this message translates to:
+  /// **'The package is extended'**
+  String get cardMakeupActionExtension;
+
+  /// No description provided for @cardMakeupActionWaived.
+  ///
+  /// In en, this message translates to:
+  /// **'No make-up needed'**
+  String get cardMakeupActionWaived;
+
+  /// No description provided for @cardScheduleRequestedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Request to change the regular times'**
+  String get cardScheduleRequestedTitle;
+
+  /// No description provided for @cardScheduleApprovedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New regular times confirmed'**
+  String get cardScheduleApprovedTitle;
+
+  /// No description provided for @cardScheduleRejectedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The change of regular times was not approved'**
+  String get cardScheduleRejectedTitle;
+
+  /// A regular weekly time, e.g. 'Every Monday 17:00'.
+  ///
+  /// In en, this message translates to:
+  /// **'Every {when}'**
+  String cardEveryWeek(String when);
+
+  /// No description provided for @tabSchedule.
+  ///
+  /// In en, this message translates to:
+  /// **'Schedule'**
+  String get tabSchedule;
+
+  /// No description provided for @scheduleEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No lessons in the next two weeks.'**
+  String get scheduleEmpty;
+
+  /// No description provided for @scheduleLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load your schedule.'**
+  String get scheduleLoadFailed;
+
+  /// No description provided for @phaseUpcoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Upcoming'**
+  String get phaseUpcoming;
+
+  /// No description provided for @phaseInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'In progress'**
+  String get phaseInProgress;
+
+  /// No description provided for @phaseAwaitingClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs report'**
+  String get phaseAwaitingClose;
+
+  /// No description provided for @phaseOverdue.
+  ///
+  /// In en, this message translates to:
+  /// **'Report overdue'**
+  String get phaseOverdue;
+
+  /// No description provided for @outcomeHeld.
+  ///
+  /// In en, this message translates to:
+  /// **'Held'**
+  String get outcomeHeld;
+
+  /// No description provided for @outcomeStudentApology.
+  ///
+  /// In en, this message translates to:
+  /// **'Student apologised'**
+  String get outcomeStudentApology;
+
+  /// No description provided for @outcomeTeacherApology.
+  ///
+  /// In en, this message translates to:
+  /// **'Teacher apologised'**
+  String get outcomeTeacherApology;
+
+  /// No description provided for @outcomeAdminCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get outcomeAdminCancelled;
+
+  /// No description provided for @outcomeStudentNoShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Student absent'**
+  String get outcomeStudentNoShow;
+
+  /// No description provided for @outcomeTeacherNoShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Teacher absent'**
+  String get outcomeTeacherNoShow;
+
+  /// No description provided for @outcomeRescheduled.
+  ///
+  /// In en, this message translates to:
+  /// **'Moved'**
+  String get outcomeRescheduled;
+
+  /// No description provided for @lessonKindMakeup.
+  ///
+  /// In en, this message translates to:
+  /// **'Make-up'**
+  String get lessonKindMakeup;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

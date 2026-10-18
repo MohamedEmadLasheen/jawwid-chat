@@ -27,16 +27,27 @@ import {
 } from '../communication/contracts/vocab';
 import { renderCardBody, type CardLanguage } from './lesson-card';
 
-type Tx = Prisma.TransactionClient;
+export type Tx = Prisma.TransactionClient;
 
-type LessonWithRelations = Lesson & {
+export type LessonWithRelations = Lesson & {
   report: LessonReport | null;
   rulings: LessonRuling[];
   learner: { id: string; name: string; familyId: string };
   teacher: { id: string; name: string };
 };
 
-const LESSON_INCLUDE = {
+/**
+ * What a card is about: a lesson, or -- for a regular-time change -- a learner
+ * with no one lesson (`id` null). Its group is the learner's (groupFor).
+ */
+export interface CardSubject {
+  id: string | null;
+  learnerId: string;
+  organizationId: string;
+  teacherId: string;
+}
+
+export const LESSON_INCLUDE = {
   report: true,
   rulings: true,
   learner: { select: { id: true, name: true, familyId: true } },
@@ -95,7 +106,7 @@ export class LessonService {
       select: { id: true, teacherId: true },
     });
     if (!learner) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'learner not found');
-    if (!learner.teacherId) throw state('the learner has no assigned teacher');
+    if (!learner.teacherId) throw stateError('the learner has no assigned teacher');
 
     const lesson = await this.write(() =>
       this.prisma.$transaction(async (tx) => {
@@ -211,6 +222,19 @@ export class LessonService {
       take: 500,
     });
     const lessons = open.map((l) => this.toDto(l, 'manager', now, escalation));
+    // PD-11 T2: teacher-cancelled lessons nobody replaced within the window, and
+    // families waiting for an answer about their regular times.
+    const windowDays = Number(await this.config.get('lesson.makeup_window_days'));
+    const owed = await this.owedMakeups(actor.organizationId as string, { closedDaysAgo: windowDays });
+    const requests = await this.prisma.scheduleChangeRequest.findMany({
+      where: { organizationId: actor.organizationId, status: 'pending' },
+      orderBy: { createdAt: 'asc' },
+      take: 500,
+    });
+    const learnerNames = new Map(
+      (await this.prisma.learner.findMany({ where: { id: { in: requests.map((r) => r.learnerId) } }, select: { id: true, name: true } }))
+        .map((l) => [l.id, l.name]),
+    );
     return {
       overdue: lessons.filter((l) => l.phase === 'overdue'),
       awaitingClose: lessons.filter((l) => l.phase === 'awaiting_close'),
@@ -218,7 +242,49 @@ export class LessonService {
         ...rulingDto(r),
         lesson: this.toDto(r.lesson as LessonWithRelations, 'manager', now, escalation),
       })),
+      makeupsOverdue: owed.map((l) => this.toDto(l, 'manager', now, escalation)),
+      scheduleRequests: requests.map((r) => ({
+        id: r.id,
+        learner: { id: r.learnerId, name: learnerNames.get(r.learnerId) ?? '' },
+        slots: r.slots,
+        note: r.note,
+        createdAt: r.createdAt.toISOString(),
+      })),
     };
+  }
+
+  /**
+   * Lessons the teacher did not give that still owe the family a make-up: no
+   * live make-up replaces them and no supervisor has recorded what was done
+   * instead. Optionally only those closed at least `closedDaysAgo` days ago by
+   * the DATABASE clock (the follow-up window -- outcome_at is written by that
+   * clock, so it is measured by it too) and only for `learnerIds`.
+   */
+  async owedMakeups(
+    organizationId: string,
+    opts: { closedDaysAgo?: number; learnerIds?: string[]; since?: Date } = {},
+  ): Promise<LessonWithRelations[]> {
+    const ids = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT l.id::text AS id
+        FROM chat.lesson l
+       WHERE l.organization_id = ${organizationId}::uuid
+         AND l.outcome IN ('teacher_apology', 'teacher_no_show')
+         AND (${opts.closedDaysAgo ?? null}::int IS NULL OR l.outcome_at <= now() - make_interval(days => ${opts.closedDaysAgo ?? null}::int))
+         AND (${opts.since ?? null}::timestamptz IS NULL OR l.starts_at >= ${opts.since ?? null}::timestamptz)
+         AND (${opts.learnerIds ?? null}::uuid[] IS NULL OR l.learner_id = ANY(${opts.learnerIds ?? null}::uuid[]))
+         AND NOT EXISTS (
+           SELECT 1 FROM chat.lesson m
+            WHERE m.makeup_for = l.id AND m.kind = 'makeup'
+              AND (m.outcome IS NULL OR m.outcome NOT IN ('teacher_apology', 'teacher_no_show', 'admin_cancelled', 'rescheduled')))
+         AND NOT EXISTS (SELECT 1 FROM chat.lesson_ruling r WHERE r.lesson_id = l.id AND r.kind = 'makeup_followup')
+       ORDER BY l.outcome_at ASC
+       LIMIT 500`;
+    if (ids.length === 0) return [];
+    return this.prisma.lesson.findMany({
+      where: { id: { in: ids.map((r) => r.id) } },
+      include: LESSON_INCLUDE,
+      orderBy: { outcomeAt: 'asc' },
+    });
   }
 
   /**
@@ -247,10 +313,11 @@ export class LessonService {
     });
     const tickets: Array<{
       ticket: LessonAct;
-      lessonId: string;
+      /** Null for a ticket about the learner rather than one lesson (a regular-time change). */
+      lessonId: string | null;
       learner: { id: string; name: string };
-      startsAt: string;
-      endsAt: string;
+      startsAt: string | null;
+      endsAt: string | null;
     }> = [];
     for (const l of rows) {
       const standing = this.authz.lessonStanding(actor, this.scopeOf(l), { teachersDepartment: false, supervisesLearner: false });
@@ -263,6 +330,45 @@ export class LessonService {
             learner: { id: l.learner.id, name: l.learner.name },
             startsAt: l.startsAt.toISOString(),
             endsAt: l.endsAt.toISOString(),
+          });
+        }
+      }
+    }
+
+    // PD-11 T2: the make-ups this family is owed, and asking for new regular times.
+    const owed = await this.owedMakeups(conv.organizationId, { learnerIds, since: new Date(now.getTime() - 60 * 86_400_000) });
+    for (const l of owed) {
+      const standing = this.authz.lessonStanding(actor, this.scopeOf(l), { teachersDepartment: false, supervisesLearner: false });
+      if (standing && this.authz.canRecordLessonAct(actor, standing, 'book_makeup').allowed) {
+        tickets.push({
+          ticket: 'book_makeup',
+          lessonId: l.id,
+          learner: { id: l.learner.id, name: l.learner.name },
+          startsAt: l.startsAt.toISOString(),
+          endsAt: l.endsAt.toISOString(),
+        });
+      }
+    }
+    if (actor.kind === ActorKind.CONTACT) {
+      const learners = await this.prisma.learner.findMany({
+        where: { id: { in: learnerIds }, familyId: actor.familyId, organizationId: conv.organizationId },
+        select: { id: true, name: true, teacherId: true },
+      });
+      for (const learner of learners) {
+        const scope = { organizationId: conv.organizationId, teacherId: learner.teacherId ?? '', familyId: actor.familyId as string };
+        const standing = this.authz.lessonStanding(actor, scope, { teachersDepartment: false, supervisesLearner: false });
+        if (!standing || !this.authz.canRecordLessonAct(actor, standing, 'request_schedule_change').allowed) continue;
+        const [slots, pending] = await Promise.all([
+          this.prisma.learnerScheduleSlot.count({ where: { learnerId: learner.id, validTo: null } }),
+          this.prisma.scheduleChangeRequest.count({ where: { learnerId: learner.id, status: 'pending' } }),
+        ]);
+        if (slots > 0 && pending === 0) {
+          tickets.push({
+            ticket: 'request_schedule_change',
+            lessonId: null,
+            learner: { id: learner.id, name: learner.name },
+            startsAt: null,
+            endsAt: null,
           });
         }
       }
@@ -350,14 +456,14 @@ export class LessonService {
     const { lesson, standing } = await this.load(actor, lessonId);
     this.requireAct(actor, standing, 'late_apology');
     const now = new Date();
-    if (now < lesson.startsAt) throw state('the lesson has not started: send an apology instead');
+    if (now < lesson.startsAt) throw stateError('the lesson has not started: send an apology instead');
     if (now.getTime() > lesson.startsAt.getTime() + LATE_APOLOGY_HOURS * 3_600_000) {
-      throw state(`a late apology is accepted for ${LATE_APOLOGY_HOURS} hours after the start`);
+      throw stateError(`a late apology is accepted for ${LATE_APOLOGY_HOURS} hours after the start`);
     }
     if (lesson.outcome !== null && lesson.outcome !== LessonOutcome.STUDENT_NO_SHOW) {
-      throw state('a late apology applies only to an absence');
+      throw stateError('a late apology applies only to an absence');
     }
-    if (lesson.rulings.some((r) => r.kind === RulingKind.LATE_APOLOGY)) throw state('a late apology was already filed');
+    if (lesson.rulings.some((r) => r.kind === RulingKind.LATE_APOLOGY)) throw stateError('a late apology was already filed');
 
     const lang = await this.languageOf(lesson);
     await this.write(() =>
@@ -408,7 +514,7 @@ export class LessonService {
     if (!ruling) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'ruling not found');
     const { lesson, standing } = await this.load(actor, ruling.lessonId);
     this.requireAct(actor, standing, 'decide_ruling');
-    if (ruling.decision !== null) throw state('this ruling is already decided');
+    if (ruling.decision !== null) throw stateError('this ruling is already decided');
 
     const lang = await this.languageOf(lesson);
     await this.write(() =>
@@ -446,7 +552,8 @@ export class LessonService {
   }
 
   // ------------------------------------------------------------------
-  // Internals
+  // Internals. The non-private ones are shared with SchedulingService, which
+  // posts its cards and loads its lessons exactly as the tickets above do.
   // ------------------------------------------------------------------
 
   /** Close an open lesson with `outcome`, run the ticket's own writes, and tell Core -- one transaction. */
@@ -461,13 +568,13 @@ export class LessonService {
     const actor = await this.conversations.requireActor(actorId);
     const { lesson, standing } = await this.load(actor, lessonId);
     this.requireAct(actor, standing, act);
-    if (lesson.outcome !== null) throw state('this lesson is already closed');
+    if (lesson.outcome !== null) throw stateError('this lesson is already closed');
     const now = new Date();
     const afterStart = outcome === LessonOutcome.HELD || outcome === LessonOutcome.STUDENT_NO_SHOW || outcome === LessonOutcome.TEACHER_NO_SHOW;
     const beforeStart = outcome === LessonOutcome.STUDENT_APOLOGY || outcome === LessonOutcome.TEACHER_APOLOGY;
-    if (afterStart && now < lesson.startsAt) throw state('the lesson has not started yet');
+    if (afterStart && now < lesson.startsAt) throw stateError('the lesson has not started yet');
     if (beforeStart && now >= lesson.startsAt) {
-      throw state(
+      throw stateError(
         outcome === LessonOutcome.STUDENT_APOLOGY
           ? 'the lesson has started: file a late apology instead'
           : 'the lesson has started: a missed lesson is recorded by the Teachers department',
@@ -488,6 +595,9 @@ export class LessonService {
           },
         });
         await then(tx, lesson, actor, lang);
+        // A lesson that will not happen reminds nobody -- in the same
+        // transaction, so a reminder can never outlive the cancellation.
+        if (beforeStart || outcome === LessonOutcome.ADMIN_CANCELLED) await cancelReminders(tx, lesson.id);
         await this.emitClosed(tx, updated, false);
         await this.recordAttendance(tx, updated, actor, lesson.learner.familyId);
         if (outcomeNote !== null && act !== 'report') {
@@ -505,7 +615,7 @@ export class LessonService {
     return this.get(actorId, lessonId);
   }
 
-  private async emitClosed(tx: Tx, lesson: Lesson, correction: boolean) {
+  async emitClosed(tx: Tx, lesson: Lesson, correction: boolean) {
     await this.outbox.enqueue(tx, CommEvent.LESSON_CLOSED, {
       lessonId: lesson.id,
       learnerId: lesson.learnerId,
@@ -519,7 +629,7 @@ export class LessonService {
   }
 
   /** PD-9 keeps the class_attended / class_missed vocabulary and emits it from outcomes. */
-  private async recordAttendance(tx: Tx, lesson: Lesson, actor: Actor, familyId: string) {
+  async recordAttendance(tx: Tx, lesson: Lesson, actor: Actor, familyId: string) {
     const type =
       lesson.outcome === LessonOutcome.HELD ? 'class_attended'
         : lesson.outcome === LessonOutcome.STUDENT_NO_SHOW ? 'class_missed'
@@ -543,9 +653,9 @@ export class LessonService {
    * null when the learner has no live student group: the record stands, and
    * the parent's child page still shows it.
    */
-  private async postCard(
+  async postCard(
     tx: Tx,
-    lesson: LessonWithRelations,
+    lesson: CardSubject,
     recorder: Actor | null,
     kind: string,
     payload: Record<string, unknown>,
@@ -624,7 +734,7 @@ export class LessonService {
    * teacher is in. Both belong to ONE family (chat.conversation_learner holds a
    * single family's children), so a card never reaches another family.
    */
-  private async groupFor(tx: Tx, lesson: LessonWithRelations) {
+  async groupFor(tx: Tx, lesson: CardSubject) {
     const own = await tx.conversation.findFirst({
       where: { type: ConversationType.STUDENT_GROUP, learnerId: lesson.learnerId, archivedAt: null, organizationId: lesson.organizationId },
       orderBy: { createdAt: 'desc' },
@@ -646,7 +756,7 @@ export class LessonService {
   }
 
   /** The learners a group is about: a student group's one, or a family group's chat.conversation_learner rows. */
-  private async learnersOf(conv: { id: string; type: string; learnerId: string | null }): Promise<string[]> {
+  async learnersOf(conv: { id: string; type: string; learnerId: string | null }): Promise<string[]> {
     if (conv.type === ConversationType.STUDENT_GROUP) return conv.learnerId ? [conv.learnerId] : [];
     if (conv.type === ConversationType.FAMILY_GROUP) {
       const rows = await this.prisma.conversationLearner.findMany({ where: { conversationId: conv.id }, select: { learnerId: true } });
@@ -655,7 +765,7 @@ export class LessonService {
     return [];
   }
 
-  private cardBase(lesson: LessonWithRelations) {
+  cardBase(lesson: LessonWithRelations) {
     return {
       lessonId: lesson.id,
       learnerName: lesson.learner.name,
@@ -667,7 +777,7 @@ export class LessonService {
   }
 
   /** Load a lesson the actor may see. A lesson they may not see is answered exactly as an unknown one. */
-  private async load(actor: Actor, lessonId: string): Promise<{ lesson: LessonWithRelations; standing: LessonStanding }> {
+  async load(actor: Actor, lessonId: string): Promise<{ lesson: LessonWithRelations; standing: LessonStanding }> {
     if (!isUuid(lessonId)) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'lesson not found');
     const lesson = await this.prisma.lesson.findUnique({ where: { id: lessonId }, include: LESSON_INCLUDE });
     if (!lesson) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'lesson not found');
@@ -680,22 +790,22 @@ export class LessonService {
     return { lesson, standing };
   }
 
-  private scopeOf(lesson: LessonWithRelations) {
+  scopeOf(lesson: LessonWithRelations) {
     return { organizationId: lesson.organizationId, teacherId: lesson.teacherId, familyId: lesson.learner.familyId };
   }
 
-  private requireAct(actor: Actor, standing: LessonStanding, act: LessonAct) {
+  requireAct(actor: Actor, standing: LessonStanding, act: LessonAct) {
     const d = this.authz.canRecordLessonAct(actor, standing, act);
     if (!d.allowed) throw new CommError(d.code, d.reason);
   }
 
-  private async requireManager(actor: Actor) {
+  async requireManager(actor: Actor) {
     const d = this.authz.canManageLessons(actor, actor.organizationId ?? '', { teachersDepartment: await this.isManager(actor) });
     if (!d.allowed) throw new CommError(CommErrorCode.LESSON_DENIED, d.reason);
   }
 
   /** The actor manages or belongs to the organization's Teachers department. */
-  private async isManager(actor: Actor): Promise<boolean> {
+  async isManager(actor: Actor): Promise<boolean> {
     if (actor.kind !== ActorKind.STAFF || !actor.organizationId) return false;
     const rows = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
       SELECT EXISTS (
@@ -710,7 +820,7 @@ export class LessonService {
   }
 
   /** Learners whose PD-8 supervisor is one of the actor's principals (optionally just `only`). */
-  private async supervisedLearnerIds(actor: Actor, at: Date, only?: string): Promise<string[]> {
+  async supervisedLearnerIds(actor: Actor, at: Date, only?: string): Promise<string[]> {
     const rows = await this.prisma.$queryRaw<Array<{ learner_id: string }>>`
       SELECT ls.learner_id::text AS learner_id
         FROM chat.learner_supervision ls
@@ -720,17 +830,17 @@ export class LessonService {
     return rows.map((r) => r.learner_id);
   }
 
-  private async languageOf(lesson: LessonWithRelations): Promise<CardLanguage> {
+  async languageOf(lesson: { learner: { familyId: string } }): Promise<CardLanguage> {
     const family = await this.prisma.family.findUnique({ where: { id: lesson.learner.familyId }, select: { language: true } });
     return family?.language === 'en' ? 'en' : 'ar';
   }
 
-  private async escalationMs(): Promise<number> {
+  async escalationMs(): Promise<number> {
     return Number(await this.config.get('lesson.escalation_after_minutes')) * 60_000;
   }
 
   /** Map the database's refusal to a stable code: the triggers have the last word. */
-  private async write<T>(fn: () => Promise<T>): Promise<T> {
+  async write<T>(fn: () => Promise<T>): Promise<T> {
     try {
       return await fn();
     } catch (e) {
@@ -739,7 +849,12 @@ export class LessonService {
       if (/23P01|lesson_teacher_is_never_double_booked/.test(text)) {
         throw new CommError(CommErrorCode.LESSON_TEACHER_BUSY, 'the teacher already has a lesson at that time', 409);
       }
-      if (/23514|check_violation/.test(text)) {
+      // A unique index refusing a second live record (a second make-up, a second
+      // pending request) is a state answer, not a server error.
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        throw new CommError(CommErrorCode.LESSON_STATE, 'this was already done', 409);
+      }
+      if (/23505|23514|check_violation|unique constraint/i.test(text)) {
         const reason = /message: "([^"]+)"/.exec(text)?.[1] ?? 'the lesson does not allow this';
         throw new CommError(CommErrorCode.LESSON_STATE, reason, 409);
       }
@@ -747,7 +862,7 @@ export class LessonService {
     }
   }
 
-  private toDto(lesson: LessonWithRelations, standing: LessonStanding, now: Date, escalationMs: number) {
+  toDto(lesson: LessonWithRelations, standing: LessonStanding, now: Date, escalationMs: number) {
     const ruling = lesson.rulings.find((r) => r.kind === RulingKind.LATE_APOLOGY) ?? null;
     return {
       id: lesson.id,
@@ -819,32 +934,40 @@ export function availableActs(lesson: Pick<Lesson, 'outcome' | 'startsAt'> & { r
   return acts;
 }
 
-function invalid(reason: string) {
+/** ReminderService.cancelForSubject, inside the caller's transaction. */
+export async function cancelReminders(tx: Tx, lessonId: string): Promise<void> {
+  await tx.notification.updateMany({
+    where: { status: 'scheduled', dedupeKey: { contains: `:${lessonId}:` } },
+    data: { status: 'cancelled' },
+  });
+}
+
+export function invalid(reason: string) {
   return new CommError(CommErrorCode.VALIDATION, reason, 400);
 }
-function state(reason: string) {
+export function stateError(reason: string) {
   return new CommError(CommErrorCode.LESSON_STATE, reason, 409);
 }
-function uuidField(body: Record<string, unknown>, key: string): string {
+export function uuidField(body: Record<string, unknown>, key: string): string {
   const v = body[key];
   if (typeof v !== 'string' || !isUuid(v)) throw invalid(`${key}: must be a uuid`);
   return v;
 }
-function optionalUuidField(body: Record<string, unknown>, key: string): string | null {
+export function optionalUuidField(body: Record<string, unknown>, key: string): string | null {
   if (body[key] === undefined || body[key] === null) return null;
   return uuidField(body, key);
 }
-function parseDate(v: string, key: string): Date {
+export function parseDate(v: string, key: string): Date {
   const d = new Date(v);
   if (Number.isNaN(d.getTime()) || !/^\d{4}-\d{2}-\d{2}T/.test(v)) throw invalid(`${key}: must be an ISO-8601 timestamp`);
   return d;
 }
-function dateField(body: Record<string, unknown>, key: string): Date {
+export function dateField(body: Record<string, unknown>, key: string): Date {
   const v = body[key];
   if (typeof v !== 'string') throw invalid(`${key}: must be an ISO-8601 timestamp`);
   return parseDate(v, key);
 }
-function textField(body: Record<string, unknown>, key: string, max: number, required: boolean): string | null {
+export function textField(body: Record<string, unknown>, key: string, max: number, required: boolean): string | null {
   const v = body[key];
   if (v === undefined || v === null || (typeof v === 'string' && v.trim() === '')) {
     if (required) throw invalid(`${key}: required`);
