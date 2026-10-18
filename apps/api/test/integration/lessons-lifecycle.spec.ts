@@ -19,14 +19,16 @@ import { LessonService } from '../../src/lessons/lesson.service';
 import { SchedulingService } from '../../src/lessons/scheduling.service';
 import { LifecycleService } from '../../src/lessons/lifecycle.service';
 import { SupervisionService } from '../../src/lessons/supervision.service';
+import { SupervisionConversationService } from '../../src/supervision/supervision-conversation.service';
 import { buildGraph, seed, truncate, Scenario } from './harness';
 
 const g = buildGraph();
 const audit = new PrismaAuditService();
 const lessons = new LessonService(g.prisma, g.authz, g.conversations, g.outbox, g.config, audit);
 const scheduling = new SchedulingService(g.prisma, g.authz, g.conversations, lessons, g.outbox, g.config, g.reminders, audit);
-const lifecycle = new LifecycleService(g.prisma, g.conversations, lessons, scheduling, g.outbox, g.config, audit);
-const supervision = new SupervisionService(g.prisma, g.conversations, lessons, g.outbox, audit);
+const supervisionChats = new SupervisionConversationService(g.prisma, g.authz, g.conversations, g.outbox, audit);
+const lifecycle = new LifecycleService(g.prisma, g.conversations, lessons, scheduling, g.outbox, g.config, audit, supervisionChats);
+const supervision = new SupervisionService(g.prisma, g.conversations, lessons, g.outbox, supervisionChats, audit);
 
 const TZ = 'Africa/Cairo';
 const HOUR = 3_600_000;
@@ -139,8 +141,11 @@ describe('1. transfers', () => {
     // The family is told who teaches now; the new teacher gets the handover in their supervision chat.
     expect((await cards()).map((c) => c.card?.kind)).toEqual(['learner_transferred']);
     expect((await cards()).at(0)?.card?.payload).not.toHaveProperty('reason');
-    const direct = await g.conversations.getOrCreateDirect(tsupId, s.newTeacherId);
-    const handover = (await cards(direct.id)).find((c) => c.card?.kind === 'learner_handover');
+    // PD-12 (reconciled 2026-10-19): the ONE supervision conversation per teacher.
+    const supervisionConv = await g.prisma.conversation.findFirstOrThrow({
+      where: { type: 'teacher_supervision', supervisedTeacherId: s.newTeacherId, archivedAt: null },
+    });
+    const handover = (await cards(supervisionConv.id)).find((c) => c.card?.kind === 'learner_handover');
     expect(handover?.card?.payload).toMatchObject({ handoverNote: 'strong in tajweed, weak in revision' });
     expect(await g.prisma.outboxEvent.count({ where: { type: 'learner.transferred' } })).toBe(1);
 
@@ -262,6 +267,8 @@ describe('4. Teacher Supervision', () => {
     await lessons.teacherApology(s.teacherId, id, { reason: 'ill' });
 
     const bonus = await supervision.bonus(tsupId, s.teacherId, { reason: 'every report on time in October' });
+    const conv = await g.prisma.conversation.findUniqueOrThrow({ where: { id: bonus.conversationId } });
+    expect([conv.type, conv.supervisedTeacherId]).toEqual(['teacher_supervision', s.teacherId]);
     const card = (await cards(bonus.conversationId)).find((c) => c.card?.kind === 'teacher_bonus');
     expect(card?.card?.payload).toMatchObject({ reason: 'every report on time in October' });
     expect(card?.authorType).toBe('staff');

@@ -191,6 +191,24 @@ export enum CommErrorCode {
   TEACHER_FILE_NOT_FOUND = 'COMM.TEACHER_FILE_NOT_FOUND',
   /** PD-10: the timeline refused the entry (already resolved, already recorded, wrong target). 409. */
   TEACHER_FILE_CONFLICT = 'COMM.TEACHER_FILE_CONFLICT',
+  /** PD-12: no such certificate, or none this caller may see. 404. */
+  CERTIFICATE_NOT_FOUND = 'COMM.CERTIFICATE_NOT_FOUND',
+  /** PD-12: this caller may not request, issue or decline this certificate. 403. */
+  CERTIFICATE_DENIED = 'COMM.CERTIFICATE_DENIED',
+  /** PD-12: the certificate is not in a state that allows this (already decided, no group to deliver into). 409. */
+  CERTIFICATE_STATE = 'COMM.CERTIFICATE_STATE',
+  /** PD-12: no such leave request or teacher, or none this caller may see. 404. */
+  LEAVE_NOT_FOUND = 'COMM.LEAVE_NOT_FOUND',
+  /** PD-12: this caller may not request, decide or cancel this leave, or set this allowance. 403. */
+  LEAVE_DENIED = 'COMM.LEAVE_DENIED',
+  /** PD-12: the leave is not in a state that allows this (decided, overlapping, past, crossing a year). 409. */
+  LEAVE_STATE = 'COMM.LEAVE_STATE',
+  /** PD-12: open lessons fall inside the leave; approve again with cancelCollidingLessons. 409. */
+  LEAVE_LESSONS_COLLIDE = 'COMM.LEAVE_LESSONS_COLLIDE',
+  /** PD-12: this caller may not open this teacher's supervision conversation. 403. */
+  SUPERVISION_DENIED = 'COMM.SUPERVISION_DENIED',
+  /** PD-12: no such active teacher in the caller's organization. 404. */
+  SUPERVISION_NOT_FOUND = 'COMM.SUPERVISION_NOT_FOUND',
 }
 
 export class CommError extends Error {

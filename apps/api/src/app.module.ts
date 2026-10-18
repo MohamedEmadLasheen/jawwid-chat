@@ -8,6 +8,9 @@ import { StaffProfileModule } from './staff-profile/staff-profile.module';
 import { OrgStructureModule } from './org/org-structure.module';
 import { LessonModule } from './lessons/lesson.module';
 import { TeacherFileModule } from './teacher-file/teacher-file.module';
+import { SupervisionModule } from './supervision/supervision.module';
+import { CertificateModule } from './certificates/certificate.module';
+import { LeaveModule } from './leave/leave.module';
 
 /**
  * The root module. Composition only -- it declares no provider and no
@@ -39,6 +42,9 @@ import { TeacherFileModule } from './teacher-file/teacher-file.module';
     OrgStructureModule,
     LessonModule,
     TeacherFileModule,
+    SupervisionModule,
+    CertificateModule,
+    LeaveModule,
   ],
 })
 export class AppModule {}

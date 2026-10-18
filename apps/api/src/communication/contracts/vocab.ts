@@ -64,6 +64,11 @@ export const ConversationType = {
    * family (chat.conversation_learner). Moderated like a Student Group.
    */
   FAMILY_GROUP: 'family_group',
+  /**
+   * PD-11 / PD-12: one staff-only conversation per teacher with the Teachers
+   * department (chat.conversation.supervised_teacher_id). Never a contact.
+   */
+  TEACHER_SUPERVISION: 'teacher_supervision',
 } as const;
 
 /** Group conversations: BR-1 admin presence, moderation and PD-2 apply. */
@@ -290,6 +295,16 @@ export const CardKind = {
   LEARNER_RETURN_SOON: 'learner_return_soon',
   LEARNER_RESUMED: 'learner_resumed',
   TEACHER_BONUS: 'teacher_bonus',
+  /** PD-12: posted in the teacher supervision conversation. */
+  CERTIFICATE_REQUESTED: 'certificate_requested',
+  /** PD-12: posted in the learner's group, carrying the certificate file as its attachment. */
+  CERTIFICATE_ISSUED: 'certificate_issued',
+  CERTIFICATE_DECLINED: 'certificate_declined',
+  LEAVE_REQUESTED: 'leave_requested',
+  LEAVE_APPROVED: 'leave_approved',
+  LEAVE_DECLINED: 'leave_declined',
+  LEAVE_WITHDRAWN: 'leave_withdrawn',
+  LEAVE_CANCELLED: 'leave_cancelled',
 } as const;
 export type CardKind = (typeof CardKind)[keyof typeof CardKind];
 
@@ -306,6 +321,20 @@ export type MakeupAction = (typeof MakeupAction)[keyof typeof MakeupAction];
 
 /** The outcomes that owe the family a make-up: the teacher did not give the lesson. */
 export const MAKEUP_OWING_OUTCOMES: ReadonlySet<string> = new Set(['teacher_apology', 'teacher_no_show']);
+
+/** PD-12: a student certificate's life. */
+export const CertificateState = { REQUESTED: 'requested', ISSUED: 'issued', DECLINED: 'declined' } as const;
+export type CertificateState = (typeof CertificateState)[keyof typeof CertificateState];
+
+/** PD-12: a leave request's life. */
+export const LeaveState = {
+  REQUESTED: 'requested',
+  APPROVED: 'approved',
+  DECLINED: 'declined',
+  WITHDRAWN: 'withdrawn',
+  CANCELLED: 'cancelled',
+} as const;
+export type LeaveState = (typeof LeaveState)[keyof typeof LeaveState];
 export const RulingDecision = { EXCUSED: 'excused', TEACHER_CREDITED: 'teacher_credited' } as const;
 export type RulingDecision = (typeof RulingDecision)[keyof typeof RulingDecision];
 
