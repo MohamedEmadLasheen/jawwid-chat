@@ -32,6 +32,9 @@ abstract final class Wire {
   static const messageFile = 'file';
   static const messageSystem = 'system';
 
+  /// PD-11: a ticket's card. `MessageDto.card` carries its structure.
+  static const messageCard = 'card';
+
   // Moderation
   static const moderationPublished = 'published';
   static const moderationPending = 'pending';

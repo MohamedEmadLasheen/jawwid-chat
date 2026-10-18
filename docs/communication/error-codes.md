@@ -109,6 +109,19 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.STAFF_ASSIGNMENT_INVALID` | 409 | The assignment is not lawful: already active, already ended, or it breaks the reporting hierarchy. |
 | `COMM.STAFF_DIRECTORY_DENIED` | 403 | The organization-wide staff overview belongs to `super_admin` alone. |
 
+## Lessons (PD-9 / PD-11)
+
+| Code | HTTP | Meaning |
+|---|---|---|
+| `COMM.LESSON_NOT_FOUND` | 404 | No such lesson or ruling, or one the caller may not see (another teacher's, another family's, another organization's). Deliberately one code. |
+| `COMM.LESSON_DENIED` | 403 | The caller sees the lesson but may not record this on it: a parent writing a report, a teacher deciding a ruling, an Operations supervisor cancelling. Never retry. |
+| `COMM.LESSON_STATE` | 409 | The lesson does not allow it now: already closed, not started yet, started already (send a late apology instead), or past the 48-hour late-apology window. Refresh the lesson; do not retry. |
+| `COMM.LESSON_TEACHER_BUSY` | 409 | The teacher already has a lesson that overlaps this time. |
+
+A client may never send a message of type `card`; `POST /conversations/:id/messages`
+answers `COMMON.VALIDATION` (400). Cards are written only by the ticket that
+recorded them.
+
 ## Client guidance
 
 - **Never retry** a BR-1 or role denial: it is a rule, not a transient failure.

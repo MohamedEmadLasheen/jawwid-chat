@@ -120,7 +120,7 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-10 — CLOSED
+## 4. Product decisions PD-1 to PD-11 — CLOSED
 
 PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
 exit gate, before `main` was baselined. **PD-6 was closed by the product owner
@@ -129,6 +129,7 @@ the same six-field form. This section is the canonical record. Any document that
 contradicts it is superseded on that point, whatever its own status banner says.
 **PD-7 was closed by the product owner on 2026-10-14** and supersedes PD-6.
 **PD-9 and PD-10 were closed by the product owner on 2026-10-18.**
+**PD-11 was closed by the product owner on 2026-10-18.**
 
 | ID | Subject | Status |
 |---|---|---|
@@ -142,6 +143,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-8** | **Organization structure and conversation scope** (2026-10-15) | **CLOSED** — departments + per-child supervision + activated backups; staff read only on a PD-8 basis; super admin full read/write; supersedes BR-4 for scope. Record: `../architecture/ORG-SCOPE-PD8.md` |
 | **PD-9** | **Lessons move from Core into Chat** (2026-10-18) | **CLOSED** — Chat owns lessons per cut-over teacher; one outcome per lesson; the report is the message; money stays in Core |
 | **PD-10** | **Teacher File (admin only); parent Billing and child pages** (2026-10-18) | **CLOSED** — tiered admin access, finance super_admin only; Billing and payroll read-only from Core; teacher sees own schedule + workload |
+| **PD-11** | **Lesson operations: tickets, apologies, make-ups, suspensions, transfers, trials** (2026-10-18) | **CLOSED** — every ticket is a form that changes one record and posts one card; rulings go to a supervision queue; money stays in Core |
 
 ---
 
@@ -679,10 +681,132 @@ PD-10):
 
 ---
 
-### Decisions still open after PD-1 to PD-10
+### PD-11 · Lesson operations: tickets, apologies, make-ups, suspensions, transfers and trials
+
+**Closed 2026-10-18** by the product owner.
+
+The owner's requirements of 2026-10-18 extend PD-9 to the whole life of a
+learner's lessons. Four questions were answered on the same day: a "grant" is a
+**teacher bonus**; the lesson-package balance **stays in Core**; a parent books a
+**make-up instantly** but a **regular-time change needs approval**; a trial
+conversion is a **Sales ticket confirmed against Core**.
+
+**Final decision.**
+
+```
+ticket   = a form in a conversation's "+" menu, offered only in the right
+           conversation type to the right role, that
+             - changes exactly ONE domain record (lesson, enrollment, trial ...)
+             - posts exactly ONE card into that conversation
+           there is no ticket table, no assignee and no ticket status:
+           PD-4 keeps tasks frozen
+
+ruling   = a ticket that needs a decision opens a ruling on its record;
+           open rulings form the Teacher Supervision "Needs decision" queue;
+           every decided ruling is appended to the teacher's supervision
+           timeline (PD-10)
+```
+
+**Lesson reports and absences (PD-9 refined).**
+
+| Situation | Who acts | Outcome |
+|---|---|---|
+| Learner attended | teacher: **Lesson report** ticket | `held` + report card |
+| Learner excused **before** the start | parent: **Apology** ticket (its timestamp is the notice) | `student_apology`; no report |
+| Learner absent, no apology, start has passed | teacher: **Absence** ticket | `student_no_show`; credited to the teacher |
+| Parent apologises **after** the start (emergency) | parent: **Late apology** ticket | opens a ruling; the lesson stays credited to the teacher until a supervisor rules `student_apology` (excused) or confirms `student_no_show` |
+| Teacher cannot teach, before the start | teacher: **Teacher apology** ticket | `teacher_apology`; a make-up is owed |
+
+The teacher is never the judge of a late apology, and a teacher's credit is
+never held while a ruling is open. A card is posted into the learner's student
+group, or — where the family is served through a PD-8 family group instead —
+into the live family group that is about the learner and has the lesson's
+teacher in it. Both belong to one family, so a card never reaches another.
+
+**Make-ups and schedule changes.** A make-up is owed after `teacher_apology`
+(and after an excused `student_apology` when the academy's notice rule says so).
+The parent's **Make-up** ticket lists the teacher's real free slots — the PD-9
+availability template minus extra days off minus booked lessons — and books one
+**instantly**; the database refuses two lessons that overlap for one teacher. A
+**Regular-time change** ticket lists the same slots but only **requests** the
+change; a Teachers-department supervisor approves it. If no make-up is booked
+within a configured number of days, a ruling opens; the supervisor's action
+(substitute teacher, credit to the family in Core, package extension in Core) is
+recorded on the teacher's supervision timeline. This **overrides PD-9 default 2**
+for make-ups only.
+
+**Suspensions.** Chat records the state of a learner's study: `active`,
+`paused` (with an agreed return date) or `left` (with a reason from a fixed
+list, plus free text). A pause creates no lessons in its window and tells Core,
+which **holds the package** (Core owns the balance). Two days before the return
+date, the family's group and the responsible team are notified; on the date,
+lessons resume unless a supervisor extends the pause. The "used up their
+package" list reads the balance from a Core API at request time (PD-10 rule).
+
+**Transfers.** A **Transfer** ticket names the new teacher, a reason from a fixed
+list and a handover note. A Teachers-department supervisor executes it, in one
+transaction: `chat.learner.teacher_id` changes through a guarded writer, the old
+teacher leaves the student group (losing access to it), the new teacher joins
+and reads the whole history, future lessons move, past lessons stay with the
+teacher who taught them, and Core is told. Chat therefore **writes** the
+teacher assignment for cut-over teachers.
+
+**Trials.** Each teacher has one staff-only **trial group** (the Sales
+supervisor, the teacher, Teachers-department supervisors when needed). A trial
+lesson is about a **prospect** named by display name only — no phone or e-mail
+(BR-2). Two independent facts, each recorded by whoever knows it:
+**attendance** (teacher: trial report or no-show) and **conversion**
+(Sales: subscribed, or not subscribed with a reason). A conversion becomes
+**confirmed** when Core's subscription event arrives for it; only a confirmed
+conversion credits the teacher.
+
+**New students.** A confirmed subscription puts the learner on the Operations
+**New Students** page, which is a single setup: teacher, weekly times, student
+group, welcome message.
+
+**Teacher Supervision chat and bonuses.** Each teacher has one staff-only
+supervision conversation with the Teachers department. Its **Bonus** ticket
+records the reason on the supervision timeline; the amount is payroll and stays
+in Core/HR (PD-10).
+
+**Implementation phase.** In order: **T1** lessons, report / absence / apology
+/ late-apology tickets, rulings and the needs-action list; **T2** availability,
+make-up booking, regular-time requests, teacher-apology follow-up; **T3**
+transfers, suspensions and the supervision chat; **T4** trials, trial groups and
+New Students (needs Core's subscription events); **T5** statistics.
+
+**Consequences.**
+- A message gains one new type, `card`, written only by the server; a client
+  can never author one.
+- Two staff-only conversation purposes (trial group, teacher supervision) are
+  new in T3/T4 and are recorded when they are built.
+- `chat.learner.teacher_id` gains a second writer (the transfer) beside Core
+  ingestion.
+- New Chat → Core events: `lesson.closed`, `enrollment.paused`,
+  `enrollment.resumed`, `enrollment.left`, `learner.transferred`.
+
+**Deprecated behaviour.** None removed. Explicitly **not** built: a generic ticket
+or task entity; any stored package balance; parents changing their regular
+lesson times without approval.
+
+**Defaults adopted at closing** (the owner may override without reopening
+PD-11):
+1. Report template: **what was covered** (required), homework, a 1–5 rating and
+   a note (optional). This settles PD-9 open item 1 until the academic team
+   replaces it.
+2. A late apology may be filed up to **48 hours** after the lesson starts.
+3. The return-date notice is sent **2 days** before the date.
+4. A lesson still open **24 hours** after its end is overdue and escalated
+   (`lesson.escalation_after_minutes`); this settles PD-9 open item 3.
+
+**Closed.** 2026-10-18.
+
+---
+
+### Decisions still open after PD-1 to PD-11
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
-The implementation items left open inside PD-9 and PD-10 are settled when their
+The implementation items left open inside PD-9, PD-10 and PD-11 are settled when their
 phase starts and do not reopen either decision. Any new product question is
 recorded here with a new `PD-n` and the same six fields: decision, canonical
 rule, implementation phase, consequences, deprecated behaviour, and the date it

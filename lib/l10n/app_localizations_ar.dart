@@ -803,4 +803,113 @@ class L10nAr extends L10n {
 
   @override
   String get systemUpdate => 'تحديث من النظام';
+
+  @override
+  String get lessonTicketsHeader => 'الحصة';
+
+  @override
+  String get ticketReport => 'تقرير الحصة';
+
+  @override
+  String get ticketAbsence => 'غياب الطالب';
+
+  @override
+  String get ticketApology => 'اعتذار عن الحصة';
+
+  @override
+  String get ticketTeacherApology => 'اعتذار المعلم عن الحصة';
+
+  @override
+  String get ticketLateApology => 'اعتذار متأخر (ظرف طارئ)';
+
+  @override
+  String ticketLessonAt(String when) {
+    return 'حصة $when';
+  }
+
+  @override
+  String get reportCoveredLabel => 'ما تمت دراسته';
+
+  @override
+  String get reportHomeworkLabel => 'الواجب (اختياري)';
+
+  @override
+  String get reportRatingLabel => 'التقييم (اختياري)';
+
+  @override
+  String get reportNoteLabel => 'ملاحظة (اختياري)';
+
+  @override
+  String get ticketReasonLabel => 'السبب';
+
+  @override
+  String get ticketAbsenceHint => 'لم يصل اعتذار وانتهى وقت الحصة.';
+
+  @override
+  String get ticketLateApologyHint =>
+      'ستراجعه الإدارة، وحتى ذلك الحين تُحتسب الحصة غيابًا.';
+
+  @override
+  String get ticketTeacherApologyHint => 'سيتم ترتيب حصة تعويضية مع الأسرة.';
+
+  @override
+  String get ticketSubmit => 'إرسال';
+
+  @override
+  String get ticketSent => 'تم الإرسال';
+
+  @override
+  String get ticketFailed => 'تعذّر الإرسال. حاول مرة أخرى.';
+
+  @override
+  String get ticketNoLongerAllowed =>
+      'لم يعد بالإمكان تحديث هذه الحصة بهذه الطريقة.';
+
+  @override
+  String get cardReportTitle => 'تقرير الحصة';
+
+  @override
+  String get cardAbsenceTitle => 'غياب عن الحصة';
+
+  @override
+  String get cardApologyTitle => 'اعتذار';
+
+  @override
+  String get cardTeacherApologyTitle => 'اعتذار المعلم عن الحصة';
+
+  @override
+  String get cardCancelledTitle => 'أُلغيت الحصة';
+
+  @override
+  String get cardTeacherAbsentTitle => 'لم تُعقد الحصة لغياب المعلم';
+
+  @override
+  String get cardLateApologyTitle => 'اعتذار متأخر';
+
+  @override
+  String get cardRulingExcusedTitle => 'قُبل الاعتذار';
+
+  @override
+  String get cardRulingCreditedTitle => 'سُجّلت الحصة غيابًا';
+
+  @override
+  String get cardUnderReview => 'قيد المراجعة من الإدارة';
+
+  @override
+  String get cardMakeupOwed => 'سيتم ترتيب حصة تعويضية.';
+
+  @override
+  String get cardCovered => 'ما تمت دراسته';
+
+  @override
+  String get cardHomework => 'الواجب';
+
+  @override
+  String get cardRating => 'التقييم';
+
+  @override
+  String get cardNote => 'ملاحظة';
+
+  @override
+  String get cardReason => 'السبب';
 }

@@ -802,4 +802,116 @@ class L10nEn extends L10n {
 
   @override
   String get systemUpdate => 'System update';
+
+  @override
+  String get lessonTicketsHeader => 'Lesson';
+
+  @override
+  String get ticketReport => 'Lesson report';
+
+  @override
+  String get ticketAbsence => 'Student absent';
+
+  @override
+  String get ticketApology => 'Apologise for the lesson';
+
+  @override
+  String get ticketTeacherApology => 'I can\'t teach this lesson';
+
+  @override
+  String get ticketLateApology => 'Late apology (emergency)';
+
+  @override
+  String ticketLessonAt(String when) {
+    return 'Lesson of $when';
+  }
+
+  @override
+  String get reportCoveredLabel => 'What was covered';
+
+  @override
+  String get reportHomeworkLabel => 'Homework (optional)';
+
+  @override
+  String get reportRatingLabel => 'Rating (optional)';
+
+  @override
+  String get reportNoteLabel => 'Note (optional)';
+
+  @override
+  String get ticketReasonLabel => 'Reason';
+
+  @override
+  String get ticketAbsenceHint =>
+      'No apology was received and the lesson time has passed.';
+
+  @override
+  String get ticketLateApologyHint =>
+      'A supervisor will review it. Until then the lesson counts as an absence.';
+
+  @override
+  String get ticketTeacherApologyHint =>
+      'A make-up lesson will be arranged with the family.';
+
+  @override
+  String get ticketSubmit => 'Send';
+
+  @override
+  String get ticketSent => 'Sent';
+
+  @override
+  String get ticketFailed => 'Couldn\'t send. Please try again.';
+
+  @override
+  String get ticketNoLongerAllowed =>
+      'This lesson can no longer be updated this way.';
+
+  @override
+  String get cardReportTitle => 'Lesson report';
+
+  @override
+  String get cardAbsenceTitle => 'Absent from the lesson';
+
+  @override
+  String get cardApologyTitle => 'Apology';
+
+  @override
+  String get cardTeacherApologyTitle => 'The teacher can\'t teach this lesson';
+
+  @override
+  String get cardCancelledTitle => 'Lesson cancelled';
+
+  @override
+  String get cardTeacherAbsentTitle =>
+      'Lesson not held — the teacher was absent';
+
+  @override
+  String get cardLateApologyTitle => 'Late apology';
+
+  @override
+  String get cardRulingExcusedTitle => 'Apology accepted';
+
+  @override
+  String get cardRulingCreditedTitle => 'Recorded as an absence';
+
+  @override
+  String get cardUnderReview => 'Under review by the supervision team';
+
+  @override
+  String get cardMakeupOwed => 'A make-up lesson will be arranged.';
+
+  @override
+  String get cardCovered => 'Covered';
+
+  @override
+  String get cardHomework => 'Homework';
+
+  @override
+  String get cardRating => 'Rating';
+
+  @override
+  String get cardNote => 'Note';
+
+  @override
+  String get cardReason => 'Reason';
 }

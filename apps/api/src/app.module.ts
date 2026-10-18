@@ -6,6 +6,7 @@ import { HealthModule } from './infra/health/health.module';
 import { AdminModule } from './admin/admin.module';
 import { StaffProfileModule } from './staff-profile/staff-profile.module';
 import { OrgStructureModule } from './org/org-structure.module';
+import { LessonModule } from './lessons/lesson.module';
 
 /**
  * The root module. Composition only -- it declares no provider and no
@@ -35,6 +36,7 @@ import { OrgStructureModule } from './org/org-structure.module';
     AdminModule,
     StaffProfileModule,
     OrgStructureModule,
+    LessonModule,
   ],
 })
 export class AppModule {}

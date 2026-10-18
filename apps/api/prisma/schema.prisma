@@ -131,6 +131,7 @@ model Learner {
   updatedAt   DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
   conversations Conversation[]
+  lessons       Lesson[]
 
   @@map("learner")
   @@schema("chat")
@@ -278,6 +279,8 @@ model Message {
   createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
 
   attachments MessageAttachment[]
+  /// PD-11: the structured half of a message of type `card`.
+  card        MessageCard?
   reactions   MessageReaction[]
   receipts    MessageReceipt[]
   hiddenFor   MessageHiddenFor[]
@@ -678,6 +681,7 @@ model Teacher {
   updatedAt     DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
   learners Learner[]
+  lessons  Lesson[]
 
   @@map("teacher")
   @@schema("chat")
@@ -939,5 +943,83 @@ model ConversationLearner {
 
   @@id([conversationId, learnerId])
   @@map("conversation_learner")
+  @@schema("chat")
+}
+
+/// PD-9 / PD-11: one lesson occurrence. SQL owns the DDL and every rule
+/// (20261018120000): born open, closed once, never deleted.
+model Lesson {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  learnerId      String    @map("learner_id") @db.Uuid
+  learner        Learner   @relation(fields: [learnerId], references: [id])
+  teacherId      String    @map("teacher_id") @db.Uuid
+  teacher        Teacher   @relation(fields: [teacherId], references: [id])
+  kind           String    @default("regular")
+  makeupFor      String?   @map("makeup_for") @db.Uuid
+  startsAt       DateTime  @map("starts_at") @db.Timestamptz
+  endsAt         DateTime  @map("ends_at") @db.Timestamptz
+  outcome        String?
+  outcomeNote    String?   @map("outcome_note")
+  outcomeByKind  String?   @map("outcome_by_kind")
+  outcomeBy      String?   @map("outcome_by") @db.Uuid
+  outcomeAt      DateTime? @map("outcome_at") @db.Timestamptz
+  createdBy      String    @map("created_by") @db.Uuid
+  createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
+  updatedAt      DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  report  LessonReport?
+  rulings LessonRuling[]
+
+  @@map("lesson")
+  @@schema("chat")
+}
+
+model LessonReport {
+  lessonId       String   @id @map("lesson_id") @db.Uuid
+  lesson         Lesson   @relation(fields: [lessonId], references: [id])
+  organizationId String   @map("organization_id") @db.Uuid
+  teacherId      String   @map("teacher_id") @db.Uuid
+  covered        String
+  homework       String?
+  rating         Int?     @db.SmallInt
+  note           String?
+  messageId      String?  @unique @map("message_id") @db.Uuid
+  submittedAt    DateTime @map("submitted_at") @db.Timestamptz @default(now())
+
+  @@map("lesson_report")
+  @@schema("chat")
+}
+
+model LessonRuling {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  lessonId       String    @map("lesson_id") @db.Uuid
+  lesson         Lesson    @relation(fields: [lessonId], references: [id])
+  kind           String
+  openedByKind   String    @map("opened_by_kind")
+  openedBy       String    @map("opened_by") @db.Uuid
+  openedAt       DateTime  @map("opened_at") @db.Timestamptz @default(now())
+  reason         String
+  decision       String?
+  decidedBy      String?   @map("decided_by") @db.Uuid
+  decidedAt      DateTime? @map("decided_at") @db.Timestamptz
+  decisionNote   String?   @map("decision_note")
+
+  @@unique([lessonId, kind])
+  @@map("lesson_ruling")
+  @@schema("chat")
+}
+
+/// PD-11: what a ticket recorded, rendered by the client as a card.
+model MessageCard {
+  messageId      String  @id @map("message_id") @db.Uuid
+  message        Message @relation(fields: [messageId], references: [id])
+  organizationId String  @map("organization_id") @db.Uuid
+  kind           String
+  lessonId       String? @map("lesson_id") @db.Uuid
+  payload        Json    @default("{}")
+
+  @@map("message_card")
   @@schema("chat")
 }

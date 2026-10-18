@@ -97,6 +97,8 @@ export const MessageType = {
   VOICE: 'voice',
   FILE: 'file',
   SYSTEM: 'system',
+  /** PD-11: a ticket's card. Written by the server only; a client can never author one. */
+  CARD: 'card',
 } as const;
 export type MessageType = (typeof MessageType)[keyof typeof MessageType];
 
@@ -247,3 +249,36 @@ export type StoryBackground = (typeof STORY_BACKGROUNDS)[number];
 
 /** Subscription plan lengths, in months. Mirrors `family_subscription_plan_months_check`. */
 export const SUBSCRIPTION_PLAN_MONTHS = [1, 3, 6, 12] as const;
+
+// ---------------------------------------------------------------------------
+// PD-9 / PD-11: lessons. Mirrors the checks of 20261018120000.
+// ---------------------------------------------------------------------------
+
+export const LessonKind = { REGULAR: 'regular', MAKEUP: 'makeup' } as const;
+export type LessonKind = (typeof LessonKind)[keyof typeof LessonKind];
+
+export const LessonOutcome = {
+  HELD: 'held',
+  STUDENT_APOLOGY: 'student_apology',
+  TEACHER_APOLOGY: 'teacher_apology',
+  ADMIN_CANCELLED: 'admin_cancelled',
+  STUDENT_NO_SHOW: 'student_no_show',
+  TEACHER_NO_SHOW: 'teacher_no_show',
+} as const;
+export type LessonOutcome = (typeof LessonOutcome)[keyof typeof LessonOutcome];
+
+export const CardKind = {
+  LESSON_REPORT: 'lesson_report',
+  LESSON_ABSENCE: 'lesson_absence',
+  LESSON_APOLOGY: 'lesson_apology',
+  LESSON_TEACHER_APOLOGY: 'lesson_teacher_apology',
+  /** An admin cancellation or a teacher absence: the lesson will not happen. */
+  LESSON_CANCELLED: 'lesson_cancelled',
+  LESSON_LATE_APOLOGY: 'lesson_late_apology',
+  LESSON_RULING: 'lesson_ruling',
+} as const;
+export type CardKind = (typeof CardKind)[keyof typeof CardKind];
+
+export const RulingKind = { LATE_APOLOGY: 'late_apology' } as const;
+export const RulingDecision = { EXCUSED: 'excused', TEACHER_CREDITED: 'teacher_credited' } as const;
+export type RulingDecision = (typeof RulingDecision)[keyof typeof RulingDecision];

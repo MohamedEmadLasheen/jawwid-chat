@@ -1,4 +1,5 @@
 import '../../../shared/models/conversation.dart';
+import '../../../shared/models/lesson.dart';
 import '../../../shared/models/message.dart';
 import '../../../shared/models/story.dart';
 import '../../../shared/models/user_role.dart';
@@ -137,6 +138,7 @@ abstract final class WireMappers {
         Wire.messageVoice => MessageKind.voice,
         Wire.messageFile => MessageKind.file,
         Wire.messageSystem => MessageKind.system,
+        Wire.messageCard => MessageKind.card,
         _ => MessageKind.text,
       };
 
@@ -281,6 +283,20 @@ abstract final class WireMappers {
   /// which is defensive presentation, **not** identity resolution: this client
   /// never asks an identity endpoint for a missing name, and it never derives one
   /// from the role, the actor kind, or conversation membership.
+  /// PD-11: `MessageDto.card`, or null when absent or malformed. A malformed card is
+  /// dropped rather than thrown on: the message still has its plain-text body.
+  static MessageCard? messageCard(Object? raw) {
+    if (raw is! Map) return null;
+    final kind = raw['kind'];
+    final payload = raw['payload'];
+    if (kind is! String || kind.isEmpty || payload is! Map) return null;
+    return MessageCard(
+      kind: kind,
+      lessonId: raw['lessonId'] as String?,
+      payload: Map<String, Object?>.from(payload),
+    );
+  }
+
   static Message message(
     Map<String, Object?> json, {
     required String viewerActorId,
@@ -322,6 +338,7 @@ abstract final class WireMappers {
       // original has not been paged in yet.
       replyTo: null,
       replyToMessageId: json['replyToMessageId'] as String?,
+      card: messageCard(json['card']),
       reactions: [
         for (final entry in byEmoji.entries)
           Reaction(

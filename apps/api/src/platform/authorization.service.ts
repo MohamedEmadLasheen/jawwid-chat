@@ -36,6 +36,41 @@ const allow = (onBehalfMode: string | null = null, moderation: string = Moderati
   moderation,
 });
 
+/**
+ * PD-9 / PD-11: how an actor stands to one lesson. `manager` -- the super admin
+ * or the Teachers department; `supervisor` -- the learner's PD-8 supervisor
+ * (read only); `teacher` -- the lesson's own teacher; `family` -- a contact of
+ * the learner's family.
+ */
+export type LessonStanding = 'manager' | 'supervisor' | 'teacher' | 'family';
+
+export type LessonAct =
+  | 'report'
+  | 'absence'
+  | 'apology'
+  | 'teacher_apology'
+  | 'cancel'
+  | 'teacher_no_show'
+  | 'late_apology'
+  | 'decide_ruling';
+
+/**
+ * Who may record what (PD-11's table). The report is the teacher's own words,
+ * so nobody writes it for them; an absence the Teachers department may record
+ * when the teacher cannot; a late apology is the family's to file and never
+ * the teacher's to judge.
+ */
+const LESSON_ACTS: Readonly<Record<LessonAct, readonly LessonStanding[]>> = {
+  report: ['teacher'],
+  absence: ['teacher', 'manager'],
+  apology: ['family', 'manager'],
+  teacher_apology: ['teacher', 'manager'],
+  cancel: ['manager'],
+  teacher_no_show: ['manager'],
+  late_apology: ['family'],
+  decide_ruling: ['manager'],
+};
+
 export interface SendIntent {
   visibility: string;
   /** Only ASSIST / ESCALATION are honoured; OWNER vs COVERAGE is derived. */
@@ -1234,6 +1269,62 @@ export class AuthorizationService {
       return deny(CommErrorCode.ORG_STRUCTURE_DENIED, 'only managers and the super admin may view the organization structure');
     }
     return allow();
+  }
+
+  // ------------------------------------------------------------------
+  // PD-9 / PD-11: lessons
+  // ------------------------------------------------------------------
+
+  /**
+   * How `actor` stands to one lesson, or null when they may not see it at all
+   * (which the caller answers as not found). Facts are resolved by
+   * LessonService: `teachersDepartment` -- the actor manages or belongs to the
+   * organization's Teachers department; `supervisesLearner` -- the learner's
+   * PD-8 supervisor is one of the actor's principals.
+   */
+  lessonStanding(
+    actor: Actor,
+    lesson: { organizationId: string; teacherId: string; familyId: string },
+    facts: { teachersDepartment: boolean; supervisesLearner: boolean },
+  ): LessonStanding | null {
+    if (!actor.isActive || !actor.organizationId || actor.organizationId !== lesson.organizationId) return null;
+    switch (actor.kind) {
+      case ActorKind.STAFF:
+        if (actor.staffRole === StaffRole.SUPER_ADMIN || facts.teachersDepartment) return 'manager';
+        return facts.supervisesLearner ? 'supervisor' : null;
+      case ActorKind.TEACHER:
+        return actor.actorId === lesson.teacherId ? 'teacher' : null;
+      case ActorKind.CONTACT:
+        return actor.familyId === lesson.familyId ? 'family' : null;
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Whether `standing` may record `act` on a lesson. WHO, never WHEN: whether
+   * the lesson's state and the clock allow it is LessonService's pre-check and,
+   * authoritatively, chat.guard_lesson's.
+   */
+  canRecordLessonAct(actor: Actor, standing: LessonStanding | null, act: LessonAct): Decision {
+    if (standing === null) return deny(CommErrorCode.LESSON_NOT_FOUND, 'lesson not found');
+    if (!LESSON_ACTS[act].includes(standing)) {
+      return deny(CommErrorCode.LESSON_DENIED, `${standing} may not record ${act} on a lesson`);
+    }
+    if (standing === 'family' && actor.canMessage === false) {
+      return deny(CommErrorCode.LESSON_DENIED, 'this contact may not act for the family');
+    }
+    return allow();
+  }
+
+  /** Scheduling lessons and reading the needs-action list: the super admin and the Teachers department. */
+  canManageLessons(actor: Actor, organizationId: string, facts: { teachersDepartment: boolean }): Decision {
+    return this.orgAuthority(
+      actor,
+      organizationId,
+      (a) => a.staffRole === StaffRole.SUPER_ADMIN || facts.teachersDepartment,
+      'manage lessons',
+    );
   }
 
   private orgAuthority(actor: Actor, organizationId: string, permitted: (a: Actor) => boolean, what: string): Decision {

@@ -1554,6 +1554,216 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'System update'**
   String get systemUpdate;
+
+  /// Section header in the + menu for lesson tickets.
+  ///
+  /// In en, this message translates to:
+  /// **'Lesson'**
+  String get lessonTicketsHeader;
+
+  /// No description provided for @ticketReport.
+  ///
+  /// In en, this message translates to:
+  /// **'Lesson report'**
+  String get ticketReport;
+
+  /// No description provided for @ticketAbsence.
+  ///
+  /// In en, this message translates to:
+  /// **'Student absent'**
+  String get ticketAbsence;
+
+  /// No description provided for @ticketApology.
+  ///
+  /// In en, this message translates to:
+  /// **'Apologise for the lesson'**
+  String get ticketApology;
+
+  /// No description provided for @ticketTeacherApology.
+  ///
+  /// In en, this message translates to:
+  /// **'I can\'t teach this lesson'**
+  String get ticketTeacherApology;
+
+  /// No description provided for @ticketLateApology.
+  ///
+  /// In en, this message translates to:
+  /// **'Late apology (emergency)'**
+  String get ticketLateApology;
+
+  /// Subtitle naming which lesson a ticket is for.
+  ///
+  /// In en, this message translates to:
+  /// **'Lesson of {when}'**
+  String ticketLessonAt(String when);
+
+  /// No description provided for @reportCoveredLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'What was covered'**
+  String get reportCoveredLabel;
+
+  /// No description provided for @reportHomeworkLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Homework (optional)'**
+  String get reportHomeworkLabel;
+
+  /// No description provided for @reportRatingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Rating (optional)'**
+  String get reportRatingLabel;
+
+  /// No description provided for @reportNoteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get reportNoteLabel;
+
+  /// No description provided for @ticketReasonLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get ticketReasonLabel;
+
+  /// No description provided for @ticketAbsenceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'No apology was received and the lesson time has passed.'**
+  String get ticketAbsenceHint;
+
+  /// No description provided for @ticketLateApologyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A supervisor will review it. Until then the lesson counts as an absence.'**
+  String get ticketLateApologyHint;
+
+  /// No description provided for @ticketTeacherApologyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A make-up lesson will be arranged with the family.'**
+  String get ticketTeacherApologyHint;
+
+  /// No description provided for @ticketSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get ticketSubmit;
+
+  /// No description provided for @ticketSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent'**
+  String get ticketSent;
+
+  /// No description provided for @ticketFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t send. Please try again.'**
+  String get ticketFailed;
+
+  /// No description provided for @ticketNoLongerAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'This lesson can no longer be updated this way.'**
+  String get ticketNoLongerAllowed;
+
+  /// No description provided for @cardReportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Lesson report'**
+  String get cardReportTitle;
+
+  /// No description provided for @cardAbsenceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Absent from the lesson'**
+  String get cardAbsenceTitle;
+
+  /// No description provided for @cardApologyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Apology'**
+  String get cardApologyTitle;
+
+  /// No description provided for @cardTeacherApologyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The teacher can\'t teach this lesson'**
+  String get cardTeacherApologyTitle;
+
+  /// No description provided for @cardCancelledTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Lesson cancelled'**
+  String get cardCancelledTitle;
+
+  /// No description provided for @cardTeacherAbsentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Lesson not held — the teacher was absent'**
+  String get cardTeacherAbsentTitle;
+
+  /// No description provided for @cardLateApologyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Late apology'**
+  String get cardLateApologyTitle;
+
+  /// No description provided for @cardRulingExcusedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Apology accepted'**
+  String get cardRulingExcusedTitle;
+
+  /// No description provided for @cardRulingCreditedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded as an absence'**
+  String get cardRulingCreditedTitle;
+
+  /// No description provided for @cardUnderReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Under review by the supervision team'**
+  String get cardUnderReview;
+
+  /// No description provided for @cardMakeupOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'A make-up lesson will be arranged.'**
+  String get cardMakeupOwed;
+
+  /// No description provided for @cardCovered.
+  ///
+  /// In en, this message translates to:
+  /// **'Covered'**
+  String get cardCovered;
+
+  /// No description provided for @cardHomework.
+  ///
+  /// In en, this message translates to:
+  /// **'Homework'**
+  String get cardHomework;
+
+  /// No description provided for @cardRating.
+  ///
+  /// In en, this message translates to:
+  /// **'Rating'**
+  String get cardRating;
+
+  /// No description provided for @cardNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Note'**
+  String get cardNote;
+
+  /// No description provided for @cardReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get cardReason;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {
