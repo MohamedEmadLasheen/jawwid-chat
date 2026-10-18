@@ -14,7 +14,8 @@ import { Link, NavLink, useLocation } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
 import { useRealtime } from '@/core/realtime/RealtimeProvider'
-import { isSuperAdmin } from '@/core/permissions/capabilities'
+import { canOpenArea, isSuperAdmin, type NavArea } from '@/core/permissions/capabilities'
+import { useTeacherFilesOffered } from '@/features/teachers/hooks'
 import { TEXT, useText } from '@/features/admin/copy'
 import { ShiftEndBanner } from '@/features/inbox/ShiftEndBanner'
 import { Avatar } from '@/shared/components/Avatar'
@@ -40,7 +41,12 @@ const RAIL_QUERY = '(min-width: 1024px)'
 
 function useDestinations(): Destination[] {
   const { staff } = useSession()
-  return useMemo(() => (staff ? destinationsFor(staff.role) : []), [staff])
+  // PD-10: whether to offer Teacher Files is the server's answer, not the role's.
+  const offerTeachers = useTeacherFilesOffered(Boolean(staff && canOpenArea(staff.role, 'teachers')))
+  return useMemo(
+    () => (staff ? destinationsFor(staff.role, offerTeachers ? new Set<NavArea>(['teachers']) : new Set<NavArea>()) : []),
+    [staff, offerTeachers],
+  )
 }
 
 function useEntryLabel() {

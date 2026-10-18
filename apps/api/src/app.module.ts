@@ -7,6 +7,7 @@ import { AdminModule } from './admin/admin.module';
 import { StaffProfileModule } from './staff-profile/staff-profile.module';
 import { OrgStructureModule } from './org/org-structure.module';
 import { LessonModule } from './lessons/lesson.module';
+import { TeacherFileModule } from './teacher-file/teacher-file.module';
 
 /**
  * The root module. Composition only -- it declares no provider and no
@@ -37,6 +38,7 @@ import { LessonModule } from './lessons/lesson.module';
     StaffProfileModule,
     OrgStructureModule,
     LessonModule,
+    TeacherFileModule,
   ],
 })
 export class AppModule {}

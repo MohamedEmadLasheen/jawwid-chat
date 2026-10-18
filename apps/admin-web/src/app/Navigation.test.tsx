@@ -59,11 +59,11 @@ afterEach(() => {
 })
 
 describe('The navigation registry', () => {
-  it('gives each of the seventeen sections exactly one destination, with the Dashboard under More', () => {
+  it('gives each of the eighteen sections exactly one destination, with the Dashboard under More', () => {
     const destinations = destinationsFor('super_admin')
     expect(destinations.map((d) => d.key)).toEqual(['conversations', 'calls', 'people', 'stories', 'more'])
     const keys = destinations.flatMap((d) => entriesOf(d).map((e) => e.key))
-    expect(keys).toHaveLength(17)
+    expect(keys).toHaveLength(18)
     expect([...keys].sort()).toEqual(ADMIN_SECTIONS.map((s) => s.key).sort())
     const more = destinations.find((d) => d.key === 'more')!
     expect(entriesOf(more).map((e) => e.key)).toContain('dashboard')
@@ -80,9 +80,13 @@ describe('The navigation registry', () => {
         .map((a) => AREA_PATH[a])
       expect([...listed].sort(), role).toEqual([...allowed].sort())
       expect(listed, role).not.toContain('/inbox')
+      // ...and a second: Teachers (PD-10) is offered only once the server has
+      // confirmed this person is in the Teachers department.
       expect(visibleAreas(role).filter((a) => !navAreas(role).includes(a)), role).toEqual(
-        visibleAreas(role).includes('inbox') ? ['inbox'] : [],
+        (['inbox', 'teachers'] as const).filter((a) => visibleAreas(role).includes(a)),
       )
+      const confirmed = destinationsFor(role, new Set(['teachers'])).flatMap((d) => entriesOf(d).map((e) => e.path))
+      expect(confirmed.includes('/teachers'), role).toBe(visibleAreas(role).includes('teachers'))
       expect(listed.some((p) => p.startsWith('/admin/')), role).toBe(false)
     }
     // And the super admin's navigation is the portal, not the operator screens.
@@ -200,6 +204,9 @@ describe('The desktop rail', () => {
     // PD-8: the people group's second page is the built Organization page (no badge).
     expect(document.activeElement).toHaveAccessibleName('Organization')
     await userEvent.keyboard('{ArrowDown}')
+    // PD-10: then the Teachers page, then the menu wraps.
+    expect(document.activeElement).toHaveAccessibleName('Teachers')
+    await userEvent.keyboard('{ArrowDown}')
     expect(document.activeElement).toHaveAccessibleName('Users')
     await userEvent.keyboard('{Escape}')
     expect(people).toHaveAttribute('aria-expanded', 'false')
@@ -268,7 +275,7 @@ describe('The drawer, below desktop width', () => {
     expect(within(nav).getByRole('group', { name: 'الأشخاص والفرق' })).toBeInTheDocument()
     const more = within(nav).getByRole('group', { name: 'المزيد' })
     expect(within(more).getByRole('link', { name: 'لوحة المتابعة' })).toBeInTheDocument()
-    expect(within(nav).getAllByRole('link')).toHaveLength(17)
+    expect(within(nav).getAllByRole('link')).toHaveLength(18)
   })
 
   it('opens from the menu button and closes with Escape, giving focus back', async () => {

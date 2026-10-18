@@ -13,6 +13,7 @@ import {
   type StaffProfileAccess,
   type StaffProfileTarget,
 } from './staff-profile-policy';
+import { decideTeacherFileAccess, type TeacherFileAccess, type TeachersDepartmentRole } from './teacher-file-policy';
 import {
   ActorKind,
   CONVERSATION_STAFF_ROLES,
@@ -1277,6 +1278,18 @@ export class AuthorizationService {
   }
 
   /** Reading the structure: the super admin (all of it) and managers (their department). */
+  /**
+   * PD-10: what this actor may see and change in a Teacher File. The caller
+   * resolves the actor's relation to the Teachers department; the matrix is in
+   * teacher-file-policy.ts.
+   */
+  teacherFileAccess(
+    actor: Actor,
+    target: { organizationId: string; teachersDepartmentRole: TeachersDepartmentRole },
+  ): TeacherFileAccess {
+    return decideTeacherFileAccess(actor, target);
+  }
+
   canViewOrgStructure(actor: Actor): Decision {
     if (!actor.isActive) return deny(CommErrorCode.ACTOR_INACTIVE, 'an inactive actor may not view the structure');
     if (

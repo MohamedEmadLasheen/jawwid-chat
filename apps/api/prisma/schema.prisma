@@ -1143,7 +1143,30 @@ model TeacherSupervisionEntry {
   conversationId String?   @map("conversation_id") @db.Uuid
   createdBy      String    @map("created_by") @db.Uuid
   createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
+  /// PD-10: a complaint_resolution's complaint.
+  refersTo       String?   @map("refers_to") @db.Uuid
+  /// PD-10: a complaint's source message (in conversation_id).
+  sourceMessageId String?  @map("source_message_id") @db.Uuid
 
   @@map("teacher_supervision_entry")
+  @@schema("chat")
+}
+
+// =====================================================================
+// PD-10 Teacher File -- 20261018170000_chat_pd010_teacher_file.sql owns the DDL.
+// The phone is read and written ONLY by src/teacher-file (teacher-file-confinement.spec).
+// =====================================================================
+
+/// A teacher's administration-only personal record.
+model TeacherFile {
+  teacherId      String    @id @map("teacher_id") @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  adminOnlyPhone String?   @map("phone")
+  email          String?
+  joinedOn       DateTime? @map("joined_on") @db.Date
+  updatedAt      DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+  updatedBy      String?   @map("updated_by") @db.Uuid
+
+  @@map("teacher_file")
   @@schema("chat")
 }

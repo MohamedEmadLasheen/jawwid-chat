@@ -119,7 +119,20 @@ describe('the legacy Inbox is routable but never offered', () => {
     }
   })
 
-  it('nothing else is hidden: navigation is the openable areas minus Inbox', () => {
-    for (const role of ROLES) expect(navAreas(role)).toEqual(visibleAreas(role).filter((a) => a !== 'inbox'))
+  it('nothing else is hidden: navigation is the openable areas minus Inbox and the unconfirmed Teachers area', () => {
+    for (const role of ROLES) {
+      expect(navAreas(role)).toEqual(visibleAreas(role).filter((a) => a !== 'inbox' && a !== 'teachers'))
+      // Once the server confirms Teacher Files for this person, it is offered.
+      expect(navAreas(role, new Set(['teachers']))).toEqual(visibleAreas(role).filter((a) => a !== 'inbox'))
+    }
+  })
+
+  it('PD-10: Teachers is openable by the roles a Teachers-department member can hold, and by no one else', () => {
+    for (const role of ROLES) {
+      expect({ role, open: visibleAreas(role).includes('teachers') }).toEqual({
+        role,
+        open: role === 'manager' || role === 'admin' || role === 'coverage',
+      })
+    }
   })
 })

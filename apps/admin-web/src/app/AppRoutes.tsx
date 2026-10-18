@@ -17,6 +17,8 @@ import { AdminSectionPage } from '@/features/admin/AdminSectionPage'
 import { adminSectionPath } from '@/features/admin/sections'
 import { ProfilePage } from '@/features/profile/ProfilePage'
 import { OrganizationPage } from '@/features/organization/OrganizationPage'
+import { TeacherFilesPage } from '@/features/teachers/TeacherFilesPage'
+import { TeacherFilePage } from '@/features/teachers/TeacherFilePage'
 import { ForbiddenPage } from './ForbiddenPage'
 import type { ReactElement } from 'react'
 
@@ -64,6 +66,13 @@ export function AppRoutes() {
         <Route path="/inbox/:familyId" element={<Area area="inbox"><InboxPage /></Area>} />
         <Route path="/families" element={<Area area="families"><FamiliesPage /></Area>} />
         <Route path="/organization" element={<Area area="organization"><OrganizationPage /></Area>} />
+        {/*
+          PD-10 Teacher Files: /teachers for the Teachers department (the server
+          refuses everyone else, whatever this route allows), /admin/teachers
+          for the super admin.
+        */}
+        <Route path="/teachers" element={<Area area="teachers"><TeacherFilesPage basePath="/teachers" /></Area>} />
+        <Route path="/teachers/:teacherId" element={<Area area="teachers"><TeacherFilePage basePath="/teachers" /></Area>} />
         <Route path="/tasks" element={<Area area="tasks"><TasksPage /></Area>} />
         <Route path="/coverage" element={<Area area="coverage"><CoveragePage /></Area>} />
         <Route path="/dashboard" element={<Area area="dashboard"><DashboardPage /></Area>} />
@@ -85,6 +94,10 @@ export function AppRoutes() {
         <Route
           path="/admin/:section"
           element={<SuperAdminOnly><AdminSectionPage /></SuperAdminOnly>}
+        />
+        <Route
+          path="/admin/teachers/:teacherId"
+          element={<SuperAdminOnly><TeacherFilePage basePath={adminSectionPath('teachers')} /></SuperAdminOnly>}
         />
         <Route
           path="/admin/stories/new"

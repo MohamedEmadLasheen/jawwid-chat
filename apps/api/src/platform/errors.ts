@@ -185,6 +185,12 @@ export enum CommErrorCode {
   LESSON_STATE = 'COMM.LESSON_STATE',
   /** PD-11: the teacher already has a lesson at that time. 409. */
   LESSON_TEACHER_BUSY = 'COMM.LESSON_TEACHER_BUSY',
+  /** PD-10: this actor may not see, or may not make this change to, a Teacher File. 403. */
+  TEACHER_FILE_DENIED = 'COMM.TEACHER_FILE_DENIED',
+  /** PD-10: no such teacher in the actor's organization. 404, identical for a foreign id. */
+  TEACHER_FILE_NOT_FOUND = 'COMM.TEACHER_FILE_NOT_FOUND',
+  /** PD-10: the timeline refused the entry (already resolved, already recorded, wrong target). 409. */
+  TEACHER_FILE_CONFLICT = 'COMM.TEACHER_FILE_CONFLICT',
 }
 
 export class CommError extends Error {

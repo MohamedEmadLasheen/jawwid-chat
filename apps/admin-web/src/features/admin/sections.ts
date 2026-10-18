@@ -31,6 +31,7 @@ export type AdminSectionKey =
   | 'conversations'
   | 'users'
   | 'teams'
+  | 'teachers'
   | 'stories'
   | 'quality'
   | 'reports'
@@ -212,6 +213,22 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
       ar: 'يتحقق الخادم من التغييرات ويسجّلها مع سببها. تبقى خطوط التبعية والمسؤوليات في ملفي الشخصي ← نظرة عامة على المؤسسة.',
     },
     legacy: [{ path: '/coverage' }],
+  },
+  {
+    key: 'teachers',
+    group: 'people',
+    icon: 'users',
+    // PD-10: the administration-only Teacher File, against /teacher-files.
+    status: 'managed',
+    label: { en: 'Teachers', ar: 'المعلمون' },
+    purpose: {
+      en: 'Each teacher’s file: personal information, assigned students and supervision notes.',
+      ar: 'ملف كل معلم: البيانات الشخصية والطلاب المسندون وملاحظات الإشراف.',
+    },
+    note: {
+      en: 'Schedule and workload arrive with the lesson system; salary is shown from Jawwid Core once it offers it.',
+      ar: 'الجدول وعبء العمل يأتيان مع نظام الدروس، والراتب يُعرض من نظام جوّد الأساسي عند توفيره.',
+    },
   },
 
   /* ------------------------------------------------------------ operations */
