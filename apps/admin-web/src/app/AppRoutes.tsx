@@ -20,6 +20,8 @@ import { OrganizationPage } from '@/features/organization/OrganizationPage'
 import { TeacherStatsPage } from '@/features/teachers/TeacherStatsPage'
 import { TeacherFilesPage } from '@/features/teacher-files/TeacherFilesPage'
 import { TeacherFilePage } from '@/features/teacher-files/TeacherFilePage'
+import { CertificatesPage } from '@/features/supervision/CertificatesPage'
+import { LeaveRequestsPage } from '@/features/supervision/LeaveRequestsPage'
 import { ForbiddenPage } from './ForbiddenPage'
 import type { ReactElement } from 'react'
 
@@ -72,6 +74,9 @@ export function AppRoutes() {
         {/* PD-10 Teacher Files: a tab of the same area; the server refuses anyone else. */}
         <Route path="/teachers/files" element={<Area area="teachers"><TeacherFilesPage basePath="/teachers/files" /></Area>} />
         <Route path="/teachers/files/:teacherId" element={<Area area="teachers"><TeacherFilePage basePath="/teachers/files" /></Area>} />
+        {/* PD-12: the department's queues, tabs of the same area. */}
+        <Route path="/teachers/certificates" element={<Area area="teachers"><CertificatesPage basePath="/teachers" /></Area>} />
+        <Route path="/teachers/leave" element={<Area area="teachers"><LeaveRequestsPage basePath="/teachers" /></Area>} />
         <Route path="/tasks" element={<Area area="tasks"><TasksPage /></Area>} />
         <Route path="/coverage" element={<Area area="coverage"><CoveragePage /></Area>} />
         <Route path="/dashboard" element={<Area area="dashboard"><DashboardPage /></Area>} />
@@ -93,6 +98,14 @@ export function AppRoutes() {
         <Route
           path="/admin/:section"
           element={<SuperAdminOnly><AdminSectionPage /></SuperAdminOnly>}
+        />
+        <Route
+          path="/admin/teachers/certificates"
+          element={<SuperAdminOnly><CertificatesPage basePath={adminSectionPath('teachers')} /></SuperAdminOnly>}
+        />
+        <Route
+          path="/admin/teachers/leave"
+          element={<SuperAdminOnly><LeaveRequestsPage basePath={adminSectionPath('teachers')} /></SuperAdminOnly>}
         />
         <Route
           path="/admin/teachers/:teacherId"

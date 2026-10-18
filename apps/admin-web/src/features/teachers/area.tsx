@@ -27,8 +27,10 @@ export const TEACHERS_AREA_BASE = '/teachers'
 
 export const TEACHERS_TABS: TeachersTab[] = [
   { key: 'statistics', segment: '', label: { en: 'Statistics', ar: 'الإحصائيات' } },
-  // PD-10 Teacher File (carried in PD-12 S1).
+  // PD-10 Teacher File and PD-12 S1's queues.
   { key: 'files', segment: 'files', label: { en: 'Teacher files', ar: 'ملفات المعلمين' } },
+  { key: 'certificates', segment: 'certificates', label: { en: 'Certificates', ar: 'الشهادات' } },
+  { key: 'leave', segment: 'leave', label: { en: 'Leave requests', ar: 'طلبات الإجازة' } },
 ]
 
 export function teachersTabPath(tab: TeachersTab, base: string = TEACHERS_AREA_BASE): string {

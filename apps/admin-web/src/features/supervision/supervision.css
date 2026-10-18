@@ -1,0 +1,18 @@
+/* PD-12 S1. Layout reuses .page / .card / .table / .toolbar from the design system. */
+.sv-tabs { display: flex; gap: var(--space-1); flex-wrap: wrap; border-block-end: 1px solid var(--border); margin-block: 0 var(--space-3); }
+.sv-tab { padding: var(--space-2) var(--space-3); color: var(--text-muted); text-decoration: none; border-block-end: 2px solid transparent; }
+.sv-tab:hover { color: var(--text); }
+.sv-tab[aria-current='page'] { color: var(--accent); border-block-end-color: var(--accent); font-weight: 600; }
+.sv-table-wrap { overflow-x: auto; }
+.sv-cell-main { display: grid; gap: var(--space-1); min-inline-size: 12rem; }
+.sv-muted { color: var(--text-muted); font-size: var(--fs-sm); }
+.sv-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.sv-days { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-2) 0 0; padding: 0; border: none; }
+.sv-day { display: inline-flex; align-items: center; gap: var(--space-1); padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.sv-collisions { margin: var(--space-2) 0 0; padding-inline-start: var(--space-4); }
+.sv-check { display: flex; align-items: center; gap: var(--space-2); margin-block-start: var(--space-2); }
+.sv-figures { display: flex; flex-wrap: wrap; gap: var(--space-4); margin: var(--space-3) 0 0; }
+.sv-figure { display: grid; gap: var(--space-1); }
+.sv-figure dt { color: var(--text-muted); font-size: var(--fs-sm); }
+.sv-figure dd { margin: 0; font-size: var(--fs-lg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.sv-textarea { min-block-size: 5rem; resize: vertical; }

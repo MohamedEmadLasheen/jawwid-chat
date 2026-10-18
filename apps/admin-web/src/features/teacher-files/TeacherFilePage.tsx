@@ -11,6 +11,7 @@ import { Refusal, isTeacherFileRefusal } from './Refusal'
 import { useTeacherFile } from './hooks'
 import { AddEntryDialog, EditPersonalDialog, type EntryIntent } from './TeacherFileDialogs'
 import './teacher-files.css'
+import { OpenSupervisionButton, TeacherLeaveSection } from '@/features/supervision/TeacherLeaveSection'
 
 /**
  * PD-10: one teacher's file. Sections in the order the owner listed them;
@@ -45,12 +46,15 @@ export function TeacherFilePage({ basePath, eyebrow }: { basePath: string; eyebr
                       {tx(data.teacher.isActive ? T.active : T.inactive)}
                     </Badge>
                   }
+                  actions={data.teacher.isActive && data.access.canWriteSupervision ? <OpenSupervisionButton teacherId={data.teacher.id} /> : undefined}
                 />
                 <Personal file={data} onEdit={() => setEditing(true)} />
                 <Students file={data} />
                 <Complaints file={data} onAdd={setIntent} />
                 <Monthly file={data} onAdd={setIntent} />
                 <DaysOff file={data} onAdd={setIntent} />
+                {/* PD-12: the manager (and super admin) edit the record; the same two set the allowance. */}
+                <TeacherLeaveSection teacherId={data.teacher.id} canSetAllowance={data.access.canEditPersonal} />
                 <section className="card panel tf-section" aria-labelledby="tf-later">
                   <h2 id="tf-later" className="tf-section__title">
                     {tx(T.notHereYet)}
