@@ -132,6 +132,7 @@ describe('1. the teacher supervision conversation', () => {
     expect(conv.type).toBe('teacher_supervision');
     expect(conv.supervisedTeacherId).toBe(s.teacherId);
     expect(conv.familyId).toBeNull();
+    expect(conv.title).toBe('teacher_c');
 
     const members = await g.prisma.conversationMember.findMany({ where: { conversationId, leftAt: null } });
     expect(members.map((m) => m.actorId).sort()).toEqual([s.teacherId, tsupId, tmgrId].sort());

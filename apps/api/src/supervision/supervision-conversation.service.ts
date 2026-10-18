@@ -113,7 +113,7 @@ export class SupervisionConversationService {
   async ensureInTx(tx: Tx, teacherId: string, organizationId: string, byStaffId: string | null): Promise<Conversation> {
     const teacher = await tx.teacher.findFirst({
       where: { id: teacherId, organizationId, isActive: true, leftAt: null },
-      select: { id: true },
+      select: { id: true, name: true },
     });
     if (!teacher) throw new CommError(CommErrorCode.SUPERVISION_NOT_FOUND, 'no such teacher');
 
@@ -143,7 +143,9 @@ export class SupervisionConversationService {
           supervisedTeacherId: teacherId,
           familyId: null,
           learnerId: null,
-          title: null,
+          // The staff side's name for it. The teacher's own app shows its own
+          // label for this type and never this title.
+          title: teacher.name,
           teacherRequiresApproval: false,
           parentRequiresApproval: false,
         },
@@ -160,6 +162,11 @@ export class SupervisionConversationService {
         after: { teacherId },
         reason: 'teacher supervision conversation opened',
       });
+    }
+
+    if (conv.title !== teacher.name) {
+      // chat.teacher.name is the only teacher name (Teacher Profile V2); follow a rename.
+      conv = await tx.conversation.update({ where: { id: conv.id }, data: { title: teacher.name } });
     }
 
     const live = await tx.conversationMember.findMany({ where: { conversationId: conv.id, leftAt: null } });
