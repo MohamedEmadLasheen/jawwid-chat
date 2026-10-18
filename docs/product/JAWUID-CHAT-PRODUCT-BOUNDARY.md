@@ -120,7 +120,7 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-11 — CLOSED
+## 4. Product decisions PD-1 to PD-12 — CLOSED
 
 PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
 exit gate, before `main` was baselined. **PD-6 was closed by the product owner
@@ -130,6 +130,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-7 was closed by the product owner on 2026-10-14** and supersedes PD-6.
 **PD-9 and PD-10 were closed by the product owner on 2026-10-18.**
 **PD-11 was closed by the product owner on 2026-10-18.**
+**PD-12 was closed by the product owner on 2026-10-18** and depends on PD-11.
 
 | ID | Subject | Status |
 |---|---|---|
@@ -144,6 +145,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-9** | **Lessons move from Core into Chat** (2026-10-18) | **CLOSED** — Chat owns lessons per cut-over teacher; one outcome per lesson; the report is the message; money stays in Core |
 | **PD-10** | **Teacher File (admin only); parent Billing and child pages** (2026-10-18) | **CLOSED** — tiered admin access, finance super_admin only; Billing and payroll read-only from Core; teacher sees own schedule + workload |
 | **PD-11** | **Lesson operations: tickets, apologies, make-ups, suspensions, transfers, trials** (2026-10-18) | **CLOSED** — every ticket is a form that changes one record and posts one card; rulings go to a supervision queue; money stays in Core |
+| **PD-12** | **Admin operations: instalments, student certificates, teacher discipline and leave** (2026-10-18) | **CLOSED** — Core invoices read-only with a billing supervisor; certificates delivered as one student-group card; one monthly ladder, suggested then confirmed; leave balance computed, never stored |
 
 ---
 
@@ -861,10 +863,224 @@ PD-11):
 
 ---
 
-### Decisions still open after PD-1 to PD-11
+### PD-12 · Admin operations: instalments, student certificates, teacher discipline and leave
+
+**Closed 2026-10-18** by the product owner.
+
+**Depends on PD-11** (lesson operations). PD-12 reuses three of its parts and
+does not restate them: the **ticket** (a form that changes one domain record
+and posts one card; there is no ticket table, and PD-4 keeps tasks frozen); the
+staff-only **teacher supervision conversation**; and the **New Students** page
+fed by a Sales trial ticket confirmed against Core. The owner's "New Students"
+and "trials closed in Chat" requirements are therefore settled by PD-11, not
+here.
+
+The owner asked on 2026-10-18 for four Admin Portal pages: Instalment Payments,
+New Students, Certificates and Teacher Supervision. These answers were given on
+the same day:
+- request cards instead of tickets: yes (the PD-11 ticket);
+- the disciplinary count resets **monthly**;
+- lateness and cancellations share **one** ladder;
+- suspensions are approved by the **Teachers department**;
+- the leave allowance is **typed in by an admin**;
+- the teacher **sees their leave balance** in the teacher app;
+- trials are closed **in Chat**;
+- Operations supervisors **see invoice amounts** for their own families;
+- Core invoices **per family**, and sometimes **per child** when a child takes
+  more subjects.
+
+**Final decision.**
+
+```
+instalments  = Core invoices, read at request time, never stored (PD-10)
+               row = (responsible account, child or "family", amount, due date,
+                      status, responsible supervisor)
+               order: Overdue (oldest first) > Due today > Upcoming (soonest)
+
+certificate  = a learner_certificate record:
+                 requested -> issued | declined
+               requested by the teacher's Certificate ticket in the teacher
+               supervision conversation; issued by uploading the file;
+               delivered as ONE card in the learner's student group
+
+violation    = a lesson closed teacher_apology or teacher_no_show,
+               or a held lesson recorded late, that is not excused
+ladder step  = the number of violations in the teacher's calendar month:
+                 1 warning, 2 first deduction, 3 second deduction,
+                 4 temporary suspension, 5+ permanent suspension
+               the system suggests the step; a Teachers-department member
+               confirms it; it is appended to the supervision timeline
+
+leave        = balance = allowance(year) - approved leave days(year)
+               computed on every read, never a stored counter
+```
+
+**1. Instalment Payments (Operations).**
+* The page reads Core's invoices at request time and stores nothing (PD-10's
+  rule; the `chat.subscription` mirror stays frozen). An instalment is an invoice
+  with a due date. Paid invoices are hidden by default.
+* **Responsible account** is the invoice's payer, shown by the parent's display
+  name in Chat.
+* **Responsible supervisor:** if the invoice names a child, it is that child's
+  PD-8 supervisor. If it is a family invoice, it is the family's **billing
+  supervisor**, a new family-level field in the PD-8 assignment that the
+  Operations Manager sets. While it is unset, the invoice appears under the
+  manager's "No billing supervisor" filter. Nothing is guessed from the children.
+* **Who sees it:** an Operations supervisor sees amounts, dates and status for
+  the families in their PD-8 scope only; the Operations Manager and super_admin
+  see all. This extends PD-10: parents already see their own invoices, and
+  teachers and Teachers-department staff never see any.
+* A row opens the family's direct conversation, where the follow-up happens.
+  Paying stays in Core.
+
+**2. Student certificates.**
+* The name is **student certificate** (`learner_certificate`). "Certificate"
+  already names a teacher's qualification document (Teacher Profile V2), and the
+  two must never share a table, a screen or an API.
+* The teacher files a **Certificate** ticket for one learner in their teacher
+  supervision conversation, which is private and never the student group. The
+  ticket carries the certificate type, the achievement, the date, an optional
+  grade and the learner's name as it should be printed. This creates the record
+  in `requested`.
+* Open requests form the Admin **Certificates** page. A designated supervisor
+  either uploads the finished file (PDF or image), which moves the record to
+  `issued`, or declines it with a reason, which posts a card back into the
+  supervision conversation.
+* **Delivery is one card.** On `issued`, the certificate is posted as a card into
+  the learner's student group. The teacher and the parent are both members, so
+  it is in both accounts at once, with no new teacher-app surface. The parent's
+  per-child page (PD-10) lists the same record.
+* The file is a learner-scoped object. Reading it requires a signed URL, and
+  issuing that URL is the access decision: only the learner's student-group
+  members and staff in scope receive one.
+* This settles PD-9 open item 2. The criterion for *when* to request one stays
+  with the academic team, not with the system.
+
+**3. Teacher discipline (Teachers department).**
+* **What counts.** A lesson closed `teacher_apology` or `teacher_no_show`
+  (PD-9), and a `held` lesson recorded as late. Lateness is new: a `held` lesson
+  gains `late_minutes`, recorded by a Teachers-department member. A lesson counts
+  as late only above a configured threshold.
+* **Excused.** A Teachers-department member may excuse a violation with a
+  reason, such as an outage or an emergency. It stays on the record but is not
+  counted.
+* **Not a violation:** a lesson cancelled because of approved leave (section 4)
+  or by a suspension.
+* **One shared ladder, reset monthly.** The step is the count of counted
+  violations in the teacher's calendar month, which is also the payroll month.
+  On the first of the month the count starts again at zero. The history is
+  never reset, and a suspension already in force continues.
+* **Suggest, then confirm.** Each new violation opens a ruling (PD-11) in the
+  Teacher Supervision "Needs decision" queue. The ruling shows the suggested
+  step and the teacher's history. Any Teachers-department supervisor or manager,
+  or super_admin, confirms, excuses the violation, or chooses a different step
+  with a reason. Nothing is applied automatically.
+* **What each step does:**
+  - *Warning:* a system message in the teacher supervision conversation.
+  - *First and second deduction:* Chat records the decision and emits
+    `teacher.deduction_applied` (step, month) to Core. **The amount is set in Core
+    payroll** (PD-10). Teachers-department staff never see salary or amounts.
+  - *Temporary suspension:* the approver sets an end date. No lessons are
+    scheduled in that window. Lessons already in it are listed at confirmation
+    and must be given a substitute or closed `admin_cancelled` (reason
+    `teacher_suspended`; a make-up is owed under PD-11). The teacher keeps their
+    account and conversations.
+  - *Permanent suspension:* every learner is moved with PD-11's transfer, future
+    lessons are moved or cancelled as above, the teacher's sessions are revoked
+    and the account is disabled. Core is told (`teacher.suspended`, with kind and
+    dates).
+* Every violation, ruling and step is appended to the teacher's **supervision
+  timeline** (PD-10), which can only grow. New entry types: `violation`,
+  `warning`, `deduction`, `suspension`, `excused`.
+* The page has three sections, **Lateness**, **Cancellations** and **Leave**.
+  Each is a query over lesson rows and timeline entries; nothing is typed in
+  twice.
+
+**4. Teacher leave.**
+* **Allowance:** a Teachers-department member types each teacher's leave
+  allowance in days, per leave year, in the Teacher File. Changes are appended
+  with who made them and when.
+* **Request:** the teacher files a **Leave** ticket (dates and reason) in the
+  teacher supervision conversation. A Teachers-department member approves it or
+  declines it with a reason. Approval writes PD-11's `chat.teacher_day_off`
+  rows (the one record of days off, which the scheduler and make-up booking
+  read), linked to the request; cancelling removes the days that have not
+  passed. There is no second leave table.
+* **Balance** = allowance − approved leave days in that leave year. It is
+  computed on every read and never decremented. Cancelling or shortening an
+  approved leave therefore restores the balance with no correction step. A day
+  on which the teacher's weekly availability has no working hours (their regular
+  day off) does not consume balance.
+* **Lessons inside an approved leave** are listed at approval and must be given a
+  substitute or closed `admin_cancelled` (reason `teacher_leave`; a make-up is
+  owed under PD-11). They never count as violations. This is the rule most
+  likely to be missed: without it, approved leave turns into no-shows, and the
+  no-shows turn into deductions.
+* **The teacher sees their own balance** and the state of their own leave
+  requests in the teacher app. This reopens the Teacher Account freeze for one
+  more read-only surface, beside PD-9's schedule and workload.
+
+**Permissions.** New keys: `billing.family_read` (Operations, in scope),
+`certificate.issue`, `teacher_discipline.decide` and `teacher_leave.manage`
+(Teachers department and super_admin). They are enforced in the API and in the
+database, never only in the client.
+
+**Implementation phase.** In order:
+- **S1:** the teacher supervision conversation, pulled forward from PD-11 T3,
+  plus student certificates and leave.
+- **S2:** the discipline ladder. It needs PD-11 T1's lesson outcomes and rulings,
+  plus `late_minutes`.
+- **S3:** Instalment Payments, which needs Core's invoice read API (PD-10 open
+  item 2) and the PD-8 billing supervisor.
+
+**Consequences.**
+- PD-8's assignment gains a family-level billing supervisor.
+- PD-10 is extended: Operations supervisors read invoice amounts for their own
+  families.
+- The Teacher Account freeze reopens for the leave balance and leave-request
+  state, read-only.
+- New Chat → Core events: `teacher.deduction_applied` and `teacher.suspended`.
+- A lesson gains `late_minutes`. `admin_cancelled` gains the reasons
+  `teacher_leave` and `teacher_suspended`.
+
+**Deprecated behaviour.** None removed. Explicitly **not** built:
+- a stored leave counter;
+- any deduction amount in Chat;
+- any stored copy of invoices;
+- a ticket or task entity;
+- an automatic disciplinary step.
+
+**Defaults adopted at closing** (the owner may override any of them without reopening
+PD-12):
+1. The late threshold is **10 minutes** (`teacher.late_threshold_minutes`).
+2. The leave year is the calendar year, and unused days do not carry over.
+3. Student certificates are issued by **Teachers-department supervisors**.
+4. A temporary suspension defaults to **7 days**; the approver may change it.
+
+**Open implementation items** (they do not block this decision):
+1. Whether lateness is also derived from the teacher's join time when a lesson
+   runs on a Jawwid call.
+2. The certificate types list, from the academic team.
+3. Core's invoice read API and its per-child invoice field.
+
+**Closed.** 2026-10-18.
+
+---
+
+**Reconciled 2026-10-19** (owner-approved plan, three parallel workstreams):
+PD-11 is the one lessons system; `chat.teacher_day_off` is the one record of
+days off; PD-11's `chat.teacher_supervision_entry` is the one timeline (PD-10
+extends it); the supervision conversation is ONE per teacher with the whole
+Teachers department (`teacher_supervision`), and PD-11's bonus and handover
+cards are posted there; the PD-12 certificate flow is the only certificate
+model. Implementation record: `docs/admin/pd012-s1.md`.
+
+---
+
+### Decisions still open after PD-1 to PD-12
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
-The implementation items left open inside PD-9, PD-10 and PD-11 are settled when their
+The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their
 phase starts and do not reopen either decision. Any new product question is
 recorded here with a new `PD-n` and the same six fields: decision, canonical
 rule, implementation phase, consequences, deprecated behaviour, and the date it
