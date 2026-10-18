@@ -64,6 +64,12 @@ final lessonRepositoryProvider = Provider<LessonRepository>((ref) {
   return const NoLessonRepository();
 });
 
+/// PD-12 S1. A harmless default like the lesson repository's: a build without a
+/// supervision server offers no supervision ticket.
+final supervisionRepositoryProvider = Provider<SupervisionRepository>((ref) {
+  return const NoSupervisionRepository();
+});
+
 final callRepositoryProvider = Provider<CallRepository>((ref) {
   throw UnimplementedError('callRepositoryProvider must be overridden');
 });

@@ -267,6 +267,7 @@ abstract final class WireMappers {
       // (2026-10-14) forbids that channel again, and one left over from the PD-6 window is
       // history -- the backend refuses every send into it with BR1_TEACHER_PARENT_DIRECT.
       isReadOnly: archivedAt != null || kind == ConversationKind.teacherParentDirect,
+      isTeacherSupervision: json['type'] == Wire.conversationTeacherSupervision,
     );
   }
 

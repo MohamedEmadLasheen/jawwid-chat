@@ -323,7 +323,7 @@ Future<void> _showActions(
             child: Semantics(
               header: true,
               child: ContentText(
-                conversation.title,
+                conversation.displayTitle(L10n.of(sheetContext).supervisionChatTitle),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(sheetContext).textTheme.titleSmall,

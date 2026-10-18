@@ -2154,6 +2154,342 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'{percent} reports on time'**
   String workloadOnTime(String percent);
+
+  /// No description provided for @supervisionChatTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Supervision'**
+  String get supervisionChatTitle;
+
+  /// No description provided for @supervisionChatSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Teachers department · private'**
+  String get supervisionChatSubtitle;
+
+  /// No description provided for @supervisionTicketsHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'Requests'**
+  String get supervisionTicketsHeader;
+
+  /// No description provided for @ticketCertificate.
+  ///
+  /// In en, this message translates to:
+  /// **'Request a certificate'**
+  String get ticketCertificate;
+
+  /// No description provided for @ticketLeave.
+  ///
+  /// In en, this message translates to:
+  /// **'Request leave'**
+  String get ticketLeave;
+
+  /// No description provided for @certificateFormTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Request a certificate'**
+  String get certificateFormTitle;
+
+  /// No description provided for @certificateFormHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent privately to the Teachers department. When the certificate is issued, it is posted to the student\'s group, where you and the parents receive it.'**
+  String get certificateFormHint;
+
+  /// No description provided for @certificateStudent.
+  ///
+  /// In en, this message translates to:
+  /// **'Student'**
+  String get certificateStudent;
+
+  /// No description provided for @certificateTitleField.
+  ///
+  /// In en, this message translates to:
+  /// **'Certificate'**
+  String get certificateTitleField;
+
+  /// No description provided for @certificateTitleHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Juz Amma'**
+  String get certificateTitleHint;
+
+  /// No description provided for @certificateAchievement.
+  ///
+  /// In en, this message translates to:
+  /// **'Achievement'**
+  String get certificateAchievement;
+
+  /// No description provided for @certificateAchievedOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Date achieved'**
+  String get certificateAchievedOn;
+
+  /// No description provided for @certificateGrade.
+  ///
+  /// In en, this message translates to:
+  /// **'Grade (optional)'**
+  String get certificateGrade;
+
+  /// No description provided for @certificatePrintedName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name as it should be printed'**
+  String get certificatePrintedName;
+
+  /// No description provided for @certificateNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Note to the department (optional)'**
+  String get certificateNote;
+
+  /// No description provided for @leaveFormTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Request leave'**
+  String get leaveFormTitle;
+
+  /// No description provided for @leaveFormHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent privately to the Teachers department. Approved days are deducted from your balance.'**
+  String get leaveFormHint;
+
+  /// No description provided for @leaveFirstDay.
+  ///
+  /// In en, this message translates to:
+  /// **'First day'**
+  String get leaveFirstDay;
+
+  /// No description provided for @leaveLastDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Last day'**
+  String get leaveLastDay;
+
+  /// No description provided for @leaveReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get leaveReason;
+
+  /// No description provided for @leaveDaysCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 day} other{{count} days}}'**
+  String leaveDaysCount(int count);
+
+  /// No description provided for @leaveBalanceNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Your balance now: {balance}'**
+  String leaveBalanceNow(String balance);
+
+  /// No description provided for @leaveSameYear.
+  ///
+  /// In en, this message translates to:
+  /// **'Send a separate request for each year.'**
+  String get leaveSameYear;
+
+  /// No description provided for @leaveLastBeforeFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'The last day is before the first day.'**
+  String get leaveLastBeforeFirst;
+
+  /// No description provided for @formRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Required'**
+  String get formRequired;
+
+  /// No description provided for @formSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get formSend;
+
+  /// No description provided for @myLeaveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'My leave'**
+  String get myLeaveTitle;
+
+  /// No description provided for @myLeaveAllowance.
+  ///
+  /// In en, this message translates to:
+  /// **'Allowance {year}'**
+  String myLeaveAllowance(String year);
+
+  /// No description provided for @myLeaveUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'Used'**
+  String get myLeaveUsed;
+
+  /// No description provided for @myLeaveBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance'**
+  String get myLeaveBalance;
+
+  /// No description provided for @myLeaveNoAllowance.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set yet'**
+  String get myLeaveNoAllowance;
+
+  /// No description provided for @myLeaveNoRequests.
+  ///
+  /// In en, this message translates to:
+  /// **'No leave requests this year.'**
+  String get myLeaveNoRequests;
+
+  /// No description provided for @myLeaveRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Request leave'**
+  String get myLeaveRequest;
+
+  /// No description provided for @myLeaveWithdraw.
+  ///
+  /// In en, this message translates to:
+  /// **'Withdraw'**
+  String get myLeaveWithdraw;
+
+  /// No description provided for @myLeaveWithdrawConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Withdraw this leave request?'**
+  String get myLeaveWithdrawConfirm;
+
+  /// No description provided for @leaveStateRequested.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting'**
+  String get leaveStateRequested;
+
+  /// No description provided for @leaveStateApproved.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved'**
+  String get leaveStateApproved;
+
+  /// No description provided for @leaveStateDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'Not approved'**
+  String get leaveStateDeclined;
+
+  /// No description provided for @leaveStateWithdrawn.
+  ///
+  /// In en, this message translates to:
+  /// **'Withdrawn'**
+  String get leaveStateWithdrawn;
+
+  /// No description provided for @leaveStateCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get leaveStateCancelled;
+
+  /// No description provided for @cardCertificateRequestedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Certificate request'**
+  String get cardCertificateRequestedTitle;
+
+  /// No description provided for @cardCertificateIssuedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Certificate'**
+  String get cardCertificateIssuedTitle;
+
+  /// No description provided for @cardCertificateDeclinedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Certificate request not approved'**
+  String get cardCertificateDeclinedTitle;
+
+  /// No description provided for @cardLeaveRequestedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave request'**
+  String get cardLeaveRequestedTitle;
+
+  /// No description provided for @cardLeaveApprovedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave approved'**
+  String get cardLeaveApprovedTitle;
+
+  /// No description provided for @cardLeaveDeclinedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave not approved'**
+  String get cardLeaveDeclinedTitle;
+
+  /// No description provided for @cardLeaveWithdrawnTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave request withdrawn'**
+  String get cardLeaveWithdrawnTitle;
+
+  /// No description provided for @cardLeaveCancelledTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave cancelled'**
+  String get cardLeaveCancelledTitle;
+
+  /// No description provided for @cardAchievement.
+  ///
+  /// In en, this message translates to:
+  /// **'Achievement'**
+  String get cardAchievement;
+
+  /// No description provided for @cardGrade.
+  ///
+  /// In en, this message translates to:
+  /// **'Grade'**
+  String get cardGrade;
+
+  /// No description provided for @cardDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Days'**
+  String get cardDays;
+
+  /// No description provided for @cardBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance'**
+  String get cardBalance;
+
+  /// No description provided for @cardDaysReturned.
+  ///
+  /// In en, this message translates to:
+  /// **'Days returned'**
+  String get cardDaysReturned;
+
+  /// No description provided for @cardCongratulations.
+  ///
+  /// In en, this message translates to:
+  /// **'Congratulations! The certificate is attached.'**
+  String get cardCongratulations;
+
+  /// No description provided for @leaveNotAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'These dates can\'t be requested: they overlap another request or have already passed.'**
+  String get leaveNotAllowed;
+
+  /// No description provided for @progressCertificatesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Certificates'**
+  String get progressCertificatesTitle;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

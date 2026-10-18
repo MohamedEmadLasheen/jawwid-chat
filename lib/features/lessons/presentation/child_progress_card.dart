@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/providers.dart';
+import '../../../app/router.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
@@ -15,9 +17,9 @@ final childProgressProvider = FutureProvider.autoDispose.family<ChildProgress, S
 /// PD-10's per-child page, as a section of the child's group profile.
 ///
 /// Leads with what was learnt and how steadily (the streak), then the month's
-/// counts; absences are shown plainly, never as the headline. Certificates have
-/// a named place but no content until the academy decides how they are earned
-/// (PD-11 open item) -- an honest "will appear here", not an invented badge.
+/// counts; absences are shown plainly, never as the headline. Certificates are
+/// the PD-12 student certificates actually issued -- until one is, an honest
+/// "will appear here", not an invented badge.
 /// A build without a lesson server shows nothing at all.
 class ChildProgressCard extends ConsumerWidget {
   const ChildProgressCard({super.key, required this.learnerId});
@@ -69,10 +71,28 @@ class ChildProgressCard extends ConsumerWidget {
             if (p.nextLessonAt != null) Text(l10n.progressNext(lessonWhen(context, p.nextLessonAt!)), style: theme.textTheme.bodySmall),
             if (p.lastCovered != null) Text(l10n.progressLastCovered(p.lastCovered!), style: theme.textTheme.bodySmall),
             const SizedBox(height: Spacing.spacing2),
-            Text(
-              l10n.progressCertificates,
-              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant, fontStyle: FontStyle.italic),
-            ),
+            if (p.certificates.isEmpty)
+              Text(
+                l10n.progressCertificates,
+                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant, fontStyle: FontStyle.italic),
+              )
+            else ...[
+              Text(l10n.progressCertificatesTitle, style: theme.textTheme.titleSmall),
+              // PD-12: each opens the group it was delivered into, where its file is.
+              for (final c in p.certificates)
+                ListTile(
+                  key: ValueKey('progress-certificate-${c.id}'),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  leading: Icon(Icons.workspace_premium, color: theme.colorScheme.primary),
+                  title: Text(c.title),
+                  subtitle: Text([
+                    MaterialLocalizations.of(context).formatMediumDate(DateTime(c.achievedOn.year, c.achievedOn.month, c.achievedOn.day)),
+                    ?c.grade,
+                  ].join(' · ')),
+                  onTap: c.conversationId == null ? null : () => context.push(Routes.conversation(c.conversationId!)),
+                ),
+            ],
           ],
         ),
       ),

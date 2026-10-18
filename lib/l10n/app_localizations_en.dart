@@ -1156,4 +1156,188 @@ class L10nEn extends L10n {
   String workloadOnTime(String percent) {
     return '$percent reports on time';
   }
+
+  @override
+  String get supervisionChatTitle => 'Supervision';
+
+  @override
+  String get supervisionChatSubtitle => 'Teachers department · private';
+
+  @override
+  String get supervisionTicketsHeader => 'Requests';
+
+  @override
+  String get ticketCertificate => 'Request a certificate';
+
+  @override
+  String get ticketLeave => 'Request leave';
+
+  @override
+  String get certificateFormTitle => 'Request a certificate';
+
+  @override
+  String get certificateFormHint =>
+      'Sent privately to the Teachers department. When the certificate is issued, it is posted to the student\'s group, where you and the parents receive it.';
+
+  @override
+  String get certificateStudent => 'Student';
+
+  @override
+  String get certificateTitleField => 'Certificate';
+
+  @override
+  String get certificateTitleHint => 'e.g. Juz Amma';
+
+  @override
+  String get certificateAchievement => 'Achievement';
+
+  @override
+  String get certificateAchievedOn => 'Date achieved';
+
+  @override
+  String get certificateGrade => 'Grade (optional)';
+
+  @override
+  String get certificatePrintedName => 'Name as it should be printed';
+
+  @override
+  String get certificateNote => 'Note to the department (optional)';
+
+  @override
+  String get leaveFormTitle => 'Request leave';
+
+  @override
+  String get leaveFormHint =>
+      'Sent privately to the Teachers department. Approved days are deducted from your balance.';
+
+  @override
+  String get leaveFirstDay => 'First day';
+
+  @override
+  String get leaveLastDay => 'Last day';
+
+  @override
+  String get leaveReason => 'Reason';
+
+  @override
+  String leaveDaysCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count days',
+      one: '1 day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String leaveBalanceNow(String balance) {
+    return 'Your balance now: $balance';
+  }
+
+  @override
+  String get leaveSameYear => 'Send a separate request for each year.';
+
+  @override
+  String get leaveLastBeforeFirst => 'The last day is before the first day.';
+
+  @override
+  String get formRequired => 'Required';
+
+  @override
+  String get formSend => 'Send';
+
+  @override
+  String get myLeaveTitle => 'My leave';
+
+  @override
+  String myLeaveAllowance(String year) {
+    return 'Allowance $year';
+  }
+
+  @override
+  String get myLeaveUsed => 'Used';
+
+  @override
+  String get myLeaveBalance => 'Balance';
+
+  @override
+  String get myLeaveNoAllowance => 'Not set yet';
+
+  @override
+  String get myLeaveNoRequests => 'No leave requests this year.';
+
+  @override
+  String get myLeaveRequest => 'Request leave';
+
+  @override
+  String get myLeaveWithdraw => 'Withdraw';
+
+  @override
+  String get myLeaveWithdrawConfirm => 'Withdraw this leave request?';
+
+  @override
+  String get leaveStateRequested => 'Waiting';
+
+  @override
+  String get leaveStateApproved => 'Approved';
+
+  @override
+  String get leaveStateDeclined => 'Not approved';
+
+  @override
+  String get leaveStateWithdrawn => 'Withdrawn';
+
+  @override
+  String get leaveStateCancelled => 'Cancelled';
+
+  @override
+  String get cardCertificateRequestedTitle => 'Certificate request';
+
+  @override
+  String get cardCertificateIssuedTitle => 'Certificate';
+
+  @override
+  String get cardCertificateDeclinedTitle => 'Certificate request not approved';
+
+  @override
+  String get cardLeaveRequestedTitle => 'Leave request';
+
+  @override
+  String get cardLeaveApprovedTitle => 'Leave approved';
+
+  @override
+  String get cardLeaveDeclinedTitle => 'Leave not approved';
+
+  @override
+  String get cardLeaveWithdrawnTitle => 'Leave request withdrawn';
+
+  @override
+  String get cardLeaveCancelledTitle => 'Leave cancelled';
+
+  @override
+  String get cardAchievement => 'Achievement';
+
+  @override
+  String get cardGrade => 'Grade';
+
+  @override
+  String get cardDays => 'Days';
+
+  @override
+  String get cardBalance => 'Balance';
+
+  @override
+  String get cardDaysReturned => 'Days returned';
+
+  @override
+  String get cardCongratulations =>
+      'Congratulations! The certificate is attached.';
+
+  @override
+  String get leaveNotAllowed =>
+      'These dates can\'t be requested: they overlap another request or have already passed.';
+
+  @override
+  String get progressCertificatesTitle => 'Certificates';
 }

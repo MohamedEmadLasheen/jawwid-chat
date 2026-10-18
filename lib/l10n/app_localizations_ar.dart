@@ -1154,4 +1154,190 @@ class L10nAr extends L10n {
   String workloadOnTime(String percent) {
     return '$percent من التقارير في موعدها';
   }
+
+  @override
+  String get supervisionChatTitle => 'الإشراف';
+
+  @override
+  String get supervisionChatSubtitle => 'قسم المعلمين · خاصة';
+
+  @override
+  String get supervisionTicketsHeader => 'الطلبات';
+
+  @override
+  String get ticketCertificate => 'طلب شهادة';
+
+  @override
+  String get ticketLeave => 'طلب إجازة';
+
+  @override
+  String get certificateFormTitle => 'طلب شهادة';
+
+  @override
+  String get certificateFormHint =>
+      'يُرسل بشكل خاص إلى قسم المعلمين. عند إصدار الشهادة تُنشر في مجموعة الطالب، حيث تستلمها أنت وأولياء الأمر.';
+
+  @override
+  String get certificateStudent => 'الطالب';
+
+  @override
+  String get certificateTitleField => 'الشهادة';
+
+  @override
+  String get certificateTitleHint => 'مثال: جزء عمّ';
+
+  @override
+  String get certificateAchievement => 'الإنجاز';
+
+  @override
+  String get certificateAchievedOn => 'تاريخ الإنجاز';
+
+  @override
+  String get certificateGrade => 'التقدير (اختياري)';
+
+  @override
+  String get certificatePrintedName => 'الاسم كما يُكتب على الشهادة';
+
+  @override
+  String get certificateNote => 'ملاحظة للقسم (اختيارية)';
+
+  @override
+  String get leaveFormTitle => 'طلب إجازة';
+
+  @override
+  String get leaveFormHint =>
+      'يُرسل بشكل خاص إلى قسم المعلمين. تُخصم الأيام المعتمدة من رصيدك.';
+
+  @override
+  String get leaveFirstDay => 'أول يوم';
+
+  @override
+  String get leaveLastDay => 'آخر يوم';
+
+  @override
+  String get leaveReason => 'السبب';
+
+  @override
+  String leaveDaysCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count يوم',
+      many: '$count يومًا',
+      few: '$count أيام',
+      two: 'يومان',
+      one: 'يوم واحد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String leaveBalanceNow(String balance) {
+    return 'رصيدك الحالي: $balance';
+  }
+
+  @override
+  String get leaveSameYear => 'أرسل طلبًا منفصلًا لكل عام.';
+
+  @override
+  String get leaveLastBeforeFirst => 'آخر يوم قبل أول يوم.';
+
+  @override
+  String get formRequired => 'مطلوب';
+
+  @override
+  String get formSend => 'إرسال';
+
+  @override
+  String get myLeaveTitle => 'إجازاتي';
+
+  @override
+  String myLeaveAllowance(String year) {
+    return 'رصيد $year';
+  }
+
+  @override
+  String get myLeaveUsed => 'المستخدم';
+
+  @override
+  String get myLeaveBalance => 'المتبقي';
+
+  @override
+  String get myLeaveNoAllowance => 'لم يُحدَّد بعد';
+
+  @override
+  String get myLeaveNoRequests => 'لا توجد طلبات إجازة هذا العام.';
+
+  @override
+  String get myLeaveRequest => 'طلب إجازة';
+
+  @override
+  String get myLeaveWithdraw => 'سحب';
+
+  @override
+  String get myLeaveWithdrawConfirm => 'سحب طلب الإجازة هذا؟';
+
+  @override
+  String get leaveStateRequested => 'بانتظار القرار';
+
+  @override
+  String get leaveStateApproved => 'معتمدة';
+
+  @override
+  String get leaveStateDeclined => 'غير معتمدة';
+
+  @override
+  String get leaveStateWithdrawn => 'مسحوبة';
+
+  @override
+  String get leaveStateCancelled => 'ملغاة';
+
+  @override
+  String get cardCertificateRequestedTitle => 'طلب شهادة';
+
+  @override
+  String get cardCertificateIssuedTitle => 'شهادة';
+
+  @override
+  String get cardCertificateDeclinedTitle => 'لم يُعتمد طلب الشهادة';
+
+  @override
+  String get cardLeaveRequestedTitle => 'طلب إجازة';
+
+  @override
+  String get cardLeaveApprovedTitle => 'تمت الموافقة على الإجازة';
+
+  @override
+  String get cardLeaveDeclinedTitle => 'لم تتم الموافقة على الإجازة';
+
+  @override
+  String get cardLeaveWithdrawnTitle => 'سُحب طلب الإجازة';
+
+  @override
+  String get cardLeaveCancelledTitle => 'أُلغيت الإجازة';
+
+  @override
+  String get cardAchievement => 'الإنجاز';
+
+  @override
+  String get cardGrade => 'التقدير';
+
+  @override
+  String get cardDays => 'الأيام';
+
+  @override
+  String get cardBalance => 'الرصيد';
+
+  @override
+  String get cardDaysReturned => 'أيام أُعيدت';
+
+  @override
+  String get cardCongratulations => 'مبارك! الشهادة مرفقة.';
+
+  @override
+  String get leaveNotAllowed =>
+      'لا يمكن طلب هذه الأيام: تتداخل مع طلب آخر أو مضت.';
+
+  @override
+  String get progressCertificatesTitle => 'الشهادات';
 }

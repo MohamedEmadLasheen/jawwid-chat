@@ -17,6 +17,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/conversation.dart';
 import '../../../shared/models/lesson.dart';
 import '../../../shared/models/message.dart';
+import '../../../shared/models/supervision.dart';
 import '../../../shared/utils/relative_time.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../../calls/application/call_capability.dart';
@@ -26,6 +27,7 @@ import '../../calls/domain/call_timeline.dart';
 import '../../calls/presentation/call_card.dart';
 import '../../conversations/application/conversations_controller.dart';
 import '../../lessons/presentation/lesson_ticket_sheet.dart';
+import '../../supervision/presentation/supervision_ticket_sheet.dart';
 import '../application/messages_controller.dart';
 import '../application/voice_composer_controller.dart';
 import 'attachment_preview.dart';
@@ -48,6 +50,7 @@ class ChatScreen extends ConsumerStatefulWidget {
     this.kind = ConversationKind.jawwidSupport,
     this.requiresApproval = false,
     this.isReadOnly = false,
+    this.isTeacherSupervision = false,
     this.onOpenMembers,
     this.onOpenProfile,
   });
@@ -61,6 +64,10 @@ class ChatScreen extends ConsumerStatefulWidget {
   final ConversationKind kind;
   final bool requiresApproval;
   final bool isReadOnly;
+
+  /// PD-12: the teacher's private conversation with the Teachers department. Only here
+  /// does "+" ask the server for supervision tickets.
+  final bool isTeacherSupervision;
   final VoidCallback? onOpenMembers;
 
   /// Tapping the header — avatar or name — opens the profile, or group info for a
@@ -173,12 +180,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final tickets = ref.read(lessonTicketsProvider(widget.conversationId)).value ?? const [];
     // Refetch behind the menu: the next "+" reflects anything another device closed.
     ref.invalidate(lessonTicketsProvider(widget.conversationId));
-    final choice = await showComposerMenu(context, tickets: tickets);
+    final supervision = widget.isTeacherSupervision
+        ? ref.read(supervisionTicketsProvider(widget.conversationId)).value ?? SupervisionTickets.none
+        : SupervisionTickets.none;
+    final choice = await showComposerMenu(context, tickets: tickets, supervisionTickets: supervision.kinds);
     if (choice == null || !mounted) return;
     final AttachmentSource source;
     switch (choice) {
       case TicketChoice(:final ticket):
         await _openTicket(ticket);
+        return;
+      case SupervisionChoice(:final kind):
+        await _openSupervisionTicket(kind, supervision.learners);
         return;
       case AttachmentChoice(source: final picked):
         source = picked;
@@ -223,6 +236,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (!mounted) return;
     ref.invalidate(lessonTicketsProvider(widget.conversationId));
     if (!sent) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(L10n.of(context).ticketSent)));
+    unawaited(ref.read(messagesControllerProvider(widget.conversationId).notifier).refreshLatest());
+    if (_isAwayFromBottom) _jumpToNewest();
+  }
+
+  /// Open a PD-12 request. Its card arrives through the ordinary message path.
+  Future<void> _openSupervisionTicket(SupervisionTicketKind kind, List<SupervisionLearner> learners) async {
+    final sent = await showSupervisionTicketSheet(context, kind, learners: learners);
+    if (!mounted || !sent) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(L10n.of(context).ticketSent)));
     unawaited(ref.read(messagesControllerProvider(widget.conversationId).notifier).refreshLatest());
     if (_isAwayFromBottom) _jumpToNewest();
@@ -482,6 +504,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     // PD-11: prefetch the lesson tickets so "+" opens without a round trip.
     ref.watch(lessonTicketsProvider(widget.conversationId));
+    if (widget.isTeacherSupervision) ref.watch(supervisionTicketsProvider(widget.conversationId));
 
     final voice = ref.watch(voiceComposerProvider(widget.conversationId));
     final voiceController =

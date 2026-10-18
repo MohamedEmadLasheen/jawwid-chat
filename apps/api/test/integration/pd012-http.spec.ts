@@ -205,6 +205,13 @@ describe('PD-12 S1 over HTTP', () => {
     expect(delivered).toHaveLength(1);
     expect(delivered[0].attachments).toHaveLength(1);
     expect(delivered[0].attachments[0].url).toBeTruthy();
+
+    // ...and on the child's progress (PD-11 T5), pointing at where the file is.
+    const progress = await http(fam.parent, 'GET', `/learners/${fam.childId}/progress`);
+    expect(progress.status).toBe(200);
+    expect(progress.json.certificates).toEqual([
+      expect.objectContaining({ id: certId, title: 'Juz Amma', achievedOn: '2026-10-01', conversationId: fam.groupId }),
+    ]);
   });
 
   it('leave: the teacher requests, the department approves, the teacher reads the computed balance', async () => {

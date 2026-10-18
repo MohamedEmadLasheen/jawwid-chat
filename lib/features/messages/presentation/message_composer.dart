@@ -4,7 +4,9 @@ import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
 import '../../../shared/models/message.dart';
+import '../../../shared/models/supervision.dart';
 import '../../lessons/presentation/lesson_ticket_sheet.dart';
+import '../../supervision/presentation/supervision_ticket_sheet.dart';
 import '../application/voice_composer_controller.dart';
 import 'voice_recorder_bar.dart';
 
@@ -365,6 +367,12 @@ class TicketChoice extends ComposerChoice {
   final LessonTicket ticket;
 }
 
+/// PD-12: a request filed in the teacher's supervision conversation.
+class SupervisionChoice extends ComposerChoice {
+  const SupervisionChoice(this.kind);
+  final SupervisionTicketKind kind;
+}
+
 /// The `+` menu with PD-11's lesson tickets under the three attachment entries.
 ///
 /// The attachments stay first and stay three. The tickets are a second, titled
@@ -374,8 +382,9 @@ class TicketChoice extends ComposerChoice {
 Future<ComposerChoice?> showComposerMenu(
   BuildContext context, {
   List<LessonTicket> tickets = const [],
+  List<SupervisionTicketKind> supervisionTickets = const [],
 }) {
-  if (tickets.isEmpty) {
+  if (tickets.isEmpty && supervisionTickets.isEmpty) {
     return showAttachmentMenu(context).then((s) => s == null ? null : AttachmentChoice(s));
   }
   return showModalBottomSheet<ComposerChoice>(
@@ -409,6 +418,24 @@ Future<ComposerChoice?> showComposerMenu(
                 title: Text(l10n.attachFile),
                 onTap: () => pick(const AttachmentChoice(AttachmentSource.file)),
               ),
+              if (supervisionTickets.isNotEmpty) ...[
+                const Divider(),
+                Padding(
+                  padding: const EdgeInsetsDirectional.fromSTEB(Spacing.spacing5, Spacing.spacing2, Spacing.spacing5, Spacing.spacing1),
+                  child: Text(
+                    l10n.supervisionTicketsHeader,
+                    style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.primary),
+                  ),
+                ),
+                for (final k in supervisionTickets)
+                  ListTile(
+                    key: ValueKey('supervision-ticket-${k.name}'),
+                    leading: Icon(supervisionTicketIcon(k)),
+                    title: Text(supervisionTicketLabel(l10n, k)),
+                    onTap: () => pick(SupervisionChoice(k)),
+                  ),
+              ],
+              if (tickets.isNotEmpty) ...[
               const Divider(),
               Padding(
                 padding: const EdgeInsetsDirectional.fromSTEB(Spacing.spacing5, Spacing.spacing2, Spacing.spacing5, Spacing.spacing1),
@@ -428,6 +455,7 @@ Future<ComposerChoice?> showComposerMenu(
                   ].join(' · ')),
                   onTap: () => pick(TicketChoice(t)),
                 ),
+              ],
             ],
           ),
         ),

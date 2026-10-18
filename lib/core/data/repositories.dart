@@ -3,6 +3,7 @@ import '../../shared/models/conversation.dart';
 import '../../shared/models/lesson.dart';
 import '../../shared/models/message.dart';
 import '../../shared/models/story.dart';
+import '../../shared/models/supervision.dart';
 import '../../shared/models/user_role.dart';
 
 /// One page of a cursor-paginated list (§19).
@@ -531,6 +532,55 @@ abstract interface class LessonRepository {
 /// that do not override it): it offers no ticket, so "+" shows only attachments, and
 /// it refuses every submission. A fixture lesson would be indistinguishable on screen
 /// from a real one, and a parent must never see a report that was not written.
+/// PD-12 S1: the teacher's private supervision conversation, their certificate
+/// requests and their own leave. Every method is one endpoint; NO AUTHORIZATION LIVES
+/// HERE -- the server decides and its `COMM.*` code reaches the caller intact.
+abstract interface class SupervisionRepository {
+  /// `GET /conversations/:id/supervision-tickets` -- what "+" may offer here. Advisory.
+  Future<SupervisionTickets> tickets(String conversationId);
+
+  /// `POST /learner-certificates` -- the request's card lands in the supervision conversation.
+  Future<void> requestCertificate(CertificateDraft draft);
+
+  /// `POST /me/leave-requests`
+  Future<void> requestLeave({required DateTime firstDay, required DateTime lastDay, required String reason});
+
+  /// `POST /me/leave-requests/:id/withdraw` -- only while undecided.
+  Future<void> withdrawLeave(String requestId);
+
+  /// `GET /me/leave?year=` -- the teacher's own allowance, used days, balance and requests.
+  Future<LeaveSummary> myLeave({int? year});
+
+  /// `POST /me/supervision-conversation` -- the teacher's own, created on first use.
+  Future<String> openOwnConversation();
+}
+
+/// The build with no supervision server (fixtures, tests that do not override it):
+/// offers nothing and refuses every submission, so a fixture balance can never be
+/// mistaken for the teacher's real one.
+class NoSupervisionRepository implements SupervisionRepository {
+  const NoSupervisionRepository();
+
+  @override
+  Future<SupervisionTickets> tickets(String conversationId) async => SupervisionTickets.none;
+
+  @override
+  Future<void> requestCertificate(CertificateDraft draft) => throw UnsupportedError('no supervision server in this build');
+
+  @override
+  Future<void> requestLeave({required DateTime firstDay, required DateTime lastDay, required String reason}) =>
+      throw UnsupportedError('no supervision server in this build');
+
+  @override
+  Future<void> withdrawLeave(String requestId) => throw UnsupportedError('no supervision server in this build');
+
+  @override
+  Future<LeaveSummary> myLeave({int? year}) => throw UnsupportedError('no supervision server in this build');
+
+  @override
+  Future<String> openOwnConversation() => throw UnsupportedError('no supervision server in this build');
+}
+
 class NoLessonRepository implements LessonRepository {
   const NoLessonRepository();
 
