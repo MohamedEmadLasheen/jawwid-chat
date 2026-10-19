@@ -51,6 +51,10 @@ class L10nEn extends L10n {
   String get sessionExpiredBody => 'Your session ended. Please sign in again.';
 
   @override
+  String get sessionUnreachableBody =>
+      'Couldn\'t reach Jawwid to open your session. You\'re still signed in — check your connection and try again.';
+
+  @override
   String get signOutAction => 'Sign out';
 
   @override
@@ -630,6 +634,9 @@ class L10nEn extends L10n {
   String get attachmentVoiceLabel => 'Voice message';
 
   @override
+  String get attachmentVideoLabel => 'Video';
+
+  @override
   String get attachmentSendTitle => 'Send this?';
 
   @override
@@ -752,6 +759,33 @@ class L10nEn extends L10n {
   String get storyVideoRetry => 'Try again';
 
   @override
+  String get storyTextLabel => 'Story';
+
+  @override
+  String get storyVoiceLabel => 'Voice story';
+
+  @override
+  String get storyVoiceFailed => 'This voice note could not be played.';
+
+  @override
+  String get storyVoicePlay => 'Play voice story';
+
+  @override
+  String get storyVoicePause => 'Pause voice story';
+
+  @override
+  String get storyCtaWhatsApp => 'Chat on WhatsApp';
+
+  @override
+  String get storyCtaMessage => 'Send a message';
+
+  @override
+  String get storyCtaLink => 'Learn more';
+
+  @override
+  String get storyCtaFailed => 'That didn\'t open. Please try again.';
+
+  @override
   String get storiesEmpty => 'No stories yet';
 
   @override
@@ -775,4 +809,542 @@ class L10nEn extends L10n {
 
   @override
   String get systemUpdate => 'System update';
+
+  @override
+  String get lessonTicketsHeader => 'Lesson';
+
+  @override
+  String get ticketReport => 'Lesson report';
+
+  @override
+  String get ticketAbsence => 'Student absent';
+
+  @override
+  String get ticketApology => 'Apologise for the lesson';
+
+  @override
+  String get ticketTeacherApology => 'I can\'t teach this lesson';
+
+  @override
+  String get ticketLateApology => 'Late apology (emergency)';
+
+  @override
+  String ticketLessonAt(String when) {
+    return 'Lesson of $when';
+  }
+
+  @override
+  String get reportCoveredLabel => 'What was covered';
+
+  @override
+  String get reportHomeworkLabel => 'Homework (optional)';
+
+  @override
+  String get reportRatingLabel => 'Rating (optional)';
+
+  @override
+  String get reportNoteLabel => 'Note (optional)';
+
+  @override
+  String get ticketReasonLabel => 'Reason';
+
+  @override
+  String get ticketAbsenceHint =>
+      'No apology was received and the lesson time has passed.';
+
+  @override
+  String get ticketLateApologyHint =>
+      'A supervisor will review it. Until then the lesson counts as an absence.';
+
+  @override
+  String get ticketTeacherApologyHint =>
+      'A make-up lesson will be arranged with the family.';
+
+  @override
+  String get ticketSubmit => 'Send';
+
+  @override
+  String get ticketSent => 'Sent';
+
+  @override
+  String get ticketFailed => 'Couldn\'t send. Please try again.';
+
+  @override
+  String get ticketNoLongerAllowed =>
+      'This lesson can no longer be updated this way.';
+
+  @override
+  String get cardReportTitle => 'Lesson report';
+
+  @override
+  String get cardAbsenceTitle => 'Absent from the lesson';
+
+  @override
+  String get cardApologyTitle => 'Apology';
+
+  @override
+  String get cardTeacherApologyTitle => 'The teacher can\'t teach this lesson';
+
+  @override
+  String get cardCancelledTitle => 'Lesson cancelled';
+
+  @override
+  String get cardTeacherAbsentTitle =>
+      'Lesson not held — the teacher was absent';
+
+  @override
+  String get cardLateApologyTitle => 'Late apology';
+
+  @override
+  String get cardRulingExcusedTitle => 'Apology accepted';
+
+  @override
+  String get cardRulingCreditedTitle => 'Recorded as an absence';
+
+  @override
+  String get cardUnderReview => 'Under review by the supervision team';
+
+  @override
+  String get cardMakeupOwed => 'A make-up lesson will be arranged.';
+
+  @override
+  String get cardCovered => 'Covered';
+
+  @override
+  String get cardHomework => 'Homework';
+
+  @override
+  String get cardRating => 'Rating';
+
+  @override
+  String get cardNote => 'Note';
+
+  @override
+  String get cardReason => 'Reason';
+
+  @override
+  String get ticketBookMakeup => 'Book a make-up lesson';
+
+  @override
+  String get ticketRequestScheduleChange => 'Change regular lesson times';
+
+  @override
+  String ticketFor(String name) {
+    return 'For $name';
+  }
+
+  @override
+  String get makeupPickDay => 'Choose a day';
+
+  @override
+  String get makeupPickTime => 'Choose a time';
+
+  @override
+  String get makeupNoSlots =>
+      'No free times in the next two weeks. The supervision team will arrange the make-up.';
+
+  @override
+  String get makeupBook => 'Book';
+
+  @override
+  String makeupLength(int minutes) {
+    return '$minutes minutes';
+  }
+
+  @override
+  String get scheduleChangePick => 'Choose the new weekly times';
+
+  @override
+  String get scheduleChangeHint =>
+      'The supervision team will confirm the change.';
+
+  @override
+  String get scheduleChangeNoOptions =>
+      'There are no other free times right now.';
+
+  @override
+  String get scheduleChangeSend => 'Send request';
+
+  @override
+  String get ticketLoadFailed =>
+      'Couldn\'t load the free times. Please try again.';
+
+  @override
+  String get cardMakeupBookedTitle => 'Make-up lesson booked';
+
+  @override
+  String get cardMakeupResolvedTitle => 'Missed lesson resolved';
+
+  @override
+  String get cardMakeupActionSubstitute => 'A substitute teacher';
+
+  @override
+  String get cardMakeupActionCredit => 'A credit to the family';
+
+  @override
+  String get cardMakeupActionExtension => 'The package is extended';
+
+  @override
+  String get cardMakeupActionWaived => 'No make-up needed';
+
+  @override
+  String get cardScheduleRequestedTitle =>
+      'Request to change the regular times';
+
+  @override
+  String get cardScheduleApprovedTitle => 'New regular times confirmed';
+
+  @override
+  String get cardScheduleRejectedTitle =>
+      'The change of regular times was not approved';
+
+  @override
+  String cardEveryWeek(String when) {
+    return 'Every $when';
+  }
+
+  @override
+  String get tabSchedule => 'Schedule';
+
+  @override
+  String get scheduleEmpty => 'No lessons in the next two weeks.';
+
+  @override
+  String get scheduleLoadFailed => 'Couldn\'t load your schedule.';
+
+  @override
+  String get phaseUpcoming => 'Upcoming';
+
+  @override
+  String get phaseInProgress => 'In progress';
+
+  @override
+  String get phaseAwaitingClose => 'Needs report';
+
+  @override
+  String get phaseOverdue => 'Report overdue';
+
+  @override
+  String get outcomeHeld => 'Held';
+
+  @override
+  String get outcomeStudentApology => 'Student apologised';
+
+  @override
+  String get outcomeTeacherApology => 'Teacher apologised';
+
+  @override
+  String get outcomeAdminCancelled => 'Cancelled';
+
+  @override
+  String get outcomeStudentNoShow => 'Student absent';
+
+  @override
+  String get outcomeTeacherNoShow => 'Teacher absent';
+
+  @override
+  String get outcomeRescheduled => 'Moved';
+
+  @override
+  String get lessonKindMakeup => 'Make-up';
+
+  @override
+  String get cardTransferredTitle => 'New teacher';
+
+  @override
+  String cardTransferredBody(String teacher) {
+    return '$teacher will teach from now on.';
+  }
+
+  @override
+  String get cardHandoverTitle => 'A new student';
+
+  @override
+  String get cardHandoverFrom => 'Previous teacher';
+
+  @override
+  String get cardHandoverNote => 'Handover';
+
+  @override
+  String get cardPausedTitle => 'Lessons paused';
+
+  @override
+  String cardPausedUntil(String date) {
+    return 'Until $date';
+  }
+
+  @override
+  String get cardStoppedTitle => 'Lessons stopped';
+
+  @override
+  String get cardReturnSoonTitle => 'Lessons resume soon';
+
+  @override
+  String cardReturnOn(String date) {
+    return 'Back on $date';
+  }
+
+  @override
+  String get cardResumedTitle => 'Lessons resumed';
+
+  @override
+  String get cardBonusTitle => 'A bonus for you';
+
+  @override
+  String get progressTitle => 'This month';
+
+  @override
+  String get progressAttended => 'Attended';
+
+  @override
+  String get progressApologised => 'Apologised';
+
+  @override
+  String get progressAbsent => 'Absent';
+
+  @override
+  String progressStreak(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count lessons in a row',
+      one: '1 lesson in a row',
+      zero: 'No streak yet',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String progressAllTime(int count) {
+    return '$count lessons attended in total';
+  }
+
+  @override
+  String progressMakeupsOwed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count make-up lessons owed',
+      one: '1 make-up lesson owed',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String progressNext(String when) {
+    return 'Next lesson: $when';
+  }
+
+  @override
+  String progressLastCovered(String covered) {
+    return 'Last lesson: $covered';
+  }
+
+  @override
+  String get progressCertificates => 'Certificates will appear here.';
+
+  @override
+  String get progressUnavailable => 'Progress isn\'t available right now.';
+
+  @override
+  String get workloadTitle => 'This month';
+
+  @override
+  String workloadHeld(int lessons, String hours) {
+    return '$lessons lessons · $hours h';
+  }
+
+  @override
+  String workloadNeedsReport(int count) {
+    return '$count need a report';
+  }
+
+  @override
+  String workloadOnTime(String percent) {
+    return '$percent reports on time';
+  }
+
+  @override
+  String get supervisionChatTitle => 'Supervision';
+
+  @override
+  String get supervisionChatSubtitle => 'Teachers department · private';
+
+  @override
+  String get supervisionTicketsHeader => 'Requests';
+
+  @override
+  String get ticketCertificate => 'Request a certificate';
+
+  @override
+  String get ticketLeave => 'Request leave';
+
+  @override
+  String get certificateFormTitle => 'Request a certificate';
+
+  @override
+  String get certificateFormHint =>
+      'Sent privately to the Teachers department. When the certificate is issued, it is posted to the student\'s group, where you and the parents receive it.';
+
+  @override
+  String get certificateStudent => 'Student';
+
+  @override
+  String get certificateTitleField => 'Certificate';
+
+  @override
+  String get certificateTitleHint => 'e.g. Juz Amma';
+
+  @override
+  String get certificateAchievement => 'Achievement';
+
+  @override
+  String get certificateAchievedOn => 'Date achieved';
+
+  @override
+  String get certificateGrade => 'Grade (optional)';
+
+  @override
+  String get certificatePrintedName => 'Name as it should be printed';
+
+  @override
+  String get certificateNote => 'Note to the department (optional)';
+
+  @override
+  String get leaveFormTitle => 'Request leave';
+
+  @override
+  String get leaveFormHint =>
+      'Sent privately to the Teachers department. Approved days are deducted from your balance.';
+
+  @override
+  String get leaveFirstDay => 'First day';
+
+  @override
+  String get leaveLastDay => 'Last day';
+
+  @override
+  String get leaveReason => 'Reason';
+
+  @override
+  String leaveDaysCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count days',
+      one: '1 day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String leaveBalanceNow(String balance) {
+    return 'Your balance now: $balance';
+  }
+
+  @override
+  String get leaveSameYear => 'Send a separate request for each year.';
+
+  @override
+  String get leaveLastBeforeFirst => 'The last day is before the first day.';
+
+  @override
+  String get formRequired => 'Required';
+
+  @override
+  String get formSend => 'Send';
+
+  @override
+  String get myLeaveTitle => 'My leave';
+
+  @override
+  String myLeaveAllowance(String year) {
+    return 'Allowance $year';
+  }
+
+  @override
+  String get myLeaveUsed => 'Used';
+
+  @override
+  String get myLeaveBalance => 'Balance';
+
+  @override
+  String get myLeaveNoAllowance => 'Not set yet';
+
+  @override
+  String get myLeaveNoRequests => 'No leave requests this year.';
+
+  @override
+  String get myLeaveRequest => 'Request leave';
+
+  @override
+  String get myLeaveWithdraw => 'Withdraw';
+
+  @override
+  String get myLeaveWithdrawConfirm => 'Withdraw this leave request?';
+
+  @override
+  String get leaveStateRequested => 'Waiting';
+
+  @override
+  String get leaveStateApproved => 'Approved';
+
+  @override
+  String get leaveStateDeclined => 'Not approved';
+
+  @override
+  String get leaveStateWithdrawn => 'Withdrawn';
+
+  @override
+  String get leaveStateCancelled => 'Cancelled';
+
+  @override
+  String get cardCertificateRequestedTitle => 'Certificate request';
+
+  @override
+  String get cardCertificateIssuedTitle => 'Certificate';
+
+  @override
+  String get cardCertificateDeclinedTitle => 'Certificate request not approved';
+
+  @override
+  String get cardLeaveRequestedTitle => 'Leave request';
+
+  @override
+  String get cardLeaveApprovedTitle => 'Leave approved';
+
+  @override
+  String get cardLeaveDeclinedTitle => 'Leave not approved';
+
+  @override
+  String get cardLeaveWithdrawnTitle => 'Leave request withdrawn';
+
+  @override
+  String get cardLeaveCancelledTitle => 'Leave cancelled';
+
+  @override
+  String get cardAchievement => 'Achievement';
+
+  @override
+  String get cardGrade => 'Grade';
+
+  @override
+  String get cardDays => 'Days';
+
+  @override
+  String get cardBalance => 'Balance';
+
+  @override
+  String get cardDaysReturned => 'Days returned';
+
+  @override
+  String get cardCongratulations =>
+      'Congratulations! The certificate is attached.';
+
+  @override
+  String get leaveNotAllowed =>
+      'These dates can\'t be requested: they overlap another request or have already passed.';
+
+  @override
+  String get progressCertificatesTitle => 'Certificates';
 }

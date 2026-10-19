@@ -8,8 +8,10 @@ import '../core/data/http/http_auth_repository.dart';
 import '../core/data/http/http_call_repository.dart';
 import '../core/data/http/http_conversation_repository.dart';
 import '../core/data/http/http_group_repository.dart';
+import '../core/data/http/http_lesson_repository.dart';
 import '../core/data/http/http_message_repository.dart';
 import '../core/data/http/http_story_repository.dart';
+import '../core/data/http/http_supervision_repository.dart';
 import '../core/errors/app_error.dart';
 import '../core/network/api_client.dart';
 import '../core/network/api_config.dart';
@@ -23,7 +25,9 @@ import '../features/auth/application/session_termination.dart';
 import '../features/auth/domain/auth_state.dart';
 import '../features/calls/data/account_call_history.dart';
 import '../features/calls/data/http_account_call_history.dart';
+import '../features/settings/application/locale_preference.dart';
 import '../shared/models/user_role.dart';
+import 'app.dart';
 import 'providers.dart';
 
 /// Which data source this build talks to.
@@ -119,6 +123,8 @@ List<Override> _httpOverrides() {
   client = buildApiClient(config: config, tokens: tokens);
 
   return [
+    // The language choice survives a restart (see PersistedLocaleController).
+    localeOverrideProvider.overrideWith(PersistedLocaleController.new),
     tokenStoreProvider.overrideWithValue(tokenStore),
     authRepositoryProvider.overrideWithValue(auth),
     conversationRepositoryProvider.overrideWithValue(
@@ -133,6 +139,12 @@ List<Override> _httpOverrides() {
     ),
     groupRepositoryProvider.overrideWithValue(
       HttpGroupRepository(client: client),
+    ),
+    lessonRepositoryProvider.overrideWithValue(
+      HttpLessonRepository(client: client),
+    ),
+    supervisionRepositoryProvider.overrideWithValue(
+      HttpSupervisionRepository(client: client),
     ),
     // Stories are read-only here. The development composition root below registers no
     // implementation on purpose -- a fixture story is indistinguishable on screen from a real
@@ -155,7 +167,8 @@ List<Override> _httpOverrides() {
       HttpCallRepository(client: client),
     ),
     accountCallHistoryProvider.overrideWithValue(
-      HttpAccountCallHistory(client: client),
+      // Named after the OTHER participant, so the viewer's own id is read per call.
+      HttpAccountCallHistory(client: client, viewerActorId: session.actorId),
     ),
     pushRegistrationApiProvider.overrideWithValue(
       HttpPushRegistration(client: client),
@@ -203,6 +216,7 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
   final authRepository = FakeAuthRepository(backend: backend, tokens: tokens);
 
   return [
+    localeOverrideProvider.overrideWith(PersistedLocaleController.new),
     tokenStoreProvider.overrideWithValue(tokens),
     authRepositoryProvider.overrideWithValue(authRepository),
     conversationRepositoryProvider

@@ -59,11 +59,11 @@ afterEach(() => {
 })
 
 describe('The navigation registry', () => {
-  it('gives each of the seventeen sections exactly one destination, with the Dashboard under More', () => {
+  it('gives each of the eighteen sections exactly one destination, with the Dashboard under More', () => {
     const destinations = destinationsFor('super_admin')
     expect(destinations.map((d) => d.key)).toEqual(['conversations', 'calls', 'people', 'stories', 'more'])
     const keys = destinations.flatMap((d) => entriesOf(d).map((e) => e.key))
-    expect(keys).toHaveLength(17)
+    expect(keys).toHaveLength(18)
     expect([...keys].sort()).toEqual(ADMIN_SECTIONS.map((s) => s.key).sort())
     const more = destinations.find((d) => d.key === 'more')!
     expect(entriesOf(more).map((e) => e.key)).toContain('dashboard')
@@ -71,19 +71,25 @@ describe('The navigation registry', () => {
 
   it('lists for each role exactly the pages it may open: nothing hidden, nothing extra', () => {
     for (const role of OPERATOR_ROLES) {
-      const listed = destinationsFor(role).flatMap((d) => entriesOf(d).map((e) => e.path))
-      // Exactly the openable areas, with ONE deliberate exception: the legacy
-      // Inbox stays routable (old links) but is never offered -- its API
-      // routes (/inbox, /families/*) exist on no branch.
-      const allowed = navAreas(role)
-        .filter((a): a is Exclude<NavArea, 'settings'> => a !== 'settings')
-        .map((a) => AREA_PATH[a])
-      expect([...listed].sort(), role).toEqual([...allowed].sort())
-      expect(listed, role).not.toContain('/inbox')
-      expect(visibleAreas(role).filter((a) => !navAreas(role).includes(a)), role).toEqual(
-        visibleAreas(role).includes('inbox') ? ['inbox'] : [],
-      )
-      expect(listed.some((p) => p.startsWith('/admin/')), role).toBe(false)
+      for (const lessonManager of [false, true]) {
+        const listed = destinationsFor(role, { lessonManager }).flatMap((d) => entriesOf(d).map((e) => e.path))
+        // Exactly the openable areas, with TWO deliberate exceptions: the legacy
+        // Inbox stays routable (old links) but is never offered -- its API
+        // routes (/inbox, /families/*) exist on no branch; and Teacher
+        // statistics is offered only when the server confirms the Teachers
+        // department (GET /lessons/access), which the role alone cannot tell.
+        const allowed = navAreas(role, { lessonManager })
+          .filter((a): a is Exclude<NavArea, 'settings'> => a !== 'settings')
+          .map((a) => AREA_PATH[a])
+        expect([...listed].sort(), role).toEqual([...allowed].sort())
+        expect(listed, role).not.toContain('/inbox')
+        const withheld = [
+          ...(visibleAreas(role).includes('inbox') ? ['inbox'] : []),
+          ...(!lessonManager && visibleAreas(role).includes('teachers') ? ['teachers'] : []),
+        ]
+        expect(visibleAreas(role).filter((a) => !navAreas(role, { lessonManager }).includes(a)), role).toEqual(withheld)
+        expect(listed.some((p) => p.startsWith('/admin/')), role).toBe(false)
+      }
     }
     // And the super admin's navigation is the portal, not the operator screens.
     const listed = destinationsFor('super_admin').flatMap((d) => entriesOf(d).map((e) => e.path))
@@ -200,6 +206,9 @@ describe('The desktop rail', () => {
     // PD-8: the people group's second page is the built Organization page (no badge).
     expect(document.activeElement).toHaveAccessibleName('Organization')
     await userEvent.keyboard('{ArrowDown}')
+    // PD-10: then the Teachers page, then the menu wraps.
+    expect(document.activeElement).toHaveAccessibleName('Teachers')
+    await userEvent.keyboard('{ArrowDown}')
     expect(document.activeElement).toHaveAccessibleName('Users')
     await userEvent.keyboard('{Escape}')
     expect(people).toHaveAttribute('aria-expanded', 'false')
@@ -268,7 +277,7 @@ describe('The drawer, below desktop width', () => {
     expect(within(nav).getByRole('group', { name: 'الأشخاص والفرق' })).toBeInTheDocument()
     const more = within(nav).getByRole('group', { name: 'المزيد' })
     expect(within(more).getByRole('link', { name: 'لوحة المتابعة' })).toBeInTheDocument()
-    expect(within(nav).getAllByRole('link')).toHaveLength(17)
+    expect(within(nav).getAllByRole('link')).toHaveLength(18)
   })
 
   it('opens from the menu button and closes with Escape, giving focus back', async () => {

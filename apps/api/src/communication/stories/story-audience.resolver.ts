@@ -6,6 +6,7 @@ import {
   ActorKind,
   ConversationType,
   StoryAudienceKind,
+  SUBSCRIPTION_PLAN_MONTHS,
   UNSCOPED_STORY_AUDIENCE_KINDS,
 } from '../contracts/vocab';
 
@@ -13,6 +14,84 @@ import {
 export interface AudienceClause {
   kind: string;
   refId?: string | null;
+  /** kind = segment only. Parsed by `parseSegmentFilter`, never trusted as typed. */
+  filter?: unknown;
+}
+
+/**
+ * A `segment` clause: who, and -- for families -- which of them.
+ *
+ * Every dimension is a set of accepted values, ANDed with the others; an empty
+ * or absent set accepts everyone. The family dimensions are only meaningful
+ * when `who` is `families`: a teacher has no plan, no children and no country
+ * in this schema, so a filter that named one for "everyone" would silently
+ * drop every teacher -- refused instead.
+ */
+export interface StorySegmentFilter {
+  who: 'everyone' | 'families' | 'teachers';
+  /** Subscription PLAN length in months: 1, 3, 6, 12. */
+  planMonths: number[];
+  /** Number of children: 1, 2, 3, or 4 meaning "four or more". */
+  children: number[];
+  /** ISO 3166-1 alpha-2. */
+  countries: string[];
+}
+
+export const CHILDREN_FOUR_OR_MORE = 4;
+
+/** Validate a client-supplied segment filter. Throws STORY_AUDIENCE_INVALID. */
+export function parseSegmentFilter(raw: unknown): StorySegmentFilter {
+  const bad = (why: string) =>
+    new CommError(CommErrorCode.STORY_AUDIENCE_INVALID, `segment: ${why}`, 400);
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw bad('a filter object is required');
+  const o = raw as Record<string, unknown>;
+  const known = new Set(['who', 'planMonths', 'children', 'countries']);
+  for (const k of Object.keys(o)) if (!known.has(k)) throw bad(`unknown field "${k}"`);
+
+  if (o.who !== 'everyone' && o.who !== 'families' && o.who !== 'teachers') {
+    throw bad('"who" must be everyone, families or teachers');
+  }
+  const list = (key: string, ok: (v: unknown) => boolean, max: number): unknown[] => {
+    const v = o[key];
+    if (v === undefined || v === null) return [];
+    if (!Array.isArray(v) || v.length > max || !v.every(ok)) throw bad(`"${key}" is not a valid list`);
+    return [...new Set(v)];
+  };
+  const plans: readonly number[] = SUBSCRIPTION_PLAN_MONTHS;
+  const filter: StorySegmentFilter = {
+    who: o.who,
+    planMonths: list('planMonths', (v) => typeof v === 'number' && plans.includes(v), 4) as number[],
+    children: list(
+      'children',
+      (v) => typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= CHILDREN_FOUR_OR_MORE,
+      4,
+    ) as number[],
+    countries: list('countries', (v) => typeof v === 'string' && /^[A-Z]{2}$/.test(v), 250) as string[],
+  };
+  const narrowed = filter.planMonths.length + filter.children.length + filter.countries.length > 0;
+  if (narrowed && filter.who !== 'families') {
+    throw bad('plan, children and country narrow families only; choose "families" to use them');
+  }
+  return filter;
+}
+
+/** True when a family with these facts is inside the filter. */
+export function familyMatchesSegment(
+  f: StorySegmentFilter,
+  family: { countryCode: string | null; subscriptionPlanMonths: number | null; childCount: number },
+): boolean {
+  if (f.countries.length && (!family.countryCode || !f.countries.includes(family.countryCode))) return false;
+  if (
+    f.planMonths.length &&
+    (family.subscriptionPlanMonths === null || !f.planMonths.includes(family.subscriptionPlanMonths))
+  ) {
+    return false;
+  }
+  if (f.children.length) {
+    const bucket = Math.min(family.childCount, CHILDREN_FOUR_OR_MORE);
+    if (family.childCount === 0 || !f.children.includes(bucket)) return false;
+  }
+  return true;
 }
 
 export interface ResolvedRecipient {
@@ -20,6 +99,8 @@ export interface ResolvedRecipient {
   actorKind: string;
   /** Which clause first matched. Reporting only, never an authorization input. */
   matchedKind: string;
+  /** A contact's family. Used to honour the message-the-publisher reach rule. */
+  familyId?: string | null;
 }
 
 export interface ResolvedAudience {
@@ -115,6 +196,15 @@ export class StoryAudienceResolver {
         400,
       );
     }
+    if (clause.kind === StoryAudienceKind.SEGMENT) {
+      parseSegmentFilter(clause.filter);
+    } else if (clause.filter !== undefined && clause.filter !== null) {
+      throw new CommError(
+        CommErrorCode.STORY_AUDIENCE_INVALID,
+        `audience kind "${clause.kind}" takes no filter`,
+        400,
+      );
+    }
     const unscoped = UNSCOPED_STORY_AUDIENCE_KINDS.has(clause.kind);
     if (unscoped && clause.refId) {
       throw new CommError(
@@ -164,6 +254,22 @@ export class StoryAudienceResolver {
         );
       }
 
+      case StoryAudienceKind.SEGMENT: {
+        const filter = parseSegmentFilter(clause.filter);
+        const orgWhere = org ? { organizationId: org } : {};
+        if (filter.who === 'teachers') return this.teachersWhere(orgWhere, clause.kind);
+        const families = await this.contactsWhere(
+          { ...orgWhere, ...(await this.segmentFamilyWhere(filter, org)) },
+          clause.kind,
+        );
+        if (filter.who === 'families') return families;
+        const teachers = await this.teachersWhere(orgWhere, clause.kind);
+        return {
+          recipients: [...families.recipients, ...teachers.recipients],
+          familyIds: families.familyIds,
+        };
+      }
+
       case StoryAudienceKind.FAMILY: {
         const family = await this.prisma.family.findFirst({
           where: { id: clause.refId!, ...(org ? { organizationId: org } : {}) },
@@ -208,7 +314,12 @@ export class StoryAudienceResolver {
         if (!contact) throw this.outOfScope('contact', clause.refId!);
         return {
           recipients: [
-            { actorId: contact.id, actorKind: ActorKind.CONTACT, matchedKind: clause.kind },
+            {
+              actorId: contact.id,
+              actorKind: ActorKind.CONTACT,
+              matchedKind: clause.kind,
+              familyId: contact.familyId,
+            },
           ],
           familyIds: [contact.familyId],
         };
@@ -260,6 +371,42 @@ export class StoryAudienceResolver {
     }
   }
 
+  /**
+   * The family half of a segment, as a contact WHERE.
+   *
+   * Country and plan are columns, so they filter in SQL. Number of children is
+   * derived -- a count of chat.learner, never a stored number that could go
+   * stale -- so the families are counted here and the matching ids handed back.
+   * With no family dimension at all this is "every family", the same as
+   * all_families.
+   */
+  private async segmentFamilyWhere(
+    filter: StorySegmentFilter,
+    org: string | undefined,
+  ): Promise<Record<string, unknown>> {
+    if (filter.who !== 'families' || (!filter.countries.length && !filter.planMonths.length && !filter.children.length)) {
+      return {};
+    }
+    const families = await this.prisma.family.findMany({
+      where: {
+        ...(org ? { organizationId: org } : {}),
+        ...(filter.countries.length ? { countryCode: { in: filter.countries } } : {}),
+        ...(filter.planMonths.length ? { subscriptionPlanMonths: { in: filter.planMonths } } : {}),
+      },
+      select: { id: true, countryCode: true, subscriptionPlanMonths: true, _count: { select: { learners: true } } },
+    });
+    const ids = families
+      .filter((f) =>
+        familyMatchesSegment(filter, {
+          countryCode: f.countryCode,
+          subscriptionPlanMonths: f.subscriptionPlanMonths,
+          childCount: f._count.learners,
+        }),
+      )
+      .map((f) => f.id);
+    return { familyId: { in: ids } };
+  }
+
   private async contactsWhere(
     where: Record<string, unknown>,
     matchedKind: string,
@@ -273,6 +420,7 @@ export class StoryAudienceResolver {
         actorId: c.id,
         actorKind: ActorKind.CONTACT,
         matchedKind,
+        familyId: c.familyId,
       })),
       familyIds: contacts.map((c) => c.familyId),
     };
@@ -300,7 +448,7 @@ export class StoryAudienceResolver {
   private async filterLiveActors(
     members: Array<{ actorId: string; actorKind: string }>,
     org: string | undefined,
-  ): Promise<Array<{ actorId: string; actorKind: string }>> {
+  ): Promise<Array<{ actorId: string; actorKind: string; familyId?: string | null }>> {
     const contactIds = members.filter((m) => m.actorKind === ActorKind.CONTACT).map((m) => m.actorId);
     const teacherIds = members.filter((m) => m.actorKind === ActorKind.TEACHER).map((m) => m.actorId);
 
@@ -313,7 +461,7 @@ export class StoryAudienceResolver {
               canMessage: true,
               ...(org ? { organizationId: org } : {}),
             },
-            select: { id: true },
+            select: { id: true, familyId: true },
           })
         : Promise.resolve([]),
       teacherIds.length
@@ -329,11 +477,15 @@ export class StoryAudienceResolver {
         : Promise.resolve([]),
     ]);
 
-    const liveContacts = new Set(contacts.map((c) => c.id));
+    const liveContacts = new Map(contacts.map((c) => [c.id, c.familyId]));
     const liveTeachers = new Set(teachers.map((t) => t.id));
-    return members.filter((m) =>
-      m.actorKind === ActorKind.CONTACT ? liveContacts.has(m.actorId) : liveTeachers.has(m.actorId),
-    );
+    return members
+      .filter((m) =>
+        m.actorKind === ActorKind.CONTACT ? liveContacts.has(m.actorId) : liveTeachers.has(m.actorId),
+      )
+      .map((m) =>
+        m.actorKind === ActorKind.CONTACT ? { ...m, familyId: liveContacts.get(m.actorId) ?? null } : m,
+      );
   }
 
   /**

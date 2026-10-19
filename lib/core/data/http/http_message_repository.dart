@@ -331,6 +331,7 @@ class HttpMessageRepository implements MessageRepository {
         MessageKind.voice => 'voice',
         MessageKind.file => 'file',
         MessageKind.system => 'system',
+        MessageKind.card => 'card',
         MessageKind.text => 'text',
       };
 }

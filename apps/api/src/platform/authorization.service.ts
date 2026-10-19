@@ -13,6 +13,7 @@ import {
   type StaffProfileAccess,
   type StaffProfileTarget,
 } from './staff-profile-policy';
+import { decideTeacherFileAccess, type TeacherFileAccess, type TeachersDepartmentRole } from './teacher-file-policy';
 import {
   ActorKind,
   CONVERSATION_STAFF_ROLES,
@@ -35,6 +36,59 @@ const allow = (onBehalfMode: string | null = null, moderation: string = Moderati
   onBehalfMode,
   moderation,
 });
+
+/**
+ * PD-9 / PD-11: how an actor stands to one lesson. `manager` -- the super admin
+ * or the Teachers department; `supervisor` -- the learner's PD-8 supervisor
+ * (read only); `teacher` -- the lesson's own teacher; `family` -- a contact of
+ * the learner's family.
+ */
+export type LessonStanding = 'manager' | 'supervisor' | 'teacher' | 'family';
+
+export type LessonAct =
+  | 'report'
+  | 'absence'
+  | 'apology'
+  | 'teacher_apology'
+  | 'cancel'
+  | 'teacher_no_show'
+  | 'late_apology'
+  | 'decide_ruling'
+  | 'book_makeup'
+  | 'request_schedule_change'
+  | 'decide_schedule_change'
+  | 'resolve_makeup'
+  | 'read_schedule'
+  | 'transfer'
+  | 'suspend';
+
+/**
+ * Who may record what (PD-11's table). The report is the teacher's own words,
+ * so nobody writes it for them; an absence the Teachers department may record
+ * when the teacher cannot; a late apology is the family's to file and never
+ * the teacher's to judge.
+ */
+const LESSON_ACTS: Readonly<Record<LessonAct, readonly LessonStanding[]>> = {
+  report: ['teacher'],
+  absence: ['teacher', 'manager'],
+  apology: ['family', 'manager'],
+  teacher_apology: ['teacher', 'manager'],
+  cancel: ['manager'],
+  teacher_no_show: ['manager'],
+  late_apology: ['family'],
+  decide_ruling: ['manager'],
+  // PD-11 T2: a family books the make-up it is owed itself, instantly; a
+  // regular-time change it may only ask for.
+  book_makeup: ['family', 'manager'],
+  request_schedule_change: ['family'],
+  decide_schedule_change: ['manager'],
+  resolve_makeup: ['manager'],
+  read_schedule: ['manager', 'supervisor', 'teacher', 'family'],
+  // PD-11 T3: moving a child between teachers is the Teachers department's; a
+  // pause or a stop may also be recorded by the child's own (Operations) supervisor.
+  transfer: ['manager'],
+  suspend: ['manager', 'supervisor'],
+};
 
 export interface SendIntent {
   visibility: string;
@@ -551,6 +605,19 @@ export class AuthorizationService {
     return null;
   }
 
+  /**
+   * Will THIS viewer's messages in this conversation be held for approval?
+   * The same function that decides the moderation a message is stored with, so
+   * the notice a client shows can never disagree with what happens on send. A
+   * parent is told only about the parents' rule, never the teachers'; a 1:1
+   * never holds anything; staff are never held.
+   */
+  viewerRequiresApproval(actor: Actor, conv: Conv): boolean {
+    if (actor.kind === ActorKind.CONTACT) return this.moderationFor(conv, MemberRole.PARENT) === Moderation.PENDING;
+    if (actor.kind === ActorKind.TEACHER) return this.moderationFor(conv, MemberRole.TEACHER) === Moderation.PENDING;
+    return false;
+  }
+
   /** Group approval policy. Staff messages are never held. */
   private moderationFor(conv: Conv, role: string): string {
     if (!GROUP_CONVERSATION_TYPES.has(conv.type)) return Moderation.PUBLISHED;
@@ -864,10 +931,12 @@ export class AuthorizationService {
     if (!actor.isActive) {
       return deny(CommErrorCode.ACTOR_INACTIVE, 'an inactive actor may not publish');
     }
-    if (!isFamilyFacingStaff(actor)) {
+    // 2026-10-17: the super admin publishes too -- the Admin Portal is its
+    // publishing surface, and PD-8 already gave it full write.
+    if (!isFamilyFacingStaff(actor) && actor.staffRole !== StaffRole.SUPER_ADMIN) {
       return deny(
         CommErrorCode.STORY_CANNOT_PUBLISH,
-        'only Jawwid admins, coverage admins and managers may publish a story',
+        'only Jawwid admins, coverage admins, managers and the super admin may publish a story',
       );
     }
     // A publisher with no tenant cannot be scoped, and an unscoped audience
@@ -920,6 +989,35 @@ export class AuthorizationService {
    */
   canReadStoryViewers(actor: Actor): Decision {
     return this.canPublishStory(actor);
+  }
+
+  /**
+   * May this actor read and set a family's targeting attributes (country,
+   * subscription plan)?
+   *
+   * The super admin and managers. These are organization-wide customer facts
+   * that Jawwid Core owns, and a supervisor editing them for the families they
+   * happen to supervise would make targeting depend on who typed what. A
+   * supervisor still TARGETS by them: estimating and publishing a segment is
+   * canPublishStory, and the estimate returns counts, never a family list.
+   */
+  canManageStoryAudienceData(actor: Actor): Decision {
+    if (!actor.isActive) {
+      return deny(CommErrorCode.ACTOR_INACTIVE, 'an inactive actor may not edit audience data');
+    }
+    if (
+      actor.kind !== ActorKind.STAFF ||
+      (actor.staffRole !== StaffRole.SUPER_ADMIN && actor.staffRole !== StaffRole.MANAGER)
+    ) {
+      return deny(
+        CommErrorCode.STORY_AUDIENCE_DATA_DENIED,
+        'only the super admin and managers may manage family audience data',
+      );
+    }
+    if (!actor.organizationId) {
+      return deny(CommErrorCode.STORY_AUDIENCE_DATA_DENIED, 'an actor with no organization cannot be scoped');
+    }
+    return allow();
   }
 
   /**
@@ -1193,6 +1291,18 @@ export class AuthorizationService {
   }
 
   /** Reading the structure: the super admin (all of it) and managers (their department). */
+  /**
+   * PD-10: what this actor may see and change in a Teacher File. The caller
+   * resolves the actor's relation to the Teachers department; the matrix is in
+   * teacher-file-policy.ts.
+   */
+  teacherFileAccess(
+    actor: Actor,
+    target: { organizationId: string; teachersDepartmentRole: TeachersDepartmentRole },
+  ): TeacherFileAccess {
+    return decideTeacherFileAccess(actor, target);
+  }
+
   canViewOrgStructure(actor: Actor): Decision {
     if (!actor.isActive) return deny(CommErrorCode.ACTOR_INACTIVE, 'an inactive actor may not view the structure');
     if (
@@ -1203,6 +1313,62 @@ export class AuthorizationService {
       return deny(CommErrorCode.ORG_STRUCTURE_DENIED, 'only managers and the super admin may view the organization structure');
     }
     return allow();
+  }
+
+  // ------------------------------------------------------------------
+  // PD-9 / PD-11: lessons
+  // ------------------------------------------------------------------
+
+  /**
+   * How `actor` stands to one lesson, or null when they may not see it at all
+   * (which the caller answers as not found). Facts are resolved by
+   * LessonService: `teachersDepartment` -- the actor manages or belongs to the
+   * organization's Teachers department; `supervisesLearner` -- the learner's
+   * PD-8 supervisor is one of the actor's principals.
+   */
+  lessonStanding(
+    actor: Actor,
+    lesson: { organizationId: string; teacherId: string; familyId: string },
+    facts: { teachersDepartment: boolean; supervisesLearner: boolean },
+  ): LessonStanding | null {
+    if (!actor.isActive || !actor.organizationId || actor.organizationId !== lesson.organizationId) return null;
+    switch (actor.kind) {
+      case ActorKind.STAFF:
+        if (actor.staffRole === StaffRole.SUPER_ADMIN || facts.teachersDepartment) return 'manager';
+        return facts.supervisesLearner ? 'supervisor' : null;
+      case ActorKind.TEACHER:
+        return actor.actorId === lesson.teacherId ? 'teacher' : null;
+      case ActorKind.CONTACT:
+        return actor.familyId === lesson.familyId ? 'family' : null;
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Whether `standing` may record `act` on a lesson. WHO, never WHEN: whether
+   * the lesson's state and the clock allow it is LessonService's pre-check and,
+   * authoritatively, chat.guard_lesson's.
+   */
+  canRecordLessonAct(actor: Actor, standing: LessonStanding | null, act: LessonAct): Decision {
+    if (standing === null) return deny(CommErrorCode.LESSON_NOT_FOUND, 'lesson not found');
+    if (!LESSON_ACTS[act].includes(standing)) {
+      return deny(CommErrorCode.LESSON_DENIED, `${standing} may not record ${act} on a lesson`);
+    }
+    if (standing === 'family' && actor.canMessage === false) {
+      return deny(CommErrorCode.LESSON_DENIED, 'this contact may not act for the family');
+    }
+    return allow();
+  }
+
+  /** Scheduling lessons and reading the needs-action list: the super admin and the Teachers department. */
+  canManageLessons(actor: Actor, organizationId: string, facts: { teachersDepartment: boolean }): Decision {
+    return this.orgAuthority(
+      actor,
+      organizationId,
+      (a) => a.staffRole === StaffRole.SUPER_ADMIN || facts.teachersDepartment,
+      'manage lessons',
+    );
   }
 
   private orgAuthority(actor: Actor, organizationId: string, permitted: (a: Actor) => boolean, what: string): Decision {

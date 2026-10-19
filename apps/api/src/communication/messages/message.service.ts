@@ -142,8 +142,13 @@ export class MessageService {
     const visibility = input.visibility ?? Visibility.CUSTOMER;
     // A client may never author a SYSTEM message or claim a non-user origin:
     // those are how the backend speaks, and impersonating them would let a user
-    // post something that reads as coming from Jawwid itself.
+    // post something that reads as coming from Jawwid itself. A CARD is
+    // refused outright (PD-11): it is a ticket's record, written only by the
+    // service that wrote the record, so one sent here would be a forgery.
     const requestedType = input.type ?? MessageType.TEXT;
+    if (requestedType === MessageType.CARD) {
+      throw new CommError(CommErrorCode.VALIDATION, 'a card is written by its ticket, never sent', 400);
+    }
     const type =
       actor.kind === ActorKind.SYSTEM
         ? requestedType
@@ -267,7 +272,7 @@ export class MessageService {
                 }
               : undefined,
           },
-          include: { attachments: true, reactions: true, receipts: true },
+          include: { attachments: true, reactions: true, receipts: true, card: true },
         });
 
         // Advance the conversation. A pending message must not make the
@@ -404,7 +409,7 @@ export class MessageService {
   ): Promise<MessageDto | null> {
     const found = await this.prisma.message.findFirst({
       where: { conversationId, authorId, clientMessageId },
-      include: { attachments: true, reactions: true, receipts: true },
+      include: { attachments: true, reactions: true, receipts: true, card: true },
     });
     // The idempotent-replay path returns the original message, so it must carry
     // the same playable URLs a first send does.
@@ -470,7 +475,7 @@ export class MessageService {
     const ascending = input.after !== undefined;
     const rows = await this.prisma.message.findMany({
       where: this.visibilityFilter(actor, conv.id, input),
-      include: { attachments: true, reactions: true, receipts: true },
+      include: { attachments: true, reactions: true, receipts: true, card: true },
       orderBy: { seq: ascending ? 'asc' : 'desc' },
       take: limit,
     });
@@ -500,7 +505,7 @@ export class MessageService {
    */
   private visibilityFilter(
     actor: Actor,
-    conversationId: string,
+    conversationId: string | { in: string[] },
     input: ListMessagesInput,
   ): Prisma.MessageWhereInput {
     const where: Prisma.MessageWhereInput = { conversationId };
@@ -523,6 +528,30 @@ export class MessageService {
       : [{ moderation: Moderation.PUBLISHED }, { authorId: actor.actorId }];
 
     return where;
+  }
+
+  /**
+   * The newest message THIS viewer may see in each conversation, for a chat
+   * list row. THE CALLER AUTHORIZES THE IDS (the list route passes exactly what
+   * listForActor returned); the per-message rule is `visibilityFilter`, the one
+   * the message page uses, so a preview can never show a parent an internal
+   * note, someone else's held message, or what they deleted for themselves.
+   *
+   * One indexed lookup per conversation (conversation_id, seq), run together;
+   * the list is capped at 200 rows.
+   */
+  async lastVisibleMessages(conversationIds: readonly string[], actor: Actor): Promise<Map<string, Message>> {
+    const out = new Map<string, Message>();
+    const found = await Promise.all(
+      conversationIds.map((id) =>
+        this.prisma.message.findFirst({
+          where: this.visibilityFilter(actor, id, {} as ListMessagesInput),
+          orderBy: { seq: 'desc' },
+        }),
+      ),
+    );
+    for (const m of found) if (m?.conversationId) out.set(m.conversationId, m);
+    return out;
   }
 
   // -------------------------------------------------------------------

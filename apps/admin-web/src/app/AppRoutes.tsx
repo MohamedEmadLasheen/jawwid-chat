@@ -10,11 +10,21 @@ import { FamiliesPage } from '@/features/family/FamiliesPage'
 import { TasksPage } from '@/features/tasks/TasksPage'
 import { CoveragePage } from '@/features/coverage/CoveragePage'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
-import { StoriesPage } from '@/features/stories/StoriesPage'
+import { StoriesStudio } from '@/features/stories/StoriesStudio'
+import { StoryComposer } from '@/features/stories/StoryComposer'
+import { StoryInsights } from '@/features/stories/StoryInsights'
 import { AdminSectionPage } from '@/features/admin/AdminSectionPage'
 import { adminSectionPath } from '@/features/admin/sections'
 import { ProfilePage } from '@/features/profile/ProfilePage'
 import { OrganizationPage } from '@/features/organization/OrganizationPage'
+import { TeacherStatsPage } from '@/features/teachers/TeacherStatsPage'
+import { NeedsActionPage } from '@/features/teachers/NeedsActionPage'
+import { SchedulesPage } from '@/features/teachers/SchedulesPage'
+import { StudentsPage } from '@/features/teachers/StudentsPage'
+import { TeacherFilesPage } from '@/features/teacher-files/TeacherFilesPage'
+import { TeacherFilePage } from '@/features/teacher-files/TeacherFilePage'
+import { CertificatesPage } from '@/features/supervision/CertificatesPage'
+import { LeaveRequestsPage } from '@/features/supervision/LeaveRequestsPage'
 import { ForbiddenPage } from './ForbiddenPage'
 import type { ReactElement } from 'react'
 
@@ -62,10 +72,28 @@ export function AppRoutes() {
         <Route path="/inbox/:familyId" element={<Area area="inbox"><InboxPage /></Area>} />
         <Route path="/families" element={<Area area="families"><FamiliesPage /></Area>} />
         <Route path="/organization" element={<Area area="organization"><OrganizationPage /></Area>} />
+        {/* The Teachers area (features/teachers/area.tsx): Statistics is its base tab. */}
+        <Route path="/teachers" element={<Area area="teachers"><TeacherStatsPage inTeachersArea /></Area>} />
+        <Route path="/teachers/needs-action" element={<Area area="teachers"><NeedsActionPage /></Area>} />
+        <Route path="/teachers/schedules" element={<Area area="teachers"><SchedulesPage /></Area>} />
+        <Route path="/teachers/students" element={<Area area="teachers"><StudentsPage /></Area>} />
+        {/* PD-10 Teacher Files: a tab of the same area; the server refuses anyone else. */}
+        <Route path="/teachers/files" element={<Area area="teachers"><TeacherFilesPage basePath="/teachers/files" /></Area>} />
+        <Route path="/teachers/files/:teacherId" element={<Area area="teachers"><TeacherFilePage basePath="/teachers/files" /></Area>} />
+        {/* PD-12: the department's queues, tabs of the same area. */}
+        <Route path="/teachers/certificates" element={<Area area="teachers"><CertificatesPage basePath="/teachers" /></Area>} />
+        <Route path="/teachers/leave" element={<Area area="teachers"><LeaveRequestsPage basePath="/teachers" /></Area>} />
         <Route path="/tasks" element={<Area area="tasks"><TasksPage /></Area>} />
         <Route path="/coverage" element={<Area area="coverage"><CoveragePage /></Area>} />
         <Route path="/dashboard" element={<Area area="dashboard"><DashboardPage /></Area>} />
-        <Route path="/stories" element={<Area area="stories"><StoriesPage /></Area>} />
+        {/*
+          Stories: one studio, two homes. Operators (admin, coverage, manager)
+          publish under /stories; the super admin under /admin/stories. The
+          server decides every request on its own (canPublishStory).
+        */}
+        <Route path="/stories" element={<Area area="stories"><StoriesStudio basePath="/stories" /></Area>} />
+        <Route path="/stories/new" element={<Area area="stories"><StoryComposer basePath="/stories" /></Area>} />
+        <Route path="/stories/:storyId" element={<Area area="stories"><StoryInsights basePath="/stories" /></Area>} />
         {/*
           Staff profiles: every staff role, no Area gate. What a profile shows
           and what may be changed on it is decided by /staff-profiles per
@@ -76,6 +104,26 @@ export function AppRoutes() {
         <Route
           path="/admin/:section"
           element={<SuperAdminOnly><AdminSectionPage /></SuperAdminOnly>}
+        />
+        <Route
+          path="/admin/teachers/certificates"
+          element={<SuperAdminOnly><CertificatesPage basePath={adminSectionPath('teachers')} /></SuperAdminOnly>}
+        />
+        <Route
+          path="/admin/teachers/leave"
+          element={<SuperAdminOnly><LeaveRequestsPage basePath={adminSectionPath('teachers')} /></SuperAdminOnly>}
+        />
+        <Route
+          path="/admin/teachers/:teacherId"
+          element={<SuperAdminOnly><TeacherFilePage basePath={adminSectionPath('teachers')} /></SuperAdminOnly>}
+        />
+        <Route
+          path="/admin/stories/new"
+          element={<SuperAdminOnly><StoryComposer basePath={adminSectionPath('stories')} /></SuperAdminOnly>}
+        />
+        <Route
+          path="/admin/stories/:storyId"
+          element={<SuperAdminOnly><StoryInsights basePath={adminSectionPath('stories')} /></SuperAdminOnly>}
         />
         {/*
           Reserved seams (docs/admin/backend-contract-required.md §10):

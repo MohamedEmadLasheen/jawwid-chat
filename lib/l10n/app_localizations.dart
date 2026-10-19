@@ -169,6 +169,12 @@ abstract class L10n {
   /// **'Your session ended. Please sign in again.'**
   String get sessionExpiredBody;
 
+  /// No description provided for @sessionUnreachableBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t reach Jawwid to open your session. You\'re still signed in — check your connection and try again.'**
+  String get sessionUnreachableBody;
+
   /// No description provided for @signOutAction.
   ///
   /// In en, this message translates to:
@@ -1249,6 +1255,12 @@ abstract class L10n {
   /// **'Voice message'**
   String get attachmentVoiceLabel;
 
+  /// Stands in for a video where a message has no text (chat list preview).
+  ///
+  /// In en, this message translates to:
+  /// **'Video'**
+  String get attachmentVideoLabel;
+
   /// Header of the preview shown before an attachment is sent.
   ///
   /// In en, this message translates to:
@@ -1459,6 +1471,60 @@ abstract class L10n {
   /// **'Try again'**
   String get storyVideoRetry;
 
+  /// Stories viewer (2026-10-17): storyTextLabel
+  ///
+  /// In en, this message translates to:
+  /// **'Story'**
+  String get storyTextLabel;
+
+  /// Stories viewer (2026-10-17): storyVoiceLabel
+  ///
+  /// In en, this message translates to:
+  /// **'Voice story'**
+  String get storyVoiceLabel;
+
+  /// Stories viewer (2026-10-17): storyVoiceFailed
+  ///
+  /// In en, this message translates to:
+  /// **'This voice note could not be played.'**
+  String get storyVoiceFailed;
+
+  /// Stories viewer (2026-10-17): storyVoicePlay
+  ///
+  /// In en, this message translates to:
+  /// **'Play voice story'**
+  String get storyVoicePlay;
+
+  /// Stories viewer (2026-10-17): storyVoicePause
+  ///
+  /// In en, this message translates to:
+  /// **'Pause voice story'**
+  String get storyVoicePause;
+
+  /// Stories viewer (2026-10-17): storyCtaWhatsApp
+  ///
+  /// In en, this message translates to:
+  /// **'Chat on WhatsApp'**
+  String get storyCtaWhatsApp;
+
+  /// Stories viewer (2026-10-17): storyCtaMessage
+  ///
+  /// In en, this message translates to:
+  /// **'Send a message'**
+  String get storyCtaMessage;
+
+  /// Stories viewer (2026-10-17): storyCtaLink
+  ///
+  /// In en, this message translates to:
+  /// **'Learn more'**
+  String get storyCtaLink;
+
+  /// Stories viewer (2026-10-17): storyCtaFailed
+  ///
+  /// In en, this message translates to:
+  /// **'That didn\'t open. Please try again.'**
+  String get storyCtaFailed;
+
   /// Shown in the stories rail when the signed-in account has no live stories.
   ///
   /// In en, this message translates to:
@@ -1500,6 +1566,942 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'System update'**
   String get systemUpdate;
+
+  /// Section header in the + menu for lesson tickets.
+  ///
+  /// In en, this message translates to:
+  /// **'Lesson'**
+  String get lessonTicketsHeader;
+
+  /// No description provided for @ticketReport.
+  ///
+  /// In en, this message translates to:
+  /// **'Lesson report'**
+  String get ticketReport;
+
+  /// No description provided for @ticketAbsence.
+  ///
+  /// In en, this message translates to:
+  /// **'Student absent'**
+  String get ticketAbsence;
+
+  /// No description provided for @ticketApology.
+  ///
+  /// In en, this message translates to:
+  /// **'Apologise for the lesson'**
+  String get ticketApology;
+
+  /// No description provided for @ticketTeacherApology.
+  ///
+  /// In en, this message translates to:
+  /// **'I can\'t teach this lesson'**
+  String get ticketTeacherApology;
+
+  /// No description provided for @ticketLateApology.
+  ///
+  /// In en, this message translates to:
+  /// **'Late apology (emergency)'**
+  String get ticketLateApology;
+
+  /// Subtitle naming which lesson a ticket is for.
+  ///
+  /// In en, this message translates to:
+  /// **'Lesson of {when}'**
+  String ticketLessonAt(String when);
+
+  /// No description provided for @reportCoveredLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'What was covered'**
+  String get reportCoveredLabel;
+
+  /// No description provided for @reportHomeworkLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Homework (optional)'**
+  String get reportHomeworkLabel;
+
+  /// No description provided for @reportRatingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Rating (optional)'**
+  String get reportRatingLabel;
+
+  /// No description provided for @reportNoteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get reportNoteLabel;
+
+  /// No description provided for @ticketReasonLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get ticketReasonLabel;
+
+  /// No description provided for @ticketAbsenceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'No apology was received and the lesson time has passed.'**
+  String get ticketAbsenceHint;
+
+  /// No description provided for @ticketLateApologyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A supervisor will review it. Until then the lesson counts as an absence.'**
+  String get ticketLateApologyHint;
+
+  /// No description provided for @ticketTeacherApologyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A make-up lesson will be arranged with the family.'**
+  String get ticketTeacherApologyHint;
+
+  /// No description provided for @ticketSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get ticketSubmit;
+
+  /// No description provided for @ticketSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent'**
+  String get ticketSent;
+
+  /// No description provided for @ticketFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t send. Please try again.'**
+  String get ticketFailed;
+
+  /// No description provided for @ticketNoLongerAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'This lesson can no longer be updated this way.'**
+  String get ticketNoLongerAllowed;
+
+  /// No description provided for @cardReportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Lesson report'**
+  String get cardReportTitle;
+
+  /// No description provided for @cardAbsenceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Absent from the lesson'**
+  String get cardAbsenceTitle;
+
+  /// No description provided for @cardApologyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Apology'**
+  String get cardApologyTitle;
+
+  /// No description provided for @cardTeacherApologyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The teacher can\'t teach this lesson'**
+  String get cardTeacherApologyTitle;
+
+  /// No description provided for @cardCancelledTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Lesson cancelled'**
+  String get cardCancelledTitle;
+
+  /// No description provided for @cardTeacherAbsentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Lesson not held — the teacher was absent'**
+  String get cardTeacherAbsentTitle;
+
+  /// No description provided for @cardLateApologyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Late apology'**
+  String get cardLateApologyTitle;
+
+  /// No description provided for @cardRulingExcusedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Apology accepted'**
+  String get cardRulingExcusedTitle;
+
+  /// No description provided for @cardRulingCreditedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded as an absence'**
+  String get cardRulingCreditedTitle;
+
+  /// No description provided for @cardUnderReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Under review by the supervision team'**
+  String get cardUnderReview;
+
+  /// No description provided for @cardMakeupOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'A make-up lesson will be arranged.'**
+  String get cardMakeupOwed;
+
+  /// No description provided for @cardCovered.
+  ///
+  /// In en, this message translates to:
+  /// **'Covered'**
+  String get cardCovered;
+
+  /// No description provided for @cardHomework.
+  ///
+  /// In en, this message translates to:
+  /// **'Homework'**
+  String get cardHomework;
+
+  /// No description provided for @cardRating.
+  ///
+  /// In en, this message translates to:
+  /// **'Rating'**
+  String get cardRating;
+
+  /// No description provided for @cardNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Note'**
+  String get cardNote;
+
+  /// No description provided for @cardReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get cardReason;
+
+  /// No description provided for @ticketBookMakeup.
+  ///
+  /// In en, this message translates to:
+  /// **'Book a make-up lesson'**
+  String get ticketBookMakeup;
+
+  /// No description provided for @ticketRequestScheduleChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Change regular lesson times'**
+  String get ticketRequestScheduleChange;
+
+  /// Subtitle naming the child a ticket is about.
+  ///
+  /// In en, this message translates to:
+  /// **'For {name}'**
+  String ticketFor(String name);
+
+  /// No description provided for @makeupPickDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a day'**
+  String get makeupPickDay;
+
+  /// No description provided for @makeupPickTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a time'**
+  String get makeupPickTime;
+
+  /// No description provided for @makeupNoSlots.
+  ///
+  /// In en, this message translates to:
+  /// **'No free times in the next two weeks. The supervision team will arrange the make-up.'**
+  String get makeupNoSlots;
+
+  /// No description provided for @makeupBook.
+  ///
+  /// In en, this message translates to:
+  /// **'Book'**
+  String get makeupBook;
+
+  /// Length of the make-up lesson.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} minutes'**
+  String makeupLength(int minutes);
+
+  /// No description provided for @scheduleChangePick.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the new weekly times'**
+  String get scheduleChangePick;
+
+  /// No description provided for @scheduleChangeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The supervision team will confirm the change.'**
+  String get scheduleChangeHint;
+
+  /// No description provided for @scheduleChangeNoOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'There are no other free times right now.'**
+  String get scheduleChangeNoOptions;
+
+  /// No description provided for @scheduleChangeSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send request'**
+  String get scheduleChangeSend;
+
+  /// No description provided for @ticketLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the free times. Please try again.'**
+  String get ticketLoadFailed;
+
+  /// No description provided for @cardMakeupBookedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Make-up lesson booked'**
+  String get cardMakeupBookedTitle;
+
+  /// No description provided for @cardMakeupResolvedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Missed lesson resolved'**
+  String get cardMakeupResolvedTitle;
+
+  /// No description provided for @cardMakeupActionSubstitute.
+  ///
+  /// In en, this message translates to:
+  /// **'A substitute teacher'**
+  String get cardMakeupActionSubstitute;
+
+  /// No description provided for @cardMakeupActionCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'A credit to the family'**
+  String get cardMakeupActionCredit;
+
+  /// No description provided for @cardMakeupActionExtension.
+  ///
+  /// In en, this message translates to:
+  /// **'The package is extended'**
+  String get cardMakeupActionExtension;
+
+  /// No description provided for @cardMakeupActionWaived.
+  ///
+  /// In en, this message translates to:
+  /// **'No make-up needed'**
+  String get cardMakeupActionWaived;
+
+  /// No description provided for @cardScheduleRequestedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Request to change the regular times'**
+  String get cardScheduleRequestedTitle;
+
+  /// No description provided for @cardScheduleApprovedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New regular times confirmed'**
+  String get cardScheduleApprovedTitle;
+
+  /// No description provided for @cardScheduleRejectedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The change of regular times was not approved'**
+  String get cardScheduleRejectedTitle;
+
+  /// A regular weekly time, e.g. 'Every Monday 17:00'.
+  ///
+  /// In en, this message translates to:
+  /// **'Every {when}'**
+  String cardEveryWeek(String when);
+
+  /// No description provided for @tabSchedule.
+  ///
+  /// In en, this message translates to:
+  /// **'Schedule'**
+  String get tabSchedule;
+
+  /// No description provided for @scheduleEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No lessons in the next two weeks.'**
+  String get scheduleEmpty;
+
+  /// No description provided for @scheduleLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load your schedule.'**
+  String get scheduleLoadFailed;
+
+  /// No description provided for @phaseUpcoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Upcoming'**
+  String get phaseUpcoming;
+
+  /// No description provided for @phaseInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'In progress'**
+  String get phaseInProgress;
+
+  /// No description provided for @phaseAwaitingClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs report'**
+  String get phaseAwaitingClose;
+
+  /// No description provided for @phaseOverdue.
+  ///
+  /// In en, this message translates to:
+  /// **'Report overdue'**
+  String get phaseOverdue;
+
+  /// No description provided for @outcomeHeld.
+  ///
+  /// In en, this message translates to:
+  /// **'Held'**
+  String get outcomeHeld;
+
+  /// No description provided for @outcomeStudentApology.
+  ///
+  /// In en, this message translates to:
+  /// **'Student apologised'**
+  String get outcomeStudentApology;
+
+  /// No description provided for @outcomeTeacherApology.
+  ///
+  /// In en, this message translates to:
+  /// **'Teacher apologised'**
+  String get outcomeTeacherApology;
+
+  /// No description provided for @outcomeAdminCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get outcomeAdminCancelled;
+
+  /// No description provided for @outcomeStudentNoShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Student absent'**
+  String get outcomeStudentNoShow;
+
+  /// No description provided for @outcomeTeacherNoShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Teacher absent'**
+  String get outcomeTeacherNoShow;
+
+  /// No description provided for @outcomeRescheduled.
+  ///
+  /// In en, this message translates to:
+  /// **'Moved'**
+  String get outcomeRescheduled;
+
+  /// No description provided for @lessonKindMakeup.
+  ///
+  /// In en, this message translates to:
+  /// **'Make-up'**
+  String get lessonKindMakeup;
+
+  /// No description provided for @cardTransferredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New teacher'**
+  String get cardTransferredTitle;
+
+  /// Card telling a family who teaches their child after a transfer.
+  ///
+  /// In en, this message translates to:
+  /// **'{teacher} will teach from now on.'**
+  String cardTransferredBody(String teacher);
+
+  /// No description provided for @cardHandoverTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'A new student'**
+  String get cardHandoverTitle;
+
+  /// No description provided for @cardHandoverFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous teacher'**
+  String get cardHandoverFrom;
+
+  /// No description provided for @cardHandoverNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Handover'**
+  String get cardHandoverNote;
+
+  /// No description provided for @cardPausedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Lessons paused'**
+  String get cardPausedTitle;
+
+  /// Return date of a paused learner.
+  ///
+  /// In en, this message translates to:
+  /// **'Until {date}'**
+  String cardPausedUntil(String date);
+
+  /// No description provided for @cardStoppedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Lessons stopped'**
+  String get cardStoppedTitle;
+
+  /// No description provided for @cardReturnSoonTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Lessons resume soon'**
+  String get cardReturnSoonTitle;
+
+  /// The day a paused learner's lessons resume.
+  ///
+  /// In en, this message translates to:
+  /// **'Back on {date}'**
+  String cardReturnOn(String date);
+
+  /// No description provided for @cardResumedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Lessons resumed'**
+  String get cardResumedTitle;
+
+  /// No description provided for @cardBonusTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'A bonus for you'**
+  String get cardBonusTitle;
+
+  /// No description provided for @progressTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This month'**
+  String get progressTitle;
+
+  /// No description provided for @progressAttended.
+  ///
+  /// In en, this message translates to:
+  /// **'Attended'**
+  String get progressAttended;
+
+  /// No description provided for @progressApologised.
+  ///
+  /// In en, this message translates to:
+  /// **'Apologised'**
+  String get progressApologised;
+
+  /// No description provided for @progressAbsent.
+  ///
+  /// In en, this message translates to:
+  /// **'Absent'**
+  String get progressAbsent;
+
+  /// Consecutive lessons attended.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No streak yet} =1{1 lesson in a row} other{{count} lessons in a row}}'**
+  String progressStreak(int count);
+
+  /// All-time attended lessons.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} lessons attended in total'**
+  String progressAllTime(int count);
+
+  /// Make-up lessons the family is owed.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 make-up lesson owed} other{{count} make-up lessons owed}}'**
+  String progressMakeupsOwed(int count);
+
+  /// When the next lesson is.
+  ///
+  /// In en, this message translates to:
+  /// **'Next lesson: {when}'**
+  String progressNext(String when);
+
+  /// What the latest report says was covered.
+  ///
+  /// In en, this message translates to:
+  /// **'Last lesson: {covered}'**
+  String progressLastCovered(String covered);
+
+  /// No description provided for @progressCertificates.
+  ///
+  /// In en, this message translates to:
+  /// **'Certificates will appear here.'**
+  String get progressCertificates;
+
+  /// No description provided for @progressUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Progress isn\'t available right now.'**
+  String get progressUnavailable;
+
+  /// No description provided for @workloadTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This month'**
+  String get workloadTitle;
+
+  /// Lessons held this month and their hours.
+  ///
+  /// In en, this message translates to:
+  /// **'{lessons} lessons · {hours} h'**
+  String workloadHeld(int lessons, String hours);
+
+  /// Lessons ended without a report.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} need a report'**
+  String workloadNeedsReport(int count);
+
+  /// Share of reports submitted on time.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent} reports on time'**
+  String workloadOnTime(String percent);
+
+  /// No description provided for @supervisionChatTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Supervision'**
+  String get supervisionChatTitle;
+
+  /// No description provided for @supervisionChatSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Teachers department · private'**
+  String get supervisionChatSubtitle;
+
+  /// No description provided for @supervisionTicketsHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'Requests'**
+  String get supervisionTicketsHeader;
+
+  /// No description provided for @ticketCertificate.
+  ///
+  /// In en, this message translates to:
+  /// **'Request a certificate'**
+  String get ticketCertificate;
+
+  /// No description provided for @ticketLeave.
+  ///
+  /// In en, this message translates to:
+  /// **'Request leave'**
+  String get ticketLeave;
+
+  /// No description provided for @certificateFormTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Request a certificate'**
+  String get certificateFormTitle;
+
+  /// No description provided for @certificateFormHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent privately to the Teachers department. When the certificate is issued, it is posted to the student\'s group, where you and the parents receive it.'**
+  String get certificateFormHint;
+
+  /// No description provided for @certificateStudent.
+  ///
+  /// In en, this message translates to:
+  /// **'Student'**
+  String get certificateStudent;
+
+  /// No description provided for @certificateTitleField.
+  ///
+  /// In en, this message translates to:
+  /// **'Certificate'**
+  String get certificateTitleField;
+
+  /// No description provided for @certificateTitleHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Juz Amma'**
+  String get certificateTitleHint;
+
+  /// No description provided for @certificateAchievement.
+  ///
+  /// In en, this message translates to:
+  /// **'Achievement'**
+  String get certificateAchievement;
+
+  /// No description provided for @certificateAchievedOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Date achieved'**
+  String get certificateAchievedOn;
+
+  /// No description provided for @certificateGrade.
+  ///
+  /// In en, this message translates to:
+  /// **'Grade (optional)'**
+  String get certificateGrade;
+
+  /// No description provided for @certificatePrintedName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name as it should be printed'**
+  String get certificatePrintedName;
+
+  /// No description provided for @certificateNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Note to the department (optional)'**
+  String get certificateNote;
+
+  /// No description provided for @leaveFormTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Request leave'**
+  String get leaveFormTitle;
+
+  /// No description provided for @leaveFormHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent privately to the Teachers department. Approved days are deducted from your balance.'**
+  String get leaveFormHint;
+
+  /// No description provided for @leaveFirstDay.
+  ///
+  /// In en, this message translates to:
+  /// **'First day'**
+  String get leaveFirstDay;
+
+  /// No description provided for @leaveLastDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Last day'**
+  String get leaveLastDay;
+
+  /// No description provided for @leaveReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get leaveReason;
+
+  /// No description provided for @leaveDaysCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 day} other{{count} days}}'**
+  String leaveDaysCount(int count);
+
+  /// No description provided for @leaveBalanceNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Your balance now: {balance}'**
+  String leaveBalanceNow(String balance);
+
+  /// No description provided for @leaveSameYear.
+  ///
+  /// In en, this message translates to:
+  /// **'Send a separate request for each year.'**
+  String get leaveSameYear;
+
+  /// No description provided for @leaveLastBeforeFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'The last day is before the first day.'**
+  String get leaveLastBeforeFirst;
+
+  /// No description provided for @formRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Required'**
+  String get formRequired;
+
+  /// No description provided for @formSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get formSend;
+
+  /// No description provided for @myLeaveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'My leave'**
+  String get myLeaveTitle;
+
+  /// No description provided for @myLeaveAllowance.
+  ///
+  /// In en, this message translates to:
+  /// **'Allowance {year}'**
+  String myLeaveAllowance(String year);
+
+  /// No description provided for @myLeaveUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'Used'**
+  String get myLeaveUsed;
+
+  /// No description provided for @myLeaveBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance'**
+  String get myLeaveBalance;
+
+  /// No description provided for @myLeaveNoAllowance.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set yet'**
+  String get myLeaveNoAllowance;
+
+  /// No description provided for @myLeaveNoRequests.
+  ///
+  /// In en, this message translates to:
+  /// **'No leave requests this year.'**
+  String get myLeaveNoRequests;
+
+  /// No description provided for @myLeaveRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Request leave'**
+  String get myLeaveRequest;
+
+  /// No description provided for @myLeaveWithdraw.
+  ///
+  /// In en, this message translates to:
+  /// **'Withdraw'**
+  String get myLeaveWithdraw;
+
+  /// No description provided for @myLeaveWithdrawConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Withdraw this leave request?'**
+  String get myLeaveWithdrawConfirm;
+
+  /// No description provided for @leaveStateRequested.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting'**
+  String get leaveStateRequested;
+
+  /// No description provided for @leaveStateApproved.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved'**
+  String get leaveStateApproved;
+
+  /// No description provided for @leaveStateDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'Not approved'**
+  String get leaveStateDeclined;
+
+  /// No description provided for @leaveStateWithdrawn.
+  ///
+  /// In en, this message translates to:
+  /// **'Withdrawn'**
+  String get leaveStateWithdrawn;
+
+  /// No description provided for @leaveStateCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get leaveStateCancelled;
+
+  /// No description provided for @cardCertificateRequestedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Certificate request'**
+  String get cardCertificateRequestedTitle;
+
+  /// No description provided for @cardCertificateIssuedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Certificate'**
+  String get cardCertificateIssuedTitle;
+
+  /// No description provided for @cardCertificateDeclinedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Certificate request not approved'**
+  String get cardCertificateDeclinedTitle;
+
+  /// No description provided for @cardLeaveRequestedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave request'**
+  String get cardLeaveRequestedTitle;
+
+  /// No description provided for @cardLeaveApprovedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave approved'**
+  String get cardLeaveApprovedTitle;
+
+  /// No description provided for @cardLeaveDeclinedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave not approved'**
+  String get cardLeaveDeclinedTitle;
+
+  /// No description provided for @cardLeaveWithdrawnTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave request withdrawn'**
+  String get cardLeaveWithdrawnTitle;
+
+  /// No description provided for @cardLeaveCancelledTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave cancelled'**
+  String get cardLeaveCancelledTitle;
+
+  /// No description provided for @cardAchievement.
+  ///
+  /// In en, this message translates to:
+  /// **'Achievement'**
+  String get cardAchievement;
+
+  /// No description provided for @cardGrade.
+  ///
+  /// In en, this message translates to:
+  /// **'Grade'**
+  String get cardGrade;
+
+  /// No description provided for @cardDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Days'**
+  String get cardDays;
+
+  /// No description provided for @cardBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance'**
+  String get cardBalance;
+
+  /// No description provided for @cardDaysReturned.
+  ///
+  /// In en, this message translates to:
+  /// **'Days returned'**
+  String get cardDaysReturned;
+
+  /// No description provided for @cardCongratulations.
+  ///
+  /// In en, this message translates to:
+  /// **'Congratulations! The certificate is attached.'**
+  String get cardCongratulations;
+
+  /// No description provided for @leaveNotAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'These dates can\'t be requested: they overlap another request or have already passed.'**
+  String get leaveNotAllowed;
+
+  /// No description provided for @progressCertificatesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Certificates'**
+  String get progressCertificatesTitle;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

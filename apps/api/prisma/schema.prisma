@@ -70,6 +70,14 @@ model Family {
   tier             String   @default("standard")
   state            String   @default("onboarding")
   language         String   @default("ar")
+  /// Story targeting (20261017120000). Owned by Jawwid Core; an admin sets them
+  /// until the Core projection writes them. ISO 3166-1 alpha-2.
+  countryCode            String?   @map("country_code")
+  /// Length of the subscription PLAN in months: 1, 3, 6 or 12.
+  subscriptionPlanMonths Int?      @map("subscription_plan_months") @db.SmallInt
+  /// admin | core -- who last wrote the two columns above.
+  segmentSource          String?   @map("segment_source")
+  segmentUpdatedAt       DateTime? @map("segment_updated_at") @db.Timestamptz
   createdAt        DateTime @map("created_at") @db.Timestamptz @default(now())
   updatedAt        DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
@@ -123,6 +131,7 @@ model Learner {
   updatedAt   DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
   conversations Conversation[]
+  lessons       Lesson[]
 
   @@map("learner")
   @@schema("chat")
@@ -185,6 +194,9 @@ model Conversation {
 
   /// Canonical id of a 1:1 channel; makes a duplicate direct conversation impossible.
   directKey String? @unique @map("direct_key")
+
+  /// PD-11/PD-12: the teacher a teacher_supervision conversation is about (that type only).
+  supervisedTeacherId String? @map("supervised_teacher_id") @db.Uuid
 
   state String @default("open")
 
@@ -270,6 +282,8 @@ model Message {
   createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
 
   attachments MessageAttachment[]
+  /// PD-11: the structured half of a message of type `card`.
+  card        MessageCard?
   reactions   MessageReaction[]
   receipts    MessageReceipt[]
   hiddenFor   MessageHiddenFor[]
@@ -670,6 +684,7 @@ model Teacher {
   updatedAt     DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
   learners Learner[]
+  lessons  Lesson[]
 
   @@map("teacher")
   @@schema("chat")
@@ -684,20 +699,37 @@ model Story {
   /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
   organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   id             String  @id @default(uuid()) @db.Uuid
+  /// Legacy. Nothing writes it since 2026-10-17: a story carries no caption.
   title          String?
+  /// The words of a TEXT story. A photo, video or voice story has none.
   body           String?
+  /// The publisher's own label. Publisher surfaces only; never sent to a reader.
+  internalName   String? @map("internal_name")
+  /// Background of a text or voice story, from a fixed palette.
+  background     String?
 
   /// A key into private object storage. Never a URL, and never a capability:
   /// reads go through a short-lived signed URL minted per request.
   mediaObjectKey String? @map("media_object_key")
   mediaKind      String? @map("media_kind")
   mediaMime      String? @map("media_mime")
+  /// image | video | audio. Client-asserted for audio/video; bounded by a check.
+  mediaDurationMs Int?   @map("media_duration_ms")
+
+  /// The call to action: whatsapp | message_publisher | link, or none.
+  ctaKind  String? @map("cta_kind")
+  ctaLabel String? @map("cta_label")
+  /// https only (story_cta_shape).
+  ctaUrl   String? @map("cta_url")
+  /// The ACADEMY's WhatsApp number, E.164 digits. Never a family's.
+  ctaPhone String? @map("cta_phone")
 
   /// draft | published | expired | deleted. Transitions are guarded by
   /// chat.guard_story_transition(); `deleted` is terminal.
   state       String    @default("draft")
   publishedAt DateTime? @map("published_at") @db.Timestamptz
-  /// When access ends. Part of the read invariant, not just a sweep input.
+  /// When access ends; NULL means "until deleted" (every story since
+  /// 2026-10-17). A non-null value is still part of the read invariant.
   expiresAt   DateTime? @map("expires_at") @db.Timestamptz
 
   createdBy   String @map("created_by") @db.Uuid
@@ -719,6 +751,7 @@ model Story {
   audiences  StoryAudience[]
   recipients StoryRecipient[]
   views      StoryView[]
+  ctaClicks  StoryCtaClick[]
 
   @@map("story")
   @@schema("chat")
@@ -730,8 +763,10 @@ model StoryAudience {
   id        String   @id @default(uuid()) @db.Uuid
   storyId   String   @map("story_id") @db.Uuid
   story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
-  /// all_families | all_teachers | assigned_families | family | teacher | contact | conversation
+  /// all_families | all_teachers | assigned_families | family | teacher | contact | conversation | segment
   kind      String
+  /// kind = segment only: { who, planMonths?, children?, countries? }.
+  filter    Json?
   /// Null exactly for the kinds that name no particular record. Not a foreign
   /// key: it points into a different table per kind, and the resolver validates
   /// it under the author's own scope.
@@ -766,6 +801,19 @@ model StoryView {
 
   @@id([storyId, actorId])
   @@map("story_view")
+  @@schema("chat")
+}
+
+/// One row per call-to-action tap. Tapping twice is two taps.
+model StoryCtaClick {
+  id        BigInt   @id @default(autoincrement())
+  storyId   String   @map("story_id") @db.Uuid
+  story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  actorId   String   @map("actor_id") @db.Uuid
+  clickedAt DateTime @map("clicked_at") @db.Timestamptz @default(now())
+
+  @@index([storyId, clickedAt])
+  @@map("story_cta_click")
   @@schema("chat")
 }
 
@@ -898,5 +946,301 @@ model ConversationLearner {
 
   @@id([conversationId, learnerId])
   @@map("conversation_learner")
+  @@schema("chat")
+}
+
+/// PD-9 / PD-11: one lesson occurrence. SQL owns the DDL and every rule
+/// (20261018120000): born open, closed once, never deleted.
+model Lesson {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  learnerId      String    @map("learner_id") @db.Uuid
+  learner        Learner   @relation(fields: [learnerId], references: [id])
+  teacherId      String    @map("teacher_id") @db.Uuid
+  teacher        Teacher   @relation(fields: [teacherId], references: [id])
+  kind           String    @default("regular")
+  makeupFor      String?   @map("makeup_for") @db.Uuid
+  startsAt       DateTime  @map("starts_at") @db.Timestamptz
+  endsAt         DateTime  @map("ends_at") @db.Timestamptz
+  outcome        String?
+  outcomeNote    String?   @map("outcome_note")
+  outcomeByKind  String?   @map("outcome_by_kind")
+  outcomeBy      String?   @map("outcome_by") @db.Uuid
+  outcomeAt      DateTime? @map("outcome_at") @db.Timestamptz
+  /// staff / contact (a make-up the family booked) / system (materialized from a slot).
+  createdByKind  String    @default("staff") @map("created_by_kind")
+  createdBy      String?   @map("created_by") @db.Uuid
+  scheduleSlotId String?   @map("schedule_slot_id") @db.Uuid
+  remindersScheduledAt DateTime? @map("reminders_scheduled_at") @db.Timestamptz
+  createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
+  updatedAt      DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  report  LessonReport?
+  rulings LessonRuling[]
+
+  @@map("lesson")
+  @@schema("chat")
+}
+
+model LessonReport {
+  lessonId       String   @id @map("lesson_id") @db.Uuid
+  lesson         Lesson   @relation(fields: [lessonId], references: [id])
+  organizationId String   @map("organization_id") @db.Uuid
+  teacherId      String   @map("teacher_id") @db.Uuid
+  covered        String
+  homework       String?
+  rating         Int?     @db.SmallInt
+  note           String?
+  messageId      String?  @unique @map("message_id") @db.Uuid
+  submittedAt    DateTime @map("submitted_at") @db.Timestamptz @default(now())
+
+  @@map("lesson_report")
+  @@schema("chat")
+}
+
+model LessonRuling {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  lessonId       String    @map("lesson_id") @db.Uuid
+  lesson         Lesson    @relation(fields: [lessonId], references: [id])
+  kind           String
+  openedByKind   String    @map("opened_by_kind")
+  openedBy       String    @map("opened_by") @db.Uuid
+  openedAt       DateTime  @map("opened_at") @db.Timestamptz @default(now())
+  reason         String
+  decision       String?
+  decidedBy      String?   @map("decided_by") @db.Uuid
+  decidedAt      DateTime? @map("decided_at") @db.Timestamptz
+  decisionNote   String?   @map("decision_note")
+
+  @@unique([lessonId, kind])
+  @@map("lesson_ruling")
+  @@schema("chat")
+}
+
+/// PD-11: what a ticket recorded, rendered by the client as a card.
+model MessageCard {
+  messageId      String  @id @map("message_id") @db.Uuid
+  message        Message @relation(fields: [messageId], references: [id])
+  organizationId String  @map("organization_id") @db.Uuid
+  kind           String
+  lessonId       String? @map("lesson_id") @db.Uuid
+  payload        Json    @default("{}")
+
+  @@map("message_card")
+  @@schema("chat")
+}
+
+/// PD-11 T2: a teacher's weekly working window, in the teacher's time zone.
+model TeacherAvailability {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  teacherId      String   @map("teacher_id") @db.Uuid
+  weekday        Int      @db.SmallInt
+  startMinute    Int      @map("start_minute")
+  endMinute      Int      @map("end_minute")
+  timezone       String
+  createdBy      String   @map("created_by") @db.Uuid
+  createdAt      DateTime @map("created_at") @db.Timestamptz @default(now())
+
+  @@map("teacher_availability")
+  @@schema("chat")
+}
+
+model TeacherDayOff {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  teacherId      String   @map("teacher_id") @db.Uuid
+  day            DateTime @db.Date
+  reason         String?
+  createdBy      String   @map("created_by") @db.Uuid
+  createdAt      DateTime @map("created_at") @db.Timestamptz @default(now())
+  /// PD-12: the approved leave request this day off belongs to (null for one recorded directly).
+  leaveRequestId String?  @map("leave_request_id") @db.Uuid
+
+  @@unique([teacherId, day])
+  @@map("teacher_day_off")
+  @@schema("chat")
+}
+
+/// PD-11 T2: a learner's regular weekly lesson time. Ended, never edited.
+model LearnerScheduleSlot {
+  id              String    @id @default(uuid()) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  learnerId       String    @map("learner_id") @db.Uuid
+  teacherId       String    @map("teacher_id") @db.Uuid
+  weekday         Int       @db.SmallInt
+  startMinute     Int       @map("start_minute")
+  durationMinutes Int       @map("duration_minutes")
+  timezone        String
+  validFrom       DateTime  @map("valid_from") @db.Date
+  validTo         DateTime? @map("valid_to") @db.Date
+  createdBy       String    @map("created_by") @db.Uuid
+  createdAt       DateTime  @map("created_at") @db.Timestamptz @default(now())
+
+  @@map("learner_schedule_slot")
+  @@schema("chat")
+}
+
+model ScheduleChangeRequest {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  learnerId      String    @map("learner_id") @db.Uuid
+  requestedBy    String    @map("requested_by") @db.Uuid
+  slots          Json
+  note           String?
+  status         String    @default("pending")
+  decidedBy      String?   @map("decided_by") @db.Uuid
+  decidedAt      DateTime? @map("decided_at") @db.Timestamptz
+  decisionNote   String?   @map("decision_note")
+  createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
+
+  @@map("schedule_change_request")
+  @@schema("chat")
+}
+
+/// PD-11 T3: a learner moved between teachers. Append-only.
+model LearnerTransfer {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  learnerId      String   @map("learner_id") @db.Uuid
+  fromTeacherId  String?  @map("from_teacher_id") @db.Uuid
+  toTeacherId    String   @map("to_teacher_id") @db.Uuid
+  reasonCode     String   @map("reason_code")
+  note           String?
+  handoverNote   String?  @map("handover_note")
+  decidedBy      String   @map("decided_by") @db.Uuid
+  createdAt      DateTime @map("created_at") @db.Timestamptz @default(now())
+
+  @@map("learner_transfer")
+  @@schema("chat")
+}
+
+/// PD-11 T3: a learner's study paused (temporary, until return_on) or stopped (permanent).
+model LearnerSuspension {
+  id               String    @id @default(uuid()) @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  learnerId        String    @map("learner_id") @db.Uuid
+  kind             String
+  reasonCode       String    @map("reason_code")
+  note             String?
+  startsOn         DateTime  @map("starts_on") @db.Date
+  returnOn         DateTime? @map("return_on") @db.Date
+  status           String    @default("active")
+  endedAt          DateTime? @map("ended_at") @db.Timestamptz
+  endedBy          String?   @map("ended_by") @db.Uuid
+  returnNotifiedAt DateTime? @map("return_notified_at") @db.Timestamptz
+  createdBy        String    @map("created_by") @db.Uuid
+  createdAt        DateTime  @map("created_at") @db.Timestamptz @default(now())
+
+  @@map("learner_suspension")
+  @@schema("chat")
+}
+
+/// PD-10/PD-11: one entry on a teacher's supervision timeline. Append-only.
+model TeacherSupervisionEntry {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  teacherId      String    @map("teacher_id") @db.Uuid
+  kind           String
+  body           String
+  period         DateTime? @db.Date
+  conversationId String?   @map("conversation_id") @db.Uuid
+  createdBy      String    @map("created_by") @db.Uuid
+  createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
+  /// PD-10: a complaint_resolution's complaint.
+  refersTo       String?   @map("refers_to") @db.Uuid
+  /// PD-10: a complaint's source message (in conversation_id).
+  sourceMessageId String?  @map("source_message_id") @db.Uuid
+
+  @@map("teacher_supervision_entry")
+  @@schema("chat")
+}
+
+// =====================================================================
+// PD-10 Teacher File -- 20261018170000_chat_pd010_teacher_file.sql owns the DDL.
+// The phone is read and written ONLY by src/teacher-file (teacher-file-confinement.spec).
+// =====================================================================
+
+/// A teacher's administration-only personal record.
+model TeacherFile {
+  teacherId      String    @id @map("teacher_id") @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  adminOnlyPhone String?   @map("phone")
+  email          String?
+  joinedOn       DateTime? @map("joined_on") @db.Date
+  updatedAt      DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+  updatedBy      String?   @map("updated_by") @db.Uuid
+
+  @@map("teacher_file")
+  @@schema("chat")
+}
+
+// =====================================================================
+// PD-12 S1 -- 20261019090000_chat_pd012_s1.sql owns the DDL and every rule.
+// =====================================================================
+
+/// A STUDENT certificate: requested by the learner's teacher, issued or declined once.
+model LearnerCertificate {
+  id               String    @id @default(uuid()) @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  learnerId        String    @map("learner_id") @db.Uuid
+  requestedBy      String    @map("requested_by") @db.Uuid
+  title            String
+  achievement      String
+  achievedOn       DateTime  @map("achieved_on") @db.Date
+  grade            String?
+  printedName      String    @map("printed_name")
+  note             String?
+  state            String    @default("requested")
+  requestedAt      DateTime  @map("requested_at") @db.Timestamptz @default(now())
+  requestMessageId String?   @unique @map("request_message_id") @db.Uuid
+  decidedBy        String?   @map("decided_by") @db.Uuid
+  decidedAt        DateTime? @map("decided_at") @db.Timestamptz
+  declineReason    String?   @map("decline_reason")
+  conversationId   String?   @map("conversation_id") @db.Uuid
+  objectKey        String?   @unique @map("object_key")
+  mimeType         String?   @map("mime_type")
+  byteSize         Int?      @map("byte_size")
+  fileName         String?   @map("file_name")
+  issuedMessageId  String?   @unique @map("issued_message_id") @db.Uuid
+
+  @@map("learner_certificate")
+  @@schema("chat")
+}
+
+/// A teacher's leave allowance for a year. Append-only: the latest row wins.
+model TeacherLeaveAllowance {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  teacherId      String   @map("teacher_id") @db.Uuid
+  leaveYear      Int      @map("leave_year")
+  days           Int
+  note           String?
+  setBy          String   @map("set_by") @db.Uuid
+  setAt          DateTime @map("set_at") @db.Timestamptz @default(now())
+
+  @@map("teacher_leave_allowance")
+  @@schema("chat")
+}
+
+/// A teacher's leave request. Approval writes PD-10 day_off entries.
+model TeacherLeaveRequest {
+  id               String    @id @default(uuid()) @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  teacherId        String    @map("teacher_id") @db.Uuid
+  firstDay         DateTime  @map("first_day") @db.Date
+  lastDay          DateTime  @map("last_day") @db.Date
+  reason           String
+  state            String    @default("requested")
+  requestedAt      DateTime  @map("requested_at") @db.Timestamptz @default(now())
+  requestMessageId String?   @unique @map("request_message_id") @db.Uuid
+  decidedBy        String?   @map("decided_by") @db.Uuid
+  decidedAt        DateTime? @map("decided_at") @db.Timestamptz
+  decisionNote     String?   @map("decision_note")
+  endedAt          DateTime? @map("ended_at") @db.Timestamptz
+  endedBy          String?   @map("ended_by") @db.Uuid
+
+  @@map("teacher_leave_request")
   @@schema("chat")
 }

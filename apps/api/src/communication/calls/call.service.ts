@@ -8,7 +8,7 @@ import type { Decision } from '../../platform/authorization.service';
 import { AppConfigService } from '../../platform/app-config.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
 import { AUDIT_SERVICE, IDENTITY_SERVICE, MEDIA_TOKEN_ISSUER } from '../../platform/tokens';
-import type { IdentityService } from '../../platform/identity.service';
+import { actorRefKey, type IdentityService, type ResolvedActors } from '../../platform/identity.service';
 import type { AuditService } from '../../platform/audit.service';
 import type { MediaTokenIssuer } from './media-token';
 import { Actor, SYSTEM_ACTOR } from '../../platform/types';
@@ -781,12 +781,19 @@ export class CallService {
 
     const calls = await this.prisma.call.findMany({
       where: { conversationId },
-      include: { participants: true },
+      include: CallService.HISTORY_INCLUDE,
       orderBy: { startedAt: 'desc' },
       take: 100,
     });
 
-    return calls.map((c) => this.toHistoryRow(c));
+    // Named in one batch, exactly as the account-scoped history above: both
+    // feed the same row shape, so both resolve the same way.
+    const directory = await this.identity.resolveActors(
+      calls.flatMap((c) =>
+        c.participants.map((p) => ({ actorId: p.actorId, actorKind: p.actorKind })),
+      ),
+    );
+    return calls.map((c) => this.toHistoryRow(c, directory));
   }
 
   /**
@@ -867,7 +874,7 @@ export class CallService {
             }
           : {}),
       },
-      include: { participants: true },
+      include: CallService.HISTORY_INCLUDE,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       // One more than asked for, to know whether another page exists without a
       // second count query.
@@ -876,12 +883,53 @@ export class CallService {
 
     const page = calls.slice(0, limit);
     const last = page.at(-1);
+
+    // Every participant in the page, named in one batch. Per row it would be a
+    // lookup per call per person, which is the cost that kept names off this
+    // payload; resolveActors spends at most one query per actor kind for the whole page.
+    const directory = await this.identity.resolveActors(
+      page.flatMap((c) =>
+        c.participants.map((p) => ({ actorId: p.actorId, actorKind: p.actorKind })),
+      ),
+    );
+
     return {
-      items: page.map((c) => this.toHistoryRow(c)),
+      items: page.map((c) => this.toHistoryRow(c, directory)),
       nextCursor:
         calls.length > limit && last ? encodeHistoryCursor(last.startedAt, last.id) : null,
     };
   }
+
+  /**
+   * The participant include BOTH history routes use.
+   *
+   * THE ORDER IS PART OF THE RESPONSE. Neither query said how to order the
+   * relation, so neither got a guarantee: Postgres returns an unordered result
+   * in whatever order the chosen plan produces. The two routes select different
+   * sets of calls -- one conversation against a cursor-paged window -- so they
+   * can be planned differently and return the same participants in different
+   * orders. They did: four failures in twelve full integration runs,
+   * transposing in BOTH directions, which is what rules out one route being
+   * consistently reversed and leaves "no order was specified" as the cause.
+   *
+   * That is a defect in the RESPONSE, not in the test that noticed it. Two
+   * identical requests must not produce different JSON, or a client that
+   * caches, diffs or renders a participant list sees it reshuffle for no
+   * reason.
+   *
+   * `invitedAt` is the meaningful order -- who was brought onto the call first.
+   * It is not sufficient alone: participants are created by one `createMany`
+   * inside a transaction, so they share `now()` to the microsecond. `actorId`
+   * breaks that tie deterministically, which is all a tiebreak has to do.
+   *
+   * Declared once because the two routes are documented to share a mapper;
+   * sharing the mapper and not the query is exactly how they came to disagree.
+   */
+  private static readonly HISTORY_INCLUDE = {
+    participants: {
+      orderBy: [{ invitedAt: 'asc' }, { actorId: 'asc' }],
+    },
+  } as const satisfies Prisma.CallInclude;
 
   /**
    * ONE history row, and the only place a call becomes one.
@@ -895,6 +943,7 @@ export class CallService {
    */
   private toHistoryRow(
     call: Call & { participants: CallParticipant[] },
+    directory?: ResolvedActors,
   ): {
     id: string;
     conversationId: string;
@@ -908,6 +957,13 @@ export class CallService {
     participants: {
       actorId: string;
       actorKind: string;
+      /**
+       * Resolved for the page in one batch, or null when the principal could
+       * not be resolved. Closes O3 for calls: a history row carried an actor id
+       * and no name, so the Calls tab drew a placeholder avatar and no title
+       * for every call a parent had ever made. An id is never the fallback.
+       */
+      displayName: string | null;
       joinedAt: string | null;
       leftAt: string | null;
     }[];
@@ -925,6 +981,7 @@ export class CallService {
       participants: call.participants.map((p) => ({
         actorId: p.actorId,
         actorKind: p.actorKind,
+        displayName: directory?.get(actorRefKey({ actorId: p.actorId, actorKind: p.actorKind }))?.displayName ?? null,
         joinedAt: p.joinedAt?.toISOString() ?? null,
         leftAt: p.leftAt?.toISOString() ?? null,
       })),

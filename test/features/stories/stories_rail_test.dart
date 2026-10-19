@@ -148,23 +148,23 @@ void main() {
               // every unviewed one. Unviewed-first outranks newest-first.
               story(
                 id: 'viewed-new',
-                title: 'C',
+                body: 'C',
                 isViewed: true,
                 publishedAt: now,
               ),
               story(
                 id: 'unviewed-old',
-                title: 'B',
+                body: 'B',
                 publishedAt: now.subtract(const Duration(hours: 5)),
               ),
               story(
                 id: 'unviewed-new',
-                title: 'A',
+                body: 'A',
                 publishedAt: now.subtract(const Duration(minutes: 1)),
               ),
               story(
                 id: 'viewed-old',
-                title: 'D',
+                body: 'D',
                 isViewed: true,
                 publishedAt: now.subtract(const Duration(hours: 9)),
               ),
@@ -174,17 +174,16 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Only the ring labels. The avatar initials are Text too, and interleaved; filtering
-      // to the titles keeps the tree order, which is what is being asserted.
+      // Rings in tree order, by key: every ring carries the academy's name now that a story
+      // has no title, so the key is what names the story.
       // A = unviewed newest, B = unviewed oldest, C = viewed newest, D = viewed oldest.
-      const titles = {'A', 'B', 'C', 'D'};
-      final labels = tester
-          .widgetList<Text>(find.byType(Text))
-          .map((t) => t.data)
-          .whereType<String>()
-          .where(titles.contains)
+      final order = tester
+          .widgetList(find.byWidgetPredicate(
+            (w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('story-ring-'),
+          ))
+          .map((w) => (w.key! as ValueKey<String>).value.replaceFirst('story-ring-', ''))
           .toList();
-      expect(labels, ['A', 'B', 'C', 'D']);
+      expect(order, ['unviewed-new', 'unviewed-old', 'viewed-new', 'viewed-old']);
     });
 
     testWidgets('viewed state reaches a screen reader as WORDS, not just a ring colour',
@@ -194,10 +193,10 @@ void main() {
           locale: const Locale('en'),
           overrides: [
             repo(FakeStoryRepository(stories: [
-              story(id: 'a', title: 'Fresh', publishedAt: DateTime.now()),
+              story(id: 'a', body: 'Fresh', publishedAt: DateTime.now()),
               story(
                 id: 'b',
-                title: 'Seen',
+                body: 'Seen',
                 isViewed: true,
                 publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
               ),
@@ -207,23 +206,61 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.bySemanticsLabel('Unviewed story: Fresh'), findsOneWidget);
-      expect(find.bySemanticsLabel('Viewed story: Seen'), findsOneWidget);
+      expect(find.bySemanticsLabel('Unviewed story: Jawwid'), findsOneWidget);
+      expect(find.bySemanticsLabel('Viewed story: Jawwid'), findsOneWidget);
     });
 
-    testWidgets('a story with no title falls back to the academy name', (tester) async {
+    testWidgets('a ring shows the story itself -- no initial, and no name under it', (tester) async {
+      // Owner decision 2026-10-17: rings like WhatsApp's status rings. Inside, a preview of
+      // the story; under it, nothing (every ring would have said "Jawwid").
+      final now = DateTime.now();
       await tester.pumpWidget(
         harness(
           locale: const Locale('en'),
           overrides: [
-            repo(FakeStoryRepository(stories: [story(id: 'a', title: null)])),
+            repo(FakeStoryRepository(stories: [
+              story(id: 't', body: 'Eid Mubarak', publishedAt: now),
+              story(
+                id: 'p',
+                mediaKind: StoryMediaKind.image,
+                mediaUrl: 'https://api.test/media/stories/p?sig=1',
+                publishedAt: now.subtract(const Duration(minutes: 1)),
+              ),
+              story(
+                id: 'v',
+                mediaKind: StoryMediaKind.audio,
+                mediaUrl: 'https://api.test/media/stories/v?sig=1',
+                publishedAt: now.subtract(const Duration(minutes: 2)),
+              ),
+              story(
+                id: 'm',
+                mediaKind: StoryMediaKind.video,
+                mediaUrl: 'https://api.test/media/stories/m?sig=1',
+                publishedAt: now.subtract(const Duration(minutes: 3)),
+              ),
+            ])),
           ],
         ),
       );
       await tester.pumpAndSettle();
 
-      // Not an empty label, and not an invented author: the publisher IS the academy.
-      expect(find.text('Jawwid'), findsOneWidget);
+      // No initial avatar, no caption row.
+      expect(find.byType(JawwidAvatar), findsNothing);
+      expect(find.text('Jawwid'), findsNothing);
+      expect(find.text('J'), findsNothing);
+
+      Finder inRing(String id, Finder f) =>
+          find.descendant(of: find.byKey(ValueKey('story-ring-$id')), matching: f);
+      // A text story shows its words; a photo its picture, from the server's signed URL;
+      // voice and video their mark.
+      expect(inRing('t', find.text('Eid Mubarak')), findsOneWidget);
+      final image = tester.widget<Image>(inRing('p', find.byType(Image)));
+      expect((image.image as NetworkImage).url, 'https://api.test/media/stories/p?sig=1');
+      expect(inRing('v', find.byIcon(Icons.mic_rounded)), findsOneWidget);
+      expect(inRing('m', find.byIcon(Icons.play_arrow_rounded)), findsOneWidget);
+
+      // The academy's name still reaches a screen reader, with the viewed state.
+      expect(find.bySemanticsLabel('Unviewed story: Jawwid'), findsNWidgets(4));
     });
   });
 
@@ -251,10 +288,10 @@ void main() {
           locale: const Locale('en'),
           overrides: [
             repo(FakeStoryRepository(stories: [
-              story(id: 'first', title: 'First', publishedAt: DateTime.now()),
+              story(id: 'first', body: 'First', publishedAt: DateTime.now()),
               story(
                 id: 'second',
-                title: 'Second',
+                body: 'Second',
                 publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
               ),
             ])),
@@ -264,7 +301,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Second'));
+      await tester.tap(find.byKey(const ValueKey('story-ring-second')));
       await tester.pumpAndSettle();
       expect(tapped, ['second']);
     });
@@ -288,7 +325,7 @@ void main() {
 
   group('refresh', () {
     testWidgets('refetches, and the rail reflects the new answer', (tester) async {
-      final fake = FakeStoryRepository(stories: [story(id: 'a', title: 'Before')]);
+      final fake = FakeStoryRepository(stories: [story(id: 'a', body: 'Before')]);
       late ProviderContainer container;
 
       await tester.pumpWidget(
@@ -315,17 +352,17 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Before'), findsOneWidget);
+      expect(find.byKey(const ValueKey('story-ring-a')), findsOneWidget);
       expect(fake.feedCalls, 1);
 
       // The academy published something else and pulled the first one.
-      fake.setStories([story(id: 'b', title: 'After')]);
+      fake.setStories([story(id: 'b', body: 'After')]);
       await container.read(storiesControllerProvider.notifier).refresh();
       await tester.pumpAndSettle();
 
       expect(fake.feedCalls, 2);
-      expect(find.text('Before'), findsNothing);
-      expect(find.text('After'), findsOneWidget);
+      expect(find.byKey(const ValueKey('story-ring-a')), findsNothing);
+      expect(find.byKey(const ValueKey('story-ring-b')), findsOneWidget);
     });
 
     testWidgets('a refresh that finds nothing collapses the rail again', (tester) async {

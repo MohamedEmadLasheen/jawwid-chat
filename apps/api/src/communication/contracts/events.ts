@@ -55,6 +55,24 @@ export const CommEvent = {
   NOTIFICATION_CREATED: 'notification.created',
   STORY_PUBLISHED: 'story.published',
   STORY_RETIRED: 'story.retired',
+  /**
+   * PD-9: a lesson closed with its outcome -- what Core needs to keep billing,
+   * credits and payroll right. Carries no conversationId on purpose: it is for
+   * Core, never fanned out to a thread.
+   */
+  LESSON_CLOSED: 'lesson.closed',
+  /**
+   * PD-11 T2: what a supervisor did about a teacher-cancelled lesson nobody
+   * replaced -- a family credit or a package extension is Core's to apply.
+   * For Core; no conversationId.
+   */
+  LESSON_MAKEUP_RESOLVED: 'lesson.makeup_resolved',
+  /** PD-11 T3, for Core: a learner changed teacher in Chat. */
+  LEARNER_TRANSFERRED: 'learner.transferred',
+  /** PD-11 T3, for Core: a learner's study paused, resumed or stopped -- Core holds the package. */
+  LEARNER_ENROLLMENT_CHANGED: 'learner.enrollment_changed',
+  /** PD-11 T3, for Core/HR: a teacher bonus was recorded. The amount is payroll's, not Chat's. */
+  TEACHER_BONUS_RECORDED: 'teacher.bonus_recorded',
 } as const;
 
 export type CommEventName = (typeof CommEvent)[keyof typeof CommEvent];
@@ -204,7 +222,8 @@ export interface NotificationCreatedPayload {
 export interface StoryPublishedPayload {
   storyId: string;
   publishedAt: string;
-  expiresAt: string;
+  /** Null: stories published since 2026-10-17 do not expire. */
+  expiresAt: string | null;
   hasMedia: boolean;
   recipientCount: number;
 }
@@ -239,6 +258,52 @@ export interface CommEventPayloads {
   [CommEvent.NOTIFICATION_CREATED]: NotificationCreatedPayload;
   [CommEvent.STORY_PUBLISHED]: StoryPublishedPayload;
   [CommEvent.STORY_RETIRED]: StoryRetiredPayload;
+  [CommEvent.LESSON_CLOSED]: LessonClosedPayload;
+  [CommEvent.LESSON_MAKEUP_RESOLVED]: LessonMakeupResolvedPayload;
+  [CommEvent.LEARNER_TRANSFERRED]: LearnerTransferredPayload;
+  [CommEvent.LEARNER_ENROLLMENT_CHANGED]: LearnerEnrollmentChangedPayload;
+  [CommEvent.TEACHER_BONUS_RECORDED]: TeacherBonusRecordedPayload;
+}
+
+export interface LearnerTransferredPayload {
+  transferId: string;
+  learnerId: string;
+  fromTeacherId: string | null;
+  toTeacherId: string;
+  reasonCode: string;
+}
+
+export interface LearnerEnrollmentChangedPayload {
+  learnerId: string;
+  suspensionId: string;
+  status: 'paused' | 'resumed' | 'left';
+  startsOn: string;
+  returnOn: string | null;
+}
+
+export interface TeacherBonusRecordedPayload {
+  teacherId: string;
+  entryId: string;
+}
+
+export interface LessonMakeupResolvedPayload {
+  lessonId: string;
+  learnerId: string;
+  teacherId: string;
+  action: string;
+  durationMinutes: number;
+}
+
+export interface LessonClosedPayload {
+  lessonId: string;
+  learnerId: string;
+  teacherId: string;
+  kind: string;
+  outcome: string;
+  startsAt: string;
+  endsAt: string;
+  /** True when a ruling changed an outcome Core was already told about. */
+  correction: boolean;
 }
 
 /** Rooms a socket may join. Never a client-supplied raw string. */

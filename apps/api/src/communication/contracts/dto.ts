@@ -3,6 +3,7 @@ import {
   Learner,
   Message,
   MessageAttachment,
+  MessageCard,
   MessageReaction,
   MessageReceipt,
 } from '@prisma/client';
@@ -62,6 +63,8 @@ export interface MessageDto {
   onBehalfMode: string | null;
   type: string;
   body: string | null;
+  /** For `type: 'system'`: the parsed event (`{ kind, ...details }`); otherwise null. */
+  systemEvent: Record<string, unknown> | null;
   visibility: string;
   moderation: string;
   origin: string;
@@ -73,6 +76,18 @@ export interface MessageDto {
   attachments: AttachmentDto[];
   reactions: Array<{ actorId: string; emoji: string }>;
   receipts: Array<{ actorId: string; state: string; deliveredAt: string | null; readAt: string | null }>;
+  /**
+   * PD-11: present only when `type` is `card` -- what a ticket recorded, for the
+   * client to draw as a card. `body` still carries a plain-text rendering, so a
+   * build that predates cards shows a readable message instead of nothing.
+   */
+  card: MessageCardDto | null;
+}
+
+export interface MessageCardDto {
+  kind: string;
+  lessonId: string | null;
+  payload: Record<string, unknown>;
 }
 
 export interface ConversationMemberDto {
@@ -175,6 +190,76 @@ export interface ConversationDto {
    * do not compute it; absent means "not computed here", never zero.
    */
   unreadCount?: number;
+
+  /**
+   * Will THIS viewer's messages be held for approval here? Decided by the same
+   * function that decides a sent message's moderation, so the client never has
+   * to combine the two stored flags (and never tells a parent the teachers'
+   * rule). Optional: computed by the list and detail routes only.
+   */
+  viewerRequiresApproval?: boolean;
+
+  /** The viewer's own pin / archive / mute, as setPreferences stored them. */
+  viewerState?: ConversationViewerStateDto;
+
+  /**
+   * The newest message THIS viewer may see, for a list row; null when there is
+   * none. Chosen by the message page's own visibility rule.
+   */
+  lastMessage?: LastMessageDto | null;
+}
+
+export interface ConversationViewerStateDto {
+  pinned: boolean;
+  archived: boolean;
+  mutedUntil: string | null;
+}
+
+export interface LastMessageDto {
+  seq: string | null;
+  type: string;
+  /** The text of a text message; null for media, system events and deleted messages. */
+  text: string | null;
+  /** For a system message, its event kind (e.g. `group.created`); the client words it. */
+  systemKind: string | null;
+  authorKind: string;
+  authorId: string | null;
+  deleted: boolean;
+  createdAt: string;
+}
+
+/** A list-row preview of a message. Text is capped: a row shows a line, not a page. */
+export function toLastMessageDto(m: Message): LastMessageDto {
+  const deleted = m.deletedForAll;
+  const system = m.type === 'system';
+  return {
+    seq: m.seq?.toString() ?? null,
+    type: m.type,
+    text: !deleted && !system && m.type === 'text' && m.body ? m.body.slice(0, 160) : null,
+    systemKind: system && !deleted ? (parseSystemEvent(m.body)?.kind as string | undefined) ?? null : null,
+    authorKind: m.authorType,
+    authorId: m.authorId,
+    deleted,
+    createdAt: m.createdAt.toISOString(),
+  };
+}
+
+/**
+ * A system message's event. System messages are written only by the server
+ * (ConversationService.systemMessage) as a JSON object with a `kind`; a body
+ * that is not one yields null rather than a guess.
+ */
+export function parseSystemEvent(body: string | null): Record<string, unknown> | null {
+  if (!body) return null;
+  try {
+    const parsed: unknown = JSON.parse(body);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && typeof (parsed as { kind?: unknown }).kind === 'string') {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // not an event
+  }
+  return null;
 }
 
 export function needsReply(
@@ -224,7 +309,12 @@ export interface ResolvedMember {
 export function toConversationDto(
   c: ConversationWithLearner,
   members?: ResolvedMember[],
-  extra?: { unreadCount?: number },
+  extra?: {
+    unreadCount?: number;
+    viewerRequiresApproval?: boolean;
+    viewerState?: ConversationViewerStateDto;
+    lastMessage?: LastMessageDto | null;
+  },
 ): ConversationDto {
   return {
     id: c.id,
@@ -252,6 +342,9 @@ export function toConversationDto(
     // reach a client because somebody widened an include.
     learner: c.learner ? { id: c.learner.id, name: c.learner.name } : undefined,
     unreadCount: extra?.unreadCount,
+    viewerRequiresApproval: extra?.viewerRequiresApproval,
+    viewerState: extra?.viewerState,
+    lastMessage: extra?.lastMessage,
   };
 }
 
@@ -295,6 +388,7 @@ type MessageWithRelations = Message & {
   attachments?: MessageAttachment[];
   reactions?: MessageReaction[];
   receipts?: MessageReceipt[];
+  card?: MessageCard | null;
 };
 
 /**
@@ -324,6 +418,9 @@ export function toMessageDto(
     // A message deleted for everyone keeps its row for auditability, but its
     // body is never served again.
     body: hidden ? null : m.body,
+    // A system message's event, parsed here so a client never has to parse
+    // JSON out of `body` (which stays, unchanged, for clients that already do).
+    systemEvent: !hidden && m.type === 'system' ? parseSystemEvent(m.body) : null,
     visibility: m.visibility,
     moderation: m.moderation,
     origin: m.origin,
@@ -345,6 +442,10 @@ export function toMessageDto(
       deliveredAt: r.deliveredAt?.toISOString() ?? null,
       readAt: r.readAt?.toISOString() ?? null,
     })),
+    card:
+      !hidden && m.card
+        ? { kind: m.card.kind, lessonId: m.card.lessonId, payload: m.card.payload as Record<string, unknown> }
+        : null,
   };
 }
 

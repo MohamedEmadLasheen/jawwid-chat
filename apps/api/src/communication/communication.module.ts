@@ -112,6 +112,7 @@ import { StoryController } from './api/story.controller';
   ],
   exports: [
     ConversationService,
+    OutboxService,
     MessageService,
     ApprovalService,
     CallService,

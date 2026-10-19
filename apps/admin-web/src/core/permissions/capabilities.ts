@@ -27,6 +27,7 @@ export type NavArea =
   | 'dashboard'
   | 'stories'
   | 'organization'
+  | 'teachers'
   | 'settings'
 
 /** Roles that operate the customer relationship. */
@@ -60,11 +61,15 @@ export function isSuperAdmin(role: StaffRole): boolean {
 /** Which nav areas this role may even attempt to open. */
 export function visibleAreas(role: StaffRole): NavArea[] {
   if (isSuperAdmin(role)) {
-    return ['inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'settings']
+    // `teachers` stays routable for the super admin; it is offered as the
+    // Admin Portal's Reports section rather than as an operator area.
+    return ['inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'teachers', 'settings']
   }
   if (isManager(role)) {
     // PD-8: the department's structure -- children's supervisors and backups.
-    return ['chat', 'inbox', 'families', 'organization', 'tasks', 'coverage', 'dashboard', 'stories', 'settings']
+    // PD-11 T5: teacher statistics -- offered only when the server confirms
+    // the Teachers department (see TEACHERS_DEPARTMENT_AREAS).
+    return ['chat', 'inbox', 'families', 'organization', 'teachers', 'tasks', 'coverage', 'dashboard', 'stories', 'settings']
   }
   if (isOperator(role)) {
     // No coverage configuration, no manager dashboard, no config editing.
@@ -75,7 +80,7 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // Chat is first: the conversation workspace on the real conversation API
     // (the same conversations parents and teachers are in). The server decides
     // which ones this admin may open -- staff scope -- not this list.
-    return ['chat', 'inbox', 'families', 'tasks', 'stories']
+    return ['chat', 'inbox', 'families', 'teachers', 'tasks', 'stories']
   }
   if (isDepartment(role)) {
     // Departments get tasks and nothing else — they may not open family records.
@@ -96,9 +101,20 @@ export function canOpenArea(role: StaffRole, area: NavArea): boolean {
  */
 export const UNLISTED_AREAS: ReadonlySet<NavArea> = new Set<NavArea>(['inbox'])
 
+/**
+ * Areas offered only when the server confirms a fact the role alone does not
+ * carry. The Teachers area (statistics, and -- PD-12 -- teacher files,
+ * certificates, leave) belongs to the Teachers department (PD-10), and the
+ * client cannot tell a Teachers supervisor from an Operations one by role, so
+ * ONE probe, `GET /lessons/access`, decides whether the entry is shown.
+ */
+export const TEACHERS_DEPARTMENT_AREAS: ReadonlySet<NavArea> = new Set<NavArea>(['teachers'])
+
 /** What navigation shows: the areas this role may open, minus the unlisted ones. */
-export function navAreas(role: StaffRole): NavArea[] {
-  return visibleAreas(role).filter((area) => !UNLISTED_AREAS.has(area))
+export function navAreas(role: StaffRole, opts: { lessonManager?: boolean } = {}): NavArea[] {
+  return visibleAreas(role).filter(
+    (area) => !UNLISTED_AREAS.has(area) && (opts.lessonManager === true || !TEACHERS_DEPARTMENT_AREAS.has(area)),
+  )
 }
 
 /** Manager-only, per the brief's invariants and AI #5's matrix. */

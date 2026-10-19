@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../design/tokens.dart';
-import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/story.dart';
 import '../application/stories_controller.dart';
+import 'story_backgrounds.dart';
 
 /// The horizontally scrolling stories rail, above the conversation list.
 ///
@@ -37,8 +37,15 @@ import '../application/stories_controller.dart';
 /// The feed carries no author, on purpose: a reader has no business learning which member of
 /// staff wrote an academy publication. Every story a reader sees is from the academy, so
 /// grouping by publisher would produce exactly one ring and throw away the per-story
-/// unviewed state the contract does give us. Each ring is therefore one story, labelled with
-/// its own title, and the avatar carries the academy's initial.
+/// unviewed state the contract does give us. Each ring is therefore one story.
+///
+/// ## A ring shows the story, and nothing under it (owner decision, 2026-10-17)
+///
+/// Like WhatsApp: inside the ring is a preview of the story itself -- the photo for a photo
+/// story, the background and opening words for a text story, the background with a mic or a
+/// play mark for voice and video -- never an initial. There is no caption under the ring:
+/// every ring would have said "Jawwid". The academy's name still reaches a screen reader, in
+/// the ring's semantic label with its viewed state.
 ///
 /// There is no "Your story" entry. This client authenticates only as `parent` or `teacher`
 /// and can never publish, so an entry that opened a composer would be a control that exists
@@ -49,8 +56,11 @@ class StoriesRail extends ConsumerWidget {
   /// Overridable so widget tests can observe navigation without a router.
   final void Function(Story story)? onOpenStory;
 
-  /// Avatar + ring + one line of label, plus the row's own padding.
-  static const railHeight = 106.0;
+  /// The ring plus the row's own padding. No label row since 2026-10-17.
+  static const railHeight = 94.0;
+
+  /// The story preview inside a ring.
+  static const thumbSize = 64.0;
 
   /// Two short lines of text and the same vertical padding. Deliberately well under
   /// [railHeight]: an absence should cost less room than the thing it stands in for.
@@ -91,6 +101,9 @@ class StoriesRail extends ConsumerWidget {
         ),
         itemCount: stories.length,
         itemBuilder: (context, index) => _StoryEntry(
+          // Rings all carry the academy's name now that a story has no title, so the key is
+          // what tells them apart -- for tests, and for Flutter's element reuse on reorder.
+          key: ValueKey('story-ring-${stories[index].id}'),
           story: stories[index],
           publisherName: l10n.appName,
           onTap: () => onOpenStory?.call(stories[index]),
@@ -177,6 +190,7 @@ class _EmptyRail extends StatelessWidget {
 
 class _StoryEntry extends StatelessWidget {
   const _StoryEntry({
+    super.key,
     required this.story,
     required this.publisherName,
     this.onTap,
@@ -189,8 +203,8 @@ class _StoryEntry extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
-    final theme = Theme.of(context);
-    final label = story.title ?? publisherName;
+    // A story has no title (2026-10-17); every ring is the academy's.
+    final label = publisherName;
 
     // Viewed state reaches a screen reader as WORDS. The ring colour alone would be the only
     // indication for a sighted user and no indication at all for anyone else.
@@ -202,40 +216,72 @@ class _StoryEntry extends StatelessWidget {
       button: true,
       label: semanticLabel,
       child: ExcludeSemantics(
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: const BorderRadius.all(Radii.radiusMd),
-          child: SizedBox(
-            width: 76,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _AvatarRing(
-                  viewed: story.isViewed,
-                  child: JawwidAvatar(
-                    displayName: publisherName,
-                    size: Sizes.avatarLg,
-                  ),
-                ),
-                const SizedBox(height: Spacing.spacing2),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    fontWeight: story.isViewed ? FontWeight.w400 : FontWeight.w700,
-                    color: story.isViewed
-                        ? theme.colorScheme.onSurfaceVariant
-                        : theme.colorScheme.onSurface,
-                  ),
-                ),
-              ],
+        child: Padding(
+          padding: const EdgeInsetsDirectional.only(end: Spacing.spacing3),
+          child: InkWell(
+            onTap: onTap,
+            customBorder: const CircleBorder(),
+            child: Center(
+              child: _AvatarRing(
+                viewed: story.isViewed,
+                child: _StoryThumb(story: story, size: StoriesRail.thumbSize),
+              ),
             ),
           ),
         ),
       ),
     );
+  }
+}
+
+/// A preview of the story, the way WhatsApp fills a status ring.
+class _StoryThumb extends StatelessWidget {
+  const _StoryThumb({required this.story, required this.size});
+
+  final Story story;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget onBackground(Widget child, {String? background}) => DecoratedBox(
+          decoration: BoxDecoration(gradient: storyBackground(background ?? story.background)),
+          child: Center(child: child),
+        );
+    Widget mark(IconData icon, {String? background}) => onBackground(
+          Icon(icon, size: size * 0.4, color: StoryPalette.onStory),
+          background: background,
+        );
+
+    final Widget content = switch (story.kind) {
+      StoryKind.image when story.mediaUrl != null => Image.network(
+          story.mediaUrl!,
+          fit: BoxFit.cover,
+          // A lapsed signature or a purged picture: still a ring, never a broken box.
+          errorBuilder: (_, _, _) => mark(Icons.image_outlined, background: 'ink'),
+        ),
+      StoryKind.image => mark(Icons.image_outlined, background: 'ink'),
+      StoryKind.video => mark(Icons.play_arrow_rounded, background: 'ink'),
+      StoryKind.voice => mark(Icons.mic_rounded),
+      StoryKind.text => onBackground(
+          Padding(
+            padding: EdgeInsets.all(size * 0.14),
+            child: Text(
+              story.body ?? '',
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: StoryPalette.onStory,
+                    fontSize: 8,
+                    height: 1.2,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ),
+        ),
+    };
+
+    return ClipOval(child: SizedBox.square(dimension: size, child: content));
   }
 }
 

@@ -58,7 +58,7 @@ class ConversationTile extends StatelessWidget {
     // One semantic string for the whole row, so a screen reader announces it as a unit
     // rather than reading five disconnected fragments.
     final semanticLabel = [
-      conversation.title,
+      conversation.displayTitle(l10n.supervisionChatTitle),
       if (conversation.handledByLabel != null)
         l10n.handledBy(conversation.handledByLabel!),
       if (unread) l10n.unreadCount(conversation.unreadCount),
@@ -88,7 +88,7 @@ class ConversationTile extends StatelessWidget {
                   _ProfileTarget(
                     onOpenProfile: onOpenProfile,
                     child: JawwidAvatar(
-                      displayName: conversation.title,
+                      displayName: conversation.displayTitle(l10n.supervisionChatTitle),
                       imageUrl: conversation.avatarUrl,
                       size: Sizes.avatarLg,
                     ),
@@ -104,7 +104,7 @@ class ConversationTile extends StatelessWidget {
                         _ProfileTarget(
                           onOpenProfile: onOpenProfile,
                           child: ContentText(
-                            conversation.title,
+                            conversation.displayTitle(l10n.supervisionChatTitle),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.titleSmall?.copyWith(
@@ -252,7 +252,7 @@ class _PreviewText extends StatelessWidget {
 
     // Without this, an Arabic sentence in an English UI puts its full stop on the left.
     return ContentText(
-      conversation.lastMessagePreview,
+      previewText(conversation, L10n.of(context)),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: theme.textTheme.bodySmall?.copyWith(
@@ -292,4 +292,28 @@ class _UnreadBadge extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The list row's preview line: the message's text, or -- for a photo, a voice
+/// note, a video, a file, a deleted message or a system event -- a word for it
+/// in the reader's language (the server sends the kind, never wording).
+String previewText(Conversation conversation, L10n l10n) {
+  if (conversation.lastMessagePreview.isNotEmpty) return conversation.lastMessagePreview;
+  final kind = conversation.lastMessageKind;
+  if (kind == null) return '';
+  if (kind.startsWith('system:')) {
+    return switch (kind.substring('system:'.length)) {
+      'group.created' => l10n.systemGroupCreatedNoLearner,
+      'group.archived' => l10n.systemGroupArchived,
+      _ => l10n.systemUpdate,
+    };
+  }
+  return switch (kind) {
+    'image' => l10n.attachmentPhotoLabel,
+    'voice' => l10n.attachmentVoiceLabel,
+    'video' => l10n.attachmentVideoLabel,
+    'file' => l10n.attachmentFileLabel,
+    'deleted' => l10n.messageDeleted,
+    _ => '',
+  };
 }

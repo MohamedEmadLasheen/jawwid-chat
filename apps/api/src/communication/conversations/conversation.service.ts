@@ -1418,6 +1418,18 @@ export class ConversationService {
     });
   }
 
+  /**
+   * The viewer's own pin / archive / mute for these conversations, read back
+   * (setPreferences writes them). THE CALLER AUTHORIZES THE IDS. One query.
+   */
+  async viewerStates(conversationIds: readonly string[], actorId: string) {
+    const rows = await this.prisma.conversationParticipantState.findMany({
+      where: { conversationId: { in: [...conversationIds] }, actorId },
+      select: { conversationId: true, pinnedAt: true, archivedAt: true, mutedUntil: true },
+    });
+    return new Map(rows.map((r) => [r.conversationId, r]));
+  }
+
   /** Archive / mute / pin are per-user; one user's pin never affects another. */
   async setPreferences(
     conversationId: string,

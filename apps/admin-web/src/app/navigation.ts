@@ -67,6 +67,7 @@ export const SECTION_DESTINATION: Record<AdminSectionKey, DestinationKey> = {
   calls: 'calls',
   users: 'people',
   teams: 'people',
+  teachers: 'people',
   stories: 'stories',
   dashboard: 'more',
   notifications: 'more',
@@ -88,6 +89,7 @@ export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   inbox: 'conversations',
   families: 'people',
   organization: 'people',
+  teachers: 'people',
   coverage: 'people',
   stories: 'stories',
   tasks: 'more',
@@ -100,6 +102,7 @@ export const AREA_PATH: Record<OperatorArea, string> = {
   inbox: '/inbox',
   families: '/families',
   organization: '/organization',
+  teachers: '/teachers',
   tasks: '/tasks',
   coverage: '/coverage',
   dashboard: '/dashboard',
@@ -111,6 +114,7 @@ const AREA_ICON: Record<OperatorArea, IconName> = {
   inbox: 'conversations',
   families: 'users',
   organization: 'teams',
+  teachers: 'academy',
   tasks: 'tasks',
   coverage: 'teams',
   dashboard: 'dashboard',
@@ -147,10 +151,10 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
   return out
 }
 
-function operatorDestinations(role: StaffRole): Map<DestinationKey, NavEntryGroup[]> {
+function operatorDestinations(role: StaffRole, lessonManager: boolean): Map<DestinationKey, NavEntryGroup[]> {
   const out = new Map<DestinationKey, NavEntryGroup[]>()
   // navAreas, not visibleAreas: the legacy Inbox stays routable but is never offered.
-  for (const area of navAreas(role)) {
+  for (const area of navAreas(role, { lessonManager })) {
     const dest = AREA_DESTINATION[area]
     if (dest === null || area === 'settings') continue
     const groups = out.get(dest) ?? [{ key: dest, label: null, entries: [] }]
@@ -166,9 +170,12 @@ function operatorDestinations(role: StaffRole): Map<DestinationKey, NavEntryGrou
   return out
 }
 
-/** The destinations this role sees, in rail order; empty ones are left out. */
-export function destinationsFor(role: StaffRole): Destination[] {
-  const byKey = isSuperAdmin(role) ? adminDestinations() : operatorDestinations(role)
+/**
+ * The destinations this role sees, in rail order; empty ones are left out.
+ * `lessonManager` is the server's answer to GET /lessons/access (PD-11 T5).
+ */
+export function destinationsFor(role: StaffRole, opts: { lessonManager?: boolean } = {}): Destination[] {
+  const byKey = isSuperAdmin(role) ? adminDestinations() : operatorDestinations(role, opts.lessonManager === true)
   return DESTINATIONS.filter((d) => byKey.has(d.key)).map((d) => ({ ...d, groups: byKey.get(d.key)! }))
 }
 

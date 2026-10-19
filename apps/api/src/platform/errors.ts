@@ -124,6 +124,16 @@ export enum CommErrorCode {
   /** The authored audience resolves to nobody the author may address. */
   STORY_AUDIENCE_EMPTY = 'COMM.STORY_AUDIENCE_EMPTY',
   STORY_AUDIENCE_INVALID = 'COMM.STORY_AUDIENCE_INVALID',
+  /** The call to action is malformed: an unknown kind, a non-https link, a bad number. */
+  STORY_CTA_INVALID = 'COMM.STORY_CTA_INVALID',
+  /** The story has no call to action, so there is nothing to tap. */
+  STORY_NO_CTA = 'COMM.STORY_NO_CTA',
+  /** A photo, video or voice story carries no words: rule 2, no caption. */
+  STORY_CAPTION_NOT_ALLOWED = 'COMM.STORY_CAPTION_NOT_ALLOWED',
+  /** Family segmentation data (country, plan) is for the super admin and managers. */
+  STORY_AUDIENCE_DATA_DENIED = 'COMM.STORY_AUDIENCE_DATA_DENIED',
+  /** The family named for audience data does not exist in the caller's organization. */
+  STORY_FAMILY_NOT_FOUND = 'COMM.STORY_FAMILY_NOT_FOUND',
 
   // --- Admin Portal ---
   /** Not the super admin. The `/admin` inspection surface is theirs alone. Never retry. */
@@ -167,6 +177,38 @@ export enum CommErrorCode {
   ORG_STRUCTURE_DENIED = 'COMM.ORG_STRUCTURE_DENIED',
   /** PD-8: the requested structure is not lawful (wrong department, ended link, mixed supervisors). 409. */
   ORG_STRUCTURE_INVALID = 'COMM.ORG_STRUCTURE_INVALID',
+  /** PD-11: no such lesson, or none this caller may see. 404. */
+  LESSON_NOT_FOUND = 'COMM.LESSON_NOT_FOUND',
+  /** PD-11: this caller may see the lesson but may not record this on it. 403. */
+  LESSON_DENIED = 'COMM.LESSON_DENIED',
+  /** PD-11: the lesson is not in a state that allows this (already closed, not started, too late). 409. */
+  LESSON_STATE = 'COMM.LESSON_STATE',
+  /** PD-11: the teacher already has a lesson at that time. 409. */
+  LESSON_TEACHER_BUSY = 'COMM.LESSON_TEACHER_BUSY',
+  /** PD-10: this actor may not see, or may not make this change to, a Teacher File. 403. */
+  TEACHER_FILE_DENIED = 'COMM.TEACHER_FILE_DENIED',
+  /** PD-10: no such teacher in the actor's organization. 404, identical for a foreign id. */
+  TEACHER_FILE_NOT_FOUND = 'COMM.TEACHER_FILE_NOT_FOUND',
+  /** PD-10: the timeline refused the entry (already resolved, already recorded, wrong target). 409. */
+  TEACHER_FILE_CONFLICT = 'COMM.TEACHER_FILE_CONFLICT',
+  /** PD-12: no such certificate, or none this caller may see. 404. */
+  CERTIFICATE_NOT_FOUND = 'COMM.CERTIFICATE_NOT_FOUND',
+  /** PD-12: this caller may not request, issue or decline this certificate. 403. */
+  CERTIFICATE_DENIED = 'COMM.CERTIFICATE_DENIED',
+  /** PD-12: the certificate is not in a state that allows this (already decided, no group to deliver into). 409. */
+  CERTIFICATE_STATE = 'COMM.CERTIFICATE_STATE',
+  /** PD-12: no such leave request or teacher, or none this caller may see. 404. */
+  LEAVE_NOT_FOUND = 'COMM.LEAVE_NOT_FOUND',
+  /** PD-12: this caller may not request, decide or cancel this leave, or set this allowance. 403. */
+  LEAVE_DENIED = 'COMM.LEAVE_DENIED',
+  /** PD-12: the leave is not in a state that allows this (decided, overlapping, past, crossing a year). 409. */
+  LEAVE_STATE = 'COMM.LEAVE_STATE',
+  /** PD-12: open lessons fall inside the leave; approve again with cancelCollidingLessons. 409. */
+  LEAVE_LESSONS_COLLIDE = 'COMM.LEAVE_LESSONS_COLLIDE',
+  /** PD-12: this caller may not open this teacher's supervision conversation. 403. */
+  SUPERVISION_DENIED = 'COMM.SUPERVISION_DENIED',
+  /** PD-12: no such active teacher in the caller's organization. 404. */
+  SUPERVISION_NOT_FOUND = 'COMM.SUPERVISION_NOT_FOUND',
 }
 
 export class CommError extends Error {

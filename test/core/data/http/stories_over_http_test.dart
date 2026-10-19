@@ -37,22 +37,30 @@ void main() {
   late TestServer server;
   late ProviderContainer container;
 
+  /// A `StoryFeedItem` as the API sends it since 2026-10-17: a kind, no title, and no
+  /// expiry unless a test gives one.
   Map<String, Object?> feedItem({
     String id = 'story-1',
-    String? title = 'Term starts Sunday',
+    String? kind,
     String? body = 'Classes resume this Sunday.',
+    String? background,
     String? mediaKind,
     String? mediaUrl,
+    int? mediaDurationMs,
+    Map<String, Object?>? cta,
     String publishedAt = '2026-09-29T09:00:00.000Z',
-    String expiresAt = '2099-09-30T09:00:00.000Z',
+    String? expiresAt,
     bool viewed = false,
   }) =>
       {
         'id': id,
-        'title': title,
+        'kind': kind,
         'body': body,
+        'background': background,
         'mediaKind': mediaKind,
         'mediaUrl': mediaUrl,
+        'mediaDurationMs': mediaDurationMs,
+        'cta': cta,
         'publishedAt': publishedAt,
         'expiresAt': expiresAt,
         'viewed': viewed,
@@ -87,7 +95,7 @@ void main() {
     test('the client asks the published path, and maps the published envelope', () async {
       server.on('GET', '/stories/feed', [
         Reply.ok({
-          'stories': [feedItem(id: 'a'), feedItem(id: 'b', title: null, viewed: true)],
+          'stories': [feedItem(id: 'a', kind: 'text', background: 'plum'), feedItem(id: 'b', viewed: true)],
         }),
       ]);
 
@@ -96,8 +104,9 @@ void main() {
       expect(server.requests.single.method, 'GET');
       expect(server.requests.single.path, '/stories/feed');
       expect(stories.map((s) => s.id), ['a', 'b']);
-      expect(stories.first.title, 'Term starts Sunday');
-      expect(stories.last.title, isNull);
+      expect(stories.first.kind, StoryKind.text);
+      expect(stories.first.body, 'Classes resume this Sunday.');
+      expect(stories.first.background, 'plum');
       expect(stories.last.isViewed, isTrue);
     });
 
@@ -148,9 +157,8 @@ void main() {
         Reply.ok({
           'stories': [
             feedItem(id: 'good'),
-            // No expiresAt. The expiry is what the viewer stops at; substituting one would
-            // let a story outstay the server's own answer.
-            {'id': 'no-expiry', 'publishedAt': '2026-09-29T09:00:00.000Z', 'viewed': false},
+            // No publication time: there is no story without one.
+            {'id': 'no-publishedAt', 'viewed': false},
             'not even an object',
           ],
         }),
@@ -160,11 +168,91 @@ void main() {
       expect(stories.map((s) => s.id), ['good']);
     });
 
+    test('a story with NO expiry is kept -- that is every story since 2026-10-17', () async {
+      // Regression: this mapper used to drop a row without expiresAt, which would have made
+      // every new story invisible on the phone the day the server stopped expiring them.
+      server.on('GET', '/stories/feed', [
+        Reply.ok({
+          'stories': [
+            {'id': 'forever', 'kind': 'text', 'body': 'Hi', 'publishedAt': '2026-10-17T09:00:00.000Z', 'expiresAt': null, 'viewed': false},
+            feedItem(id: 'legacy', expiresAt: '2099-09-30T09:00:00.000Z'),
+          ],
+        }),
+      ]);
+
+      final stories = await container.read(storiesControllerProvider.future);
+      expect(stories.map((s) => s.id), ['forever', 'legacy']);
+      expect(stories.first.expiresAt, isNull);
+      expect(stories.first.isExpiredAt(DateTime.utc(2100)), isFalse);
+      expect(stories.last.expiresAt!.toUtc(), DateTime.utc(2099, 9, 30, 9));
+    });
+
+    test('a picture carries no caption, even from an older server that sent one', () async {
+      server.on('GET', '/stories/feed', [
+        Reply.ok({
+          'stories': [
+            feedItem(mediaKind: 'image', mediaUrl: 'https://storage.example/p.png', body: 'old caption'),
+          ],
+        }),
+      ]);
+
+      final stories = await container.read(storiesControllerProvider.future);
+      expect(stories.single.kind, StoryKind.image);
+      expect(stories.single.body, isNull);
+    });
+
+    test('a voice story maps its audio and its duration', () async {
+      server.on('GET', '/stories/feed', [
+        Reply.ok({
+          'stories': [
+            feedItem(
+              kind: 'voice',
+              body: null,
+              background: 'sunset',
+              mediaKind: 'audio',
+              mediaUrl: 'https://api.example/media/stories/x?sig=1',
+              mediaDurationMs: 42000,
+            ),
+          ],
+        }),
+      ]);
+
+      final stories = await container.read(storiesControllerProvider.future);
+      expect(stories.single.kind, StoryKind.voice);
+      expect(stories.single.mediaKind, StoryMediaKind.audio);
+      expect(stories.single.mediaDuration, const Duration(seconds: 42));
+      expect(stories.single.background, 'sunset');
+    });
+
+    test('a button is mapped as sent; one that could only fail is no button', () async {
+      server.on('GET', '/stories/feed', [
+        Reply.ok({
+          'stories': [
+            feedItem(id: 'wa', cta: {'kind': 'whatsapp', 'label': 'Ask us', 'url': 'https://wa.me/971501234567'}),
+            feedItem(id: 'msg', cta: {'kind': 'message_publisher', 'label': null, 'url': null}),
+            feedItem(id: 'http', cta: {'kind': 'link', 'url': 'http://insecure.example'}),
+            feedItem(id: 'odd', cta: {'kind': 'telegram', 'url': 'https://t.me/x'}),
+          ],
+        }),
+      ]);
+
+      final byId = {
+        for (final s in await container.read(storiesControllerProvider.future)) s.id: s,
+      };
+      expect(byId['wa']!.cta!.kind, StoryCtaKind.whatsapp);
+      expect(byId['wa']!.cta!.label, 'Ask us');
+      expect(byId['wa']!.cta!.url, 'https://wa.me/971501234567');
+      expect(byId['msg']!.cta!.kind, StoryCtaKind.messagePublisher);
+      expect(byId['msg']!.cta!.url, isNull);
+      expect(byId['http']!.cta, isNull);
+      expect(byId['odd']!.cta, isNull);
+    });
+
     test('an unknown media kind is ignored rather than guessed', () async {
       server.on('GET', '/stories/feed', [
         Reply.ok({
           'stories': [
-            feedItem(mediaKind: 'audio', mediaUrl: 'https://storage.example/x.m4a'),
+            feedItem(mediaKind: 'hologram', mediaUrl: 'https://storage.example/x.holo'),
           ],
         }),
       ]);
@@ -250,6 +338,55 @@ void main() {
       // key, so a replay would add a request and nothing else.
       final posts = server.requests.where((r) => r.method == 'POST').toList();
       expect(posts, hasLength(1));
+    });
+  });
+
+  group('POST /stories/:id/cta', () {
+    test('posts to the published path once, and returns where to go', () async {
+      server.on('GET', '/stories/feed', [
+        Reply.ok({'stories': [feedItem(id: 'abc', cta: {'kind': 'message_publisher'})]}),
+      ]);
+      server.on('POST', '/stories/abc/cta', [
+        const Reply.ok({'kind': 'message_publisher', 'url': null, 'conversationId': 'conv-9'}),
+      ]);
+
+      await container.read(storiesControllerProvider.future);
+      final result = await container.read(storiesControllerProvider.notifier).tapCta('abc');
+
+      expect(result.error, isNull);
+      expect(result.tap!.conversationId, 'conv-9');
+      final posts = server.requests.where((r) => r.method == 'POST').toList();
+      expect(posts.single.path, '/stories/abc/cta');
+    });
+
+    test('a tap is NOT auto-retried: every tap is a tap, and the failure is reported', () async {
+      server.on('GET', '/stories/feed', [
+        Reply.ok({'stories': [feedItem(id: 'abc', cta: {'kind': 'link', 'url': 'https://x.example'})]}),
+      ]);
+      server.on('POST', '/stories/abc/cta', [
+        const Reply(503, {'error': {'code': 'unavailable'}}),
+        const Reply.ok({'kind': 'link', 'url': 'https://x.example'}),
+      ]);
+
+      await container.read(storiesControllerProvider.future);
+      final result = await container.read(storiesControllerProvider.notifier).tapCta('abc');
+
+      expect(result.tap, isNull);
+      expect(result.error, isNotNull);
+      expect(server.requests.where((r) => r.method == 'POST'), hasLength(1));
+    });
+
+    test('a story that is gone comes back as gone, so the viewer can leave', () async {
+      server.on('GET', '/stories/feed', [
+        Reply.ok({'stories': [feedItem(id: 'abc', cta: {'kind': 'link', 'url': 'https://x.example'})]}),
+      ]);
+      server.on('POST', '/stories/abc/cta', [
+        const Reply(410, {'error': {'code': WireErrors.storyDeleted, 'message': 'this story was removed'}}),
+      ]);
+
+      await container.read(storiesControllerProvider.future);
+      final result = await container.read(storiesControllerProvider.notifier).tapCta('abc');
+      expect(result.error?.code, WireErrors.storyDeleted);
     });
   });
 
