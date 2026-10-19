@@ -77,6 +77,13 @@ export const CommEvent = {
   TEACHER_DEDUCTION_APPLIED: 'teacher.deduction_applied',
   /** PD-12 S2, for Core/HR: a teacher was suspended, temporarily (with dates) or permanently. */
   TEACHER_SUSPENDED: 'teacher.suspended',
+  /**
+   * PD-11 T4, for Core: Sales recorded that a trial's prospect subscribed. Core
+   * creates the subscription and answers with `subscription.created` carrying
+   * `chat_trial_id` = this `trialId`, which confirms the trial in Chat
+   * (docs/integration/core-subscription-confirmation.md). No conversationId.
+   */
+  TRIAL_CONVERTED: 'trial.converted',
 } as const;
 
 export type CommEventName = (typeof CommEvent)[keyof typeof CommEvent];
@@ -269,6 +276,7 @@ export interface CommEventPayloads {
   [CommEvent.TEACHER_BONUS_RECORDED]: TeacherBonusRecordedPayload;
   [CommEvent.TEACHER_DEDUCTION_APPLIED]: TeacherDeductionAppliedPayload;
   [CommEvent.TEACHER_SUSPENDED]: TeacherSuspendedPayload;
+  [CommEvent.TRIAL_CONVERTED]: TrialConvertedPayload;
 }
 
 export interface LearnerTransferredPayload {
@@ -299,6 +307,20 @@ export interface TeacherDeductionAppliedPayload {
   step: 1 | 2;
   /** YYYY-MM, the payroll month it belongs to. */
   month: string;
+}
+
+export interface TrialConvertedPayload {
+  /** The trial lesson's id: Core echoes it back as `chat_trial_id`. */
+  trialId: string;
+  organizationId: string;
+  teacherId: string;
+  /** Core's id for the teacher, when Chat knows it (opaque text). */
+  coreTeacherId: string | null;
+  /** The prospect by display name and level only: no contact detail (BR-2). */
+  prospect: { id: string; displayName: string; level: string | null };
+  trialAt: string;
+  recordedBy: string;
+  recordedAt: string;
 }
 
 export interface TeacherSuspendedPayload {
