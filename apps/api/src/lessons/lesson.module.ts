@@ -9,6 +9,9 @@ import { SchedulingController } from './scheduling.controller';
 import { SupervisionService } from './supervision.service';
 import { StatsController } from './stats.controller';
 import { StatsService } from './stats.service';
+import { TrialController, TrialTicketsController } from './trial.controller';
+import { TrialGroupService } from './trial-group.service';
+import { TrialService } from './trial.service';
 import { SchedulingService } from './scheduling.service';
 
 /**
@@ -22,8 +25,8 @@ import { SchedulingService } from './scheduling.service';
   // SupervisionModule: the teacher's supervision conversation (PD-12), where
   // the bonus and handover cards are posted. It depends on nothing here.
   imports: [CommunicationModule, SupervisionModule],
-  controllers: [StatsController, SchedulingController, LessonController, LifecycleController],
-  providers: [LessonService, SchedulingService, LifecycleService, SupervisionService, StatsService],
-  exports: [LessonService, SchedulingService, LifecycleService, SupervisionService, StatsService],
+  controllers: [StatsController, SchedulingController, LessonController, LifecycleController, TrialController, TrialTicketsController],
+  providers: [LessonService, SchedulingService, LifecycleService, SupervisionService, StatsService, TrialService, TrialGroupService],
+  exports: [LessonService, SchedulingService, LifecycleService, SupervisionService, StatsService, TrialService],
 })
 export class LessonModule {}

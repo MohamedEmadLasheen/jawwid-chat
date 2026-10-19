@@ -21,6 +21,9 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaAuditService } from '@platform/audit.service';
 import { CommError, CommErrorCode } from '@platform/errors';
 import { LessonService } from '../../src/lessons/lesson.service';
+import { SchedulingService } from '../../src/lessons/scheduling.service';
+import { TrialService } from '../../src/lessons/trial.service';
+import { TrialGroupService } from '../../src/lessons/trial-group.service';
 import { SupervisionConversationService } from '../../src/supervision/supervision-conversation.service';
 import { CardPoster } from '../../src/supervision/card-poster';
 import { CertificateService } from '../../src/certificates/certificate.service';
@@ -34,7 +37,10 @@ const lessons = new LessonService(g.prisma, g.authz, g.conversations, g.outbox, 
 const supervision = new SupervisionConversationService(g.prisma, g.authz, g.conversations, g.outbox, audit);
 const cards = new CardPoster(g.conversations, g.outbox, audit);
 const certificates = new CertificateService(g.prisma, g.conversations, supervision, cards, g.storage, audit);
-const leave = new LeaveService(g.prisma, g.conversations, supervision, cards, lessons, audit);
+const scheduling = new SchedulingService(g.prisma, g.authz, g.conversations, lessons, g.outbox, g.config, g.reminders, audit);
+const groups = new TrialGroupService(g.prisma, g.authz, g.conversations, g.outbox, cards, g.config, audit);
+const trials = new TrialService(g.prisma, g.conversations, lessons, scheduling, audit, groups);
+const leave = new LeaveService(g.prisma, g.conversations, supervision, cards, lessons, audit, trials);
 const blobs = new LocalFsBlobStore();
 
 let s: Scenario;
@@ -352,17 +358,29 @@ describe('3. teacher leave', () => {
       startsAt: `${day('03-11')}T08:00:00.000Z`,
       endsAt: `${day('03-11')}T08:30:00.000Z`,
     });
+    // PD-11 T4: a booked trial is the teacher's time too.
+    const prospect = await g.prisma.trialProspect.create({
+      data: { organizationId: (await g.prisma.teacher.findUniqueOrThrow({ where: { id: s.teacherId } })).organizationId, displayName: 'prospect_q', createdBy: tsupId },
+    });
+    const trial = await g.prisma.lesson.create({
+      data: {
+        organizationId: prospect.organizationId, kind: 'trial', prospectId: prospect.id, teacherId: s.teacherId,
+        startsAt: new Date(`${day('03-12')}T08:00:00.000Z`), endsAt: new Date(`${day('03-12')}T08:30:00.000Z`),
+        createdByKind: 'staff', createdBy: tsupId,
+      },
+    });
     const { request } = await leave.request(s.teacherId, { firstDay: day('03-10'), lastDay: day('03-12'), reason: 'r' });
     const listed = (await leave.list(tsupId, { state: 'requested' })).requests[0];
-    expect(listed.collidingLessons?.map((l) => l.id)).toEqual([lesson.id]);
+    expect(listed.collidingLessons?.map((l) => l.id)).toEqual([lesson.id, trial.id]);
 
     expect(await code(leave.approve(tsupId, request.id, {}))).toBe(CommErrorCode.LEAVE_LESSONS_COLLIDE);
     expect((await g.prisma.teacherLeaveRequest.findUniqueOrThrow({ where: { id: request.id } })).state).toBe('requested');
 
     const out = await leave.approve(tsupId, request.id, { cancelCollidingLessons: true });
-    expect(out).toMatchObject({ cancelledLessons: 1, notCancelled: [] });
+    expect(out).toMatchObject({ cancelledLessons: 2, notCancelled: [] });
     const closed = await g.prisma.lesson.findUniqueOrThrow({ where: { id: lesson.id } });
     expect(closed.outcome).toBe('admin_cancelled');
+    expect((await g.prisma.lesson.findUniqueOrThrow({ where: { id: trial.id } })).outcome).toBe('admin_cancelled');
     expect((await cardsIn(groupId)).map((m) => m.card?.kind)).toEqual(['lesson_cancelled']);
   });
 

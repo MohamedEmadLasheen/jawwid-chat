@@ -22,6 +22,7 @@ import {
 import {
   LESSON_INCLUDE,
   LessonService,
+  learnerLesson,
   cancelReminders,
   dateField,
   invalid,
@@ -459,7 +460,7 @@ export class SchedulingService {
             createdBy: actor.actorId,
           },
           include: LESSON_INCLUDE,
-        });
+        }).then(learnerLesson);
         await this.lessons.postCard(
           tx, created, actor, CardKind.LESSON_MAKEUP_BOOKED,
           { ...this.lessons.cardBase(created), makeupFor: lesson.id, missedStartsAt: lesson.startsAt.toISOString() },
@@ -565,11 +566,14 @@ export class SchedulingService {
       take: 500,
     });
     for (const lesson of due) {
-      const parents = await this.prisma.contact.findMany({
-        where: { familyId: lesson.learner.familyId, isActive: true, canMessage: true },
-        select: { id: true },
-      });
-      const locale = lesson.learner.family.language === 'en' ? 'en' : 'ar';
+      // A trial (PD-11 T4) has no family yet: its teacher is still reminded.
+      const parents = lesson.learner
+        ? await this.prisma.contact.findMany({
+            where: { familyId: lesson.learner.familyId, isActive: true, canMessage: true },
+            select: { id: true },
+          })
+        : [];
+      const locale = lesson.learner?.family.language === 'en' ? 'en' : 'ar';
       await this.reminders.scheduleForEvent('lesson_scheduled', {
         subjectId: lesson.id,
         anchorAt: lesson.startsAt,
@@ -577,7 +581,7 @@ export class SchedulingService {
           { actorId: lesson.teacherId, role: 'teacher', locale },
           ...parents.map((p) => ({ actorId: p.id, role: 'parent', locale })),
         ],
-        familyId: lesson.learner.familyId,
+        familyId: lesson.learner?.familyId ?? null,
         skipPast: true,
       });
       await this.prisma.lesson.update({ where: { id: lesson.id }, data: { remindersScheduledAt: new Date() } });
@@ -709,7 +713,8 @@ export class SchedulingService {
        ORDER BY d.weekday, d.start_minute`;
   }
 
-  private async freeSlots(teacherId: string, duration: number): Promise<Date[]> {
+  /** Free start times for one lesson of `duration` (shared with TrialService). */
+  async freeSlots(teacherId: string, duration: number): Promise<Date[]> {
     const lead = Number(await this.config.get('lesson.booking_lead_minutes'));
     const horizon = Number(await this.config.get('lesson.makeup_horizon_days'));
     const step = Number(await this.config.get('lesson.slot_step_minutes'));

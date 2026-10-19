@@ -1384,4 +1384,55 @@ class L10nAr extends L10n {
 
   @override
   String get cardPayrollNote => 'يُحدَّد المبلغ في الرواتب.';
+
+  @override
+  String get trialGroupTitle => 'الحصص التجريبية';
+
+  @override
+  String get trialGroupSubtitle => 'المبيعات · للموظفين فقط';
+
+  @override
+  String get trialTicketsHeader => 'الحصص التجريبية';
+
+  @override
+  String get trialReportTitle => 'تقرير الحصة التجريبية';
+
+  @override
+  String get trialAttended => 'حضر';
+
+  @override
+  String get trialDidNotAttend => 'لم يحضر';
+
+  @override
+  String get trialCovered => 'ما تم في الحصة';
+
+  @override
+  String get trialRating => 'التقييم';
+
+  @override
+  String get trialNote => 'ملاحظة (اختيارية)';
+
+  @override
+  String get cardTrialBookedTitle => 'حُجزت حصة تجريبية';
+
+  @override
+  String get cardTrialCancelledTitle => 'أُلغيت الحصة التجريبية';
+
+  @override
+  String get cardTrialReportTitle => 'تقرير الحصة التجريبية';
+
+  @override
+  String get cardTrialNoShowTitle => 'لم يحضر الحصة التجريبية';
+
+  @override
+  String get cardTrialSubscribedTitle => 'اشترك';
+
+  @override
+  String get cardTrialNotSubscribedTitle => 'لم يشترك';
+
+  @override
+  String get cardTrialLevel => 'المستوى';
+
+  @override
+  String get cardTrialAwaitingCore => 'تُحتسب بعد أن يؤكد Core الاشتراك.';
 }

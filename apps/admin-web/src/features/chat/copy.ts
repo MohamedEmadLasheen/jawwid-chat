@@ -51,6 +51,7 @@ export const chatCopy = {
       class_group: 'مجموعة الفصل',
       family_group: 'مجموعة العائلة',
       teacher_supervision: 'محادثة الإشراف',
+      trial_group: 'مجموعة الحصص التجريبية',
     } as Record<string, string>,
     role: { contact: 'ولي أمر', teacher: 'معلم', staff: 'جوّد', system: 'النظام' } as Record<string, string>,
     system: {
@@ -108,6 +109,7 @@ export const chatCopy = {
       class_group: 'Class Group',
       family_group: 'Family group',
       teacher_supervision: 'Supervision chat',
+      trial_group: 'Trial group',
     } as Record<string, string>,
     role: { contact: 'Parent', teacher: 'Teacher', staff: 'Jawwid', system: 'System' } as Record<string, string>,
     system: {

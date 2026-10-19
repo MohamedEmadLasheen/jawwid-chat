@@ -836,5 +836,22 @@
       }
     }
   },
-  "cardPayrollNote": "The amount is set in payroll."
+  "cardPayrollNote": "The amount is set in payroll.",
+  "trialGroupTitle": "Trial lessons",
+  "trialGroupSubtitle": "Sales · staff only",
+  "trialTicketsHeader": "Trials",
+  "trialReportTitle": "Trial report",
+  "trialAttended": "Attended",
+  "trialDidNotAttend": "Did not attend",
+  "trialCovered": "What was covered",
+  "trialRating": "Rating",
+  "trialNote": "Note (optional)",
+  "cardTrialBookedTitle": "Trial lesson booked",
+  "cardTrialCancelledTitle": "Trial cancelled",
+  "cardTrialReportTitle": "Trial report",
+  "cardTrialNoShowTitle": "Did not attend the trial",
+  "cardTrialSubscribedTitle": "Subscribed",
+  "cardTrialNotSubscribedTitle": "Did not subscribe",
+  "cardTrialLevel": "Level",
+  "cardTrialAwaitingCore": "Counts once Core confirms the subscription."
 }

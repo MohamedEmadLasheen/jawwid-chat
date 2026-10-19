@@ -88,6 +88,7 @@ describe('The navigation registry', () => {
           ...(visibleAreas(role).includes('inbox') ? ['inbox'] : []),
           ...(!lessonManager && visibleAreas(role).includes('teachers') ? ['teachers'] : []),
           ...(!billingReader && visibleAreas(role).includes('instalments') ? ['instalments'] : []),
+          ...(!lessonManager && visibleAreas(role).includes('trials') ? ['trials'] : []),
         ]
         expect(visibleAreas(role).filter((a) => !navAreas(role, { lessonManager, billingReader }).includes(a)), role).toEqual(withheld)
         expect(listed.some((p) => p.startsWith('/admin/')), role).toBe(false)

@@ -70,6 +70,11 @@ final supervisionRepositoryProvider = Provider<SupervisionRepository>((ref) {
   return const NoSupervisionRepository();
 });
 
+/// PD-11 T4. A harmless default too: a build without a trial server offers no trial report.
+final trialRepositoryProvider = Provider<TrialRepository>((ref) {
+  return const NoTrialRepository();
+});
+
 final callRepositoryProvider = Provider<CallRepository>((ref) {
   throw UnimplementedError('callRepositoryProvider must be overridden');
 });

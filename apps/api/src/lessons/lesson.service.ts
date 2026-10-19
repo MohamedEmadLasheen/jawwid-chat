@@ -30,12 +30,31 @@ import { renderCardBody, type CardLanguage } from './lesson-card';
 
 export type Tx = Prisma.TransactionClient;
 
+/**
+ * A LEARNER's lesson -- every lesson but a trial. Trials (kind 'trial', for a
+ * prospect, no learner) are TrialService's: every query here excludes them
+ * (LEARNER_LESSON) and narrows with learnerLesson(), so a learner is always there.
+ */
 export type LessonWithRelations = Lesson & {
+  learnerId: string;
   report: LessonReport | null;
   rulings: LessonRuling[];
   learner: { id: string; name: string; familyId: string };
   teacher: { id: string; name: string };
 };
+
+/** The `where` fragment that keeps trials out of every learner-lesson query. */
+export const LEARNER_LESSON = { kind: { not: 'trial' } } as const;
+
+type LessonRow = Prisma.LessonGetPayload<{ include: typeof LESSON_INCLUDE }>;
+
+/** A row from a LEARNER_LESSON query, typed as what it is. A trial here is answered as unknown. */
+export function learnerLesson(l: LessonRow): LessonWithRelations {
+  if (l.learner === null || l.learnerId === null) {
+    throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'lesson not found');
+  }
+  return l as LessonWithRelations;
+}
 
 /**
  * What a card is about: a lesson, or -- for a regular-time change -- a learner
@@ -123,7 +142,7 @@ export class LessonService {
             createdBy: actor.actorId,
           },
           include: LESSON_INCLUDE,
-        });
+        }).then(learnerLesson);
         await this.audit.audit(tx, {
           actorId: actor.actorId,
           action: 'lesson.scheduled',
@@ -160,6 +179,7 @@ export class LessonService {
     if (query.learnerId !== undefined && !isUuid(query.learnerId)) throw invalid('learnerId: must be a uuid');
 
     const where: Prisma.LessonWhereInput = {
+      ...LEARNER_LESSON,
       organizationId: actor.organizationId,
       startsAt: { gte: from, lt: to },
       ...(query.teacherId ? { teacherId: query.teacherId } : {}),
@@ -191,7 +211,7 @@ export class LessonService {
       take: 1000,
     });
     const escalation = await this.escalationMs();
-    return { lessons: rows.map((l) => this.toDto(l, standing, now, escalation)) };
+    return { lessons: rows.map((l) => this.toDto(learnerLesson(l), standing, now, escalation)) };
   }
 
   async get(actorId: string, lessonId: string) {
@@ -211,11 +231,11 @@ export class LessonService {
     const now = new Date();
     const escalation = await this.escalationMs();
     const open = await this.prisma.lesson.findMany({
-      where: { organizationId: actor.organizationId, outcome: null, endsAt: { lte: now } },
+      where: { ...LEARNER_LESSON, organizationId: actor.organizationId, outcome: null, endsAt: { lte: now } },
       include: LESSON_INCLUDE,
       orderBy: { endsAt: 'asc' },
       take: 500,
-    });
+    }).then((rows) => rows.map(learnerLesson));
     const rulings = await this.prisma.lessonRuling.findMany({
       where: { organizationId: actor.organizationId, decision: null },
       include: { lesson: { include: LESSON_INCLUDE } },
@@ -241,7 +261,7 @@ export class LessonService {
       awaitingClose: lessons.filter((l) => l.phase === 'awaiting_close'),
       rulings: rulings.map((r) => ({
         ...rulingDto(r),
-        lesson: this.toDto(r.lesson as LessonWithRelations, 'manager', now, escalation),
+        lesson: this.toDto(learnerLesson(r.lesson), 'manager', now, escalation),
       })),
       makeupsOverdue: owed.map((l) => this.toDto(l, 'manager', now, escalation)),
       // PD-11 T3: paused learners coming back within the notice window -- the
@@ -283,6 +303,7 @@ export class LessonService {
       SELECT l.id::text AS id
         FROM chat.lesson l
        WHERE l.organization_id = ${organizationId}::uuid
+         AND l.kind <> 'trial'
          AND l.outcome IN ('teacher_apology', 'teacher_no_show')
          AND (${opts.closedDaysAgo ?? null}::int IS NULL OR l.outcome_at <= now() - make_interval(days => ${opts.closedDaysAgo ?? null}::int))
          AND (${opts.since ?? null}::timestamptz IS NULL OR l.starts_at >= ${opts.since ?? null}::timestamptz)
@@ -299,7 +320,7 @@ export class LessonService {
       where: { id: { in: ids.map((r) => r.id) } },
       include: LESSON_INCLUDE,
       orderBy: { outcomeAt: 'asc' },
-    });
+    }).then((rows) => rows.map(learnerLesson));
   }
 
   /**
@@ -325,7 +346,7 @@ export class LessonService {
       },
       include: LESSON_INCLUDE,
       orderBy: { startsAt: 'asc' },
-    });
+    }).then((found) => found.map(learnerLesson));
     const tickets: Array<{
       ticket: LessonAct;
       /** Null for a ticket about the learner rather than one lesson (a regular-time change). */
@@ -815,8 +836,10 @@ export class LessonService {
   /** Load a lesson the actor may see. A lesson they may not see is answered exactly as an unknown one. */
   async load(actor: Actor, lessonId: string): Promise<{ lesson: LessonWithRelations; standing: LessonStanding }> {
     if (!isUuid(lessonId)) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'lesson not found');
-    const lesson = await this.prisma.lesson.findUnique({ where: { id: lessonId }, include: LESSON_INCLUDE });
-    if (!lesson) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'lesson not found');
+    const row = await this.prisma.lesson.findUnique({ where: { id: lessonId }, include: LESSON_INCLUDE });
+    // A trial is TrialService's; here it is answered exactly as an unknown lesson.
+    if (!row || row.kind === LessonKind.TRIAL) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'lesson not found');
+    const lesson = learnerLesson(row);
     const staff = actor.kind === ActorKind.STAFF;
     const standing = this.authz.lessonStanding(actor, this.scopeOf(lesson), {
       teachersDepartment: staff ? await this.isManager(actor) : false,
@@ -842,12 +865,17 @@ export class LessonService {
 
   /** The actor manages or belongs to the organization's Teachers department. */
   async isManager(actor: Actor): Promise<boolean> {
-    if (actor.kind !== ActorKind.STAFF || !actor.organizationId) return false;
+    return this.inDepartment(actor, 'teachers');
+  }
+
+  /** The actor manages or belongs to the organization's `kind` department (PD-8). */
+  async inDepartment(actor: Actor, kind: 'teachers' | 'sales' | 'operations'): Promise<boolean> {
+    if (actor.kind !== ActorKind.STAFF || !actor.organizationId || !actor.isActive) return false;
     const rows = await this.prisma.$queryRaw<Array<{ ok: boolean }>>`
       SELECT EXISTS (
         SELECT 1 FROM chat.department d
          WHERE d.organization_id = ${actor.organizationId}::uuid
-           AND d.kind = 'teachers'
+           AND d.kind = ${kind}
            AND (d.manager_id = ${actor.actorId}::uuid
                 OR EXISTS (SELECT 1 FROM chat.department_member m
                             WHERE m.department_id = d.id AND m.staff_id = ${actor.actorId}::uuid))

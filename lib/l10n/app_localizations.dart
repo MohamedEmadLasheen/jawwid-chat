@@ -2568,6 +2568,108 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'The amount is set in payroll.'**
   String get cardPayrollNote;
+
+  /// No description provided for @trialGroupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Trial lessons'**
+  String get trialGroupTitle;
+
+  /// No description provided for @trialGroupSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales · staff only'**
+  String get trialGroupSubtitle;
+
+  /// No description provided for @trialTicketsHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'Trials'**
+  String get trialTicketsHeader;
+
+  /// No description provided for @trialReportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Trial report'**
+  String get trialReportTitle;
+
+  /// No description provided for @trialAttended.
+  ///
+  /// In en, this message translates to:
+  /// **'Attended'**
+  String get trialAttended;
+
+  /// No description provided for @trialDidNotAttend.
+  ///
+  /// In en, this message translates to:
+  /// **'Did not attend'**
+  String get trialDidNotAttend;
+
+  /// No description provided for @trialCovered.
+  ///
+  /// In en, this message translates to:
+  /// **'What was covered'**
+  String get trialCovered;
+
+  /// No description provided for @trialRating.
+  ///
+  /// In en, this message translates to:
+  /// **'Rating'**
+  String get trialRating;
+
+  /// No description provided for @trialNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get trialNote;
+
+  /// No description provided for @cardTrialBookedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Trial lesson booked'**
+  String get cardTrialBookedTitle;
+
+  /// No description provided for @cardTrialCancelledTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Trial cancelled'**
+  String get cardTrialCancelledTitle;
+
+  /// No description provided for @cardTrialReportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Trial report'**
+  String get cardTrialReportTitle;
+
+  /// No description provided for @cardTrialNoShowTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Did not attend the trial'**
+  String get cardTrialNoShowTitle;
+
+  /// No description provided for @cardTrialSubscribedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscribed'**
+  String get cardTrialSubscribedTitle;
+
+  /// No description provided for @cardTrialNotSubscribedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Did not subscribe'**
+  String get cardTrialNotSubscribedTitle;
+
+  /// No description provided for @cardTrialLevel.
+  ///
+  /// In en, this message translates to:
+  /// **'Level'**
+  String get cardTrialLevel;
+
+  /// No description provided for @cardTrialAwaitingCore.
+  ///
+  /// In en, this message translates to:
+  /// **'Counts once Core confirms the subscription.'**
+  String get cardTrialAwaitingCore;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

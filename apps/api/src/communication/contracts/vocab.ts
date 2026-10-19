@@ -69,6 +69,12 @@ export const ConversationType = {
    * department (chat.conversation.supervised_teacher_id). Never a contact.
    */
   TEACHER_SUPERVISION: 'teacher_supervision',
+  /**
+   * PD-11 T4: one staff-only conversation per teacher with Sales (and the
+   * Teachers department) about their trial lessons
+   * (chat.conversation.trial_teacher_id). Never a contact or a prospect.
+   */
+  TRIAL_GROUP: 'trial_group',
 } as const;
 
 /** Group conversations: BR-1 admin presence, moderation and PD-2 apply. */
@@ -259,7 +265,8 @@ export const SUBSCRIPTION_PLAN_MONTHS = [1, 3, 6, 12] as const;
 // PD-9 / PD-11: lessons. Mirrors the checks of 20261018120000.
 // ---------------------------------------------------------------------------
 
-export const LessonKind = { REGULAR: 'regular', MAKEUP: 'makeup' } as const;
+/** PD-11 T4: `trial` is a lesson for a prospect (no learner), handled by TrialService only. */
+export const LessonKind = { REGULAR: 'regular', MAKEUP: 'makeup', TRIAL: 'trial' } as const;
 export type LessonKind = (typeof LessonKind)[keyof typeof LessonKind];
 
 export const LessonOutcome = {
@@ -305,6 +312,13 @@ export const CardKind = {
   LEAVE_DECLINED: 'leave_declined',
   LEAVE_WITHDRAWN: 'leave_withdrawn',
   LEAVE_CANCELLED: 'leave_cancelled',
+  /** PD-11 T4: posted in the teacher's trial group. */
+  TRIAL_BOOKED: 'trial_booked',
+  TRIAL_CANCELLED: 'trial_cancelled',
+  TRIAL_REPORT: 'trial_report',
+  TRIAL_NO_SHOW: 'trial_no_show',
+  /** Sales' decision. Never carries the not-subscribed reason: the teacher reads this group. */
+  TRIAL_DECISION: 'trial_decision',
   /** PD-12 S2: a confirmed ladder step, in the teacher's supervision conversation. */
   DISCIPLINE_WARNING: 'discipline_warning',
   DISCIPLINE_DEDUCTION: 'discipline_deduction',

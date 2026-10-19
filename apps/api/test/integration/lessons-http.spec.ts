@@ -256,6 +256,51 @@ describe('lesson tickets over HTTP, in a PD-8 family group', () => {
     expect((await http(fam.teacher, 'GET', '/lessons/roster')).status).toBe(403);
   });
 
+  it('T4: Sales books a trial into real free time; the teacher reports it; Sales records the decision', async () => {
+    const sales = m.salesManager.subject;
+    expect((await http(null, 'GET', '/trials')).status).toBe(401);
+    expect((await http(sales, 'GET', '/lessons/access')).json).toMatchObject({ sales: true, lessonManager: false });
+    expect((await http(fam.teacher, 'POST', '/trials/prospects', { displayName: 'x' })).status).toBe(403);
+    const prospect = await http(sales, 'POST', '/trials/prospects', { displayName: 'QA prospect' });
+    expect(prospect.status).toBe(201);
+    const teachers = await http(sales, 'GET', '/trials/teachers');
+    expect((teachers.json.teachers as Array<{ id: string }>).map((t) => t.id)).toContain(fam.child.teacherId);
+    expect((await http(fam.teacher, 'GET', '/trials/teachers')).status).toBe(403);
+    const slots = await http(sales, 'GET', `/trials/slots?teacherId=${fam.child.teacherId}&durationMinutes=30`);
+    expect(slots.status).toBe(200);
+    const booked = await http(sales, 'POST', '/trials', {
+      prospectId: prospect.json.id, teacherId: fam.child.teacherId, startsAt: (slots.json.slots as string[])[2],
+    });
+    expect(booked.status).toBe(201);
+    expect((await http(fam.teacher, 'GET', '/trials')).json.trials).toEqual([expect.objectContaining({ id: booked.json.id })]);
+    expect((await http(fam.siblingTeacher, 'GET', `/trials/${booked.json.id as string}`)).status).toBe(404);
+    // A trial is not a lesson: /lessons/:id does not know it.
+    expect((await http(tsup, 'GET', `/lessons/${booked.json.id as string}`)).status).toBe(404);
+    // Before it starts there is nothing to report; the decision waits for attendance.
+    expect((await http(fam.teacher, 'POST', `/trials/${booked.json.id as string}/attendance`, { attended: true, covered: 'x' })).status).toBe(409);
+    expect((await http(sales, 'POST', `/trials/${booked.json.id as string}/outcome`, { result: 'subscribed' })).status).toBe(409);
+    expect((await http(sales, 'GET', '/trials/new-students')).status).toBe(200);
+    expect((await http(fam.teacher, 'GET', '/trials/new-students')).status).toBe(403);
+
+    // Part 2: the booking's card is in the teacher's trial group, which the
+    // teacher, Sales and the Teachers department read -- and Operations does not.
+    const group = await http(fam.teacher, 'POST', '/trials/my-group');
+    expect(group.status).toBe(201);
+    const gid = group.json.conversationId as string;
+    expect((await http(sales, 'POST', `/trials/teachers/${fam.child.teacherId}/group`)).json.conversationId).toBe(gid);
+    const read = await http(fam.teacher, 'GET', `/conversations/${gid}/messages`);
+    expect(read.status).toBe(200);
+    expect(JSON.stringify(read.json)).toContain('trial_booked');
+    expect((await http(sales, 'GET', `/conversations/${gid}/messages`)).status).toBe(200);
+    expect((await http(tsup, 'GET', `/conversations/${gid}/messages`)).status).toBe(200);
+    expect([403, 404]).toContain((await http(m.operationsManager.subject, 'GET', `/conversations/${gid}/messages`)).status);
+    expect([403, 404]).toContain((await http(fam.siblingTeacher, 'GET', `/conversations/${gid}/messages`)).status);
+    // Nothing has started yet, so "+" offers no trial report.
+    const tickets = await http(fam.teacher, 'GET', `/conversations/${gid}/trial-tickets`);
+    expect(tickets.status).toBe(200);
+    expect(tickets.json.tickets).toEqual([]);
+  });
+
   it('the needs-action queue is the Teachers department\'s; a client cannot send a card', async () => {
     expect((await http(fam.teacher, 'GET', '/lessons/needs-action')).status).toBe(403);
     expect((await http(tsup, 'GET', '/lessons/needs-action')).status).toBe(200);

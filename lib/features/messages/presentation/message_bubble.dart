@@ -13,6 +13,7 @@ import '../../../shared/utils/relative_time.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../../lessons/presentation/lesson_card_view.dart';
 import '../../supervision/presentation/supervision_card_view.dart';
+import '../../trials/presentation/trial_card_view.dart';
 import 'system_message_text.dart';
 import 'voice_message_player.dart';
 
@@ -92,7 +93,9 @@ class MessageBubble extends StatelessWidget {
     final card = message.isDeleted ? null : message.card;
     final cardView = card == null
         ? null
-        : lessonCardView(context, card, foreground) ?? supervisionCardView(context, card, foreground);
+        : lessonCardView(context, card, foreground) ??
+            supervisionCardView(context, card, foreground) ??
+            trialCardView(context, card, foreground);
 
     // A withheld message is visually de-emphasised so its sender can see at a glance that
     // it has not reached anyone yet.

@@ -320,7 +320,8 @@ export interface LessonMakeupResolvedPayload {
 
 export interface LessonClosedPayload {
   lessonId: string;
-  learnerId: string;
+  /** Null for a trial (PD-11 T4), which is for a prospect. */
+  learnerId: string | null;
   teacherId: string;
   kind: string;
   outcome: string;

@@ -48,9 +48,11 @@ function useDestinations(): Destination[] {
   const billing = useInstalmentAccess(operator)
   const lessonManager = access.data?.lessonManager === true
   const billingReader = billing.data?.billingReader === true
+  const sales = access.data?.sales === true
+  const operations = access.data?.operations === true
   return useMemo(
-    () => (staff ? destinationsFor(staff.role, { lessonManager, billingReader }) : []),
-    [staff, lessonManager, billingReader],
+    () => (staff ? destinationsFor(staff.role, { lessonManager, sales, operations, billingReader }) : []),
+    [staff, lessonManager, sales, operations, billingReader],
   )
 }
 

@@ -13,6 +13,8 @@ abstract final class Wire {
   static const conversationFamilyGroup = 'family_group';
   /// PD-11 / PD-12: a teacher's private conversation with the Teachers department.
   static const conversationTeacherSupervision = 'teacher_supervision';
+  /// PD-11 T4: a teacher's staff-only group with Sales about their trial lessons.
+  static const conversationTrialGroup = 'trial_group';
 
   // MemberRole
   static const memberParent = 'parent';
