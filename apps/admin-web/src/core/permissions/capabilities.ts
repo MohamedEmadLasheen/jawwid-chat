@@ -53,8 +53,10 @@ export function isManager(role: StaffRole): boolean {
 /**
  * The organization owner (PD-5). Sees every Admin Portal section, including the
  * ones still in development, plus every legacy screen. Seeing a section is not
- * being allowed to act in it: the API answers each request on its own, and
- * today it gives super_admin read-only inspection and nothing more.
+ * being allowed to act in it: the API answers each request on its own. The
+ * /admin sections are read-only inspection; the Chat workspace is where the
+ * super admin replies, because PD-8 gives it full read+write on every
+ * conversation of its organization (chat.staff_conversation_access).
  */
 export function isSuperAdmin(role: StaffRole): boolean {
   return role === 'super_admin'
@@ -66,7 +68,9 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // `teachers` stays routable for the super admin; it is offered as the
     // Admin Portal's Reports section rather than as an operator area.
     // `instalments` and `trials` likewise: offered as Admin Portal sections.
-    return ['inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'teachers', 'instalments', 'trials', 'settings']
+    // `chat` is the real conversation workspace: offered beside the read-only
+    // Conversations section, so the super admin can reply (PD-8).
+    return ['chat', 'inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'teachers', 'instalments', 'trials', 'settings']
   }
   if (isManager(role)) {
     // PD-8: the department's structure -- children's supervisors and backups.

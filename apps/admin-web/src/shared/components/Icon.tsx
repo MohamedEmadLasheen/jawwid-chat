@@ -255,11 +255,26 @@ const PATHS = {
   chart: <path d="M4 20h16M7 16v-5M12 16V6M17 16v-8" />,
   upload: <path d="M12 16V4M7 9l5-5 5 5M4.5 15v3.5A1.5 1.5 0 0 0 6 20h12a1.5 1.5 0 0 0 1.5-1.5V15" />,
   send: <path d="m4 12 16-8-6 16-2.5-6.5L4 12ZM11.5 13.5 20 4" />,
+  pin: <path d="M9 4h6M10 4v5.5L7 13h10l-3-3.5V4M12 13v7" />,
+  archive: (
+    <>
+      <rect x="3" y="4" width="18" height="4.5" rx="1.25" />
+      <path d="M5 8.5V19a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19V8.5M10 12.5h4" />
+    </>
+  ),
+  reply: <path d="M9.5 6 4 11.5 9.5 17M4 11.5h10a6 6 0 0 1 6 6V19" />,
+  smile: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M8.5 14a4.2 4.2 0 0 0 7 0M9 9.5h.01M15 9.5h.01" />
+    </>
+  ),
+  bellOff: <path d="M6.3 6.3A6 6 0 0 0 6 9c0 6-2.5 7.5-2.5 7.5h13M9 4a6 6 0 0 1 9 5c0 2.5.4 4.2.9 5.4M10 20a2.2 2.2 0 0 0 4 0M3 3l18 18" />,
 } satisfies Record<string, ReactElement>
 
 export type IconName = keyof typeof PATHS
 
-const DIRECTIONAL: ReadonlySet<IconName> = new Set<IconName>(['chevronForward', 'arrowBack', 'signOut'])
+const DIRECTIONAL: ReadonlySet<IconName> = new Set<IconName>(['chevronForward', 'arrowBack', 'signOut', 'send', 'reply'])
 
 export function Icon({
   name,

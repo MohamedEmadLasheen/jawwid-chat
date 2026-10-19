@@ -136,10 +136,10 @@ describe('Admin Portal registry and navigation', () => {
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/teams' })
     const nav = await screen.findByRole('navigation')
 
-    // Five destinations hold all nineteen sections. Below desktop width the
-    // drawer lists every one of them, none behind a toggle. (The desktop
-    // rail's menus are covered in app/Navigation.test.tsx.)
-    expect(within(nav).getAllByRole('link')).toHaveLength(19)
+    // Five destinations hold all nineteen sections plus Chat. Below desktop
+    // width the drawer lists every one of them, none behind a toggle. (The
+    // desktop rail's menus are covered in app/Navigation.test.tsx.)
+    expect(within(nav).getAllByRole('link')).toHaveLength(20)
     const inDevelopment = ADMIN_SECTIONS.filter((s) => s.status === 'in_development').length
     expect(within(nav).getAllByText('In development')).toHaveLength(inDevelopment)
   })
@@ -258,7 +258,7 @@ describe('Conversations', () => {
     expect(screen.queryByText('Family One')).not.toBeInTheDocument()
   })
 
-  it('opens a conversation read-only: messages, and no way to reply', async () => {
+  it('opens a conversation read-only: messages, no composer, and a way to reply in Chat', async () => {
     const id = CONVERSATIONS.conversations[0]!.id
     const fetchMock = routeFetch({
       '/admin/conversations': CONVERSATIONS,
@@ -289,8 +289,10 @@ describe('Conversations', () => {
     expect(screen.getByText('Voice message')).toBeInTheDocument()
     expect(screen.getByText('Awaiting approval')).toBeInTheDocument()
     expect(screen.getByText('This message was deleted.')).toBeInTheDocument()
-    expect(screen.getByText('Read-only. Replying is not available to this account.')).toBeInTheDocument()
+    expect(screen.getByText('This view is read-only.')).toBeInTheDocument()
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    // PD-8: the reply happens in the Chat workspace, on the same conversation.
+    expect(screen.getByRole('link', { name: 'Reply in Chat' })).toHaveAttribute('href', `/chat/${id}`)
     expect(fetchMock.mock.calls.every(([, init]) => !init || !init.method || init.method === 'GET')).toBe(true)
   })
 

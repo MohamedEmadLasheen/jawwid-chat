@@ -78,7 +78,8 @@ afterEach(() => {
 })
 
 async function openDialog() {
-  await userEvent.click(await screen.findByRole('button', { name: 'New family group' }))
+  await userEvent.click(await screen.findByRole('button', { name: 'New chat or group' }))
+  await userEvent.click(await screen.findByRole('menuitem', { name: 'New family group' }))
   const dialog = await screen.findByRole('dialog')
   await userEvent.selectOptions(await within(dialog).findByRole('combobox', { name: 'Family' }), 'f-1')
   return dialog
@@ -134,6 +135,6 @@ describe('creating a family group', () => {
   it('department staff are not offered the action', async () => {
     render('finance')
     await screen.findByText(/No conversations/)
-    expect(screen.queryByRole('button', { name: 'New family group' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'New chat or group' })).not.toBeInTheDocument()
   })
 })

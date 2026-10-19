@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../design/tokens.dart';
+import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/message.dart';
 import '../../../shared/models/user_role.dart';
@@ -28,6 +29,7 @@ class MessageBubble extends StatelessWidget {
     super.key,
     required this.message,
     required this.showAuthor,
+    this.reserveSenderColumn = false,
     this.replyTo,
     this.onRetry,
     this.onDiscard,
@@ -40,8 +42,14 @@ class MessageBubble extends StatelessWidget {
 
   final Message message;
 
-  /// Group conversations show the sender above the first bubble in a run.
+  /// The first bubble of a run from someone else, where several people speak:
+  /// their picture beside it and their name, in their colour, at its top --
+  /// WhatsApp's group layout.
   final bool showAuthor;
+
+  /// Keeps the picture's column on the later bubbles of that run, so they line
+  /// up under the first. Set on every bubble from someone else in such a chat.
+  final bool reserveSenderColumn;
 
   /// The quote to render above this bubble, already resolved.
   ///
@@ -116,9 +124,9 @@ class MessageBubble extends StatelessWidget {
         .where((a) => a.kind == MessageKind.file || a.kind == MessageKind.video)
         .toList(growable: false);
 
-    return Align(
-      alignment: mine ? AlignmentDirectional.centerEnd : AlignmentDirectional.centerStart,
-      child: ConstrainedBox(
+    final senderColumn = reserveSenderColumn && !mine;
+
+    final bubble = ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth:
               MediaQuery.sizeOf(context).width * Sizes.maxBubbleWidthFraction,
@@ -145,8 +153,11 @@ class MessageBubble extends StatelessWidget {
                       padding: const EdgeInsets.only(bottom: Spacing.spacing1),
                       child: ContentText(
                         _authorLabel(message, l10n),
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.primary,
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: senderColor(
+                            message.authorId ?? message.authorName,
+                            theme.brightness,
+                          ),
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -223,7 +234,34 @@ class MessageBubble extends StatelessWidget {
             ],
           ),
         ),
-      ),
+      );
+
+    return Align(
+      alignment: mine ? AlignmentDirectional.centerEnd : AlignmentDirectional.centerStart,
+      child: !senderColumn
+          ? bubble
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(
+                    start: Spacing.spacing3,
+                    top: Spacing.spacing1,
+                  ),
+                  child: showAuthor
+                      ? Semantics(
+                          excludeSemantics: true,
+                          child: JawwidAvatar(
+                            displayName: _authorLabel(message, l10n),
+                            size: senderAvatarSize,
+                          ),
+                        )
+                      : const SizedBox(width: senderAvatarSize),
+                ),
+                Flexible(child: bubble),
+              ],
+            ),
     );
   }
 
@@ -268,10 +306,18 @@ class MessageBubble extends StatelessWidget {
     return AnimatedContainer(
       duration: Motion.respecting(context, Motion.motionSlow),
       curve: Motion.easingStandard,
-      margin: const EdgeInsets.symmetric(
-        horizontal: Spacing.spacing4,
-        vertical: Spacing.spacing1,
-      ),
+      // Beside a sender's picture the bubble sits close to it, as in WhatsApp.
+      margin: reserveSenderColumn && !mine
+          ? const EdgeInsetsDirectional.only(
+              start: Spacing.spacing2,
+              end: Spacing.spacing4,
+              top: Spacing.spacing1,
+              bottom: Spacing.spacing1,
+            )
+          : const EdgeInsets.symmetric(
+              horizontal: Spacing.spacing4,
+              vertical: Spacing.spacing1,
+            ),
       padding: const EdgeInsets.symmetric(
         horizontal: Spacing.spacing4,
         vertical: Spacing.spacing3,
@@ -302,6 +348,22 @@ class MessageBubble extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The sender's picture in a group, beside the first bubble of their run.
+const double senderAvatarSize = 36;
+
+/// One of eight name colours, stable per sender, as WhatsApp colours names in a
+/// group. Each is at least 4.5:1 on the incoming bubble in its theme -- the
+/// same eight as Admin Web's chat, so a person reads the same everywhere.
+Color senderColor(String seed, Brightness brightness) {
+  var h = 0;
+  for (final unit in seed.codeUnits) {
+    h = (h * 31 + unit) & 0x7fffffff;
+  }
+  final palette =
+      brightness == Brightness.dark ? SenderNameColors.dark : SenderNameColors.light;
+  return palette[h % palette.length];
 }
 
 /// `radius.lg` on three corners, `radius.bubbleTail` on the one nearest the author.

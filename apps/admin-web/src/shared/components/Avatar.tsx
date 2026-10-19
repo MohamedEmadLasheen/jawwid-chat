@@ -1,8 +1,11 @@
+import { useState } from 'react'
+
 /**
- * Generated initials. There is no photo storage behind any principal, so an
- * avatar is always initials -- never a placeholder silhouette that suggests a
- * photo is missing. The tone is a stable hash of the id, so the same person
- * keeps the same colour across screens.
+ * A person's picture: their photo when the server supplies one (`src`, a
+ * signed URL), otherwise generated initials -- never a placeholder silhouette
+ * that suggests a photo is missing. A photo that fails to load falls back to
+ * the initials. The tone is a stable hash of the id, so the same person keeps
+ * the same colour across screens.
  */
 const TONES = 5
 
@@ -23,15 +26,21 @@ export function Avatar({
   name,
   seed,
   size = 'md',
+  src,
 }: {
   name: string
   seed?: string
   size?: 'sm' | 'md' | 'lg'
+  src?: string | null
 }) {
+  const [failed, setFailed] = useState<string | null>(null)
   const sizeClass = size === 'md' ? '' : ` avatar--${size}`
+  const photo = src && failed !== src ? src : null
+  // A malformed or partial record must not take the page down with it.
+  const label = typeof name === 'string' ? name : ''
   return (
-    <span className={`avatar avatar--t${toneFor(seed ?? name)}${sizeClass}`} aria-hidden="true">
-      {initials(name)}
+    <span className={`avatar avatar--t${toneFor(seed || label)}${sizeClass}${photo ? ' avatar--photo' : ''}`} aria-hidden="true">
+      {photo ? <img src={photo} alt="" loading="lazy" onError={() => setFailed(photo)} /> : initials(label)}
     </span>
   )
 }

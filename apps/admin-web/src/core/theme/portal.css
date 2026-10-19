@@ -597,6 +597,7 @@
   text-align: center;
 }
 .thread-readonly__bar .icon { color: var(--text-subtle); }
+.thread-readonly__reply { margin-inline-start: var(--space-2); }
 
 /* Details panel */
 .workspace__panel {

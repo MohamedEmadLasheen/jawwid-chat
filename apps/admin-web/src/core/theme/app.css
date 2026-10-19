@@ -405,6 +405,8 @@
 }
 .avatar--sm { inline-size: 28px; block-size: 28px; font-size: var(--fs-xs); }
 .avatar--lg { inline-size: 48px; block-size: 48px; font-size: var(--fs-lg); }
+.avatar--photo { overflow: hidden; background: var(--surface-sunken); }
+.avatar--photo img { inline-size: 100%; block-size: 100%; object-fit: cover; display: block; }
 .avatar--t1 { --avatar-bg: var(--brand-50); --avatar-fg: var(--text-link); }
 .avatar--t2 { --avatar-bg: var(--gold-50); --avatar-fg: var(--gold-700); }
 .avatar--t3 { --avatar-bg: var(--ok-soft); --avatar-fg: var(--ok); }
