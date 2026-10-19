@@ -14,6 +14,11 @@ import { NewFamilyGroupDialog } from './NewFamilyGroupDialog'
 import { isOperator } from '@/core/permissions/capabilities'
 import { VoiceNotePlayer, VoiceRecorder } from './VoiceRecorder'
 import { ConversationCallControls } from '@/features/calls/ConversationCallControls'
+import {
+  SCHEDULED_CALL_CARD_KINDS,
+  ScheduledCallCard,
+  readScheduledCallCard,
+} from '@/features/calls-page/ScheduledCallCard'
 
 function useCopy(): ChatCopy {
   const { locale } = useI18n()
@@ -140,6 +145,12 @@ function MessageView({
     : 'contact'
   const author = message.authorId === selfId ? null : message.authorDisplayName
   const role = copy.role[message.authorKind] ?? message.authorKind
+  // PD-13: a scheduled-call card is drawn with its Join button; any other card
+  // (or one this client cannot read) keeps showing its plain-text body.
+  const callCard =
+    !message.deletedForAll && message.type === 'card' && message.card && SCHEDULED_CALL_CARD_KINDS.has(message.card.kind)
+      ? readScheduledCallCard(message.card.payload)
+      : null
 
   return (
     <article className={`msg msg--${kind}`} data-seq={message.seq ?? undefined}>
@@ -151,6 +162,8 @@ function MessageView({
       <div className="msg__bubble">
         {message.deletedForAll ? (
           <em>{copy.deleted}</em>
+        ) : callCard && message.card && message.conversationId ? (
+          <ScheduledCallCard cardKind={message.card.kind} card={callCard} conversationId={message.conversationId} />
         ) : kind === 'system' ? (
           systemText(message.body, copy)
         ) : (

@@ -122,13 +122,13 @@ describe('Admin Portal registry and navigation', () => {
     expect(ADMIN_GROUPS.flatMap((g) => sectionsInGroup(g.key))).toHaveLength(19)
     // Only the sections with a real endpoint claim to be built: five read-only
     // views -- Reports is the PD-11 teacher statistics (2026-10-19), Instalments
-    // reads Jawwid Core's invoices (PD-12 S3) -- and three
-    // whose controls act: Organization (PD-8) and Stories (2026-10-17: the
-    // super admin publishes).
+    // reads Jawwid Core's invoices (PD-12 S3) -- and four
+    // whose controls act: Organization (PD-8), Stories (2026-10-17: the
+    // super admin publishes) and Calls (PD-13: start, schedule, join).
     expect(ADMIN_SECTIONS.filter((s) => s.status === 'read_only').map((s) => s.key).sort()).toEqual(
       ['conversations', 'dashboard', 'instalments', 'reports', 'users'],
     )
-    expect(ADMIN_SECTIONS.filter((s) => s.status === 'managed').map((s) => s.key).sort()).toEqual(['stories', 'teachers', 'teams'])
+    expect(ADMIN_SECTIONS.filter((s) => s.status === 'managed').map((s) => s.key).sort()).toEqual(['calls', 'stories', 'teachers', 'teams'])
   })
 
   it('every section is reachable from the navigation, and the unbuilt ones are marked', async () => {

@@ -12,6 +12,8 @@ import '../../../core/data/repositories.dart';
 import '../../../core/data/wire/wire_vocab.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/realtime/call_event.dart';
+import '../data/scheduled_call_repository.dart';
+import '../domain/scheduled_call.dart';
 import 'call_media_providers.dart';
 import 'call_session.dart';
 
@@ -339,6 +341,134 @@ class CallController extends Notifier<CallUiState> {
       if (!_alive) return;
       state = state.copyWith(phase: CallUiPhase.failed, failure: _classify(error));
     }
+  }
+
+  /// Join a scheduled call or a call link (PD-13). ADDITIVE: it enters the call
+  /// through the same two states the existing paths reach, and changes neither.
+  ///
+  /// `POST /scheduled-calls/:id/join` runs FIRST, while nothing is on screen, so
+  /// a refusal (not open yet, cancelled, a parent on a group call nobody has
+  /// started) is returned for the caller to explain in words instead of putting
+  /// up a call screen that can only say "not available". Then:
+  ///
+  /// * `started` -- this member placed the call. The state is exactly the one
+  ///   [start] reaches after `POST /calls` succeeds: outgoing, ringing, with the
+  ///   server's call id. `call.accepted` joins the media as it does for [start].
+  /// * `joined` -- a call is live and this member has a seat. If this device is
+  ///   already ringing for that call, it is simply [accept]ed. Otherwise the same
+  ///   accept -> token -> media path an incoming answer takes: `POST
+  ///   /calls/:id/accept`, then [_joinMedia] (which fetches the token).
+  ///
+  /// NO PHANTOM CALLS. While this device is ringing for a call in a DIFFERENT
+  /// conversation, the server is not asked at all: a Join could START a second
+  /// call that rings everyone else while this device is busy ignoring it. So
+  /// [conversationId] -- the scheduled call's own conversation -- is required,
+  /// and only a ring in that same conversation lets the Join through.
+  ///
+  /// The server decides every step; this decides nothing.
+  Future<ScheduledJoinResult> joinScheduled({
+    required String scheduledCallId,
+    required String conversationId,
+    required String peerLabel,
+    required bool isGroup,
+  }) async {
+    final calls = _calls;
+    ScheduledCallRepository? scheduled;
+    try {
+      scheduled = ref.read(scheduledCallRepositoryProvider);
+    } catch (_) {
+      scheduled = null;
+    }
+    if (calls == null || scheduled == null) return ScheduledJoinResult.unavailable;
+    // A ringing incoming call IN THIS CONVERSATION may be the very call being
+    // joined. A ring anywhere else, or anything else that may still exist on
+    // the server, is never interrupted -- and the server is not even asked.
+    final ringingHere = state.phase == CallUiPhase.incomingRinging &&
+        state.conversationId == conversationId;
+    if (state.isPresent && !_isOver && !ringingHere) {
+      return ScheduledJoinResult.busy;
+    }
+
+    final ScheduledJoin join;
+    try {
+      join = await scheduled.join(scheduledCallId);
+    } catch (error) {
+      return _classifyScheduledJoin(error);
+    }
+    if (!_alive) return ScheduledJoinResult.unavailable;
+
+    final ringingForIt =
+        state.phase == CallUiPhase.incomingRinging && state.callId == join.callId;
+
+    switch (join.mode) {
+      case ScheduledJoinMode.started:
+        if (state.isPresent && !_isOver) {
+          // Something rang while the request was in flight. The call this member
+          // just started is ringing nobody's screen here, so it is hung up rather
+          // than left ringing the others.
+          unawaited(calls.end(callId: join.callId).catchError((Object _) {}));
+          return ScheduledJoinResult.busy;
+        }
+        if (state.isPresent) await _teardownMedia();
+        if (!_alive) return ScheduledJoinResult.unavailable;
+        state = CallUiState(
+          phase: CallUiPhase.outgoingRinging,
+          direction: CallDirection.outgoing,
+          callId: join.callId,
+          conversationId: join.conversationId,
+          peerLabel: peerLabel,
+          isGroup: isGroup,
+          canSwitchSpeaker: _audio?.canSwitch ?? false,
+          speakerPreferred: _audio?.speakerPreferred ?? false,
+        );
+        return ScheduledJoinResult.joined;
+
+      case ScheduledJoinMode.joined:
+        if (ringingForIt) {
+          await accept();
+          return ScheduledJoinResult.joined;
+        }
+        if (state.isPresent && !_isOver) return ScheduledJoinResult.busy;
+        if (state.isPresent) await _teardownMedia();
+        if (!_alive) return ScheduledJoinResult.unavailable;
+        state = CallUiState(
+          phase: CallUiPhase.connecting,
+          direction: CallDirection.incoming,
+          callId: join.callId,
+          conversationId: join.conversationId,
+          peerLabel: peerLabel,
+          isGroup: isGroup,
+          canSwitchSpeaker: _audio?.canSwitch ?? false,
+          speakerPreferred: _audio?.speakerPreferred ?? false,
+        );
+        try {
+          await calls.accept(callId: join.callId);
+        } catch (error) {
+          if (!_alive) return ScheduledJoinResult.unavailable;
+          state = state.copyWith(phase: CallUiPhase.failed, failure: _classify(error));
+          return ScheduledJoinResult.joined;
+        }
+        if (!_alive || state.phase != CallUiPhase.connecting) {
+          return ScheduledJoinResult.joined;
+        }
+        await _joinMedia(join.callId);
+        return ScheduledJoinResult.joined;
+    }
+  }
+
+  ScheduledJoinResult _classifyScheduledJoin(Object error) {
+    if (error is! AppError) return ScheduledJoinResult.network;
+    switch (error.code) {
+      case ScheduledCallCodes.notJoinable:
+        return ScheduledJoinResult.notJoinable;
+      case ScheduledCallCodes.parentCannotStartGroupCall:
+        return ScheduledJoinResult.waitingForHost;
+      case ScheduledCallCodes.notFound:
+        return ScheduledJoinResult.notAllowed;
+    }
+    return _classify(error) == CallUiFailure.network
+        ? ScheduledJoinResult.network
+        : ScheduledJoinResult.notAllowed;
   }
 
   // ---------------------------------------------------------------- incoming

@@ -223,6 +223,12 @@ export enum CommErrorCode {
   BILLING_NOT_FOUND = 'COMM.BILLING_NOT_FOUND',
   /** PD-12 S3: Jawwid Core's invoice API did not answer, or answered something unusable. 502. */
   BILLING_CORE_UNAVAILABLE = 'COMM.BILLING_CORE_UNAVAILABLE',
+  /** PD-13: no such scheduled call, or none in a conversation this caller may read. 404. */
+  SCHEDULED_CALL_NOT_FOUND = 'COMM.SCHEDULED_CALL_NOT_FOUND',
+  /** PD-13: only someone who may start a call in the conversation schedules one there; only its creator cancels it. 403. */
+  SCHEDULED_CALL_DENIED = 'COMM.SCHEDULED_CALL_DENIED',
+  /** PD-13: cancelled, not yet open (more than 10 minutes early), or over (2 hours after its start). 409. */
+  SCHEDULED_CALL_NOT_JOINABLE = 'COMM.SCHEDULED_CALL_NOT_JOINABLE',
 }
 
 export class CommError extends Error {

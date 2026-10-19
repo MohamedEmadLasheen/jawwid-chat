@@ -1454,4 +1454,156 @@ class L10nEn extends L10n {
   @override
   String get cardTrialAwaitingCore =>
       'Counts once Core confirms the subscription.';
+
+  @override
+  String get callsSearchHint => 'Search by name';
+
+  @override
+  String get callActionStart => 'Start call';
+
+  @override
+  String get callActionNewLink => 'New call link';
+
+  @override
+  String get callActionSelectMember => 'Select a member';
+
+  @override
+  String get callActionSchedule => 'Schedule call';
+
+  @override
+  String get callsSectionUpcoming => 'Upcoming';
+
+  @override
+  String get callsSectionFavorites => 'Favourites';
+
+  @override
+  String get callsSectionRecent => 'Recent';
+
+  @override
+  String get callsUpcomingEmpty => 'No scheduled calls';
+
+  @override
+  String get callsUpcomingError => 'Upcoming calls could not be loaded.';
+
+  @override
+  String get callsFavoritesEmpty =>
+      'Add a chat to your favourites to call it from here.';
+
+  @override
+  String get callsSearchNoMatch => 'Nothing matched your search';
+
+  @override
+  String get callsUnnamed => 'Unnamed chat';
+
+  @override
+  String get callBack => 'Call back';
+
+  @override
+  String get callDirectionOutgoing => 'Outgoing';
+
+  @override
+  String get callDirectionIncoming => 'Incoming';
+
+  @override
+  String callWhen(String day, String time) {
+    return '$day, $time';
+  }
+
+  @override
+  String get callPickerPeople => 'People';
+
+  @override
+  String get callPickerGroups => 'Groups';
+
+  @override
+  String get callPickerEmpty => 'There are no chats to choose from.';
+
+  @override
+  String get callPickerNoMatch => 'No chats match your search';
+
+  @override
+  String get callRefusedParentGroup =>
+      'Only staff or the teacher can start a group call';
+
+  @override
+  String get callRefusedGeneric => 'Calls are not available in this chat';
+
+  @override
+  String get scheduledCallDefaultTitle => 'Scheduled call';
+
+  @override
+  String get scheduledCallLinkLabel => 'Call link';
+
+  @override
+  String get scheduledCallStateOpen => 'Open now';
+
+  @override
+  String get scheduledCallStateUpcoming => 'Scheduled';
+
+  @override
+  String get scheduledCallJoin => 'Join';
+
+  @override
+  String get scheduledCallCancel => 'Cancel call';
+
+  @override
+  String get scheduledCallCancelConfirmTitle => 'Cancel this call?';
+
+  @override
+  String get scheduledCallCancelConfirmBody =>
+      'Everyone in the chat will see that it was cancelled.';
+
+  @override
+  String get scheduledCallKeep => 'Keep';
+
+  @override
+  String get scheduledCallCancelled => 'Call cancelled';
+
+  @override
+  String scheduledCallBy(String name) {
+    return 'By $name';
+  }
+
+  @override
+  String get scheduledCallJoinHint =>
+      'You can join from 10 minutes before the start.';
+
+  @override
+  String get scheduledJoinNotJoinable =>
+      'This call is not open to join right now';
+
+  @override
+  String get scheduledJoinWaitingForHost =>
+      'The call starts when staff or the teacher join';
+
+  @override
+  String get scheduledJoinBusy => 'Finish your current call first';
+
+  @override
+  String get callScheduleDate => 'Date';
+
+  @override
+  String get callScheduleTime => 'Time';
+
+  @override
+  String get callScheduleTitleLabel => 'Title (optional)';
+
+  @override
+  String get callScheduleInPast => 'Choose a time in the future';
+
+  @override
+  String callSchedulePosted(String chat) {
+    return 'Scheduled — posted in $chat';
+  }
+
+  @override
+  String callLinkPosted(String chat) {
+    return 'Call link posted in $chat';
+  }
+
+  @override
+  String get callLinkJoinNow => 'Join now';
+
+  @override
+  String get callLinkOpenChat => 'Open chat';
 }

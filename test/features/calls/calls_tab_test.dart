@@ -177,6 +177,29 @@ void main() {
     expect(find.textContaining('COMM.'), findsNothing);
   });
 
+  testWidgets('PD-13: the actions are on the page, and an unwired build says so when tapped',
+      (tester) async {
+    await tester.pumpWidget(harness(history: RecordingHistory()));
+    await tester.pumpAndSettle();
+    final l10n = await L10n.delegate.load(const Locale('en'));
+
+    for (final label in [
+      l10n.callActionStart,
+      l10n.callActionNewLink,
+      l10n.callActionSelectMember,
+      l10n.callActionSchedule,
+      l10n.callsSectionRecent,
+    ]) {
+      expect(find.text(label), findsOneWidget, reason: label);
+    }
+    // No scheduled-call repository in this container: Upcoming is absent, not empty.
+    expect(find.text(l10n.callsSectionUpcoming), findsNothing);
+
+    await tester.tap(find.text(l10n.callActionStart));
+    await tester.pumpAndSettle();
+    expect(find.text(l10n.callsUnavailableTitle), findsOneWidget);
+  });
+
   testWidgets('nothing technical reaches the screen', (tester) async {
     await tester.pumpWidget(
       harness(history: RecordingHistory(result: Page(items: [entry()]))),

@@ -139,6 +139,9 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.BILLING_DENIED` | 403 | Instalments are read only by Operations supervisors (their families), the Operations Manager and the super admin; a billing supervisor is set only by the latter two. Never retry. |
 | `COMM.BILLING_NOT_FOUND` | 404 | No such family in the caller's organization, or one this caller does not reach. |
 | `COMM.BILLING_CORE_UNAVAILABLE` | 502 | Jawwid Core's invoice API did not answer or answered something unusable. Retry later; never show it as "nothing due". |
+| `COMM.SCHEDULED_CALL_NOT_FOUND` | 404 | PD-13: no such scheduled call or call link, or one in a conversation the caller cannot read. Indistinguishable on purpose. |
+| `COMM.SCHEDULED_CALL_DENIED` | 403 | PD-13: only the person who scheduled a call cancels it. (Scheduling itself answers with the call-capability refusal, e.g. `COMM.PARENT_CANNOT_START_GROUP_CALL`.) Never retry. |
+| `COMM.SCHEDULED_CALL_NOT_JOINABLE` | 409 | PD-13: cancelled, not open yet (more than 10 minutes before its start), or over (2 hours after it). Show the state; do not retry automatically. |
 
 Issuing a certificate answers `COMM.ATTACHMENT_NOT_IN_CONVERSATION` (403) for a
 file that was not uploaded into the learner's group, and

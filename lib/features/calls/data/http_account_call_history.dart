@@ -1,4 +1,5 @@
-import '../../../core/data/repositories.dart' show CallHistoryEntry, CallOutcome, Page;
+import '../../../core/data/repositories.dart'
+    show CallHistoryDirection, CallHistoryEntry, CallOutcome, Page;
 import '../../../core/data/wire/wire_vocab.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/network/api_client.dart';
@@ -108,7 +109,19 @@ class HttpAccountCallHistory implements AccountCallHistoryRepository {
       outcome: outcome,
       isGroup: row['type'] == Wire.callTypeGroup,
       duration: seconds is int ? Duration(seconds: seconds) : null,
+      direction: _direction(row),
     );
+  }
+
+  /// Outgoing when the viewer placed the call, incoming when somebody else did.
+  ///
+  /// Null when the row names no initiator or no session is signed in: an arrow
+  /// pointing the wrong way is worse than none.
+  CallHistoryDirection? _direction(Map<dynamic, dynamic> row) {
+    final initiator = row['initiatorId'];
+    final me = _viewerActorId();
+    if (initiator is! String || initiator.isEmpty || me.isEmpty) return null;
+    return initiator == me ? CallHistoryDirection.outgoing : CallHistoryDirection.incoming;
   }
 
   /// The display name of the one participant who is not the viewer.

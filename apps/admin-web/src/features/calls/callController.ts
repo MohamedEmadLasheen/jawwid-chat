@@ -89,7 +89,9 @@ const IN_MEDIA: ReadonlySet<CallPhase> = new Set(['connecting', 'live', 'reconne
 /** Server codes that mean "this call is already over", not "you may not". */
 const ALREADY_OVER = new Set(['COMM.CALL_ALREADY_ENDED', 'COMM.CALL_PARTICIPANT_LEFT'])
 
-export type CallApi = Pick<typeof CallApiImpl, 'start' | 'token' | 'accept' | 'decline' | 'end'>
+export type CallApi = Pick<typeof CallApiImpl, 'start' | 'token' | 'accept' | 'decline' | 'end'> &
+  /** PD-13, additive: only `joinScheduled()` uses it, so an api without it still runs every other path. */
+  Partial<Pick<typeof CallApiImpl, 'joinScheduled'>>
 
 /** The server's call events this controller consumes (actor-room routed). */
 export type CallServerEvent =
@@ -186,6 +188,95 @@ export class CallController {
       if (!this.alive) return
       this.patch({ phase: 'failed', ...classify(e) })
     }
+  }
+
+  // ------------------------------------------------------------ scheduled (PD-13)
+
+  /**
+   * Join a scheduled call or a call link. ADDITIVE ENTRY POINT: it ends in one
+   * of the two states the existing paths already produce, and adds no state of
+   * its own. The server decides which (`POST /scheduled-calls/:id/join`):
+   *
+   *   started -> exactly the state after a successful `start()`: outgoing
+   *              ringing on the returned callId, media joined on call.accepted.
+   *   joined  -> the incoming-accept path: if this device is already ringing for
+   *              that callId it simply runs `accept()`; otherwise it takes the
+   *              same steps (connecting -> POST accept -> joinMedia).
+   *
+   * The conversation is not put in state until the server names it, so a
+   * refused Join offers no "Retry" -- a retry would be a plain new call, which
+   * is not what was asked for.
+   */
+  async joinScheduled(args: {
+    scheduledCallId: string
+    conversationId: string
+    peerLabel: string
+    isGroup: boolean
+  }): Promise<void> {
+    const ringing = this.state.phase === 'incomingRinging' ? this.state.callId : null
+    if (this.isPresent && !ringing && !this.isOver()) return
+    // While another conversation's call rings here, a Join could START a second
+    // call that rings everyone else and that this device would then ignore.
+    if (ringing && this.state.conversationId !== args.conversationId) return
+    const join = this.api.joinScheduled
+    if (!join) return
+
+    if (!ringing) {
+      if (this.isPresent) await this.teardownMedia()
+      this.mediaRetryUsed = false
+      this.rejoining = false
+      this.set({
+        ...IDLE_CALL,
+        phase: 'starting',
+        direction: 'outgoing',
+        peerLabel: args.peerLabel,
+        isGroup: args.isGroup,
+      })
+    }
+
+    let result
+    try {
+      result = await join(args.scheduledCallId)
+    } catch (e) {
+      if (!this.alive) return
+      // A refused Join while another call rings here leaves that ring alone.
+      if (ringing) return
+      if (this.phaseNow() !== 'starting') return
+      this.patch({ phase: 'failed', ...classify(e) })
+      return
+    }
+    if (!this.alive) return
+
+    if (ringing) {
+      // Already ringing for this very call: answering it IS joining it.
+      if (result.mode === 'joined' && result.callId === ringing && this.phaseNow() === 'incomingRinging') {
+        await this.accept()
+      }
+      return
+    }
+    if (this.phaseNow() !== 'starting') return
+
+    if (result.mode === 'started') {
+      this.patch({ phase: 'outgoingRinging', callId: result.callId, conversationId: result.conversationId })
+      return
+    }
+
+    // joined: a live call already holds a seat for us -- the accept path.
+    this.patch({
+      phase: 'connecting',
+      direction: 'incoming',
+      callId: result.callId,
+      conversationId: result.conversationId,
+    })
+    try {
+      await this.api.accept(result.callId)
+    } catch (e) {
+      if (!this.alive) return
+      this.patch({ phase: 'failed', ...classify(e) })
+      return
+    }
+    if (!this.alive || this.phaseNow() !== 'connecting') return
+    await this.joinMedia(result.callId)
   }
 
   // ------------------------------------------------------------ incoming
