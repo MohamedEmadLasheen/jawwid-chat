@@ -109,13 +109,14 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     icon: 'conversations',
     status: 'read_only',
     label: { en: 'Conversations', ar: 'المحادثات' },
+    navLabel: { en: 'All conversations', ar: 'كل المحادثات' },
     purpose: {
       en: 'Every conversation in the organization.',
       ar: 'كل محادثات المؤسسة.',
     },
     note: {
-      en: 'Replying is not available to this account.',
-      ar: 'الرد غير متاح لهذا الحساب.',
+      en: 'A read-only view. Reply from Chat.',
+      ar: 'عرض للقراءة فقط. الرد من الدردشة.',
     },
   },
   {

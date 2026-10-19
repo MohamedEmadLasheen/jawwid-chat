@@ -523,11 +523,16 @@ function Thread({
         </QueryBoundary>
       </div>
 
-      {/* Where a composer would be: the same shape, plainly not an input. */}
+      {/* Where a composer would be. This view only reads (/admin/*); the reply
+          happens in the Chat workspace, where the server lets the super admin
+          write (PD-8). */}
       <footer className="thread-readonly">
         <div className="thread-readonly__bar">
           <Icon name="lock" size={16} />
           <span>{tx(TEXT.readOnlyComposer)}</span>
+          <Link to={`/chat/${encodeURIComponent(c.id)}`} className="btn btn--primary btn--sm thread-readonly__reply">
+            {tx(TEXT.replyInChat)}
+          </Link>
         </div>
       </footer>
     </>

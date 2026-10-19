@@ -112,9 +112,10 @@ export const TEXT = {
   internal: { en: 'Internal note', ar: 'ملاحظة داخلية' },
   unknownAuthor: { en: 'Unknown sender', ar: 'مرسل غير معروف' },
   readOnlyComposer: {
-    en: 'Read-only. Replying is not available to this account.',
-    ar: 'للقراءة فقط. الرد غير متاح لهذا الحساب.',
+    en: 'This view is read-only.',
+    ar: 'هذا العرض للقراءة فقط.',
   },
+  replyInChat: { en: 'Reply in Chat', ar: 'الرد في الدردشة' },
   today: { en: 'Today', ar: 'اليوم' },
   status: { en: 'Status', ar: 'الحالة' },
   type: { en: 'Type', ar: 'النوع' },

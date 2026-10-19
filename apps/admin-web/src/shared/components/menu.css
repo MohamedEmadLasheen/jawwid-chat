@@ -1,0 +1,35 @@
+/* Menu: a button and a short list of actions (shared/components/Menu.tsx). */
+.menu { position: relative; display: inline-flex; }
+.menu__popover {
+  position: absolute;
+  inset-block-start: calc(100% + 4px);
+  z-index: 30;
+  min-inline-size: 200px;
+  padding: var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  display: grid;
+}
+.menu__popover--end { inset-inline-end: 0; }
+.menu__popover--start { inset-inline-start: 0; }
+.menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 36px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-md);
+  text-align: start;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.menu__item .icon { color: var(--text-muted); }
+.menu__item:hover, .menu__item:focus-visible { background: var(--surface-hover); outline: none; }
+.menu__item--danger, .menu__item--danger .icon { color: var(--danger); }

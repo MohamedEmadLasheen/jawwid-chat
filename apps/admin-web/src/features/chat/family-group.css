@@ -3,3 +3,15 @@
 .fg-check { display: flex; gap: var(--space-2); align-items: center; padding-block: var(--space-1); cursor: pointer; }
 .fg-check input:disabled + span { color: var(--text-muted); cursor: not-allowed; }
 .chat-list__new { margin-inline-start: auto; }
+
+/* PD-8 super admin: new 1:1 chat picker. */
+.dc-list { list-style: none; margin: var(--space-3) 0 0; padding: 0; max-block-size: 50vh; overflow-y: auto; }
+.dc-person {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  inline-size: 100%; padding: var(--space-2) var(--space-3); min-block-size: 44px;
+  border: none; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit;
+  text-align: start; cursor: pointer;
+}
+.dc-person:hover, .dc-person:focus-visible { background: var(--surface-sunken); }
+.dc-person:disabled { cursor: progress; opacity: 0.6; }
+.dc-person__kind { color: var(--text-muted); font-size: var(--fs-sm); }
