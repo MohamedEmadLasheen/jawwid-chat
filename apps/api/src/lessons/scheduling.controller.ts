@@ -13,6 +13,12 @@ import { SchedulingService } from './scheduling.service';
 export class SchedulingController {
   constructor(private readonly scheduling: SchedulingService) {}
 
+  /** The Teachers department's teachers and learners, for the Admin Web's Schedules tab. */
+  @Get('lessons/roster')
+  roster(@ActorId() actorId: string) {
+    return this.scheduling.roster(actorId);
+  }
+
   /** `:id` may be `me` for a teacher reading their own. */
   @Get('teachers/:id/availability')
   availability(@ActorId() actorId: string, @Param('id') id: string) {

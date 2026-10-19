@@ -19,7 +19,7 @@ import { SchedulingService } from './scheduling.service';
  */
 @Module({
   imports: [CommunicationModule],
-  controllers: [StatsController, LessonController, SchedulingController, LifecycleController],
+  controllers: [StatsController, SchedulingController, LessonController, LifecycleController],
   providers: [LessonService, SchedulingService, LifecycleService, SupervisionService, StatsService],
   exports: [LessonService, SchedulingService, LifecycleService, SupervisionService, StatsService],
 })

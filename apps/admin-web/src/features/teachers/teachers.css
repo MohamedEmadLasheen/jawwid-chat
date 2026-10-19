@@ -44,3 +44,25 @@
 .ts-tabs { display: flex; gap: var(--space-1); flex-wrap: wrap; border-block-end: 1px solid var(--border); margin-block-end: var(--space-3); }
 .ts-tab { padding: var(--space-2) var(--space-3); color: var(--text-muted); text-decoration: none; border-block-end: 2px solid transparent; }
 .ts-tab--active { color: var(--accent); border-block-end-color: var(--accent); font-weight: 600; }
+
+/* Supervisors' operations (Needs action, Schedules, Students). */
+.ts-section { margin-block-end: var(--space-4); }
+.ts-section__head { display: flex; align-items: center; gap: var(--space-2); }
+.ts-section__hint { margin-block: var(--space-1) var(--space-2); }
+.ts-rows { display: grid; gap: var(--space-2); }
+.ts-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.ts-row__main { display: grid; gap: 2px; min-inline-size: 0; }
+.ts-row__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.ts-inline { max-inline-size: 18rem; }
+.ts-windows { display: grid; gap: var(--space-2); margin-block: var(--space-2); }
+.ts-window { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.ts-window .select, .ts-window .input { inline-size: auto; }
+.ts-narrow { max-inline-size: 6rem; }
+.ts-subtitle { margin: var(--space-4) 0 var(--space-2); font-size: var(--fs-md); }
+.ts-daysoff { list-style: none; padding: 0; margin: 0 0 var(--space-2); display: grid; gap: var(--space-1); }
+.ts-daysoff li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
+.ts-badge-gap { margin-inline-start: var(--space-2); }
+/* A row's name is a row header for assistive tech, but should not look like a header column. */
+.ts-plain-rows th[scope='row'] { background: transparent; font-weight: 600; color: var(--text); }
+.ts-actions-cell { white-space: nowrap; }
+.ts-actions-cell .btn + .btn { margin-inline-start: var(--space-2); }

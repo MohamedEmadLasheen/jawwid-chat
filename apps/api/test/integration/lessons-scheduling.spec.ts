@@ -297,3 +297,19 @@ describe('6. reminders', () => {
     expect(after.every((r) => r.status === 'cancelled')).toBe(true);
   });
 });
+
+describe('7. the roster the Schedules tab reads', () => {
+  it('gives the Teachers department every teacher (with zone) and learner (with regular times); nobody else', async () => {
+    await openAllWeek();
+    const wd = await weekdayIn(2);
+    await scheduling.setSchedule(tsupId, s.learnerId, { slots: [{ weekday: wd, start: '18:00', durationMinutes: 30 }] });
+    const r = await scheduling.roster(tsupId);
+    expect(r.teachers.find((t) => t.id === s.teacherId)).toMatchObject({ timezone: TZ, isActive: true });
+    expect(r.teachers.find((t) => t.id === s.newTeacherId)?.timezone).toBeNull();
+    const l = r.learners.find((x) => x.id === s.learnerId)!;
+    expect(l).toMatchObject({ teacherId: s.teacherId, suspension: null, slots: [{ weekday: wd, start: '18:00', durationMinutes: 30 }] });
+    expect(l.family.id).toBe(s.familyId);
+    expect(await code(scheduling.roster(s.ownerId))).toBe(CommErrorCode.LESSON_DENIED);
+    expect(await code(scheduling.roster(s.teacherId))).toBe(CommErrorCode.LESSON_DENIED);
+  });
+});
