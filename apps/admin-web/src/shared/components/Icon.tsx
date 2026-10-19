@@ -263,6 +263,13 @@ const PATHS = {
     </>
   ),
   reply: <path d="M9.5 6 4 11.5 9.5 17M4 11.5h10a6 6 0 0 1 6 6V19" />,
+  forward: <path d="M14.5 6 20 11.5 14.5 17M20 11.5H10a6 6 0 0 0-6 6V19" />,
+  checkSquare: (
+    <>
+      <rect x="4" y="4" width="16" height="16" rx="3" />
+      <path d="m8.5 12 2.5 2.5 4.5-5" />
+    </>
+  ),
   star: <path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9L12 3.5Z" />,
   smile: (
     <>
@@ -275,7 +282,7 @@ const PATHS = {
 
 export type IconName = keyof typeof PATHS
 
-const DIRECTIONAL: ReadonlySet<IconName> = new Set<IconName>(['chevronForward', 'arrowBack', 'signOut', 'send', 'reply'])
+const DIRECTIONAL: ReadonlySet<IconName> = new Set<IconName>(['chevronForward', 'arrowBack', 'signOut', 'send', 'reply', 'forward'])
 
 export function Icon({
   name,

@@ -144,6 +144,7 @@ class Message {
     this.card,
     this.isStarred = false,
     this.isPinned = false,
+    this.isForwarded = false,
   });
 
   /// Server id. Null until the server has accepted the message.
@@ -203,6 +204,10 @@ class Message {
   /// Pinned for everyone in the conversation (server `MessageDto.pinned`).
   final bool isPinned;
 
+  /// A copy forwarded by its author (server `MessageDto.forwarded`); shown as
+  /// "Forwarded". The source is never named.
+  final bool isForwarded;
+
   bool get isSystem => kind == MessageKind.system;
   bool get isPending => deliveryState.isInFlight;
   bool get canRetry => deliveryState == DeliveryState.failed;
@@ -239,6 +244,7 @@ class Message {
         card: card,
         isStarred: isStarred,
         isPinned: isPinned,
+        isForwarded: isForwarded,
       );
 
   Message copyWith({
@@ -278,6 +284,7 @@ class Message {
       card: card,
       isStarred: isStarred ?? this.isStarred,
       isPinned: isPinned ?? this.isPinned,
+      isForwarded: isForwarded,
     );
   }
 }

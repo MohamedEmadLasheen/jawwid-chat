@@ -13,6 +13,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/shared/components/States
 import { bySeq, chatApi, chatKeys, type ChatAttachment, type ChatMessage, type UploadedAttachment } from './chatApi'
 import { chatCopyFor, systemText, type ChatCopy } from './copy'
 import { ChatComposer, type ComposerSend, type ReplyTarget } from './ChatComposer'
+import { ForwardDialog } from './ForwardDialog'
 import { ConversationAvatar, conversationName, isGroup, isMuted } from './chatView'
 import { useConversationPreferences } from './useChatActions'
 
@@ -142,6 +143,19 @@ export function ChatThread({
   const [pending, setPending] = useState<PendingSend[]>([])
   const [reply, setReply] = useState<ReplyTarget | null>(null)
   const [actionError, setActionError] = useState<unknown>(null)
+  // Select mode: a set of message ids, and the bulk actions over them.
+  const [selecting, setSelecting] = useState(false)
+  const [selected, setSelected] = useState<string[]>([])
+  const [forwarding, setForwarding] = useState<string[] | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const stopSelecting = () => {
+    setSelecting(false)
+    setSelected([])
+  }
+  const flash = (text: string) => {
+    setNotice(text)
+    setTimeout(() => setNotice(null), 2500)
+  }
 
   const messages = useMemo(() => {
     const byId = new Map<string, ChatMessage>()
@@ -323,6 +337,7 @@ export function ChatThread({
               label={copy.chatActions}
               items={[
                 { key: 'info', label: group ? copy.groupInfo : copy.contactInfo, icon: 'info', onSelect: onToggleInfo },
+                { key: 'select', label: copy.select, icon: 'checkSquare', onSelect: () => setSelecting(true) },
                 { key: 'mute', label: muted ? copy.unmute : copy.mute, icon: muted ? 'notifications' : 'bellOff', onSelect: () => prefs.mute(conv.id, !muted) },
                 { key: 'pin', label: pinned ? copy.unpin : copy.pin, icon: 'pin', onSelect: () => prefs.pin(conv.id, !pinned) },
                 { key: 'archive', label: archived ? copy.unarchive : copy.archive, icon: 'archive', onSelect: () => prefs.archive(conv.id, !archived) },
@@ -388,6 +403,14 @@ export function ChatThread({
                       )
                     }}
                     onStar={() => void act(() => (m.starred ? chatApi.unstar(conversationId, m.id) : chatApi.star(conversationId, m.id)))}
+                    onForward={() => setForwarding([m.id])}
+                    onSelectStart={() => {
+                      setSelecting(true)
+                      setSelected([m.id])
+                    }}
+                    selectMode={selecting}
+                    isSelected={selected.includes(m.id)}
+                    onToggleSelect={() => setSelected((all) => (all.includes(m.id) ? all.filter((x) => x !== m.id) : [...all, m.id]))}
                     onPin={() => void act(() => (m.pinned ? chatApi.unpin(conversationId, m.id) : chatApi.pin(conversationId, m.id)))}
                     onDeleteForMe={() => void act(() => chatApi.deleteForMe(conversationId, m.id))}
                     onDeleteForEveryone={() => void act(() => chatApi.deleteForEveryone(conversationId, m.id))}
@@ -444,7 +467,84 @@ export function ChatThread({
         </div>
       )}
 
-      <ChatComposer onSend={submit} reply={reply} onCancelReply={() => setReply(null)} />
+      {notice && (
+        <div className="cw-notice" role="status">
+          {notice}
+        </div>
+      )}
+
+      {selecting ? (
+        <div className="cw-select-bar" role="toolbar" aria-label={copy.selectedCount(selected.length)}>
+          <button type="button" className="btn btn--ghost btn--icon" onClick={stopSelecting} aria-label={copy.cancelSelect} title={copy.cancelSelect}>
+            <Icon name="close" size={18} />
+          </button>
+          <strong className="cw-select-bar__count">{copy.selectedCount(selected.length)}</strong>
+          <div className="cw-select-bar__actions">
+            <button type="button" className="btn btn--sm" disabled={selected.length === 0} onClick={() => setForwarding(selected)}>
+              <Icon name="forward" size={14} />
+              {copy.forward}
+            </button>
+            <button
+              type="button"
+              className="btn btn--sm"
+              disabled={selected.length === 0}
+              onClick={() =>
+                void act(async () => {
+                  for (const id of selected) await chatApi.star(conversationId, id)
+                }).then(stopSelecting)
+              }
+            >
+              <Icon name="star" size={14} />
+              {copy.star}
+            </button>
+            <button
+              type="button"
+              className="btn btn--sm"
+              disabled={selected.length === 0}
+              onClick={() => {
+                const text = messages
+                  .filter((x) => selected.includes(x.id) && x.body && !x.deletedForAll)
+                  .map((x) => x.body)
+                  .join('\n')
+                void navigator.clipboard?.writeText(text)
+                flash(copy.copied)
+                stopSelecting()
+              }}
+            >
+              <Icon name="copy" size={14} />
+              {copy.copy}
+            </button>
+            <button
+              type="button"
+              className="btn btn--sm"
+              disabled={selected.length === 0}
+              onClick={() =>
+                void act(async () => {
+                  for (const id of selected) await chatApi.deleteForMe(conversationId, id)
+                }).then(stopSelecting)
+              }
+            >
+              <Icon name="trash" size={14} />
+              {copy.deleteForMe}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <ChatComposer onSend={submit} reply={reply} onCancelReply={() => setReply(null)} />
+      )}
+
+      {forwarding && (
+        <ForwardDialog
+          conversationId={conversationId}
+          messageIds={forwarding}
+          onClose={() => setForwarding(null)}
+          onDone={(n) => {
+            setForwarding(null)
+            stopSelecting()
+            flash(copy.forwardDone(n))
+          }}
+        />
+      )}
     </>
   )
 }
@@ -462,6 +562,11 @@ function MessageItem({
   onReply,
   onReact,
   onStar,
+  onForward,
+  onSelectStart,
+  selectMode,
+  isSelected,
+  onToggleSelect,
   onPin,
   onDeleteForMe,
   onDeleteForEveryone,
@@ -479,6 +584,11 @@ function MessageItem({
   onReply: () => void
   onReact: (emoji: string) => void
   onStar: () => void
+  onForward: () => void
+  onSelectStart: () => void
+  selectMode: boolean
+  isSelected: boolean
+  onToggleSelect: () => void
   onPin: () => void
   onDeleteForMe: () => void
   onDeleteForEveryone: () => void
@@ -524,6 +634,11 @@ function MessageItem({
   const items: MenuItem[] = live
     ? [
         { key: 'reply', label: copy.reply, icon: 'reply', onSelect: onReply },
+        // Only what may leave its conversation; the server re-checks both ends.
+        ...(m.moderation === 'published' && m.type !== 'card'
+          ? [{ key: 'forward', label: copy.forward, icon: 'forward' as const, onSelect: onForward }]
+          : []),
+        { key: 'select', label: copy.select, icon: 'checkSquare' as const, onSelect: onSelectStart },
         { key: 'star', label: m.starred ? copy.unstar : copy.star, icon: 'star' as const, onSelect: onStar },
         // Only a published message can be pinned; the server decides who may write here.
         ...(m.moderation === 'published'
@@ -542,11 +657,22 @@ function MessageItem({
 
   return (
     <li
-      className={`bubble-row ${SIDE_CLASS[side]} cw-msg${runStart ? ' cw-msg--run-start' : ''}${identity !== 'none' ? ' cw-msg--with-sender' : ''}`}
+      className={`bubble-row ${SIDE_CLASS[side]} cw-msg${runStart ? ' cw-msg--run-start' : ''}${identity !== 'none' ? ' cw-msg--with-sender' : ''}${selectMode ? ' cw-msg--selectable' : ''}${isSelected ? ' cw-msg--selected' : ''}`}
       data-seq={m.seq ?? undefined}
       data-msg-id={m.id}
+      onClick={selectMode ? onToggleSelect : undefined}
     >
       <div className="cw-msg__line">
+        {selectMode && (
+          <input
+            type="checkbox"
+            className="cw-msg__check"
+            checked={isSelected}
+            onChange={onToggleSelect}
+            onClick={(e) => e.stopPropagation()}
+            aria-label={`${copy.select}: ${bodyPreview(m, copy)}`}
+          />
+        )}
         {identity === 'lead' && (
           <span className={`cw-msg__avatar cw-tone--${nameTone(m.authorId ?? m.authorKind)}`} title={authorName(m, copy)}>
             <Avatar name={authorName(m, copy)} seed={m.authorId ?? m.authorKind} src={m.authorAvatarUrl} />
@@ -560,6 +686,12 @@ function MessageItem({
                 {authorName(m, copy)}
               </span>
               <span className={`kind-chip kind-chip--${m.authorKind}`}>{copy.role[m.authorKind] ?? m.authorKind}</span>
+            </span>
+          )}
+          {m.forwarded && (
+            <span className="cw-forwarded">
+              <Icon name="forward" size={12} />
+              {copy.forwarded}
             </span>
           )}
           {side === 'internal' && (
@@ -602,7 +734,7 @@ function MessageItem({
             <time dateTime={m.createdAt}>{time(m.createdAt)}</time>
           </span>
         </div>
-        <Menu
+        {!selectMode && <Menu
           label={copy.messageActions}
           className="cw-msg__menu"
           align={side === 'out' ? 'end' : 'start'}
@@ -630,7 +762,7 @@ function MessageItem({
                 )
               : undefined
           }
-        />
+        />}
       </div>
       {reactions.length > 0 && (
         <div className="cw-reactions">

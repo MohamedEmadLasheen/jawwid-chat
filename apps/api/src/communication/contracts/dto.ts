@@ -84,6 +84,8 @@ export interface MessageDto {
   createdAt: string;
   attachments: AttachmentDto[];
   reactions: Array<{ actorId: string; emoji: string }>;
+  /** A copy forwarded by its author; shown as "Forwarded". The source is never named. */
+  forwarded: boolean;
   /** The VIEWER's private bookmark. Set on the message page and the starred list. */
   starred?: boolean;
   /** Pinned for everyone in this conversation (at most three). */
@@ -467,6 +469,7 @@ export function toMessageDto(
     moderation: m.moderation,
     origin: m.origin,
     replyToMessageId: m.replyToMessageId,
+    forwarded: m.forwarded,
     clientMessageId: m.clientMessageId,
     deletedAt: m.deletedAt?.toISOString() ?? null,
     deletedForAll: m.deletedForAll,

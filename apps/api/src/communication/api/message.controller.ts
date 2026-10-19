@@ -81,6 +81,26 @@ export class MessageController {
     });
   }
 
+  /**
+   * Forward one or more messages of THIS conversation into up to ten others.
+   * Each message must be readable here; each destination must be writable
+   * (the ordinary send decision); media are copied, never shared by key.
+   */
+  @Post('forward')
+  async forward(
+    @ActorId() actorId: string,
+    @Param('conversationId') conversationId: string,
+    @Body() body: { messageIds?: unknown; toConversationIds?: unknown; clientMessageIds?: unknown },
+  ) {
+    return this.messages.forward({
+      actorId,
+      conversationId,
+      messageIds: body?.messageIds,
+      toConversationIds: body?.toConversationIds,
+      clientMessageIds: body?.clientMessageIds,
+    });
+  }
+
   /** Authorizes an upload before any object key exists. */
   @Post('attachments/authorize')
   async authorizeUpload(

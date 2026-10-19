@@ -1499,4 +1499,58 @@ class L10nAr extends L10n {
   @override
   String get starredMessagesEmpty =>
       'لم تميّز أي رسالة بعد. اضغط مطولًا على رسالة واختر «تمييز بنجمة».';
+
+  @override
+  String get forwardAction => 'إعادة توجيه';
+
+  @override
+  String get forwardTitle => 'إعادة التوجيه إلى…';
+
+  @override
+  String get forwardEmpty => 'لا توجد محادثات لإعادة التوجيه إليها.';
+
+  @override
+  String forwardSendTo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'إرسال إلى $count',
+      zero: 'إرسال',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get forwardMax => 'يمكن اختيار ١٠ محادثات كحد أقصى.';
+
+  @override
+  String forwardDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'أُعيد توجيهها إلى $count محادثات',
+      one: 'أُعيد توجيهها إلى محادثة واحدة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get forwardedLabel => 'مُعاد توجيهها';
+
+  @override
+  String get selectAction => 'تحديد الرسائل';
+
+  @override
+  String selectedCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count رسائل محددة',
+      one: 'رسالة محددة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get cancelSelection => 'إلغاء التحديد';
 }

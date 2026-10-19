@@ -2790,6 +2790,66 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'No starred messages yet. Long-press a message and choose Star.'**
   String get starredMessagesEmpty;
+
+  /// No description provided for @forwardAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Forward'**
+  String get forwardAction;
+
+  /// No description provided for @forwardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Forward to…'**
+  String get forwardTitle;
+
+  /// No description provided for @forwardEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No chats to forward to.'**
+  String get forwardEmpty;
+
+  /// No description provided for @forwardSendTo.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Send} other{Send to {count}}}'**
+  String forwardSendTo(int count);
+
+  /// No description provided for @forwardMax.
+  ///
+  /// In en, this message translates to:
+  /// **'You can choose at most 10 chats.'**
+  String get forwardMax;
+
+  /// No description provided for @forwardDone.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Forwarded to 1 chat} other{Forwarded to {count} chats}}'**
+  String forwardDone(int count);
+
+  /// No description provided for @forwardedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Forwarded'**
+  String get forwardedLabel;
+
+  /// No description provided for @selectAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Select messages'**
+  String get selectAction;
+
+  /// No description provided for @selectedCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 selected} other{{count} selected}}'**
+  String selectedCount(int count);
+
+  /// No description provided for @cancelSelection.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel selection'**
+  String get cancelSelection;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

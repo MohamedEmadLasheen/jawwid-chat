@@ -171,6 +171,8 @@ export enum CommErrorCode {
   STAFF_ASSIGNMENT_INVALID = 'COMM.STAFF_ASSIGNMENT_INVALID',
   /** The organization-wide profile overview belongs to the super admin. 403. */
   STAFF_DIRECTORY_DENIED = 'COMM.STAFF_DIRECTORY_DENIED',
+  /** The message cannot leave its conversation: deleted, held, rejected, a system message or a card. 403. */
+  MESSAGE_NOT_FORWARDABLE = 'COMM.MESSAGE_NOT_FORWARDABLE',
   // --- Profile photos (parents, teachers, children) ---
   /**
    * The photo does not exist or is not one the caller may see or change -- one

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import {
+  CopyObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
@@ -171,6 +172,25 @@ export class S3ObjectStorage implements ObjectStorage {
     await this.client.send(
       new DeleteObjectCommand({ Bucket: this.bucket, Key: assertSafeObjectKey(objectKey) }),
     );
+  }
+
+  /** Server-side CopyObject within the bucket: no bytes pass through the API. */
+  async copy(sourceKey: string, targetKey: string): Promise<boolean> {
+    const source = assertSafeObjectKey(sourceKey);
+    try {
+      await this.client.send(
+        new CopyObjectCommand({
+          Bucket: this.bucket,
+          Key: assertSafeObjectKey(targetKey),
+          CopySource: `${this.bucket}/${source.split('/').map(encodeURIComponent).join('/')}`,
+        }),
+      );
+      return true;
+    } catch (error) {
+      const name = (error as { name?: string }).name;
+      if (name === 'NoSuchKey' || name === 'NotFound') return false;
+      throw error;
+    }
   }
 
   /**

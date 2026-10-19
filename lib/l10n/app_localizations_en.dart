@@ -1501,4 +1501,58 @@ class L10nEn extends L10n {
   @override
   String get starredMessagesEmpty =>
       'No starred messages yet. Long-press a message and choose Star.';
+
+  @override
+  String get forwardAction => 'Forward';
+
+  @override
+  String get forwardTitle => 'Forward to…';
+
+  @override
+  String get forwardEmpty => 'No chats to forward to.';
+
+  @override
+  String forwardSendTo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Send to $count',
+      zero: 'Send',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get forwardMax => 'You can choose at most 10 chats.';
+
+  @override
+  String forwardDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Forwarded to $count chats',
+      one: 'Forwarded to 1 chat',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get forwardedLabel => 'Forwarded';
+
+  @override
+  String get selectAction => 'Select messages';
+
+  @override
+  String selectedCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count selected',
+      one: '1 selected',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get cancelSelection => 'Cancel selection';
 }
