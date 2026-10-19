@@ -443,6 +443,20 @@ describe('4. the database backstop', () => {
     expect(await sqlError(entry(day('05-09')))).toMatch(/request's teacher and dates/);
   });
 
+  it('a day of an approved leave is removed only by cancelling the leave', async () => {
+    await leave.setAllowance(tmgrId, s.teacherId, { year: NEXT_YEAR, days: 10 });
+    const { request } = await leave.request(s.teacherId, { firstDay: day('06-01'), lastDay: day('06-02'), reason: 'r' });
+    await leave.approve(tsupId, request.id, {});
+    // Any other writer -- the Schedules tab, the Teacher File, raw SQL -- is refused.
+    expect(
+      await sqlError(g.prisma.teacherDayOff.deleteMany({ where: { leaveRequestId: request.id } })),
+    ).toMatch(/belongs to an approved leave; cancel the leave instead/);
+    expect(await g.prisma.teacherDayOff.count({ where: { leaveRequestId: request.id } })).toBe(2);
+    // The cancel path marks the leave cancelled first, then removes its days.
+    expect((await leave.cancel(tsupId, request.id, { note: 'plans changed' })).daysReturned).toBe(2);
+    expect(await g.prisma.teacherDayOff.count({ where: { leaveRequestId: request.id } })).toBe(0);
+  });
+
   it('a learner reassigned away is no longer the teacher\'s to request a certificate for', async () => {
     await withAssignmentGate(g.prisma, `update chat.learner set teacher_id = '${s.newTeacherId}'::uuid where id = '${s.learnerId}'::uuid`);
     const body = { learnerId: s.learnerId, title: 't', achievement: 'a', achievedOn: '2026-10-01', printedName: 'n' };

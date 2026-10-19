@@ -660,6 +660,30 @@ create trigger teacher_day_off_leave_link_is_coherent
   before insert on chat.teacher_day_off
   for each row execute function chat.guard_day_off_leave_link();
 
+-- A day of an APPROVED leave is removed only by cancelling the leave: the
+-- cancel path marks the request cancelled first, in the same transaction, and
+-- then deletes its future days. Any other writer (the Schedules tab, the
+-- Teacher File) would otherwise leave a request that still reads "approved".
+create or replace function chat.guard_day_off_leave_delete()
+returns trigger
+language plpgsql
+as $$
+begin
+  if old.leave_request_id is not null and exists (
+    select 1 from chat.teacher_leave_request r
+     where r.id = old.leave_request_id and r.state = 'approved'
+  ) then
+    raise exception 'this day off belongs to an approved leave; cancel the leave instead'
+      using errcode = 'check_violation';
+  end if;
+  return old;
+end;
+$$;
+
+create trigger teacher_day_off_leave_day_is_kept
+  before delete on chat.teacher_day_off
+  for each row execute function chat.guard_day_off_leave_delete();
+
 -- ===========================================================================
 -- 6. Request roles: none
 -- ===========================================================================
@@ -677,3 +701,4 @@ revoke all on function chat.guard_teacher_leave_allowance() from public;
 revoke all on function chat.guard_teacher_leave_request() from public;
 revoke all on function chat.forbid_teacher_leave_request_delete() from public;
 revoke all on function chat.guard_day_off_leave_link() from public;
+revoke all on function chat.guard_day_off_leave_delete() from public;
