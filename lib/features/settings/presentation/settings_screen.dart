@@ -162,6 +162,17 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const Divider(),
 
+          // PD-12: the one leave surface in the teacher app -- their own balance and requests.
+          if (user?.isTeacher ?? false) ...[
+            ListTile(
+              key: const ValueKey('settings-my-leave'),
+              leading: const Icon(Icons.beach_access_outlined),
+              title: Text(l10n.myLeaveTitle),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push(Routes.myLeave),
+            ),
+            const Divider(),
+          ],
           ListTile(
             leading: const Icon(Icons.notifications_outlined),
             title: Text(l10n.settingsNotifications),

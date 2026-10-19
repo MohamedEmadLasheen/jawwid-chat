@@ -31,6 +31,7 @@ export type AdminSectionKey =
   | 'conversations'
   | 'users'
   | 'teams'
+  | 'teachers'
   | 'stories'
   | 'quality'
   | 'reports'
@@ -120,28 +121,18 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     key: 'stories',
     group: 'communication',
     icon: 'stories',
-    status: 'read_only',
+    // 2026-10-17: the super admin publishes. Create, target, publish, delete
+    // and the analytics all act against the real /stories API.
+    status: 'managed',
     label: { en: 'Stories', ar: 'الحالات' },
     purpose: {
-      en: 'Every story in the organization, with its audience and reach.',
-      ar: 'كل الحالات في المؤسسة، مع جمهورها ومدى وصولها.',
+      en: 'Publish stories to exactly the people they are for, and see how each one performs.',
+      ar: 'انشر الحالات للأشخاص المقصودين بالضبط، وتابع أداء كل حالة.',
     },
     note: {
-      en: 'Creating, publishing and deleting stories are not available to this account.',
-      ar: 'إنشاء الحالات ونشرها وحذفها غير متاح لهذا الحساب.',
+      en: 'Country and subscription plan come from Jawwid Core once it is connected; until then they are set under Audience data.',
+      ar: 'تأتي الدولة وباقة الاشتراك من نظام جوّد الأساسي عند ربطه، وحتى ذلك الحين تُعيَّن من «بيانات الجمهور».',
     },
-    legacy: [
-      {
-        path: '/stories',
-        // GET /stories is the PUBLISHER's list (canPublishStory: admin,
-        // coverage, manager). super_admin is refused there with
-        // COMM.STORY_CANNOT_PUBLISH on purpose -- it is not family-facing yet.
-        note: {
-          en: 'The publisher screen is for admin, coverage and manager roles. It is unsupported for Super Admin by design, and the server refuses it.',
-          ar: 'شاشة النشر مخصّصة لأدوار المشرف والتغطية والمدير، وهي غير مدعومة لمدير النظام عن قصد ويرفضها الخادم.',
-        },
-      },
-    ],
   },
   {
     key: 'notifications',
@@ -223,6 +214,22 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     },
     legacy: [{ path: '/coverage' }],
   },
+  {
+    key: 'teachers',
+    group: 'people',
+    icon: 'users',
+    // PD-10: the administration-only Teacher File, against /teacher-files.
+    status: 'managed',
+    label: { en: 'Teachers', ar: 'المعلمون' },
+    purpose: {
+      en: 'Each teacher’s file: personal information, assigned students and supervision notes.',
+      ar: 'ملف كل معلم: البيانات الشخصية والطلاب المسندون وملاحظات الإشراف.',
+    },
+    note: {
+      en: 'Schedule and workload arrive with the lesson system; salary is shown from Jawwid Core once it offers it.',
+      ar: 'الجدول وعبء العمل يأتيان مع نظام الدروس، والراتب يُعرض من نظام جوّد الأساسي عند توفيره.',
+    },
+  },
 
   /* ------------------------------------------------------------ operations */
   {
@@ -284,13 +291,16 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     key: 'reports',
     group: 'operations',
     icon: 'reports',
-    status: 'in_development',
+    status: 'read_only',
     label: { en: 'Reports & analytics', ar: 'التقارير والتحليلات' },
     purpose: {
-      en: 'Trends in communication volume and response performance.',
-      ar: 'اتجاهات حجم التواصل وأداء الرد.',
+      en: 'Teacher statistics: lessons by outcome and length, reports on time, replies to families, workload.',
+      ar: 'إحصائيات المعلمين: الحصص حسب النتيجة والمدة، والتقارير في موعدها، والرد على الأسر، وعبء العمل.',
     },
-    note: NO_BACKEND,
+    note: {
+      en: 'Counted by the server from the lessons themselves (PD-11). Read-only.',
+      ar: 'يحسبها الخادم من الحصص نفسها (PD-11). للاطلاع فقط.',
+    },
   },
 
   /* -------------------------------------------------------- administration */

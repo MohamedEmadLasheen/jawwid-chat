@@ -46,6 +46,25 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
    * regardless of this value; this only governs the bytes.
    */
   'story.media_retention_hours': 72,
+  /** PD-9: an open lesson this long after its end is escalated to the Teachers department. */
+  'lesson.escalation_after_minutes': 1440,
+  /** PD-11 T2: a teacher-cancelled lesson with no make-up this many days later goes to a supervisor. */
+  'lesson.makeup_window_days': 7,
+  /** How far ahead lessons are materialized from regular times. */
+  'lesson.materialize_weeks': 4,
+  /** A family books a make-up at least this long ahead, and at most this many days out. */
+  'lesson.booking_lead_minutes': 120,
+  'lesson.makeup_horizon_days': 14,
+  /** Free times are offered on this grid (minutes). */
+  'lesson.slot_step_minutes': 30,
+  /** PD-11 T3: the family and the team hear this many days before a paused learner returns. */
+  'lesson.return_notice_days': 2,
+  /** PD-11 T5: the academy's zone for calendar months in statistics. */
+  'stats.zone': 'Africa/Cairo',
+  /** A report is on time when submitted within this many hours of the lesson's end. */
+  'stats.report_grace_hours': 24,
+  /** A family message counts as answered when the teacher replied within this many hours. */
+  'stats.reply_within_hours': 24,
 } as const;
 
 export type CommunicationConfigKey = keyof typeof COMMUNICATION_CONFIG_DEFAULTS;

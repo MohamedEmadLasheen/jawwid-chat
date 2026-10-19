@@ -11,6 +11,8 @@ import '../../../shared/models/user_role.dart';
 import '../../../shared/utils/byte_size_format.dart';
 import '../../../shared/utils/relative_time.dart';
 import '../../../shared/utils/text_direction.dart';
+import '../../lessons/presentation/lesson_card_view.dart';
+import '../../supervision/presentation/supervision_card_view.dart';
 import 'system_message_text.dart';
 import 'voice_message_player.dart';
 
@@ -86,6 +88,11 @@ class MessageBubble extends StatelessWidget {
 
     final foreground =
         mine ? tokens.colorMessageOutgoingText : tokens.colorMessageIncomingText;
+
+    final card = message.isDeleted ? null : message.card;
+    final cardView = card == null
+        ? null
+        : lessonCardView(context, card, foreground) ?? supervisionCardView(context, card, foreground);
 
     // A withheld message is visually de-emphasised so its sender can see at a glance that
     // it has not reached anyone yet.
@@ -176,10 +183,14 @@ class MessageBubble extends StatelessWidget {
                             ? null
                             : () => onOpenAttachment!(document),
                       ),
+                    // PD-11: a ticket's card replaces the body it also carries
+                    // as plain text; an unknown card kind keeps the body.
+                    if (cardView != null)
+                      cardView
                     // Message bodies resolve their own base direction, so a
                     // mixed Arabic/English message reads correctly either way
                     // (§4).
-                    if (message.body.isNotEmpty)
+                    else if (message.body.isNotEmpty)
                       Padding(
                         padding: EdgeInsets.only(
                           top: message.attachments.isEmpty

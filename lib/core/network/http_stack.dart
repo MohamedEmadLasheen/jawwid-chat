@@ -24,9 +24,13 @@ import 'error_mapper.dart';
 /// just the offending one. Two independent refreshers on one device are therefore not a race
 /// that costs a retry; they are a race that signs the user out of every device they own.
 ///
-/// [ApiClient] single-flights the refresh, so a burst of 401s produces one exchange. That
-/// guarantee holds per provider instance, which is precisely why there must only ever be one.
-class StoredTokenProvider implements TokenProvider {
+/// The refresh is single-flighted HERE, in the one object every consumer shares. [ApiClient]
+/// also single-flights its own 401s, but that only ever covered HTTP: the realtime socket
+/// renews a refused handshake by calling [refresh] on this same instance, and an app resuming
+/// after its access token expired does both at once -- the socket reconnects and a screen
+/// reloads. Two exchanges of one refresh token is the reuse above, and before this the second
+/// one revoked every session on the account.
+class StoredTokenProvider implements TokenProvider, RenewalReporting {
   StoredTokenProvider({
     required TokenStore store,
     required AuthRepository auth,
@@ -42,18 +46,36 @@ class StoredTokenProvider implements TokenProvider {
   @override
   Future<String?> accessToken() async => (await _store.read())?.accessToken;
 
+  Future<Renewal>? _inFlight;
+
   @override
-  Future<String?> refresh() async {
+  Future<String?> refresh() async => (await renew()).token;
+
+  @override
+  Future<Renewal> renew() {
+    final existing = _inFlight;
+    if (existing != null) return existing;
+
+    final flight = _exchange().whenComplete(() => _inFlight = null);
+    _inFlight = flight;
+    return flight;
+  }
+
+  Future<Renewal> _exchange() async {
     final session = await _store.read();
-    if (session == null) return null;
+    if (session == null) return const Renewal.ended();
 
     try {
       final renewed = await _auth.refresh(session.refreshToken);
       await _store.write(renewed);
-      return renewed.accessToken;
-    } on AppError {
-      // A refresh that fails is the end of the session, not a retryable error.
-      return null;
+      return Renewal.renewed(renewed.accessToken);
+    } on AppError catch (error) {
+      // Only a refresh that provably never arrived keeps the session. Anything else may have
+      // been processed -- the token rotated server-side and only the answer lost -- and
+      // presenting it again would be the reuse that revokes the whole account. Ending this
+      // session locally is the safe reading of an ambiguous failure.
+      if (error.neverReachedServer) return Renewal.unreachable(error);
+      return const Renewal.ended();
     }
   }
 

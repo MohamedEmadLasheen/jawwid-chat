@@ -80,6 +80,7 @@ class Conversation {
     this.handledByLabel,
     this.requiresApproval = false,
     this.isReadOnly = false,
+    this.isTeacherSupervision = false,
   });
 
   final String id;
@@ -113,7 +114,17 @@ class Conversation {
   /// server-side (§72).
   final bool isReadOnly;
 
+  /// PD-12: the teacher's private conversation with the Teachers department. It groups
+  /// and behaves like a 1:1 with Jawwid ([ConversationKind.adminDirect]); this flag only
+  /// gives it its own name and its own tickets under "+". Taken from the server's type,
+  /// never inferred from a title.
+  final bool isTeacherSupervision;
+
   bool get hasUnread => unreadCount > 0;
+
+  /// The name to show: the server's title, except for a supervision conversation, which
+  /// the teacher reads under its own localized name ([supervisionLabel]).
+  String displayTitle(String supervisionLabel) => isTeacherSupervision ? supervisionLabel : title;
 
   Conversation copyWith({
     bool? isPinned,
@@ -137,6 +148,7 @@ class Conversation {
       handledByLabel: handledByLabel,
       requiresApproval: requiresApproval,
       isReadOnly: isReadOnly,
+      isTeacherSupervision: isTeacherSupervision,
     );
   }
 }

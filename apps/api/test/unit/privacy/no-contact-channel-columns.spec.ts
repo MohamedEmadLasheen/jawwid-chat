@@ -27,8 +27,20 @@ const REPO = join(__dirname, '..', '..', '..', '..', '..');
 /** Identifiers that would reintroduce a personal contact channel. */
 const FORBIDDEN = /\b(phone|phone_number|phoneNumber|msisdn|mobile_number|mobileNumber|whatsapp|telephone|tel_number)\b/i;
 
-/** Deliberate, privacy-reviewed exceptions. Empty by design. */
-const ALLOWED: ReadonlyArray<string> = [];
+/**
+ * Deliberate, privacy-reviewed exceptions. Each names ONE declaration exactly.
+ *
+ * PD-10 (closed 2026-10-18): a teacher's phone lives in the administration-only
+ * Teacher File. The structure this guard protects still holds, because the
+ * communication engine cannot read that table: no request role has a grant on
+ * it, and teacher-file-confinement.spec.ts fails the build if any source
+ * outside src/teacher-file names it. The redaction proof for every surface
+ * listed above is that confinement: the engine never holds the value.
+ */
+const ALLOWED: ReadonlyArray<string> = [
+  'phone text constraint teacher_file_phone_is_admin_only check',
+  'adminOnlyPhone String?   @map("phone")',
+];
 
 /** Strip comments so prose about phone privacy is not mistaken for a column. */
 function stripComments(src: string, kind: 'sql' | 'prisma'): string {

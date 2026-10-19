@@ -12,6 +12,7 @@
   "signInFailedRoleUnsupported": "This account cannot sign in to the Jawwid app. Staff accounts use the Jawwid console.",
   "sessionExpiredTitle": "You have been signed out",
   "sessionExpiredBody": "Your session ended. Please sign in again.",
+  "sessionUnreachableBody": "Couldn't reach Jawwid to open your session. You're still signed in — check your connection and try again.",
   "signOutAction": "Sign out",
   "signOutConfirm": "Sign out of Jawwid on this device?",
   "tabChats": "Chats",
@@ -440,6 +441,42 @@
   "storyVideoLabel": "Story video",
   "storyVideoFailed": "This video could not be played.",
   "storyVideoRetry": "Try again",
+  "storyTextLabel": "Story",
+  "@storyTextLabel": {
+    "description": "Stories viewer (2026-10-17): storyTextLabel"
+  },
+  "storyVoiceLabel": "Voice story",
+  "@storyVoiceLabel": {
+    "description": "Stories viewer (2026-10-17): storyVoiceLabel"
+  },
+  "storyVoiceFailed": "This voice note could not be played.",
+  "@storyVoiceFailed": {
+    "description": "Stories viewer (2026-10-17): storyVoiceFailed"
+  },
+  "storyVoicePlay": "Play voice story",
+  "@storyVoicePlay": {
+    "description": "Stories viewer (2026-10-17): storyVoicePlay"
+  },
+  "storyVoicePause": "Pause voice story",
+  "@storyVoicePause": {
+    "description": "Stories viewer (2026-10-17): storyVoicePause"
+  },
+  "storyCtaWhatsApp": "Chat on WhatsApp",
+  "@storyCtaWhatsApp": {
+    "description": "Stories viewer (2026-10-17): storyCtaWhatsApp"
+  },
+  "storyCtaMessage": "Send a message",
+  "@storyCtaMessage": {
+    "description": "Stories viewer (2026-10-17): storyCtaMessage"
+  },
+  "storyCtaLink": "Learn more",
+  "@storyCtaLink": {
+    "description": "Stories viewer (2026-10-17): storyCtaLink"
+  },
+  "storyCtaFailed": "That didn't open. Please try again.",
+  "@storyCtaFailed": {
+    "description": "Stories viewer (2026-10-17): storyCtaFailed"
+  },
   "storiesEmpty": "No stories yet",
   "@storiesEmpty": {
     "description": "Shown in the stories rail when the signed-in account has no live stories."
@@ -467,5 +504,308 @@
     }
   },
   "systemGroupArchived": "Group archived",
-  "systemUpdate": "System update"
+  "systemUpdate": "System update",
+  "lessonTicketsHeader": "Lesson",
+  "@lessonTicketsHeader": {
+    "description": "Section header in the + menu for lesson tickets."
+  },
+  "ticketReport": "Lesson report",
+  "ticketAbsence": "Student absent",
+  "ticketApology": "Apologise for the lesson",
+  "ticketTeacherApology": "I can't teach this lesson",
+  "ticketLateApology": "Late apology (emergency)",
+  "ticketLessonAt": "Lesson of {when}",
+  "@ticketLessonAt": {
+    "description": "Subtitle naming which lesson a ticket is for.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "reportCoveredLabel": "What was covered",
+  "reportHomeworkLabel": "Homework (optional)",
+  "reportRatingLabel": "Rating (optional)",
+  "reportNoteLabel": "Note (optional)",
+  "ticketReasonLabel": "Reason",
+  "ticketAbsenceHint": "No apology was received and the lesson time has passed.",
+  "ticketLateApologyHint": "A supervisor will review it. Until then the lesson counts as an absence.",
+  "ticketTeacherApologyHint": "A make-up lesson will be arranged with the family.",
+  "ticketSubmit": "Send",
+  "ticketSent": "Sent",
+  "ticketFailed": "Couldn't send. Please try again.",
+  "ticketNoLongerAllowed": "This lesson can no longer be updated this way.",
+  "cardReportTitle": "Lesson report",
+  "cardAbsenceTitle": "Absent from the lesson",
+  "cardApologyTitle": "Apology",
+  "cardTeacherApologyTitle": "The teacher can't teach this lesson",
+  "cardCancelledTitle": "Lesson cancelled",
+  "cardTeacherAbsentTitle": "Lesson not held — the teacher was absent",
+  "cardLateApologyTitle": "Late apology",
+  "cardRulingExcusedTitle": "Apology accepted",
+  "cardRulingCreditedTitle": "Recorded as an absence",
+  "cardUnderReview": "Under review by the supervision team",
+  "cardMakeupOwed": "A make-up lesson will be arranged.",
+  "cardCovered": "Covered",
+  "cardHomework": "Homework",
+  "cardRating": "Rating",
+  "cardNote": "Note",
+  "cardReason": "Reason",
+  "ticketBookMakeup": "Book a make-up lesson",
+  "ticketRequestScheduleChange": "Change regular lesson times",
+  "ticketFor": "For {name}",
+  "@ticketFor": {
+    "description": "Subtitle naming the child a ticket is about.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "makeupPickDay": "Choose a day",
+  "makeupPickTime": "Choose a time",
+  "makeupNoSlots": "No free times in the next two weeks. The supervision team will arrange the make-up.",
+  "makeupBook": "Book",
+  "makeupLength": "{minutes} minutes",
+  "@makeupLength": {
+    "description": "Length of the make-up lesson.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "scheduleChangePick": "Choose the new weekly times",
+  "scheduleChangeHint": "The supervision team will confirm the change.",
+  "scheduleChangeNoOptions": "There are no other free times right now.",
+  "scheduleChangeSend": "Send request",
+  "ticketLoadFailed": "Couldn't load the free times. Please try again.",
+  "cardMakeupBookedTitle": "Make-up lesson booked",
+  "cardMakeupResolvedTitle": "Missed lesson resolved",
+  "cardMakeupActionSubstitute": "A substitute teacher",
+  "cardMakeupActionCredit": "A credit to the family",
+  "cardMakeupActionExtension": "The package is extended",
+  "cardMakeupActionWaived": "No make-up needed",
+  "cardScheduleRequestedTitle": "Request to change the regular times",
+  "cardScheduleApprovedTitle": "New regular times confirmed",
+  "cardScheduleRejectedTitle": "The change of regular times was not approved",
+  "cardEveryWeek": "Every {when}",
+  "@cardEveryWeek": {
+    "description": "A regular weekly time, e.g. 'Every Monday 17:00'.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "tabSchedule": "Schedule",
+  "scheduleEmpty": "No lessons in the next two weeks.",
+  "scheduleLoadFailed": "Couldn't load your schedule.",
+  "phaseUpcoming": "Upcoming",
+  "phaseInProgress": "In progress",
+  "phaseAwaitingClose": "Needs report",
+  "phaseOverdue": "Report overdue",
+  "outcomeHeld": "Held",
+  "outcomeStudentApology": "Student apologised",
+  "outcomeTeacherApology": "Teacher apologised",
+  "outcomeAdminCancelled": "Cancelled",
+  "outcomeStudentNoShow": "Student absent",
+  "outcomeTeacherNoShow": "Teacher absent",
+  "outcomeRescheduled": "Moved",
+  "lessonKindMakeup": "Make-up",
+  "cardTransferredTitle": "New teacher",
+  "cardTransferredBody": "{teacher} will teach from now on.",
+  "@cardTransferredBody": {
+    "description": "Card telling a family who teaches their child after a transfer.",
+    "placeholders": {
+      "teacher": {
+        "type": "String"
+      }
+    }
+  },
+  "cardHandoverTitle": "A new student",
+  "cardHandoverFrom": "Previous teacher",
+  "cardHandoverNote": "Handover",
+  "cardPausedTitle": "Lessons paused",
+  "cardPausedUntil": "Until {date}",
+  "@cardPausedUntil": {
+    "description": "Return date of a paused learner.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "cardStoppedTitle": "Lessons stopped",
+  "cardReturnSoonTitle": "Lessons resume soon",
+  "cardReturnOn": "Back on {date}",
+  "@cardReturnOn": {
+    "description": "The day a paused learner's lessons resume.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "cardResumedTitle": "Lessons resumed",
+  "cardBonusTitle": "A bonus for you",
+  "progressTitle": "This month",
+  "progressAttended": "Attended",
+  "progressApologised": "Apologised",
+  "progressAbsent": "Absent",
+  "progressStreak": "{count, plural, =0{No streak yet} =1{1 lesson in a row} other{{count} lessons in a row}}",
+  "@progressStreak": {
+    "description": "Consecutive lessons attended.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "progressAllTime": "{count} lessons attended in total",
+  "@progressAllTime": {
+    "description": "All-time attended lessons.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "progressMakeupsOwed": "{count, plural, =1{1 make-up lesson owed} other{{count} make-up lessons owed}}",
+  "@progressMakeupsOwed": {
+    "description": "Make-up lessons the family is owed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "progressNext": "Next lesson: {when}",
+  "@progressNext": {
+    "description": "When the next lesson is.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "progressLastCovered": "Last lesson: {covered}",
+  "@progressLastCovered": {
+    "description": "What the latest report says was covered.",
+    "placeholders": {
+      "covered": {
+        "type": "String"
+      }
+    }
+  },
+  "progressCertificates": "Certificates will appear here.",
+  "progressUnavailable": "Progress isn't available right now.",
+  "workloadTitle": "This month",
+  "workloadHeld": "{lessons} lessons · {hours} h",
+  "@workloadHeld": {
+    "description": "Lessons held this month and their hours.",
+    "placeholders": {
+      "lessons": {
+        "type": "int"
+      },
+      "hours": {
+        "type": "String"
+      }
+    }
+  },
+  "workloadNeedsReport": "{count} need a report",
+  "@workloadNeedsReport": {
+    "description": "Lessons ended without a report.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "workloadOnTime": "{percent} reports on time",
+  "@workloadOnTime": {
+    "description": "Share of reports submitted on time.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "supervisionChatTitle": "Supervision",
+  "supervisionChatSubtitle": "Teachers department · private",
+  "supervisionTicketsHeader": "Requests",
+  "ticketCertificate": "Request a certificate",
+  "ticketLeave": "Request leave",
+  "certificateFormTitle": "Request a certificate",
+  "certificateFormHint": "Sent privately to the Teachers department. When the certificate is issued, it is posted to the student's group, where you and the parents receive it.",
+  "certificateStudent": "Student",
+  "certificateTitleField": "Certificate",
+  "certificateTitleHint": "e.g. Juz Amma",
+  "certificateAchievement": "Achievement",
+  "certificateAchievedOn": "Date achieved",
+  "certificateGrade": "Grade (optional)",
+  "certificatePrintedName": "Name as it should be printed",
+  "certificateNote": "Note to the department (optional)",
+  "leaveFormTitle": "Request leave",
+  "leaveFormHint": "Sent privately to the Teachers department. Approved days are deducted from your balance.",
+  "leaveFirstDay": "First day",
+  "leaveLastDay": "Last day",
+  "leaveReason": "Reason",
+  "leaveDaysCount": "{count, plural, =1{1 day} other{{count} days}}",
+  "@leaveDaysCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "leaveBalanceNow": "Your balance now: {balance}",
+  "@leaveBalanceNow": {
+    "placeholders": {
+      "balance": {
+        "type": "String"
+      }
+    }
+  },
+  "leaveSameYear": "Send a separate request for each year.",
+  "leaveLastBeforeFirst": "The last day is before the first day.",
+  "formRequired": "Required",
+  "formSend": "Send",
+  "myLeaveTitle": "My leave",
+  "myLeaveAllowance": "Allowance {year}",
+  "@myLeaveAllowance": {
+    "placeholders": {
+      "year": {
+        "type": "String"
+      }
+    }
+  },
+  "myLeaveUsed": "Used",
+  "myLeaveBalance": "Balance",
+  "myLeaveNoAllowance": "Not set yet",
+  "myLeaveNoRequests": "No leave requests this year.",
+  "myLeaveRequest": "Request leave",
+  "myLeaveWithdraw": "Withdraw",
+  "myLeaveWithdrawConfirm": "Withdraw this leave request?",
+  "leaveStateRequested": "Waiting",
+  "leaveStateApproved": "Approved",
+  "leaveStateDeclined": "Not approved",
+  "leaveStateWithdrawn": "Withdrawn",
+  "leaveStateCancelled": "Cancelled",
+  "cardCertificateRequestedTitle": "Certificate request",
+  "cardCertificateIssuedTitle": "Certificate",
+  "cardCertificateDeclinedTitle": "Certificate request not approved",
+  "cardLeaveRequestedTitle": "Leave request",
+  "cardLeaveApprovedTitle": "Leave approved",
+  "cardLeaveDeclinedTitle": "Leave not approved",
+  "cardLeaveWithdrawnTitle": "Leave request withdrawn",
+  "cardLeaveCancelledTitle": "Leave cancelled",
+  "cardAchievement": "Achievement",
+  "cardGrade": "Grade",
+  "cardDays": "Days",
+  "cardBalance": "Balance",
+  "cardDaysReturned": "Days returned",
+  "cardCongratulations": "Congratulations! The certificate is attached.",
+  "leaveNotAllowed": "These dates can't be requested: they overlap another request or have already passed.",
+  "progressCertificatesTitle": "Certificates"
 }

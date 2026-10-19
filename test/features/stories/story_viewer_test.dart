@@ -12,6 +12,7 @@ import 'package:jawwid_chat/features/stories/presentation/story_viewer_screen.da
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/story.dart';
 
+import '../messages/fake_voice_devices.dart';
 import 'fake_story_repository.dart';
 import 'fake_story_video_player.dart';
 
@@ -84,6 +85,9 @@ void main() {
           // A factory, because the viewer owns the player's lifecycle. Returning the same
           // instance each call is what lets a test assert it was disposed.
           storyVideoPlayerFactoryProvider.overrideWithValue(() => video),
+          // The viewer builds a voice player too; a fake keeps every suite off the platform
+          // audio session.
+          storyVoicePlayerFactoryProvider.overrideWithValue(FakeVoicePlayer.new),
         ],
         child: Consumer(
           builder: (context, ref, _) {
@@ -132,10 +136,10 @@ void main() {
       await pumpViewer(
         tester,
         stories: [
-          story(id: 'a', title: 'First', publishedAt: DateTime.now()),
+          story(id: 'a', body: 'First', publishedAt: DateTime.now()),
           story(
             id: 'b',
-            title: 'Second',
+            body: 'Second',
             publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
           ),
         ],
@@ -145,15 +149,15 @@ void main() {
       expect(find.text('Second'), findsOneWidget);
     });
 
-    testWidgets('shows the title and the body', (tester) async {
+    testWidgets('a text story is its words -- no title, no caption block', (tester) async {
       await pumpViewer(
         tester,
-        stories: [story(id: 'a', title: 'Term starts', body: 'On Sunday.')],
+        stories: [story(id: 'a', body: 'Term starts on Sunday.')],
         storyId: 'a',
       );
 
-      expect(find.text('Term starts'), findsOneWidget);
-      expect(find.text('On Sunday.'), findsOneWidget);
+      expect(find.text('Term starts on Sunday.'), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp('^Story')), findsOneWidget);
     });
 
     testWidgets('a story id that is not in the feed says so and closes', (tester) async {
@@ -175,7 +179,7 @@ void main() {
       // Reading the list in initState found it empty and told the reader the story was gone,
       // which was a lie about a story that was about to arrive.
       fake
-        ..setStories([story(id: 'a', title: 'Arrived late')])
+        ..setStories([story(id: 'a', body: 'Arrived late')])
         ..feedDelay = const Duration(milliseconds: 80);
 
       await tester.pumpWidget(
@@ -243,15 +247,15 @@ void main() {
       await pumpViewer(
         tester,
         stories: [
-          story(id: 'a', title: 'A', publishedAt: DateTime.now()),
+          story(id: 'a', body: 'A', publishedAt: DateTime.now()),
           story(
             id: 'b',
-            title: 'B',
+            body: 'B',
             publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
           ),
           story(
             id: 'c',
-            title: 'C',
+            body: 'C',
             publishedAt: DateTime.now().subtract(const Duration(hours: 2)),
           ),
         ],
@@ -264,7 +268,7 @@ void main() {
     testWidgets('a FAILED view does not crash the viewer or hide the story',
         (tester) async {
       fake.viewError = const UnclassifiedFailure();
-      await pumpViewer(tester, stories: [story(id: 'a', title: 'Still here')], storyId: 'a');
+      await pumpViewer(tester, stories: [story(id: 'a', body: 'Still here')], storyId: 'a');
 
       expect(tester.takeException(), isNull);
       expect(find.text('Still here'), findsOneWidget);
@@ -299,10 +303,10 @@ void main() {
       await pumpViewer(
         tester,
         stories: [
-          story(id: 'a', title: 'A', publishedAt: DateTime.now()),
+          story(id: 'a', body: 'A', publishedAt: DateTime.now()),
           story(
             id: 'b',
-            title: 'B',
+            body: 'B',
             publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
           ),
         ],
@@ -320,10 +324,10 @@ void main() {
       await pumpViewer(
         tester,
         stories: [
-          story(id: 'a', title: 'A', publishedAt: DateTime.now()),
+          story(id: 'a', body: 'A', publishedAt: DateTime.now()),
           story(
             id: 'b',
-            title: 'B',
+            body: 'B',
             publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
           ),
         ],
@@ -337,7 +341,7 @@ void main() {
 
     testWidgets('previous on the FIRST story restarts it rather than leaving',
         (tester) async {
-      await pumpViewer(tester, stories: [story(id: 'a', title: 'Only')], storyId: 'a');
+      await pumpViewer(tester, stories: [story(id: 'a', body: 'Only')], storyId: 'a');
 
       await tester.tap(find.bySemanticsLabel('Previous story'));
       await tester.pump();
@@ -398,10 +402,10 @@ void main() {
       await pumpViewer(
         tester,
         stories: [
-          story(id: 'a', title: 'A', publishedAt: DateTime.now()),
+          story(id: 'a', body: 'A', publishedAt: DateTime.now()),
           story(
             id: 'b',
-            title: 'B',
+            body: 'B',
             publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
           ),
         ],
@@ -447,10 +451,10 @@ void main() {
       await pumpViewer(
         tester,
         stories: [
-          story(id: 'a', title: 'A', publishedAt: DateTime.now()),
+          story(id: 'a', body: 'A', publishedAt: DateTime.now()),
           story(
             id: 'b',
-            title: 'B',
+            body: 'B',
             publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
           ),
         ],
@@ -496,7 +500,6 @@ void main() {
             id: 'a',
             mediaKind: StoryMediaKind.image,
             mediaUrl: 'https://storage.test/gone.png',
-            title: null,
             body: null,
           ),
         ],
@@ -535,7 +538,6 @@ void main() {
             id: 'a',
             mediaKind: StoryMediaKind.video,
             mediaUrl: 'https://storage.test/clip.mp4',
-            title: null,
             body: null,
           ),
         ],
@@ -556,7 +558,6 @@ void main() {
             id: 'a',
             mediaKind: StoryMediaKind.video,
             mediaUrl: 'https://storage.test/gone.mp4',
-            title: null,
             body: null,
           ),
         ],
@@ -575,14 +576,14 @@ void main() {
         stories: [
           story(
             id: 'a',
-            title: 'A',
+            body: 'A',
             mediaKind: StoryMediaKind.video,
             mediaUrl: 'https://storage.test/gone.mp4',
             publishedAt: DateTime.now(),
           ),
           story(
             id: 'b',
-            title: 'B',
+            body: 'B',
             publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
           ),
         ],
@@ -607,7 +608,6 @@ void main() {
             id: 'a',
             mediaKind: StoryMediaKind.video,
             mediaUrl: 'https://storage.test/clip.mp4',
-            title: null,
             body: null,
           ),
         ],
@@ -634,14 +634,14 @@ void main() {
         stories: [
           story(
             id: 'a',
-            title: 'A',
+            body: 'A',
             mediaKind: StoryMediaKind.video,
             mediaUrl: 'https://storage.test/clip.mp4',
             publishedAt: DateTime.now(),
           ),
           story(
             id: 'b',
-            title: 'B',
+            body: 'B',
             publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
           ),
         ],
@@ -652,7 +652,7 @@ void main() {
       await tester.pump(StoryViewerScreen.imageDuration * 5);
       await settleRoute(tester);
 
-      expect(find.text('A'), findsOneWidget);
+      expect(find.byKey(const ValueKey('story-page-a')), findsOneWidget);
       expect(find.text('B'), findsNothing);
     });
 
@@ -663,19 +663,19 @@ void main() {
         stories: [
           story(
             id: 'a',
-            title: 'A',
+            body: 'A',
             mediaKind: StoryMediaKind.video,
             mediaUrl: 'https://storage.test/clip.mp4',
             publishedAt: DateTime.now(),
           ),
           story(
             id: 'b',
-            title: 'B',
+            body: 'B',
             publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
           ),
           story(
             id: 'c',
-            title: 'C',
+            body: 'C',
             publishedAt: DateTime.now().subtract(const Duration(hours: 2)),
           ),
         ],
@@ -700,7 +700,6 @@ void main() {
             id: 'a',
             mediaKind: StoryMediaKind.video,
             mediaUrl: 'https://storage.test/clip.mp4',
-            title: null,
             body: null,
           ),
         ],
@@ -722,7 +721,6 @@ void main() {
             id: 'a',
             mediaKind: StoryMediaKind.video,
             mediaUrl: 'https://storage.test/clip.mp4',
-            title: null,
             body: null,
           ),
         ],
@@ -750,7 +748,7 @@ void main() {
         stories: [
           story(
             id: 'a',
-            title: 'A',
+            body: 'A',
             mediaKind: StoryMediaKind.video,
             mediaUrl: 'https://storage.test/clip.mp4',
             publishedAt: DateTime.now(),
@@ -758,7 +756,7 @@ void main() {
           if (stories > 1)
             story(
               id: 'b',
-              title: 'B',
+              body: 'B',
               publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
             ),
         ],
@@ -820,10 +818,10 @@ void main() {
       await pumpViewer(
         tester,
         stories: [
-          story(id: 'a', title: 'A', publishedAt: DateTime.now()),
+          story(id: 'a', body: 'A', publishedAt: DateTime.now()),
           story(
             id: 'b',
-            title: 'B',
+            body: 'B',
             mediaKind: StoryMediaKind.video,
             mediaUrl: 'https://storage.test/clip.mp4',
             publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
@@ -875,10 +873,10 @@ void main() {
       await pumpViewer(
         tester,
         stories: [
-          story(id: 'a', title: 'A', publishedAt: DateTime.now()),
+          story(id: 'a', body: 'A', publishedAt: DateTime.now()),
           story(
             id: 'b',
-            title: 'B',
+            body: 'B',
             publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
           ),
         ],
@@ -908,15 +906,15 @@ void main() {
       await pumpViewer(
         tester,
         stories: [
-          story(id: 'i1', title: 'I1', publishedAt: now),
+          story(id: 'i1', body: 'I1', publishedAt: now),
           story(
             id: 'v1',
-            title: 'V1',
+            body: 'V1',
             mediaKind: StoryMediaKind.video,
             mediaUrl: 'https://storage.test/clip.mp4',
             publishedAt: now.subtract(const Duration(hours: 1)),
           ),
-          story(id: 'i2', title: 'I2', publishedAt: now.subtract(const Duration(hours: 2))),
+          story(id: 'i2', body: 'I2', publishedAt: now.subtract(const Duration(hours: 2))),
         ],
         storyId: 'i1',
       );
@@ -925,12 +923,12 @@ void main() {
       expect(find.text('I1'), findsOneWidget);
       await tester.pump(StoryViewerScreen.imageDuration);
       await settleRoute(tester);
-      expect(find.text('V1'), findsOneWidget);
+      expect(find.byKey(const ValueKey('story-page-v1')), findsOneWidget);
 
       // Video: NOT duration.
       await tester.pump(StoryViewerScreen.imageDuration * 3);
       await settleRoute(tester);
-      expect(find.text('V1'), findsOneWidget);
+      expect(find.byKey(const ValueKey('story-page-v1')), findsOneWidget);
 
       // Video: completion.
       video.completePlayback();
@@ -954,15 +952,15 @@ void main() {
         stories: [
           story(
             id: 'v1',
-            title: 'V1',
+            body: 'V1',
             mediaKind: StoryMediaKind.video,
             mediaUrl: 'https://storage.test/one.mp4',
             publishedAt: now,
           ),
-          story(id: 'i1', title: 'I1', publishedAt: now.subtract(const Duration(hours: 1))),
+          story(id: 'i1', body: 'I1', publishedAt: now.subtract(const Duration(hours: 1))),
           story(
             id: 'v2',
-            title: 'V2',
+            body: 'V2',
             mediaKind: StoryMediaKind.video,
             mediaUrl: 'https://storage.test/two.mp4',
             publishedAt: now.subtract(const Duration(hours: 2)),
@@ -979,7 +977,7 @@ void main() {
 
       await tester.pump(StoryViewerScreen.imageDuration);
       await settleRoute(tester);
-      expect(find.text('V2'), findsOneWidget);
+      expect(find.byKey(const ValueKey('story-page-v2')), findsOneWidget);
 
       // A second video loaded its own URL, and only after the first was released.
       expect(video.loaded, ['https://storage.test/one.mp4', 'https://storage.test/two.mp4']);
@@ -991,10 +989,10 @@ void main() {
       await pumpViewer(
         tester,
         stories: [
-          story(id: 'i1', title: 'I1', publishedAt: now),
+          story(id: 'i1', body: 'I1', publishedAt: now),
           story(
             id: 'v1',
-            title: 'V1',
+            body: 'V1',
             mediaKind: StoryMediaKind.video,
             mediaUrl: 'https://storage.test/clip.mp4',
             publishedAt: now.subtract(const Duration(hours: 1)),

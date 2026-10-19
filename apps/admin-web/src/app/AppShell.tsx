@@ -13,6 +13,7 @@ import {
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
+import { useLessonAccess } from '@/features/teachers/hooks'
 import { useRealtime } from '@/core/realtime/RealtimeProvider'
 import { isSuperAdmin } from '@/core/permissions/capabilities'
 import { TEXT, useText } from '@/features/admin/copy'
@@ -40,7 +41,10 @@ const RAIL_QUERY = '(min-width: 1024px)'
 
 function useDestinations(): Destination[] {
   const { staff } = useSession()
-  return useMemo(() => (staff ? destinationsFor(staff.role) : []), [staff])
+  // Only operators need the answer; the super admin reaches statistics as a section.
+  const access = useLessonAccess(staff !== null && !isSuperAdmin(staff.role))
+  const lessonManager = access.data?.lessonManager === true
+  return useMemo(() => (staff ? destinationsFor(staff.role, { lessonManager }) : []), [staff, lessonManager])
 }
 
 function useEntryLabel() {
@@ -445,13 +449,8 @@ function Topbar({
         </span>
       </Link>
       <div className="topbar__spacer" />
-      {superAdmin && (
-        <span className="readonly-chip" title={tx(TEXT.readOnlyAccessHint)}>
-          <Icon name="eye" size={14} />
-          <span className="readonly-chip__text">{tx(TEXT.readOnlyAccess)}</span>
-          <span className="sr-only">{tx(TEXT.readOnlyAccessHint)}</span>
-        </span>
-      )}
+      {/* No "Read-only access" chip: the super admin has written in conversations
+          since PD-8 and publishes stories since 2026-10-17, so the claim was false. */}
       <LanguageToggle />
       {staff && (
         <>

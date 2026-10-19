@@ -111,7 +111,8 @@ async function publishedStory(
   extra: { body?: string | null; media?: boolean } = {},
 ): Promise<string> {
   const draft = await stories.create(authorId, {
-    body: extra.body === undefined ? 'hello' : extra.body,
+    // A photo story carries no caption (2026-10-17), so media means no body.
+    body: extra.body === undefined ? (extra.media ? null : 'hello') : extra.body,
     ...(extra.media
       ? { mediaObjectKey: `stories/${randomUUID()}`, mediaKind: 'image', mediaMime: 'image/png' }
       : {}),
@@ -185,7 +186,6 @@ describe('§A a story past access cannot mint media', () => {
 
   it('a DRAFT does hand one out — the author has to see what they attached', async () => {
     const draft = await stories.create(s.ownerId, {
-      body: 'draft with media',
       mediaObjectKey: `stories/${randomUUID()}`,
       mediaKind: 'image',
       mediaMime: 'image/png',
@@ -216,13 +216,25 @@ describe('§A a story past access cannot mint media', () => {
 describe('§B media is purged on every path, and never orphaned forever', () => {
   async function draftWithMedia(bodyless = false): Promise<string> {
     const draft = await stories.create(s.ownerId, {
-      body: bodyless ? null : 'with media',
       mediaObjectKey: `stories/${randomUUID()}`,
       mediaKind: 'image',
       mediaMime: 'image/png',
       audiences: [{ kind: StoryAudienceKind.ALL_FAMILIES }],
     });
+    // A picture WITH a caption can no longer be created (2026-10-17), but rows
+    // from before that exist and must purge just the same: write the legacy
+    // shape directly.
+    if (!bodyless) await prisma.story.update({ where: { id: draft.id }, data: { body: 'with media' } });
     return draft.id;
+  }
+
+  /**
+   * Stories published since 2026-10-17 do not expire, so their media is held
+   * for as long as they are live. The retention paths below are about stories
+   * whose access DID end; an expiring publication is the pre-2026-10-17 shape.
+   */
+  async function giveLegacyExpiry(id: string): Promise<void> {
+    await prisma.story.update({ where: { id }, data: { expiresAt: new Date(Date.now() + 3_600_000) } });
   }
 
   it('a MEDIA-ONLY published story can be purged (story_has_content must tolerate it)', async () => {
@@ -232,6 +244,7 @@ describe('§B media is purged on every path, and never orphaned forever', () => 
     // body, which is how it hid.
     const id = await draftWithMedia(true);
     await stories.publish(id, s.ownerId);
+    await giveLegacyExpiry(id);
     await ageStory(id, RETENTION_PAST);
 
     expect(await storySweeper.purgeDueMedia()).toBe(1);
@@ -267,15 +280,23 @@ describe('§B media is purged on every path, and never orphaned forever', () => 
 
     const expired = await draftWithMedia();
     await stories.publish(expired, s.ownerId);
+    await giveLegacyExpiry(expired);
 
     const deleted = await draftWithMedia();
     await stories.publish(deleted, s.ownerId);
     await stories.remove(deleted, s.ownerId, 'removed');
 
+    // Published with an expiry the sweep has not relabelled yet.
     const stillPublished = await draftWithMedia();
     await stories.publish(stillPublished, s.ownerId);
+    await giveLegacyExpiry(stillPublished);
 
-    for (const id of [drafted, expired, deleted, stillPublished]) {
+    // Published since 2026-10-17: no expiry, so its access has not ended and
+    // its media is not "past the window" -- it is the publication.
+    const permanent = await draftWithMedia();
+    await stories.publish(permanent, s.ownerId);
+
+    for (const id of [drafted, expired, deleted, stillPublished, permanent]) {
       await ageStory(id, RETENTION_PAST);
     }
     await storySweeper.expireDue();
@@ -285,8 +306,21 @@ describe('§B media is purged on every path, and never orphaned forever', () => 
       where: { mediaObjectKey: { not: null } },
       select: { id: true, state: true },
     });
-    expect(stranded).toEqual([]);
-    expect([drafted, expired, deleted, stillPublished]).toHaveLength(4);
+    // Everything whose access ended has lost its bytes; the one live story kept
+    // them, and is still readable.
+    expect(stranded).toEqual([{ id: permanent, state: StoryState.PUBLISHED }]);
+    expect([drafted, expired, deleted, stillPublished, permanent]).toHaveLength(5);
+  });
+
+  it('a story that does not expire keeps its media however old it is', async () => {
+    const id = await draftWithMedia(true);
+    await stories.publish(id, s.ownerId);
+    await ageStory(id, RETENTION_PAST * 10);
+
+    expect(await storySweeper.sweep()).toEqual({ expired: 0, purged: 0 });
+    const [item] = await stories.feed(s.parentId);
+    expect(item!.id).toBe(id);
+    expect(item!.mediaUrl).toMatch(STORY_MEDIA_LINK);
   });
 
   it('purging is idempotent and a second pass finds nothing', async () => {
@@ -687,6 +721,8 @@ describe('§H failure isolation', () => {
     const id = await publishedStory(s.ownerId, [{ kind: StoryAudienceKind.ALL_FAMILIES }], {
       media: true,
     });
+    // A pre-2026-10-17 expiring story: only those expire and purge.
+    await prisma.story.update({ where: { id }, data: { expiresAt: new Date() } });
     await ageStory(id, RETENTION_PAST);
 
     const exploding = {

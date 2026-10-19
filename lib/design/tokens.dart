@@ -284,6 +284,31 @@ class JawwidTokens extends ThemeExtension<JawwidTokens> {
 }
 
 /// §4 — 4px base grid. `spacing1` (2px) exists only for optical badge padding.
+/// Story colours (2026-10-17): the eight backgrounds a text or voice story may have, and the
+/// colours drawn over them. Identical in both themes -- a story is the publisher's artwork,
+/// not app chrome -- and identical to Admin Web's preview (`apps/admin-web/src/features/
+/// stories/stories.css`) and the database's `story_background_check`, so what the publisher
+/// saw is what the reader gets. White text clears 3:1 (large text) on every background.
+abstract final class StoryPalette {
+  static const backgrounds = <String, List<Color>>{
+    'teal': [Color(0xFF0B4856), Color(0xFF0E5A6B), Color(0xFF1B7487)],
+    'gold': [Color(0xFF5C410F), Color(0xFF7A5716), Color(0xFF94691B)],
+    'plum': [Color(0xFF3B2257), Color(0xFF57357E), Color(0xFF6D4597)],
+    'ink': [Color(0xFF0D1A20), Color(0xFF13232A), Color(0xFF24363E)],
+    'rose': [Color(0xFF7A1F42), Color(0xFF9C2F55), Color(0xFFB5476D)],
+    'sky': [Color(0xFF123F69), Color(0xFF1D5A94), Color(0xFF2A6FAE)],
+    'forest': [Color(0xFF143F28), Color(0xFF1E5B3A), Color(0xFF2A7049)],
+    'sunset': [Color(0xFF7C2D12), Color(0xFFA83C0C), Color(0xFFC2510C)],
+  };
+
+  /// Words and controls drawn on a story background.
+  static const onStory = Color(0xFFFFFFFF);
+
+  /// The story's button: a white pill with dark text, readable over any photo.
+  static const ctaSurface = Color(0xFFFFFFFF);
+  static const ctaForeground = Color(0xFF13232A);
+}
+
 abstract final class Spacing {
   static const double spacing0 = 0;
   static const double spacing1 = 2;

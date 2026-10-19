@@ -57,10 +57,15 @@ class SecureTokenStore implements TokenStore {
     );
   }
 
+  /// The refresh token is written FIRST. These are three separate keychain writes, and a
+  /// process killed between them leaves a mix of old and new. After a rotation the old
+  /// refresh token is already retired server-side, and presenting it is read as theft and
+  /// revokes every session on the account -- so it must never be the one left behind. A new
+  /// refresh token beside an old access token only costs one 401 and a refresh.
   @override
   Future<void> write(AuthSession session) async {
-    await _storage.write(key: _accessKey, value: session.accessToken);
     await _storage.write(key: _refreshKey, value: session.refreshToken);
+    await _storage.write(key: _accessKey, value: session.accessToken);
     await _storage.write(
       key: _expiryKey,
       value: session.accessTokenExpiresAt.toIso8601String(),

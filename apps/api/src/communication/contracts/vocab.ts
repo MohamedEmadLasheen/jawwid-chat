@@ -64,6 +64,11 @@ export const ConversationType = {
    * family (chat.conversation_learner). Moderated like a Student Group.
    */
   FAMILY_GROUP: 'family_group',
+  /**
+   * PD-11 / PD-12: one staff-only conversation per teacher with the Teachers
+   * department (chat.conversation.supervised_teacher_id). Never a contact.
+   */
+  TEACHER_SUPERVISION: 'teacher_supervision',
 } as const;
 
 /** Group conversations: BR-1 admin presence, moderation and PD-2 apply. */
@@ -97,6 +102,8 @@ export const MessageType = {
   VOICE: 'voice',
   FILE: 'file',
   SYSTEM: 'system',
+  /** PD-11: a ticket's card. Written by the server only; a client can never author one. */
+  CARD: 'card',
 } as const;
 export type MessageType = (typeof MessageType)[keyof typeof MessageType];
 
@@ -178,7 +185,8 @@ export const StoryState = {
 } as const;
 export type StoryState = (typeof StoryState)[keyof typeof StoryState];
 
-export const StoryMediaKind = { IMAGE: 'image', VIDEO: 'video' } as const;
+/** `audio` is a voice story (20261017120000). A story with no media is a text story. */
+export const StoryMediaKind = { IMAGE: 'image', VIDEO: 'video', AUDIO: 'audio' } as const;
 export type StoryMediaKind = (typeof StoryMediaKind)[keyof typeof StoryMediaKind];
 
 /**
@@ -199,6 +207,12 @@ export const StoryAudienceKind = {
   CONTACT: 'contact',
   /** The members of one student_group / class_group conversation. */
   CONVERSATION: 'conversation',
+  /**
+   * 20261017120000: a FILTER rather than a record -- user type, plus, for
+   * families, subscription plan length, number of children and country. See
+   * StorySegmentFilter in story-audience.resolver.ts.
+   */
+  SEGMENT: 'segment',
 } as const;
 export type StoryAudienceKind = (typeof StoryAudienceKind)[keyof typeof StoryAudienceKind];
 
@@ -207,7 +221,133 @@ export const UNSCOPED_STORY_AUDIENCE_KINDS: ReadonlySet<string> = new Set([
   StoryAudienceKind.ALL_FAMILIES,
   StoryAudienceKind.ALL_TEACHERS,
   StoryAudienceKind.ASSIGNED_FAMILIES,
+  StoryAudienceKind.SEGMENT,
 ]);
 
-/** Staff roles that may publish a story: the family-facing set, and only it. */
-export const STORY_PUBLISHER_ROLES: ReadonlySet<string> = FAMILY_FACING_STAFF_ROLES;
+/**
+ * Staff roles that may publish a story: the family-facing set plus the super
+ * admin (owner decision 2026-10-17 -- the Admin Portal is its publishing
+ * surface, and PD-8 already gave it full write). Mirrors
+ * chat.current_can_publish_story().
+ */
+export const STORY_PUBLISHER_ROLES: ReadonlySet<string> = new Set([
+  ...FAMILY_FACING_STAFF_ROLES,
+  StaffRole.SUPER_ADMIN,
+]);
+
+/** A story's one call to action. Mirrors `story_cta_shape`. */
+export const StoryCtaKind = {
+  /** Open the ACADEMY's WhatsApp number. */
+  WHATSAPP: 'whatsapp',
+  /** Open a direct conversation with the staff member who published it. */
+  MESSAGE_PUBLISHER: 'message_publisher',
+  /** Open an https link. */
+  LINK: 'link',
+} as const;
+export type StoryCtaKind = (typeof StoryCtaKind)[keyof typeof StoryCtaKind];
+
+/** Backgrounds a text or voice story may use. Mirrors `story_background_check`. */
+export const STORY_BACKGROUNDS = [
+  'teal', 'gold', 'plum', 'ink', 'rose', 'sky', 'forest', 'sunset',
+] as const;
+export type StoryBackground = (typeof STORY_BACKGROUNDS)[number];
+
+/** Subscription plan lengths, in months. Mirrors `family_subscription_plan_months_check`. */
+export const SUBSCRIPTION_PLAN_MONTHS = [1, 3, 6, 12] as const;
+
+// ---------------------------------------------------------------------------
+// PD-9 / PD-11: lessons. Mirrors the checks of 20261018120000.
+// ---------------------------------------------------------------------------
+
+export const LessonKind = { REGULAR: 'regular', MAKEUP: 'makeup' } as const;
+export type LessonKind = (typeof LessonKind)[keyof typeof LessonKind];
+
+export const LessonOutcome = {
+  HELD: 'held',
+  STUDENT_APOLOGY: 'student_apology',
+  TEACHER_APOLOGY: 'teacher_apology',
+  ADMIN_CANCELLED: 'admin_cancelled',
+  STUDENT_NO_SHOW: 'student_no_show',
+  TEACHER_NO_SHOW: 'teacher_no_show',
+  /** PD-11 T2: a future lesson replaced by a regular-time change. Not counted by statistics. */
+  RESCHEDULED: 'rescheduled',
+  /** PD-11 T3: a future lesson removed because the learner's study is paused or stopped. Not counted. */
+  SUSPENDED: 'suspended',
+} as const;
+export type LessonOutcome = (typeof LessonOutcome)[keyof typeof LessonOutcome];
+
+export const CardKind = {
+  LESSON_REPORT: 'lesson_report',
+  LESSON_ABSENCE: 'lesson_absence',
+  LESSON_APOLOGY: 'lesson_apology',
+  LESSON_TEACHER_APOLOGY: 'lesson_teacher_apology',
+  /** An admin cancellation or a teacher absence: the lesson will not happen. */
+  LESSON_CANCELLED: 'lesson_cancelled',
+  LESSON_LATE_APOLOGY: 'lesson_late_apology',
+  LESSON_RULING: 'lesson_ruling',
+  LESSON_MAKEUP_BOOKED: 'lesson_makeup_booked',
+  LESSON_MAKEUP_RESOLVED: 'lesson_makeup_resolved',
+  SCHEDULE_CHANGE_REQUESTED: 'schedule_change_requested',
+  SCHEDULE_CHANGE_DECIDED: 'schedule_change_decided',
+  LEARNER_TRANSFERRED: 'learner_transferred',
+  LEARNER_HANDOVER: 'learner_handover',
+  LEARNER_SUSPENDED: 'learner_suspended',
+  LEARNER_RETURN_SOON: 'learner_return_soon',
+  LEARNER_RESUMED: 'learner_resumed',
+  TEACHER_BONUS: 'teacher_bonus',
+  /** PD-12: posted in the teacher supervision conversation. */
+  CERTIFICATE_REQUESTED: 'certificate_requested',
+  /** PD-12: posted in the learner's group, carrying the certificate file as its attachment. */
+  CERTIFICATE_ISSUED: 'certificate_issued',
+  CERTIFICATE_DECLINED: 'certificate_declined',
+  LEAVE_REQUESTED: 'leave_requested',
+  LEAVE_APPROVED: 'leave_approved',
+  LEAVE_DECLINED: 'leave_declined',
+  LEAVE_WITHDRAWN: 'leave_withdrawn',
+  LEAVE_CANCELLED: 'leave_cancelled',
+} as const;
+export type CardKind = (typeof CardKind)[keyof typeof CardKind];
+
+export const RulingKind = { LATE_APOLOGY: 'late_apology', MAKEUP_FOLLOWUP: 'makeup_followup' } as const;
+
+/** PD-11: what a supervisor did about a teacher-cancelled lesson no make-up replaced. */
+export const MakeupAction = {
+  SUBSTITUTE_TEACHER: 'substitute_teacher',
+  FAMILY_CREDIT: 'family_credit',
+  PACKAGE_EXTENSION: 'package_extension',
+  WAIVED: 'waived',
+} as const;
+export type MakeupAction = (typeof MakeupAction)[keyof typeof MakeupAction];
+
+/** The outcomes that owe the family a make-up: the teacher did not give the lesson. */
+export const MAKEUP_OWING_OUTCOMES: ReadonlySet<string> = new Set(['teacher_apology', 'teacher_no_show']);
+
+/** PD-12: a student certificate's life. */
+export const CertificateState = { REQUESTED: 'requested', ISSUED: 'issued', DECLINED: 'declined' } as const;
+export type CertificateState = (typeof CertificateState)[keyof typeof CertificateState];
+
+/** PD-12: a leave request's life. */
+export const LeaveState = {
+  REQUESTED: 'requested',
+  APPROVED: 'approved',
+  DECLINED: 'declined',
+  WITHDRAWN: 'withdrawn',
+  CANCELLED: 'cancelled',
+} as const;
+export type LeaveState = (typeof LeaveState)[keyof typeof LeaveState];
+export const RulingDecision = { EXCUSED: 'excused', TEACHER_CREDITED: 'teacher_credited' } as const;
+export type RulingDecision = (typeof RulingDecision)[keyof typeof RulingDecision];
+
+// PD-11 T3: the fixed reason lists of 20261018160000 (free text goes in `note`).
+export const TRANSFER_REASONS: ReadonlySet<string> = new Set([
+  'family_request', 'teacher_request', 'schedule_fit', 'level_fit', 'quality', 'teacher_leaving', 'other',
+]);
+export const SUSPENSION_REASONS: ReadonlySet<string> = new Set([
+  'travel', 'exams', 'health', 'holiday', 'financial', 'schedule', 'quality', 'finished', 'moved_elsewhere', 'other',
+]);
+export const SupervisionKind = {
+  BONUS: 'bonus',
+  COMPLAINT: 'complaint',
+  MONTHLY_COMMENT: 'monthly_comment',
+  NOTE: 'note',
+} as const;

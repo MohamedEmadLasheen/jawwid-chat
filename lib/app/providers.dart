@@ -58,6 +58,18 @@ final groupRepositoryProvider = Provider<GroupRepository>((ref) {
   throw UnimplementedError('groupRepositoryProvider must be overridden');
 });
 
+/// PD-11. Unlike the others this has a harmless default rather than a throw: a build
+/// without a lesson server simply offers no lesson ticket.
+final lessonRepositoryProvider = Provider<LessonRepository>((ref) {
+  return const NoLessonRepository();
+});
+
+/// PD-12 S1. A harmless default like the lesson repository's: a build without a
+/// supervision server offers no supervision ticket.
+final supervisionRepositoryProvider = Provider<SupervisionRepository>((ref) {
+  return const NoSupervisionRepository();
+});
+
 final callRepositoryProvider = Provider<CallRepository>((ref) {
   throw UnimplementedError('callRepositoryProvider must be overridden');
 });
@@ -189,6 +201,14 @@ final attachmentOpenerProvider =
 /// override it so no suite opens a platform video session.
 final storyVideoPlayerFactoryProvider = Provider<StoryVideoPlayer Function()>(
   (ref) => VideoPlayerStoryVideoPlayer.new,
+);
+
+/// Makes a player for a VOICE story -- one per story viewer, for the same reason as
+/// [storyVideoPlayerFactoryProvider]: the viewer owns it and disposes it, so a closed story
+/// can never keep talking. Deliberately not [voicePlayerProvider], which is the chat's shared
+/// player and lives as long as the container.
+final storyVoicePlayerFactoryProvider = Provider<VoicePlayer Function()>(
+  (ref) => JustAudioVoicePlayer.new,
 );
 
 /// Audio playback. Like the recorder, a device capability with a real default;

@@ -277,7 +277,7 @@ void main() {
           child: const ChatsScreen(),
           extra: [
             storyRepositoryProvider.overrideWithValue(
-              FakeStoryRepository(stories: [story(id: 's1', title: 'أهلاً')]),
+              FakeStoryRepository(stories: [story(id: 's1', body: 'أهلاً')]),
             ),
           ],
         ),
@@ -285,9 +285,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.getSize(find.byType(StoriesRail)).height, greaterThan(0));
-      // The rail draws rings, not captions, so the story's presence is asserted
-      // on the ring's semantic label rather than on visible text.
-      expect(find.bySemanticsLabel(RegExp('أهلاً')), findsWidgets);
+      expect(find.byKey(const ValueKey('story-ring-s1')), findsOneWidget);
     });
 
     testWidgets('there is no compose or new-chat affordance', (tester) async {

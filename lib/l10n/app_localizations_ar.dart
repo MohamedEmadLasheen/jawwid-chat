@@ -51,6 +51,10 @@ class L10nAr extends L10n {
   String get sessionExpiredBody => 'انتهت جلستك. برجاء تسجيل الدخول مرة أخرى.';
 
   @override
+  String get sessionUnreachableBody =>
+      'تعذّر الوصول إلى جَوِّد لفتح جلستك. ما زلت مسجّلًا للدخول — تحقق من اتصالك وحاول مرة أخرى.';
+
+  @override
   String get signOutAction => 'تسجيل الخروج';
 
   @override
@@ -753,6 +757,33 @@ class L10nAr extends L10n {
   String get storyVideoRetry => 'إعادة المحاولة';
 
   @override
+  String get storyTextLabel => 'حالة';
+
+  @override
+  String get storyVoiceLabel => 'حالة صوتية';
+
+  @override
+  String get storyVoiceFailed => 'لم نتمكّن من تشغيل هذه الرسالة الصوتية.';
+
+  @override
+  String get storyVoicePlay => 'تشغيل الحالة الصوتية';
+
+  @override
+  String get storyVoicePause => 'إيقاف الحالة الصوتية مؤقتًا';
+
+  @override
+  String get storyCtaWhatsApp => 'تواصل عبر واتساب';
+
+  @override
+  String get storyCtaMessage => 'أرسل رسالة';
+
+  @override
+  String get storyCtaLink => 'اعرف المزيد';
+
+  @override
+  String get storyCtaFailed => 'لم يُفتح. حاول مرة أخرى.';
+
+  @override
   String get storiesEmpty => 'لا توجد حالات بعد';
 
   @override
@@ -776,4 +807,541 @@ class L10nAr extends L10n {
 
   @override
   String get systemUpdate => 'تحديث من النظام';
+
+  @override
+  String get lessonTicketsHeader => 'الحصة';
+
+  @override
+  String get ticketReport => 'تقرير الحصة';
+
+  @override
+  String get ticketAbsence => 'غياب الطالب';
+
+  @override
+  String get ticketApology => 'اعتذار عن الحصة';
+
+  @override
+  String get ticketTeacherApology => 'اعتذار المعلم عن الحصة';
+
+  @override
+  String get ticketLateApology => 'اعتذار متأخر (ظرف طارئ)';
+
+  @override
+  String ticketLessonAt(String when) {
+    return 'حصة $when';
+  }
+
+  @override
+  String get reportCoveredLabel => 'ما تمت دراسته';
+
+  @override
+  String get reportHomeworkLabel => 'الواجب (اختياري)';
+
+  @override
+  String get reportRatingLabel => 'التقييم (اختياري)';
+
+  @override
+  String get reportNoteLabel => 'ملاحظة (اختياري)';
+
+  @override
+  String get ticketReasonLabel => 'السبب';
+
+  @override
+  String get ticketAbsenceHint => 'لم يصل اعتذار وانتهى وقت الحصة.';
+
+  @override
+  String get ticketLateApologyHint =>
+      'ستراجعه الإدارة، وحتى ذلك الحين تُحتسب الحصة غيابًا.';
+
+  @override
+  String get ticketTeacherApologyHint => 'سيتم ترتيب حصة تعويضية مع الأسرة.';
+
+  @override
+  String get ticketSubmit => 'إرسال';
+
+  @override
+  String get ticketSent => 'تم الإرسال';
+
+  @override
+  String get ticketFailed => 'تعذّر الإرسال. حاول مرة أخرى.';
+
+  @override
+  String get ticketNoLongerAllowed =>
+      'لم يعد بالإمكان تحديث هذه الحصة بهذه الطريقة.';
+
+  @override
+  String get cardReportTitle => 'تقرير الحصة';
+
+  @override
+  String get cardAbsenceTitle => 'غياب عن الحصة';
+
+  @override
+  String get cardApologyTitle => 'اعتذار';
+
+  @override
+  String get cardTeacherApologyTitle => 'اعتذار المعلم عن الحصة';
+
+  @override
+  String get cardCancelledTitle => 'أُلغيت الحصة';
+
+  @override
+  String get cardTeacherAbsentTitle => 'لم تُعقد الحصة لغياب المعلم';
+
+  @override
+  String get cardLateApologyTitle => 'اعتذار متأخر';
+
+  @override
+  String get cardRulingExcusedTitle => 'قُبل الاعتذار';
+
+  @override
+  String get cardRulingCreditedTitle => 'سُجّلت الحصة غيابًا';
+
+  @override
+  String get cardUnderReview => 'قيد المراجعة من الإدارة';
+
+  @override
+  String get cardMakeupOwed => 'سيتم ترتيب حصة تعويضية.';
+
+  @override
+  String get cardCovered => 'ما تمت دراسته';
+
+  @override
+  String get cardHomework => 'الواجب';
+
+  @override
+  String get cardRating => 'التقييم';
+
+  @override
+  String get cardNote => 'ملاحظة';
+
+  @override
+  String get cardReason => 'السبب';
+
+  @override
+  String get ticketBookMakeup => 'حجز حصة تعويضية';
+
+  @override
+  String get ticketRequestScheduleChange => 'تغيير مواعيد الحصص الثابتة';
+
+  @override
+  String ticketFor(String name) {
+    return 'لـ $name';
+  }
+
+  @override
+  String get makeupPickDay => 'اختر يومًا';
+
+  @override
+  String get makeupPickTime => 'اختر وقتًا';
+
+  @override
+  String get makeupNoSlots =>
+      'لا توجد أوقات متاحة خلال الأسبوعين القادمين، وستتولى الإدارة ترتيب الحصة التعويضية.';
+
+  @override
+  String get makeupBook => 'احجز';
+
+  @override
+  String makeupLength(int minutes) {
+    return '$minutes دقيقة';
+  }
+
+  @override
+  String get scheduleChangePick => 'اختر المواعيد الأسبوعية الجديدة';
+
+  @override
+  String get scheduleChangeHint => 'ستؤكد الإدارة التغيير.';
+
+  @override
+  String get scheduleChangeNoOptions => 'لا توجد مواعيد أخرى متاحة حاليًا.';
+
+  @override
+  String get scheduleChangeSend => 'إرسال الطلب';
+
+  @override
+  String get ticketLoadFailed => 'تعذّر تحميل الأوقات المتاحة. حاول مرة أخرى.';
+
+  @override
+  String get cardMakeupBookedTitle => 'حُجزت حصة تعويضية';
+
+  @override
+  String get cardMakeupResolvedTitle => 'تمت معالجة الحصة الفائتة';
+
+  @override
+  String get cardMakeupActionSubstitute => 'معلم بديل';
+
+  @override
+  String get cardMakeupActionCredit => 'رصيد للأسرة';
+
+  @override
+  String get cardMakeupActionExtension => 'تمديد الباقة';
+
+  @override
+  String get cardMakeupActionWaived => 'لا حاجة لحصة تعويضية';
+
+  @override
+  String get cardScheduleRequestedTitle => 'طلب تغيير المواعيد الثابتة';
+
+  @override
+  String get cardScheduleApprovedTitle => 'اعتُمدت المواعيد الجديدة';
+
+  @override
+  String get cardScheduleRejectedTitle => 'لم يُعتمد تغيير المواعيد';
+
+  @override
+  String cardEveryWeek(String when) {
+    return 'كل $when';
+  }
+
+  @override
+  String get tabSchedule => 'الجدول';
+
+  @override
+  String get scheduleEmpty => 'لا توجد حصص خلال الأسبوعين القادمين.';
+
+  @override
+  String get scheduleLoadFailed => 'تعذّر تحميل جدولك.';
+
+  @override
+  String get phaseUpcoming => 'قادمة';
+
+  @override
+  String get phaseInProgress => 'جارية';
+
+  @override
+  String get phaseAwaitingClose => 'بانتظار التقرير';
+
+  @override
+  String get phaseOverdue => 'تأخر التقرير';
+
+  @override
+  String get outcomeHeld => 'عُقدت';
+
+  @override
+  String get outcomeStudentApology => 'اعتذر الطالب';
+
+  @override
+  String get outcomeTeacherApology => 'اعتذر المعلم';
+
+  @override
+  String get outcomeAdminCancelled => 'أُلغيت';
+
+  @override
+  String get outcomeStudentNoShow => 'غاب الطالب';
+
+  @override
+  String get outcomeTeacherNoShow => 'غاب المعلم';
+
+  @override
+  String get outcomeRescheduled => 'نُقلت';
+
+  @override
+  String get lessonKindMakeup => 'تعويضية';
+
+  @override
+  String get cardTransferredTitle => 'معلم جديد';
+
+  @override
+  String cardTransferredBody(String teacher) {
+    return 'سيتولى $teacher التدريس ابتداءً من الآن.';
+  }
+
+  @override
+  String get cardHandoverTitle => 'طالب جديد';
+
+  @override
+  String get cardHandoverFrom => 'المعلم السابق';
+
+  @override
+  String get cardHandoverNote => 'ملاحظات التسليم';
+
+  @override
+  String get cardPausedTitle => 'توقف الحصص مؤقتًا';
+
+  @override
+  String cardPausedUntil(String date) {
+    return 'حتى $date';
+  }
+
+  @override
+  String get cardStoppedTitle => 'توقفت الحصص';
+
+  @override
+  String get cardReturnSoonTitle => 'تعود الحصص قريبًا';
+
+  @override
+  String cardReturnOn(String date) {
+    return 'العودة يوم $date';
+  }
+
+  @override
+  String get cardResumedTitle => 'عادت الحصص';
+
+  @override
+  String get cardBonusTitle => 'مكافأة لك';
+
+  @override
+  String get progressTitle => 'هذا الشهر';
+
+  @override
+  String get progressAttended => 'حضر';
+
+  @override
+  String get progressApologised => 'اعتذر';
+
+  @override
+  String get progressAbsent => 'غاب';
+
+  @override
+  String progressStreak(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count حصة متتالية',
+      many: '$count حصة متتالية',
+      few: '$count حصص متتالية',
+      two: 'حصتان متتاليتان',
+      one: 'حصة واحدة متتالية',
+      zero: 'لا توجد سلسلة بعد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String progressAllTime(int count) {
+    return '$count حصة حضرها إجمالًا';
+  }
+
+  @override
+  String progressMakeupsOwed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count حصة تعويضية مستحقة',
+      few: '$count حصص تعويضية مستحقة',
+      two: 'حصتان تعويضيتان مستحقتان',
+      one: 'حصة تعويضية مستحقة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String progressNext(String when) {
+    return 'الحصة القادمة: $when';
+  }
+
+  @override
+  String progressLastCovered(String covered) {
+    return 'آخر حصة: $covered';
+  }
+
+  @override
+  String get progressCertificates => 'ستظهر الشهادات هنا.';
+
+  @override
+  String get progressUnavailable => 'التقدم غير متاح حاليًا.';
+
+  @override
+  String get workloadTitle => 'هذا الشهر';
+
+  @override
+  String workloadHeld(int lessons, String hours) {
+    return '$lessons حصة · $hours ساعة';
+  }
+
+  @override
+  String workloadNeedsReport(int count) {
+    return '$count بانتظار التقرير';
+  }
+
+  @override
+  String workloadOnTime(String percent) {
+    return '$percent من التقارير في موعدها';
+  }
+
+  @override
+  String get supervisionChatTitle => 'الإشراف';
+
+  @override
+  String get supervisionChatSubtitle => 'قسم المعلمين · خاصة';
+
+  @override
+  String get supervisionTicketsHeader => 'الطلبات';
+
+  @override
+  String get ticketCertificate => 'طلب شهادة';
+
+  @override
+  String get ticketLeave => 'طلب إجازة';
+
+  @override
+  String get certificateFormTitle => 'طلب شهادة';
+
+  @override
+  String get certificateFormHint =>
+      'يُرسل بشكل خاص إلى قسم المعلمين. عند إصدار الشهادة تُنشر في مجموعة الطالب، حيث تستلمها أنت وأولياء الأمر.';
+
+  @override
+  String get certificateStudent => 'الطالب';
+
+  @override
+  String get certificateTitleField => 'الشهادة';
+
+  @override
+  String get certificateTitleHint => 'مثال: جزء عمّ';
+
+  @override
+  String get certificateAchievement => 'الإنجاز';
+
+  @override
+  String get certificateAchievedOn => 'تاريخ الإنجاز';
+
+  @override
+  String get certificateGrade => 'التقدير (اختياري)';
+
+  @override
+  String get certificatePrintedName => 'الاسم كما يُكتب على الشهادة';
+
+  @override
+  String get certificateNote => 'ملاحظة للقسم (اختيارية)';
+
+  @override
+  String get leaveFormTitle => 'طلب إجازة';
+
+  @override
+  String get leaveFormHint =>
+      'يُرسل بشكل خاص إلى قسم المعلمين. تُخصم الأيام المعتمدة من رصيدك.';
+
+  @override
+  String get leaveFirstDay => 'أول يوم';
+
+  @override
+  String get leaveLastDay => 'آخر يوم';
+
+  @override
+  String get leaveReason => 'السبب';
+
+  @override
+  String leaveDaysCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count يوم',
+      many: '$count يومًا',
+      few: '$count أيام',
+      two: 'يومان',
+      one: 'يوم واحد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String leaveBalanceNow(String balance) {
+    return 'رصيدك الحالي: $balance';
+  }
+
+  @override
+  String get leaveSameYear => 'أرسل طلبًا منفصلًا لكل عام.';
+
+  @override
+  String get leaveLastBeforeFirst => 'آخر يوم قبل أول يوم.';
+
+  @override
+  String get formRequired => 'مطلوب';
+
+  @override
+  String get formSend => 'إرسال';
+
+  @override
+  String get myLeaveTitle => 'إجازاتي';
+
+  @override
+  String myLeaveAllowance(String year) {
+    return 'رصيد $year';
+  }
+
+  @override
+  String get myLeaveUsed => 'المستخدم';
+
+  @override
+  String get myLeaveBalance => 'المتبقي';
+
+  @override
+  String get myLeaveNoAllowance => 'لم يُحدَّد بعد';
+
+  @override
+  String get myLeaveNoRequests => 'لا توجد طلبات إجازة هذا العام.';
+
+  @override
+  String get myLeaveRequest => 'طلب إجازة';
+
+  @override
+  String get myLeaveWithdraw => 'سحب';
+
+  @override
+  String get myLeaveWithdrawConfirm => 'سحب طلب الإجازة هذا؟';
+
+  @override
+  String get leaveStateRequested => 'بانتظار القرار';
+
+  @override
+  String get leaveStateApproved => 'معتمدة';
+
+  @override
+  String get leaveStateDeclined => 'غير معتمدة';
+
+  @override
+  String get leaveStateWithdrawn => 'مسحوبة';
+
+  @override
+  String get leaveStateCancelled => 'ملغاة';
+
+  @override
+  String get cardCertificateRequestedTitle => 'طلب شهادة';
+
+  @override
+  String get cardCertificateIssuedTitle => 'شهادة';
+
+  @override
+  String get cardCertificateDeclinedTitle => 'لم يُعتمد طلب الشهادة';
+
+  @override
+  String get cardLeaveRequestedTitle => 'طلب إجازة';
+
+  @override
+  String get cardLeaveApprovedTitle => 'تمت الموافقة على الإجازة';
+
+  @override
+  String get cardLeaveDeclinedTitle => 'لم تتم الموافقة على الإجازة';
+
+  @override
+  String get cardLeaveWithdrawnTitle => 'سُحب طلب الإجازة';
+
+  @override
+  String get cardLeaveCancelledTitle => 'أُلغيت الإجازة';
+
+  @override
+  String get cardAchievement => 'الإنجاز';
+
+  @override
+  String get cardGrade => 'التقدير';
+
+  @override
+  String get cardDays => 'الأيام';
+
+  @override
+  String get cardBalance => 'الرصيد';
+
+  @override
+  String get cardDaysReturned => 'أيام أُعيدت';
+
+  @override
+  String get cardCongratulations => 'مبارك! الشهادة مرفقة.';
+
+  @override
+  String get leaveNotAllowed =>
+      'لا يمكن طلب هذه الأيام: تتداخل مع طلب آخر أو مضت.';
+
+  @override
+  String get progressCertificatesTitle => 'الشهادات';
 }

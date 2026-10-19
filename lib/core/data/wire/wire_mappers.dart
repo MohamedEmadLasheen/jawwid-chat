@@ -1,4 +1,5 @@
 import '../../../shared/models/conversation.dart';
+import '../../../shared/models/lesson.dart';
 import '../../../shared/models/message.dart';
 import '../../../shared/models/story.dart';
 import '../../../shared/models/user_role.dart';
@@ -137,6 +138,7 @@ abstract final class WireMappers {
         Wire.messageVoice => MessageKind.voice,
         Wire.messageFile => MessageKind.file,
         Wire.messageSystem => MessageKind.system,
+        Wire.messageCard => MessageKind.card,
         _ => MessageKind.text,
       };
 
@@ -265,6 +267,7 @@ abstract final class WireMappers {
       // (2026-10-14) forbids that channel again, and one left over from the PD-6 window is
       // history -- the backend refuses every send into it with BR1_TEACHER_PARENT_DIRECT.
       isReadOnly: archivedAt != null || kind == ConversationKind.teacherParentDirect,
+      isTeacherSupervision: json['type'] == Wire.conversationTeacherSupervision,
     );
   }
 
@@ -281,6 +284,20 @@ abstract final class WireMappers {
   /// which is defensive presentation, **not** identity resolution: this client
   /// never asks an identity endpoint for a missing name, and it never derives one
   /// from the role, the actor kind, or conversation membership.
+  /// PD-11: `MessageDto.card`, or null when absent or malformed. A malformed card is
+  /// dropped rather than thrown on: the message still has its plain-text body.
+  static MessageCard? messageCard(Object? raw) {
+    if (raw is! Map) return null;
+    final kind = raw['kind'];
+    final payload = raw['payload'];
+    if (kind is! String || kind.isEmpty || payload is! Map) return null;
+    return MessageCard(
+      kind: kind,
+      lessonId: raw['lessonId'] as String?,
+      payload: Map<String, Object?>.from(payload),
+    );
+  }
+
   static Message message(
     Map<String, Object?> json, {
     required String viewerActorId,
@@ -322,6 +339,7 @@ abstract final class WireMappers {
       // original has not been paged in yet.
       replyTo: null,
       replyToMessageId: json['replyToMessageId'] as String?,
+      card: messageCard(json['card']),
       reactions: [
         for (final entry in byEmoji.entries)
           Reaction(
@@ -364,25 +382,66 @@ abstract final class WireMappers {
   /// `mediaKind` and `mediaUrl` travel together: the server sets both or neither, and once
   /// media is purged it sends neither. A half-described attachment is treated as no
   /// attachment, so the viewer shows the words instead of an image box that cannot fill.
+  /// One story from `StoryFeedItem`.
+  ///
+  /// A null `expiresAt` is a story that does not expire (every story since 2026-10-17), NOT a
+  /// row to drop: the first version of this mapper refused it, which would have made every
+  /// new story invisible on the phone. A row with no id or no publication time is still
+  /// dropped -- there is no story without those.
+  ///
+  /// Words are kept only for a TEXT story. The server already sends none for the other kinds;
+  /// an older server's caption under a picture is not rendered either, because a story has
+  /// no caption.
   static Story? story(Map<String, Object?> json) {
     final id = json['id'] as String?;
     final publishedAt = parseTime(json['publishedAt']);
+    if (id == null || id.isEmpty || publishedAt == null) return null;
     final expiresAt = parseTime(json['expiresAt']);
-    if (id == null || id.isEmpty || publishedAt == null || expiresAt == null) return null;
 
     final mediaKind = StoryMediaKind.tryParse(json['mediaKind'] as String?);
     final mediaUrl = json['mediaUrl'] as String?;
     final hasMedia = mediaKind != null && mediaUrl != null && mediaUrl.isNotEmpty;
+    final kind = StoryKind.fromWire(json['kind'] as String?, mediaKind);
+    final durationMs = json['mediaDurationMs'];
 
     return Story(
       id: id,
-      title: _nonEmpty(json['title']),
-      body: _nonEmpty(json['body']),
+      kind: kind,
+      body: kind == StoryKind.text ? _nonEmpty(json['body']) : null,
+      background: _nonEmpty(json['background']),
       mediaKind: hasMedia ? mediaKind : null,
       mediaUrl: hasMedia ? mediaUrl : null,
+      mediaDuration: durationMs is num && durationMs > 0
+          ? Duration(milliseconds: durationMs.round())
+          : null,
+      cta: storyCta(json['cta']),
       publishedAt: publishedAt,
       expiresAt: expiresAt,
       isViewed: json['viewed'] == true,
+    );
+  }
+
+  /// A story's button. An unknown kind, or a link/WhatsApp button with no address, is no
+  /// button: a control that could only fail is worse than none.
+  static StoryCta? storyCta(Object? raw) {
+    if (raw is! Map) return null;
+    final kind = StoryCtaKind.tryParse(raw['kind'] as String?);
+    if (kind == null) return null;
+    final url = _nonEmpty(raw['url']);
+    if (kind != StoryCtaKind.messagePublisher && (url == null || !url.startsWith('https://'))) {
+      return null;
+    }
+    return StoryCta(kind: kind, label: _nonEmpty(raw['label']), url: url);
+  }
+
+  /// What `POST /stories/:id/cta` answered.
+  static StoryCtaTap? storyCtaTap(Map<String, Object?> json) {
+    final kind = StoryCtaKind.tryParse(json['kind'] as String?);
+    if (kind == null) return null;
+    return StoryCtaTap(
+      kind: kind,
+      url: _nonEmpty(json['url']),
+      conversationId: _nonEmpty(json['conversationId']),
     );
   }
 

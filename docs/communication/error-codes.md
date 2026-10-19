@@ -72,7 +72,7 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 
 | Code | HTTP | Meaning |
 |---|---|---|
-| `COMM.STORY_CANNOT_PUBLISH` | 403 | Not a publisher. Publishing is the family-facing staff roles (admin, coverage, manager). Also the answer to "may I read the viewer list?". Never retry. |
+| `COMM.STORY_CANNOT_PUBLISH` | 403 | Not a publisher. Publishing is the family-facing staff roles (admin, coverage, manager) and, since 2026-10-17, the super admin. Also the answer to "may I read the viewer list / analytics?". Never retry. |
 | `COMM.STORY_CANNOT_READ` | 403 | This contact is not a communicating contact for the family. |
 | `COMM.STORY_NOT_FOUND` | 404 | Deliberately returned for "does not exist", "not yours" and "not published to you" alike, with the same message. Distinguishing them would turn every story route into an existence oracle. |
 | `COMM.STORY_EMPTY` | 400 | A story needs a body or a piece of media. |
@@ -83,7 +83,12 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.STORY_DELETED` | 410 | Removed by an operator. Never retry. |
 | `COMM.STORY_DELETE_REASON_REQUIRED` | 400 | Deleting a story requires a reason; it is recorded in `chat.audit_log`. |
 | `COMM.STORY_AUDIENCE_EMPTY` | 400 | The authored audience resolves to nobody you may address. |
-| `COMM.STORY_AUDIENCE_INVALID` | 400 | A clause is malformed, names an unknown kind, or names a record outside your organization. Loud rather than silent, so an operator learns while composing. |
+| `COMM.STORY_AUDIENCE_INVALID` | 400 | A clause is malformed, names an unknown kind, or names a record outside your organization; a segment filter is malformed; or an analytics time zone is unknown. Loud rather than silent, so an operator learns while composing. |
+| `COMM.STORY_CAPTION_NOT_ALLOWED` | 400 | A photo, video or voice story carries no words, and no story has a title (2026-10-17). Name it for yourself with `internalName`. |
+| `COMM.STORY_CTA_INVALID` | 400 | The button is malformed: an unknown kind, a link that is not https, a WhatsApp number that is not international, or a label over 40 characters. |
+| `COMM.STORY_NO_CTA` | 409 | The story has no button to tap (or replies are not available for it). |
+| `COMM.STORY_AUDIENCE_DATA_DENIED` | 403 | Family country / plan data is for the super admin and managers. Never retry. |
+| `COMM.STORY_FAMILY_NOT_FOUND` | 404 | No such family in your organization. |
 
 ## Admin Portal
 
@@ -103,6 +108,38 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.STAFF_ASSIGNMENT_DENIED` | 403 | The caller may not assign or end this responsibility or reporting line (self-assignment, outside their team, not the super admin). Never retry. |
 | `COMM.STAFF_ASSIGNMENT_INVALID` | 409 | The assignment is not lawful: already active, already ended, or it breaks the reporting hierarchy. |
 | `COMM.STAFF_DIRECTORY_DENIED` | 403 | The organization-wide staff overview belongs to `super_admin` alone. |
+
+## Lessons (PD-9 / PD-11)
+
+| Code | HTTP | Meaning |
+|---|---|---|
+| `COMM.LESSON_NOT_FOUND` | 404 | No such lesson or ruling, or one the caller may not see (another teacher's, another family's, another organization's). Deliberately one code. |
+| `COMM.LESSON_DENIED` | 403 | The caller sees the lesson but may not record this on it: a parent writing a report, a teacher deciding a ruling, an Operations supervisor cancelling. Never retry. |
+| `COMM.LESSON_STATE` | 409 | The lesson does not allow it now: already closed, not started yet, started already (send a late apology instead), or past the 48-hour late-apology window. Refresh the lesson; do not retry. |
+| `COMM.LESSON_TEACHER_BUSY` | 409 | The teacher already has a lesson that overlaps this time. |
+
+## Certificates, leave and the supervision conversation (PD-12)
+
+| Code | HTTP | Meaning |
+|---|---|---|
+| `COMM.CERTIFICATE_NOT_FOUND` | 404 | No such certificate, or a learner the teacher does not teach (one code for both, so a teacher cannot probe other learners). |
+| `COMM.CERTIFICATE_DENIED` | 403 | Only the Teachers department and the super admin see, issue or decline certificates. Never retry. |
+| `COMM.CERTIFICATE_STATE` | 409 | Already decided, the file has not been uploaded, or the learner has no live group to deliver into. Refresh; do not retry. |
+| `COMM.LEAVE_NOT_FOUND` | 404 | No such leave request or teacher, or one the caller may not see. |
+| `COMM.LEAVE_DENIED` | 403 | Leave is requested by a teacher for themselves, decided by the Teachers department, and the allowance is set by its manager or the super admin. Never retry. |
+| `COMM.LEAVE_STATE` | 409 | The leave does not allow it: already decided or withdrawn, overlapping another open or approved request, in the past, or crossing a calendar year. |
+| `COMM.LEAVE_LESSONS_COLLIDE` | 409 | Open lessons fall inside the leave. Approve again with `cancelCollidingLessons: true` to cancel them (each family is told in its group). |
+| `COMM.SUPERVISION_DENIED` | 403 | Only the teacher themselves, or the Teachers department, opens a supervision conversation. |
+| `COMM.SUPERVISION_NOT_FOUND` | 404 | No such active teacher in the caller's organization. |
+
+Issuing a certificate answers `COMM.ATTACHMENT_NOT_IN_CONVERSATION` (403) for a
+file that was not uploaded into the learner's group, and
+`COMM.ATTACHMENT_TYPE_NOT_ALLOWED` (400) when the stored bytes are not the PDF or
+image they were declared as.
+
+A client may never send a message of type `card`; `POST /conversations/:id/messages`
+answers `COMMON.VALIDATION` (400). Cards are written only by the ticket that
+recorded them.
 
 ## Client guidance
 

@@ -1,0 +1,68 @@
+/* PD-11 T5 teacher statistics. Layout reuses .page / .card / .table from the design system. */
+.ts-toolbar { margin-block: var(--space-3); max-inline-size: 28rem; }
+.ts-month { display: inline-flex; align-items: center; gap: var(--space-2); }
+.ts-month .field__label { margin: 0; white-space: nowrap; }
+.ts-month .input { inline-size: auto; }
+.ts-link { font: inherit; font-weight: 600; background: none; border: none; padding: 0; color: var(--text-link); cursor: pointer; text-align: start; }
+.ts-link:hover { text-decoration: underline; }
+.ts-muted { color: var(--text-muted); }
+.ts-attention { color: var(--warn); font-weight: 600; }
+.ts-back { margin-block-end: var(--space-2); }
+.ts-head-actions { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; }
+.ts-total { display: grid; justify-items: center; padding: var(--space-2) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.ts-total__label { font-size: var(--fs-sm); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.ts-total__value { font-size: 1.75rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.ts-grid { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr)); margin-block-start: var(--space-3); }
+.ts-grid .card { margin: 0; }
+.ts-grid--facts { margin-block-start: var(--space-5); }
+
+.ts-card { display: flex; flex-direction: column; gap: var(--space-2); }
+.ts-card__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
+.ts-card__title { margin: 0; font-size: var(--fs-md); font-weight: 600; }
+.ts-card__count { font-size: 1.75rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ts-card__rule { block-size: 3px; border-radius: 2px; background: var(--border); }
+.ts-card--success .ts-card__rule { background: var(--ok); }
+.ts-card--info .ts-card__rule { background: var(--info); }
+.ts-card--warning .ts-card__rule { background: var(--warn); }
+.ts-card--danger .ts-card__rule { background: var(--danger); }
+.ts-card__rows { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.ts-card__row { display: flex; justify-content: space-between; gap: var(--space-2); }
+.ts-card__right { display: grid; justify-items: end; font-variant-numeric: tabular-nums; }
+.ts-card__empty { margin: var(--space-2) 0; text-align: center; }
+.ts-card__foot { display: flex; justify-content: space-between; gap: var(--space-2); padding-block-start: var(--space-2); border-block-start: 1px solid var(--border); margin-block-start: auto; }
+.ts-card__note { font-size: var(--fs-sm); margin: 0; }
+
+.ts-fact__list { margin: var(--space-2) 0 0; display: grid; gap: var(--space-3); }
+.ts-metric { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); }
+.ts-metric dt { color: var(--text-muted); }
+.ts-metric dd { margin: 0; display: grid; justify-items: end; font-variant-numeric: tabular-nums; }
+.ts-metric__hint { font-size: var(--fs-sm); }
+.ts-previous { margin-block-start: var(--space-4); }
+
+/* The Teachers area's tab strip (area.tsx). Same look as the Organization tabs. */
+.ts-tabs { display: flex; gap: var(--space-1); flex-wrap: wrap; border-block-end: 1px solid var(--border); margin-block-end: var(--space-3); }
+.ts-tab { padding: var(--space-2) var(--space-3); color: var(--text-muted); text-decoration: none; border-block-end: 2px solid transparent; }
+.ts-tab--active { color: var(--accent); border-block-end-color: var(--accent); font-weight: 600; }
+
+/* Supervisors' operations (Needs action, Schedules, Students). */
+.ts-section { margin-block-end: var(--space-4); }
+.ts-section__head { display: flex; align-items: center; gap: var(--space-2); }
+.ts-section__hint { margin-block: var(--space-1) var(--space-2); }
+.ts-rows { display: grid; gap: var(--space-2); }
+.ts-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.ts-row__main { display: grid; gap: 2px; min-inline-size: 0; }
+.ts-row__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.ts-inline { max-inline-size: 18rem; }
+.ts-windows { display: grid; gap: var(--space-2); margin-block: var(--space-2); }
+.ts-window { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.ts-window .select, .ts-window .input { inline-size: auto; }
+.ts-narrow { max-inline-size: 6rem; }
+.ts-subtitle { margin: var(--space-4) 0 var(--space-2); font-size: var(--fs-md); }
+.ts-daysoff { list-style: none; padding: 0; margin: 0 0 var(--space-2); display: grid; gap: var(--space-1); }
+.ts-daysoff li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
+.ts-badge-gap { margin-inline-start: var(--space-2); }
+/* A row's name is a row header for assistive tech, but should not look like a header column. */
+.ts-plain-rows th[scope='row'] { background: transparent; font-weight: 600; color: var(--text); }
+.ts-actions-cell { white-space: nowrap; }
+.ts-actions-cell .btn + .btn { margin-inline-start: var(--space-2); }

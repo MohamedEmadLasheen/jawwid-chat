@@ -142,30 +142,29 @@ void main() {
       final now = DateTime.now();
       await tester.pumpWidget(
         harness(
-          locale: const Locale('en'),
           overrides: [
             repo(FakeStoryRepository(stories: [
               // Deliberately the NEWEST story of all, and viewed: it must still sort behind
               // every unviewed one. Unviewed-first outranks newest-first.
               story(
                 id: 'viewed-new',
-                title: 'C',
+                body: 'C',
                 isViewed: true,
                 publishedAt: now,
               ),
               story(
                 id: 'unviewed-old',
-                title: 'B',
+                body: 'B',
                 publishedAt: now.subtract(const Duration(hours: 5)),
               ),
               story(
                 id: 'unviewed-new',
-                title: 'A',
+                body: 'A',
                 publishedAt: now.subtract(const Duration(minutes: 1)),
               ),
               story(
                 id: 'viewed-old',
-                title: 'D',
+                body: 'D',
                 isViewed: true,
                 publishedAt: now.subtract(const Duration(hours: 9)),
               ),
@@ -175,23 +174,16 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Read from the SEMANTIC labels, not from visible text: the rail shows
-      // rings and no captions, so the title exists on screen only for a screen
-      // reader. That is the point of the change, and it is also what keeps this
-      // assertion possible -- the order is still observable, just not by
-      // sighted means.
+      // Rings in tree order, by key: every ring carries the academy's name now that a story
+      // has no title, so the key is what names the story.
       // A = unviewed newest, B = unviewed oldest, C = viewed newest, D = viewed oldest.
       final order = tester
-          .widgetList<Semantics>(find.byType(Semantics))
-          .map((w) => w.properties.label)
-          .whereType<String>()
-          .where((l) => l.endsWith(' story: A') ||
-              l.endsWith(' story: B') ||
-              l.endsWith(' story: C') ||
-              l.endsWith(' story: D'))
-          .map((l) => l.characters.last)
+          .widgetList(find.byWidgetPredicate(
+            (w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('story-ring-'),
+          ))
+          .map((w) => (w.key! as ValueKey<String>).value.replaceFirst('story-ring-', ''))
           .toList();
-      expect(order, ['A', 'B', 'C', 'D']);
+      expect(order, ['unviewed-new', 'unviewed-old', 'viewed-new', 'viewed-old']);
     });
 
     testWidgets('viewed state reaches a screen reader as WORDS, not just a ring colour',
@@ -201,10 +193,10 @@ void main() {
           locale: const Locale('en'),
           overrides: [
             repo(FakeStoryRepository(stories: [
-              story(id: 'a', title: 'Fresh', publishedAt: DateTime.now()),
+              story(id: 'a', body: 'Fresh', publishedAt: DateTime.now()),
               story(
                 id: 'b',
-                title: 'Seen',
+                body: 'Seen',
                 isViewed: true,
                 publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
               ),
@@ -214,102 +206,37 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.bySemanticsLabel('Unviewed story: Fresh'), findsOneWidget);
-      expect(find.bySemanticsLabel('Viewed story: Seen'), findsOneWidget);
-    });
-
-    testWidgets('a story with no title falls back to the academy name', (tester) async {
-      await tester.pumpWidget(
-        harness(
-          locale: const Locale('en'),
-          overrides: [
-            repo(FakeStoryRepository(stories: [story(id: 'a', title: null)])),
-          ],
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      // Not an empty label, and not an invented author: the publisher IS the
-      // academy. Asserted on the semantic label, because the rail no longer
-      // prints a caption for anyone to read.
       expect(find.bySemanticsLabel('Unviewed story: Jawwid'), findsOneWidget);
+      expect(find.bySemanticsLabel('Viewed story: Jawwid'), findsOneWidget);
     });
-  });
 
-  group('the rail is rings and nothing else', () {
-    testWidgets('prints no caption under a circle, however long the title',
-        (tester) async {
-      const longTitle =
-          'A deliberately long academy announcement that would be ellipsised into '
-          'uselessness under a 76dp circle';
-
+    testWidgets('a ring shows the story itself -- no initial, and no name under it', (tester) async {
+      // Owner decision 2026-10-17: rings like WhatsApp's status rings. Inside, a preview of
+      // the story; under it, nothing (every ring would have said "Jawwid").
+      final now = DateTime.now();
       await tester.pumpWidget(
         harness(
           locale: const Locale('en'),
           overrides: [
             repo(FakeStoryRepository(stories: [
-              story(id: 'a', title: longTitle),
-              story(id: 'b', title: 'Short'),
-            ])),
-          ],
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      // Every Text still on screen belongs to an AVATAR INITIAL. A caption --
-      // the title, a truncation of it, or any replacement label -- is what this
-      // forbids, so the assertion is on what is rendered rather than on the
-      // absence of one particular string.
-      final rendered = tester
-          .widgetList<Text>(find.descendant(
-            of: find.byType(StoriesRail),
-            matching: find.byType(Text),
-          ))
-          .map((t) => t.data ?? '')
-          .where((t) => t.isNotEmpty)
-          .toList();
-
-      for (final text in rendered) {
-        expect(text.length, lessThanOrEqualTo(2),
-            reason: 'only an avatar initial may be drawn in the rail, found: $text');
-      }
-      expect(find.textContaining('academy announcement'), findsNothing);
-      expect(find.text('Short'), findsNothing);
-    });
-
-    testWidgets('prints no caption in Arabic either', (tester) async {
-      await tester.pumpWidget(
-        harness(
-          locale: const Locale('ar'),
-          overrides: [
-            repo(FakeStoryRepository(stories: [
-              story(id: 'a', title: 'إجازة نهاية الأسبوع'),
-            ])),
-          ],
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('إجازة نهاية الأسبوع'), findsNothing);
-      expect(find.textContaining('إجازة'), findsNothing);
-    });
-
-    testWidgets('keeps the ring, its seen state and the screen-reader title',
-        (tester) async {
-      // Removing the caption is a VISUAL decision. It must not take the title
-      // away from someone who cannot see the ring, and it must not take the
-      // seen state away from anyone.
-      await tester.pumpWidget(
-        harness(
-          locale: const Locale('en'),
-          overrides: [
-            repo(FakeStoryRepository(stories: [
-              story(id: 'a', title: 'Fresh', publishedAt: DateTime.now()),
+              story(id: 't', body: 'Eid Mubarak', publishedAt: now),
               story(
-                id: 'b',
-                title: 'Seen',
-                isViewed: true,
-                publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
+                id: 'p',
+                mediaKind: StoryMediaKind.image,
+                mediaUrl: 'https://api.test/media/stories/p?sig=1',
+                publishedAt: now.subtract(const Duration(minutes: 1)),
+              ),
+              story(
+                id: 'v',
+                mediaKind: StoryMediaKind.audio,
+                mediaUrl: 'https://api.test/media/stories/v?sig=1',
+                publishedAt: now.subtract(const Duration(minutes: 2)),
+              ),
+              story(
+                id: 'm',
+                mediaKind: StoryMediaKind.video,
+                mediaUrl: 'https://api.test/media/stories/m?sig=1',
+                publishedAt: now.subtract(const Duration(minutes: 3)),
               ),
             ])),
           ],
@@ -317,40 +244,23 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.bySemanticsLabel('Unviewed story: Fresh'), findsOneWidget);
-      expect(find.bySemanticsLabel('Viewed story: Seen'), findsOneWidget);
-      expect(find.byType(StoriesRail), findsOneWidget);
-    });
+      // No initial avatar, no caption row.
+      expect(find.byType(JawwidAvatar), findsNothing);
+      expect(find.text('Jawwid'), findsNothing);
+      expect(find.text('J'), findsNothing);
 
-    testWidgets('still scrolls horizontally with many stories', (tester) async {
-      await tester.pumpWidget(
-        harness(
-          locale: const Locale('en'),
-          overrides: [
-            repo(FakeStoryRepository(stories: [
-              for (var i = 0; i < 12; i += 1)
-                story(
-                  id: 's$i',
-                  title: 'Story $i',
-                  publishedAt: DateTime.now().subtract(Duration(minutes: i)),
-                ),
-            ])),
-          ],
-        ),
-      );
-      await tester.pumpAndSettle();
+      Finder inRing(String id, Finder f) =>
+          find.descendant(of: find.byKey(ValueKey('story-ring-$id')), matching: f);
+      // A text story shows its words; a photo its picture, from the server's signed URL;
+      // voice and video their mark.
+      expect(inRing('t', find.text('Eid Mubarak')), findsOneWidget);
+      final image = tester.widget<Image>(inRing('p', find.byType(Image)));
+      expect((image.image as NetworkImage).url, 'https://api.test/media/stories/p?sig=1');
+      expect(inRing('v', find.byIcon(Icons.mic_rounded)), findsOneWidget);
+      expect(inRing('m', find.byIcon(Icons.play_arrow_rounded)), findsOneWidget);
 
-      final rail = find.descendant(
-        of: find.byType(StoriesRail),
-        matching: find.byType(Scrollable),
-      );
-      expect(rail, findsOneWidget);
-
-      await tester.drag(rail, const Offset(-300, 0));
-      await tester.pumpAndSettle();
-
-      // Nothing appeared under a circle as a result of scrolling either.
-      expect(find.textContaining('Story '), findsNothing);
+      // The academy's name still reaches a screen reader, with the viewed state.
+      expect(find.bySemanticsLabel('Unviewed story: Jawwid'), findsNWidgets(4));
     });
   });
 
@@ -378,10 +288,10 @@ void main() {
           locale: const Locale('en'),
           overrides: [
             repo(FakeStoryRepository(stories: [
-              story(id: 'first', title: 'First', publishedAt: DateTime.now()),
+              story(id: 'first', body: 'First', publishedAt: DateTime.now()),
               story(
                 id: 'second',
-                title: 'Second',
+                body: 'Second',
                 publishedAt: DateTime.now().subtract(const Duration(hours: 1)),
               ),
             ])),
@@ -391,7 +301,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.bySemanticsLabel('Unviewed story: Second'));
+      await tester.tap(find.byKey(const ValueKey('story-ring-second')));
       await tester.pumpAndSettle();
       expect(tapped, ['second']);
     });
@@ -415,7 +325,7 @@ void main() {
 
   group('refresh', () {
     testWidgets('refetches, and the rail reflects the new answer', (tester) async {
-      final fake = FakeStoryRepository(stories: [story(id: 'a', title: 'Before')]);
+      final fake = FakeStoryRepository(stories: [story(id: 'a', body: 'Before')]);
       late ProviderContainer container;
 
       await tester.pumpWidget(
@@ -442,17 +352,17 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.bySemanticsLabel('Unviewed story: Before'), findsOneWidget);
+      expect(find.byKey(const ValueKey('story-ring-a')), findsOneWidget);
       expect(fake.feedCalls, 1);
 
       // The academy published something else and pulled the first one.
-      fake.setStories([story(id: 'b', title: 'After')]);
+      fake.setStories([story(id: 'b', body: 'After')]);
       await container.read(storiesControllerProvider.notifier).refresh();
       await tester.pumpAndSettle();
 
       expect(fake.feedCalls, 2);
-      expect(find.bySemanticsLabel('Unviewed story: Before'), findsNothing);
-      expect(find.bySemanticsLabel('Unviewed story: After'), findsOneWidget);
+      expect(find.byKey(const ValueKey('story-ring-a')), findsNothing);
+      expect(find.byKey(const ValueKey('story-ring-b')), findsOneWidget);
     });
 
     testWidgets('a refresh that finds nothing collapses the rail again', (tester) async {

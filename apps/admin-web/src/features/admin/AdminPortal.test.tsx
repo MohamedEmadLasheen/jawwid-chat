@@ -6,7 +6,7 @@ import { sessionApi, NOT_STAFF_CODE } from '@/core/api/endpoints'
 import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
 import { ADMIN_GROUPS, ADMIN_SECTIONS, sectionsInGroup } from './sections'
-import { effectiveState } from './StoriesView'
+import { effectiveState } from '@/features/stories/StoriesStudio'
 
 /**
  * The super admin's view of the portal.
@@ -105,11 +105,11 @@ afterEach(() => {
 })
 
 describe('Admin Portal registry and navigation', () => {
-  it('registers exactly the seventeen planned sections, each in a group', () => {
+  it('registers exactly the eighteen planned sections, each in a group', () => {
     expect(ADMIN_SECTIONS.map((s) => s.key).sort()).toEqual(
       [
         'academy', 'approvals', 'audit', 'calls', 'conversations', 'dashboard', 'forms', 'integrations',
-        'notifications', 'quality', 'reports', 'settings', 'stories', 'tasks', 'teams', 'users', 'whatsapp',
+        'notifications', 'quality', 'reports', 'settings', 'stories', 'tasks', 'teachers', 'teams', 'users', 'whatsapp',
       ].sort(),
     )
     // Every one has both languages, a purpose and a stated backend status.
@@ -119,13 +119,15 @@ describe('Admin Portal registry and navigation', () => {
         expect(b.ar.length).toBeGreaterThan(0)
       }
     }
-    expect(ADMIN_GROUPS.flatMap((g) => sectionsInGroup(g.key))).toHaveLength(17)
+    expect(ADMIN_GROUPS.flatMap((g) => sectionsInGroup(g.key))).toHaveLength(18)
     // Only the sections with a real endpoint claim to be built: four read-only
-    // views, and Organization (PD-8), whose controls act.
+    // views -- Reports is the PD-11 teacher statistics (2026-10-19) -- and two
+    // whose controls act: Organization (PD-8) and Stories (2026-10-17: the
+    // super admin publishes).
     expect(ADMIN_SECTIONS.filter((s) => s.status === 'read_only').map((s) => s.key).sort()).toEqual(
-      ['conversations', 'dashboard', 'stories', 'users'],
+      ['conversations', 'dashboard', 'reports', 'users'],
     )
-    expect(ADMIN_SECTIONS.filter((s) => s.status === 'managed').map((s) => s.key)).toEqual(['teams'])
+    expect(ADMIN_SECTIONS.filter((s) => s.status === 'managed').map((s) => s.key).sort()).toEqual(['stories', 'teachers', 'teams'])
   })
 
   it('every section is reachable from the navigation, and the unbuilt ones are marked', async () => {
@@ -133,10 +135,10 @@ describe('Admin Portal registry and navigation', () => {
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/teams' })
     const nav = await screen.findByRole('navigation')
 
-    // Five destinations hold all seventeen sections. Below desktop width the
+    // Five destinations hold all eighteen sections. Below desktop width the
     // drawer lists every one of them, none behind a toggle. (The desktop
     // rail's menus are covered in app/Navigation.test.tsx.)
-    expect(within(nav).getAllByRole('link')).toHaveLength(17)
+    expect(within(nav).getAllByRole('link')).toHaveLength(18)
     const inDevelopment = ADMIN_SECTIONS.filter((s) => s.status === 'in_development').length
     expect(within(nav).getAllByText('In development')).toHaveLength(inDevelopment)
   })
@@ -170,10 +172,11 @@ describe('Admin Portal registry and navigation', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Conversations' })).toBeInTheDocument()
   })
 
-  it('says the account is read-only, once, in the top bar', async () => {
+  it('no longer claims the account is read-only: it writes since PD-8, and publishes stories', async () => {
     vi.stubGlobal('fetch', routeFetch({}))
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/users' })
-    expect(await screen.findByText('Read-only access')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Users' })).toBeInTheDocument()
+    expect(screen.queryByText('Read-only access')).not.toBeInTheDocument()
   })
 
   // Regression: Sign out used to revoke the session and clear the tokens while
@@ -361,41 +364,42 @@ describe('Users', () => {
 })
 
 describe('Stories', () => {
-  // The portal's Stories section is GET /admin/stories (super_admin, read-only).
-  // The legacy /stories screen is the publisher's, and the server refuses it to
-  // super_admin by design -- the page must say so rather than imply it works.
-  it('reads /admin/stories, offers no publishing control, and explains why', async () => {
+  // 2026-10-17: the portal's Stories section is the publishing studio. It reads
+  // the publisher's /stories API (the super admin is a publisher now), never the
+  // read-only /admin/stories inspection list it replaced.
+  it('reads /stories, offers a way to create one, and no longer claims to be read-only', async () => {
     const fetchMock = routeFetch({
-      '/admin/stories': {
-        truncated: false,
+      '/stories': {
         stories: [
           {
-            id: 's1', title: 'Story one', state: 'draft', creatorName: 'admin_a', recipients: 0,
-            views: 0, createdAt: NOW, publishedAt: null, expiresAt: null, deletedAt: null,
+            id: 's1', kind: 'text', internalName: 'Story one', title: null, body: 'hello', background: 'teal',
+            mediaKind: null, mediaUrl: null, mediaDurationMs: null, cta: null, state: 'draft', createdAt: NOW,
+            publishedAt: null, expiresAt: null, deletedAt: null, createdBy: 'a', creatorName: 'admin_a',
+            audiences: [{ kind: 'segment', refId: null, filter: { who: 'everyone' } }],
+            recipientCount: 0, viewCount: 0, ctaTapCount: 0, ctaTapperCount: 0,
           },
         ],
       },
     })
     vi.stubGlobal('fetch', fetchMock)
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/stories' })
-    expect(await screen.findByRole('button', { name: 'Story one' })).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'Story one' })).toBeInTheDocument()
     expect(screen.getAllByText('Draft').length).toBeGreaterThan(0)
     const urls = fetchMock.mock.calls.map(([url]) => String(url))
-    expect(urls.some((u) => u.endsWith('/admin/stories'))).toBe(true)
-    expect(urls.some((u) => /\/stories(\?|$)/.test(u.replace('/admin/stories', '')))).toBe(false)
-    expect(screen.getByText(/unsupported for Super Admin by design/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /publish|create|delete/i })).not.toBeInTheDocument()
+    expect(urls.some((u) => /\/api\/v1\/stories\?/.test(u))).toBe(true)
+    expect(urls.some((u) => u.includes('/admin/stories'))).toBe(false)
+    expect(screen.queryByText(/unsupported for Super Admin by design/)).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'New story' })).toHaveAttribute('href', '/admin/stories/new')
   })
 
   it('treats a published story past its expiry as expired, because viewers can no longer see it', () => {
-    const base = {
-      id: 's', title: null, creatorName: 'a', recipients: 0, views: 0, createdAt: NOW, deletedAt: null,
-    }
     const past = new Date(Date.now() - 60_000).toISOString()
     const future = new Date(Date.now() + 60_000).toISOString()
-    expect(effectiveState({ ...base, state: 'published', publishedAt: NOW, expiresAt: past })).toBe('expired')
-    expect(effectiveState({ ...base, state: 'published', publishedAt: NOW, expiresAt: future })).toBe('published')
-    expect(effectiveState({ ...base, state: 'draft', publishedAt: null, expiresAt: null })).toBe('draft')
+    expect(effectiveState({ state: 'published', expiresAt: past })).toBe('expired')
+    expect(effectiveState({ state: 'published', expiresAt: future })).toBe('published')
+    // Since 2026-10-17 a story has no expiry and is live until deleted.
+    expect(effectiveState({ state: 'published', expiresAt: null })).toBe('published')
+    expect(effectiveState({ state: 'draft', expiresAt: null })).toBe('draft')
   })
 })
 
@@ -407,7 +411,9 @@ describe('Arabic', () => {
     expect(document.documentElement.dir).toBe('rtl')
     // Two members is the Arabic dual, not "٢ عضو".
     expect((await screen.findAllByText('مباشرة · عضوان')).length).toBeGreaterThan(0)
-    expect(screen.getByText('وصول للقراءة فقط')).toBeInTheDocument()
+    // The top bar speaks Arabic too (its read-only chip is gone since 2026-10-17).
+    expect(screen.getAllByText('بوابة الإدارة').length).toBeGreaterThan(0)
+    expect(screen.queryByText('وصول للقراءة فقط')).not.toBeInTheDocument()
   })
 })
 

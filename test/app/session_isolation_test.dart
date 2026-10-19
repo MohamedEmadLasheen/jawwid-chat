@@ -376,9 +376,9 @@ void main() {
     // tester's fake-async zone will not complete those futures on its own.
     await tester.runAsync(() => signIn(c, 'parentA'));
     await settle();
-    // The rail shows rings only; each story's title reaches the screen as its
-    // ring's semantic label (stories_rail.dart), so that is where it is looked for.
-    expect(storyRing('parentA story'), findsOneWidget);
+    // A ring is found by its story, not by words under it: a story has no title since
+    // 2026-10-17, so every ring carries the academy's name.
+    expect(find.byKey(const ValueKey('story-ring-parentA-story')), findsOneWidget);
     expect(tester.getSize(find.byType(StoriesRail)).height,
         StoriesRail.railHeight);
 
@@ -388,14 +388,11 @@ void main() {
     });
     await settle();
 
-    expect(storyRing('parentA story'), findsNothing,
+    expect(find.byKey(const ValueKey('story-ring-parentA-story')), findsNothing,
         reason: "the parent's story must not be on a teacher's screen");
-    expect(storyRing('teacherA story'), findsOneWidget);
+    expect(find.byKey(const ValueKey('story-ring-teacherA-story')), findsOneWidget);
   });
 }
-
-/// A story ring on screen, found by the title its semantic label carries.
-Finder storyRing(String title) => find.bySemanticsLabel(RegExp(RegExp.escape(title)));
 
 /// Lets a test drive the authenticated principal directly, without a whole auth stack.
 class _PrincipalHolder extends Notifier<String?> {
@@ -524,9 +521,8 @@ class _PrincipalStoryRepository implements StoryRepository {
       for (final id in feeds[who]!)
         Story(
           id: id,
-          title: id.replaceAll('-', ' '),
+          body: id.replaceAll('-', ' '),
           publishedAt: DateTime.utc(2026, 10, 8),
-          expiresAt: DateTime.utc(2026, 10, 9),
           isViewed: false,
         ),
     ];
@@ -534,6 +530,9 @@ class _PrincipalStoryRepository implements StoryRepository {
 
   @override
   Future<void> markViewed(String storyId) async {}
+
+  @override
+  Future<StoryCtaTap> tapCta(String storyId) async => throw UnimplementedError();
 }
 
 class _PrincipalConversationRepository implements ConversationRepository {
