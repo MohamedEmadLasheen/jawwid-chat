@@ -9,6 +9,7 @@ import { OutboxService } from '../communication/outbox/outbox.service';
 import { CommEvent } from '../communication/contracts/events';
 import { CardKind, SupervisionKind } from '../communication/contracts/vocab';
 import { LessonService, invalid, textField } from './lesson.service';
+import { SupervisionConversationService } from '../supervision/supervision-conversation.service';
 
 const ENTRY_KINDS: ReadonlySet<string> = new Set([SupervisionKind.COMPLAINT, SupervisionKind.MONTHLY_COMMENT, SupervisionKind.NOTE]);
 const MONTH_RE = /^\d{4}-\d{2}$/;
@@ -24,8 +25,9 @@ const MONTH_RE = /^\d{4}-\d{2}$/;
  * recorded twice and nothing can drift.
  *
  * The bonus ticket writes a `bonus` entry and posts a card into the teacher's
- * supervision chat (their direct conversation with whoever recorded it). The
- * amount is payroll's (PD-10): Chat records the reason and tells Core/HR.
+ * supervision conversation -- ONE per teacher, with the whole Teachers
+ * department (PD-12, reconciled 2026-10-19). The amount is payroll's (PD-10):
+ * Chat records the reason and tells Core/HR.
  */
 @Injectable()
 export class SupervisionService {
@@ -34,6 +36,7 @@ export class SupervisionService {
     private readonly conversations: ConversationService,
     private readonly lessons: LessonService,
     private readonly outbox: OutboxService,
+    private readonly supervisionChats: SupervisionConversationService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
   ) {}
 
@@ -148,9 +151,11 @@ export class SupervisionService {
     const actor = await this.conversations.requireActor(actorId);
     const teacher = await this.supervisedTeacher(actor, teacherId);
     const reason = textField(body, 'reason', 2000, true) as string;
-    const chat = await this.conversations.getOrCreateDirect(actor.actorId, teacher.id);
+    let chatId = '';
     const entry = await this.lessons.write(() =>
       this.prisma.$transaction(async (tx) => {
+        const chat = await this.supervisionChats.ensureInTx(tx, teacher.id, teacher.organizationId, actor.actorId);
+        chatId = chat.id;
         const created = await tx.teacherSupervisionEntry.create({
           data: {
             organizationId: teacher.organizationId,
@@ -170,14 +175,16 @@ export class SupervisionService {
         return created;
       }),
     );
-    return { id: entry.id, kind: entry.kind, conversationId: chat.id };
+    return { id: entry.id, kind: entry.kind, conversationId: chatId };
   }
 
-  /** The teacher's supervision chat with the caller (their direct conversation), opened if needed. */
+  /** The teacher's supervision conversation (one per teacher, with the Teachers department), opened if needed. */
   async supervisionChat(actorId: string, teacherId: string) {
     const actor = await this.conversations.requireActor(actorId);
     const teacher = await this.supervisedTeacher(actor, teacherId);
-    const chat = await this.conversations.getOrCreateDirect(actor.actorId, teacher.id);
+    const chat = await this.prisma.$transaction((tx) =>
+      this.supervisionChats.ensureInTx(tx, teacher.id, teacher.organizationId, actor.actorId),
+    );
     return { conversationId: chat.id };
   }
 

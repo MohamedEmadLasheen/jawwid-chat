@@ -67,6 +67,7 @@ export const SECTION_DESTINATION: Record<AdminSectionKey, DestinationKey> = {
   calls: 'calls',
   users: 'people',
   teams: 'people',
+  teachers: 'people',
   stories: 'stories',
   dashboard: 'more',
   notifications: 'more',

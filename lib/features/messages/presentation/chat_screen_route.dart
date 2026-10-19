@@ -53,7 +53,10 @@ class ChatScreenRoute extends ConsumerWidget {
         ),
       AsyncData(:final value) => ChatScreen(
           conversationId: conversationId,
-          title: value.title,
+          // PD-12: the server titles a supervision conversation for its staff side;
+          // the teacher reads it as their supervision chat.
+          title: value.isTeacherSupervision ? l10n.supervisionChatTitle : value.title,
+          isTeacherSupervision: value.isTeacherSupervision,
           onOpenProfile: () =>
               context.push(Routes.conversationProfile(conversationId)),
           // Two different things, and never invented.
@@ -71,6 +74,7 @@ class ChatScreenRoute extends ConsumerWidget {
           // when the backend has not said — `ConversationDto` carries no
           // learner today — rather than guessed at from the title string.
           subtitle: switch (value) {
+            Conversation(isTeacherSupervision: true) => l10n.supervisionChatSubtitle,
             Conversation(handledByLabel: final handler?) =>
               l10n.handledBy(handler),
             Conversation(learner: final learner?) =>

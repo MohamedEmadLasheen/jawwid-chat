@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { CommunicationModule } from '../communication/communication.module';
+import { SupervisionModule } from '../supervision/supervision.module';
 import { LessonController } from './lesson.controller';
 import { LessonService } from './lesson.service';
 import { LifecycleController } from './lifecycle.controller';
@@ -18,7 +19,9 @@ import { SchedulingService } from './scheduling.service';
  * every ticket posts its card in the same transaction as its record.
  */
 @Module({
-  imports: [CommunicationModule],
+  // SupervisionModule: the teacher's supervision conversation (PD-12), where
+  // the bonus and handover cards are posted. It depends on nothing here.
+  imports: [CommunicationModule, SupervisionModule],
   controllers: [StatsController, SchedulingController, LessonController, LifecycleController],
   providers: [LessonService, SchedulingService, LifecycleService, SupervisionService, StatsService],
   exports: [LessonService, SchedulingService, LifecycleService, SupervisionService, StatsService],

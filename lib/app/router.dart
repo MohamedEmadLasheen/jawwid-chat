@@ -14,6 +14,7 @@ import '../features/messages/presentation/conversation_media_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/stories/presentation/story_viewer_screen.dart';
+import '../features/supervision/presentation/my_leave_screen.dart';
 import '../shared/models/user_role.dart';
 import 'providers.dart';
 import 'shells/app_shell.dart';
@@ -55,6 +56,9 @@ abstract final class Routes {
   /// The signed-in user's own account. Deliberately under Settings rather than alongside
   /// the profiles above: "my account" and "someone else's profile" are different things.
   static const myAccount = '/settings/account';
+
+  /// PD-12: a teacher's own leave balance and requests.
+  static const myLeave = '/settings/leave';
 
   /// One story, opened full-screen from the rail.
   ///
@@ -143,6 +147,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.myAccount,
         builder: (context, state) => const MyAccountScreen(),
+      ),
+      GoRoute(
+        path: Routes.myLeave,
+        builder: (context, state) => const MyLeaveScreen(),
       ),
       // Full-screen, above the tab bar: a story is the whole viewport for as long as it is
       // open, and a tab bar underneath it would be something to tap by accident.

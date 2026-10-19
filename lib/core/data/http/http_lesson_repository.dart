@@ -156,6 +156,17 @@ class HttpLessonRepository implements LessonRepository {
       nextLessonAt: next == null ? null : DateTime.tryParse('${next['startsAt']}')?.toLocal(),
       lastCovered: last?['covered'] as String?,
       lastReportAt: last == null ? null : DateTime.tryParse('${last['startsAt']}')?.toLocal(),
+      certificates: [
+        for (final c in (d['certificates'] as List?) ?? const [])
+          if (c is Map && c['id'] is String && c['title'] is String && DateTime.tryParse('${c['achievedOn']}T00:00:00Z') != null)
+            ProgressCertificate(
+              id: c['id'] as String,
+              title: c['title'] as String,
+              achievedOn: DateTime.parse('${c['achievedOn']}T00:00:00Z'),
+              grade: c['grade'] as String?,
+              conversationId: c['conversationId'] as String?,
+            ),
+      ],
     );
   }
 

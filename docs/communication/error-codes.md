@@ -118,6 +118,25 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.LESSON_STATE` | 409 | The lesson does not allow it now: already closed, not started yet, started already (send a late apology instead), or past the 48-hour late-apology window. Refresh the lesson; do not retry. |
 | `COMM.LESSON_TEACHER_BUSY` | 409 | The teacher already has a lesson that overlaps this time. |
 
+## Certificates, leave and the supervision conversation (PD-12)
+
+| Code | HTTP | Meaning |
+|---|---|---|
+| `COMM.CERTIFICATE_NOT_FOUND` | 404 | No such certificate, or a learner the teacher does not teach (one code for both, so a teacher cannot probe other learners). |
+| `COMM.CERTIFICATE_DENIED` | 403 | Only the Teachers department and the super admin see, issue or decline certificates. Never retry. |
+| `COMM.CERTIFICATE_STATE` | 409 | Already decided, the file has not been uploaded, or the learner has no live group to deliver into. Refresh; do not retry. |
+| `COMM.LEAVE_NOT_FOUND` | 404 | No such leave request or teacher, or one the caller may not see. |
+| `COMM.LEAVE_DENIED` | 403 | Leave is requested by a teacher for themselves, decided by the Teachers department, and the allowance is set by its manager or the super admin. Never retry. |
+| `COMM.LEAVE_STATE` | 409 | The leave does not allow it: already decided or withdrawn, overlapping another open or approved request, in the past, or crossing a calendar year. |
+| `COMM.LEAVE_LESSONS_COLLIDE` | 409 | Open lessons fall inside the leave. Approve again with `cancelCollidingLessons: true` to cancel them (each family is told in its group). |
+| `COMM.SUPERVISION_DENIED` | 403 | Only the teacher themselves, or the Teachers department, opens a supervision conversation. |
+| `COMM.SUPERVISION_NOT_FOUND` | 404 | No such active teacher in the caller's organization. |
+
+Issuing a certificate answers `COMM.ATTACHMENT_NOT_IN_CONVERSATION` (403) for a
+file that was not uploaded into the learner's group, and
+`COMM.ATTACHMENT_TYPE_NOT_ALLOWED` (400) when the stored bytes are not the PDF or
+image they were declared as.
+
 A client may never send a message of type `card`; `POST /conversations/:id/messages`
 answers `COMMON.VALIDATION` (400). Cards are written only by the ticket that
 recorded them.

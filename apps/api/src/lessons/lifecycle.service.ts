@@ -19,6 +19,7 @@ import {
 } from '../communication/contracts/vocab';
 import { LessonService, cancelReminders, invalid, stateError, textField, type Tx } from './lesson.service';
 import { SchedulingService } from './scheduling.service';
+import { SupervisionConversationService } from '../supervision/supervision-conversation.service';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** A temporary pause longer than this is a stop, or needs re-recording. */
@@ -52,6 +53,7 @@ export class LifecycleService {
     private readonly outbox: OutboxService,
     private readonly config: AppConfigService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    private readonly supervisionChats: SupervisionConversationService,
     @Optional()
     @Inject(REALTIME_REVOCATION)
     private readonly revocation: RealtimeRevocation = NO_REALTIME_REVOCATION,
@@ -81,9 +83,9 @@ export class LifecycleService {
       : null;
     const oldSlots = await this.prisma.learnerScheduleSlot.findMany({ where: { learnerId: learner.id, validTo: null } });
     const before = await this.futureOpenLessonIds(learner.id);
-    // The new teacher's supervision chat with whoever moved the child: where the
-    // handover reaches them. Opened before the transaction (it may create it).
-    const handoverChat = await this.conversations.getOrCreateDirect(actor.actorId, toTeacher.id).catch(() => null);
+    // The handover reaches the new teacher in their supervision conversation
+    // (one per teacher, with the Teachers department -- PD-12), opened inside
+    // the transaction below. An inactive new teacher has none, and gets none.
     const lang = await this.lessons.languageOf({ learner: { familyId: learner.familyId } });
 
     const { evictions, transferId } = await this.lessons.write(() =>
@@ -102,6 +104,9 @@ export class LifecycleService {
           learnerName: learner.name,
           teacherName: toTeacher.name,
         }, lang);
+        const handoverChat = toTeacher.isActive && toTeacher.leftAt === null
+          ? await this.supervisionChats.ensureInTx(tx, toTeacher.id, toTeacher.organizationId, actor.actorId)
+          : null;
         if (handoverChat) {
           await this.lessons.postCardInto(tx, handoverChat, null, actor, CardKind.LEARNER_HANDOVER, {
             learnerName: learner.name,

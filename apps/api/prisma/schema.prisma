@@ -195,6 +195,9 @@ model Conversation {
   /// Canonical id of a 1:1 channel; makes a duplicate direct conversation impossible.
   directKey String? @unique @map("direct_key")
 
+  /// PD-11/PD-12: the teacher a teacher_supervision conversation is about (that type only).
+  supervisedTeacherId String? @map("supervised_teacher_id") @db.Uuid
+
   state String @default("open")
 
   teacherRequiresApproval Boolean @map("teacher_requires_approval") @default(true)
@@ -1052,6 +1055,8 @@ model TeacherDayOff {
   reason         String?
   createdBy      String   @map("created_by") @db.Uuid
   createdAt      DateTime @map("created_at") @db.Timestamptz @default(now())
+  /// PD-12: the approved leave request this day off belongs to (null for one recorded directly).
+  leaveRequestId String?  @map("leave_request_id") @db.Uuid
 
   @@unique([teacherId, day])
   @@map("teacher_day_off")
@@ -1143,7 +1148,99 @@ model TeacherSupervisionEntry {
   conversationId String?   @map("conversation_id") @db.Uuid
   createdBy      String    @map("created_by") @db.Uuid
   createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
+  /// PD-10: a complaint_resolution's complaint.
+  refersTo       String?   @map("refers_to") @db.Uuid
+  /// PD-10: a complaint's source message (in conversation_id).
+  sourceMessageId String?  @map("source_message_id") @db.Uuid
 
   @@map("teacher_supervision_entry")
+  @@schema("chat")
+}
+
+// =====================================================================
+// PD-10 Teacher File -- 20261018170000_chat_pd010_teacher_file.sql owns the DDL.
+// The phone is read and written ONLY by src/teacher-file (teacher-file-confinement.spec).
+// =====================================================================
+
+/// A teacher's administration-only personal record.
+model TeacherFile {
+  teacherId      String    @id @map("teacher_id") @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  adminOnlyPhone String?   @map("phone")
+  email          String?
+  joinedOn       DateTime? @map("joined_on") @db.Date
+  updatedAt      DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+  updatedBy      String?   @map("updated_by") @db.Uuid
+
+  @@map("teacher_file")
+  @@schema("chat")
+}
+
+// =====================================================================
+// PD-12 S1 -- 20261019090000_chat_pd012_s1.sql owns the DDL and every rule.
+// =====================================================================
+
+/// A STUDENT certificate: requested by the learner's teacher, issued or declined once.
+model LearnerCertificate {
+  id               String    @id @default(uuid()) @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  learnerId        String    @map("learner_id") @db.Uuid
+  requestedBy      String    @map("requested_by") @db.Uuid
+  title            String
+  achievement      String
+  achievedOn       DateTime  @map("achieved_on") @db.Date
+  grade            String?
+  printedName      String    @map("printed_name")
+  note             String?
+  state            String    @default("requested")
+  requestedAt      DateTime  @map("requested_at") @db.Timestamptz @default(now())
+  requestMessageId String?   @unique @map("request_message_id") @db.Uuid
+  decidedBy        String?   @map("decided_by") @db.Uuid
+  decidedAt        DateTime? @map("decided_at") @db.Timestamptz
+  declineReason    String?   @map("decline_reason")
+  conversationId   String?   @map("conversation_id") @db.Uuid
+  objectKey        String?   @unique @map("object_key")
+  mimeType         String?   @map("mime_type")
+  byteSize         Int?      @map("byte_size")
+  fileName         String?   @map("file_name")
+  issuedMessageId  String?   @unique @map("issued_message_id") @db.Uuid
+
+  @@map("learner_certificate")
+  @@schema("chat")
+}
+
+/// A teacher's leave allowance for a year. Append-only: the latest row wins.
+model TeacherLeaveAllowance {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  teacherId      String   @map("teacher_id") @db.Uuid
+  leaveYear      Int      @map("leave_year")
+  days           Int
+  note           String?
+  setBy          String   @map("set_by") @db.Uuid
+  setAt          DateTime @map("set_at") @db.Timestamptz @default(now())
+
+  @@map("teacher_leave_allowance")
+  @@schema("chat")
+}
+
+/// A teacher's leave request. Approval writes PD-10 day_off entries.
+model TeacherLeaveRequest {
+  id               String    @id @default(uuid()) @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  teacherId        String    @map("teacher_id") @db.Uuid
+  firstDay         DateTime  @map("first_day") @db.Date
+  lastDay          DateTime  @map("last_day") @db.Date
+  reason           String
+  state            String    @default("requested")
+  requestedAt      DateTime  @map("requested_at") @db.Timestamptz @default(now())
+  requestMessageId String?   @unique @map("request_message_id") @db.Uuid
+  decidedBy        String?   @map("decided_by") @db.Uuid
+  decidedAt        DateTime? @map("decided_at") @db.Timestamptz
+  decisionNote     String?   @map("decision_note")
+  endedAt          DateTime? @map("ended_at") @db.Timestamptz
+  endedBy          String?   @map("ended_by") @db.Uuid
+
+  @@map("teacher_leave_request")
   @@schema("chat")
 }

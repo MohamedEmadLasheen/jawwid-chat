@@ -729,5 +729,82 @@
         "type": "String"
       }
     }
-  }
+  },
+  "supervisionChatTitle": "Supervision",
+  "supervisionChatSubtitle": "Teachers department · private",
+  "supervisionTicketsHeader": "Requests",
+  "ticketCertificate": "Request a certificate",
+  "ticketLeave": "Request leave",
+  "certificateFormTitle": "Request a certificate",
+  "certificateFormHint": "Sent privately to the Teachers department. When the certificate is issued, it is posted to the student's group, where you and the parents receive it.",
+  "certificateStudent": "Student",
+  "certificateTitleField": "Certificate",
+  "certificateTitleHint": "e.g. Juz Amma",
+  "certificateAchievement": "Achievement",
+  "certificateAchievedOn": "Date achieved",
+  "certificateGrade": "Grade (optional)",
+  "certificatePrintedName": "Name as it should be printed",
+  "certificateNote": "Note to the department (optional)",
+  "leaveFormTitle": "Request leave",
+  "leaveFormHint": "Sent privately to the Teachers department. Approved days are deducted from your balance.",
+  "leaveFirstDay": "First day",
+  "leaveLastDay": "Last day",
+  "leaveReason": "Reason",
+  "leaveDaysCount": "{count, plural, =1{1 day} other{{count} days}}",
+  "@leaveDaysCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "leaveBalanceNow": "Your balance now: {balance}",
+  "@leaveBalanceNow": {
+    "placeholders": {
+      "balance": {
+        "type": "String"
+      }
+    }
+  },
+  "leaveSameYear": "Send a separate request for each year.",
+  "leaveLastBeforeFirst": "The last day is before the first day.",
+  "formRequired": "Required",
+  "formSend": "Send",
+  "myLeaveTitle": "My leave",
+  "myLeaveAllowance": "Allowance {year}",
+  "@myLeaveAllowance": {
+    "placeholders": {
+      "year": {
+        "type": "String"
+      }
+    }
+  },
+  "myLeaveUsed": "Used",
+  "myLeaveBalance": "Balance",
+  "myLeaveNoAllowance": "Not set yet",
+  "myLeaveNoRequests": "No leave requests this year.",
+  "myLeaveRequest": "Request leave",
+  "myLeaveWithdraw": "Withdraw",
+  "myLeaveWithdrawConfirm": "Withdraw this leave request?",
+  "leaveStateRequested": "Waiting",
+  "leaveStateApproved": "Approved",
+  "leaveStateDeclined": "Not approved",
+  "leaveStateWithdrawn": "Withdrawn",
+  "leaveStateCancelled": "Cancelled",
+  "cardCertificateRequestedTitle": "Certificate request",
+  "cardCertificateIssuedTitle": "Certificate",
+  "cardCertificateDeclinedTitle": "Certificate request not approved",
+  "cardLeaveRequestedTitle": "Leave request",
+  "cardLeaveApprovedTitle": "Leave approved",
+  "cardLeaveDeclinedTitle": "Leave not approved",
+  "cardLeaveWithdrawnTitle": "Leave request withdrawn",
+  "cardLeaveCancelledTitle": "Leave cancelled",
+  "cardAchievement": "Achievement",
+  "cardGrade": "Grade",
+  "cardDays": "Days",
+  "cardBalance": "Balance",
+  "cardDaysReturned": "Days returned",
+  "cardCongratulations": "Congratulations! The certificate is attached.",
+  "leaveNotAllowed": "These dates can't be requested: they overlap another request or have already passed.",
+  "progressCertificatesTitle": "Certificates"
 }

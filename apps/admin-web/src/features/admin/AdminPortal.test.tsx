@@ -105,11 +105,11 @@ afterEach(() => {
 })
 
 describe('Admin Portal registry and navigation', () => {
-  it('registers exactly the seventeen planned sections, each in a group', () => {
+  it('registers exactly the eighteen planned sections, each in a group', () => {
     expect(ADMIN_SECTIONS.map((s) => s.key).sort()).toEqual(
       [
         'academy', 'approvals', 'audit', 'calls', 'conversations', 'dashboard', 'forms', 'integrations',
-        'notifications', 'quality', 'reports', 'settings', 'stories', 'tasks', 'teams', 'users', 'whatsapp',
+        'notifications', 'quality', 'reports', 'settings', 'stories', 'tasks', 'teachers', 'teams', 'users', 'whatsapp',
       ].sort(),
     )
     // Every one has both languages, a purpose and a stated backend status.
@@ -119,7 +119,7 @@ describe('Admin Portal registry and navigation', () => {
         expect(b.ar.length).toBeGreaterThan(0)
       }
     }
-    expect(ADMIN_GROUPS.flatMap((g) => sectionsInGroup(g.key))).toHaveLength(17)
+    expect(ADMIN_GROUPS.flatMap((g) => sectionsInGroup(g.key))).toHaveLength(18)
     // Only the sections with a real endpoint claim to be built: four read-only
     // views -- Reports is the PD-11 teacher statistics (2026-10-19) -- and two
     // whose controls act: Organization (PD-8) and Stories (2026-10-17: the
@@ -127,7 +127,7 @@ describe('Admin Portal registry and navigation', () => {
     expect(ADMIN_SECTIONS.filter((s) => s.status === 'read_only').map((s) => s.key).sort()).toEqual(
       ['conversations', 'dashboard', 'reports', 'users'],
     )
-    expect(ADMIN_SECTIONS.filter((s) => s.status === 'managed').map((s) => s.key).sort()).toEqual(['stories', 'teams'])
+    expect(ADMIN_SECTIONS.filter((s) => s.status === 'managed').map((s) => s.key).sort()).toEqual(['stories', 'teachers', 'teams'])
   })
 
   it('every section is reachable from the navigation, and the unbuilt ones are marked', async () => {
@@ -135,10 +135,10 @@ describe('Admin Portal registry and navigation', () => {
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/teams' })
     const nav = await screen.findByRole('navigation')
 
-    // Five destinations hold all seventeen sections. Below desktop width the
+    // Five destinations hold all eighteen sections. Below desktop width the
     // drawer lists every one of them, none behind a toggle. (The desktop
     // rail's menus are covered in app/Navigation.test.tsx.)
-    expect(within(nav).getAllByRole('link')).toHaveLength(17)
+    expect(within(nav).getAllByRole('link')).toHaveLength(18)
     const inDevelopment = ADMIN_SECTIONS.filter((s) => s.status === 'in_development').length
     expect(within(nav).getAllByText('In development')).toHaveLength(inDevelopment)
   })

@@ -145,6 +145,14 @@ export class StatsService {
     const owed = await this.lessons.owedMakeups(learner.organizationId, { learnerIds: [learner.id] });
     const next = [...lessons].reverse().find((l) => l.outcome === null && l.startsAt.getTime() > now) ?? null;
     const lastReport = lessons.find((l) => l.report !== null) ?? null;
+    // PD-12: the learner's issued student certificates. The file itself is the
+    // attachment of the card in `conversationId`, signed per reader there.
+    const certificates = await this.prisma.learnerCertificate.findMany({
+      where: { learnerId: learner.id, state: 'issued' },
+      orderBy: { achievedOn: 'desc' },
+      select: { id: true, title: true, achievement: true, achievedOn: true, grade: true, decidedAt: true, conversationId: true, issuedMessageId: true },
+      take: 50,
+    });
     return {
       learner: { id: learner.id, name: learner.name },
       month: period.month,
@@ -168,8 +176,16 @@ export class StatsService {
             rating: lastReport.report.rating,
           }
         : null,
-      // PD-11 open item: who issues a certificate, and on what. Until decided, none.
-      certificates: [],
+      certificates: certificates.map((c) => ({
+        id: c.id,
+        title: c.title,
+        achievement: c.achievement,
+        achievedOn: c.achievedOn.toISOString().slice(0, 10),
+        grade: c.grade,
+        issuedAt: c.decidedAt?.toISOString() ?? null,
+        conversationId: c.conversationId,
+        messageId: c.issuedMessageId,
+      })),
     };
   }
 

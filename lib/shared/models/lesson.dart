@@ -182,6 +182,7 @@ class ChildProgress {
     this.nextLessonAt,
     this.lastCovered,
     this.lastReportAt,
+    this.certificates = const [],
   });
 
   final int attended;
@@ -195,6 +196,23 @@ class ChildProgress {
   final DateTime? nextLessonAt;
   final String? lastCovered;
   final DateTime? lastReportAt;
+
+  /// PD-12: issued student certificates, newest first.
+  final List<ProgressCertificate> certificates;
+}
+
+/// One issued student certificate on a child's progress (PD-12). Its file is the
+/// attachment of the card in [conversationId] -- opened there, signed for the reader.
+class ProgressCertificate {
+  const ProgressCertificate({required this.id, required this.title, required this.achievedOn, this.grade, this.conversationId});
+
+  final String id;
+  final String title;
+
+  /// A calendar date (UTC midnight).
+  final DateTime achievedOn;
+  final String? grade;
+  final String? conversationId;
 }
 
 /// A teacher's own month (PD-10: their schedule and workload, nothing else).
