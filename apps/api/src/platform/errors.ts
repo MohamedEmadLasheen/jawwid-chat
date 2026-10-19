@@ -217,6 +217,12 @@ export enum CommErrorCode {
   DISCIPLINE_STATE = 'COMM.DISCIPLINE_STATE',
   /** PD-12 S2: open lessons fall inside the suspension; decide again with cancelCollidingLessons. 409. */
   DISCIPLINE_LESSONS_COLLIDE = 'COMM.DISCIPLINE_LESSONS_COLLIDE',
+  /** PD-12 S3: only Operations (in scope), the Operations Manager and the super admin read instalments. 403. */
+  BILLING_DENIED = 'COMM.BILLING_DENIED',
+  /** PD-12 S3: no such family in the caller's organization, or none this caller may see. 404. */
+  BILLING_NOT_FOUND = 'COMM.BILLING_NOT_FOUND',
+  /** PD-12 S3: Jawwid Core's invoice API did not answer, or answered something unusable. 502. */
+  BILLING_CORE_UNAVAILABLE = 'COMM.BILLING_CORE_UNAVAILABLE',
 }
 
 export class CommError extends Error {

@@ -59,11 +59,11 @@ afterEach(() => {
 })
 
 describe('The navigation registry', () => {
-  it('gives each of the eighteen sections exactly one destination, with the Dashboard under More', () => {
+  it('gives each of the nineteen sections exactly one destination, with the Dashboard under More', () => {
     const destinations = destinationsFor('super_admin')
     expect(destinations.map((d) => d.key)).toEqual(['conversations', 'calls', 'people', 'stories', 'more'])
     const keys = destinations.flatMap((d) => entriesOf(d).map((e) => e.key))
-    expect(keys).toHaveLength(18)
+    expect(keys).toHaveLength(19)
     expect([...keys].sort()).toEqual(ADMIN_SECTIONS.map((s) => s.key).sort())
     const more = destinations.find((d) => d.key === 'more')!
     expect(entriesOf(more).map((e) => e.key)).toContain('dashboard')
@@ -71,14 +71,15 @@ describe('The navigation registry', () => {
 
   it('lists for each role exactly the pages it may open: nothing hidden, nothing extra', () => {
     for (const role of OPERATOR_ROLES) {
-      for (const lessonManager of [false, true]) {
-        const listed = destinationsFor(role, { lessonManager }).flatMap((d) => entriesOf(d).map((e) => e.path))
+      for (const [lessonManager, billingReader] of [[false, false], [true, false], [false, true], [true, true]] as const) {
+        const listed = destinationsFor(role, { lessonManager, billingReader }).flatMap((d) => entriesOf(d).map((e) => e.path))
         // Exactly the openable areas, with TWO deliberate exceptions: the legacy
         // Inbox stays routable (old links) but is never offered -- its API
         // routes (/inbox, /families/*) exist on no branch; and Teacher
         // statistics is offered only when the server confirms the Teachers
-        // department (GET /lessons/access), which the role alone cannot tell.
-        const allowed = navAreas(role, { lessonManager })
+        // department (GET /lessons/access), which the role alone cannot tell --
+        // and Instalments likewise waits for Operations (GET /instalments/access).
+        const allowed = navAreas(role, { lessonManager, billingReader })
           .filter((a): a is Exclude<NavArea, 'settings'> => a !== 'settings')
           .map((a) => AREA_PATH[a])
         expect([...listed].sort(), role).toEqual([...allowed].sort())
@@ -86,8 +87,9 @@ describe('The navigation registry', () => {
         const withheld = [
           ...(visibleAreas(role).includes('inbox') ? ['inbox'] : []),
           ...(!lessonManager && visibleAreas(role).includes('teachers') ? ['teachers'] : []),
+          ...(!billingReader && visibleAreas(role).includes('instalments') ? ['instalments'] : []),
         ]
-        expect(visibleAreas(role).filter((a) => !navAreas(role, { lessonManager }).includes(a)), role).toEqual(withheld)
+        expect(visibleAreas(role).filter((a) => !navAreas(role, { lessonManager, billingReader }).includes(a)), role).toEqual(withheld)
         expect(listed.some((p) => p.startsWith('/admin/')), role).toBe(false)
       }
     }
@@ -184,7 +186,7 @@ describe('The desktop rail', () => {
     expect(more).toHaveAttribute('aria-expanded', 'true')
 
     const menu = document.getElementById(more.getAttribute('aria-controls')!)!
-    expect(within(menu).getAllByRole('link')).toHaveLength(12)
+    expect(within(menu).getAllByRole('link')).toHaveLength(13)
     expect(within(menu).getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual([
       'Overview', 'Communication', 'Operations & performance', 'Administration',
     ])
@@ -277,7 +279,7 @@ describe('The drawer, below desktop width', () => {
     expect(within(nav).getByRole('group', { name: 'الأشخاص والفرق' })).toBeInTheDocument()
     const more = within(nav).getByRole('group', { name: 'المزيد' })
     expect(within(more).getByRole('link', { name: 'لوحة المتابعة' })).toBeInTheDocument()
-    expect(within(nav).getAllByRole('link')).toHaveLength(18)
+    expect(within(nav).getAllByRole('link')).toHaveLength(19)
   })
 
   it('opens from the menu button and closes with Escape, giving focus back', async () => {

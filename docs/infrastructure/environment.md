@@ -156,6 +156,12 @@ credentials, the LiveKit API secret, or Core credentials.
 | `CORE_WEBHOOK_SECRET` | **yes** | opt | req | req |
 | `CORE_TIMEOUT_MS` | no | opt | req | req |
 | `CORE_RETRY_MAX` | no | opt | req | req |
+| `CORE_INVOICES_ENABLED` | no | opt | opt | opt |
+
+`CORE_INVOICES_ENABLED=true` connects Instalment Payments (PD-12 S3) to Core's
+invoice read API at `CORE_BASE_URL`, authenticated with `CORE_API_KEY`. Unset, the
+page says Core is not connected; `CORE_BASE_URL` alone never turns it on. See
+`docs/admin/pd012-s3.md`.
 
 ### Observability
 

@@ -69,3 +69,38 @@ export function canRequestCertificate(
     learner.teacherId === actor.actorId
   );
 }
+
+/**
+ * PD-12 S3: who reads Instalment Payments, and who sets a family's billing
+ * supervisor.
+ *
+ *   act                              Operations supervisor   Operations Manager   super admin   anyone else
+ *   read instalments (billing.       families they reach     every family         every family  never
+ *     family_read)                   (PD-8 scope)
+ *   set / clear a billing supervisor --                      yes                  yes           never
+ *
+ * "Operations" is chat.operations_department_role(). Teachers-department staff
+ * and teachers never see an invoice (PD-10, PD-12 §1).
+ */
+export type OperationsDepartmentRole = 'manager' | 'member' | null;
+
+export interface BillingAccess {
+  /** null = no access; 'all' = every family of the organization; 'reach' = chat.staff_reaches_family. */
+  scope: 'all' | 'reach' | null;
+  canAssign: boolean;
+}
+
+export const NO_BILLING_ACCESS: BillingAccess = Object.freeze({ scope: null, canAssign: false });
+
+export function decideBillingAccess(actor: Actor, operationsRole: OperationsDepartmentRole): BillingAccess {
+  if (actor.kind !== ActorKind.STAFF || !actor.isActive || !actor.organizationId) return NO_BILLING_ACCESS;
+  if (actor.staffRole === StaffRole.SUPER_ADMIN) return { scope: 'all', canAssign: true };
+  if (operationsRole === 'manager' && actor.staffRole === StaffRole.MANAGER) return { scope: 'all', canAssign: true };
+  if (
+    operationsRole === 'member' &&
+    (actor.staffRole === StaffRole.ADMIN || actor.staffRole === StaffRole.COVERAGE)
+  ) {
+    return { scope: 'reach', canAssign: false };
+  }
+  return NO_BILLING_ACCESS;
+}

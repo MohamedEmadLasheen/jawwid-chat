@@ -12,6 +12,7 @@ import { SupervisionModule } from './supervision/supervision.module';
 import { CertificateModule } from './certificates/certificate.module';
 import { LeaveModule } from './leave/leave.module';
 import { DisciplineModule } from './discipline/discipline.module';
+import { BillingModule } from './billing/billing.module';
 
 /**
  * The root module. Composition only -- it declares no provider and no
@@ -47,6 +48,7 @@ import { DisciplineModule } from './discipline/discipline.module';
     CertificateModule,
     LeaveModule,
     DisciplineModule,
+    BillingModule,
   ],
 })
 export class AppModule {}

@@ -11,6 +11,7 @@ import { DevelopmentPlaceholder } from './DevelopmentPlaceholder'
 import { OrganizationPage } from '@/features/organization/OrganizationPage'
 import { TeacherStatsPage } from '@/features/teachers/TeacherStatsPage'
 import { TeacherFilesPage } from '@/features/teacher-files/TeacherFilesPage'
+import { InstalmentsPage } from '@/features/instalments/InstalmentsPage'
 
 /**
  * One route, `/admin/:section`, for every Admin Portal section. The four built
@@ -46,9 +47,16 @@ export function AdminSectionPage() {
       return <TeacherStatsPage />
     case 'teachers':
       return <TeacherFilesPage basePath={adminSectionPath('teachers')} />
+    case 'instalments':
+      return <AdminInstalments section={section} />
     default:
       return <DevelopmentPlaceholder section={section} />
   }
+}
+
+function AdminInstalments({ section }: { section: NonNullable<ReturnType<typeof findAdminSection>> }) {
+  const eyebrow = useEyebrow(section)
+  return <InstalmentsPage eyebrow={eyebrow} />
 }
 
 /** The Admin Portal's home for the Stories studio (2026-10-17: the super admin publishes). */

@@ -26,6 +26,7 @@ import { TeacherFilePage } from '@/features/teacher-files/TeacherFilePage'
 import { CertificatesPage } from '@/features/supervision/CertificatesPage'
 import { LeaveRequestsPage } from '@/features/supervision/LeaveRequestsPage'
 import { DisciplinePage } from '@/features/discipline/DisciplinePage'
+import { InstalmentsPage } from '@/features/instalments/InstalmentsPage'
 import { ForbiddenPage } from './ForbiddenPage'
 import type { ReactElement } from 'react'
 
@@ -85,6 +86,8 @@ export function AppRoutes() {
         <Route path="/teachers/certificates" element={<Area area="teachers"><CertificatesPage basePath="/teachers" /></Area>} />
         <Route path="/teachers/leave" element={<Area area="teachers"><LeaveRequestsPage basePath="/teachers" /></Area>} />
         <Route path="/teachers/discipline" element={<Area area="teachers"><DisciplinePage basePath="/teachers" /></Area>} />
+        {/* PD-12 S3: Operations; the super admin reaches it as /admin/instalments. */}
+        <Route path="/instalments" element={<Area area="instalments"><InstalmentsPage /></Area>} />
         <Route path="/tasks" element={<Area area="tasks"><TasksPage /></Area>} />
         <Route path="/coverage" element={<Area area="coverage"><CoveragePage /></Area>} />
         <Route path="/dashboard" element={<Area area="dashboard"><DashboardPage /></Area>} />

@@ -28,6 +28,7 @@ export type NavArea =
   | 'stories'
   | 'organization'
   | 'teachers'
+  | 'instalments'
   | 'settings'
 
 /** Roles that operate the customer relationship. */
@@ -63,13 +64,16 @@ export function visibleAreas(role: StaffRole): NavArea[] {
   if (isSuperAdmin(role)) {
     // `teachers` stays routable for the super admin; it is offered as the
     // Admin Portal's Reports section rather than as an operator area.
-    return ['inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'teachers', 'settings']
+    // `instalments` likewise: offered as the Admin Portal's Instalments section.
+    return ['inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'teachers', 'instalments', 'settings']
   }
   if (isManager(role)) {
     // PD-8: the department's structure -- children's supervisors and backups.
     // PD-11 T5: teacher statistics -- offered only when the server confirms
     // the Teachers department (see TEACHERS_DEPARTMENT_AREAS).
-    return ['chat', 'inbox', 'families', 'organization', 'teachers', 'tasks', 'coverage', 'dashboard', 'stories', 'settings']
+    // PD-12 S3: instalments -- offered only when the server confirms Operations
+    // (see OPERATIONS_AREAS).
+    return ['chat', 'inbox', 'families', 'organization', 'teachers', 'instalments', 'tasks', 'coverage', 'dashboard', 'stories', 'settings']
   }
   if (isOperator(role)) {
     // No coverage configuration, no manager dashboard, no config editing.
@@ -80,7 +84,7 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // Chat is first: the conversation workspace on the real conversation API
     // (the same conversations parents and teachers are in). The server decides
     // which ones this admin may open -- staff scope -- not this list.
-    return ['chat', 'inbox', 'families', 'teachers', 'tasks', 'stories']
+    return ['chat', 'inbox', 'families', 'teachers', 'instalments', 'tasks', 'stories']
   }
   if (isDepartment(role)) {
     // Departments get tasks and nothing else — they may not open family records.
@@ -110,10 +114,21 @@ export const UNLISTED_AREAS: ReadonlySet<NavArea> = new Set<NavArea>(['inbox'])
  */
 export const TEACHERS_DEPARTMENT_AREAS: ReadonlySet<NavArea> = new Set<NavArea>(['teachers'])
 
+/**
+ * PD-12 S3: Instalment Payments belongs to the Operations department -- its
+ * supervisors (their families), its manager and the super admin -- and, as with
+ * the Teachers area, only the server can tell, so `GET /instalments/access`
+ * (billingReader) decides whether the entry is shown.
+ */
+export const OPERATIONS_AREAS: ReadonlySet<NavArea> = new Set<NavArea>(['instalments'])
+
 /** What navigation shows: the areas this role may open, minus the unlisted ones. */
-export function navAreas(role: StaffRole, opts: { lessonManager?: boolean } = {}): NavArea[] {
+export function navAreas(role: StaffRole, opts: { lessonManager?: boolean; billingReader?: boolean } = {}): NavArea[] {
   return visibleAreas(role).filter(
-    (area) => !UNLISTED_AREAS.has(area) && (opts.lessonManager === true || !TEACHERS_DEPARTMENT_AREAS.has(area)),
+    (area) =>
+      !UNLISTED_AREAS.has(area) &&
+      (opts.lessonManager === true || !TEACHERS_DEPARTMENT_AREAS.has(area)) &&
+      (opts.billingReader === true || !OPERATIONS_AREAS.has(area)),
   )
 }
 

@@ -918,6 +918,21 @@ model LearnerSupervision {
   @@schema("chat")
 }
 
+/// PD-12 S3: the Operations supervisor responsible for a family's family-level
+/// invoices (an invoice that names no child). Must supervise one of the
+/// family's children; the database clears it when they no longer do.
+model FamilyBillingSupervision {
+  familyId       String   @id @map("family_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  supervisorId   String   @map("supervisor_id") @db.Uuid
+  assignedBy     String?  @map("assigned_by") @db.Uuid
+  assignedAt     DateTime @map("assigned_at") @db.Timestamptz @default(now())
+  reason         String?
+
+  @@map("family_billing_supervision")
+  @@schema("chat")
+}
+
 model SupervisorBackup {
   id             String    @id @default(uuid()) @db.Uuid
   organizationId String    @map("organization_id") @db.Uuid
