@@ -159,18 +159,19 @@ describe('the statistics', () => {
 })
 
 describe('the Teachers area', () => {
-  it('one tab needs no strip; a second tab (as PD-12 appends) shows the strip with Statistics selected at /teachers', async () => {
-    const { unmount } = renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/teachers' })
-    await screen.findByRole('table')
-    expect(screen.queryByRole('navigation', { name: 'Teachers' })).not.toBeInTheDocument()
+  it('shows its tabs in the agreed order with Statistics selected at /teachers, and an appended tab joins them', async () => {
+    const { unmount } = renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/teachers?month=2026-10' })
+    const tabs = await screen.findByRole('navigation', { name: 'Teachers' })
+    expect(within(tabs).getAllByRole('link').map((l) => l.textContent)).toEqual(['Statistics', 'Needs action', 'Schedules', 'Students'])
+    expect(within(tabs).getByRole('link', { name: 'Statistics' })).toHaveAttribute('aria-current', 'page')
     unmount()
 
+    // PD-12 appends its tabs to the same registry; nothing else is needed for them to show.
     TEACHERS_TABS.push({ key: 'certificates', segment: 'certificates', label: { en: 'Certificates', ar: 'الشهادات' } })
     try {
       renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/teachers?month=2026-10' })
-      const tabs = await screen.findByRole('navigation', { name: 'Teachers' })
-      expect(within(tabs).getByRole('link', { name: 'Statistics' })).toHaveAttribute('aria-current', 'page')
-      expect(within(tabs).getByRole('link', { name: 'Certificates' })).toHaveAttribute('href', '/teachers/certificates')
+      const again = await screen.findByRole('navigation', { name: 'Teachers' })
+      expect(within(again).getByRole('link', { name: 'Certificates' })).toHaveAttribute('href', '/teachers/certificates')
     } finally {
       TEACHERS_TABS.pop()
     }

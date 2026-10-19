@@ -251,6 +251,9 @@ describe('lesson tickets over HTTP, in a PD-8 family group', () => {
     expect((await http(fam.teacher, 'GET', '/stats/me')).status).toBe(200);
     expect((await http(fam.parent, 'GET', `/learners/${fam.child.id}/progress`)).status).toBe(200);
     expect((await http(null, 'GET', '/stats/me')).status).toBe(401);
+    // The Schedules tab's roster resolves too (not shadowed by /lessons/:id).
+    expect((await http(tsup, 'GET', '/lessons/roster')).status).toBe(200);
+    expect((await http(fam.teacher, 'GET', '/lessons/roster')).status).toBe(403);
   });
 
   it('the needs-action queue is the Teachers department\'s; a client cannot send a card', async () => {

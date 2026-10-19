@@ -13,8 +13,9 @@ import type { Pair } from './copy'
  * whose pages have sub-routes (`files/:teacherId`) stays selected on them.
  *
  * Coordination (2026-10-19, owner-approved plan): Statistics is PD-11 T5;
- * Teacher files, Certificates and Leave requests arrive with PD-12 S1
- * (branch claude/admin-ops-s1), which appends their entries here.
+ * Needs action, Schedules and Students are the supervisors' daily operations
+ * (PD-11 T1-T3); Teacher files, Certificates and Leave requests arrive with
+ * PD-12 S1 (#48), appended after them in that order.
  */
 export interface TeachersTab {
   key: string
@@ -27,6 +28,9 @@ export const TEACHERS_AREA_BASE = '/teachers'
 
 export const TEACHERS_TABS: TeachersTab[] = [
   { key: 'statistics', segment: '', label: { en: 'Statistics', ar: 'الإحصائيات' } },
+  { key: 'needs-action', segment: 'needs-action', label: { en: 'Needs action', ar: 'بحاجة إلى إجراء' } },
+  { key: 'schedules', segment: 'schedules', label: { en: 'Schedules', ar: 'الجداول' } },
+  { key: 'students', segment: 'students', label: { en: 'Students', ar: 'الطلاب' } },
 ]
 
 export function teachersTabPath(tab: TeachersTab, base: string = TEACHERS_AREA_BASE): string {

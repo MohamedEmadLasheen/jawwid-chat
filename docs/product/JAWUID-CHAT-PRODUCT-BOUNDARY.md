@@ -864,6 +864,25 @@ New Students (needs Core's subscription events); **T5** statistics.
   - The page has a month picker, a list of every teacher, and per-teacher category cards broken down by lesson length (the Core dashboard's layout), plus rates, reports on time, replies to families, workload and student movements.
 - **App.** The child's progress appears on the group profile, and the teacher's month heads the Schedule tab.
 
+**Supervisors' screens as built (2026-10-19).** Three more tabs in the Admin Web
+Teachers area, behind the same `/lessons/access` gate. There is one new
+endpoint, `GET /lessons/roster`; everything else uses the T1–T3 API.
+- **Needs action** (`/teachers/needs-action`) is the daily queue. Its sections:
+  - lessons still without an outcome, each with student absent / teacher absent / cancel;
+  - late apologies, to excuse or count as an absence;
+  - teacher-cancelled lessons with no make-up, with the decision recorded;
+  - regular-time requests, to approve or reject;
+  - pauses ending soon, with "move return date".
+- **Schedules** (`/teachers/schedules`): a teacher's weekly hours and days off;
+  each student's regular times, a one-off lesson, a transfer (with a handover
+  note) and pause / stop.
+- **Students** (`/teachers/students`): the paused and stopped lists, with
+  extend and end. "Package left" reads "kept in Core" until Core publishes it.
+- **One dialog for every action.** Required fields are refused before anything
+  is sent, and the server's refusal is shown in its own words.
+- **Not here:** the supervision timeline and the bonus screen. Those belong to
+  the PD-12 Teacher File (#48).
+
 **Deprecated behaviour.** None removed. Explicitly **not** built: a generic ticket
 or task entity; any stored package balance; parents changing their regular
 lesson times without approval.
