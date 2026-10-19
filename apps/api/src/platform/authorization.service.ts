@@ -1381,6 +1381,22 @@ export class AuthorizationService {
   }
 
   /**
+   * D1 (PD-A, ported from 33a347a). Whoever STARTS a call must be one of the
+   * participants it rings -- a live member of the conversation. Since PD-8 a
+   * department manager, an active backup or the super admin may send into a
+   * conversation without being a member; through canCall they could otherwise
+   * start a call that rings everyone else while they hold no seat in it (a
+   * phantom call). Joining is unaffected: it already requires a participant row.
+   */
+  canStartCallAsParticipant(
+    actor: Pick<Actor, 'actorId'>,
+    participants: ReadonlyArray<Pick<Actor, 'actorId'>>,
+  ): Decision {
+    if (participants.some((p) => p.actorId === actor.actorId)) return allow();
+    return deny(CommErrorCode.NOT_CONVERSATION_MEMBER, 'the caller would not be a participant of this call');
+  }
+
+  /**
    * Calling uses the same matrix as messaging - deliberately. A permission can
    * never be enforced for chat and forgotten for calls.
    */
