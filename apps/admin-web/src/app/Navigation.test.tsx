@@ -63,8 +63,11 @@ describe('The navigation registry', () => {
     const destinations = destinationsFor('super_admin')
     expect(destinations.map((d) => d.key)).toEqual(['conversations', 'calls', 'people', 'stories', 'more'])
     const keys = destinations.flatMap((d) => entriesOf(d).map((e) => e.key))
-    expect(keys).toHaveLength(19)
-    expect([...keys].sort()).toEqual(ADMIN_SECTIONS.map((s) => s.key).sort())
+    // The nineteen sections, plus Chat (PD-8: where the super admin replies).
+    expect(keys).toHaveLength(20)
+    expect([...keys].sort()).toEqual([...ADMIN_SECTIONS.map((s) => s.key), 'chat'].sort())
+    const conversations = destinations.find((d) => d.key === 'conversations')!
+    expect(entriesOf(conversations).map((e) => e.path)).toEqual(['/chat', '/admin/conversations'])
     const more = destinations.find((d) => d.key === 'more')!
     expect(entriesOf(more).map((e) => e.key)).toContain('dashboard')
   })
@@ -94,9 +97,10 @@ describe('The navigation registry', () => {
         expect(listed.some((p) => p.startsWith('/admin/')), role).toBe(false)
       }
     }
-    // And the super admin's navigation is the portal, not the operator screens.
+    // And the super admin's navigation is the portal, not the operator screens
+    // -- except Chat, the one workspace it writes in (PD-8).
     const listed = destinationsFor('super_admin').flatMap((d) => entriesOf(d).map((e) => e.path))
-    expect(listed.every((p) => p.startsWith('/admin/'))).toBe(true)
+    expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat'])
   })
 })
 
@@ -181,8 +185,10 @@ describe('The desktop rail', () => {
     expect(items.map((el) => el.getAttribute('data-destination'))).toEqual([
       'conversations', 'calls', 'people', 'stories', 'more',
     ])
+    // Conversations is a menu now -- Chat and All conversations -- and it is
+    // where the super admin lands.
     await waitFor(() =>
-      expect(within(nav).getByRole('link', { name: 'Conversations' })).toHaveAttribute('aria-current', 'page'),
+      expect(within(nav).getByRole('button', { name: 'Conversations' })).toHaveAttribute('aria-current', 'true'),
     )
     // PD-13: Calls is built, so its single icon links straight to the page, unmarked.
     expect(within(nav).getByRole('link', { name: 'Calls' })).toHaveAttribute('href', '/admin/calls')
@@ -294,11 +300,13 @@ describe('The drawer, below desktop width', () => {
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/conversations', locale: 'ar' })
     const nav = await screen.findByRole('navigation', { name: 'بوابة الإدارة' })
     expect(document.documentElement.dir).toBe('rtl')
-    expect(within(nav).getByRole('link', { name: 'المحادثات' })).toHaveAttribute('aria-current', 'page')
+    const conversations = within(nav).getByRole('group', { name: 'المحادثات' })
+    expect(within(conversations).getByRole('link', { name: 'كل المحادثات' })).toHaveAttribute('aria-current', 'page')
+    expect(within(conversations).getByRole('link', { name: 'الدردشة' })).toHaveAttribute('href', '/chat')
     expect(within(nav).getByRole('group', { name: 'الأشخاص والفرق' })).toBeInTheDocument()
     const more = within(nav).getByRole('group', { name: 'المزيد' })
     expect(within(more).getByRole('link', { name: 'لوحة المتابعة' })).toBeInTheDocument()
-    expect(within(nav).getAllByRole('link')).toHaveLength(19)
+    expect(within(nav).getAllByRole('link')).toHaveLength(20)
   })
 
   it('opens from the menu button and closes with Escape, giving focus back', async () => {

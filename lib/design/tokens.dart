@@ -391,3 +391,19 @@ abstract final class Sizes {
 
   static const double maxBubbleWidthFraction = 0.78;
 }
+
+/// Sender names in a group chat, WhatsApp-style: one of eight colours, stable
+/// per person. Each is at least 4.5:1 on the incoming, pending and highlighted
+/// bubbles of its theme, and they are the same eight Admin Web's chat uses
+/// (apps/admin-web/src/features/chat/chat.css), so a person reads the same
+/// colour in every app.
+abstract final class SenderNameColors {
+  static const light = <Color>[
+    Color(0xFFB4441C), Color(0xFF1F6FB2), Color(0xFF2A722E), Color(0xFF8E3FA6),
+    Color(0xFFA8327A), Color(0xFF0F766E), Color(0xFF8A5A00), Color(0xFF4B55C4),
+  ];
+  static const dark = <Color>[
+    Color(0xFFF4A27F), Color(0xFF7CB8F2), Color(0xFF86D18A), Color(0xFFD49AE6),
+    Color(0xFFF08FC7), Color(0xFF5FD3C6), Color(0xFFE9BD5C), Color(0xFFA7AEF5),
+  ];
+}

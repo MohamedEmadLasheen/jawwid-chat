@@ -1,0 +1,183 @@
+import { useMemo, useState, type ReactNode } from 'react'
+import { useI18n } from '@/core/i18n/I18nProvider'
+import { useSession } from '@/core/auth/SessionProvider'
+import { listTime } from '@/features/admin/copy'
+import { Badge } from '@/shared/components/Badge'
+import { EmptyState } from '@/shared/components/States'
+import { FilterChips } from '@/shared/components/FilterChips'
+import { Icon } from '@/shared/components/Icon'
+import { Menu } from '@/shared/components/Menu'
+import { SearchField } from '@/shared/components/SearchField'
+import type { ChatConversation } from './chatApi'
+import { chatCopyFor } from './copy'
+import { ConversationAvatar, conversationName, isGroup, isMuted, previewText } from './chatView'
+import { useConversationPreferences } from './useChatActions'
+
+type View = 'all' | 'unread' | 'groups' | 'archived'
+
+/**
+ * The conversation list. What is in it is exactly what the server returned
+ * for this viewer; the filters and the order below are views of that list.
+ * Archived chats leave the main views and gather under Archived, pinned ones
+ * lead, and both are this viewer's preferences only.
+ */
+export function ConversationList({
+  conversations,
+  selectedId,
+  onSelect,
+  actions,
+}: {
+  conversations: ChatConversation[]
+  selectedId: string | null
+  onSelect: (id: string) => void
+  /** The header's buttons (New chat / New family group). */
+  actions?: ReactNode
+}) {
+  const { locale, number } = useI18n()
+  const copy = chatCopyFor(locale)
+  const { staff } = useSession()
+  const [search, setSearch] = useState('')
+  const [view, setView] = useState<View>('all')
+
+  const named = useMemo(() => {
+    const needle = search.trim().toLocaleLowerCase()
+    return conversations.filter(
+      (c) =>
+        !needle ||
+        [conversationName(c, staff?.id, copy), ...(c.members ?? []).map((m) => m.displayName)].some((t) =>
+          t.toLocaleLowerCase().includes(needle),
+        ),
+    )
+  }, [conversations, search, staff?.id, copy])
+
+  const archived = named.filter((c) => c.viewerState?.archived)
+  const active = named.filter((c) => !c.viewerState?.archived)
+  const inView = (v: View) =>
+    v === 'archived' ? archived
+    : v === 'unread' ? active.filter((c) => (c.unreadCount ?? 0) > 0)
+    : v === 'groups' ? active.filter(isGroup)
+    : active
+  // Pinned first; otherwise the server's order (most recent activity first).
+  const rows = [...inView(view)].sort((a, b) => Number(!!b.viewerState?.pinned) - Number(!!a.viewerState?.pinned))
+
+  const options = [
+    { value: 'all' as const, label: copy.filterAll, count: inView('all').length },
+    { value: 'unread' as const, label: copy.filterUnread, count: inView('unread').length },
+    { value: 'groups' as const, label: copy.filterGroups, count: inView('groups').length },
+    ...(archived.length > 0 || view === 'archived'
+      ? [{ value: 'archived' as const, label: copy.filterArchived, count: archived.length }]
+      : []),
+  ]
+
+  return (
+    <>
+      <div className="workspace__head">
+        <div className="workspace__title-row">
+          <h1 className="workspace__title">{copy.title}</h1>
+          <span className="workspace__count">{number(active.length)}</span>
+          <div className="cw-list__actions">{actions}</div>
+        </div>
+        <SearchField value={search} onChange={setSearch} label={copy.search} clearLabel={copy.clearSearch} />
+        <FilterChips options={options} value={view} onChange={setView} label={copy.filterLabel} formatCount={number} />
+      </div>
+      <div className="workspace__scroll">
+        {conversations.length === 0 ? (
+          <EmptyState compact icon="conversations" title={copy.empty} />
+        ) : rows.length === 0 ? (
+          <EmptyState compact icon="search" title={copy.noMatches} />
+        ) : (
+          <ul className="conv-list" aria-label={copy.title}>
+            {rows.map((c) => (
+              <ConversationRow
+                key={c.id}
+                c={c}
+                selected={c.id === selectedId}
+                onSelect={() => onSelect(c.id)}
+                selfId={staff?.id}
+                locale={locale}
+              />
+            ))}
+          </ul>
+        )}
+      </div>
+    </>
+  )
+}
+
+function ConversationRow({
+  c,
+  selected,
+  onSelect,
+  selfId,
+  locale,
+}: {
+  c: ChatConversation
+  selected: boolean
+  onSelect: () => void
+  selfId: string | undefined
+  locale: 'ar' | 'en'
+}) {
+  const copy = chatCopyFor(locale)
+  const { dateTime } = useI18n()
+  const prefs = useConversationPreferences()
+  const name = conversationName(c, selfId, copy)
+  const unread = c.unreadCount ?? 0
+  const pinned = !!c.viewerState?.pinned
+  const muted = isMuted(c)
+  const archived = !!c.viewerState?.archived
+  const preview = previewText(c.lastMessage, selfId, copy) || (copy.kind[c.type] ?? c.type)
+
+  return (
+    <li className="cw-row">
+      <button
+        type="button"
+        className={unread > 0 ? 'conv-row cw-row__main cw-row__main--unread' : 'conv-row cw-row__main'}
+        aria-current={selected ? 'true' : undefined}
+        onClick={onSelect}
+      >
+        <ConversationAvatar c={c} name={name} />
+        <span className="conv-row__body">
+          <span className="conv-row__top">
+            <span className="conv-row__name" dir="auto">{name}</span>
+            <time className="conv-row__time" dateTime={c.lastActivityAt} title={dateTime(c.lastActivityAt)}>
+              {listTime(c.lastActivityAt, locale)}
+            </time>
+          </span>
+          <span className="conv-row__bottom">
+            <span className="conv-row__sub" dir="auto">{preview}</span>
+            {c.needsReply && <Badge tone="now">{copy.needsReply}</Badge>}
+            {muted && (
+              <span className="cw-row__mark" title={copy.mutedMark} aria-label={copy.mutedMark}>
+                <Icon name="bellOff" size={14} />
+              </span>
+            )}
+            {pinned && (
+              <span className="cw-row__mark" title={copy.pinnedMark} aria-label={copy.pinnedMark}>
+                <Icon name="pin" size={14} />
+              </span>
+            )}
+            {unread > 0 && (
+              <span className="cw-unread" aria-label={copy.unread(unread)}>
+                {unread}
+              </span>
+            )}
+          </span>
+        </span>
+      </button>
+      <Menu
+        label={copy.chatActions}
+        className="cw-row__menu"
+        items={[
+          { key: 'pin', label: pinned ? copy.unpin : copy.pin, icon: 'pin', onSelect: () => prefs.pin(c.id, !pinned) },
+          { key: 'mute', label: muted ? copy.unmute : copy.mute, icon: muted ? 'notifications' : 'bellOff', onSelect: () => prefs.mute(c.id, !muted) },
+          {
+            key: 'archive',
+            label: archived ? copy.unarchive : copy.archive,
+            icon: 'archive',
+            onSelect: () => prefs.archive(c.id, !archived),
+          },
+        ]}
+      />
+    </li>
+  )
+}

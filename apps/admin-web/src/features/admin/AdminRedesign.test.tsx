@@ -172,7 +172,7 @@ describe('Conversations', () => {
     expect(localStorage.getItem('jawwid.admin.listWidth')).toBe('360')
   })
 
-  it('shows the read-only bar where a composer would be, and no way to type', async () => {
+  it('shows the read-only bar where a composer would be, with a link to reply in Chat', async () => {
     const id = CONVERSATIONS.conversations[0]!.id
     vi.stubGlobal(
       'fetch',
@@ -182,8 +182,9 @@ describe('Conversations', () => {
       }),
     )
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: `/admin/conversations?c=${id}` })
-    expect(await screen.findByText('Read-only. Replying is not available to this account.')).toBeInTheDocument()
+    expect(await screen.findByText('This view is read-only.')).toBeInTheDocument()
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Reply in Chat' })).toHaveAttribute('href', `/chat/${id}`)
   })
 })
 

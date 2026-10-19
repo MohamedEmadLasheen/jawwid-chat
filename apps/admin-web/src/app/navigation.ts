@@ -131,6 +131,9 @@ const AREA_ICON: Record<OperatorArea, IconName> = {
   stories: 'stories',
 }
 
+/** The super admin's name for /chat, distinct from the read-only section's. */
+export const ADMIN_CHAT_LABEL: Bilingual = { en: 'Chat', ar: 'الدردشة' }
+
 function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
   const out = new Map<DestinationKey, NavEntryGroup[]>()
   // Sections keep their registry order; inside a destination that spans more
@@ -154,6 +157,16 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
       out.set(dest, groups)
     }
   }
+  // PD-8: the super admin replies in the Chat workspace -- the same
+  // conversations, on the real conversation API. It leads its destination, so
+  // replying is offered first and read-only inspection second.
+  out.get('conversations')?.[0]?.entries.unshift({
+    key: 'chat',
+    path: AREA_PATH.chat,
+    icon: AREA_ICON.chat,
+    label: { text: ADMIN_CHAT_LABEL },
+    inDevelopment: false,
+  })
   // One registry group inside a destination needs no heading.
   for (const groups of out.values()) {
     if (groups.length === 1) groups[0]!.label = null

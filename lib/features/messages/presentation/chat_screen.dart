@@ -712,6 +712,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         .reversed
         .toList(growable: false);
 
+    // WhatsApp's rule: wherever more than one other person speaks, each run of
+    // their messages carries their picture and name. A group always does; so
+    // does a thread that is formally 1:1 with "Jawwid" but answered by several
+    // staff, or a trial or supervision chat with more than one colleague in it.
+    final showsSenders = widget.kind == ConversationKind.studentGroup ||
+        state.log.messages
+                .where((m) => !m.isMine && !m.isSystem && m.authorId != null)
+                .map((m) => m.authorId)
+                .toSet()
+                .length >
+            1;
+
     return Stack(
       children: [
         ListView.builder(
@@ -759,8 +771,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 .firstOrNull
                 ?.message;
 
-            final showAuthor = !message.isMine &&
-                (older == null || older.authorId != message.authorId);
+            final fromSomeoneElse =
+                showsSenders && !message.isMine && !message.isSystem;
+            final showAuthor = fromSomeoneElse &&
+                (older == null ||
+                    older.authorId != message.authorId ||
+                    older.isSystem ||
+                    showDaySeparator);
 
             final key = _keyOf(message);
             final reply = _resolveReply(message, state);
@@ -772,6 +789,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   key: _messageKeys.putIfAbsent(key, GlobalKey.new),
                   message: message,
                   showAuthor: showAuthor,
+                  reserveSenderColumn: fromSomeoneElse,
                   replyTo: reply,
                   isHighlighted: _highlightedKey == key,
                   onRetry: message.canRetry
