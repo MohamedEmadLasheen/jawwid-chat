@@ -914,6 +914,12 @@ records prospects and books trials (the Teachers department may book too); the
   stamps the confirmation and links the prospect to the learner Core created.
   The Core ingestion that calls it is **not built**, so every subscription
   reads **"awaiting Core"**, and only a confirmed one credits the teacher.
+  *Chat side built 2026-10-19* (`docs/integration/core-subscription-confirmation.md`):
+  Sales' "subscribed" queues `trial.converted` for Core; the signed webhook
+  `POST /integration/core/events` takes `subscription.created` and confirms with
+  `chat.confirm_trial_subscription`, linking the student now or when the learner
+  arrives; New Students gains "Confirmed, student not in Chat yet". Core's ids
+  became opaque text (`20261019200000`). Still Core's: sending the event.
 - **New Students** (`GET /trials/new-students`; Operations, Sales, super
   admin): confirmed subscriptions whose learner has no live group yet ("ready
   to set up"), and subscriptions Core has not confirmed. A student leaves the

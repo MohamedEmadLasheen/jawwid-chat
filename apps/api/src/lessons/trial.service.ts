@@ -10,6 +10,8 @@ import { ConversationService, isUuid } from '../communication/conversations/conv
 import { LessonService, cancelReminders, dateField, invalid, stateError, textField } from './lesson.service';
 import { SchedulingService } from './scheduling.service';
 import { TrialGroupService } from './trial-group.service';
+import { OutboxService } from '../communication/outbox/outbox.service';
+import { CommEvent } from '../communication/contracts/events';
 
 const NOT_SUBSCRIBED_REASONS: ReadonlySet<string> = new Set(['price', 'schedule', 'not_ready', 'chose_other', 'no_response', 'other']);
 const MAX_RANGE_DAYS = 93;
@@ -55,6 +57,7 @@ export class TrialService {
     private readonly scheduling: SchedulingService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
     private readonly groups: TrialGroupService,
+    private readonly outbox: OutboxService,
   ) {}
 
   // ------------------------------------------------------------------
@@ -297,6 +300,25 @@ export class TrialService {
         });
         // The result only: the reason and note stay with Sales.
         await this.groups.postCard(tx, trial, actor, CardKind.TRIAL_DECISION, { result });
+        // Core creates the subscription and answers with subscription.created,
+        // carrying this trial's id back (chat.confirm_trial_subscription).
+        if (result === 'subscribed') {
+          const teacher = await tx.teacher.findUnique({ where: { id: trial.teacherId }, select: { coreTeacherId: true } });
+          await this.outbox.enqueue(tx, CommEvent.TRIAL_CONVERTED, {
+            trialId: trial.id,
+            organizationId: trial.organizationId,
+            teacherId: trial.teacherId,
+            coreTeacherId: teacher?.coreTeacherId ?? null,
+            prospect: {
+              id: trial.prospect?.id ?? '',
+              displayName: trial.prospect?.displayName ?? '',
+              level: trial.prospect?.level ?? null,
+            },
+            trialAt: trial.startsAt.toISOString(),
+            recordedBy: actor.actorId,
+            recordedAt: new Date().toISOString(),
+          });
+        }
         await this.audit.audit(tx, {
           actorId: actor.actorId, action: `trial.${result}`, entity: 'lesson', entityId: trial.id,
           after: { result, reasonCode }, reason: note ?? result,
@@ -333,7 +355,9 @@ export class TrialService {
   /**
    * The Operations team's New Students page: subscriptions Core has CONFIRMED
    * whose learner exists and still has no live group to talk in (ready to set
-   * up), and subscriptions Sales recorded that Core has not confirmed yet.
+   * up); confirmed ones whose student Chat does not have yet (Core named the
+   * child, the learner arrives later and links itself); and subscriptions Sales
+   * recorded that Core has not confirmed yet.
    */
   async newStudents(actorId: string) {
     const actor = await this.conversations.requireActor(actorId);
@@ -369,6 +393,7 @@ export class TrialService {
     });
     return {
       readyForSetup: rows.filter((r) => r.confirmedAt && r.lesson.prospect?.learnerId && !grouped.has(r.lesson.prospect.learnerId)).map(item),
+      awaitingStudent: rows.filter((r) => r.confirmedAt && !r.lesson.prospect?.learnerId).map(item),
       awaitingCore: rows.filter((r) => !r.confirmedAt).map(item),
     };
   }

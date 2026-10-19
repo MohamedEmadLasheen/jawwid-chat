@@ -69,6 +69,12 @@ delivery layer.
 
 ## 3. Event types
 
+> **Implemented on the integration line (2026-10-19):** only
+> `subscription.created`, for PD-11 trial confirmation. See
+> `docs/integration/core-subscription-confirmation.md`. Every other type below is
+> refused with 400 `unknown_event_type` until its handler exists. Core ids are
+> opaque text, not UUIDs (`20261019200000`).
+
 | Event | Applies to |
 |---|---|
 | `parent.upserted` | family identity and language |

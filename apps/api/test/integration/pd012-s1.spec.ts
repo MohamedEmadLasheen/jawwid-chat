@@ -39,7 +39,7 @@ const cards = new CardPoster(g.conversations, g.outbox, audit);
 const certificates = new CertificateService(g.prisma, g.conversations, supervision, cards, g.storage, audit);
 const scheduling = new SchedulingService(g.prisma, g.authz, g.conversations, lessons, g.outbox, g.config, g.reminders, audit);
 const groups = new TrialGroupService(g.prisma, g.authz, g.conversations, g.outbox, cards, g.config, audit);
-const trials = new TrialService(g.prisma, g.conversations, lessons, scheduling, audit, groups);
+const trials = new TrialService(g.prisma, g.conversations, lessons, scheduling, audit, groups, g.outbox);
 const leave = new LeaveService(g.prisma, g.conversations, supervision, cards, lessons, audit, trials);
 const blobs = new LocalFsBlobStore();
 
