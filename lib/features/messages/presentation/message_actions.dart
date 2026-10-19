@@ -11,7 +11,7 @@ import '../../../shared/utils/text_direction.dart';
 /// A choice, not a command: the sheet decides *what was asked for* and the chat
 /// screen decides what to do about it. Keeping the two apart is what lets the
 /// sheet be tested without a controller, a repository or a network.
-enum MessageAction { reply, star, pin, copy, open, deleteForMe, deleteForEveryone }
+enum MessageAction { reply, forward, select, star, pin, copy, open, deleteForMe, deleteForEveryone }
 
 /// The reactions a parent can leave.
 ///
@@ -100,6 +100,10 @@ List<MessageAction> actionsFor(Message message, {bool withMarks = false}) {
 
   return [
     MessageAction.reply,
+    // Only what may leave its conversation (the server re-checks both ends).
+    if (withMarks && message.approvalState == ApprovalState.notRequired && message.card == null)
+      MessageAction.forward,
+    if (withMarks) MessageAction.select,
     if (withMarks) MessageAction.star,
     if (withMarks && message.approvalState == ApprovalState.notRequired) MessageAction.pin,
     if (hasText) MessageAction.copy,
@@ -193,6 +197,8 @@ class _MessageActionsSheet extends StatelessWidget {
 
   static IconData _iconFor(MessageAction action, Message message) => switch (action) {
         MessageAction.reply => Icons.reply,
+        MessageAction.forward => Icons.forward,
+        MessageAction.select => Icons.check_box_outlined,
         MessageAction.star => message.isStarred ? Icons.star : Icons.star_border,
         MessageAction.pin => message.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
         MessageAction.copy => Icons.copy_outlined,
@@ -203,6 +209,8 @@ class _MessageActionsSheet extends StatelessWidget {
 
   static String _labelFor(MessageAction action, L10n l10n, Message message) => switch (action) {
         MessageAction.reply => l10n.replyAction,
+        MessageAction.forward => l10n.forwardAction,
+        MessageAction.select => l10n.selectAction,
         MessageAction.star => message.isStarred ? l10n.unstarAction : l10n.starAction,
         MessageAction.pin => message.isPinned ? l10n.unpinAction : l10n.pinAction,
         MessageAction.copy => l10n.copyAction,

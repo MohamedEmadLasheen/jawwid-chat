@@ -664,5 +664,15 @@
   "pinnedBannerOne": "رسالة مثبّتة",
   "pinnedBannerOf": "رسالة مثبّتة {index} من {total}",
   "starredMessagesTitle": "الرسائل المميّزة بنجمة",
-  "starredMessagesEmpty": "لم تميّز أي رسالة بعد. اضغط مطولًا على رسالة واختر «تمييز بنجمة»."
+  "starredMessagesEmpty": "لم تميّز أي رسالة بعد. اضغط مطولًا على رسالة واختر «تمييز بنجمة».",
+  "forwardAction": "إعادة توجيه",
+  "forwardTitle": "إعادة التوجيه إلى…",
+  "forwardEmpty": "لا توجد محادثات لإعادة التوجيه إليها.",
+  "forwardSendTo": "{count, plural, =0{إرسال} other{إرسال إلى {count}}}",
+  "forwardMax": "يمكن اختيار ١٠ محادثات كحد أقصى.",
+  "forwardDone": "{count, plural, =1{أُعيد توجيهها إلى محادثة واحدة} other{أُعيد توجيهها إلى {count} محادثات}}",
+  "forwardedLabel": "مُعاد توجيهها",
+  "selectAction": "تحديد الرسائل",
+  "selectedCount": "{count, plural, =1{رسالة محددة} other{{count} رسائل محددة}}",
+  "cancelSelection": "إلغاء التحديد"
 }

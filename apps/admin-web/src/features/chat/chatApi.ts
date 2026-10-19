@@ -93,6 +93,8 @@ export interface ChatMessage {
   authorAvatarUrl?: string | null
   /** One reaction per actor (server unique index). */
   reactions?: Array<{ actorId: string; emoji: string }>
+  /** A copy forwarded by its author; shown as "Forwarded" (the source is never named). */
+  forwarded?: boolean
   /** The viewer's private bookmark. */
   starred?: boolean
   /** Pinned for everyone in this conversation (at most three). */
@@ -194,6 +196,13 @@ export const chatApi = {
     })
   },
   upload,
+  /**
+   * Forward messages of conversation `id` into up to ten others. The server
+   * checks each source is readable here and each destination writable; media
+   * are copied into each destination.
+   */
+  forward: (id: string, messageIds: string[], toConversationIds: string[]) =>
+    api.post<{ sent: ChatMessage[] }>(`${conv(id)}/messages/forward`, { messageIds, toConversationIds }),
   star: (id: string, messageId: string) =>
     api.post<{ ok: boolean }>(`${conv(id)}/messages/${encodeURIComponent(messageId)}/star`),
   unstar: (id: string, messageId: string) =>

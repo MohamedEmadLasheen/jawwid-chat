@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { LocalFsBlobStore } from './blob-store';
+import { assertSafeObjectKey } from './object-key';
 
 /**
  * PLATFORM SEAM. Binary content never touches Postgres.
@@ -96,6 +97,13 @@ export interface ObjectStorage {
    */
   readHead(objectKey: string, maxBytes: number): Promise<StoredObjectHead | null>;
   /**
+   * Server-side copy of a stored object to a new key (forwarding media into
+   * another conversation's namespace). Returns false when the source does not
+   * exist. Optional: a store without it refuses media forwards rather than
+   * pointing a second conversation at the first one's object.
+   */
+  copy?(sourceKey: string, targetKey: string): Promise<boolean>;
+  /**
    * RT-037. The bytes, read by this API on behalf of a request it has just
    * authorized (the media route) -- so no storage URL has to be handed out.
    * Null when there is no such object; 'unsatisfiable' for a range outside it.
@@ -177,6 +185,13 @@ export class SignedLocalObjectStorage implements ObjectStorage {
    */
   async delete(objectKey: string): Promise<void> {
     await this.blobs.delete(objectKey);
+  }
+
+  async copy(sourceKey: string, targetKey: string): Promise<boolean> {
+    const blob = await this.blobs.get(assertSafeObjectKey(sourceKey));
+    if (!blob) return false;
+    await this.blobs.put(assertSafeObjectKey(targetKey), blob.mimeType, blob.bytes);
+    return true;
   }
 
   async read(objectKey: string, rangeHeader?: string | string[]): Promise<StoredObject | 'unsatisfiable' | null> {

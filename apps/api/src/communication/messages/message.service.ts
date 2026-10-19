@@ -64,6 +64,21 @@ export interface SendMessageInput {
   attachments?: AttachmentInput[];
   /** Only assist / escalation are honoured; owner vs coverage is derived. */
   requestedMode?: string;
+  /**
+   * SERVER-ONLY: set by forward() after it authorized the source. The send
+   * route never passes it, so a client cannot claim a message is a forward.
+   */
+  forwardedFromMessageId?: string;
+}
+
+export interface ForwardInput {
+  actorId: string;
+  /** The conversation the messages are forwarded FROM (the route's). */
+  conversationId: string;
+  messageIds: unknown;
+  toConversationIds: unknown;
+  /** Optional idempotency, one per (target, message): `${target}:${messageId}` -> clientMessageId. */
+  clientMessageIds?: unknown;
 }
 
 export interface ListMessagesInput {
@@ -256,6 +271,8 @@ export class MessageService {
             seq,
             replyToMessageId: input.replyToMessageId ?? null,
             clientMessageId: input.clientMessageId ?? null,
+            forwarded: !!input.forwardedFromMessageId,
+            forwardedFromMessageId: input.forwardedFromMessageId ?? null,
             attachmentsJson: [],
             attachments: input.attachments?.length
               ? {
@@ -946,6 +963,121 @@ export class MessageService {
     const signed = await this.attachments.signUrlsForMessages(rows.map((m) => m.id), actor.actorId);
     const authors = await this.authorsFor(rows);
     return rows.map((m) => toMessageDto(m, signed, authors, (author) => signActorAvatar(author, conversationId, actor.actorId)));
+  }
+
+  // -------------------------------------------------------------------
+  // Forward (owner decisions 2026-10-19: anyone, any message they can read,
+  // text and media, up to ten conversations)
+  // -------------------------------------------------------------------
+
+  static readonly MAX_FORWARD_TARGETS = 10;
+  static readonly MAX_FORWARD_MESSAGES = 30;
+
+  /**
+   * Copy messages into other conversations. TWO authorizations, neither
+   * implying the other (ported from the phase-7 design, 6137735):
+   *
+   *   SOURCE       each message passes loadForActor -- the forwarder may read it
+   *                where it lives -- and must be one that may leave: published,
+   *                not deleted, not a system message or a ticket's card.
+   *                Without this, forwarding would be a read primitive.
+   *   DESTINATION  every target is checked up front with the send decision
+   *                (mayWrite), then each copy goes through send() itself, so a
+   *                forward reaches nowhere a message could not and inherits
+   *                BR-1, scope, silencing and approval whole.
+   *
+   * A forward is a NEW message authored by the forwarder, flagged `forwarded`;
+   * it carries no reactions, receipts or reply target of the original. An
+   * internal note stays an internal note (only staff may write one), so it can
+   * never reach a family. Media are COPIED into the destination's namespace.
+   */
+  async forward(input: ForwardInput): Promise<{ sent: MessageDto[] }> {
+    const ids = [...new Set(Array.isArray(input.messageIds) ? input.messageIds.filter((x): x is string => typeof x === 'string') : [])];
+    const targets = [...new Set(Array.isArray(input.toConversationIds) ? input.toConversationIds.filter((x): x is string => typeof x === 'string') : [])];
+    if (ids.length === 0 || targets.length === 0) {
+      throw new CommError(CommErrorCode.VALIDATION, 'a forward needs at least one message and one destination', 400);
+    }
+    if (targets.length > MessageService.MAX_FORWARD_TARGETS) {
+      throw new CommError(CommErrorCode.VALIDATION, `a forward may reach at most ${MessageService.MAX_FORWARD_TARGETS} conversations`, 400);
+    }
+    if (ids.length > MessageService.MAX_FORWARD_MESSAGES) {
+      throw new CommError(CommErrorCode.VALIDATION, `at most ${MessageService.MAX_FORWARD_MESSAGES} messages can be forwarded at once`, 400);
+    }
+    if (!targets.every(isUuid)) throw new CommError(CommErrorCode.CONVERSATION_NOT_FOUND, 'conversation not found', 404);
+
+    // SOURCE: readable here, and allowed to leave.
+    const sources: Message[] = [];
+    let actor: Actor | null = null;
+    for (const id of ids) {
+      const loaded = await this.loadForActor(id, input.actorId);
+      actor = loaded.actor;
+      const m = loaded.message;
+      if (m.conversationId !== input.conversationId) {
+        throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'message not found', 404);
+      }
+      if (m.deletedForAll || m.moderation !== Moderation.PUBLISHED || m.type === MessageType.SYSTEM || m.type === MessageType.CARD) {
+        throw new CommError(CommErrorCode.MESSAGE_NOT_FORWARDABLE, 'that message cannot be forwarded', 403);
+      }
+      sources.push(m);
+    }
+    sources.sort((a, b) => (a.seq ?? 0n) < (b.seq ?? 0n) ? -1 : 1);
+    const forwarder = actor!;
+
+    // DESTINATION: every target may be written in, for every visibility forwarded.
+    const visibilities = [...new Set(sources.map((m) => m.visibility))];
+    for (const target of targets) {
+      const conv = await this.conversations.requireConversation(target);
+      for (const visibility of visibilities) {
+        const decision = await this.mayWrite(forwarder, conv, visibility);
+        if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+      }
+    }
+
+    const attachments = await this.prisma.messageAttachment.findMany({
+      where: { messageId: { in: sources.map((m) => m.id) } },
+      orderBy: { createdAt: 'asc' },
+    });
+    const keys = (input.clientMessageIds && typeof input.clientMessageIds === 'object' ? input.clientMessageIds : {}) as Record<string, unknown>;
+
+    const sent: MessageDto[] = [];
+    for (const target of targets) {
+      for (const m of sources) {
+        const copies = await this.attachments.copyForForward(
+          attachments.filter((a) => a.messageId === m.id),
+          target,
+        );
+        try {
+          const key = keys[`${target}:${m.id}`];
+          sent.push(
+            await this.send({
+              conversationId: target,
+              senderId: forwarder.actorId,
+              type: m.type,
+              body: m.body,
+              visibility: m.visibility,
+              clientMessageId: typeof key === 'string' ? key : undefined,
+              attachments: copies,
+              forwardedFromMessageId: m.id,
+            }),
+          );
+        } catch (error) {
+          await this.attachments.discardCopies(copies.map((c) => c.objectKey));
+          throw error;
+        }
+      }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await this.audit.audit(tx, {
+        actorId: forwarder.actorId,
+        action: 'message.forwarded',
+        entity: 'conversation',
+        entityId: input.conversationId,
+        after: { messages: sources.map((m) => m.id), to: targets, created: sent.map((s) => s.id) },
+        reason: 'forwarded by a reader who may write in each destination',
+      });
+    });
+    return { sent };
   }
 
   // -------------------------------------------------------------------

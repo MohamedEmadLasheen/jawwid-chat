@@ -46,6 +46,11 @@ abstract interface class MessageMarksRepository {
 
   /// The viewer's starred messages, newest star first.
   Future<StarredPage> starred({String? before});
+
+  /// Forward messages of [conversationId] into up to ten conversations. The
+  /// server checks each source is readable and each destination writable, and
+  /// copies media. Returns how many copies were sent.
+  Future<int> forward(String conversationId, List<String> messageIds, List<String> toConversationIds);
 }
 
 class NoMessageMarksRepository implements MessageMarksRepository {
@@ -65,6 +70,8 @@ class NoMessageMarksRepository implements MessageMarksRepository {
   Future<List<PinnedMessage>> pins(String conversationId) async => const [];
   @override
   Future<StarredPage> starred({String? before}) async => const StarredPage();
+  @override
+  Future<int> forward(String conversationId, List<String> messageIds, List<String> toConversationIds) async => 0;
 }
 
 class HttpMessageMarksRepository implements MessageMarksRepository {
@@ -108,6 +115,15 @@ class HttpMessageMarksRepository implements MessageMarksRepository {
             pinnedAt: WireMappers.parseTime(row['pinnedAt']) ?? DateTime.now(),
           ),
     ];
+  }
+
+  @override
+  Future<int> forward(String conversationId, List<String> messageIds, List<String> toConversationIds) async {
+    final response = await _client.post<Map<String, Object?>>(
+      '/conversations/$conversationId/messages/forward',
+      data: {'messageIds': messageIds, 'toConversationIds': toConversationIds},
+    );
+    return ((response.data?['sent'] as List?) ?? const []).length;
   }
 
   @override

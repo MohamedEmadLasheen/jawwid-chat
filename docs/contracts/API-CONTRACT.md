@@ -545,6 +545,27 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 - Response: the bytes, `Content-Type` as stored, `X-Content-Type-Options: nosniff`, `Content-Disposition: inline`, `Cache-Control: private, no-store`, `Accept-Ranges: bytes`; single-range requests → 206 with `Content-Range`; out-of-range → 416. No storage URL is ever returned.
 - Guarantee: a deactivation, a removal or a deletion refuses the very NEXT request on a link minted earlier. Not covered: bytes already delivered, and one response already streaming when the change commits.
 
+### Forwarding messages (2026-10-19, owner decisions: anyone, any message they can read; text and media; up to 10 chats)
+
+**`POST /conversations/:cid/messages/forward`**
+- Body: `{ messageIds: string[], toConversationIds: string[] }`, with at most 30 messages and 10 destinations.
+- Response: `{ sent: MessageDto[] }`, ordered by destination, then by the original message order.
+
+**Two authorizations, neither implying the other:**
+- **Source:** every message must be readable by the caller in `:cid`. It must also be allowed to leave: published, not deleted, and not a system message or a ticket's card. Otherwise the request fails with `COMM.MESSAGE_NOT_FORWARDABLE` (403).
+- **Destination:** every target is checked up front with the send decision, and then each copy goes through the ordinary send path. A forward can therefore never reach a chat an ordinary message could not, and it inherits BR-1, staff scope, silencing and approval.
+
+**What a forward creates:**
+- A NEW message, authored by the forwarder, with `MessageDto.forwarded: true`.
+- No reactions, receipts or reply target from the original.
+- An internal note stays an internal note, so it can never reach a family.
+
+**Media:** each stored object is COPIED server-side (`ObjectStorage.copy`: S3 CopyObject, or the local blob store) into `conversations/<target>/<uuid>`. Keys are never shared across conversations. A store without `copy` refuses media forwards.
+
+**Provenance and audit:**
+- `chat.message.forwarded_from_message_id` is kept for audit and NEVER returned to a client (migration `20261020100000`).
+- `chat.audit_log` records `message.forwarded`.
+
 ### Starred and pinned messages (2026-10-19, owner decisions: anyone who can write may pin; at most 3)
 
 **Star: a private bookmark.** Nobody else ever sees it.

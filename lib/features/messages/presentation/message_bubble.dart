@@ -34,6 +34,7 @@ class MessageBubble extends StatelessWidget {
     this.onRetry,
     this.onDiscard,
     this.onLongPress,
+    this.onTap,
     this.onTapReply,
     this.onToggleReaction,
     this.onOpenAttachment,
@@ -63,6 +64,9 @@ class MessageBubble extends StatelessWidget {
 
   /// Opens the actions sheet. Null on a message nothing can be done to.
   final VoidCallback? onLongPress;
+
+  /// A plain tap -- set only in select mode, where it toggles the selection.
+  final VoidCallback? onTap;
 
   /// Jump to the message this one answers.
   final VoidCallback? onTapReply;
@@ -143,6 +147,7 @@ class MessageBubble extends StatelessWidget {
               // quicker gesture unreachable.
               GestureDetector(
                 onLongPress: onLongPress,
+                onTap: onTap,
                 // Feedback matters here — without it a long press that opens
                 // nothing (a system message, a failed send) is indistinguishable
                 // from one the app missed.
@@ -160,6 +165,24 @@ class MessageBubble extends StatelessWidget {
                           ),
                           fontWeight: FontWeight.w700,
                         ),
+                      ),
+                    ),
+                  if (message.isForwarded)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: Spacing.spacing1),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.forward, size: 12, color: theme.colorScheme.onSurfaceVariant),
+                          const SizedBox(width: Spacing.spacing1),
+                          Text(
+                            l10n.forwardedLabel,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              fontStyle: FontStyle.italic,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   if (replyTo != null)

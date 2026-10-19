@@ -165,7 +165,7 @@ function ConversationRow({
         </span>
       </button>
       <Menu
-        label={copy.chatActions}
+        label={`${copy.chatActions}: ${name}`}
         className="cw-row__menu"
         items={[
           { key: 'pin', label: pinned ? copy.unpin : copy.pin, icon: 'pin', onSelect: () => prefs.pin(c.id, !pinned) },
