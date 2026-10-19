@@ -136,6 +136,9 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.DISCIPLINE_DENIED` | 403 | Discipline is read, recorded and decided only by the Teachers department and the super admin. Never retry. |
 | `COMM.DISCIPLINE_STATE` | 409 | Not allowed now: already decided, below the late threshold, the lesson was not held, the suspension starts in the past, or the teacher still has students (permanent suspension). |
 | `COMM.DISCIPLINE_LESSONS_COLLIDE` | 409 | Open lessons fall inside the suspension. Decide again with `cancelCollidingLessons: true` to cancel them (each family is told in its group). |
+| `COMM.BILLING_DENIED` | 403 | Instalments are read only by Operations supervisors (their families), the Operations Manager and the super admin; a billing supervisor is set only by the latter two. Never retry. |
+| `COMM.BILLING_NOT_FOUND` | 404 | No such family in the caller's organization, or one this caller does not reach. |
+| `COMM.BILLING_CORE_UNAVAILABLE` | 502 | Jawwid Core's invoice API did not answer or answered something unusable. Retry later; never show it as "nothing due". |
 
 Issuing a certificate answers `COMM.ATTACHMENT_NOT_IN_CONVERSATION` (403) for a
 file that was not uploaded into the learner's group, and

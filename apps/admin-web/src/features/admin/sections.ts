@@ -32,6 +32,7 @@ export type AdminSectionKey =
   | 'users'
   | 'teams'
   | 'teachers'
+  | 'instalments'
   | 'stories'
   | 'quality'
   | 'reports'
@@ -232,6 +233,22 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
   },
 
   /* ------------------------------------------------------------ operations */
+  {
+    key: 'instalments',
+    group: 'operations',
+    icon: 'calendar',
+    // PD-12 S3: Jawwid Core's invoices, read at request time, never stored.
+    status: 'read_only',
+    label: { en: 'Instalment payments', ar: 'الأقساط' },
+    purpose: {
+      en: 'Every family’s invoices from Jawwid Core, overdue first, with the supervisor responsible for each.',
+      ar: 'فواتير كل أسرة من نظام جوّد الأساسي، المتأخر أولًا، مع المشرف المسؤول عن كل فاتورة.',
+    },
+    note: {
+      en: 'Amounts and dates come from Jawwid Core at the moment you open the page; paying stays in Core.',
+      ar: 'تأتي المبالغ والتواريخ من نظام جوّد الأساسي لحظة فتح الصفحة، ويبقى الدفع في النظام الأساسي.',
+    },
+  },
   {
     key: 'quality',
     group: 'operations',

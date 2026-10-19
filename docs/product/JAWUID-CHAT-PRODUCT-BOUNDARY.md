@@ -1072,6 +1072,9 @@ database, never only in the client.
   plus `late_minutes`.
 - **S3:** Instalment Payments, which needs Core's invoice read API (PD-10 open
   item 2) and the PD-8 billing supervisor.
+  *Chat side built 2026-10-19* (`docs/admin/pd012-s3.md`): the billing
+  supervisor, the page, and the Core contract Chat asks for. It shows "not
+  connected" until Core publishes the API and `CORE_INVOICES_ENABLED` is set.
 
 **Consequences.**
 - PD-8's assignment gains a family-level billing supervisor.
