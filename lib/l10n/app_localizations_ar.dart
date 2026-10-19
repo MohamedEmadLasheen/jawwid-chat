@@ -635,6 +635,9 @@ class L10nAr extends L10n {
   String get attachmentVoiceLabel => 'رسالة صوتية';
 
   @override
+  String get attachmentVideoLabel => 'فيديو';
+
+  @override
   String get attachmentSendTitle => 'إرسال هذه؟';
 
   @override

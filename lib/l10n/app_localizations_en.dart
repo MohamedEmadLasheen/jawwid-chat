@@ -634,6 +634,9 @@ class L10nEn extends L10n {
   String get attachmentVoiceLabel => 'Voice message';
 
   @override
+  String get attachmentVideoLabel => 'Video';
+
+  @override
   String get attachmentSendTitle => 'Send this?';
 
   @override

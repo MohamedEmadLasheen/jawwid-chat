@@ -1255,6 +1255,12 @@ abstract class L10n {
   /// **'Voice message'**
   String get attachmentVoiceLabel;
 
+  /// Stands in for a video where a message has no text (chat list preview).
+  ///
+  /// In en, this message translates to:
+  /// **'Video'**
+  String get attachmentVideoLabel;
+
   /// Header of the preview shown before an attachment is sent.
   ///
   /// In en, this message translates to:

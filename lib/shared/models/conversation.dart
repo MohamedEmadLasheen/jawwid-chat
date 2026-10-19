@@ -72,6 +72,7 @@ class Conversation {
     this.avatarUrl,
     this.learner,
     this.lastMessagePreview = '',
+    this.lastMessageKind,
     this.lastMessageAt,
     this.unreadCount = 0,
     this.isPinned = false,
@@ -92,6 +93,11 @@ class Conversation {
   final LearnerRef? learner;
 
   final String lastMessagePreview;
+
+  /// What the last message is when it has no text to preview: `image`, `video`,
+  /// `voice`, `file`, `deleted`, or `system:<kind>`. Null when there is none, or
+  /// when [lastMessagePreview] carries its text. The tile words it (§ preview).
+  final String? lastMessageKind;
   final DateTime? lastMessageAt;
   final DateTime updatedAt;
   final int unreadCount;
@@ -139,6 +145,7 @@ class Conversation {
       avatarUrl: avatarUrl,
       learner: learner,
       lastMessagePreview: lastMessagePreview,
+      lastMessageKind: lastMessageKind,
       lastMessageAt: lastMessageAt,
       updatedAt: updatedAt,
       unreadCount: unreadCount ?? this.unreadCount,

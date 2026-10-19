@@ -231,11 +231,39 @@ abstract final class WireMappers {
     final archivedAt = parseTime(json['archivedAt']);
     final lastActivity = parseTime(json['lastActivityAt']) ?? DateTime.now();
 
-    // Approval policy is per role, so the flag the composer honours depends on who is
-    // looking (§26).
-    final requiresApproval = viewerRole == UserRole.teacher
-        ? json['teacherRequiresApproval'] == true
-        : json['parentRequiresApproval'] == true;
+    // Approval policy is per viewer (§26). The server now says it outright --
+    // `viewerRequiresApproval`, from the same function that decides a sent
+    // message's moderation, so a 1:1 is never "reviewed" and a parent never
+    // inherits the teachers' rule. The per-role stored flag is only the fallback
+    // for a server that predates the field.
+    final viewerRule = json['viewerRequiresApproval'];
+    final requiresApproval = viewerRule is bool
+        ? viewerRule
+        : viewerRole == UserRole.teacher
+            ? json['teacherRequiresApproval'] == true
+            : json['parentRequiresApproval'] == true;
+
+    // The viewer's own pin / mute / archive, read back from the server. Absent
+    // (an older server, or a create response) falls back to the caller's values.
+    final state = json['viewerState'];
+    final viewerState = state is Map ? state : null;
+    final mutedUntil = parseTime(viewerState?['mutedUntil']);
+
+    // The newest message THIS viewer may see (the server applies the message
+    // page's own visibility rule). Text previews as itself; anything else is
+    // named by kind and worded by the tile in the reader's language.
+    final last = json['lastMessage'];
+    final lastMessage = last is Map ? last : null;
+    final lastText = lastMessage?['text'];
+    final lastKind = lastMessage == null
+        ? null
+        : lastMessage['deleted'] == true
+            ? 'deleted'
+            : lastMessage['type'] == 'system'
+                ? 'system:${lastMessage['systemKind'] ?? ''}'
+                : (lastText is String && lastText.isNotEmpty)
+                    ? null
+                    : lastMessage['type'] as String?;
 
     final kind = conversationKind(json['type'] as String?, members: json['members']);
 
@@ -251,15 +279,21 @@ abstract final class WireMappers {
       // gone rather than merely unused.
       learner: WireMappers.learner(json['learner']),
       updatedAt: lastActivity,
-      lastMessageAt: lastActivity,
-      lastMessagePreview: lastMessagePreview,
+      lastMessageAt: parseTime(lastMessage?['createdAt']) ?? lastActivity,
+      lastMessagePreview:
+          (lastText is String && lastMessage?['deleted'] != true) ? lastText : lastMessagePreview,
+      lastMessageKind: lastKind,
       // Server-derived, per actor. Absent is treated as zero: the list route
       // always sends it, and a create/sync response that omits it is not
       // describing a badge.
       unreadCount: (json['unreadCount'] as num?)?.toInt() ?? 0,
-      isPinned: isPinned,
-      isMuted: isMuted,
-      isArchived: archivedAt != null,
+      isPinned: viewerState != null ? viewerState['pinned'] == true : isPinned,
+      isMuted: viewerState != null
+          ? (mutedUntil != null && mutedUntil.isAfter(DateTime.now()))
+          : isMuted,
+      // Archived for everyone (server-side, read-only) or archived by this viewer
+      // (a personal "hide from my list"). Only the first makes it read-only, below.
+      isArchived: archivedAt != null || viewerState?['archived'] == true,
       handledByLabel: handledByLabel,
       requiresApproval: requiresApproval,
       // An archived conversation is read-only for this client; the backend also refuses

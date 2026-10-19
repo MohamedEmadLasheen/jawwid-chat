@@ -605,6 +605,19 @@ export class AuthorizationService {
     return null;
   }
 
+  /**
+   * Will THIS viewer's messages in this conversation be held for approval?
+   * The same function that decides the moderation a message is stored with, so
+   * the notice a client shows can never disagree with what happens on send. A
+   * parent is told only about the parents' rule, never the teachers'; a 1:1
+   * never holds anything; staff are never held.
+   */
+  viewerRequiresApproval(actor: Actor, conv: Conv): boolean {
+    if (actor.kind === ActorKind.CONTACT) return this.moderationFor(conv, MemberRole.PARENT) === Moderation.PENDING;
+    if (actor.kind === ActorKind.TEACHER) return this.moderationFor(conv, MemberRole.TEACHER) === Moderation.PENDING;
+    return false;
+  }
+
   /** Group approval policy. Staff messages are never held. */
   private moderationFor(conv: Conv, role: string): string {
     if (!GROUP_CONVERSATION_TYPES.has(conv.type)) return Moderation.PUBLISHED;
