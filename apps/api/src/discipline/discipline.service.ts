@@ -354,7 +354,7 @@ export class DisciplineService {
   private async stepOf(v: TeacherViolation): Promise<number> {
     const month = await this.prisma.teacherViolation.findMany({
       where: { teacherId: v.teacherId, month: v.month },
-      select: { id: true, occurredAt: true, month: true, decision: true },
+      select: { id: true, teacherId: true, occurredAt: true, month: true, decision: true },
     });
     return stepsOf(month.map((m) => ({ ...m, month: isoDate(m.month) }))).get(v.id) ?? 1;
   }
@@ -390,7 +390,7 @@ export class DisciplineService {
     const keys = [...new Set(rows.map((r) => `${r.teacherId}|${isoDate(r.month)}`))];
     const all = await this.prisma.teacherViolation.findMany({
       where: { OR: keys.map((k) => ({ teacherId: k.split('|')[0], month: asDate(k.split('|')[1]) })) },
-      select: { id: true, occurredAt: true, month: true, decision: true },
+      select: { id: true, teacherId: true, occurredAt: true, month: true, decision: true },
     });
     const steps = stepsOf(all.map((m) => ({ ...m, month: isoDate(m.month) })));
     const lessons = await this.prisma.lesson.findMany({
