@@ -167,7 +167,8 @@ List<Override> _httpOverrides() {
       HttpCallRepository(client: client),
     ),
     accountCallHistoryProvider.overrideWithValue(
-      HttpAccountCallHistory(client: client),
+      // Named after the OTHER participant, so the viewer's own id is read per call.
+      HttpAccountCallHistory(client: client, viewerActorId: session.actorId),
     ),
     pushRegistrationApiProvider.overrideWithValue(
       HttpPushRegistration(client: client),
