@@ -25,10 +25,13 @@ server {
     # browsers honour, and clickjacking an admin console that can transfer
     # family ownership is a real risk, not a theoretical one.
     #
-    # connect-src is pinned to this environment's API and realtime origins.
+    # connect-src is pinned to this environment's API and realtime origins,
+    # plus the object store a voice note is uploaded to (STORAGE_ORIGIN, the
+    # host of the API's signed upload URLs). media-src adds the API and the
+    # store, which serve the signed URLs a voice note plays from.
     # A wildcard here would let injected script exfiltrate customer messages to
     # any host it liked.
-    add_header Content-Security-Policy "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ${API_ORIGIN} ${REALTIME_ORIGIN}; form-action 'self'" always;
+    add_header Content-Security-Policy "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob:; media-src 'self' blob: ${API_ORIGIN} ${STORAGE_ORIGIN}; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ${API_ORIGIN} ${REALTIME_ORIGIN} ${LIVEKIT_ORIGIN} ${STORAGE_ORIGIN}; form-action 'self'" always;
 
     gzip on;
     gzip_types text/plain text/css application/javascript application/json image/svg+xml;

@@ -360,6 +360,24 @@ class L10nEn extends L10n {
   String get callSendMessageInstead => 'Send a message instead';
 
   @override
+  String get callNoAnswer => 'No answer';
+
+  @override
+  String get callMissedIncoming => 'Missed call';
+
+  @override
+  String get callAgain => 'Call again';
+
+  @override
+  String get callRecordVoice => 'Record voice message';
+
+  @override
+  String get callMessage => 'Message';
+
+  @override
+  String get callVoiceTitle => 'Jawwid voice call';
+
+  @override
   String get notificationsTitle => 'Updates';
 
   @override

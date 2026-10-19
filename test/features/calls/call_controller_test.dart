@@ -795,4 +795,112 @@ void main() {
       expect(stateOf(container).callId, isNull);
     });
   });
+  group('call again (W7 reopen 2026-10-17)', () {
+    test('records who placed the call: start is outgoing, a ring is incoming',
+        () async {
+      final out = await ready();
+      await controllerOf(out).start(
+        conversationId: 'conv_1',
+        peerLabel: 'Mr. Ahmed',
+        isGroup: false,
+      );
+      expect(stateOf(out).direction, CallDirection.outgoing);
+
+      final inc = await ready();
+      socket.emit(CallEventNames.incoming, Frames.incoming());
+      await settle();
+      expect(stateOf(inc).direction, CallDirection.incoming);
+    });
+
+    test('only from ENDED: never while live, never from failed', () async {
+      final live = await liveOutgoing();
+      await controllerOf(live).callAgain();
+      expect(calls.startCalls, hasLength(1));
+      expect(stateOf(live).phase, CallUiPhase.live);
+
+      final failed = await ready();
+      calls.startError = refusal(WireErrors.teacherParentNotAuthorized);
+      await controllerOf(failed).start(
+        conversationId: 'conv_1',
+        peerLabel: 'Mr. Ahmed',
+        isGroup: false,
+      );
+      expect(stateOf(failed).phase, CallUiPhase.failed);
+      calls.startError = null;
+      await controllerOf(failed).callAgain();
+      expect(stateOf(failed).phase, CallUiPhase.failed);
+    });
+
+    test('after ended, a NEW call in the same conversation, outcome cleared',
+        () async {
+      final c = await liveOutgoing();
+      socket.emit(CallEventNames.ended, Frames.ended(outcome: 'answered'));
+      await settle();
+      expect(stateOf(c).outcome, CallOutcome.answered);
+      final before = calls.startCalls.length;
+      calls.nextCallId = 'call_2';
+
+      await controllerOf(c).callAgain();
+
+      expect(calls.startCalls.length, before + 1);
+      expect(calls.startCalls.last, 'conv_1');
+      final s = stateOf(c);
+      expect(s.phase, CallUiPhase.outgoingRinging);
+      expect(s.callId, 'call_2');
+      expect(s.outcome, isNull);
+      expect(s.peerLabel, 'Mr. Ahmed');
+    });
+  });
+  group('a new ring after a finished call (W7 reopen 2026-10-17)', () {
+    test('replaces a screen that only shows how the last call ended', () async {
+      final c = await ready();
+      await controllerOf(c).start(
+        conversationId: 'conv_1',
+        peerLabel: 'Mr. Ahmed',
+        isGroup: false,
+      );
+      socket.emit(
+        CallEventNames.ended,
+        Frames.ended(outcome: 'missed', durationSeconds: null),
+      );
+      await settle();
+      expect(stateOf(c).phase, CallUiPhase.ended);
+
+      socket.emit(
+        CallEventNames.incoming,
+        Frames.incoming(callId: 'call_9', initiatorName: 'Mrs. Fatima'),
+      );
+      await settle();
+
+      final s = stateOf(c);
+      expect(s.phase, CallUiPhase.incomingRinging);
+      expect(s.callId, 'call_9');
+      expect(s.direction, CallDirection.incoming);
+      expect(s.outcome, isNull);
+    });
+
+    test('never interrupts a live call or a failure that holds a callId',
+        () async {
+      final live = await liveOutgoing();
+      socket.emit(CallEventNames.incoming, Frames.incoming(callId: 'call_9'));
+      await settle();
+      expect(stateOf(live).phase, CallUiPhase.live);
+      expect(stateOf(live).callId, 'call_1');
+
+      final failed = await ready();
+      await controllerOf(failed).start(
+        conversationId: 'conv_1',
+        peerLabel: 'Mr. Ahmed',
+        isGroup: false,
+      );
+      calls.endError = refusal(WireErrors.teacherParentNotAuthorized);
+      await controllerOf(failed).hangUp();
+      final before = stateOf(failed);
+      expect(before.phase, CallUiPhase.failed);
+      expect(before.callId, 'call_1');
+      socket.emit(CallEventNames.incoming, Frames.incoming(callId: 'call_9'));
+      await settle();
+      expect(stateOf(failed).callId, 'call_1');
+    });
+  });
 }

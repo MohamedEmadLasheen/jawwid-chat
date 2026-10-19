@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
@@ -12,6 +12,8 @@ import { chatCopyFor, systemText, type ChatCopy } from './copy'
 import { useChatRealtime } from './useChatRealtime'
 import { NewFamilyGroupDialog } from './NewFamilyGroupDialog'
 import { isOperator } from '@/core/permissions/capabilities'
+import { VoiceNotePlayer, VoiceRecorder } from './VoiceRecorder'
+import { ConversationCallControls } from '@/features/calls/ConversationCallControls'
 
 function useCopy(): ChatCopy {
   const { locale } = useI18n()
@@ -156,7 +158,9 @@ function MessageView({
         )}
         {!message.deletedForAll &&
           message.attachments.map((a) =>
-            a.url ? (
+            a.kind === 'voice' || a.mimeType?.startsWith('audio/') ? (
+              <VoiceNotePlayer key={a.id} url={a.url} durationMs={a.durationMs} copy={copy} />
+            ) : a.url ? (
               <div key={a.id}>
                 <a href={a.url} target="_blank" rel="noreferrer">
                   📎 {a.originalName ?? copy.attachment}
@@ -201,6 +205,7 @@ function ThreadPane({ conversationId }: { conversationId: string }) {
   const { locale } = useI18n()
   const { staff } = useSession()
   const queryClient = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const details = useQuery({
     queryKey: chatKeys.conversation(conversationId),
@@ -345,6 +350,13 @@ function ThreadPane({ conversationId }: { conversationId: string }) {
             {conv.members.map((m) => `${m.displayName} (${copy.role[m.actorKind] ?? m.actorKind})`).join(' · ')}
           </span>
         )}
+        {conv && (
+          <ConversationCallControls
+            conversationId={conversationId}
+            peerLabel={conversationName(conv, staff?.id, copy)}
+            isGroup={conv.type !== 'direct'}
+          />
+        )}
       </div>
 
       <div
@@ -405,13 +417,32 @@ function ThreadPane({ conversationId }: { conversationId: string }) {
         </div>
       </div>
 
-      <ChatComposer onSend={submit} />
+      <ChatComposer
+        onSend={submit}
+        conversationId={conversationId}
+        autoStartVoice={searchParams.get('voice') === '1'}
+        onVoiceAutoStarted={() => setSearchParams({}, { replace: true })}
+        onVoiceSent={() => void queryClient.invalidateQueries({ queryKey: chatKeys.messages(conversationId) })}
+      />
     </div>
   )
 }
 
-function ChatComposer({ onSend }: { onSend: (body: string, visibility: 'customer' | 'internal') => void }) {
+function ChatComposer({
+  onSend,
+  conversationId,
+  autoStartVoice,
+  onVoiceAutoStarted,
+  onVoiceSent,
+}: {
+  onSend: (body: string, visibility: 'customer' | 'internal') => void
+  conversationId: string
+  autoStartVoice: boolean
+  onVoiceAutoStarted: () => void
+  onVoiceSent: () => void
+}) {
   const copy = useCopy()
+  const { locale } = useI18n()
   const [body, setBody] = useState('')
   const [visibility, setVisibility] = useState<'customer' | 'internal'>('customer')
   const isInternal = visibility === 'internal'
@@ -452,6 +483,15 @@ function ChatComposer({ onSend }: { onSend: (body: string, visibility: 'customer
         }}
       />
       <div className="composer__actions">
+        <VoiceRecorder
+          conversationId={conversationId}
+          visibility={visibility}
+          copy={copy}
+          locale={locale}
+          autoStart={autoStartVoice}
+          onAutoStarted={onVoiceAutoStarted}
+          onSent={onVoiceSent}
+        />
         <button type="button" className="btn btn--primary" disabled={!body.trim()} onClick={submit}>
           {copy.send}
         </button>

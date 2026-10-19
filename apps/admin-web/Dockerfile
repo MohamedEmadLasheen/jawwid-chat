@@ -47,8 +47,15 @@ FROM nginx:1.27-alpine AS runtime
 COPY infra-nginx/default.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
 
+# LIVEKIT_ORIGIN: the media server the call screen connects to (wss://...),
+# from the API's LIVEKIT_URL. Empty means calls cannot connect media.
+# STORAGE_ORIGIN: the object store's origin (https://...), the host of the
+# API's signed upload and download URLs. Empty means voice notes upload and
+# play only when the store is served from API_ORIGIN (the local driver).
 ENV API_ORIGIN="" \
     REALTIME_ORIGIN="" \
+    LIVEKIT_ORIGIN="" \
+    STORAGE_ORIGIN="" \
     NGINX_PORT=8080
 
 EXPOSE 8080

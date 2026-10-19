@@ -364,6 +364,24 @@ class L10nAr extends L10n {
   String get callSendMessageInstead => 'إرسال رسالة بدلاً من ذلك';
 
   @override
+  String get callNoAnswer => 'لم يتم الرد';
+
+  @override
+  String get callMissedIncoming => 'مكالمة فائتة';
+
+  @override
+  String get callAgain => 'معاودة الاتصال';
+
+  @override
+  String get callRecordVoice => 'تسجيل رسالة صوتية';
+
+  @override
+  String get callMessage => 'رسالة';
+
+  @override
+  String get callVoiceTitle => 'مكالمة جوّد الصوتية';
+
+  @override
   String get notificationsTitle => 'المستجدات';
 
   @override
