@@ -136,6 +136,20 @@ describe('Landing and deep links', () => {
     expect(screen.getByTestId('where')).toHaveTextContent('/admin/dashboard')
   })
 
+  it('PD-13: opens the Calls page at /calls for operators and /admin/calls for the super admin', async () => {
+    for (const [role, route] of [['admin', '/calls'], ['coverage', '/calls'], ['manager', '/calls'], ['super_admin', '/admin/calls']] as const) {
+      vi.stubGlobal('fetch', routeFetch({}))
+      const { unmount } = renderWithProviders(<AppRoutes />, { staff: staff(role), route })
+      expect(await screen.findByRole('heading', { level: 1, name: 'Calls' }), role).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Schedule call' }), role).toBeInTheDocument()
+      unmount()
+    }
+    // A department has no calls page; the route answers Forbidden.
+    vi.stubGlobal('fetch', routeFetch({}))
+    renderWithProviders(<AppRoutes />, { staff: staff('finance'), route: '/calls' })
+    expect(await screen.findByRole('alert')).toHaveTextContent("You don't have permission")
+  })
+
   it('sends an unknown path home, never to a page the role cannot open', async () => {
     vi.stubGlobal('fetch', routeFetch({}))
     renderWithProviders(
@@ -170,8 +184,10 @@ describe('The desktop rail', () => {
     await waitFor(() =>
       expect(within(nav).getByRole('link', { name: 'Conversations' })).toHaveAttribute('aria-current', 'page'),
     )
-    // A placeholder says so, even as a single icon.
-    expect(within(nav).getByRole('link', { name: 'Calls & media In development' })).toBeInTheDocument()
+    // PD-13: Calls is built, so its single icon links straight to the page, unmarked.
+    expect(within(nav).getByRole('link', { name: 'Calls' })).toHaveAttribute('href', '/admin/calls')
+    // A placeholder still says so, inside its menu.
+    expect(within(nav).queryByRole('link', { name: /In development/ })).not.toBeInTheDocument()
     expect(within(nav).getByRole('button', { name: 'People & teams' })).toHaveAttribute('aria-expanded', 'false')
     expect(within(nav).getByRole('button', { name: 'More' })).toHaveAttribute('aria-expanded', 'false')
     // The Dashboard is not a primary destination; it waits in the closed More menu.
@@ -232,8 +248,10 @@ describe('The desktop rail', () => {
     const cases: [StaffRole, string[], string[], string[]][] = [
       // role, destinations, direct links, menus
       // Conversations is a direct link to /chat: the legacy Inbox is not offered.
-      ['manager', ['conversations', 'people', 'stories', 'more'], ['Conversations', 'Stories'], ['People & teams', 'More']],
-      ['admin', ['conversations', 'people', 'stories', 'more'], ['Conversations', 'Families', 'Stories', 'Tasks'], []],
+      // PD-13: Calls is its own destination for every operating role.
+      ['manager', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Stories'], ['People & teams', 'More']],
+      ['admin', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Families', 'Stories', 'Tasks'], []],
+      ['coverage', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Families', 'Stories', 'Tasks'], []],
       ['finance', ['more'], ['Tasks'], []],
     ]
     for (const [role, keys, links, menus] of cases) {

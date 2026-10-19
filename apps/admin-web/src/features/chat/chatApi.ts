@@ -32,6 +32,8 @@ export interface ChatConversation {
   members?: ChatMember[]
   learner?: { id: string; name: string } | null
   unreadCount?: number
+  /** The viewer's own pin / archive / mute (list and detail routes only). */
+  viewerState?: { pinned: boolean; archived: boolean; mutedUntil: string | null }
 }
 
 export interface ChatAttachment {
@@ -69,6 +71,12 @@ export interface ChatMessage {
   deletedForAll: boolean
   createdAt: string
   attachments: ChatAttachment[]
+  /**
+   * Present only when `type` is `card`: what the server recorded, for the
+   * client to draw (PD-11 lessons, PD-13 scheduled calls). `body` still carries
+   * a plain-text rendering for a card this client does not know.
+   */
+  card?: { kind: string; payload: Record<string, unknown> } | null
 }
 
 export interface MessagePage {

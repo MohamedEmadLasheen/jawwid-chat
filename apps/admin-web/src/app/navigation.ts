@@ -49,7 +49,7 @@ export interface Destination {
 
 export const DESTINATIONS: readonly { key: DestinationKey; icon: IconName; label: Bilingual }[] = [
   { key: 'conversations', icon: 'conversations', label: { en: 'Conversations', ar: 'المحادثات' } },
-  { key: 'calls', icon: 'calls', label: { en: 'Calls & media', ar: 'المكالمات والوسائط' } },
+  { key: 'calls', icon: 'calls', label: { en: 'Calls', ar: 'المكالمات' } },
   { key: 'people', icon: 'users', label: { en: 'People & teams', ar: 'الأشخاص والفرق' } },
   { key: 'stories', icon: 'stories', label: { en: 'Stories', ar: 'الحالات' } },
   { key: 'more', icon: 'more', label: { en: 'More', ar: 'المزيد' } },
@@ -88,6 +88,7 @@ export const SECTION_DESTINATION: Record<AdminSectionKey, DestinationKey> = {
 export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   chat: 'conversations',
   inbox: 'conversations',
+  calls: 'calls',
   families: 'people',
   organization: 'people',
   teachers: 'people',
@@ -103,6 +104,7 @@ export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
 export const AREA_PATH: Record<OperatorArea, string> = {
   chat: '/chat',
   inbox: '/inbox',
+  calls: '/calls',
   families: '/families',
   organization: '/organization',
   teachers: '/teachers',
@@ -117,6 +119,7 @@ export const AREA_PATH: Record<OperatorArea, string> = {
 const AREA_ICON: Record<OperatorArea, IconName> = {
   chat: 'conversations',
   inbox: 'conversations',
+  calls: 'calls',
   families: 'users',
   organization: 'teams',
   teachers: 'academy',

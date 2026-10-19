@@ -255,6 +255,17 @@ const PATHS = {
   chart: <path d="M4 20h16M7 16v-5M12 16V6M17 16v-8" />,
   upload: <path d="M12 16V4M7 9l5-5 5 5M4.5 15v3.5A1.5 1.5 0 0 0 6 20h12a1.5 1.5 0 0 0 1.5-1.5V15" />,
   send: <path d="m4 12 16-8-6 16-2.5-6.5L4 12ZM11.5 13.5 20 4" />,
+  // Calls page (PD-13).
+  calendarPlus: (
+    <>
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2" />
+      <path d="M3.5 10h17M8 3v4M16 3v4M12 13v5M9.5 15.5h5" />
+    </>
+  ),
+  /** A call that came in: an arrow down to the corner. */
+  callIncoming: <path d="M17 7 7 17M7 9.5V17h7.5" />,
+  /** A call this account placed: an arrow up and away. */
+  callOutgoing: <path d="M7 17 17 7M9.5 7H17v7.5" />,
 } satisfies Record<string, ReactElement>
 
 export type IconName = keyof typeof PATHS

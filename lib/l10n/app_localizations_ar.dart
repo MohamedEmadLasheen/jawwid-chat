@@ -1453,4 +1453,154 @@ class L10nAr extends L10n {
 
   @override
   String get cardTrialAwaitingCore => 'تُحتسب بعد أن يؤكد Core الاشتراك.';
+
+  @override
+  String get callsSearchHint => 'ابحث بالاسم';
+
+  @override
+  String get callActionStart => 'بدء مكالمة';
+
+  @override
+  String get callActionNewLink => 'رابط مكالمة جديد';
+
+  @override
+  String get callActionSelectMember => 'اختيار عضو';
+
+  @override
+  String get callActionSchedule => 'جدولة مكالمة';
+
+  @override
+  String get callsSectionUpcoming => 'القادمة';
+
+  @override
+  String get callsSectionFavorites => 'المفضلة';
+
+  @override
+  String get callsSectionRecent => 'الأخيرة';
+
+  @override
+  String get callsUpcomingEmpty => 'لا توجد مكالمات مجدولة';
+
+  @override
+  String get callsUpcomingError => 'تعذّر تحميل المكالمات القادمة.';
+
+  @override
+  String get callsFavoritesEmpty => 'أضف محادثة إلى المفضلة لتتصل بها من هنا.';
+
+  @override
+  String get callsSearchNoMatch => 'لا توجد نتائج مطابقة لبحثك';
+
+  @override
+  String get callsUnnamed => 'محادثة بلا اسم';
+
+  @override
+  String get callBack => 'معاودة الاتصال';
+
+  @override
+  String get callDirectionOutgoing => 'صادرة';
+
+  @override
+  String get callDirectionIncoming => 'واردة';
+
+  @override
+  String callWhen(String day, String time) {
+    return '$day، $time';
+  }
+
+  @override
+  String get callPickerPeople => 'الأشخاص';
+
+  @override
+  String get callPickerGroups => 'المجموعات';
+
+  @override
+  String get callPickerEmpty => 'لا توجد محادثات للاختيار منها.';
+
+  @override
+  String get callPickerNoMatch => 'لا توجد محادثات تطابق بحثك';
+
+  @override
+  String get callRefusedParentGroup =>
+      'يبدأ مكالمةَ المجموعة الموظفون أو المعلم فقط';
+
+  @override
+  String get callRefusedGeneric => 'المكالمات غير متاحة في هذه المحادثة';
+
+  @override
+  String get scheduledCallDefaultTitle => 'مكالمة مجدولة';
+
+  @override
+  String get scheduledCallLinkLabel => 'رابط مكالمة';
+
+  @override
+  String get scheduledCallStateOpen => 'متاحة الآن';
+
+  @override
+  String get scheduledCallStateUpcoming => 'مجدولة';
+
+  @override
+  String get scheduledCallJoin => 'انضمام';
+
+  @override
+  String get scheduledCallCancel => 'إلغاء المكالمة';
+
+  @override
+  String get scheduledCallCancelConfirmTitle => 'إلغاء هذه المكالمة؟';
+
+  @override
+  String get scheduledCallCancelConfirmBody =>
+      'سيرى كل من في المحادثة أنها أُلغيت.';
+
+  @override
+  String get scheduledCallKeep => 'إبقاء';
+
+  @override
+  String get scheduledCallCancelled => 'أُلغيت المكالمة';
+
+  @override
+  String scheduledCallBy(String name) {
+    return 'بواسطة $name';
+  }
+
+  @override
+  String get scheduledCallJoinHint => 'يمكنك الانضمام قبل الموعد بعشر دقائق.';
+
+  @override
+  String get scheduledJoinNotJoinable =>
+      'لا يمكن الانضمام إلى هذه المكالمة الآن';
+
+  @override
+  String get scheduledJoinWaitingForHost =>
+      'تبدأ المكالمة عندما ينضم الموظفون أو المعلم';
+
+  @override
+  String get scheduledJoinBusy => 'أنهِ مكالمتك الحالية أولًا';
+
+  @override
+  String get callScheduleDate => 'التاريخ';
+
+  @override
+  String get callScheduleTime => 'الوقت';
+
+  @override
+  String get callScheduleTitleLabel => 'العنوان (اختياري)';
+
+  @override
+  String get callScheduleInPast => 'اختر وقتًا في المستقبل';
+
+  @override
+  String callSchedulePosted(String chat) {
+    return 'تمت الجدولة — نُشرت في $chat';
+  }
+
+  @override
+  String callLinkPosted(String chat) {
+    return 'نُشر رابط المكالمة في $chat';
+  }
+
+  @override
+  String get callLinkJoinNow => 'انضم الآن';
+
+  @override
+  String get callLinkOpenChat => 'فتح المحادثة';
 }

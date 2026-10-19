@@ -14,6 +14,7 @@ import { LeaveModule } from './leave/leave.module';
 import { DisciplineModule } from './discipline/discipline.module';
 import { BillingModule } from './billing/billing.module';
 import { CoreBoundaryModule } from './core-boundary/core-boundary.module';
+import { ScheduledCallModule } from './scheduled-calls/scheduled-call.module';
 
 /**
  * The root module. Composition only -- it declares no provider and no
@@ -51,6 +52,7 @@ import { CoreBoundaryModule } from './core-boundary/core-boundary.module';
     DisciplineModule,
     BillingModule,
     CoreBoundaryModule,
+    ScheduledCallModule,
   ],
 })
 export class AppModule {}

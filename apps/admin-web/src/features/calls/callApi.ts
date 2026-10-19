@@ -30,6 +30,18 @@ export interface MediaToken {
   expiresAt: string
 }
 
+/**
+ * PD-13: the answer to `POST /scheduled-calls/:id/join`. `started` means this
+ * caller started the call (it now rings the others, exactly as after
+ * `POST /calls`); `joined` means a call is already live and the caller has a
+ * seat, so the client runs the ordinary accept path.
+ */
+export interface ScheduledJoin {
+  callId: string
+  conversationId: string
+  mode: 'started' | 'joined'
+}
+
 export interface CallHistoryRow {
   id: string
   conversationId: string
@@ -53,6 +65,9 @@ export const callApi = {
   accept: (callId: string) => api.post<{ ok: boolean }>(`${call(callId)}/accept`),
   decline: (callId: string) => api.post<{ ok: boolean }>(`${call(callId)}/decline`),
   end: (callId: string) => api.post<{ ok: boolean }>(`${call(callId)}/end`),
+  /** PD-13: join a scheduled call or a call link. The server decides start vs accept. */
+  joinScheduled: (scheduledCallId: string) =>
+    api.post<ScheduledJoin>(`/scheduled-calls/${encodeURIComponent(scheduledCallId)}/join`),
   history: (conversationId: string) =>
     api
       .get<{ calls: CallHistoryRow[] }>(`/calls/history/${encodeURIComponent(conversationId)}`)
