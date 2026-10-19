@@ -193,3 +193,69 @@ describe('a teacher file', () => {
     expect(document.documentElement.dir === 'rtl' || document.querySelector('[dir="rtl"]')).toBeTruthy()
   })
 })
+
+describe('the supervision timeline', () => {
+  const timeline = {
+    teacher: { id: 't-1', name: 'Teacher One' },
+    items: [
+      { id: 'b-1', type: 'bonus', at: '2026-10-18T10:00:00Z', body: 'Every report on time.', by: 's-1', byName: 'Supervisor One' },
+      { id: 'l-9', type: 'teacher_no_show', at: '2026-10-15T08:00:00Z', body: null, lesson: { id: 'l-9', startsAt: '2026-10-15T08:00:00Z', learnerName: 'Child Alpha' } },
+      { id: 'c-1', type: 'complaint', at: '2026-10-10T09:00:00Z', body: 'Started late.', by: 's-1', byName: 'Supervisor One' },
+      { id: 'd-1', type: 'day_off', at: '2026-10-01T09:00:00Z', day: '2026-10-21', body: 'Leave: wedding', by: 's-1', byName: 'Supervisor One' },
+    ],
+  }
+
+  it('shows every record in one line, with who recorded it, and filters by kind', async () => {
+    on('GET', /\/teachers\/t-1\/supervision$/, () => json(timeline))
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
+    const section = await screen.findByRole('region', { name: 'Supervision timeline' })
+    expect(within(section).getByText('Every report on time.')).toBeInTheDocument()
+    expect(within(section).getAllByText(/Supervisor One/).length).toBeGreaterThan(0)
+    expect(within(section).getByText('Teacher absent')).toBeInTheDocument()
+    expect(within(section).getByText(/Child Alpha/)).toBeInTheDocument()
+
+    await userEvent.click(within(section).getByRole('button', { name: /Complaints/ }))
+    expect(within(section).getByText('Started late.')).toBeInTheDocument()
+    expect(within(section).queryByText('Every report on time.')).not.toBeInTheDocument()
+  })
+
+  it('records a bonus with its reason only -- the amount is payroll\'s -- and a note', async () => {
+    on('GET', /\/teachers\/t-1\/supervision$/, () => json(timeline))
+    on('POST', /\/teachers\/t-1\/bonus$/, () => json({ id: 'b-2', kind: 'bonus', conversationId: 'sv-1' }, 201))
+    on('POST', /\/teachers\/t-1\/supervision$/, () => json({ id: 'n-1', kind: 'note' }, 201))
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
+    const section = await screen.findByRole('region', { name: 'Supervision timeline' })
+
+    await userEvent.click(within(section).getByRole('button', { name: 'Record a bonus' }))
+    let dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/never here/)).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    expect(calls('POST', /\/bonus$/)).toHaveLength(0)
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'Why the bonus' }), 'Two trial students stayed')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(calls('POST', /\/bonus$/)).toHaveLength(1))
+    expect(bodyOf(calls('POST', /\/bonus$/)[0]!)).toEqual({ reason: 'Two trial students stayed' })
+
+    await userEvent.click(within(section).getByRole('button', { name: 'Add a note' }))
+    dialog = await screen.findByRole('dialog')
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'Note' }), 'Covering Saturdays in November')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(calls('POST', /\/teachers\/t-1\/supervision$/)).toHaveLength(1))
+    expect(bodyOf(calls('POST', /\/teachers\/t-1\/supervision$/)[0]!)).toEqual({ kind: 'note', body: 'Covering Saturdays in November' })
+  })
+
+  it('offers no actions to a reader who cannot write, and is absent when the server refuses', async () => {
+    on('GET', /\/teachers\/t-1\/supervision$/, () => json(timeline))
+    on('GET', /\/teacher-files\/t-1$/, () => json(file({ canEditPersonal: false, canWriteSupervision: false })))
+    const { unmount } = renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
+    const section = await screen.findByRole('region', { name: 'Supervision timeline' })
+    expect(within(section).queryByRole('button', { name: 'Record a bonus' })).not.toBeInTheDocument()
+    unmount()
+
+    on('GET', /\/teachers\/t-1\/supervision$/, () => json({ error: { code: 'COMM.LESSON_DENIED', message: 'no' } }, 403))
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
+    await screen.findByRole('region', { name: 'Personal information' })
+    await waitFor(() => expect(calls('GET', /\/teachers\/t-1\/supervision$/).length).toBeGreaterThan(1))
+    expect(screen.queryByRole('region', { name: 'Supervision timeline' })).not.toBeInTheDocument()
+  })
+})

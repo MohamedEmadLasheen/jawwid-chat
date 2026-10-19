@@ -105,3 +105,55 @@ export const teacherFileKeys = {
   list: ['teacher-files', 'list'] as const,
   detail: (teacherId: string) => ['teacher-files', 'detail', teacherId] as const,
 }
+
+/**
+ * PD-11's supervision timeline (`GET /teachers/:id/supervision`): a QUERY over
+ * the records that already exist -- entries, decided rulings, lessons the
+ * teacher did not give, transfers, days off -- newest first. Nothing in it is
+ * stored twice. Mirrored from apps/api/src/lessons/supervision.service.ts.
+ */
+export type TimelineType =
+  | 'bonus'
+  | 'complaint'
+  | 'complaint_resolution'
+  | 'monthly_comment'
+  | 'note'
+  | 'late_apology'
+  | 'makeup_followup'
+  | 'teacher_apology'
+  | 'teacher_no_show'
+  | 'transfer_in'
+  | 'transfer_out'
+  | 'day_off'
+
+export interface TimelineItem {
+  id: string
+  type: TimelineType | string
+  at: string
+  body?: string | null
+  /** monthly_comment: YYYY-MM */
+  period?: string | null
+  /** day_off: YYYY-MM-DD */
+  day?: string
+  decision?: string | null
+  reason?: string | null
+  lesson?: { id: string; startsAt: string; learnerName: string }
+  learner?: { id: string; name: string }
+  by?: string | null
+  byName?: string | null
+}
+
+export const supervisionTimelineApi = {
+  timeline: (teacherId: string) =>
+    api.get<{ teacher: { id: string; name: string }; items: TimelineItem[] }>(`/teachers/${encodeURIComponent(teacherId)}/supervision`),
+  /** A free note on the timeline (complaints and monthly comments have their own sections). */
+  addNote: (teacherId: string, body: string) =>
+    api.post<{ id: string; kind: string }>(`/teachers/${encodeURIComponent(teacherId)}/supervision`, { kind: 'note', body }),
+  /** The bonus ticket: a `bonus` entry and a card in the teacher's supervision chat. No amount -- payroll's. */
+  bonus: (teacherId: string, reason: string) =>
+    api.post<{ id: string; kind: string; conversationId: string }>(`/teachers/${encodeURIComponent(teacherId)}/bonus`, { reason }),
+}
+
+export const timelineKeys = {
+  timeline: (teacherId: string) => ['teacher-files', 'timeline', teacherId] as const,
+}

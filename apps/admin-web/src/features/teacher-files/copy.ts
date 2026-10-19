@@ -98,9 +98,52 @@ export const T = {
   save: { en: 'Save', ar: 'حفظ' },
   saving: { en: 'Saving…', ar: 'جارٍ الحفظ…' },
   by: { en: '{name}, {date}', ar: '{name}، {date}' },
+
+  // Supervision timeline (PD-11's query over existing records)
+  timeline: { en: 'Supervision timeline', ar: 'سجل الإشراف' },
+  timelineHint: {
+    en: 'Everything about this teacher in one line, newest first: notes, bonuses, complaints, monthly comments, rulings, lessons not given, transfers and days off. Nothing here is typed twice.',
+    ar: 'كل ما يخص هذا المعلم في تسلسل واحد، الأحدث أولًا: الملاحظات والمكافآت والشكاوى والتعليقات الشهرية والقرارات والحصص التي لم تُعطَ والنقل وأيام الإجازة. لا يُكتب شيء هنا مرتين.',
+  },
+  noTimeline: { en: 'Nothing on the timeline yet.', ar: 'لا شيء في السجل بعد.' },
+  addNote: { en: 'Add a note', ar: 'إضافة ملاحظة' },
+  note: { en: 'Note', ar: 'ملاحظة' },
+  recordBonus: { en: 'Record a bonus', ar: 'تسجيل مكافأة' },
+  bonusReason: { en: 'Why the bonus', ar: 'سبب المكافأة' },
+  bonusHint: {
+    en: 'The teacher sees the reason in their supervision chat. The amount is set in payroll (Jawwid Core / HR), never here.',
+    ar: 'يرى المعلم السبب في محادثة الإشراف. يُحدَّد المبلغ في الرواتب (نظام جوّد الأساسي / الموارد البشرية)، وليس هنا.',
+  },
+  filterAll: { en: 'All', ar: 'الكل' },
+  filterRecognition: { en: 'Notes & bonuses', ar: 'ملاحظات ومكافآت' },
+  filterConcerns: { en: 'Complaints', ar: 'الشكاوى' },
+  filterLessons: { en: 'Lessons', ar: 'الحصص' },
+  filterMoves: { en: 'Transfers & days off', ar: 'النقل والإجازات' },
+  tBonus: { en: 'Bonus', ar: 'مكافأة' },
+  tComplaint: { en: 'Complaint', ar: 'شكوى' },
+  tResolution: { en: 'Complaint resolved', ar: 'معالجة شكوى' },
+  tMonthly: { en: 'Monthly comment', ar: 'تعليق شهري' },
+  tNote: { en: 'Note', ar: 'ملاحظة' },
+  tLateApology: { en: 'Late apology ruled', ar: 'قرار في اعتذار متأخر' },
+  tMakeup: { en: 'Make-up follow-up', ar: 'متابعة حصة تعويضية' },
+  tTeacherApology: { en: 'Teacher apologised', ar: 'اعتذر المعلم' },
+  tTeacherNoShow: { en: 'Teacher absent', ar: 'غياب المعلم' },
+  tTransferIn: { en: 'Student transferred in', ar: 'نُقل إليه طالب' },
+  tTransferOut: { en: 'Student transferred out', ar: 'نُقل منه طالب' },
+  tDayOff: { en: 'Day off', ar: 'يوم إجازة' },
+  tOther: { en: 'Record', ar: 'سجل' },
+  lessonOf: { en: '{name}, {date}', ar: '{name}، {date}' },
 } satisfies Record<string, Pair>
 
 const BY_CODE: Record<string, Pair> = {
+  'COMM.LESSON_DENIED': {
+    en: 'Notes and bonuses are recorded by the Teachers department and the super admin.',
+    ar: 'تسجّل الملاحظات والمكافآت من قسم المعلمين والمدير العام فقط.',
+  },
+  'COMM.SUPERVISION_NOT_FOUND': {
+    en: 'This teacher is no longer active, so they have no supervision chat to receive a bonus in.',
+    ar: 'هذا المعلم لم يعد نشطًا، فلا توجد له محادثة إشراف لاستلام المكافأة.',
+  },
   'COMM.TEACHER_FILE_DENIED': {
     en: 'Teacher Files are for the Teachers department and the super admin.',
     ar: 'ملفات المعلمين لقسم المعلمين والمدير العام فقط.',
