@@ -59,6 +59,12 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'lesson.slot_step_minutes': 30,
   /** PD-11 T3: the family and the team hear this many days before a paused learner returns. */
   'lesson.return_notice_days': 2,
+  /** PD-11 T5: the academy's zone for calendar months in statistics. */
+  'stats.zone': 'Africa/Cairo',
+  /** A report is on time when submitted within this many hours of the lesson's end. */
+  'stats.report_grace_hours': 24,
+  /** A family message counts as answered when the teacher replied within this many hours. */
+  'stats.reply_within_hours': 24,
 } as const;
 
 export type CommunicationConfigKey = keyof typeof COMMUNICATION_CONFIG_DEFAULTS;

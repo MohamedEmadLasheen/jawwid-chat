@@ -137,4 +137,43 @@ class HttpLessonRepository implements LessonRepository {
     }
     return out;
   }
+
+  @override
+  Future<ChildProgress> progress(String learnerId) async {
+    final d = (await _client.get<Map<String, Object?>>('/learners/$learnerId/progress')).data ?? const {};
+    final month = d['thisMonth'] is Map ? d['thisMonth'] as Map : const {};
+    final all = d['allTime'] is Map ? d['allTime'] as Map : const {};
+    final next = d['nextLesson'] is Map ? d['nextLesson'] as Map : null;
+    final last = d['lastReport'] is Map ? d['lastReport'] as Map : null;
+    int n(Object? v) => v is num ? v.toInt() : 0;
+    return ChildProgress(
+      attended: n(month['attended']),
+      apologised: n(month['apologised']),
+      absent: n(month['absent']),
+      attendedAllTime: n(all['attended']),
+      streak: n(d['streak']),
+      makeupsOwed: n(d['makeupsOwed']),
+      nextLessonAt: next == null ? null : DateTime.tryParse('${next['startsAt']}')?.toLocal(),
+      lastCovered: last?['covered'] as String?,
+      lastReportAt: last == null ? null : DateTime.tryParse('${last['startsAt']}')?.toLocal(),
+    );
+  }
+
+  @override
+  Future<TeacherWorkload> myWorkload() async {
+    final d = (await _client.get<Map<String, Object?>>('/stats/me')).data ?? const {};
+    final categories = (d['categories'] as List?) ?? const [];
+    Map<Object?, Object?> cat(String key) =>
+        categories.whereType<Map<Object?, Object?>>().firstWhere((c) => c['key'] == key, orElse: () => const {});
+    int n(Object? v) => v is num ? v.toInt() : 0;
+    final reports = d['reports'] is Map ? d['reports'] as Map : const {};
+    final workload = d['workload'] is Map ? d['workload'] as Map : const {};
+    return TeacherWorkload(
+      heldLessons: n(cat('held')['lessons']),
+      heldMinutes: n(cat('held')['minutes']),
+      unreported: n(cat('unreported')['lessons']),
+      reportsOnTimeRate: (reports['onTimeRate'] as num?)?.toDouble(),
+      availableMinutes: (workload['availableMinutes'] as num?)?.toInt(),
+    );
+  }
 }

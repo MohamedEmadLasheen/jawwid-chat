@@ -843,6 +843,27 @@ New Students (needs Core's subscription events); **T5** statistics.
   direct conversation with the recorder) and tells Core/HR through
   `teacher.bonus_recorded`. No amount passes through Chat.
 
+**T5 as built (2026-10-19).** Migration `20261019100000_chat_pd011_statistics.sql`.
+- **One definition per number.** SQL functions compute everything:
+  - `chat.lesson_category` and `chat.teacher_lesson_stats`: lessons by outcome, kind and length;
+  - `chat.teacher_report_timeliness`: reports submitted within `stats.report_grace_hours` (24) of the end;
+  - `chat.teacher_reply_times`: a family's published messages answered by the teacher within `stats.reply_within_hours` (24);
+  - `chat.teacher_available_minutes`: weekly windows over the month, minus days off.
+
+  Months are calendar months in `stats.zone` (Africa/Cairo). `rescheduled` and
+  `suspended` lessons are shown, and counted for or against nobody. Trials read
+  zero, labelled as not available, until T4.
+- **Who reads what (PD-10).**
+  - `GET /stats/teachers` and `GET /stats/teachers/:id`: the Teachers department and the super admin.
+  - `GET /stats/me`: a teacher, their own month, without student movements.
+  - `GET /learners/:id/progress`: the family, and others who can read the child's schedule. It shows this month's attended, apologised and absent lessons, the streak, make-ups owed, the next lesson and the last report. Certificates are empty until the certificate flow lands.
+  - `GET /lessons/access`: tells the Admin Web whether to offer the page.
+- **Admin Web.**
+  - Operators get **Teacher statistics** at `/teachers`, the first tab of the **Teachers** area. The area is offered only when `/lessons/access` confirms the Teachers department; its tabs are registered in `features/teachers/area.tsx`, and PD-12 appends teacher files, certificates and leave there.
+  - The super admin gets the **Reports & analytics** section.
+  - The page has a month picker, a list of every teacher, and per-teacher category cards broken down by lesson length (the Core dashboard's layout), plus rates, reports on time, replies to families, workload and student movements.
+- **App.** The child's progress appears on the group profile, and the teacher's month heads the Schedule tab.
+
 **Deprecated behaviour.** None removed. Explicitly **not** built: a generic ticket
 or task entity; any stored package balance; parents changing their regular
 lesson times without approval.

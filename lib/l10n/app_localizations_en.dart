@@ -1082,4 +1082,78 @@ class L10nEn extends L10n {
 
   @override
   String get cardBonusTitle => 'A bonus for you';
+
+  @override
+  String get progressTitle => 'This month';
+
+  @override
+  String get progressAttended => 'Attended';
+
+  @override
+  String get progressApologised => 'Apologised';
+
+  @override
+  String get progressAbsent => 'Absent';
+
+  @override
+  String progressStreak(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count lessons in a row',
+      one: '1 lesson in a row',
+      zero: 'No streak yet',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String progressAllTime(int count) {
+    return '$count lessons attended in total';
+  }
+
+  @override
+  String progressMakeupsOwed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count make-up lessons owed',
+      one: '1 make-up lesson owed',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String progressNext(String when) {
+    return 'Next lesson: $when';
+  }
+
+  @override
+  String progressLastCovered(String covered) {
+    return 'Last lesson: $covered';
+  }
+
+  @override
+  String get progressCertificates => 'Certificates will appear here.';
+
+  @override
+  String get progressUnavailable => 'Progress isn\'t available right now.';
+
+  @override
+  String get workloadTitle => 'This month';
+
+  @override
+  String workloadHeld(int lessons, String hours) {
+    return '$lessons lessons · $hours h';
+  }
+
+  @override
+  String workloadNeedsReport(int count) {
+    return '$count need a report';
+  }
+
+  @override
+  String workloadOnTime(String percent) {
+    return '$percent reports on time';
+  }
 }

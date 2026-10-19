@@ -8,6 +8,7 @@ import 'package:jawwid_chat/core/data/repositories.dart';
 import 'package:jawwid_chat/core/data/wire/wire_mappers.dart';
 import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/design/theme.dart';
+import 'package:jawwid_chat/features/lessons/presentation/child_progress_card.dart';
 import 'package:jawwid_chat/features/lessons/presentation/lesson_ticket_sheet.dart';
 import 'package:jawwid_chat/features/lessons/presentation/makeup_sheet.dart';
 import 'package:jawwid_chat/features/lessons/presentation/schedule_change_sheet.dart';
@@ -314,6 +315,50 @@ void main() {
       expect(find.text('كل التقارير في موعدها'), findsOneWidget);
     });
   });
+  group('T5: progress and workload', () {
+    testWidgets('a child\'s month leads with the streak; absences are counted, not headlined', (tester) async {
+      final repo = _RecordingLessons()
+        ..childProgress = ChildProgress(
+          attended: 11, apologised: 1, absent: 1, attendedAllTime: 64, streak: 5, makeupsOwed: 1,
+          nextLessonAt: DateTime(2026, 10, 21, 17), lastCovered: 'Al-Mulk 1-15',
+        );
+      await tester.pumpWidget(app(const ChildProgressCard(learnerId: 'k1'), lessons: repo));
+      await tester.pumpAndSettle();
+      expect(find.text('5 lessons in a row'), findsOneWidget);
+      expect(find.text('11'), findsOneWidget);
+      expect(find.text('64 lessons attended in total'), findsOneWidget);
+      expect(find.text('1 make-up lesson owed'), findsOneWidget);
+      expect(find.text('Last lesson: Al-Mulk 1-15'), findsOneWidget);
+      expect(find.text('Certificates will appear here.'), findsOneWidget);
+    });
+
+    testWidgets('a build with no lesson server shows no progress at all', (tester) async {
+      await tester.pumpWidget(app(const ChildProgressCard(learnerId: 'k1')));
+      await tester.pumpAndSettle();
+      expect(find.text('This month'), findsNothing);
+    });
+
+    testWidgets('the Schedule tab opens with the teacher\'s month', (tester) async {
+      final repo = _RecordingLessons()
+        ..workload = const TeacherWorkload(heldLessons: 42, heldMinutes: 1890, unreported: 2, reportsOnTimeRate: 0.9)
+        ..mine = [
+          ScheduledLesson(id: 'a', learnerName: 'learner_l', startsAt: DateTime(2026, 10, 19, 9), endsAt: DateTime(2026, 10, 19, 9, 30), kind: 'regular', phase: 'upcoming'),
+        ];
+      await tester.pumpWidget(ProviderScope(
+        overrides: [lessonRepositoryProvider.overrideWithValue(repo)],
+        child: const MaterialApp(
+          locale: Locale('en'),
+          supportedLocales: JawwidApp.supportedLocales,
+          localizationsDelegates: [L10n.delegate, GlobalMaterialLocalizations.delegate, GlobalWidgetsLocalizations.delegate, GlobalCupertinoLocalizations.delegate],
+          home: TeacherScheduleScreen(),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('42 lessons · 31.5 h'), findsOneWidget);
+      expect(find.text('2 need a report'), findsOneWidget);
+      expect(find.text('90% reports on time'), findsOneWidget);
+    });
+  });
 }
 
 class _RecordingLessons implements LessonRepository {
@@ -368,4 +413,13 @@ class _RecordingLessons implements LessonRepository {
 
   @override
   Future<List<ScheduledLesson>> myLessons(DateTime from, DateTime to) async => mine;
+
+  ChildProgress? childProgress;
+  TeacherWorkload? workload;
+
+  @override
+  Future<ChildProgress> progress(String learnerId) async => childProgress!;
+
+  @override
+  Future<TeacherWorkload> myWorkload() async => workload ?? (throw UnsupportedError('none'));
 }

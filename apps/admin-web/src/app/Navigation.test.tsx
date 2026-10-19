@@ -71,19 +71,25 @@ describe('The navigation registry', () => {
 
   it('lists for each role exactly the pages it may open: nothing hidden, nothing extra', () => {
     for (const role of OPERATOR_ROLES) {
-      const listed = destinationsFor(role).flatMap((d) => entriesOf(d).map((e) => e.path))
-      // Exactly the openable areas, with ONE deliberate exception: the legacy
-      // Inbox stays routable (old links) but is never offered -- its API
-      // routes (/inbox, /families/*) exist on no branch.
-      const allowed = navAreas(role)
-        .filter((a): a is Exclude<NavArea, 'settings'> => a !== 'settings')
-        .map((a) => AREA_PATH[a])
-      expect([...listed].sort(), role).toEqual([...allowed].sort())
-      expect(listed, role).not.toContain('/inbox')
-      expect(visibleAreas(role).filter((a) => !navAreas(role).includes(a)), role).toEqual(
-        visibleAreas(role).includes('inbox') ? ['inbox'] : [],
-      )
-      expect(listed.some((p) => p.startsWith('/admin/')), role).toBe(false)
+      for (const lessonManager of [false, true]) {
+        const listed = destinationsFor(role, { lessonManager }).flatMap((d) => entriesOf(d).map((e) => e.path))
+        // Exactly the openable areas, with TWO deliberate exceptions: the legacy
+        // Inbox stays routable (old links) but is never offered -- its API
+        // routes (/inbox, /families/*) exist on no branch; and Teacher
+        // statistics is offered only when the server confirms the Teachers
+        // department (GET /lessons/access), which the role alone cannot tell.
+        const allowed = navAreas(role, { lessonManager })
+          .filter((a): a is Exclude<NavArea, 'settings'> => a !== 'settings')
+          .map((a) => AREA_PATH[a])
+        expect([...listed].sort(), role).toEqual([...allowed].sort())
+        expect(listed, role).not.toContain('/inbox')
+        const withheld = [
+          ...(visibleAreas(role).includes('inbox') ? ['inbox'] : []),
+          ...(!lessonManager && visibleAreas(role).includes('teachers') ? ['teachers'] : []),
+        ]
+        expect(visibleAreas(role).filter((a) => !navAreas(role, { lessonManager }).includes(a)), role).toEqual(withheld)
+        expect(listed.some((p) => p.startsWith('/admin/')), role).toBe(false)
+      }
     }
     // And the super admin's navigation is the portal, not the operator screens.
     const listed = destinationsFor('super_admin').flatMap((d) => entriesOf(d).map((e) => e.path))

@@ -6,6 +6,8 @@ import { LifecycleController } from './lifecycle.controller';
 import { LifecycleService } from './lifecycle.service';
 import { SchedulingController } from './scheduling.controller';
 import { SupervisionService } from './supervision.service';
+import { StatsController } from './stats.controller';
+import { StatsService } from './stats.service';
 import { SchedulingService } from './scheduling.service';
 
 /**
@@ -17,8 +19,8 @@ import { SchedulingService } from './scheduling.service';
  */
 @Module({
   imports: [CommunicationModule],
-  controllers: [LessonController, SchedulingController, LifecycleController],
-  providers: [LessonService, SchedulingService, LifecycleService, SupervisionService],
-  exports: [LessonService, SchedulingService, LifecycleService, SupervisionService],
+  controllers: [StatsController, LessonController, SchedulingController, LifecycleController],
+  providers: [LessonService, SchedulingService, LifecycleService, SupervisionService, StatsService],
+  exports: [LessonService, SchedulingService, LifecycleService, SupervisionService, StatsService],
 })
 export class LessonModule {}
