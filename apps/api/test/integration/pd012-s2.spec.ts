@@ -21,6 +21,9 @@ import { SupervisionConversationService } from '../../src/supervision/supervisio
 import { CardPoster } from '../../src/supervision/card-poster';
 import { LeaveService } from '../../src/leave/leave.service';
 import { DisciplineService } from '../../src/discipline/discipline.service';
+import { SchedulingService } from '../../src/lessons/scheduling.service';
+import { TrialService } from '../../src/lessons/trial.service';
+import { TrialGroupService } from '../../src/lessons/trial-group.service';
 import { buildGraph, seed, truncate, withAssignmentGate, Scenario } from './harness';
 
 const g = buildGraph();
@@ -28,8 +31,11 @@ const audit = new PrismaAuditService();
 const lessons = new LessonService(g.prisma, g.authz, g.conversations, g.outbox, g.config, audit);
 const supervision = new SupervisionConversationService(g.prisma, g.authz, g.conversations, g.outbox, audit);
 const cards = new CardPoster(g.conversations, g.outbox, audit);
-const leave = new LeaveService(g.prisma, g.conversations, supervision, cards, lessons, audit);
-const discipline = new DisciplineService(g.prisma, g.conversations, supervision, cards, lessons, g.outbox, g.config, audit);
+const scheduling = new SchedulingService(g.prisma, g.authz, g.conversations, lessons, g.outbox, g.config, g.reminders, audit);
+const groups = new TrialGroupService(g.prisma, g.authz, g.conversations, g.outbox, cards, g.config, audit);
+const trials = new TrialService(g.prisma, g.conversations, lessons, scheduling, audit, groups);
+const leave = new LeaveService(g.prisma, g.conversations, supervision, cards, lessons, audit, trials);
+const discipline = new DisciplineService(g.prisma, g.conversations, supervision, cards, lessons, g.outbox, g.config, audit, trials);
 
 const HOUR = 3_600_000;
 const at = (ms: number) => new Date(Date.now() + ms).toISOString();
@@ -192,13 +198,25 @@ describe('3. what each decision does', () => {
   it('a temporary suspension: open lessons must be confirmed, its days are days off but not leave, and the families are told', async () => {
     const v = await apology();
     const inside = await lesson(26 * HOUR);
+    // PD-11 T4: a booked trial is the teacher's time too, and is cancelled as a trial.
+    const prospect = await g.prisma.trialProspect.create({
+      data: { organizationId: (await g.prisma.teacher.findUniqueOrThrow({ where: { id: s.teacherId } })).organizationId, displayName: 'prospect_q', createdBy: tsupId },
+    });
+    const trial = await g.prisma.lesson.create({
+      data: {
+        organizationId: prospect.organizationId, kind: 'trial', prospectId: prospect.id, teacherId: s.teacherId,
+        startsAt: new Date(Date.now() + 30 * HOUR), endsAt: new Date(Date.now() + 30 * HOUR + 30 * 60_000),
+        createdByKind: 'staff', createdBy: tsupId,
+      },
+    });
     await leave.setAllowance(tmgrId, s.teacherId, { year: new Date().getUTCFullYear(), days: 10 });
 
     expect(await code(discipline.decide(tsupId, v, { decision: 'temporary_suspension', note: 'repeated absences' }))).toBe(
       CommErrorCode.DISCIPLINE_LESSONS_COLLIDE,
     );
     const out = await discipline.decide(tsupId, v, { decision: 'temporary_suspension', note: 'repeated absences', cancelCollidingLessons: true });
-    expect(out).toMatchObject({ cancelledLessons: 1, notCancelled: [] });
+    expect(out).toMatchObject({ cancelledLessons: 2, notCancelled: [] });
+    expect((await g.prisma.lesson.findUniqueOrThrow({ where: { id: trial.id } })).outcome).toBe('admin_cancelled');
     expect(out.violation.suspension).toMatchObject({ kind: 'temporary' });
 
     const days = await g.prisma.teacherDayOff.findMany({ where: { suspensionId: out.violation.suspension!.id } });

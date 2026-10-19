@@ -14,6 +14,7 @@ import { CardPoster } from '../supervision/card-poster';
 import { SupervisionConversationService } from '../supervision/supervision-conversation.service';
 import { renderPd012CardBody, type CardLanguage } from '../supervision/pd012-cards';
 import { LessonService } from '../lessons/lesson.service';
+import { TrialService } from '../lessons/trial.service';
 import { daysBetween, isoDate, todayIn } from '../leave/leave.service';
 import { DECISIONS, Decision, decisionForStep, isSuspension, needsReason, stepsOf } from './ladder';
 
@@ -63,6 +64,7 @@ export class DisciplineService {
     private readonly outbox: OutboxService,
     private readonly config: AppConfigService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    private readonly trials: TrialService,
   ) {}
 
   // ------------------------------------------------------------------
@@ -332,9 +334,10 @@ export class DisciplineService {
     const notCancelled: Array<{ lessonId: string; reason: string }> = [];
     for (const lesson of colliding) {
       try {
-        await this.lessons.cancel(actorId, lesson.id, {
-          reason: teacher.locale === 'en' ? 'The teacher is suspended' : 'المعلم موقوف',
-        });
+        const reason = teacher.locale === 'en' ? 'The teacher is suspended' : 'المعلم موقوف';
+        // A trial (PD-11 T4) is cancelled as a trial: LessonService never sees one.
+        if (lesson.kind === 'trial') await this.trials.cancel(actorId, lesson.id, { reason });
+        else await this.lessons.cancel(actorId, lesson.id, { reason });
       } catch (e) {
         const reason = e instanceof Error ? e.message : String(e);
         this.logger.warn(`lesson ${lesson.id} inside suspension of ${violation.teacherId} was not cancelled: ${reason}`);
@@ -357,8 +360,8 @@ export class DisciplineService {
   }
 
   private async openLessonsIn(teacherId: string, window: { startsOn: string; endsOn: string | null }, tz: string) {
-    return this.prisma.$queryRaw<Array<{ id: string }>>`
-      SELECT l.id::text AS id
+    return this.prisma.$queryRaw<Array<{ id: string; kind: string }>>`
+      SELECT l.id::text AS id, l.kind
         FROM chat.lesson l
        WHERE l.teacher_id = ${teacherId}::uuid
          AND l.outcome IS NULL

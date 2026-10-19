@@ -58,7 +58,7 @@ class ConversationTile extends StatelessWidget {
     // One semantic string for the whole row, so a screen reader announces it as a unit
     // rather than reading five disconnected fragments.
     final semanticLabel = [
-      conversation.displayTitle(l10n.supervisionChatTitle),
+      conversation.displayTitle(l10n.supervisionChatTitle, trialGroupLabel: l10n.trialGroupTitle),
       if (conversation.handledByLabel != null)
         l10n.handledBy(conversation.handledByLabel!),
       if (unread) l10n.unreadCount(conversation.unreadCount),
@@ -88,7 +88,7 @@ class ConversationTile extends StatelessWidget {
                   _ProfileTarget(
                     onOpenProfile: onOpenProfile,
                     child: JawwidAvatar(
-                      displayName: conversation.displayTitle(l10n.supervisionChatTitle),
+                      displayName: conversation.displayTitle(l10n.supervisionChatTitle, trialGroupLabel: l10n.trialGroupTitle),
                       imageUrl: conversation.avatarUrl,
                       size: Sizes.avatarLg,
                     ),
@@ -104,7 +104,7 @@ class ConversationTile extends StatelessWidget {
                         _ProfileTarget(
                           onOpenProfile: onOpenProfile,
                           child: ContentText(
-                            conversation.displayTitle(l10n.supervisionChatTitle),
+                            conversation.displayTitle(l10n.supervisionChatTitle, trialGroupLabel: l10n.trialGroupTitle),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.titleSmall?.copyWith(

@@ -59,7 +59,13 @@ export class StatsService {
   /** What the Admin Web may offer this staff member. Advisory -- every route decides again. */
   async access(actorId: string) {
     const actor = await this.conversations.requireActor(actorId);
-    return { lessonManager: await this.isStatsReader(actor) };
+    const staff = actor.kind === ActorKind.STAFF && actor.isActive && !!actor.organizationId;
+    const superAdmin = staff && actor.staffRole === StaffRole.SUPER_ADMIN;
+    return {
+      lessonManager: await this.isStatsReader(actor),
+      sales: staff && (superAdmin || (await this.lessons.inDepartment(actor, 'sales'))),
+      operations: staff && (superAdmin || (await this.lessons.inDepartment(actor, 'operations'))),
+    };
   }
 
   /** Every teacher of the organization, one row each, for the month. */
@@ -79,7 +85,7 @@ export class StatsService {
       month: period.month,
       zone: period.zone,
       teachers: teachers.map((t) => {
-        const mine = byTeacher.get(t.id) ?? [];
+        const mine = (byTeacher.get(t.id) ?? []).filter((r) => r.kind !== 'trial');
         const total = (c: string) => sum(mine.filter((r) => r.category === c));
         const counted = sum(mine.filter((r) => COUNTED.has(r.category)));
         const held = total('held');
@@ -198,12 +204,17 @@ export class StatsService {
     if (!teacher) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
     const period = await this.period(month);
     const previous = await this.period(shiftMonth(period.month, -1));
-    const [rows, prevRows, reports, replies] = await Promise.all([
+    const [allRows, prevRows, reports, replies, conversions] = await Promise.all([
       this.lessonRows(org, period, teacherId),
       this.lessonRows(org, previous, teacherId),
       this.reportRows(org, period, teacherId),
       this.replyRows(org, period, teacherId),
+      this.conversionRows(org, period, teacherId),
     ]);
+    // A trial is not a student's lesson: it has its own block below, and only
+    // its time joins the workload.
+    const rows = allRows.filter((r) => r.kind !== 'trial');
+    const trialRows = allRows.filter((r) => r.kind === 'trial');
     const categories = STAT_CATEGORIES.map((key) => {
       const mine = rows.filter((r) => r.category === key);
       const byDuration = new Map<number, Bucket>();
@@ -226,7 +237,7 @@ export class StatsService {
     const closedCounted = counted.lessons;
     const teacherCaused = total('teacher_apology').lessons + total('teacher_no_show').lessons;
     const available = await this.availableMinutes(teacherId, period);
-    const scheduledMinutes = sum(rows.filter((r) => r.category !== 'rescheduled' && r.category !== 'suspended')).minutes;
+    const scheduledMinutes = sum(allRows.filter((r) => r.category !== 'rescheduled' && r.category !== 'suspended')).minutes;
     const report = reports[0];
     const reply = replies[0];
     const makeups = sum(rows.filter((r) => r.kind === 'makeup' && COUNTED.has(r.category)));
@@ -239,8 +250,17 @@ export class StatsService {
       categories,
       totals: { counted, scheduledMinutes },
       makeups: { lessons: makeups.lessons, held: makeupsHeld.lessons },
-      // PD-11 T4 (trials) is not built: zero is the truth until it is, not a guess.
-      trials: { lessons: 0, attended: 0, converted: 0, available: false },
+      trials: {
+        lessons: sum(trialRows.filter((r) => COUNTED.has(r.category) || r.category === 'unreported')).lessons,
+        attended: sum(trialRows.filter((r) => r.category === 'held')).lessons,
+        noShow: sum(trialRows.filter((r) => r.category === 'student_no_show')).lessons,
+        upcoming: sum(trialRows.filter((r) => r.category === 'upcoming')).lessons,
+        // Sales' decision, by the trial's month; credited to the teacher only once Core confirms.
+        subscribed: conversions.subscribed,
+        confirmed: conversions.confirmed,
+        notSubscribed: conversions.notSubscribed,
+        available: true,
+      },
       rates: {
         attendance: rate(held.lessons, held.lessons + total('student_no_show').lessons),
         // Of the lessons closed and counted, how many took place.
@@ -257,7 +277,7 @@ export class StatsService {
         ? { availableMinutes: null, scheduledMinutes, freeMinutes: null }
         : { availableMinutes: available, scheduledMinutes, freeMinutes: Math.max(0, available - scheduledMinutes) },
       ...(forManager ? { movements: await this.movements(org, teacherId, period) } : {}),
-      previous: { month: previous.month, held: sum(prevRows.filter((r) => r.category === 'held')) },
+      previous: { month: previous.month, held: sum(prevRows.filter((r) => r.category === 'held' && r.kind !== 'trial')) },
     };
   }
 
@@ -267,6 +287,19 @@ export class StatsService {
         FROM chat.teacher_lesson_stats(${org}::uuid, ${p.from}::timestamptz, ${p.to}::timestamptz)
        WHERE ${teacherId ?? null}::uuid IS NULL OR teacher_id = ${teacherId ?? null}::uuid`;
     return rows.map((r) => ({ ...r, duration_minutes: Number(r.duration_minutes), lessons: Number(r.lessons), minutes: Number(r.minutes) }));
+  }
+
+  /** Sales' recorded decisions on the teacher's trials of the month. */
+  private async conversionRows(org: string, p: Period, teacherId: string) {
+    const rows = await this.prisma.$queryRaw<Array<{ subscribed: number; confirmed: number; not_subscribed: number }>>`
+      SELECT count(*) FILTER (WHERE o.result = 'subscribed')::int AS subscribed,
+             count(*) FILTER (WHERE o.result = 'subscribed' AND o.confirmed_at IS NOT NULL)::int AS confirmed,
+             count(*) FILTER (WHERE o.result = 'not_subscribed')::int AS not_subscribed
+        FROM chat.trial_outcome o JOIN chat.lesson l ON l.id = o.lesson_id
+       WHERE o.organization_id = ${org}::uuid AND l.teacher_id = ${teacherId}::uuid
+         AND l.starts_at >= ${p.from}::timestamptz AND l.starts_at < ${p.to}::timestamptz`;
+    const r = rows[0];
+    return { subscribed: Number(r?.subscribed ?? 0), confirmed: Number(r?.confirmed ?? 0), notSubscribed: Number(r?.not_subscribed ?? 0) };
   }
 
   private async reportRows(org: string, p: Period, teacherId?: string) {

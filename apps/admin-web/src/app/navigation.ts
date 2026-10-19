@@ -1,4 +1,4 @@
-import { isSuperAdmin, navAreas, type NavArea } from '@/core/permissions/capabilities'
+import { isSuperAdmin, navAreas, type DepartmentAccess, type NavArea } from '@/core/permissions/capabilities'
 import type { StaffRole } from '@/shared/types/domain'
 import {
   ADMIN_GROUPS,
@@ -92,6 +92,7 @@ export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   organization: 'people',
   teachers: 'people',
   instalments: 'people',
+  trials: 'people',
   coverage: 'people',
   stories: 'stories',
   tasks: 'more',
@@ -106,6 +107,7 @@ export const AREA_PATH: Record<OperatorArea, string> = {
   organization: '/organization',
   teachers: '/teachers',
   instalments: '/instalments',
+  trials: '/trials',
   tasks: '/tasks',
   coverage: '/coverage',
   dashboard: '/dashboard',
@@ -119,6 +121,7 @@ const AREA_ICON: Record<OperatorArea, IconName> = {
   organization: 'teams',
   teachers: 'academy',
   instalments: 'calendar',
+  trials: 'calendar',
   tasks: 'tasks',
   coverage: 'teams',
   dashboard: 'dashboard',
@@ -155,13 +158,10 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
   return out
 }
 
-function operatorDestinations(
-  role: StaffRole,
-  opts: { lessonManager: boolean; billingReader: boolean },
-): Map<DestinationKey, NavEntryGroup[]> {
+function operatorDestinations(role: StaffRole, access: DepartmentAccess): Map<DestinationKey, NavEntryGroup[]> {
   const out = new Map<DestinationKey, NavEntryGroup[]>()
   // navAreas, not visibleAreas: the legacy Inbox stays routable but is never offered.
-  for (const area of navAreas(role, opts)) {
+  for (const area of navAreas(role, access)) {
     const dest = AREA_DESTINATION[area]
     if (dest === null || area === 'settings') continue
     const groups = out.get(dest) ?? [{ key: dest, label: null, entries: [] }]
@@ -179,13 +179,11 @@ function operatorDestinations(
 
 /**
  * The destinations this role sees, in rail order; empty ones are left out.
- * `lessonManager` is the server's answer to GET /lessons/access (PD-11 T5);
- * `billingReader`, to GET /instalments/access (PD-12 S3).
+ * `opts` is the server's answers to GET /lessons/access (PD-11 T4/T5) and
+ * GET /instalments/access (PD-12 S3).
  */
-export function destinationsFor(role: StaffRole, opts: { lessonManager?: boolean; billingReader?: boolean } = {}): Destination[] {
-  const byKey = isSuperAdmin(role)
-    ? adminDestinations()
-    : operatorDestinations(role, { lessonManager: opts.lessonManager === true, billingReader: opts.billingReader === true })
+export function destinationsFor(role: StaffRole, opts: DepartmentAccess = {}): Destination[] {
+  const byKey = isSuperAdmin(role) ? adminDestinations() : operatorDestinations(role, opts)
   return DESTINATIONS.filter((d) => byKey.has(d.key)).map((d) => ({ ...d, groups: byKey.get(d.key)! }))
 }
 

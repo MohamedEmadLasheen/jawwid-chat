@@ -155,6 +155,23 @@ describe('2. regular times become lessons', () => {
   });
 });
 
+describe('2b. a teacher\'s day off', () => {
+  it('no regular lesson is generated on it, however far ahead it was recorded', async () => {
+    await openAllWeek();
+    const [{ d, wd }] = await g.prisma.$queryRawUnsafe<Array<{ d: string; wd: number }>>(
+      `select to_char((now() at time zone '${TZ}')::date + 9, 'YYYY-MM-DD') as d,
+              extract(isodow from (now() at time zone '${TZ}')::date + 9)::int as wd`,
+    );
+    await scheduling.addDayOff(tsupId, s.teacherId, { date: d, reason: 'leave' });
+    await scheduling.setSchedule(tsupId, s.learnerId, { slots: [{ weekday: wd, start: '18:00', durationMinutes: 30 }] });
+    const days = await g.prisma.$queryRawUnsafe<Array<{ day: string }>>(
+      `select to_char(starts_at at time zone '${TZ}', 'YYYY-MM-DD') as day from chat.lesson where learner_id = $1::uuid`, s.learnerId,
+    );
+    expect(days.length).toBeGreaterThanOrEqual(3);
+    expect(days.map((x) => x.day)).not.toContain(d);
+  });
+});
+
 describe('3. the make-up a family books', () => {
   it('is offered only after the teacher cancelled, only in real free time, and booked instantly once', async () => {
     await openAllWeek();

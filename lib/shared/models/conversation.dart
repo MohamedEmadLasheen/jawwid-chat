@@ -82,6 +82,7 @@ class Conversation {
     this.requiresApproval = false,
     this.isReadOnly = false,
     this.isTeacherSupervision = false,
+    this.isTrialGroup = false,
   });
 
   final String id;
@@ -126,11 +127,20 @@ class Conversation {
   /// never inferred from a title.
   final bool isTeacherSupervision;
 
+  /// PD-11 T4: the teacher's staff-only group with Sales about their trial lessons. Like
+  /// the supervision conversation it has its own name and its own "+" (the trial report).
+  /// Taken from the server's type, never inferred from a title.
+  final bool isTrialGroup;
+
   bool get hasUnread => unreadCount > 0;
 
   /// The name to show: the server's title, except for a supervision conversation, which
   /// the teacher reads under its own localized name ([supervisionLabel]).
-  String displayTitle(String supervisionLabel) => isTeacherSupervision ? supervisionLabel : title;
+  String displayTitle(String supervisionLabel, {String? trialGroupLabel}) => isTeacherSupervision
+      ? supervisionLabel
+      : isTrialGroup && trialGroupLabel != null
+          ? trialGroupLabel
+          : title;
 
   Conversation copyWith({
     bool? isPinned,
@@ -156,6 +166,7 @@ class Conversation {
       requiresApproval: requiresApproval,
       isReadOnly: isReadOnly,
       isTeacherSupervision: isTeacherSupervision,
+      isTrialGroup: isTrialGroup,
     );
   }
 }

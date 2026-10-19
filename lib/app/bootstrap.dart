@@ -12,6 +12,7 @@ import '../core/data/http/http_lesson_repository.dart';
 import '../core/data/http/http_message_repository.dart';
 import '../core/data/http/http_story_repository.dart';
 import '../core/data/http/http_supervision_repository.dart';
+import '../core/data/http/http_trial_repository.dart';
 import '../core/errors/app_error.dart';
 import '../core/network/api_client.dart';
 import '../core/network/api_config.dart';
@@ -145,6 +146,9 @@ List<Override> _httpOverrides() {
     ),
     supervisionRepositoryProvider.overrideWithValue(
       HttpSupervisionRepository(client: client),
+    ),
+    trialRepositoryProvider.overrideWithValue(
+      HttpTrialRepository(client: client),
     ),
     // Stories are read-only here. The development composition root below registers no
     // implementation on purpose -- a fixture story is indistinguishable on screen from a real

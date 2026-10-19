@@ -4,6 +4,7 @@ import '../../shared/models/lesson.dart';
 import '../../shared/models/message.dart';
 import '../../shared/models/story.dart';
 import '../../shared/models/supervision.dart';
+import '../../shared/models/trial.dart';
 import '../../shared/models/user_role.dart';
 
 /// One page of a cursor-paginated list (§19).
@@ -624,4 +625,27 @@ class NoLessonRepository implements LessonRepository {
 
   @override
   Future<TeacherWorkload> myWorkload() => throw UnsupportedError('no lesson server in this build');
+}
+
+/// PD-11 T4: the teacher's trial group -- the trials they may report under "+", and the
+/// report itself. Sales books trials and records the decision in the Admin Web.
+abstract interface class TrialRepository {
+  /// `GET /conversations/:id/trial-tickets` -- what "+" may offer here. Advisory.
+  Future<List<TrialTicket>> tickets(String conversationId);
+
+  /// `POST /trials/:id/attendance` -- the card lands in the trial group.
+  Future<void> reportAttendance(String trialId, TrialAttendanceDraft draft);
+}
+
+/// The build with no trial server (fixtures, tests that do not override it): "+" offers
+/// no trial report, and nothing is ever sent.
+class NoTrialRepository implements TrialRepository {
+  const NoTrialRepository();
+
+  @override
+  Future<List<TrialTicket>> tickets(String conversationId) async => const [];
+
+  @override
+  Future<void> reportAttendance(String trialId, TrialAttendanceDraft draft) =>
+      throw UnsupportedError('no trial server in this build');
 }

@@ -121,9 +121,19 @@ describe('the legacy Inbox is routable but never offered', () => {
 
   it('nothing else is hidden: navigation is the openable areas minus Inbox -- and minus Teacher statistics and Instalments until the server confirms the department', () => {
     for (const role of ROLES) {
-      expect(navAreas(role)).toEqual(visibleAreas(role).filter((a) => a !== 'inbox' && a !== 'teachers' && a !== 'instalments'))
+      expect(navAreas(role)).toEqual(visibleAreas(role).filter((a) => a !== 'inbox' && a !== 'teachers' && a !== 'trials' && a !== 'instalments'))
       expect(navAreas(role, { lessonManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'inbox' && a !== 'instalments'))
       expect(navAreas(role, { lessonManager: true, billingReader: true })).toEqual(visibleAreas(role).filter((a) => a !== 'inbox'))
     }
+  })
+
+  it('PD-11 T4: Trials is offered to Sales, Operations or the Teachers department -- and Teachers to none but the last', () => {
+    for (const role of ['admin', 'manager'] as const) {
+      for (const opts of [{ sales: true }, { operations: true }]) {
+        expect(navAreas(role, opts)).toContain('trials')
+        expect(navAreas(role, opts)).not.toContain('teachers')
+      }
+    }
+    expect(navAreas('finance', { sales: true })).not.toContain('trials')
   })
 })

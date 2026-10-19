@@ -1384,4 +1384,56 @@ class L10nEn extends L10n {
 
   @override
   String get cardPayrollNote => 'The amount is set in payroll.';
+
+  @override
+  String get trialGroupTitle => 'Trial lessons';
+
+  @override
+  String get trialGroupSubtitle => 'Sales · staff only';
+
+  @override
+  String get trialTicketsHeader => 'Trials';
+
+  @override
+  String get trialReportTitle => 'Trial report';
+
+  @override
+  String get trialAttended => 'Attended';
+
+  @override
+  String get trialDidNotAttend => 'Did not attend';
+
+  @override
+  String get trialCovered => 'What was covered';
+
+  @override
+  String get trialRating => 'Rating';
+
+  @override
+  String get trialNote => 'Note (optional)';
+
+  @override
+  String get cardTrialBookedTitle => 'Trial lesson booked';
+
+  @override
+  String get cardTrialCancelledTitle => 'Trial cancelled';
+
+  @override
+  String get cardTrialReportTitle => 'Trial report';
+
+  @override
+  String get cardTrialNoShowTitle => 'Did not attend the trial';
+
+  @override
+  String get cardTrialSubscribedTitle => 'Subscribed';
+
+  @override
+  String get cardTrialNotSubscribedTitle => 'Did not subscribe';
+
+  @override
+  String get cardTrialLevel => 'Level';
+
+  @override
+  String get cardTrialAwaitingCore =>
+      'Counts once Core confirms the subscription.';
 }

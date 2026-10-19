@@ -198,6 +198,9 @@ model Conversation {
   /// PD-11/PD-12: the teacher a teacher_supervision conversation is about (that type only).
   supervisedTeacherId String? @map("supervised_teacher_id") @db.Uuid
 
+  /// PD-11 T4: the teacher a trial_group conversation belongs to (that type only).
+  trialTeacherId String? @map("trial_teacher_id") @db.Uuid
+
   state String @default("open")
 
   teacherRequiresApproval Boolean @map("teacher_requires_approval") @default(true)
@@ -969,8 +972,11 @@ model ConversationLearner {
 model Lesson {
   id             String    @id @default(uuid()) @db.Uuid
   organizationId String    @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
-  learnerId      String    @map("learner_id") @db.Uuid
-  learner        Learner   @relation(fields: [learnerId], references: [id])
+  /// Null for a trial (kind = 'trial'), which is for a prospect instead.
+  learnerId      String?   @map("learner_id") @db.Uuid
+  learner        Learner?  @relation(fields: [learnerId], references: [id])
+  prospectId     String?   @map("prospect_id") @db.Uuid
+  prospect       TrialProspect? @relation(fields: [prospectId], references: [id])
   teacherId      String    @map("teacher_id") @db.Uuid
   teacher        Teacher   @relation(fields: [teacherId], references: [id])
   kind           String    @default("regular")
@@ -990,8 +996,9 @@ model Lesson {
   createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
   updatedAt      DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
-  report  LessonReport?
-  rulings LessonRuling[]
+  report       LessonReport?
+  rulings      LessonRuling[]
+  trialOutcome TrialOutcome?
 
   @@map("lesson")
   @@schema("chat")
@@ -1304,5 +1311,39 @@ model TeacherSuspension {
   createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
 
   @@map("teacher_suspension")
+  @@schema("chat")
+}
+
+/// PD-11 T4: a prospective student, by display name only (BR-2).
+model TrialProspect {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  displayName    String   @map("display_name")
+  level          String?
+  note           String?
+  learnerId      String?  @map("learner_id") @db.Uuid
+  createdBy      String   @map("created_by") @db.Uuid
+  createdAt      DateTime @map("created_at") @db.Timestamptz @default(now())
+
+  lessons Lesson[]
+
+  @@map("trial_prospect")
+  @@schema("chat")
+}
+
+/// PD-11 T4: Sales' fact about an attended trial; confirmed only by Core.
+model TrialOutcome {
+  lessonId            String    @id @map("lesson_id") @db.Uuid
+  lesson              Lesson    @relation(fields: [lessonId], references: [id])
+  organizationId      String    @map("organization_id") @db.Uuid
+  result              String
+  reasonCode          String?   @map("reason_code")
+  note                String?
+  recordedBy          String    @map("recorded_by") @db.Uuid
+  recordedAt          DateTime  @map("recorded_at") @db.Timestamptz @default(now())
+  confirmedAt         DateTime? @map("confirmed_at") @db.Timestamptz
+  coreSubscriptionRef String?   @map("core_subscription_ref")
+
+  @@map("trial_outcome")
   @@schema("chat")
 }

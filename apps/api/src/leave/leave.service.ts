@@ -12,6 +12,7 @@ import { CardPoster } from '../supervision/card-poster';
 import { SupervisionConversationService } from '../supervision/supervision-conversation.service';
 import { renderPd012CardBody, type CardLanguage } from '../supervision/pd012-cards';
 import { LessonService } from '../lessons/lesson.service';
+import { TrialService } from '../lessons/trial.service';
 
 type Tx = Prisma.TransactionClient;
 
@@ -65,6 +66,7 @@ export class LeaveService {
     private readonly cards: CardPoster,
     private readonly lessons: LessonService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    private readonly trials: TrialService,
   ) {}
 
   // ------------------------------------------------------------------
@@ -302,9 +304,10 @@ export class LeaveService {
     const notCancelled: Array<{ lessonId: string; reason: string }> = [];
     for (const lesson of colliding) {
       try {
-        await this.lessons.cancel(actorId, lesson.id, {
-          reason: teacher.locale === 'en' ? 'The teacher is on approved leave' : 'المعلم في إجازة معتمدة',
-        });
+        const reason = teacher.locale === 'en' ? 'The teacher is on approved leave' : 'المعلم في إجازة معتمدة';
+        // A trial (PD-11 T4) is cancelled as a trial: LessonService never sees one.
+        if (lesson.kind === 'trial') await this.trials.cancel(actorId, lesson.id, { reason });
+        else await this.lessons.cancel(actorId, lesson.id, { reason });
       } catch (e) {
         const reason = e instanceof Error ? e.message : String(e);
         this.logger.warn(`lesson ${lesson.id} inside approved leave ${row.id} was not cancelled: ${reason}`);
@@ -409,10 +412,11 @@ export class LeaveService {
 
   /** Open lessons of the teacher whose start falls on a day of the leave, in the academy's time zone. */
   private async collidingLessons(teacherId: string, firstDay: string, lastDay: string, tz: string) {
-    return this.prisma.$queryRaw<Array<{ id: string; starts_at: Date; learner_name: string }>>`
-      SELECT l.id::text AS id, l.starts_at, ln.name AS learner_name
+    return this.prisma.$queryRaw<Array<{ id: string; kind: string; starts_at: Date; learner_name: string }>>`
+      SELECT l.id::text AS id, l.kind, l.starts_at, coalesce(ln.name, p.display_name) AS learner_name
         FROM chat.lesson l
-        JOIN chat.learner ln ON ln.id = l.learner_id
+        LEFT JOIN chat.learner ln ON ln.id = l.learner_id
+        LEFT JOIN chat.trial_prospect p ON p.id = l.prospect_id -- PD-11 T4: a trial is the teacher's time too
        WHERE l.teacher_id = ${teacherId}::uuid
          AND l.outcome IS NULL
          AND (l.starts_at AT TIME ZONE ${tz})::date BETWEEN ${firstDay}::date AND ${lastDay}::date

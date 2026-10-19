@@ -5,6 +5,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
 import '../../../shared/models/message.dart';
 import '../../../shared/models/supervision.dart';
+import '../../../shared/models/trial.dart';
 import '../../lessons/presentation/lesson_ticket_sheet.dart';
 import '../../supervision/presentation/supervision_ticket_sheet.dart';
 import '../application/voice_composer_controller.dart';
@@ -373,6 +374,12 @@ class SupervisionChoice extends ComposerChoice {
   final SupervisionTicketKind kind;
 }
 
+/// PD-11 T4: a trial report filed in the teacher's trial group.
+class TrialChoice extends ComposerChoice {
+  const TrialChoice(this.ticket);
+  final TrialTicket ticket;
+}
+
 /// The `+` menu with PD-11's lesson tickets under the three attachment entries.
 ///
 /// The attachments stay first and stay three. The tickets are a second, titled
@@ -383,8 +390,9 @@ Future<ComposerChoice?> showComposerMenu(
   BuildContext context, {
   List<LessonTicket> tickets = const [],
   List<SupervisionTicketKind> supervisionTickets = const [],
+  List<TrialTicket> trialTickets = const [],
 }) {
-  if (tickets.isEmpty && supervisionTickets.isEmpty) {
+  if (tickets.isEmpty && supervisionTickets.isEmpty && trialTickets.isEmpty) {
     return showAttachmentMenu(context).then((s) => s == null ? null : AttachmentChoice(s));
   }
   return showModalBottomSheet<ComposerChoice>(
@@ -433,6 +441,24 @@ Future<ComposerChoice?> showComposerMenu(
                     leading: Icon(supervisionTicketIcon(k)),
                     title: Text(supervisionTicketLabel(l10n, k)),
                     onTap: () => pick(SupervisionChoice(k)),
+                  ),
+              ],
+              if (trialTickets.isNotEmpty) ...[
+                const Divider(),
+                Padding(
+                  padding: const EdgeInsetsDirectional.fromSTEB(Spacing.spacing5, Spacing.spacing2, Spacing.spacing5, Spacing.spacing1),
+                  child: Text(
+                    l10n.trialTicketsHeader,
+                    style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.primary),
+                  ),
+                ),
+                for (final t in trialTickets)
+                  ListTile(
+                    key: ValueKey('trial-ticket-${t.trialId}'),
+                    leading: const Icon(Icons.menu_book_outlined),
+                    title: Text(l10n.trialReportTitle),
+                    subtitle: Text('${t.prospectName} · ${lessonWhen(sheetContext, t.startsAt)}'),
+                    onTap: () => pick(TrialChoice(t)),
                   ),
               ],
               if (tickets.isNotEmpty) ...[

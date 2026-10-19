@@ -47,13 +47,13 @@ export class SupervisionService {
       this.prisma.teacherSupervisionEntry.findMany({ where: { teacherId: teacher.id }, orderBy: { createdAt: 'desc' }, take: 200 }),
       this.prisma.lessonRuling.findMany({
         where: { lesson: { teacherId: teacher.id }, decision: { not: null } },
-        include: { lesson: { select: { id: true, startsAt: true, learner: { select: { name: true } } } } },
+        include: { lesson: { select: { id: true, startsAt: true, learner: { select: { name: true } }, prospect: { select: { displayName: true } } } } },
         orderBy: { decidedAt: 'desc' },
         take: 200,
       }),
       this.prisma.lesson.findMany({
         where: { teacherId: teacher.id, outcome: { in: ['teacher_apology', 'teacher_no_show'] } },
-        include: { learner: { select: { name: true } } },
+        include: { learner: { select: { name: true } }, prospect: { select: { displayName: true } } },
         orderBy: { startsAt: 'desc' },
         take: 200,
       }),
@@ -83,7 +83,7 @@ export class SupervisionService {
         at: (r.decidedAt ?? r.openedAt).toISOString(),
         decision: r.decision,
         body: r.decisionNote ?? r.reason,
-        lesson: { id: r.lesson.id, startsAt: r.lesson.startsAt.toISOString(), learnerName: r.lesson.learner.name },
+        lesson: { id: r.lesson.id, startsAt: r.lesson.startsAt.toISOString(), learnerName: r.lesson.learner?.name ?? r.lesson.prospect?.displayName ?? '' },
         by: r.decidedBy,
       })),
       ...missed.map((l) => ({
@@ -91,7 +91,7 @@ export class SupervisionService {
         type: l.outcome as string,
         at: (l.outcomeAt ?? l.startsAt).toISOString(),
         body: l.outcomeNote,
-        lesson: { id: l.id, startsAt: l.startsAt.toISOString(), learnerName: l.learner.name },
+        lesson: { id: l.id, startsAt: l.startsAt.toISOString(), learnerName: l.learner?.name ?? l.prospect?.displayName ?? '' },
       })),
       ...transfersIn.map((t) => ({
         id: t.id,

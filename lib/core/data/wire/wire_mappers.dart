@@ -302,6 +302,7 @@ abstract final class WireMappers {
       // history -- the backend refuses every send into it with BR1_TEACHER_PARENT_DIRECT.
       isReadOnly: archivedAt != null || kind == ConversationKind.teacherParentDirect,
       isTeacherSupervision: json['type'] == Wire.conversationTeacherSupervision,
+      isTrialGroup: json['type'] == Wire.conversationTrialGroup,
     );
   }
 

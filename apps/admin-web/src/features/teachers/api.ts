@@ -58,7 +58,8 @@ export interface TeacherDetail {
 }
 
 export const statsApi = {
-  access: () => api.get<{ lessonManager: boolean }>('/lessons/access'),
+  /** `sales` / `operations`: PD-11 T4's Trials and New Students pages (optional: older servers omit them). */
+  access: () => api.get<{ lessonManager: boolean; sales?: boolean; operations?: boolean }>('/lessons/access'),
   teachers: (month: string) => api.get<{ month: string; zone: string; teachers: TeacherRow[] }>('/stats/teachers', { month }),
   teacher: (id: string, month: string) =>
     api.get<TeacherDetail>(`/stats/teachers/${encodeURIComponent(id)}`, { month }),

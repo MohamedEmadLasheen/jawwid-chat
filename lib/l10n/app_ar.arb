@@ -627,5 +627,22 @@
   "cardViolationNoShow": "غياب عن الحصة",
   "cardViolationApology": "اعتذار عن الحصة",
   "cardViolationStep": "المخالفة رقم {step} هذا الشهر",
-  "cardPayrollNote": "يُحدَّد المبلغ في الرواتب."
+  "cardPayrollNote": "يُحدَّد المبلغ في الرواتب.",
+  "trialGroupTitle": "الحصص التجريبية",
+  "trialGroupSubtitle": "المبيعات · للموظفين فقط",
+  "trialTicketsHeader": "الحصص التجريبية",
+  "trialReportTitle": "تقرير الحصة التجريبية",
+  "trialAttended": "حضر",
+  "trialDidNotAttend": "لم يحضر",
+  "trialCovered": "ما تم في الحصة",
+  "trialRating": "التقييم",
+  "trialNote": "ملاحظة (اختيارية)",
+  "cardTrialBookedTitle": "حُجزت حصة تجريبية",
+  "cardTrialCancelledTitle": "أُلغيت الحصة التجريبية",
+  "cardTrialReportTitle": "تقرير الحصة التجريبية",
+  "cardTrialNoShowTitle": "لم يحضر الحصة التجريبية",
+  "cardTrialSubscribedTitle": "اشترك",
+  "cardTrialNotSubscribedTitle": "لم يشترك",
+  "cardTrialLevel": "المستوى",
+  "cardTrialAwaitingCore": "تُحتسب بعد أن يؤكد Core الاشتراك."
 }

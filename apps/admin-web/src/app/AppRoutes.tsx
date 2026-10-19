@@ -21,6 +21,8 @@ import { TeacherStatsPage } from '@/features/teachers/TeacherStatsPage'
 import { NeedsActionPage } from '@/features/teachers/NeedsActionPage'
 import { SchedulesPage } from '@/features/teachers/SchedulesPage'
 import { StudentsPage } from '@/features/teachers/StudentsPage'
+import { TrialsPage } from '@/features/trials/TrialsPage'
+import { NewStudentsPage } from '@/features/trials/NewStudentsPage'
 import { TeacherFilesPage } from '@/features/teacher-files/TeacherFilesPage'
 import { TeacherFilePage } from '@/features/teacher-files/TeacherFilePage'
 import { CertificatesPage } from '@/features/supervision/CertificatesPage'
@@ -85,6 +87,9 @@ export function AppRoutes() {
         {/* PD-12: the department's queues, tabs of the same area. */}
         <Route path="/teachers/certificates" element={<Area area="teachers"><CertificatesPage basePath="/teachers" /></Area>} />
         <Route path="/teachers/leave" element={<Area area="teachers"><LeaveRequestsPage basePath="/teachers" /></Area>} />
+        {/* PD-11 T4: Sales' trials and Operations' new students (features/trials/area.tsx). */}
+        <Route path="/trials" element={<Area area="trials"><TrialsPage /></Area>} />
+        <Route path="/trials/new-students" element={<Area area="trials"><NewStudentsPage /></Area>} />
         <Route path="/teachers/discipline" element={<Area area="teachers"><DisciplinePage basePath="/teachers" /></Area>} />
         {/* PD-12 S3: Operations; the super admin reaches it as /admin/instalments. */}
         <Route path="/instalments" element={<Area area="instalments"><InstalmentsPage /></Area>} />

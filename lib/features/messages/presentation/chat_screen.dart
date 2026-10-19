@@ -18,6 +18,7 @@ import '../../../shared/models/conversation.dart';
 import '../../../shared/models/lesson.dart';
 import '../../../shared/models/message.dart';
 import '../../../shared/models/supervision.dart';
+import '../../../shared/models/trial.dart';
 import '../../../shared/utils/relative_time.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../../calls/application/call_capability.dart';
@@ -28,6 +29,7 @@ import '../../calls/presentation/call_card.dart';
 import '../../conversations/application/conversations_controller.dart';
 import '../../lessons/presentation/lesson_ticket_sheet.dart';
 import '../../supervision/presentation/supervision_ticket_sheet.dart';
+import '../../trials/presentation/trial_report_sheet.dart';
 import '../application/messages_controller.dart';
 import '../application/voice_composer_controller.dart';
 import 'attachment_preview.dart';
@@ -51,6 +53,7 @@ class ChatScreen extends ConsumerStatefulWidget {
     this.requiresApproval = false,
     this.isReadOnly = false,
     this.isTeacherSupervision = false,
+    this.isTrialGroup = false,
     this.onOpenMembers,
     this.onOpenProfile,
   });
@@ -68,6 +71,10 @@ class ChatScreen extends ConsumerStatefulWidget {
   /// PD-12: the teacher's private conversation with the Teachers department. Only here
   /// does "+" ask the server for supervision tickets.
   final bool isTeacherSupervision;
+
+  /// PD-11 T4: the teacher's trial group with Sales. Only here does "+" ask the server
+  /// for trial reports.
+  final bool isTrialGroup;
   final VoidCallback? onOpenMembers;
 
   /// Tapping the header — avatar or name — opens the profile, or group info for a
@@ -183,7 +190,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final supervision = widget.isTeacherSupervision
         ? ref.read(supervisionTicketsProvider(widget.conversationId)).value ?? SupervisionTickets.none
         : SupervisionTickets.none;
-    final choice = await showComposerMenu(context, tickets: tickets, supervisionTickets: supervision.kinds);
+    final trials = widget.isTrialGroup
+        ? ref.read(trialTicketsProvider(widget.conversationId)).value ?? const <TrialTicket>[]
+        : const <TrialTicket>[];
+    if (widget.isTrialGroup) ref.invalidate(trialTicketsProvider(widget.conversationId));
+    final choice = await showComposerMenu(
+      context,
+      tickets: tickets,
+      supervisionTickets: supervision.kinds,
+      trialTickets: trials,
+    );
     if (choice == null || !mounted) return;
     final AttachmentSource source;
     switch (choice) {
@@ -192,6 +208,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         return;
       case SupervisionChoice(:final kind):
         await _openSupervisionTicket(kind, supervision.learners);
+        return;
+      case TrialChoice(:final ticket):
+        await _openTrialReport(ticket);
         return;
       case AttachmentChoice(source: final picked):
         source = picked;
@@ -246,6 +265,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final sent = await showSupervisionTicketSheet(context, kind, learners: learners);
     if (!mounted || !sent) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(L10n.of(context).ticketSent)));
+    unawaited(ref.read(messagesControllerProvider(widget.conversationId).notifier).refreshLatest());
+    if (_isAwayFromBottom) _jumpToNewest();
+  }
+
+  /// Open a PD-11 T4 trial report. Its card arrives through the ordinary message path.
+  Future<void> _openTrialReport(TrialTicket ticket) async {
+    final sent = await showTrialReportSheet(context, ticket);
+    if (!mounted || !sent) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(L10n.of(context).ticketSent)));
+    ref.invalidate(trialTicketsProvider(widget.conversationId));
     unawaited(ref.read(messagesControllerProvider(widget.conversationId).notifier).refreshLatest());
     if (_isAwayFromBottom) _jumpToNewest();
   }
@@ -505,6 +534,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // PD-11: prefetch the lesson tickets so "+" opens without a round trip.
     ref.watch(lessonTicketsProvider(widget.conversationId));
     if (widget.isTeacherSupervision) ref.watch(supervisionTicketsProvider(widget.conversationId));
+    if (widget.isTrialGroup) ref.watch(trialTicketsProvider(widget.conversationId));
 
     final voice = ref.watch(voiceComposerProvider(widget.conversationId));
     final voiceController =

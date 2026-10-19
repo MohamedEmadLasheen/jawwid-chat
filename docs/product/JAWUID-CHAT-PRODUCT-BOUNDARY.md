@@ -853,8 +853,8 @@ New Students (needs Core's subscription events); **T5** statistics.
   - `chat.teacher_available_minutes`: weekly windows over the month, minus days off.
 
   Months are calendar months in `stats.zone` (Africa/Cairo). `rescheduled` and
-  `suspended` lessons are shown, and counted for or against nobody. Trials read
-  zero, labelled as not available, until T4.
+  `suspended` lessons are shown, and counted for or against nobody. Trials have
+  their own block since T4 (below).
 - **Who reads what (PD-10).**
   - `GET /stats/teachers` and `GET /stats/teachers/:id`: the Teachers department and the super admin.
   - `GET /stats/me`: a teacher, their own month, without student movements.
@@ -884,6 +884,96 @@ endpoint, `GET /lessons/roster`; everything else uses the T1–T3 API.
   is sent, and the server's refusal is shown in its own words.
 - **Not here:** the supervision timeline and the bonus screen. Those belong to
   the PD-12 Teacher File (#48).
+
+**T4 part 1 as built (2026-10-19).** Migration `20261019120000_chat_pd011_trials.sql`.
+Owner decisions at the start of T4: build now and wait for Core; **Sales**
+records prospects and books trials (the Teachers department may book too); the
+**whole Sales department** joins trial groups (part 2).
+- **A trial is a lesson.** It is a `chat.lesson` row of kind `trial` for a
+  `chat.trial_prospect` (display name, optional level and note; no phone or
+  e-mail, BR-2) and never for a learner. The database enforces
+  `kind = 'trial'` ⇔ `prospect_id` set ⇔ `learner_id` null. So the teacher's
+  free times, the no-double-booking constraint, reminders and leave all count
+  it. A trial is booked only by staff, only for an active teacher of the
+  organization, and only into a time `GET /trials/slots` offers.
+- **Two facts, kept apart.**
+  - **Attendance** is the teacher's: `POST /trials/:id/attendance` with
+    `attended: true` writes the outcome `held` and a report (what was covered,
+    an optional 1–5 rating and a note). With `attended: false` it writes
+    `student_no_show`. The Teachers department may record an absence but never
+    the report. Sales records neither. Nothing is recorded before the start.
+  - **Conversion** is Sales': `POST /trials/:id/outcome` takes `subscribed`, or
+    `not_subscribed` with a fixed reason (price, schedule, not ready, chose
+    another, no response, other). It is accepted only for an attended trial,
+    and only once (`chat.trial_outcome`, its guard refuses rewrites). A teacher
+    sees that a decision exists, never its reason.
+- **Core confirms.** `chat.confirm_trial_conversion(lesson, core_ref, learner)`
+  is server-side only (revoked from every request role) and idempotent. It
+  stamps the confirmation and links the prospect to the learner Core created.
+  The Core ingestion that calls it is **not built**, so every subscription
+  reads **"awaiting Core"**, and only a confirmed one credits the teacher.
+- **New Students** (`GET /trials/new-students`; Operations, Sales, super
+  admin): confirmed subscriptions whose learner has no live group yet ("ready
+  to set up"), and subscriptions Core has not confirmed. A student leaves the
+  first list when their group exists; there is no "done" button to forget.
+- **Statistics.** Trials are never a student's lesson. They are left out of
+  the categories, rates and the teachers list. Their own block counts lessons,
+  attended, absent, upcoming, subscribed, confirmed and not subscribed. Their
+  time joins the workload.
+- **Leave and suspension (PD-12 S1, S2).** Approving leave, or deciding a
+  temporary suspension, sees colliding trials too and cancels them as trials
+  (through TrialService, which posts the trial group's card).
+- **Fix to T2.** `chat.materialize_lessons` now skips the teacher's days off
+  (`chat.teacher_day_off`), as free slots already did. Before this, a leave or
+  day off recorded more than four weeks ahead was later filled with regular
+  lessons.
+- **Access.** `GET /lessons/access` adds `sales` and `operations`. Lesson routes
+  (`/lessons/*`) never see a trial; `/trials/*` is the trials' only reader and
+  writer.
+- **Admin Web.** A **Trials & new students** area: **Trial lessons**
+  (`/trials`; Sales and the Teachers department) and **New students**
+  (`/trials/new-students`; Operations and Sales). It is offered when the server
+  confirms any of the three departments, and each tab only to its readers.
+  - Sales records prospects, books from the teacher's real free times and
+    records the decision.
+  - The Teachers department records an absence.
+  - Either can open the teacher's trial group in Chat.
+
+**T4 part 2 as built (2026-10-19).** Migration `20261019130000_chat_pd011_trial_group.sql`,
+built on PD-12 S1 (`20261019090000`): it extends PD-12's type list, access
+function and `chat.message_card_kind`, and rewrites none of them from an older
+copy.
+- **The trial group.** It is conversation type `trial_group`, one live group
+  per teacher (`chat.conversation.trial_teacher_id`). It is shaped like PD-12's
+  supervision conversation: never a family, a learner or a 1:1.
+  - **Members:** the teacher, and the whole Sales department as admins, synced
+    every time the group is ensured. A contact or a prospect is never a member;
+    the row trigger refuses anyone else.
+  - **Access:** Sales and the Teachers department are parties through one new
+    branch of `chat.staff_conversation_access` (and the chat-list candidates).
+    The Teachers department reads and writes without being a member, so it is
+    not notified of every trial of every teacher. Operations has no access.
+- **The report is the message.** Each change posts its card in the same
+  transaction as the record:
+  - `trial_booked`;
+  - `trial_report` (what was covered and the rating);
+  - `trial_no_show`;
+  - `trial_cancelled`;
+  - `trial_decision`, which carries the result **only**. The not-subscribed
+    reason and Sales' note never reach the group, because the teacher reads it.
+
+  The group is created on the teacher's first booking, or when Sales, the
+  Teachers department (`POST /trials/teachers/:id/group`) or the teacher
+  (`POST /trials/my-group`) opens it.
+- **App.** The teacher's chat list shows the group as **Trial lessons**,
+  never under the staff-side title. Its "+" offers a **Trial report** for each
+  trial that has started and has no outcome
+  (`GET /conversations/:id/trial-tickets`). The report is attended (what was
+  covered, an optional 1–5 rating, a note) or did not attend. Trial cards are
+  drawn in the bubble; a subscription reads "counts once Core confirms".
+- **Admin Web.** The trial row has a **Trial group** button that opens the
+  teacher's group in Chat. The group shows as "Trial group" in the
+  conversation lists.
 
 **Deprecated behaviour.** None removed. Explicitly **not** built: a generic ticket
 or task entity; any stored package balance; parents changing their regular
