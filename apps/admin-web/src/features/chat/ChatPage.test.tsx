@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { Route, Routes } from 'react-router-dom'
+import { chatCopy } from './copy'
 import { renderWithProviders, makeStaff } from '@/test/utils'
 import type { ChatConversation, ChatMessage } from './chatApi'
 
@@ -346,6 +347,39 @@ describe('Admin chat workspace', () => {
     renderChat('/chat/c1')
     expect(await screen.findByText('Awaiting approval')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Approve & publish' })).toBeNull()
+  })
+
+  it('a voice message plays from its signed URL instead of showing as a file chip', async () => {
+    stubApi({
+      conversations: [conv('c1')],
+      messages: {
+        c1: [
+          msg('v1', 1, {
+            type: 'voice',
+            body: '',
+            attachments: [{ id: 'a1', kind: 'voice', mimeType: 'audio/mp4', url: 'https://media.test/v1', durationMs: 7000 }],
+          }),
+        ],
+      },
+    })
+    const { container } = renderChat('/chat/c1')
+    expect(await screen.findByText('0:07')).toBeInTheDocument()
+    expect(container.querySelector('audio')?.getAttribute('src')).toBe('https://media.test/v1')
+    expect(screen.queryByText(/📎/)).toBeNull()
+  })
+
+  it('?voice=1 (from the call window) starts the recorder without a click', async () => {
+    stubApi({ conversations: [conv('c1')], messages: { c1: [] } })
+    renderChat('/chat/c1?voice=1')
+    // jsdom has no microphone: the attempt itself is the evidence the flag was honoured.
+    expect(await screen.findByText(chatCopy.en.voiceUnsupported)).toBeInTheDocument()
+  })
+
+  it('without ?voice=1 nothing records until asked', async () => {
+    stubApi({ conversations: [conv('c1')], messages: { c1: [] } })
+    renderChat('/chat/c1')
+    expect(await screen.findByRole('button', { name: 'Record voice message' })).toBeInTheDocument()
+    expect(screen.queryByText(chatCopy.en.voiceUnsupported)).toBeNull()
   })
 
   it('a system message is rendered as words, never as its raw JSON', async () => {

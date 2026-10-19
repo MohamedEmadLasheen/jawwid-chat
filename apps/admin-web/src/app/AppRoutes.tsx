@@ -29,6 +29,8 @@ import { CertificatesPage } from '@/features/supervision/CertificatesPage'
 import { LeaveRequestsPage } from '@/features/supervision/LeaveRequestsPage'
 import { DisciplinePage } from '@/features/discipline/DisciplinePage'
 import { InstalmentsPage } from '@/features/instalments/InstalmentsPage'
+import { CallsPage } from '@/features/calls-page/CallsPage'
+import { JoinLinkPage } from '@/features/calls-page/JoinLinkPage'
 import { ForbiddenPage } from './ForbiddenPage'
 import type { ReactElement } from 'react'
 
@@ -72,6 +74,10 @@ export function AppRoutes() {
         <Route path="/" element={<Navigate to={homeFor(staff.role)} replace />} />
         <Route path="/chat" element={<Area area="chat"><ChatPage /></Area>} />
         <Route path="/chat/:conversationId" element={<Area area="chat"><ChatPage /></Area>} />
+        {/* PD-13: the Calls page; the super admin reaches it as /admin/calls. A
+            call link (members-only) lands on /calls/join/:id for both. */}
+        <Route path="/calls" element={<Area area="calls"><CallsPage /></Area>} />
+        <Route path="/calls/join/:scheduledCallId" element={<Area area="calls"><JoinLinkPage /></Area>} />
         <Route path="/inbox" element={<Area area="inbox"><InboxPage /></Area>} />
         <Route path="/inbox/:familyId" element={<Area area="inbox"><InboxPage /></Area>} />
         <Route path="/families" element={<Area area="families"><FamiliesPage /></Area>} />
@@ -140,11 +146,11 @@ export function AppRoutes() {
           element={<SuperAdminOnly><StoryInsights basePath={adminSectionPath('stories')} /></SuperAdminOnly>}
         />
         {/*
-          Reserved seams (docs/admin/backend-contract-required.md §10):
-          /approvals and /calls are intentionally unregistered. They exist in
-          the AI #4 role assignment but in no part of the product brief, so
-          they are not built. Adding one is a single Route here plus a nav
-          registry entry — no refactor.
+          Reserved seam (docs/admin/backend-contract-required.md §10):
+          /approvals is intentionally unregistered. It exists in the AI #4
+          role assignment but in no part of the product brief, so it is not
+          built. Adding it is a single Route here plus a nav registry entry —
+          no refactor. (/calls was the other seam; PD-13 filled it.)
         */}
         <Route path="*" element={<Navigate to={homeFor(staff.role)} replace />} />
       </Routes>

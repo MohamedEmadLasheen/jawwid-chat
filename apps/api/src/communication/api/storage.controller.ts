@@ -3,6 +3,7 @@ import { OBJECT_STORAGE } from '../../platform/tokens';
 import type { ObjectStorage } from '../attachments/object-storage';
 import { SignedLocalObjectStorage, parseByteRange } from '../attachments/object-storage';
 import { LocalFsBlobStore } from '../attachments/blob-store';
+import { Public } from '../../platform/auth/auth.guard';
 
 /**
  * Minimal shapes, so this controller needs no @types/express on the runtime
@@ -40,7 +41,15 @@ interface ResponseLike {
  *
  * In production OBJECT_STORAGE points at S3 and these handlers are dead code --
  * the signed URLs address the bucket directly and never reach this process.
+ *
+ * `@Public()` to the global bearer guard, for the reason above. Without it the
+ * guard (PR-B, which came after this route) answered 401 to every upload and
+ * read, before the signature was ever checked -- so on local storage no voice
+ * note, photo or file could be stored or played (found 2026-10-17; same class
+ * as RT-038a, the LiveKit webhook). The signature check below is unchanged and
+ * is now the check that runs.
  */
+@Public()
 @Controller('storage')
 export class StorageController {
   constructor(

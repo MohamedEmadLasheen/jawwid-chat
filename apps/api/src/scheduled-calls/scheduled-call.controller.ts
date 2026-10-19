@@ -1,0 +1,39 @@
+import { Body, Controller, Get, Param, Post, UseFilters } from '@nestjs/common';
+import { ActorId } from '../communication/api/actor.decorator';
+import { CommErrorFilter } from '../communication/api/http-exception.filter';
+import { ScheduledCallService } from './scheduled-call.service';
+
+/** PD-13: scheduled calls and members-only call links. */
+@Controller('scheduled-calls')
+@UseFilters(CommErrorFilter)
+export class ScheduledCallController {
+  constructor(private readonly scheduled: ScheduledCallService) {}
+
+  /** `{ conversationId, kind?: 'scheduled' | 'link', startsAt?, title? }` -- posts its card. */
+  @Post()
+  create(@ActorId() actorId: string, @Body() body: Record<string, unknown>) {
+    return this.scheduled.create(actorId, body ?? {});
+  }
+
+  /** The caller's open and coming calls, soonest first. */
+  @Get()
+  upcoming(@ActorId() actorId: string) {
+    return this.scheduled.upcoming(actorId);
+  }
+
+  @Get(':id')
+  get(@ActorId() actorId: string, @Param('id') id: string) {
+    return this.scheduled.get(actorId, id);
+  }
+
+  @Post(':id/cancel')
+  cancel(@ActorId() actorId: string, @Param('id') id: string) {
+    return this.scheduled.cancel(actorId, id);
+  }
+
+  /** `{ callId, conversationId, mode: 'started' | 'joined' }`. */
+  @Post(':id/join')
+  join(@ActorId() actorId: string, @Param('id') id: string) {
+    return this.scheduled.join(actorId, id);
+  }
+}

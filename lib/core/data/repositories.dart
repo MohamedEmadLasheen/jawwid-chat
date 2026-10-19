@@ -115,6 +115,11 @@ class CallMediaGrant {
 
 enum CallOutcome { answered, missed, declined }
 
+/// Who placed a call in the account history, as the server's `initiatorId`
+/// says, compared with the signed-in actor. Presentation only: it picks the
+/// row's arrow, never a permission.
+enum CallHistoryDirection { outgoing, incoming }
+
 class CallHistoryEntry {
   const CallHistoryEntry({
     required this.id,
@@ -124,6 +129,7 @@ class CallHistoryEntry {
     required this.outcome,
     required this.isGroup,
     this.duration,
+    this.direction,
   });
 
   final String id;
@@ -135,6 +141,9 @@ class CallHistoryEntry {
   final CallOutcome outcome;
   final bool isGroup;
   final Duration? duration;
+
+  /// Null when the row did not say who placed it, or before a session exists.
+  final CallHistoryDirection? direction;
 }
 
 /// A device/session this user is signed in on (§9, §43).

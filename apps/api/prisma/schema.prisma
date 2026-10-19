@@ -553,6 +553,29 @@ model CallParticipant {
   @@schema("chat")
 }
 
+/// PD-13: a scheduled call or members-only call link, inside ONE conversation.
+/// DDL: supabase/migrations/20261020090000_chat_scheduled_call.sql. It grants
+/// nothing: Join starts or joins a call through the ordinary call path.
+model ScheduledCall {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  conversationId String    @map("conversation_id") @db.Uuid
+  kind           String
+  title          String?
+  startsAt       DateTime  @map("starts_at") @db.Timestamptz
+  createdBy      String    @map("created_by") @db.Uuid
+  createdByKind  String    @map("created_by_kind")
+  createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
+  messageId      String?   @unique @map("message_id") @db.Uuid
+  callId         String?   @map("call_id") @db.Uuid
+  cancelledAt    DateTime? @map("cancelled_at") @db.Timestamptz
+  cancelledBy    String?   @map("cancelled_by") @db.Uuid
+
+  @@index([conversationId, startsAt])
+  @@map("scheduled_call")
+  @@schema("chat")
+}
+
 /// Tenant root (PRD 2.3). DDL lives in supabase/migrations/20260906120000_chat_organization.sql.
 model Organization {
   id           String   @id @default(uuid()) @db.Uuid

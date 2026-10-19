@@ -117,7 +117,9 @@ assumed:
   trial instance of the candidate Postgres *before* committing to it; it
   changes nothing and answers the question in one command.
 * **Admin Web is an nginx container that needs runtime environment**
-  (`API_ORIGIN`, `REALTIME_ORIGIN`) for its CSP, so "static hosting" above is
+  (`API_ORIGIN`, `REALTIME_ORIGIN`, `LIVEKIT_ORIGIN` for the call screen's
+  media connection, and `STORAGE_ORIGIN` for voice-note uploads and playback)
+  for its CSP, so "static hosting" above is
   not accurate for the image this repository actually builds.
 
 ---

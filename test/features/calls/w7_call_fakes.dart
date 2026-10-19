@@ -112,6 +112,10 @@ class FakeRoom implements MediaRoom {
   /// Make `connect` throw, as an unreachable room does.
   Object? connectError;
 
+  /// Make `disconnect` throw, as the real SDK does on a room that never
+  /// connected (it times out waiting for a disconnected event).
+  Object? disconnectError;
+
   /// Whether a successful connect auto-emits `MediaRoomConnected`. Off lets a
   /// test hold the call in `connecting`.
   bool announceConnected = true;
@@ -140,7 +144,10 @@ class FakeRoom implements MediaRoom {
   }
 
   @override
-  Future<void> disconnect() async => disconnects++;
+  Future<void> disconnect() async {
+    disconnects++;
+    if (disconnectError != null) throw disconnectError!;
+  }
 
   @override
   Future<void> dispose() async {

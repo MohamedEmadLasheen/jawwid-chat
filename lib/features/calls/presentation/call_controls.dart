@@ -3,13 +3,14 @@ import 'package:flutter/material.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 
-/// The in-call controls: mute, speaker, end.
+/// The in-call controls: speaker and mute on one row, End alone below.
 ///
 /// LAYOUT IS A SAFETY PROPERTY HERE, not a style choice. `screens/call.md` §6
 /// requires the end-call button to be the largest target on screen and NEVER
 /// adjacent to mute — hanging up by accident while reaching for mute is the one
-/// misfire that cannot be undone. So end sits on its own row, below the others,
-/// and is deliberately bigger.
+/// misfire that cannot be undone. So End sits on its own row, below the others,
+/// and is deliberately bigger. (The reference messenger puts End in the grid;
+/// this keeps the spec.)
 ///
 /// RTL: the row mirrors, but the mute and speaker GLYPHS do not — they are
 /// physical objects (`cross-platform.md` §4), and a mirrored microphone reads as
@@ -46,105 +47,128 @@ class CallControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
-    final tokens = JawwidTokens.of(context);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            _CircleControl(
-              icon: microphoneMuted ? Icons.mic_off : Icons.mic,
-              label: microphoneMuted ? l10n.callUnmute : l10n.callMute,
-              selected: microphoneMuted,
-              onPressed: enabled ? onToggleMute : null,
-            ),
-            if (canSwitchSpeaker) ...[
-              const SizedBox(width: Spacing.spacing7),
-              _CircleControl(
+            if (canSwitchSpeaker)
+              CallRoundButton(
                 icon: speakerPreferred ? Icons.volume_up : Icons.hearing,
                 label: l10n.callSpeaker,
-                selected: speakerPreferred,
+                toggled: speakerPreferred,
                 onPressed: enabled ? onToggleSpeaker : null,
               ),
-            ],
+            CallRoundButton(
+              icon: microphoneMuted ? Icons.mic_off : Icons.mic,
+              label: microphoneMuted ? l10n.callUnmute : l10n.callMute,
+              toggled: microphoneMuted,
+              onPressed: enabled ? onToggleMute : null,
+            ),
           ],
         ),
         // The separation that keeps "end" away from "mute".
-        const SizedBox(height: Spacing.spacing8),
-        Semantics(
-          button: true,
+        const SizedBox(height: Spacing.spacing7),
+        CallRoundButton(
+          icon: Icons.call_end,
           label: l10n.callEnd,
-          child: SizedBox(
-            width: _endDiameter,
-            height: _endDiameter,
-            child: Material(
-              color: tokens.colorStatusDangerFg,
-              shape: const CircleBorder(),
-              child: InkWell(
-                customBorder: const CircleBorder(),
-                onTap: onEnd,
-                child: Icon(
-                  Icons.call_end,
-                  color: tokens.colorTextInverse,
-                  size: Spacing.spacing8,
-                ),
-              ),
-            ),
-          ),
+          fill: CallPalette.hangUp,
+          large: true,
+          onPressed: onEnd,
         ),
       ],
     );
   }
-
-  /// Larger than the secondary controls, on purpose. See the class comment.
-  static const double _endDiameter = 72;
 }
 
-class _CircleControl extends StatelessWidget {
-  const _CircleControl({
+/// One round control with its label underneath, as on the reference screens.
+///
+/// [toggled] makes it a toggle for assistive technology as well as visually;
+/// a null [onPressed] renders it disabled, never hidden.
+class CallRoundButton extends StatelessWidget {
+  const CallRoundButton({
+    super.key,
     required this.icon,
     required this.label,
-    required this.selected,
     required this.onPressed,
+    this.fill,
+    this.toggled,
+    this.large = false,
   });
 
   final IconData icon;
   final String label;
-  final bool selected;
   final VoidCallback? onPressed;
+
+  /// A solid fill (End, Accept, Call again). Otherwise the translucent control.
+  final Color? fill;
+  final bool? toggled;
+
+  /// The largest size is reserved for End / Accept / Decline (`call.md` §6).
+  final bool large;
+
+  static const double diameter = 60;
+  static const double largeDiameter = 76;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = JawwidTokens.of(context);
+    final size = large ? largeDiameter : diameter;
+    final on = toggled ?? false;
+    final enabled = onPressed != null;
+    final background =
+        fill ?? (on ? CallPalette.controlOn : CallPalette.control);
+    final foreground = fill != null
+        ? CallPalette.onFill
+        : on
+        ? CallPalette.background
+        : CallPalette.foreground;
+
     return Semantics(
       button: true,
-      toggled: selected,
+      enabled: enabled,
+      toggled: toggled,
       label: label,
-      child: Tooltip(
-        message: label,
-        child: SizedBox(
-          width: _diameter,
-          height: _diameter,
-          child: Material(
-            color: selected ? tokens.colorBrandSubtle : tokens.colorSurfaceMuted,
-            shape: const CircleBorder(),
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: onPressed,
-              child: Icon(
-                icon,
-                color: onPressed == null
-                    ? tokens.colorTextMuted
-                    : tokens.colorTextPrimary,
+      excludeSemantics: true,
+      // The label is part of the target: people tap the word as often as the
+      // circle, and a bigger target is the accessible one.
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onPressed,
+        child: Opacity(
+          opacity: enabled ? 1 : 0.45,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: size,
+                height: size,
+                child: Material(
+                  color: background,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: onPressed,
+                    child: Icon(icon, color: foreground, size: large ? 34 : 28),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(height: Spacing.spacing2),
+              SizedBox(
+                width: 92,
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: CallPalette.muted),
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
-
-  static const double _diameter = 56;
 }

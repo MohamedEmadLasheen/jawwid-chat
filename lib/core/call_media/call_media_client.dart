@@ -353,16 +353,35 @@ class CallMediaClient {
 
   /// Drop the room and the subscription to it. Safe to call repeatedly, and
   /// only ever reaches the room once.
+  ///
+  /// CLEANUP NEVER THROWS. Every caller reports an outcome right after this —
+  /// `connectionFailed`, `publishFailed`, `disconnected` — and an exception
+  /// escaping here skipped that report and left the phone on "Connecting…"
+  /// forever (W4 reopen, 2026-10-17). The SDK does throw here: `Room.disconnect()`
+  /// on a room that never connected times out waiting for a disconnected event
+  /// that never comes. Each step is still attempted; a failure is logged, never
+  /// raised.
   Future<void> _releaseRoom() async {
-    await _roomSub?.cancel();
+    // NOT awaited. Cancelling stops delivery at once; awaiting the returned
+    // future can block until the room's broadcast stream closes, which on a
+    // failed join is never — the release then stalls before it starts.
+    unawaited(_roomSub?.cancel());
     _roomSub = null;
     if (_roomReleased) return;
     _roomReleased = true;
     // disconnect BEFORE dispose: dispose on a live room is the SDK tearing down
     // a session it is still using, and the microphone is released by the
     // disconnect rather than by the object going away.
-    await _room.disconnect();
-    await _room.dispose();
+    try {
+      await _room.disconnect();
+    } catch (_) {
+      _log.warn('call media: leaving the room did not complete cleanly');
+    }
+    try {
+      await _room.dispose();
+    } catch (_) {
+      _log.warn('call media: releasing the room did not complete cleanly');
+    }
   }
 
   /// Release everything, for good. Idempotent.

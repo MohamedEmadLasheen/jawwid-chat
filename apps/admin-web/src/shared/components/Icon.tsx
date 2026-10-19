@@ -270,6 +270,17 @@ const PATHS = {
     </>
   ),
   bellOff: <path d="M6.3 6.3A6 6 0 0 0 6 9c0 6-2.5 7.5-2.5 7.5h13M9 4a6 6 0 0 1 9 5c0 2.5.4 4.2.9 5.4M10 20a2.2 2.2 0 0 0 4 0M3 3l18 18" />,
+  // Calls page (PD-13).
+  calendarPlus: (
+    <>
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2" />
+      <path d="M3.5 10h17M8 3v4M16 3v4M12 13v5M9.5 15.5h5" />
+    </>
+  ),
+  /** A call that came in: an arrow down to the corner. */
+  callIncoming: <path d="M17 7 7 17M7 9.5V17h7.5" />,
+  /** A call this account placed: an arrow up and away. */
+  callOutgoing: <path d="M7 17 17 7M9.5 7H17v7.5" />,
 } satisfies Record<string, ReactElement>
 
 export type IconName = keyof typeof PATHS

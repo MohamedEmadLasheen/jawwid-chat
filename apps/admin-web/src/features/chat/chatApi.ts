@@ -87,6 +87,12 @@ export interface ChatMessage {
   replyToMessageId?: string | null
   /** One reaction per actor (server unique index). */
   reactions?: Array<{ actorId: string; emoji: string }>
+  /**
+   * Present only when `type` is `card`: what the server recorded, for the
+   * client to draw (PD-11 lessons, PD-13 scheduled calls). `body` still carries
+   * a plain-text rendering for a card this client does not know.
+   */
+  card?: { kind: string; payload: Record<string, unknown> } | null
 }
 
 export interface MessagePage {
@@ -118,7 +124,7 @@ export interface SendInput {
 }
 
 /** POST /messages/attachments/authorize: a signed, single-use upload. */
-interface UploadGrant {
+export interface UploadGrant {
   objectKey: string
   uploadUrl: string
   method: string
@@ -199,6 +205,32 @@ export const chatApi = {
   /** Staff-only; every field is re-validated server-side and a reason is recorded. */
   addMember: (id: string, member: { actorId: string; actorKind: 'contact' | 'teacher'; memberRole: 'parent' | 'teacher' }, reason: string) =>
     api.post<{ ok: boolean }>(`${conv(id)}/members`, { action: 'add', ...member, reason }),
+  /** Step 1 of an attachment: the server checks membership, MIME and size, then signs. */
+  authorizeAttachment: (
+    id: string,
+    input: { kind: string; mimeType: string; byteSize: number; visibility?: 'customer' | 'internal' },
+  ) =>
+    api.post<UploadGrant>(`${conv(id)}/messages/attachments/authorize`, input),
+  /** Step 3 of a voice note, after the bytes are uploaded. Retry-safe like `send`. */
+  sendVoice: (
+    id: string,
+    input: {
+      clientMessageId: string
+      visibility: 'customer' | 'internal'
+      attachment: { objectKey: string; mimeType: string; byteSize: number; durationMs: number }
+    },
+  ) =>
+    api.post<ChatMessage>(
+      `${conv(id)}/messages`,
+      {
+        type: 'voice',
+        body: '',
+        visibility: input.visibility,
+        clientMessageId: input.clientMessageId,
+        attachments: [{ kind: 'voice', ...input.attachment }],
+      },
+      input.clientMessageId,
+    ),
   markRead: (id: string, upToSeq: string) =>
     api.post<{ ok: boolean }>(`${conv(id)}/messages/read`, { upToSeq }),
   /** Held teacher/parent messages in this conversation that the caller may see. */

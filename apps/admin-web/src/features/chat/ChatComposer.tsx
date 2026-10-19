@@ -3,6 +3,7 @@ import { useI18n } from '@/core/i18n/I18nProvider'
 import { Icon } from '@/shared/components/Icon'
 import { Menu } from '@/shared/components/Menu'
 import { chatCopyFor } from './copy'
+import { VoiceRecorder } from './VoiceRecorder'
 
 export interface ComposerSend {
   body: string
@@ -28,10 +29,19 @@ export function ChatComposer({
   onSend,
   reply,
   onCancelReply,
+  conversationId,
+  autoStartVoice = false,
+  onVoiceAutoStarted,
+  onVoiceSent,
 }: {
   onSend: (input: ComposerSend) => void
   reply: ReplyTarget | null
   onCancelReply: () => void
+  conversationId: string
+  /** "Record voice message" from the call window opens the chat recording. */
+  autoStartVoice?: boolean
+  onVoiceAutoStarted?: () => void
+  onVoiceSent?: () => void
 }) {
   const { locale } = useI18n()
   const copy = chatCopyFor(locale)
@@ -180,6 +190,15 @@ export function ChatComposer({
               setFiles((all) => [...all, ...pasted])
             }
           }}
+        />
+        <VoiceRecorder
+          conversationId={conversationId}
+          visibility={visibility}
+          copy={copy}
+          locale={locale}
+          autoStart={autoStartVoice}
+          onAutoStarted={onVoiceAutoStarted}
+          onSent={onVoiceSent}
         />
         <button
           type="button"

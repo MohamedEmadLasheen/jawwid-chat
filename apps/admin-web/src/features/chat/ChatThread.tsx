@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
@@ -15,6 +15,13 @@ import { chatCopyFor, systemText, type ChatCopy } from './copy'
 import { ChatComposer, type ComposerSend, type ReplyTarget } from './ChatComposer'
 import { ConversationAvatar, conversationName, isGroup, isMuted } from './chatView'
 import { useConversationPreferences } from './useChatActions'
+import { VoiceNotePlayer } from './VoiceRecorder'
+import { ConversationCallControls } from '@/features/calls/ConversationCallControls'
+import {
+  SCHEDULED_CALL_CARD_KINDS,
+  ScheduledCallCard,
+  readScheduledCallCard,
+} from '@/features/calls-page/ScheduledCallCard'
 
 /** The quick reactions, the same six as the mobile app. */
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const
@@ -103,6 +110,7 @@ export function ChatThread({
   const { staff } = useSession()
   const queryClient = useQueryClient()
   const prefs = useConversationPreferences()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const details = useQuery({
     queryKey: chatKeys.conversation(conversationId),
@@ -301,6 +309,7 @@ export function ChatThread({
           </button>
         )}
         <div className="cw-head__actions">
+          {conv && <ConversationCallControls conversationId={conversationId} peerLabel={name} isGroup={group} />}
           {muted && (
             <span className="cw-row__mark" title={copy.mutedMark} aria-label={copy.mutedMark}>
               <Icon name="bellOff" size={16} />
@@ -438,7 +447,15 @@ export function ChatThread({
         </div>
       )}
 
-      <ChatComposer onSend={submit} reply={reply} onCancelReply={() => setReply(null)} />
+      <ChatComposer
+        onSend={submit}
+        reply={reply}
+        onCancelReply={() => setReply(null)}
+        conversationId={conversationId}
+        autoStartVoice={searchParams.get('voice') === '1'}
+        onVoiceAutoStarted={() => setSearchParams({}, { replace: true })}
+        onVoiceSent={() => void queryClient.invalidateQueries({ queryKey: chatKeys.messages(conversationId) })}
+      />
     </>
   )
 }
@@ -510,6 +527,12 @@ function MessageItem({
 
   const mine = m.authorId === selfId
   const live = !m.deletedForAll
+  // PD-13: a scheduled-call card is drawn with its Join button; any other card
+  // (or one this client cannot read) keeps showing its plain-text body.
+  const callCard =
+    live && m.type === 'card' && m.card && SCHEDULED_CALL_CARD_KINDS.has(m.card.kind)
+      ? readScheduledCallCard(m.card.payload)
+      : null
   const reactions = summarize(m.reactions ?? [], selfId)
   const items: MenuItem[] = live
     ? [
@@ -562,6 +585,8 @@ function MessageItem({
           )}
           {m.deletedForAll ? (
             <em className="bubble__deleted">{copy.deleted}</em>
+          ) : callCard && m.card && m.conversationId ? (
+            <ScheduledCallCard cardKind={m.card.kind} card={callCard} conversationId={m.conversationId} />
           ) : (
             <>
               {m.attachments.map((a) => (
@@ -665,7 +690,7 @@ function AttachmentView({ a, copy }: { a: ChatAttachment; copy: ChatCopy }) {
     )
   }
   if (a.kind === 'video') return <video className="cw-media" src={a.url} controls preload="metadata" />
-  if (a.kind === 'voice') return <audio className="cw-audio" src={a.url} controls preload="metadata" />
+  if (a.kind === 'voice') return <VoiceNotePlayer url={a.url} durationMs={a.durationMs} copy={copy} />
   return (
     <a href={a.url} target="_blank" rel="noreferrer" className="bubble__attachment">
       <Icon name="paperclip" size={14} />
