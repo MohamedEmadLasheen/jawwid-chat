@@ -10,6 +10,7 @@ import { useCalendarDate } from './calendar'
 import { Refusal, isTeacherFileRefusal } from './Refusal'
 import { useTeacherFile } from './hooks'
 import { AddEntryDialog, EditPersonalDialog, type EntryIntent } from './TeacherFileDialogs'
+import { SupervisionTimeline } from './SupervisionTimeline'
 import './teacher-files.css'
 import { OpenSupervisionButton, TeacherLeaveSection } from '@/features/supervision/TeacherLeaveSection'
 
@@ -53,6 +54,8 @@ export function TeacherFilePage({ basePath, eyebrow }: { basePath: string; eyebr
                 <Complaints file={data} onAdd={setIntent} />
                 <Monthly file={data} onAdd={setIntent} />
                 <DaysOff file={data} onAdd={setIntent} />
+                {/* PD-11's timeline: every record about the teacher in one line, plus notes and the bonus ticket. */}
+                <SupervisionTimeline teacherId={data.teacher.id} canWrite={data.access.canWriteSupervision} />
                 {/* PD-12: the manager (and super admin) edit the record; the same two set the allowance. */}
                 <TeacherLeaveSection teacherId={data.teacher.id} canSetAllowance={data.access.canEditPersonal} />
                 <section className="card panel tf-section" aria-labelledby="tf-later">

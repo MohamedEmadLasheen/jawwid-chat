@@ -70,6 +70,7 @@ export class SupervisionService {
 
     const items = [
       ...entries.map((e) => ({
+        id: e.id,
         type: e.kind,
         at: e.createdAt.toISOString(),
         body: e.body,
@@ -77,6 +78,7 @@ export class SupervisionService {
         by: e.createdBy,
       })),
       ...rulings.map((r) => ({
+        id: r.id,
         type: r.kind,
         at: (r.decidedAt ?? r.openedAt).toISOString(),
         decision: r.decision,
@@ -85,12 +87,14 @@ export class SupervisionService {
         by: r.decidedBy,
       })),
       ...missed.map((l) => ({
+        id: l.id,
         type: l.outcome as string,
         at: (l.outcomeAt ?? l.startsAt).toISOString(),
         body: l.outcomeNote,
         lesson: { id: l.id, startsAt: l.startsAt.toISOString(), learnerName: l.learner.name },
       })),
       ...transfersIn.map((t) => ({
+        id: t.id,
         type: 'transfer_in',
         at: t.createdAt.toISOString(),
         reason: t.reasonCode,
@@ -99,6 +103,7 @@ export class SupervisionService {
         by: t.decidedBy,
       })),
       ...transfersOut.map((t) => ({
+        id: t.id,
         type: 'transfer_out',
         at: t.createdAt.toISOString(),
         reason: t.reasonCode,
@@ -107,6 +112,7 @@ export class SupervisionService {
         by: t.decidedBy,
       })),
       ...daysOff.map((d) => ({
+        id: d.id,
         type: 'day_off',
         at: d.createdAt.toISOString(),
         day: d.day.toISOString().slice(0, 10),
@@ -115,7 +121,16 @@ export class SupervisionService {
       })),
     ].sort((a, b) => b.at.localeCompare(a.at));
 
-    return { teacher: { id: teacher.id, name: teacher.name }, items };
+    // Who recorded each item, by name: the page shows people, not ids.
+    const staffIds = [...new Set(items.map((i) => ('by' in i ? i.by : null)).filter((x): x is string => !!x))];
+    const staff = staffIds.length
+      ? await this.prisma.staff.findMany({ where: { id: { in: staffIds } }, select: { id: true, name: true } })
+      : [];
+    const nameOf = new Map(staff.map((s) => [s.id, s.name]));
+    return {
+      teacher: { id: teacher.id, name: teacher.name },
+      items: items.map((i) => ({ ...i, byName: 'by' in i && i.by ? (nameOf.get(i.by) ?? null) : null })),
+    };
   }
 
   /** A complaint, a monthly comment (one month, `period: YYYY-MM`) or a note. */

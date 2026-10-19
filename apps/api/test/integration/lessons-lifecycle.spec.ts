@@ -279,6 +279,9 @@ describe('4. Teacher Supervision', () => {
 
     const t = await supervision.timeline(tsupId, s.teacherId);
     expect(t.items.map((i) => i.type).sort()).toEqual(['bonus', 'complaint', 'monthly_comment', 'teacher_apology']);
+    // Every item has an id, and what a person recorded carries their name.
+    expect(t.items.every((i) => typeof i.id === 'string')).toBe(true);
+    expect(t.items.find((i) => i.type === 'bonus')).toMatchObject({ byName: 'tsup_a' });
 
     await expect(g.prisma.$executeRawUnsafe(
       `insert into chat.teacher_supervision_entry (organization_id, teacher_id, kind, body, created_by)
