@@ -540,5 +540,20 @@
   "cardReturnSoonTitle": "تعود الحصص قريبًا",
   "cardReturnOn": "العودة يوم {date}",
   "cardResumedTitle": "عادت الحصص",
-  "cardBonusTitle": "مكافأة لك"
+  "cardBonusTitle": "مكافأة لك",
+  "progressTitle": "هذا الشهر",
+  "progressAttended": "حضر",
+  "progressApologised": "اعتذر",
+  "progressAbsent": "غاب",
+  "progressStreak": "{count, plural, =0{لا توجد سلسلة بعد} =1{حصة واحدة متتالية} =2{حصتان متتاليتان} few{{count} حصص متتالية} many{{count} حصة متتالية} other{{count} حصة متتالية}}",
+  "progressAllTime": "{count} حصة حضرها إجمالًا",
+  "progressMakeupsOwed": "{count, plural, =1{حصة تعويضية مستحقة} =2{حصتان تعويضيتان مستحقتان} few{{count} حصص تعويضية مستحقة} other{{count} حصة تعويضية مستحقة}}",
+  "progressNext": "الحصة القادمة: {when}",
+  "progressLastCovered": "آخر حصة: {covered}",
+  "progressCertificates": "ستظهر الشهادات هنا.",
+  "progressUnavailable": "التقدم غير متاح حاليًا.",
+  "workloadTitle": "هذا الشهر",
+  "workloadHeld": "{lessons} حصة · {hours} ساعة",
+  "workloadNeedsReport": "{count} بانتظار التقرير",
+  "workloadOnTime": "{percent} من التقارير في موعدها"
 }

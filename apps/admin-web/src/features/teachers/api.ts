@@ -1,107 +1,71 @@
 import { api } from '@/core/api/client'
 
 /**
- * `/teacher-files/*` -- the PD-10 wire contract, mirrored from
- * apps/api/src/teacher-file/teacher-file.service.ts. Who may see or change
- * what is decided there; `access` tells the page which controls to offer, and
- * the server still answers every request on its own.
+ * `/stats/*` and `/lessons/access` -- the PD-11 T5 wire contract, mirrored from
+ * apps/api/src/lessons/stats.service.ts. Every number is computed by the server
+ * from the lesson rows (one definition per number); this page only lays them out.
  */
 
-export interface TeacherFileAccessFlags {
-  canEditPersonal: boolean
-  canWriteSupervision: boolean
+export interface Bucket {
+  lessons: number
+  minutes: number
 }
 
-export interface TeacherSummary {
-  id: string
-  name: string
-  isActive: boolean
-  studentCount: number
-  openComplaints: number
+export type StatCategory =
+  | 'held'
+  | 'upcoming'
+  | 'unreported'
+  | 'student_apology'
+  | 'teacher_apology'
+  | 'student_no_show'
+  | 'teacher_no_show'
+  | 'admin_cancelled'
+  | 'rescheduled'
+  | 'suspended'
+
+export interface CategoryStats extends Bucket {
+  key: StatCategory
+  /** Counted for or against someone. Moved and paused lessons are information only. */
+  counted: boolean
+  byDuration: Array<{ durationMinutes: number } & Bucket>
 }
 
-export interface Person {
-  id: string
-  name: string
+export interface TeacherRow {
+  teacher: { id: string; name: string; isActive: boolean }
+  held: Bucket
+  scheduled: Bucket
+  notHeld: Bucket
+  unreported: Bucket
+  upcoming: Bucket
+  attendanceRate: number | null
+  reportsOnTimeRate: number | null
 }
 
-export interface EntryBrief {
-  id: string
-  body: string
-  createdAt: string
-  author: Person
-}
-
-export interface Complaint extends EntryBrief {
-  source: { conversationId: string; messageId: string | null } | null
-  resolution: EntryBrief | null
-}
-
-export interface MonthlyComment {
-  /** YYYY-MM */
+export interface TeacherDetail {
+  teacher: { id: string; name: string }
   month: string
-  current: EntryBrief
-  earlierVersions: EntryBrief[]
+  zone: string
+  categories: CategoryStats[]
+  totals: { counted: Bucket; scheduledMinutes: number }
+  makeups: { lessons: number; held: number }
+  trials: { lessons: number; attended: number; converted: number; available: boolean }
+  rates: { attendance: number | null; completion: number | null; teacherReliability: number | null }
+  reports: { reports: number; onTime: number; onTimeRate: number | null; medianDelayMinutes: number | null }
+  replies: { familyMessages: number; answeredWithin: number; rate: number | null; medianReplyMinutes: number | null }
+  workload: { availableMinutes: number | null; scheduledMinutes: number; freeMinutes: number | null }
+  movements?: { transfersIn: number; transfersOut: number; paused: number; stopped: number }
+  previous: { month: string; held: Bucket }
 }
 
-export interface DayOff extends EntryBrief {
-  /** YYYY-MM-DD */
-  date: string
-  cancellation: EntryBrief | null
+export const statsApi = {
+  access: () => api.get<{ lessonManager: boolean }>('/lessons/access'),
+  teachers: (month: string) => api.get<{ month: string; zone: string; teachers: TeacherRow[] }>('/stats/teachers', { month }),
+  teacher: (id: string, month: string) =>
+    api.get<TeacherDetail>(`/stats/teachers/${encodeURIComponent(id)}`, { month }),
 }
 
-export interface TeacherFile {
-  access: TeacherFileAccessFlags
-  teacher: { id: string; name: string; isActive: boolean; leftAt: string | null }
-  personal: {
-    fullName: string
-    phone: string | null
-    email: string | null
-    /** YYYY-MM-DD */
-    joinedOn: string | null
-    updatedAt: string | null
-    updatedBy: Person | null
-  }
-  assignedStudents: Array<{
-    learnerId: string
-    name: string
-    level: string | null
-    family: { id: string; displayName: string }
-    supervisor: Person | null
-  }>
-  supervision: {
-    complaints: Complaint[]
-    monthlyComments: MonthlyComment[]
-    daysOff: DayOff[]
-  }
-}
-
-/** A field left out is unchanged; null clears it. */
-export interface PersonalPatch {
-  phone?: string | null
-  email?: string | null
-  joinedOn?: string | null
-  reason: string
-}
-
-export type NewEntry =
-  | { kind: 'complaint'; body: string }
-  | { kind: 'complaint_resolution'; body: string; refersTo: string }
-  | { kind: 'monthly_comment'; body: string; month: string }
-  | { kind: 'day_off'; body: string; dayOffOn: string }
-  | { kind: 'day_off_cancellation'; body: string; refersTo: string }
-
-export const teacherFileApi = {
-  list: () => api.get<{ access: TeacherFileAccessFlags; teachers: TeacherSummary[] }>('/teacher-files'),
-  detail: (teacherId: string) => api.get<TeacherFile>(`/teacher-files/${encodeURIComponent(teacherId)}`),
-  updatePersonal: (teacherId: string, body: PersonalPatch) =>
-    api.post<TeacherFile>(`/teacher-files/${encodeURIComponent(teacherId)}/personal`, body),
-  addEntry: (teacherId: string, body: NewEntry) =>
-    api.post<{ id: string; kind: string; createdAt: string }>(`/teacher-files/${encodeURIComponent(teacherId)}/entries`, body),
-}
-
-export const teacherFileKeys = {
-  all: ['teacher-files'] as const,
-  list: ['teacher-files', 'list'] as const,
-  detail: (teacherId: string) => ['teacher-files', 'detail', teacherId] as const,
+export const statsKeys = {
+  access: ['lessons', 'access'] as const,
+  teachers: (month: string) => ['stats', 'teachers', month] as const,
+  teacher: (id: string, month: string) => ['stats', 'teacher', id, month] as const,
 }

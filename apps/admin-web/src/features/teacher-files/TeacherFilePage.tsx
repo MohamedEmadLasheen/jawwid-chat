@@ -10,7 +10,7 @@ import { useCalendarDate } from './calendar'
 import { Refusal, isTeacherFileRefusal } from './Refusal'
 import { useTeacherFile } from './hooks'
 import { AddEntryDialog, EditPersonalDialog, type EntryIntent } from './TeacherFileDialogs'
-import './teachers.css'
+import './teacher-files.css'
 
 /**
  * PD-10: one teacher's file. Sections in the order the owner listed them;

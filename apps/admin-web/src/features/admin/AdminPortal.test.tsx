@@ -120,11 +120,12 @@ describe('Admin Portal registry and navigation', () => {
       }
     }
     expect(ADMIN_GROUPS.flatMap((g) => sectionsInGroup(g.key))).toHaveLength(18)
-    // Only the sections with a real endpoint claim to be built: three read-only
-    // views, and three whose controls act -- Organization (PD-8), Stories
-    // (2026-10-17: the super admin publishes) and Teachers (PD-10).
+    // Only the sections with a real endpoint claim to be built: four read-only
+    // views -- Reports is the PD-11 teacher statistics (2026-10-19) -- and two
+    // whose controls act: Organization (PD-8) and Stories (2026-10-17: the
+    // super admin publishes).
     expect(ADMIN_SECTIONS.filter((s) => s.status === 'read_only').map((s) => s.key).sort()).toEqual(
-      ['conversations', 'dashboard', 'users'],
+      ['conversations', 'dashboard', 'reports', 'users'],
     )
     expect(ADMIN_SECTIONS.filter((s) => s.status === 'managed').map((s) => s.key).sort()).toEqual(['stories', 'teachers', 'teams'])
   })

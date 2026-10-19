@@ -61,10 +61,14 @@ export function isSuperAdmin(role: StaffRole): boolean {
 /** Which nav areas this role may even attempt to open. */
 export function visibleAreas(role: StaffRole): NavArea[] {
   if (isSuperAdmin(role)) {
-    return ['inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'settings']
+    // `teachers` stays routable for the super admin; it is offered as the
+    // Admin Portal's Reports section rather than as an operator area.
+    return ['inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'teachers', 'settings']
   }
   if (isManager(role)) {
     // PD-8: the department's structure -- children's supervisors and backups.
+    // PD-11 T5: teacher statistics -- offered only when the server confirms
+    // the Teachers department (see TEACHERS_DEPARTMENT_AREAS).
     return ['chat', 'inbox', 'families', 'organization', 'teachers', 'tasks', 'coverage', 'dashboard', 'stories', 'settings']
   }
   if (isOperator(role)) {
@@ -76,8 +80,6 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // Chat is first: the conversation workspace on the real conversation API
     // (the same conversations parents and teachers are in). The server decides
     // which ones this admin may open -- staff scope -- not this list.
-    // Teachers: only the Teachers department's members get anything from it
-    // (PD-10); see CONFIRMED_AREAS for how navigation avoids offering it to the rest.
     return ['chat', 'inbox', 'families', 'teachers', 'tasks', 'stories']
   }
   if (isDepartment(role)) {
@@ -100,19 +102,18 @@ export function canOpenArea(role: StaffRole, area: NavArea): boolean {
 export const UNLISTED_AREAS: ReadonlySet<NavArea> = new Set<NavArea>(['inbox'])
 
 /**
- * Areas whose audience is not a role but a relation only the server knows.
- * Teacher Files (PD-10) belong to the Teachers DEPARTMENT: an Operations
- * supervisor has the same role as a Teachers supervisor. These areas stay
- * routable for the role, and are offered only once the server has answered
- * for this person (`confirmed`), so navigation never lists a page that would
- * only answer "forbidden".
+ * Areas offered only when the server confirms a fact the role alone does not
+ * carry. The Teachers area (statistics, and -- PD-12 -- teacher files,
+ * certificates, leave) belongs to the Teachers department (PD-10), and the
+ * client cannot tell a Teachers supervisor from an Operations one by role, so
+ * ONE probe, `GET /lessons/access`, decides whether the entry is shown.
  */
-export const CONFIRMED_AREAS: ReadonlySet<NavArea> = new Set<NavArea>(['teachers'])
+export const TEACHERS_DEPARTMENT_AREAS: ReadonlySet<NavArea> = new Set<NavArea>(['teachers'])
 
-/** What navigation shows: the areas this role may open, minus the unlisted ones and the unconfirmed ones. */
-export function navAreas(role: StaffRole, confirmed: ReadonlySet<NavArea> = new Set()): NavArea[] {
+/** What navigation shows: the areas this role may open, minus the unlisted ones. */
+export function navAreas(role: StaffRole, opts: { lessonManager?: boolean } = {}): NavArea[] {
   return visibleAreas(role).filter(
-    (area) => !UNLISTED_AREAS.has(area) && (!CONFIRMED_AREAS.has(area) || confirmed.has(area)),
+    (area) => !UNLISTED_AREAS.has(area) && (opts.lessonManager === true || !TEACHERS_DEPARTMENT_AREAS.has(area)),
   )
 }
 

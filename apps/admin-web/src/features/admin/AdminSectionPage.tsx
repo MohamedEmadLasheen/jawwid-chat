@@ -9,7 +9,8 @@ import { UsersView } from './UsersView'
 import { StoriesStudio } from '@/features/stories/StoriesStudio'
 import { DevelopmentPlaceholder } from './DevelopmentPlaceholder'
 import { OrganizationPage } from '@/features/organization/OrganizationPage'
-import { TeacherFilesPage } from '@/features/teachers/TeacherFilesPage'
+import { TeacherStatsPage } from '@/features/teachers/TeacherStatsPage'
+import { TeacherFilesPage } from '@/features/teacher-files/TeacherFilesPage'
 
 /**
  * One route, `/admin/:section`, for every Admin Portal section. The four built
@@ -41,6 +42,8 @@ export function AdminSectionPage() {
       return <AdminStories section={section} />
     case 'teams':
       return <OrganizationPage />
+    case 'reports':
+      return <TeacherStatsPage />
     case 'teachers':
       return <TeacherFilesPage basePath={adminSectionPath('teachers')} />
     default:

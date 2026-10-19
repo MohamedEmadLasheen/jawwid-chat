@@ -14,6 +14,11 @@ final myScheduleProvider = FutureProvider.autoDispose<List<ScheduledLesson>>((re
   return ref.watch(lessonRepositoryProvider).myLessons(from, from.add(const Duration(days: 14)));
 });
 
+/// The teacher's own month (`GET /stats/me`).
+final myWorkloadProvider = FutureProvider.autoDispose<TeacherWorkload>((ref) {
+  return ref.watch(lessonRepositoryProvider).myWorkload();
+});
+
 /// PD-9/PD-10: the teacher's Schedule tab -- their own schedule and nothing else from
 /// the Teacher File. One list, grouped by day in the teacher's own calendar; each lesson
 /// says where it stands, so "Needs report" is visible without opening a chat. Reports
@@ -33,7 +38,9 @@ class TeacherScheduleScreen extends ConsumerWidget {
         child: async.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (_, _) => _Message(text: l10n.scheduleLoadFailed),
-          data: (lessons) => lessons.isEmpty ? _Message(text: l10n.scheduleEmpty) : _ScheduleList(lessons: lessons),
+          data: (lessons) => lessons.isEmpty
+              ? _Message(text: l10n.scheduleEmpty)
+              : _ScheduleList(lessons: lessons, header: const _WorkloadSummary()),
         ),
       ),
     );
@@ -60,16 +67,17 @@ class _Message extends StatelessWidget {
 }
 
 class _ScheduleList extends StatelessWidget {
-  const _ScheduleList({required this.lessons});
+  const _ScheduleList({required this.lessons, this.header});
 
   final List<ScheduledLesson> lessons;
+  final Widget? header;
 
   @override
   Widget build(BuildContext context) {
     final m = MaterialLocalizations.of(context);
     final theme = Theme.of(context);
     final sorted = [...lessons]..sort((a, b) => a.startsAt.compareTo(b.startsAt));
-    final items = <Widget>[];
+    final items = <Widget>[?header];
     DateTime? day;
     for (final l in sorted) {
       final d = DateTime(l.startsAt.year, l.startsAt.month, l.startsAt.day);
@@ -130,4 +138,38 @@ class _LessonRow extends StatelessWidget {
             _ => (l10n.phaseUpcoming, false),
           },
       };
+}
+
+/// The teacher's month at a glance: lessons held and hours, reports still owed,
+/// and how many reports went in on time. Nothing if the server has no answer.
+class _WorkloadSummary extends ConsumerWidget {
+  const _WorkloadSummary();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = L10n.of(context);
+    final theme = Theme.of(context);
+    final w = ref.watch(myWorkloadProvider).value;
+    if (w == null) return const SizedBox.shrink();
+    final hours = (w.heldMinutes / 60).toStringAsFixed(w.heldMinutes % 60 == 0 ? 0 : 1);
+    return Card(
+      key: const ValueKey('workload-summary'),
+      margin: const EdgeInsetsDirectional.fromSTEB(Spacing.spacing5, Spacing.spacing3, Spacing.spacing5, 0),
+      child: Padding(
+        padding: const EdgeInsets.all(Spacing.spacing4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l10n.workloadTitle, style: theme.textTheme.labelLarge),
+            const SizedBox(height: Spacing.spacing1),
+            Text(l10n.workloadHeld(w.heldLessons, hours), style: theme.textTheme.titleMedium),
+            if (w.unreported > 0)
+              Text(l10n.workloadNeedsReport(w.unreported), style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error)),
+            if (w.reportsOnTimeRate != null)
+              Text(l10n.workloadOnTime('${(w.reportsOnTimeRate! * 100).round()}%'), style: theme.textTheme.bodySmall),
+          ],
+        ),
+      ),
+    );
+  }
 }

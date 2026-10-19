@@ -18,6 +18,7 @@ import '../../../shared/models/user_role.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../../conversations/application/conversations_controller.dart';
 import '../../conversations/application/open_direct_controller.dart';
+import '../../lessons/presentation/child_progress_card.dart';
 import '../application/profile_controller.dart';
 import '../domain/profile_view.dart';
 import 'profile_sections.dart';
@@ -147,6 +148,13 @@ class ProfileBody extends ConsumerWidget {
             ProfileNote(text: l10n.childrenEmpty)
           else
             for (final child in view.children) ChildTile(child: child),
+        ],
+
+        // PD-10: the child's progress, for the family and the child's teacher.
+        // The server decides who may read it.
+        if (view.isGroup && view.learner != null && view.learner!.id.isNotEmpty) ...[
+          const ProfileDivider(),
+          ChildProgressCard(learnerId: view.learner!.id),
         ],
 
         if (view.isGroup) ...[

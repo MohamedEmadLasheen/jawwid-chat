@@ -1,49 +1,30 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { teacherFileApi, teacherFileKeys, type NewEntry, type PersonalPatch } from './api'
-
-export function useTeacherList(enabled = true) {
-  return useQuery({ queryKey: teacherFileKeys.list, queryFn: teacherFileApi.list, enabled, staleTime: 30_000 })
-}
-
-export function useTeacherFile(teacherId: string) {
-  return useQuery({
-    queryKey: teacherFileKeys.detail(teacherId),
-    queryFn: () => teacherFileApi.detail(teacherId),
-    staleTime: 15_000,
-  })
-}
+import { useQuery } from '@tanstack/react-query'
+import { statsApi, statsKeys } from './api'
 
 /**
- * Whether this staff member's navigation should offer Teacher Files. Only the
- * server knows who is in the Teachers department, so it is asked once: a 403
- * means "not for you" and is cached like an answer, not retried. This decides
- * a link, never access -- every request is still answered on its own.
+ * Whether the server counts this staff member as a lesson manager (Teachers
+ * department or super admin). Navigation uses it to avoid offering a page that
+ * would only answer "forbidden"; the page itself still asks the server.
  */
-export function useTeacherFilesOffered(enabled: boolean): boolean {
-  const probe = useQuery({
-    queryKey: teacherFileKeys.list,
-    queryFn: teacherFileApi.list,
+export function useLessonAccess(enabled = true) {
+  return useQuery({
+    queryKey: statsKeys.access,
+    queryFn: statsApi.access,
     enabled,
     staleTime: 5 * 60_000,
     retry: false,
   })
-  return enabled && probe.isSuccess
 }
 
-function useRefresh(teacherId: string) {
-  const qc = useQueryClient()
-  return () => {
-    void qc.invalidateQueries({ queryKey: teacherFileKeys.detail(teacherId) })
-    void qc.invalidateQueries({ queryKey: teacherFileKeys.list })
-  }
+export function useTeacherStats(month: string) {
+  return useQuery({ queryKey: statsKeys.teachers(month), queryFn: () => statsApi.teachers(month), staleTime: 60_000 })
 }
 
-export function useUpdatePersonal(teacherId: string) {
-  const done = useRefresh(teacherId)
-  return useMutation({ mutationFn: (body: PersonalPatch) => teacherFileApi.updatePersonal(teacherId, body), onSuccess: done })
-}
-
-export function useAddEntry(teacherId: string) {
-  const done = useRefresh(teacherId)
-  return useMutation({ mutationFn: (body: NewEntry) => teacherFileApi.addEntry(teacherId, body), onSuccess: done })
+export function useTeacherDetail(id: string | null, month: string) {
+  return useQuery({
+    queryKey: statsKeys.teacher(id ?? '', month),
+    queryFn: () => statsApi.teacher(id as string, month),
+    enabled: id !== null,
+    staleTime: 60_000,
+  })
 }

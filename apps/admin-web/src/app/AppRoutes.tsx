@@ -17,8 +17,9 @@ import { AdminSectionPage } from '@/features/admin/AdminSectionPage'
 import { adminSectionPath } from '@/features/admin/sections'
 import { ProfilePage } from '@/features/profile/ProfilePage'
 import { OrganizationPage } from '@/features/organization/OrganizationPage'
-import { TeacherFilesPage } from '@/features/teachers/TeacherFilesPage'
-import { TeacherFilePage } from '@/features/teachers/TeacherFilePage'
+import { TeacherStatsPage } from '@/features/teachers/TeacherStatsPage'
+import { TeacherFilesPage } from '@/features/teacher-files/TeacherFilesPage'
+import { TeacherFilePage } from '@/features/teacher-files/TeacherFilePage'
 import { ForbiddenPage } from './ForbiddenPage'
 import type { ReactElement } from 'react'
 
@@ -66,13 +67,11 @@ export function AppRoutes() {
         <Route path="/inbox/:familyId" element={<Area area="inbox"><InboxPage /></Area>} />
         <Route path="/families" element={<Area area="families"><FamiliesPage /></Area>} />
         <Route path="/organization" element={<Area area="organization"><OrganizationPage /></Area>} />
-        {/*
-          PD-10 Teacher Files: /teachers for the Teachers department (the server
-          refuses everyone else, whatever this route allows), /admin/teachers
-          for the super admin.
-        */}
-        <Route path="/teachers" element={<Area area="teachers"><TeacherFilesPage basePath="/teachers" /></Area>} />
-        <Route path="/teachers/:teacherId" element={<Area area="teachers"><TeacherFilePage basePath="/teachers" /></Area>} />
+        {/* The Teachers area (features/teachers/area.tsx): Statistics is its base tab. */}
+        <Route path="/teachers" element={<Area area="teachers"><TeacherStatsPage inTeachersArea /></Area>} />
+        {/* PD-10 Teacher Files: a tab of the same area; the server refuses anyone else. */}
+        <Route path="/teachers/files" element={<Area area="teachers"><TeacherFilesPage basePath="/teachers/files" /></Area>} />
+        <Route path="/teachers/files/:teacherId" element={<Area area="teachers"><TeacherFilePage basePath="/teachers/files" /></Area>} />
         <Route path="/tasks" element={<Area area="tasks"><TasksPage /></Area>} />
         <Route path="/coverage" element={<Area area="coverage"><CoveragePage /></Area>} />
         <Route path="/dashboard" element={<Area area="dashboard"><DashboardPage /></Area>} />

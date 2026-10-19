@@ -8,7 +8,8 @@ import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { T, useCopy } from './copy'
 import { Refusal, isTeacherFileRefusal } from './Refusal'
 import { useTeacherList } from './hooks'
-import './teachers.css'
+import './teacher-files.css'
+import { TeachersAreaTabs } from '@/features/teachers/area'
 
 /**
  * PD-10: every teacher of the organization, for the Teachers department and
@@ -29,6 +30,8 @@ export function TeacherFilesPage({ basePath, eyebrow }: { basePath: string; eyeb
     <div className="page">
       <div className="page__inner">
         <PageHeader eyebrow={eyebrow} title={tx(T.title)} subtitle={tx(T.subtitle)} />
+        {/* Operators reach this as a tab of the Teachers area; the super admin from Admin › Teachers. */}
+        {!basePath.startsWith('/admin') && <TeachersAreaTabs />}
         {isTeacherFileRefusal(list.error) ? (
           <Refusal error={list.error} />
         ) : (

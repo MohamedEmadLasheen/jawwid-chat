@@ -82,36 +82,23 @@ afterEach(() => {
   tokenStore.clear()
 })
 
-describe('navigation follows the server, not the role', () => {
-  it('offers Teachers to a staff member the server answers for', async () => {
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/chat' })
-    const nav = await screen.findByRole('navigation', { name: 'Jawwid Operations' })
-    expect(await within(nav).findByRole('link', { name: 'Teachers' })).toHaveAttribute('href', '/teachers')
-  })
-
-  it('does not offer it to the same role when the server refuses (an Operations supervisor)', async () => {
-    on('GET', /\/teacher-files$/, () => json({ error: { code: 'COMM.TEACHER_FILE_DENIED', message: 'Teacher Files are administration-only' } }, 403))
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/chat' })
-    const nav = await screen.findByRole('navigation', { name: 'Jawwid Operations' })
-    await waitFor(() => expect(calls('GET', /\/teacher-files$/)).toHaveLength(1))
-    expect(within(nav).queryByRole('link', { name: 'Teachers' })).not.toBeInTheDocument()
-    // A refusal is an answer: it is not retried.
-    expect(calls('GET', /\/teacher-files$/)).toHaveLength(1)
-  })
-
-  it('never asks for a role that cannot hold a Teachers-department place', async () => {
-    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'finance' }), route: '/tasks' })
-    await screen.findByRole('navigation', { name: 'Jawwid Operations' })
-    expect(calls('GET', /\/teacher-files/)).toHaveLength(0)
+describe('the Teachers area', () => {
+  // Navigation to the area is gated by T5's GET /lessons/access (TeacherStatsPage.test);
+  // here: the Teacher files are one of its tabs.
+  it('offers Teacher files as a tab of the Teachers area', async () => {
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files' })
+    const tabs = await screen.findByRole('navigation', { name: 'Teachers' })
+    expect(within(tabs).getByRole('link', { name: 'Teacher files' })).toHaveAttribute('href', '/teachers/files')
+    expect(within(tabs).getByRole('link', { name: 'Statistics' })).toHaveAttribute('href', '/teachers')
   })
 })
 
 describe('the list', () => {
   it('lists every teacher with counts and status, each linking to its file', async () => {
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers' })
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files' })
     const table = await screen.findByRole('table')
     const one = within(table).getByRole('link', { name: /^Teacher One/ })
-    expect(one).toHaveAttribute('href', '/teachers/t-1')
+    expect(one).toHaveAttribute('href', '/teachers/files/t-1')
     const two = within(table).getByText('Teacher Two').closest('tr')!
     expect(within(two).getByText('Left')).toBeInTheDocument()
     expect(screen.queryByText(/example\.test|0147/)).not.toBeInTheDocument()
@@ -119,14 +106,14 @@ describe('the list', () => {
 
   it("shows the server's refusal as it is", async () => {
     on('GET', /\/teacher-files$/, () => json({ error: { code: 'COMM.TEACHER_FILE_DENIED', message: 'Teacher Files are administration-only' } }, 403))
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers' })
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files' })
     expect(await screen.findByText('Teacher Files are for the Teachers department and the super admin.')).toBeInTheDocument()
   })
 })
 
 describe('a teacher file', () => {
   it('shows every section; the joining date is the same calendar day in any time zone', async () => {
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/t-1' })
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
     expect(await screen.findByRole('heading', { level: 1, name: /^Teacher One/ })).toBeInTheDocument()
     const personal = screen.getByRole('region', { name: 'Personal information' })
     expect(within(personal).getByText('+20 100 555 0147')).toBeInTheDocument()
@@ -141,7 +128,7 @@ describe('a teacher file', () => {
   })
 
   it('offers only the controls the server grants: a supervisor writes notes but cannot edit personal information', async () => {
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/t-1' })
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
     await screen.findByRole('heading', { level: 1, name: /^Teacher One/ })
     expect(screen.queryByRole('button', { name: 'Edit personal information' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Record a complaint' })).toBeInTheDocument()
@@ -149,7 +136,7 @@ describe('a teacher file', () => {
 
   it('records a complaint resolution against the complaint it resolves', async () => {
     on('POST', /\/teacher-files\/t-1\/entries$/, () => json({ id: 'r-1', kind: 'complaint_resolution', createdAt: '2026-10-18T10:00:00Z' }, 201))
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/t-1' })
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
     await userEvent.click(await screen.findByRole('button', { name: 'Resolve' }))
     const dialog = await screen.findByRole('dialog')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
@@ -170,7 +157,7 @@ describe('a teacher file', () => {
     on('POST', /\/teacher-files\/t-1\/entries$/, () =>
       json({ error: { code: 'COMM.TEACHER_FILE_CONFLICT', message: 'this day off is already recorded' } }, 409),
     )
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/t-1' })
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
     await userEvent.click(await screen.findByRole('button', { name: 'Record a day off' }))
     const dialog = await screen.findByRole('dialog')
     const day = dialog.querySelector('input[type="date"]') as HTMLInputElement
@@ -184,7 +171,7 @@ describe('a teacher file', () => {
   it('the Teachers manager edits personal information: only changed fields are sent, an emptied one as null, with a reason', async () => {
     on('GET', /\/teacher-files\/t-1$/, () => json(file({ canEditPersonal: true, canWriteSupervision: true })))
     on('POST', /\/teacher-files\/t-1\/personal$/, () => json(file({ canEditPersonal: true, canWriteSupervision: true }), 201))
-    renderWithProviders(<AppRoutes />, { staff: teachersManager, route: '/teachers/t-1' })
+    renderWithProviders(<AppRoutes />, { staff: teachersManager, route: '/teachers/files/t-1' })
     await userEvent.click(await screen.findByRole('button', { name: 'Edit personal information' }))
     const dialog = await screen.findByRole('dialog')
     await userEvent.clear(within(dialog).getByRole('textbox', { name: 'Email address' }))
@@ -200,7 +187,7 @@ describe('a teacher file', () => {
   })
 
   it('reads in Arabic, right to left', async () => {
-    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/t-1', locale: 'ar' })
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1', locale: 'ar' })
     expect(await screen.findByRole('region', { name: 'البيانات الشخصية' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'الشكاوى' })).toBeInTheDocument()
     expect(document.documentElement.dir === 'rtl' || document.querySelector('[dir="rtl"]')).toBeTruthy()
