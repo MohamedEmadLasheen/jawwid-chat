@@ -57,6 +57,8 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'lesson.makeup_horizon_days': 14,
   /** Free times are offered on this grid (minutes). */
   'lesson.slot_step_minutes': 30,
+  /** PD-11 T3: the family and the team hear this many days before a paused learner returns. */
+  'lesson.return_notice_days': 2,
 } as const;
 
 export type CommunicationConfigKey = keyof typeof COMMUNICATION_CONFIG_DEFAULTS;

@@ -87,6 +87,28 @@ export function renderCardBody(kind: string, p: Record<string, unknown>, lang: C
           : ar ? `ℹ️ لم يُعتمد طلب تغيير مواعيد ${learner}` : `ℹ️ The request to change ${learner}'s times was not approved`,
         line(ar ? 'ملاحظة' : 'Note', p.note),
       );
+    case CardKind.LEARNER_TRANSFERRED:
+      return ar
+        ? `👋 سيدرّس ${String(p.teacherName ?? '')} ${learner} ابتداءً من الآن.`
+        : `👋 ${String(p.teacherName ?? '')} will teach ${learner} from now on.`;
+    case CardKind.LEARNER_HANDOVER:
+      return join(
+        ar ? `📝 انضم إليك ${learner}` : `📝 ${learner} is now your student`,
+        line(ar ? 'المعلم السابق' : 'Previous teacher', p.fromTeacherName),
+        line(ar ? 'ملاحظات التسليم' : 'Handover', p.handoverNote),
+      );
+    case CardKind.LEARNER_SUSPENDED:
+      return p.kind === 'temporary'
+        ? ar ? `⏸️ توقفت حصص ${learner} مؤقتًا حتى ${String(p.returnOn)}` : `⏸️ ${learner}'s lessons are paused until ${String(p.returnOn)}`
+        : ar ? `⏹️ توقفت حصص ${learner}` : `⏹️ ${learner}'s lessons have stopped`;
+    case CardKind.LEARNER_RETURN_SOON:
+      return ar
+        ? `🔔 تعود حصص ${learner} يوم ${String(p.returnOn)}`
+        : `🔔 ${learner}'s lessons resume on ${String(p.returnOn)}`;
+    case CardKind.LEARNER_RESUMED:
+      return ar ? `▶️ عادت حصص ${learner}` : `▶️ ${learner}'s lessons have resumed`;
+    case CardKind.TEACHER_BONUS:
+      return join(ar ? '🏅 مكافأة' : '🏅 A bonus for you', line(ar ? 'السبب' : 'Reason', p.reason));
     default:
       return ar ? 'تحديث على الحصة' : 'Lesson update';
   }

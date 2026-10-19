@@ -6,6 +6,7 @@ import { OutboxWorker } from './communication/outbox/outbox.worker';
 import { StorySweeper } from './communication/stories/story-sweeper.service';
 import { CallService } from './communication/calls/call.service';
 import { SchedulingService } from './lessons/scheduling.service';
+import { LifecycleService } from './lessons/lifecycle.service';
 import { NotificationService } from './communication/notifications/notification.service';
 import { readBuildInfo } from './infra/build-info';
 import { listenForOutboxWake, OutboxPacer } from './communication/outbox/outbox-wake';
@@ -84,6 +85,7 @@ async function bootstrap(): Promise<void> {
   const calls = app.get(CallService);
   const notifications = app.get(NotificationService);
   const scheduling = app.get(SchedulingService);
+  const lifecycle = app.get(LifecycleService);
 
   let running = true;
   let draining = false;
@@ -189,6 +191,9 @@ async function bootstrap(): Promise<void> {
     if (Date.now() >= nextLessonSweep) {
       draining = true;
       try {
+        // Resume pauses that reached their return date first, so the materializer
+        // that follows already creates their lessons.
+        await lifecycle.sweep();
         await scheduling.sweep();
       } catch (e) {
         log.error(`lesson sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`);

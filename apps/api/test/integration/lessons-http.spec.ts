@@ -218,6 +218,29 @@ describe('lesson tickets over HTTP, in a PD-8 family group', () => {
     expect((await http(fam.siblingTeacher, 'GET', `/lessons/${id}/makeup-slots`)).status).toBe(404);
   });
 
+  it('T3: a transfer inside a family group swaps the teachers there, and the old one loses the chat', async () => {
+    const third = m.teachers.find((t) => t.subject !== fam.teacher && t.subject !== fam.siblingTeacher)!;
+    expect((await http(fam.teacher, 'POST', `/learners/${fam.child.id}/transfer`, { toTeacherId: third.id, reason: 'schedule_fit' })).status).toBe(403);
+    const r = await http(tsup, 'POST', `/learners/${fam.child.id}/transfer`, {
+      toTeacherId: third.id, reason: 'schedule_fit', handoverNote: 'continue from Al-Mulk 16',
+    });
+    expect(r.status).toBe(201);
+    const live = await g.prisma.conversationMember.findMany({ where: { conversationId: fam.groupId, leftAt: null, actorKind: 'teacher' } });
+    expect(live.map((x) => x.actorId)).toContain(third.id);
+    // The old teacher stays only if they still teach another child of this group.
+    const others = await g.prisma.conversationLearner.findMany({ where: { conversationId: fam.groupId, NOT: { learnerId: fam.child.id } } });
+    const stillTeaches = await g.prisma.learner.count({
+      where: { id: { in: others.map((o) => o.learnerId) }, teacherId: fam.child.teacherId },
+    });
+    if (stillTeaches === 0) {
+      expect(live.map((x) => x.actorId)).not.toContain(fam.child.teacherId);
+      expect([403, 404]).toContain((await http(fam.teacher, 'GET', `/conversations/${fam.groupId}/messages`)).status);
+    } else {
+      expect(live.map((x) => x.actorId)).toContain(fam.child.teacherId);
+    }
+    expect((await http(third.subject, 'GET', `/conversations/${fam.groupId}/messages`)).status).toBe(200);
+  });
+
   it('the needs-action queue is the Teachers department\'s; a client cannot send a card', async () => {
     expect((await http(fam.teacher, 'GET', '/lessons/needs-action')).status).toBe(403);
     expect((await http(tsup, 'GET', '/lessons/needs-action')).status).toBe(200);

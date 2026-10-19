@@ -543,7 +543,7 @@ export class SchedulingService {
    * the new slots begin, and `then` runs (an approval's request and card).
    * Lessons are then materialized for the new times.
    */
-  private async applySchedule(
+  async applySchedule(
     actor: Actor,
     learner: Learner,
     slots: WeeklySlot[],
@@ -688,7 +688,7 @@ export class SchedulingService {
   }
 
   /** How the actor stands to a learner -- the same standing a lesson of theirs would give. */
-  private async learnerFor(actor: Actor, learnerId: string, act: LessonAct): Promise<{ learner: Learner; standing: LessonStanding }> {
+  async learnerFor(actor: Actor, learnerId: string, act: LessonAct): Promise<{ learner: Learner; standing: LessonStanding }> {
     if (!isUuid(learnerId)) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'learner not found');
     const learner = await this.prisma.learner.findUnique({ where: { id: learnerId } });
     if (!learner) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'learner not found');
@@ -706,7 +706,7 @@ export class SchedulingService {
     return { learner, standing };
   }
 
-  private requireAct(actor: Actor, standing: LessonStanding, act: LessonAct) {
+  requireAct(actor: Actor, standing: LessonStanding, act: LessonAct) {
     const d = this.authz.canRecordLessonAct(actor, standing, act);
     if (!d.allowed) throw new CommError(d.code, d.reason);
   }

@@ -1992,6 +1992,78 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Make-up'**
   String get lessonKindMakeup;
+
+  /// No description provided for @cardTransferredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New teacher'**
+  String get cardTransferredTitle;
+
+  /// Card telling a family who teaches their child after a transfer.
+  ///
+  /// In en, this message translates to:
+  /// **'{teacher} will teach from now on.'**
+  String cardTransferredBody(String teacher);
+
+  /// No description provided for @cardHandoverTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'A new student'**
+  String get cardHandoverTitle;
+
+  /// No description provided for @cardHandoverFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous teacher'**
+  String get cardHandoverFrom;
+
+  /// No description provided for @cardHandoverNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Handover'**
+  String get cardHandoverNote;
+
+  /// No description provided for @cardPausedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Lessons paused'**
+  String get cardPausedTitle;
+
+  /// Return date of a paused learner.
+  ///
+  /// In en, this message translates to:
+  /// **'Until {date}'**
+  String cardPausedUntil(String date);
+
+  /// No description provided for @cardStoppedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Lessons stopped'**
+  String get cardStoppedTitle;
+
+  /// No description provided for @cardReturnSoonTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Lessons resume soon'**
+  String get cardReturnSoonTitle;
+
+  /// The day a paused learner's lessons resume.
+  ///
+  /// In en, this message translates to:
+  /// **'Back on {date}'**
+  String cardReturnOn(String date);
+
+  /// No description provided for @cardResumedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Lessons resumed'**
+  String get cardResumedTitle;
+
+  /// No description provided for @cardBonusTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'A bonus for you'**
+  String get cardBonusTitle;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

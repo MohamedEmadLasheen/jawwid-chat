@@ -31,6 +31,14 @@ Widget? lessonCardView(BuildContext context, MessageCard card, Color foreground)
     'schedule_change_decided' => card.text('decision') == 'approved'
         ? (Icons.event_repeat_outlined, l10n.cardScheduleApprovedTitle)
         : (Icons.info_outline, l10n.cardScheduleRejectedTitle),
+    'learner_transferred' => (Icons.swap_horiz, l10n.cardTransferredTitle),
+    'learner_handover' => (Icons.person_add_alt_outlined, l10n.cardHandoverTitle),
+    'learner_suspended' => card.text('kind') == 'temporary'
+        ? (Icons.pause_circle_outline, l10n.cardPausedTitle)
+        : (Icons.stop_circle_outlined, l10n.cardStoppedTitle),
+    'learner_return_soon' => (Icons.notifications_active_outlined, l10n.cardReturnSoonTitle),
+    'learner_resumed' => (Icons.play_circle_outline, l10n.cardResumedTitle),
+    'teacher_bonus' => (Icons.military_tech_outlined, l10n.cardBonusTitle),
     _ => null,
   };
   if (title == null) return null;
@@ -77,8 +85,22 @@ class _LessonCard extends StatelessWidget {
         if (raw is Map && raw['nextStartsAt'] is String && DateTime.tryParse(raw['nextStartsAt'] as String) != null)
           l10n.cardEveryWeek(weeklyLabel(context, DateTime.parse(raw['nextStartsAt'] as String).toLocal())),
     ];
+    // Dates the server sends as calendar days (YYYY-MM-DD), shown in the reader's format.
+    String? day(String key) {
+      final raw = card.text(key);
+      final parsed = raw == null ? null : DateTime.tryParse(raw);
+      return parsed == null ? null : MaterialLocalizations.of(context).formatMediumDate(parsed);
+    }
     final rows = <(String, String)>[
       ?action == null ? null : (l10n.cardMakeupResolvedTitle, action),
+      if (card.kind == 'learner_transferred' && card.text('teacherName') != null)
+        ('', l10n.cardTransferredBody(card.text('teacherName')!)),
+      if (card.kind == 'learner_handover' && card.text('fromTeacherName') != null)
+        (l10n.cardHandoverFrom, card.text('fromTeacherName')!),
+      if (card.kind == 'learner_handover' && card.text('handoverNote') != null)
+        (l10n.cardHandoverNote, card.text('handoverNote')!),
+      if (card.kind == 'learner_suspended' && day('returnOn') != null) ('', l10n.cardPausedUntil(day('returnOn')!)),
+      if (card.kind == 'learner_return_soon' && day('returnOn') != null) ('', l10n.cardReturnOn(day('returnOn')!)),
       for (final w in weekly) ('', w),
       if (card.text('covered') case final v?) (l10n.cardCovered, v),
       if (card.text('homework') case final v?) (l10n.cardHomework, v),

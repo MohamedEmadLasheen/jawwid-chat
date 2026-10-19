@@ -273,6 +273,47 @@ void main() {
       expect(find.text('A credit to the family'), findsOneWidget);
     });
   });
+  group('T3: transfers, pauses and bonuses as cards', () {
+    testWidgets('a family reads who teaches now -- and never why', (tester) async {
+      final m = WireMappers.message(wireCard('learner_transferred', {'learnerName': 'learner_l', 'teacherName': 'teacher_d'}), viewerActorId: 'p1');
+      await tester.pumpWidget(app(MessageBubble(message: m, showAuthor: true)));
+      expect(find.text('New teacher'), findsOneWidget);
+      expect(find.text('teacher_d will teach from now on.'), findsOneWidget);
+    });
+
+    testWidgets('the new teacher reads the handover', (tester) async {
+      final m = WireMappers.message(
+        wireCard('learner_handover', {'learnerName': 'learner_l', 'fromTeacherName': 'teacher_b', 'handoverNote': 'continue from Al-Mulk 16'}),
+        viewerActorId: 't2',
+      );
+      await tester.pumpWidget(app(MessageBubble(message: m, showAuthor: true)));
+      expect(find.text('A new student'), findsOneWidget);
+      expect(find.text('teacher_b'), findsOneWidget);
+      expect(find.text('continue from Al-Mulk 16'), findsOneWidget);
+    });
+
+    testWidgets('a pause names its return date; a stop names none', (tester) async {
+      final paused = WireMappers.message(
+        wireCard('learner_suspended', {'learnerName': 'learner_l', 'kind': 'temporary', 'returnOn': '2026-11-01'}),
+        viewerActorId: 'p1',
+      );
+      await tester.pumpWidget(app(MessageBubble(message: paused, showAuthor: true)));
+      expect(find.text('Lessons paused'), findsOneWidget);
+      expect(find.textContaining(RegExp(r'^Until .*Nov 1')), findsOneWidget);
+
+      final stopped = WireMappers.message(wireCard('learner_suspended', {'learnerName': 'learner_l', 'kind': 'permanent'}), viewerActorId: 'p1');
+      await tester.pumpWidget(app(MessageBubble(message: stopped, showAuthor: true)));
+      expect(find.text('Lessons stopped'), findsOneWidget);
+      expect(find.textContaining('Until'), findsNothing);
+    });
+
+    testWidgets('a bonus says why, in Arabic too', (tester) async {
+      final m = WireMappers.message(wireCard('teacher_bonus', {'reason': 'كل التقارير في موعدها'}), viewerActorId: 't1');
+      await tester.pumpWidget(app(MessageBubble(message: m, showAuthor: true), locale: const Locale('ar')));
+      expect(find.text('مكافأة لك'), findsOneWidget);
+      expect(find.text('كل التقارير في موعدها'), findsOneWidget);
+    });
+  });
 }
 
 class _RecordingLessons implements LessonRepository {

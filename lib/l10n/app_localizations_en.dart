@@ -1040,4 +1040,46 @@ class L10nEn extends L10n {
 
   @override
   String get lessonKindMakeup => 'Make-up';
+
+  @override
+  String get cardTransferredTitle => 'New teacher';
+
+  @override
+  String cardTransferredBody(String teacher) {
+    return '$teacher will teach from now on.';
+  }
+
+  @override
+  String get cardHandoverTitle => 'A new student';
+
+  @override
+  String get cardHandoverFrom => 'Previous teacher';
+
+  @override
+  String get cardHandoverNote => 'Handover';
+
+  @override
+  String get cardPausedTitle => 'Lessons paused';
+
+  @override
+  String cardPausedUntil(String date) {
+    return 'Until $date';
+  }
+
+  @override
+  String get cardStoppedTitle => 'Lessons stopped';
+
+  @override
+  String get cardReturnSoonTitle => 'Lessons resume soon';
+
+  @override
+  String cardReturnOn(String date) {
+    return 'Back on $date';
+  }
+
+  @override
+  String get cardResumedTitle => 'Lessons resumed';
+
+  @override
+  String get cardBonusTitle => 'A bonus for you';
 }

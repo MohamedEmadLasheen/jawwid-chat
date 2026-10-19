@@ -2,7 +2,10 @@ import { Module } from '@nestjs/common';
 import { CommunicationModule } from '../communication/communication.module';
 import { LessonController } from './lesson.controller';
 import { LessonService } from './lesson.service';
+import { LifecycleController } from './lifecycle.controller';
+import { LifecycleService } from './lifecycle.service';
 import { SchedulingController } from './scheduling.controller';
+import { SupervisionService } from './supervision.service';
 import { SchedulingService } from './scheduling.service';
 
 /**
@@ -14,8 +17,8 @@ import { SchedulingService } from './scheduling.service';
  */
 @Module({
   imports: [CommunicationModule],
-  controllers: [LessonController, SchedulingController],
-  providers: [LessonService, SchedulingService],
-  exports: [LessonService, SchedulingService],
+  controllers: [LessonController, SchedulingController, LifecycleController],
+  providers: [LessonService, SchedulingService, LifecycleService, SupervisionService],
+  exports: [LessonService, SchedulingService, LifecycleService, SupervisionService],
 })
 export class LessonModule {}

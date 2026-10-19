@@ -266,6 +266,8 @@ export const LessonOutcome = {
   TEACHER_NO_SHOW: 'teacher_no_show',
   /** PD-11 T2: a future lesson replaced by a regular-time change. Not counted by statistics. */
   RESCHEDULED: 'rescheduled',
+  /** PD-11 T3: a future lesson removed because the learner's study is paused or stopped. Not counted. */
+  SUSPENDED: 'suspended',
 } as const;
 export type LessonOutcome = (typeof LessonOutcome)[keyof typeof LessonOutcome];
 
@@ -282,6 +284,12 @@ export const CardKind = {
   LESSON_MAKEUP_RESOLVED: 'lesson_makeup_resolved',
   SCHEDULE_CHANGE_REQUESTED: 'schedule_change_requested',
   SCHEDULE_CHANGE_DECIDED: 'schedule_change_decided',
+  LEARNER_TRANSFERRED: 'learner_transferred',
+  LEARNER_HANDOVER: 'learner_handover',
+  LEARNER_SUSPENDED: 'learner_suspended',
+  LEARNER_RETURN_SOON: 'learner_return_soon',
+  LEARNER_RESUMED: 'learner_resumed',
+  TEACHER_BONUS: 'teacher_bonus',
 } as const;
 export type CardKind = (typeof CardKind)[keyof typeof CardKind];
 
@@ -300,3 +308,17 @@ export type MakeupAction = (typeof MakeupAction)[keyof typeof MakeupAction];
 export const MAKEUP_OWING_OUTCOMES: ReadonlySet<string> = new Set(['teacher_apology', 'teacher_no_show']);
 export const RulingDecision = { EXCUSED: 'excused', TEACHER_CREDITED: 'teacher_credited' } as const;
 export type RulingDecision = (typeof RulingDecision)[keyof typeof RulingDecision];
+
+// PD-11 T3: the fixed reason lists of 20261018160000 (free text goes in `note`).
+export const TRANSFER_REASONS: ReadonlySet<string> = new Set([
+  'family_request', 'teacher_request', 'schedule_fit', 'level_fit', 'quality', 'teacher_leaving', 'other',
+]);
+export const SUSPENSION_REASONS: ReadonlySet<string> = new Set([
+  'travel', 'exams', 'health', 'holiday', 'financial', 'schedule', 'quality', 'finished', 'moved_elsewhere', 'other',
+]);
+export const SupervisionKind = {
+  BONUS: 'bonus',
+  COMPLAINT: 'complaint',
+  MONTHLY_COMMENT: 'monthly_comment',
+  NOTE: 'note',
+} as const;

@@ -611,5 +611,41 @@
   "outcomeStudentNoShow": "Student absent",
   "outcomeTeacherNoShow": "Teacher absent",
   "outcomeRescheduled": "Moved",
-  "lessonKindMakeup": "Make-up"
+  "lessonKindMakeup": "Make-up",
+  "cardTransferredTitle": "New teacher",
+  "cardTransferredBody": "{teacher} will teach from now on.",
+  "@cardTransferredBody": {
+    "description": "Card telling a family who teaches their child after a transfer.",
+    "placeholders": {
+      "teacher": {
+        "type": "String"
+      }
+    }
+  },
+  "cardHandoverTitle": "A new student",
+  "cardHandoverFrom": "Previous teacher",
+  "cardHandoverNote": "Handover",
+  "cardPausedTitle": "Lessons paused",
+  "cardPausedUntil": "Until {date}",
+  "@cardPausedUntil": {
+    "description": "Return date of a paused learner.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "cardStoppedTitle": "Lessons stopped",
+  "cardReturnSoonTitle": "Lessons resume soon",
+  "cardReturnOn": "Back on {date}",
+  "@cardReturnOn": {
+    "description": "The day a paused learner's lessons resume.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "cardResumedTitle": "Lessons resumed",
+  "cardBonusTitle": "A bonus for you"
 }

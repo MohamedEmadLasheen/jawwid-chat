@@ -528,5 +528,17 @@
   "outcomeStudentNoShow": "غاب الطالب",
   "outcomeTeacherNoShow": "غاب المعلم",
   "outcomeRescheduled": "نُقلت",
-  "lessonKindMakeup": "تعويضية"
+  "lessonKindMakeup": "تعويضية",
+  "cardTransferredTitle": "معلم جديد",
+  "cardTransferredBody": "سيتولى {teacher} التدريس ابتداءً من الآن.",
+  "cardHandoverTitle": "طالب جديد",
+  "cardHandoverFrom": "المعلم السابق",
+  "cardHandoverNote": "ملاحظات التسليم",
+  "cardPausedTitle": "توقف الحصص مؤقتًا",
+  "cardPausedUntil": "حتى {date}",
+  "cardStoppedTitle": "توقفت الحصص",
+  "cardReturnSoonTitle": "تعود الحصص قريبًا",
+  "cardReturnOn": "العودة يوم {date}",
+  "cardResumedTitle": "عادت الحصص",
+  "cardBonusTitle": "مكافأة لك"
 }

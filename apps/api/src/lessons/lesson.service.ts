@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Lesson, LessonReport, LessonRuling, Prisma } from '@prisma/client';
+import { Conversation, Lesson, LessonReport, LessonRuling, Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { AppConfigService } from '../platform/app-config.service';
 import { AuthorizationService, type LessonAct, type LessonStanding } from '../platform/authorization.service';
@@ -19,6 +19,7 @@ import {
   LessonOutcome,
   MessageType,
   Moderation,
+  OnBehalfMode,
   Origin,
   ReceiptState,
   RulingDecision,
@@ -243,6 +244,20 @@ export class LessonService {
         lesson: this.toDto(r.lesson as LessonWithRelations, 'manager', now, escalation),
       })),
       makeupsOverdue: owed.map((l) => this.toDto(l, 'manager', now, escalation)),
+      // PD-11 T3: paused learners coming back within the notice window -- the
+      // team's half of the return notice (the family's half is a card).
+      returningSoon: (
+        await this.prisma.$queryRaw<Array<{ id: string; learner_id: string; name: string; return_on: Date }>>`
+          SELECT s.id::text AS id, s.learner_id::text AS learner_id, l.name, s.return_on
+            FROM chat.learner_suspension s JOIN chat.learner l ON l.id = s.learner_id
+           WHERE s.organization_id = ${actor.organizationId}::uuid AND s.status = 'active' AND s.kind = 'temporary'
+             AND s.return_on - ${Number(await this.config.get('lesson.return_notice_days'))}::int <= current_date
+           ORDER BY s.return_on`
+      ).map((r) => ({
+        suspensionId: r.id,
+        learner: { id: r.learner_id, name: r.name },
+        returnOn: r.return_on.toISOString().slice(0, 10),
+      })),
       scheduleRequests: requests.map((r) => ({
         id: r.id,
         learner: { id: r.learnerId, name: learnerNames.get(r.learnerId) ?? '' },
@@ -663,6 +678,24 @@ export class LessonService {
   ): Promise<string | null> {
     const conv = await this.groupFor(tx, lesson);
     if (!conv) return null;
+    return this.postCardInto(tx, conv, lesson.id, recorder, kind, payload, lang);
+  }
+
+  /**
+   * Post one card into a given conversation (a learner's group, or -- T3 -- a
+   * teacher's supervision chat), in the caller's transaction. Same rules as
+   * postCard: published, authored by the recorder when they are a live member,
+   * by Jawwid otherwise.
+   */
+  async postCardInto(
+    tx: Tx,
+    conv: Conversation,
+    lessonId: string | null,
+    recorder: Actor | null,
+    kind: string,
+    payload: Record<string, unknown>,
+    lang: CardLanguage,
+  ): Promise<string> {
     const locked = await tx.$queryRaw<Array<{ last_seq: bigint }>>`
       SELECT last_seq FROM chat.conversation WHERE id = ${conv.id}::uuid FOR UPDATE`;
     const seq = locked[0].last_seq + BigInt(1);
@@ -679,6 +712,9 @@ export class LessonService {
         conversationId: conv.id,
         authorType: author ? author.kind : ActorKind.SYSTEM,
         authorId: author ? author.actorId : null,
+        // A staff member recording a card in a chat they belong to speaks as
+        // themselves (chat.message requires staff to declare a mode).
+        onBehalfMode: author?.kind === ActorKind.STAFF ? OnBehalfMode.OWNER : null,
         type: MessageType.CARD,
         body,
         visibility: Visibility.CUSTOMER,
@@ -689,7 +725,7 @@ export class LessonService {
       },
     });
     await tx.messageCard.create({
-      data: { messageId: message.id, organizationId: conv.organizationId, kind, lessonId: lesson.id, payload: payload as Prisma.InputJsonValue },
+      data: { messageId: message.id, organizationId: conv.organizationId, kind, lessonId, payload: payload as Prisma.InputJsonValue },
     });
     const recipients = members.filter((m) => m.actorId !== author?.actorId);
     if (recipients.length > 0) {
@@ -723,7 +759,7 @@ export class LessonService {
       actorKind: author ? author.kind : ActorKind.SYSTEM,
       actorId: author ? author.actorId : null,
       type: 'message_sent',
-      payload: { conversationId: conv.id, messageId: message.id, type: MessageType.CARD, card: kind, lessonId: lesson.id },
+      payload: { conversationId: conv.id, messageId: message.id, type: MessageType.CARD, card: kind, lessonId },
     });
     return message.id;
   }

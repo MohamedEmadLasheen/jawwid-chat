@@ -1033,4 +1033,46 @@ class L10nAr extends L10n {
 
   @override
   String get lessonKindMakeup => 'تعويضية';
+
+  @override
+  String get cardTransferredTitle => 'معلم جديد';
+
+  @override
+  String cardTransferredBody(String teacher) {
+    return 'سيتولى $teacher التدريس ابتداءً من الآن.';
+  }
+
+  @override
+  String get cardHandoverTitle => 'طالب جديد';
+
+  @override
+  String get cardHandoverFrom => 'المعلم السابق';
+
+  @override
+  String get cardHandoverNote => 'ملاحظات التسليم';
+
+  @override
+  String get cardPausedTitle => 'توقف الحصص مؤقتًا';
+
+  @override
+  String cardPausedUntil(String date) {
+    return 'حتى $date';
+  }
+
+  @override
+  String get cardStoppedTitle => 'توقفت الحصص';
+
+  @override
+  String get cardReturnSoonTitle => 'تعود الحصص قريبًا';
+
+  @override
+  String cardReturnOn(String date) {
+    return 'العودة يوم $date';
+  }
+
+  @override
+  String get cardResumedTitle => 'عادت الحصص';
+
+  @override
+  String get cardBonusTitle => 'مكافأة لك';
 }

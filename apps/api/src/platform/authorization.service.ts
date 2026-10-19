@@ -57,7 +57,9 @@ export type LessonAct =
   | 'request_schedule_change'
   | 'decide_schedule_change'
   | 'resolve_makeup'
-  | 'read_schedule';
+  | 'read_schedule'
+  | 'transfer'
+  | 'suspend';
 
 /**
  * Who may record what (PD-11's table). The report is the teacher's own words,
@@ -81,6 +83,10 @@ const LESSON_ACTS: Readonly<Record<LessonAct, readonly LessonStanding[]>> = {
   decide_schedule_change: ['manager'],
   resolve_makeup: ['manager'],
   read_schedule: ['manager', 'supervisor', 'teacher', 'family'],
+  // PD-11 T3: moving a child between teachers is the Teachers department's; a
+  // pause or a stop may also be recorded by the child's own (Operations) supervisor.
+  transfer: ['manager'],
+  suspend: ['manager', 'supervisor'],
 };
 
 export interface SendIntent {
