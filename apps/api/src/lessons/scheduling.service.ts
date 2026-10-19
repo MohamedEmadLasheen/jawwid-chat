@@ -184,14 +184,67 @@ export class SchedulingService {
     await this.lessons.requireManager(actor);
     const teacher = await this.orgTeacher(actor, teacherId);
     const day = dateOnlyField(date, 'date');
-    await this.prisma.$transaction(async (tx) => {
-      await tx.teacherDayOff.deleteMany({ where: { teacherId: teacher.id, day: new Date(`${day}T00:00:00Z`) } });
-      await this.audit.audit(tx, {
-        actorId: actor.actorId, action: 'teacher.day_off_removed', entity: 'teacher', entityId: teacher.id,
-        before: { date: day }, reason: 'day off removed',
-      });
-    });
+    // Through write(): a day off the database will not let go (PD-12: one that
+    // belongs to an approved leave) comes back as 409 with the database's reason.
+    await this.lessons.write(() =>
+      this.prisma.$transaction(async (tx) => {
+        await tx.teacherDayOff.deleteMany({ where: { teacherId: teacher.id, day: new Date(`${day}T00:00:00Z`) } });
+        await this.audit.audit(tx, {
+          actorId: actor.actorId, action: 'teacher.day_off_removed', entity: 'teacher', entityId: teacher.id,
+          before: { date: day }, reason: 'day off removed',
+        });
+      }),
+    );
     return this.availability(actorId, teacher.id);
+  }
+
+  /**
+   * What the Teachers department schedules for: every teacher (with their zone)
+   * and every learner (with their teacher, family, current regular times and
+   * any active pause). The Admin Web's Schedules tab reads this; it is the
+   * department's view of the whole organization, as PD-10 gives it.
+   */
+  async roster(actorId: string) {
+    const actor = await this.conversations.requireActor(actorId);
+    await this.lessons.requireManager(actor);
+    const org = actor.organizationId as string;
+    const [teachers, zones, learners, slots, pauses] = await Promise.all([
+      this.prisma.teacher.findMany({ where: { organizationId: org }, select: { id: true, name: true, isActive: true, leftAt: true }, orderBy: { name: 'asc' } }),
+      this.prisma.teacherAvailability.findMany({ where: { organizationId: org }, select: { teacherId: true, timezone: true }, distinct: ['teacherId'] }),
+      this.prisma.learner.findMany({
+        where: { organizationId: org },
+        include: { family: { select: { id: true, displayName: true } } },
+        orderBy: { name: 'asc' },
+        take: 5000,
+      }),
+      this.prisma.learnerScheduleSlot.findMany({ where: { organizationId: org, validTo: null }, orderBy: [{ weekday: 'asc' }, { startMinute: 'asc' }] }),
+      this.prisma.learnerSuspension.findMany({ where: { organizationId: org, status: 'active' } }),
+    ]);
+    const zoneOf = new Map(zones.map((z) => [z.teacherId, z.timezone]));
+    const pauseOf = new Map(pauses.map((p) => [p.learnerId, p]));
+    return {
+      teachers: teachers.map((t) => ({
+        id: t.id,
+        name: t.name,
+        isActive: t.isActive && t.leftAt === null,
+        timezone: zoneOf.get(t.id) ?? null,
+      })),
+      learners: learners.map((l) => {
+        const pause = pauseOf.get(l.id);
+        return {
+          id: l.id,
+          name: l.name,
+          family: { id: l.family.id, displayName: l.family.displayName },
+          teacherId: l.teacherId,
+          slots: slots
+            .filter((x) => x.learnerId === l.id)
+            .map((x) => ({ weekday: x.weekday, start: hhmm(x.startMinute), durationMinutes: x.durationMinutes })),
+          suspension: pause
+            ? { id: pause.id, kind: pause.kind, returnOn: pause.returnOn ? pause.returnOn.toISOString().slice(0, 10) : null }
+            : null,
+        };
+      }),
+    };
   }
 
   // ------------------------------------------------------------------
