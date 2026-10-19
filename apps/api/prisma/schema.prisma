@@ -964,7 +964,11 @@ model Lesson {
   outcomeByKind  String?   @map("outcome_by_kind")
   outcomeBy      String?   @map("outcome_by") @db.Uuid
   outcomeAt      DateTime? @map("outcome_at") @db.Timestamptz
-  createdBy      String    @map("created_by") @db.Uuid
+  /// staff / contact (a make-up the family booked) / system (materialized from a slot).
+  createdByKind  String    @default("staff") @map("created_by_kind")
+  createdBy      String?   @map("created_by") @db.Uuid
+  scheduleSlotId String?   @map("schedule_slot_id") @db.Uuid
+  remindersScheduledAt DateTime? @map("reminders_scheduled_at") @db.Timestamptz
   createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
   updatedAt      DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
@@ -1021,5 +1025,125 @@ model MessageCard {
   payload        Json    @default("{}")
 
   @@map("message_card")
+  @@schema("chat")
+}
+
+/// PD-11 T2: a teacher's weekly working window, in the teacher's time zone.
+model TeacherAvailability {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  teacherId      String   @map("teacher_id") @db.Uuid
+  weekday        Int      @db.SmallInt
+  startMinute    Int      @map("start_minute")
+  endMinute      Int      @map("end_minute")
+  timezone       String
+  createdBy      String   @map("created_by") @db.Uuid
+  createdAt      DateTime @map("created_at") @db.Timestamptz @default(now())
+
+  @@map("teacher_availability")
+  @@schema("chat")
+}
+
+model TeacherDayOff {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  teacherId      String   @map("teacher_id") @db.Uuid
+  day            DateTime @db.Date
+  reason         String?
+  createdBy      String   @map("created_by") @db.Uuid
+  createdAt      DateTime @map("created_at") @db.Timestamptz @default(now())
+
+  @@unique([teacherId, day])
+  @@map("teacher_day_off")
+  @@schema("chat")
+}
+
+/// PD-11 T2: a learner's regular weekly lesson time. Ended, never edited.
+model LearnerScheduleSlot {
+  id              String    @id @default(uuid()) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  learnerId       String    @map("learner_id") @db.Uuid
+  teacherId       String    @map("teacher_id") @db.Uuid
+  weekday         Int       @db.SmallInt
+  startMinute     Int       @map("start_minute")
+  durationMinutes Int       @map("duration_minutes")
+  timezone        String
+  validFrom       DateTime  @map("valid_from") @db.Date
+  validTo         DateTime? @map("valid_to") @db.Date
+  createdBy       String    @map("created_by") @db.Uuid
+  createdAt       DateTime  @map("created_at") @db.Timestamptz @default(now())
+
+  @@map("learner_schedule_slot")
+  @@schema("chat")
+}
+
+model ScheduleChangeRequest {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  learnerId      String    @map("learner_id") @db.Uuid
+  requestedBy    String    @map("requested_by") @db.Uuid
+  slots          Json
+  note           String?
+  status         String    @default("pending")
+  decidedBy      String?   @map("decided_by") @db.Uuid
+  decidedAt      DateTime? @map("decided_at") @db.Timestamptz
+  decisionNote   String?   @map("decision_note")
+  createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
+
+  @@map("schedule_change_request")
+  @@schema("chat")
+}
+
+/// PD-11 T3: a learner moved between teachers. Append-only.
+model LearnerTransfer {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  learnerId      String   @map("learner_id") @db.Uuid
+  fromTeacherId  String?  @map("from_teacher_id") @db.Uuid
+  toTeacherId    String   @map("to_teacher_id") @db.Uuid
+  reasonCode     String   @map("reason_code")
+  note           String?
+  handoverNote   String?  @map("handover_note")
+  decidedBy      String   @map("decided_by") @db.Uuid
+  createdAt      DateTime @map("created_at") @db.Timestamptz @default(now())
+
+  @@map("learner_transfer")
+  @@schema("chat")
+}
+
+/// PD-11 T3: a learner's study paused (temporary, until return_on) or stopped (permanent).
+model LearnerSuspension {
+  id               String    @id @default(uuid()) @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  learnerId        String    @map("learner_id") @db.Uuid
+  kind             String
+  reasonCode       String    @map("reason_code")
+  note             String?
+  startsOn         DateTime  @map("starts_on") @db.Date
+  returnOn         DateTime? @map("return_on") @db.Date
+  status           String    @default("active")
+  endedAt          DateTime? @map("ended_at") @db.Timestamptz
+  endedBy          String?   @map("ended_by") @db.Uuid
+  returnNotifiedAt DateTime? @map("return_notified_at") @db.Timestamptz
+  createdBy        String    @map("created_by") @db.Uuid
+  createdAt        DateTime  @map("created_at") @db.Timestamptz @default(now())
+
+  @@map("learner_suspension")
+  @@schema("chat")
+}
+
+/// PD-10/PD-11: one entry on a teacher's supervision timeline. Append-only.
+model TeacherSupervisionEntry {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  teacherId      String    @map("teacher_id") @db.Uuid
+  kind           String
+  body           String
+  period         DateTime? @db.Date
+  conversationId String?   @map("conversation_id") @db.Uuid
+  createdBy      String    @map("created_by") @db.Uuid
+  createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
+
+  @@map("teacher_supervision_entry")
   @@schema("chat")
 }

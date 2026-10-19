@@ -66,7 +66,60 @@ export function renderCardBody(kind: string, p: Record<string, unknown>, lang: C
           : ar ? `ℹ️ سُجّلت حصة ${learner} غيابًا` : `ℹ️ ${learner}'s lesson is recorded as an absence`,
         line(ar ? 'ملاحظة' : 'Note', p.note),
       );
+    case CardKind.LESSON_MAKEUP_BOOKED:
+      return ar ? `📅 حُجزت حصة تعويضية لـ ${learner}` : `📅 A make-up lesson was booked for ${learner}`;
+    case CardKind.LESSON_MAKEUP_RESOLVED:
+      return join(
+        ar ? `ℹ️ تمت معالجة الحصة التي لم يقدمها المعلم لـ ${learner}` : `ℹ️ The lesson ${learner} missed through the teacher has been resolved`,
+        line(ar ? 'الإجراء' : 'Action', makeupActionLabel(String(p.action ?? ''), ar)),
+        line(ar ? 'ملاحظة' : 'Note', p.note),
+      );
+    case CardKind.SCHEDULE_CHANGE_REQUESTED:
+      return join(
+        ar ? `🗓️ طلب تغيير مواعيد حصص ${learner}` : `🗓️ Request to change ${learner}'s regular lesson times`,
+        line(ar ? 'ملاحظة' : 'Note', p.note),
+        ar ? 'ستراجعه الإدارة.' : 'The supervision team will review it.',
+      );
+    case CardKind.SCHEDULE_CHANGE_DECIDED:
+      return join(
+        p.decision === 'approved'
+          ? ar ? `✅ تم اعتماد المواعيد الجديدة لحصص ${learner}` : `✅ ${learner}'s new regular lesson times are confirmed`
+          : ar ? `ℹ️ لم يُعتمد طلب تغيير مواعيد ${learner}` : `ℹ️ The request to change ${learner}'s times was not approved`,
+        line(ar ? 'ملاحظة' : 'Note', p.note),
+      );
+    case CardKind.LEARNER_TRANSFERRED:
+      return ar
+        ? `👋 سيدرّس ${String(p.teacherName ?? '')} ${learner} ابتداءً من الآن.`
+        : `👋 ${String(p.teacherName ?? '')} will teach ${learner} from now on.`;
+    case CardKind.LEARNER_HANDOVER:
+      return join(
+        ar ? `📝 انضم إليك ${learner}` : `📝 ${learner} is now your student`,
+        line(ar ? 'المعلم السابق' : 'Previous teacher', p.fromTeacherName),
+        line(ar ? 'ملاحظات التسليم' : 'Handover', p.handoverNote),
+      );
+    case CardKind.LEARNER_SUSPENDED:
+      return p.kind === 'temporary'
+        ? ar ? `⏸️ توقفت حصص ${learner} مؤقتًا حتى ${String(p.returnOn)}` : `⏸️ ${learner}'s lessons are paused until ${String(p.returnOn)}`
+        : ar ? `⏹️ توقفت حصص ${learner}` : `⏹️ ${learner}'s lessons have stopped`;
+    case CardKind.LEARNER_RETURN_SOON:
+      return ar
+        ? `🔔 تعود حصص ${learner} يوم ${String(p.returnOn)}`
+        : `🔔 ${learner}'s lessons resume on ${String(p.returnOn)}`;
+    case CardKind.LEARNER_RESUMED:
+      return ar ? `▶️ عادت حصص ${learner}` : `▶️ ${learner}'s lessons have resumed`;
+    case CardKind.TEACHER_BONUS:
+      return join(ar ? '🏅 مكافأة' : '🏅 A bonus for you', line(ar ? 'السبب' : 'Reason', p.reason));
     default:
       return ar ? 'تحديث على الحصة' : 'Lesson update';
+  }
+}
+
+function makeupActionLabel(action: string, ar: boolean): string {
+  switch (action) {
+    case 'substitute_teacher': return ar ? 'معلم بديل' : 'A substitute teacher';
+    case 'family_credit': return ar ? 'رصيد للأسرة' : 'A credit to the family';
+    case 'package_extension': return ar ? 'تمديد الباقة' : 'The package is extended';
+    case 'waived': return ar ? 'لا حاجة لحصة تعويضية' : 'No make-up needed';
+    default: return action;
   }
 }

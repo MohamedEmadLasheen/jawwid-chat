@@ -504,6 +504,21 @@ abstract interface class LessonRepository {
 
   /// `POST /lessons/:id/apology`, `/teacher-apology` or `/late-apology`, by [kind].
   Future<void> apologise(String lessonId, LessonTicketKind kind, String reason);
+
+  /// `GET /lessons/:id/makeup-slots`
+  Future<MakeupOffer> makeupSlots(String lessonId);
+
+  /// `POST /lessons/:id/makeup`
+  Future<void> bookMakeup(String lessonId, DateTime startsAt);
+
+  /// `GET /learners/:id/schedule-options`
+  Future<List<WeeklyOption>> scheduleOptions(String learnerId);
+
+  /// `POST /learners/:id/schedule-change-requests`
+  Future<void> requestScheduleChange(String learnerId, List<WeeklyOption> slots, {String? note});
+
+  /// `GET /lessons?from&to` -- for a teacher, their own lessons.
+  Future<List<ScheduledLesson>> myLessons(DateTime from, DateTime to);
 }
 
 /// The lesson repository of a build with no lesson server (the fixture build, tests
@@ -527,4 +542,23 @@ class NoLessonRepository implements LessonRepository {
   @override
   Future<void> apologise(String lessonId, LessonTicketKind kind, String reason) =>
       throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<MakeupOffer> makeupSlots(String lessonId) =>
+      throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<void> bookMakeup(String lessonId, DateTime startsAt) =>
+      throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<List<WeeklyOption>> scheduleOptions(String learnerId) =>
+      throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<void> requestScheduleChange(String learnerId, List<WeeklyOption> slots, {String? note}) =>
+      throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<List<ScheduledLesson>> myLessons(DateTime from, DateTime to) async => const [];
 }

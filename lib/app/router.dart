@@ -8,11 +8,13 @@ import '../features/calls/presentation/active_call_screen.dart';
 import '../features/calls/presentation/calls_screen.dart';
 import '../features/conversations/application/chat_realtime.dart';
 import '../features/conversations/presentation/chats_screen.dart';
+import '../features/lessons/presentation/teacher_schedule_screen.dart';
 import '../features/messages/presentation/chat_screen_route.dart';
 import '../features/messages/presentation/conversation_media_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/stories/presentation/story_viewer_screen.dart';
+import '../shared/models/user_role.dart';
 import 'providers.dart';
 import 'shells/app_shell.dart';
 
@@ -23,6 +25,10 @@ abstract final class Routes {
   static const chats = '/chats';
   static const calls = '/calls';
   static const settings = '/settings';
+
+  /// PD-9/PD-10: the teacher's own schedule. A parent who follows a link here is sent
+  /// to Chats (see the redirect).
+  static const schedule = '/schedule';
 
   /// Retired destinations. They are not routes any more — Home and Groups both dissolved
   /// into Chats — but they are kept named here because notifications, saved links and
@@ -95,6 +101,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: Routes.settings,
             builder: (context, state) => const SettingsScreen(),
+          ),
+          GoRoute(
+            path: Routes.schedule,
+            builder: (context, state) => const TeacherScheduleScreen(),
           ),
         ],
       ),
@@ -189,6 +199,12 @@ String? _redirect(Ref ref, String location) {
   // to the list that now holds them; Groups arrives at Chats, where the Groups chip is one
   // tap away.
   if (location == Routes.retiredHome || location == Routes.retiredGroups) {
+    return Routes.chats;
+  }
+
+  // The Schedule is a teacher's (PD-10). A parent following a stale or shared link lands
+  // on their chats, where their children's lessons already arrive as cards.
+  if (location == Routes.schedule && ref.read(currentRoleProvider) != UserRole.teacher) {
     return Routes.chats;
   }
 

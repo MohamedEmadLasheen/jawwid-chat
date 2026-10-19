@@ -914,4 +914,172 @@ class L10nEn extends L10n {
 
   @override
   String get cardReason => 'Reason';
+
+  @override
+  String get ticketBookMakeup => 'Book a make-up lesson';
+
+  @override
+  String get ticketRequestScheduleChange => 'Change regular lesson times';
+
+  @override
+  String ticketFor(String name) {
+    return 'For $name';
+  }
+
+  @override
+  String get makeupPickDay => 'Choose a day';
+
+  @override
+  String get makeupPickTime => 'Choose a time';
+
+  @override
+  String get makeupNoSlots =>
+      'No free times in the next two weeks. The supervision team will arrange the make-up.';
+
+  @override
+  String get makeupBook => 'Book';
+
+  @override
+  String makeupLength(int minutes) {
+    return '$minutes minutes';
+  }
+
+  @override
+  String get scheduleChangePick => 'Choose the new weekly times';
+
+  @override
+  String get scheduleChangeHint =>
+      'The supervision team will confirm the change.';
+
+  @override
+  String get scheduleChangeNoOptions =>
+      'There are no other free times right now.';
+
+  @override
+  String get scheduleChangeSend => 'Send request';
+
+  @override
+  String get ticketLoadFailed =>
+      'Couldn\'t load the free times. Please try again.';
+
+  @override
+  String get cardMakeupBookedTitle => 'Make-up lesson booked';
+
+  @override
+  String get cardMakeupResolvedTitle => 'Missed lesson resolved';
+
+  @override
+  String get cardMakeupActionSubstitute => 'A substitute teacher';
+
+  @override
+  String get cardMakeupActionCredit => 'A credit to the family';
+
+  @override
+  String get cardMakeupActionExtension => 'The package is extended';
+
+  @override
+  String get cardMakeupActionWaived => 'No make-up needed';
+
+  @override
+  String get cardScheduleRequestedTitle =>
+      'Request to change the regular times';
+
+  @override
+  String get cardScheduleApprovedTitle => 'New regular times confirmed';
+
+  @override
+  String get cardScheduleRejectedTitle =>
+      'The change of regular times was not approved';
+
+  @override
+  String cardEveryWeek(String when) {
+    return 'Every $when';
+  }
+
+  @override
+  String get tabSchedule => 'Schedule';
+
+  @override
+  String get scheduleEmpty => 'No lessons in the next two weeks.';
+
+  @override
+  String get scheduleLoadFailed => 'Couldn\'t load your schedule.';
+
+  @override
+  String get phaseUpcoming => 'Upcoming';
+
+  @override
+  String get phaseInProgress => 'In progress';
+
+  @override
+  String get phaseAwaitingClose => 'Needs report';
+
+  @override
+  String get phaseOverdue => 'Report overdue';
+
+  @override
+  String get outcomeHeld => 'Held';
+
+  @override
+  String get outcomeStudentApology => 'Student apologised';
+
+  @override
+  String get outcomeTeacherApology => 'Teacher apologised';
+
+  @override
+  String get outcomeAdminCancelled => 'Cancelled';
+
+  @override
+  String get outcomeStudentNoShow => 'Student absent';
+
+  @override
+  String get outcomeTeacherNoShow => 'Teacher absent';
+
+  @override
+  String get outcomeRescheduled => 'Moved';
+
+  @override
+  String get lessonKindMakeup => 'Make-up';
+
+  @override
+  String get cardTransferredTitle => 'New teacher';
+
+  @override
+  String cardTransferredBody(String teacher) {
+    return '$teacher will teach from now on.';
+  }
+
+  @override
+  String get cardHandoverTitle => 'A new student';
+
+  @override
+  String get cardHandoverFrom => 'Previous teacher';
+
+  @override
+  String get cardHandoverNote => 'Handover';
+
+  @override
+  String get cardPausedTitle => 'Lessons paused';
+
+  @override
+  String cardPausedUntil(String date) {
+    return 'Until $date';
+  }
+
+  @override
+  String get cardStoppedTitle => 'Lessons stopped';
+
+  @override
+  String get cardReturnSoonTitle => 'Lessons resume soon';
+
+  @override
+  String cardReturnOn(String date) {
+    return 'Back on $date';
+  }
+
+  @override
+  String get cardResumedTitle => 'Lessons resumed';
+
+  @override
+  String get cardBonusTitle => 'A bonus for you';
 }

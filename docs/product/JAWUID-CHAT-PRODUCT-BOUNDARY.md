@@ -785,6 +785,64 @@ New Students (needs Core's subscription events); **T5** statistics.
 - New Chat → Core events: `lesson.closed`, `enrollment.paused`,
   `enrollment.resumed`, `enrollment.left`, `learner.transferred`.
 
+**T2 as built (2026-10-18).** Migration `20261018140000_chat_pd011_scheduling.sql`.
+- Weekly availability and dated days off are recorded by the Teachers department,
+  in the teacher's IANA time zone. Every conversion to an instant is done by
+  Postgres `at time zone`, so daylight saving is the database's job.
+- A learner's regular times are `chat.learner_schedule_slot` rows, ended and
+  never edited. Lessons are **materialized** from them 4 weeks ahead by the
+  worker (`chat.materialize_lessons`, idempotent).
+- A changed schedule turns the old slots' future open lessons into the new
+  outcome **`rescheduled`**, which statistics do not count.
+- A family books a make-up **only** for a `teacher_apology` / `teacher_no_show`
+  lesson, only into `chat.teacher_free_slots`, and the database keeps one live
+  make-up per missed lesson. A make-up after an excused student apology waits
+  for the academy's notice rule and is not offered yet.
+- An unreplaced teacher-cancelled lesson reaches the needs-action list after
+  `lesson.makeup_window_days` (7). The supervisor's action (`substitute_teacher`,
+  `family_credit`, `package_extension`, `waived`) is a `makeup_followup` ruling,
+  and `lesson.makeup_resolved` tells Core.
+- Reminders are data rules on event `lesson_scheduled`: the family 24 h and
+  30 min before, the teacher 15 min before. Templates name nobody (push privacy,
+  2026-10-14). A reminder whose moment has passed is skipped, never sent late,
+  and closing a lesson early cancels its reminders in the same transaction.
+- The teacher app gains its **Schedule** tab (Chats · Schedule · Calls ·
+  Settings); a parent's tabs are unchanged.
+
+**T3 as built (2026-10-18).** Migration `20261018160000_chat_pd011_transfers_suspensions.sql`.
+- **Transfers** go through `chat.transfer_learner`, the second writer of
+  `chat.learner.teacher_id`. It checks the actor is in the Teachers department
+  (`chat.is_lesson_manager`) and opens the assignment gate for its own statement
+  only. Only a server-side caller can run it (`chat.trusted_staff_actor`).
+- **One transaction:** in the student group the old teacher leaves and the new
+  one joins; family groups gain the new teacher, and the PD-8 trigger prunes the
+  old one; future lessons follow the learner where the new teacher is free and
+  become `rescheduled` otherwise; the regular times end.
+- **Around the function:** the service keeps the same weekly times when the new
+  teacher is free at them. The family's card names the new teacher, never the
+  reason. The handover note reaches the new teacher as a card in their
+  supervision chat. The old teacher's sockets are evicted (RT-009), and
+  `learner.transferred` tells Core.
+- **Suspensions** (`chat.learner_suspension`, one active per learner): the
+  lessons in the window become the new outcome **`suspended`**, which counts
+  against nobody, and the materializer skips paused dates. A permanent stop also
+  ends the regular times.
+- **Return:** the worker posts a return-date card
+  `lesson.return_notice_days` (2) before the day, the team sees it in
+  needs-action as `returningSoon`, and on the day the pause ends by itself and
+  the lessons come back. Both lists are `GET /suspensions`. `packageBalance` is
+  null until Core publishes it (PD-10).
+- **"One lesson per weekly slot and start time"** now holds for live lessons
+  only, so a pause that ends early gets its lessons back.
+- **Teacher Supervision** is a query over records that already exist: the new
+  append-only `chat.teacher_supervision_entry` (bonus, complaint, monthly
+  comment, note), decided rulings, lessons the teacher did not give, transfers in
+  and out, and days off. It is read by the Teachers department and the super
+  admin only.
+- **The bonus ticket** posts a card into the teacher's supervision chat (their
+  direct conversation with the recorder) and tells Core/HR through
+  `teacher.bonus_recorded`. No amount passes through Chat.
+
 **Deprecated behaviour.** None removed. Explicitly **not** built: a generic ticket
 or task entity; any stored package balance; parents changing their regular
 lesson times without approval.

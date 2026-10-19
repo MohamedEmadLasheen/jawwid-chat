@@ -912,4 +912,167 @@ class L10nAr extends L10n {
 
   @override
   String get cardReason => 'السبب';
+
+  @override
+  String get ticketBookMakeup => 'حجز حصة تعويضية';
+
+  @override
+  String get ticketRequestScheduleChange => 'تغيير مواعيد الحصص الثابتة';
+
+  @override
+  String ticketFor(String name) {
+    return 'لـ $name';
+  }
+
+  @override
+  String get makeupPickDay => 'اختر يومًا';
+
+  @override
+  String get makeupPickTime => 'اختر وقتًا';
+
+  @override
+  String get makeupNoSlots =>
+      'لا توجد أوقات متاحة خلال الأسبوعين القادمين، وستتولى الإدارة ترتيب الحصة التعويضية.';
+
+  @override
+  String get makeupBook => 'احجز';
+
+  @override
+  String makeupLength(int minutes) {
+    return '$minutes دقيقة';
+  }
+
+  @override
+  String get scheduleChangePick => 'اختر المواعيد الأسبوعية الجديدة';
+
+  @override
+  String get scheduleChangeHint => 'ستؤكد الإدارة التغيير.';
+
+  @override
+  String get scheduleChangeNoOptions => 'لا توجد مواعيد أخرى متاحة حاليًا.';
+
+  @override
+  String get scheduleChangeSend => 'إرسال الطلب';
+
+  @override
+  String get ticketLoadFailed => 'تعذّر تحميل الأوقات المتاحة. حاول مرة أخرى.';
+
+  @override
+  String get cardMakeupBookedTitle => 'حُجزت حصة تعويضية';
+
+  @override
+  String get cardMakeupResolvedTitle => 'تمت معالجة الحصة الفائتة';
+
+  @override
+  String get cardMakeupActionSubstitute => 'معلم بديل';
+
+  @override
+  String get cardMakeupActionCredit => 'رصيد للأسرة';
+
+  @override
+  String get cardMakeupActionExtension => 'تمديد الباقة';
+
+  @override
+  String get cardMakeupActionWaived => 'لا حاجة لحصة تعويضية';
+
+  @override
+  String get cardScheduleRequestedTitle => 'طلب تغيير المواعيد الثابتة';
+
+  @override
+  String get cardScheduleApprovedTitle => 'اعتُمدت المواعيد الجديدة';
+
+  @override
+  String get cardScheduleRejectedTitle => 'لم يُعتمد تغيير المواعيد';
+
+  @override
+  String cardEveryWeek(String when) {
+    return 'كل $when';
+  }
+
+  @override
+  String get tabSchedule => 'الجدول';
+
+  @override
+  String get scheduleEmpty => 'لا توجد حصص خلال الأسبوعين القادمين.';
+
+  @override
+  String get scheduleLoadFailed => 'تعذّر تحميل جدولك.';
+
+  @override
+  String get phaseUpcoming => 'قادمة';
+
+  @override
+  String get phaseInProgress => 'جارية';
+
+  @override
+  String get phaseAwaitingClose => 'بانتظار التقرير';
+
+  @override
+  String get phaseOverdue => 'تأخر التقرير';
+
+  @override
+  String get outcomeHeld => 'عُقدت';
+
+  @override
+  String get outcomeStudentApology => 'اعتذر الطالب';
+
+  @override
+  String get outcomeTeacherApology => 'اعتذر المعلم';
+
+  @override
+  String get outcomeAdminCancelled => 'أُلغيت';
+
+  @override
+  String get outcomeStudentNoShow => 'غاب الطالب';
+
+  @override
+  String get outcomeTeacherNoShow => 'غاب المعلم';
+
+  @override
+  String get outcomeRescheduled => 'نُقلت';
+
+  @override
+  String get lessonKindMakeup => 'تعويضية';
+
+  @override
+  String get cardTransferredTitle => 'معلم جديد';
+
+  @override
+  String cardTransferredBody(String teacher) {
+    return 'سيتولى $teacher التدريس ابتداءً من الآن.';
+  }
+
+  @override
+  String get cardHandoverTitle => 'طالب جديد';
+
+  @override
+  String get cardHandoverFrom => 'المعلم السابق';
+
+  @override
+  String get cardHandoverNote => 'ملاحظات التسليم';
+
+  @override
+  String get cardPausedTitle => 'توقف الحصص مؤقتًا';
+
+  @override
+  String cardPausedUntil(String date) {
+    return 'حتى $date';
+  }
+
+  @override
+  String get cardStoppedTitle => 'توقفت الحصص';
+
+  @override
+  String get cardReturnSoonTitle => 'تعود الحصص قريبًا';
+
+  @override
+  String cardReturnOn(String date) {
+    return 'العودة يوم $date';
+  }
+
+  @override
+  String get cardResumedTitle => 'عادت الحصص';
+
+  @override
+  String get cardBonusTitle => 'مكافأة لك';
 }
