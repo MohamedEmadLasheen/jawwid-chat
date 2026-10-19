@@ -2730,6 +2730,66 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Shown in your child\'s groups, to their teacher and supervisor.'**
   String get childrenPhotosHint;
+
+  /// No description provided for @starAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Star'**
+  String get starAction;
+
+  /// No description provided for @unstarAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Unstar'**
+  String get unstarAction;
+
+  /// No description provided for @pinAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin message'**
+  String get pinAction;
+
+  /// No description provided for @unpinAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin message'**
+  String get unpinAction;
+
+  /// No description provided for @starredMark.
+  ///
+  /// In en, this message translates to:
+  /// **'Starred'**
+  String get starredMark;
+
+  /// No description provided for @pinnedMark.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned'**
+  String get pinnedMark;
+
+  /// No description provided for @pinnedBannerOne.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned message'**
+  String get pinnedBannerOne;
+
+  /// No description provided for @pinnedBannerOf.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned message {index} of {total}'**
+  String pinnedBannerOf(int index, int total);
+
+  /// No description provided for @starredMessagesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Starred messages'**
+  String get starredMessagesTitle;
+
+  /// No description provided for @starredMessagesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No starred messages yet. Long-press a message and choose Star.'**
+  String get starredMessagesEmpty;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

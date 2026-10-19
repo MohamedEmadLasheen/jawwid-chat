@@ -30,6 +30,7 @@ import '../../conversations/application/conversations_controller.dart';
 import '../../lessons/presentation/lesson_ticket_sheet.dart';
 import '../../supervision/presentation/supervision_ticket_sheet.dart';
 import '../../trials/presentation/trial_report_sheet.dart';
+import '../application/marks_providers.dart';
 import '../application/messages_controller.dart';
 import '../application/voice_composer_controller.dart';
 import 'attachment_preview.dart';
@@ -37,6 +38,7 @@ import 'media_viewer.dart';
 import 'message_actions.dart';
 import 'message_bubble.dart';
 import 'message_composer.dart';
+import 'pinned_banner.dart';
 
 /// One conversation.
 ///
@@ -321,7 +323,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final controller =
         ref.read(messagesControllerProvider(widget.conversationId).notifier);
 
-    final result = await showMessageActions(context, message: message);
+    final marks = ref.read(messageMarksRepositoryProvider);
+    final result = await showMessageActions(context, message: message, withMarks: marks.isAvailable);
     if (result == null || !mounted) return;
 
     final reaction = result.reaction;
@@ -333,6 +336,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     switch (result.action!) {
       case MessageAction.reply:
         setState(() => _replyingTo = _previewOf(message));
+      case MessageAction.star:
+        await _guard(() => _mark(message, star: true));
+      case MessageAction.pin:
+        await _guard(() => _mark(message, star: false));
       case MessageAction.copy:
         await _copy(message);
       case MessageAction.open:
@@ -342,6 +349,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       case MessageAction.deleteForEveryone:
         await _guard(() => controller.deleteForEveryone(message));
     }
+  }
+
+  /// Star (private) or pin (for everyone here) -- toggled from the message's
+  /// own state -- then re-read the page (the flags) and the pinned bar. The
+  /// server decides who may pin; a refusal surfaces through [_guard].
+  Future<void> _mark(Message message, {required bool star}) async {
+    final id = message.id;
+    if (id == null) return;
+    final marks = ref.read(messageMarksRepositoryProvider);
+    final conversationId = widget.conversationId;
+    if (star) {
+      await (message.isStarred ? marks.unstar(conversationId, id) : marks.star(conversationId, id));
+    } else {
+      await (message.isPinned ? marks.unpin(conversationId, id) : marks.pin(conversationId, id));
+    }
+    if (!mounted) return;
+    ref.invalidate(pinnedMessagesProvider(conversationId));
+    await ref.read(messagesControllerProvider(conversationId).notifier).refreshLatest();
   }
 
   /// Copy to the clipboard, and say so without a dialog (§11).
@@ -627,6 +652,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               message: l10n.messageQueuedOffline,
               tone: JawwidBannerTone.warning,
             ),
+          PinnedBanner(
+            conversationId: widget.conversationId,
+            onJump: (messageId) => _jumpToMessage(messageId, state),
+          ),
           Expanded(child: _body(state, controller, l10n)),
           MessageComposer(
             onAttach: widget.isReadOnly ? null : _attach,

@@ -133,6 +133,8 @@ export function ChatThread({
   const refreshThread = () => {
     void queryClient.invalidateQueries({ queryKey: chatKeys.approvals(conversationId) })
     void queryClient.invalidateQueries({ queryKey: chatKeys.messages(conversationId) })
+    void queryClient.invalidateQueries({ queryKey: chatKeys.pins(conversationId) })
+    void queryClient.invalidateQueries({ queryKey: chatKeys.starred })
   }
   const [older, setOlder] = useState<ChatMessage[]>([])
   const [olderCursor, setOlderCursor] = useState<string | null | undefined>(undefined)
@@ -330,6 +332,8 @@ export function ChatThread({
         </div>
       </header>
 
+      <PinnedBar conversationId={conversationId} scroller={scroller} />
+
       <div
         className="thread-body"
         ref={scroller}
@@ -383,6 +387,8 @@ export function ChatThread({
                         mine?.emoji === emoji ? chatApi.unreact(conversationId, m.id) : chatApi.react(conversationId, m.id, emoji),
                       )
                     }}
+                    onStar={() => void act(() => (m.starred ? chatApi.unstar(conversationId, m.id) : chatApi.star(conversationId, m.id)))}
+                    onPin={() => void act(() => (m.pinned ? chatApi.unpin(conversationId, m.id) : chatApi.pin(conversationId, m.id)))}
                     onDeleteForMe={() => void act(() => chatApi.deleteForMe(conversationId, m.id))}
                     onDeleteForEveryone={() => void act(() => chatApi.deleteForEveryone(conversationId, m.id))}
                   />
@@ -455,6 +461,8 @@ function MessageItem({
   onDecided,
   onReply,
   onReact,
+  onStar,
+  onPin,
   onDeleteForMe,
   onDeleteForEveryone,
 }: {
@@ -470,6 +478,8 @@ function MessageItem({
   onDecided: () => void
   onReply: () => void
   onReact: (emoji: string) => void
+  onStar: () => void
+  onPin: () => void
   onDeleteForMe: () => void
   onDeleteForEveryone: () => void
 }) {
@@ -514,6 +524,11 @@ function MessageItem({
   const items: MenuItem[] = live
     ? [
         { key: 'reply', label: copy.reply, icon: 'reply', onSelect: onReply },
+        { key: 'star', label: m.starred ? copy.unstar : copy.star, icon: 'star' as const, onSelect: onStar },
+        // Only a published message can be pinned; the server decides who may write here.
+        ...(m.moderation === 'published'
+          ? [{ key: 'pin', label: m.pinned ? copy.unpinMessage : copy.pinMessage, icon: 'pin' as const, onSelect: onPin }]
+          : []),
         ...(m.body
           ? [{ key: 'copy', label: copy.copy, icon: 'copy' as const, onSelect: () => void navigator.clipboard?.writeText(m.body ?? '') }]
           : []),
@@ -529,6 +544,7 @@ function MessageItem({
     <li
       className={`bubble-row ${SIDE_CLASS[side]} cw-msg${runStart ? ' cw-msg--run-start' : ''}${identity !== 'none' ? ' cw-msg--with-sender' : ''}`}
       data-seq={m.seq ?? undefined}
+      data-msg-id={m.id}
     >
       <div className="cw-msg__line">
         {identity === 'lead' && (
@@ -571,6 +587,16 @@ function MessageItem({
             </>
           )}
           <span className="bubble__meta">
+            {m.pinned && (
+              <span className="cw-mark" title={copy.pinnedMessageMark} aria-label={copy.pinnedMessageMark}>
+                <Icon name="pin" size={12} />
+              </span>
+            )}
+            {m.starred && (
+              <span className="cw-mark cw-mark--star" title={copy.starredMark} aria-label={copy.starredMark}>
+                <Icon name="star" size={12} />
+              </span>
+            )}
             {m.moderation === 'pending' && <Badge tone="waiting">{copy.pending}</Badge>}
             {m.moderation === 'rejected' && <Badge tone="danger">{copy.rejected}</Badge>}
             <time dateTime={m.createdAt}>{time(m.createdAt)}</time>
@@ -671,5 +697,56 @@ function AttachmentView({ a, copy }: { a: ChatAttachment; copy: ChatCopy }) {
       <Icon name="paperclip" size={14} />
       <span dir="auto">{a.originalName ?? copy.attachment}</span>
     </a>
+  )
+}
+
+/**
+ * The conversation's pinned messages (at most three), WhatsApp-style: one bar
+ * under the header showing a pin; tapping it scrolls to that message and moves
+ * the bar on to the next. Only pins this viewer could read are listed.
+ */
+function PinnedBar({ conversationId, scroller }: { conversationId: string; scroller: React.RefObject<HTMLDivElement | null> }) {
+  const { locale } = useI18n()
+  const copy = chatCopyFor(locale)
+  const pins = useQuery({ queryKey: chatKeys.pins(conversationId), queryFn: () => chatApi.pins(conversationId) })
+  const list = pins.data ?? []
+  const [index, setIndex] = useState(0)
+  if (list.length === 0) return null
+  // Newest first, as WhatsApp shows it; the counter reads oldest = 1.
+  const shown = list[list.length - 1 - (index % list.length)]!
+  const position = list.length - (index % list.length)
+  const m = shown.message
+
+  return (
+    <button
+      type="button"
+      className="cw-pinned"
+      aria-label={`${copy.pinnedBar(position, list.length)}${list.length > 1 ? ` · ${copy.pinnedNext}` : ''}`}
+      onClick={() => {
+        setIndex((i) => i + 1)
+        // Matched by value, not by building a selector from the id.
+        const el = [...(scroller.current?.querySelectorAll<HTMLElement>('[data-msg-id]') ?? [])].find(
+          (node) => node.dataset.msgId === m.id,
+        )
+        el?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+        el?.classList.add('cw-msg--flash')
+        setTimeout(() => el?.classList.remove('cw-msg--flash'), 1200)
+      }}
+    >
+      {list.length > 1 && (
+        <span className="cw-pinned__ticks" aria-hidden="true">
+          {list.map((p, i) => (
+            <span key={p.message.id} className={i === position - 1 ? 'cw-pinned__tick cw-pinned__tick--on' : 'cw-pinned__tick'} />
+          ))}
+        </span>
+      )}
+      <Icon name="pin" size={16} />
+      <span className="cw-pinned__text">
+        <span className="cw-pinned__label">{copy.pinnedBar(position, list.length)}</span>
+        <span className="cw-pinned__body" dir="auto">
+          {m.body || (copy.preview[m.attachments[0]?.kind ?? m.type] ?? copy.attachment)}
+        </span>
+      </span>
+    </button>
   )
 }

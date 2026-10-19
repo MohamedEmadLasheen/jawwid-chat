@@ -11,6 +11,7 @@ import '../features/conversations/presentation/chats_screen.dart';
 import '../features/lessons/presentation/teacher_schedule_screen.dart';
 import '../features/messages/presentation/chat_screen_route.dart';
 import '../features/messages/presentation/conversation_media_screen.dart';
+import '../features/messages/presentation/starred_messages_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/stories/presentation/story_viewer_screen.dart';
@@ -59,6 +60,9 @@ abstract final class Routes {
 
   /// PD-12: a teacher's own leave balance and requests.
   static const myLeave = '/settings/leave';
+
+  /// The viewer's starred messages (their private bookmarks).
+  static const starred = '/settings/starred';
 
   /// One story, opened full-screen from the rail.
   ///
@@ -151,6 +155,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.myLeave,
         builder: (context, state) => const MyLeaveScreen(),
+      ),
+      GoRoute(
+        path: Routes.starred,
+        builder: (context, state) => const StarredMessagesScreen(),
       ),
       // Full-screen, above the tab bar: a story is the whole viewport for as long as it is
       // open, and a tab bar underneath it would be something to tap by accident.

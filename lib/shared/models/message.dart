@@ -142,6 +142,8 @@ class Message {
     this.isDeleted = false,
     this.failureCode,
     this.card,
+    this.isStarred = false,
+    this.isPinned = false,
   });
 
   /// Server id. Null until the server has accepted the message.
@@ -195,6 +197,12 @@ class Message {
   /// writes one; the client never composes a card.
   final MessageCard? card;
 
+  /// The viewer's own private bookmark (server `MessageDto.starred`).
+  final bool isStarred;
+
+  /// Pinned for everyone in the conversation (server `MessageDto.pinned`).
+  final bool isPinned;
+
   bool get isSystem => kind == MessageKind.system;
   bool get isPending => deliveryState.isInFlight;
   bool get canRetry => deliveryState == DeliveryState.failed;
@@ -229,6 +237,8 @@ class Message {
         isDeleted: isDeleted,
         failureCode: failureCode,
         card: card,
+        isStarred: isStarred,
+        isPinned: isPinned,
       );
 
   Message copyWith({
@@ -240,6 +250,8 @@ class Message {
     List<Reaction>? reactions,
     String? failureCode,
     bool? isDeleted,
+    bool? isStarred,
+    bool? isPinned,
   }) {
     return Message(
       id: id ?? this.id,
@@ -264,6 +276,8 @@ class Message {
       isDeleted: isDeleted ?? this.isDeleted,
       failureCode: failureCode ?? this.failureCode,
       card: card,
+      isStarred: isStarred ?? this.isStarred,
+      isPinned: isPinned ?? this.isPinned,
     );
   }
 }

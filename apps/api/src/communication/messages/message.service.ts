@@ -1,6 +1,6 @@
 import { signActorAvatar } from '../profile/avatar-urls';
 import { Inject, Injectable } from '@nestjs/common';
-import { Message, Prisma } from '@prisma/client';
+import { Conversation, Message, Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
 import { AppConfigService } from '../../platform/app-config.service';
@@ -20,6 +20,7 @@ import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
 import {
   MessageDto,
+  MessageWithRelations,
   messageAuthorRef,
   toMessageDto,
   needsReply,
@@ -490,10 +491,21 @@ export class MessageService {
     // map would be one round trip per message -- the shape this whole change exists
     // to remove.
     const authors = await this.authorsFor(rows);
+    // The viewer's own stars and the conversation's pins on this page: two
+    // indexed lookups, then flags on each message.
+    const ids = rows.map((m) => m.id);
+    const [starRows, pinRows] = await Promise.all([
+      this.prisma.messageStar.findMany({ where: { actorId: actor.actorId, messageId: { in: ids } }, select: { messageId: true } }),
+      this.prisma.messagePin.findMany({ where: { conversationId: conv.id }, select: { messageId: true } }),
+    ]);
+    const starredIds = new Set(starRows.map((r) => r.messageId));
+    const pinnedIds = new Set(pinRows.map((r) => r.messageId));
     // Photos are signed for this viewer in THIS conversation: pure HMAC, no I/O.
-    const messages = rows.map((m) =>
-      toMessageDto(m, signed, authors, (author) => signActorAvatar(author, conv.id, actor.actorId)),
-    );
+    const messages = rows.map((m) => ({
+      ...toMessageDto(m, signed, authors, (author) => signActorAvatar(author, conv.id, actor.actorId)),
+      starred: starredIds.has(m.id),
+      pinned: pinnedIds.has(m.id),
+    }));
     const nextBefore =
       !ascending && rows.length === limit ? (rows[rows.length - 1].seq?.toString() ?? null) : null;
 
@@ -737,6 +749,203 @@ export class MessageService {
         emoji: existing.emoji,
       });
     });
+  }
+
+  // -------------------------------------------------------------------
+  // Star (private) and pin (shared, at most three)
+  // -------------------------------------------------------------------
+
+  /** At most this many pins per conversation; a new one replaces the oldest (owner decision). */
+  static readonly MAX_PINS = 3;
+
+  /**
+   * Whether this actor may WRITE in the conversation now: exactly the decision a
+   * send takes (staff scope, BR-1, archived, silent members, internal notes).
+   * "Anyone who can write may pin" (owner decision 2026-10-19) is this check.
+   */
+  private async mayWrite(actor: Actor, conv: Conversation, visibility: string) {
+    const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
+    const family = conv.familyId
+      ? await this.prisma.family.findUnique({ where: { id: conv.familyId }, select: { ownerId: true } })
+      : null;
+    const members = await this.prisma.conversationMember.findMany({
+      where: { conversationId: conv.id, leftAt: null },
+      select: { actorKind: true },
+    });
+    return this.authz.canSend(
+      actor,
+      conv,
+      membership,
+      { visibility },
+      new Date(),
+      family?.ownerId ?? null,
+      members.map((m) => m.actorKind),
+      await this.conversations.liveMembersOf(conv.id),
+    );
+  }
+
+  /** A private bookmark on a message the actor can read. Idempotent. */
+  async star(messageId: string, actorId: string): Promise<void> {
+    const { actor, message } = await this.loadForActor(messageId, actorId);
+    if (message.deletedForAll) throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'message not found', 404);
+    await this.prisma.messageStar.upsert({
+      where: { messageId_actorId: { messageId, actorId: actor.actorId } },
+      create: { messageId, actorId: actor.actorId },
+      update: {},
+    });
+  }
+
+  async unstar(messageId: string, actorId: string): Promise<void> {
+    const actor = await this.conversations.requireActor(actorId);
+    if (!isUuid(messageId)) throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'message not found', 404);
+    // Removing one's own bookmark needs no read check: it reveals and changes nothing else.
+    await this.prisma.messageStar.deleteMany({ where: { messageId, actorId: actor.actorId } });
+  }
+
+  /**
+   * Pin a published message for everyone in its conversation. Anyone who may
+   * write there may pin; a fourth pin replaces the oldest, in one transaction
+   * under a lock on the conversation, so two pins at once cannot exceed three.
+   */
+  async pin(messageId: string, actorId: string): Promise<void> {
+    const { actor, message, conv } = await this.loadForActor(messageId, actorId);
+    if (message.deletedForAll || message.moderation !== Moderation.PUBLISHED || message.type === MessageType.SYSTEM) {
+      throw new CommError(CommErrorCode.VALIDATION, 'only a published message can be pinned', 400);
+    }
+    const decision = await this.mayWrite(actor, conv, message.visibility);
+    if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+
+    await this.prisma.$transaction(async (tx) => {
+      await this.conversations.assertActorLive(tx, actor); // RT-032
+      await tx.$queryRaw`select id from chat.conversation where id = ${conv.id}::uuid for update`;
+      const pins = await tx.messagePin.findMany({
+        where: { conversationId: conv.id },
+        orderBy: { pinnedAt: 'asc' },
+      });
+      if (pins.some((p) => p.messageId === messageId)) return;
+      const excess = pins.length - (MessageService.MAX_PINS - 1);
+      if (excess > 0) {
+        await tx.messagePin.deleteMany({
+          where: { conversationId: conv.id, messageId: { in: pins.slice(0, excess).map((p) => p.messageId) } },
+        });
+      }
+      await tx.messagePin.create({
+        data: { conversationId: conv.id, messageId, pinnedBy: actor.actorId, pinnedByKind: actor.kind },
+      });
+      await this.announcePins(tx, conv, actor, 'message_pinned', messageId);
+    });
+  }
+
+  /** Unpin: the same right as pinning -- anyone who may write there. */
+  async unpin(messageId: string, actorId: string): Promise<void> {
+    const { actor, message, conv } = await this.loadForActor(messageId, actorId);
+    const decision = await this.mayWrite(actor, conv, message.visibility);
+    if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+    await this.prisma.$transaction(async (tx) => {
+      const removed = await tx.messagePin.deleteMany({ where: { conversationId: conv.id, messageId } });
+      if (removed.count > 0) await this.announcePins(tx, conv, actor, 'message_unpinned', messageId);
+    });
+  }
+
+  /** Every client in the conversation re-reads it (pins are part of it); the audit log records who. */
+  private async announcePins(tx: Prisma.TransactionClient, conv: Conversation, actor: Actor, type: string, messageId: string) {
+    await this.outbox.enqueue(tx, CommEvent.CONVERSATION_UPDATED, {
+      conversationId: conv.id,
+      familyId: conv.familyId,
+      state: conversationState(conv),
+      needsReply: needsReply(conv),
+      lastActivityAt: conv.lastActivityAt.toISOString(),
+      handlerId: await this.conversations.responsibleSupervisor(conv),
+    });
+    await this.audit.audit(tx, {
+      actorId: actor.actorId,
+      action: type === 'message_pinned' ? 'message.pinned' : 'message.unpinned',
+      entity: 'conversation',
+      entityId: conv.id,
+      after: { messageId },
+      reason: 'changed by a member who may write in the conversation',
+    });
+  }
+
+  /**
+   * The conversation's pins as THIS viewer may see them, oldest first: the same
+   * visibility rule as the message page, so a parent never sees a pinned
+   * internal note and nobody sees what they deleted for themselves.
+   */
+  async pins(conversationId: string, actorId: string): Promise<{ pins: Array<{ pinnedAt: string; pinnedBy: string; message: MessageDto }> }> {
+    const actor = await this.conversations.requireActor(actorId);
+    const conv = await this.conversations.requireConversation(conversationId);
+    const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
+    const decision = await this.conversations.canReadResolved(actor, conv, membership);
+    if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+
+    const pins = await this.prisma.messagePin.findMany({ where: { conversationId: conv.id }, orderBy: { pinnedAt: 'asc' } });
+    if (pins.length === 0) return { pins: [] };
+    const rows = await this.prisma.message.findMany({
+      where: { AND: [this.visibilityFilter(actor, conv.id, {} as ListMessagesInput), { id: { in: pins.map((p) => p.messageId) }, deletedForAll: false }] },
+      include: { attachments: true, reactions: true, receipts: true, card: true },
+    });
+    const dtos = await this.dtosFor(rows, conv.id, actor);
+    const byId = new Map(dtos.map((d) => [d.id, d]));
+    return {
+      pins: pins
+        .filter((p) => byId.has(p.messageId))
+        .map((p) => ({ pinnedAt: p.pinnedAt.toISOString(), pinnedBy: p.pinnedBy, message: { ...byId.get(p.messageId)!, pinned: true } })),
+    };
+  }
+
+  /**
+   * The actor's starred messages, newest star first, across every conversation
+   * they may STILL read -- a star does not outlive access: a message from a
+   * conversation they left, or one now hidden from them, is simply not listed.
+   */
+  async starred(
+    actorId: string,
+    page: { before?: string; limit?: number } = {},
+  ): Promise<{ items: Array<{ starredAt: string; conversationId: string; message: MessageDto }>; nextBefore: string | null }> {
+    const actor = await this.conversations.requireActor(actorId);
+    const limit = Math.min(Math.max(Number(page.limit) || 30, 1), 100);
+    const before = page.before ? new Date(page.before) : null;
+    const stars = await this.prisma.messageStar.findMany({
+      where: { actorId: actor.actorId, ...(before && !Number.isNaN(before.getTime()) ? { starredAt: { lt: before } } : {}) },
+      orderBy: { starredAt: 'desc' },
+      take: limit,
+    });
+    if (stars.length === 0) return { items: [], nextBefore: null };
+    const candidates = await this.prisma.message.findMany({
+      where: { id: { in: stars.map((s) => s.messageId) }, deletedForAll: false },
+      select: { id: true, conversationId: true },
+    });
+    const items: Array<{ starredAt: string; conversationId: string; message: MessageDto }> = [];
+    const byConv = new Map<string, string[]>();
+    for (const c of candidates) if (c.conversationId) byConv.set(c.conversationId, [...(byConv.get(c.conversationId) ?? []), c.id]);
+    const dtos = new Map<string, MessageDto>();
+    for (const [convId, ids] of byConv) {
+      const conv = await this.conversations.requireConversation(convId).catch(() => null);
+      if (!conv) continue;
+      const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
+      if (!(await this.conversations.canReadResolved(actor, conv, membership)).allowed) continue;
+      const rows = await this.prisma.message.findMany({
+        where: { AND: [this.visibilityFilter(actor, conv.id, {} as ListMessagesInput), { id: { in: ids } }] },
+        include: { attachments: true, reactions: true, receipts: true, card: true },
+      });
+      for (const d of await this.dtosFor(rows, conv.id, actor)) dtos.set(d.id, { ...d, starred: true });
+    }
+    for (const s of stars) {
+      const m = dtos.get(s.messageId);
+      if (m?.conversationId) items.push({ starredAt: s.starredAt.toISOString(), conversationId: m.conversationId, message: m });
+    }
+    return {
+      items,
+      nextBefore: stars.length === limit ? stars[stars.length - 1]!.starredAt.toISOString() : null,
+    };
+  }
+
+  /** Message rows to DTOs for one viewer in one conversation: signed media, names, photos. */
+  private async dtosFor(rows: MessageWithRelations[], conversationId: string, actor: Actor): Promise<MessageDto[]> {
+    const signed = await this.attachments.signUrlsForMessages(rows.map((m) => m.id), actor.actorId);
+    const authors = await this.authorsFor(rows);
+    return rows.map((m) => toMessageDto(m, signed, authors, (author) => signActorAvatar(author, conversationId, actor.actorId)));
   }
 
   // -------------------------------------------------------------------

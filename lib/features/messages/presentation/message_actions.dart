@@ -11,7 +11,7 @@ import '../../../shared/utils/text_direction.dart';
 /// A choice, not a command: the sheet decides *what was asked for* and the chat
 /// screen decides what to do about it. Keeping the two apart is what lets the
 /// sheet be tested without a controller, a repository or a network.
-enum MessageAction { reply, copy, open, deleteForMe, deleteForEveryone }
+enum MessageAction { reply, star, pin, copy, open, deleteForMe, deleteForEveryone }
 
 /// The reactions a parent can leave.
 ///
@@ -63,6 +63,7 @@ class MessageActionResult {
 Future<MessageActionResult?> showMessageActions(
   BuildContext context, {
   required Message message,
+  bool withMarks = false,
 }) {
   if (!canActOn(message)) return Future.value(null);
 
@@ -72,7 +73,7 @@ Future<MessageActionResult?> showMessageActions(
     // from and its last row disappears behind the tab bar.
     useRootNavigator: true,
     showDragHandle: true,
-    builder: (sheetContext) => _MessageActionsSheet(message: message),
+    builder: (sheetContext) => _MessageActionsSheet(message: message, withMarks: withMarks),
   );
 }
 
@@ -88,7 +89,10 @@ bool canActOn(Message message) {
 }
 
 /// The actions valid for one message, in the order they are shown.
-List<MessageAction> actionsFor(Message message) {
+/// [withMarks] offers Star and Pin -- only when this build can reach those
+/// routes. Pin is offered for a message that reached everyone; the server
+/// decides whether this viewer may write (and so pin) here.
+List<MessageAction> actionsFor(Message message, {bool withMarks = false}) {
   final hasText = message.body.trim().isNotEmpty;
   final openable = message.attachments.any(
     (a) => a.kind == MessageKind.image || a.kind == MessageKind.file,
@@ -96,6 +100,8 @@ List<MessageAction> actionsFor(Message message) {
 
   return [
     MessageAction.reply,
+    if (withMarks) MessageAction.star,
+    if (withMarks && message.approvalState == ApprovalState.notRequired) MessageAction.pin,
     if (hasText) MessageAction.copy,
     if (openable) MessageAction.open,
     MessageAction.deleteForMe,
@@ -108,14 +114,15 @@ List<MessageAction> actionsFor(Message message) {
 }
 
 class _MessageActionsSheet extends StatelessWidget {
-  const _MessageActionsSheet({required this.message});
+  const _MessageActionsSheet({required this.message, required this.withMarks});
 
   final Message message;
+  final bool withMarks;
 
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
-    final actions = actionsFor(message);
+    final actions = actionsFor(message, withMarks: withMarks);
     final mine = message.reactions.firstWhereOrNull((r) => r.mine)?.emoji;
 
     return SafeArea(
@@ -150,8 +157,8 @@ class _MessageActionsSheet extends StatelessWidget {
                 children: [
           for (final action in actions)
             ListTile(
-              leading: Icon(_iconFor(action)),
-              title: Text(_labelFor(action, l10n)),
+              leading: Icon(_iconFor(action, message)),
+              title: Text(_labelFor(action, l10n, message)),
               // The two deletes are the only entries that need explaining,
               // because "for me" and "for everyone" look alike and do not
               // behave alike.
@@ -184,16 +191,20 @@ class _MessageActionsSheet extends StatelessWidget {
       action == MessageAction.deleteForMe ||
       action == MessageAction.deleteForEveryone;
 
-  static IconData _iconFor(MessageAction action) => switch (action) {
+  static IconData _iconFor(MessageAction action, Message message) => switch (action) {
         MessageAction.reply => Icons.reply,
+        MessageAction.star => message.isStarred ? Icons.star : Icons.star_border,
+        MessageAction.pin => message.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
         MessageAction.copy => Icons.copy_outlined,
         MessageAction.open => Icons.open_in_new,
         MessageAction.deleteForMe => Icons.delete_outline,
         MessageAction.deleteForEveryone => Icons.delete_forever_outlined,
       };
 
-  static String _labelFor(MessageAction action, L10n l10n) => switch (action) {
+  static String _labelFor(MessageAction action, L10n l10n, Message message) => switch (action) {
         MessageAction.reply => l10n.replyAction,
+        MessageAction.star => message.isStarred ? l10n.unstarAction : l10n.starAction,
+        MessageAction.pin => message.isPinned ? l10n.unpinAction : l10n.pinAction,
         MessageAction.copy => l10n.copyAction,
         MessageAction.open => l10n.openAction,
         MessageAction.deleteForMe => l10n.deleteForMeAction,

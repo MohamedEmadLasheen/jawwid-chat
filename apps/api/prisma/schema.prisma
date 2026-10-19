@@ -333,6 +333,32 @@ model MessageReaction {
   @@schema("chat")
 }
 
+/// A private bookmark (20261020090000). SQL owns the DDL; no relation fields so
+/// the Message model stays untouched -- rows cascade with their message.
+model MessageStar {
+  messageId String   @map("message_id") @db.Uuid
+  actorId   String   @map("actor_id") @db.Uuid
+  starredAt DateTime @default(now()) @map("starred_at") @db.Timestamptz
+
+  @@id([messageId, actorId])
+  @@map("message_star")
+  @@schema("chat")
+}
+
+/// A message pinned for everyone in its conversation; at most three (trigger
+/// chat.enforce_message_pin, 20261020090000).
+model MessagePin {
+  conversationId String   @map("conversation_id") @db.Uuid
+  messageId      String   @map("message_id") @db.Uuid
+  pinnedBy       String   @map("pinned_by") @db.Uuid
+  pinnedByKind   String   @map("pinned_by_kind")
+  pinnedAt       DateTime @default(now()) @map("pinned_at") @db.Timestamptz
+
+  @@id([conversationId, messageId])
+  @@map("message_pin")
+  @@schema("chat")
+}
+
 model MessageReceipt {
   id          String    @id @default(uuid()) @db.Uuid
   messageId   String    @map("message_id") @db.Uuid

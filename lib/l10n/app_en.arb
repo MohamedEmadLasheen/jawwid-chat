@@ -863,5 +863,25 @@
   "profilePhotoFailed": "The photo could not be saved. Try again.",
   "profilePhotoInvalid": "Use a JPEG, PNG or WebP photo, at least 64 × 64 pixels and under 2 MB.",
   "childrenPhotosTitle": "Children's photos",
-  "childrenPhotosHint": "Shown in your child's groups, to their teacher and supervisor."
+  "childrenPhotosHint": "Shown in your child's groups, to their teacher and supervisor.",
+  "starAction": "Star",
+  "unstarAction": "Unstar",
+  "pinAction": "Pin message",
+  "unpinAction": "Unpin message",
+  "starredMark": "Starred",
+  "pinnedMark": "Pinned",
+  "pinnedBannerOne": "Pinned message",
+  "pinnedBannerOf": "Pinned message {index} of {total}",
+  "@pinnedBannerOf": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "starredMessagesTitle": "Starred messages",
+  "starredMessagesEmpty": "No starred messages yet. Long-press a message and choose Star."
 }

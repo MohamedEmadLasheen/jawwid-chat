@@ -395,6 +395,8 @@ abstract final class WireMappers {
       replyTo: null,
       replyToMessageId: json['replyToMessageId'] as String?,
       card: messageCard(json['card']),
+      isStarred: json['starred'] == true,
+      isPinned: json['pinned'] == true,
       reactions: [
         for (final entry in byEmoji.entries)
           Reaction(

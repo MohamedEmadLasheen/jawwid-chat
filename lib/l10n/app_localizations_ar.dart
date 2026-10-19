@@ -1466,4 +1466,37 @@ class L10nAr extends L10n {
 
   @override
   String get childrenPhotosHint => 'تظهر في مجموعات طفلك لمعلمه ومشرفه.';
+
+  @override
+  String get starAction => 'تمييز بنجمة';
+
+  @override
+  String get unstarAction => 'إلغاء التمييز';
+
+  @override
+  String get pinAction => 'تثبيت الرسالة';
+
+  @override
+  String get unpinAction => 'إلغاء تثبيت الرسالة';
+
+  @override
+  String get starredMark => 'مميّزة بنجمة';
+
+  @override
+  String get pinnedMark => 'مثبّتة';
+
+  @override
+  String get pinnedBannerOne => 'رسالة مثبّتة';
+
+  @override
+  String pinnedBannerOf(int index, int total) {
+    return 'رسالة مثبّتة $index من $total';
+  }
+
+  @override
+  String get starredMessagesTitle => 'الرسائل المميّزة بنجمة';
+
+  @override
+  String get starredMessagesEmpty =>
+      'لم تميّز أي رسالة بعد. اضغط مطولًا على رسالة واختر «تمييز بنجمة».';
 }

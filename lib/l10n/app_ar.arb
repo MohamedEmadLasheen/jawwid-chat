@@ -654,5 +654,15 @@
   "profilePhotoFailed": "تعذّر حفظ الصورة. حاول مرة أخرى.",
   "profilePhotoInvalid": "استخدم صورة JPEG أو PNG أو WebP، بحجم ٦٤ × ٦٤ بكسل على الأقل وأقل من ٢ ميغابايت.",
   "childrenPhotosTitle": "صور الأطفال",
-  "childrenPhotosHint": "تظهر في مجموعات طفلك لمعلمه ومشرفه."
+  "childrenPhotosHint": "تظهر في مجموعات طفلك لمعلمه ومشرفه.",
+  "starAction": "تمييز بنجمة",
+  "unstarAction": "إلغاء التمييز",
+  "pinAction": "تثبيت الرسالة",
+  "unpinAction": "إلغاء تثبيت الرسالة",
+  "starredMark": "مميّزة بنجمة",
+  "pinnedMark": "مثبّتة",
+  "pinnedBannerOne": "رسالة مثبّتة",
+  "pinnedBannerOf": "رسالة مثبّتة {index} من {total}",
+  "starredMessagesTitle": "الرسائل المميّزة بنجمة",
+  "starredMessagesEmpty": "لم تميّز أي رسالة بعد. اضغط مطولًا على رسالة واختر «تمييز بنجمة»."
 }

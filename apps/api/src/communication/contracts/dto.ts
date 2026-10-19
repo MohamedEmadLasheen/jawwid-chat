@@ -84,6 +84,10 @@ export interface MessageDto {
   createdAt: string;
   attachments: AttachmentDto[];
   reactions: Array<{ actorId: string; emoji: string }>;
+  /** The VIEWER's private bookmark. Set on the message page and the starred list. */
+  starred?: boolean;
+  /** Pinned for everyone in this conversation (at most three). */
+  pinned?: boolean;
   receipts: Array<{ actorId: string; state: string; deliveredAt: string | null; readAt: string | null }>;
   /**
    * PD-11: present only when `type` is `card` -- what a ticket recorded, for the
@@ -416,7 +420,7 @@ export function messageAuthorRef(
   return m.authorId ? { actorId: m.authorId, actorKind: m.authorType } : null;
 }
 
-type MessageWithRelations = Message & {
+export type MessageWithRelations = Message & {
   attachments?: MessageAttachment[];
   reactions?: MessageReaction[];
   receipts?: MessageReceipt[];

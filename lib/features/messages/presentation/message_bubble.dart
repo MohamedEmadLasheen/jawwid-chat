@@ -461,6 +461,22 @@ class _StatusLine extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // Pinned (for everyone) and starred (the viewer's own), each with a
+        // spoken label -- never the glyph alone (§53).
+        if (message.isPinned) ...[
+          Semantics(
+            label: l10n.pinnedMark,
+            child: Icon(Icons.push_pin, size: 12, color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(width: Spacing.spacing1),
+        ],
+        if (message.isStarred) ...[
+          Semantics(
+            label: l10n.starredMark,
+            child: Icon(Icons.star, size: 12, color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(width: Spacing.spacing1),
+        ],
         Text(stamp, style: muted),
         if (message.isMine) ...[
           const SizedBox(width: Spacing.spacing2),

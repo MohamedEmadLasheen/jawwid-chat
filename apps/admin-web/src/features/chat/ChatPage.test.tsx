@@ -752,3 +752,83 @@ describe('Profile photos', () => {
     expect(rowOf('Kid group').querySelector('img')?.getAttribute('src')).toBe('http://x/kid')
   })
 })
+
+describe('Star and pin (group B)', () => {
+  type Call = { method: string; path: string }
+  function stubMarks(state: { messages: ChatMessage[]; pins: ChatMessage[]; starred: ChatMessage[] }) {
+    const calls: Call[] = []
+    const json = (data: unknown, status = 200) =>
+      new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const path = new URL(String(input), 'http://localhost').pathname.replace(/^\/api\/v1/, '')
+        const method = init?.method ?? 'GET'
+        calls.push({ method, path })
+        if (path === '/me') return json(ADMIN)
+        if (path === '/approvals/pending') return json({ approvals: [] })
+        if (path === '/me/starred') {
+          return json({ items: state.starred.map((m) => ({ starredAt: m.createdAt, conversationId: 'c1', message: { ...m, starred: true } })), nextBefore: null })
+        }
+        if (path === '/conversations') return json({ conversations: [conv('c1', { title: 'Kid group' })] })
+        if (path === '/conversations/c1') return json(conv('c1', { title: 'Kid group' }))
+        if (path === '/conversations/c1/messages/pins') {
+          return json({ pins: state.pins.map((m) => ({ pinnedAt: m.createdAt, pinnedBy: 'x', message: { ...m, pinned: true } })) })
+        }
+        if (path === '/conversations/c1/messages') return json({ messages: [...state.messages].reverse(), nextBefore: null })
+        if (/\/messages\/[^/]+\/(star|pin)$/.test(path) || path.endsWith('/messages/read')) return json({ ok: true })
+        return json({ error: { code: 'NOT_FOUND', message: 'nope' } }, 404)
+      }),
+    )
+    return calls
+  }
+
+  beforeEach(() => fakeSocket.reset())
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('stars and pins from the message menu, and shows both marks', async () => {
+    const calls = stubMarks({ messages: [msg('m1', 1), msg('m2', 2, { starred: true, pinned: true })], pins: [], starred: [] })
+    renderChat('/chat/c1')
+    await screen.findByText('body m1')
+
+    const row2 = screen.getByText('body m2').closest('li')!
+    expect(within(row2).getByLabelText('Starred')).toBeInTheDocument()
+    expect(within(row2).getByLabelText('Pinned')).toBeInTheDocument()
+
+    const row1 = screen.getByText('body m1').closest('li')!
+    fireEvent.click(within(row1).getByRole('button', { name: 'Message options' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Star' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/conversations/c1/messages/m1/star')).toBe(true))
+
+    fireEvent.click(within(row1).getByRole('button', { name: 'Message options' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Pin message' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/conversations/c1/messages/m1/pin')).toBe(true))
+
+    // Already starred and pinned: the menu offers the undo.
+    fireEvent.click(within(row2).getByRole('button', { name: 'Message options' }))
+    expect(await screen.findByRole('menuitem', { name: 'Unstar' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Unpin message' })).toBeInTheDocument()
+  })
+
+  it('shows the newest pin in a bar; with several, the bar counts and moves on', async () => {
+    const one = msg('m1', 1, { body: 'the schedule' })
+    const two = msg('m2', 2, { body: 'the meeting link' })
+    stubMarks({ messages: [one, two], pins: [one, two], starred: [] })
+    renderChat('/chat/c1')
+    const bar = await screen.findByRole('button', { name: /Pinned message 2 of 2/ })
+    expect(within(bar).getByText('the meeting link')).toBeInTheDocument()
+    fireEvent.click(bar)
+    expect(await screen.findByRole('button', { name: /Pinned message 1 of 2/ })).toBeInTheDocument()
+  })
+
+  it('lists starred messages and opens the conversation a star is in', async () => {
+    stubMarks({ messages: [msg('m1', 1)], pins: [], starred: [msg('s1', 9, { body: 'keep this one' })] })
+    renderChat()
+    await screen.findByText('Kid group')
+    fireEvent.click(screen.getByRole('button', { name: 'Starred messages' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Starred messages' })
+    fireEvent.click(await within(dialog).findByText('keep this one'))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(await screen.findByText('body m1')).toBeInTheDocument()
+  })
+})

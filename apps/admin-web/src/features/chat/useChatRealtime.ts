@@ -102,7 +102,13 @@ export function useChatRealtime(conversationIds: readonly string[]): void {
     }
     const onList = (payload: { conversationId?: unknown } | undefined) => {
       const id = typeof payload?.conversationId === 'string' ? payload.conversationId : null
-      if (id) void queryClient.invalidateQueries({ queryKey: chatKeys.conversation(id) })
+      if (id) {
+        void queryClient.invalidateQueries({ queryKey: chatKeys.conversation(id) })
+        // A pin or unpin arrives as conversation.updated: the pinned bar and
+        // the messages' pinned flags re-read too.
+        void queryClient.invalidateQueries({ queryKey: chatKeys.pins(id) })
+        void queryClient.invalidateQueries({ queryKey: chatKeys.messages(id) })
+      }
       refreshList()
     }
 

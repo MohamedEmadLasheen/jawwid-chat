@@ -1,3 +1,4 @@
+import { StarredController } from './api/starred.controller';
 import { ProfilePhotoController } from './api/profile-photo.controller';
 import { AvatarService } from './profile/avatar.service';
 import { Module } from '@nestjs/common';
@@ -65,6 +66,7 @@ import { StoryController } from './api/story.controller';
     StorageController,
     MediaController,
     ProfilePhotoController,
+    StarredController,
     StoryController,
   ],
   providers: [

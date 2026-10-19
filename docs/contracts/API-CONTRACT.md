@@ -545,6 +545,29 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 - Response: the bytes, `Content-Type` as stored, `X-Content-Type-Options: nosniff`, `Content-Disposition: inline`, `Cache-Control: private, no-store`, `Accept-Ranges: bytes`; single-range requests → 206 with `Content-Range`; out-of-range → 416. No storage URL is ever returned.
 - Guarantee: a deactivation, a removal or a deletion refuses the very NEXT request on a link minted earlier. Not covered: bytes already delivered, and one response already streaming when the change commits.
 
+### Starred and pinned messages (2026-10-19, owner decisions: anyone who can write may pin; at most 3)
+
+**Star: a private bookmark.** Nobody else ever sees it.
+- `POST` and `DELETE /conversations/:cid/messages/:mid/star`.
+- Starring requires the caller to be able to read the message, and the message must not be deleted for everyone.
+- Unstarring always succeeds for the caller's own star.
+- `GET /me/starred?before=&limit=` returns `{ items: [{ starredAt, conversationId, message: MessageDto }], nextBefore }`. Items are newest star first, and only from conversations the caller may still read (the same visibility rule as the message page).
+
+**Pin: shared with everyone in the conversation.**
+- `POST` and `DELETE /conversations/:cid/messages/:mid/pin`.
+- Allowed exactly when the caller may WRITE there: the same `canSend` decision a send takes. Being able to read is not enough; an archived conversation refuses with `COMM.CONVERSATION_ARCHIVED`.
+- Only a published, non-system message that is not deleted can be pinned (otherwise 400 `COMM.VALIDATION`).
+- At most 3 per conversation. A fourth replaces the oldest, in one transaction under a lock on the conversation row. The `chat.enforce_message_pin` trigger also enforces the cap, and that the message belongs to the conversation, for any writer.
+- Every pin or unpin emits `conversation.updated` (clients re-read the page and the pins) and writes `chat.audit_log` (`message.pinned` or `message.unpinned`).
+- `GET /conversations/:cid/messages/pins` returns `{ pins: [{ pinnedAt, pinnedBy, message: MessageDto }] }`, oldest first. It holds only the pins this viewer could read anyway, so a pinned internal note is never shown to a family.
+
+**`MessageDto` fields:**
+- `starred`: the viewer's own bookmark.
+- `pinned`: pinned for everyone.
+- Both are set on the message page, the pins list and the starred list.
+
+**Schema:** migration `20261020090000_chat_message_star_pin.sql` adds `chat.message_star` and `chat.message_pin`. Both cascade with their message, and RLS is on with no policy (owner connection only).
+
 ### Profile photos in chat (2026-10-19, owner decision: everyone, WhatsApp-style, children included)
 
 Who has a photo:

@@ -1468,4 +1468,37 @@ class L10nEn extends L10n {
   @override
   String get childrenPhotosHint =>
       'Shown in your child\'s groups, to their teacher and supervisor.';
+
+  @override
+  String get starAction => 'Star';
+
+  @override
+  String get unstarAction => 'Unstar';
+
+  @override
+  String get pinAction => 'Pin message';
+
+  @override
+  String get unpinAction => 'Unpin message';
+
+  @override
+  String get starredMark => 'Starred';
+
+  @override
+  String get pinnedMark => 'Pinned';
+
+  @override
+  String get pinnedBannerOne => 'Pinned message';
+
+  @override
+  String pinnedBannerOf(int index, int total) {
+    return 'Pinned message $index of $total';
+  }
+
+  @override
+  String get starredMessagesTitle => 'Starred messages';
+
+  @override
+  String get starredMessagesEmpty =>
+      'No starred messages yet. Long-press a message and choose Star.';
 }
