@@ -305,6 +305,10 @@ export const CardKind = {
   LEAVE_DECLINED: 'leave_declined',
   LEAVE_WITHDRAWN: 'leave_withdrawn',
   LEAVE_CANCELLED: 'leave_cancelled',
+  /** PD-12 S2: a confirmed ladder step, in the teacher's supervision conversation. */
+  DISCIPLINE_WARNING: 'discipline_warning',
+  DISCIPLINE_DEDUCTION: 'discipline_deduction',
+  DISCIPLINE_SUSPENSION: 'discipline_suspension',
 } as const;
 export type CardKind = (typeof CardKind)[keyof typeof CardKind];
 

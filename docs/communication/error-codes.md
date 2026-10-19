@@ -132,6 +132,11 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.SUPERVISION_DENIED` | 403 | Only the teacher themselves, or the Teachers department, opens a supervision conversation. |
 | `COMM.SUPERVISION_NOT_FOUND` | 404 | No such active teacher in the caller's organization. |
 
+| `COMM.DISCIPLINE_NOT_FOUND` | 404 | No such violation, lesson or teacher in the caller's organization. |
+| `COMM.DISCIPLINE_DENIED` | 403 | Discipline is read, recorded and decided only by the Teachers department and the super admin. Never retry. |
+| `COMM.DISCIPLINE_STATE` | 409 | Not allowed now: already decided, below the late threshold, the lesson was not held, the suspension starts in the past, or the teacher still has students (permanent suspension). |
+| `COMM.DISCIPLINE_LESSONS_COLLIDE` | 409 | Open lessons fall inside the suspension. Decide again with `cancelCollidingLessons: true` to cancel them (each family is told in its group). |
+
 Issuing a certificate answers `COMM.ATTACHMENT_NOT_IN_CONVERSATION` (403) for a
 file that was not uploaded into the learner's group, and
 `COMM.ATTACHMENT_TYPE_NOT_ALLOWED` (400) when the stored bytes are not the PDF or

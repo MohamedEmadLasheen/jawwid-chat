@@ -48,6 +48,10 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'story.media_retention_hours': 72,
   /** PD-9: an open lesson this long after its end is escalated to the Teachers department. */
   'lesson.escalation_after_minutes': 1440,
+  /** PD-12 default: a held lesson counts as late only from this many minutes. */
+  'teacher.late_threshold_minutes': 10,
+  /** PD-12 default: a temporary suspension's length when the approver does not change it. */
+  'teacher.suspension_default_days': 7,
   /** PD-11 T2: a teacher-cancelled lesson with no make-up this many days later goes to a supervisor. */
   'lesson.makeup_window_days': 7,
   /** How far ahead lessons are materialized from regular times. */

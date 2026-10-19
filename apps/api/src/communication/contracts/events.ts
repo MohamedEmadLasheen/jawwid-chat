@@ -73,6 +73,10 @@ export const CommEvent = {
   LEARNER_ENROLLMENT_CHANGED: 'learner.enrollment_changed',
   /** PD-11 T3, for Core/HR: a teacher bonus was recorded. The amount is payroll's, not Chat's. */
   TEACHER_BONUS_RECORDED: 'teacher.bonus_recorded',
+  /** PD-12 S2, for Core payroll: a deduction step was confirmed. The amount is payroll's, never Chat's. */
+  TEACHER_DEDUCTION_APPLIED: 'teacher.deduction_applied',
+  /** PD-12 S2, for Core/HR: a teacher was suspended, temporarily (with dates) or permanently. */
+  TEACHER_SUSPENDED: 'teacher.suspended',
 } as const;
 
 export type CommEventName = (typeof CommEvent)[keyof typeof CommEvent];
@@ -263,6 +267,8 @@ export interface CommEventPayloads {
   [CommEvent.LEARNER_TRANSFERRED]: LearnerTransferredPayload;
   [CommEvent.LEARNER_ENROLLMENT_CHANGED]: LearnerEnrollmentChangedPayload;
   [CommEvent.TEACHER_BONUS_RECORDED]: TeacherBonusRecordedPayload;
+  [CommEvent.TEACHER_DEDUCTION_APPLIED]: TeacherDeductionAppliedPayload;
+  [CommEvent.TEACHER_SUSPENDED]: TeacherSuspendedPayload;
 }
 
 export interface LearnerTransferredPayload {
@@ -284,6 +290,24 @@ export interface LearnerEnrollmentChangedPayload {
 export interface TeacherBonusRecordedPayload {
   teacherId: string;
   entryId: string;
+}
+
+export interface TeacherDeductionAppliedPayload {
+  teacherId: string;
+  violationId: string;
+  /** 1 or 2: the first or second deduction of the month. */
+  step: 1 | 2;
+  /** YYYY-MM, the payroll month it belongs to. */
+  month: string;
+}
+
+export interface TeacherSuspendedPayload {
+  teacherId: string;
+  suspensionId: string;
+  violationId: string;
+  kind: 'temporary' | 'permanent';
+  startsOn: string;
+  endsOn: string | null;
 }
 
 export interface LessonMakeupResolvedPayload {
