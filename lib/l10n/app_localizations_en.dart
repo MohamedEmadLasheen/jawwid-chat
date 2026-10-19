@@ -1340,4 +1340,41 @@ class L10nEn extends L10n {
 
   @override
   String get progressCertificatesTitle => 'Certificates';
+
+  @override
+  String get cardDisciplineWarningTitle => 'Warning';
+
+  @override
+  String get cardDisciplineDeduction1Title => 'First deduction';
+
+  @override
+  String get cardDisciplineDeduction2Title => 'Second deduction';
+
+  @override
+  String get cardDisciplineTemporaryTitle => 'Temporary suspension';
+
+  @override
+  String get cardDisciplinePermanentTitle => 'Permanent suspension';
+
+  @override
+  String get cardViolation => 'What happened';
+
+  @override
+  String cardViolationLate(String minutes) {
+    return '$minutes minutes late';
+  }
+
+  @override
+  String get cardViolationNoShow => 'Absent from the lesson';
+
+  @override
+  String get cardViolationApology => 'Apologised for the lesson';
+
+  @override
+  String cardViolationStep(String step) {
+    return 'Violation $step this month';
+  }
+
+  @override
+  String get cardPayrollNote => 'The amount is set in payroll.';
 }

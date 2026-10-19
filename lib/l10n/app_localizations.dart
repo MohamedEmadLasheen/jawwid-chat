@@ -2490,6 +2490,72 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Certificates'**
   String get progressCertificatesTitle;
+
+  /// No description provided for @cardDisciplineWarningTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Warning'**
+  String get cardDisciplineWarningTitle;
+
+  /// No description provided for @cardDisciplineDeduction1Title.
+  ///
+  /// In en, this message translates to:
+  /// **'First deduction'**
+  String get cardDisciplineDeduction1Title;
+
+  /// No description provided for @cardDisciplineDeduction2Title.
+  ///
+  /// In en, this message translates to:
+  /// **'Second deduction'**
+  String get cardDisciplineDeduction2Title;
+
+  /// No description provided for @cardDisciplineTemporaryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Temporary suspension'**
+  String get cardDisciplineTemporaryTitle;
+
+  /// No description provided for @cardDisciplinePermanentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Permanent suspension'**
+  String get cardDisciplinePermanentTitle;
+
+  /// No description provided for @cardViolation.
+  ///
+  /// In en, this message translates to:
+  /// **'What happened'**
+  String get cardViolation;
+
+  /// No description provided for @cardViolationLate.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} minutes late'**
+  String cardViolationLate(String minutes);
+
+  /// No description provided for @cardViolationNoShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Absent from the lesson'**
+  String get cardViolationNoShow;
+
+  /// No description provided for @cardViolationApology.
+  ///
+  /// In en, this message translates to:
+  /// **'Apologised for the lesson'**
+  String get cardViolationApology;
+
+  /// No description provided for @cardViolationStep.
+  ///
+  /// In en, this message translates to:
+  /// **'Violation {step} this month'**
+  String cardViolationStep(String step);
+
+  /// No description provided for @cardPayrollNote.
+  ///
+  /// In en, this message translates to:
+  /// **'The amount is set in payroll.'**
+  String get cardPayrollNote;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

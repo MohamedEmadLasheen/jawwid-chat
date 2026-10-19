@@ -611,5 +611,16 @@
   "cardDaysReturned": "أيام أُعيدت",
   "cardCongratulations": "مبارك! الشهادة مرفقة.",
   "leaveNotAllowed": "لا يمكن طلب هذه الأيام: تتداخل مع طلب آخر أو مضت.",
-  "progressCertificatesTitle": "الشهادات"
+  "progressCertificatesTitle": "الشهادات",
+  "cardDisciplineWarningTitle": "تنبيه",
+  "cardDisciplineDeduction1Title": "الخصم الأول",
+  "cardDisciplineDeduction2Title": "الخصم الثاني",
+  "cardDisciplineTemporaryTitle": "إيقاف مؤقت",
+  "cardDisciplinePermanentTitle": "إيقاف نهائي",
+  "cardViolation": "ما حدث",
+  "cardViolationLate": "تأخر {minutes} دقيقة",
+  "cardViolationNoShow": "غياب عن الحصة",
+  "cardViolationApology": "اعتذار عن الحصة",
+  "cardViolationStep": "المخالفة رقم {step} هذا الشهر",
+  "cardPayrollNote": "يُحدَّد المبلغ في الرواتب."
 }

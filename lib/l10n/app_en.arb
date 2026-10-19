@@ -806,5 +806,30 @@
   "cardDaysReturned": "Days returned",
   "cardCongratulations": "Congratulations! The certificate is attached.",
   "leaveNotAllowed": "These dates can't be requested: they overlap another request or have already passed.",
-  "progressCertificatesTitle": "Certificates"
+  "progressCertificatesTitle": "Certificates",
+  "cardDisciplineWarningTitle": "Warning",
+  "cardDisciplineDeduction1Title": "First deduction",
+  "cardDisciplineDeduction2Title": "Second deduction",
+  "cardDisciplineTemporaryTitle": "Temporary suspension",
+  "cardDisciplinePermanentTitle": "Permanent suspension",
+  "cardViolation": "What happened",
+  "cardViolationLate": "{minutes} minutes late",
+  "@cardViolationLate": {
+    "placeholders": {
+      "minutes": {
+        "type": "String"
+      }
+    }
+  },
+  "cardViolationNoShow": "Absent from the lesson",
+  "cardViolationApology": "Apologised for the lesson",
+  "cardViolationStep": "Violation {step} this month",
+  "@cardViolationStep": {
+    "placeholders": {
+      "step": {
+        "type": "String"
+      }
+    }
+  },
+  "cardPayrollNote": "The amount is set in payroll."
 }
