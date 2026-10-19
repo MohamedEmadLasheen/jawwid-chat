@@ -290,7 +290,7 @@ export function ChatThread({
         </Link>
         {conv && (
           <button type="button" className="cw-head__who" onClick={onToggleInfo} aria-label={group ? copy.groupInfo : copy.contactInfo}>
-            <ConversationAvatar c={conv} name={name} />
+            <ConversationAvatar c={conv} name={name} selfId={staff?.id} />
             <span className="thread-head__text">
               <span className="thread-head__name" dir="auto">{name}</span>
               <span className="thread-head__sub">
@@ -533,7 +533,7 @@ function MessageItem({
       <div className="cw-msg__line">
         {identity === 'lead' && (
           <span className={`cw-msg__avatar cw-tone--${nameTone(m.authorId ?? m.authorKind)}`} title={authorName(m, copy)}>
-            <Avatar name={authorName(m, copy)} seed={m.authorId ?? m.authorKind} />
+            <Avatar name={authorName(m, copy)} seed={m.authorId ?? m.authorKind} src={m.authorAvatarUrl} />
           </span>
         )}
         {identity === 'follow' && <span className="cw-msg__avatar" aria-hidden="true" />}

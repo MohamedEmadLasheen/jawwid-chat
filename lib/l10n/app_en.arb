@@ -853,5 +853,15 @@
   "cardTrialSubscribedTitle": "Subscribed",
   "cardTrialNotSubscribedTitle": "Did not subscribe",
   "cardTrialLevel": "Level",
-  "cardTrialAwaitingCore": "Counts once Core confirms the subscription."
+  "cardTrialAwaitingCore": "Counts once Core confirms the subscription.",
+  "profilePhotoTitle": "Profile photo",
+  "profilePhotoHint": "Everyone you chat with sees this photo.",
+  "profilePhotoAdd": "Add photo",
+  "profilePhotoChange": "Change photo",
+  "profilePhotoRemove": "Remove photo",
+  "profilePhotoSaving": "Saving…",
+  "profilePhotoFailed": "The photo could not be saved. Try again.",
+  "profilePhotoInvalid": "Use a JPEG, PNG or WebP photo, at least 64 × 64 pixels and under 2 MB.",
+  "childrenPhotosTitle": "Children's photos",
+  "childrenPhotosHint": "Shown in your child's groups, to their teacher and supervisor."
 }

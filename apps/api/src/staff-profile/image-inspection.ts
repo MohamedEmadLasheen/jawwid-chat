@@ -200,3 +200,14 @@ function inspectWebp(b: Buffer): InspectedImage | null {
 
   return null;
 }
+
+/** What a refused photo is told, for each reason. Shared by every profile-photo writer. */
+export const AVATAR_REJECTION_MESSAGE: Record<AvatarRejection, string> = {
+  empty: 'the uploaded photo is empty',
+  too_large_bytes: `a profile photo must be at most ${MAX_AVATAR_BYTES} bytes`,
+  unrecognized: 'the uploaded file is not a JPEG, PNG or WebP image',
+  type_mismatch: 'the uploaded bytes do not match the declared image type',
+  animated: 'animated images are not accepted as a profile photo',
+  too_small: 'a profile photo must be at least 64 x 64 pixels',
+  too_large_dimensions: 'a profile photo must be at most 4096 x 4096 pixels',
+};

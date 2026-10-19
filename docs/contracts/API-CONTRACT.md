@@ -545,6 +545,55 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 - Response: the bytes, `Content-Type` as stored, `X-Content-Type-Options: nosniff`, `Content-Disposition: inline`, `Cache-Control: private, no-store`, `Accept-Ranges: bytes`; single-range requests → 206 with `Content-Range`; out-of-range → 416. No storage URL is ever returned.
 - Guarantee: a deactivation, a removal or a deletion refuses the very NEXT request on a link minted earlier. Not covered: bytes already delivered, and one response already streaming when the change commits.
 
+### Profile photos in chat (2026-10-19, owner decision: everyone, WhatsApp-style, children included)
+
+Who has a photo:
+- **Staff:** unchanged. They set it on their staff profile (`/staff-profiles/:ref/avatar…`, RT-037 directory rule).
+- **Parents and teachers:** set their own.
+- **Parents:** also set their children's.
+
+The photos reach chat as signed links on the payloads below. A client never builds a link and never sees an object key.
+
+**Payload fields** (all are `string | null`, signed for the VIEWER in the context named):
+- `MessageDto.authorAvatarUrl`: the author's photo in this conversation.
+- `ConversationMemberDto.avatarUrl`: the member's photo in this conversation.
+- `ConversationLearnerDto.avatarUrl`: the child's photo, on `GET /conversations` and `GET /conversations/:id`.
+- No `ConversationDto.avatarUrl`. A client pictures a 1:1 by the other member and a student group by its learner.
+
+**`GET /media/avatars/:id`**
+- Auth: `@Public()`, signed exactly as `/media/attachments` (`v`, `a`, `e`, `s`).
+- `:id` is `<kind>.<id>.<context>`:
+  - `kind` is `staff`, `contact`, `teacher` or `learner`;
+  - `context` is a conversation id, or `self`.
+- The link also carries `k`: 8 hex characters of the stored key's SHA-256. A new photo is therefore a new URL. `k` is not signed and grants nothing.
+- Expiry is bucketed to the hour, so a list re-read every minute hands out the same URL.
+- On every request:
+  1. signature + expiry (403);
+  2. the reader is live (403);
+  3. the decision, otherwise 404:
+     - same organization;
+     - the stored key is `avatars/<kind>/<id>/<uuid>`;
+     - for `self`: the reader's own photo, or a child of the reader's own family;
+     - for a conversation: the reader may read it NOW (staff scope included), and the person is or was a member of it or wrote in it, or the child is the one it is about.
+- Response headers match `/media/attachments` (`private, no-store`).
+
+**Endpoints** (`profile-photo.controller.ts`, `communication/profile/avatar.service.ts`):
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/me/photo` | none | `{ avatarUrl, children: [{ id, name, avatarUrl }] }`. `children` is filled for a parent only. |
+| POST | `/me/avatar/upload` | `{ mimeType, byteSize }` | A signed PUT under `avatars/<contact|teacher>/<self>/`. JPEG/PNG/WebP, at most 2 MiB. |
+| POST | `/me/avatar` | `{ objectKey }` | `{ avatarUrl }` |
+| DELETE | `/me/avatar` | none | `{ avatarUrl: null }` |
+| POST · POST · DELETE | `/me/children/:learnerId/avatar/upload`, `/me/children/:learnerId/avatar` | as above | As above, under `avatars/learner/<learnerId>/`, for a learner of the caller's own family only. |
+
+**Errors:**
+- `COMM.PROFILE_PHOTO_INVALID` (400): type, size or dimensions; bytes that are not a real image; or a key outside the owner's prefix.
+- `COMM.PROFILE_PHOTO_DENIED` (403): staff calling `/me/avatar`.
+- `COMM.PROFILE_PHOTO_NOT_FOUND` (404): any other refusal.
+
+**What a commit does:** checks the key structurally, inspects the stored bytes (`judgeAvatar`), updates only `avatar_object_key`, writes `chat.audit_log` (`profile_photo.set|removed`), and deletes the replaced object. The database CHECK of 20261014130000 independently holds every key to its own row's prefix.
+
 ### 3.7 Approvals (`approval.controller.ts`, `approval.service.ts`)
 
 ```

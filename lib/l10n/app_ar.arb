@@ -644,5 +644,15 @@
   "cardTrialSubscribedTitle": "اشترك",
   "cardTrialNotSubscribedTitle": "لم يشترك",
   "cardTrialLevel": "المستوى",
-  "cardTrialAwaitingCore": "تُحتسب بعد أن يؤكد Core الاشتراك."
+  "cardTrialAwaitingCore": "تُحتسب بعد أن يؤكد Core الاشتراك.",
+  "profilePhotoTitle": "الصورة الشخصية",
+  "profilePhotoHint": "يرى هذه الصورة كل من تتحدث معه.",
+  "profilePhotoAdd": "إضافة صورة",
+  "profilePhotoChange": "تغيير الصورة",
+  "profilePhotoRemove": "إزالة الصورة",
+  "profilePhotoSaving": "جارٍ الحفظ…",
+  "profilePhotoFailed": "تعذّر حفظ الصورة. حاول مرة أخرى.",
+  "profilePhotoInvalid": "استخدم صورة JPEG أو PNG أو WebP، بحجم ٦٤ × ٦٤ بكسل على الأقل وأقل من ٢ ميغابايت.",
+  "childrenPhotosTitle": "صور الأطفال",
+  "childrenPhotosHint": "تظهر في مجموعات طفلك لمعلمه ومشرفه."
 }

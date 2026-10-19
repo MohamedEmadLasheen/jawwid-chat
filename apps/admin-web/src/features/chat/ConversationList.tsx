@@ -135,7 +135,7 @@ function ConversationRow({
         aria-current={selected ? 'true' : undefined}
         onClick={onSelect}
       >
-        <ConversationAvatar c={c} name={name} />
+        <ConversationAvatar c={c} name={name} selfId={selfId} />
         <span className="conv-row__body">
           <span className="conv-row__top">
             <span className="conv-row__name" dir="auto">{name}</span>

@@ -49,6 +49,7 @@ class ChatScreen extends ConsumerStatefulWidget {
     required this.conversationId,
     required this.title,
     this.subtitle,
+    this.avatarUrl,
     this.kind = ConversationKind.jawwidSupport,
     this.requiresApproval = false,
     this.isReadOnly = false,
@@ -63,6 +64,10 @@ class ChatScreen extends ConsumerStatefulWidget {
 
   /// e.g. the owner line on the Jawwid thread. Never an internal handler id.
   final String? subtitle;
+
+  /// The header picture: the other person's photo in a 1:1, the child's in a
+  /// group about them (a signed link from the server), or null for initials.
+  final String? avatarUrl;
 
   final ConversationKind kind;
   final bool requiresApproval;
@@ -564,6 +569,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               children: [
                 JawwidAvatar(
                   displayName: widget.title,
+                  imageUrl: widget.avatarUrl,
                   size: Sizes.avatarSm,
                 ),
                 const SizedBox(width: Spacing.spacing3),

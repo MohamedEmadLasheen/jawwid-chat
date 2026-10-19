@@ -41,6 +41,8 @@
 	     nicety: attaching a photo from the camera is unreachable without it. -->
 	<key>NSCameraUsageDescription</key>
 	<string>Jawwid uses the camera to take a photo to send in a conversation.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Jawwid lets you choose a photo to send in a conversation or to use as a profile photo.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Jawwid uses the microphone to record voice messages and to make voice calls.</string>
 	<key>UIApplicationSceneManifest</key>

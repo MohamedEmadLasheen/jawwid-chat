@@ -18,6 +18,8 @@ export interface ChatMember {
   displayName: string
   /** Whether the VIEWER may open a 1:1 with this member (server-decided, advisory). */
   canOpenDirect?: boolean
+  /** Their profile photo: a signed link for this viewer in this conversation, or null. */
+  avatarUrl?: string | null
 }
 
 /** The viewer's own preferences for a conversation (POST /:id/preferences). */
@@ -51,10 +53,12 @@ export interface ChatConversation {
   lastActivityAt: string
   archivedAt: string | null
   members?: ChatMember[]
-  learner?: { id: string; name: string } | null
+  learner?: { id: string; name: string; avatarUrl?: string | null } | null
   unreadCount?: number
   viewerState?: ChatViewerState
   lastMessage?: ChatLastMessage | null
+  /** A group's picture: its one child's photo, signed for this viewer; null otherwise. */
+  avatarUrl?: string | null
 }
 
 export interface ChatAttachment {
@@ -85,6 +89,8 @@ export interface ChatMessage {
   createdAt: string
   attachments: ChatAttachment[]
   replyToMessageId?: string | null
+  /** The author's profile photo, signed for this viewer in this conversation; null when none. */
+  authorAvatarUrl?: string | null
   /** One reaction per actor (server unique index). */
   reactions?: Array<{ actorId: string; emoji: string }>
 }

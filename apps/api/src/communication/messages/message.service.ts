@@ -1,3 +1,4 @@
+import { signActorAvatar } from '../profile/avatar-urls';
 import { Inject, Injectable } from '@nestjs/common';
 import { Message, Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
@@ -383,6 +384,7 @@ export class MessageService {
         created,
         await this.attachments.signUrlsForMessages([created.id], actor.actorId),
         await this.authorsFor([created]),
+        (author) => signActorAvatar(author, conv.id, actor.actorId),
       );
     } catch (e) {
       // Concurrent duplicate submission of the same client_message_id.
@@ -418,6 +420,7 @@ export class MessageService {
       found,
       await this.attachments.signUrlsForMessages([found.id], authorId),
       await this.authorsFor([found]),
+      (author) => signActorAvatar(author, conversationId, authorId),
     );
   }
 
@@ -487,7 +490,10 @@ export class MessageService {
     // map would be one round trip per message -- the shape this whole change exists
     // to remove.
     const authors = await this.authorsFor(rows);
-    const messages = rows.map((m) => toMessageDto(m, signed, authors));
+    // Photos are signed for this viewer in THIS conversation: pure HMAC, no I/O.
+    const messages = rows.map((m) =>
+      toMessageDto(m, signed, authors, (author) => signActorAvatar(author, conv.id, actor.actorId)),
+    );
     const nextBefore =
       !ascending && rows.length === limit ? (rows[rows.length - 1].seq?.toString() ?? null) : null;
 

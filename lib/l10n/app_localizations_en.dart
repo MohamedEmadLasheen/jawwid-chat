@@ -1436,4 +1436,36 @@ class L10nEn extends L10n {
   @override
   String get cardTrialAwaitingCore =>
       'Counts once Core confirms the subscription.';
+
+  @override
+  String get profilePhotoTitle => 'Profile photo';
+
+  @override
+  String get profilePhotoHint => 'Everyone you chat with sees this photo.';
+
+  @override
+  String get profilePhotoAdd => 'Add photo';
+
+  @override
+  String get profilePhotoChange => 'Change photo';
+
+  @override
+  String get profilePhotoRemove => 'Remove photo';
+
+  @override
+  String get profilePhotoSaving => 'Saving…';
+
+  @override
+  String get profilePhotoFailed => 'The photo could not be saved. Try again.';
+
+  @override
+  String get profilePhotoInvalid =>
+      'Use a JPEG, PNG or WebP photo, at least 64 × 64 pixels and under 2 MB.';
+
+  @override
+  String get childrenPhotosTitle => 'Children\'s photos';
+
+  @override
+  String get childrenPhotosHint =>
+      'Shown in your child\'s groups, to their teacher and supervisor.';
 }

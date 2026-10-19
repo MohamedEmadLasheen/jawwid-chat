@@ -2670,6 +2670,66 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Counts once Core confirms the subscription.'**
   String get cardTrialAwaitingCore;
+
+  /// No description provided for @profilePhotoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile photo'**
+  String get profilePhotoTitle;
+
+  /// No description provided for @profilePhotoHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone you chat with sees this photo.'**
+  String get profilePhotoHint;
+
+  /// No description provided for @profilePhotoAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add photo'**
+  String get profilePhotoAdd;
+
+  /// No description provided for @profilePhotoChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Change photo'**
+  String get profilePhotoChange;
+
+  /// No description provided for @profilePhotoRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove photo'**
+  String get profilePhotoRemove;
+
+  /// No description provided for @profilePhotoSaving.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving…'**
+  String get profilePhotoSaving;
+
+  /// No description provided for @profilePhotoFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The photo could not be saved. Try again.'**
+  String get profilePhotoFailed;
+
+  /// No description provided for @profilePhotoInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Use a JPEG, PNG or WebP photo, at least 64 × 64 pixels and under 2 MB.'**
+  String get profilePhotoInvalid;
+
+  /// No description provided for @childrenPhotosTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Children\'s photos'**
+  String get childrenPhotosTitle;
+
+  /// No description provided for @childrenPhotosHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Shown in your child\'s groups, to their teacher and supervisor.'**
+  String get childrenPhotosHint;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

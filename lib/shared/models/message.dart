@@ -129,6 +129,7 @@ class Message {
     this.sequence,
     this.authorId,
     this.authorName = '',
+    this.authorAvatarUrl,
     this.authorRole = ParticipantRole.unknown,
     this.body = '',
     this.attachments = const [],
@@ -156,6 +157,11 @@ class Message {
 
   final String? authorId;
   final String authorName;
+
+  /// The author's profile photo: a signed link for THIS viewer in this
+  /// conversation, re-authorized on every request by the server. Loaded with no
+  /// bearer header (it is self-authorizing). Null when there is none.
+  final String? authorAvatarUrl;
   final ParticipantRole authorRole;
   final MessageKind kind;
   final String body;
@@ -207,6 +213,7 @@ class Message {
         sequence: sequence,
         authorId: authorId,
         authorName: authorName,
+        authorAvatarUrl: authorAvatarUrl,
         authorRole: authorRole,
         kind: kind,
         body: body,
@@ -241,6 +248,7 @@ class Message {
       sequence: sequence ?? this.sequence,
       authorId: authorId,
       authorName: authorName,
+      authorAvatarUrl: authorAvatarUrl,
       authorRole: authorRole,
       kind: kind,
       body: body,

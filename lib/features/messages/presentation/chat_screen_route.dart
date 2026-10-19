@@ -56,6 +56,7 @@ class ChatScreenRoute extends ConsumerWidget {
           // PD-12: the server titles a supervision conversation for its staff side;
           // the teacher reads it as their supervision chat.
           title: value.displayTitle(l10n.supervisionChatTitle, trialGroupLabel: l10n.trialGroupTitle),
+          avatarUrl: value.avatarUrl,
           isTeacherSupervision: value.isTeacherSupervision,
           isTrialGroup: value.isTrialGroup,
           onOpenProfile: () =>

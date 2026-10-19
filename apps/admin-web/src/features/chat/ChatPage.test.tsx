@@ -708,3 +708,47 @@ describe('Who wrote it (WhatsApp layout)', () => {
     expect(within(row).queryByText('Parent One')).not.toBeInTheDocument()
   })
 })
+
+describe('Profile photos', () => {
+  beforeEach(() => fakeSocket.reset())
+  afterEach(() => vi.unstubAllGlobals())
+
+  it("shows a sender's photo beside their message, and falls back to initials if it cannot load", async () => {
+    stubApi({
+      conversations: [conv('c1', { type: 'family_group' })],
+      messages: { c1: [msg('m1', 1, { authorAvatarUrl: 'http://api.test/api/v1/media/avatars/contact.p.c1?s=x' })] },
+    })
+    renderChat('/chat/c1')
+    await screen.findByText('body m1')
+    const row = screen.getByText('body m1').closest('li')!
+    const img = row.querySelector('.cw-msg__avatar img') as HTMLImageElement
+    expect(img).not.toBeNull()
+    expect(img.getAttribute('src')).toBe('http://api.test/api/v1/media/avatars/contact.p.c1?s=x')
+    fireEvent.error(img)
+    await waitFor(() => expect(row.querySelector('.cw-msg__avatar img')).toBeNull())
+    expect(within(row.querySelector('.cw-msg__avatar') as HTMLElement).getByText('PO')).toBeInTheDocument()
+  })
+
+  it("a 1:1 row shows the other person's photo; a child's group shows the child's", async () => {
+    stubApi({
+      conversations: [
+        conv('d1', {
+          type: 'direct',
+          title: null,
+          learnerId: null,
+          members: [
+            { actorId: ADMIN.id, actorKind: 'staff', memberRole: 'admin', isSilent: false, displayName: 'Admin A', avatarUrl: 'http://x/me' },
+            { actorId: 'p1', actorKind: 'contact', memberRole: 'parent', isSilent: false, displayName: 'Parent P', avatarUrl: 'http://x/parent' },
+          ],
+        }),
+        conv('g1', { title: 'Kid group', learner: { id: 'l-1', name: 'Kid', avatarUrl: 'http://x/kid' } }),
+      ],
+      messages: {},
+    })
+    renderChat()
+    await screen.findByText('Kid group')
+    const rowOf = (text: string) => screen.getByText(text).closest('li')!
+    expect(rowOf('Parent P').querySelector('img')?.getAttribute('src')).toBe('http://x/parent')
+    expect(rowOf('Kid group').querySelector('img')?.getAttribute('src')).toBe('http://x/kid')
+  })
+})

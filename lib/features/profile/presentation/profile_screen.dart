@@ -21,6 +21,7 @@ import '../../conversations/application/open_direct_controller.dart';
 import '../../lessons/presentation/child_progress_card.dart';
 import '../application/profile_controller.dart';
 import '../domain/profile_view.dart';
+import 'profile_photos_section.dart';
 import 'profile_sections.dart';
 
 /// A person's profile, or a group's info.
@@ -102,7 +103,12 @@ class MyAccountScreen extends ConsumerWidget {
             error: error,
             onRetry: () => ref.invalidate(myAccountProvider),
           ),
-        AsyncData(:final value) => ProfileBody(view: value),
+        // The viewer's own photo (and, for a parent, the children's) sits
+        // right under the header, where WhatsApp puts it.
+        AsyncData(:final value) => ProfileBody(
+            view: value,
+            actions: [ProfilePhotosSection(displayName: value.subject.displayName)],
+          ),
       },
     );
   }

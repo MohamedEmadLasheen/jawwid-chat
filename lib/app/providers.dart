@@ -16,6 +16,7 @@ import '../core/realtime/realtime_socket.dart';
 import '../core/storage/secure_token_store.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/domain/auth_state.dart';
+import '../features/profile/data/profile_photo_repository.dart';
 import '../shared/models/user_role.dart';
 
 /// Composition root.
@@ -68,6 +69,12 @@ final lessonRepositoryProvider = Provider<LessonRepository>((ref) {
 /// supervision server offers no supervision ticket.
 final supervisionRepositoryProvider = Provider<SupervisionRepository>((ref) {
   return const NoSupervisionRepository();
+});
+
+/// Profile photos (own and, for a parent, the children's). A harmless default:
+/// a build without a photo server offers no photo controls.
+final profilePhotoRepositoryProvider = Provider<ProfilePhotoRepository>((ref) {
+  return const NoProfilePhotoRepository();
 });
 
 /// PD-11 T4. A harmless default too: a build without a trial server offers no trial report.

@@ -26,6 +26,7 @@ import '../features/auth/application/session_termination.dart';
 import '../features/auth/domain/auth_state.dart';
 import '../features/calls/data/account_call_history.dart';
 import '../features/calls/data/http_account_call_history.dart';
+import '../features/profile/data/profile_photo_repository.dart';
 import '../features/settings/application/locale_preference.dart';
 import '../shared/models/user_role.dart';
 import 'app.dart';
@@ -146,6 +147,9 @@ List<Override> _httpOverrides() {
     ),
     supervisionRepositoryProvider.overrideWithValue(
       HttpSupervisionRepository(client: client),
+    ),
+    profilePhotoRepositoryProvider.overrideWithValue(
+      HttpProfilePhotoRepository(client: client),
     ),
     trialRepositoryProvider.overrideWithValue(
       HttpTrialRepository(client: client),

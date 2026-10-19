@@ -1435,4 +1435,35 @@ class L10nAr extends L10n {
 
   @override
   String get cardTrialAwaitingCore => 'تُحتسب بعد أن يؤكد Core الاشتراك.';
+
+  @override
+  String get profilePhotoTitle => 'الصورة الشخصية';
+
+  @override
+  String get profilePhotoHint => 'يرى هذه الصورة كل من تتحدث معه.';
+
+  @override
+  String get profilePhotoAdd => 'إضافة صورة';
+
+  @override
+  String get profilePhotoChange => 'تغيير الصورة';
+
+  @override
+  String get profilePhotoRemove => 'إزالة الصورة';
+
+  @override
+  String get profilePhotoSaving => 'جارٍ الحفظ…';
+
+  @override
+  String get profilePhotoFailed => 'تعذّر حفظ الصورة. حاول مرة أخرى.';
+
+  @override
+  String get profilePhotoInvalid =>
+      'استخدم صورة JPEG أو PNG أو WebP، بحجم ٦٤ × ٦٤ بكسل على الأقل وأقل من ٢ ميغابايت.';
+
+  @override
+  String get childrenPhotosTitle => 'صور الأطفال';
+
+  @override
+  String get childrenPhotosHint => 'تظهر في مجموعات طفلك لمعلمه ومشرفه.';
 }

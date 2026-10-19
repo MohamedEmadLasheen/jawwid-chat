@@ -254,6 +254,8 @@ class MessageBubble extends StatelessWidget {
                           excludeSemantics: true,
                           child: JawwidAvatar(
                             displayName: _authorLabel(message, l10n),
+                            // A signed link: loaded with no bearer header.
+                            imageUrl: message.authorAvatarUrl,
                             size: senderAvatarSize,
                           ),
                         )
