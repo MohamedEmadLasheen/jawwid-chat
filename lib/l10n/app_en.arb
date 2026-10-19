@@ -647,5 +647,87 @@
     }
   },
   "cardResumedTitle": "Lessons resumed",
-  "cardBonusTitle": "A bonus for you"
+  "cardBonusTitle": "A bonus for you",
+  "progressTitle": "This month",
+  "progressAttended": "Attended",
+  "progressApologised": "Apologised",
+  "progressAbsent": "Absent",
+  "progressStreak": "{count, plural, =0{No streak yet} =1{1 lesson in a row} other{{count} lessons in a row}}",
+  "@progressStreak": {
+    "description": "Consecutive lessons attended.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "progressAllTime": "{count} lessons attended in total",
+  "@progressAllTime": {
+    "description": "All-time attended lessons.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "progressMakeupsOwed": "{count, plural, =1{1 make-up lesson owed} other{{count} make-up lessons owed}}",
+  "@progressMakeupsOwed": {
+    "description": "Make-up lessons the family is owed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "progressNext": "Next lesson: {when}",
+  "@progressNext": {
+    "description": "When the next lesson is.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "progressLastCovered": "Last lesson: {covered}",
+  "@progressLastCovered": {
+    "description": "What the latest report says was covered.",
+    "placeholders": {
+      "covered": {
+        "type": "String"
+      }
+    }
+  },
+  "progressCertificates": "Certificates will appear here.",
+  "progressUnavailable": "Progress isn't available right now.",
+  "workloadTitle": "This month",
+  "workloadHeld": "{lessons} lessons · {hours} h",
+  "@workloadHeld": {
+    "description": "Lessons held this month and their hours.",
+    "placeholders": {
+      "lessons": {
+        "type": "int"
+      },
+      "hours": {
+        "type": "String"
+      }
+    }
+  },
+  "workloadNeedsReport": "{count} need a report",
+  "@workloadNeedsReport": {
+    "description": "Lessons ended without a report.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "workloadOnTime": "{percent} reports on time",
+  "@workloadOnTime": {
+    "description": "Share of reports submitted on time.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  }
 }

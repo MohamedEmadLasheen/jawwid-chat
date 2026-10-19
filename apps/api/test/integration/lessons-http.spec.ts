@@ -241,6 +241,18 @@ describe('lesson tickets over HTTP, in a PD-8 family group', () => {
     expect((await http(third.subject, 'GET', `/conversations/${fam.groupId}/messages`)).status).toBe(200);
   });
 
+  it('T5: statistics routes resolve (not shadowed by /lessons/:id) and follow PD-10', async () => {
+    const access = await http(tsup, 'GET', '/lessons/access');
+    expect(access.status).toBe(200);
+    expect(access.json.lessonManager).toBe(true);
+    expect((await http(fam.parent, 'GET', '/lessons/access')).json.lessonManager).toBe(false);
+    expect((await http(tsup, 'GET', '/stats/teachers')).status).toBe(200);
+    expect((await http(fam.teacher, 'GET', '/stats/teachers')).status).toBe(403);
+    expect((await http(fam.teacher, 'GET', '/stats/me')).status).toBe(200);
+    expect((await http(fam.parent, 'GET', `/learners/${fam.child.id}/progress`)).status).toBe(200);
+    expect((await http(null, 'GET', '/stats/me')).status).toBe(401);
+  });
+
   it('the needs-action queue is the Teachers department\'s; a client cannot send a card', async () => {
     expect((await http(fam.teacher, 'GET', '/lessons/needs-action')).status).toBe(403);
     expect((await http(tsup, 'GET', '/lessons/needs-action')).status).toBe(200);

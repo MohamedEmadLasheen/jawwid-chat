@@ -2064,6 +2064,96 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'A bonus for you'**
   String get cardBonusTitle;
+
+  /// No description provided for @progressTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This month'**
+  String get progressTitle;
+
+  /// No description provided for @progressAttended.
+  ///
+  /// In en, this message translates to:
+  /// **'Attended'**
+  String get progressAttended;
+
+  /// No description provided for @progressApologised.
+  ///
+  /// In en, this message translates to:
+  /// **'Apologised'**
+  String get progressApologised;
+
+  /// No description provided for @progressAbsent.
+  ///
+  /// In en, this message translates to:
+  /// **'Absent'**
+  String get progressAbsent;
+
+  /// Consecutive lessons attended.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No streak yet} =1{1 lesson in a row} other{{count} lessons in a row}}'**
+  String progressStreak(int count);
+
+  /// All-time attended lessons.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} lessons attended in total'**
+  String progressAllTime(int count);
+
+  /// Make-up lessons the family is owed.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 make-up lesson owed} other{{count} make-up lessons owed}}'**
+  String progressMakeupsOwed(int count);
+
+  /// When the next lesson is.
+  ///
+  /// In en, this message translates to:
+  /// **'Next lesson: {when}'**
+  String progressNext(String when);
+
+  /// What the latest report says was covered.
+  ///
+  /// In en, this message translates to:
+  /// **'Last lesson: {covered}'**
+  String progressLastCovered(String covered);
+
+  /// No description provided for @progressCertificates.
+  ///
+  /// In en, this message translates to:
+  /// **'Certificates will appear here.'**
+  String get progressCertificates;
+
+  /// No description provided for @progressUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Progress isn\'t available right now.'**
+  String get progressUnavailable;
+
+  /// No description provided for @workloadTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This month'**
+  String get workloadTitle;
+
+  /// Lessons held this month and their hours.
+  ///
+  /// In en, this message translates to:
+  /// **'{lessons} lessons · {hours} h'**
+  String workloadHeld(int lessons, String hours);
+
+  /// Lessons ended without a report.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} need a report'**
+  String workloadNeedsReport(int count);
+
+  /// Share of reports submitted on time.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent} reports on time'**
+  String workloadOnTime(String percent);
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

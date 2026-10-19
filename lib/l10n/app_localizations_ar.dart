@@ -1075,4 +1075,83 @@ class L10nAr extends L10n {
 
   @override
   String get cardBonusTitle => 'مكافأة لك';
+
+  @override
+  String get progressTitle => 'هذا الشهر';
+
+  @override
+  String get progressAttended => 'حضر';
+
+  @override
+  String get progressApologised => 'اعتذر';
+
+  @override
+  String get progressAbsent => 'غاب';
+
+  @override
+  String progressStreak(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count حصة متتالية',
+      many: '$count حصة متتالية',
+      few: '$count حصص متتالية',
+      two: 'حصتان متتاليتان',
+      one: 'حصة واحدة متتالية',
+      zero: 'لا توجد سلسلة بعد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String progressAllTime(int count) {
+    return '$count حصة حضرها إجمالًا';
+  }
+
+  @override
+  String progressMakeupsOwed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count حصة تعويضية مستحقة',
+      few: '$count حصص تعويضية مستحقة',
+      two: 'حصتان تعويضيتان مستحقتان',
+      one: 'حصة تعويضية مستحقة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String progressNext(String when) {
+    return 'الحصة القادمة: $when';
+  }
+
+  @override
+  String progressLastCovered(String covered) {
+    return 'آخر حصة: $covered';
+  }
+
+  @override
+  String get progressCertificates => 'ستظهر الشهادات هنا.';
+
+  @override
+  String get progressUnavailable => 'التقدم غير متاح حاليًا.';
+
+  @override
+  String get workloadTitle => 'هذا الشهر';
+
+  @override
+  String workloadHeld(int lessons, String hours) {
+    return '$lessons حصة · $hours ساعة';
+  }
+
+  @override
+  String workloadNeedsReport(int count) {
+    return '$count بانتظار التقرير';
+  }
+
+  @override
+  String workloadOnTime(String percent) {
+    return '$percent من التقارير في موعدها';
+  }
 }

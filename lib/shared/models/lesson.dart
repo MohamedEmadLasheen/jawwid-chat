@@ -168,3 +168,48 @@ class MessageCard {
 
   bool flag(String key) => payload[key] == true;
 }
+
+/// A child's month, for the family (PD-10's per-child page). Counts only: nothing
+/// about the teacher's performance reaches a family.
+class ChildProgress {
+  const ChildProgress({
+    required this.attended,
+    required this.apologised,
+    required this.absent,
+    required this.attendedAllTime,
+    required this.streak,
+    required this.makeupsOwed,
+    this.nextLessonAt,
+    this.lastCovered,
+    this.lastReportAt,
+  });
+
+  final int attended;
+  final int apologised;
+  final int absent;
+  final int attendedAllTime;
+
+  /// Lessons attended in a row, newest first.
+  final int streak;
+  final int makeupsOwed;
+  final DateTime? nextLessonAt;
+  final String? lastCovered;
+  final DateTime? lastReportAt;
+}
+
+/// A teacher's own month (PD-10: their schedule and workload, nothing else).
+class TeacherWorkload {
+  const TeacherWorkload({
+    required this.heldLessons,
+    required this.heldMinutes,
+    required this.unreported,
+    this.reportsOnTimeRate,
+    this.availableMinutes,
+  });
+
+  final int heldLessons;
+  final int heldMinutes;
+  final int unreported;
+  final double? reportsOnTimeRate;
+  final int? availableMinutes;
+}

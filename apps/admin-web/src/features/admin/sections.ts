@@ -274,13 +274,16 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     key: 'reports',
     group: 'operations',
     icon: 'reports',
-    status: 'in_development',
+    status: 'read_only',
     label: { en: 'Reports & analytics', ar: 'التقارير والتحليلات' },
     purpose: {
-      en: 'Trends in communication volume and response performance.',
-      ar: 'اتجاهات حجم التواصل وأداء الرد.',
+      en: 'Teacher statistics: lessons by outcome and length, reports on time, replies to families, workload.',
+      ar: 'إحصائيات المعلمين: الحصص حسب النتيجة والمدة، والتقارير في موعدها، والرد على الأسر، وعبء العمل.',
     },
-    note: NO_BACKEND,
+    note: {
+      en: 'Counted by the server from the lessons themselves (PD-11). Read-only.',
+      ar: 'يحسبها الخادم من الحصص نفسها (PD-11). للاطلاع فقط.',
+    },
   },
 
   /* -------------------------------------------------------- administration */

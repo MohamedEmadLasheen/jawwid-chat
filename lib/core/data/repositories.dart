@@ -519,6 +519,12 @@ abstract interface class LessonRepository {
 
   /// `GET /lessons?from&to` -- for a teacher, their own lessons.
   Future<List<ScheduledLesson>> myLessons(DateTime from, DateTime to);
+
+  /// `GET /learners/:id/progress` -- this month, in the academy's zone.
+  Future<ChildProgress> progress(String learnerId);
+
+  /// `GET /stats/me` -- a teacher's own month.
+  Future<TeacherWorkload> myWorkload();
 }
 
 /// The lesson repository of a build with no lesson server (the fixture build, tests
@@ -561,4 +567,11 @@ class NoLessonRepository implements LessonRepository {
 
   @override
   Future<List<ScheduledLesson>> myLessons(DateTime from, DateTime to) async => const [];
+
+  @override
+  Future<ChildProgress> progress(String learnerId) =>
+      throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<TeacherWorkload> myWorkload() => throw UnsupportedError('no lesson server in this build');
 }
