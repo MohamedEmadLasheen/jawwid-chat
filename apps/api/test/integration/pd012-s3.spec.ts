@@ -16,7 +16,7 @@
  * Core is a fake here: the HTTP boundary is unit-tested in pd012-s3-billing.spec.
  * Synthetic people only (G-20).
  */
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { PrismaAuditService } from '@platform/audit.service';
 import { hashPassword } from '@platform/auth/password';
@@ -61,6 +61,8 @@ let orgId: string;
 let today: string;
 const parentOf = new Map<string, string>(); // family id -> core parent id
 const childCore = new Map<string, string>(); // learner id -> core child id
+/** Core's ids are MongoDB ObjectIds: 24 hex characters, opaque text in Chat (20261019200000). */
+const objectId = () => randomBytes(12).toString('hex');
 
 const shift = (days: number) => {
   const d = new Date(`${today}T00:00:00Z`);
@@ -130,13 +132,13 @@ beforeAll(async () => {
   });
   // Core identities: the seed has none (it is not a Core sync).
   for (const f of m.families) {
-    const p = randomUUID();
+    const p = objectId();
     parentOf.set(f.id, p);
-    await g.prisma.$executeRaw`update chat.family set core_parent_id = ${p}::uuid where id = ${f.id}::uuid`;
+    await g.prisma.$executeRaw`update chat.family set core_parent_id = ${p} where id = ${f.id}::uuid`;
     for (const c of f.children) {
-      const k = randomUUID();
+      const k = objectId();
       childCore.set(c.id, k);
-      await g.prisma.$executeRaw`update chat.learner set core_child_id = ${k}::uuid where id = ${c.id}::uuid`;
+      await g.prisma.$executeRaw`update chat.learner set core_child_id = ${k} where id = ${c.id}::uuid`;
     }
   }
   today = todayIn('Africa/Cairo');

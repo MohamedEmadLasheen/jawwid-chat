@@ -60,6 +60,11 @@ export const TR = {
     en: 'Confirmed by Core, with no group yet. Set up the group from Families.',
     ar: 'أكّدها Core ولا توجد لهم مجموعة بعد. جهّز المجموعة من صفحة الأسر.',
   },
+  awaitingStudent: { en: 'Confirmed — student not in Chat yet', ar: 'مؤكَّد — الطالب غير موجود في المحادثات بعد' },
+  awaitingStudentHint: {
+    en: 'Core confirmed the subscription and named the student, who has not reached Chat yet. They move to "Ready to set up" by themselves when they do.',
+    ar: 'أكّد Core الاشتراك وحدّد الطالب، لكنه لم يصل إلى المحادثات بعد. سينتقل وحده إلى «جاهزون للتجهيز» عند وصوله.',
+  },
   awaitingCore: { en: 'Awaiting Core', ar: 'بانتظار Core' },
   awaitingCoreHint: {
     en: 'Sales recorded a subscription that Core has not confirmed yet. Nothing to do here until it does.',
@@ -70,6 +75,7 @@ export const TR = {
   confirmedOn: { en: 'Confirmed', ar: 'تاريخ التأكيد' },
   nothingReady: { en: 'No one is waiting to be set up.', ar: 'لا يوجد من ينتظر التجهيز.' },
   nothingAwaiting: { en: 'Nothing is awaiting Core.', ar: 'لا شيء بانتظار Core.' },
+  nothingAwaitingStudent: { en: 'No confirmed student is missing.', ar: 'لا يوجد طالب مؤكَّد غير موجود.' },
 } satisfies Record<string, Pair>
 
 export const ATTENDANCE: Record<string, Pair> = {

@@ -11,7 +11,7 @@ import { Logger } from '@nestjs/common';
  *
  *   POST {CORE_BASE_URL}/integration/chat/invoices/query
  *   Authorization: Bearer {CORE_API_KEY}
- *   { "parent_ids": ["<core_parent_id>", ...], "include_paid": false }
+ *   { "parent_ids": ["<core_parent_id>", ...], "include_paid": false }      (ids: opaque text)
  *   ->
  *   { "invoices": [ { "id", "parent_id", "child_id" | null, "amount_minor",
  *                     "currency", "due_date": "YYYY-MM-DD",
@@ -57,7 +57,6 @@ export const NOT_CONNECTED: CoreInvoiceSource = Object.freeze({
 });
 
 const BATCH = 200;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const CURRENCY_RE = /^[A-Z]{3}$/;
 
@@ -105,13 +104,16 @@ export class HttpCoreInvoiceSource implements CoreInvoiceSource {
     } catch {
       throw new CoreInvoiceSourceError('Jawwid Core answered something that is not JSON');
     }
-    return parseInvoices(body, new Set(parentIds.map((p) => p.toLowerCase())), includePaid);
+    return parseInvoices(body, new Set(parentIds), includePaid);
   }
 }
 
 /**
  * Strict: a malformed invoice is dropped, not guessed at, and so is one for a
  * parent Chat did not ask about. A void invoice is not an instalment.
+ *
+ * Core's ids are OPAQUE TEXT (MongoDB ObjectIds today, 20261019200000): they
+ * are compared exactly as sent -- never parsed as UUIDs, never re-cased.
  */
 export function parseInvoices(body: unknown, askedFor: ReadonlySet<string>, includePaid: boolean): CoreInvoice[] {
   const list = (body as { invoices?: unknown } | null)?.invoices;
@@ -120,10 +122,10 @@ export function parseInvoices(body: unknown, askedFor: ReadonlySet<string>, incl
   for (const raw of list) {
     if (!raw || typeof raw !== 'object') continue;
     const r = raw as Record<string, unknown>;
-    const parentId = typeof r.parent_id === 'string' ? r.parent_id.toLowerCase() : '';
+    const parentId = typeof r.parent_id === 'string' ? r.parent_id : '';
     if (!askedFor.has(parentId)) continue;
     const childId = r.child_id === null || r.child_id === undefined ? null : r.child_id;
-    if (childId !== null && (typeof childId !== 'string' || !UUID_RE.test(childId))) continue;
+    if (childId !== null && !isOpaqueId(childId)) continue;
     if (typeof r.id !== 'string' || r.id.length === 0 || r.id.length > 200) continue;
     if (typeof r.amount_minor !== 'number' || !Number.isSafeInteger(r.amount_minor) || r.amount_minor < 0) continue;
     if (typeof r.currency !== 'string' || !CURRENCY_RE.test(r.currency)) continue;
@@ -133,7 +135,7 @@ export function parseInvoices(body: unknown, askedFor: ReadonlySet<string>, incl
     out.push({
       id: r.id,
       parentId,
-      childId: childId === null ? null : childId.toLowerCase(),
+      childId,
       amountMinor: r.amount_minor,
       currency: r.currency,
       dueDate: r.due_date,
@@ -143,6 +145,11 @@ export function parseInvoices(body: unknown, askedFor: ReadonlySet<string>, incl
     });
   }
   return out;
+}
+
+/** A Core id: a non-blank string of at most 200 characters, otherwise unexamined. */
+function isOpaqueId(v: unknown): v is string {
+  return typeof v === 'string' && v.trim().length > 0 && v.length <= 200;
 }
 
 /**

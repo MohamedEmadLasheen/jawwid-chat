@@ -141,7 +141,7 @@ describe('the execution boundary', () => {
         cross join unnest(array[
           'chat.transfer_ownership(uuid, uuid, text, uuid)',
           'chat.offboard_staff(uuid, text, uuid, uuid)',
-          'chat.assign_family_owner(uuid, uuid, text, uuid)',
+          'chat.assign_family_owner(text, uuid, text, uuid)',
           'chat.write_audit(uuid, text, text, uuid, text, jsonb, jsonb)',
           'chat.log_event(text, uuid, text, uuid, jsonb)']) f`);
     expect(rows.filter((x) => x.can)).toEqual([]);
@@ -352,7 +352,7 @@ describe('authorization matrix on the server-side path', () => {
     return id;
   }
   const assign = (actor: string) =>
-    `select chat.assign_family_owner(gen_random_uuid(), '${w.otherAdminId}'::uuid, 'x', '${actor}'::uuid)`;
+    `select chat.assign_family_owner(gen_random_uuid()::text, '${w.otherAdminId}'::uuid, 'x', '${actor}'::uuid)`;
 
   for (const role of ['admin', 'coverage', 'finance', 'technical', 'academic']) {
     it(`${role}: refused for every ownership and offboarding action, changing nothing`, async () => {
@@ -390,14 +390,14 @@ describe('authorization matrix on the server-side path', () => {
 describe('family owner assignment', () => {
   it('cannot be spoofed on the request role, and the server path checks authority before anything else', async () => {
     expect(
-      String(await asRequest(SUBJECT.admin, `select chat.assign_family_owner(gen_random_uuid(), '${w.otherAdminId}'::uuid, 'x', '${w.managerId}'::uuid)`)),
+      String(await asRequest(SUBJECT.admin, `select chat.assign_family_owner(gen_random_uuid()::text, '${w.otherAdminId}'::uuid, 'x', '${w.managerId}'::uuid)`)),
     ).toMatch(/permission denied for function assign_family_owner/);
     expect(
-      String(await asServer(`select chat.assign_family_owner(gen_random_uuid(), '${w.otherAdminId}'::uuid, 'x', '${w.ownerId}'::uuid)`)),
+      String(await asServer(`select chat.assign_family_owner(gen_random_uuid()::text, '${w.otherAdminId}'::uuid, 'x', '${w.ownerId}'::uuid)`)),
     ).toMatch(/only an active manager/);
     // A real manager passes authority and reaches the next rule.
     expect(
-      String(await asServer(`select chat.assign_family_owner(gen_random_uuid(), '${w.otherAdminId}'::uuid, 'x', '${w.managerId}'::uuid)`)),
+      String(await asServer(`select chat.assign_family_owner(gen_random_uuid()::text, '${w.otherAdminId}'::uuid, 'x', '${w.managerId}'::uuid)`)),
     ).toMatch(/no waiting Jawwid Core parent/);
   });
 });

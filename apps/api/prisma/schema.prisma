@@ -679,7 +679,7 @@ model Teacher {
   account       Account?  @relation(fields: [accountId], references: [id])
   name          String
   /// Set when Jawwid Core gains a teacher entity.
-  coreTeacherId String?   @unique @map("core_teacher_id") @db.Uuid
+  coreTeacherId String?   @unique @map("core_teacher_id")
   syncedAt      DateTime? @map("synced_at") @db.Timestamptz
   isActive      Boolean   @map("is_active") @default(true)
   leftAt        DateTime? @map("left_at") @db.Timestamptz

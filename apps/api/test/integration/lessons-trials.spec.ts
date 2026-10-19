@@ -30,7 +30,7 @@ const lessons = new LessonService(g.prisma, g.authz, g.conversations, g.outbox, 
 const scheduling = new SchedulingService(g.prisma, g.authz, g.conversations, lessons, g.outbox, g.config, g.reminders, audit);
 const cards = new CardPoster(g.conversations, g.outbox, audit);
 const groups = new TrialGroupService(g.prisma, g.authz, g.conversations, g.outbox, cards, g.config, audit);
-const trials = new TrialService(g.prisma, g.conversations, lessons, scheduling, audit, groups);
+const trials = new TrialService(g.prisma, g.conversations, lessons, scheduling, audit, groups, g.outbox);
 const stats = new StatsService(g.prisma, g.conversations, lessons, scheduling, g.config);
 
 const TZ = 'Africa/Cairo';

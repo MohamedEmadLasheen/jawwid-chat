@@ -14,9 +14,10 @@ import {
 } from '../../../src/billing/core-invoice-source';
 
 const ORG = '11111111-1111-1111-1111-111111111111';
-const P1 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-const P2 = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
-const C1 = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+// Core's ids are MongoDB ObjectIds -- opaque text, not UUIDs (20261019200000).
+const P1 = '652f1c2ab8e4a10012ab34cd';
+const P2 = '652f1c2ab8e4a10012ab34ce';
+const C1 = '652f1c2ab8e4a10012ab9f01';
 
 function staff(role: string, over: Partial<Actor> = {}): Actor {
   return { actorId: 's', kind: 'staff', displayName: 's', locale: 'ar', isActive: true, staffRole: role as never, organizationId: ORG, ...over };
@@ -81,8 +82,8 @@ describe('the Core invoice boundary', () => {
   const asked = new Set([P1]);
   const good = { id: 'inv-1', parent_id: P1, child_id: null, amount_minor: 150000, currency: 'EGP', due_date: '2026-10-25', status: 'open' };
 
-  it('reads a well-formed invoice, family or per child', () => {
-    const out = parseInvoices({ invoices: [good, { ...good, id: 'inv-2', child_id: C1.toUpperCase(), label: ' Quran ' }] }, asked, false);
+  it('reads a well-formed invoice, family or per child, keeping Core ids exactly as sent', () => {
+    const out = parseInvoices({ invoices: [good, { ...good, id: 'inv-2', child_id: C1, label: ' Quran ' }] }, asked, false);
     expect(out).toEqual([
       { id: 'inv-1', parentId: P1, childId: null, amountMinor: 150000, currency: 'EGP', dueDate: '2026-10-25', status: 'open', paidAt: null, label: null },
       { id: 'inv-2', parentId: P1, childId: C1, amountMinor: 150000, currency: 'EGP', dueDate: '2026-10-25', status: 'open', paidAt: null, label: 'Quran' },
@@ -91,6 +92,8 @@ describe('the Core invoice boundary', () => {
 
   it('drops an invoice for a parent Chat did not ask about: Core cannot widen the scope', () => {
     expect(parseInvoices({ invoices: [{ ...good, parent_id: P2 }] }, asked, false)).toEqual([]);
+    // Exact comparison: a re-cased id is another id, not the same one.
+    expect(parseInvoices({ invoices: [{ ...good, parent_id: P1.toUpperCase() }] }, asked, false)).toEqual([]);
   });
 
   it('drops malformed invoices instead of guessing, and void ones always', () => {
@@ -101,7 +104,9 @@ describe('the Core invoice boundary', () => {
       { ...good, currency: 'egp' },
       { ...good, due_date: '25/10/2026' },
       { ...good, status: 'void' },
-      { ...good, child_id: 'not-a-uuid' },
+      { ...good, child_id: 42 },
+      { ...good, child_id: '   ' },
+      { ...good, child_id: 'x'.repeat(201) },
       { ...good, id: '' },
       null,
       'x',
@@ -133,7 +138,7 @@ describe('the Core invoice boundary', () => {
       calls.push({ url, init });
       return new Response(JSON.stringify({ invoices: [good] }), { status: 200 });
     }) as unknown as typeof fetch;
-    const parents = Array.from({ length: 450 }, (_, i) => (i === 0 ? P1 : `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`));
+    const parents = Array.from({ length: 450 }, (_, i) => (i === 0 ? P1 : `652f1c2ab8e4a1${String(i).padStart(10, '0')}`));
     const source = new HttpCoreInvoiceSource('http://core/', 'secret', 1000, fake);
     const out = await source.invoicesFor(parents, { includePaid: false });
     expect(calls).toHaveLength(3);

@@ -59,6 +59,17 @@ export function NewStudentsPage() {
             <p className="ts-muted ts-section__hint">{tx(TR.readyHint)}</p>
             {(q.data?.readyForSetup.length ?? 0) === 0 ? <EmptyState title={tx(TR.nothingReady)} /> : table(q.data!.readyForSetup, true)}
           </section>
+          <section className="ts-section" aria-labelledby="ns-student">
+            <h2 id="ns-student" className="ts-subtitle ts-section__head">
+              {tx(TR.awaitingStudent)} <span className="badge">{q.data?.awaitingStudent?.length ?? 0}</span>
+            </h2>
+            <p className="ts-muted ts-section__hint">{tx(TR.awaitingStudentHint)}</p>
+            {(q.data?.awaitingStudent?.length ?? 0) === 0 ? (
+              <EmptyState title={tx(TR.nothingAwaitingStudent)} />
+            ) : (
+              table(q.data!.awaitingStudent!, true)
+            )}
+          </section>
           <section className="ts-section" aria-labelledby="ns-core">
             <h2 id="ns-core" className="ts-subtitle ts-section__head">
               {tx(TR.awaitingCore)} <span className="badge">{q.data?.awaitingCore.length ?? 0}</span>

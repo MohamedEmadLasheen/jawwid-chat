@@ -13,6 +13,7 @@ import { CertificateModule } from './certificates/certificate.module';
 import { LeaveModule } from './leave/leave.module';
 import { DisciplineModule } from './discipline/discipline.module';
 import { BillingModule } from './billing/billing.module';
+import { CoreBoundaryModule } from './core-boundary/core-boundary.module';
 
 /**
  * The root module. Composition only -- it declares no provider and no
@@ -49,6 +50,7 @@ import { BillingModule } from './billing/billing.module';
     LeaveModule,
     DisciplineModule,
     BillingModule,
+    CoreBoundaryModule,
   ],
 })
 export class AppModule {}
