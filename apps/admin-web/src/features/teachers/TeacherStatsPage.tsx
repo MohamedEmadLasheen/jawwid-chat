@@ -268,7 +268,7 @@ function CategoryCard({ category: c }: { category: CategoryStats }) {
             <li key={b.durationMinutes} className="ts-card__row">
               <span>{tx(T.minutesLong, { m: fmt.number(b.durationMinutes) })}</span>
               <span className="ts-card__right">
-                <strong>{tx(T.lessons, { n: fmt.number(b.lessons) })}</strong>
+                <strong>{fmt.lessons(b.lessons)}</strong>
                 <span className="ts-muted">{tx(T.total)}: {fmt.hours(b.minutes)}</span>
               </span>
             </li>
@@ -333,7 +333,9 @@ function useFormat() {
       minutes: (m: number | null) => (m === null ? tx(T.none) : tx(T.minutesLong, { m: number(m) })),
       percent: (r: number | null) =>
         r === null ? tx(T.none) : new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en', { style: 'percent', maximumFractionDigits: 0 }).format(r),
-      lessonsHours: (b: Bucket) => tx(T.lessonsHours, { n: number(b.lessons), h: hoursNumber(b.minutes) }),
+      lessons: (n: number) => (n === 1 ? tx(T.lessonOne) : tx(T.lessons, { n: number(n) })),
+      lessonsHours: (b: Bucket) =>
+        b.lessons === 1 ? tx(T.lessonOneHours, { h: hoursNumber(b.minutes) }) : tx(T.lessonsHours, { n: number(b.lessons), h: hoursNumber(b.minutes) }),
     }
   }, [number, locale, tx])
 }

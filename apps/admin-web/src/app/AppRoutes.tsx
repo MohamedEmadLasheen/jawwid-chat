@@ -18,6 +18,9 @@ import { adminSectionPath } from '@/features/admin/sections'
 import { ProfilePage } from '@/features/profile/ProfilePage'
 import { OrganizationPage } from '@/features/organization/OrganizationPage'
 import { TeacherStatsPage } from '@/features/teachers/TeacherStatsPage'
+import { NeedsActionPage } from '@/features/teachers/NeedsActionPage'
+import { SchedulesPage } from '@/features/teachers/SchedulesPage'
+import { StudentsPage } from '@/features/teachers/StudentsPage'
 import { TeacherFilesPage } from '@/features/teacher-files/TeacherFilesPage'
 import { TeacherFilePage } from '@/features/teacher-files/TeacherFilePage'
 import { CertificatesPage } from '@/features/supervision/CertificatesPage'
@@ -71,6 +74,9 @@ export function AppRoutes() {
         <Route path="/organization" element={<Area area="organization"><OrganizationPage /></Area>} />
         {/* The Teachers area (features/teachers/area.tsx): Statistics is its base tab. */}
         <Route path="/teachers" element={<Area area="teachers"><TeacherStatsPage inTeachersArea /></Area>} />
+        <Route path="/teachers/needs-action" element={<Area area="teachers"><NeedsActionPage /></Area>} />
+        <Route path="/teachers/schedules" element={<Area area="teachers"><SchedulesPage /></Area>} />
+        <Route path="/teachers/students" element={<Area area="teachers"><StudentsPage /></Area>} />
         {/* PD-10 Teacher Files: a tab of the same area; the server refuses anyone else. */}
         <Route path="/teachers/files" element={<Area area="teachers"><TeacherFilesPage basePath="/teachers/files" /></Area>} />
         <Route path="/teachers/files/:teacherId" element={<Area area="teachers"><TeacherFilePage basePath="/teachers/files" /></Area>} />

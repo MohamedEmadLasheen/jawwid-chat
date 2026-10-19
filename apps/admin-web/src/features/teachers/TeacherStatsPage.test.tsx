@@ -159,21 +159,25 @@ describe('the statistics', () => {
 })
 
 describe('the Teachers area', () => {
-  it('one tab needs no strip; with the appended tabs the strip shows Statistics selected at /teachers', async () => {
+  it('shows its tabs in the agreed order with Statistics selected at /teachers', async () => {
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/teachers?month=2026-10' })
+    const tabs = await screen.findByRole('navigation', { name: 'Teachers' })
+    expect(within(tabs).getAllByRole('link').map((l) => l.textContent)).toEqual([
+      'Statistics', 'Needs action', 'Schedules', 'Students', 'Teacher files', 'Certificates', 'Leave requests',
+    ])
+    expect(within(tabs).getByRole('link', { name: 'Statistics' })).toHaveAttribute('aria-current', 'page')
+    expect(within(tabs).getByRole('link', { name: 'Teacher files' })).toHaveAttribute('href', '/teachers/files')
+  })
+
+  it('one tab needs no strip', async () => {
     const saved = TEACHERS_TABS.splice(1)
     try {
-      const { unmount } = renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/teachers' })
+      renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/teachers' })
       await screen.findByRole('table')
       expect(screen.queryByRole('navigation', { name: 'Teachers' })).not.toBeInTheDocument()
-      unmount()
     } finally {
       TEACHERS_TABS.push(...saved)
     }
-
-    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'manager' }), route: '/teachers?month=2026-10' })
-    const tabs = await screen.findByRole('navigation', { name: 'Teachers' })
-    expect(within(tabs).getByRole('link', { name: 'Statistics' })).toHaveAttribute('aria-current', 'page')
-    expect(within(tabs).getByRole('link', { name: 'Teacher files' })).toHaveAttribute('href', '/teachers/files')
   })
 })
 

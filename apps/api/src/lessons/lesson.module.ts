@@ -22,7 +22,7 @@ import { SchedulingService } from './scheduling.service';
   // SupervisionModule: the teacher's supervision conversation (PD-12), where
   // the bonus and handover cards are posted. It depends on nothing here.
   imports: [CommunicationModule, SupervisionModule],
-  controllers: [StatsController, LessonController, SchedulingController, LifecycleController],
+  controllers: [StatsController, SchedulingController, LessonController, LifecycleController],
   providers: [LessonService, SchedulingService, LifecycleService, SupervisionService, StatsService],
   exports: [LessonService, SchedulingService, LifecycleService, SupervisionService, StatsService],
 })
