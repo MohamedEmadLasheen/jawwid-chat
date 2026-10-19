@@ -1,0 +1,13 @@
+/* PD-12 S2 discipline. Layout reuses .page / .table / .toolbar from the design system. */
+.dc-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-3); }
+.dc-month { display: inline-flex; align-items: center; gap: var(--space-2); }
+.dc-month .field__label { margin: 0; white-space: nowrap; }
+.dc-month .input { inline-size: auto; }
+.dc-table-wrap { overflow-x: auto; }
+.dc-cell { display: grid; gap: var(--space-1); justify-items: start; min-inline-size: 10rem; }
+.dc-muted { color: var(--text-muted); font-size: var(--fs-sm); }
+.dc-options { display: grid; gap: var(--space-2); margin: var(--space-2) 0 0; padding: 0; border: none; }
+.dc-option { display: flex; align-items: center; gap: var(--space-2); }
+.dc-dates { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); }
+.dc-check { display: flex; align-items: center; gap: var(--space-2); margin-block-start: var(--space-2); }
+.dc-textarea { min-block-size: 5rem; resize: vertical; }

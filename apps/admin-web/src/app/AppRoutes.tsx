@@ -25,6 +25,7 @@ import { TeacherFilesPage } from '@/features/teacher-files/TeacherFilesPage'
 import { TeacherFilePage } from '@/features/teacher-files/TeacherFilePage'
 import { CertificatesPage } from '@/features/supervision/CertificatesPage'
 import { LeaveRequestsPage } from '@/features/supervision/LeaveRequestsPage'
+import { DisciplinePage } from '@/features/discipline/DisciplinePage'
 import { ForbiddenPage } from './ForbiddenPage'
 import type { ReactElement } from 'react'
 
@@ -83,6 +84,7 @@ export function AppRoutes() {
         {/* PD-12: the department's queues, tabs of the same area. */}
         <Route path="/teachers/certificates" element={<Area area="teachers"><CertificatesPage basePath="/teachers" /></Area>} />
         <Route path="/teachers/leave" element={<Area area="teachers"><LeaveRequestsPage basePath="/teachers" /></Area>} />
+        <Route path="/teachers/discipline" element={<Area area="teachers"><DisciplinePage basePath="/teachers" /></Area>} />
         <Route path="/tasks" element={<Area area="tasks"><TasksPage /></Area>} />
         <Route path="/coverage" element={<Area area="coverage"><CoveragePage /></Area>} />
         <Route path="/dashboard" element={<Area area="dashboard"><DashboardPage /></Area>} />
@@ -108,6 +110,10 @@ export function AppRoutes() {
         <Route
           path="/admin/teachers/certificates"
           element={<SuperAdminOnly><CertificatesPage basePath={adminSectionPath('teachers')} /></SuperAdminOnly>}
+        />
+        <Route
+          path="/admin/teachers/discipline"
+          element={<SuperAdminOnly><DisciplinePage basePath={adminSectionPath('teachers')} /></SuperAdminOnly>}
         />
         <Route
           path="/admin/teachers/leave"

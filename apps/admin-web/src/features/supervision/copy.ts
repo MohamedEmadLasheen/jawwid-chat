@@ -13,6 +13,7 @@ export const S = {
   tabTeachers: { en: 'Teachers', ar: 'المعلمون' },
   tabCertificates: { en: 'Certificates', ar: 'الشهادات' },
   tabLeave: { en: 'Leave requests', ar: 'طلبات الإجازة' },
+  tabDiscipline: { en: 'Discipline', ar: 'الانضباط' },
   sections: { en: 'Teachers department', ar: 'قسم المعلمين' },
 
   // Certificates
