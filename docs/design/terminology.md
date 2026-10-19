@@ -148,3 +148,11 @@ Call history · سجل المكالمات.
    numbers and durations that pluralise differently in Arabic.
 7. **Arabic plurals** have six forms. Any string containing a count must go through ICU plural
    selection, never `n + " " + noun`.
+   Guarded by `test/l10n/plurals_test.dart`, which also pins the counted strings that predate
+   the guard and still need converting.
+8. **The product name** is `جَوِّد` in Arabic and `Jawwid` in English. `جوّيد` is not a variant
+   spelling — the inserted ي breaks the morphology of جوَّد, the root the academy is named for.
+   It was seeded into the Arabic notification templates by `20260905093100`, `20261014160000`
+   and `20261018140000`; the database is corrected forward-only by `20261020300000`. Guarded by
+   `test/l10n/brand_name_test.dart` and by the template assertion in
+   `apps/api/test/integration/groups-approval-calls.spec.ts`.
