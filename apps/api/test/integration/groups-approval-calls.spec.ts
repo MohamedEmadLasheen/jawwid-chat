@@ -384,7 +384,7 @@ describe('notification and reminder engine', () => {
       parent_name: 'أم أحمد', student_name: 'أحمد', class_time: '5:00', class_date: 'الأحد',
     });
     expect(ar!.body).toContain('أحمد');
-    expect(ar!.title).toBe('جوّيد');
+    expect(ar!.title).toBe('جَوِّد');
 
     const en = await g.templates.render('class_reminder', 'en', {
       parent_name: 'Umm Ahmed', student_name: 'Ahmed', class_time: '5:00pm', class_date: 'Sunday',
@@ -395,7 +395,47 @@ describe('notification and reminder engine', () => {
 
   it('falls back to Arabic when a locale has no template', async () => {
     const rendered = await g.templates.render('class_reminder', 'fr' as never, { student_name: 'X' });
-    expect(rendered!.title).toBe('جوّيد');
+    expect(rendered!.title).toBe('جَوِّد');
+  });
+
+  /**
+   * Brand-integrity guard.
+   *
+   * Three migrations seeded the Arabic brand as 'جوّيد' -- an inserted ي that
+   * breaks the morphology and is not a word -- on the TITLE line of most
+   * Arabic pushes, and in the body of the generic call pushes.
+   * 20261020300000 corrects every version forward, because the seeds were
+   * already applied and scripts/db/apply.sh never re-runs them.
+   *
+   * This asserts the END STATE of the whole migration chain rather than the
+   * text of any file, so it fails if the correcting migration is dropped or
+   * reordered, or a later seed reintroduces the misspelling.
+   */
+  it('never carries the misspelt Arabic brand name on a template', async () => {
+    const all = await g.prisma.notificationTemplate.findMany();
+    expect(all.filter((t) => t.locale === 'ar').length).toBeGreaterThan(0);
+
+    const offenders = all
+      .filter((t) => t.title.includes('جوّيد') || t.body.includes('جوّيد'))
+      .map((t) => `${t.key}/${t.locale}/v${t.version}`);
+    expect(offenders).toEqual([]);
+
+    // Every push that is titled with the brand renders the canonical spelling.
+    for (const key of [
+      'class_reminder', 'schedule_change', 'renewal_reminder', 'payment_reminder',
+      'pending_approval', 'approval_decision', 'group_call_started', 'new_message',
+      'lesson_reminder_tomorrow', 'lesson_reminder_soon', 'lesson_reminder_teacher',
+    ]) {
+      const rendered = await g.templates.render(key, 'ar', {});
+      expect({ key, title: rendered?.title }).toEqual({ key, title: 'جَوِّد' });
+    }
+
+    // The generic call pushes name the brand in the body.
+    expect((await g.templates.render('incoming_call', 'ar', {}))!.body).toBe('مكالمة واردة على جَوِّد.');
+    expect((await g.templates.render('missed_call', 'ar', {}))!.body).toBe('فاتتك مكالمة على جَوِّد.');
+
+    // English is a separate brand string and must not have been touched.
+    expect((await g.templates.render('class_reminder', 'en', {}))!.title).toBe('Jawwid');
   });
 
   it('leaves an unknown placeholder visible instead of rendering "undefined"', () => {
