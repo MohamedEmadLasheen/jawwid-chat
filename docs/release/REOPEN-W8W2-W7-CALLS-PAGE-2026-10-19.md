@@ -50,7 +50,7 @@ Retired by PD-13: the Calls tab's "no new-call button" rule. A call still
 starts only where `POST /calls` authorizes it, because every tile re-checks
 capability and the server decides.
 
-## 3. Closure evidence (2026-10-19, worktree `recursing-curie-f75339`, uncommitted)
+## 3. Closure evidence (2026-10-19, branch `claude/calls-page-pd13` on PR #56's head `3dbc7c0`)
 
 | Evidence | Result |
 |---|---|

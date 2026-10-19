@@ -1245,7 +1245,7 @@ is rung until someone taps Join.
   is no directory of strangers.
 - Photos are initials, except for staff.
 
-**Implementation phase.** Delivered 2026-10-19 on `claude/calls-page`, which is
+**Implementation phase.** Delivered 2026-10-19 on `claude/calls-page-pd13`, which is
 built on PR #56's branch, the Admin Web call stack. It covers migration
 `20261020090000_chat_scheduled_call.sql`, `apps/api/src/scheduled-calls/*`, the
 Admin Web `/calls` page and the Flutter Calls tab. The Flutter Calls tab was

@@ -1,6 +1,6 @@
 # Scheduled calls and call links (PD-13)
 
-Status: IMPLEMENTED on `claude/calls-page` (2026-10-19). Owner decisions: see
+Status: IMPLEMENTED on `claude/calls-page-pd13` (2026-10-19, stacked on PR #56). Owner decisions: see
 `docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4 PD-13.
 
 ## The model in one paragraph
