@@ -60,7 +60,12 @@ export const trialsApi = {
     api.post<TrialDto>(`/trials/${id(trialId)}/outcome`, body),
   /** The teacher's trial group (created if needed): Sales and the Teachers department talk to the teacher there. */
   openGroup: (teacherId: string) => api.post<{ conversationId: string }>(`/trials/teachers/${id(teacherId)}/group`),
-  newStudents: () => api.get<{ readyForSetup: NewStudentDto[]; awaitingCore: NewStudentDto[] }>('/trials/new-students'),
+  newStudents: () => api.get<{
+      readyForSetup: NewStudentDto[]
+      /** Confirmed by Core; the student is not in Chat yet and links itself when they arrive. */
+      awaitingStudent?: NewStudentDto[]
+      awaitingCore: NewStudentDto[]
+    }>('/trials/new-students'),
 }
 
 export const trialKeys = {

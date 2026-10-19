@@ -154,6 +154,8 @@ credentials, the LiveKit API secret, or Core credentials.
 | `CORE_BASE_URL` | no | req | req | req |
 | `CORE_API_KEY` | **yes** | opt | req | req |
 | `CORE_WEBHOOK_SECRET` | **yes** | opt | req | req |
+| `CORE_WEBHOOK_SECRETS` | **yes** | opt | opt | opt |
+| `CORE_WEBHOOK_TOLERANCE_SECONDS` | no | opt | opt | opt |
 | `CORE_TIMEOUT_MS` | no | opt | req | req |
 | `CORE_RETRY_MAX` | no | opt | req | req |
 | `CORE_INVOICES_ENABLED` | no | opt | opt | opt |
@@ -250,8 +252,13 @@ tokens; the secret itself must never reach a client. `scan-secrets.sh` fails the
 build if it appears under `lib/` or `apps/admin-web/src/`.
 
 **`CORE_*`** — Jawwid Core integration. `CORE_TIMEOUT_MS` bounds Core's latency
-so it cannot become Chat's latency; `CORE_WEBHOOK_SECRET` verifies inbound
-webhook signatures. A Core outage degrades Core-dependent features and leaves
+so it cannot become Chat's latency. `CORE_WEBHOOK_SECRETS` (or, when it is unset,
+the deployed name `CORE_WEBHOOK_SECRET`) holds `keyid:secret[,keyid2:secret2]`
+and verifies inbound webhook signatures at `POST /integration/core/events`; two
+entries is how a rotation lands. A value without a key id is ignored, and an
+empty one leaves the endpoint answering 503. `CORE_WEBHOOK_TOLERANCE_SECONDS`
+(default 300) is the timestamp window. See
+`docs/integration/core-subscription-confirmation.md`. A Core outage degrades Core-dependent features and leaves
 the rest of Chat running (see `architecture.md` §4).
 
 **`GIT_COMMIT` / `BUILD_VERSION` / `BUILD_TIME`** — injected at image build time

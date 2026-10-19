@@ -162,13 +162,20 @@ describe('New students, as Operations', () => {
       teacher: { id: 't-1', name: 'Teacher One' }, trialAt: '2026-10-10T15:00:00Z', recordedAt: '2026-10-11T10:00:00Z', confirmedAt,
     })
     on('GET', /\/trials\/new-students$/, () =>
-      json({ readyForSetup: [item('a', 'Prospect Ready', '2026-10-12T10:00:00Z')], awaitingCore: [item('b', 'Prospect Waiting', null)] }),
+      json({
+        readyForSetup: [item('a', 'Prospect Ready', '2026-10-12T10:00:00Z')],
+        awaitingStudent: [{ ...item('c', 'Prospect Confirmed', '2026-10-13T10:00:00Z'), learnerId: null }],
+        awaitingCore: [item('b', 'Prospect Waiting', null)],
+      }),
     )
     renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
     const ready = await screen.findByRole('region', { name: /Ready to set up/ })
     expect(within(ready).getByText('Prospect Ready')).toBeInTheDocument()
     expect(within(ready).queryByText('Prospect Waiting')).not.toBeInTheDocument()
     expect(within(screen.getByRole('region', { name: /Awaiting Core/ })).getByText('Prospect Waiting')).toBeInTheDocument()
+    const confirmed = screen.getByRole('region', { name: /student not in Chat yet/ })
+    expect(within(confirmed).getByText('Prospect Confirmed')).toBeInTheDocument()
+    expect(within(ready).queryByText('Prospect Confirmed')).not.toBeInTheDocument()
     // Operations alone has one page: no tab strip.
     expect(screen.queryByRole('navigation', { name: 'Trials' })).not.toBeInTheDocument()
   })
