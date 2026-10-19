@@ -77,6 +77,25 @@ class AuthSignedOut extends AuthState {
   }
 }
 
+/// A session is stored, but the server could not be reached to confirm it at launch.
+///
+/// Deliberately NOT [AuthSignedOut]: the tokens are kept, and nothing here says the session
+/// is over. Before this state existed an offline launch landed on the sign-in screen looking
+/// exactly like a sign-out, with no way back but typing the password again -- and the stored
+/// session, still perfectly valid, sitting unused behind it.
+///
+/// It is not authenticated either, so the router keeps every protected screen out of reach
+/// until the backend has vouched for the principal (§7).
+class AuthUnreachable extends AuthState {
+  const AuthUnreachable({this.retrying = false, this.error});
+
+  /// A retry is in flight; the screen shows progress instead of a second button.
+  final bool retrying;
+
+  /// What the last attempt ran into, for the message. Always a transient kind.
+  final AppError? error;
+}
+
 class AuthSigningIn extends AuthState {
   const AuthSigningIn();
 }

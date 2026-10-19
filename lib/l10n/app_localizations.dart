@@ -169,6 +169,12 @@ abstract class L10n {
   /// **'Your session ended. Please sign in again.'**
   String get sessionExpiredBody;
 
+  /// No description provided for @sessionUnreachableBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t reach Jawwid to open your session. You\'re still signed in — check your connection and try again.'**
+  String get sessionUnreachableBody;
+
   /// No description provided for @signOutAction.
   ///
   /// In en, this message translates to:

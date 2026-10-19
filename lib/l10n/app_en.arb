@@ -12,6 +12,7 @@
   "signInFailedRoleUnsupported": "This account cannot sign in to the Jawwid app. Staff accounts use the Jawwid console.",
   "sessionExpiredTitle": "You have been signed out",
   "sessionExpiredBody": "Your session ended. Please sign in again.",
+  "sessionUnreachableBody": "Couldn't reach Jawwid to open your session. You're still signed in — check your connection and try again.",
   "signOutAction": "Sign out",
   "signOutConfirm": "Sign out of Jawwid on this device?",
   "tabChats": "Chats",
