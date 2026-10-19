@@ -202,3 +202,17 @@ final pushRegistrarProvider = Provider<PushRegistrar?>((ref) {
 
   return registrar;
 });
+
+/// Starts push registration for the life of the app. Called once, from `main`.
+///
+/// LISTENED, not read. `main` starts this while the stored session is still being restored,
+/// so the first build sees no account and yields null. A provider that is only READ is not
+/// rebuilt when what it watches changes -- Riverpod pauses a provider nobody listens to and
+/// recomputes it on the next read, and nothing ever reads this one again. Reading it once is
+/// how no device registered for push after a restore or a sign-in (W8-W1 reopen,
+/// 2026-10-19). A listener keeps it live, so every session change rebuilds it: a session
+/// that arrives registers, one that ends retires its tokens.
+///
+/// The subscription is deliberately never closed: registration lasts as long as the app.
+ProviderSubscription<PushRegistrar?> startPushRegistration(ProviderContainer container) =>
+    container.listen<PushRegistrar?>(pushRegistrarProvider, (_, _) {});
