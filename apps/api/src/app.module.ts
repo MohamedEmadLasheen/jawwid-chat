@@ -11,6 +11,7 @@ import { TeacherFileModule } from './teacher-file/teacher-file.module';
 import { SupervisionModule } from './supervision/supervision.module';
 import { CertificateModule } from './certificates/certificate.module';
 import { LeaveModule } from './leave/leave.module';
+import { DisciplineModule } from './discipline/discipline.module';
 
 /**
  * The root module. Composition only -- it declares no provider and no
@@ -45,6 +46,7 @@ import { LeaveModule } from './leave/leave.module';
     SupervisionModule,
     CertificateModule,
     LeaveModule,
+    DisciplineModule,
   ],
 })
 export class AppModule {}

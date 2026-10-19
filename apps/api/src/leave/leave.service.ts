@@ -389,6 +389,7 @@ export class LeaveService {
           ORDER BY a.set_at DESC, a.id DESC LIMIT 1) AS allowance,
         (SELECT count(*)::int FROM chat.teacher_day_off o
           WHERE o.teacher_id = ${teacherId}::uuid
+            AND o.suspension_id IS NULL -- a suspension is not leave (PD-12 S2)
             AND extract(year FROM o.day) = ${year}) AS used`;
     const allowance = rows[0]?.allowance ?? null;
     const used = rows[0]?.used ?? 0;

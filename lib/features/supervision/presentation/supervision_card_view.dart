@@ -23,6 +23,16 @@ Widget? supervisionCardView(BuildContext context, MessageCard card, Color foregr
     'leave_declined' => (Icons.cancel_outlined, l10n.cardLeaveDeclinedTitle),
     'leave_withdrawn' => (Icons.undo, l10n.cardLeaveWithdrawnTitle),
     'leave_cancelled' => (Icons.undo, l10n.cardLeaveCancelledTitle),
+    // PD-12 S2: a confirmed step of the discipline ladder.
+    'discipline_warning' => (Icons.warning_amber_rounded, l10n.cardDisciplineWarningTitle),
+    'discipline_deduction' => (
+        Icons.remove_circle_outline,
+        card.integer('step') == 2 ? l10n.cardDisciplineDeduction2Title : l10n.cardDisciplineDeduction1Title,
+      ),
+    'discipline_suspension' => (
+        Icons.block,
+        card.text('kind') == 'permanent' ? l10n.cardDisciplinePermanentTitle : l10n.cardDisciplineTemporaryTitle,
+      ),
     _ => null,
   };
   if (head == null) return null;
@@ -48,10 +58,17 @@ class _SupervisionCard extends StatelessWidget {
     final theme = Theme.of(context);
     final muted = foreground.withValues(alpha: 0.75);
     final isCertificate = card.kind.startsWith('certificate_');
+    final isDiscipline = card.kind.startsWith('discipline_');
 
-    final subtitle = isCertificate ? card.text('learnerName') : _dates(context);
+    final subtitle = isCertificate
+        ? card.text('learnerName')
+        : isDiscipline
+            ? _dates(context, from: 'startsOn', to: 'endsOn')
+            : _dates(context);
     final rows = <(String, String)>[
-      if (isCertificate) ...[
+      if (isDiscipline) ...[
+        (l10n.cardViolation, _violation(context)),
+      ] else if (isCertificate) ...[
         if (card.text('title') case final v?) (l10n.certificateTitleField, v),
         if (card.text('achievement') case final v?) (l10n.cardAchievement, v),
         if (card.text('grade') case final v?) (l10n.cardGrade, v),
@@ -99,6 +116,9 @@ class _SupervisionCard extends StatelessWidget {
                 ],
               ),
             ),
+          if (card.kind == 'discipline_warning' && card.integer('step') != null)
+            _Foot(text: l10n.cardViolationStep('${card.integer('step')}'), color: muted),
+          if (card.kind == 'discipline_deduction') _Foot(text: l10n.cardPayrollNote, color: muted),
           if (card.kind == 'certificate_issued')
             Padding(
               padding: const EdgeInsets.only(top: Spacing.spacing2),
@@ -112,13 +132,44 @@ class _SupervisionCard extends StatelessWidget {
     );
   }
 
-  /// A leave's dates are calendar days: formatted as the same day in every time zone.
-  String? _dates(BuildContext context) {
-    final first = parseCalendarDay(card.payload['firstDay']);
-    final last = parseCalendarDay(card.payload['lastDay']);
+  /// What the violation was, whose lesson, which day -- as the server recorded it.
+  String _violation(BuildContext context) {
+    final l10n = L10n.of(context);
+    final what = switch (card.text('violationKind')) {
+      'late' => l10n.cardViolationLate('${card.integer('lateMinutes') ?? ''}'),
+      'teacher_no_show' => l10n.cardViolationNoShow,
+      _ => l10n.cardViolationApology,
+    };
+    final day = parseCalendarDay(card.payload['lessonDay']);
+    return [
+      what,
+      ?card.text('learnerName'),
+      if (day != null) MaterialLocalizations.of(context).formatMediumDate(DateTime(day.year, day.month, day.day)),
+    ].join(' — ');
+  }
+
+  /// A leave's (or a suspension's) dates are calendar days: the same day in every time zone.
+  String? _dates(BuildContext context, {String from = 'firstDay', String to = 'lastDay'}) {
+    final first = parseCalendarDay(card.payload[from]);
+    final last = parseCalendarDay(card.payload[to]);
     if (first == null || last == null) return null;
     final m = MaterialLocalizations.of(context);
     String day(DateTime d) => m.formatMediumDate(DateTime(d.year, d.month, d.day));
     return first == last ? day(first) : '${day(first)} – ${day(last)}';
+  }
+}
+
+class _Foot extends StatelessWidget {
+  const _Foot({required this.text, required this.color});
+
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: Spacing.spacing2),
+      child: Text(text, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: color, fontStyle: FontStyle.italic)),
+    );
   }
 }

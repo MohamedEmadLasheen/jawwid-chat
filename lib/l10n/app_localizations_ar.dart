@@ -1347,4 +1347,41 @@ class L10nAr extends L10n {
 
   @override
   String get progressCertificatesTitle => 'الشهادات';
+
+  @override
+  String get cardDisciplineWarningTitle => 'تنبيه';
+
+  @override
+  String get cardDisciplineDeduction1Title => 'الخصم الأول';
+
+  @override
+  String get cardDisciplineDeduction2Title => 'الخصم الثاني';
+
+  @override
+  String get cardDisciplineTemporaryTitle => 'إيقاف مؤقت';
+
+  @override
+  String get cardDisciplinePermanentTitle => 'إيقاف نهائي';
+
+  @override
+  String get cardViolation => 'ما حدث';
+
+  @override
+  String cardViolationLate(String minutes) {
+    return 'تأخر $minutes دقيقة';
+  }
+
+  @override
+  String get cardViolationNoShow => 'غياب عن الحصة';
+
+  @override
+  String get cardViolationApology => 'اعتذار عن الحصة';
+
+  @override
+  String cardViolationStep(String step) {
+    return 'المخالفة رقم $step هذا الشهر';
+  }
+
+  @override
+  String get cardPayrollNote => 'يُحدَّد المبلغ في الرواتب.';
 }

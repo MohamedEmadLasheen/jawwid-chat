@@ -35,6 +35,8 @@ export const TEACHERS_TABS: TeachersTab[] = [
   { key: 'files', segment: 'files', label: { en: 'Teacher files', ar: 'ملفات المعلمين' } },
   { key: 'certificates', segment: 'certificates', label: { en: 'Certificates', ar: 'الشهادات' } },
   { key: 'leave', segment: 'leave', label: { en: 'Leave requests', ar: 'طلبات الإجازة' } },
+  // PD-12 S2.
+  { key: 'discipline', segment: 'discipline', label: { en: 'Discipline', ar: 'الانضباط' } },
 ]
 
 export function teachersTabPath(tab: TeachersTab, base: string = TEACHERS_AREA_BASE): string {

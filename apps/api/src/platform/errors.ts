@@ -209,6 +209,14 @@ export enum CommErrorCode {
   SUPERVISION_DENIED = 'COMM.SUPERVISION_DENIED',
   /** PD-12: no such active teacher in the caller's organization. 404. */
   SUPERVISION_NOT_FOUND = 'COMM.SUPERVISION_NOT_FOUND',
+  /** PD-12 S2: no such violation, lesson or teacher, or none this caller may see. 404. */
+  DISCIPLINE_NOT_FOUND = 'COMM.DISCIPLINE_NOT_FOUND',
+  /** PD-12 S2: only the Teachers department (and the super admin) records and decides discipline. 403. */
+  DISCIPLINE_DENIED = 'COMM.DISCIPLINE_DENIED',
+  /** PD-12 S2: not allowed now (already decided, below the late threshold, lesson not held, students still assigned). 409. */
+  DISCIPLINE_STATE = 'COMM.DISCIPLINE_STATE',
+  /** PD-12 S2: open lessons fall inside the suspension; decide again with cancelCollidingLessons. 409. */
+  DISCIPLINE_LESSONS_COLLIDE = 'COMM.DISCIPLINE_LESSONS_COLLIDE',
 }
 
 export class CommError extends Error {

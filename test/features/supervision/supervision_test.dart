@@ -123,6 +123,44 @@ void main() {
     });
   });
 
+  group('discipline cards (PD-12 S2)', () {
+    testWidgets('a deduction names the step and the violation, and says the amount is payroll\'s', (tester) async {
+      final m = WireMappers.message(
+        wireCard('discipline_deduction', {
+          'violationKind': 'late',
+          'lateMinutes': 15,
+          'learnerName': 'learner_l',
+          'lessonDay': '2026-10-15',
+          'step': 1,
+          'note': 'third late start',
+        }),
+        viewerActorId: 't1',
+      );
+      await tester.pumpWidget(app(MessageBubble(message: m, showAuthor: true)));
+      expect(find.text('First deduction'), findsOneWidget);
+      expect(find.textContaining('15 minutes late'), findsOneWidget);
+      expect(find.textContaining('learner_l'), findsOneWidget);
+      expect(find.text('The amount is set in payroll.'), findsOneWidget);
+      expect(find.text('plain-text fallback'), findsNothing);
+    });
+
+    testWidgets('a temporary suspension shows its calendar days, in Arabic too', (tester) async {
+      final m = WireMappers.message(
+        wireCard('discipline_suspension', {
+          'violationKind': 'teacher_no_show',
+          'kind': 'temporary',
+          'startsOn': '2026-10-20',
+          'endsOn': '2026-10-26',
+          'step': 4,
+        }),
+        viewerActorId: 't1',
+      );
+      await tester.pumpWidget(app(MessageBubble(message: m, showAuthor: true), locale: const Locale('ar')));
+      expect(find.text('إيقاف مؤقت'), findsOneWidget);
+      expect(find.textContaining('غياب عن الحصة'), findsOneWidget);
+    });
+  });
+
   group('the + menu in a supervision conversation', () {
     testWidgets('offers the requests under their own heading; picking one returns it', (tester) async {
       ComposerChoice? picked;

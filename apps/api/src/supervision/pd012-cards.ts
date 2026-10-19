@@ -9,6 +9,19 @@ export type CardLanguage = 'ar' | 'en';
  * Pure. Dates are the ISO calendar dates the payload carries (a leave day or an
  * achievement date is a date, not an instant, so no time zone is guessed).
  */
+/** A violation in one line: what happened, to whose lesson, when (a calendar date). */
+function violation(p: Record<string, unknown>, ar: boolean): string {
+  const what =
+    p.violationKind === 'late'
+      ? ar ? `تأخر ${String(p.lateMinutes ?? '')} دقيقة` : `${String(p.lateMinutes ?? '')} minutes late`
+      : p.violationKind === 'teacher_no_show'
+        ? ar ? 'غياب عن الحصة' : 'absent from the lesson'
+        : ar ? 'اعتذار عن الحصة' : 'apologised for the lesson';
+  const whose = p.learnerName ? (ar ? ` (${String(p.learnerName)})` : ` (${String(p.learnerName)})`) : '';
+  const when = p.lessonDay ? ` — ${String(p.lessonDay)}` : '';
+  return `${what}${whose}${when}`;
+}
+
 export function renderPd012CardBody(kind: string, p: Record<string, unknown>, lang: CardLanguage): string {
   const ar = lang === 'ar';
   const s = (v: unknown) => (v === null || v === undefined ? '' : String(v));
@@ -64,6 +77,28 @@ export function renderPd012CardBody(kind: string, p: Record<string, unknown>, la
       );
     case CardKind.LEAVE_WITHDRAWN:
       return ar ? `↩️ سحب المعلم طلب الإجازة: ${range()}` : `↩️ The teacher withdrew the leave request: ${range()}`;
+    case CardKind.DISCIPLINE_WARNING:
+      return join(
+        ar ? `⚠️ تنبيه: ${violation(p, ar)}` : `⚠️ Warning: ${violation(p, ar)}`,
+        line(ar ? 'ملاحظة' : 'Note', p.note),
+        ar ? `هذه المخالفة رقم ${s(p.step)} هذا الشهر.` : `This is violation ${s(p.step)} this month.`,
+      );
+    case CardKind.DISCIPLINE_DEDUCTION:
+      return join(
+        ar
+          ? `⚠️ ${p.step === 2 ? 'الخصم الثاني' : 'الخصم الأول'}: ${violation(p, ar)}`
+          : `⚠️ ${p.step === 2 ? 'Second deduction' : 'First deduction'}: ${violation(p, ar)}`,
+        line(ar ? 'ملاحظة' : 'Note', p.note),
+        ar ? 'يُحدَّد المبلغ في الرواتب.' : 'The amount is set in payroll.',
+      );
+    case CardKind.DISCIPLINE_SUSPENSION:
+      return join(
+        p.kind === 'permanent'
+          ? ar ? '⛔ إيقاف نهائي' : '⛔ Permanent suspension'
+          : ar ? `⛔ إيقاف مؤقت: ${s(p.startsOn)} → ${s(p.endsOn)}` : `⛔ Temporary suspension: ${s(p.startsOn)} → ${s(p.endsOn)}`,
+        line(ar ? 'السبب' : 'Reason', violation(p, ar)),
+        line(ar ? 'ملاحظة' : 'Note', p.note),
+      );
     case CardKind.LEAVE_CANCELLED:
       return join(
         ar ? `↩️ أُلغيت الإجازة: ${range()}` : `↩️ Leave cancelled: ${range()}`,
