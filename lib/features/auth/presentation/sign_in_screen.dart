@@ -72,6 +72,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                     const SizedBox(height: Spacing.spacing7),
 
                     if (state is AuthSignedOut) _SignInNotice(state: state),
+                    if (state is AuthUnreachable) _UnreachableNotice(state: state),
 
                     TextFormField(
                       controller: _username,
@@ -177,6 +178,69 @@ class _SignInNotice extends StatelessWidget {
                   color: theme.colorScheme.onErrorContainer,
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The launch could not reach the server, but the stored session is intact.
+///
+/// Said plainly, with the way back on the same card: retrying needs no password. The form
+/// stays usable below it, because signing in as someone else is still a legitimate choice.
+class _UnreachableNotice extends ConsumerWidget {
+  const _UnreachableNotice({required this.state});
+
+  final AuthUnreachable state;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = L10n.of(context);
+    final theme = Theme.of(context);
+    final ink = theme.colorScheme.onSecondaryContainer;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Spacing.spacing5),
+      child: Container(
+        padding: const EdgeInsets.all(Spacing.spacing4),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.secondaryContainer,
+          borderRadius: Radii.card,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.cloud_off_outlined, color: ink),
+                const SizedBox(width: Spacing.spacing3),
+                Expanded(
+                  child: Text(
+                    l10n.sessionUnreachableBody,
+                    style: theme.textTheme.bodyMedium?.copyWith(color: ink),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: Spacing.spacing3),
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: state.retrying
+                  ? const Padding(
+                      padding: EdgeInsets.all(Spacing.spacing3),
+                      child: SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : TextButton(
+                      onPressed: () =>
+                          ref.read(authControllerProvider.notifier).restore(),
+                      child: Text(l10n.retryAction),
+                    ),
             ),
           ],
         ),

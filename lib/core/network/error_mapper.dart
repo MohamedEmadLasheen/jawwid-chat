@@ -39,14 +39,21 @@ abstract final class ErrorMapper {
   }
 
   static AppError _fromDio(DioException error) {
+    // An interceptor that has already classified the failure (ApiClient, when a refresh
+    // could not reach the server) carries its AppError here; re-deriving one from the
+    // DioException would lose exactly the distinction it made.
+    final carried = error.error;
+    if (carried is AppError) return carried;
+
     switch (error.type) {
       case DioExceptionType.connectionTimeout:
+        return const AppError(AppErrorKind.timeout, code: AppError.connectTimeout);
       case DioExceptionType.sendTimeout:
       case DioExceptionType.receiveTimeout:
       case DioExceptionType.transformTimeout:
         return const AppError(AppErrorKind.timeout);
       case DioExceptionType.connectionError:
-        return const AppError(AppErrorKind.network);
+        return const AppError(AppErrorKind.network, code: AppError.connectFailed);
       case DioExceptionType.cancel:
         return const AppError(AppErrorKind.unknown, code: 'cancelled');
       case DioExceptionType.badCertificate:

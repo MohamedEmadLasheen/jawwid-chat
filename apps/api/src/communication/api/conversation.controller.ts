@@ -2,7 +2,8 @@ import { Body, Controller, Get, Param, Post, Query, UseFilters } from '@nestjs/c
 import { ConversationService } from '../conversations/conversation.service';
 import { MessageService } from '../messages/message.service';
 import { CallService } from '../calls/call.service';
-import { toConversationDto } from '../contracts/dto';
+import { toConversationDto, toLastMessageDto, type ConversationViewerStateDto, type ResolvedMember } from '../contracts/dto';
+import { AuthorizationService } from '../../platform/authorization.service';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
 
@@ -21,6 +22,7 @@ export class ConversationController {
     private readonly conversations: ConversationService,
     private readonly messages: MessageService,
     private readonly calls: CallService,
+    private readonly authz: AuthorizationService,
   ) {}
 
   /**
@@ -35,16 +37,38 @@ export class ConversationController {
    * One count query for the whole list, not one per row (mobile gap O1).
    */
   @Get()
-  async list(@ActorId() actorId: string) {
+  async list(@ActorId() actorId: string, @Query('q') q?: string) {
+    const actor = await this.conversations.requireActor(actorId);
     const rows = await this.conversations.listForActor(actorId);
-    const unread = await this.messages.unreadCountsFor(
-      rows.map((c) => c.id),
-      actorId,
-    );
+    const ids = rows.map((c) => c.id);
+    // Every per-row fact is computed for exactly the ids listForActor
+    // authorized, each in one batch: unread counts (the caller's own
+    // receipts), members with names, the viewer's own preferences, and the
+    // newest message THIS viewer may see.
+    const [unread, members, states, last] = await Promise.all([
+      this.messages.unreadCountsFor(ids, actorId),
+      this.conversations.membersOfMany(ids, actor),
+      this.conversations.viewerStates(ids, actor.actorId),
+      this.messages.lastVisibleMessages(ids, actor),
+    ]);
+
+    // Search narrows the caller's own list -- it never widens it. A row matches
+    // on its title, its child's name, or a member's display name.
+    const needle = typeof q === 'string' ? q.trim().toLocaleLowerCase().slice(0, 100) : '';
+    const matches = (c: (typeof rows)[number]) =>
+      !needle ||
+      [c.title, c.learner?.name, ...(members.get(c.id) ?? []).map((m: ResolvedMember) => m.displayName)].some(
+        (text) => typeof text === 'string' && text.toLocaleLowerCase().includes(needle),
+      );
 
     return {
-      conversations: rows.map((c) =>
-        toConversationDto(c, undefined, { unreadCount: unread.get(c.id) ?? 0 }),
+      conversations: rows.filter(matches).map((c) =>
+        toConversationDto(c, members.get(c.id), {
+          unreadCount: unread.get(c.id) ?? 0,
+          viewerRequiresApproval: this.authz.viewerRequiresApproval(actor, c),
+          viewerState: viewerState(states.get(c.id)),
+          lastMessage: last.has(c.id) ? toLastMessageDto(last.get(c.id)!) : null,
+        }),
       ),
     };
   }
@@ -52,10 +76,9 @@ export class ConversationController {
   /**
    * Get or create the 1:1 channel with another actor.
    *
-   * PD-6: a teacher/parent pair is permitted only where the server-resolved
-   * relationship authorizes it, and refused otherwise with
-   * COMM.TEACHER_PARENT_NOT_AUTHORIZED. `withActorId` selects the other party;
-   * it asserts nothing about the relationship with them.
+   * BR-1 (PD-7): a teacher/parent pair is refused outright with
+   * COMM.BR1_TEACHER_PARENT_DIRECT, whatever their relationship. `withActorId`
+   * selects the other party; it asserts nothing about them.
    */
   @Post('direct')
   async direct(@ActorId() actorId: string, @Body() body: { withActorId: string }) {
@@ -71,6 +94,21 @@ export class ConversationController {
     );
   }
 
+  /**
+   * PD-8: a supervisor creates a group about one or more of their children in
+   * ONE family, with the parents and teachers they choose from that family and
+   * those children. Every participant is validated server side and by the
+   * database; see ConversationService.createFamilyGroup.
+   */
+  @Post('family-group')
+  async familyGroup(@ActorId() actorId: string, @Body() body: Record<string, unknown>) {
+    const conv = await this.conversations.createFamilyGroup(actorId, body ?? {});
+    return toConversationDto(
+      conv,
+      await this.conversations.membersOf(conv.id, await this.conversations.requireActor(actorId)),
+    );
+  }
+
   /** The official group for a learner, created from Core relationships. */
   @Post('student-group')
   async studentGroup(@ActorId() actorId: string, @Body() body: { learnerId: string }) {
@@ -79,8 +117,8 @@ export class ConversationController {
   }
 
   @Post('student-group/:learnerId/sync')
-  async sync(@Param('learnerId') learnerId: string) {
-    const conv = await this.conversations.syncStudentGroup(learnerId);
+  async sync(@ActorId() actorId: string, @Param('learnerId') learnerId: string) {
+    const conv = await this.conversations.syncStudentGroup(learnerId, actorId);
     return conv ? toConversationDto(conv) : { synced: false };
   }
 
@@ -108,8 +146,16 @@ export class ConversationController {
     // them through the one batch primitive. Only on this route: the LIST
     // endpoint deliberately does not load members, because that would be an
     // identity batch per row for a screen that renders none of them.
+    const actor = await this.conversations.requireActor(actorId);
+    const [states, last] = await Promise.all([
+      this.conversations.viewerStates([conversation.id], actor.actorId),
+      this.messages.lastVisibleMessages([conversation.id], actor),
+    ]);
     return toConversationDto(conversation, members, {
       unreadCount: await this.messages.unreadCount(id, actorId),
+      viewerRequiresApproval: this.authz.viewerRequiresApproval(actor, conversation),
+      viewerState: viewerState(states.get(conversation.id)),
+      lastMessage: last.has(conversation.id) ? toLastMessageDto(last.get(conversation.id)!) : null,
     });
   }
 
@@ -153,17 +199,19 @@ export class ConversationController {
       reason: string;
     },
   ) {
+    // Passed through as received: the service validates every field and judges
+    // the member from their own row, so nothing here is trusted.
     await this.conversations.setMembership(
       id,
       actorId,
       {
-        actorId: body.actorId,
-        actorKind: body.actorKind,
-        memberRole: body.memberRole,
-        isSilent: body.isSilent,
+        actorId: body?.actorId,
+        actorKind: body?.actorKind,
+        memberRole: body?.memberRole,
+        isSilent: body?.isSilent,
       },
-      body.action,
-      body.reason,
+      body?.action,
+      body?.reason,
     );
     return { ok: true };
   }
@@ -182,4 +230,15 @@ export class ConversationController {
     });
     return { ok: true };
   }
+}
+
+/** The viewer's stored preferences, or the defaults when they never set any. */
+function viewerState(
+  row: { pinnedAt: Date | null; archivedAt: Date | null; mutedUntil: Date | null } | undefined,
+): ConversationViewerStateDto {
+  return {
+    pinned: !!row?.pinnedAt,
+    archived: !!row?.archivedAt,
+    mutedUntil: row?.mutedUntil?.toISOString() ?? null,
+  };
 }

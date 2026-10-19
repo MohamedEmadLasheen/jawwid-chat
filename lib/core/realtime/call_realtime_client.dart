@@ -3,6 +3,7 @@ import 'dart:async';
 import '../logging/redacting_logger.dart';
 import '../network/api_client.dart' show TokenProvider;
 import 'call_event.dart';
+import 'chat_signal.dart';
 import 'realtime_socket.dart';
 
 /// Where the realtime connection stands, as the application sees it.
@@ -27,20 +28,38 @@ enum CallRealtimeState { idle, connecting, connected, disconnected, unauthorized
 ///
 /// A [CallAccepted] here means the application-level answer, not a media join.
 /// See [CallEvent].
+///
+/// CHAT RIDES THE SAME CONNECTION. This is the session's ONLY realtime client
+/// and its socket the only socket: chat signals ([chatSignals]) are decoded
+/// from the same frames rather than from a second connection, so there is one
+/// handshake, one credential refresh and one set of rooms per session. A chat
+/// signal says which conversation changed and nothing more; see [ChatSignal].
 class CallRealtimeClient {
   CallRealtimeClient({
     required RealtimeSocket socket,
     required TokenProvider tokens,
     RedactingLogger logger = const RedactingLogger(),
+    this.unknownActorRetryDelay = const Duration(milliseconds: 250),
   })  : _socket = socket,
         _tokens = tokens,
         _log = logger;
+
+  /// Base delay for retrying a subscribe answered `COMM.UNKNOWN_ACTOR`.
+  ///
+  /// The server authenticates the socket asynchronously and the client sees
+  /// `connect` first, so a subscribe sent immediately can arrive before the
+  /// socket has an actor. That refusal is a race, not a verdict; every other
+  /// refusal still is.
+  final Duration unknownActorRetryDelay;
+
+  static const _unknownActorAttempts = 4;
 
   final RealtimeSocket _socket;
   final TokenProvider _tokens;
   final RedactingLogger _log;
 
   final _events = StreamController<CallEvent>.broadcast();
+  final _chat = StreamController<ChatSignal>.broadcast();
   final _states = StreamController<CallRealtimeState>.broadcast();
 
   /// The conversations this client WANTS to be subscribed to. Kept so a
@@ -66,6 +85,13 @@ class CallRealtimeClient {
   /// Typed call events. Broadcast: several listeners are fine, and a late
   /// listener does not replay history it would misread as new.
   Stream<CallEvent> get events => _events.stream;
+
+  /// Chat signals: which conversation changed, plus [ChatSignalKind.reconnected]
+  /// on every successful (re)connection. Broadcast, like [events].
+  Stream<ChatSignal> get chatSignals => _chat.stream;
+
+  /// The conversations currently subscribed (as far as the server last said).
+  Set<String> get subscriptions => Set.unmodifiable(_wanted);
 
   Stream<CallRealtimeState> get states => _states.stream;
 
@@ -121,13 +147,30 @@ class CallRealtimeClient {
     if (_disposed) {
       return const SubscriptionResult(ok: false, code: 'COMM.NOT_CONNECTED');
     }
-    final result = await _socket.subscribe(conversationId);
+    final result = await _subscribeOnce(conversationId);
+    if (_disposed) return result;
     if (result.ok) {
       _wanted.add(conversationId);
     } else {
       // Not remembered, so a reconnect does not re-ask for something already
       // refused.
       _log.warn('realtime: subscribe refused', data: {'code': result.code});
+    }
+    return result;
+  }
+
+  /// One subscribe, retrying ONLY the connect/authenticate race.
+  Future<SubscriptionResult> _subscribeOnce(String conversationId) async {
+    var result = await _socket.subscribe(conversationId);
+    for (var attempt = 1;
+        attempt < _unknownActorAttempts &&
+            !result.ok &&
+            result.code == 'COMM.UNKNOWN_ACTOR' &&
+            !_disposed;
+        attempt++) {
+      await Future<void>.delayed(unknownActorRetryDelay * attempt);
+      if (_disposed) break;
+      result = await _socket.subscribe(conversationId);
     }
     return result;
   }
@@ -149,7 +192,15 @@ class CallRealtimeClient {
         // were subscribed to, and let the server authorize each one again --
         // a relationship revoked while we were away must not come back just
         // because we were in the room before it was.
-        unawaited(_resubscribe());
+        //
+        // Then -- and only once the rooms are back -- tell the chat layer to
+        // catch up from the server: whatever happened while the socket was down
+        // was not delivered. Signalling before the resubscribe finished would
+        // leave a window where a message committed after the catch-up read but
+        // before the room was rejoined reached nobody.
+        unawaited(_resubscribe().then((_) {
+          if (!_chat.isClosed) _chat.add(const ChatSignal.reconnected());
+        }));
       case RealtimeSocketState.disconnected:
         _setState(CallRealtimeState.disconnected);
       case RealtimeSocketState.unauthorized:
@@ -206,7 +257,8 @@ class CallRealtimeClient {
 
   Future<void> _resubscribe() async {
     for (final conversationId in _wanted.toList()) {
-      final result = await _socket.subscribe(conversationId);
+      if (_disposed) return;
+      final result = await _subscribeOnce(conversationId);
       if (!result.ok) {
         _wanted.remove(conversationId);
         _log.warn(
@@ -219,6 +271,11 @@ class CallRealtimeClient {
 
   void _onFrame(RealtimeFrame frame) {
     if (_events.isClosed) return;
+    final chat = decodeChatSignal(frame.event, frame.payload);
+    if (chat != null) {
+      if (!_chat.isClosed) _chat.add(chat);
+      return;
+    }
     try {
       final event = decodeCallEvent(frame.event, frame.payload);
       // null means "not a call event" -- typing, presence, messages. Somebody
@@ -257,6 +314,7 @@ class CallRealtimeClient {
     await _socket.dispose();
     _setState(CallRealtimeState.idle);
     await _events.close();
+    await _chat.close();
     await _states.close();
   }
 }

@@ -108,8 +108,8 @@ class FakeConversationRepository implements ConversationRepository {
   /// Opening a direct channel is **not** offered by the fixture, on purpose.
   ///
   /// Whether two actors may share a channel is `canOpenDirect` — a server
-  /// decision over real relationships (PD-6 resolves it per learner, per family,
-  /// at the moment of the action). A fixture cannot evaluate that, and the only
+  /// decision made at the moment of the action (since PD-7 it refuses every
+  /// teacher<->parent pair; staff pairs depend on scope). A fixture cannot evaluate that, and the only
   /// two things it could do instead are both wrong: fabricate a conversation for
   /// any id handed to it, which makes an unauthorized pairing look like it
   /// worked; or hard-code a pairing, which teaches a rule the server does not

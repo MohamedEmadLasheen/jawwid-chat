@@ -14,11 +14,22 @@
  */
 import { randomUUID } from 'node:crypto';
 import { toConversationDto } from '@communication/contracts/dto';
-import { buildGraph, seed, truncate, withAssignmentGate, Scenario } from './harness';
+import { buildGraph, seed, truncate, withAssignmentGate, Scenario, supervise } from './harness';
 
 jest.setTimeout(60_000);
 
 const g = buildGraph();
+
+/** PD-8: give a second family a child supervised by admin_a, so admin_a reaches it. */
+async function superviseNewChild(familyId: string): Promise<void> {
+  const learnerId = randomUUID();
+  await withAssignmentGate(
+    g.prisma,
+    `insert into chat.learner (id, family_id, name, teacher_id)
+     values ('${learnerId}'::uuid, '${familyId}'::uuid, 'learner_y', null)`,
+  );
+  await supervise(g.prisma, s.ownerId, [learnerId]);
+}
 let s: Scenario;
 
 beforeAll(async () => {
@@ -113,6 +124,8 @@ describe('learner context', () => {
                '${s.teacherId}'::uuid)`,
     );
 
+    // PD-8: admin_a supervises family_y's child too.
+    await supervise(g.prisma, s.ownerId, [otherLearner]);
     await studentGroup();
     await g.conversations.ensureStudentGroup(otherLearner, s.ownerId);
 
@@ -302,6 +315,7 @@ describe('one parent never learns another parent\'s unread state', () => {
        values ('${otherContact}'::uuid, '${otherFamily}'::uuid, 'parent_z',
                'primary_guardian', true, true)`,
     );
+    await superviseNewChild(otherFamily);
 
     const theirThread = await g.conversations.getOrCreateDirect(otherContact, s.ownerId);
     await g.messages.send({
@@ -332,6 +346,7 @@ describe('one parent never learns another parent\'s unread state', () => {
          values ('${otherContact}'::uuid, '${otherFamily}'::uuid, 'parent_z',
                  'primary_guardian', true, true)`,
       );
+      await superviseNewChild(otherFamily);
       const theirThread = await g.conversations.getOrCreateDirect(otherContact, s.ownerId);
       await g.messages.send({
         conversationId: theirThread.id,

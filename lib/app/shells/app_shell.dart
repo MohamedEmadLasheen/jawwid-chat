@@ -58,13 +58,27 @@ abstract final class Shells {
     ),
   ];
 
-  /// Kept as a function because the shell is still handed a role: if a destination ever has
-  /// to differ again, this is where it belongs rather than in a widget.
-  static List<ShellDestination> forRole(UserRole role) => destinations;
+  /// PD-9/PD-10 (2026-10-18): a teacher's own Schedule -- the one surface the Teacher
+  /// Account freeze reopened. Second, beside Chats: a teacher's day is their lessons and
+  /// the chats they report in.
+  static const schedule = ShellDestination(
+    route: '/schedule',
+    icon: Icons.calendar_month_outlined,
+    selectedIcon: Icons.calendar_month,
+    label: _scheduleLabel,
+  );
+
+  /// The destinations for a role: a parent's are [destinations]; a teacher's add
+  /// [schedule] after Chats. This is where a role difference belongs, not in a widget.
+  static List<ShellDestination> forRole(UserRole role) => switch (role) {
+        UserRole.parent => destinations,
+        UserRole.teacher => [chats, schedule, ...destinations.skip(1)],
+      };
 
   static String _chatsLabel(L10n l10n) => l10n.tabChats;
   static String _callsLabel(L10n l10n) => l10n.callHistoryTitle;
   static String _settingsLabel(L10n l10n) => l10n.settingsTitle;
+  static String _scheduleLabel(L10n l10n) => l10n.tabSchedule;
 }
 
 /// The tabbed frame around every signed-in screen.

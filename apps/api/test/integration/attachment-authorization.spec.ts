@@ -109,12 +109,27 @@ describe('a member who may read but may not send is refused', () => {
     );
   });
 
-  it('refuses an off-duty admin for a customer-visible attachment', async () => {
+  it('refuses a department manager who may READ a supervisor\'s teacher channel but is not a party to it', async () => {
+    // PD-8: manager_c runs Operations, so they read admin_a's Teacher<->Admin
+    // 1:1 -- which is what makes this the read-but-not-send case -- but it is
+    // a channel between two other people, answerable only by its members.
+    const conv = await g.conversations.getOrCreateDirect(s.teacherId, s.ownerId);
+    const manager = await g.conversations.requireActor(s.managerId);
+    expect(await g.conversations.staffInScope(manager, conv)).toBe(true);
+
+    expect(await refusalCode(conv.id, s.managerId)).toBe(CommErrorCode.NOT_CONVERSATION_MEMBER);
+  });
+
+  it('refuses an admin outside the family\'s charge before anything else', async () => {
     const conv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
-    // Nobody is on duty, and this admin does not own the family.
     g.coverage.onDutyId = null;
 
-    expect(await refusalCode(conv.id, s.otherAdminId)).toBe(CommErrorCode.NOT_ON_DUTY);
+    // Not the owner, not on duty, not a member, not sticky: this admin may not
+    // even read the conversation (staff scope, 2026-10-14), so no lane opens.
+    expect(await refusalCode(conv.id, s.otherAdminId)).toBe(CommErrorCode.STAFF_OUT_OF_SCOPE);
+    expect(await refusalCode(conv.id, s.otherAdminId, { visibility: 'internal' })).toBe(
+      CommErrorCode.STAFF_OUT_OF_SCOPE,
+    );
   });
 
   it('refuses a deactivated actor', async () => {
@@ -132,10 +147,11 @@ describe('visibility is judged as the send path judges it', () => {
     const conv = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
     g.coverage.onDutyId = null;
 
-    // Any family-facing admin may write an internal note at any time, so the
-    // attachment for one must be authorizable too.
+    // Any family-facing admin who may READ the conversation may write an
+    // internal note at any time, on duty or not, so the attachment for one must
+    // be authorizable too. Since staff scope that reader is the family owner.
     await expect(
-      authorizeAs(conv.id, s.otherAdminId, { visibility: 'internal' }),
+      authorizeAs(conv.id, s.ownerId, { visibility: 'internal' }),
     ).resolves.toBeDefined();
   });
 

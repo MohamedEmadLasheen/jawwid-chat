@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 
 import '../core/data/fake_backend.dart';
@@ -7,8 +8,11 @@ import '../core/data/http/http_auth_repository.dart';
 import '../core/data/http/http_call_repository.dart';
 import '../core/data/http/http_conversation_repository.dart';
 import '../core/data/http/http_group_repository.dart';
+import '../core/data/http/http_lesson_repository.dart';
 import '../core/data/http/http_message_repository.dart';
 import '../core/data/http/http_story_repository.dart';
+import '../core/data/http/http_supervision_repository.dart';
+import '../core/data/http/http_trial_repository.dart';
 import '../core/errors/app_error.dart';
 import '../core/network/api_client.dart';
 import '../core/network/api_config.dart';
@@ -22,7 +26,9 @@ import '../features/auth/application/session_termination.dart';
 import '../features/auth/domain/auth_state.dart';
 import '../features/calls/data/account_call_history.dart';
 import '../features/calls/data/http_account_call_history.dart';
+import '../features/settings/application/locale_preference.dart';
 import '../shared/models/user_role.dart';
+import 'app.dart';
 import 'providers.dart';
 
 /// Which data source this build talks to.
@@ -118,16 +124,31 @@ List<Override> _httpOverrides() {
   client = buildApiClient(config: config, tokens: tokens);
 
   return [
+    // The language choice survives a restart (see PersistedLocaleController).
+    localeOverrideProvider.overrideWith(PersistedLocaleController.new),
     tokenStoreProvider.overrideWithValue(tokenStore),
     authRepositoryProvider.overrideWithValue(auth),
     conversationRepositoryProvider.overrideWithValue(
-      HttpConversationRepository(client: client, viewerRole: session.role),
+      HttpConversationRepository(
+        client: client,
+        viewerRole: session.role,
+        viewerActorId: session.actorId,
+      ),
     ),
     messageRepositoryProvider.overrideWithValue(
       HttpMessageRepository(client: client, viewerActorId: session.actorId),
     ),
     groupRepositoryProvider.overrideWithValue(
       HttpGroupRepository(client: client),
+    ),
+    lessonRepositoryProvider.overrideWithValue(
+      HttpLessonRepository(client: client),
+    ),
+    supervisionRepositoryProvider.overrideWithValue(
+      HttpSupervisionRepository(client: client),
+    ),
+    trialRepositoryProvider.overrideWithValue(
+      HttpTrialRepository(client: client),
     ),
     // Stories are read-only here. The development composition root below registers no
     // implementation on purpose -- a fixture story is indistinguishable on screen from a real
@@ -150,7 +171,8 @@ List<Override> _httpOverrides() {
       HttpCallRepository(client: client),
     ),
     accountCallHistoryProvider.overrideWithValue(
-      HttpAccountCallHistory(client: client),
+      // Named after the OTHER participant, so the viewer's own id is read per call.
+      HttpAccountCallHistory(client: client, viewerActorId: session.actorId),
     ),
     pushRegistrationApiProvider.overrideWithValue(
       HttpPushRegistration(client: client),
@@ -160,9 +182,19 @@ List<Override> _httpOverrides() {
     // same verifier the HTTP guard uses, and the actor is derived from it. The
     // retired `x-actor-id` seam is not reintroduced here in any form.
     realtimeTokenProvider.overrideWithValue(tokens),
-    realtimeSocketProvider.overrideWithValue(
-      SocketIoRealtimeSocket(baseUrl: config.baseUrl),
-    ),
+    // ONE SOCKET PER SESSION. The transport is keyed on the signed-in account
+    // exactly as `callRealtimeClientProvider` is, so a session that ends tears
+    // its socket down and the next session gets a fresh one. It used to be a
+    // single app-lifetime value: the first sign-out disposed it for good
+    // (`dispose()` is terminal), and every later session's `connect()` returned
+    // on `_disposed` without opening anything -- realtime silently dead until
+    // the app was restarted.
+    realtimeSocketProvider.overrideWith((ref) {
+      ref.watch(authControllerProvider.select((state) => state.user?.id));
+      final socket = SocketIoRealtimeSocket(baseUrl: config.baseUrl);
+      ref.onDispose(socket.dispose);
+      return socket;
+    }),
     authControllerProvider.overrideWith(
       () => AuthController(
         repository: auth,
@@ -188,6 +220,7 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
   final authRepository = FakeAuthRepository(backend: backend, tokens: tokens);
 
   return [
+    localeOverrideProvider.overrideWith(PersistedLocaleController.new),
     tokenStoreProvider.overrideWithValue(tokens),
     authRepositoryProvider.overrideWithValue(authRepository),
     conversationRepositoryProvider
@@ -195,6 +228,16 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
     messageRepositoryProvider.overrideWithValue(FakeMessageRepository(backend)),
     groupRepositoryProvider.overrideWithValue(FakeGroupRepository(backend)),
     callRepositoryProvider.overrideWithValue(FakeCallRepository(backend)),
+    // The fixture build has no server: a transport that opens nothing, so the
+    // session's realtime client runs its ordinary lifecycle instead of throwing
+    // on an unoverridden provider.
+    realtimeSocketProvider.overrideWith((ref) {
+      ref.watch(authControllerProvider.select((state) => state.user?.id));
+      final socket = SilentRealtimeSocket();
+      ref.onDispose(socket.dispose);
+      return socket;
+    }),
+    realtimeTokenProvider.overrideWithValue(const _NoRealtimeTokens()),
     authControllerProvider.overrideWith(
       () => AuthController(
         repository: authRepository,
@@ -240,3 +283,19 @@ class SessionContext {
 }
 
 typedef AppAuthState = AuthState;
+
+/// Realtime credentials for the fixture build: there is no server to present
+/// a token to, so there is none. The client reports `unauthorized` and stays
+/// quiet, which is exactly what a build with no backend should do.
+class _NoRealtimeTokens implements TokenProvider {
+  const _NoRealtimeTokens();
+
+  @override
+  Future<String?> accessToken() async => null;
+
+  @override
+  Future<String?> refresh() async => null;
+
+  @override
+  Future<void> onSessionEnded(AppError error) async {}
+}

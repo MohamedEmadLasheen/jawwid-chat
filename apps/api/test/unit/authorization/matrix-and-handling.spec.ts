@@ -3,9 +3,11 @@
  * what the approval policy holds.
  */
 import { CommErrorCode } from '@platform/errors';
+import { StaffAccessBasis } from '@platform/staff-scope';
 import {
   admin,
   authzWithOnDuty,
+  authzWithScope,
   conversation,
   manager,
   member,
@@ -18,58 +20,53 @@ const NOW = new Date('2026-09-06T10:00:00Z');
 const customer = { visibility: 'customer' };
 const internal = { visibility: 'internal' };
 
-describe('staff replies are gated on on_duty()', () => {
-  it('the family owner replying on duty is attributed OWNER', async () => {
-    const a = admin('admin-on-duty');
-    const authz = authzWithOnDuty('admin-on-duty');
-    const d = await authz.canSend(a, conversation(), member(a), customer, NOW, 'admin-on-duty');
+describe('staff replies are gated on the PD-8 scope basis (on_duty() decides nothing)', () => {
+  it("the children's supervisor replying is attributed OWNER", async () => {
+    const a = admin('sup');
+    const authz = authzWithScope({ sup: StaffAccessBasis.RESPONSIBLE });
+    const d = await authz.canSend(a, conversation(), member(a), customer, NOW);
     expect(d.allowed).toBe(true);
     if (d.allowed) expect(d.onBehalfMode).toBe('owner');
   });
 
-  it('a covering admin on duty is attributed COVERAGE, not OWNER', async () => {
-    const a = admin('admin-on-duty');
-    const authz = authzWithOnDuty('admin-on-duty');
-    const d = await authz.canSend(a, conversation(), member(a), customer, NOW, 'a-different-owner');
+  it('an ACTIVE backup is attributed COVERAGE, not OWNER', async () => {
+    const a = admin('bak', 'coverage');
+    const authz = authzWithScope({ bak: StaffAccessBasis.BACKUP });
+    const d = await authz.canSend(a, conversation(), null, customer, NOW);
     expect(d.allowed).toBe(true);
     if (d.allowed) expect(d.onBehalfMode).toBe('coverage');
   });
 
-  it('an off-duty admin may NOT reply to the customer', async () => {
-    const a = admin('admin-off-duty');
-    const authz = authzWithOnDuty('someone-else');
+  it('an admin on_duty() names but with no basis may NOT reply -- the coverage engine grants nothing', async () => {
+    const a = admin('admin-on-duty');
+    const authz = authzWithScope();
     const d = await authz.canSend(a, conversation(), member(a), customer, NOW);
     expect(d.allowed).toBe(false);
-    if (!d.allowed) expect(d.code).toBe(CommErrorCode.NOT_ON_DUTY);
+    if (!d.allowed) expect(d.code).toBe(CommErrorCode.STAFF_OUT_OF_SCOPE);
   });
 
-  it('an off-duty admin may still write an internal note on any family', async () => {
-    const a = admin('admin-off-duty');
-    const authz = authzWithOnDuty('someone-else');
-    const d = await authz.canSend(a, conversation(), member(a), internal, NOW);
-    expect(d.allowed).toBe(true);
+  it('an in-scope admin may write an internal note; an out-of-scope one may not', async () => {
+    const authz = authzWithScope({ sup: StaffAccessBasis.RESPONSIBLE });
+    expect((await authz.canSend(admin('sup'), conversation(), null, internal, NOW)).allowed).toBe(true);
+    expect((await authz.canSend(admin('x'), conversation(), member(admin('x')), internal, NOW)).allowed).toBe(false);
   });
 
-  it('a manager may act on anything', async () => {
+  it('a department manager may act on their department', async () => {
     const authz = authzWithOnDuty('someone-else');
     const d = await authz.canSend(manager(), conversation(), null, customer, NOW);
     expect(d.allowed).toBe(true);
   });
 
-  it('stickiness lets the admin who just replied keep the conversation past shift end', async () => {
+  it('stickiness grants nothing: the admin who last replied keeps the conversation only while in scope', async () => {
     const a = admin('sticky-admin');
-    const authz = authzWithOnDuty('now-someone-else');
-    const d = await authz.canSend(
-      a,
-      conversation({
-        stickyHandlerId: 'sticky-admin',
-        stickyUntil: new Date(NOW.getTime() + 5 * 60_000),
-      }),
-      member(a),
-      customer,
-      NOW,
-    );
-    expect(d.allowed).toBe(true);
+    const sticky = conversation({
+      stickyHandlerId: 'sticky-admin',
+      stickyUntil: new Date(NOW.getTime() + 5 * 60_000),
+    });
+    const out = await authzWithScope().canSend(a, sticky, member(a), customer, NOW);
+    expect(out.allowed).toBe(false);
+    const inScope = await authzWithScope({ 'sticky-admin': StaffAccessBasis.RESPONSIBLE }).canSend(a, sticky, member(a), customer, NOW);
+    expect(inScope.allowed).toBe(true);
   });
 
   it('expired stickiness does not grant a reply', async () => {
@@ -88,12 +85,14 @@ describe('staff replies are gated on on_duty()', () => {
     expect(d.allowed).toBe(false);
   });
 
-  it('assist and escalation FAIL CLOSED: a client-supplied mode never grants access', async () => {
-    // The real assist predicate depends on the attention / response-target
-    // engines AI #1 owns. Until that grant exists, an off-duty admin asking to
-    // "assist" is denied rather than admitted on their own say-so.
-    const a = admin('helper');
-    const authz = authzWithOnDuty('someone-else');
+  it('assist and escalation FAIL CLOSED: a client-supplied mode never grants access or re-attributes', async () => {
+    // Out of scope: refused whatever is asked.
+    const outsider = admin('helper');
+    const none = authzWithScope();
+    expect((await none.canSend(outsider, conversation(), member(outsider), { ...customer, requestedMode: 'assist' }, NOW)).allowed).toBe(false);
+    // In scope as the supervisor: the request is refused by name, never honoured.
+    const a = admin('sup');
+    const authz = authzWithScope({ sup: StaffAccessBasis.RESPONSIBLE });
 
     const assist = await authz.canSend(a, conversation(), member(a), { ...customer, requestedMode: 'assist' }, NOW);
     expect(assist.allowed).toBe(false);
@@ -105,11 +104,13 @@ describe('staff replies are gated on on_duty()', () => {
   });
 
   it('a client cannot upgrade itself to owner by asking', async () => {
-    const a = admin('off-duty');
-    const authz = authzWithOnDuty('someone-else');
-    // owner/coverage are derived from on_duty(), never taken from the request.
-    const d = await authz.canSend(a, conversation(), member(a), { ...customer, requestedMode: 'owner' }, NOW);
+    const out = admin('off-duty');
+    // owner/coverage are derived from the basis, never taken from the request.
+    const d = await authzWithScope().canSend(out, conversation(), member(out), { ...customer, requestedMode: 'owner' }, NOW);
     expect(d.allowed).toBe(false);
+    const bak = admin('bak', 'coverage');
+    const asked = await authzWithScope({ bak: StaffAccessBasis.BACKUP }).canSend(bak, conversation(), null, { ...customer, requestedMode: 'owner' }, NOW);
+    if (asked.allowed) expect(asked.onBehalfMode).toBe('coverage');
   });
 });
 
@@ -187,29 +188,39 @@ describe('group approval policy', () => {
   });
 });
 
-describe('who may decide an approval', () => {
+describe('who may decide an approval (PD-8: whoever is in charge of the group)', () => {
   const authz = authzWithOnDuty();
 
-  it('the active handler may decide', () => {
-    expect(authz.canApprove(admin('handler'), 'handler').allowed).toBe(true);
+  it("the children's supervisor may decide", () => {
+    expect(authz.canApprove(admin('handler'), StaffAccessBasis.RESPONSIBLE).allowed).toBe(true);
   });
 
-  it('an admin who is not the active handler may not decide', () => {
-    const d = authz.canApprove(admin('bystander'), 'handler');
+  it('their ACTIVE backup and their department manager may decide', () => {
+    expect(authz.canApprove(admin('bak', 'coverage'), StaffAccessBasis.BACKUP).allowed).toBe(true);
+    expect(authz.canApprove(manager(), StaffAccessBasis.MANAGER).allowed).toBe(true);
+  });
+
+  it('an admin with no basis on the conversation may not decide', () => {
+    const d = authz.canApprove(admin('bystander'), null);
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.CANNOT_APPROVE);
   });
 
-  it('a manager may always decide', () => {
-    expect(authz.canApprove(manager(), 'someone-else').allowed).toBe(true);
+  it('a manager OUTSIDE the department may not decide: the role alone is not enough', () => {
+    const d = authz.canApprove(manager(), null);
+    expect(d.allowed).toBe(false);
+  });
+
+  it('the staff party of a 1:1 has nothing to decide (MEMBER is not a group basis)', () => {
+    expect(authz.canApprove(admin('m'), StaffAccessBasis.MEMBER).allowed).toBe(false);
   });
 
   it('a teacher may never decide, even on their own message', () => {
-    expect(authz.canApprove(teacher(), 'teacher-1').allowed).toBe(false);
+    expect(authz.canApprove(teacher(), StaffAccessBasis.RESPONSIBLE).allowed).toBe(false);
   });
 
   it('a parent may never decide', () => {
-    expect(authz.canApprove(parent(), 'parent-1').allowed).toBe(false);
+    expect(authz.canApprove(parent(), StaffAccessBasis.RESPONSIBLE).allowed).toBe(false);
   });
 });
 

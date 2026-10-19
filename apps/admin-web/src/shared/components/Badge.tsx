@@ -2,10 +2,36 @@ import type { ReactNode } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import type { AttentionBucket, HandlingMode, WorkloadLevel } from '@/shared/types/domain'
 
-type Tone = 'now' | 'today' | 'waiting' | 'ok' | 'danger' | 'internal' | 'coverage' | 'neutral'
+export type Tone =
+  | 'now'
+  | 'today'
+  | 'waiting'
+  | 'ok'
+  | 'warn'
+  | 'danger'
+  | 'info'
+  | 'internal'
+  | 'coverage'
+  | 'gold'
+  | 'outline'
+  | 'neutral'
 
-export function Badge({ tone = 'neutral', children }: { tone?: Tone; children: ReactNode }) {
-  return <span className={tone === 'neutral' ? 'badge' : `badge badge--${tone}`}>{children}</span>
+/** `dot` adds a leading shape, so a status never relies on its colour alone. */
+export function Badge({
+  tone = 'neutral',
+  dot,
+  children,
+}: {
+  tone?: Tone
+  dot?: boolean
+  children: ReactNode
+}) {
+  return (
+    <span className={tone === 'neutral' ? 'badge' : `badge badge--${tone}`}>
+      {dot && <span className="badge__dot" aria-hidden="true" />}
+      {children}
+    </span>
+  )
 }
 
 /**

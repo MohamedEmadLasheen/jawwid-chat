@@ -3,6 +3,7 @@ import { PlatformModule } from '../platform/platform.module';
 import { AuthModule } from '../platform/auth/auth.module';
 import {
   MEDIA_TOKEN_ISSUER,
+  MEDIA_ROOM_CONTROL,
   OBJECT_STORAGE,
   PUSH_PROVIDER,
   REALTIME_PUBLISHER,
@@ -27,9 +28,10 @@ import { TemplateService } from './notifications/template.service';
 import { QuietHoursService } from './notifications/quiet-hours.service';
 import { selectPushProvider } from './notifications/push.provider.selector';
 import { RealtimeGateway } from './realtime/realtime.gateway';
+import { RevocationConfirmer } from './realtime/revocation-confirmer.service';
 import { TypingService } from './realtime/typing.service';
 import { PresenceService } from './realtime/presence.service';
-import { redisProvider } from './realtime/redis.provider';
+import { RedisClientShutdown, redisProvider } from './realtime/redis.provider';
 import { RelayRealtimePublisher } from '../infra/realtime/relay.publisher';
 import { RealtimeRelay } from '../infra/realtime/realtime-relay.service';
 
@@ -39,9 +41,11 @@ import { ApprovalController } from './api/approval.controller';
 import { CallController } from './api/call.controller';
 import { LiveKitWebhookController } from './api/livekit-webhook.controller';
 import { LiveKitWebhookVerifier } from './calls/livekit-webhook.verifier';
+import { LiveKitRoomControl } from './calls/media-room-control';
 import { MediaPresenceService } from './calls/media-presence.service';
 import { NotificationController } from './api/notification.controller';
 import { StorageController } from './api/storage.controller';
+import { MediaController } from './api/media.controller';
 import { StoryController } from './api/story.controller';
 
 @Module({
@@ -57,10 +61,12 @@ import { StoryController } from './api/story.controller';
     LiveKitWebhookController,
     NotificationController,
     StorageController,
+    MediaController,
     StoryController,
   ],
   providers: [
     redisProvider,
+    RedisClientShutdown,
     ConversationService,
     MessageService,
     ApprovalService,
@@ -80,6 +86,7 @@ import { StoryController } from './api/story.controller';
     TypingService,
     PresenceService,
     RealtimeGateway,
+    RevocationConfirmer,
     LocalFsBlobStore,
     // Chosen from configuration, not compiled in: S3-compatible storage when
     // the bucket and credentials are set, the local reference implementation
@@ -92,6 +99,7 @@ import { StoryController } from './api/story.controller';
     // to start. See push.provider.selector.ts.
     { provide: PUSH_PROVIDER, useFactory: () => selectPushProvider().provider },
     { provide: MEDIA_TOKEN_ISSUER, useClass: LiveKitTokenIssuer },
+    { provide: MEDIA_ROOM_CONTROL, useClass: LiveKitRoomControl },
     // AI #7 (D-2). The gateway ALONE cannot be the publisher: in the worker
     // process there is no Socket.IO server, so gateway.toThread()'s
     // `this.server?.` made every emit a silent no-op while OutboxWorker still
@@ -104,6 +112,7 @@ import { StoryController } from './api/story.controller';
   ],
   exports: [
     ConversationService,
+    OutboxService,
     MessageService,
     ApprovalService,
     CallService,

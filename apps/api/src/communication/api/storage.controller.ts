@@ -1,7 +1,7 @@
 import { Controller, Get, Inject, Param, Put, Query, Req, Res } from '@nestjs/common';
 import { OBJECT_STORAGE } from '../../platform/tokens';
 import type { ObjectStorage } from '../attachments/object-storage';
-import { SignedLocalObjectStorage } from '../attachments/object-storage';
+import { SignedLocalObjectStorage, parseByteRange } from '../attachments/object-storage';
 import { LocalFsBlobStore } from '../attachments/blob-store';
 
 /**
@@ -140,25 +140,9 @@ export class StorageController {
     res.status(200).send(blob.bytes);
   }
 
-  /** Single-range `bytes=a-b` only; anything else is served whole. */
-  private parseRange(
-    header: string | string[] | undefined,
-    total: number,
-  ): { start: number; end: number } | 'unsatisfiable' | null {
-    const raw = Array.isArray(header) ? header[0] : header;
-    const match = /^bytes=(\d*)-(\d*)$/.exec(raw ?? '');
-    if (!match) return null;
-
-    const [, rawStart, rawEnd] = match;
-    if (rawStart === '' && rawEnd === '') return null;
-
-    // A suffix range (`bytes=-500`) asks for the last N bytes.
-    const start = rawStart === '' ? Math.max(0, total - Number(rawEnd)) : Number(rawStart);
-    const end = rawStart === '' || rawEnd === '' ? total - 1 : Math.min(Number(rawEnd), total - 1);
-
-    if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
-    if (start > end || start >= total) return 'unsatisfiable';
-    return { start, end };
+  /** Single-range only; anything else is served whole. Shared with the media route. */
+  private parseRange(header: string | string[] | undefined, total: number) {
+    return parseByteRange(header, total);
   }
 
   private fail(res: ResponseLike, status: number, message: string): void {

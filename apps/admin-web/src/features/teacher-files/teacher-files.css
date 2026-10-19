@@ -1,0 +1,24 @@
+/* PD-10 Teacher File. Layout reuses .page / .card / .table from the design system. */
+.tf-back { margin-block: 0 var(--space-2); }
+.tf-section { margin-block-end: var(--space-4); }
+.tf-section__head { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: baseline; justify-content: space-between; }
+.tf-section__title { margin: 0; font-size: var(--fs-lg); }
+.tf-muted { color: var(--text-muted); }
+.tf-table-wrap { overflow-x: auto; }
+.tf-kv { display: grid; grid-template-columns: minmax(8rem, max-content) 1fr; gap: var(--space-2) var(--space-4); margin: var(--space-3) 0 0; }
+.tf-kv dt { color: var(--text-muted); }
+.tf-kv dd { margin: 0; overflow-wrap: anywhere; }
+.tf-byline { color: var(--text-muted); font-size: var(--fs-sm); }
+.tf-entries { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; gap: var(--space-3); }
+.tf-entry { padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); display: grid; gap: var(--space-2); justify-items: start; }
+.tf-entry__head { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.tf-entry__body { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tf-followup { padding-inline-start: var(--space-3); border-inline-start: 3px solid var(--border); display: grid; gap: var(--space-1); }
+.tf-struck { text-decoration: line-through; }
+.tf-textarea { min-block-size: 6rem; resize: vertical; }
+@media (max-width: 480px) {
+  .tf-kv { grid-template-columns: 1fr; gap: var(--space-1); }
+  .tf-kv dd { margin-block-end: var(--space-2); }
+}
+.tf-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.tf-timeline { margin-block-start: var(--space-3); }

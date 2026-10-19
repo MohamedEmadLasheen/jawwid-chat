@@ -6,7 +6,7 @@ import { CommErrorCode } from '@platform/errors';
 import { QuietHoursService } from '@communication/notifications/quiet-hours.service';
 import { TemplateService } from '@communication/notifications/template.service';
 import { ReminderService } from '@communication/notifications/reminder.service';
-import { buildGraph, seed, truncate, Scenario, withAssignmentGate } from './harness';
+import { buildGraph, seed, truncate, Scenario, withAssignmentGate, activateBackup } from './harness';
 
 jest.setTimeout(60_000);
 
@@ -234,11 +234,39 @@ describe('message approval', () => {
     });
   });
 
-  it('an admin who is not the active handler cannot decide', async () => {
+  it('an admin seated in the group with no charge over the child cannot decide (PD-8)', async () => {
+    const { group, msg } = await groupWithPendingTeacherMessage();
+    // A membership row is not scope since PD-8: admin_b is an Operations
+    // supervisor, but not this child's, so the decision is refused at the read
+    // and the message stays held.
+    await g.prisma.conversationMember.create({
+      data: { conversationId: group.id, actorId: s.otherAdminId, actorKind: 'staff', memberRole: 'admin' },
+    });
+    const approval = await g.prisma.messageApproval.findUnique({ where: { messageId: msg.id } });
+    await expect(g.approvals.approve(approval!.id, s.otherAdminId)).rejects.toMatchObject({
+      code: CommErrorCode.STAFF_OUT_OF_SCOPE,
+    });
+    expect((await g.prisma.messageApproval.findUnique({ where: { id: approval!.id } }))!.decision).toBe('pending');
+  });
+
+  it("the supervisor's ACTIVE backup may decide; the same link dormant may not (PD-8)", async () => {
+    const { msg } = await groupWithPendingTeacherMessage();
+    const approval = await g.prisma.messageApproval.findUnique({ where: { messageId: msg.id } });
+    const link = await activateBackup(g.prisma, s.ownerId, s.otherAdminId);
+    await g.prisma.supervisorBackup.update({ where: { id: link }, data: { activatedAt: null } });
+    await expect(g.approvals.approve(approval!.id, s.otherAdminId)).rejects.toMatchObject({
+      code: CommErrorCode.STAFF_OUT_OF_SCOPE,
+    });
+    await g.prisma.supervisorBackup.update({ where: { id: link }, data: { activatedAt: new Date(Date.now() - 1000) } });
+    await g.approvals.approve(approval!.id, s.otherAdminId);
+    expect((await g.prisma.messageApproval.findUnique({ where: { id: approval!.id } }))!.decision).toBe('approved');
+  });
+
+  it('an admin outside the family is refused earlier, by staff scope', async () => {
     const { msg } = await groupWithPendingTeacherMessage();
     const approval = await g.prisma.messageApproval.findUnique({ where: { messageId: msg.id } });
     await expect(g.approvals.approve(approval!.id, s.otherAdminId)).rejects.toMatchObject({
-      code: CommErrorCode.CANNOT_APPROVE,
+      code: CommErrorCode.STAFF_OUT_OF_SCOPE,
     });
   });
 

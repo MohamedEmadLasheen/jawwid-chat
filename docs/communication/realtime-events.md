@@ -9,14 +9,21 @@ has a typed payload; there are no untyped string events.
 ## Connecting
 
 ```js
-io(API_URL, { auth: { actorId: "<actor id>" } })
+io(API_ORIGIN, { transports: ['websocket'], auth: (cb) => cb({ token: currentAccessToken() }) })
 ```
 
-> **AI #1 seam.** The handshake currently carries an actor id. When real auth
-> lands it carries a token instead and the server resolves the actor from it.
-> The event contracts below do not change.
+The default namespace, and the bearer **access token** in the handshake `auth`
+(RT-001; the old `actorId` seam is gone). `API_ORIGIN` is the server origin with
+**no path**: socket.io reads a URL path as a namespace, and the server has only
+`/`. Pass `auth` as a function so every reconnect presents the current token —
+it rotates every 15 minutes. A refused token is answered with a server-side
+disconnect (`io server disconnect`), which socket.io does not retry: refresh the
+session once and reconnect.
 
-An unknown or inactive actor is disconnected immediately.
+An unknown or inactive actor is disconnected immediately. The server finishes
+authenticating asynchronously, so a `conversation.subscribe` sent the instant
+`connect` fires can be answered `COMM.UNKNOWN_ACTOR`; retry that one code a few
+times with a short backoff. Every other refusal is a verdict.
 
 ## Rooms
 
@@ -25,13 +32,25 @@ server authorizes it with the same `AuthorizationService` the REST API uses.
 
 ```js
 socket.emit('conversation.subscribe', { conversationId }, (res) => {
-  // { ok: true } | { ok: false, code: 'COMM.NOT_CONVERSATION_MEMBER' }
+  // { ok: true } | { ok: false, code: 'COMM.NOT_CONVERSATION_MEMBER' | 'COMM.STAFF_OUT_OF_SCOPE' | ... }
 });
 socket.emit('conversation.unsubscribe', { conversationId });
 ```
 
 Every socket also joins its own actor room automatically, which is how
 multi-device fan-out works: all of one person's devices receive the same events.
+
+**Subscribe to every conversation in your list**, not only the open one: that
+is how a message in another conversation moves the list and its unread badge.
+Staff are subject to the same read check as the REST API, including **staff
+scope** (2026-10-14): an admin may subscribe only to conversations in their
+charge (member, family owner, on duty, live sticky handler); a manager, to
+their organization's.
+
+**A room is an index, not authorization** (RT-009): every delivery re-checks the
+recipient's live identity and read access at the moment of delivery, so a
+removed member, a revoked session or an out-of-scope admin receives nothing
+further, and is sent `conversation.access_revoked`.
 
 ## Client → server
 
@@ -55,7 +74,9 @@ multi-device fan-out works: all of one person's devices receive the same events.
 | `typing.started` / `typing.stopped` | `{ conversationId, actorId, displayName }` | Conversation room, excluding sender |
 | `presence.changed` | `{ actorId, state, lastSeenAt }` | Actor rooms |
 | `conversation.updated` | `{ conversationId, familyId, state, needsReply, lastActivityAt, handlerId }` | Conversation room |
-| `conversation.membership_changed` | `{ conversationId, added[], removed[] }` | Conversation room |
+| `conversation.membership_changed` | `{ conversationId, added[], removed[] }` | Conversation room. Also emitted when a direct conversation or a Student Group is **created** (`added` = every member). |
+| `conversation.added` | `{ conversationId }` | **Each added member's own actor room** (2026-10-14). A conversation they belong to now exists and they are not subscribed to it yet: re-read the list and subscribe. Carries nothing else. |
+| `conversation.access_revoked` | `{ conversationId }` | The one socket that lost read access (RT-009). It was removed from the room; re-read what is still readable. |
 | `approval.requested` | `{ conversationId, messageId, approvalId, requestedBy }` | **Staff rooms only** — never the group |
 | `approval.decided` | `{ conversationId, messageId, approvalId, decision, rejectionReason }` | Conversation room |
 | `call.incoming` | `{ callId, conversationId, type, initiatorId, initiatorName }` | Conversation room. **No `roomName`** (removed 2026-09-24): the room handle comes back from `POST /calls/:id/token` with the token that makes it usable. |
@@ -83,9 +104,20 @@ column. Actors appear as an opaque id plus a display name.
 
 ## Reconnect
 
-1. Reconnect and re-subscribe to visible conversations.
-2. For each, `GET …/messages?after=<last seq you hold>`.
-3. Send `message.delivered` for anything newly received.
+1. Reconnect and re-subscribe to every listed conversation — and only **then**
+   catch up, so nothing committed between the catch-up read and the rejoin is
+   missed.
+2. For each open thread, `GET …/messages?after=<last seq you hold>`, following
+   the watermark until nothing newer comes back; then re-read the newest page
+   (`GET …/messages`) — a deletion, a reaction or an approval does not move a
+   seq, so the watermark alone never sees it.
+3. Re-read the list (`GET /conversations`) for activity and unread counts.
+4. Send `message.delivered` for anything newly received.
+
+**A held message keeps its seq.** A message sent for approval is assigned its
+seq at send time and, once approved, is announced by `message.created` with
+that ORIGINAL seq — possibly below what the client has already read. Fetch it
+with `?after=<its seq - 1>`, not `?after=<your newest>`.
 
 Ordering comes from `seq`, so replay is deterministic and gap-free regardless of
 arrival order or device clocks.

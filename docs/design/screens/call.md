@@ -26,7 +26,9 @@
 **Roles:** parent ↔ Jawwid · teacher ↔ Jawwid · **parent ↔ authorized teacher, 1:1** ·
 **group calls within a Student Group** · admin → family.
 
-> **Updated 2026-09-23 by PD-6.** An earlier revision of this spec read *"Never teacher ↔ parent
+> **Updated 2026-10-14 by PD-7:** the original line is in force again — direct Teacher ↔ Parent chat and calls are forbidden; the Student Group is the only channel.
+>
+> *History:* **Updated 2026-09-23 by PD-6.** An earlier revision of this spec read *"Never teacher ↔ parent
 > 1:1, in either direction"*. That was correct under PRD v0.1 BR-1 and is now superseded.
 
 **Teacher ↔ parent 1:1 calling is allowed — and only — where the backend authorizes the
@@ -75,7 +77,7 @@ for non-hosts in MVP.
 ## 4. Permissions *(UX affordances only)*
 
 The call button renders **only** where the backend authorizes a call for that conversation
-`[BE]`. This is unchanged by PD-6 and matters more, not less: the set of authorized pairs is now
+`[BE]`. This is unchanged by PD-6 and PD-7 (under PD-7 the server never authorizes a teacher ↔ parent pair); under PD-6 the set of authorized pairs was
 data rather than a constant, so the client must never infer it. Where the backend does not
 authorize the pairing, the affordance is **absent, not disabled**.
 

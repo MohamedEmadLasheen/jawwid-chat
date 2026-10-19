@@ -49,7 +49,9 @@ Follow-ups · Manager Dashboard · Audit logging · Jawwid Core integration.
 
 ### The critical communication rule (BR-1)
 
-> **SUPERSEDED ON THIS POINT, 2026-09-23, by PD-6.** The paragraph below is the
+> **RESTORED 2026-10-14 by PD-7:** the paragraph below is in force again (PD-7 superseded PD-6).
+>
+> *History:* **SUPERSEDED ON THIS POINT, 2026-09-23, by PD-6.** The paragraph below is the
 > rule as it stood from 2026-09-05 and is kept for the record. The rule in force
 > is PRD **v0.2** BR-1: a teacher and a parent may hold a direct 1:1 conversation
 > and call **when an authorized relationship exists**, and never otherwise.

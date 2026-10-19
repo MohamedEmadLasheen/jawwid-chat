@@ -56,6 +56,19 @@ export function selectObjectStorage(
   const present = S3_VARS.filter((name) => (env[name] ?? '').trim().length > 0);
 
   if (present.length === 0) {
+    // RT-039: the local reference storage builds its upload links on
+    // STORAGE_ENDPOINT, which is one of the S3 settings -- so with none of them
+    // set it ALWAYS falls back to http://localhost:3000/storage, which no
+    // client of a deployed API can reach. Outside a developer / test
+    // environment that is refused at startup instead of shipped.
+    const appEnv = (env.APP_ENV ?? 'local').trim().toLowerCase();
+    if (!['local', 'test', 'ci', ''].includes(appEnv)) {
+      throw new Error(
+        `object storage: APP_ENV=${appEnv} with no S3 configuration -- the local reference storage ` +
+          'would hand clients upload links to http://localhost:3000/storage. ' +
+          `Set ${S3_VARS.join(', ')}.`,
+      );
+    }
     logger.warn(
       'object storage is the local reference implementation: attachments are ' +
         'written to this container filesystem, are lost on redeploy, and are ' +

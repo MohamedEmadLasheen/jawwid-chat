@@ -6,12 +6,16 @@ import '../features/auth/domain/auth_state.dart';
 import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/calls/presentation/active_call_screen.dart';
 import '../features/calls/presentation/calls_screen.dart';
+import '../features/conversations/application/chat_realtime.dart';
 import '../features/conversations/presentation/chats_screen.dart';
+import '../features/lessons/presentation/teacher_schedule_screen.dart';
 import '../features/messages/presentation/chat_screen_route.dart';
 import '../features/messages/presentation/conversation_media_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/stories/presentation/story_viewer_screen.dart';
+import '../features/supervision/presentation/my_leave_screen.dart';
+import '../shared/models/user_role.dart';
 import 'providers.dart';
 import 'shells/app_shell.dart';
 
@@ -22,6 +26,10 @@ abstract final class Routes {
   static const chats = '/chats';
   static const calls = '/calls';
   static const settings = '/settings';
+
+  /// PD-9/PD-10: the teacher's own schedule. A parent who follows a link here is sent
+  /// to Chats (see the redirect).
+  static const schedule = '/schedule';
 
   /// Retired destinations. They are not routes any more — Home and Groups both dissolved
   /// into Chats — but they are kept named here because notifications, saved links and
@@ -48,6 +56,9 @@ abstract final class Routes {
   /// The signed-in user's own account. Deliberately under Settings rather than alongside
   /// the profiles above: "my account" and "someone else's profile" are different things.
   static const myAccount = '/settings/account';
+
+  /// PD-12: a teacher's own leave balance and requests.
+  static const myLeave = '/settings/leave';
 
   /// One story, opened full-screen from the rail.
   ///
@@ -95,6 +106,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: Routes.settings,
             builder: (context, state) => const SettingsScreen(),
           ),
+          GoRoute(
+            path: Routes.schedule,
+            builder: (context, state) => const TeacherScheduleScreen(),
+          ),
         ],
       ),
       // Conversations open full-screen, above the tab bar, so the thread gets the whole
@@ -132,6 +147,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.myAccount,
         builder: (context, state) => const MyAccountScreen(),
+      ),
+      GoRoute(
+        path: Routes.myLeave,
+        builder: (context, state) => const MyLeaveScreen(),
       ),
       // Full-screen, above the tab bar: a story is the whole viewport for as long as it is
       // open, and a tab bar underneath it would be something to tap by accident.
@@ -191,6 +210,12 @@ String? _redirect(Ref ref, String location) {
     return Routes.chats;
   }
 
+  // The Schedule is a teacher's (PD-10). A parent following a stale or shared link lands
+  // on their chats, where their children's lessons already arrive as cards.
+  if (location == Routes.schedule && ref.read(currentRoleProvider) != UserRole.teacher) {
+    return Routes.chats;
+  }
+
   return null;
 }
 
@@ -204,6 +229,10 @@ class _RoleShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final role = ref.watch(currentRoleProvider);
     if (role == null) return const _SplashScreen();
+
+    // Live chat for as long as a signed-in shell is on screen: the list and
+    // open threads follow the server without a pull-to-refresh.
+    ref.watch(chatRealtimeProvider);
 
     return AppShell(
       role: role,

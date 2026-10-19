@@ -1,3 +1,4 @@
+import 'lesson.dart';
 import 'user_role.dart';
 
 /// How far an outgoing message has travelled.
@@ -43,7 +44,9 @@ enum ApprovalState {
   bool get isWithheld => this == pending || this == rejected;
 }
 
-enum MessageKind { text, image, video, file, voice, system }
+/// [card] is PD-11: a ticket's record, drawn from [Message.card]. A card this build cannot
+/// draw falls back to its plain-text [Message.body].
+enum MessageKind { text, image, video, file, voice, system, card }
 
 class Attachment {
   const Attachment({
@@ -137,6 +140,7 @@ class Message {
     this.isMine = false,
     this.isDeleted = false,
     this.failureCode,
+    this.card,
   });
 
   /// Server id. Null until the server has accepted the message.
@@ -181,6 +185,10 @@ class Message {
   /// Machine-readable reason a send failed, for choosing the retry affordance.
   final String? failureCode;
 
+  /// PD-11: what a ticket recorded, when [kind] is [MessageKind.card]. Only the server
+  /// writes one; the client never composes a card.
+  final MessageCard? card;
+
   bool get isSystem => kind == MessageKind.system;
   bool get isPending => deliveryState.isInFlight;
   bool get canRetry => deliveryState == DeliveryState.failed;
@@ -213,6 +221,7 @@ class Message {
         isMine: isMine,
         isDeleted: isDeleted,
         failureCode: failureCode,
+        card: card,
       );
 
   Message copyWith({
@@ -246,6 +255,7 @@ class Message {
       isMine: isMine,
       isDeleted: isDeleted ?? this.isDeleted,
       failureCode: failureCode ?? this.failureCode,
+      card: card,
     );
   }
 }

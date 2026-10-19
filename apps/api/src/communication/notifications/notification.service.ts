@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { actorIsLive } from '../../platform/liveness';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AppConfigService } from '../../platform/app-config.service';
@@ -38,6 +39,9 @@ export interface ScheduleInput {
  * outbox events, re-run reminder sweeps and duplicate source events all
  * converge on exactly one delivery.
  */
+/** An id from a URL that is not a uuid names no row; it is answered as one that does not exist. */
+const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+
 @Injectable()
 export class NotificationService {
   private readonly log = new Logger(NotificationService.name);
@@ -51,10 +55,44 @@ export class NotificationService {
   ) {}
 
   /**
-   * Idempotent. Returns the notification id whether it was created now or
-   * already existed.
+   * The organization a notification is filed under, from server-owned rows.
+   *
+   * RT-031. It used to be the column default (organization A) for everyone.
+   * It is the RECIPIENT's organization, read from their own principal row; and
+   * when the notification concerns a conversation, that conversation must be
+   * in the same organization. Anything else -- an unknown recipient, or a
+   * conversation of another tenant -- is refused (null): a notification is a
+   * side effect and must never be the way content crosses a tenant boundary.
    */
-  async schedule(input: ScheduleInput): Promise<string> {
+  private async organizationFor(recipientId: string, conversationId: string | null | undefined): Promise<string | null> {
+    const rows = await this.prisma.$queryRaw<Array<{ organization_id: string }>>`
+      SELECT organization_id FROM chat.contact WHERE id = ${recipientId}::uuid
+      UNION ALL SELECT organization_id FROM chat.staff WHERE id = ${recipientId}::uuid
+      UNION ALL SELECT organization_id FROM chat.teacher WHERE id = ${recipientId}::uuid`;
+    const orgs = new Set(rows.map((r) => r.organization_id));
+    if (orgs.size !== 1) return null;
+    const [org] = orgs;
+    if (conversationId) {
+      const conv = await this.prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: { organizationId: true },
+      });
+      if (!conv || conv.organizationId !== org) return null;
+    }
+    return org;
+  }
+
+  /**
+   * Idempotent. Returns the notification id whether it was created now or
+   * already existed -- or null when the recipient cannot be placed in the
+   * notification's organization (RT-031), in which case nothing is written.
+   */
+  async schedule(input: ScheduleInput): Promise<string | null> {
+    const organizationId = await this.organizationFor(input.recipientId, input.conversationId);
+    if (!organizationId) {
+      this.log.error(`notification ${input.ruleKey ?? input.templateKey} refused: recipient not in the conversation's organization`);
+      return null;
+    }
     const scheduledAt = await this.quietHours.adjust(
       input.recipientId,
       input.scheduledAt,
@@ -64,6 +102,7 @@ export class NotificationService {
     try {
       const created = await this.prisma.notification.create({
         data: {
+          organizationId,
           dedupeKey: input.dedupeKey,
           ruleKey: input.ruleKey ?? null,
           templateKey: input.templateKey,
@@ -140,6 +179,20 @@ export class NotificationService {
       // In-app notifications are delivered over the realtime channel by the
       // outbox worker; there is nothing to push.
       return true;
+    }
+
+    // RT-032: liveness is re-read at SEND time, not trusted from when the
+    // notification was scheduled (quiet hours and retries can put a long gap
+    // in between). A recipient taken out of service since then gets nothing,
+    // and the notification is cancelled rather than retried -- a later
+    // re-activation must not replay it. (A push already handed to the provider
+    // cannot be recalled: RT-037.)
+    if (!(await actorIsLive(this.prisma, n.recipientId))) {
+      await this.prisma.notification.updateMany({
+        where: { id: notificationId },
+        data: { status: NotificationStatus.CANCELLED, failureCode: 'RECIPIENT_INACTIVE' },
+      });
+      return false;
     }
 
     const active = await this.prisma.deviceToken.findMany({
@@ -231,14 +284,23 @@ export class NotificationService {
   }
 
   /** Called by a client or a provider webhook. Never inferred. */
-  async markDelivered(notificationId: string): Promise<void> {
+  /**
+   * Only the RECIPIENT reports their own notification delivered (as for
+   * opened). It used to take the id alone, so any authenticated caller could
+   * rewrite another person's delivery state (ported from the parallel branch's
+   * scoped-read work). A foreign or malformed id changes nothing and says so to
+   * nobody: the response is the same either way.
+   */
+  async markDelivered(notificationId: string, actorId: string): Promise<void> {
+    if (!isUuid(notificationId)) return;
     await this.prisma.notification.updateMany({
-      where: { id: notificationId, status: NotificationStatus.SENT },
+      where: { id: notificationId, recipientId: actorId, status: NotificationStatus.SENT },
       data: { status: NotificationStatus.DELIVERED, deliveredAt: new Date() },
     });
   }
 
   async markOpened(notificationId: string, actorId: string): Promise<void> {
+    if (!isUuid(notificationId)) return;
     await this.prisma.notification.updateMany({
       where: {
         id: notificationId,

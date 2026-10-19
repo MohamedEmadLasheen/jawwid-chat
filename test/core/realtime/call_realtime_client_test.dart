@@ -18,6 +18,7 @@ import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/core/network/api_client.dart' show TokenProvider;
 import 'package:jawwid_chat/core/realtime/call_event.dart';
 import 'package:jawwid_chat/core/realtime/call_realtime_client.dart';
+import 'package:jawwid_chat/core/realtime/chat_signal.dart';
 import 'package:jawwid_chat/core/realtime/realtime_socket.dart';
 
 const _conversationId = '22222222-2222-2222-2222-222222222222';
@@ -34,6 +35,10 @@ class FakeRealtimeSocket implements RealtimeSocket {
   /// Conversations the "server" refuses, with the code it refuses them with.
   final refusals = <String, String>{};
 
+  /// Conversations refused `COMM.UNKNOWN_ACTOR` this many more times first --
+  /// the server's async handshake losing the race with the client's subscribe.
+  final unknownActorTimes = <String, int>{};
+
   @override
   Stream<RealtimeFrame> get frames => _frames.stream;
 
@@ -43,9 +48,19 @@ class FakeRealtimeSocket implements RealtimeSocket {
   @override
   Future<void> connect(String token) async => connectedWith.add(token);
 
+  /// When set, the server's ack arrives on a later turn, the way a real
+  /// round trip does -- and only then is the subscription recorded.
+  bool ackLater = false;
+
   @override
   Future<SubscriptionResult> subscribe(String conversationId) async {
+    if (ackLater) await Future<void>.delayed(Duration.zero);
     subscribed.add(conversationId);
+    final racing = unknownActorTimes[conversationId] ?? 0;
+    if (racing > 0) {
+      unknownActorTimes[conversationId] = racing - 1;
+      return const SubscriptionResult(ok: false, code: 'COMM.UNKNOWN_ACTOR');
+    }
     final code = refusals[conversationId];
     return code == null
         ? const SubscriptionResult(ok: true)
@@ -673,6 +688,96 @@ void main() {
         expect(call, isNot(contains(r'${_tokens')), reason: call);
         expect(call, isNot(contains('accessToken')), reason: call);
       }
+    });
+  });
+
+  group('E. chat rides the same connection', () {
+    late CallRealtimeClient fast;
+
+    setUp(() {
+      fast = CallRealtimeClient(
+        socket: socket,
+        tokens: tokens,
+        unknownActorRetryDelay: const Duration(milliseconds: 1),
+      );
+    });
+
+    tearDown(() async => fast.dispose());
+
+    test('a chat frame becomes a chat signal and never a call event', () async {
+      await fast.connect();
+      final signals = <ChatSignal>[];
+      final calls = <CallEvent>[];
+      final s1 = fast.chatSignals.listen(signals.add);
+      final s2 = fast.events.listen(calls.add);
+      addTearDown(() {
+        unawaited(s1.cancel());
+        unawaited(s2.cancel());
+      });
+
+      socket.emit('message.created', {'conversationId': _conversationId, 'seq': '7'});
+      socket.emit(CallEventNames.accepted, _accepted('call-1'));
+      await pumpEventQueue();
+
+      expect(signals.single.kind, ChatSignalKind.messageCreated);
+      expect(signals.single.seq, 7);
+      expect(calls.single, isA<CallAccepted>());
+    });
+
+    test('a subscribe that loses the handshake race (UNKNOWN_ACTOR) is retried until it lands', () async {
+      await fast.connect();
+      socket.unknownActorTimes[_conversationId] = 2;
+
+      final result = await fast.subscribe(_conversationId);
+
+      expect(result.ok, isTrue);
+      expect(socket.subscribed, [_conversationId, _conversationId, _conversationId]);
+      expect(fast.subscriptions, {_conversationId});
+    });
+
+    test('any OTHER refusal is the server\'s verdict and is not retried', () async {
+      await fast.connect();
+      socket.refusals[_conversationId] = 'COMM.STAFF_OUT_OF_SCOPE';
+
+      final result = await fast.subscribe(_conversationId);
+
+      expect(result.code, 'COMM.STAFF_OUT_OF_SCOPE');
+      expect(socket.subscribed, [_conversationId]);
+      expect(fast.subscriptions, isEmpty);
+    });
+
+    test('UNKNOWN_ACTOR forever is bounded, not a loop', () async {
+      await fast.connect();
+      socket.unknownActorTimes[_conversationId] = 1000;
+
+      final result = await fast.subscribe(_conversationId);
+
+      expect(result.ok, isFalse);
+      expect(socket.subscribed.length, 4);
+    });
+
+    test('a reconnect signals "catch up" only after the rooms are rejoined', () async {
+      await fast.connect();
+      await fast.subscribe(_conversationId);
+      socket.subscribed.clear();
+      socket.ackLater = true;
+      // What the socket had re-joined at the moment the signal arrived.
+      final rejoinedWhenSignalled = <List<String>>[];
+      final sub = fast.chatSignals.listen((s) {
+        if (s.kind == ChatSignalKind.reconnected) {
+          rejoinedWhenSignalled.add(List.of(socket.subscribed));
+        }
+      });
+      addTearDown(() => unawaited(sub.cancel()));
+
+      socket.moveTo(RealtimeSocketState.disconnected);
+      socket.moveTo(RealtimeSocketState.connected);
+      await pumpEventQueue();
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+
+      expect(rejoinedWhenSignalled, [
+        [_conversationId],
+      ]);
     });
   });
 }

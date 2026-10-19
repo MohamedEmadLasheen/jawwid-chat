@@ -120,7 +120,7 @@ class _SharedItems {
             voice.add(item);
           case MessageKind.file || MessageKind.video:
             files.add(item);
-          case MessageKind.text || MessageKind.system:
+          case MessageKind.text || MessageKind.system || MessageKind.card:
             break;
         }
       }

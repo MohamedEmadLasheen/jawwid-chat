@@ -24,6 +24,7 @@ import { StorySweeper } from '@communication/stories/story-sweeper.service';
 import { OutboxWorker } from '@communication/outbox/outbox.worker';
 import { LiveKitTokenIssuer } from '@communication/calls/media-token';
 import { PrismaRelationshipService } from '@platform/relationship.service';
+import { SqlStaffScope } from '@platform/staff-scope';
 
 process.env.DATABASE_URL ??= 'postgres://postgres:postgres@localhost:55433/jawwid_chat_int';
 
@@ -49,12 +50,14 @@ export function buildGraph(
   const coverage = new PinnedCoverage();
   const identity = wrapIdentity(new PrismaIdentityService(prisma));
   const audit = new PrismaAuditService();
-  const authz = new AuthorizationService(coverage);
+  // PD-8: the real SQL scope, against the same database -- the rule under test.
+  const scope = new SqlStaffScope(prisma);
+  const authz = new AuthorizationService(coverage, scope);
   const outbox = new OutboxService();
   const config = new AppConfigService(prisma);
   const storage = new SignedLocalObjectStorage();
-  // PD-6. The real implementation, against the same database: the harness must
-  // not be able to authorize a relationship the running system would refuse.
+  // The real relationship implementation, against the same database. Since
+  // PD-7 it opens no channel, but it is still wired as production wires it.
   const relationships = new PrismaRelationshipService(prisma);
 
   const conversations = new ConversationService(
@@ -76,7 +79,7 @@ export function buildGraph(
   );
   const storyAudience = new StoryAudienceResolver(prisma);
   const stories = new StoryService(
-    prisma, authz, storyAudience, outbox, config, identity, storage, audit,
+    prisma, authz, storyAudience, outbox, config, identity, storage, audit, undefined, conversations,
   );
   const storySweeper = new StorySweeper(prisma, config, outbox, storage);
 
@@ -87,7 +90,7 @@ export function buildGraph(
   const outboxWorker = new OutboxWorker(prisma, notifications, silentRealtime as never, identity);
 
   return {
-    prisma, coverage, identity, authz, conversations, messages, approvals,
+    prisma, coverage, scope, identity, authz, conversations, messages, approvals,
     attachments, notifications, reminders, templates, quietHours, calls,
     stories, storyAudience, storySweeper, storage, outboxWorker,
     relationships,
@@ -106,12 +109,18 @@ export interface Scenario {
   otherParentId: string;
   teacherId: string;
   newTeacherId: string;
-  /** PD-6: a real, active teacher who teaches NOBODY in this family, so the
-   *  pair (unrelatedTeacherId, parentId) has no authorized relationship. The
-   *  negative half of every PD-6 assertion needs a teacher that exists --
-   *  a nonexistent id would prove only that unknown ids are denied. */
+  /** A real, active teacher who teaches NOBODY in this family, so the pair
+   *  (unrelatedTeacherId, parentId) has no authorized relationship, and who is
+   *  a member of nothing -- the outsider every isolation case needs. Under
+   *  PD-7 the relationship no longer opens a direct channel, but it is still
+   *  the academy's fact (chat.teacher_parent_authorized) and is still asserted
+   *  on its own. A nonexistent id would prove only that unknown ids are denied. */
   unrelatedTeacherId: string;
   learnerId: string;
+  /** PD-8: the family's second child (learner_m), also supervised by ownerId. */
+  secondLearnerId: string;
+  /** PD-8: the Operations department; managerId manages it. */
+  departmentId: string;
 }
 
 /**
@@ -150,6 +159,8 @@ export async function seed(prisma: PrismaService): Promise<Scenario> {
     newTeacherId: randomUUID(),
     unrelatedTeacherId: randomUUID(),
     learnerId: randomUUID(),
+    secondLearnerId: randomUUID(),
+    departmentId: randomUUID(),
   };
 
   await prisma.$executeRawUnsafe(
@@ -186,21 +197,220 @@ export async function seed(prisma: PrismaService): Promise<Scenario> {
   await withAssignmentGate(
     prisma,
     `insert into chat.learner (id, family_id, name, teacher_id)
-     values ('${randomUUID()}'::uuid, '${ids.familyId}'::uuid, 'learner_m', '${ids.newTeacherId}'::uuid)`,
+     values ('${ids.secondLearnerId}'::uuid, '${ids.familyId}'::uuid, 'learner_m', '${ids.newTeacherId}'::uuid)`,
+  );
+  // PD-8: the organization structure the scope is computed from. manager_c runs
+  // Operations; admin_a and admin_b are its supervisors; admin_a supervises
+  // both of family_x's children. admin_b is therefore an Operations supervisor
+  // with NO charge over this family -- the in-department outsider.
+  await prisma.$executeRawUnsafe(
+    `insert into chat.department (id, kind, display_name, manager_id)
+     values ('${ids.departmentId}'::uuid, 'operations', 'operations', '${ids.managerId}'::uuid)`,
+  );
+  await prisma.$executeRawUnsafe(
+    `insert into chat.department_member (staff_id, organization_id, department_id, position) values
+       ('${ids.ownerId}'::uuid, chat.default_organization_id(), '${ids.departmentId}'::uuid, 'supervisor'),
+       ('${ids.otherAdminId}'::uuid, chat.default_organization_id(), '${ids.departmentId}'::uuid, 'supervisor')`,
+  );
+  await prisma.$executeRawUnsafe(
+    `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id) values
+       ('${ids.learnerId}'::uuid, chat.default_organization_id(), '${ids.ownerId}'::uuid),
+       ('${ids.secondLearnerId}'::uuid, chat.default_organization_id(), '${ids.ownerId}'::uuid)`,
   );
   return ids;
+}
+
+/**
+ * PD-8: `supervisorId` supervises `learnerIds`, as the Operations Manager would
+ * assign them. Puts the supervisor in their organization's Operations
+ * department (created on first use, run by `managerId` when given) and writes
+ * chat.learner_supervision -- the facts the staff scope is computed from.
+ * For suites that build their own families instead of using `seed()`.
+ */
+export async function supervise(
+  prisma: PrismaService,
+  supervisorId: string,
+  learnerIds: readonly string[],
+  opts: { managerId?: string } = {},
+): Promise<string> {
+  const [{ organization_id: org }] = await prisma.$queryRawUnsafe<Array<{ organization_id: string }>>(
+    `select organization_id::text from chat.staff where id = $1::uuid`,
+    supervisorId,
+  );
+  await prisma.$executeRawUnsafe(
+    `insert into chat.department (organization_id, kind, display_name, manager_id)
+     values ($1::uuid, 'operations', 'operations', $2::uuid)
+     on conflict (organization_id, kind) do nothing`,
+    org,
+    opts.managerId ?? null,
+  );
+  if (opts.managerId) {
+    await prisma.$executeRawUnsafe(
+      `update chat.department set manager_id = $2::uuid where organization_id = $1::uuid and kind = 'operations'`,
+      org,
+      opts.managerId,
+    );
+  }
+  const [{ id: departmentId }] = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+    `select id::text from chat.department where organization_id = $1::uuid and kind = 'operations'`,
+    org,
+  );
+  await prisma.$executeRawUnsafe(
+    `insert into chat.department_member (staff_id, organization_id, department_id, position)
+     values ($1::uuid, $2::uuid, $3::uuid, 'supervisor')
+     on conflict (staff_id) do nothing`,
+    supervisorId,
+    org,
+    departmentId,
+  );
+  for (const learnerId of learnerIds) {
+    await prisma.$executeRawUnsafe(
+      `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id)
+       values ($1::uuid, $2::uuid, $3::uuid)
+       on conflict (learner_id) do update set supervisor_id = excluded.supervisor_id`,
+      learnerId,
+      org,
+      supervisorId,
+    );
+  }
+  return departmentId;
+}
+
+/**
+ * PD-8 scenario: family_x's second child (learner_m) moves to admin_b, so the
+ * family has TWO supervisors, each reaching it through their own child -- and
+ * each blind to the other's conversations.
+ */
+export async function splitFamily(prisma: PrismaService, s: Scenario): Promise<void> {
+  await prisma.$executeRawUnsafe(
+    `update chat.learner_supervision set supervisor_id = $2::uuid where learner_id = $1::uuid`,
+    s.secondLearnerId,
+    s.otherAdminId,
+  );
+}
+
+/**
+ * PD-8: every child of family_x moves to `supervisorId` -- what "coverage moved
+ * away" used to model. The previous supervisor no longer reaches the family.
+ */
+export async function moveFamily(prisma: PrismaService, s: Scenario, supervisorId: string): Promise<void> {
+  await prisma.$executeRawUnsafe(
+    `update chat.learner_supervision set supervisor_id = $2::uuid where learner_id in ($1::uuid, $3::uuid)`,
+    s.learnerId,
+    supervisorId,
+    s.secondLearnerId,
+  );
+}
+
+/**
+ * PD-8: make `backupId` an ACTIVE backup of `primaryId` (both must already be
+ * in the same Operations department). Returns the link id. Stands in for the
+ * Operations Manager's activation, for suites that used to pin on_duty().
+ */
+export async function activateBackup(
+  prisma: PrismaService,
+  primaryId: string,
+  backupId: string,
+  until: Date | null = null,
+): Promise<string> {
+  const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+    `insert into chat.supervisor_backup (organization_id, primary_id, backup_id, activated_at, active_until)
+     values (chat.default_organization_id(), $1::uuid, $2::uuid, now() - interval '1 second', $3::timestamptz)
+     returning id::text as id`,
+    primaryId,
+    backupId,
+    until,
+  );
+  return rows[0].id;
+}
+
+/**
+ * A direct teacher <-> parent conversation as the PD-6 window left it.
+ *
+ * PD-7 (2026-10-14) restored BR-1: neither the API nor the database will
+ * create this conversation any more (canOpenDirect refuses, and
+ * chat.enforce_direct_conversation_rules raises check_violation on the member
+ * INSERT). But the rows PD-6 created still exist in a real database, and the
+ * rule for them -- readable history, nothing new accepted -- can only be
+ * proven against such a row. So the fixture writes it the one way that
+ * bypasses every trigger: `session_replication_role = replica`, LOCAL to one
+ * transaction so it cannot leak into a pooled connection. Exactly what the
+ * PD-6 code wrote: a direct conversation keyed like getOrCreateDirect, filed
+ * under the parent's family, with a parent and a teacher member.
+ */
+export async function legacyTeacherParentDirect(
+  prisma: PrismaService,
+  teacherId: string,
+  parentId: string,
+  familyId: string,
+): Promise<string> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`set local session_replication_role = replica`);
+    const conv = await tx.conversation.create({
+      data: {
+        type: 'direct',
+        directKey: ConversationService.directKey(teacherId, parentId),
+        familyId,
+        title: null,
+      },
+    });
+    await tx.conversationMember.createMany({
+      data: [
+        { conversationId: conv.id, actorId: parentId, actorKind: 'contact', memberRole: 'parent' },
+        { conversationId: conv.id, actorId: teacherId, actorKind: 'teacher', memberRole: 'teacher' },
+      ],
+    });
+    return conv.id;
+  });
+}
+
+/**
+ * A direct call still RINGING in a PD-6-era teacher <-> parent conversation
+ * (see legacyTeacherParentDirect). chat.enforce_call_participant_rules refuses
+ * the participant INSERT under PD-7, so it is written with triggers bypassed
+ * for the same reason and in the same transaction-local way. What it proves
+ * is the PD-7 rule for a call that was already ringing when the policy
+ * changed: it can be ended, never answered.
+ */
+export async function legacyTeacherParentCall(
+  prisma: PrismaService,
+  conversationId: string,
+  initiatorId: string,
+  participants: { teacherId: string; parentId: string },
+  familyId: string,
+): Promise<string> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`set local session_replication_role = replica`);
+    const call = await tx.call.create({
+      data: {
+        conversationId,
+        familyId,
+        initiatorId,
+        type: 'direct',
+        roomName: `jawwid-${conversationId}-${randomUUID()}`,
+        status: 'ringing',
+      },
+    });
+    await tx.callParticipant.createMany({
+      data: [
+        { callId: call.id, actorId: participants.parentId, actorKind: 'contact' },
+        { callId: call.id, actorId: participants.teacherId, actorKind: 'teacher' },
+      ],
+    });
+    return call.id;
+  });
 }
 
 /** Order matters: children before parents. */
 export async function truncate(prisma: PrismaService): Promise<void> {
   await prisma.$executeRawUnsafe(`
-    truncate chat.story_view, chat.story_recipient, chat.story_audience, chat.story,
+    truncate chat.story_cta_click, chat.story_view, chat.story_recipient, chat.story_audience, chat.story,
              chat.message_receipt, chat.message_reaction, chat.message_attachment,
              chat.message_hidden_for, chat.message_approval, chat.call_participant,
              chat.call, chat.notification, chat.outbox_event,
              chat.conversation_participant_state, chat.conversation_member,
              chat.message, chat.conversation, chat.learner,
              chat.contact, chat.family, chat.staff, chat.teacher,
-             chat.event_log, chat.audit_log
+             chat.event_log, chat.audit_log, chat.principal_revocation
     restart identity cascade`);
 }

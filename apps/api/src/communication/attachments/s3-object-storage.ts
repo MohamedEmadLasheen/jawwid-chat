@@ -8,7 +8,8 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import type { ObjectStorage, UploadAuthorization } from './object-storage';
+import { parseByteRange } from './object-storage';
+import type { ObjectStorage, StoredObject, StoredObjectHead, UploadAuthorization } from './object-storage';
 import { assertSafeObjectKey, buildObjectKey } from './object-key';
 
 /**
@@ -170,6 +171,64 @@ export class S3ObjectStorage implements ObjectStorage {
     await this.client.send(
       new DeleteObjectCommand({ Bucket: this.bucket, Key: assertSafeObjectKey(objectKey) }),
     );
+  }
+
+  /**
+   * A ranged GET: the first `maxBytes` and nothing more cross the network. The
+   * total size comes from `Content-Range` (`bytes 0-N/TOTAL`); an object
+   * smaller than the range is answered whole, with no Content-Range, and then
+   * its length is the total.
+   */
+  async readHead(objectKey: string, maxBytes: number): Promise<StoredObjectHead | null> {
+    try {
+      const out = await this.client.send(
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: assertSafeObjectKey(objectKey),
+          Range: `bytes=0-${Math.max(0, maxBytes - 1)}`,
+        }),
+      );
+      const head = Buffer.from((await out.Body?.transformToByteArray()) ?? new Uint8Array());
+      const total = /\/(\d+)$/.exec(out.ContentRange ?? '')?.[1];
+      return {
+        head: head.subarray(0, maxBytes),
+        byteSize: total ? Number(total) : head.length,
+        contentType: out.ContentType ?? null,
+      };
+    } catch (error) {
+      if (isNotFound(error)) return null;
+      throw error;
+    }
+  }
+
+  /**
+   * RT-037. Read through this API instead of handing out a presigned URL: a
+   * HEAD for the size and type, then the GET (ranged when asked), streamed.
+   */
+  async read(objectKey: string, rangeHeader?: string | string[]): Promise<StoredObject | 'unsatisfiable' | null> {
+    const Key = assertSafeObjectKey(objectKey);
+    let size: number;
+    let mimeType: string;
+    try {
+      const head = await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key }));
+      size = Number(head.ContentLength ?? 0);
+      mimeType = head.ContentType ?? 'application/octet-stream';
+    } catch (error) {
+      if (isNotFound(error)) return null;
+      throw error;
+    }
+    const range = parseByteRange(rangeHeader, size);
+    if (range === 'unsatisfiable') return 'unsatisfiable';
+    const got = await this.client.send(
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key,
+        ...(range ? { Range: `bytes=${range.start}-${range.end}` } : {}),
+      }),
+    );
+    const body = got.Body as unknown as AsyncIterable<Uint8Array> | undefined;
+    if (!body) return null;
+    return { mimeType, size, range, body };
   }
 
   /** Releases the underlying HTTP handler. */

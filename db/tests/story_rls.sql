@@ -120,6 +120,37 @@ insert into chat.story_view (story_id, actor_id) values
   ('11111111-0000-0000-0000-000000000a10', '11111111-0000-0000-0000-000000000a07')
 on conflict do nothing;
 
+-- Stories v2 (20261017120000): a story published with NO expiry, the shape of
+-- every story since 2026-10-17, and one recorded call-to-action tap.
+insert into chat.story
+  (id, organization_id, body, state, published_at, expires_at, created_by, published_by,
+   cta_kind, cta_url) values
+  ('11111111-0000-0000-0000-000000000a14', '11111111-0000-0000-0000-000000000a01',
+   'permanent story', 'published', now() - interval '400 days', null,
+   '11111111-0000-0000-0000-000000000a05', '11111111-0000-0000-0000-000000000a05',
+   'link', 'https://story-org-a.example/offer')
+on conflict (id) do nothing;
+
+insert into chat.story_recipient (story_id, actor_id, actor_kind, matched_kind) values
+  ('11111111-0000-0000-0000-000000000a14', '11111111-0000-0000-0000-000000000a07',
+   'contact', 'segment')
+on conflict do nothing;
+
+insert into chat.story_cta_click (story_id, actor_id) values
+  ('11111111-0000-0000-0000-000000000a14', '11111111-0000-0000-0000-000000000a07');
+
+-- The super admin publishes since 2026-10-17.
+insert into chat.account (id, subject, kind, organization_id) values
+  ('11111111-0000-0000-0000-000000000a15', 'story-super-a', 'staff',
+   '11111111-0000-0000-0000-000000000a01')
+on conflict (id) do nothing;
+select set_config('chat.provisioning_super_admin', 'on', true);
+insert into chat.staff (id, account_id, name, role, organization_id) values
+  ('11111111-0000-0000-0000-000000000a16', '11111111-0000-0000-0000-000000000a15',
+   'story_super_a', 'super_admin', '11111111-0000-0000-0000-000000000a01')
+on conflict (id) do nothing;
+select set_config('chat.provisioning_super_admin', 'off', true);
+
 -- ---------------------------------------------------------------------------
 -- Helpers (the same idiom as tenant_isolation.sql)
 -- ---------------------------------------------------------------------------
@@ -454,6 +485,92 @@ select pg_temp.want_ok(
 select pg_temp.want_ok(
   'H5 org B''s publisher sees none of org A''s AUTHORED AUDIENCES',
   (select count(*) from chat.story_audience) = 0
+);
+
+select pg_temp.want_ok(
+  'H6 org B''s publisher sees none of org A''s CALL-TO-ACTION TAPS',
+  (select count(*) from chat.story_cta_click) = 0
+);
+
+-- ===========================================================================
+-- I · Stories v2: no expiry, taps, the super admin
+-- ===========================================================================
+
+set local chat.actor_subject = 'story-parent-1';
+
+select pg_temp.want_ok(
+  'I1 a story with NO expiry stays visible to its recipient, however old',
+  (select count(*) from chat.story where id = '11111111-0000-0000-0000-000000000a14') = 1
+);
+
+select pg_temp.want_ok(
+  'I2 ...while a story WITH a past expiry is still invisible (section C holds)',
+  (select count(*) from chat.story where id = '11111111-0000-0000-0000-000000000a11') = 0
+);
+
+select pg_temp.want_ok(
+  'I3 a recipient sees their own tap',
+  (select count(*) from chat.story_cta_click
+    where actor_id = '11111111-0000-0000-0000-000000000a07') = 1
+);
+
+select pg_temp.want_ok(
+  'I4 a recipient may record their own tap',
+  pg_temp.expect_ok($$
+    insert into chat.story_cta_click (story_id, actor_id)
+    values ('11111111-0000-0000-0000-000000000a14', '11111111-0000-0000-0000-000000000a07')
+  $$)
+);
+
+-- I5 needs the impersonated actor to BE in the audience: the audience guard is
+-- a BEFORE trigger and fires ahead of WITH CHECK, so impersonating a
+-- non-recipient would be refused by the wrong guard and prove nothing about
+-- the policy. parent_2 joins this one story's audience here, as the owner,
+-- rather than in the fixtures, because section D asserts parent_2 sees nothing.
+reset role;
+insert into chat.story_recipient (story_id, actor_id, actor_kind, matched_kind) values
+  ('11111111-0000-0000-0000-000000000a14', '11111111-0000-0000-0000-000000000a08',
+   'contact', 'segment')
+on conflict do nothing;
+set local role authenticated;
+set local chat.actor_subject = 'story-parent-1';
+
+select pg_temp.want_ok(
+  'I5 a recipient may NOT record a tap as somebody else (WITH CHECK)',
+  pg_temp.expect_violation($$
+    insert into chat.story_cta_click (story_id, actor_id)
+    values ('11111111-0000-0000-0000-000000000a14', '11111111-0000-0000-0000-000000000a08')
+  $$, 'row-level security')
+);
+
+set local chat.actor_subject = 'story-parent-2';
+
+select pg_temp.want_ok(
+  'I6 a NON-recipient cannot tap, even as themselves (audience guard)',
+  pg_temp.expect_violation($$
+    insert into chat.story_cta_click (story_id, actor_id)
+    values ('11111111-0000-0000-0000-000000000a10', '11111111-0000-0000-0000-000000000a08')
+  $$, 'not in the audience')
+);
+
+select pg_temp.want_ok(
+  'I7 a reader never sees another reader''s taps',
+  (select count(*) from chat.story_cta_click) = 0
+);
+
+set local chat.actor_subject = 'story-super-a';
+
+select pg_temp.want_ok(
+  'I8 the super admin is a publisher',
+  chat.current_can_publish_story() = true
+);
+
+select pg_temp.want_ok(
+  'I9 the super admin sees its organization''s taps, and only those',
+  (select count(*) from chat.story_cta_click) >= 1
+  and (select count(*) from chat.story_cta_click c
+         join chat.story st on st.id = c.story_id
+        where st.organization_id <> '11111111-0000-0000-0000-000000000a01') = 0
 );
 
 rollback;

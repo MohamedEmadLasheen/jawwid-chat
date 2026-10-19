@@ -30,6 +30,41 @@ export interface UploadBinding {
   byteSize: number;
 }
 
+/** RT-037: the bytes of a stored object, as the media route serves them. */
+export interface StoredObject {
+  mimeType: string;
+  /** Total size of the object in bytes. */
+  size: number;
+  /** The inclusive byte range served, or null for the whole object. */
+  range: { start: number; end: number } | null;
+  /** The served bytes: a buffer, or a stream for large remote objects. */
+  body: Buffer | AsyncIterable<Uint8Array>;
+}
+
+/**
+ * Single-range `bytes=a-b` / `bytes=a-` / `bytes=-n` only; anything else is
+ * served whole (null). Shared by the storage and media routes.
+ */
+export function parseByteRange(
+  header: string | string[] | undefined,
+  total: number,
+): { start: number; end: number } | 'unsatisfiable' | null {
+  const raw = Array.isArray(header) ? header[0] : header;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(raw ?? '');
+  if (!match) return null;
+
+  const [, rawStart, rawEnd] = match;
+  if (rawStart === '' && rawEnd === '') return null;
+
+  // A suffix range (`bytes=-500`) asks for the last N bytes.
+  const start = rawStart === '' ? Math.max(0, total - Number(rawEnd)) : Number(rawStart);
+  const end = rawStart === '' || rawEnd === '' ? total - 1 : Math.min(Number(rawEnd), total - 1);
+
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  if (start > end || start >= total) return 'unsatisfiable';
+  return { start, end };
+}
+
 export interface ObjectStorage {
   authorizeUpload(params: {
     prefix: string;
@@ -50,6 +85,28 @@ export interface ObjectStorage {
    * contract is that it stops existing.
    */
   delete(objectKey: string): Promise<void>;
+  /**
+   * The first `maxBytes` of a stored object, its total size and the content
+   * type storage recorded for it -- or null when the object does not exist.
+   *
+   * For a caller that must look at what was ACTUALLY uploaded before it commits
+   * to it (a profile photo is checked for its real image signature and its
+   * dimensions, not for the type the client declared). Bounded on purpose: a
+   * validator never needs, and never gets, the whole object in memory.
+   */
+  readHead(objectKey: string, maxBytes: number): Promise<StoredObjectHead | null>;
+  /**
+   * RT-037. The bytes, read by this API on behalf of a request it has just
+   * authorized (the media route) -- so no storage URL has to be handed out.
+   * Null when there is no such object; 'unsatisfiable' for a range outside it.
+   */
+  read(objectKey: string, rangeHeader?: string | string[]): Promise<StoredObject | 'unsatisfiable' | null>;
+}
+
+export interface StoredObjectHead {
+  head: Buffer;
+  byteSize: number;
+  contentType: string | null;
 }
 
 /**
@@ -122,7 +179,31 @@ export class SignedLocalObjectStorage implements ObjectStorage {
     await this.blobs.delete(objectKey);
   }
 
+  async read(objectKey: string, rangeHeader?: string | string[]): Promise<StoredObject | 'unsatisfiable' | null> {
+    const blob = await this.blobs.get(objectKey);
+    if (!blob) return null;
+    const size = blob.bytes.length;
+    const range = parseByteRange(rangeHeader, size);
+    if (range === 'unsatisfiable') return 'unsatisfiable';
+    return {
+      mimeType: blob.mimeType,
+      size,
+      range,
+      body: range ? blob.bytes.subarray(range.start, range.end + 1) : blob.bytes,
+    };
+  }
+
   private readonly blobs = new LocalFsBlobStore();
+
+  async readHead(objectKey: string, maxBytes: number): Promise<StoredObjectHead | null> {
+    const blob = await this.blobs.get(objectKey);
+    if (!blob) return null;
+    return {
+      head: blob.bytes.subarray(0, Math.max(0, maxBytes)),
+      byteSize: blob.bytes.length,
+      contentType: blob.mimeType,
+    };
+  }
 
   /**
    * A PUT is verifiable only against the MIME type and byte size it was

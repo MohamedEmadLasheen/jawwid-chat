@@ -1,4 +1,6 @@
 > **STATUS: HISTORICAL** (Phase 0, 2026-09-07). OD-06's recommendation (no super_admin, no CRITICAL) is overruled by PRD §3 / `docs/architecture/AUTHORIZATION-MODEL.md` (PD-5).
+> **2026-10-14: PD-7 supersedes PD-6** — direct Teacher ↔ Parent communication is forbidden again (record: `../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4 PD-7, `decision-log.md` DEC-18). The OD-04 closure below (Core owns teacher assignment) is unaffected; the PD-6 permission it was written for is withdrawn.
+>
 > **OD-04 is CLOSED and OD-03 is PARTLY CLOSED by PD-6 (2026-09-23)**; the record is `../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4 and `decision-log.md` DEC-17.
 > Canonical index: `docs/README.md`.
 

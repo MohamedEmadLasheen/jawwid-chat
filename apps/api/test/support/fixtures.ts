@@ -1,5 +1,11 @@
 import { AuthorizationService } from '@platform/authorization.service';
 import type { CoverageService } from '@platform/coverage.service';
+import {
+  StaffAccessBasis,
+  type ActsFor,
+  type FamilyReach,
+  type StaffScope,
+} from '@platform/staff-scope';
 import { Actor } from '@platform/types';
 
 /** on_duty() is AI #1's; unit tests stub it rather than reimplement coverage. */
@@ -10,8 +16,55 @@ export class FakeCoverage implements CoverageService {
   }
 }
 
+/**
+ * PD-8: the staff scope is SQL (chat.staff_conversation_access) and is proven
+ * against a real database in the integration suites. Unit tests stub its
+ * ANSWER per staff id, exactly as they stub on_duty(): the policy under test is
+ * what AuthorizationService does with a basis, not how the basis is computed.
+ */
+export class FakeStaffScope implements StaffScope {
+  constructor(
+    private readonly access: Readonly<Record<string, StaffAccessBasis>> = {},
+    private readonly acts: Readonly<Record<string, ActsFor>> = {},
+    private readonly reach: Readonly<Record<string, FamilyReach>> = {},
+  ) {}
+  async conversationAccess(staffId: string): Promise<StaffAccessBasis | null> {
+    return this.access[staffId] ?? null;
+  }
+  async visibleConversationIds(): Promise<string[]> {
+    return [];
+  }
+  async familyReach(staffId: string): Promise<FamilyReach> {
+    return this.reach[staffId] ?? null;
+  }
+  async familyReachMany(pairs: ReadonlyArray<{ staffId: string; familyId: string }>): Promise<Map<string, FamilyReach>> {
+    return new Map(pairs.map((p) => [`${p.staffId}:${p.familyId}`, this.reach[p.staffId] ?? null]));
+  }
+  async actsFor(staffId: string): Promise<ActsFor> {
+    return this.acts[staffId] ?? null;
+  }
+  async responsibleSupervisor(): Promise<string | null> {
+    return null;
+  }
+}
+
+export const authzWithScope = (
+  access: Readonly<Record<string, StaffAccessBasis>> = {},
+  acts: Readonly<Record<string, ActsFor>> = {},
+  reach: Readonly<Record<string, FamilyReach>> = {},
+): AuthorizationService => new AuthorizationService(new FakeCoverage(null), new FakeStaffScope(access, acts, reach));
+
+/**
+ * The pre-PD-8 helper, kept for the suites written against it. What "on duty"
+ * used to grant is now the RESPONSIBLE basis (the child's supervisor), and the
+ * default `manager-1` is the department manager of everyone -- the two facts
+ * those suites actually depended on. Nothing else is in scope.
+ */
 export const authzWithOnDuty = (onDutyId: string | null = null): AuthorizationService =>
-  new AuthorizationService(new FakeCoverage(onDutyId));
+  authzWithScope({
+    'manager-1': StaffAccessBasis.MANAGER,
+    ...(onDutyId ? { [onDutyId]: StaffAccessBasis.RESPONSIBLE } : {}),
+  });
 
 /**
  * Every fixture carries an organizationId, because every real Actor does:
@@ -60,6 +113,7 @@ type Conv = Parameters<AuthorizationService['canRead']>[1];
 export const conversation = (over: Partial<Conv> = {}): Conv => ({
   id: 'conv-1',
   type: 'direct',
+  organizationId: ORG,
   familyId: 'family-1',
   stickyHandlerId: null,
   stickyUntil: null,

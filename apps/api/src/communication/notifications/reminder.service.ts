@@ -11,6 +11,12 @@ export interface ReminderContext {
   familyId?: string | null;
   conversationId?: string | null;
   variables?: Record<string, unknown>;
+  /**
+   * Skip a rule whose moment has already passed (PD-11: a "tomorrow" reminder
+   * for a lesson booked two hours ahead would arrive at once and be wrong).
+   * Off by default: a payment reminder anchored in the past is still owed.
+   */
+  skipPast?: boolean;
 }
 
 /**
@@ -47,6 +53,7 @@ export class ReminderService {
     let count = 0;
     for (const rule of rules) {
       const scheduledAt = new Date(ctx.anchorAt.getTime() + rule.offsetSeconds * 1000);
+      if (ctx.skipPast && scheduledAt.getTime() < Date.now()) continue;
 
       for (const recipient of ctx.recipients) {
         // A rule targets one role; "participant" means everyone given.

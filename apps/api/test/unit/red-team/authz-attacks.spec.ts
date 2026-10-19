@@ -8,9 +8,11 @@
  * vulnerability is ever reintroduced.
  */
 import { CommErrorCode } from '@platform/errors';
+import { StaffAccessBasis } from '@platform/staff-scope';
 import {
   admin,
   authzWithOnDuty,
+  authzWithScope,
   conversation,
   manager,
   member,
@@ -47,10 +49,10 @@ describe('RT-003 (fixed) · on_behalf_mode cannot be asserted by the client', ()
     if (d.allowed) expect(d.onBehalfMode).toBe('owner');
   });
 
-  it('an on-duty admin who is not the owner is attributed COVERAGE, not OWNER', async () => {
+  it('an ACTIVE backup who is not the supervisor is attributed COVERAGE, not OWNER (PD-8)', async () => {
     const cov = admin('coverage-admin', 'coverage');
-    const authz = authzWithOnDuty('coverage-admin');
-    const d = await authz.canSend(cov, conversation(), member(cov), customer, NOW, OWNER);
+    const authz = authzWithScope({ 'coverage-admin': StaffAccessBasis.BACKUP });
+    const d = await authz.canSend(cov, conversation(), member(cov), { ...customer, requestedMode: 'owner' }, NOW, OWNER);
     expect(d.allowed).toBe(true);
     if (d.allowed) expect(d.onBehalfMode).toBe('coverage');
   });
@@ -73,12 +75,18 @@ describe('RT-003 (fixed) · on_behalf_mode cannot be asserted by the client', ()
 });
 
 describe('RT-004 (fixed) · COVERAGE is never asserted without a coverage assignment', () => {
-  it('an internal note by an off-duty non-owner is attributed ASSIST, not COVERAGE', async () => {
-    const a = admin('bystander');
-    const authz = authzWithOnDuty('somebody-else');
-    const d = await authz.canSend(a, conversation(), member(a), internal, NOW, OWNER);
+  it('an internal note by a department manager is attributed ASSIST, not COVERAGE (PD-8)', async () => {
+    const m = manager('manager-x');
+    const authz = authzWithScope({ 'manager-x': StaffAccessBasis.MANAGER });
+    const d = await authz.canSend(m, conversation(), null, { ...internal, requestedMode: 'coverage' }, NOW, OWNER);
     expect(d.allowed).toBe(true);
     if (d.allowed) expect(d.onBehalfMode).toBe('assist');
+  });
+
+  it('a membership row without a basis writes nothing, not even a note', async () => {
+    const a = admin('bystander');
+    const d = await authzWithScope().canSend(a, conversation(), member(a), internal, NOW, OWNER);
+    expect(d.allowed).toBe(false);
   });
 
   it('an internal note by the owner is attributed OWNER', async () => {
@@ -113,8 +121,25 @@ describe('RT-002 (fixed) · authorization is a function of the participant set, 
     expect(d.allowed).toBe(false);
   });
 
-  it('control: family-facing staff may still open any family conversation', () => {
-    expect(authz.canRead(admin(), studentGroup(), null).allowed).toBe(true);
+  it('control: staff open what is in their charge -- a manager too, and only through the resolved basis (PD-8)', () => {
+    // The scope is a server-resolved fact; without it a non-member admin is
+    // refused, with it they are admitted. A manager's role alone no longer
+    // opens the whole organization: they read their department.
+    expect(authz.canRead(admin(), studentGroup(), null, true).allowed).toBe(true);
+    expect(authz.canRead(manager(), studentGroup(), null, true).allowed).toBe(true);
+    expect(authz.canRead(manager(), studentGroup(), null).allowed).toBe(false);
+    const outside = authz.canRead(admin(), studentGroup(), null);
+    expect(outside.allowed).toBe(false);
+    if (!outside.allowed) expect(outside.code).toBe(CommErrorCode.STAFF_OUT_OF_SCOPE);
+  });
+
+  it('another organization\'s conversation reads as not found, even for a manager', () => {
+    const foreign = studentGroup({ organizationId: 'org-2' });
+    for (const staff of [admin(), manager()]) {
+      const d = authz.canRead(staff, foreign, member(staff), true);
+      expect(d.allowed).toBe(false);
+      if (!d.allowed) expect(d.code).toBe(CommErrorCode.CONVERSATION_NOT_FOUND);
+    }
   });
 });
 
@@ -122,36 +147,31 @@ describe('conversation-type confusion', () => {
   const authz = authzWithOnDuty();
 
   it('a teacher cannot post into a direct conversation with a parent by presenting a membership row', async () => {
-    // PD-6 re-versioned the rule but not this attack: a membership row is not a
-    // relationship. Holding a member row in a direct conversation with a
-    // contact buys nothing when the relationship says no.
+    // PD-7 restored BR-1: a membership row in a direct conversation with a
+    // contact buys nothing at all.
     const t = teacher();
     const d = await authz.canSend(
-      t, conversation({ type: 'direct' }), member(t), customer, NOW, null, ['teacher', 'contact'],
-      [], false /* pairingAuthorized */,
+      t, conversation({ type: 'direct' }), member(t), customer, NOW, null, ['teacher', 'contact'], [],
     );
     expect(d.allowed).toBe(false);
-    if (!d.allowed) expect(d.code).toBe(CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED);
+    if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_TEACHER_PARENT_DIRECT);
   });
 
-  it('...and the resolved relationship is the ONLY thing that changes that verdict', async () => {
+  it('...and the participant set, not the type, is what decides it', async () => {
     // The positive control for the attack above: same actor, same membership
-    // row, same participant set, only the server-resolved fact differs. Without
-    // this the assertion above could pass for the wrong reason.
+    // row, same conversation type, only the other participant's kind differs.
+    // Without this the assertion above could pass for the wrong reason.
     const t = teacher();
     const d = await authz.canSend(
-      t, conversation({ type: 'direct' }), member(t), customer, NOW, null, ['teacher', 'contact'],
-      [], true /* pairingAuthorized */,
+      t, conversation({ type: 'direct', familyId: null }), member(t), customer, NOW, null, ['teacher', 'staff'], [],
     );
     expect(d.allowed).toBe(true);
   });
 
   it('a client cannot widen its own authority: the fact comes from the server, not the request', async () => {
-    // RT-002/003/004 in PD-6 shape. There is no request field that reaches
-    // pairingAuthorized -- it is resolved by RelationshipService from Jawwid
-    // Core data before the policy runs. This asserts the policy's half of that
-    // contract: the parameter is positional and typed boolean, so no actor
-    // field, membership field or participant-kind string can reach it.
+    // RT-002/003/004. Under PD-7 the policy reads no relationship at all, so
+    // no actor field an attacker adds -- however it is named -- can open the
+    // channel.
     const t = teacher();
     const forged = {
       ...teacher(),
@@ -166,6 +186,6 @@ describe('conversation-type confusion', () => {
       ['teacher', 'contact'],
     );
     expect(d.allowed).toBe(false);
-    if (!d.allowed) expect(d.code).toBe(CommErrorCode.TEACHER_PARENT_NOT_AUTHORIZED);
+    if (!d.allowed) expect(d.code).toBe(CommErrorCode.BR1_TEACHER_PARENT_DIRECT);
   });
 });

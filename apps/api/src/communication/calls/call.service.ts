@@ -8,14 +8,14 @@ import type { Decision } from '../../platform/authorization.service';
 import { AppConfigService } from '../../platform/app-config.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
 import { AUDIT_SERVICE, IDENTITY_SERVICE, MEDIA_TOKEN_ISSUER } from '../../platform/tokens';
-import type { IdentityService } from '../../platform/identity.service';
+import { actorRefKey, type IdentityService, type ResolvedActors } from '../../platform/identity.service';
 import type { AuditService } from '../../platform/audit.service';
 import type { MediaTokenIssuer } from './media-token';
 import { Actor, SYSTEM_ACTOR } from '../../platform/types';
 import { ConversationService } from '../conversations/conversation.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
-import { CallOutcome, CallStatus, CallType, ConversationType } from '../contracts/vocab';
+import { CallOutcome, CallStatus, CallType, ConversationType, GROUP_CONVERSATION_TYPES } from '../contracts/vocab';
 
 /**
  * Calling.
@@ -84,6 +84,7 @@ export class CallService {
     const now = new Date();
     const initiator = await this.conversations.requireActor(initiatorId);
     const conv = await this.conversations.requireConversation(conversationId);
+    this.requireConversationOrganization(initiator, conv.organizationId);
     const membership = await this.conversations.membershipOf(conv.id, initiator.actorId);
 
     const { decision, participantActors } = await this.decideInitiate(
@@ -94,17 +95,20 @@ export class CallService {
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
-    const type =
-      conv.type === ConversationType.STUDENT_GROUP || conv.type === ConversationType.CLASS_GROUP
-        ? CallType.GROUP
-        : CallType.DIRECT;
+    const type = GROUP_CONVERSATION_TYPES.has(conv.type) ? CallType.GROUP : CallType.DIRECT;
 
     // Unguessable and server-owned.
     const roomName = `jawwid-${conv.id}-${randomUUID()}`;
 
     return this.prisma.$transaction(async (tx) => {
+      // RT-032: the initiator is still live under lock.
+      await this.conversations.assertActorLive(tx, initiator);
       const call = await tx.call.create({
         data: {
+          // RT-031: filed under the conversation's organization, never the
+          // column default (organization A) -- the database guard
+          // call_same_organization refuses any other value.
+          organizationId: conv.organizationId,
           conversationId: conv.id,
           familyId: conv.familyId,
           initiatorId: initiator.actorId,
@@ -170,7 +174,11 @@ export class CallService {
     const participantActors: Actor[] = [];
     for (const m of members) {
       const a = await this.identity.resolveActor(m.actorId);
-      if (a && a.isActive && !m.isSilent) participantActors.push(a);
+      // RT-031: a member row naming an actor of another organization is not a
+      // participant, however it got there.
+      if (a && a.isActive && !m.isSilent && a.organizationId === conv.organizationId) {
+        participantActors.push(a);
+      }
     }
 
     const family = conv.familyId
@@ -193,12 +201,16 @@ export class CallService {
       // PD-2: this is the START path. A parent is refused here and allowed on
       // the join path.
       CallIntent.INITIATE,
-      // PD-6: the teacher<->parent relationship, resolved from the conversation
-      // membership rather than from anything the caller sent.
-      await this.conversations.pairingAuthorizedAmong(members),
     );
+    if (!decision.allowed) return { decision, participantActors };
 
-    return { decision, participantActors };
+    // D1 (ported from 33a347a, PD-A). Whoever starts a call must be ON it. The
+    // participants are the conversation's live members; since PD-8 a department
+    // manager, an ACTIVE backup or the super admin may SEND into a conversation
+    // they are not a member of -- and so, through canCall, could start a call
+    // that rings everyone else while the caller holds no seat in it: a phantom
+    // call. Starting a call is taking part in it, so it needs membership.
+    return { decision: this.authz.canStartCallAsParticipant(initiator, participantActors), participantActors };
   }
 
   /**
@@ -234,9 +246,10 @@ export class CallService {
   ): Promise<{ canCall: boolean; code: string | null }> {
     const actor = await this.conversations.requireActor(actorId);
     const conv = await this.conversations.requireConversation(conversationId);
+    this.requireConversationOrganization(actor, conv.organizationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
 
-    const readable = this.authz.canRead(actor, conv, membership);
+    const readable = await this.conversations.canReadResolved(actor, conv, membership);
     if (!readable.allowed) throw new CommError(readable.code, readable.reason);
 
     const { decision } = await this.decideInitiate(actor, conv, membership, new Date());
@@ -260,12 +273,18 @@ export class CallService {
     const { call, membership, actor } = await this.authorizeJoin(callId, actorId);
 
     const ttl = await this.config.get('call.token_ttl_seconds');
-    const issued = await this.media.issue({
-      roomName: call.roomName,
-      identity: actor.actorId,
-      name: actor.displayName,
-      canPublish: !membership?.isSilent,
-      ttlSeconds: ttl,
+    // RT-032: minted while the actor is live under lock, so a token is never
+    // issued after a deactivation committed. (Once issued it is a bearer
+    // credential until it expires -- see RT-037.)
+    const issued = await this.prisma.$transaction(async (tx) => {
+      await this.conversations.assertActorLive(tx, actor);
+      return this.media.issue({
+        roomName: call.roomName,
+        identity: actor.actorId,
+        name: actor.displayName,
+        canPublish: !membership?.isSilent,
+        ttlSeconds: ttl,
+      });
     });
 
     return { ...issued, roomName: call.roomName };
@@ -315,6 +334,8 @@ export class CallService {
       if (status === CallStatus.ENDED) {
         throw new CommError(CommErrorCode.CALL_ALREADY_ENDED, 'this call has ended', 409);
       }
+      // RT-032: the answering actor is still live under lock.
+      await this.conversations.assertActorLive(tx, actor);
 
       // Re-read under the lock. The participant could have left, or every other
       // participant could have declined, between authorization and here.
@@ -597,7 +618,7 @@ export class CallService {
    */
   async end(callId: string, actorId: string): Promise<void> {
     const actor = await this.conversations.requireActor(actorId);
-    const call = await this.requireLiveParticipant(callId, actor.actorId);
+    const call = await this.requireLiveParticipant(callId, actor);
 
     await this.prisma.$transaction(async (tx) => {
       const locked = await this.lockCall(tx, callId);
@@ -753,18 +774,26 @@ export class CallService {
   async history(conversationId: string, actorId: string) {
     const actor = await this.conversations.requireActor(actorId);
     const conv = await this.conversations.requireConversation(conversationId);
+    this.requireConversationOrganization(actor, conv.organizationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
-    const readable = this.authz.canRead(actor, conv, membership);
+    const readable = await this.conversations.canReadResolved(actor, conv, membership);
     if (!readable.allowed) throw new CommError(readable.code, readable.reason);
 
     const calls = await this.prisma.call.findMany({
       where: { conversationId },
-      include: { participants: true },
+      include: CallService.HISTORY_INCLUDE,
       orderBy: { startedAt: 'desc' },
       take: 100,
     });
 
-    return calls.map((c) => this.toHistoryRow(c));
+    // Named in one batch, exactly as the account-scoped history above: both
+    // feed the same row shape, so both resolve the same way.
+    const directory = await this.identity.resolveActors(
+      calls.flatMap((c) =>
+        c.participants.map((p) => ({ actorId: p.actorId, actorKind: p.actorKind })),
+      ),
+    );
+    return calls.map((c) => this.toHistoryRow(c, directory));
   }
 
   /**
@@ -845,7 +874,7 @@ export class CallService {
             }
           : {}),
       },
-      include: { participants: true },
+      include: CallService.HISTORY_INCLUDE,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       // One more than asked for, to know whether another page exists without a
       // second count query.
@@ -854,12 +883,53 @@ export class CallService {
 
     const page = calls.slice(0, limit);
     const last = page.at(-1);
+
+    // Every participant in the page, named in one batch. Per row it would be a
+    // lookup per call per person, which is the cost that kept names off this
+    // payload; resolveActors spends at most one query per actor kind for the whole page.
+    const directory = await this.identity.resolveActors(
+      page.flatMap((c) =>
+        c.participants.map((p) => ({ actorId: p.actorId, actorKind: p.actorKind })),
+      ),
+    );
+
     return {
-      items: page.map((c) => this.toHistoryRow(c)),
+      items: page.map((c) => this.toHistoryRow(c, directory)),
       nextCursor:
         calls.length > limit && last ? encodeHistoryCursor(last.startedAt, last.id) : null,
     };
   }
+
+  /**
+   * The participant include BOTH history routes use.
+   *
+   * THE ORDER IS PART OF THE RESPONSE. Neither query said how to order the
+   * relation, so neither got a guarantee: Postgres returns an unordered result
+   * in whatever order the chosen plan produces. The two routes select different
+   * sets of calls -- one conversation against a cursor-paged window -- so they
+   * can be planned differently and return the same participants in different
+   * orders. They did: four failures in twelve full integration runs,
+   * transposing in BOTH directions, which is what rules out one route being
+   * consistently reversed and leaves "no order was specified" as the cause.
+   *
+   * That is a defect in the RESPONSE, not in the test that noticed it. Two
+   * identical requests must not produce different JSON, or a client that
+   * caches, diffs or renders a participant list sees it reshuffle for no
+   * reason.
+   *
+   * `invitedAt` is the meaningful order -- who was brought onto the call first.
+   * It is not sufficient alone: participants are created by one `createMany`
+   * inside a transaction, so they share `now()` to the microsecond. `actorId`
+   * breaks that tie deterministically, which is all a tiebreak has to do.
+   *
+   * Declared once because the two routes are documented to share a mapper;
+   * sharing the mapper and not the query is exactly how they came to disagree.
+   */
+  private static readonly HISTORY_INCLUDE = {
+    participants: {
+      orderBy: [{ invitedAt: 'asc' }, { actorId: 'asc' }],
+    },
+  } as const satisfies Prisma.CallInclude;
 
   /**
    * ONE history row, and the only place a call becomes one.
@@ -873,6 +943,7 @@ export class CallService {
    */
   private toHistoryRow(
     call: Call & { participants: CallParticipant[] },
+    directory?: ResolvedActors,
   ): {
     id: string;
     conversationId: string;
@@ -886,6 +957,13 @@ export class CallService {
     participants: {
       actorId: string;
       actorKind: string;
+      /**
+       * Resolved for the page in one batch, or null when the principal could
+       * not be resolved. Closes O3 for calls: a history row carried an actor id
+       * and no name, so the Calls tab drew a placeholder avatar and no title
+       * for every call a parent had ever made. An id is never the fallback.
+       */
+      displayName: string | null;
       joinedAt: string | null;
       leftAt: string | null;
     }[];
@@ -903,6 +981,7 @@ export class CallService {
       participants: call.participants.map((p) => ({
         actorId: p.actorId,
         actorKind: p.actorKind,
+        displayName: directory?.get(actorRefKey({ actorId: p.actorId, actorKind: p.actorKind }))?.displayName ?? null,
         joinedAt: p.joinedAt?.toISOString() ?? null,
         leftAt: p.leftAt?.toISOString() ?? null,
       })),
@@ -942,6 +1021,9 @@ export class CallService {
       include: { participants: true },
     });
     if (!call) throw new CommError(CommErrorCode.CALL_NOT_FOUND, 'call not found', 404);
+    // D3: another organization's call reads exactly as an unknown one, before
+    // its status or its participants can be read off the refusal.
+    this.requireCallOrganization(actor, call.organizationId);
     if (call.status === CallStatus.ENDED) {
       throw new CommError(CommErrorCode.CALL_ALREADY_ENDED, 'this call has ended', 409);
     }
@@ -990,11 +1072,6 @@ export class CallService {
       // PD-2: joining an existing call, which a parent may do. The call was
       // already started by a teacher or an admin.
       CallIntent.JOIN,
-      // PD-6. Re-resolved HERE, never inherited from the moment the call was
-      // created. A call is not a standing grant: if the learner was reassigned,
-      // the contact deactivated or the teacher offboarded in the seconds since
-      // `start`, this is refused.
-      await this.conversations.pairingAuthorizedAmong(call.participants),
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
@@ -1016,18 +1093,36 @@ export class CallService {
    * the right question for hanging up. Joining, answering and obtaining media
    * go through authorizeJoin() instead.
    */
-  private async requireLiveParticipant(callId: string, actorId: string) {
+  private async requireLiveParticipant(callId: string, actor: Actor) {
     const call = await this.prisma.call.findUnique({
       where: { id: callId },
       include: { participants: true },
     });
     if (!call) throw new CommError(CommErrorCode.CALL_NOT_FOUND, 'call not found', 404);
-    if (!call.participants.some((p) => p.actorId === actorId)) {
+    this.requireCallOrganization(actor, call.organizationId);
+    if (!call.participants.some((p) => p.actorId === actor.actorId)) {
       throw new CommError(
         CommErrorCode.CALL_NOT_A_PARTICIPANT,
         'actor is not a participant of this call',
       );
     }
     return call;
+  }
+
+  /**
+   * D3 (ported from 33a347a; RT-030's rule). Every call operation first
+   * establishes the conversation's organization: another organization's
+   * conversation is answered exactly like an unknown one (404), before
+   * membership, scope or call state can be read off the refusal.
+   */
+  private requireConversationOrganization(actor: Actor, organizationId: string): void {
+    const tenant = this.authz.canActInOrganization(actor, organizationId);
+    if (!tenant.allowed) throw new CommError(CommErrorCode.CONVERSATION_NOT_FOUND, 'conversation not found', 404);
+  }
+
+  /** The same for a call addressed by id: another organization's call is an unknown call. */
+  private requireCallOrganization(actor: Actor, organizationId: string): void {
+    const tenant = this.authz.canActInOrganization(actor, organizationId);
+    if (!tenant.allowed) throw new CommError(CommErrorCode.CALL_NOT_FOUND, 'call not found', 404);
   }
 }

@@ -1,13 +1,12 @@
 /// The kinds of conversation this client can render.
 ///
-/// PD-6 (2026-09-23) added [teacherParentDirect]. An earlier revision of this file said
-/// "there is deliberately no 'direct chat with a teacher/parent' kind — the type system
-/// itself refuses to represent the forbidden channel". That channel is no longer forbidden
-/// when the server authorizes the relationship, so the type must now be able to name it.
+/// PD-6 (2026-09-23) added [teacherParentDirect]. PD-7 (2026-10-14) forbids creating that
+/// channel again (BR-1), but the conversations PD-6 created still exist and stay readable,
+/// so the type must still be able to name them — read-only (`wire_mappers.dart`).
 ///
 /// This enum is **presentation and domain mapping only**. It never grants anything: the
-/// server decides who may speak to whom and refuses anything else with
-/// `COMM.TEACHER_PARENT_NOT_AUTHORIZED`, whatever this client believes a row to be.
+/// server decides who may speak to whom and refuses anything else (a teacher<->parent
+/// direct with `COMM.BR1_TEACHER_PARENT_DIRECT`), whatever this client believes a row to be.
 enum ConversationKind {
   /// The family's single continuous support thread. Exactly one per family, and its identity
   /// survives a change of handling admin (§12).
@@ -19,7 +18,8 @@ enum ConversationKind {
   /// A 1:1 with Jawwid staff. Available to both parents and teachers.
   adminDirect,
 
-  /// A 1:1 between a parent and a teacher the server has authorized (PD-6).
+  /// A 1:1 between a parent and a teacher created under PD-6 (2026-09-23 to
+  /// 2026-10-14). Read-only since PD-7: history, no new messages, calls or reactions.
   ///
   /// Only ever produced when the payload actually says so — exactly one `contact` member
   /// and exactly one `teacher` member. It is never inferred from the conversation type,
@@ -72,6 +72,7 @@ class Conversation {
     this.avatarUrl,
     this.learner,
     this.lastMessagePreview = '',
+    this.lastMessageKind,
     this.lastMessageAt,
     this.unreadCount = 0,
     this.isPinned = false,
@@ -80,6 +81,8 @@ class Conversation {
     this.handledByLabel,
     this.requiresApproval = false,
     this.isReadOnly = false,
+    this.isTeacherSupervision = false,
+    this.isTrialGroup = false,
   });
 
   final String id;
@@ -91,6 +94,11 @@ class Conversation {
   final LearnerRef? learner;
 
   final String lastMessagePreview;
+
+  /// What the last message is when it has no text to preview: `image`, `video`,
+  /// `voice`, `file`, `deleted`, or `system:<kind>`. Null when there is none, or
+  /// when [lastMessagePreview] carries its text. The tile words it (§ preview).
+  final String? lastMessageKind;
   final DateTime? lastMessageAt;
   final DateTime updatedAt;
   final int unreadCount;
@@ -113,7 +121,26 @@ class Conversation {
   /// server-side (§72).
   final bool isReadOnly;
 
+  /// PD-12: the teacher's private conversation with the Teachers department. It groups
+  /// and behaves like a 1:1 with Jawwid ([ConversationKind.adminDirect]); this flag only
+  /// gives it its own name and its own tickets under "+". Taken from the server's type,
+  /// never inferred from a title.
+  final bool isTeacherSupervision;
+
+  /// PD-11 T4: the teacher's staff-only group with Sales about their trial lessons. Like
+  /// the supervision conversation it has its own name and its own "+" (the trial report).
+  /// Taken from the server's type, never inferred from a title.
+  final bool isTrialGroup;
+
   bool get hasUnread => unreadCount > 0;
+
+  /// The name to show: the server's title, except for a supervision conversation, which
+  /// the teacher reads under its own localized name ([supervisionLabel]).
+  String displayTitle(String supervisionLabel, {String? trialGroupLabel}) => isTeacherSupervision
+      ? supervisionLabel
+      : isTrialGroup && trialGroupLabel != null
+          ? trialGroupLabel
+          : title;
 
   Conversation copyWith({
     bool? isPinned,
@@ -128,6 +155,7 @@ class Conversation {
       avatarUrl: avatarUrl,
       learner: learner,
       lastMessagePreview: lastMessagePreview,
+      lastMessageKind: lastMessageKind,
       lastMessageAt: lastMessageAt,
       updatedAt: updatedAt,
       unreadCount: unreadCount ?? this.unreadCount,
@@ -137,6 +165,8 @@ class Conversation {
       handledByLabel: handledByLabel,
       requiresApproval: requiresApproval,
       isReadOnly: isReadOnly,
+      isTeacherSupervision: isTeacherSupervision,
+      isTrialGroup: isTrialGroup,
     );
   }
 }

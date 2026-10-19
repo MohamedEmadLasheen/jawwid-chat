@@ -9,9 +9,13 @@ import 'package:jawwid_chat/app/retry_policy.dart';
 import 'package:jawwid_chat/app/router.dart';
 import 'package:jawwid_chat/core/data/fake_backend.dart';
 import 'package:jawwid_chat/core/data/fake_repositories.dart';
+import 'package:jawwid_chat/core/errors/app_error.dart';
+import 'package:jawwid_chat/core/network/api_client.dart';
+import 'package:jawwid_chat/core/realtime/realtime_socket.dart';
 import 'package:jawwid_chat/core/storage/secure_token_store.dart';
 import 'package:jawwid_chat/features/auth/application/auth_controller.dart';
 import 'package:jawwid_chat/features/auth/domain/auth_state.dart';
+import 'package:jawwid_chat/features/conversations/application/chat_realtime.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/auth.dart';
 import 'package:jawwid_chat/shared/models/user_role.dart';
@@ -49,6 +53,13 @@ void main() {
         messageRepositoryProvider.overrideWithValue(FakeMessageRepository(backend)),
         groupRepositoryProvider.overrideWithValue(FakeGroupRepository(backend)),
         callRepositoryProvider.overrideWithValue(FakeCallRepository(backend)),
+        // The signed-in shell holds the session's realtime client (live chat),
+        // so the fixture world needs a transport too: one that opens nothing.
+        realtimeSocketProvider.overrideWithValue(SilentRealtimeSocket()),
+        realtimeTokenProvider.overrideWithValue(_NoTokens()),
+        // Routing only: live chat (and its periodic safety resync timer) has
+        // its own suites, and a periodic timer would outlive the widget tree.
+        chatRealtimeProvider.overrideWithValue(null),
         authControllerProvider.overrideWith(
           () => AuthController(
             repository: auth,
@@ -235,4 +246,15 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+}
+
+class _NoTokens implements TokenProvider {
+  @override
+  Future<String?> accessToken() async => null;
+
+  @override
+  Future<String?> refresh() async => null;
+
+  @override
+  Future<void> onSessionEnded(AppError error) async {}
 }

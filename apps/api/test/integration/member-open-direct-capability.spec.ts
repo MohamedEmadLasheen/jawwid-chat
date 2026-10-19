@@ -1,12 +1,18 @@
 /**
- * PD-6, delivered to the client: `ConversationMemberDto.canOpenDirect`.
+ * The direct-channel rule, delivered to the client:
+ * `ConversationMemberDto.canOpenDirect`.
  *
- * WHY THIS EXISTS. PD-6 permits a teacher and a parent to hold a direct channel
- * when an authorized relationship exists, and forbids it otherwise. That makes
- * the pairing undecidable from roles alone, and the mobile client is never told
- * the relationship -- so it offered the action to nobody and the permitted
- * channel was unreachable from either side. The advisory is the server answering
- * the question it is the only party able to answer.
+ * WHY THIS EXISTS. It was introduced for PD-6, which let a teacher and a parent
+ * hold a direct channel when an authorized relationship existed -- a pairing
+ * the client could not decide from roles alone. The advisory is the server
+ * answering "may you open a 1:1 with this member" so the client never infers it.
+ *
+ * RE-VERSIONED 2026-10-14 BY PD-7, which supersedes PD-6 and restores BR-1: a
+ * teacher and a parent may NEVER hold a direct channel, whatever their
+ * relationship; they speak only in the Student Group, with a live admin. So
+ * every teacher <-> parent case below that PD-6 answered TRUE now answers
+ * FALSE, the relationship (held, absent or revoked) no longer moves it, and
+ * the family-facing admin remains the one member both sides may open.
  *
  * WHAT IS ASSERTED. That the advisory equals the enforcement. Every case below
  * pairs the flag with the decision `POST /conversations/direct` would actually
@@ -14,7 +20,7 @@
  * it either hides a legitimate channel or promises one that is refused.
  */
 import { ConversationService } from '@communication/conversations/conversation.service';
-import { CommError } from '@platform/errors';
+import { CommError, CommErrorCode } from '@platform/errors';
 import { buildGraph, seed, truncate, Scenario } from './harness';
 
 const g = buildGraph();
@@ -39,15 +45,18 @@ async function flagFor(
   return members.find((m) => m.actorId === memberId)?.canOpenDirect;
 }
 
-describe('canOpenDirect is the server answering PD-6 for the viewer', () => {
-  it('is TRUE for the parent of a learner this teacher actually teaches', async () => {
+describe('canOpenDirect is the server answering BR-1 (PD-7) for the viewer', () => {
+  it('is FALSE even for the parent of a learner this teacher actually teaches', async () => {
     const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
+    // The relationship holds -- PD-6 would have answered TRUE here.
+    expect(await g.relationships.teacherParentAuthorized(s.teacherId, s.parentId)).toBe(true);
 
-    expect(await flagFor(group.id, s.teacherId, s.parentId)).toBe(true);
+    expect(await flagFor(group.id, s.teacherId, s.parentId)).toBe(false);
 
-    // The advisory agrees with the gate: the channel really does open.
-    const conv = await g.conversations.getOrCreateDirect(s.teacherId, s.parentId);
-    expect(conv.id).toBeTruthy();
+    // The advisory agrees with the gate: the channel really is refused, by BR-1.
+    await expect(
+      g.conversations.getOrCreateDirect(s.teacherId, s.parentId),
+    ).rejects.toMatchObject({ code: CommErrorCode.BR1_TEACHER_PARENT_DIRECT });
   });
 
   it('is FALSE for a teacher who teaches nobody in this family', async () => {
@@ -66,15 +75,18 @@ describe('canOpenDirect is the server answering PD-6 for the viewer', () => {
     // And the gate refuses, which is what makes the false honest rather than shy.
     await expect(
       g.conversations.getOrCreateDirect(s.unrelatedTeacherId, s.parentId),
-    ).rejects.toBeInstanceOf(CommError);
+    ).rejects.toMatchObject({ code: CommErrorCode.BR1_TEACHER_PARENT_DIRECT });
   });
 
   it('is symmetric: the parent sees the same answer about the teacher', async () => {
     const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
 
-    // PD-6 is a property of the pair, not of who asks. A parent offered a channel
+    // BR-1 is a property of the pair, not of who asks. A parent offered a channel
     // the teacher is not offered would be the same bug seen from the other end.
-    expect(await flagFor(group.id, s.parentId, s.teacherId)).toBe(true);
+    expect(await flagFor(group.id, s.parentId, s.teacherId)).toBe(false);
+    await expect(
+      g.conversations.getOrCreateDirect(s.parentId, s.teacherId),
+    ).rejects.toMatchObject({ code: CommErrorCode.BR1_TEACHER_PARENT_DIRECT });
   });
 
   it('is TRUE for the family-facing admin, which needs no relationship', async () => {
@@ -82,6 +94,10 @@ describe('canOpenDirect is the server answering PD-6 for the viewer', () => {
 
     expect(await flagFor(group.id, s.teacherId, s.ownerId)).toBe(true);
     expect(await flagFor(group.id, s.parentId, s.ownerId)).toBe(true);
+
+    // The positive control the FALSE cases above need: both channels open.
+    await expect(g.conversations.getOrCreateDirect(s.teacherId, s.ownerId)).resolves.toBeDefined();
+    await expect(g.conversations.getOrCreateDirect(s.parentId, s.ownerId)).resolves.toBeDefined();
   });
 
   it('is FALSE for yourself, and for a teacher looking at another teacher', async () => {
@@ -110,12 +126,13 @@ describe('canOpenDirect is the server answering PD-6 for the viewer', () => {
     expect(members.length).toBeGreaterThan(0);
   });
 
-  it('loses the channel when the assignment that authorized it goes away', async () => {
+  it('does not move with the assignment: FALSE before and after it goes away', async () => {
+    // PD-6 flipped this from TRUE to FALSE on reassignment. Under PD-7 the
+    // relationship is not an input, so the answer is FALSE throughout.
     const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
-    expect(await flagFor(group.id, s.teacherId, s.parentId)).toBe(true);
+    expect(await flagFor(group.id, s.teacherId, s.parentId)).toBe(false);
 
-    // Reassign the learner to another teacher, the way ingestion would. The
-    // advisory is derived, never stored, so it has to follow.
+    // Reassign the learner to another teacher, the way ingestion would.
     await g.prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe(`set local chat.syncing_assignment = 'on'`);
       await tx.$executeRawUnsafe(
@@ -131,8 +148,10 @@ describe('canOpenDirect is the server answering PD-6 for the viewer', () => {
     const { members } = await g.conversations.readWithMembers(group.id, s.teacherId);
 
     const parent = members.find((m) => m.actorId === s.parentId);
+    const admin = members.find((m) => m.actorId === s.ownerId);
     expect(parent).toBeDefined();
-    expect(parent!.canOpenDirect).toBe(true);
+    expect(parent!.canOpenDirect).toBe(false);
+    expect(admin!.canOpenDirect).toBe(true);
     // Spelled on every member, never omitted for the false ones: an absent field
     // and a false one must not be distinguishable to the client.
     expect(members.every((m) => typeof m.canOpenDirect === 'boolean')).toBe(true);

@@ -41,6 +41,15 @@ class FakeStoryRepository implements StoryRepository {
 
   int feedCalls = 0;
 
+  /// What [tapCta] answers; null answers with the story's own button kind and URL.
+  StoryCtaTap? tapResult;
+
+  /// Thrown by [tapCta] when set.
+  Object? tapError;
+
+  /// Every id [tapCta] was called with, in order.
+  final List<String> tapped = [];
+
   /// Replace what the next [feed] returns, standing in for a story expiring or being removed
   /// between one fetch and the next.
   void setStories(List<Story> stories) => _stories = [...stories];
@@ -60,28 +69,52 @@ class FakeStoryRepository implements StoryRepository {
     final error = viewError;
     if (error != null) throw error;
   }
+
+  @override
+  Future<StoryCtaTap> tapCta(String storyId) async {
+    tapped.add(storyId);
+    final error = tapError;
+    if (error != null) throw error;
+    final result = tapResult;
+    if (result != null) return result;
+    final cta = _stories.firstWhere((s) => s.id == storyId).cta!;
+    return StoryCtaTap(kind: cta.kind, url: cta.url);
+  }
 }
 
 /// A story with sensible defaults, so each test states only what it is about.
+///
+/// A story has no title since 2026-10-17. A TEXT story IS its words, so [body] is how a test
+/// names one and finds it on screen; a photo, video or voice story carries no words at all,
+/// and the helper drops [body] for them exactly as the wire mapper does.
+///
+/// No expiry by default: that is every story published now. Tests about the legacy expiry
+/// pass one.
 Story story({
   String id = 'story-1',
-  String? title = 'Term starts Sunday',
   String? body = 'Classes resume this Sunday.',
+  String? background,
   StoryMediaKind? mediaKind,
   String? mediaUrl,
+  Duration? mediaDuration,
+  StoryCta? cta,
   DateTime? publishedAt,
   DateTime? expiresAt,
   bool isViewed = false,
 }) {
   final now = DateTime.now();
+  final kind = StoryKind.fromWire(null, mediaKind);
   return Story(
     id: id,
-    title: title,
-    body: body,
+    kind: kind,
+    body: kind == StoryKind.text ? body : null,
+    background: background,
     mediaKind: mediaKind,
     mediaUrl: mediaUrl,
+    mediaDuration: mediaDuration,
+    cta: cta,
     publishedAt: publishedAt ?? now.subtract(const Duration(hours: 1)),
-    expiresAt: expiresAt ?? now.add(const Duration(hours: 23)),
+    expiresAt: expiresAt,
     isViewed: isViewed,
   );
 }

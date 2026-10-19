@@ -5,8 +5,11 @@ import { AppModule } from './app.module';
 import { OutboxWorker } from './communication/outbox/outbox.worker';
 import { StorySweeper } from './communication/stories/story-sweeper.service';
 import { CallService } from './communication/calls/call.service';
+import { SchedulingService } from './lessons/scheduling.service';
+import { LifecycleService } from './lessons/lifecycle.service';
 import { NotificationService } from './communication/notifications/notification.service';
 import { readBuildInfo } from './infra/build-info';
+import { listenForOutboxWake, OutboxPacer } from './communication/outbox/outbox-wake';
 
 /**
  * Background worker entrypoint. Same image as the API, different command
@@ -53,6 +56,22 @@ const STORY_SWEEP_MS = Number(process.env.STORY_SWEEP_MS ?? 60_000);
  */
 const CALL_SWEEP_MS = Number(process.env.CALL_SWEEP_INTERVAL_MS ?? 5000);
 
+/**
+ * PD-11 T2: how often lessons are materialized from regular times and their
+ * reminders scheduled. Both are idempotent (one lesson per slot and start, one
+ * notification per rule, lesson and recipient), so every replica may run it.
+ */
+const LESSON_SWEEP_MS = Number(process.env.LESSON_SWEEP_MS ?? 300_000);
+
+/**
+ * After a wake hint (outbox-wake.ts), how long to keep polling at
+ * WAKE_POLL_MS before falling back to the idle backoff. The hint can arrive
+ * before the enqueuing transaction commits, so one read is not enough; a short
+ * window of fast reads is, and costs nothing while the system is quiet.
+ */
+const WAKE_WINDOW_MS = 2000;
+const WAKE_POLL_MS = 50;
+
 async function bootstrap(): Promise<void> {
   const log = new Logger('Worker');
   const build = readBuildInfo();
@@ -65,6 +84,8 @@ async function bootstrap(): Promise<void> {
   const stories = app.get(StorySweeper);
   const calls = app.get(CallService);
   const notifications = app.get(NotificationService);
+  const scheduling = app.get(SchedulingService);
+  const lifecycle = app.get(LifecycleService);
 
   let running = true;
   let draining = false;
@@ -99,6 +120,21 @@ async function bootstrap(): Promise<void> {
 
   let nextStorySweep = 0;
   let lastSweepAt = 0;
+  let nextLessonSweep = 0;
+
+  // Realtime latency: a hint that a row was enqueued cuts the current sleep
+  // short (OutboxPacer). Without Redis there are no hints and the loop simply
+  // polls -- correctness never depends on one.
+  const pacer = new OutboxPacer({
+    pollMs: POLL_MS,
+    idleMs: IDLE_BACKOFF_MS,
+    wakePollMs: WAKE_POLL_MS,
+    wakeWindowMs: WAKE_WINDOW_MS,
+  });
+  const closeWake = await listenForOutboxWake(() => pacer.wake()).catch((e) => {
+    log.warn(`outbox wake hints unavailable, polling only: ${e instanceof Error ? e.message : 'unknown'}`);
+    return null;
+  });
 
   while (running) {
     let published = 0;
@@ -150,6 +186,23 @@ async function bootstrap(): Promise<void> {
       }
     }
 
+    // Lessons from regular times, and their reminders -- before dispatch, so a
+    // reminder scheduled now and already due goes out on this pass.
+    if (Date.now() >= nextLessonSweep) {
+      draining = true;
+      try {
+        // Resume pauses that reached their return date first, so the materializer
+        // that follows already creates their lessons.
+        await lifecycle.sweep();
+        await scheduling.sweep();
+      } catch (e) {
+        log.error(`lesson sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`);
+      } finally {
+        draining = false;
+        nextLessonSweep = Date.now() + LESSON_SWEEP_MS;
+      }
+    }
+
     // Deliver the notifications the outbox scheduled.
     //
     // Nothing called this before, so a notification could be scheduled by the
@@ -166,13 +219,12 @@ async function bootstrap(): Promise<void> {
     }
     if (!running) break;
     // Back off when there is nothing to do, so an idle deployment is not
-    // hammering the database once a second for no reason.
-    await sleep(published > 0 ? POLL_MS : IDLE_BACKOFF_MS);
+    // hammering the database once a second for no reason -- unless a wake hint
+    // just said a row is on its way, in which case poll fast for a moment.
+    // Either sleep is cut short by the next hint.
+    await pacer.pause(pacer.delayAfter(published));
   }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  await closeWake?.();
 }
 
 void bootstrap().catch((error: unknown) => {

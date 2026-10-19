@@ -21,9 +21,11 @@
  * widen. The second group is the point of the file.
  */
 import { CommErrorCode } from '@platform/errors';
+import { StaffAccessBasis } from '@platform/staff-scope';
 import {
   admin,
   authzWithOnDuty,
+  authzWithScope,
   conversation,
   financeStaff,
   manager,
@@ -40,18 +42,26 @@ const internal = { visibility: 'internal' };
 /** The Teacher <-> Admin shape: direct, and no family. */
 const staffDirect = (over = {}) => conversation({ familyId: null, ...over });
 
+/**
+ * PD-8: admin-1 holds the MEMBER basis chat.staff_conversation_access() gives
+ * the staff party of a 1:1, and manager-1 the department manager's basis.
+ * Everybody else has none.
+ */
+const memberScope = () =>
+  authzWithScope({ 'admin-1': StaffAccessBasis.MEMBER, 'manager-1': StaffAccessBasis.MANAGER });
+
 describe('DEF-001 — a member admin may answer in a non-family-scoped direct channel', () => {
   it('an ordinary admin who IS a member may send to the customer', async () => {
     const a = admin('admin-1');
     // Nobody is on duty anywhere: the allow must come from membership, not from
     // a coverage answer that happens to match.
-    const d = await authzWithOnDuty(null).canSend(a, staffDirect(), member(a), customer, NOW);
+    const d = await memberScope().canSend(a, staffDirect(), member(a), customer, NOW);
     expect(d.allowed).toBe(true);
   });
 
   it('is attributed OWNER, never ASSIST', async () => {
     const a = admin('admin-1');
-    const d = await authzWithOnDuty(null).canSend(a, staffDirect(), member(a), customer, NOW);
+    const d = await memberScope().canSend(a, staffDirect(), member(a), customer, NOW);
     // ASSIST would be false -- the admin is the counterpart, not a stand-in --
     // and message.service writes a `message.assist` audit row for it, so a wrong
     // mode here would forge an assist event on every ordinary reply.
@@ -60,7 +70,7 @@ describe('DEF-001 — a member admin may answer in a non-family-scoped direct ch
 
   it('the teacher may send in the same conversation', async () => {
     const t = teacher('teacher-1');
-    const d = await authzWithOnDuty(null).canSend(t, staffDirect(), member(t), customer, NOW);
+    const d = await memberScope().canSend(t, staffDirect(), member(t), customer, NOW);
     expect(d.allowed).toBe(true);
   });
 
@@ -69,7 +79,7 @@ describe('DEF-001 — a member admin may answer in a non-family-scoped direct ch
     // teacherRequiresApproval is true on the fixture: moderation applies to
     // GROUPS, where a supervisor is the audience's guard, not to the teacher's
     // own 1:1 with Jawwid.
-    const d = await authzWithOnDuty(null).canSend(
+    const d = await memberScope().canSend(
       t, staffDirect({ teacherRequiresApproval: true }), member(t), customer, NOW,
     );
     expect(d.allowed).toBe(true);
@@ -77,7 +87,7 @@ describe('DEF-001 — a member admin may answer in a non-family-scoped direct ch
 
   it('a manager still may, exactly as before', async () => {
     const m = manager('manager-1');
-    const d = await authzWithOnDuty(null).canSend(m, staffDirect(), member(m), customer, NOW);
+    const d = await memberScope().canSend(m, staffDirect(), member(m), customer, NOW);
     expect(d.allowed).toBe(true);
   });
 
@@ -94,7 +104,7 @@ describe('DEF-001 — a member admin may answer in a non-family-scoped direct ch
       stickyHandlerId: 'admin-1',
       stickyUntil: new Date('2026-10-01T10:30:00Z'),
     });
-    const d = await authzWithOnDuty(null).canSend(a, sticky, member(a), customer, NOW);
+    const d = await memberScope().canSend(a, sticky, member(a), customer, NOW);
     expect(d.allowed).toBe(true);
     if (d.allowed) expect(d.onBehalfMode).toBe('owner');
   });
@@ -117,14 +127,13 @@ describe('DEF-001 — a member admin may answer in a non-family-scoped direct ch
 describe('DEF-001 — the boundaries membership must not widen', () => {
   it('a NON-MEMBER admin who guessed the conversation id is refused', async () => {
     const a = admin('intruder');
-    // This is the case `canRead` cannot catch: family-facing staff may READ any
-    // conversation without membership, so the send check is the only thing
-    // standing between a guessed id and a posted message.
-    const d = await authzWithOnDuty(null).canSend(a, staffDirect(), null, customer, NOW);
+    // Since staff scope (2026-10-14) `canRead` catches this first: a
+    // non-member admin with no family in their charge cannot even read a
+    // conversation with no family. The DEF-001 branch below stays as the
+    // second line, asserted by the departed-member cases.
+    const d = await memberScope().canSend(a, staffDirect(), null, customer, NOW);
     expect(d.allowed).toBe(false);
-    // Named for what is actually wrong. NOT_ON_DUTY was the old message and was
-    // misleading here: there is no duty roster on a conversation with no family.
-    if (!d.allowed) expect(d.code).toBe(CommErrorCode.NOT_CONVERSATION_MEMBER);
+    if (!d.allowed) expect(d.code).toBe(CommErrorCode.STAFF_OUT_OF_SCOPE);
   });
 
   it('a departed admin is NOT rescued by their own stale stickiness', async () => {
@@ -138,7 +147,7 @@ describe('DEF-001 — the boundaries membership must not widen', () => {
       stickyUntil: new Date('2026-10-01T10:30:00Z'),
     });
     const gone = member(a, { leftAt: new Date('2026-09-30T10:00:00Z') });
-    const d = await authzWithOnDuty(null).canSend(a, sticky, gone, customer, NOW);
+    const d = await memberScope().canSend(a, sticky, gone, customer, NOW);
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.NOT_CONVERSATION_MEMBER);
   });
@@ -149,21 +158,22 @@ describe('DEF-001 — the boundaries membership must not widen', () => {
       stickyHandlerId: 'admin-1',
       stickyUntil: new Date('2026-10-01T10:30:00Z'),
     });
-    const d = await authzWithOnDuty(null).canSend(a, sticky, null, customer, NOW);
+    const d = await memberScope().canSend(a, sticky, null, customer, NOW);
     expect(d.allowed).toBe(false);
   });
 
   it('a DEPARTED admin cannot keep sending on a stale client view', async () => {
-    const a = admin('admin-1');
+    const a = admin('admin-gone');
     const gone = member(a, { leftAt: new Date('2026-09-30T10:00:00Z') });
-    const d = await authzWithOnDuty(null).canSend(a, staffDirect(), gone, customer, NOW);
+    const d = await memberScope().canSend(a, staffDirect(), gone, customer, NOW);
     expect(d.allowed).toBe(false);
-    if (!d.allowed) expect(d.code).toBe(CommErrorCode.NOT_CONVERSATION_MEMBER);
+    // A departed member is out of scope: no family, no live membership.
+    if (!d.allowed) expect(d.code).toBe(CommErrorCode.STAFF_OUT_OF_SCOPE);
   });
 
   it('a teacher is still refused a conversation they do not belong to', async () => {
     const t = teacher('outsider');
-    const d = await authzWithOnDuty(null).canSend(t, staffDirect(), null, customer, NOW);
+    const d = await memberScope().canSend(t, staffDirect(), null, customer, NOW);
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.NOT_CONVERSATION_MEMBER);
   });
@@ -172,59 +182,74 @@ describe('DEF-001 — the boundaries membership must not widen', () => {
     const f = financeStaff('finance-1');
     // Finance may never take part in family communication. Being a member row in
     // a conversation must not become a way around that.
-    const d = await authzWithOnDuty(null).canSend(f, staffDirect(), member(f), customer, NOW);
+    const d = await memberScope().canSend(f, staffDirect(), member(f), customer, NOW);
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.ROLE_CANNOT_MESSAGE_FAMILY);
   });
 
-  it('a FAMILY-SCOPED direct conversation still requires on duty', async () => {
-    const a = admin('admin-off-duty');
-    // The whole point of the new branch is that it cannot reach anything with a
-    // family. Membership here is real and still must not be enough.
-    const d = await authzWithOnDuty('someone-else').canSend(
-      a, conversation({ familyId: 'family-1' }), member(a), customer, NOW, 'a-different-owner',
+  it('a FAMILY-SCOPED direct conversation needs a scope basis: a membership row is not enough (PD-8)', async () => {
+    const a = admin('former-supervisor');
+    // The whole point of the branch is that it cannot reach anything with a
+    // family. Membership here is real and still must not be enough: a
+    // supervisor whose children were reassigned keeps the row, not the family.
+    const d = await authzWithScope().canSend(
+      a, conversation({ familyId: 'family-1' }), member(a), customer, NOW,
     );
     expect(d.allowed).toBe(false);
-    if (!d.allowed) expect(d.code).toBe(CommErrorCode.NOT_ON_DUTY);
+    if (!d.allowed) expect(d.code).toBe(CommErrorCode.STAFF_OUT_OF_SCOPE);
   });
 
-  it('the on-duty admin in a family conversation is still COVERAGE, not OWNER', async () => {
-    const a = admin('admin-on-duty');
-    const d = await authzWithOnDuty('admin-on-duty').canSend(
-      a, conversation({ familyId: 'family-1' }), member(a), customer, NOW, 'a-different-owner',
+  it('an ACTIVE backup in a family conversation is COVERAGE, not OWNER', async () => {
+    const a = admin('backup-1', 'coverage');
+    const d = await authzWithScope({ 'backup-1': StaffAccessBasis.BACKUP }).canSend(
+      a, conversation({ familyId: 'family-1' }), null, customer, NOW,
     );
     expect(d.allowed).toBe(true);
     if (d.allowed) expect(d.onBehalfMode).toBe('coverage');
   });
 
+  it('a department manager who may READ a supervisor teacher channel may not SEND into it', async () => {
+    const m = manager('manager-1');
+    const d = await memberScope().canSend(m, staffDirect(), null, customer, NOW);
+    expect(d.allowed).toBe(false);
+    if (!d.allowed) expect(d.code).toBe(CommErrorCode.NOT_CONVERSATION_MEMBER);
+  });
+
   it('a GROUP with no family is still decided by the group branch', async () => {
     const a = admin('admin-1');
-    // studentGroup with familyId null hits `else if (isGroup)` first, which
-    // allows regardless of membership. The new branch must not change that, and
-    // must not start requiring membership there.
-    const d = await authzWithOnDuty(null).canSend(a, studentGroup({ familyId: null }), null, customer, NOW);
+    // studentGroup with familyId null hits `else if (isGroup)`, which allows an
+    // admin who may read it. The DEF-001 branch must not change that. Since
+    // staff scope (2026-10-14) "may read it" means a live member here: there is
+    // no family to own or cover.
+    const d = await memberScope().canSend(a, studentGroup({ familyId: null }), member(a), customer, NOW);
     expect(d.allowed).toBe(true);
     if (d.allowed) expect(d.onBehalfMode).toBe('owner');
+    const outsider = await memberScope().canSend(
+      admin('outsider'), studentGroup({ familyId: null }), null, customer, NOW,
+    );
+    expect(outsider.allowed).toBe(false);
+    if (!outsider.allowed) expect(outsider.code).toBe(CommErrorCode.STAFF_OUT_OF_SCOPE);
   });
 
   it('internal notes keep their own rule, above this branch', async () => {
-    const a = admin('admin-off-duty');
-    const d = await authzWithOnDuty('someone-else').canSend(
-      a, conversation({ familyId: 'family-1' }), member(a), internal, NOW,
-    );
+    const a = admin('sup-1');
+    const scoped = authzWithScope({ 'sup-1': StaffAccessBasis.RESPONSIBLE });
+    const d = await scoped.canSend(a, conversation({ familyId: 'family-1' }), null, internal, NOW);
     expect(d.allowed).toBe(true);
+    const outsider = await scoped.canSend(admin('x'), conversation({ familyId: 'family-1' }), member(admin('x')), internal, NOW);
+    expect(outsider.allowed).toBe(false);
   });
 
   it('a parent gains nothing: a contact is never in a staff direct channel', async () => {
     const p = parent('parent-1');
-    const d = await authzWithOnDuty(null).canSend(p, staffDirect(), member(p), internal, NOW);
+    const d = await memberScope().canSend(p, staffDirect(), member(p), internal, NOW);
     // The contact branch refuses internal visibility outright, well before this.
     expect(d.allowed).toBe(false);
   });
 
   it('an inactive admin is refused even as a member', async () => {
     const a = { ...admin('admin-1'), isActive: false };
-    const d = await authzWithOnDuty(null).canSend(a, staffDirect(), member(a), customer, NOW);
+    const d = await memberScope().canSend(a, staffDirect(), member(a), customer, NOW);
     expect(d.allowed).toBe(false);
     if (!d.allowed) expect(d.code).toBe(CommErrorCode.ACTOR_INACTIVE);
   });
@@ -243,7 +268,7 @@ describe('DEF-001 does not reopen JC-005', () => {
   it('no value of requestedMode grants a NON-MEMBER admin access', async () => {
     const a = admin('intruder');
     for (const mode of ['owner', 'coverage', 'assist', 'escalation']) {
-      const d = await authzWithOnDuty(null).canSend(
+      const d = await memberScope().canSend(
         a, staffDirect(), null, { ...customer, requestedMode: mode }, NOW,
       );
       expect({ mode, allowed: d.allowed }).toEqual({ mode, allowed: false });
@@ -253,7 +278,7 @@ describe('DEF-001 does not reopen JC-005', () => {
   it('a requested mode cannot change the attribution of a member admin', async () => {
     const a = admin('admin-1');
     for (const mode of ['assist', 'escalation', 'coverage']) {
-      const d = await authzWithOnDuty(null).canSend(
+      const d = await memberScope().canSend(
         a, staffDirect(), member(a), { ...customer, requestedMode: mode }, NOW,
       );
       expect(d.allowed).toBe(true);
@@ -265,13 +290,16 @@ describe('DEF-001 does not reopen JC-005', () => {
   it('the family-scoped ASSIST and ESCALATION refusals are unchanged', async () => {
     const a = admin('intruder');
     const fam = conversation({ familyId: 'family-1' });
-    const assist = await authzWithOnDuty('someone-else').canSend(
-      a, fam, null, { ...customer, requestedMode: 'assist' }, NOW, 'owner-1',
+    // In scope (PD-8 MEMBER basis), so the request reaches the
+    // assist/escalation branch rather than being refused by scope first.
+    const scoped = authzWithScope({ intruder: StaffAccessBasis.MEMBER });
+    const assist = await scoped.canSend(
+      a, fam, member(a), { ...customer, requestedMode: 'assist' }, NOW, 'owner-1',
     );
     expect(assist.allowed).toBe(false);
     if (!assist.allowed) expect(assist.code).toBe(CommErrorCode.ASSIST_NOT_PERMITTED);
-    const esc = await authzWithOnDuty('someone-else').canSend(
-      a, fam, null, { ...customer, requestedMode: 'escalation' }, NOW, 'owner-1',
+    const esc = await scoped.canSend(
+      a, fam, member(a), { ...customer, requestedMode: 'escalation' }, NOW, 'owner-1',
     );
     expect(esc.allowed).toBe(false);
     if (!esc.allowed) expect(esc.code).toBe(CommErrorCode.ESCALATION_NOT_PERMITTED);

@@ -22,7 +22,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { CommErrorCode } from '@platform/errors';
-import { Scenario, buildGraph, seed, truncate } from './harness';
+import { Scenario, buildGraph, seed, truncate, splitFamily } from './harness';
 
 jest.setTimeout(60_000);
 
@@ -92,7 +92,10 @@ describe('1/8/9. the account list, ordered by the server', () => {
 
   it('8. newest first, and the order is the server\'s', async () => {
     const first = await callBetween(s.parentId, s.ownerId, s.ownerId);
-    const second = await callBetween(s.parentId, s.teacherId, s.teacherId);
+    // A second 1:1 of the same parent (PD-7: never with a teacher), with the
+    // supervisor of the family's OTHER child (PD-8 splitFamily), started by the parent.
+    await splitFamily(g.prisma, s);
+    const second = await callBetween(s.parentId, s.otherAdminId, s.parentId);
     // Age the first so the order is unambiguous rather than same-millisecond.
     await g.prisma.$executeRawUnsafe(
       `update chat.call set started_at = now() - interval '1 hour' where id = '${first.callId}'::uuid`,
@@ -208,18 +211,31 @@ describe('2/4/6. authorization, through the existing contract', () => {
     });
   });
 
-  it('6. family-facing staff see the conversations the canonical rule gives them',
+  it('6. staff see the calls the canonical rule gives them -- and a co-supervisor sees none of the other\'s (PD-8)',
     async () => {
-      // `listForActor` probes AuthorizationService.canRead for staff and then
-      // returns the conversation set. This asserts the CONSEQUENCE — an admin
-      // sees calls from conversations they are not a member of — which is the
-      // existing contract ("family-facing staff may open any family
-      // conversation"), not a new rule introduced here.
-      const parentAndTeacher = await callBetween(s.parentId, s.teacherId, s.teacherId);
+      // `listForActor` filters staff by the same rule AuthorizationService.canRead
+      // applies (chat.staff_conversation_access). This asserts the CONSEQUENCE
+      // at the boundary.
+      //
+      // RE-VERSIONED 2026-10-15 BY PD-8. Family ownership no longer opens a
+      // family's conversations: each supervisor reaches the family through
+      // THEIR OWN child, and a 1:1 is visible to its staff member, their active
+      // backup, their department manager and the super admin -- never to the
+      // family's other supervisor.
+      const outsideAdminId = randomUUID();
+      await g.prisma.$executeRawUnsafe(
+        `insert into chat.staff (id, name, role, is_active)
+         values ('${outsideAdminId}'::uuid, 'admin_z', 'admin', true)`,
+      );
+      // learner_m is admin_b's: the second parent's 1:1 with admin_b.
+      await splitFamily(g.prisma, s);
+      const notOwners = await callBetween(s.otherParentId, s.otherAdminId, s.otherParentId);
 
-      const page = await g.calls.historyForActor(s.otherAdminId);
-
-      expect(idsOf(page)).toContain(parentAndTeacher.callId);
+      expect(idsOf(await g.calls.historyForActor(s.otherAdminId))).toContain(notOwners.callId);
+      expect(idsOf(await g.calls.historyForActor(s.managerId))).toContain(notOwners.callId);
+      // admin_a supervises the family's other child -- and still sees nothing of admin_b's channel.
+      expect(idsOf(await g.calls.historyForActor(s.ownerId))).not.toContain(notOwners.callId);
+      expect((await g.calls.historyForActor(outsideAdminId)).items).toEqual([]);
     });
 
   it('6b. a non-family-facing staff role is refused outright', async () => {
@@ -370,9 +386,75 @@ describe('11/12/13. what a history row may carry', () => {
         'type',
       ].sort(),
     );
+    // `displayName` is a DELIBERATE addition, not a leak: a history row used to
+    // carry an actor id and no name, so the Calls tab drew a placeholder avatar
+    // and no title for every call a parent had ever made (O3 for calls). It is
+    // a name and nothing else -- resolved for the page in one batch, from
+    // principals the caller is already authorized to see.
+    //
+    // The list stays exhaustive on purpose. This assertion is the privacy
+    // boundary for a call row, and widening it must remain a decision somebody
+    // makes here rather than a field that arrives quietly.
     expect(Object.keys(page.items[0].participants[0]).sort()).toEqual(
-      ['actorId', 'actorKind', 'joinedAt', 'leftAt'].sort(),
+      ['actorId', 'actorKind', 'displayName', 'joinedAt', 'leftAt'].sort(),
     );
+  });
+
+  /**
+   * The participant order is part of the response, and it is DETERMINISTIC.
+   *
+   * The test below ("they share a mapper") caught this, but only by chance: the
+   * two routes returned the same two people in opposite orders in FOUR OF TWELVE
+   * full integration runs, transposing in both directions. Neither query said
+   * how to order the relation, so the order came from whatever plan Postgres
+   * chose -- and the two routes select different numbers of calls, so they can
+   * choose differently.
+   *
+   * A GROUP call, because a direct one may not have more than two participants
+   * (`assert_call_participant_rules`) and two rows are not enough to tell a
+   * sorted order from an accidental one. The invitation times are then written
+   * in the REVERSE of the order the rows were created in, so the documented
+   * order and the stored order disagree by construction: an unordered read
+   * returns them as stored, `invited_at, actor_id` returns them reversed.
+   */
+  it('orders participants by invitedAt, not by how they were stored', async () => {
+    const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
+    // Staff starts it: PD-2 forbids a parent starting a group call.
+    const { callId } = await g.calls.start(group.id, s.ownerId);
+
+    const stored = await g.prisma.callParticipant.findMany({
+      where: { callId },
+      orderBy: { id: 'asc' },
+    });
+    expect(stored.length).toBeGreaterThanOrEqual(3);
+
+    // Reverse the invitation times against the stored order: the row that
+    // sorts FIRST by id was invited LAST, so `invited_at ascending` is the
+    // exact reverse of it.
+    for (const [i, row] of stored.entries()) {
+      await g.prisma.$executeRawUnsafe(
+        `update chat.call_participant
+            set invited_at = now() - make_interval(secs => ${(i + 1) * 60})
+          where id = '${row.id}'::uuid`,
+      );
+    }
+
+    const documented = (
+      await g.prisma.callParticipant.findMany({
+        where: { callId },
+        orderBy: [{ invitedAt: 'asc' }, { actorId: 'asc' }],
+      })
+    ).map((r) => r.actorId);
+
+    // The two disagree, which is the whole point of the fixture.
+    expect(documented).not.toEqual(stored.map((r) => r.actorId));
+
+    const [fromConversation] = await g.calls.history(group.id, s.parentId);
+    const page = await g.calls.historyForActor(s.parentId);
+    const fromAccount = page.items.find((c) => c.id === callId)!;
+
+    expect(fromConversation.participants.map((p) => p.actorId)).toEqual(documented);
+    expect(fromAccount.participants.map((p) => p.actorId)).toEqual(documented);
   });
 
   it('the per-conversation endpoint and this one agree, because they share a mapper',
@@ -390,11 +472,12 @@ describe('11/12/13. what a history row may carry', () => {
 describe('3. tenancy', () => {
   it('3. cross-tenant isolation is not exercisable here, and this records why',
     async () => {
-      // RT-030: `getOrCreateDirect` never sets `organization_id`, so every
-      // conversation this harness can create lands in the default organization
-      // and a second tenant's call cannot be produced through the service at
-      // all. Asserted rather than left as a silent gap — the same statement the
-      // ring-timeout suite makes.
+      // This suite seeds one organization only. Since RT-030 (closed
+      // 2026-10-12) a second tenant's conversation CAN be created through the
+      // service, but a call in it would still be filed under the default
+      // organization (RT-031: `call.create` sets no `organization_id`), so a
+      // cross-tenant call assertion waits on RT-031. Asserted rather than left
+      // as a silent gap — the same statement the ring-timeout suite makes.
       await callBetween(s.parentId, s.ownerId, s.ownerId);
 
       const organizations = new Set(

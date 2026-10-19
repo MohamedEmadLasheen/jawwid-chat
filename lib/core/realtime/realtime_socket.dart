@@ -71,9 +71,39 @@ class SubscriptionResult {
 /// a second retry engine on top of the library's would produce two backoffs
 /// racing each other.
 class SocketIoRealtimeSocket implements RealtimeSocket {
-  SocketIoRealtimeSocket({required String baseUrl}) : _baseUrl = baseUrl;
+  SocketIoRealtimeSocket({
+    required String baseUrl,
+    this.subscribeAckTimeout = const Duration(seconds: 8),
+  }) : _origin = originOf(baseUrl);
 
-  final String _baseUrl;
+  /// How long `conversation.subscribe` waits for the server's answer before
+  /// reporting `COMM.SUBSCRIBE_TIMEOUT` (retryable on the next reconnect).
+  final Duration subscribeAckTimeout;
+
+  /// The socket connects to the ORIGIN, never to the API base URL.
+  ///
+  /// socket.io reads a path on the connection URL as a NAMESPACE. The API base
+  /// URL always carries one — `/api/v1` is the server's global prefix — so
+  /// handing it over verbatim asks for a namespace called `/api/v1`, while the
+  /// gateway is on the default namespace. The handshake then never reaches it
+  /// and the client waits forever, which is exactly what a caller saw: a call
+  /// that rang, was answered on the other side, and stayed "Calling…" on this
+  /// one because no event could ever arrive.
+  ///
+  /// It cost nothing to miss in review: every test doubles the socket, so the
+  /// only thing that could have caught it is a real server.
+  final String _origin;
+
+  /// The scheme and authority of [baseUrl], with any path discarded.
+  ///
+  /// Visible for testing, and a pure function so the rule can be asserted
+  /// without a socket, a server or a network.
+  static String originOf(String baseUrl) {
+    final uri = Uri.parse(baseUrl);
+    if (!uri.hasAuthority) return baseUrl;
+    return Uri(scheme: uri.scheme, host: uri.host, port: uri.hasPort ? uri.port : null)
+        .toString();
+  }
 
   final _frames = StreamController<RealtimeFrame>.broadcast();
   final _states = StreamController<RealtimeSocketState>.broadcast();
@@ -121,10 +151,17 @@ class SocketIoRealtimeSocket implements RealtimeSocket {
 
   void _open(String token) {
     final socket = io.io(
-      _baseUrl,
+      _origin,
       io.OptionBuilder()
           .setTransports(<String>['websocket'])
           .disableAutoConnect()
+          // A NEW connection, every time. socket_io_client caches one Manager
+          // per URL and hands a second `io()` for the same server the cached
+          // socket -- with the FIRST caller's auth. So a reconnect after a
+          // token refresh, and the next session after a sign-out, silently got
+          // the old connection back and never connected as themselves (found
+          // against a real server: the second client sat in `connecting`).
+          .enableForceNew()
           // The contracted position. `auth: { token }` on the default
           // namespace, and nothing else that names the actor: the server reads
           // identity from this token alone.
@@ -171,10 +208,21 @@ class SocketIoRealtimeSocket implements RealtimeSocket {
       );
     }
     final completer = Completer<SubscriptionResult>();
+    // An ack that never comes must not hang the caller: the client resubscribes
+    // its conversations one after another, so one lost ack used to stall every
+    // subscription behind it until the next reconnect.
+    final timeout = Timer(subscribeAckTimeout, () {
+      if (!completer.isCompleted) {
+        completer.complete(
+          const SubscriptionResult(ok: false, code: 'COMM.SUBSCRIBE_TIMEOUT'),
+        );
+      }
+    });
     socket.emitWithAck(
       'conversation.subscribe',
       <String, dynamic>{'conversationId': conversationId},
       ack: (dynamic response) {
+        timeout.cancel();
         if (completer.isCompleted) return;
         final map = response is Map ? response : const <dynamic, dynamic>{};
         completer.complete(

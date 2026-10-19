@@ -1,0 +1,134 @@
+/*
+ * Staff profile. Built ONLY from the shared design tokens (tokens.css), with
+ * logical properties throughout, so the page mirrors correctly in RTL and picks
+ * up any theme that redefines the tokens. No new colours are introduced.
+ */
+/* min-inline-size: 0 -- the page is a flex item of the shell; without it the
+   widest unbreakable child (a tab strip, a long e-mail) sets the page width and
+   the whole document scrolls sideways on a phone. */
+.sp-page { display: flex; flex-direction: column; gap: var(--space-4); max-inline-size: 1200px; margin-inline: auto; min-inline-size: 0; }
+.sp-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.sp-header .page__title { margin: 0; }
+
+.sp-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--space-4); align-items: start; }
+.sp-col { display: flex; flex-direction: column; gap: var(--space-4); min-inline-size: 0; }
+.sp-col > .card, .sp-page > .card { margin-block-end: 0; }
+
+.sp-card { min-inline-size: 0; }
+.sp-card__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); flex-wrap: wrap; }
+.sp-card__title { margin: 0; font-size: var(--fs-lg); }
+.sp-subtitle { margin: var(--space-4) 0 var(--space-2); font-size: var(--fs-md); color: var(--text-muted); font-weight: 600; }
+.sp-footnote { margin: var(--space-2) 0 0; font-size: var(--fs-xs); color: var(--text-subtle); }
+.sp-muted { color: var(--text-muted); }
+.sp-small { font-size: var(--fs-sm); }
+.sp-ok { color: var(--ok); font-size: var(--fs-sm); }
+.sp-ltr { unicode-bidi: plaintext; overflow-wrap: anywhere; }
+
+.sp-identity { display: flex; gap: var(--space-4); align-items: flex-start; margin-block: var(--space-3); flex-wrap: wrap; }
+.sp-identity__text { flex: 1; min-inline-size: 180px; }
+.sp-name { font-size: var(--fs-xl); font-weight: 700; overflow-wrap: anywhere; }
+.sp-title { color: var(--text-muted); margin-block: var(--space-1); overflow-wrap: anywhere; }
+.sp-chips { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-block-start: var(--space-1); }
+.sp-about { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; line-height: 1.6; }
+
+.sp-avatar { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; object-fit: cover; flex: none; background: var(--accent-soft); color: var(--accent); font-weight: 700; border: 1px solid var(--border); }
+.sp-photo { display: flex; gap: var(--space-3); align-items: flex-start; flex-wrap: wrap; }
+.sp-photo__controls { display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start; max-inline-size: 260px; }
+.sp-file-input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; overflow: hidden; }
+.sp-file-input:focus-visible + .sp-file-label, .sp-file-label:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sp-file-label { cursor: pointer; }
+/* The label precedes the input in the DOM; make its focus ring follow the input. */
+.sp-photo__controls:has(.sp-file-input:focus-visible) .sp-file-label { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.sp-form { margin-block-start: var(--space-3); }
+.sp-textarea { resize: vertical; min-block-size: 140px; }
+.sp-actions { display: flex; gap: var(--space-2); justify-content: flex-end; flex-wrap: wrap; }
+.sp-latest { margin-block-start: var(--space-2); font-size: var(--fs-sm); color: var(--text); }
+
+.sp-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: var(--space-3) 0 0; font-size: var(--fs-sm); }
+.sp-facts dt { color: var(--text-muted); }
+.sp-facts dd { margin: 0; overflow-wrap: anywhere; }
+.sp-facts__row { display: contents; }
+.sp-inline-action { display: flex; justify-content: flex-end; margin-block-start: calc(-1 * var(--space-2)); }
+
+.sp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.sp-list__item { padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.sp-resp { display: flex; align-items: flex-start; gap: var(--space-2); justify-content: space-between; }
+.sp-resp__body { min-inline-size: 0; overflow-wrap: anywhere; }
+.sp-coverage { display: flex; flex-direction: column; gap: 2px; }
+.sp-person { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.sp-details { margin-block-start: var(--space-3); }
+.sp-details summary { cursor: pointer; color: var(--text-muted); font-size: var(--fs-sm); }
+.sp-details[open] summary { margin-block-end: var(--space-2); }
+
+.sp-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--space-2); margin-block-start: var(--space-3); }
+.sp-metric { border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-3); background: var(--surface); min-inline-size: 0; }
+.sp-metric__value { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sp-metric__label { font-weight: 600; font-size: var(--fs-sm); }
+.sp-metric__def { font-size: var(--fs-xs); color: var(--text-subtle); margin-block-start: 2px; }
+.sp-untracked { margin-block-start: var(--space-3); padding: var(--space-3); border-radius: var(--radius); background: var(--surface-sunken); font-size: var(--fs-sm); color: var(--text-muted); }
+
+.sp-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: var(--space-2); margin-block: var(--space-3); }
+.sp-total { border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-2) var(--space-3); background: var(--surface); text-align: start; font: inherit; color: inherit; min-inline-size: 0; }
+.sp-total--link { cursor: pointer; }
+.sp-total--link:hover { background: var(--surface-hover); }
+.sp-total--link:focus-visible, .sp-tab:focus-visible, .sp-row__link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sp-total__value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sp-total__label { font-size: var(--fs-xs); color: var(--text-muted); }
+
+.sp-filters { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block: var(--space-3); }
+.sp-filter { display: block; min-inline-size: 150px; }
+.sp-filter--grow { flex: 1 1 220px; }
+.sp-filter .input, .sp-filter .select { inline-size: 100%; }
+
+.sp-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.sp-row { display: grid; grid-template-columns: minmax(200px, 2fr) minmax(160px, 2fr) minmax(220px, 3fr) minmax(150px, 1.5fr); gap: var(--space-3); align-items: start; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.sp-row--compact { grid-template-columns: minmax(200px, 1fr) minmax(220px, 2fr); }
+.sp-row__who { display: flex; gap: var(--space-2); align-items: flex-start; min-inline-size: 0; }
+.sp-row__names { min-inline-size: 0; overflow-wrap: anywhere; }
+.sp-row__link { font-weight: 600; color: var(--accent); text-decoration: none; }
+.sp-row__link:hover { text-decoration: underline; }
+.sp-row__resp { display: flex; flex-wrap: wrap; gap: var(--space-1); align-content: flex-start; min-inline-size: 0; }
+.sp-row__nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)); gap: var(--space-1); margin: 0; }
+.sp-row__nums dt { font-size: var(--fs-xs); color: var(--text-subtle); }
+.sp-row__nums dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sp-row__meta { display: flex; flex-direction: column; gap: 2px; min-inline-size: 0; overflow-wrap: anywhere; }
+
+.sp-tabs { display: flex; gap: var(--space-1); flex-wrap: wrap; border-block-end: 1px solid var(--border); margin-block-start: var(--space-3); }
+.sp-tab { font: inherit; background: transparent; border: none; border-block-end: 2px solid transparent; padding: var(--space-2) var(--space-3); color: var(--text-muted); cursor: pointer; }
+.sp-tab[aria-selected='true'] { color: var(--accent); border-block-end-color: var(--accent); font-weight: 600; }
+.sp-tabpanel { padding-block-start: var(--space-3); min-inline-size: 0; }
+.sp-quick { margin-block-start: var(--space-4); border-block-start: 1px solid var(--border); padding-block-start: var(--space-2); }
+
+.sp-timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.sp-timeline__item { border-inline-start: 3px solid var(--border-strong); padding-inline-start: var(--space-3); }
+
+.sp-completeness { display: flex; align-items: center; gap: var(--space-3); font-size: var(--fs-sm); flex-wrap: wrap; }
+.sp-completeness__bar { inline-size: 160px; block-size: 8px; border-radius: 4px; background: var(--surface-sunken); overflow: hidden; border: 1px solid var(--border); }
+.sp-completeness__bar span { display: block; block-size: 100%; background: var(--ok); }
+
+.sp-skeleton { background: linear-gradient(90deg, var(--surface-sunken), var(--surface-hover), var(--surface-sunken)); background-size: 200% 100%; animation: sp-shimmer 1.4s ease-in-out infinite; }
+@keyframes sp-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .sp-skeleton { animation: none; } }
+
+@media (max-width: 1100px) {
+  .sp-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+@media (max-width: 900px) {
+  .sp-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 600px) {
+  .sp-page { padding: var(--space-3); }
+  .sp-row, .sp-row--compact { grid-template-columns: minmax(0, 1fr); }
+  .sp-filter { min-inline-size: 0; flex: 1 1 100%; }
+  .sp-facts { grid-template-columns: minmax(0, 1fr); }
+  .sp-facts dd { margin-block-end: var(--space-2); }
+  /* Tabs wrap rather than scroll: a nowrap strip's min-content would widen the
+     shell's grid column and scroll the whole document sideways. */
+  .sp-tab { padding-inline: var(--space-2); }
+}
+
+/* The header name is the link to one's own profile (AppShell). */
+.header__profile { color: inherit; text-decoration: none; border-radius: var(--radius-sm); }
+.header__profile:hover { text-decoration: underline; }
+.header__profile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

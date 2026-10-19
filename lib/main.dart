@@ -27,16 +27,12 @@ Future<void> main() async {
   // was designed for.
   unawaited(container.read(authControllerProvider.notifier).restore());
 
-  // W8-W1. Reading it is what starts it: the registrar watches the signed-in
-  // account and registers this device's push tokens for as long as that session
-  // lasts, retiring them when it ends. A Riverpod provider is not built until
-  // something reads it, and nothing else in the app has a reason to.
-  //
-  // It is read HERE rather than from a widget because push must not depend on
-  // which screen happens to be mounted -- and because `app.dart` and
-  // `router.dart` belong to a closed workstream. Signed out it yields null and
-  // does nothing.
-  container.read(pushRegistrarProvider);
+  // W8-W1. Push registration follows the signed-in account for as long as the app runs:
+  // a session that arrives registers this device's tokens, one that ends retires them.
+  // Started HERE rather than from a widget because push must not depend on which screen
+  // happens to be mounted -- and because `app.dart` and `router.dart` belong to a closed
+  // workstream. It must be listened, not read: see `startPushRegistration`.
+  startPushRegistration(container);
 
   runApp(
     UncontrolledProviderScope(

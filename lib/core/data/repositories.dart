@@ -1,7 +1,10 @@
 import '../../shared/models/auth.dart';
 import '../../shared/models/conversation.dart';
+import '../../shared/models/lesson.dart';
 import '../../shared/models/message.dart';
 import '../../shared/models/story.dart';
+import '../../shared/models/supervision.dart';
+import '../../shared/models/trial.dart';
 import '../../shared/models/user_role.dart';
 
 /// One page of a cursor-paginated list (§19).
@@ -36,8 +39,9 @@ class GroupMember {
   /// Advisory, exactly like the call capability: it decides what the UI may
   /// OFFER, never what the server will allow. PD-6 made the teacher/parent
   /// pairing undecidable from roles alone, so the client stopped guessing and
-  /// asks. Defaults to false, which is what a server that does not send the
-  /// field — an older build — correctly yields.
+  /// asks; since PD-7 the server answers false for that pairing always. Defaults
+  /// to false, which is what a server that does not send the field — an older
+  /// build — correctly yields.
   final bool canOpenDirect;
 }
 
@@ -416,6 +420,10 @@ abstract interface class StoryRepository {
 
   /// Record that the signed-in actor opened this story. Idempotent on the server.
   Future<void> markViewed(String storyId);
+
+  /// The reader tapped the story's button. The server records the tap and answers where to
+  /// go: a URL to open, or -- for "message the publisher" -- the conversation to open.
+  Future<StoryCtaTap> tapCta(String storyId);
 }
 
 abstract interface class GroupRepository {
@@ -479,4 +487,165 @@ abstract interface class CallRepository {
   /// global call history on the server, and this interface does not pretend
   /// otherwise; `docs/mobile/backend-dependencies.md` carries the gap.
   Future<List<CallHistoryEntry>> callHistory({required String conversationId});
+}
+
+/// PD-9 / PD-11 lesson tickets. Every method is one endpoint; NO AUTHORIZATION LIVES
+/// HERE -- each call asks the server and reports what it said, keeping its `COMM.*` code.
+///
+/// Submitting returns nothing to draw: the card the ticket posts arrives in the chat
+/// through the ordinary message path, exactly like anyone else's message.
+abstract interface class LessonRepository {
+  /// `GET /conversations/:id/lesson-tickets` -- what "+" may offer here, now. Advisory.
+  Future<List<LessonTicket>> tickets(String conversationId);
+
+  /// `POST /lessons/:id/report`
+  Future<void> report(String lessonId, LessonReportDraft draft);
+
+  /// `POST /lessons/:id/absence`
+  Future<void> absence(String lessonId, {String? note});
+
+  /// `POST /lessons/:id/apology`, `/teacher-apology` or `/late-apology`, by [kind].
+  Future<void> apologise(String lessonId, LessonTicketKind kind, String reason);
+
+  /// `GET /lessons/:id/makeup-slots`
+  Future<MakeupOffer> makeupSlots(String lessonId);
+
+  /// `POST /lessons/:id/makeup`
+  Future<void> bookMakeup(String lessonId, DateTime startsAt);
+
+  /// `GET /learners/:id/schedule-options`
+  Future<List<WeeklyOption>> scheduleOptions(String learnerId);
+
+  /// `POST /learners/:id/schedule-change-requests`
+  Future<void> requestScheduleChange(String learnerId, List<WeeklyOption> slots, {String? note});
+
+  /// `GET /lessons?from&to` -- for a teacher, their own lessons.
+  Future<List<ScheduledLesson>> myLessons(DateTime from, DateTime to);
+
+  /// `GET /learners/:id/progress` -- this month, in the academy's zone.
+  Future<ChildProgress> progress(String learnerId);
+
+  /// `GET /stats/me` -- a teacher's own month.
+  Future<TeacherWorkload> myWorkload();
+}
+
+/// The lesson repository of a build with no lesson server (the fixture build, tests
+/// that do not override it): it offers no ticket, so "+" shows only attachments, and
+/// it refuses every submission. A fixture lesson would be indistinguishable on screen
+/// from a real one, and a parent must never see a report that was not written.
+/// PD-12 S1: the teacher's private supervision conversation, their certificate
+/// requests and their own leave. Every method is one endpoint; NO AUTHORIZATION LIVES
+/// HERE -- the server decides and its `COMM.*` code reaches the caller intact.
+abstract interface class SupervisionRepository {
+  /// `GET /conversations/:id/supervision-tickets` -- what "+" may offer here. Advisory.
+  Future<SupervisionTickets> tickets(String conversationId);
+
+  /// `POST /learner-certificates` -- the request's card lands in the supervision conversation.
+  Future<void> requestCertificate(CertificateDraft draft);
+
+  /// `POST /me/leave-requests`
+  Future<void> requestLeave({required DateTime firstDay, required DateTime lastDay, required String reason});
+
+  /// `POST /me/leave-requests/:id/withdraw` -- only while undecided.
+  Future<void> withdrawLeave(String requestId);
+
+  /// `GET /me/leave?year=` -- the teacher's own allowance, used days, balance and requests.
+  Future<LeaveSummary> myLeave({int? year});
+
+  /// `POST /me/supervision-conversation` -- the teacher's own, created on first use.
+  Future<String> openOwnConversation();
+}
+
+/// The build with no supervision server (fixtures, tests that do not override it):
+/// offers nothing and refuses every submission, so a fixture balance can never be
+/// mistaken for the teacher's real one.
+class NoSupervisionRepository implements SupervisionRepository {
+  const NoSupervisionRepository();
+
+  @override
+  Future<SupervisionTickets> tickets(String conversationId) async => SupervisionTickets.none;
+
+  @override
+  Future<void> requestCertificate(CertificateDraft draft) => throw UnsupportedError('no supervision server in this build');
+
+  @override
+  Future<void> requestLeave({required DateTime firstDay, required DateTime lastDay, required String reason}) =>
+      throw UnsupportedError('no supervision server in this build');
+
+  @override
+  Future<void> withdrawLeave(String requestId) => throw UnsupportedError('no supervision server in this build');
+
+  @override
+  Future<LeaveSummary> myLeave({int? year}) => throw UnsupportedError('no supervision server in this build');
+
+  @override
+  Future<String> openOwnConversation() => throw UnsupportedError('no supervision server in this build');
+}
+
+class NoLessonRepository implements LessonRepository {
+  const NoLessonRepository();
+
+  @override
+  Future<List<LessonTicket>> tickets(String conversationId) async => const [];
+
+  @override
+  Future<void> report(String lessonId, LessonReportDraft draft) =>
+      throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<void> absence(String lessonId, {String? note}) =>
+      throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<void> apologise(String lessonId, LessonTicketKind kind, String reason) =>
+      throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<MakeupOffer> makeupSlots(String lessonId) =>
+      throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<void> bookMakeup(String lessonId, DateTime startsAt) =>
+      throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<List<WeeklyOption>> scheduleOptions(String learnerId) =>
+      throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<void> requestScheduleChange(String learnerId, List<WeeklyOption> slots, {String? note}) =>
+      throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<List<ScheduledLesson>> myLessons(DateTime from, DateTime to) async => const [];
+
+  @override
+  Future<ChildProgress> progress(String learnerId) =>
+      throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<TeacherWorkload> myWorkload() => throw UnsupportedError('no lesson server in this build');
+}
+
+/// PD-11 T4: the teacher's trial group -- the trials they may report under "+", and the
+/// report itself. Sales books trials and records the decision in the Admin Web.
+abstract interface class TrialRepository {
+  /// `GET /conversations/:id/trial-tickets` -- what "+" may offer here. Advisory.
+  Future<List<TrialTicket>> tickets(String conversationId);
+
+  /// `POST /trials/:id/attendance` -- the card lands in the trial group.
+  Future<void> reportAttendance(String trialId, TrialAttendanceDraft draft);
+}
+
+/// The build with no trial server (fixtures, tests that do not override it): "+" offers
+/// no trial report, and nothing is ever sent.
+class NoTrialRepository implements TrialRepository {
+  const NoTrialRepository();
+
+  @override
+  Future<List<TrialTicket>> tickets(String conversationId) async => const [];
+
+  @override
+  Future<void> reportAttendance(String trialId, TrialAttendanceDraft draft) =>
+      throw UnsupportedError('no trial server in this build');
 }

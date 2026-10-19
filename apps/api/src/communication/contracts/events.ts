@@ -20,6 +20,14 @@ export const CommEvent = {
   PRESENCE_CHANGED: 'presence.changed',
   CONVERSATION_UPDATED: 'conversation.updated',
   MEMBERSHIP_CHANGED: 'conversation.membership_changed',
+  /**
+   * To each ADDED member's own actor room: "a conversation you belong to now
+   * exists for you". The thread-room copy of MEMBERSHIP_CHANGED cannot reach
+   * them -- a client subscribes only to conversations it already knows -- so
+   * without this a parent learns of a new conversation only on a manual
+   * refresh. Carries the id and nothing else; the client re-reads its list.
+   */
+  CONVERSATION_ADDED: 'conversation.added',
   APPROVAL_REQUESTED: 'approval.requested',
   APPROVAL_DECIDED: 'approval.decided',
   /** A call was created and is ringing. */
@@ -47,6 +55,28 @@ export const CommEvent = {
   NOTIFICATION_CREATED: 'notification.created',
   STORY_PUBLISHED: 'story.published',
   STORY_RETIRED: 'story.retired',
+  /**
+   * PD-9: a lesson closed with its outcome -- what Core needs to keep billing,
+   * credits and payroll right. Carries no conversationId on purpose: it is for
+   * Core, never fanned out to a thread.
+   */
+  LESSON_CLOSED: 'lesson.closed',
+  /**
+   * PD-11 T2: what a supervisor did about a teacher-cancelled lesson nobody
+   * replaced -- a family credit or a package extension is Core's to apply.
+   * For Core; no conversationId.
+   */
+  LESSON_MAKEUP_RESOLVED: 'lesson.makeup_resolved',
+  /** PD-11 T3, for Core: a learner changed teacher in Chat. */
+  LEARNER_TRANSFERRED: 'learner.transferred',
+  /** PD-11 T3, for Core: a learner's study paused, resumed or stopped -- Core holds the package. */
+  LEARNER_ENROLLMENT_CHANGED: 'learner.enrollment_changed',
+  /** PD-11 T3, for Core/HR: a teacher bonus was recorded. The amount is payroll's, not Chat's. */
+  TEACHER_BONUS_RECORDED: 'teacher.bonus_recorded',
+  /** PD-12 S2, for Core payroll: a deduction step was confirmed. The amount is payroll's, never Chat's. */
+  TEACHER_DEDUCTION_APPLIED: 'teacher.deduction_applied',
+  /** PD-12 S2, for Core/HR: a teacher was suspended, temporarily (with dates) or permanently. */
+  TEACHER_SUSPENDED: 'teacher.suspended',
 } as const;
 
 export type CommEventName = (typeof CommEvent)[keyof typeof CommEvent];
@@ -109,6 +139,10 @@ export interface MembershipChangedPayload {
   conversationId: string;
   added: string[];
   removed: string[];
+}
+
+export interface ConversationAddedPayload {
+  conversationId: string;
 }
 
 export interface ApprovalRequestedPayload {
@@ -192,7 +226,8 @@ export interface NotificationCreatedPayload {
 export interface StoryPublishedPayload {
   storyId: string;
   publishedAt: string;
-  expiresAt: string;
+  /** Null: stories published since 2026-10-17 do not expire. */
+  expiresAt: string | null;
   hasMedia: boolean;
   recipientCount: number;
 }
@@ -215,6 +250,7 @@ export interface CommEventPayloads {
   [CommEvent.PRESENCE_CHANGED]: PresencePayload;
   [CommEvent.CONVERSATION_UPDATED]: ConversationUpdatedPayload;
   [CommEvent.MEMBERSHIP_CHANGED]: MembershipChangedPayload;
+  [CommEvent.CONVERSATION_ADDED]: ConversationAddedPayload;
   [CommEvent.APPROVAL_REQUESTED]: ApprovalRequestedPayload;
   [CommEvent.APPROVAL_DECIDED]: ApprovalDecidedPayload;
   [CommEvent.CALL_INCOMING]: CallPayload;
@@ -226,10 +262,89 @@ export interface CommEventPayloads {
   [CommEvent.NOTIFICATION_CREATED]: NotificationCreatedPayload;
   [CommEvent.STORY_PUBLISHED]: StoryPublishedPayload;
   [CommEvent.STORY_RETIRED]: StoryRetiredPayload;
+  [CommEvent.LESSON_CLOSED]: LessonClosedPayload;
+  [CommEvent.LESSON_MAKEUP_RESOLVED]: LessonMakeupResolvedPayload;
+  [CommEvent.LEARNER_TRANSFERRED]: LearnerTransferredPayload;
+  [CommEvent.LEARNER_ENROLLMENT_CHANGED]: LearnerEnrollmentChangedPayload;
+  [CommEvent.TEACHER_BONUS_RECORDED]: TeacherBonusRecordedPayload;
+  [CommEvent.TEACHER_DEDUCTION_APPLIED]: TeacherDeductionAppliedPayload;
+  [CommEvent.TEACHER_SUSPENDED]: TeacherSuspendedPayload;
+}
+
+export interface LearnerTransferredPayload {
+  transferId: string;
+  learnerId: string;
+  fromTeacherId: string | null;
+  toTeacherId: string;
+  reasonCode: string;
+}
+
+export interface LearnerEnrollmentChangedPayload {
+  learnerId: string;
+  suspensionId: string;
+  status: 'paused' | 'resumed' | 'left';
+  startsOn: string;
+  returnOn: string | null;
+}
+
+export interface TeacherBonusRecordedPayload {
+  teacherId: string;
+  entryId: string;
+}
+
+export interface TeacherDeductionAppliedPayload {
+  teacherId: string;
+  violationId: string;
+  /** 1 or 2: the first or second deduction of the month. */
+  step: 1 | 2;
+  /** YYYY-MM, the payroll month it belongs to. */
+  month: string;
+}
+
+export interface TeacherSuspendedPayload {
+  teacherId: string;
+  suspensionId: string;
+  violationId: string;
+  kind: 'temporary' | 'permanent';
+  startsOn: string;
+  endsOn: string | null;
+}
+
+export interface LessonMakeupResolvedPayload {
+  lessonId: string;
+  learnerId: string;
+  teacherId: string;
+  action: string;
+  durationMinutes: number;
+}
+
+export interface LessonClosedPayload {
+  lessonId: string;
+  /** Null for a trial (PD-11 T4), which is for a prospect. */
+  learnerId: string | null;
+  teacherId: string;
+  kind: string;
+  outcome: string;
+  startsAt: string;
+  endsAt: string;
+  /** True when a ruling changed an outcome Core was already told about. */
+  correction: boolean;
 }
 
 /** Rooms a socket may join. Never a client-supplied raw string. */
 export const room = {
   conversation: (id: string) => `conversation:${id}`,
   actor: (id: string) => `actor:${id}`,
+  /** RT-009: every socket of one session (rebound on refresh rotation). */
+  session: (id: string) => `session:${id}`,
+  /** RT-009: every socket of one account. */
+  account: (id: string) => `account:${id}`,
 };
+
+/**
+ * RT-009. Sent by the gateway itself -- never through the outbox -- to a socket
+ * the moment it is removed from a conversation room because its access ended.
+ * Clients that do not know it ignore it; the security property is the room
+ * removal, not the notice.
+ */
+export const CONVERSATION_ACCESS_REVOKED = 'conversation.access_revoked';

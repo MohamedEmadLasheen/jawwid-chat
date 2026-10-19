@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { CommEventName, CommEventPayloads } from '../contracts/events';
+import { notifyOutboxWake } from './outbox-wake';
 
 /**
  * Transactional outbox.
@@ -21,5 +22,7 @@ export class OutboxService {
     await tx.outboxEvent.create({
       data: { type, payload: payload as unknown as Prisma.InputJsonValue },
     });
+    // A hint to the worker, not a delivery: see outbox-wake.ts.
+    notifyOutboxWake();
   }
 }

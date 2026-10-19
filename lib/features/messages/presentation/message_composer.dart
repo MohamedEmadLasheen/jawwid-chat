@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/models/lesson.dart';
 import '../../../shared/models/message.dart';
+import '../../../shared/models/supervision.dart';
+import '../../../shared/models/trial.dart';
+import '../../lessons/presentation/lesson_ticket_sheet.dart';
+import '../../supervision/presentation/supervision_ticket_sheet.dart';
 import '../application/voice_composer_controller.dart';
 import 'voice_recorder_bar.dart';
 
@@ -347,3 +352,140 @@ Future<AttachmentSource?> showAttachmentMenu(BuildContext context) {
 /// source is a question about the picker and about which permission is asked
 /// for; it is not a question about the attachment.
 enum AttachmentSource { camera, photo, file }
+
+/// What the user picked from "+": an attachment source, or a lesson ticket.
+sealed class ComposerChoice {
+  const ComposerChoice();
+}
+
+class AttachmentChoice extends ComposerChoice {
+  const AttachmentChoice(this.source);
+  final AttachmentSource source;
+}
+
+class TicketChoice extends ComposerChoice {
+  const TicketChoice(this.ticket);
+  final LessonTicket ticket;
+}
+
+/// PD-12: a request filed in the teacher's supervision conversation.
+class SupervisionChoice extends ComposerChoice {
+  const SupervisionChoice(this.kind);
+  final SupervisionTicketKind kind;
+}
+
+/// PD-11 T4: a trial report filed in the teacher's trial group.
+class TrialChoice extends ComposerChoice {
+  const TrialChoice(this.ticket);
+  final TrialTicket ticket;
+}
+
+/// The `+` menu with PD-11's lesson tickets under the three attachment entries.
+///
+/// The attachments stay first and stay three. The tickets are a second, titled
+/// group, and they appear only when the server offers one for this member, here,
+/// now -- a parent with no lesson today sees exactly the menu they always saw.
+/// Each ticket names its lesson, because a teacher may owe two at once.
+Future<ComposerChoice?> showComposerMenu(
+  BuildContext context, {
+  List<LessonTicket> tickets = const [],
+  List<SupervisionTicketKind> supervisionTickets = const [],
+  List<TrialTicket> trialTickets = const [],
+}) {
+  if (tickets.isEmpty && supervisionTickets.isEmpty && trialTickets.isEmpty) {
+    return showAttachmentMenu(context).then((s) => s == null ? null : AttachmentChoice(s));
+  }
+  return showModalBottomSheet<ComposerChoice>(
+    context: context,
+    useRootNavigator: true,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (sheetContext) {
+      final l10n = L10n.of(sheetContext);
+      final theme = Theme.of(sheetContext);
+      void pick(ComposerChoice c) => Navigator.of(sheetContext).pop(c);
+
+      return SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: Text(l10n.attachCamera),
+                onTap: () => pick(const AttachmentChoice(AttachmentSource.camera)),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_outlined),
+                title: Text(l10n.attachPhoto),
+                onTap: () => pick(const AttachmentChoice(AttachmentSource.photo)),
+              ),
+              ListTile(
+                leading: const Icon(Icons.insert_drive_file_outlined),
+                title: Text(l10n.attachFile),
+                onTap: () => pick(const AttachmentChoice(AttachmentSource.file)),
+              ),
+              if (supervisionTickets.isNotEmpty) ...[
+                const Divider(),
+                Padding(
+                  padding: const EdgeInsetsDirectional.fromSTEB(Spacing.spacing5, Spacing.spacing2, Spacing.spacing5, Spacing.spacing1),
+                  child: Text(
+                    l10n.supervisionTicketsHeader,
+                    style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.primary),
+                  ),
+                ),
+                for (final k in supervisionTickets)
+                  ListTile(
+                    key: ValueKey('supervision-ticket-${k.name}'),
+                    leading: Icon(supervisionTicketIcon(k)),
+                    title: Text(supervisionTicketLabel(l10n, k)),
+                    onTap: () => pick(SupervisionChoice(k)),
+                  ),
+              ],
+              if (trialTickets.isNotEmpty) ...[
+                const Divider(),
+                Padding(
+                  padding: const EdgeInsetsDirectional.fromSTEB(Spacing.spacing5, Spacing.spacing2, Spacing.spacing5, Spacing.spacing1),
+                  child: Text(
+                    l10n.trialTicketsHeader,
+                    style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.primary),
+                  ),
+                ),
+                for (final t in trialTickets)
+                  ListTile(
+                    key: ValueKey('trial-ticket-${t.trialId}'),
+                    leading: const Icon(Icons.menu_book_outlined),
+                    title: Text(l10n.trialReportTitle),
+                    subtitle: Text('${t.prospectName} · ${lessonWhen(sheetContext, t.startsAt)}'),
+                    onTap: () => pick(TrialChoice(t)),
+                  ),
+              ],
+              if (tickets.isNotEmpty) ...[
+              const Divider(),
+              Padding(
+                padding: const EdgeInsetsDirectional.fromSTEB(Spacing.spacing5, Spacing.spacing2, Spacing.spacing5, Spacing.spacing1),
+                child: Text(
+                  l10n.lessonTicketsHeader,
+                  style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.primary),
+                ),
+              ),
+              for (final t in tickets)
+                ListTile(
+                  key: ValueKey('ticket-${t.kind.name}-${t.lessonId ?? t.learnerId}'),
+                  leading: Icon(lessonTicketIcon(t.kind)),
+                  title: Text(lessonTicketLabel(l10n, t.kind)),
+                  subtitle: Text([
+                    if (t.learnerName.isNotEmpty) t.learnerName,
+                    if (t.startsAt != null) lessonWhen(sheetContext, t.startsAt!),
+                  ].join(' · ')),
+                  onTap: () => pick(TicketChoice(t)),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}

@@ -48,23 +48,42 @@ export class ApprovalService {
   /** The approval queue, scoped to what this actor is allowed to decide. */
   async listPending(actorId: string, conversationId?: string): Promise<PendingApprovalDto[]> {
     const actor = await this.conversations.requireActor(actorId);
-    const decision = this.authz.canApprove(actor, actor.actorId);
-    if (!decision.allowed && actor.staffRole !== 'manager') {
+    const decision = this.authz.canApprove(actor);
+    if (!decision.allowed) {
       // Non-staff never see the queue at all.
       throw new CommError(decision.code, decision.reason);
     }
 
+    // PD-8: the queue is bounded to the conversations this actor may access
+    // BEFORE the cap (the same SQL scope every read uses), so another
+    // supervisor's backlog can neither appear here nor starve this one.
+    const now = new Date();
+    const visible = await this.authz.visibleConversationIds(actor, now);
+    const scope = conversationId ? visible.filter((id) => id === conversationId) : visible;
+    if (scope.length === 0) return [];
+
     const rows = await this.prisma.messageApproval.findMany({
       where: {
         decision: ApprovalDecision.PENDING,
-        ...(conversationId ? { conversationId } : {}),
+        conversationId: { in: scope },
+        organizationId: actor.organizationId,
       },
       include: { message: { include: { attachments: true, reactions: true, receipts: true } } },
       orderBy: { createdAt: 'asc' },
       take: 200,
     });
 
-    return this.withSignedAttachments(rows);
+    // Only what this actor may also DECIDE: reading a supervisor's group as a
+    // department manager or backup is enough; reading a 1:1 as its member is not
+    // a group with a queue at all.
+    const decidable = new Map<string, boolean>();
+    for (const id of new Set(rows.map((r) => r.conversationId))) {
+      const conv = await this.prisma.conversation.findUnique({ where: { id } });
+      const basis = conv ? await this.conversations.staffAccess(actor, conv, now) : null;
+      decidable.set(id, this.authz.canApprove(actor, basis).allowed);
+    }
+
+    return this.withSignedAttachments(rows.filter((r) => decidable.get(r.conversationId)), actor.actorId);
   }
 
   /** What the sender sees: their own pending/rejected messages with status. */
@@ -76,7 +95,7 @@ export class ApprovalService {
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
-    return this.withSignedAttachments(rows);
+    return this.withSignedAttachments(rows, actor.actorId);
   }
 
   /**
@@ -94,8 +113,9 @@ export class ApprovalService {
       createdAt: Date;
       message: Parameters<typeof toMessageDto>[0];
     }>,
+    viewerId: string,
   ): Promise<PendingApprovalDto[]> {
-    const signed = await this.attachments.signUrlsForMessages(rows.map((r) => r.messageId));
+    const signed = await this.attachments.signUrlsForMessages(rows.map((r) => r.messageId), viewerId);
 
     // Authors, in one batch for the whole queue — the same shape as the signed
     // URLs above and for the same reason. An approver is deciding about a
@@ -159,19 +179,32 @@ export class ApprovalService {
     }
 
     const conv = await this.conversations.requireConversation(approval.conversationId);
-    // The approver is the family's active handler, resolved through AI #1's
-    // coverage engine - coverage logic is never duplicated here.
-    const activeHandler = await this.conversations.activeHandler(conv);
+    // Deciding is acting on the conversation, so it is never wider than READING
+    // it: tenant, staff scope and activity all apply. Without this a manager of
+    // another organization could decide an approval by its id.
+    const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
+    const readable = await this.conversations.canReadResolved(actor, conv, membership);
+    if (!readable.allowed) throw new CommError(readable.code, readable.reason);
 
-    const permitted = this.authz.canApprove(actor, activeHandler);
+    // PD-8: the approver is whoever is in charge of the group -- its children's
+    // supervisor, their active backup or department manager, the super admin.
+    const permitted = this.authz.canApprove(actor, await this.conversations.staffAccess(actor, conv));
     if (!permitted.allowed) throw new CommError(permitted.code, permitted.reason);
 
     const now = new Date();
     const approved = decisionValue === ApprovalDecision.APPROVED;
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.messageApproval.update({
-        where: { id: approvalId },
+      // RT-032: the approver is still live under lock, or this decision is
+      // ordered before their deactivation commits.
+      await this.conversations.assertActorLive(tx, actor);
+      // CLAIM, don't overwrite. The PENDING check above ran outside this
+      // transaction, so two decisions made at once (approve + reject, or two
+      // approvals) could both pass it and both write -- publishing a message
+      // that ends up rejected, or announcing it twice. Only the decision that
+      // flips the row from PENDING proceeds; the other is told it was decided.
+      const claimed = await tx.messageApproval.updateMany({
+        where: { id: approvalId, decision: ApprovalDecision.PENDING },
         data: {
           decision: decisionValue,
           approverId: actor.actorId,
@@ -179,6 +212,13 @@ export class ApprovalService {
           rejectionReason: reason,
         },
       });
+      if (claimed.count === 0) {
+        throw new CommError(
+          CommErrorCode.APPROVAL_ALREADY_DECIDED,
+          'this approval has already been decided',
+          409,
+        );
+      }
 
       await tx.message.update({
         where: { id: approval.messageId },
@@ -251,7 +291,7 @@ export class ApprovalService {
     const actor = await this.conversations.requireActor(actorId);
     const conv = await this.conversations.requireConversation(conversationId);
     const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
-    const readable = this.authz.canRead(actor, conv, membership);
+    const readable = await this.conversations.canReadResolved(actor, conv, membership);
     if (!readable.allowed) throw new CommError(readable.code, readable.reason);
     if (!this.authz.canReadInternal(actor)) {
       throw new CommError(CommErrorCode.CANNOT_APPROVE, 'approval history is staff-only');

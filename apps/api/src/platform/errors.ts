@@ -6,23 +6,20 @@
 export enum CommErrorCode {
   // --- BR-1 and the communication matrix ---
   /**
-   * PD-6 (2026-09-23). A teacher and a parent would share a direct 1:1
-   * conversation or call with NO authorized relationship between them.
+   * DEPRECATED by PD-7 (2026-10-14). PD-6's refusal for a teacher/parent pair
+   * with no authorized relationship. Nothing in src/ raises it any more: PD-7
+   * forbids the direct channel for every pair (BR1_TEACHER_PARENT_DIRECT).
    *
-   * "Authorized" is the relationship predicate: a learner in the contact's
-   * family, taught by that teacher, both sides live, one organization. It is
-   * resolved from Jawwid Core data and never from anything the client sent.
+   * Kept, not deleted: shipped clients treat it as terminal (never retried),
+   * and removing the constant would delete the contract those builds were
+   * written against. Asserted by test/unit/authorization/br1-conformance.spec.ts.
    */
   TEACHER_PARENT_NOT_AUTHORIZED = 'COMM.TEACHER_PARENT_NOT_AUTHORIZED',
   /**
-   * DEPRECATED by PD-6. The server no longer emits this for any authorization
-   * decision: the blanket teacher<->parent prohibition it named is gone, and
-   * an unauthorized pairing now reports TEACHER_PARENT_NOT_AUTHORIZED above.
-   *
-   * Kept, not deleted, for exactly one reason: shipped clients treat this code
-   * as terminal (never retried), and removing the constant would delete the
-   * contract those builds were written against. Nothing in src/ raises it.
-   * Asserted by test/unit/authorization/br1-conformance.spec.ts.
+   * BR-1, restored by PD-7 (2026-10-14). A teacher and a parent may never share
+   * a direct 1:1 conversation or call, whatever their relationship: refused on
+   * open, on send (either side) and on call. They speak only in the Student
+   * Group, with a live admin present (C-4).
    */
   BR1_TEACHER_PARENT_DIRECT = 'COMM.BR1_TEACHER_PARENT_DIRECT',
   BR1_ADMIN_PRESENCE_REQUIRED = 'COMM.BR1_ADMIN_PRESENCE_REQUIRED',
@@ -36,13 +33,32 @@ export enum CommErrorCode {
   ASSIST_NOT_PERMITTED = 'COMM.ASSIST_NOT_PERMITTED',
   ESCALATION_NOT_PERMITTED = 'COMM.ESCALATION_NOT_PERMITTED',
   NOT_CONVERSATION_MEMBER = 'COMM.NOT_CONVERSATION_MEMBER',
+  /**
+   * 403. Family-facing staff, same organization, but the conversation's family
+   * is not in this admin's charge: not a member, not the family's owner, not on
+   * duty for it, not its live sticky handler. Managers are never refused this.
+   */
+  STAFF_OUT_OF_SCOPE = 'COMM.STAFF_OUT_OF_SCOPE',
   CONTACT_CANNOT_MESSAGE = 'COMM.CONTACT_CANNOT_MESSAGE',
   CONTACT_CANNOT_WRITE_INTERNAL = 'COMM.CONTACT_CANNOT_WRITE_INTERNAL',
   TEACHER_CANNOT_WRITE_INTERNAL = 'COMM.TEACHER_CANNOT_WRITE_INTERNAL',
   MEMBER_IS_SILENT = 'COMM.MEMBER_IS_SILENT',
   ACTOR_INACTIVE = 'COMM.ACTOR_INACTIVE',
   CANNOT_MANAGE_MEMBERSHIP = 'COMM.CANNOT_MANAGE_MEMBERSHIP',
+  /**
+   * A Student Group is provisioned by Jawwid staff for a family in their scope:
+   * a manager for any family in their organization, an admin or coverage admin
+   * for a family they own. Never by a parent, a teacher or department staff.
+   */
+  CANNOT_PROVISION_STUDENT_GROUP = 'COMM.CANNOT_PROVISION_STUDENT_GROUP',
   CANNOT_APPROVE = 'COMM.CANNOT_APPROVE',
+  /**
+   * A request body that fails validation (API-CONTRACT section 1: 400, the
+   * message names the field). Shared with every route; first emitted by
+   * `POST /conversations/:id/members`, whose missing reason used to reach the
+   * audit_log NOT NULL constraint and fail as a 500.
+   */
+  VALIDATION = 'COMMON.VALIDATION',
   NOT_MESSAGE_AUTHOR = 'COMM.NOT_MESSAGE_AUTHOR',
   DELETE_WINDOW_EXPIRED = 'COMM.DELETE_WINDOW_EXPIRED',
 
@@ -108,13 +124,118 @@ export enum CommErrorCode {
   /** The authored audience resolves to nobody the author may address. */
   STORY_AUDIENCE_EMPTY = 'COMM.STORY_AUDIENCE_EMPTY',
   STORY_AUDIENCE_INVALID = 'COMM.STORY_AUDIENCE_INVALID',
+  /** The call to action is malformed: an unknown kind, a non-https link, a bad number. */
+  STORY_CTA_INVALID = 'COMM.STORY_CTA_INVALID',
+  /** The story has no call to action, so there is nothing to tap. */
+  STORY_NO_CTA = 'COMM.STORY_NO_CTA',
+  /** A photo, video or voice story carries no words: rule 2, no caption. */
+  STORY_CAPTION_NOT_ALLOWED = 'COMM.STORY_CAPTION_NOT_ALLOWED',
+  /** Family segmentation data (country, plan) is for the super admin and managers. */
+  STORY_AUDIENCE_DATA_DENIED = 'COMM.STORY_AUDIENCE_DATA_DENIED',
+  /** The family named for audience data does not exist in the caller's organization. */
+  STORY_FAMILY_NOT_FOUND = 'COMM.STORY_FAMILY_NOT_FOUND',
+
+  // --- Admin Portal ---
+  /** Not the super admin. The `/admin` inspection surface is theirs alone. Never retry. */
+  ADMIN_INSPECTION_DENIED = 'COMM.ADMIN_INSPECTION_DENIED',
+
+  // --- Realtime revocation (RT-009) ---
+  /**
+   * 503. The revocation (a membership removal, a logout, a session or account
+   * revocation) IS committed and durable -- but not every API node confirmed
+   * that it can no longer deliver to the revoked recipient on a decision made
+   * before it. The operation is therefore NOT reported as complete. Retrying
+   * the same request is safe and idempotent; it succeeds once every node
+   * confirms.
+   */
+  REVOCATION_UNCONFIRMED = 'COMM.REVOCATION_UNCONFIRMED',
+
+  // --- Staff profiles ---
+  /**
+   * The profile does not exist, is in another organization, or is not one the
+   * caller may see. One code for all three, so the route is not an existence
+   * oracle for staff ids. 404.
+   */
+  STAFF_PROFILE_NOT_FOUND = 'COMM.STAFF_PROFILE_NOT_FOUND',
+  /** The caller may see this profile but may not change this part of it. 403. */
+  STAFF_PROFILE_EDIT_DENIED = 'COMM.STAFF_PROFILE_EDIT_DENIED',
+  /** A field failed validation (length, characters, unknown field). 400. */
+  STAFF_PROFILE_INVALID = 'COMM.STAFF_PROFILE_INVALID',
+  /** Someone saved the profile after the caller loaded it. Reload, then retry. 409. */
+  STAFF_PROFILE_CONFLICT = 'COMM.STAFF_PROFILE_CONFLICT',
+  /** The uploaded bytes are not an acceptable profile photo. 400. */
+  STAFF_AVATAR_INVALID = 'COMM.STAFF_AVATAR_INVALID',
+  /** An official assignment (responsibility, reporting line) was refused. 403. */
+  STAFF_ASSIGNMENT_DENIED = 'COMM.STAFF_ASSIGNMENT_DENIED',
+  /** The assignment is not a lawful shape (hierarchy, duplicate, already ended). 409. */
+  STAFF_ASSIGNMENT_INVALID = 'COMM.STAFF_ASSIGNMENT_INVALID',
+  /** The organization-wide profile overview belongs to the super admin. 403. */
+  STAFF_DIRECTORY_DENIED = 'COMM.STAFF_DIRECTORY_DENIED',
+  /** PD-8: the learner has no supervisor, so no group can carry the required admin. 409. */
+  LEARNER_UNSUPERVISED = 'COMM.LEARNER_UNSUPERVISED',
+  /** PD-8: the organization structure (departments, supervision, backups) may not be changed by this actor. 403. */
+  ORG_STRUCTURE_DENIED = 'COMM.ORG_STRUCTURE_DENIED',
+  /** PD-8: the requested structure is not lawful (wrong department, ended link, mixed supervisors). 409. */
+  ORG_STRUCTURE_INVALID = 'COMM.ORG_STRUCTURE_INVALID',
+  /** PD-11: no such lesson, or none this caller may see. 404. */
+  LESSON_NOT_FOUND = 'COMM.LESSON_NOT_FOUND',
+  /** PD-11: this caller may see the lesson but may not record this on it. 403. */
+  LESSON_DENIED = 'COMM.LESSON_DENIED',
+  /** PD-11: the lesson is not in a state that allows this (already closed, not started, too late). 409. */
+  LESSON_STATE = 'COMM.LESSON_STATE',
+  /** PD-11: the teacher already has a lesson at that time. 409. */
+  LESSON_TEACHER_BUSY = 'COMM.LESSON_TEACHER_BUSY',
+  /** PD-10: this actor may not see, or may not make this change to, a Teacher File. 403. */
+  TEACHER_FILE_DENIED = 'COMM.TEACHER_FILE_DENIED',
+  /** PD-10: no such teacher in the actor's organization. 404, identical for a foreign id. */
+  TEACHER_FILE_NOT_FOUND = 'COMM.TEACHER_FILE_NOT_FOUND',
+  /** PD-10: the timeline refused the entry (already resolved, already recorded, wrong target). 409. */
+  TEACHER_FILE_CONFLICT = 'COMM.TEACHER_FILE_CONFLICT',
+  /** PD-12: no such certificate, or none this caller may see. 404. */
+  CERTIFICATE_NOT_FOUND = 'COMM.CERTIFICATE_NOT_FOUND',
+  /** PD-12: this caller may not request, issue or decline this certificate. 403. */
+  CERTIFICATE_DENIED = 'COMM.CERTIFICATE_DENIED',
+  /** PD-12: the certificate is not in a state that allows this (already decided, no group to deliver into). 409. */
+  CERTIFICATE_STATE = 'COMM.CERTIFICATE_STATE',
+  /** PD-12: no such leave request or teacher, or none this caller may see. 404. */
+  LEAVE_NOT_FOUND = 'COMM.LEAVE_NOT_FOUND',
+  /** PD-12: this caller may not request, decide or cancel this leave, or set this allowance. 403. */
+  LEAVE_DENIED = 'COMM.LEAVE_DENIED',
+  /** PD-12: the leave is not in a state that allows this (decided, overlapping, past, crossing a year). 409. */
+  LEAVE_STATE = 'COMM.LEAVE_STATE',
+  /** PD-12: open lessons fall inside the leave; approve again with cancelCollidingLessons. 409. */
+  LEAVE_LESSONS_COLLIDE = 'COMM.LEAVE_LESSONS_COLLIDE',
+  /** PD-12: this caller may not open this teacher's supervision conversation. 403. */
+  SUPERVISION_DENIED = 'COMM.SUPERVISION_DENIED',
+  /** PD-12: no such active teacher in the caller's organization. 404. */
+  SUPERVISION_NOT_FOUND = 'COMM.SUPERVISION_NOT_FOUND',
+  /** PD-12 S2: no such violation, lesson or teacher, or none this caller may see. 404. */
+  DISCIPLINE_NOT_FOUND = 'COMM.DISCIPLINE_NOT_FOUND',
+  /** PD-12 S2: only the Teachers department (and the super admin) records and decides discipline. 403. */
+  DISCIPLINE_DENIED = 'COMM.DISCIPLINE_DENIED',
+  /** PD-12 S2: not allowed now (already decided, below the late threshold, lesson not held, students still assigned). 409. */
+  DISCIPLINE_STATE = 'COMM.DISCIPLINE_STATE',
+  /** PD-12 S2: open lessons fall inside the suspension; decide again with cancelCollidingLessons. 409. */
+  DISCIPLINE_LESSONS_COLLIDE = 'COMM.DISCIPLINE_LESSONS_COLLIDE',
+  /** PD-12 S3: only Operations (in scope), the Operations Manager and the super admin read instalments. 403. */
+  BILLING_DENIED = 'COMM.BILLING_DENIED',
+  /** PD-12 S3: no such family in the caller's organization, or none this caller may see. 404. */
+  BILLING_NOT_FOUND = 'COMM.BILLING_NOT_FOUND',
+  /** PD-12 S3: Jawwid Core's invoice API did not answer, or answered something unusable. 502. */
+  BILLING_CORE_UNAVAILABLE = 'COMM.BILLING_CORE_UNAVAILABLE',
 }
 
 export class CommError extends Error {
   constructor(
     readonly code: CommErrorCode,
     message: string,
-    readonly status = 403,
+    // A refusal that says "not found" IS a 404, whoever throws it. Several call
+    // sites passed a canRead decision straight through and so answered another
+    // organization's conversation as 403 CONVERSATION_NOT_FOUND while an unknown
+    // id was 404 -- the status alone told a caller the id exists in another
+    // tenant (found by org-scope-pd8.spec, 2026-10-15). Deciding it here means
+    // no call site can forget it again.
+    readonly status: number = code.endsWith('_NOT_FOUND') ? 404 : 403,
   ) {
     super(message);
     this.name = 'CommError';
