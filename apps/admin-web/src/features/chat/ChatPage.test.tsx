@@ -1326,3 +1326,83 @@ describe('Search and export (group B)', () => {
     clicked.mockRestore()
   })
 })
+
+describe('Schedule a call from inside a chat', () => {
+  function stubSchedule(canCall: boolean, refusal?: { status: number; code: string; message: string }) {
+    const calls: Array<{ method: string; path: string; body: unknown }> = []
+    const json = (data: unknown, status = 200) =>
+      new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const path = new URL(String(input), 'http://localhost').pathname.replace(/^\/api\/v1/, '')
+        const method = init?.method ?? 'GET'
+        const body = init?.body ? JSON.parse(String(init.body)) : undefined
+        calls.push({ method, path, body })
+        if (path === '/me') return json(ADMIN)
+        if (path === '/approvals/pending') return json({ approvals: [] })
+        if (path === '/conversations') return json({ conversations: [conv('c1', { title: 'Kid group' })] })
+        if (path === '/conversations/c1') return json(conv('c1', { title: 'Kid group' }))
+        if (path === '/conversations/c1/call-capability') return json({ canCall: canCall, code: canCall ? null : 'COMM.PARENT_CANNOT_START_GROUP_CALL' })
+        if (path === '/conversations/c1/messages/pins') return json({ pins: [] })
+        if (path === '/conversations/c1/messages') return json({ messages: [msg('m1', 1)], nextBefore: null })
+        if (path.endsWith('/messages/read')) return json({ ok: true })
+        if (path === '/scheduled-calls' && method === 'POST') {
+          if (refusal) return json({ error: { code: refusal.code, message: refusal.message } }, refusal.status)
+          const at = body.startsAt as string
+          return json({
+            id: 'sc1', conversationId: 'c1', kind: 'scheduled', title: body.title ?? null, startsAt: at,
+            joinableFrom: at, joinableUntil: at, state: 'upcoming', createdBy: { actorId: ADMIN.id, displayName: 'Me' }, canCancel: true,
+          }, 201)
+        }
+        return json({ error: { code: 'NOT_FOUND', message: 'nope' } }, 404)
+      }),
+    )
+    return calls
+  }
+
+  beforeEach(() => fakeSocket.reset())
+  afterEach(() => vi.unstubAllGlobals())
+
+  it("schedules into THIS chat from its menu: the chat is fixed, and the card is the server's to post", async () => {
+    const calls = stubSchedule(true)
+    renderChat('/chat/c1')
+    await screen.findByText('body m1')
+    fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Schedule call…' }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Schedule call' })
+    expect(within(dialog).getByText('Kid group')).toBeInTheDocument()
+    // Opened from inside the chat, there is no other chat to pick.
+    expect(within(dialog).queryByRole('button', { name: 'Change' })).not.toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Schedule' }))
+
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/scheduled-calls')).toBeTruthy())
+    const sent = calls.find((c) => c.method === 'POST' && c.path === '/scheduled-calls')!.body as { conversationId: string; kind: string; startsAt: string }
+    expect(sent).toEqual(expect.objectContaining({ conversationId: 'c1', kind: 'scheduled' }))
+    expect(new Date(sent.startsAt).getTime()).toBeGreaterThan(Date.now())
+    expect(await screen.findByText('Scheduled — posted in “Kid group”')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Schedule call' })).not.toBeInTheDocument()
+  })
+
+  it('is absent, not disabled, when the server says this viewer may not call here', async () => {
+    stubSchedule(false)
+    renderChat('/chat/c1')
+    await screen.findByText('body m1')
+    fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
+    await screen.findByRole('menuitem', { name: 'Select messages' })
+    expect(screen.queryByRole('menuitem', { name: 'Schedule call…' })).not.toBeInTheDocument()
+  })
+
+  it("shows the server's refusal in the dialog and keeps it open", async () => {
+    stubSchedule(true, { status: 403, code: 'COMM.PARENT_CANNOT_START_GROUP_CALL', message: 'only staff may start a group call' })
+    renderChat('/chat/c1')
+    await screen.findByText('body m1')
+    fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Schedule call…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Schedule call' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Schedule' }))
+    expect(await within(dialog).findByRole('alert')).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Schedule call' })).toBeInTheDocument()
+  })
+})

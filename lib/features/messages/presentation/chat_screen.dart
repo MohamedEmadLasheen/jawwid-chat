@@ -27,6 +27,7 @@ import '../../calls/application/call_controller.dart';
 import '../../calls/application/conversation_calls.dart';
 import '../../calls/domain/call_timeline.dart';
 import '../../calls/presentation/call_card.dart';
+import '../../calls/presentation/calls_actions.dart';
 import '../../conversations/application/conversations_controller.dart';
 import '../../lessons/presentation/lesson_ticket_sheet.dart';
 import '../../supervision/presentation/supervision_ticket_sheet.dart';
@@ -63,6 +64,7 @@ class ChatScreen extends ConsumerStatefulWidget {
     this.onOpenMembers,
     this.onOpenProfile,
     this.focusMessageId,
+    this.conversation,
     this.startVoiceRecording = false,
   });
 
@@ -71,6 +73,10 @@ class ChatScreen extends ConsumerStatefulWidget {
   /// Open at this message (a search hit from the chats list): older history is
   /// loaded until it is on screen, then it is briefly highlighted.
   final String? focusMessageId;
+
+  /// The conversation as the server described it (the route loads it). Needed
+  /// to schedule a call from here; without it the header offers no schedule.
+  final Conversation? conversation;
   final String title;
 
   /// e.g. the owner line on the Jawwid thread. Never an internal handler id.
@@ -941,6 +947,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               icon: const Icon(Icons.group_outlined),
               tooltip: l10n.groupMembersTitle,
             ),
+          if (widget.conversation != null) _ChatMoreMenu(conversation: widget.conversation!),
         ],
       ),
       // The list resizes; the composer does not translate (handoff §5.8).
@@ -1262,6 +1269,41 @@ class _DaySeparator extends StatelessWidget {
 /// TAPPING IT IS NOT PERMISSION EITHER. `CallController.start` posts to `/calls`,
 /// which decides again from scratch; a relationship revoked between the answer and
 /// the tap is refused there and shown as a plain "not available".
+/// The chat's "more" menu. Today it holds Schedule call (owner request
+/// 2026-10-20: schedule from inside the chat), offered under the SAME
+/// server answer that draws the call button -- absent, not disabled, when the
+/// viewer may not start a call here (PD-2, PD-7). The menu itself is absent
+/// when it would be empty.
+class _ChatMoreMenu extends ConsumerWidget {
+  const _ChatMoreMenu({required this.conversation});
+
+  final Conversation conversation;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(canCallProvider(conversation.id))) return const SizedBox.shrink();
+    final l10n = L10n.of(context);
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert),
+      onSelected: (choice) {
+        // The flow asks the server again, opens the sheet, and confirms that
+        // the card was posted in this chat.
+        if (choice == 'schedule') unawaited(scheduleFlow(context, ref, conversation: conversation));
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem<String>(
+          value: 'schedule',
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.event_outlined),
+            title: Text(l10n.callActionSchedule),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _CallAction extends ConsumerWidget {
   const _CallAction({
     required this.conversationId,
