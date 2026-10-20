@@ -5,7 +5,15 @@
  * is that algorithm at the documented cost -- not scrypt, not bcrypt, and not
  * Argon2id at parameters low enough to be worthless.
  */
+import * as argon2 from '@node-rs/argon2';
 import { ARGON2ID_PREFIX, hashPassword, spendComparableTime, verifyPassword } from '@platform/auth/password';
+
+// A pass-through spy: every test still runs the real native Argon2id, but the
+// timing tests can also see WHAT was verified, not only how long it took.
+jest.mock('@node-rs/argon2', () => {
+  const actual = jest.requireActual('@node-rs/argon2');
+  return { ...actual, verify: jest.fn(actual.verify) };
+});
 
 jest.setTimeout(30_000);
 
@@ -73,16 +81,39 @@ describe('verification', () => {
 });
 
 describe('account enumeration by timing', () => {
+  const median = (xs: number[]): number => xs.slice().sort((a, b) => a - b)[Math.floor(xs.length / 2)];
+  const time = async (fn: () => Promise<unknown>): Promise<number> => {
+    const started = process.hrtime.bigint();
+    await fn();
+    return Number(process.hrtime.bigint() - started) / 1e6;
+  };
+
   it('spendComparableTime performs a real verification, not a no-op', async () => {
     // If the unknown-subject path returned instantly, response timing would
     // enumerate accounts no matter how uniform the body is.
-    const started = process.hrtime.bigint();
+    const verifySpy = argon2.verify as jest.MockedFunction<typeof argon2.verify>;
+    verifySpy.mockClear();
     await spendComparableTime('whatever-was-submitted');
-    const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
 
-    // A real Argon2id verification at m=19456 costs tens of milliseconds; a
-    // no-op or a failed parse costs well under one.
-    expect(elapsedMs).toBeGreaterThan(5);
+    // WHAT ran: one native verification, against a well-formed hash at the
+    // documented cost, that completed rather than failing to parse.
+    expect(verifySpy).toHaveBeenCalledTimes(1);
+    expect(verifySpy.mock.calls[0][0]).toMatch(/^\$argon2id\$v=19\$m=19456,t=2,p=1\$[^$]+\$[^$]+$/);
+    await expect(verifySpy.mock.results[0].value).resolves.toBe(false);
+
+    // HOW LONG it took, RELATIVE to a failed parse through the same call path.
+    // Not an absolute floor: a fast runner verified m=19456 in 4.99 ms and
+    // tripped a fixed 5 ms bound. A failed parse costs tens of microseconds
+    // on any machine, a real verification costs ~100-200x that, so a 20x
+    // ratio holds on fast hardware and still catches a no-op or a bad decoy.
+    // Median of seven, for the reason the next test gives.
+    const real: number[] = [];
+    const failedParse: number[] = [];
+    for (let i = 0; i < 7; i++) {
+      real.push(await time(() => spendComparableTime('whatever-was-submitted')));
+      failedParse.push(await time(() => verifyPassword('whatever-was-submitted', '$argon2id$truncated')));
+    }
+    expect(median(real)).toBeGreaterThan(median(failedParse) * 20);
   });
 
   it('is within the same order of magnitude as verifying a real hash', async () => {
@@ -93,13 +124,6 @@ describe('account enumeration by timing', () => {
     // arbitrarily stretched by a neighbouring worker. A security test that
     // fails at random gets muted, which costs more than the property it
     // guards -- and the property is about the TYPICAL cost, not the worst case.
-    const median = (xs: number[]): number => xs.slice().sort((a, b) => a - b)[Math.floor(xs.length / 2)];
-    const time = async (fn: () => Promise<unknown>): Promise<number> => {
-      const started = process.hrtime.bigint();
-      await fn();
-      return Number(process.hrtime.bigint() - started) / 1e6;
-    };
-
     const real: number[] = [];
     const decoy: number[] = [];
     for (let i = 0; i < 7; i++) {
