@@ -508,6 +508,11 @@ class _StatusLine extends StatelessWidget {
           ),
           const SizedBox(width: Spacing.spacing1),
         ],
+        // The author changed the text after sending (the server keeps the original).
+        if (message.editedAt != null && !message.isDeleted) ...[
+          Text(l10n.editedMark, style: muted?.copyWith(fontStyle: FontStyle.italic)),
+          const SizedBox(width: Spacing.spacing1),
+        ],
         Text(stamp, style: muted),
         if (message.isMine) ...[
           const SizedBox(width: Spacing.spacing2),

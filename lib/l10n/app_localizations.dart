@@ -3145,6 +3145,12 @@ abstract class L10n {
   /// **'Forwarded'**
   String get forwardedLabel;
 
+  /// Shown next to a message's time when its author edited it after sending.
+  ///
+  /// In en, this message translates to:
+  /// **'Edited'**
+  String get editedMark;
+
   /// No description provided for @selectAction.
   ///
   /// In en, this message translates to:

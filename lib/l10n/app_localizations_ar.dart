@@ -1706,6 +1706,9 @@ class L10nAr extends L10n {
   String get forwardedLabel => 'مُعاد توجيهها';
 
   @override
+  String get editedMark => 'معدّلة';
+
+  @override
   String get selectAction => 'تحديد الرسائل';
 
   @override

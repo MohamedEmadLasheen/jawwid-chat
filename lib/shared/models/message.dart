@@ -145,6 +145,7 @@ class Message {
     this.isStarred = false,
     this.isPinned = false,
     this.isForwarded = false,
+    this.editedAt,
   });
 
   /// Server id. Null until the server has accepted the message.
@@ -208,6 +209,10 @@ class Message {
   /// "Forwarded". The source is never named.
   final bool isForwarded;
 
+  /// When the author last edited it (server `MessageDto.editedAt`); null when
+  /// never edited. [body] is already the edited wording. Shown as "Edited".
+  final DateTime? editedAt;
+
   bool get isSystem => kind == MessageKind.system;
   bool get isPending => deliveryState.isInFlight;
   bool get canRetry => deliveryState == DeliveryState.failed;
@@ -245,6 +250,7 @@ class Message {
         isStarred: isStarred,
         isPinned: isPinned,
         isForwarded: isForwarded,
+        editedAt: editedAt,
       );
 
   Message copyWith({
@@ -285,6 +291,7 @@ class Message {
       isStarred: isStarred ?? this.isStarred,
       isPinned: isPinned ?? this.isPinned,
       isForwarded: isForwarded,
+      editedAt: editedAt,
     );
   }
 }
