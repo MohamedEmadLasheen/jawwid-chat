@@ -75,7 +75,9 @@ export class ConversationController {
       conversations: rows.filter(matches).map((c) =>
         toConversationDto(c, members.get(c.id), {
           unreadCount: unread.get(c.id) ?? 0,
-          viewerRequiresApproval: this.authz.viewerRequiresApproval(actor, c),
+          // PD-14: nothing is held for approval. Still sent, as false, for
+          // clients built before it.
+          viewerRequiresApproval: false,
           viewerState: viewerState(states.get(c.id), c.id, actor.actorId),
           lastMessage: last.has(c.id) ? toLastMessageDto(last.get(c.id)!) : null,
           learnerAvatarUrl: c.learner
@@ -174,7 +176,8 @@ export class ConversationController {
       actor.kind === 'staff' && this.tools ? await this.tools.labelsFor(actor.actorId, [conversation.id]) : null;
     return toConversationDto(conversation, members, {
       unreadCount: await this.messages.unreadCount(id, actorId),
-      viewerRequiresApproval: this.authz.viewerRequiresApproval(actor, conversation),
+      viewerRequiresApproval: false, // PD-14
+      viewerModerates: this.authz.moderatableAuthorKinds(actor, await this.conversations.staffAccess(actor, conversation)),
       viewerState: viewerState(states.get(conversation.id), conversation.id, actor.actorId),
       lastMessage: last.has(conversation.id) ? toLastMessageDto(last.get(conversation.id)!) : null,
       learnerAvatarUrl: conversation.learner

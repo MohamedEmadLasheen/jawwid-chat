@@ -6,7 +6,7 @@ import { CommErrorCode } from '@platform/errors';
 import { QuietHoursService } from '@communication/notifications/quiet-hours.service';
 import { TemplateService } from '@communication/notifications/template.service';
 import { ReminderService } from '@communication/notifications/reminder.service';
-import { buildGraph, seed, truncate, Scenario, withAssignmentGate, activateBackup } from './harness';
+import { buildGraph, seed, truncate, Scenario, withAssignmentGate, activateBackup, legacyHeldMessage } from './harness';
 
 jest.setTimeout(60_000);
 
@@ -121,23 +121,35 @@ describe('student groups', () => {
 });
 
 // -------------------------------------------------------------------------
-describe('message approval', () => {
+describe('PD-14: nothing is held -- a group message publishes on send', () => {
+  it('a teacher and a parent message are published, delivered and visible at once; nothing is queued', async () => {
+    const group = await g.conversations.ensureStudentGroup(s.learnerId);
+    const t = await g.messages.send({ conversationId: group.id, senderId: s.teacherId, body: 'homework for tomorrow' });
+    const p = await g.messages.send({ conversationId: group.id, senderId: s.parentId, body: 'thank you' });
+    expect([t.moderation, p.moderation]).toEqual(['published', 'published']);
+    expect(await g.prisma.messageApproval.count()).toBe(0);
+    expect(await g.prisma.messageReceipt.count({ where: { messageId: t.id } })).toBeGreaterThan(0);
+
+    const parentView = await g.messages.list({ conversationId: group.id, actorId: s.parentId });
+    expect(parentView.messages.map((m) => m.body)).toContain('homework for tomorrow');
+    const teacherView = await g.messages.list({ conversationId: group.id, actorId: s.teacherId });
+    expect(teacherView.messages.map((m) => m.body)).toContain('thank you');
+    expect(await g.approvals.listPending(s.ownerId)).toEqual([]);
+  });
+
+  it('a new Student Group carries no approval flags', async () => {
+    const group = await g.conversations.ensureStudentGroup(s.learnerId);
+    expect([group.teacherRequiresApproval, group.parentRequiresApproval]).toEqual([false, false]);
+  });
+});
+
+/** Legacy: messages held BEFORE PD-14 are still decided by the queue. */
+describe('message approval (pre-PD-14 backlog)', () => {
   async function groupWithPendingTeacherMessage() {
     const group = await g.conversations.ensureStudentGroup(s.learnerId);
-    const msg = await g.messages.send({
-      conversationId: group.id, senderId: s.teacherId, body: 'homework for tomorrow',
-    });
+    const msg = await legacyHeldMessage(g, { conversationId: group.id, senderId: s.teacherId, body: 'homework for tomorrow' });
     return { group, msg };
   }
-
-  it('holds a teacher message when the group requires approval', async () => {
-    const { msg } = await groupWithPendingTeacherMessage();
-    expect(msg.moderation).toBe('pending');
-
-    const approval = await g.prisma.messageApproval.findUnique({ where: { messageId: msg.id } });
-    expect(approval!.decision).toBe('pending');
-    expect(approval!.approverId).toBe(s.ownerId); // the family's active handler
-  });
 
   it('a pending message is NOT delivered: no receipts exist for it', async () => {
     const { msg } = await groupWithPendingTeacherMessage();
@@ -296,12 +308,12 @@ describe('message approval', () => {
     expect(await g.prisma.messageApproval.count({ where: { messageId: msg.id } })).toBe(0);
   });
 
-  it('a pending message does not make the conversation look answered', async () => {
+  it("PD-14: a parent's group message is published, so the customer clock starts at once and it needs a reply", async () => {
     const group = await g.conversations.ensureStudentGroup(s.learnerId);
-    await g.messages.send({ conversationId: group.id, senderId: s.parentId, body: 'question' });
+    const m = await g.messages.send({ conversationId: group.id, senderId: s.parentId, body: 'question' });
     const conv = await g.prisma.conversation.findUnique({ where: { id: group.id } });
-    // Held for approval, so the customer clock has not started.
-    expect(conv!.lastCustomerMessageAt).toBeNull();
+    expect(conv!.lastCustomerMessageAt?.getTime()).toBeGreaterThanOrEqual(new Date(m.createdAt).getTime() - 1000);
+    expect(conv!.resolvedAt).toBeNull();
   });
 });
 

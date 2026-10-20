@@ -6,10 +6,9 @@
  *   - the family-owner admin's message is published at once -- while that admin
  *     is ON DUTY for the family (the staff duty rule; off duty it is refused,
  *     pinned below too);
- *   - the assigned teacher's and an authorized parent's are accepted and HELD
- *     for approval (the group's teacher_requires_approval /
- *     parent_requires_approval defaults), and a held message reaches no parent
- *     until the active handler approves it;
+ *   - the assigned teacher's and an authorized parent's are accepted and
+ *     published at once -- PD-14 (2026-10-20): nothing is held for approval;
+ *     the seated admin moderates afterwards;
  *   - BR-1 admin presence holds: provisioning seats the owner admin, which is
  *     what lets the teacher and the parent post at all.
  *
@@ -113,31 +112,26 @@ describe('a newly provisioned, empty Student Group', () => {
     expect(await authoredIn(id)).toHaveLength(1);
   });
 
-  it('accepts the assigned teacher as the first author, HELD for approval: no parent sees it until the seated admin approves', async () => {
+  it('accepts the assigned teacher as the first author, published at once (PD-14): the parent sees it with no approval', async () => {
     const id = await provisionEmptyGroup();
     const sent = await g.messages.send({ conversationId: id, senderId: s.teacherId, body: 'first: teacher', clientMessageId: 'first-teacher' });
-    expect(sent.moderation).toBe('pending');
+    expect(sent.moderation).toBe('published');
     expect(await authoredIn(id)).toEqual([
-      expect.objectContaining({ id: sent.id, authorId: s.teacherId, seq: 2, moderation: 'pending' }),
+      expect.objectContaining({ id: sent.id, authorId: s.teacherId, seq: 2, moderation: 'published' }),
     ]);
-    expect(await visibleTo(id, s.parentId)).not.toContain(sent.id);
-
-    const queue = await g.approvals.listPending(s.ownerId, id);
-    const held = queue.find((p) => p.messageId === sent.id);
-    expect(held).toBeDefined();
-    await g.approvals.approve(held!.approvalId, s.ownerId);
     expect(await visibleTo(id, s.parentId)).toContain(sent.id);
+    expect(await g.approvals.listPending(s.ownerId, id)).toEqual([]);
   });
 
-  it('accepts an authorized parent as the first author, HELD for approval', async () => {
+  it('accepts an authorized parent as the first author, published at once (PD-14)', async () => {
     const id = await provisionEmptyGroup();
     const sent = await g.messages.send({ conversationId: id, senderId: s.parentId, body: 'first: parent', clientMessageId: 'first-parent' });
-    expect(sent.moderation).toBe('pending');
+    expect(sent.moderation).toBe('published');
     expect(await authoredIn(id)).toEqual([
-      expect.objectContaining({ id: sent.id, authorId: s.parentId, seq: 2, moderation: 'pending' }),
+      expect.objectContaining({ id: sent.id, authorId: s.parentId, seq: 2, moderation: 'published' }),
     ]);
-    const queue = await g.approvals.listPending(s.ownerId, id);
-    expect(queue.map((p) => p.messageId)).toContain(sent.id);
+    expect(await visibleTo(id, s.teacherId)).toContain(sent.id);
+    expect(await g.approvals.listPending(s.ownerId, id)).toEqual([]);
   });
 
   it('the scope rule is not relaxed for an empty group: once the child moves to another supervisor, the seated admin is refused and nothing is written (PD-8)', async () => {

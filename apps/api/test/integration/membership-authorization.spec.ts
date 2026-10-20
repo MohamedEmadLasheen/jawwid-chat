@@ -340,12 +340,12 @@ describe('Parent and Teacher messaging is unchanged', () => {
     expect(fromAdmin.moderation).toBe('published');
   });
 
-  it("a teacher and a parent still post in the learner's group, held for approval as before", async () => {
+  it("a teacher and a parent still post in the learner's group, published at once (PD-14)", async () => {
     const group = await studentGroup();
     const t = await g.messages.send({ conversationId: group.id, senderId: s.teacherId, body: 'homework' });
     const p = await g.messages.send({ conversationId: group.id, senderId: s.parentId, body: 'thanks' });
-    expect(t.moderation).toBe('pending');
-    expect(p.moderation).toBe('pending');
+    expect(t.moderation).toBe('published');
+    expect(p.moderation).toBe('published');
   });
 
   // RE-VERSIONED 2026-10-14 BY PD-7. This asserted that an authorized teacher

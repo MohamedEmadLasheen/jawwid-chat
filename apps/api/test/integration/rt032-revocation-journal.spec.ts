@@ -40,7 +40,7 @@ import { NotificationService } from '@communication/notifications/notification.s
 import { TemplateService } from '@communication/notifications/template.service';
 import { QuietHoursService } from '@communication/notifications/quiet-hours.service';
 import type { PushProvider } from '@communication/notifications/push.provider';
-import { buildGraph, seed, truncate, Scenario } from './harness';
+import { buildGraph, legacyHeldMessage, seed, truncate, Scenario } from './harness';
 
 jest.setTimeout(60_000);
 
@@ -709,7 +709,7 @@ describe('RT-032 · state-changing operations are ordered strictly before or aft
   });
 
   it('reaction: refused when the deactivation commits first', async () => {
-    // From staff: published at once (a parent's or teacher's would be held for approval and unseen).
+    // From staff, as it always was; since PD-14 a parent's or teacher's publishes at once too.
     const m = await g.messages.send({ conversationId: groupId, senderId: s.ownerId, body: 'react to me', clientMessageId: randomUUID() });
     const outcome = await expectRefusedAfterDeactivationCommits('contact', s.parentId, () => g.messages.react(m.id, s.parentId, '👍'));
     expect(outcome).toBe(CommErrorCode.ACTOR_INACTIVE);
@@ -717,7 +717,8 @@ describe('RT-032 · state-changing operations are ordered strictly before or aft
   });
 
   it('approval: the approver deactivated just before the decision commits -- refused, the message stays held', async () => {
-    const held = await g.messages.send({ conversationId: groupId, senderId: s.teacherId, body: 'needs approval', clientMessageId: randomUUID() });
+    // PD-14: a message held before it -- nothing new is held.
+    const held = await legacyHeldMessage(g, { conversationId: groupId, senderId: s.teacherId, body: 'needs approval' });
     expect(held.moderation).toBe('pending');
     const approval = await g.prisma.messageApproval.findFirstOrThrow({ where: { messageId: held.id } });
     const outcome = await expectRefusedAfterDeactivationCommits('staff', s.managerId, () => g.approvals.approve(approval.id, s.managerId));

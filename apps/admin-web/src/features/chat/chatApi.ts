@@ -66,6 +66,12 @@ export interface ChatConversation {
   learner?: { id: string; name: string; avatarUrl?: string | null } | null
   unreadCount?: number
   viewerState?: ChatViewerState
+  /**
+   * PD-14: the author kinds ('teacher' | 'contact' | 'staff') whose sent
+   * messages this viewer may edit or delete for everyone. Detail route only; a
+   * hint for the menu -- the server decides again.
+   */
+  viewerModerates?: string[]
   lastMessage?: ChatLastMessage | null
   /** A group's picture: its one child's photo, signed for this viewer; null otherwise. */
   avatarUrl?: string | null

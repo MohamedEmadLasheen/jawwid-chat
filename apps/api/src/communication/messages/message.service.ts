@@ -29,7 +29,6 @@ import {
 } from '../contracts/dto';
 import {
   ActorKind,
-  ApprovalDecision,
   MessageType,
   Moderation,
   OnBehalfMode,
@@ -223,10 +222,10 @@ export class MessageService {
     this.validateContent(type, input);
     await this.validateReplyTarget(conv.id, input.replyToMessageId ?? null);
 
-    const moderation = decision.moderation;
-    const isPending = moderation === Moderation.PENDING;
+    // PD-14 (2026-10-20): every message is published when it is sent. Nothing
+    // is held for approval; a group admin moderates afterwards (edit, delete).
+    const moderation = Moderation.PUBLISHED;
     const stickyMinutes = await this.config.get('handoff.grace_minutes');
-    // PD-8: the default approver of a held group message is the children's supervisor.
     const activeHandler = await this.conversations.responsibleSupervisor(conv);
 
     // Recipients: live members other than the author. Internal notes never
@@ -295,14 +294,12 @@ export class MessageService {
           include: { attachments: true, reactions: true, receipts: true, card: true },
         });
 
-        // Advance the conversation. A pending message must not make the
-        // conversation look answered, so only published messages move the
-        // customer/staff clocks.
+        // Advance the conversation and the customer/staff clocks.
         const patch: Prisma.ConversationUpdateInput = {
           lastSeq: seq,
           lastActivityAt: now,
         };
-        if (!isPending && visibility === Visibility.CUSTOMER) {
+        if (visibility === Visibility.CUSTOMER) {
           if (actor.kind === ActorKind.CONTACT) {
             patch.lastCustomerMessageAt = now;
             // A customer message reopens a resolved conversation.
@@ -316,50 +313,27 @@ export class MessageService {
         }
         const updated = await tx.conversation.update({ where: { id: conv.id }, data: patch });
 
-        if (isPending) {
-          // Held for approval. No receipts are created and no message.created
-          // event is broadcast, so the message cannot leak to the group.
-          const approval = await tx.messageApproval.create({
-            data: {
-              // No trigger guards this column, so a default would be filed
-              // under the wrong tenant silently rather than refused.
-              organizationId,
+        if (recipients.length > 0) {
+          await tx.messageReceipt.createMany({
+            data: recipients.map((r) => ({
               messageId: message.id,
-              conversationId: conv.id,
-              requestedBy: actor.actorId,
-              approverId: activeHandler,
-              decision: ApprovalDecision.PENDING,
-            },
-          });
-          await this.outbox.enqueue(tx, CommEvent.APPROVAL_REQUESTED, {
-            conversationId: conv.id,
-            messageId: message.id,
-            approvalId: approval.id,
-            requestedBy: actor.actorId,
-          });
-        } else {
-          if (recipients.length > 0) {
-            await tx.messageReceipt.createMany({
-              data: recipients.map((r) => ({
-                messageId: message.id,
-                actorId: r.actorId,
-                state: ReceiptState.SENT,
-              })),
-              skipDuplicates: true,
-            });
-          }
-          await this.outbox.enqueue(tx, CommEvent.MESSAGE_CREATED, {
-            conversationId: conv.id,
-            messageId: message.id,
-            seq: seq.toString(),
-            authorKind: message.authorType,
-            authorId: message.authorId,
-            type: message.type,
-            visibility: message.visibility,
-            moderation: message.moderation,
-            createdAt: message.createdAt.toISOString(),
+              actorId: r.actorId,
+              state: ReceiptState.SENT,
+            })),
+            skipDuplicates: true,
           });
         }
+        await this.outbox.enqueue(tx, CommEvent.MESSAGE_CREATED, {
+          conversationId: conv.id,
+          messageId: message.id,
+          seq: seq.toString(),
+          authorKind: message.authorType,
+          authorId: message.authorId,
+          type: message.type,
+          visibility: message.visibility,
+          moderation: message.moderation,
+          createdAt: message.createdAt.toISOString(),
+        });
 
         await this.outbox.enqueue(tx, CommEvent.CONVERSATION_UPDATED, {
           conversationId: updated.id,
@@ -1276,18 +1250,21 @@ export class MessageService {
   }
 
   /**
-   * Author within the configured window, or a manager at any time. The row is
-   * never hard-deleted, so operational history stays auditable.
+   * Author within the configured window, a manager at any time, or -- PD-14 --
+   * a group admin at any time for the messages they moderate here
+   * (AuthorizationService.moderatableAuthorKinds). The row is never
+   * hard-deleted, so operational history stays auditable.
    */
   async deleteForEveryone(messageId: string, actorId: string, reason: string): Promise<void> {
-    const { actor, message } = await this.loadForActor(messageId, actorId);
+    const { actor, message, conv } = await this.loadForActor(messageId, actorId);
     const windowMinutes = await this.config.get(
       'communication.delete_for_everyone_window_minutes',
     );
     const isManager = actor.kind === ActorKind.STAFF && actor.staffRole === 'manager';
     const isAuthor = message.authorId === actor.actorId;
+    const moderating = !isAuthor && (await this.moderates(actor, conv, message));
 
-    if (!isAuthor && !isManager) {
+    if (!isAuthor && !isManager && !moderating) {
       throw new CommError(CommErrorCode.NOT_MESSAGE_AUTHOR, 'not the author of this message');
     }
     if (isAuthor && !isManager) {
@@ -1316,6 +1293,7 @@ export class MessageService {
         entity: 'message',
         entityId: messageId,
         reason,
+        after: moderating ? { moderatedAuthorKind: message.authorType } : undefined,
       });
       await this.outbox.enqueue(tx, CommEvent.MESSAGE_DELETED, {
         conversationId: message.conversationId!,
@@ -1388,18 +1366,34 @@ export class MessageService {
     return { actor, message, conv };
   }
 
+  /**
+   * PD-14: is `actor` moderating `message` here -- in charge of this
+   * conversation on a PD-8 basis, over someone else's message of an author kind
+   * they may moderate? The caller has already established it is not their own.
+   */
+  private async moderates(
+    actor: Actor,
+    conv: Conversation,
+    message: { authorType: string; authorId: string | null },
+  ): Promise<boolean> {
+    if (actor.kind !== ActorKind.STAFF || !message.authorId) return false;
+    const basis = await this.conversations.staffAccess(actor, conv);
+    return this.authz.moderatableAuthorKinds(actor, basis).includes(message.authorType);
+  }
+
   // -------------------------------------------------------------------
   // Edit
   // -------------------------------------------------------------------
 
   /**
-   * The author rewrites their own text message, within the edit window.
+   * The author rewrites their own text message, within the edit window; or --
+   * PD-14 -- a group admin rewrites one they moderate here
+   * (AuthorizationService.moderatableAuthorKinds), at any time.
    *
-   * What may be edited: a published, never-moderated, undeleted TEXT message.
-   * A message that went through approval stays exactly as it was approved, and
-   * an author whose messages HERE would now be held for approval may not edit
-   * either -- an edit is never a way round moderation. The author must still be
-   * able to write in the conversation: the same `canSend` decision a send takes.
+   * What may be edited: a published, undeleted TEXT message. Whoever edits must
+   * still be able to write in the conversation: the same `canSend` decision a
+   * send takes. The revision row records who edited, so an admin's edit is
+   * never passed off as the author's.
    *
    * The previous wording is kept in chat.message_revision, written in the same
    * transaction; the database refuses a body change without one
@@ -1420,20 +1414,19 @@ export class MessageService {
     if (conversationId !== undefined && message.conversationId !== conversationId) {
       throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'message not found', 404);
     }
-    if (actor.kind === ActorKind.SYSTEM || message.authorId !== actor.actorId) {
-      throw new CommError(CommErrorCode.NOT_MESSAGE_AUTHOR, 'only the author may edit a message');
+    const isAuthor = actor.kind !== ActorKind.SYSTEM && message.authorId === actor.actorId;
+    const moderating = !isAuthor && (await this.moderates(actor, conv, message));
+    if (!isAuthor && !moderating) {
+      throw new CommError(CommErrorCode.NOT_MESSAGE_AUTHOR, 'only the author or a group admin may edit a message');
     }
     const notEditable = (why: string) => new CommError(CommErrorCode.MESSAGE_NOT_EDITABLE, why, 409);
     if (message.type !== MessageType.TEXT || message.deletedForAll || message.moderation !== Moderation.PUBLISHED) {
       throw notEditable('only a published text message can be edited');
     }
-    if ((await this.prisma.messageApproval.count({ where: { messageId } })) > 0) {
-      throw notEditable('a message that went through approval cannot be edited');
-    }
 
     const now = new Date();
     const windowMinutes = await this.config.get('communication.edit_window_minutes');
-    if (now.getTime() - message.createdAt.getTime() > windowMinutes * 60_000) {
+    if (!moderating && now.getTime() - message.createdAt.getTime() > windowMinutes * 60_000) {
       throw new CommError(
         CommErrorCode.EDIT_WINDOW_EXPIRED,
         `the edit window of ${windowMinutes} minutes has expired`,
@@ -1442,9 +1435,6 @@ export class MessageService {
 
     const decision = await this.mayWrite(actor, conv, message.visibility);
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
-    if (decision.moderation !== Moderation.PUBLISHED) {
-      throw notEditable('messages here are held for approval, so they cannot be edited');
-    }
 
     const updated = await this.prisma.$transaction(async (tx) => {
       await this.conversations.assertActorLive(tx, actor); // RT-032
@@ -1480,8 +1470,12 @@ export class MessageService {
         action: 'message.edit',
         entity: 'message',
         entityId: messageId,
-        after: { conversationId: conv.id, editedAt: now.toISOString() },
-        reason: 'edited by author',
+        after: {
+          conversationId: conv.id,
+          editedAt: now.toISOString(),
+          ...(moderating ? { moderatedAuthorKind: message.authorType } : {}),
+        },
+        reason: moderating ? 'edited by group admin (PD-14)' : 'edited by author',
       });
       await this.outbox.enqueue(tx, CommEvent.MESSAGE_UPDATED, {
         conversationId: conv.id,

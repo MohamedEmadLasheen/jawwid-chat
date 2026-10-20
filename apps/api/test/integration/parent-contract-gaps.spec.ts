@@ -1,8 +1,8 @@
 /**
  * The Parent-contract gaps PR #27 identified, rebuilt on the PD-8 line:
  *
- *   viewerRequiresApproval  -- the viewer's OWN rule, from the same function
- *                              that decides a sent message's moderation;
+ *   viewerRequiresApproval  -- always false since PD-14 (nothing is held),
+ *                              and it agrees with what happens on send;
  *   viewerState             -- pin / archive / mute read back;
  *   lastMessage             -- the newest message THIS viewer may see;
  *   ?q=                     -- search inside the caller's own list only;
@@ -16,7 +16,7 @@
 import { randomUUID } from 'node:crypto';
 import { ConversationController } from '@communication/api/conversation.controller';
 import type { ConversationDto } from '@communication/contracts/dto';
-import { buildGraph, seed, truncate, withAssignmentGate, supervise, Scenario } from './harness';
+import { buildGraph, legacyHeldMessage, seed, truncate, withAssignmentGate, supervise, Scenario } from './harness';
 
 jest.setTimeout(60_000);
 
@@ -45,24 +45,25 @@ async function listed(actorId: string, q?: string): Promise<ConversationDto[]> {
 }
 const row = async (actorId: string, id: string, q?: string) => (await listed(actorId, q)).find((c) => c.id === id);
 
-describe('viewerRequiresApproval -- the viewer\'s own rule, never the other role\'s', () => {
-  it('in a group that holds parents\' messages but not teachers\', the parent is told yes and the teacher no', async () => {
+describe('viewerRequiresApproval -- PD-14: nobody is held, whatever a stale row says', () => {
+  it('in a group still flagged to hold both roles, every viewer is told no, and every send publishes', async () => {
     const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
+    expect([group.parentRequiresApproval, group.teacherRequiresApproval]).toEqual([false, false]);
     await g.prisma.conversation.update({
       where: { id: group.id },
-      data: { parentRequiresApproval: true, teacherRequiresApproval: false },
+      data: { parentRequiresApproval: true, teacherRequiresApproval: true },
     });
-    expect((await row(s.parentId, group.id))!.viewerRequiresApproval).toBe(true);
+    expect((await row(s.parentId, group.id))!.viewerRequiresApproval).toBe(false);
     expect((await row(s.teacherId, group.id))!.viewerRequiresApproval).toBe(false);
     expect((await row(s.ownerId, group.id))!.viewerRequiresApproval).toBe(false);
     // ...and it agrees with what actually happens on send.
-    expect((await send(group.id, s.parentId, 'held?')).moderation).toBe('pending');
+    expect((await send(group.id, s.parentId, 'held?')).moderation).toBe('published');
     expect((await send(group.id, s.teacherId, 'published?')).moderation).toBe('published');
   });
 
-  it('a 1:1 never holds anything, whatever the stored flags say', async () => {
+  it('a 1:1 never holds anything either', async () => {
     const direct = await g.conversations.getOrCreateDirect(s.parentId, s.ownerId);
-    expect(direct.parentRequiresApproval).toBe(true);
+    expect(direct.parentRequiresApproval).toBe(false);
     expect((await row(s.parentId, direct.id))!.viewerRequiresApproval).toBe(false);
     expect((await send(direct.id, s.parentId, 'hi')).moderation).toBe('published');
   });
@@ -92,11 +93,10 @@ describe('lastMessage -- the newest message THIS viewer may see', () => {
     expect((await row(s.ownerId, direct.id))!.lastMessage!.text).toBe('staff-only note');
   });
 
-  it("someone else's held message is never previewed; the author sees their own", async () => {
+  it("someone else's held message (pre-PD-14) is never previewed; the author sees their own", async () => {
     const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
-    await g.prisma.conversation.update({ where: { id: group.id }, data: { parentRequiresApproval: true } });
     await send(group.id, s.ownerId, 'published by the supervisor');
-    await send(group.id, s.parentId, 'awaiting approval');
+    await legacyHeldMessage(g, { conversationId: group.id, senderId: s.parentId, body: 'awaiting approval' });
 
     expect((await row(s.parentId, group.id))!.lastMessage!.text).toBe('awaiting approval');
     expect((await row(s.otherParentId, group.id))!.lastMessage!.text).toBe('published by the supervisor');
