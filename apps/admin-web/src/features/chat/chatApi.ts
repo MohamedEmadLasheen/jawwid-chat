@@ -151,12 +151,6 @@ export interface MessagePage {
   nextBefore: string | null
 }
 
-export interface PendingApproval {
-  approvalId: string
-  conversationId: string
-  messageId: string
-}
-
 /** An uploaded object, ready to be attached to a message. */
 export interface UploadedAttachment {
   kind: 'image' | 'video' | 'voice' | 'file'
@@ -364,13 +358,6 @@ export const chatApi = {
     ),
   markRead: (id: string, upToSeq: string) =>
     api.post<{ ok: boolean }>(`${conv(id)}/messages/read`, { upToSeq }),
-  /** Held teacher/parent messages in this conversation that the caller may see. */
-  pendingApprovals: (id: string) =>
-    api.get<{ approvals: PendingApproval[] }>('/approvals/pending', { conversationId: id }).then((r) => r.approvals),
-  /** The server decides who may decide (active handler or a manager). */
-  approve: (approvalId: string) => api.post<{ ok: boolean }>(`/approvals/${encodeURIComponent(approvalId)}/approve`),
-  reject: (approvalId: string, reason: string) =>
-    api.post<{ ok: boolean }>(`/approvals/${encodeURIComponent(approvalId)}/reject`, { reason }),
 }
 
 /** Query keys for the chat workspace; realtime events invalidate through them. */
@@ -379,7 +366,6 @@ export const chatKeys = {
   list: ['chat', 'conversations'] as const,
   conversation: (id: string) => ['chat', 'conversation', id] as const,
   messages: (id: string) => ['chat', 'messages', id] as const,
-  approvals: (id: string) => ['chat', 'approvals', id] as const,
   pins: (id: string) => ['chat', 'pins', id] as const,
   starred: ['chat', 'starred'] as const,
   labels: ['chat', 'labels'] as const,

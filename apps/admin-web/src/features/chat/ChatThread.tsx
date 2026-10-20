@@ -140,8 +140,7 @@ export function ChatThread({
     queryFn: () => chatApi.get(conversationId),
   })
   // The newest page is the live part: every realtime event re-reads it, so a
-  // new message, a deletion or a late approval (which keeps its ORIGINAL seq)
-  // all arrive the same way.
+  // new message, an edit or a deletion all arrive the same way.
   const latest = useQuery({
     queryKey: chatKeys.messages(conversationId),
     queryFn: () => chatApi.messages(conversationId),
@@ -150,22 +149,9 @@ export function ChatThread({
     // event heals it; this bounds how long it can stay unhealed without one.
     refetchInterval: 60_000,
   })
-  // Messages held for approval BEFORE PD-14 (2026-10-20), which this admin may
-  // still release or reject. Nothing new is ever held, so this queue only
-  // drains. Server-filtered to conversations in the caller's charge; whether
-  // they may DECIDE is asked of the server when they press the button.
-  const approvals = useQuery({
-    queryKey: chatKeys.approvals(conversationId),
-    queryFn: () => chatApi.pendingApprovals(conversationId),
-  })
-  const approvalFor = useMemo(
-    () => new Map((approvals.data ?? []).map((a) => [a.messageId, a.approvalId])),
-    [approvals.data],
-  )
   // PD-14: whose messages this admin may edit or delete after they were sent.
   const moderates = useMemo(() => new Set(details.data?.viewerModerates ?? []), [details.data?.viewerModerates])
   const refreshThread = () => {
-    void queryClient.invalidateQueries({ queryKey: chatKeys.approvals(conversationId) })
     void queryClient.invalidateQueries({ queryKey: chatKeys.messages(conversationId) })
     void queryClient.invalidateQueries({ queryKey: chatKeys.pins(conversationId) })
     void queryClient.invalidateQueries({ queryKey: chatKeys.starred })
@@ -543,8 +529,6 @@ export function ChatThread({
                     canModerate={staff?.role === 'manager'}
                     moderated={m.authorId !== staff?.id && moderates.has(m.authorKind)}
                     quoted={m.replyToMessageId ? byId.get(m.replyToMessageId) ?? null : undefined}
-                    approvalId={approvalFor.get(m.id)}
-                    onDecided={refreshThread}
                     onReply={() =>
                       setReply({ messageId: m.id, author: m.authorId === staff?.id ? copy.you : authorName(m, copy), preview: bodyPreview(m, copy) })
                     }
@@ -765,8 +749,6 @@ function MessageItem({
   canModerate,
   moderated,
   quoted,
-  approvalId,
-  onDecided,
   onReply,
   onReact,
   onStar,
@@ -791,8 +773,6 @@ function MessageItem({
   moderated: boolean
   /** The message this one replies to: the message, null when it is not loaded, undefined when it is no reply. */
   quoted: ChatMessage | null | undefined
-  approvalId?: string
-  onDecided: () => void
   onReply: () => void
   onReact: (emoji: string) => void
   onStar: () => void
@@ -810,27 +790,6 @@ function MessageItem({
 }) {
   const { locale, time } = useI18n()
   const copy = chatCopyFor(locale)
-  const [deciding, setDeciding] = useState(false)
-  const [decisionError, setDecisionError] = useState<unknown>(null)
-
-  async function decide(approve: boolean) {
-    if (!approvalId) return
-    let reason = ''
-    if (!approve) {
-      reason = window.prompt(copy.rejectReason)?.trim() ?? ''
-      if (!reason) return
-    }
-    setDeciding(true)
-    setDecisionError(null)
-    try {
-      await (approve ? chatApi.approve(approvalId) : chatApi.reject(approvalId, reason))
-      onDecided()
-    } catch (e) {
-      setDecisionError(e)
-    } finally {
-      setDeciding(false)
-    }
-  }
 
   if (side === 'system') {
     return (
@@ -1016,17 +975,6 @@ function MessageItem({
               {r.emoji} {r.count > 1 && <span>{r.count}</span>}
             </button>
           ))}
-        </div>
-      )}
-      {m.moderation === 'pending' && approvalId && (
-        <div className="cw-decide">
-          <button type="button" className="btn btn--sm btn--primary" disabled={deciding} onClick={() => void decide(true)}>
-            {copy.approve}
-          </button>
-          <button type="button" className="btn btn--sm btn--ghost" disabled={deciding} onClick={() => void decide(false)}>
-            {copy.reject}
-          </button>
-          {decisionError !== null && <span role="alert">{errorText(decisionError, locale, copy.decisionFailed)}</span>}
         </div>
       )}
     </li>

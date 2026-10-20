@@ -1320,8 +1320,12 @@ PD-8 scope basis (`chat.staff_conversation_access`) for that conversation, now.
   no longer reads them. `viewerRequiresApproval` is always `false` and is kept
   only for older clients.
 - Messages **already pending** at the migration are neither published nor
-  deleted: nobody reviewed them. The approval queue keeps working for them alone,
-  so an admin can still release or reject each one. Nothing new joins it.
+  deleted: nobody reviewed them. Nothing new joins the queue.
+- **The Approve / Reject buttons are removed from Admin Web** (owner request,
+  2026-10-20, after the system-test backlog was approved). Admin Web neither
+  reads the queue nor listens for `approval.*` events. The `/approvals/*` API
+  routes remain, unused by any client, so an operator can still decide a
+  pre-PD-14 message that is left anywhere.
 - A message approved before PD-14 may now be edited like any other (the
   database floor `chat.forbid_message_rewrite` no longer refuses it).
 - Teachers and parents see an admin's edit as "Edited", exactly like an
