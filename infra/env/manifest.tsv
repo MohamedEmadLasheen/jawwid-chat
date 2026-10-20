@@ -111,6 +111,20 @@ CORE_API_KEY	core	yes	opt	opt	req
 CORE_WEBHOOK_SECRET	core	yes	opt	opt	req
 CORE_TIMEOUT_MS	core	no	opt	opt	req
 CORE_RETRY_MAX	core	no	opt	opt	req
+# BACKUP. Read by scripts/infra/backup-db.sh and restore-db.sh -- the BACKUP
+# JOB's environment, not the API's. A backup is a complete copy of every
+# family's messages, so backup-db.sh REFUSES to write an unencrypted one unless
+# APP_ENV is local, test or ci, and it decides that before pg_dump runs. That
+# enforcement lives in the script because the script is what would write the
+# file; check-env.sh validates the API process, which never reads these, so they
+# are `opt` here rather than `req`.
+#
+# Set exactly one. The key file (a path; its first line is the secret; mode 600)
+# is preferred: a path is not a secret, and a file is not inherited by every
+# child process the way an environment variable is. Format and recovery-by-hand:
+# docs/infrastructure/backup-recovery.md §3.
+BACKUP_ENCRYPTION_KEY_FILE	backup	no	opt	opt	opt
+BACKUP_ENCRYPTION_PASSPHRASE	backup	yes	opt	opt	opt
 SENTRY_DSN	observability	yes	opt	opt	req
 OTEL_SERVICE_NAME	observability	no	opt	opt	req
 OTEL_EXPORTER_OTLP_ENDPOINT	observability	no	opt	opt	req

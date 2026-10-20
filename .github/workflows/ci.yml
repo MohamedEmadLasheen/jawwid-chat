@@ -128,6 +128,14 @@ jobs:
         # with the documented remedy already applied and silently ignored.
         run: bash scripts/qa/check-backup-client-selection.sh
 
+      - name: Backups are encrypted, and restore refuses what it must
+        # A backup is every family's messages. Without a database: no key
+        # outside local/test/ci is refused before pg_dump runs, an encrypted
+        # backup leaves no plaintext and no key, and a wrong key or a modified
+        # archive is refused before the target is touched. The full round trip
+        # against a real database is G-41 in the integration job.
+        run: bash scripts/qa/check-backup-encryption.sh
+
   # ------------------------------------------------------------------ backend
   api:
     name: API · typecheck + unit
@@ -302,6 +310,127 @@ jobs:
         run: |
           APP_ENV=ci PG_IMAGE=postgres:17-alpine \
             scripts/infra/backup-db.sh --out ./backups --schema chat
+
+      # G-41. The backup above proves pg_dump runs; it does not prove there is
+      # anything to recover. This takes an ENCRYPTED backup the way production
+      # does, proves the artefact holds no plaintext, proves a wrong key and a
+      # modified archive are refused before the target is touched, then restores
+      # into a database that did not exist and holds the copy to the same gates
+      # a migrated database passes -- plus the two checks that caught every past
+      # "restore that looked fine": identical per-table row counts, and the
+      # application role reading the copy as itself.
+      #
+      # Synthetic data only. The key is generated here, lives in RUNNER_TEMP,
+      # and is never printed.
+      - name: G-41 · encrypted backup, refused tampering, restore and verify
+        env:
+          PG_IMAGE: postgres:17-alpine
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/g41"
+          mkdir -p "$work"
+          (umask 077; openssl rand -base64 48 > "$work/backup.key"; openssl rand -base64 48 > "$work/wrong.key")
+          marker="g41-synthetic-$(openssl rand -hex 6)"
+          psql -v ON_ERROR_STOP=1 -q "$DATABASE_URL" -c \
+            "insert into chat.config (key, value, description) values ('ci.g41.marker', to_jsonb('$marker'::text), 'G-41 synthetic row')"
+
+          # 1. No key outside local/test/ci: refused before pg_dump, nothing written.
+          if APP_ENV=production scripts/infra/backup-db.sh --out "$work/refused" --schema chat; then
+            echo "::error::G-41 FAIL — an unencrypted production backup was written"; exit 1
+          fi
+          [ ! -e "$work/refused" ] || { echo "::error::G-41 FAIL — the refused backup left files"; exit 1; }
+
+          # 2. Encrypted backup, as production takes it.
+          APP_ENV=production BACKUP_ENCRYPTION_KEY_FILE="$work/backup.key" \
+            scripts/infra/backup-db.sh --out "$work/enc" --schema chat
+          enc="$(ls "$work"/enc/*.dump.enc)"
+          ls "$work/enc"
+
+          # 3. No plaintext. The unencrypted archive from the step above is the
+          #    positive control: the same greps DO find it there.
+          plain="$(ls -t ./backups/*.dump | head -1)"
+          for needle in PGDMP 'CREATE TABLE chat.'; do
+            LC_ALL=C grep -a -q -F "$needle" "$plain" \
+              || { echo "::error::G-41 positive control failed: '$needle' not in the plaintext archive"; exit 1; }
+            if LC_ALL=C grep -a -q -F "$needle" "$work"/enc/*; then
+              echo "::error::G-41 FAIL — '$needle' is readable in the encrypted backup"; exit 1
+            fi
+          done
+          if LC_ALL=C grep -a -q -F -e "$marker" -e "$(head -1 "$work/backup.key")" "$work"/enc/*; then
+            echo "::error::G-41 FAIL — the synthetic row or the key is readable in the backup"; exit 1
+          fi
+          if ls "$work/enc" | grep -v -E '\.dump\.enc(\.hmac|\.sha256)?$'; then
+            echo "::error::G-41 FAIL — the encrypted backup left another file beside it"; exit 1
+          fi
+
+          psql -v ON_ERROR_STOP=1 -q "$DATABASE_URL" -c 'create database jawwid_chat_recovered'
+          recovered="${DATABASE_URL%/*}/jawwid_chat_recovered"
+          untouched() {
+            [ "$(psql -tAX "$recovered" -c "select count(*) from pg_namespace where nspname = 'chat'")" = 0 ] \
+              || { echo "::error::G-41 FAIL — a refused restore touched the target"; exit 1; }
+          }
+
+          # 4. A wrong key is refused, and the target is untouched.
+          if BACKUP_ENCRYPTION_KEY_FILE="$work/wrong.key" \
+               scripts/infra/restore-db.sh --file "$enc" --into "$recovered" --schema chat; then
+            echo "::error::G-41 FAIL — restored with the wrong key"; exit 1
+          fi
+          untouched
+
+          # 5. A modified archive is refused even when its .sha256 is rewritten
+          #    to match -- the unkeyed checksum is not what protects it.
+          mkdir -p "$work/tampered"
+          cp "$enc" "$enc.hmac" "$work/tampered/"
+          t="$work/tampered/$(basename "$enc")"
+          dd if=/dev/urandom of="$t" bs=1 seek=$(( $(wc -c < "$t") / 2 )) count=16 conv=notrunc 2>/dev/null
+          (cd "$work/tampered" && sha256sum "$(basename "$t")" > "$(basename "$t").sha256")
+          if BACKUP_ENCRYPTION_KEY_FILE="$work/backup.key" \
+               scripts/infra/restore-db.sh --file "$t" --into "$recovered" --schema chat; then
+            echo "::error::G-41 FAIL — restored a modified archive"; exit 1
+          fi
+          untouched
+
+          # 6. The real restore.
+          BACKUP_ENCRYPTION_KEY_FILE="$work/backup.key" \
+            scripts/infra/restore-db.sh --file "$enc" --into "$recovered" --schema chat
+
+          # 7. The copy passes the gates a migrated database passes.
+          for suite in schema_acceptance invariants br1_invariants tenant_isolation \
+                       relationship_predicate story_rls teacher_profile_rls; do
+            echo "::group::restored · $suite"
+            psql -v ON_ERROR_STOP=1 "$recovered" -f "db/tests/$suite.sql"
+            echo "::endgroup::"
+          done
+
+          # 8. Data, not just structure: every table's row count, the synthetic
+          #    row, and the privilege model, identical to the source.
+          counts="select string_agg(format('%s=%s', c.relname, (xpath('/row/n/text()', query_to_xml(format('select count(*) as n from chat.%I', c.relname), false, true, '')))[1]::text), ',' order by c.relname) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'chat' and c.relkind in ('r', 'p')"
+          # NULL and an explicit owner-only ACL mean the same thing, and a dump
+          # does not preserve which one a migration left; acldefault() compares
+          # what is GRANTED rather than how it is spelled.
+          acls="select md5((select coalesce(nspacl, acldefault('n', nspowner))::text from pg_namespace where nspname = 'chat') || string_agg(c.relname || ':' || coalesce(c.relacl, acldefault(case c.relkind when 'S' then 's' else 'r' end::\"char\", c.relowner))::text, '|' order by c.relname)) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'chat'"
+          for check in counts acls; do
+            src="$(psql -tAX "$DATABASE_URL" -c "${!check}")"
+            dst="$(psql -tAX "$recovered" -c "${!check}")"
+            [ "$src" = "$dst" ] || { echo "::error::G-41 FAIL — restored $check differ from the source"; diff <(tr ',' '\n' <<<"$src") <(tr ',' '\n' <<<"$dst") || true; exit 1; }
+            echo "restored $check identical to the source"
+          done
+          got="$(psql -tAX "$recovered" -c "select value #>> '{}' from chat.config where key = 'ci.g41.marker'")"
+          [ "$got" = "$marker" ] || { echo "::error::G-41 FAIL — the synthetic row did not survive"; exit 1; }
+
+          # 9. The application role can USE the copy. A restore can pass every
+          #    check above while chat_app has no USAGE on the schema; that is
+          #    how the last two recovery defects hid. RLS applies, so compare
+          #    what chat_app sees in the copy with what it sees in the source.
+          psql -v ON_ERROR_STOP=1 -q "$DATABASE_URL" -c "alter role chat_app password 'g41-drill-only'"
+          server="${DATABASE_URL#*@}"; server="${server%/*}"
+          as_app() { PGPASSWORD=g41-drill-only psql -tAX "postgres://chat_app@$server/$1" -c 'select count(*) from chat.config'; }
+          app_src="$(as_app "${DATABASE_URL##*/}")"
+          app_dst="$(as_app jawwid_chat_recovered)" \
+            || { echo "::error::G-41 FAIL — the application role cannot read the restored database"; exit 1; }
+          [ "$app_src" = "$app_dst" ] \
+            || { echo "::error::G-41 FAIL — chat_app sees $app_dst rows in the copy, $app_src in the source"; exit 1; }
+          echo "chat_app reads the copy as itself ($app_dst rows under RLS, same as the source)"
 
   # ------------------------------------------------------------------- images
   # AI #7. Deployment artifacts must build, and must not run privileged.

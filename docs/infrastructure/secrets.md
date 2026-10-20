@@ -20,8 +20,14 @@ one triggered by `pull_request`.
 Database credentials · Redis credentials · JWT signing secrets · object storage
 access and secret keys · FCM service account JSON · APNs signing key ·
 LiveKit API secret · Jawwid Core API key and webhook secret · Sentry DSN ·
-registry credentials · mobile signing keys (Android keystore, iOS
-certificate/profile).
+backup encryption passphrase (`BACKUP_ENCRYPTION_PASSPHRASE`, or the file named
+by `BACKUP_ENCRYPTION_KEY_FILE`) · registry credentials · mobile signing keys
+(Android keystore, iOS certificate/profile).
+
+The backup passphrase is the one secret that must be **retrievable**, not just
+injectable: GitHub secrets are write-only, and an encrypted backup whose key
+exists only there cannot be restored by anyone. Keep it in the team's password
+manager as well, and test a restore with that copy (`backup-recovery.md` §3).
 
 Marked `SECRET` in `infra/env/manifest.tsv`; that file is the list.
 
