@@ -23,7 +23,8 @@ role.
 - **Internal notes** — `visibility: "internal"`. Invisible to parents and
   teachers, and never delivered to them. Render them inline in the thread in a
   distinct style.
-- **Pending messages** — held for approval, invisible to the rest of the group.
+- **Pending messages** — only messages held BEFORE PD-14 (2026-10-20); nothing
+  new is ever held. Invisible to the rest of the group until decided.
 
 ## Conversations for a family
 
@@ -82,7 +83,31 @@ brief requires.
 > AI #1's. Until that grant exists the server denies it. Do not build a UI that
 > implies it works; a disabled control with a tooltip is the honest rendering.
 
-## Approval queue
+## Moderation after sending (PD-14)
+
+Every message publishes on send. An admin in charge of the conversation
+moderates afterwards, through the ordinary message routes:
+
+```http
+PATCH  /conversations/:id/messages/:messageId   { body }   edit a text message
+DELETE /conversations/:id/messages/:messageId              delete for everyone
+```
+
+- `GET /conversations/:id` returns `viewerModerates`: the author kinds
+  (`teacher`, `contact`, `staff`) whose messages THIS viewer may edit or delete
+  here. Offer Edit / Delete for everyone on someone else's message only when its
+  `authorKind` is in it. It is a hint, and the routes decide again.
+- Teachers and parents are moderated by any staff with a PD-8 basis on the
+  conversation. Other staff are moderated only by a department manager or the
+  super admin. System messages and cards are never moderated.
+- A moderator has no time window; an author keeps theirs.
+- Every edit keeps the replaced wording in `chat.message_revision`, with who made
+  it, and is audited as `edited by group admin (PD-14)`.
+
+## Approval queue (pre-PD-14 backlog only)
+
+Nothing new is ever held. These routes remain only so the messages held before
+PD-14 can still be released or rejected; the queue only drains.
 
 ```http
 GET  /approvals/pending?conversationId=…   → { approvals: [...] }
@@ -100,9 +125,8 @@ Rules to build against:
   `chat.on_duty()`), or any manager. Anyone else gets `403 COMM.CANNOT_APPROVE`.
 - **A rejection requires a reason** (`400 COMM.APPROVAL_REASON_REQUIRED`). It is
   stored and shown to the sender, so treat it as user-facing copy.
-- **An approver can never edit a message.** There is no edit endpoint and the
-  database refuses the update. If content is unacceptable, reject it with a reason
-  and send a separate message. Do not build an edit affordance.
+- ~~An approver can never edit a message.~~ Superseded by PD-14: an admin edits
+  after sending (above), and every edit is recorded.
 - Decisions are **once-only**. A second decision returns
   `409 COMM.APPROVAL_ALREADY_DECIDED` — refresh the queue rather than retrying.
 - **Nothing expires.** A pending message stays pending until a human acts, so the

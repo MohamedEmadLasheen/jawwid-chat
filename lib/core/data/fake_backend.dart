@@ -143,14 +143,15 @@ class FakeBackend {
         updatedAt: _now.subtract(const Duration(hours: 1)),
         lastMessageAt: _now.subtract(const Duration(hours: 1)),
         lastMessagePreview: 'تم تأكيد موعد الحصة القادمة.',
-        requiresApproval: true,
+        // PD-14 (2026-10-20): nothing is held for approval any more.
+        requiresApproval: false,
       ),
     );
 
     _groups[conversationId] = StudentGroup(
       conversationId: conversationId,
       learner: learner,
-      requiresApproval: true,
+      requiresApproval: false, // PD-14
       members: [
         if (includeParent)
           const GroupMember(

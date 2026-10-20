@@ -39,7 +39,7 @@ communication safe and answerable, never as a general workflow system.
 | **Supervisor communication and coverage** — the assigned supervisor answers; a covering admin may act with the same permissions for the duration of an explicit temporary assignment | MVP; coverage is an explicit manager-created assignment (**PD-3**, §4) | `AuthorizationService`, `SUPERVISOR-OWNERSHIP.md` |
 | **Realtime** — delivery, receipts, typing, presence, approvals and call signalling over Socket.IO with Redis fan-out | MVP | `RealtimeGateway`, outbox worker |
 | **Notifications** — push with priority, quiet hours, templates, dedupe, delivery/open tracking, automated reminders | MVP (dispatch pipeline to be completed) | `apps/api/src/communication/notifications` |
-| **Moderation** — group messages from teachers and parents are held for the supervisor's approval; approve / reject with reason; audit | MVP | `chat.message_approval` |
+| **Moderation** — every message publishes on send (**PD-14**); whoever is in charge of the conversation may edit or delete a teacher's or parent's message afterwards; every edit keeps the replaced wording; audit | MVP | `chat.message_revision`, `AuthorizationService.moderatableAuthorKinds` (`chat.message_approval` holds pre-PD-14 messages only) |
 | **Calls** — 1:1 voice and Student-Group voice calls, LiveKit media grants minted server-side, BR-1 applied to calls | MVP | `apps/api/src/communication/calls` |
 | **Attachments** — signed upload/download URLs, validated MIME/size, object storage | MVP | `apps/api/src/communication/attachments` |
 | **Labels** | Phase 2 | not built |
@@ -120,7 +120,7 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-13 — CLOSED
+## 4. Product decisions PD-1 to PD-14 — CLOSED
 
 PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
 exit gate, before `main` was baselined. **PD-6 was closed by the product owner
@@ -132,6 +132,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-11 was closed by the product owner on 2026-10-18.**
 **PD-12 was closed by the product owner on 2026-10-18** and depends on PD-11.
 **PD-13 was closed by the product owner on 2026-10-19** (the Calls page).
+**PD-14 was closed by the product owner on 2026-10-20** (no pre-approval of messages).
 
 | ID | Subject | Status |
 |---|---|---|
@@ -148,6 +149,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-11** | **Lesson operations: tickets, apologies, make-ups, suspensions, transfers, trials** (2026-10-18) | **CLOSED** — every ticket is a form that changes one record and posts one card; rulings go to a supervision queue; money stays in Core |
 | **PD-12** | **Admin operations: instalments, student certificates, teacher discipline and leave** (2026-10-18) | **CLOSED** — Core invoices read-only with a billing supervisor; certificates delivered as one student-group card; one monthly ladder, suggested then confirmed; leave balance computed, never stored |
 | **PD-13** | **The Calls page: scheduled calls and call links** (2026-10-19) | **CLOSED** — one Calls page for every role; a scheduled call belongs to ONE conversation and announces itself with a card; a call link is members-only; nothing grants a call that `POST /calls` would refuse |
+| **PD-14** | **Messages publish immediately; admins moderate after sending** (2026-10-20) | **CLOSED** — no message is held for approval, for any role or conversation type; whoever is in charge of a conversation may edit or delete a teacher's or parent's message at any time afterwards; a manager or the super admin also a staff member's |
 
 ---
 
@@ -1272,7 +1274,70 @@ reopened by explicit authorization; record
   authorizes it.
 - The Admin Web `calls` section placeholder is retired.
 
-### Decisions still open after PD-1 to PD-13
+### PD-14 · Messages publish immediately; admins moderate after sending
+
+**Closed by the product owner on 2026-10-20** (owner request: "admins are not
+required to approve or reject messages before they are sent … admins must retain
+the ability to edit or delete messages after they have been sent").
+
+**Decision.** No message is held for approval. Every message, from every role
+(parent, teacher, staff) and in every conversation type (Student Group, family
+group, class group, 1:1), is published the moment it is sent. Moderation happens
+**after** sending: an admin in charge of the conversation may edit or delete for
+everyone a message someone else wrote.
+
+**Canonical rule.** One function decides who moderates whom:
+`AuthorizationService.moderatableAuthorKinds(actor, basis)`, where `basis` is the
+PD-8 scope basis (`chat.staff_conversation_access`) for that conversation, now.
+- Teachers' and parents' messages: any staff basis. That is the children's
+  supervisor, their active backup or department manager, the super admin, or the
+  staff party of a 1:1.
+- Another staff member's messages: the department manager or the super admin
+  only. A supervisor never rewrites a colleague.
+- System messages and cards: never. They are records.
+- A moderator has **no time window**. An author editing or deleting their own
+  message keeps the author's window (15 minutes).
+- An edit is still only of a published **text** message. A voice note, image or
+  file is deleted, not edited.
+- A moderator must still be able to write in the conversation: the same
+  `canSend` decision a send takes.
+- Every edit writes a `chat.message_revision` row naming **who** edited and
+  keeping the replaced wording. The audit row says `edited by group admin
+  (PD-14)`. An admin's edit is never passed off as the author's.
+
+**Implementation phase.** Delivered 2026-10-20 on
+`claude/messaging-remove-approval-8cb7e3`. It covers:
+- migration `20261020400000_chat_pd014_no_preapproval.sql`;
+- `AuthorizationService.canSend` (always publishes);
+- `MessageService.send` (the hold branch is gone), `edit` and
+  `deleteForEveryone`;
+- `viewerModerates` on `GET /conversations/:id`;
+- the Admin Web message menu.
+
+**Consequences.**
+- Every existing conversation's `teacher_requires_approval` /
+  `parent_requires_approval` is set to false, and both default to false. The API
+  no longer reads them. `viewerRequiresApproval` is always `false` and is kept
+  only for older clients.
+- Messages **already pending** at the migration are neither published nor
+  deleted: nobody reviewed them. The approval queue keeps working for them alone,
+  so an admin can still release or reject each one. Nothing new joins it.
+- A message approved before PD-14 may now be edited like any other (the
+  database floor `chat.forbid_message_rewrite` no longer refuses it).
+- Teachers and parents see an admin's edit as "Edited", exactly like an
+  author's.
+
+**Deprecated behaviour.**
+- Group pre-approval (PRD moderation, `admin-contract.md` "Approval queue") is
+  retired, including the per-group approval flags and the
+  `approval.student_group_*_default` configuration.
+- "An approver can never edit a message" (`admin-contract.md`,
+  `20261020130000`) is superseded. Admins edit after sending, and every edit is
+  recorded.
+- PD-9 default 1 ("a report card bypasses Student Group moderation") is moot.
+  Nothing is held.
+
+### Decisions still open after PD-1 to PD-14
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
 The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their

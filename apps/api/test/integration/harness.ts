@@ -408,6 +408,41 @@ export async function legacyTeacherParentCall(
   });
 }
 
+/**
+ * PD-14 (2026-10-20): a send never holds a message any more, but the approval
+ * queue still decides the messages held BEFORE it. This recreates one: the
+ * message is sent, then put back into exactly the state a pre-PD-14 send left
+ * it in -- moderation pending, no receipts, never announced as message.created,
+ * and a PENDING chat.message_approval row requested by its author.
+ */
+export async function legacyHeldMessage(
+  g: { prisma: PrismaService; messages: MessageService },
+  input: { conversationId: string; senderId: string; body?: string },
+): Promise<{ id: string; moderation: string; approvalId: string }> {
+  const sent = await g.messages.send({
+    conversationId: input.conversationId,
+    senderId: input.senderId,
+    body: input.body ?? `held ${randomUUID()}`,
+    clientMessageId: randomUUID(),
+  });
+  return g.prisma.$transaction(async (tx) => {
+    const row = await tx.message.update({ where: { id: sent.id }, data: { moderation: 'pending' } });
+    await tx.messageReceipt.deleteMany({ where: { messageId: sent.id } });
+    await tx.$executeRaw`
+      DELETE FROM chat.outbox_event WHERE type = 'message.created' AND payload->>'messageId' = ${sent.id}`;
+    const approval = await tx.messageApproval.create({
+      data: {
+        organizationId: row.organizationId,
+        messageId: sent.id,
+        conversationId: input.conversationId,
+        requestedBy: input.senderId,
+        decision: 'pending',
+      },
+    });
+    return { id: sent.id, moderation: row.moderation, approvalId: approval.id };
+  });
+}
+
 /** Order matters: children before parents. */
 export async function truncate(prisma: PrismaService): Promise<void> {
   await prisma.$executeRawUnsafe(`

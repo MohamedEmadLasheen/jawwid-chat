@@ -445,7 +445,7 @@ export class AuthorizationService {
       if (direct) return direct;
       const presence = this.requireAdminPresence(conv, liveMembers, participantKinds);
       if (presence) return presence;
-      return allow(null, this.moderationFor(conv, MemberRole.PARENT));
+      return allow(null, Moderation.PUBLISHED); // PD-14: never held for approval
     }
 
     // --- teacher ---
@@ -464,7 +464,7 @@ export class AuthorizationService {
       }
       const presence = this.requireAdminPresence(conv, liveMembers, participantKinds);
       if (presence) return presence;
-      return allow(null, this.moderationFor(conv, MemberRole.TEACHER));
+      return allow(null, Moderation.PUBLISHED); // PD-14: never held for approval
     }
 
     // --- staff ---
@@ -606,24 +606,27 @@ export class AuthorizationService {
   }
 
   /**
-   * Will THIS viewer's messages in this conversation be held for approval?
-   * The same function that decides the moderation a message is stored with, so
-   * the notice a client shows can never disagree with what happens on send. A
-   * parent is told only about the parents' rule, never the teachers'; a 1:1
-   * never holds anything; staff are never held.
+   * PD-14 (2026-10-20): whose sent messages may this staff member edit or
+   * delete for everyone, after the fact? Nothing is held for approval any more;
+   * moderation happens AFTER sending, by whoever is in charge of the
+   * conversation on a PD-8 basis.
+   *
+   *   teachers and parents   any staff basis: the children's supervisor, their
+   *                          active backup or department manager, the super
+   *                          admin, or the staff party of a 1:1
+   *   other staff            the department manager or the super admin only, so
+   *                          a supervisor never rewrites a colleague
+   *   system                 never: system messages and cards are records
+   *
+   * An actor's OWN message is not moderation; the author rules (window) apply.
+   * `basis` is chat.staff_conversation_access for this conversation, now.
    */
-  viewerRequiresApproval(actor: Actor, conv: Conv): boolean {
-    if (actor.kind === ActorKind.CONTACT) return this.moderationFor(conv, MemberRole.PARENT) === Moderation.PENDING;
-    if (actor.kind === ActorKind.TEACHER) return this.moderationFor(conv, MemberRole.TEACHER) === Moderation.PENDING;
-    return false;
-  }
-
-  /** Group approval policy. Staff messages are never held. */
-  private moderationFor(conv: Conv, role: string): string {
-    if (!GROUP_CONVERSATION_TYPES.has(conv.type)) return Moderation.PUBLISHED;
-    if (role === MemberRole.TEACHER && conv.teacherRequiresApproval) return Moderation.PENDING;
-    if (role === MemberRole.PARENT && conv.parentRequiresApproval) return Moderation.PENDING;
-    return Moderation.PUBLISHED;
+  moderatableAuthorKinds(actor: Actor, basis: StaffAccessBasis | null): string[] {
+    if (actor.kind !== ActorKind.STAFF || !actor.isActive || !isConversationStaff(actor) || basis === null) return [];
+    if (basis === StaffAccessBasis.MANAGER || basis === StaffAccessBasis.SUPER_ADMIN) {
+      return [ActorKind.TEACHER, ActorKind.CONTACT, ActorKind.STAFF];
+    }
+    return [ActorKind.TEACHER, ActorKind.CONTACT];
   }
 
   /**

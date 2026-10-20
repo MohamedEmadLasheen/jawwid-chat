@@ -13,7 +13,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { CommError, CommErrorCode } from '@platform/errors';
-import { buildGraph, seed, truncate, withAssignmentGate, Scenario, supervise } from './harness';
+import { buildGraph, legacyHeldMessage, seed, truncate, withAssignmentGate, Scenario, supervise } from './harness';
 
 jest.setTimeout(60_000);
 
@@ -235,22 +235,23 @@ describe('ordinary message sending', () => {
     expect((await g.prisma.message.findUniqueOrThrow({ where: { id: m.id } })).organizationId).toBe(b.orgId);
   });
 
-  it('second organization: group posts by teacher and parent are still HELD, and the approval is filed in that tenant', async () => {
+  it('second organization: group posts by teacher and parent publish in that tenant (PD-14), and a pre-PD-14 approval is decided there', async () => {
     const group = await g.conversations.ensureStudentGroup(b.learnerId, b.adminId);
     const t = await g.messages.send({ conversationId: group.id, senderId: b.teacherId, body: 'homework' });
     const p = await g.messages.send({ conversationId: group.id, senderId: b.contactId, body: 'thanks' });
-    expect([t.moderation, p.moderation]).toEqual(['pending', 'pending']);
-    const approvals = await g.prisma.messageApproval.findMany({ where: { conversationId: group.id } });
-    expect(approvals).toHaveLength(2);
-    expect(new Set(approvals.map((x) => x.organizationId))).toEqual(new Set([b.orgId]));
+    expect([t.moderation, p.moderation]).toEqual(['published', 'published']);
+    expect(await g.prisma.messageApproval.count({ where: { conversationId: group.id } })).toBe(0);
+    expect(await g.prisma.outboxEvent.count({ where: { type: 'approval.requested' } })).toBe(0);
     const msgs = await g.prisma.message.findMany({ where: { id: { in: [t.id, p.id] } } });
     expect(new Set(msgs.map((x) => x.organizationId))).toEqual(new Set([b.orgId]));
-    const requested = await g.prisma.outboxEvent.count({ where: { type: 'approval.requested' } });
-    expect(requested).toBe(2);
 
-    // And a manager of that organization can still decide it.
-    await g.approvals.approve(approvals.find((x) => x.messageId === t.id)!.id, b.managerId);
-    expect((await g.prisma.message.findUniqueOrThrow({ where: { id: t.id } })).moderation).toBe('published');
+    // A message held before PD-14 is filed in that tenant, and a manager of that
+    // organization can still decide it.
+    const held = await legacyHeldMessage(g, { conversationId: group.id, senderId: b.teacherId, body: 'old homework' });
+    const approval = await g.prisma.messageApproval.findUniqueOrThrow({ where: { id: held.approvalId } });
+    expect(approval.organizationId).toBe(b.orgId);
+    await g.approvals.approve(held.approvalId, b.managerId);
+    expect((await g.prisma.message.findUniqueOrThrow({ where: { id: held.id } })).moderation).toBe('published');
   });
 
   it("idempotent retries in the second organization return the same message, filed once", async () => {

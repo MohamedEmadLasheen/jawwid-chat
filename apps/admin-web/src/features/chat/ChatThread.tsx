@@ -150,9 +150,10 @@ export function ChatThread({
     // event heals it; this bounds how long it can stay unhealed without one.
     refetchInterval: 60_000,
   })
-  // Held messages this admin may act on. The queue is server-filtered to
-  // conversations in the caller's charge; whether they may DECIDE is asked of
-  // the server when they press the button.
+  // Messages held for approval BEFORE PD-14 (2026-10-20), which this admin may
+  // still release or reject. Nothing new is ever held, so this queue only
+  // drains. Server-filtered to conversations in the caller's charge; whether
+  // they may DECIDE is asked of the server when they press the button.
   const approvals = useQuery({
     queryKey: chatKeys.approvals(conversationId),
     queryFn: () => chatApi.pendingApprovals(conversationId),
@@ -161,6 +162,8 @@ export function ChatThread({
     () => new Map((approvals.data ?? []).map((a) => [a.messageId, a.approvalId])),
     [approvals.data],
   )
+  // PD-14: whose messages this admin may edit or delete after they were sent.
+  const moderates = useMemo(() => new Set(details.data?.viewerModerates ?? []), [details.data?.viewerModerates])
   const refreshThread = () => {
     void queryClient.invalidateQueries({ queryKey: chatKeys.approvals(conversationId) })
     void queryClient.invalidateQueries({ queryKey: chatKeys.messages(conversationId) })
@@ -538,6 +541,7 @@ export function ChatThread({
                     runStart={runStart}
                     selfId={staff?.id}
                     canModerate={staff?.role === 'manager'}
+                    moderated={m.authorId !== staff?.id && moderates.has(m.authorKind)}
                     quoted={m.replyToMessageId ? byId.get(m.replyToMessageId) ?? null : undefined}
                     approvalId={approvalFor.get(m.id)}
                     onDecided={refreshThread}
@@ -759,6 +763,7 @@ function MessageItem({
   runStart,
   selfId,
   canModerate,
+  moderated,
   quoted,
   approvalId,
   onDecided,
@@ -782,6 +787,8 @@ function MessageItem({
   runStart: boolean
   selfId: string | undefined
   canModerate: boolean
+  /** PD-14: someone else's message this admin moderates here -- edit and delete at any time. */
+  moderated: boolean
   /** The message this one replies to: the message, null when it is not loaded, undefined when it is no reply. */
   quoted: ChatMessage | null | undefined
   approvalId?: string
@@ -837,14 +844,14 @@ function MessageItem({
   }
 
   const mine = m.authorId === selfId
-  // A hint only: the server decides (author, window, never-moderated text).
+  // A hint only: the server decides (the author within the window, or -- PD-14 --
+  // an admin moderating it at any time; a published text either way).
   const editable =
-    mine &&
+    (moderated || (mine && Date.now() - new Date(m.createdAt).getTime() < EDIT_WINDOW_MS)) &&
     !m.deletedForAll &&
     m.type === 'text' &&
     m.moderation === 'published' &&
-    !!m.body &&
-    Date.now() - new Date(m.createdAt).getTime() < EDIT_WINDOW_MS
+    !!m.body
   const live = !m.deletedForAll
   // PD-13: a scheduled-call card is drawn with its Join button; any other card
   // (or one this client cannot read) keeps showing its plain-text body.
@@ -871,8 +878,9 @@ function MessageItem({
           ? [{ key: 'copy', label: copy.copy, icon: 'copy' as const, onSelect: () => void navigator.clipboard?.writeText(m.body ?? '') }]
           : []),
         { key: 'delete-me', label: copy.deleteForMe, icon: 'trash', onSelect: onDeleteForMe },
-        // The server allows it to the author within the window, or a manager; it answers anyone else.
-        ...(mine || canModerate
+        // The server allows it to the author within the window, a manager, or an
+        // admin moderating it (PD-14); it answers anyone else.
+        ...(mine || canModerate || moderated
           ? [{ key: 'delete-all', label: copy.deleteForEveryone, icon: 'trash' as const, danger: true, onSelect: onDeleteForEveryone }]
           : []),
       ]

@@ -214,12 +214,19 @@ export interface ConversationDto {
   unreadCount?: number;
 
   /**
-   * Will THIS viewer's messages be held for approval here? Decided by the same
-   * function that decides a sent message's moderation, so the client never has
-   * to combine the two stored flags (and never tells a parent the teachers'
-   * rule). Optional: computed by the list and detail routes only.
+   * Will THIS viewer's messages be held for approval here? Always false since
+   * PD-14 (2026-10-20): every message is published when it is sent. Kept so a
+   * client built before PD-14 hides its "needs approval" notice.
    */
   viewerRequiresApproval?: boolean;
+
+  /**
+   * PD-14: the author kinds ('teacher' | 'contact' | 'staff') whose messages
+   * THIS viewer may edit or delete for everyone after sending -- a hint for the
+   * menu; the edit and delete routes decide again. Empty for anyone who is not
+   * in charge here. Computed by the detail route only.
+   */
+  viewerModerates?: string[];
 
   /** The viewer's own pin / archive / mute / favorite, as setPreferences stored them. */
   viewerState?: ConversationViewerStateDto;
@@ -352,6 +359,7 @@ export function toConversationDto(
   extra?: {
     unreadCount?: number;
     viewerRequiresApproval?: boolean;
+    viewerModerates?: string[];
     viewerState?: ConversationViewerStateDto;
     lastMessage?: LastMessageDto | null;
     /** The learner's photo link, signed by the caller for the viewer; omitted when unknown. */
@@ -392,6 +400,7 @@ export function toConversationDto(
       : undefined,
     unreadCount: extra?.unreadCount,
     viewerRequiresApproval: extra?.viewerRequiresApproval,
+    ...(extra?.viewerModerates ? { viewerModerates: extra.viewerModerates } : {}),
     viewerState: extra?.viewerState,
     lastMessage: extra?.lastMessage,
     avatarUrl: c.type === 'direct' ? undefined : (extra?.avatarUrl ?? null),

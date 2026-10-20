@@ -310,15 +310,23 @@ describe('message immutability and deletion', () => {
     expect(audits).toBe(1);
   });
 
-  it('a non-author cannot delete for everyone', async () => {
+  it('a non-author who does not moderate the message cannot delete it for everyone', async () => {
     const conv = await parentAdminConversation();
-    const m = await g.messages.send({ conversationId: conv.id, senderId: s.parentId, body: 'mine' });
-    // The owner can read and act in this conversation, and still did not write
-    // the message. (Since staff scope an admin outside the family's charge is
-    // refused earlier, at the read, and would not reach the author check.)
-    await expect(g.messages.deleteForEveryone(m.id, s.ownerId, 'no reason')).rejects.toMatchObject({
+    const m = await g.messages.send({ conversationId: conv.id, senderId: s.ownerId, body: 'from the admin' });
+    // The parent can read this conversation, and did not write the message.
+    // (Since staff scope an admin outside the family's charge is refused
+    // earlier, at the read, and would not reach the author check.)
+    await expect(g.messages.deleteForEveryone(m.id, s.parentId, 'no reason')).rejects.toMatchObject({
       code: CommErrorCode.NOT_MESSAGE_AUTHOR,
     });
+    expect((await g.prisma.message.findUniqueOrThrow({ where: { id: m.id } })).deletedForAll).toBe(false);
+  });
+
+  it("PD-14: the admin of a parent's 1:1 deletes the parent's message for everyone", async () => {
+    const conv = await parentAdminConversation();
+    const m = await g.messages.send({ conversationId: conv.id, senderId: s.parentId, body: 'mine' });
+    await g.messages.deleteForEveryone(m.id, s.ownerId, 'removed by the supervisor');
+    expect((await g.prisma.message.findUniqueOrThrow({ where: { id: m.id } })).deletedForAll).toBe(true);
   });
 });
 
