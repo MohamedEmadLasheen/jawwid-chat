@@ -348,8 +348,8 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
       ar: 'مراجعة الطلبات التي تحتاج موافقة الإدارة.',
     },
     note: {
-      en: 'Message moderation exists for family-facing staff; administrator approvals are not wired yet.',
-      ar: 'مراجعة الرسائل موجودة لموظفي العائلات؛ موافقات الإدارة غير موصولة بعد.',
+      en: 'Messages no longer need approval (PD-14): admins edit or delete them in the chat after sending. Administrator approvals are not wired yet.',
+      ar: 'لم تعد الرسائل تحتاج موافقة: يعدّلها المشرفون أو يحذفونها في المحادثة بعد إرسالها. موافقات الإدارة غير موصولة بعد.',
     },
   },
   {

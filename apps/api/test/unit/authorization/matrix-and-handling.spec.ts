@@ -1,6 +1,6 @@
 /**
  * The communication matrix beyond BR-1: who may reply, in what capacity, and
- * what the approval policy holds.
+ * PD-14 (nothing is held; who moderates after sending).
  */
 import { CommErrorCode } from '@platform/errors';
 import { StaffAccessBasis } from '@platform/staff-scope';
@@ -146,48 +146,77 @@ describe('contacts', () => {
   });
 });
 
-describe('group approval policy', () => {
+describe('PD-14: nothing is held for approval -- every message publishes on send', () => {
   const authz = authzWithOnDuty('admin-1');
+  // The retired flags are set ON in every case: a stale row must not hold anything.
+  const held = { teacherRequiresApproval: true, parentRequiresApproval: true };
 
-  it('a teacher message is held when teacher approval is on', async () => {
+  it('a teacher message in a group publishes, even on a group still flagged for approval', async () => {
     const t = teacher();
-    const d = await authz.canSend(t, studentGroup({ teacherRequiresApproval: true }), member(t), customer, NOW);
+    const d = await authz.canSend(t, studentGroup(held), member(t), customer, NOW);
     expect(d.allowed).toBe(true);
-    if (d.allowed) expect(d.moderation).toBe('pending');
-  });
-
-  it('a parent message is held when parent approval is on', async () => {
-    const p = parent();
-    const d = await authz.canSend(p, studentGroup({ parentRequiresApproval: true }), member(p), customer, NOW);
-    if (d.allowed) expect(d.moderation).toBe('pending');
-  });
-
-  it('approval can be switched off per group', async () => {
-    const t = teacher();
-    const d = await authz.canSend(t, studentGroup({ teacherRequiresApproval: false }), member(t), customer, NOW);
     if (d.allowed) expect(d.moderation).toBe('published');
   });
 
-  it('an admin message in a group is NEVER held', async () => {
+  it('a parent message in a group publishes, even on a group still flagged for approval', async () => {
+    const p = parent();
+    const d = await authz.canSend(p, studentGroup(held), member(p), customer, NOW);
+    expect(d.allowed).toBe(true);
+    if (d.allowed) expect(d.moderation).toBe('published');
+  });
+
+  it('an admin message in a group publishes', async () => {
     const a = admin('admin-1');
-    const d = await authz.canSend(
-      a,
-      studentGroup({ teacherRequiresApproval: true, parentRequiresApproval: true }),
-      member(a),
-      customer,
-      NOW,
-    );
+    const d = await authz.canSend(a, studentGroup(held), member(a), customer, NOW);
     expect(d.allowed).toBe(true);
     if (d.allowed) expect(d.moderation).toBe('published');
   });
 
-  it('a 1:1 parent message is never held: approval applies to groups only', async () => {
+  it('a 1:1 parent message publishes', async () => {
     const p = parent();
-    const d = await authz.canSend(p, conversation({ type: 'direct' }), member(p), customer, NOW);
+    const d = await authz.canSend(p, conversation({ type: 'direct', ...held }), member(p), customer, NOW);
     if (d.allowed) expect(d.moderation).toBe('published');
   });
 });
 
+describe('PD-14: who may edit or delete a sent message they did not write', () => {
+  const authz = authzWithOnDuty();
+  const families = ['teacher', 'contact'];
+  const everyone = ['teacher', 'contact', 'staff'];
+
+  it("the children's supervisor, their active backup and the staff party of a 1:1 moderate teachers and parents", () => {
+    expect(authz.moderatableAuthorKinds(admin('sup'), StaffAccessBasis.RESPONSIBLE)).toEqual(families);
+    expect(authz.moderatableAuthorKinds(admin('bak', 'coverage'), StaffAccessBasis.BACKUP)).toEqual(families);
+    expect(authz.moderatableAuthorKinds(admin('m'), StaffAccessBasis.MEMBER)).toEqual(families);
+  });
+
+  it('only a department manager or the super admin also moderates other staff', () => {
+    expect(authz.moderatableAuthorKinds(manager(), StaffAccessBasis.MANAGER)).toEqual(everyone);
+    expect(authz.moderatableAuthorKinds(admin('owner', 'super_admin'), StaffAccessBasis.SUPER_ADMIN)).toEqual(everyone);
+    expect(authz.moderatableAuthorKinds(admin('sup'), StaffAccessBasis.RESPONSIBLE)).not.toContain('staff');
+  });
+
+  it('no basis on the conversation means no moderation -- the role alone is not enough', () => {
+    expect(authz.moderatableAuthorKinds(manager(), null)).toEqual([]);
+    expect(authz.moderatableAuthorKinds(admin('bystander'), null)).toEqual([]);
+  });
+
+  it('an inactive admin, or staff who never take part in conversations, moderate nothing', () => {
+    expect(authz.moderatableAuthorKinds({ ...admin('gone'), isActive: false }, StaffAccessBasis.RESPONSIBLE)).toEqual([]);
+    expect(authz.moderatableAuthorKinds(admin('fin', 'finance'), StaffAccessBasis.RESPONSIBLE)).toEqual([]);
+  });
+
+  it('a teacher or a parent never moderates', () => {
+    expect(authz.moderatableAuthorKinds(teacher(), StaffAccessBasis.RESPONSIBLE)).toEqual([]);
+    expect(authz.moderatableAuthorKinds(parent(), StaffAccessBasis.RESPONSIBLE)).toEqual([]);
+  });
+
+  it('system messages and cards are never moderated', () => {
+    expect(authz.moderatableAuthorKinds(admin('owner', 'super_admin'), StaffAccessBasis.SUPER_ADMIN)).not.toContain('system');
+  });
+});
+
+/** Legacy: decides only messages held BEFORE PD-14; nothing new joins the queue. */
 describe('who may decide an approval (PD-8: whoever is in charge of the group)', () => {
   const authz = authzWithOnDuty();
 

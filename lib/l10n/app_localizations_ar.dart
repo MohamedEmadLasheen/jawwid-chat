@@ -1994,4 +1994,66 @@ class L10nAr extends L10n {
 
   @override
   String get teacherProfileCertificateSave => 'حفظ الشهادة';
+
+  @override
+  String get myProfileTitle => 'ملفي الشخصي';
+
+  @override
+  String get myProfileSettingsSubtitle => 'صورتك واسمك ونبذتك';
+
+  @override
+  String get profileAboutLabel => 'نبذة';
+
+  @override
+  String get profileAboutHint => 'نبذة قصيرة عنك';
+
+  @override
+  String get profileAboutEmpty => 'لا توجد نبذة بعد';
+
+  @override
+  String get profileNameLabel => 'الاسم';
+
+  @override
+  String get profileNameEmptyError => 'يُرجى إدخال الاسم';
+
+  @override
+  String get profileNameTooLongError => 'الاسم طويل جدًا';
+
+  @override
+  String get profileAboutTooLongError => 'النص طويل جدًا';
+
+  @override
+  String get profileEdit => 'تعديل';
+
+  @override
+  String get profileSave => 'حفظ';
+
+  @override
+  String get profileCancel => 'إلغاء';
+
+  @override
+  String get profileSaved => 'تم الحفظ';
+
+  @override
+  String get profileSaveFailed => 'تعذّر الحفظ. يُرجى المحاولة مرة أخرى.';
+
+  @override
+  String get profilePhotoRemoveFailed =>
+      'تعذّر إزالة الصورة. يُرجى المحاولة مرة أخرى.';
+
+  @override
+  String get profilePhotoEditLabel => 'تغيير صورتك';
+
+  @override
+  String profileChildPhotoEditLabel(String name) {
+    return 'تغيير صورة $name';
+  }
+
+  @override
+  String profileChildEditTitle(String name) {
+    return 'ملف $name';
+  }
+
+  @override
+  String get profileLoadFailed => 'تعذّر تحميل ملفك الشخصي.';
 }

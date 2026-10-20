@@ -3660,6 +3660,120 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Save certificate'**
   String get teacherProfileCertificateSave;
+
+  /// No description provided for @myProfileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'My profile'**
+  String get myProfileTitle;
+
+  /// No description provided for @myProfileSettingsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your photo, name and about'**
+  String get myProfileSettingsSubtitle;
+
+  /// No description provided for @profileAboutLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'About'**
+  String get profileAboutLabel;
+
+  /// No description provided for @profileAboutHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A little about you'**
+  String get profileAboutHint;
+
+  /// No description provided for @profileAboutEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing added yet'**
+  String get profileAboutEmpty;
+
+  /// No description provided for @profileNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get profileNameLabel;
+
+  /// No description provided for @profileNameEmptyError.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter a name'**
+  String get profileNameEmptyError;
+
+  /// No description provided for @profileNameTooLongError.
+  ///
+  /// In en, this message translates to:
+  /// **'That name is too long'**
+  String get profileNameTooLongError;
+
+  /// No description provided for @profileAboutTooLongError.
+  ///
+  /// In en, this message translates to:
+  /// **'That is too long'**
+  String get profileAboutTooLongError;
+
+  /// No description provided for @profileEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get profileEdit;
+
+  /// No description provided for @profileSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get profileSave;
+
+  /// No description provided for @profileCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get profileCancel;
+
+  /// No description provided for @profileSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get profileSaved;
+
+  /// No description provided for @profileSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'That could not be saved. Please try again.'**
+  String get profileSaveFailed;
+
+  /// No description provided for @profilePhotoRemoveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'That photo could not be removed. Please try again.'**
+  String get profilePhotoRemoveFailed;
+
+  /// No description provided for @profilePhotoEditLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Change your photo'**
+  String get profilePhotoEditLabel;
+
+  /// No description provided for @profileChildPhotoEditLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Change {name}\'s photo'**
+  String profileChildPhotoEditLabel(String name);
+
+  /// No description provided for @profileChildEditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}\'s profile'**
+  String profileChildEditTitle(String name);
+
+  /// No description provided for @profileLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Your profile could not be loaded.'**
+  String get profileLoadFailed;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

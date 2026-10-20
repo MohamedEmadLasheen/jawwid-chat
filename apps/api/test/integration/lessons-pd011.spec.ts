@@ -106,10 +106,10 @@ describe('1. scheduling', () => {
 });
 
 describe('2. the lesson report', () => {
-  it('closes a started lesson as held and posts one published card, even where teacher messages are held for approval', async () => {
+  it('closes a started lesson as held and posts one published card (PD-14: nothing in the group is held)', async () => {
     const id = await lesson(-HOUR / 4);
     const conv = await g.prisma.conversation.findUniqueOrThrow({ where: { id: groupId } });
-    expect(conv.teacherRequiresApproval).toBe(true);
+    expect(conv.teacherRequiresApproval).toBe(false);
 
     const dto = await lessons.report(s.teacherId, id, { covered: 'Al-Mulk 1-15', homework: 'revise 1-5', rating: 5 });
     expect(dto.outcome).toBe('held');

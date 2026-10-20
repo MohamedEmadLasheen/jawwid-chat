@@ -101,7 +101,6 @@ function stubApi(messages: unknown[]) {
       if (path === '/conversations/c1/messages') return json({ messages, nextBefore: null })
       if (path === '/conversations/c1/messages/read') return json({ ok: true })
       if (path === '/conversations/c1/call-capability') return json({ canCall: false, code: 'X' })
-      if (path === '/approvals/pending') return json({ approvals: [] })
       if (/^\/scheduled-calls\/[^/]+\/join$/.test(path)) return json({ callId: 'call-j', conversationId: 'c1', mode: 'started' })
       return json({ error: { code: 'NOT_FOUND', message: 'nope' } }, 404)
     }),

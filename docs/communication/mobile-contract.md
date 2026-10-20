@@ -176,8 +176,16 @@ take is stopped rather than refused after the fact.
 
 ### Approvals (Teacher and Parent apps)
 
-In a Student Group, a teacher's or parent's message may be **held for approval**.
-It comes back from `POST /messages` with `moderation: "pending"`.
+> **PD-14 (2026-10-20): nothing is held for approval any more.** Every message
+> comes back from `POST /messages` with `moderation: "published"`, and
+> `viewerRequiresApproval` is always `false`. What follows applies only to a
+> message held BEFORE PD-14 that is still awaiting its decision. An admin may
+> now edit or delete a teacher's or parent's message after it was sent; it
+> arrives as `message.updated` / `message.deleted` and shows as "Edited" or
+> deleted, like the author's own.
+
+Before PD-14, in a Student Group, a teacher's or parent's message could be
+**held for approval**. It came back from `POST /messages` with `moderation: "pending"`.
 
 Show it in the thread as *your own message, awaiting approval*. Do not show it as
 sent, and do not expect other members to see it — they cannot.

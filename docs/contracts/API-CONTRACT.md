@@ -275,7 +275,9 @@ ConversationDto {
   learnerId: string|null, title: string|null,
   state: 'open'|'waiting_on_customer'|'waiting_on_jawwid'|'resolved',   // computed
   needsReply: boolean, lastSeq: string, lastActivityAt: string, archivedAt: string|null,
-  teacherRequiresApproval: boolean, parentRequiresApproval: boolean,
+  teacherRequiresApproval: boolean, parentRequiresApproval: boolean,     // PD-14: always false
+  viewerModerates?: string[],                   // detail only (PD-14): author kinds this viewer
+                                                // may edit / delete for everyone here
   members?: ConversationMemberDto[],                                      // detail only
   learner?: ConversationLearnerDto|null,        // list + detail; null when the conversation
                                                 // is about the family, not one child
@@ -498,7 +500,7 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 **POST /conversations/:conversationId/messages**
 - Auth: required. Permission: `messages.send`. Scope: `AuthorizationService.canSend` (membership, BR-1, C-4 admin presence, on-duty / sticky / manager, silent, `can_message`, archived).
 - Request: `{ type?: 'text'|'image'|'video'|'voice'|'file' (default text; 'system' is downgraded to text for non-system actors), body?: string, visibility?: 'customer'|'internal' (default customer), clientMessageId?: string (strongly recommended), replyToMessageId?: string, requestedMode?: 'assist'|'escalation' (only these are honoured; owner/coverage are derived), attachments?: [{ kind, objectKey, mimeType, byteSize, checksumSha256?, originalName?, durationMs?, width?, height?, thumbnailObjectKey? }] }`.
-- Response: `200 MessageDto` (with `moderation: 'pending'` when held for approval; `onBehalfMode` derived).
+- Response: `200 MessageDto` (`moderation` is always `'published'` since PD-14 — nothing is held for approval; `onBehalfMode` derived).
 - Errors: `COMM.EMPTY_MESSAGE` 400 · `COMM.ATTACHMENT_*` 400 · `COMM.MESSAGE_NOT_FOUND` 404 (reply target) · `COMM.REPLY_TARGET_CROSS_CONVERSATION` 403 · `COMM.CONVERSATION_ARCHIVED` 403 · every matrix code in §1.1.
 - Idempotency: **`clientMessageId`** (fast-path lookup + unique-index P2002 re-read, scoped to `(conversationId, authorId, clientMessageId)` — the unique index is asserted by the service comment; not re-verified in the migrations here). `Idempotency-Key` is redundant for this route.
 - Side effects: `seq = last_seq + 1` under `FOR UPDATE`; `lastActivityAt`; for published customer-visible messages a contact author sets `lastCustomerMessageAt` and clears `resolvedAt`, a staff author sets `lastStaffMessageAt` and becomes sticky handler for `handoff.grace_minutes` (15); receipts `sent` created for live members other than the author (internal notes: staff only); pending messages create a `message_approval` and **no receipts**.
@@ -740,6 +742,25 @@ The photos reach chat as signed links on the payloads below. A client never buil
 
 **What a commit does:** checks the key structurally, inspects the stored bytes (`judgeAvatar`), updates only `avatar_object_key`, writes `chat.audit_log` (`profile_photo.set|removed`), and deletes the replaced object. The database CHECK of 20261014130000 independently holds every key to its own row's prefix.
 
+### Parent profile: About for a parent and their children (on main 2026-10-21)
+
+A parent edits their own name and About, and each child's. Save is the publish. Migration `20261021010000`; `parent-profile.controller.ts`, `profile/parent-profile.service.ts`.
+
+- **Names** stay `chat.contact.name` / `chat.learner.name`. The profile tables hold no name.
+- **About** lives in `chat.contact_profile` / `chat.learner_profile`, Chat-owned siblings of the identity rows, so a Core projection can never overwrite it. At most 1000 characters; whitespace-only clears it.
+- **Photos** are the account photos, set through `/me/avatar` and `/me/children/:learnerId/avatar` (above). The profile carries their `self` links.
+- **No owner id.** The caller is the token. The one id that travels is a child's, and it resolves only inside the caller's own family.
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/me/profile` | none | `{ displayName, relationship, signInIdentity, about, avatarUrl, canMessage, children: [{ id, displayName, level, about, avatarUrl }] }`. Contacts only. |
+| PATCH | `/me/profile` | `{ name?, about? }` | The profile. An absent field is left alone; `about: null` or blank clears it. |
+| PATCH | `/me/children/:learnerId` | `{ name?, about? }` | The profile, for a child of the caller's family. |
+
+**Errors:** `COMM.PROFILE_NOT_AVAILABLE` (403, not a family contact), `COMM.PROFILE_FIELD_INVALID` (400), `COMM.LEARNER_NOT_IN_FAMILY` (404, also for a learner that does not exist).
+
+**Audit:** `profile.name.changed` and `profile.child.name.changed` (old and new name); `profile.about.saved` and `profile.child.about.saved` (the About's LENGTH, never its text). The actor is always the parent.
+
 ### Teacher professional profile (Teacher Profile V2; on main 2026-10-20)
 
 The teacher owns it: **Save is the publish.** There is no draft, no submit and no profile approval. What a reviewer still decides is each **certificate**, because an upload does not make a credential verified. Migrations `20261021000000` + `20261021000100`; `teacher-profile.controller.ts`, `teacher-profile/teacher-profile.service.ts`.
@@ -755,7 +776,7 @@ The teacher owns it: **Save is the publish.** There is no draft, no submit and n
 | POST | `/me/teacher-profile` | `{ bio?, specialization?, qualifications?, experience?, languages? }` | The profile, immediately current. |
 | PATCH | `/me/teacher-profile/name` | `{ name }` | `{ name, role }`, the name as stored (trimmed, whitespace collapsed). |
 | POST | `/me/teacher-profile/certificates/upload` | `{ mimeType, byteSize }` | `{ uploadUrl, uploadToken, expiresAt, headers }`. PDF/JPEG/PNG, at most 10 MiB. PUT the bytes with exactly `headers`. |
-| POST | `/me/teacher-profile/certificates` | `{ title, issuingOrganization?, issuedOn?, mimeType, byteSize, uploadToken }` | The profile; the new certificate is `pending`. |
+| POST | `/me/teacher-profile/certificates` | `{ title, issuingOrganization?, issuedOn?, mimeType, byteSize, uploadToken }` | The profile; the new certificate is `pending`. The file must already be in storage, at the declared size, and sniff as the declared type: otherwise `COMM.TEACHER_CERTIFICATE_NOT_UPLOADED` (409) or `_INVALID_TYPE` (400, and the file is deleted). |
 | PATCH | `/me/teacher-profile/certificates/:id` | `{ title, issuingOrganization?, issuedOn? }` | The profile. A retitled claim returns to `pending`; the file never moves. |
 | DELETE | `/me/teacher-profile/certificates/:id` | none | The profile. |
 | GET | `/teacher-profiles/review` | none | `{ profiles: [{ profileId, teacherName, pendingCertificates, certificates[] }] }`, reviewers only. |
@@ -764,7 +785,7 @@ The teacher owns it: **Save is the publish.** There is no draft, no submit and n
 
 **Reviewers:** admin, coverage, manager and the super admin (`AuthorizationService.canReviewTeacherProfile`, mirrored by `chat.current_can_review_teacher_profile()`), same organization.
 
-**Errors:** `COMM.TEACHER_PROFILE_NOT_A_TEACHER`, `_CANNOT_REVIEW`, `_REVIEW_NOTE_REQUIRED`, `_INVALID_CONTENT`, `_CONFLICT`, `_NOT_FOUND`; `COMM.TEACHER_NAME_INVALID`; `COMM.TEACHER_CERTIFICATE_NOT_FOUND`, `_INVALID_TYPE`, `_TOO_LARGE`.
+**Errors:** `COMM.TEACHER_PROFILE_NOT_A_TEACHER`, `_CANNOT_REVIEW`, `_REVIEW_NOTE_REQUIRED`, `_INVALID_CONTENT`, `_CONFLICT`, `_NOT_FOUND`; `COMM.TEACHER_NAME_INVALID`; `COMM.TEACHER_CERTIFICATE_NOT_FOUND`, `_INVALID_TYPE`, `_TOO_LARGE`, `_NOT_UPLOADED`.
 
 No parent-facing route exists yet: `publicProfile` (approved certificates only) is service-level, waiting for the family screen.
 

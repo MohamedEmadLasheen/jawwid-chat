@@ -10,6 +10,7 @@ import '../core/data/http/http_conversation_repository.dart';
 import '../core/data/http/http_group_repository.dart';
 import '../core/data/http/http_lesson_repository.dart';
 import '../core/data/http/http_message_repository.dart';
+import '../core/data/http/http_profile_repository.dart';
 import '../core/data/http/http_story_repository.dart';
 import '../core/data/http/http_supervision_repository.dart';
 import '../core/data/http/http_teacher_profile_repository.dart';
@@ -170,6 +171,9 @@ List<Override> _httpOverrides() {
     trialRepositoryProvider.overrideWithValue(
       HttpTrialRepository(client: client),
     ),
+    profileRepositoryProvider.overrideWithValue(
+      HttpProfileRepository(client: client),
+    ),
     // Stories are read-only here. The development composition root below registers no
     // implementation on purpose -- a fixture story is indistinguishable on screen from a real
     // publication, and this feature's contract is that what a reader sees was genuinely
@@ -273,6 +277,9 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
       return socket;
     }),
     realtimeTokenProvider.overrideWithValue(const _NoRealtimeTokens()),
+    // A fixture profile is honest here, unlike a fixture story: it is the signed-in user's
+    // OWN, so nothing fake stands in for something another person actually published.
+    profileRepositoryProvider.overrideWithValue(FakeProfileRepository()),
     authControllerProvider.overrideWith(
       () => AuthController(
         repository: authRepository,

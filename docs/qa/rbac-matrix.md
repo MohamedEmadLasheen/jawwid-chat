@@ -101,7 +101,7 @@ that must be given a precise, testable definition — see `test-plan.md` AMB-9.
 | Edit a pending message | **DENY** | **DENY** | **DENY** | **DENY** | **DENY** |
 | Approve one's own message | **DENY (self-approval forbidden)** | | | | |
 
-¹ Governed by `teacherRequiresApproval` / `parentRequiresApproval` on the group.
+¹ Was governed by `teacherRequiresApproval` / `parentRequiresApproval`. Since PD-14 (2026-10-20) nothing is held; these rows apply only to messages held before it. Edit/delete after sending: see PD-14.
 
 **Hard rule:** a PENDING message is **never** delivered, pushed, surfaced in
 search, emitted on realtime, or included in a group read — to anyone except its

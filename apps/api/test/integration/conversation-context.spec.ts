@@ -14,7 +14,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { toConversationDto } from '@communication/contracts/dto';
-import { buildGraph, seed, truncate, withAssignmentGate, Scenario, supervise } from './harness';
+import { buildGraph, legacyHeldMessage, seed, truncate, withAssignmentGate, Scenario, supervise } from './harness';
 
 jest.setTimeout(60_000);
 
@@ -238,14 +238,10 @@ describe('unread count', () => {
   });
 
   it('never counts a message still awaiting approval', async () => {
-    // A pending group message creates no receipts at all, so it cannot reach
+    // A message held before PD-14 has no receipts at all, so it cannot reach
     // anyone's badge before a supervisor has approved it.
     const group = await studentGroup();
-    await g.messages.send({
-      conversationId: group.id,
-      senderId: s.parentId,
-      body: 'held for review',
-    });
+    await legacyHeldMessage(g, { conversationId: group.id, senderId: s.parentId, body: 'held for review' });
 
     const dto = (await listFor(s.teacherId)).find((c) => c.id === group.id);
     expect(dto!.unreadCount).toBe(0);

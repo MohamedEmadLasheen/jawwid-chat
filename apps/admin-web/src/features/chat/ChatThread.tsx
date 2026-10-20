@@ -142,8 +142,7 @@ export function ChatThread({
     queryFn: () => chatApi.get(conversationId),
   })
   // The newest page is the live part: every realtime event re-reads it, so a
-  // new message, a deletion or a late approval (which keeps its ORIGINAL seq)
-  // all arrive the same way.
+  // new message, an edit or a deletion all arrive the same way.
   const latest = useQuery({
     queryKey: chatKeys.messages(conversationId),
     queryFn: () => chatApi.messages(conversationId),
@@ -152,19 +151,9 @@ export function ChatThread({
     // event heals it; this bounds how long it can stay unhealed without one.
     refetchInterval: 60_000,
   })
-  // Held messages this admin may act on. The queue is server-filtered to
-  // conversations in the caller's charge; whether they may DECIDE is asked of
-  // the server when they press the button.
-  const approvals = useQuery({
-    queryKey: chatKeys.approvals(conversationId),
-    queryFn: () => chatApi.pendingApprovals(conversationId),
-  })
-  const approvalFor = useMemo(
-    () => new Map((approvals.data ?? []).map((a) => [a.messageId, a.approvalId])),
-    [approvals.data],
-  )
+  // PD-14: whose messages this admin may edit or delete after they were sent.
+  const moderates = useMemo(() => new Set(details.data?.viewerModerates ?? []), [details.data?.viewerModerates])
   const refreshThread = () => {
-    void queryClient.invalidateQueries({ queryKey: chatKeys.approvals(conversationId) })
     void queryClient.invalidateQueries({ queryKey: chatKeys.messages(conversationId) })
     void queryClient.invalidateQueries({ queryKey: chatKeys.pins(conversationId) })
     void queryClient.invalidateQueries({ queryKey: chatKeys.starred })
@@ -544,9 +533,8 @@ export function ChatThread({
                     runStart={runStart}
                     selfId={staff?.id}
                     canModerate={staff?.role === 'manager'}
+                    moderated={m.authorId !== staff?.id && moderates.has(m.authorKind)}
                     quoted={m.replyToMessageId ? byId.get(m.replyToMessageId) ?? null : undefined}
-                    approvalId={approvalFor.get(m.id)}
-                    onDecided={refreshThread}
                     onReply={() =>
                       setReply({ messageId: m.id, author: m.authorId === staff?.id ? copy.you : authorName(m, copy), preview: bodyPreview(m, copy) })
                     }
@@ -776,9 +764,8 @@ function MessageItem({
   runStart,
   selfId,
   canModerate,
+  moderated,
   quoted,
-  approvalId,
-  onDecided,
   onReply,
   onReact,
   onStar,
@@ -799,10 +786,10 @@ function MessageItem({
   runStart: boolean
   selfId: string | undefined
   canModerate: boolean
+  /** PD-14: someone else's message this admin moderates here -- edit and delete at any time. */
+  moderated: boolean
   /** The message this one replies to: the message, null when it is not loaded, undefined when it is no reply. */
   quoted: ChatMessage | null | undefined
-  approvalId?: string
-  onDecided: () => void
   onReply: () => void
   onReact: (emoji: string) => void
   onStar: () => void
@@ -820,27 +807,6 @@ function MessageItem({
 }) {
   const { locale, time } = useI18n()
   const copy = chatCopyFor(locale)
-  const [deciding, setDeciding] = useState(false)
-  const [decisionError, setDecisionError] = useState<unknown>(null)
-
-  async function decide(approve: boolean) {
-    if (!approvalId) return
-    let reason = ''
-    if (!approve) {
-      reason = window.prompt(copy.rejectReason)?.trim() ?? ''
-      if (!reason) return
-    }
-    setDeciding(true)
-    setDecisionError(null)
-    try {
-      await (approve ? chatApi.approve(approvalId) : chatApi.reject(approvalId, reason))
-      onDecided()
-    } catch (e) {
-      setDecisionError(e)
-    } finally {
-      setDeciding(false)
-    }
-  }
 
   if (side === 'system') {
     return (
@@ -854,14 +820,14 @@ function MessageItem({
   }
 
   const mine = m.authorId === selfId
-  // A hint only: the server decides (author, window, never-moderated text).
+  // A hint only: the server decides (the author within the window, or -- PD-14 --
+  // an admin moderating it at any time; a published text either way).
   const editable =
-    mine &&
+    (moderated || (mine && Date.now() - new Date(m.createdAt).getTime() < EDIT_WINDOW_MS)) &&
     !m.deletedForAll &&
     m.type === 'text' &&
     m.moderation === 'published' &&
-    !!m.body &&
-    Date.now() - new Date(m.createdAt).getTime() < EDIT_WINDOW_MS
+    !!m.body
   const live = !m.deletedForAll
   // PD-13: a scheduled-call card is drawn with its Join button; any other card
   // (or one this client cannot read) keeps showing its plain-text body.
@@ -888,8 +854,9 @@ function MessageItem({
           ? [{ key: 'copy', label: copy.copy, icon: 'copy' as const, onSelect: () => void navigator.clipboard?.writeText(m.body ?? '') }]
           : []),
         { key: 'delete-me', label: copy.deleteForMe, icon: 'trash', onSelect: onDeleteForMe },
-        // The server allows it to the author within the window, or a manager; it answers anyone else.
-        ...(mine || canModerate
+        // The server allows it to the author within the window, a manager, or an
+        // admin moderating it (PD-14); it answers anyone else.
+        ...(mine || canModerate || moderated
           ? [{ key: 'delete-all', label: copy.deleteForEveryone, icon: 'trash' as const, danger: true, onSelect: onDeleteForEveryone }]
           : []),
       ]
@@ -1025,17 +992,6 @@ function MessageItem({
               {r.emoji} {r.count > 1 && <span>{r.count}</span>}
             </button>
           ))}
-        </div>
-      )}
-      {m.moderation === 'pending' && approvalId && (
-        <div className="cw-decide">
-          <button type="button" className="btn btn--sm btn--primary" disabled={deciding} onClick={() => void decide(true)}>
-            {copy.approve}
-          </button>
-          <button type="button" className="btn btn--sm btn--ghost" disabled={deciding} onClick={() => void decide(false)}>
-            {copy.reject}
-          </button>
-          {decisionError !== null && <span role="alert">{errorText(decisionError, locale, copy.decisionFailed)}</span>}
         </div>
       )}
     </li>

@@ -85,7 +85,7 @@ Family-facing staff (may take part in family conversations): `admin`,
 | `sessions.manage` | list/revoke own sessions | ● | ● | ● | ● | ● | ● |
 
 ¹ only on families with an active **explicit temporary assignment** to the coverage admin (PD-3; scope, §6). A shift schedule is not an authorization input.
-² in `student_group`/`class_group`, held for moderation by default (`conversation.parentRequiresApproval` / `teacherRequiresApproval`); refused entirely when no live admin is present (C-4).
+² in `student_group`/`class_group`, published on send (PD-14: nothing is held for approval; an admin in charge moderates afterwards by edit or delete — `AuthorizationService.moderatableAuthorKinds`); refused entirely when no live admin is present (C-4).
 ³ a parent reads only their own family; a teacher reads only the families of learners they teach, through the group.
 ⁴ **PD-2, CLOSED 2026-09-07.** A parent may start a 1:1 call to their handler, and may JOIN a Student Group or Class Group call, but may **never initiate** one. Group calls are initiated by a teacher or by admin / authorized staff. Enforced by `canCall`'s `CallIntent` parameter, which defaults to the stricter `initiate`; denial code `COMM.PARENT_CANNOT_START_GROUP_CALL`. Protected by `apps/api/test/unit/authorization/pd002-group-call-initiation.spec.ts`.
 
