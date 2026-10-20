@@ -275,7 +275,9 @@ ConversationDto {
   learnerId: string|null, title: string|null,
   state: 'open'|'waiting_on_customer'|'waiting_on_jawwid'|'resolved',   // computed
   needsReply: boolean, lastSeq: string, lastActivityAt: string, archivedAt: string|null,
-  teacherRequiresApproval: boolean, parentRequiresApproval: boolean,
+  teacherRequiresApproval: boolean, parentRequiresApproval: boolean,     // PD-14: always false
+  viewerModerates?: string[],                   // detail only (PD-14): author kinds this viewer
+                                                // may edit / delete for everyone here
   members?: ConversationMemberDto[],                                      // detail only
   learner?: ConversationLearnerDto|null,        // list + detail; null when the conversation
                                                 // is about the family, not one child
@@ -498,7 +500,7 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 **POST /conversations/:conversationId/messages**
 - Auth: required. Permission: `messages.send`. Scope: `AuthorizationService.canSend` (membership, BR-1, C-4 admin presence, on-duty / sticky / manager, silent, `can_message`, archived).
 - Request: `{ type?: 'text'|'image'|'video'|'voice'|'file' (default text; 'system' is downgraded to text for non-system actors), body?: string, visibility?: 'customer'|'internal' (default customer), clientMessageId?: string (strongly recommended), replyToMessageId?: string, requestedMode?: 'assist'|'escalation' (only these are honoured; owner/coverage are derived), attachments?: [{ kind, objectKey, mimeType, byteSize, checksumSha256?, originalName?, durationMs?, width?, height?, thumbnailObjectKey? }] }`.
-- Response: `200 MessageDto` (with `moderation: 'pending'` when held for approval; `onBehalfMode` derived).
+- Response: `200 MessageDto` (`moderation` is always `'published'` since PD-14 — nothing is held for approval; `onBehalfMode` derived).
 - Errors: `COMM.EMPTY_MESSAGE` 400 · `COMM.ATTACHMENT_*` 400 · `COMM.MESSAGE_NOT_FOUND` 404 (reply target) · `COMM.REPLY_TARGET_CROSS_CONVERSATION` 403 · `COMM.CONVERSATION_ARCHIVED` 403 · every matrix code in §1.1.
 - Idempotency: **`clientMessageId`** (fast-path lookup + unique-index P2002 re-read, scoped to `(conversationId, authorId, clientMessageId)` — the unique index is asserted by the service comment; not re-verified in the migrations here). `Idempotency-Key` is redundant for this route.
 - Side effects: `seq = last_seq + 1` under `FOR UPDATE`; `lastActivityAt`; for published customer-visible messages a contact author sets `lastCustomerMessageAt` and clears `resolvedAt`, a staff author sets `lastStaffMessageAt` and becomes sticky handler for `handoff.grace_minutes` (15); receipts `sent` created for live members other than the author (internal notes: staff only); pending messages create a `message_approval` and **no receipts**.

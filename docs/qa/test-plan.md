@@ -108,8 +108,10 @@ policy disabled. If any row passes, BR-1 is not implemented.
 
 | ID | Case | Expected |
 |---|---|---|
-| AP-01 | Teacher posts where `teacherRequiresApproval` | message enters PENDING, is not delivered |
-| AP-02 | Parent posts where `parentRequiresApproval` | same |
+| AP-01 | Teacher posts in a group (PD-14) | message is PUBLISHED and delivered at once, even on a group still flagged `teacherRequiresApproval` |
+| AP-02 | Parent posts in a group (PD-14) | same |
+| AP-07 | Supervisor edits / deletes a parent's or teacher's message, any age (PD-14) | allowed; revision names the editor; author's window does not apply |
+| AP-08 | Supervisor edits a colleague's message; admin with no basis edits anyone's (PD-14) | DENY `COMM.NOT_MESSAGE_AUTHOR` |
 | AP-03 | Approver approves | message becomes published exactly once; delivered; realtime emitted; push sent |
 | AP-04 | Approver rejects **with** reason | stays rejected; author informed; never delivered |
 | AP-05 | Reject **without** reason | DENY (INV-10) |

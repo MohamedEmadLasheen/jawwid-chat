@@ -25,7 +25,7 @@ import { ActorScopedDatabase } from '@platform/actor-database';
 import { LocalFsBlobStore } from '@communication/attachments/blob-store';
 import { StaffProfileService } from '../../src/staff-profile/staff-profile.service';
 import { StaffWorkloadService } from '../../src/staff-profile/staff-workload.service';
-import { buildGraph, seed, truncate, Scenario, withAssignmentGate } from './harness';
+import { buildGraph, legacyHeldMessage, seed, truncate, Scenario, withAssignmentGate } from './harness';
 import { png } from '../support/images';
 import { SignedLocalObjectStorage } from '@communication/attachments/object-storage';
 import { MediaUrlSigner } from '@platform/media-url';
@@ -524,10 +524,10 @@ describe('workload numbers are counts of authoritative rows', () => {
   }
 
   it('match independent SQL, exclude churned families and inactive contacts, and never double-count teachers', async () => {
-    // One live student group with a held parent message: an open conversation,
-    // awaiting a reply, with one pending approval.
+    // One live student group with a parent message still held from before
+    // PD-14: an open conversation, awaiting a reply, with one pending approval.
     const group = await g.conversations.ensureStudentGroup(w.learnerId);
-    await g.messages.send({ conversationId: group.id, senderId: w.parentId, body: 'question' });
+    await legacyHeldMessage(g, { conversationId: group.id, senderId: w.parentId, body: 'question' });
 
     const mine = (await profiles.profile(await actor(w.ownerId), 'me')).workload;
     expect(mine).toEqual({

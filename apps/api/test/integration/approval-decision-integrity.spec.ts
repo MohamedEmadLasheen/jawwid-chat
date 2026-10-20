@@ -8,10 +8,14 @@
  * concurrent decisions could both win (a message announced as published and
  * then stored as rejected), and a manager of another organization could decide
  * an approval by id.
+ *
+ * PD-14 (2026-10-20): nothing new is ever held. The queue still decides the
+ * messages held before it, so these guarantees still matter; `held()` now
+ * recreates such a message (legacyHeldMessage) instead of sending one.
  */
 import { randomUUID } from 'node:crypto';
 import { CommError, CommErrorCode } from '@platform/errors';
-import { buildGraph, seed, truncate, Scenario } from './harness';
+import { buildGraph, legacyHeldMessage, seed, truncate, Scenario } from './harness';
 
 jest.setTimeout(60_000);
 
@@ -36,12 +40,9 @@ beforeEach(async () => {
 });
 
 async function held(): Promise<{ messageId: string; approvalId: string }> {
-  const m = await g.messages.send({
-    conversationId: groupId, senderId: s.teacherId, body: `held ${randomUUID()}`, clientMessageId: randomUUID(),
-  });
+  const m = await legacyHeldMessage(g, { conversationId: groupId, senderId: s.teacherId });
   expect(m.moderation).toBe('pending');
-  const a = await g.prisma.messageApproval.findFirstOrThrow({ where: { messageId: m.id } });
-  return { messageId: m.id, approvalId: a.id };
+  return { messageId: m.id, approvalId: m.approvalId };
 }
 
 const outcome = (p: Promise<unknown>) =>

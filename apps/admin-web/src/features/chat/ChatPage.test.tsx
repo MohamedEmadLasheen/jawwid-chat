@@ -1153,6 +1153,38 @@ describe('Edit and favorites', () => {
     }
   })
 
+  it("PD-14: an admin in charge edits a parent's old message and may delete it for everyone; a colleague's is not theirs to edit", async () => {
+    const state = {
+      conversations: [conv('c1', { viewerModerates: ['teacher', 'contact'] })],
+      messages: [
+        msg('p1', 1, { body: 'rude words' }),
+        msg('s1', 2, { body: 'colleague note', authorKind: 'staff', authorId: 'staff-2', authorDisplayName: 'Colleague' }),
+      ],
+    }
+    const calls = stubWorkspace(state)
+    renderChat('/chat/c1')
+
+    const colleague = (await screen.findByText('colleague note')).closest('li')!
+    fireEvent.click(within(colleague).getByRole('button', { name: 'Message options' }))
+    await screen.findByRole('menuitem', { name: 'Reply' })
+    expect(screen.queryByRole('menuitem', { name: 'Edit' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Delete for everyone' })).not.toBeInTheDocument()
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+
+    // Days old: an author's window has long closed, a moderator has none.
+    const parentRow = screen.getByText('rude words').closest('li')!
+    fireEvent.click(within(parentRow).getByRole('button', { name: 'Message options' }))
+    expect(await screen.findByRole('menuitem', { name: 'Delete for everyone' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit' }))
+    fireEvent.change(screen.getByLabelText('Editing message'), { target: { value: 'kind words' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save edit' }))
+
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'PATCH')).toMatchObject({ path: '/conversations/c1/messages/p1', body: { body: 'kind words' } }),
+    )
+    expect(within((await screen.findByText('kind words')).closest('li')!).getByText('Edited')).toBeInTheDocument()
+  })
+
   it('Escape cancels an edit and gives back what was being typed', async () => {
     stubWorkspace({ conversations: [conv('c1')], messages: [mine('m1', 1, { body: 'typo here' })] })
     renderChat('/chat/c1')

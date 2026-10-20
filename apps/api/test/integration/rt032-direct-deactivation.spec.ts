@@ -20,7 +20,7 @@ import { randomUUID } from 'node:crypto';
 import { AuthService } from '@platform/auth/auth.service';
 import { PrismaAuditService } from '@platform/audit.service';
 import { CommError, CommErrorCode } from '@platform/errors';
-import { buildGraph, seed, truncate, Scenario } from './harness';
+import { buildGraph, legacyHeldMessage, seed, truncate, Scenario } from './harness';
 
 process.env.JWT_ACCESS_SECRET ??= 'integration-access-secret-32-chars-min!';
 process.env.JWT_REFRESH_SECRET ??= 'integration-refresh-secret-32-chars-min!';
@@ -109,11 +109,11 @@ describe('RT-032 · a direct-DB deactivation refuses every operation that starts
     expect(await refusal(g.calls.start(groupId, s.teacherId))).toBe(CommErrorCode.ACTOR_INACTIVE);
   });
 
-  it('MANAGER (staff.is_active=false): authentication and an APPROVAL refuse; the held message stays held', async () => {
-    const held = await g.messages.send({
-      conversationId: groupId, senderId: s.teacherId, body: 'needs approval', clientMessageId: randomUUID(),
-    });
+  it('MANAGER (staff.is_active=false): authentication, an APPROVAL and moderation (PD-14) refuse; nothing changes', async () => {
+    // PD-14: a message held before it -- nothing new is held.
+    const held = await legacyHeldMessage(g, { conversationId: groupId, senderId: s.teacherId, body: 'needs approval' });
     expect(held.moderation).toBe('pending');
+    const sent = await g.messages.send({ conversationId: groupId, senderId: s.teacherId, body: 'as sent', clientMessageId: randomUUID() });
     const approval = await g.prisma.messageApproval.findFirstOrThrow({ where: { messageId: held.id } });
 
     await g.prisma.$executeRawUnsafe(`update chat.staff set is_active = false, left_at = now() where id = '${s.managerId}'::uuid`);
@@ -121,6 +121,10 @@ describe('RT-032 · a direct-DB deactivation refuses every operation that starts
     expect(await auth.authenticate(tokens.manager)).toBeNull();
     expect(await refusal(g.approvals.approve(approval.id, s.managerId))).not.toBe('ALLOWED');
     expect((await g.prisma.message.findUniqueOrThrow({ where: { id: held.id } })).moderation).toBe('pending');
+    expect(await refusal(g.messages.edit(sent.id, s.managerId, 'rewritten'))).not.toBe('ALLOWED');
+    expect(await refusal(g.messages.deleteForEveryone(sent.id, s.managerId, 'removed'))).not.toBe('ALLOWED');
+    const after = await g.prisma.message.findUniqueOrThrow({ where: { id: sent.id } });
+    expect([after.body, after.deletedForAll]).toEqual(['as sent', false]);
   });
 
   it('a call already ringing refuses a media token to a member deactivated after it started', async () => {

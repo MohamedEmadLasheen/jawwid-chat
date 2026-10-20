@@ -208,8 +208,8 @@ model Conversation {
 
   state String @default("open")
 
-  teacherRequiresApproval Boolean @map("teacher_requires_approval") @default(true)
-  parentRequiresApproval  Boolean @map("parent_requires_approval") @default(true)
+  teacherRequiresApproval Boolean @map("teacher_requires_approval") @default(false) // PD-14: retired, always false
+  parentRequiresApproval  Boolean @map("parent_requires_approval") @default(false) // PD-14: retired, always false
 
   stickyHandlerId String?   @map("sticky_handler_id") @db.Uuid
   stickyHandler   Staff?    @relation("ConversationStickyHandler", fields: [stickyHandlerId], references: [id])

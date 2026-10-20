@@ -40,7 +40,7 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.CANNOT_MANAGE_MEMBERSHIP` | Only Jawwid staff with the conversation's family in scope change membership; a direct conversation's membership never changes. |
 | `COMM.CANNOT_PROVISION_STUDENT_GROUP` | Only the family's supervisor (admin / coverage owner) or a manager of the same organization may create or re-sync a Student Group. |
 | `COMM.CANNOT_APPROVE` | Only the active handler or a manager may decide. |
-| `COMM.NOT_MESSAGE_AUTHOR` | Only the author (or a manager) may delete for everyone. |
+| `COMM.NOT_MESSAGE_AUTHOR` | Only the author, a manager, or (PD-14) an admin in charge of the conversation may edit or delete for everyone. |
 | `COMM.DELETE_WINDOW_EXPIRED` | Past `communication.delete_for_everyone_window_minutes`. |
 | `COMM.EDIT_WINDOW_EXPIRED` | Past `communication.edit_window_minutes`. |
 
@@ -62,7 +62,7 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.CHAT_WALLPAPER_TOO_LARGE` | 400 | The wallpaper is over 4 MB. |
 | `COMM.CHAT_WALLPAPER_DIMENSIONS` | 400 | Each side of a wallpaper must be 200–4096 px. |
 | `COMM.CHAT_WALLPAPER_ANIMATED` | 400 | An animated image cannot be a wallpaper. |
-| `COMM.MESSAGE_NOT_EDITABLE` | 409 | Only a published, never-moderated, undeleted text message can be edited, and not where the author's sends are held for approval. |
+| `COMM.MESSAGE_NOT_EDITABLE` | 409 | Only a published, undeleted text message can be edited. |
 | `COMM.REVOCATION_UNCONFIRMED` | 503 | RT-009. A membership removal, Student Group sync, logout or session/account revocation **is committed**, but not every API server confirmed it can no longer deliver realtime events to the revoked person on an earlier decision — so it is not reported as done. Retry the same request; it is idempotent and succeeds once every server confirms. |
 
 ## Calling
