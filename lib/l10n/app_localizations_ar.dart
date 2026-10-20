@@ -1721,4 +1721,36 @@ class L10nAr extends L10n {
 
   @override
   String get cancelSelection => 'إلغاء التحديد';
+
+  @override
+  String get searchInChat => 'البحث في المحادثة';
+
+  @override
+  String get searchMessagesHint => 'ابحث في الرسائل';
+
+  @override
+  String get searchClose => 'إغلاق البحث';
+
+  @override
+  String get searchOlder => 'النتيجة الأقدم';
+
+  @override
+  String get searchNewer => 'النتيجة الأحدث';
+
+  @override
+  String get searchNoMatches => 'لا توجد رسائل مطابقة';
+
+  @override
+  String get searchTooShort => 'اكتب حرفين على الأقل';
+
+  @override
+  String searchPosition(int index, String total) {
+    return '$index من $total';
+  }
+
+  @override
+  String get searchMessagesSection => 'الرسائل';
+
+  @override
+  String get searchMessagesNone => 'لا توجد رسائل مطابقة في محادثاتك';
 }

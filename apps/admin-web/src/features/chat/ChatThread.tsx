@@ -15,6 +15,9 @@ import { chatCopyFor, systemText, type ChatCopy } from './copy'
 import { ChatComposer, type ComposerSend, type EditTarget, type ReplyTarget } from './ChatComposer'
 import { ForwardDialog } from './ForwardDialog'
 import { LabelChip, LabelsDialog } from './LabelsDialog'
+import { ExportDialog } from './ExportDialog'
+import { ThreadSearch } from './ThreadSearch'
+import { Highlighted, searchable } from './search'
 import { ConversationAvatar, conversationName, isGroup, isMuted } from './chatView'
 import { useConversationPreferences } from './useChatActions'
 import { VoiceNotePlayer } from './VoiceRecorder'
@@ -110,11 +113,16 @@ export function ChatThread({
   backTo,
   infoShown,
   onToggleInfo,
+  focusMessageId,
+  onFocused,
 }: {
   conversationId: string
   backTo: string
   infoShown: boolean
   onToggleInfo: () => void
+  /** Open at this message (a search hit, a star): older history is loaded until it is on screen. */
+  focusMessageId?: string | null
+  onFocused?: () => void
 }) {
   const { locale } = useI18n()
   const copy = chatCopyFor(locale)
@@ -167,6 +175,10 @@ export function ChatThread({
   const [selected, setSelected] = useState<string[]>([])
   const [forwarding, setForwarding] = useState<string[] | null>(null)
   const [labeling, setLabeling] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [searching, setSearching] = useState(false)
+  const [searchQ, setSearchQ] = useState('')
+  const [target, setTarget] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const stopSelecting = () => {
     setSelecting(false)
@@ -206,6 +218,44 @@ export function ChatThread({
       setLoadingOlder(false)
     }
   }
+
+  /**
+   * Bring a message onto the screen: page back through older history until it
+   * is loaded (bounded), then scroll to it once it renders. The history stays
+   * contiguous, so "Load older" carries on from where this stopped.
+   */
+  async function reveal(messageId: string) {
+    atBottom.current = false
+    if (!byId.has(messageId)) {
+      let next = cursor
+      const fetched: ChatMessage[] = []
+      for (let i = 0; next && i < 40 && !fetched.some((m) => m.id === messageId); i += 1) {
+        const page = await chatApi.messages(conversationId, next)
+        fetched.push(...page.messages)
+        next = page.nextBefore
+      }
+      if (fetched.length > 0) {
+        setOlder((prev) => [...fetched, ...prev])
+        setOlderCursor(next)
+      }
+    }
+    setTarget(messageId)
+  }
+  useEffect(() => {
+    if (!target) return
+    const el = [...(scroller.current?.querySelectorAll<HTMLElement>('[data-msg-id]') ?? [])].find((node) => node.dataset.msgId === target)
+    if (!el) return
+    el.scrollIntoView?.({ block: 'center' })
+    el.classList.add('cw-msg--flash')
+    setTimeout(() => el.classList.remove('cw-msg--flash'), 1200)
+    setTarget(null)
+  }, [target, messages])
+  const loaded = latest.data !== undefined
+  useEffect(() => {
+    if (!focusMessageId || !loaded) return
+    void reveal(focusMessageId).finally(() => onFocused?.())
+    // Once per requested message, after the first page is in.
+  }, [focusMessageId, loaded])
 
   // Read state: report the newest seq actually on screen, once per new seq --
   // and only while the page is visible. A tab in the background has not "read"
@@ -370,6 +420,16 @@ export function ChatThread({
           <button
             type="button"
             className="btn btn--ghost btn--icon"
+            onClick={() => setSearching((on) => !on)}
+            aria-pressed={searching}
+            aria-label={copy.searchChat}
+            title={copy.searchChat}
+          >
+            <Icon name="search" />
+          </button>
+          <button
+            type="button"
+            className="btn btn--ghost btn--icon"
             onClick={onToggleInfo}
             aria-pressed={infoShown}
             aria-label={copy.info}
@@ -383,16 +443,34 @@ export function ChatThread({
               items={[
                 { key: 'info', label: group ? copy.groupInfo : copy.contactInfo, icon: 'info', onSelect: onToggleInfo },
                 { key: 'select', label: copy.select, icon: 'checkSquare', onSelect: () => setSelecting(true) },
+                { key: 'search', label: copy.searchChat, icon: 'search', onSelect: () => setSearching(true) },
                 { key: 'labels', label: copy.labelsMenu, icon: 'tag', onSelect: () => setLabeling(true) },
                 { key: 'mute', label: muted ? copy.unmute : copy.mute, icon: muted ? 'notifications' : 'bellOff', onSelect: () => prefs.mute(conv.id, !muted) },
                 { key: 'pin', label: pinned ? copy.unpin : copy.pin, icon: 'pin', onSelect: () => prefs.pin(conv.id, !pinned) },
                 { key: 'favorite', label: favorite ? copy.unfavorite : copy.favorite, icon: 'heart', onSelect: () => prefs.favorite(conv.id, !favorite) },
                 { key: 'archive', label: archived ? copy.unarchive : copy.archive, icon: 'archive', onSelect: () => prefs.archive(conv.id, !archived) },
+                // Exporting copies family data out of the system: the super admin's alone (the server enforces it).
+                ...(staff?.role === 'super_admin'
+                  ? [{ key: 'export', label: copy.exportChat, icon: 'upload' as const, onSelect: () => setExporting(true) }]
+                  : []),
               ]}
             />
           )}
         </div>
       </header>
+
+      {searching && (
+        <ThreadSearch
+          conversationId={conversationId}
+          query={searchQ}
+          onQuery={setSearchQ}
+          onReveal={(id) => void reveal(id)}
+          onClose={() => {
+            setSearching(false)
+            setSearchQ('')
+          }}
+        />
+      )}
 
       <PinnedBar conversationId={conversationId} scroller={scroller} />
 
@@ -457,6 +535,7 @@ export function ChatThread({
                     }}
                     selectMode={selecting}
                     isSelected={selected.includes(m.id)}
+                    highlight={searching && searchable(searchQ) ? searchQ : undefined}
                     onToggleSelect={() => setSelected((all) => (all.includes(m.id) ? all.filter((x) => x !== m.id) : [...all, m.id]))}
                     onPin={() => void act(() => (m.pinned ? chatApi.unpin(conversationId, m.id) : chatApi.pin(conversationId, m.id)))}
                     onDeleteForMe={() => void act(() => chatApi.deleteForMe(conversationId, m.id))}
@@ -592,6 +671,17 @@ export function ChatThread({
         />
       )}
 
+      {exporting && (
+        <ExportDialog
+          conversationId={conversationId}
+          onClose={() => setExporting(false)}
+          onDone={() => {
+            setExporting(false)
+            flash(copy.exportDone)
+          }}
+        />
+      )}
+
       {labeling && conv && (
         <LabelsDialog conversationId={conv.id} current={conv.labels ?? []} onClose={() => setLabeling(false)} />
       )}
@@ -629,6 +719,7 @@ function MessageItem({
   onSelectStart,
   selectMode,
   isSelected,
+  highlight,
   onToggleSelect,
   onPin,
   onDeleteForMe,
@@ -652,6 +743,8 @@ function MessageItem({
   onSelectStart: () => void
   selectMode: boolean
   isSelected: boolean
+  /** While searching: the term to mark in the text. */
+  highlight?: string
   onToggleSelect: () => void
   onPin: () => void
   onDeleteForMe: () => void
@@ -797,7 +890,7 @@ function MessageItem({
               {m.attachments.map((a) => (
                 <AttachmentView key={a.id} a={a} copy={copy} />
               ))}
-              {m.body && <span dir="auto">{m.body}</span>}
+              {m.body && <span dir="auto">{highlight ? <Highlighted text={m.body} query={highlight} /> : m.body}</span>}
             </>
           )}
           <span className="bubble__meta">

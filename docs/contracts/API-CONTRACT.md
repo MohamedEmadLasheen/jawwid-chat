@@ -590,6 +590,33 @@ Staff only. Every route first checks that the caller is active conversation staf
 
 **Storage:** migration `20261020110000` adds `chat.staff_label`, `chat.conversation_label` (a same-org trigger) and `chat.quick_reply` (owner NULL = team; partial unique indexes per library). RLS is enabled with no policies, so they are reachable only through the service role.
 
+### Message search and chat export (2026-10-20, owner decisions: search inside a chat and across chats; export = super admin only, logged, transcript + media)
+
+**Search never decides who may see a message.** The route first narrows to the conversations the caller may read. Text is matched with `chat.search_fold`, and every candidate then passes the same per-message rule the message list uses (`visibilityFilter`: internal notes, held or rejected messages, deleted-for-me). Messages deleted for everyone, system messages and cards are never matched.
+- `GET /conversations/:cid/messages/search?q=&before=` → `{ hits: MessageDto[], nextBefore: string | null }`
+  - Newest first, 50 per page, paged by seq.
+  - The caller must be able to read `:cid` (`canReadResolved`).
+- `GET /me/search?q=` → `{ hits: [{ conversationId, message: MessageDto }] }`
+  - Newest first, at most 40 hits, with no paging; a narrower term finds more.
+  - The boundary is `listForActor`: exactly the chats in the caller's list (PD-8 scope for staff, live membership for families and teachers).
+- `q` must be 2–100 characters after Arabic marks are removed, or the request fails with `COMM.VALIDATION` (400). `%` and `_` are literal characters.
+- **Matching** (migration `20261020140000`):
+  - Case-insensitive substring match.
+  - Arabic harakat, superscript alef and tatweel are ignored.
+  - أ/إ/آ/ٱ are treated as ا, ى as ي, and ة as ه.
+  - A trigram GIN index on `chat.search_fold(body)` serves terms of three or more characters.
+  - The clients carry a copy of the fold **for highlighting only**.
+
+**`GET /conversations/:cid/export`** → `application/zip`, `Content-Disposition: attachment; filename="jawwid-chat-<date>-<id8>.zip"`.
+- **Super admin only.** Any other caller gets `COMM.CONVERSATION_EXPORT_DENIED` (403) before anything is read. The conversation must also be readable by the super admin.
+- **Audit:** `chat.audit_log` records `conversation.exported` with `{ messages, mediaFiles, mediaBytes, internalNotes }`. The row is written BEFORE the first byte, so an interrupted download is still logged.
+- **Contents** — exactly what the super admin can read in the chat:
+  - `chat.txt`: UTF-8 with a BOM, oldest first, `[YYYY-MM-DD HH:mm] Sender: text`, times in `stats.zone`. Internal notes, forwarded, held and rejected messages are marked as such.
+  - `media/NNNN-<name>`: the stored bytes, under sanitized names.
+  - A message deleted for everyone appears as deleted, and its media are NOT exported.
+- **Format:** stored entries (no compression) with UTF-8 names and no ZIP64. If the archive would pass 4 GiB, the remaining files are listed in the transcript as not included.
+- **CORS:** `Content-Disposition` is exposed so the browser can read the file name.
+
 ### Starred and pinned messages (2026-10-19, owner decisions: anyone who can write may pin; at most 3)
 
 **Star: a private bookmark.** Nobody else ever sees it.

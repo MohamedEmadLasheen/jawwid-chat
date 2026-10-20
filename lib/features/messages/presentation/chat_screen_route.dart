@@ -24,10 +24,14 @@ class ChatScreenRoute extends ConsumerWidget {
   const ChatScreenRoute({
     super.key,
     required this.conversationId,
+    this.focusMessageId,
     this.startVoiceRecording = false,
   });
 
   final String conversationId;
+
+  /// Open at this message (a search hit); see [ChatScreen.focusMessageId].
+  final String? focusMessageId;
 
   /// Opened by "Record voice message" on the call screen (`?voice=1`).
   final bool startVoiceRecording;
@@ -60,6 +64,7 @@ class ChatScreenRoute extends ConsumerWidget {
         ),
       AsyncData(:final value) => ChatScreen(
           conversationId: conversationId,
+          focusMessageId: focusMessageId,
           // PD-12: the server titles a supervision conversation for its staff side;
           // the teacher reads it as their supervision chat.
           title: value.displayTitle(l10n.supervisionChatTitle, trialGroupLabel: l10n.trialGroupTitle),

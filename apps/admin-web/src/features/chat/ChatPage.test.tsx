@@ -1211,3 +1211,118 @@ describe('Edit and favorites', () => {
     expect(await within(dialog).findByText('Payment issue')).toBeInTheDocument()
   })
 })
+
+describe('Search and export (group B)', () => {
+  const SUPER = makeStaff({ id: 'staff_super', role: 'super_admin' })
+  function stubSearch(me = ADMIN, exportAnswer?: () => Response) {
+    const calls: Array<{ method: string; path: string; query: Record<string, string> }> = []
+    const json = (data: unknown, status = 200) =>
+      new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
+    const c1 = [msg('m1', 1, { body: 'old fee notice' }), msg('m2', 2), msg('m3', 3), msg('m4', 4), msg('m5', 5, { body: 'the fee is due' })]
+    const t1 = msg('t1', 1, { conversationId: 'c2', body: 'the trip is on Thursday' })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = new URL(String(input), 'http://localhost')
+        const path = url.pathname.replace(/^\/api\/v1/, '')
+        const query = Object.fromEntries(url.searchParams)
+        calls.push({ method: init?.method ?? 'GET', path, query })
+        if (path === '/me') return json(me)
+        if (path === '/approvals/pending') return json({ approvals: [] })
+        if (path === '/conversations') return json({ conversations: [conv('c1', { title: 'Kid group' }), conv('c2', { title: 'Second group' })] })
+        if (path === '/conversations/c1') return json(conv('c1', { title: 'Kid group' }))
+        if (path === '/conversations/c2') return json(conv('c2', { title: 'Second group' }))
+        if (path.endsWith('/messages/pins')) return json({ pins: [] })
+        if (path.endsWith('/messages/read')) return json({ ok: true })
+        if (path === '/conversations/c1/messages') {
+          // Two pages: the newest two, then the rest.
+          return query.before === '4'
+            ? json({ messages: c1.slice(0, 3).reverse(), nextBefore: null })
+            : json({ messages: c1.slice(3).reverse(), nextBefore: '4' })
+        }
+        if (path === '/conversations/c2/messages') return json({ messages: [t1], nextBefore: null })
+        if (path === '/conversations/c1/messages/search') return json({ hits: [c1[4], c1[0]], nextBefore: null })
+        if (path === '/me/search') return json({ hits: [{ conversationId: 'c2', message: t1 }] })
+        if (path === '/conversations/c1/export' && exportAnswer) return exportAnswer()
+        return json({ error: { code: 'NOT_FOUND', message: 'nope' } }, 404)
+      }),
+    )
+    return calls
+  }
+  const flashed = (id: string) => !!document.querySelector(`[data-msg-id="${id}"]`)?.classList.contains('cw-msg--flash')
+
+  beforeEach(() => fakeSocket.reset())
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('searches inside a chat: marks the match, and steps back to an older one, loading history to reach it', async () => {
+    const calls = stubSearch()
+    renderChat('/chat/c1')
+    await screen.findByText('the fee is due')
+    expect(screen.queryByText('old fee notice')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search in chat' }))
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search in chat' }), { target: { value: 'fee' } })
+    expect(await screen.findByText('1 of 2')).toBeInTheDocument()
+    expect(calls.find((c) => c.path === '/conversations/c1/messages/search')?.query).toEqual({ q: 'fee' })
+    expect(within(document.querySelector<HTMLElement>('[data-msg-id="m5"]')!).getByText('fee').tagName).toBe('MARK')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Older match' }))
+    expect(await screen.findByText('2 of 2')).toBeInTheDocument()
+    // Not on screen yet: the older page is fetched, then the message is shown.
+    await waitFor(() => expect(calls.some((c) => c.path === '/conversations/c1/messages' && c.query.before === '4')).toBe(true))
+    await waitFor(() => expect(flashed('m1')).toBe(true))
+  })
+
+  it('the list search also finds messages across chats, and opens the chat at the hit', async () => {
+    const calls = stubSearch()
+    renderChat('/chat')
+    await screen.findByText('Kid group')
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search chats and messages' }), { target: { value: 'trip' } })
+    const section = await screen.findByRole('region', { name: 'Messages' })
+    expect(calls.find((c) => c.path === '/me/search')?.query).toEqual({ q: 'trip' })
+    const hit = await within(section).findByRole('button', { name: /Second group/ })
+    expect(within(hit).getByText('trip').tagName).toBe('MARK')
+    fireEvent.click(hit)
+    await waitFor(() => expect(document.querySelector('[data-msg-id="t1"]')).not.toBeNull())
+    await waitFor(() => expect(flashed('t1')).toBe(true))
+  })
+
+  it('export is offered to the super admin only; it downloads the zip the server sends', async () => {
+    stubSearch(ADMIN)
+    const first = renderChat('/chat/c1')
+    await screen.findByText('the fee is due')
+    fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
+    await screen.findByRole('menuitem', { name: 'Select messages' })
+    expect(screen.queryByRole('menuitem', { name: 'Export chat…' })).not.toBeInTheDocument()
+    first.unmount()
+    vi.unstubAllGlobals()
+
+    const calls = stubSearch(SUPER, () =>
+      new Response(new Blob([new Uint8Array([0x50, 0x4b, 5, 6])]), {
+        status: 200,
+        headers: { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="jawwid-chat-2026-10-20-c1.zip"' },
+      }),
+    )
+    const created = vi.fn(() => 'blob:export')
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: created, revokeObjectURL: vi.fn() }))
+    const clicked = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    renderWithProviders(
+      <Routes>
+        <Route path="/chat/:conversationId" element={<ChatPage />} />
+      </Routes>,
+      { route: '/chat/c1', staff: SUPER },
+    )
+    await screen.findByText('the fee is due')
+    fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Export chat…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Export chat' })
+    expect(within(dialog).getByText(/audit log/)).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Download .zip' }))
+    await waitFor(() => expect(clicked).toHaveBeenCalled())
+    expect(calls.some((c) => c.path === '/conversations/c1/export')).toBe(true)
+    expect(created).toHaveBeenCalledWith(expect.any(Blob))
+    expect((clicked.mock.instances[0] as unknown as HTMLAnchorElement).download).toBe('jawwid-chat-2026-10-20-c1.zip')
+    expect(await screen.findByText('Export downloaded')).toBeInTheDocument()
+    clicked.mockRestore()
+  })
+})

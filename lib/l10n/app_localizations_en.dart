@@ -1725,4 +1725,36 @@ class L10nEn extends L10n {
 
   @override
   String get cancelSelection => 'Cancel selection';
+
+  @override
+  String get searchInChat => 'Search in chat';
+
+  @override
+  String get searchMessagesHint => 'Search messages';
+
+  @override
+  String get searchClose => 'Close search';
+
+  @override
+  String get searchOlder => 'Older match';
+
+  @override
+  String get searchNewer => 'Newer match';
+
+  @override
+  String get searchNoMatches => 'No matching messages';
+
+  @override
+  String get searchTooShort => 'Type at least 2 characters';
+
+  @override
+  String searchPosition(int index, String total) {
+    return '$index of $total';
+  }
+
+  @override
+  String get searchMessagesSection => 'Messages';
+
+  @override
+  String get searchMessagesNone => 'No matching messages in your chats';
 }

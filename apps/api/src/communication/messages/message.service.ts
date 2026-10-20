@@ -966,6 +966,126 @@ export class MessageService {
   }
 
   // -------------------------------------------------------------------
+  // Search (owner decision 2026-10-20: inside a chat and across one's chats)
+  // -------------------------------------------------------------------
+
+  static readonly SEARCH_PAGE = 50;
+  static readonly SEARCH_ACROSS_LIMIT = 40;
+  /** Text candidates per round, before the visibility rule narrows them. */
+  private static readonly SEARCH_WINDOW = 200;
+
+  /**
+   * Text search inside one conversation, newest first, paged by seq (`before`).
+   * The caller must be able to read the conversation; every text candidate then
+   * passes `visibilityFilter`, so a search can never surface a message the
+   * message list would not show this viewer. Deleted messages, system messages
+   * and cards are never matched.
+   */
+  async search(input: {
+    actorId: string;
+    conversationId: string;
+    q: unknown;
+    before?: string;
+  }): Promise<{ hits: MessageDto[]; nextBefore: string | null }> {
+    const q = searchQuery(input.q);
+    const actor = await this.conversations.requireActor(input.actorId);
+    const conv = await this.conversations.requireConversation(input.conversationId);
+    const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
+    const decision = await this.conversations.canReadResolved(actor, conv, membership);
+    if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+
+    const before = input.before && /^\d{1,18}$/.test(input.before) ? input.before : null;
+    const window = MessageService.SEARCH_WINDOW;
+    const candidates = await this.prisma.$queryRaw<Array<{ id: string; seq: bigint | null }>>`
+      SELECT id, seq FROM chat.message
+      WHERE conversation_id = ${conv.id}::uuid
+        AND deleted_for_all = false AND body IS NOT NULL
+        AND type NOT IN ('system', 'card')
+        AND (${before}::bigint IS NULL OR seq < ${before}::bigint)
+        AND chat.search_fold(body) LIKE '%' || chat.search_fold(${likeEscape(q)}) || '%' ESCAPE '!'
+      ORDER BY seq DESC NULLS LAST
+      LIMIT ${window}`;
+    if (candidates.length === 0) return { hits: [], nextBefore: null };
+
+    const rows = await this.prisma.message.findMany({
+      where: { AND: [this.visibilityFilter(actor, conv.id, {} as ListMessagesInput), { id: { in: candidates.map((c) => c.id) } }] },
+      include: { attachments: true, reactions: true, receipts: true, card: true },
+      orderBy: { seq: 'desc' },
+      take: MessageService.SEARCH_PAGE,
+    });
+    // More may follow either inside this window (the page filled) or beyond it
+    // (the window filled); seq < cursor covers both without skipping any.
+    const last = rows.length === MessageService.SEARCH_PAGE ? rows[rows.length - 1]?.seq : candidates.length === window ? candidates[candidates.length - 1]?.seq : null;
+    return { hits: await this.dtosFor(rows, conv.id, actor), nextBefore: last != null ? last.toString() : null };
+  }
+
+  /**
+   * Text search across every conversation in the caller's chat list, newest
+   * first, at most SEARCH_ACROSS_LIMIT hits. `listForActor` IS the boundary --
+   * exactly the chats this person's list shows (for staff, PD-8 scope; for a
+   * family member or a teacher, live membership) -- and then the per-message
+   * `visibilityFilter`, as in a single chat.
+   */
+  async searchAll(input: { actorId: string; q: unknown }): Promise<{ hits: Array<{ conversationId: string; message: MessageDto }> }> {
+    const q = searchQuery(input.q);
+    const actor = await this.conversations.requireActor(input.actorId);
+    const ids = (await this.conversations.listForActor(actor.actorId)).map((c) => c.id);
+    if (ids.length === 0) return { hits: [] };
+
+    const candidates = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM chat.message
+      WHERE conversation_id = ANY(${ids}::uuid[])
+        AND deleted_for_all = false AND body IS NOT NULL
+        AND type NOT IN ('system', 'card')
+        AND chat.search_fold(body) LIKE '%' || chat.search_fold(${likeEscape(q)}) || '%' ESCAPE '!'
+      ORDER BY created_at DESC
+      LIMIT ${MessageService.SEARCH_WINDOW}`;
+    if (candidates.length === 0) return { hits: [] };
+
+    const rows = await this.prisma.message.findMany({
+      where: { AND: [this.visibilityFilter(actor, { in: ids }, {} as ListMessagesInput), { id: { in: candidates.map((c) => c.id) } }] },
+      include: { attachments: true, reactions: true, receipts: true, card: true },
+      orderBy: { createdAt: 'desc' },
+      take: MessageService.SEARCH_ACROSS_LIMIT,
+    });
+    // Photos and names are signed per conversation, so map each chat's rows together.
+    const byConv = new Map<string, MessageWithRelations[]>();
+    for (const r of rows) if (r.conversationId) byConv.set(r.conversationId, [...(byConv.get(r.conversationId) ?? []), r]);
+    const dtos = new Map<string, MessageDto>();
+    for (const [convId, convRows] of byConv) for (const d of await this.dtosFor(convRows, convId, actor)) dtos.set(d.id, d);
+    return {
+      hits: rows.flatMap((r) => {
+        const message = dtos.get(r.id);
+        return message && r.conversationId ? [{ conversationId: r.conversationId, message }] : [];
+      }),
+    };
+  }
+
+  /**
+   * Every message this actor may see in a conversation, oldest first, in
+   * batches, with the stored rows (for attachment keys). For the super admin's
+   * export: THE CALLER AUTHORIZES the conversation (ConversationExportService);
+   * which messages appear is `visibilityFilter`, the one rule.
+   */
+  async *exportBatches(actor: Actor, conversationId: string): AsyncGenerator<Array<{ row: MessageWithRelations; dto: MessageDto }>> {
+    let cursor: string | undefined;
+    for (;;) {
+      const rows = await this.prisma.message.findMany({
+        where: this.visibilityFilter(actor, conversationId, {} as ListMessagesInput),
+        include: { attachments: true, reactions: true, receipts: true, card: true },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: 500,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      });
+      if (rows.length === 0) return;
+      const dtos = await this.dtosFor(rows, conversationId, actor);
+      yield rows.map((row, i) => ({ row, dto: dtos[i]! }));
+      cursor = rows[rows.length - 1]!.id;
+      if (rows.length < 500) return;
+    }
+  }
+
+  // -------------------------------------------------------------------
   // Forward (owner decisions 2026-10-19: anyone, any message they can read,
   // text and media, up to ten conversations)
   // -------------------------------------------------------------------
@@ -1318,4 +1438,27 @@ export class MessageService {
       (author) => signActorAvatar(author, conv.id, actor.actorId),
     );
   }
+}
+
+// The marks search ignores, built from code points so the source carries no
+// invisible characters: Arabic harakat U+064B-U+065F, superscript alef U+0670,
+// tatweel U+0640. chat.search_fold (migration 20261020140000) removes the same.
+const SEARCH_MARKS = new RegExp(
+  `[${String.fromCharCode(0x64b)}-${String.fromCharCode(0x65f)}${String.fromCharCode(0x670)}${String.fromCharCode(0x640)}]`,
+  'g',
+);
+
+/** A search term: 2 to 100 meaningful characters, spaces collapsed. */
+export function searchQuery(raw: unknown): string {
+  const q = typeof raw === 'string' ? raw.trim().replace(/\s+/g, ' ') : '';
+  const meaningful = [...q.replace(SEARCH_MARKS, '')].length;
+  if (meaningful < 2 || [...q].length > 100) {
+    throw new CommError(CommErrorCode.VALIDATION, 'search for 2 to 100 characters', 400);
+  }
+  return q;
+}
+
+/** LIKE wildcards in the user's text are literal: escape with '!' (ESCAPE '!'). */
+function likeEscape(s: string): string {
+  return s.replace(/[!%_]/g, (c) => `!${c}`);
 }

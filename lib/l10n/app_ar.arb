@@ -726,5 +726,15 @@
   "forwardedLabel": "مُعاد توجيهها",
   "selectAction": "تحديد الرسائل",
   "selectedCount": "{count, plural, =1{رسالة محددة} other{{count} رسائل محددة}}",
-  "cancelSelection": "إلغاء التحديد"
+  "cancelSelection": "إلغاء التحديد",
+  "searchInChat": "البحث في المحادثة",
+  "searchMessagesHint": "ابحث في الرسائل",
+  "searchClose": "إغلاق البحث",
+  "searchOlder": "النتيجة الأقدم",
+  "searchNewer": "النتيجة الأحدث",
+  "searchNoMatches": "لا توجد رسائل مطابقة",
+  "searchTooShort": "اكتب حرفين على الأقل",
+  "searchPosition": "{index} من {total}",
+  "searchMessagesSection": "الرسائل",
+  "searchMessagesNone": "لا توجد رسائل مطابقة في محادثاتك"
 }

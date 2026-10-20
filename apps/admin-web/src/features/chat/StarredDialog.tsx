@@ -15,7 +15,7 @@ import { conversationName } from './chatView'
  * every conversation they may still read (the server drops the rest). Choosing
  * one opens its conversation.
  */
-export function StarredDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (conversationId: string) => void }) {
+export function StarredDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (conversationId: string, messageId: string) => void }) {
   const { locale } = useI18n()
   const copy = chatCopyFor(locale)
   const { staff } = useSession()
@@ -58,7 +58,7 @@ export function StarredDialog({ onClose, onOpen }: { onClose: () => void; onOpen
             const author = m.authorId === staff?.id ? copy.you : m.authorDisplayName || (copy.role[m.authorKind] ?? '')
             return (
               <li key={m.id}>
-                <button type="button" className="cw-starred__item" onClick={() => onOpen(it.conversationId)}>
+                <button type="button" className="cw-starred__item" onClick={() => onOpen(it.conversationId, m.id)}>
                   <Avatar name={author || '?'} seed={m.authorId ?? m.authorKind} size="sm" src={m.authorAvatarUrl} />
                   <span className="cw-starred__main">
                     <span className="cw-starred__top">

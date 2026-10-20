@@ -135,6 +135,19 @@ async function parse<T>(response: Response, options: RequestOptions): Promise<T>
   return payload as T
 }
 
+/**
+ * A file the API streams (a chat export): its bytes and the server's file name.
+ * Same bearer, same single refresh-and-retry as `request`; an error answer is
+ * the usual JSON and throws the usual ApiError.
+ */
+export async function download(path: string): Promise<{ blob: Blob; fileName: string | null }> {
+  let response = await send(path, {})
+  if (response.status === 401 && (await refreshSession())) response = await send(path, {})
+  if (!response.ok) return parse<never>(response, {})
+  const disposition = response.headers.get('Content-Disposition') ?? ''
+  return { blob: await response.blob(), fileName: /filename="([^"]+)"/.exec(disposition)?.[1] ?? null }
+}
+
 export const api = {
   get: <T>(path: string, query?: Query, signal?: AbortSignal) =>
     request<T>(path, { method: 'GET', query, signal }),

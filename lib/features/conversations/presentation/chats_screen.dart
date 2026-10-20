@@ -7,11 +7,15 @@ import '../../../app/router.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/errors/error_presenter.dart';
 import '../../../design/tokens.dart';
+import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/conversation.dart';
 import '../../../shared/models/user_role.dart';
+import '../../../shared/utils/relative_time.dart';
+import '../../../shared/utils/search_fold.dart';
 import '../../../shared/utils/text_direction.dart';
+import '../../messages/application/search_providers.dart';
 import '../../stories/application/stories_controller.dart';
 import '../../stories/presentation/stories_rail.dart';
 import '../application/conversations_controller.dart';
@@ -38,6 +42,7 @@ class ChatsScreen extends ConsumerStatefulWidget {
     this.onOpenConversation,
     this.onOpenProfile,
     this.onOpenStory,
+    this.onOpenMessage,
     this.initialFilter = ChatFilter.all,
   });
 
@@ -49,6 +54,9 @@ class ChatsScreen extends ConsumerStatefulWidget {
 
   /// Same, for a tap on the stories rail.
   final void Function(String storyId)? onOpenStory;
+
+  /// Same, for a message search hit: open its chat at that message.
+  final void Function(String conversationId, String messageId)? onOpenMessage;
 
   /// Which chip the screen opens on. Always [ChatFilter.all] in the app — the parameter
   /// exists so a test can assert what a given filter shows without driving a tap through
@@ -77,6 +85,15 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
       return;
     }
     context.push(Routes.conversation(conversationId));
+  }
+
+  void _openAt(String conversationId, String messageId) {
+    final handler = widget.onOpenMessage;
+    if (handler != null) {
+      handler(conversationId, messageId);
+      return;
+    }
+    context.push(Routes.conversationAt(conversationId, messageId));
   }
 
   void _openProfile(String conversationId) {
@@ -156,10 +173,12 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
                     filter: _filter,
                     query: _query,
                   ),
+                  all: [for (final section in value) ...section.conversations],
                   filter: _filter,
                   query: _query,
                   role: role,
                   onOpen: _open,
+                  onOpenMessage: _openAt,
                   onOpenProfile: _openProfile,
                   onOpenStory: _openStory,
                 ),
@@ -175,6 +194,8 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
 class _Feed extends ConsumerWidget {
   const _Feed({
     required this.conversations,
+    required this.all,
+    required this.onOpenMessage,
     required this.filter,
     required this.query,
     required this.role,
@@ -184,6 +205,10 @@ class _Feed extends ConsumerWidget {
   });
 
   final List<Conversation> conversations;
+
+  /// Every chat in the list, unfiltered: a message hit names the chat it is in.
+  final List<Conversation> all;
+  final void Function(String conversationId, String messageId) onOpenMessage;
   final ChatFilter filter;
   final String query;
   final UserRole? role;
@@ -194,6 +219,10 @@ class _Feed extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final now = DateTime.now();
+    // The same box searches message text across every chat (owner decision
+    // 2026-10-20) once there is a term worth sending.
+    final term = query.trim();
+    final searchMessages = isSearchable(term) && ref.watch(messageSearchRepositoryProvider).isAvailable;
 
     return RefreshIndicator(
       // Both, together. The rail has no refresh control of its own precisely because this
@@ -219,7 +248,14 @@ class _Feed extends ConsumerWidget {
               onOpenStory: (story) => onOpenStory(story.id),
             ),
           ),
-          if (conversations.isEmpty)
+          if (conversations.isEmpty && searchMessages)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.only(top: Spacing.spacing6),
+                child: _EmptyState(filter: filter, query: query, role: role),
+              ),
+            )
+          else if (conversations.isEmpty)
             SliverFillRemaining(
               hasScrollBody: false,
               // Biased towards the top rather than centred. Centring put the explanation
@@ -259,12 +295,118 @@ class _Feed extends ConsumerWidget {
                 );
               },
             ),
+          if (searchMessages)
+            _MessageHits(
+              query: term,
+              conversations: all,
+              now: now,
+              onOpen: onOpenMessage,
+            ),
           // Breathing room above the tab bar so the last row is never half-hidden
           // behind it, and the safe-area inset on a home-indicator phone.
           const SliverToBoxAdapter(child: SizedBox(height: Spacing.spacing5)),
         ],
       ),
     );
+  }
+}
+
+/// Message matches across chats, under the chat rows, newest first. Only what
+/// the server returned for this viewer; a tap opens the chat at the message.
+class _MessageHits extends ConsumerWidget {
+  const _MessageHits({
+    required this.query,
+    required this.conversations,
+    required this.now,
+    required this.onOpen,
+  });
+
+  final String query;
+  final List<Conversation> conversations;
+  final DateTime now;
+  final void Function(String conversationId, String messageId) onOpen;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = L10n.of(context);
+    final theme = Theme.of(context);
+    final tokens = JawwidTokens.of(context);
+    final hits = ref.watch(messageSearchAllProvider(query));
+    final byId = {for (final c in conversations) c.id: c};
+
+    final header = Padding(
+      padding: const EdgeInsetsDirectional.fromSTEB(Spacing.spacing5, Spacing.spacing5, Spacing.spacing5, Spacing.spacing2),
+      child: Text(
+        l10n.searchMessagesSection,
+        style: theme.textTheme.labelMedium?.copyWith(color: tokens.colorTextSecondary),
+      ),
+    );
+
+    return switch (hits) {
+      AsyncData(:final value) when value.isEmpty => SliverToBoxAdapter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              header,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: Spacing.spacing5),
+                child: Text(l10n.searchMessagesNone, style: theme.textTheme.bodyMedium?.copyWith(color: tokens.colorTextSecondary)),
+              ),
+            ],
+          ),
+        ),
+      AsyncData(:final value) => SliverList.list(
+          children: [
+            header,
+            for (final hit in value)
+              ListTile(
+                key: ValueKey('hit-${hit.message.id}'),
+                leading: JawwidAvatar(
+                  displayName: hit.message.authorName.isNotEmpty ? hit.message.authorName : (byId[hit.conversationId]?.title ?? '?'),
+                  imageUrl: hit.message.authorAvatarUrl,
+                  size: Sizes.avatarSm,
+                ),
+                title: Row(
+                  children: [
+                    Expanded(
+                      child: ContentText(
+                        byId[hit.conversationId]?.title ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall,
+                      ),
+                    ),
+                    Text(
+                      RelativeTime.forListRow(
+                        hit.message.createdAt,
+                        now,
+                        locale: Localizations.localeOf(context).toLanguageTag(),
+                        todayLabel: l10n.todayLabel,
+                        yesterdayLabel: l10n.yesterdayLabel,
+                      ),
+                      style: theme.textTheme.labelSmall?.copyWith(color: tokens.colorTextSecondary),
+                    ),
+                  ],
+                ),
+                subtitle: ContentText(
+                  snippetAround(hit.message.body, query),
+                  highlight: query,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(color: tokens.colorTextSecondary),
+                ),
+                onTap: hit.message.id == null ? null : () => onOpen(hit.conversationId, hit.message.id!),
+              ),
+          ],
+        ),
+      AsyncError() => const SliverToBoxAdapter(child: SizedBox.shrink()),
+      _ => SliverToBoxAdapter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [header, const LinearProgressIndicator(minHeight: 2)],
+          ),
+        ),
+    };
   }
 }
 

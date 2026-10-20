@@ -30,6 +30,7 @@ import '../features/calls/data/http_account_call_history.dart';
 import '../features/calls/data/http_scheduled_call_repository.dart';
 import '../features/calls/data/scheduled_call_repository.dart';
 import '../features/messages/data/message_marks_repository.dart';
+import '../features/messages/data/message_search_repository.dart';
 import '../features/profile/data/profile_photo_repository.dart';
 import '../features/settings/application/locale_preference.dart';
 import '../shared/models/user_role.dart';
@@ -157,6 +158,9 @@ List<Override> _httpOverrides() {
     ),
     profilePhotoRepositoryProvider.overrideWithValue(
       HttpProfilePhotoRepository(client: client),
+    ),
+    messageSearchRepositoryProvider.overrideWithValue(
+      HttpMessageSearchRepository(client: client, viewerActorId: session.actorId),
     ),
     trialRepositoryProvider.overrideWithValue(
       HttpTrialRepository(client: client),

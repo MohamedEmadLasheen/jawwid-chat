@@ -1,4 +1,4 @@
-import { api } from '@/core/api/client'
+import { api, download } from '@/core/api/client'
 
 /**
  * The conversation API Admin Web chats through -- the SAME routes the parent
@@ -265,6 +265,13 @@ export const chatApi = {
       '/me/starred',
       before ? { before } : undefined,
     ),
+  /** Search this chat's messages, newest first; only what this viewer may read. */
+  search: (id: string, q: string, before?: string) =>
+    api.get<{ hits: ChatMessage[]; nextBefore: string | null }>(`${conv(id)}/messages/search`, { q, before }),
+  /** Search message text across every chat in the viewer's list (newest matches). */
+  searchAll: (q: string) => api.get<{ hits: Array<{ conversationId: string; message: ChatMessage }> }>('/me/search', { q }),
+  /** The chat as a .zip (transcript + media). Super admin only; the server logs it. */
+  exportChat: (id: string) => download(`${conv(id)}/export`),
   react: (id: string, messageId: string, emoji: string) =>
     api.post<{ ok: boolean }>(`${conv(id)}/messages/${encodeURIComponent(messageId)}/reactions`, { emoji }),
   unreact: (id: string, messageId: string) =>
@@ -334,6 +341,8 @@ export const chatKeys = {
   starred: ['chat', 'starred'] as const,
   labels: ['chat', 'labels'] as const,
   quickReplies: ['chat', 'quick-replies'] as const,
+  search: (id: string, q: string) => ['chat', 'search', id, q] as const,
+  searchAll: (q: string) => ['chat', 'search-all', q] as const,
 }
 
 /** Server order: by seq, numerically (a string compare would put "10" before "9"). */

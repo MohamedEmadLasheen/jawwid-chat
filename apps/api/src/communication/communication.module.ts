@@ -1,6 +1,8 @@
 import { StaffToolsController } from './api/staff-tools.controller';
 import { StaffToolsService } from './staff-tools/staff-tools.service';
 import { StarredController } from './api/starred.controller';
+import { ExportController } from './api/export.controller';
+import { ConversationExportService } from './export/conversation-export.service';
 import { ProfilePhotoController } from './api/profile-photo.controller';
 import { AvatarService } from './profile/avatar.service';
 import { Module } from '@nestjs/common';
@@ -70,6 +72,7 @@ import { StoryController } from './api/story.controller';
     ProfilePhotoController,
     StarredController,
     StaffToolsController,
+    ExportController,
     StoryController,
   ],
   providers: [
@@ -85,6 +88,7 @@ import { StoryController } from './api/story.controller';
     StoryService,
     AvatarService,
     StaffToolsService,
+    ConversationExportService,
     StoryAudienceResolver,
     StorySweeper,
     OutboxService,

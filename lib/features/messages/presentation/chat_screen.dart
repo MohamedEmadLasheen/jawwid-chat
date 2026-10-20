@@ -20,6 +20,7 @@ import '../../../shared/models/message.dart';
 import '../../../shared/models/supervision.dart';
 import '../../../shared/models/trial.dart';
 import '../../../shared/utils/relative_time.dart';
+import '../../../shared/utils/search_fold.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../../calls/application/call_capability.dart';
 import '../../calls/application/call_controller.dart';
@@ -33,6 +34,7 @@ import '../../trials/presentation/trial_report_sheet.dart';
 import '../application/marks_providers.dart';
 import '../application/messages_controller.dart';
 import '../application/voice_composer_controller.dart';
+import '../data/message_search_repository.dart';
 import 'attachment_preview.dart';
 import 'forward_sheet.dart';
 import 'media_viewer.dart';
@@ -60,10 +62,15 @@ class ChatScreen extends ConsumerStatefulWidget {
     this.isTrialGroup = false,
     this.onOpenMembers,
     this.onOpenProfile,
+    this.focusMessageId,
     this.startVoiceRecording = false,
   });
 
   final String conversationId;
+
+  /// Open at this message (a search hit from the chats list): older history is
+  /// loaded until it is on screen, then it is briefly highlighted.
+  final String? focusMessageId;
   final String title;
 
   /// e.g. the owner line on the Jawwid thread. Never an internal handler id.
@@ -138,6 +145,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// not sent on every rebuild.
   int? _readThrough;
 
+  // --- Search inside this chat (owner decision 2026-10-20) ---
+  bool _searching = false;
+  final _searchText = TextEditingController();
+  Timer? _searchDebounce;
+  String _searchedFor = '';
+  List<Message> _hits = const [];
+  bool _hitsMore = false;
+  bool _searchLoading = false;
+  int _hitIndex = 0;
+  bool _focusDone = false;
+
+  /// The term to mark in bubbles while searching.
+  String? get _highlightTerm => _searching && isSearchable(_searchedFor) ? _searchedFor : null;
+
   @override
   void initState() {
     super.initState();
@@ -181,6 +202,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   void dispose() {
     _highlightTimer?.cancel();
+    _searchDebounce?.cancel();
+    _searchText.dispose();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
@@ -566,6 +589,148 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return _previewOf(original);
   }
 
+  void _onSearchChanged(String text) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () => _runSearch(text.trim()));
+    setState(() {});
+  }
+
+  Future<void> _runSearch(String query) async {
+    if (!mounted) return;
+    if (!isSearchable(query)) {
+      setState(() {
+        _searchedFor = query;
+        _hits = const [];
+        _hitsMore = false;
+        _hitIndex = 0;
+      });
+      return;
+    }
+    setState(() => _searchLoading = true);
+    MessageSearchPage? page;
+    await _guard(() async {
+      page = await ref.read(messageSearchRepositoryProvider).searchIn(widget.conversationId, query);
+    });
+    if (!mounted) return;
+    setState(() => _searchLoading = false);
+    final found = page;
+    // A newer term was typed meanwhile: its own search will answer.
+    if (found == null || _searchText.text.trim() != query) return;
+    setState(() {
+      _searchedFor = query;
+      _hits = found.hits;
+      _hitsMore = found.nextBefore != null;
+      _hitIndex = 0;
+    });
+    final first = found.hits.firstOrNull?.id;
+    if (first != null) await _revealMessage(first);
+  }
+
+  void _stepHit(int delta) {
+    if (_hits.isEmpty) return;
+    final next = (_hitIndex + delta).clamp(0, _hits.length - 1);
+    if (next == _hitIndex) return;
+    setState(() => _hitIndex = next);
+    final id = _hits[next].id;
+    if (id != null) _revealMessage(id);
+  }
+
+  void _closeSearch() {
+    _searchDebounce?.cancel();
+    _searchText.clear();
+    setState(() {
+      _searching = false;
+      _searchedFor = '';
+      _hits = const [];
+      _hitsMore = false;
+      _hitIndex = 0;
+    });
+  }
+
+  /// Bring a message onto the screen for a search hit, paging back through
+  /// older history until it is loaded. Bounded, and only for a hit the user
+  /// asked to see -- unlike a reply's original (see [_jumpToMessage]).
+  Future<void> _revealMessage(String messageId) async {
+    final provider = messagesControllerProvider(widget.conversationId);
+    final controller = ref.read(provider.notifier);
+    for (var page = 0; page < 40 && mounted; page++) {
+      final state = ref.read(provider);
+      if (state.log.byServerId(messageId) != null) break;
+      if (!state.log.hasMoreOlder) return;
+      if (state.isLoadingOlder) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        page--;
+        continue;
+      }
+      await controller.loadOlder();
+      if (ref.read(provider).olderError != null) return;
+    }
+    if (!mounted) return;
+    final target = ref.read(provider).log.byServerId(messageId);
+    if (target == null) return;
+    // The list builds lazily: walk towards older messages until the target's
+    // widget exists, then let [_jumpToMessage] centre and highlight it.
+    for (var step = 0; step < 80 && mounted; step++) {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      if (_messageKeys[_keyOf(target)]?.currentContext != null) break;
+      if (!_scrollController.hasClients) return;
+      final position = _scrollController.position;
+      if (position.pixels >= position.maxScrollExtent) break;
+      _scrollController.jumpTo(
+        (position.pixels + position.viewportDimension * 0.8).clamp(0.0, position.maxScrollExtent),
+      );
+    }
+    if (mounted) _jumpToMessage(messageId, ref.read(provider));
+  }
+
+  PreferredSizeWidget _searchBar(L10n l10n) {
+    final typed = _searchText.text.trim();
+    final status = typed.isEmpty
+        ? ''
+        : !isSearchable(typed)
+            ? l10n.searchTooShort
+            : _searchLoading && _hits.isEmpty
+                ? '…'
+                : _hits.isEmpty
+                    ? l10n.searchNoMatches
+                    : l10n.searchPosition(_hitIndex + 1, '${_hits.length}${_hitsMore ? '+' : ''}');
+    return AppBar(
+      leading: IconButton(
+        icon: const Icon(Icons.close),
+        tooltip: l10n.searchClose,
+        onPressed: _closeSearch,
+      ),
+      titleSpacing: 0,
+      title: TextField(
+        controller: _searchText,
+        autofocus: true,
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          hintText: l10n.searchMessagesHint,
+          border: InputBorder.none,
+        ),
+        onChanged: _onSearchChanged,
+        onSubmitted: (_) => _stepHit(1),
+      ),
+      actions: [
+        Center(
+          child: Text(status, style: Theme.of(context).textTheme.labelSmall),
+        ),
+        IconButton(
+          icon: const Icon(Icons.keyboard_arrow_up),
+          tooltip: l10n.searchOlder,
+          onPressed: _hitIndex < _hits.length - 1 ? () => _stepHit(1) : null,
+        ),
+        IconButton(
+          icon: const Icon(Icons.keyboard_arrow_down),
+          tooltip: l10n.searchNewer,
+          onPressed: _hitIndex > 0 ? () => _stepHit(-1) : null,
+        ),
+      ],
+    );
+  }
+
   /// Scroll to a message and tint it briefly.
   ///
   /// Only works for a message already built into the list. Paging backwards
@@ -689,14 +854,28 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     _reportRead(state);
 
+    // Opened at a message (a search hit): once the first page is in, go to it.
+    final focus = widget.focusMessageId;
+    if (focus != null && !_focusDone && !state.isLoadingInitial && !state.log.isEmpty) {
+      _focusDone = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _revealMessage(focus);
+      });
+    }
+
     return PopScope(
       // Back leaves select mode first, as in every messaging app.
-      canPop: !_selecting,
+      canPop: !_selecting && !_searching,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && _selecting) setState(_selected.clear);
+        if (didPop) return;
+        if (_selecting) {
+          setState(_selected.clear);
+        } else if (_searching) {
+          _closeSearch();
+        }
       },
       child: Scaffold(
-      appBar: _selecting ? _selectionBar(state) : AppBar(
+      appBar: _selecting ? _selectionBar(state) : _searching ? _searchBar(l10n) : AppBar(
         titleSpacing: 0,
         title: InkWell(
           onTap: widget.onOpenProfile,
@@ -750,6 +929,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             title: widget.title,
             kind: widget.kind,
           ),
+          if (ref.watch(messageSearchRepositoryProvider).isAvailable)
+            IconButton(
+              onPressed: () => setState(() => _searching = true),
+              icon: const Icon(Icons.search),
+              tooltip: l10n.searchInChat,
+            ),
           if (widget.onOpenMembers != null)
             IconButton(
               onPressed: widget.onOpenMembers,
@@ -927,6 +1112,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   showAuthor: showAuthor,
                   reserveSenderColumn: fromSomeoneElse,
                   replyTo: reply,
+                  highlight: _highlightTerm,
                   isHighlighted: _highlightedKey == key ||
                       (message.id != null && _selected.contains(message.id)),
                   onRetry: message.canRetry
