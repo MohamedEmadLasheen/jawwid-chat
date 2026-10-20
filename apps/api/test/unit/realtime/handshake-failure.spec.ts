@@ -15,6 +15,7 @@ function fakeClient() {
     conn: { close: jest.fn() },
     disconnect: jest.fn(),
     join: jest.fn(async () => undefined),
+    use: jest.fn(),
   };
 }
 
