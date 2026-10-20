@@ -1340,22 +1340,11 @@ class _DaySeparator extends StatelessWidget {
   }
 }
 
-/// The call affordance in the conversation header (W7).
-///
-/// ABSENT, NOT DISABLED, wherever the server does not authorize a call —
-/// `screens/call.md` §4 — who may call is live server data the client must never
-/// infer (PD-7: never a direct teacher<->parent call). Loading, an error and a
-/// refusal all render nothing, so there is no state in which this offers a call
-/// the server would refuse.
-///
-/// TAPPING IT IS NOT PERMISSION EITHER. `CallController.start` posts to `/calls`,
-/// which decides again from scratch; a relationship revoked between the answer and
-/// the tap is refused there and shown as a plain "not available".
-/// The chat's "more" menu. Today it holds Schedule call (owner request
-/// 2026-10-20: schedule from inside the chat), offered under the SAME
-/// server answer that draws the call button -- absent, not disabled, when the
-/// viewer may not start a call here (PD-2, PD-7). The menu itself is absent
-/// when it would be empty.
+/// The chat's "more" menu: Chat theme (when this build has a theme server) and
+/// Schedule call (owner request 2026-10-20: schedule from inside the chat). The
+/// latter is offered under the SAME server answer that draws the call button --
+/// absent, not disabled, when the viewer may not start a call here (PD-2,
+/// PD-7). The menu itself is absent when it would be empty.
 class _ChatMoreMenu extends ConsumerWidget {
   const _ChatMoreMenu({required this.conversation, this.onOpenTheme});
 
@@ -1401,6 +1390,17 @@ class _ChatMoreMenu extends ConsumerWidget {
   }
 }
 
+/// The call affordance in the conversation header (W7).
+///
+/// ABSENT, NOT DISABLED, wherever the server does not authorize a call —
+/// `screens/call.md` §4 — who may call is live server data the client must never
+/// infer (PD-7: never a direct teacher<->parent call). Loading, an error and a
+/// refusal all render nothing, so there is no state in which this offers a call
+/// the server would refuse.
+///
+/// TAPPING IT IS NOT PERMISSION EITHER. `CallController.start` posts to `/calls`,
+/// which decides again from scratch; a relationship revoked between the answer and
+/// the tap is refused there and shown as a plain "not available".
 class _CallAction extends ConsumerWidget {
   const _CallAction({
     required this.conversationId,
