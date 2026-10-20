@@ -112,6 +112,7 @@ credentials, the LiveKit API secret, or Core credentials.
 | `STORAGE_SIGNED_URL_TTL_SECONDS` | no | opt | req | req |
 | `STORAGE_SIGNING_SECRET` | **yes** | req | req | req |
 | `STORAGE_LOCAL_ROOT` | no | opt | opt | opt |
+| `STORAGE_PUBLIC_BASE_URL` | no | opt | opt | opt |
 | `ATTACHMENT_MAX_BYTES_IMAGE` | no | opt | opt | opt |
 | `ATTACHMENT_MAX_BYTES_VIDEO` | no | opt | opt | opt |
 | `ATTACHMENT_MAX_BYTES_VOICE` | no | opt | opt | opt |
@@ -231,12 +232,30 @@ URLs valid for `STORAGE_SIGNED_URL_TTL_SECONDS`, never credentials.
 Which of these the code reads today is not the same as which the deployment
 contract reserves. `STORAGE_SIGNING_SECRET` signs those URLs and the API refuses
 to start without it (at least 32 characters). `STORAGE_ENDPOINT`,
+`STORAGE_PUBLIC_BASE_URL`,
 `STORAGE_SIGNED_URL_TTL_SECONDS` and `STORAGE_LOCAL_ROOT` configure the reference
 `SignedLocalObjectStorage`/`LocalFsBlobStore` pair that serves attachments now.
+`STORAGE_ENDPOINT` does **not**: it is the S3 service endpoint only, and its
+presence is part of what selects the S3 backend — see `STORAGE_PUBLIC_BASE_URL`
+below.
 `STORAGE_REGION`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY` and `STORAGE_SECRET_KEY`
 are the S3-compatible surface the `ObjectStorage` seam is built for: no adapter
 exists yet (`findings.md` RT-022), so no code reads them, and `docker-compose.yml`
 already runs the local service they configure. No provider has been selected.
+
+**`STORAGE_PUBLIC_BASE_URL`** — the public base URL of this API's own `/storage`
+route, used ONLY by the local reference storage when it mints signed URLs. A
+client has to reach those URLs, so on any deployment reachable over a network
+this must be set to that deployment's own public URL, prefix included (for
+example `http://10.0.0.5:3399/api/v1/storage`). Optional because the code
+defaults it to `http://localhost:3000/api/v1/storage`, which is right on a
+laptop and wrong everywhere else; the startup log says so when it is unset.
+
+It is **not** an alternative spelling of `STORAGE_ENDPOINT`. That variable is the
+S3 service endpoint, and because its presence is one of the five signals that
+select the S3 backend, setting it to reach the local route produces a
+half-configured S3 process that refuses to start. Neither variable falls back to
+the other, in either direction.
 
 **`STORAGE_LOCAL_ROOT`** — optional because the code defaults it, but the default
 is the OS temp directory: per-instance, and gone on restart. Naming a path here

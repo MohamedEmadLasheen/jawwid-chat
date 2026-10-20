@@ -2,6 +2,10 @@ import { Logger } from '@nestjs/common';
 import type { ObjectStorage } from './object-storage';
 import { SignedLocalObjectStorage } from './object-storage';
 import { S3ObjectStorage, type S3StorageConfig } from './s3-object-storage';
+import {
+  LOCAL_PUBLIC_BASE_URL_VAR,
+  resolveLocalPublicBaseUrl,
+} from './storage-config';
 
 /**
  * Which storage implementation this process runs. Owner: AI #7.
@@ -41,13 +45,14 @@ export interface StorageSelection {
 }
 
 /**
- * `STORAGE_ENDPOINT` means two different things, and this is the only place
- * that has to know it.
+ * `STORAGE_ENDPOINT` means ONE thing: the S3-compatible service endpoint.
  *
- * For the local reference implementation it is the base URL of *this API's own*
- * `/storage` route, because that is where its signed URLs point. For S3 it is
- * the storage endpoint. The two never apply at once: the value is read as an S3
- * endpoint only when the credentials and bucket are present as well.
+ * It used to mean two -- also the base URL of *this API's own* `/storage` route,
+ * for the local reference implementation -- and that overload was a trap, because
+ * its presence is also what SELECTS S3. Setting it to reach the local route
+ * therefore produced a half-configured S3 process that refuses to start. The
+ * local public base URL is now `STORAGE_PUBLIC_BASE_URL`, resolved in
+ * `storage-config.ts`, and neither variable falls back to the other.
  */
 export function selectObjectStorage(
   env: NodeJS.ProcessEnv = process.env,
@@ -57,15 +62,17 @@ export function selectObjectStorage(
 
   if (present.length === 0) {
     // RT-039: the local reference storage builds its upload links on
-    // STORAGE_ENDPOINT, which is one of the S3 settings -- so with none of them
-    // set it ALWAYS falls back to http://localhost:3000/storage, which no
+    // STORAGE_PUBLIC_BASE_URL (storage-config.ts), defaulting to
+    // http://localhost:3000/api/v1/storage -- a developer machine, which no
     // client of a deployed API can reach. Outside a developer / test
-    // environment that is refused at startup instead of shipped.
+    // environment the local reference storage is refused at startup instead
+    // of shipped, whatever that variable says.
     const appEnv = (env.APP_ENV ?? 'local').trim().toLowerCase();
     if (!['local', 'test', 'ci', ''].includes(appEnv)) {
       throw new Error(
         `object storage: APP_ENV=${appEnv} with no S3 configuration -- the local reference storage ` +
-          'would hand clients upload links to http://localhost:3000/storage. ' +
+          'would hand clients upload links to a developer machine (default http://localhost:3000/api/v1/storage) ' +
+          'served from this container\'s filesystem. ' +
           `Set ${S3_VARS.join(', ')}.`,
       );
     }
@@ -76,7 +83,29 @@ export function selectObjectStorage(
         S3_VARS.join(', ') +
         ' to use S3-compatible storage.',
     );
-    return { storage: new SignedLocalObjectStorage(), kind: 'local' };
+
+    // Read and validated HERE, once, and handed to the implementation. A client
+    // has to reach these URLs, so a wrong base URL is not a cosmetic problem --
+    // it is an upload that cannot happen. Saying the resolved value out loud at
+    // startup is what turns that from a per-upload mystery into one log line.
+    const publicBase = resolveLocalPublicBaseUrl(env);
+    if (publicBase.configured) {
+      logger.log(`object storage: local reference, signed URLs at ${publicBase.value}`);
+    } else {
+      logger.warn(
+        `${LOCAL_PUBLIC_BASE_URL_VAR} is not set, so signed storage URLs will ` +
+          `point at ${publicBase.value}. Any deployment a client reaches over ` +
+          'the network must set it to this API\'s own public /storage base URL ' +
+          `(for example http://10.0.0.5:3399/api/v1/storage), or every upload ` +
+          'and download will be unreachable. Do NOT use STORAGE_ENDPOINT for ' +
+          'this: that variable selects the S3 backend.',
+      );
+    }
+
+    return {
+      storage: new SignedLocalObjectStorage({ publicBaseUrl: publicBase.value }),
+      kind: 'local',
+    };
   }
 
   if (present.length !== S3_VARS.length) {
@@ -91,6 +120,17 @@ export function selectObjectStorage(
   }
 
   const config = readS3Config(env);
+
+  // Set but meaningless here: S3 presigns against its own endpoint, so this is
+  // ignored rather than wrong. Said out loud so nobody debugs a URL by editing a
+  // variable this process is not reading.
+  if ((env[LOCAL_PUBLIC_BASE_URL_VAR] ?? '').trim().length > 0) {
+    logger.warn(
+      `${LOCAL_PUBLIC_BASE_URL_VAR} is set but ignored: it configures the local ` +
+        'reference storage only, and this process uses S3-compatible storage.',
+    );
+  }
+
   logger.log(
     `object storage: S3-compatible, bucket "${config.bucket}", region ` +
       `"${config.region}", signed URL TTL ${config.signedUrlTtlSeconds}s`,

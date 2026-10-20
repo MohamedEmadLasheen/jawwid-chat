@@ -54,6 +54,7 @@ model Staff {
   responsibilities StaffResponsibility[] @relation("ResponsibilityHolder")
   reportingLine   StaffReportingLine?   @relation("ReportingLineMember")
   directReports   StaffReportingLine[]  @relation("ReportingLineManager")
+  teacherCertificatesReviewed TeacherProfileCertificate[]  @relation("TeacherCertificateReviewer")
 
   @@map("staff")
   @@schema("chat")
@@ -756,8 +757,91 @@ model Teacher {
 
   learners Learner[]
   lessons  Lesson[]
+  professionalProfile TeacherProfessionalProfile?
 
   @@map("teacher")
+  @@schema("chat")
+}
+
+// =====================================================================
+// Teacher professional profile --
+// 20261021000000_chat_teacher_professional_profile.sql and
+// 20261021000100_chat_teacher_profile_v2_immediate_save.sql own the DDL.
+// =====================================================================
+
+/// One teacher's professional profile. The teacher owns it and edits it
+/// directly: what is saved IS what is current.
+///
+/// Holds NO identity. The name and role stay on `Teacher`, joined and never
+/// copied -- a profile that could carry a second copy of the teacher's name is
+/// a profile that could disagree with it.
+///
+/// The profile PHOTO is not here: it is `Teacher.avatarObjectKey`, the one
+/// photo every surface that shows this teacher's face reads, set through
+/// `/me/avatar` like every other person's.
+///
+/// 20261021000100_chat_teacher_profile_v2_immediate_save.sql owns the length
+/// ceilings; the service repeats them so a client is refused before a round
+/// trip, not instead of one.
+model TeacherProfessionalProfile {
+  organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  id             String @id @default(uuid()) @db.Uuid
+
+  teacherId String  @unique @map("teacher_id") @db.Uuid
+  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  bio            String?
+  specialization String?
+  qualifications String?
+  experience     String?
+  languages      String[] @default([])
+
+  certificates TeacherProfileCertificate[]
+
+  createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
+  updatedAt DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  @@map("teacher_professional_profile")
+  @@schema("chat")
+}
+
+/// A credential CLAIM belonging to exactly one profile.
+///
+/// `objectKey` names a PRIVATE object and is a name, not a capability: it never
+/// leaves the API, and every read is a fresh signing decision made against the
+/// caller.
+///
+/// Profile text saves immediately; a credential does NOT become verified by
+/// being uploaded. `state` is the reviewer's decision, a teacher may never make
+/// it, and editing the claim returns it to `pending` -- the approval was of a
+/// claim, not of a file.
+model TeacherProfileCertificate {
+  id        String                     @id @default(uuid()) @db.Uuid
+  profileId String                     @map("profile_id") @db.Uuid
+  profile   TeacherProfessionalProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  title               String
+  issuingOrganization String?   @map("issuing_organization")
+  issuedOn            DateTime? @map("issued_on") @db.Date
+
+  objectKey String @map("object_key")
+  mimeType  String @map("mime_type")
+  byteSize  BigInt @map("byte_size")
+
+  /// pending | approved | rejected
+  state String @default("pending")
+
+  reviewedAt   DateTime? @map("reviewed_at") @db.Timestamptz
+  reviewedById String?   @map("reviewed_by") @db.Uuid
+  reviewedBy   Staff?    @relation("TeacherCertificateReviewer", fields: [reviewedById], references: [id])
+  reviewNote   String?   @map("review_note")
+
+  createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
+  updatedAt DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  @@unique([profileId, objectKey])
+  @@index([profileId])
+  @@map("teacher_profile_certificate")
   @@schema("chat")
 }
 

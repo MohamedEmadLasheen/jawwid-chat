@@ -16,6 +16,10 @@ export const qk = {
   adminMessages: (id: string) => ['admin', 'conversations', id, 'messages'] as const,
   adminStories: ['admin', 'stories'] as const,
 
+  teacherProfileReviews: ['teacher-profile-reviews'] as const,
+  teacherProfileReview: (profileId: string) =>
+    ['teacher-profile-reviews', profileId] as const,
+
   inbox: (section: AttentionBucket | 'covering') => ['inbox', section] as const,
   inboxAll: ['inbox'] as const,
   awaySummary: ['inbox', 'away-summary'] as const,

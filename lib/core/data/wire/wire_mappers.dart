@@ -2,6 +2,7 @@ import '../../../shared/models/conversation.dart';
 import '../../../shared/models/lesson.dart';
 import '../../../shared/models/message.dart';
 import '../../../shared/models/story.dart';
+import '../../../shared/models/teacher_profile.dart';
 import '../../../shared/models/user_role.dart';
 import '../repositories.dart';
 import 'wire_vocab.dart';
@@ -504,6 +505,52 @@ abstract final class WireMappers {
       kind: kind,
       url: _nonEmpty(json['url']),
       conversationId: _nonEmpty(json['conversationId']),
+    );
+  }
+
+  /// `GET /me/teacher-profile` and every teacher-facing mutation return this
+  /// same flat object. There is no `{published, draft}` envelope any more and no
+  /// state to interpret: what the server returns is what is current.
+  ///
+  /// `name` is required, because the profile is unrenderable without the
+  /// teacher's identity -- but it is read from the response rather than from any
+  /// local copy, so the client cannot drift from `chat.teacher`.
+  static TeacherProfile teacherProfile(Map<String, Object?> json) => TeacherProfile(
+        name: (json['name'] as String?)?.trim() ?? '',
+        // A signed URL, short-lived by design. Never cached: holding it would be
+        // holding a capability past the moment it was granted for.
+        photoUrl: _nonEmpty(json['photoUrl']),
+        bio: _nonEmpty(json['bio']),
+        specialization: _nonEmpty(json['specialization']),
+        qualifications: _nonEmpty(json['qualifications']),
+        experience: _nonEmpty(json['experience']),
+        languages: [
+          for (final language in (json['languages'] as List?) ?? const [])
+            if (language is String && language.trim().isNotEmpty) language.trim(),
+        ],
+        certificates: [
+          for (final certificate in (json['certificates'] as List?) ?? const [])
+            ?_certificate(certificate),
+        ],
+        updatedAt: parseTime(json['updatedAt']),
+      );
+
+  static ProfileCertificate? _certificate(Object? raw) {
+    if (raw is! Map<String, Object?>) return null;
+    final id = raw['id'] as String?;
+    final title = _nonEmpty(raw['title']);
+    final state = CertificateState.tryParse(raw['state'] as String?);
+    // A claim with no id cannot be opened or removed, and one with no title has
+    // nothing to show; either way it is unusable rather than partially usable.
+    if (id == null || id.isEmpty || title == null || state == null) return null;
+
+    return ProfileCertificate(
+      id: id,
+      title: title,
+      state: state,
+      issuingOrganization: _nonEmpty(raw['issuingOrganization']),
+      issuedOn: parseTime(raw['issuedOn']),
+      reviewNote: _nonEmpty(raw['reviewNote']),
     );
   }
 

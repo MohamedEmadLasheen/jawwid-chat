@@ -95,6 +95,7 @@ export const AREA_DESTINATION: Record<NavArea, DestinationKey | null> = {
   instalments: 'people',
   trials: 'people',
   coverage: 'people',
+  'teacher-profiles': 'people',
   stories: 'stories',
   tasks: 'more',
   dashboard: 'more',
@@ -114,6 +115,7 @@ export const AREA_PATH: Record<OperatorArea, string> = {
   coverage: '/coverage',
   dashboard: '/dashboard',
   stories: '/stories',
+  'teacher-profiles': '/teacher-profiles',
 }
 
 const AREA_ICON: Record<OperatorArea, IconName> = {
@@ -129,6 +131,7 @@ const AREA_ICON: Record<OperatorArea, IconName> = {
   coverage: 'teams',
   dashboard: 'dashboard',
   stories: 'stories',
+  'teacher-profiles': 'approvals',
 }
 
 /** The super admin's name for /chat, distinct from the read-only section's. */

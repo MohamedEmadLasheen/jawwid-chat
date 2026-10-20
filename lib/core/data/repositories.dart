@@ -4,6 +4,7 @@ import '../../shared/models/lesson.dart';
 import '../../shared/models/message.dart';
 import '../../shared/models/story.dart';
 import '../../shared/models/supervision.dart';
+import '../../shared/models/teacher_profile.dart';
 import '../../shared/models/trial.dart';
 import '../../shared/models/user_role.dart';
 
@@ -409,6 +410,65 @@ abstract interface class MessageRepository {
   });
 
   Future<void> setTyping(String conversationId, {required bool isTyping});
+}
+
+/// The signed-in teacher's own professional profile.
+///
+/// Every method is about the CALLER. There is no teacher-id parameter anywhere
+/// in this interface, because the server derives the teacher from the session --
+/// so "edit somebody else's profile" is not a request this client can express.
+///
+/// There is no submit, no draft and no state. The teacher owns the profile:
+/// [saveProfile] writes it and the write is the publish.
+abstract interface class TeacherProfileRepository {
+  /// The current profile. Creates nothing.
+  Future<TeacherProfile> myProfile();
+
+  /// Save the profile content. Immediately current when it returns.
+  Future<TeacherProfile> saveProfile({
+    String? bio,
+    String? specialization,
+    String? qualifications,
+    String? experience,
+    List<String> languages,
+  });
+
+  /// Rename the signed-in teacher.
+  ///
+  /// Separate from [saveProfile] because the name is IDENTITY: it lives on
+  /// `chat.teacher` and is read by surfaces that have nothing to do with this
+  /// screen. Returns the authoritative name the server stored -- which is what
+  /// the caller must then display, rather than the string it sent.
+  Future<String> updateName(String name);
+
+  /// Upload a credential and attach it to the profile.
+  Future<TeacherProfile> addCertificate({
+    required PendingCertificateFile file,
+    required String title,
+    String? issuingOrganization,
+    DateTime? issuedOn,
+    void Function(int sent, int total)? onProgress,
+  });
+
+  /// Edit a credential's metadata.
+  ///
+  /// The FILE is not a parameter and does not move. The server returns the
+  /// claim to `pending` -- a reviewer approved those words, not the file in the
+  /// abstract -- so an edited credential needs deciding again.
+  Future<TeacherProfile> updateCertificate(
+    String certificateId, {
+    required String title,
+    String? issuingOrganization,
+    DateTime? issuedOn,
+  });
+
+  Future<TeacherProfile> removeCertificate(String certificateId);
+
+  /// A short-lived URL for one certificate file, authorized per request.
+  ///
+  /// Not cached and not stored: it expires, and holding it would be holding a
+  /// capability past the moment it was granted for.
+  Future<String> certificateUrl(String certificateId);
 }
 
 /// Stories, read-only.

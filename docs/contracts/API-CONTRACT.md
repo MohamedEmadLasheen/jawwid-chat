@@ -740,6 +740,34 @@ The photos reach chat as signed links on the payloads below. A client never buil
 
 **What a commit does:** checks the key structurally, inspects the stored bytes (`judgeAvatar`), updates only `avatar_object_key`, writes `chat.audit_log` (`profile_photo.set|removed`), and deletes the replaced object. The database CHECK of 20261014130000 independently holds every key to its own row's prefix.
 
+### Teacher professional profile (Teacher Profile V2; on main 2026-10-20)
+
+The teacher owns it: **Save is the publish.** There is no draft, no submit and no profile approval. What a reviewer still decides is each **certificate**, because an upload does not make a credential verified. Migrations `20261021000000` + `20261021000100`; `teacher-profile.controller.ts`, `teacher-profile/teacher-profile.service.ts`.
+
+- **Name:** `chat.teacher.name` only. No profile table holds a name.
+- **Photo:** the teacher's one account photo, set through `/me/avatar` (above). The profile carries its `self` link as `photoUrl`; there is no teacher-profile photo route.
+- **No route takes a teacher id.** Every `/me/…` route resolves the teacher from the session.
+- **No response carries an object key.** Uploads return an opaque `uploadToken` that is handed straight back.
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/me/teacher-profile` | none | The profile: `{ name, role, photoUrl, bio, specialization, qualifications, experience, languages, certificates[], updatedAt }`. Creates nothing. |
+| POST | `/me/teacher-profile` | `{ bio?, specialization?, qualifications?, experience?, languages? }` | The profile, immediately current. |
+| PATCH | `/me/teacher-profile/name` | `{ name }` | `{ name, role }`, the name as stored (trimmed, whitespace collapsed). |
+| POST | `/me/teacher-profile/certificates/upload` | `{ mimeType, byteSize }` | `{ uploadUrl, uploadToken, expiresAt, headers }`. PDF/JPEG/PNG, at most 10 MiB. PUT the bytes with exactly `headers`. |
+| POST | `/me/teacher-profile/certificates` | `{ title, issuingOrganization?, issuedOn?, mimeType, byteSize, uploadToken }` | The profile; the new certificate is `pending`. |
+| PATCH | `/me/teacher-profile/certificates/:id` | `{ title, issuingOrganization?, issuedOn? }` | The profile. A retitled claim returns to `pending`; the file never moves. |
+| DELETE | `/me/teacher-profile/certificates/:id` | none | The profile. |
+| GET | `/teacher-profiles/review` | none | `{ profiles: [{ profileId, teacherName, pendingCertificates, certificates[] }] }`, reviewers only. |
+| POST | `/teacher-profiles/certificates/:id/decide` | `{ approved, note? }` | Reviewers only, never on their own; rejecting needs a `note`. |
+| GET | `/teacher-profiles/certificates/:id/download` | none | `{ url }`: a `GET /media/teacher-certificates/:id` link bound to the caller, the owning teacher or a reviewer, re-decided on every request (RT-037). |
+
+**Reviewers:** admin, coverage, manager and the super admin (`AuthorizationService.canReviewTeacherProfile`, mirrored by `chat.current_can_review_teacher_profile()`), same organization.
+
+**Errors:** `COMM.TEACHER_PROFILE_NOT_A_TEACHER`, `_CANNOT_REVIEW`, `_REVIEW_NOTE_REQUIRED`, `_INVALID_CONTENT`, `_CONFLICT`, `_NOT_FOUND`; `COMM.TEACHER_NAME_INVALID`; `COMM.TEACHER_CERTIFICATE_NOT_FOUND`, `_INVALID_TYPE`, `_TOO_LARGE`.
+
+No parent-facing route exists yet: `publicProfile` (approved certificates only) is service-level, waiting for the family screen.
+
 ### 3.7 Approvals (`approval.controller.ts`, `approval.service.ts`)
 
 ```
