@@ -82,6 +82,12 @@ void main() {
       // «{count} بانتظار التقرير» — the number is the subject; no noun agrees.
       'workloadNeedsReport':
           'the count stands alone; there is no noun to agree',
+      // «{index} من {total}» — a position ("3 of 12"), not a count of
+      // anything; no noun agrees with either number.
+      'searchPosition': 'a position (index of total), not a count',
+      // «رسالة مثبّتة {index} من {total}» — the same position, after a noun
+      // in the singular that names one item, whatever the numbers are.
+      'pinnedBannerOf': 'a position (index of total), not a count',
     };
 
     /// Counted strings that predate this guard and still put a number beside a
