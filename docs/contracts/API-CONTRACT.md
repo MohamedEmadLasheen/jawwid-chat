@@ -596,10 +596,12 @@ Staff only. Every route first checks that the caller is active conversation staf
 - `GET /conversations/:cid/messages/search?q=&before=` → `{ hits: MessageDto[], nextBefore: string | null }`
   - Newest first, 50 per page, paged by seq.
   - The caller must be able to read `:cid` (`canReadResolved`).
+  - Visibility is applied after the text match, so one request reads up to five windows of 200 text candidates until its page is full. A page can be short, or even empty, with `nextBefore` set: keep paging until `nextBefore` is null.
 - `GET /me/search?q=` → `{ hits: [{ conversationId, message: MessageDto }] }`
-  - Newest first, at most 40 hits, with no paging; a narrower term finds more.
+  - Newest first, at most 40 hits, with no paging; a narrower term finds more. Up to five windows of 200 text candidates are read to fill them.
+  - `q` needs **3** meaningful characters here, not 2. A two-letter term cannot use the trigram index and would fold every message of every listed chat.
   - The boundary is `listForActor`: exactly the chats in the caller's list (PD-8 scope for staff, live membership for families and teachers).
-- `q` must be 2–100 characters after Arabic marks are removed, or the request fails with `COMM.VALIDATION` (400). `%` and `_` are literal characters.
+- `q` must be 2–100 characters (3 across chats) after Arabic marks and spaces are removed, or the request fails with `COMM.VALIDATION` (400). `%` and `_` are literal characters.
 - **Matching** (migration `20261020140000`):
   - Case-insensitive substring match.
   - Arabic harakat, superscript alef and tatweel are ignored.
@@ -610,10 +612,12 @@ Staff only. Every route first checks that the caller is active conversation staf
 **`GET /conversations/:cid/export`** → `application/zip`, `Content-Disposition: attachment; filename="jawwid-chat-<date>-<id8>.zip"`.
 - **Super admin only.** Any other caller gets `COMM.CONVERSATION_EXPORT_DENIED` (403) before anything is read. The conversation must also be readable by the super admin.
 - **Audit:** `chat.audit_log` records `conversation.exported` with `{ messages, mediaFiles, mediaBytes, internalNotes }`. The row is written BEFORE the first byte, so an interrupted download is still logged.
+- **Two passes over one frozen set:** messages up to the conversation's `last_seq` when the export starts. The first pass only counts (for the audit row); the second streams the archive batch by batch. The whole chat is never held in memory; each media file is held only while it is written. Nothing is signed: an export carries bytes, never links.
 - **Contents** — exactly what the super admin can read in the chat:
   - `chat.txt`: UTF-8 with a BOM, oldest first, `[YYYY-MM-DD HH:mm] Sender: text`, times in `stats.zone`. Internal notes, forwarded, held and rejected messages are marked as such.
   - `media/NNNN-<name>`: the stored bytes, under sanitized names.
   - A message deleted for everyone appears as deleted, and its media are NOT exported.
+  - A file whose object key is outside this conversation's namespace is never read, whatever row points at it (the media route's rule). It is listed as `<file missing: …>`.
 - **Format:** stored entries (no compression) with UTF-8 names and no ZIP64. If the archive would pass 4 GiB, the remaining files are listed in the transcript as not included.
 - **CORS:** `Content-Disposition` is exposed so the browser can read the file name.
 

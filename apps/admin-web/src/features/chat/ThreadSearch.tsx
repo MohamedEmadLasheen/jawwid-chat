@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Icon } from '@/shared/components/Icon'
 import { chatApi, chatKeys } from './chatApi'
@@ -30,14 +30,17 @@ export function ThreadSearch({
   const copy = chatCopyFor(locale)
   const settled = useDebounced(query.trim())
   const ok = searchable(settled)
-  const results = useQuery({
+  // Pages of 50, newest first; stepping past the last loaded hit fetches the next.
+  const results = useInfiniteQuery({
     queryKey: chatKeys.search(conversationId, settled),
-    queryFn: () => chatApi.search(conversationId, settled),
+    queryFn: ({ pageParam }) => chatApi.search(conversationId, settled, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextBefore ?? undefined,
     enabled: ok,
     staleTime: 30_000,
   })
-  const hits = ok ? results.data?.hits ?? [] : []
-  const more = !!results.data?.nextBefore
+  const hits = ok ? results.data?.pages.flatMap((p) => p.hits) ?? [] : []
+  const more = ok && results.hasNextPage
   const [index, setIndex] = useState(0)
   const input = useRef<HTMLInputElement>(null)
 
@@ -49,11 +52,18 @@ export function ThreadSearch({
     // Only a new first hit re-reveals; onReveal changes every render.
   }, [first, settled])
 
-  const step = (delta: 1 | -1) => {
+  const step = async (delta: 1 | -1) => {
     if (hits.length === 0) return
-    const next = Math.min(Math.max(index + delta, 0), hits.length - 1)
+    let all = hits
+    // Older than everything loaded: fetch the next page first.
+    if (delta === 1 && index >= all.length - 1 && more && !results.isFetchingNextPage) {
+      const fetched = await results.fetchNextPage()
+      all = fetched.data?.pages.flatMap((p) => p.hits) ?? all
+    }
+    const next = Math.min(Math.max(index + delta, 0), all.length - 1)
+    if (next === index) return
     setIndex(next)
-    onReveal(hits[next]!.id)
+    onReveal(all[next]!.id)
   }
 
   const status = !query.trim()
@@ -85,7 +95,7 @@ export function ThreadSearch({
             onClose()
           } else if (e.key === 'Enter') {
             e.preventDefault()
-            step(e.shiftKey ? -1 : 1)
+            void step(e.shiftKey ? -1 : 1)
           }
         }}
       />
@@ -97,8 +107,8 @@ export function ThreadSearch({
         className="btn btn--ghost btn--icon btn--sm"
         aria-label={copy.searchOlder}
         title={copy.searchOlder}
-        disabled={index >= hits.length - 1}
-        onClick={() => step(1)}
+        disabled={(index >= hits.length - 1 && !more) || results.isFetchingNextPage}
+        onClick={() => void step(1)}
       >
         <Icon name="chevronUp" size={16} />
       </button>
@@ -108,7 +118,7 @@ export function ThreadSearch({
         aria-label={copy.searchNewer}
         title={copy.searchNewer}
         disabled={index <= 0}
-        onClick={() => step(-1)}
+        onClick={() => void step(-1)}
       >
         <Icon name="chevronDown" size={16} />
       </button>

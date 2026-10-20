@@ -51,8 +51,14 @@ List<(int, int)> searchMatchRanges(String text, String query) {
   return out;
 }
 
-/// A term worth sending: two characters that are not only marks.
-bool isSearchable(String query) => _fold(query.trim()).folded.replaceAll(RegExp(r'\s'), '').length >= 2;
+/// A term worth sending: [min] characters (default 2) that are not only marks.
+/// Search across chats asks for [searchAcrossMin], as the server does: a
+/// two-letter term cannot use the trigram index.
+bool isSearchable(String query, {int min = 2}) =>
+    _fold(query.trim()).folded.replaceAll(RegExp(r'\s'), '').length >= min;
+
+/// The fewest characters a search across chats needs (MessageService.SEARCH_ACROSS_MIN).
+const int searchAcrossMin = 3;
 
 /// A long text cut to the part around its first match.
 String snippetAround(String text, String query, {int before = 32}) {

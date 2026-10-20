@@ -222,7 +222,7 @@ class _Feed extends ConsumerWidget {
     // The same box searches message text across every chat (owner decision
     // 2026-10-20) once there is a term worth sending.
     final term = query.trim();
-    final searchMessages = isSearchable(term) && ref.watch(messageSearchRepositoryProvider).isAvailable;
+    final searchMessages = isSearchable(term, min: searchAcrossMin) && ref.watch(messageSearchRepositoryProvider).isAvailable;
 
     return RefreshIndicator(
       // Both, together. The rail has no refresh control of its own precisely because this

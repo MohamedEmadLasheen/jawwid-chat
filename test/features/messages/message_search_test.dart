@@ -58,7 +58,7 @@ void main() {
     backend.dispose();
   });
 
-  Widget app(Widget home, {List<String>? searched}) => ProviderScope(
+  Widget app(Widget home, {List<String>? searched, int? pageSize}) => ProviderScope(
         overrides: [
           currentRoleProvider.overrideWithValue(UserRole.parent),
           voiceRecorderProvider.overrideWithValue(recorder),
@@ -67,7 +67,7 @@ void main() {
           messageRepositoryProvider.overrideWithValue(FakeMessageRepository(backend)),
           groupRepositoryProvider.overrideWithValue(FakeGroupRepository(backend)),
           callRepositoryProvider.overrideWithValue(FakeCallRepository(backend)),
-          messageSearchRepositoryProvider.overrideWithValue(_BackendSearch(backend, searched ?? <String>[])),
+          messageSearchRepositoryProvider.overrideWithValue(_BackendSearch(backend, searched ?? <String>[], pageSize: pageSize)),
         ],
         child: MaterialApp(
           locale: const Locale('en'),
@@ -127,6 +127,50 @@ void main() {
     expect(marked(tester, 'fee'), isFalse);
   });
 
+  testWidgets('Older fetches the next page of matches past the last loaded one (review fix, PR #68)', (tester) async {
+    final conversationId = backend.listConversations().first.id;
+    backend.appendIncoming(conversationId, 'old fee notice');
+    backend.appendIncoming(conversationId, 'the fee is due');
+    final searched = <String>[];
+
+    // One match per page, so the second match is only reachable by paging.
+    await tester.pumpWidget(app(ChatScreen(conversationId: conversationId, title: 'Jawwid'), searched: searched, pageSize: 1));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Search in chat'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Search messages'), 'fee');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(find.text('1 of 1+'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Older match'));
+    await tester.pumpAndSettle();
+    // The second request continues from the first page's cursor.
+    expect(searched, hasLength(2));
+    expect(searched.last, startsWith('fee before '));
+    expect(find.text('2 of 2'), findsOneWidget);
+    expect(find.text('old fee notice').hitTestable(), findsOneWidget);
+  });
+
+  testWidgets('the chats search lists messages only from three letters (review fix, PR #68)', (tester) async {
+    backend.appendIncoming(backend.listConversations().first.id, 'the trip is on Thursday');
+    final searched = <String>[];
+    await tester.pumpWidget(app(const ChatsScreen(), searched: searched));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'tr');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(find.text('Messages'), findsNothing);
+    expect(searched, isEmpty);
+
+    await tester.enterText(find.byType(TextField), 'tri');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(find.text('Messages'), findsOneWidget);
+    expect(searched, ['all tri']);
+  });
+
   testWidgets('the chats search also lists matching messages; a tap opens the chat at the message', (tester) async {
     final target = backend.listConversations().first;
     final hit = backend.appendIncoming(target.id, 'the trip is on Thursday');
@@ -147,24 +191,38 @@ void main() {
 
 /// Search over the fake backend's messages, matched the way the server folds.
 class _BackendSearch implements MessageSearchRepository {
-  _BackendSearch(this.backend, this.searched);
+  _BackendSearch(this.backend, this.searched, {this.pageSize});
 
   final FakeBackend backend;
   final List<String> searched;
+
+  /// When set, answers [pageSize] matches at a time, paged by sequence like the server.
+  final int? pageSize;
 
   @override
   bool get isAvailable => true;
 
   @override
   Future<MessageSearchPage> searchIn(String conversationId, String query, {String? before}) async {
-    searched.add(query);
-    final all = backend.since(conversationId, afterSequence: 0).where((m) => searchMatchRanges(m.body, query).isNotEmpty).toList()
+    searched.add(before == null ? query : '$query before $before');
+    final cutoff = before == null ? null : int.parse(before);
+    final all = backend
+        .since(conversationId, afterSequence: 0)
+        .where((m) => searchMatchRanges(m.body, query).isNotEmpty && (cutoff == null || (m.sequence ?? 0) < cutoff))
+        .toList()
       ..sort((a, b) => (b.sequence ?? 0).compareTo(a.sequence ?? 0));
-    return MessageSearchPage(hits: all);
+    final size = pageSize;
+    if (size == null || all.length <= size) return MessageSearchPage(hits: all);
+    final page = all.take(size).toList();
+    return MessageSearchPage(hits: page, nextBefore: '${page.last.sequence}');
   }
 
   @override
   Future<List<MessageSearchHit>> searchAll(String query) async => [
+        ...(() {
+          searched.add('all $query');
+          return const <MessageSearchHit>[];
+        })(),
         for (final conv in backend.listConversations())
           for (final m in backend.since(conv.id, afterSequence: 0))
             if (searchMatchRanges(m.body, query).isNotEmpty) MessageSearchHit(conversationId: conv.id, message: m),

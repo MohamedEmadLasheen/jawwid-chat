@@ -118,6 +118,28 @@ describe('A · search inside a chat', () => {
     expect(second.hits.map((m) => m.body)).toEqual(['lesson note 4', 'lesson note 3', 'lesson note 2', 'lesson note 1', 'lesson note 0']);
     expect(second.nextBefore).toBeNull();
   });
+
+  it('reads past a window of matches this viewer cannot see (review fix, PR #68)', async () => {
+    const visible = await say('zebra crossing practice');
+    // More than one candidate window (200) of newer matches the parent may not see.
+    for (let i = 0; i < 210; i += 1) await say(`zebra staff note ${i}`, s.ownerId, { visibility: 'internal' });
+
+    const parent = await g.messages.search({ actorId: s.parentId, conversationId: groupId, q: 'zebra' });
+    expect(parent.hits.map((m) => m.id)).toEqual([visible.id]);
+    expect(parent.nextBefore).toBeNull();
+
+    // Staff see the notes, a page at a time, and paging still reaches the oldest.
+    const seen: string[] = [];
+    let before: string | undefined;
+    for (let i = 0; i < 10; i += 1) {
+      const page = await g.messages.search({ actorId: s.ownerId, conversationId: groupId, q: 'zebra', before });
+      seen.push(...page.hits.map((m) => m.id));
+      if (!page.nextBefore) break;
+      before = page.nextBefore;
+    }
+    expect(seen).toHaveLength(211);
+    expect(seen[seen.length - 1]).toBe(visible.id);
+  });
 });
 
 describe('B · search across chats', () => {
@@ -135,6 +157,19 @@ describe('B · search across chats', () => {
     ]);
     const teacher = await g.messages.searchAll({ actorId: s.teacherId, q: 'trip' });
     expect(teacher.hits.map((h) => h.message.body)).toEqual(['the trip is on Thursday']);
+  });
+
+  it('reads past a window of invisible matches, and needs three letters (review fix, PR #68)', async () => {
+    const visible = await say('zebra crossing practice', s.ownerId, {}, directId);
+    for (let i = 0; i < 210; i += 1) await say(`zebra staff note ${i}`, s.ownerId, { visibility: 'internal' });
+
+    const parent = await g.messages.searchAll({ actorId: s.parentId, q: 'zebra' });
+    expect(parent.hits.map((h) => h.message.id)).toEqual([visible.id]);
+    // A two-letter term cannot use the trigram index; across chats it is refused.
+    await expect(g.messages.searchAll({ actorId: s.parentId, q: 'ze' })).rejects.toEqual(code(CommErrorCode.VALIDATION));
+    await expect(g.messages.searchAll({ actorId: s.parentId, q: 'z e' })).rejects.toEqual(code(CommErrorCode.VALIDATION));
+    // Inside one chat two letters are still fine.
+    expect((await g.messages.search({ actorId: s.parentId, conversationId: directId, q: 'ze' })).hits).toHaveLength(1);
   });
 });
 
@@ -211,5 +246,25 @@ describe('C · export: the super admin only, logged, transcript + media', () => 
     expect(audit).toHaveLength(1);
     expect(audit[0]).toEqual(expect.objectContaining({ actorId: admin, entityId: groupId }));
     expect(audit[0]!.after).toEqual(expect.objectContaining({ mediaFiles: 1, internalNotes: 1 }));
+    // The audit and the archive describe the same messages.
+    const messages = (audit[0]!.after as { messages: number }).messages;
+    expect(text).toContain(`Messages: ${messages}, media files: 1`);
+  });
+
+  it('never exports a file outside this conversation, whatever row points at it (review fix, PR #68)', async () => {
+    const admin = await superAdmin();
+    const secret = Buffer.from('another family\'s photo');
+    // A real object in ANOTHER conversation's namespace...
+    const foreign = await g.attachments.authorizeUpload({ conversationId: directId, actorId: s.ownerId, kind: 'image', mimeType: 'image/png', byteSize: secret.length });
+    await new LocalFsBlobStore().put(foreign.objectKey, 'image/png', secret);
+    // ...and a row in THIS conversation pointing at it (no API path writes one; a bad migration could).
+    const host = await say('see attached');
+    await g.prisma.messageAttachment.create({
+      data: { messageId: host.id, kind: 'image', objectKey: foreign.objectKey, mimeType: 'image/png', byteSize: secret.length, originalName: 'leak.png' },
+    });
+
+    const { files } = await exportZip(admin);
+    expect([...files.keys()]).toEqual(['chat.txt']);
+    expect(files.get('chat.txt')!.toString('utf8')).toContain('<file missing: media/0001-leak.png>');
   });
 });
