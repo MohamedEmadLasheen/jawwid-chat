@@ -74,13 +74,15 @@ export class StatsService {
     await this.requireStatsReader(actor);
     const period = await this.period(month);
     const org = actor.organizationId as string;
-    const [teachers, rows, reports] = await Promise.all([
+    const [teachers, rows, reports, trials] = await Promise.all([
       this.prisma.teacher.findMany({ where: { organizationId: org }, select: { id: true, name: true, isActive: true }, orderBy: { name: 'asc' } }),
       this.lessonRows(org, period),
       this.reportRows(org, period),
+      this.trialRows(org, period),
     ]);
     const byTeacher = groupBy(rows, (r) => r.teacher_id);
     const reportsOf = new Map(reports.map((r) => [r.teacher_id, r]));
+    const trialsOf = new Map(trials.map((r) => [r.teacher_id, r]));
     return {
       month: period.month,
       zone: period.zone,
@@ -99,6 +101,7 @@ export class StatsService {
           upcoming: total('upcoming'),
           attendanceRate: rate(held.lessons, held.lessons + total('student_no_show').lessons),
           reportsOnTimeRate: r ? rate(r.on_time, r.reports) : null,
+          trials: trialBlock(trialsOf.get(t.id)),
         };
       }),
     };
@@ -204,17 +207,16 @@ export class StatsService {
     if (!teacher) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
     const period = await this.period(month);
     const previous = await this.period(shiftMonth(period.month, -1));
-    const [allRows, prevRows, reports, replies, conversions] = await Promise.all([
+    const [allRows, prevRows, reports, replies, trials] = await Promise.all([
       this.lessonRows(org, period, teacherId),
       this.lessonRows(org, previous, teacherId),
       this.reportRows(org, period, teacherId),
       this.replyRows(org, period, teacherId),
-      this.conversionRows(org, period, teacherId),
+      this.trialRows(org, period, teacherId),
     ]);
     // A trial is not a student's lesson: it has its own block below, and only
     // its time joins the workload.
     const rows = allRows.filter((r) => r.kind !== 'trial');
-    const trialRows = allRows.filter((r) => r.kind === 'trial');
     const categories = STAT_CATEGORIES.map((key) => {
       const mine = rows.filter((r) => r.category === key);
       const byDuration = new Map<number, Bucket>();
@@ -250,17 +252,8 @@ export class StatsService {
       categories,
       totals: { counted, scheduledMinutes },
       makeups: { lessons: makeups.lessons, held: makeupsHeld.lessons },
-      trials: {
-        lessons: sum(trialRows.filter((r) => COUNTED.has(r.category) || r.category === 'unreported')).lessons,
-        attended: sum(trialRows.filter((r) => r.category === 'held')).lessons,
-        noShow: sum(trialRows.filter((r) => r.category === 'student_no_show')).lessons,
-        upcoming: sum(trialRows.filter((r) => r.category === 'upcoming')).lessons,
-        // Sales' decision, by the trial's month; credited to the teacher only once Core confirms.
-        subscribed: conversions.subscribed,
-        confirmed: conversions.confirmed,
-        notSubscribed: conversions.notSubscribed,
-        available: true,
-      },
+      // Each trial once, by its one outcome, from Chat's records (chat.teacher_trial_stats).
+      trials: trialBlock(trials[0]),
       rates: {
         attendance: rate(held.lessons, held.lessons + total('student_no_show').lessons),
         // Of the lessons closed and counted, how many took place.
@@ -289,17 +282,17 @@ export class StatsService {
     return rows.map((r) => ({ ...r, duration_minutes: Number(r.duration_minutes), lessons: Number(r.lessons), minutes: Number(r.minutes) }));
   }
 
-  /** Sales' recorded decisions on the teacher's trials of the month. */
-  private async conversionRows(org: string, p: Period, teacherId: string) {
-    const rows = await this.prisma.$queryRaw<Array<{ subscribed: number; confirmed: number; not_subscribed: number }>>`
-      SELECT count(*) FILTER (WHERE o.result = 'subscribed')::int AS subscribed,
-             count(*) FILTER (WHERE o.result = 'subscribed' AND o.confirmed_at IS NOT NULL)::int AS confirmed,
-             count(*) FILTER (WHERE o.result = 'not_subscribed')::int AS not_subscribed
-        FROM chat.trial_outcome o JOIN chat.lesson l ON l.id = o.lesson_id
-       WHERE o.organization_id = ${org}::uuid AND l.teacher_id = ${teacherId}::uuid
-         AND l.starts_at >= ${p.from}::timestamptz AND l.starts_at < ${p.to}::timestamptz`;
-    const r = rows[0];
-    return { subscribed: Number(r?.subscribed ?? 0), confirmed: Number(r?.confirmed ?? 0), notSubscribed: Number(r?.not_subscribed ?? 0) };
+  /** Trials of the month per teacher, each counted once by its current outcome. */
+  private async trialRows(org: string, p: Period, teacherId?: string): Promise<TrialRow[]> {
+    const rows = await this.prisma.$queryRaw<TrialRow[]>`
+      SELECT teacher_id::text AS teacher_id, total, conducted, subscribed, not_subscribed, no_show, awaiting, upcoming, cancelled
+        FROM chat.teacher_trial_stats(${org}::uuid, ${p.from}::timestamptz, ${p.to}::timestamptz)
+       WHERE ${teacherId ?? null}::uuid IS NULL OR teacher_id = ${teacherId ?? null}::uuid`;
+    return rows.map((r) => ({
+      teacher_id: r.teacher_id, total: Number(r.total), conducted: Number(r.conducted), subscribed: Number(r.subscribed),
+      not_subscribed: Number(r.not_subscribed), no_show: Number(r.no_show), awaiting: Number(r.awaiting),
+      upcoming: Number(r.upcoming), cancelled: Number(r.cancelled),
+    }));
   }
 
   private async reportRows(org: string, p: Period, teacherId?: string) {
@@ -406,4 +399,35 @@ function shiftMonth(month: string, by: number): string {
   const [y, m] = month.split('-').map(Number);
   const d = new Date(Date.UTC(y, m - 1 + by, 1));
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+interface TrialRow {
+  teacher_id: string;
+  total: number;
+  conducted: number;
+  subscribed: number;
+  not_subscribed: number;
+  no_show: number;
+  awaiting: number;
+  upcoming: number;
+  cancelled: number;
+}
+
+/**
+ * A teacher's month of trials. total = subscribed + notSubscribed + noShow +
+ * awaiting; conversionRate is of the trials with a decision.
+ */
+function trialBlock(r: TrialRow | undefined) {
+  const n = (k: keyof Omit<TrialRow, 'teacher_id'>) => r?.[k] ?? 0;
+  return {
+    total: n('total'),
+    conducted: n('conducted'),
+    subscribed: n('subscribed'),
+    notSubscribed: n('not_subscribed'),
+    noShow: n('no_show'),
+    awaiting: n('awaiting'),
+    upcoming: n('upcoming'),
+    cancelled: n('cancelled'),
+    conversionRate: rate(n('subscribed'), n('subscribed') + n('not_subscribed')),
+  };
 }

@@ -2680,19 +2680,19 @@ abstract class L10n {
   /// No description provided for @cardTrialNoShowTitle.
   ///
   /// In en, this message translates to:
-  /// **'Did not attend the trial'**
+  /// **'The student did not attend the trial lesson.'**
   String get cardTrialNoShowTitle;
 
   /// No description provided for @cardTrialSubscribedTitle.
   ///
   /// In en, this message translates to:
-  /// **'Subscribed'**
+  /// **'The student has subscribed.'**
   String get cardTrialSubscribedTitle;
 
   /// No description provided for @cardTrialNotSubscribedTitle.
   ///
   /// In en, this message translates to:
-  /// **'Did not subscribe'**
+  /// **'The student did not subscribe.'**
   String get cardTrialNotSubscribedTitle;
 
   /// No description provided for @cardTrialLevel.
@@ -2701,11 +2701,17 @@ abstract class L10n {
   /// **'Level'**
   String get cardTrialLevel;
 
-  /// No description provided for @cardTrialAwaitingCore.
+  /// No description provided for @cardTrialCorrectionTitle.
   ///
   /// In en, this message translates to:
-  /// **'Counts once Core confirms the subscription.'**
-  String get cardTrialAwaitingCore;
+  /// **'Outcome corrected'**
+  String get cardTrialCorrectionTitle;
+
+  /// No description provided for @cardTrialNewOutcome.
+  ///
+  /// In en, this message translates to:
+  /// **'Now'**
+  String get cardTrialNewOutcome;
 
   /// No description provided for @callsSearchHint.
   ///

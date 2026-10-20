@@ -660,6 +660,31 @@ describe('Chat workspace: message, chat and group actions', () => {
   })
 })
 
+describe('A trial group (trial journey)', () => {
+  beforeEach(() => fakeSocket.reset())
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('"+" offers the Trial card in a trial group, and only there', async () => {
+    stubApi({
+      conversations: [conv('tg', { type: 'trial_group', title: 'Teacher One' }), conv('sg', { type: 'student_group' })],
+      messages: { tg: [msg('m1', 1, { conversationId: 'tg' })], sg: [msg('m2', 2, { conversationId: 'sg' })] },
+    })
+    const { unmount } = renderChat('/chat/tg')
+    await screen.findByText('body m1')
+    fireEvent.click(screen.getByRole('button', { name: 'Attach' }))
+    expect(screen.getByRole('menuitem', { name: 'Trial' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Trial' }))
+    expect(await screen.findByRole('dialog', { name: 'Trial' })).toBeInTheDocument()
+    unmount()
+
+    renderChat('/chat/sg')
+    await screen.findByText('body m2')
+    fireEvent.click(screen.getByRole('button', { name: 'Attach' }))
+    expect(screen.getByRole('menuitem', { name: 'Photo or video' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Trial' })).not.toBeInTheDocument()
+  })
+})
+
 describe('Who wrote it (WhatsApp layout)', () => {
   beforeEach(() => fakeSocket.reset())
   afterEach(() => vi.unstubAllGlobals())
