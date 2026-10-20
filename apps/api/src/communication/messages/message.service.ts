@@ -12,6 +12,7 @@ import type {
   IdentityService,
   ResolvedActors,
 } from '../../platform/identity.service';
+import { actorRefKey } from '../../platform/identity.service';
 import { Actor } from '../../platform/types';
 import { ConversationService, isUuid } from '../conversations/conversation.service';
 import { AttachmentService } from '../attachments/attachment.service';
@@ -973,6 +974,14 @@ export class MessageService {
   static readonly SEARCH_ACROSS_LIMIT = 40;
   /** Text candidates per round, before the visibility rule narrows them. */
   private static readonly SEARCH_WINDOW = 200;
+  /**
+   * Rounds of SEARCH_WINDOW candidates one request may read. The visibility
+   * rule runs AFTER the text match, so a window can be mostly matches this
+   * viewer may not see (internal notes, held messages, "deleted for me"); a
+   * request keeps reading older windows until its page is full or this bound
+   * is reached, rather than answering "no matches" over visible older ones.
+   */
+  private static readonly SEARCH_ROUNDS = 5;
 
   /**
    * Text search inside one conversation, newest first, paged by seq (`before`).
@@ -994,29 +1003,44 @@ export class MessageService {
     const decision = await this.conversations.canReadResolved(actor, conv, membership);
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
-    const before = input.before && /^\d{1,18}$/.test(input.before) ? input.before : null;
+    const page = MessageService.SEARCH_PAGE;
     const window = MessageService.SEARCH_WINDOW;
-    const candidates = await this.prisma.$queryRaw<Array<{ id: string; seq: bigint | null }>>`
-      SELECT id, seq FROM chat.message
-      WHERE conversation_id = ${conv.id}::uuid
-        AND deleted_for_all = false AND body IS NOT NULL
-        AND type NOT IN ('system', 'card')
-        AND (${before}::bigint IS NULL OR seq < ${before}::bigint)
-        AND chat.search_fold(body) LIKE '%' || chat.search_fold(${likeEscape(q)}) || '%' ESCAPE '!'
-      ORDER BY seq DESC NULLS LAST
-      LIMIT ${window}`;
-    if (candidates.length === 0) return { hits: [], nextBefore: null };
+    let cursor = input.before && /^\d{1,18}$/.test(input.before) ? input.before : null;
+    const hits: MessageWithRelations[] = [];
+    let exhausted = false;
 
-    const rows = await this.prisma.message.findMany({
-      where: { AND: [this.visibilityFilter(actor, conv.id, {} as ListMessagesInput), { id: { in: candidates.map((c) => c.id) } }] },
-      include: { attachments: true, reactions: true, receipts: true, card: true },
-      orderBy: { seq: 'desc' },
-      take: MessageService.SEARCH_PAGE,
-    });
-    // More may follow either inside this window (the page filled) or beyond it
-    // (the window filled); seq < cursor covers both without skipping any.
-    const last = rows.length === MessageService.SEARCH_PAGE ? rows[rows.length - 1]?.seq : candidates.length === window ? candidates[candidates.length - 1]?.seq : null;
-    return { hits: await this.dtosFor(rows, conv.id, actor), nextBefore: last != null ? last.toString() : null };
+    for (let round = 0; round < MessageService.SEARCH_ROUNDS && hits.length < page; round += 1) {
+      const candidates = await this.prisma.$queryRaw<Array<{ id: string; seq: bigint | null }>>`
+        SELECT id, seq FROM chat.message
+        WHERE conversation_id = ${conv.id}::uuid
+          AND deleted_for_all = false AND body IS NOT NULL
+          AND type NOT IN ('system', 'card')
+          AND (${cursor}::bigint IS NULL OR seq < ${cursor}::bigint)
+          AND chat.search_fold(body) LIKE '%' || chat.search_fold(${likeEscape(q)}) || '%' ESCAPE '!'
+        ORDER BY seq DESC NULLS LAST
+        LIMIT ${window}`;
+      if (candidates.length > 0) {
+        const visible = await this.prisma.message.findMany({
+          where: { AND: [this.visibilityFilter(actor, conv.id, {} as ListMessagesInput), { id: { in: candidates.map((c) => c.id) } }] },
+          include: { attachments: true, reactions: true, receipts: true, card: true },
+          orderBy: { seq: 'desc' },
+          take: page - hits.length,
+        });
+        hits.push(...visible);
+      }
+      const last = candidates[candidates.length - 1]?.seq;
+      if (candidates.length < window || last == null) {
+        exhausted = true;
+        break;
+      }
+      cursor = last.toString();
+    }
+
+    // A full page continues from its last hit (older visible matches may sit
+    // in the same window); otherwise from the end of the windows read.
+    const lastHit = hits.length >= page ? hits[hits.length - 1]?.seq : null;
+    const nextBefore = lastHit != null ? lastHit.toString() : exhausted ? null : cursor;
+    return { hits: await this.dtosFor(hits, conv.id, actor), nextBefore };
   }
 
   /**
@@ -1024,30 +1048,48 @@ export class MessageService {
    * first, at most SEARCH_ACROSS_LIMIT hits. `listForActor` IS the boundary --
    * exactly the chats this person's list shows (for staff, PD-8 scope; for a
    * family member or a teacher, live membership) -- and then the per-message
-   * `visibilityFilter`, as in a single chat.
+   * `visibilityFilter`, as in a single chat. Needs three meaningful
+   * characters: a two-letter term cannot use the trigram index and would fold
+   * every message of every listed chat.
    */
   async searchAll(input: { actorId: string; q: unknown }): Promise<{ hits: Array<{ conversationId: string; message: MessageDto }> }> {
-    const q = searchQuery(input.q);
+    const q = searchQuery(input.q, MessageService.SEARCH_ACROSS_MIN);
     const actor = await this.conversations.requireActor(input.actorId);
     const ids = (await this.conversations.listForActor(actor.actorId)).map((c) => c.id);
     if (ids.length === 0) return { hits: [] };
 
-    const candidates = await this.prisma.$queryRaw<Array<{ id: string }>>`
-      SELECT id FROM chat.message
-      WHERE conversation_id = ANY(${ids}::uuid[])
-        AND deleted_for_all = false AND body IS NOT NULL
-        AND type NOT IN ('system', 'card')
-        AND chat.search_fold(body) LIKE '%' || chat.search_fold(${likeEscape(q)}) || '%' ESCAPE '!'
-      ORDER BY created_at DESC
-      LIMIT ${MessageService.SEARCH_WINDOW}`;
-    if (candidates.length === 0) return { hits: [] };
+    const limit = MessageService.SEARCH_ACROSS_LIMIT;
+    const window = MessageService.SEARCH_WINDOW;
+    let cursor: { at: Date; id: string } | null = null;
+    const rows: MessageWithRelations[] = [];
 
-    const rows = await this.prisma.message.findMany({
-      where: { AND: [this.visibilityFilter(actor, { in: ids }, {} as ListMessagesInput), { id: { in: candidates.map((c) => c.id) } }] },
-      include: { attachments: true, reactions: true, receipts: true, card: true },
-      orderBy: { createdAt: 'desc' },
-      take: MessageService.SEARCH_ACROSS_LIMIT,
-    });
+    for (let round = 0; round < MessageService.SEARCH_ROUNDS && rows.length < limit; round += 1) {
+      const after = cursor;
+      const candidates: Array<{ id: string; created_at: Date }> = await this.prisma.$queryRaw`
+        SELECT id, created_at FROM chat.message
+        WHERE conversation_id = ANY(${ids}::uuid[])
+          AND deleted_for_all = false AND body IS NOT NULL
+          AND type NOT IN ('system', 'card')
+          AND (${after?.at ?? null}::timestamptz IS NULL
+               OR (created_at, id) < (${after?.at ?? null}::timestamptz, ${after?.id ?? null}::uuid))
+          AND chat.search_fold(body) LIKE '%' || chat.search_fold(${likeEscape(q)}) || '%' ESCAPE '!'
+        ORDER BY created_at DESC, id DESC
+        LIMIT ${window}`;
+      if (candidates.length > 0) {
+        rows.push(
+          ...(await this.prisma.message.findMany({
+            where: { AND: [this.visibilityFilter(actor, { in: ids }, {} as ListMessagesInput), { id: { in: candidates.map((c) => c.id) } }] },
+            include: { attachments: true, reactions: true, receipts: true, card: true },
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            take: limit - rows.length,
+          })),
+        );
+      }
+      if (candidates.length < window) break;
+      const last = candidates[candidates.length - 1]!;
+      cursor = { at: last.created_at, id: last.id };
+    }
+
     // Photos and names are signed per conversation, so map each chat's rows together.
     const byConv = new Map<string, MessageWithRelations[]>();
     for (const r of rows) if (r.conversationId) byConv.set(r.conversationId, [...(byConv.get(r.conversationId) ?? []), r]);
@@ -1061,27 +1103,46 @@ export class MessageService {
     };
   }
 
+  /** Cross-chat search needs this many meaningful characters (see searchAll). */
+  static readonly SEARCH_ACROSS_MIN = 3;
+
   /**
    * Every message this actor may see in a conversation, oldest first, in
-   * batches, with the stored rows (for attachment keys). For the super admin's
-   * export: THE CALLER AUTHORIZES the conversation (ConversationExportService);
-   * which messages appear is `visibilityFilter`, the one rule.
+   * batches of stored rows with their authors' display names. For the super
+   * admin's export: THE CALLER AUTHORIZES the conversation
+   * (ConversationExportService); which messages appear is `visibilityFilter`,
+   * the one rule. `upToSeq` freezes the set, so a count taken in one pass and
+   * the archive written in the next describe the same messages. Nothing here is
+   * signed: an export carries bytes, never links.
    */
-  async *exportBatches(actor: Actor, conversationId: string): AsyncGenerator<Array<{ row: MessageWithRelations; dto: MessageDto }>> {
+  async *exportRows(
+    actor: Actor,
+    conversationId: string,
+    upToSeq: bigint | null,
+  ): AsyncGenerator<Array<{ row: MessageWithRelations; author: string | null }>> {
+    const batch = 500;
     let cursor: string | undefined;
     for (;;) {
       const rows = await this.prisma.message.findMany({
-        where: this.visibilityFilter(actor, conversationId, {} as ListMessagesInput),
+        where: {
+          AND: [
+            this.visibilityFilter(actor, conversationId, {} as ListMessagesInput),
+            upToSeq === null ? {} : { seq: { lte: upToSeq } },
+          ],
+        },
         include: { attachments: true, reactions: true, receipts: true, card: true },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-        take: 500,
+        take: batch,
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       });
       if (rows.length === 0) return;
-      const dtos = await this.dtosFor(rows, conversationId, actor);
-      yield rows.map((row, i) => ({ row, dto: dtos[i]! }));
+      const authors = await this.authorsFor(rows);
+      yield rows.map((row) => {
+        const ref = messageAuthorRef(row);
+        return { row, author: ref ? (authors.get(actorRefKey(ref))?.displayName ?? null) : null };
+      });
       cursor = rows[rows.length - 1]!.id;
-      if (rows.length < 500) return;
+      if (rows.length < batch) return;
     }
   }
 
@@ -1448,12 +1509,12 @@ const SEARCH_MARKS = new RegExp(
   'g',
 );
 
-/** A search term: 2 to 100 meaningful characters, spaces collapsed. */
-export function searchQuery(raw: unknown): string {
+/** A search term: `min` (default 2) to 100 meaningful characters, spaces collapsed. */
+export function searchQuery(raw: unknown, min = 2): string {
   const q = typeof raw === 'string' ? raw.trim().replace(/\s+/g, ' ') : '';
-  const meaningful = [...q.replace(SEARCH_MARKS, '')].length;
-  if (meaningful < 2 || [...q].length > 100) {
-    throw new CommError(CommErrorCode.VALIDATION, 'search for 2 to 100 characters', 400);
+  const meaningful = [...q.replace(SEARCH_MARKS, '').replace(/\s/g, '')].length;
+  if (meaningful < min || [...q].length > 100) {
+    throw new CommError(CommErrorCode.VALIDATION, `search for ${min} to 100 characters`, 400);
   }
   return q;
 }

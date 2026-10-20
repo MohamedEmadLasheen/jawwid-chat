@@ -1214,7 +1214,7 @@ describe('Edit and favorites', () => {
 
 describe('Search and export (group B)', () => {
   const SUPER = makeStaff({ id: 'staff_super', role: 'super_admin' })
-  function stubSearch(me = ADMIN, exportAnswer?: () => Response) {
+  function stubSearch(me = ADMIN, exportAnswer?: () => Response, pagedSearch = false) {
     const calls: Array<{ method: string; path: string; query: Record<string, string> }> = []
     const json = (data: unknown, status = 200) =>
       new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
@@ -1241,7 +1241,11 @@ describe('Search and export (group B)', () => {
             : json({ messages: c1.slice(3).reverse(), nextBefore: '4' })
         }
         if (path === '/conversations/c2/messages') return json({ messages: [t1], nextBefore: null })
-        if (path === '/conversations/c1/messages/search') return json({ hits: [c1[4], c1[0]], nextBefore: null })
+        if (path === '/conversations/c1/messages/search') {
+          // Paged like the server: the newest match first, the older one behind `before`.
+          if (pagedSearch) return query.before === '5' ? json({ hits: [c1[0]], nextBefore: null }) : json({ hits: [c1[4]], nextBefore: '5' })
+          return json({ hits: [c1[4], c1[0]], nextBefore: null })
+        }
         if (path === '/me/search') return json({ hits: [{ conversationId: 'c2', message: t1 }] })
         if (path === '/conversations/c1/export' && exportAnswer) return exportAnswer()
         return json({ error: { code: 'NOT_FOUND', message: 'nope' } }, 404)
@@ -1271,6 +1275,37 @@ describe('Search and export (group B)', () => {
     // Not on screen yet: the older page is fetched, then the message is shown.
     await waitFor(() => expect(calls.some((c) => c.path === '/conversations/c1/messages' && c.query.before === '4')).toBe(true))
     await waitFor(() => expect(flashed('m1')).toBe(true))
+  })
+
+  it('steps past the last loaded match by fetching the next page of matches (review fix, PR #68)', async () => {
+    const calls = stubSearch(ADMIN, undefined, true)
+    renderChat('/chat/c1')
+    await screen.findByText('the fee is due')
+    fireEvent.click(screen.getByRole('button', { name: 'Search in chat' }))
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search in chat' }), { target: { value: 'fee' } })
+    expect(await screen.findByText('1 of 1+')).toBeInTheDocument()
+    // More exist on the server, so "older" stays available at the last loaded one.
+    const older = screen.getByRole('button', { name: 'Older match' })
+    expect(older).toBeEnabled()
+    fireEvent.click(older)
+    await waitFor(() => expect(calls.some((c) => c.path === '/conversations/c1/messages/search' && c.query.before === '5')).toBe(true))
+    expect(await screen.findByText('2 of 2')).toBeInTheDocument()
+    await waitFor(() => expect(flashed('m1')).toBe(true))
+    expect(screen.getByRole('button', { name: 'Older match' })).toBeDisabled()
+  })
+
+  it('searches messages across chats only from three letters (review fix, PR #68)', async () => {
+    const calls = stubSearch()
+    renderChat('/chat')
+    await screen.findByText('Kid group')
+    const box = screen.getByRole('searchbox', { name: 'Search chats and messages' })
+    fireEvent.change(box, { target: { value: 'tr' } })
+    await new Promise((r) => setTimeout(r, 400))
+    expect(calls.some((c) => c.path === '/me/search')).toBe(false)
+    expect(screen.queryByRole('region', { name: 'Messages' })).not.toBeInTheDocument()
+    fireEvent.change(box, { target: { value: 'tri' } })
+    expect(await screen.findByRole('region', { name: 'Messages' })).toBeInTheDocument()
+    await waitFor(() => expect(calls.find((c) => c.path === '/me/search')?.query).toEqual({ q: 'tri' }))
   })
 
   it('the list search also finds messages across chats, and opens the chat at the hit', async () => {

@@ -10,7 +10,7 @@ import { Icon } from '@/shared/components/Icon'
 import { Menu } from '@/shared/components/Menu'
 import { SearchField } from '@/shared/components/SearchField'
 import { chatApi, chatKeys, type ChatConversation, type ChatLabel } from './chatApi'
-import { Highlighted, searchable, snippetAround, useDebounced } from './search'
+import { Highlighted, SEARCH_ACROSS_MIN, searchable, snippetAround, useDebounced } from './search'
 import { Avatar } from '@/shared/components/Avatar'
 import { chatCopyFor } from './copy'
 import { LabelChip, LabelsDialog } from './LabelsDialog'
@@ -73,7 +73,7 @@ export function ConversationList({
   // (owner decision 2026-10-20); the server answers only from what this
   // viewer may read.
   const term = useDebounced(search.trim())
-  const textSearch = !!onOpenMessage && searchable(term)
+  const textSearch = !!onOpenMessage && searchable(term, SEARCH_ACROSS_MIN)
   const found = useQuery({
     queryKey: chatKeys.searchAll(term),
     queryFn: () => chatApi.searchAll(term),

@@ -179,6 +179,7 @@ export function ChatThread({
   const [searching, setSearching] = useState(false)
   const [searchQ, setSearchQ] = useState('')
   const [target, setTarget] = useState<string | null>(null)
+  const revealRun = useRef(0)
   const [notice, setNotice] = useState<string | null>(null)
   const stopSelecting = () => {
     setSelecting(false)
@@ -225,12 +226,16 @@ export function ChatThread({
    * contiguous, so "Load older" carries on from where this stopped.
    */
   async function reveal(messageId: string) {
+    // Only the latest request acts: an older one still paging (a fast second
+    // step, a new search) stops without touching the history.
+    const run = ++revealRun.current
     atBottom.current = false
     if (!byId.has(messageId)) {
       let next = cursor
       const fetched: ChatMessage[] = []
       for (let i = 0; next && i < 40 && !fetched.some((m) => m.id === messageId); i += 1) {
         const page = await chatApi.messages(conversationId, next)
+        if (run !== revealRun.current) return
         fetched.push(...page.messages)
         next = page.nextBefore
       }
@@ -238,6 +243,8 @@ export function ChatThread({
         setOlder((prev) => [...fetched, ...prev])
         setOlderCursor(next)
       }
+      // Not within reach: leave no target behind to jump to later.
+      if (!fetched.some((m) => m.id === messageId)) return
     }
     setTarget(messageId)
   }

@@ -73,10 +73,17 @@ export function snippetAround(text: string, query: string, before = 32): string 
   return `…${text.slice(start > 0 ? start + 1 : first[0] - before)}`
 }
 
-/** A search term worth sending: two characters that are not only marks. */
-export function searchable(q: string): boolean {
-  return fold(q.trim()).folded.replace(/\s/g, '').length >= 2
+/**
+ * A search term worth sending: `min` characters (default 2) that are not only
+ * marks. Search across chats asks for 3, as the server does (a two-letter term
+ * cannot use the trigram index).
+ */
+export function searchable(q: string, min = 2): boolean {
+  return fold(q.trim()).folded.replace(/\s/g, '').length >= min
 }
+
+/** The fewest characters a search across chats needs (MessageService.SEARCH_ACROSS_MIN). */
+export const SEARCH_ACROSS_MIN = 3
 
 /** The value, once it has stopped changing for `ms`. */
 export function useDebounced<T>(value: T, ms = 300): T {

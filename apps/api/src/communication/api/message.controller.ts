@@ -128,7 +128,6 @@ export class MessageController {
     return { ok: true };
   }
 
-  /** The conversation's pinned messages (at most three) as this viewer may see them. */
   /** Search this chat's messages; only what the caller may read. */
   @Get('search')
   search(
@@ -140,6 +139,7 @@ export class MessageController {
     return this.messages.search({ actorId, conversationId, q, before });
   }
 
+  /** The conversation's pinned messages (at most three) as this viewer may see them. */
   @Get('pins')
   async pins(@ActorId() actorId: string, @Param('conversationId') conversationId: string) {
     return this.messages.pins(conversationId, actorId);

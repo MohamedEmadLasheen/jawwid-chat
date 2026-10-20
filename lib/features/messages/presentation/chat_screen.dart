@@ -152,6 +152,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   String _searchedFor = '';
   List<Message> _hits = const [];
   bool _hitsMore = false;
+  String? _hitsNextBefore;
   bool _searchLoading = false;
   int _hitIndex = 0;
   bool _focusDone = false;
@@ -620,19 +621,40 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       _searchedFor = query;
       _hits = found.hits;
       _hitsMore = found.nextBefore != null;
+      _hitsNextBefore = found.nextBefore;
       _hitIndex = 0;
     });
     final first = found.hits.firstOrNull?.id;
     if (first != null) await _revealMessage(first);
   }
 
-  void _stepHit(int delta) {
+  Future<void> _stepHit(int delta) async {
     if (_hits.isEmpty) return;
+    // Older than every match loaded: fetch the next page of matches first.
+    if (delta > 0 && _hitIndex >= _hits.length - 1 && _hitsMore && !_searchLoading) {
+      final query = _searchedFor;
+      setState(() => _searchLoading = true);
+      MessageSearchPage? page;
+      await _guard(() async {
+        page = await ref
+            .read(messageSearchRepositoryProvider)
+            .searchIn(widget.conversationId, query, before: _hitsNextBefore);
+      });
+      if (!mounted) return;
+      setState(() => _searchLoading = false);
+      final more = page;
+      if (more == null || _searchedFor != query) return;
+      setState(() {
+        _hits = [..._hits, ...more.hits];
+        _hitsMore = more.nextBefore != null;
+        _hitsNextBefore = more.nextBefore;
+      });
+    }
     final next = (_hitIndex + delta).clamp(0, _hits.length - 1);
     if (next == _hitIndex) return;
     setState(() => _hitIndex = next);
     final id = _hits[next].id;
-    if (id != null) _revealMessage(id);
+    if (id != null) await _revealMessage(id);
   }
 
   void _closeSearch() {
@@ -643,6 +665,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       _searchedFor = '';
       _hits = const [];
       _hitsMore = false;
+      _hitsNextBefore = null;
       _hitIndex = 0;
     });
   }
@@ -653,11 +676,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _revealMessage(String messageId) async {
     final provider = messagesControllerProvider(widget.conversationId);
     final controller = ref.read(provider.notifier);
+    // Bounded twice: pages loaded, and time spent waiting on a load already in
+    // flight (a load that never settles must not keep this loop alive).
+    var waits = 0;
     for (var page = 0; page < 40 && mounted; page++) {
       final state = ref.read(provider);
       if (state.log.byServerId(messageId) != null) break;
       if (!state.log.hasMoreOlder) return;
       if (state.isLoadingOlder) {
+        if (++waits > 200) return; // 10 s
         await Future<void>.delayed(const Duration(milliseconds: 50));
         page--;
         continue;
@@ -720,7 +747,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         IconButton(
           icon: const Icon(Icons.keyboard_arrow_up),
           tooltip: l10n.searchOlder,
-          onPressed: _hitIndex < _hits.length - 1 ? () => _stepHit(1) : null,
+          onPressed: _hitIndex < _hits.length - 1 || (_hitsMore && !_searchLoading) ? () => _stepHit(1) : null,
         ),
         IconButton(
           icon: const Icon(Icons.keyboard_arrow_down),

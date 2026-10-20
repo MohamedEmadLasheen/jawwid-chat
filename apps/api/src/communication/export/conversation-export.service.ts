@@ -4,11 +4,11 @@ import { AppConfigService } from '../../platform/app-config.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
 import { AUDIT_SERVICE, OBJECT_STORAGE } from '../../platform/tokens';
 import type { AuditService } from '../../platform/audit.service';
-import type { Actor } from '../../platform/types';
 import { ZipWriter, type ZipSink } from '../../platform/zip-writer';
 import { ActorKind, StaffRole, Visibility } from '../contracts/vocab';
 import type { MessageAttachment } from '@prisma/client';
-import type { MessageDto, MessageWithRelations } from '../contracts/dto';
+import type { MessageWithRelations } from '../contracts/dto';
+import { objectKeyBelongsToConversation } from '../attachments/object-key';
 import type { ObjectStorage } from '../attachments/object-storage';
 import { ConversationService } from '../conversations/conversation.service';
 import { MessageService } from '../messages/message.service';
@@ -22,7 +22,7 @@ export interface PreparedExport {
 
 interface Item {
   row: MessageWithRelations;
-  dto: MessageDto;
+  author: string | null;
 }
 
 const attachmentsOf = (row: MessageWithRelations): MessageAttachment[] => row.attachments ?? [];
@@ -35,9 +35,14 @@ const attachmentsOf = (row: MessageWithRelations): MessageAttachment[] => row.at
  * An export copies parents' and children's messages and photos out of the
  * system, which is why it is one role's act and always logged. What it
  * contains is exactly what the super admin can read in the chat -- the same
- * per-message rule as the message list (`MessageService.exportBatches`) --
+ * per-message rule as the message list (`MessageService.exportRows`) --
  * including internal staff notes, marked as such. A message deleted for
  * everyone appears as deleted and its media are NOT exported.
+ *
+ * Two passes over the same frozen set (messages up to the newest seq at the
+ * start): the first only counts, for the audit row written before a byte
+ * leaves; the second streams the archive batch by batch. No pass holds the
+ * whole chat, and each media file is in memory only while it is written.
  */
 @Injectable()
 export class ConversationExportService {
@@ -60,9 +65,25 @@ export class ConversationExportService {
     const decision = await this.conversations.canReadResolved(actor, conv, membership);
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
-    const items: Item[] = [];
-    for await (const batch of this.messages.exportBatches(actor, conv.id)) items.push(...batch);
-    const media = items.flatMap(({ row }) => (row.deletedForAll ? [] : attachmentsOf(row)));
+    // Freeze the set: a message sent while the export runs is in neither pass.
+    const upToSeq = (await this.prisma.conversation.findUnique({ where: { id: conv.id }, select: { lastSeq: true } }))?.lastSeq ?? null;
+    const rows = () => this.messages.exportRows(actor, conv.id, upToSeq);
+
+    const counts = { messages: 0, mediaFiles: 0, mediaBytes: 0, internalNotes: 0 };
+    const names: string[] = [];
+    for await (const batch of rows()) {
+      for (const { row, author } of batch) {
+        counts.messages += 1;
+        if (row.visibility === Visibility.INTERNAL) counts.internalNotes += 1;
+        if (!row.deletedForAll) {
+          for (const a of attachmentsOf(row)) {
+            counts.mediaFiles += 1;
+            counts.mediaBytes += a.byteSize;
+          }
+        }
+        if (author && names.length < 4 && !names.includes(author)) names.push(author);
+      }
+    }
     const now = new Date();
     const zone = String(await this.config.get('stats.zone'));
 
@@ -73,36 +94,39 @@ export class ConversationExportService {
         action: 'conversation.exported',
         entity: 'conversation',
         entityId: conv.id,
-        after: {
-          messages: items.length,
-          mediaFiles: media.length,
-          mediaBytes: media.reduce((n, a) => n + a.byteSize, 0),
-          internalNotes: items.filter(({ row }) => row.visibility === Visibility.INTERNAL).length,
-        },
+        after: counts,
         reason: 'chat exported by the super admin (transcript + media)',
       });
     });
 
-    const names = [...new Set(items.map(({ dto }) => dto.authorDisplayName).filter((n): n is string => !!n))];
-    const title = conv.title?.trim() || names.slice(0, 4).join(' · ') || 'Chat';
+    const title = conv.title?.trim() || names.join(' · ') || 'Chat';
     return {
       fileName: `jawwid-chat-${localStamp(now, zone).slice(0, 10)}-${conv.id.slice(0, 8)}.zip`,
-      write: (sink) => this.writeArchive(sink, { title, type: conv.type, items, zone, now, actor }),
+      write: (sink) =>
+        this.writeArchive(sink, { conversationId: conv.id, title, type: conv.type, rows, total: counts.messages, zone, now }),
     };
   }
 
   private async writeArchive(
     sink: ZipSink,
-    x: { title: string; type: string; items: Item[]; zone: string; now: Date; actor: Actor },
+    x: {
+      conversationId: string;
+      title: string;
+      type: string;
+      rows: () => AsyncGenerator<Item[]>;
+      total: number;
+      zone: string;
+      now: Date;
+    },
   ): Promise<void> {
     const zip = new ZipWriter(sink);
     const lines: string[] = [];
     let n = 0;
     let mediaFiles = 0;
 
-    for (const { row, dto } of x.items) {
+    for await (const batch of x.rows()) for (const { row, author } of batch) {
       const stamp = `[${localStamp(row.createdAt, x.zone)}]`;
-      const who = dto.authorDisplayName || roleName(dto.authorKind);
+      const who = author || roleName(row.authorType);
       if (row.type === 'system') {
         lines.push(`${stamp} -- ${systemText(row.body)} --`);
         continue;
@@ -128,7 +152,9 @@ export class ConversationExportService {
           lines.push(`${label} <not included, the archive is full: ${name}>`);
           continue;
         }
-        const bytes = await this.readAll(a.objectKey);
+        // The media route's rule, here too: a key outside this conversation's
+        // namespace is never served, whatever row points at it.
+        const bytes = objectKeyBelongsToConversation(x.conversationId, a.objectKey) ? await this.readAll(a.objectKey) : null;
         if (!bytes) {
           lines.push(`${label} <file missing: ${name}>`);
           continue;
@@ -144,7 +170,7 @@ export class ConversationExportService {
       `Chat: ${x.title}`,
       `Kind: ${x.type}`,
       `Exported: ${localStamp(x.now, x.zone)} (${x.zone})`,
-      `Messages: ${x.items.length}, media files: ${mediaFiles}`,
+      `Messages: ${x.total}, media files: ${mediaFiles}`,
       `Times are in ${x.zone}.`,
       'Includes internal staff notes. Confidential: contains family and children\'s data.',
       '',
