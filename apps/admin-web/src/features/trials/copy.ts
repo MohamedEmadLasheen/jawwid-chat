@@ -57,8 +57,8 @@ export const TR = {
   },
   ready: { en: 'Ready to set up', ar: 'جاهزون للتجهيز' },
   readyHint: {
-    en: 'Confirmed by Core, with no group yet. Set up the group from Families.',
-    ar: 'أكّدها Core ولا توجد لهم مجموعة بعد. جهّز المجموعة من صفحة الأسر.',
+    en: 'Confirmed by Core, with no group yet. The Operations manager assigns the supervisor; the supervisor creates the group with the parent and the teacher and records the child\'s details.',
+    ar: 'أكّدها Core ولا توجد لهم مجموعة بعد. يعيّن مدير العمليات المشرف، ثم ينشئ المشرف المجموعة مع ولي الأمر والمعلم ويسجّل بيانات الطفل.',
   },
   awaitingStudent: { en: 'Confirmed — student not in Chat yet', ar: 'مؤكَّد — الطالب غير موجود في المحادثات بعد' },
   awaitingStudentHint: {

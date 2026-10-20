@@ -1257,6 +1257,19 @@ export class MessageService {
    */
   async deleteForEveryone(messageId: string, actorId: string, reason: string): Promise<void> {
     const { actor, message, conv } = await this.loadForActor(messageId, actorId);
+    // PD-15: a lesson report's card is the report's -- deleting it here would
+    // leave the lesson counted with nothing in the chat. It is deleted (and
+    // resent, or not) from the lesson's record, which keeps both in step.
+    if (message.type === MessageType.CARD) {
+      const card = await this.prisma.messageCard.findUnique({ where: { messageId }, select: { kind: true } });
+      if (card?.kind === 'lesson_report') {
+        throw new CommError(
+          CommErrorCode.MESSAGE_NOT_EDITABLE,
+          'a lesson report card is deleted from the lesson record (POST /lessons/:id/report/delete)',
+          409,
+        );
+      }
+    }
     const windowMinutes = await this.config.get(
       'communication.delete_for_everyone_window_minutes',
     );

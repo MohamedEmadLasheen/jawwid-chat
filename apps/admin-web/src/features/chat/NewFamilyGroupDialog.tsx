@@ -17,7 +17,18 @@ import './family-group.css'
  * request re-checks every person and every child, and the database refuses an
  * incorrect association whatever is sent.
  */
-export function NewFamilyGroupDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
+export function NewFamilyGroupDialog({
+  onClose,
+  onCreated,
+  initialFamilyId = '',
+  initialLearnerIds = [],
+}: {
+  onClose: () => void
+  onCreated: (id: string) => void
+  /** PD-15: opened from New Students with the family and the child already chosen. */
+  initialFamilyId?: string
+  initialLearnerIds?: string[]
+}) {
   const { locale } = useI18n()
   const copy = chatCopyFor(locale)
   const ids = { family: useId(), title: useId() }
@@ -25,8 +36,8 @@ export function NewFamilyGroupDialog({ onClose, onCreated }: { onClose: () => vo
   const create = useCreateFamilyGroup()
   const families = candidates.data?.families ?? []
 
-  const [familyId, setFamilyId] = useState('')
-  const [children, setChildren] = useState<string[]>([])
+  const [familyId, setFamilyId] = useState(initialFamilyId)
+  const [children, setChildren] = useState<string[]>(initialLearnerIds)
   const [parents, setParents] = useState<string[] | null>(null)
   const [teachers, setTeachers] = useState<string[] | null>(null)
   const [title, setTitle] = useState('')

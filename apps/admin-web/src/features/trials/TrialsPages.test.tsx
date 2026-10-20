@@ -180,3 +180,48 @@ describe('New students, as Operations', () => {
     expect(screen.queryByRole('navigation', { name: 'Trials' })).not.toBeInTheDocument()
   })
 })
+
+describe('New students: the setup steps (PD-15)', () => {
+  it('the Operations manager assigns the supervisor; the group waits for one; details open for the child', async () => {
+    access({ operations: true })
+    const base = {
+      prospect: { id: 'p-x', displayName: 'Prospect' }, teacher: { id: 't-1', name: 'Teacher One' },
+      trialAt: '2026-10-10T15:00:00Z', recordedAt: '2026-10-11T10:00:00Z', confirmedAt: '2026-10-12T10:00:00Z',
+      assignedTeacher: { id: 't-1', name: 'Teacher One' }, hasDetails: false,
+    }
+    on('GET', /\/trials\/new-students$/, () =>
+      json({
+        readyForSetup: [
+          { ...base, lessonId: 'a', prospect: { id: 'p-a', displayName: 'Prospect Unassigned' }, learnerId: 'k-a', learner: { id: 'k-a', name: 'Child Unassigned', familyId: 'f-1' }, supervisor: null },
+          { ...base, lessonId: 'b', prospect: { id: 'p-b', displayName: 'Prospect Assigned' }, learnerId: 'k-b', learner: { id: 'k-b', name: 'Child Assigned', familyId: 'f-2' }, supervisor: { id: 's-1', name: 'Supervisor One' } },
+        ],
+        awaitingStudent: [],
+        awaitingCore: [],
+      }),
+    )
+    on('GET', /\/org\/structure$/, () =>
+      json({
+        departments: [{
+          id: 'd-ops', kind: 'operations', displayName: 'Operations', manager: null, backups: [],
+          members: [{ id: 's-1', name: 'Supervisor One', role: 'admin', isActive: true, position: 'supervisor', learnerCount: 3 }],
+        }],
+      }),
+    )
+    on('GET', /\/courses$/, () => json({ canManage: true, courses: [] }))
+    renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
+    const ready = await screen.findByRole('region', { name: /Ready to set up/ })
+    const unassigned = within(ready).getByText('Prospect Unassigned').closest('tr')!
+    const assigned = within(ready).getByText('Prospect Assigned').closest('tr')!
+    expect(within(assigned).getByText('Supervisor One')).toBeInTheDocument()
+    expect(within(unassigned).getByRole('button', { name: 'Create group' })).toBeDisabled()
+    expect(within(assigned).getByRole('button', { name: 'Create group' })).toBeEnabled()
+
+    await userEvent.click(await within(unassigned).findByRole('button', { name: 'Assign' }))
+    expect(await screen.findByRole('dialog', { name: /Child Unassigned/ })).toBeInTheDocument()
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }))
+
+    await userEvent.click(within(assigned).getByRole('button', { name: 'Details' }))
+    expect(await screen.findByRole('dialog', { name: /Child Assigned: enrolment details/ })).toBeInTheDocument()
+  })
+})
+

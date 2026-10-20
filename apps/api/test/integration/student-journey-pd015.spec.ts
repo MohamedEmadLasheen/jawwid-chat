@@ -320,6 +320,16 @@ describe('4. deleting a report', () => {
   });
 });
 
+describe('4b. a report card is never deleted on its own', () => {
+  it('delete-for-everyone refuses a report card: the lesson record deletes both together', async () => {
+    const id = await lesson(-HOUR);
+    await lessons.report(s.teacherId, id, REPORT);
+    const [card] = await cards();
+    expect(await code(g.messages.deleteForEveryone(card.id, s.ownerId, 'tidy up'))).toBe(CommErrorCode.MESSAGE_NOT_EDITABLE);
+    expect((await g.prisma.message.findUniqueOrThrow({ where: { id: card.id } })).deletedForAll).toBe(false);
+  });
+});
+
 describe('5. corrections', () => {
   it('Operations corrects a mistaken absence to attended: a report, one card, history and audit', async () => {
     const id = await lesson(-HOUR);

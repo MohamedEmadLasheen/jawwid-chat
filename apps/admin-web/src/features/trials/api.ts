@@ -42,6 +42,11 @@ export interface NewStudentDto {
   trialAt: string
   recordedAt: string
   confirmedAt: string | null
+  /** PD-15: how far the setup got, once the student is in Chat. */
+  learner?: { id: string; name: string; familyId: string }
+  assignedTeacher?: { id: string; name: string } | null
+  supervisor?: { id: string; name: string } | null
+  hasDetails?: boolean
 }
 
 const id = (v: string) => encodeURIComponent(v)

@@ -30,6 +30,21 @@ export interface CategoryStats extends Bucket {
   byDuration: Array<{ durationMinutes: number } & Bucket>
 }
 
+/** PD-15: StatsService.monthSummary -- every lesson of the month in exactly one line. */
+export interface MonthSummary {
+  totalScheduled: number
+  conducted: number
+  studentAttended: number
+  studentNoShow: number
+  studentExcuses: { total: number; beforeStart: number; afterStart: number }
+  teacherExcuses: number
+  teacherNoShow: number
+  cancelled: number
+  pending: { total: number; upcoming: number; awaitingReport: number }
+  completed: { regular: number; makeup: number; total: number }
+  makeups: { completed: number; scheduled: number; total: number }
+}
+
 export interface TeacherRow {
   teacher: { id: string; name: string; isActive: boolean }
   held: Bucket
@@ -39,6 +54,7 @@ export interface TeacherRow {
   upcoming: Bucket
   attendanceRate: number | null
   reportsOnTimeRate: number | null
+  summary?: MonthSummary
 }
 
 export interface TeacherDetail {
@@ -46,6 +62,7 @@ export interface TeacherDetail {
   month: string
   zone: string
   categories: CategoryStats[]
+  summary?: MonthSummary
   totals: { counted: Bucket; scheduledMinutes: number }
   makeups: { lessons: number; held: number }
   trials: { lessons: number; attended: number; converted: number; available: boolean }

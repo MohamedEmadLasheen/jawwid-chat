@@ -996,7 +996,9 @@ export class ConversationService {
       ...contacts.map((c) => ({ actorId: c.id, actorKind: ActorKind.CONTACT, memberRole: MemberRole.PARENT })),
       ...teachers.map((t) => ({ actorId: t.id, actorKind: ActorKind.TEACHER, memberRole: MemberRole.TEACHER })),
     ];
-    const title = request.title ?? familyGroupTitle(teachers.map((t) => t.name), learners.map((l) => l.name));
+    // In the order the supervisor chose the children, so the name is stable.
+    const ordered = [...learners].sort((a, b) => request.learnerIds.indexOf(a.id) - request.learnerIds.indexOf(b.id));
+    const title = request.title ?? familyGroupTitle(teachers.map((t) => t.name), ordered.map((l) => l.name));
 
     return this.prisma.$transaction(async (tx) => {
       await this.assertActorLive(tx, actor);

@@ -1,7 +1,7 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Icon } from '@/shared/components/Icon'
-import { Menu } from '@/shared/components/Menu'
+import { Menu, type MenuItem } from '@/shared/components/Menu'
 import { chatCopyFor } from './copy'
 import { VoiceRecorder } from './VoiceRecorder'
 import { matchQuickReplies, QuickRepliesDialog, useQuickReplies } from './QuickRepliesDialog'
@@ -43,8 +43,11 @@ export function ChatComposer({
   editing = null,
   onSaveEdit,
   onCancelEdit,
+  extraItems = [],
 }: {
   onSend: (input: ComposerSend) => void
+  /** PD-15: the lesson cards the server offers in this group (student / teacher excuse, make-up). */
+  extraItems?: MenuItem[]
   /** Editing one of the viewer's messages: the box holds its text, Enter saves. */
   editing?: EditTarget | null
   onSaveEdit?: (body: string) => void
@@ -273,6 +276,7 @@ export function ChatComposer({
                 onSelect: () => doc.current?.click(),
               },
               { key: 'quick', label: copy.quickReplies, icon: 'bolt', onSelect: () => setQuickOpen(true) },
+              ...extraItems,
             ]}
           />
         )}
