@@ -16,6 +16,7 @@ import '../features/profile/presentation/profile_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/stories/presentation/story_viewer_screen.dart';
 import '../features/supervision/presentation/my_leave_screen.dart';
+import '../features/teacher_profile/presentation/teacher_profile_screen.dart';
 import '../shared/models/user_role.dart';
 import 'providers.dart';
 import 'shells/app_shell.dart';
@@ -68,6 +69,11 @@ abstract final class Routes {
 
   /// The viewer's starred messages (their private bookmarks).
   static const starred = '/settings/starred';
+
+  /// The teacher's professional profile. A SEPARATE destination from
+  /// [myAccount]: that screen is who you are, this one is what families read
+  /// about you, and the two have different audiences and different lifecycles.
+  static const teacherProfile = '/settings/professional-profile';
 
   /// One story, opened full-screen from the rail.
   ///
@@ -196,6 +202,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.starred,
         builder: (context, state) => const StarredMessagesScreen(),
+      ),
+      GoRoute(
+        path: Routes.teacherProfile,
+        builder: (context, state) => const TeacherProfileScreen(),
       ),
       // Full-screen, above the tab bar: a story is the whole viewport for as long as it is
       // open, and a tab bar underneath it would be something to tap by accident.

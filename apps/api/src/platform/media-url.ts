@@ -21,9 +21,21 @@ export type MediaVariant = 'o' | 't'; // original, thumbnail
  * profile photo (the staff directory's rule), or a profile photo seen in a
  * conversation (`avatars`: any kind of person, or a child -- see
  * communication/profile/avatar.service), or a viewer's own chat wallpaper
- * (`wallpapers`: served to its owner only -- communication/themes).
+ * (`wallpapers`: served to its owner only -- communication/themes), or a
+ * teacher's qualification certificate file (`teacher-certificates`: Teacher
+ * Profile V2 -- not PD-12's student certificates, which are message
+ * attachments).
  */
-export type MediaKind = 'attachments' | 'stories' | 'staff' | 'avatars' | 'wallpapers';
+export type MediaKind = 'attachments' | 'stories' | 'staff' | 'avatars' | 'wallpapers' | 'teacher-certificates';
+
+const MEDIA_KINDS: ReadonlySet<string> = new Set<MediaKind>([
+  'attachments',
+  'stories',
+  'staff',
+  'avatars',
+  'wallpapers',
+  'teacher-certificates',
+]);
 
 export interface MediaUrlClaims {
   kind: MediaKind;
@@ -98,7 +110,7 @@ export class MediaUrlSigner {
   }
 
   verify(c: MediaUrlClaims, now = Date.now()): boolean {
-    if (c.kind !== 'attachments' && c.kind !== 'stories' && c.kind !== 'staff' && c.kind !== 'avatars' && c.kind !== 'wallpapers') return false;
+    if (!MEDIA_KINDS.has(c.kind)) return false;
     if (c.variant !== 'o' && c.variant !== 't') return false;
     if (!Number.isInteger(c.expires) || c.expires < Math.floor(now / 1000)) return false;
     const expected = Buffer.from(this.mac(c.kind, c.attachmentId, c.variant, c.actorId, c.expires));

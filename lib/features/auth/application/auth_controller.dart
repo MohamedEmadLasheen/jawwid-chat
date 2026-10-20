@@ -185,6 +185,34 @@ class AuthController extends Notifier<AuthState> {
     await _endSession(SignedOutReason.none);
   }
 
+  /// Re-read the authenticated principal from the backend.
+  ///
+  /// Exists because the teacher can now rename themselves, and the name every
+  /// other screen renders comes from THIS state. Without a re-read, Settings and
+  /// every participant list would keep showing the old name until the app
+  /// restarted.
+  ///
+  /// Deliberately not a mutation: it asks the server who the user is and adopts
+  /// the answer. Nothing here is told what the new name is, so this cannot
+  /// publish a name the server did not store. A failure leaves the session
+  /// alone -- a flaky network must not sign anyone out -- except for a terminal
+  /// refusal, which is a session ending and goes down the one path for that.
+  Future<void> refreshIdentity() async {
+    if (state is! AuthAuthenticated) return;
+
+    try {
+      final principal = await _repository.currentUser();
+      state = AuthAuthenticated(principal);
+      _onPrincipal?.call(principal);
+    } on AppError catch (error) {
+      if (error.terminatesSession) {
+        await _endSession(AuthSignedOut.reasonFor(error));
+      } else {
+        _logger.warn('identity refresh failed', data: {'kind': error.kind.name});
+      }
+    }
+  }
+
   /// Called when any layer observes that the backend has ended this session.
   Future<void> onSessionEnded(AppError error) =>
       _endSession(AuthSignedOut.reasonFor(error));

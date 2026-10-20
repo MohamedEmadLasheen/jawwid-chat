@@ -110,8 +110,11 @@ prohibited).
 Attachments live in S3-compatible object storage. The API validates MIME/size,
 mints **signed upload URLs** before an object key exists and **signed, expiring
 read URLs** per read; the bytes never transit the API. Today
-`SignedLocalObjectStorage` signs but nothing serves the bytes and
-`STORAGE_ENDPOINT` defaults to a path the API does not serve. Canonical boundary:
+`SignedLocalObjectStorage` signs and `StorageController` serves the bytes from
+this API, under `api/v1/storage`, signature-checked (`@Public()` to the bearer
+guard: the signature is the authorization). Where
+those URLs point is `STORAGE_PUBLIC_BASE_URL` — a variable of its own, because
+`STORAGE_ENDPOINT` is the S3 endpoint and its presence selects the S3 backend. Canonical boundary:
 
 ```
 client ──POST /conversations/:id/messages/attachments/authorize──► API ──► {objectKey, uploadUrl}

@@ -1828,4 +1828,167 @@ class L10nAr extends L10n {
 
   @override
   String get chatWallpaperRemove => 'إزالة الصورة';
+
+  @override
+  String get teacherProfileTitle => 'الملف المهني للمعلم';
+
+  @override
+  String get teacherProfileSettingsEntry => 'الملف المهني';
+
+  @override
+  String get teacherProfileSettingsSubtitle => 'ما تقرؤه الأسر عنك';
+
+  @override
+  String get teacherProfileAboutSection => 'نبذة';
+
+  @override
+  String get teacherProfileBioLabel => 'نبذة تعريفية';
+
+  @override
+  String get teacherProfileBioHint => 'تعريف موجز للأسر.';
+
+  @override
+  String get teacherProfileProfessionalSection => 'المعلومات المهنية';
+
+  @override
+  String get teacherProfileSpecializationLabel => 'التخصص';
+
+  @override
+  String get teacherProfileQualificationsLabel => 'المؤهلات';
+
+  @override
+  String get teacherProfileExperienceLabel => 'الخبرة';
+
+  @override
+  String get teacherProfileLanguagesLabel => 'اللغات';
+
+  @override
+  String get teacherProfileLanguagesHint => 'افصل بين اللغات بفاصلة.';
+
+  @override
+  String get teacherProfileCertificatesSection => 'الشهادات';
+
+  @override
+  String get teacherProfileCertificatesEmpty => 'لا توجد شهادات بعد.';
+
+  @override
+  String get teacherProfileAddCertificate => 'إضافة شهادة';
+
+  @override
+  String get teacherProfileCertificateTitleLabel => 'اسم الشهادة';
+
+  @override
+  String get teacherProfileCertificateIssuerLabel => 'الجهة المانحة';
+
+  @override
+  String get teacherProfileCertificateYearLabel => 'سنة الإصدار';
+
+  @override
+  String get teacherProfileCertificateFile => 'اختيار ملف';
+
+  @override
+  String teacherProfileCertificateFileChosen(String name) {
+    return '$name جاهز للرفع';
+  }
+
+  @override
+  String get teacherProfileCertificateUploading => 'جارٍ الرفع…';
+
+  @override
+  String get teacherProfileCertificateOpen => 'فتح';
+
+  @override
+  String get teacherProfileCertificateRemove => 'حذف';
+
+  @override
+  String get teacherProfileCertificateRemoveTitle => 'حذف هذه الشهادة؟';
+
+  @override
+  String get teacherProfileCertificateRemoveBody =>
+      'ستُزال من ملفك، ويُحذف الملف المرفوع.';
+
+  @override
+  String get teacherProfileCertificatePending => 'بانتظار المراجعة';
+
+  @override
+  String get teacherProfileCertificateApproved => 'معتمدة';
+
+  @override
+  String get teacherProfileCertificateRejected => 'غير مقبولة';
+
+  @override
+  String get teacherProfileSave => 'حفظ';
+
+  @override
+  String get teacherProfileSaving => 'جارٍ الحفظ…';
+
+  @override
+  String get teacherProfileSaved => 'تم الحفظ';
+
+  @override
+  String get teacherProfileEmptyTitle => 'أنشئ ملفك المهني';
+
+  @override
+  String get teacherProfileEmptyBody =>
+      'عرِّف الأسر بخبرتك. يتم حفظ تعديلاتك وتظهر فوراً.';
+
+  @override
+  String get teacherProfileUnavailable => 'ملفك المهني غير متاح الآن.';
+
+  @override
+  String get teacherProfileCertificateTitleRequired => 'أدخل اسم الشهادة.';
+
+  @override
+  String get teacherProfileCertificateFileRequired => 'اختر ملفًا أولًا.';
+
+  @override
+  String get teacherProfileCertificateBadType => 'اختر ملف PDF أو JPEG أو PNG.';
+
+  @override
+  String get teacherProfileCertificateTooLarge =>
+      'حجم الملف أكبر من ١٠ ميجابايت.';
+
+  @override
+  String get teacherProfileCertificateEdit => 'تعديل';
+
+  @override
+  String get teacherProfileCertificateEditTitle => 'تعديل الشهادة';
+
+  @override
+  String get teacherProfileCertificateEditNote =>
+      'تعديل البيانات يُعيد إرسال الشهادة للمراجعة. الملف نفسه لا يتغير.';
+
+  @override
+  String get teacherProfileNameLabel => 'اسمك';
+
+  @override
+  String get teacherProfileNameSave => 'حفظ الاسم';
+
+  @override
+  String get teacherProfileNameSaved => 'تم حفظ الاسم';
+
+  @override
+  String get teacherProfileNameRequired => 'أدخل اسمك.';
+
+  @override
+  String get teacherProfilePhotoChoose => 'صورة الملف';
+
+  @override
+  String get teacherProfilePhotoReplace => 'تغيير الصورة';
+
+  @override
+  String get teacherProfilePhotoRemove => 'إزالة الصورة';
+
+  @override
+  String get teacherProfilePhotoRemoveTitle => 'إزالة صورتك؟';
+
+  @override
+  String get teacherProfilePhotoRemoveBody =>
+      'سيظهر ملفك بالأحرف الأولى من اسمك بدلاً من الصورة.';
+
+  @override
+  String get teacherProfilePhotoUploading => 'جارٍ رفع الصورة…';
+
+  @override
+  String get teacherProfileCertificateSave => 'حفظ الشهادة';
 }
