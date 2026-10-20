@@ -39,9 +39,13 @@ class MessageBubble extends StatelessWidget {
     this.onToggleReaction,
     this.onOpenAttachment,
     this.isHighlighted = false,
+    this.highlight,
   });
 
   final Message message;
+
+  /// While searching the chat: the term to mark in the text.
+  final String? highlight;
 
   /// The first bubble of a run from someone else, where several people speak:
   /// their picture beside it and their name, in their colour, at its top --
@@ -236,6 +240,7 @@ class MessageBubble extends StatelessWidget {
                         ),
                         child: ContentText(
                           message.body,
+                          highlight: highlight,
                           style:
                               theme.textTheme.bodyLarge?.copyWith(color: foreground),
                         ),

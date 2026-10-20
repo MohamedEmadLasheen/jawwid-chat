@@ -914,5 +914,25 @@
       }
     }
   },
-  "cancelSelection": "Cancel selection"
+  "cancelSelection": "Cancel selection",
+  "searchInChat": "Search in chat",
+  "searchMessagesHint": "Search messages",
+  "searchClose": "Close search",
+  "searchOlder": "Older match",
+  "searchNewer": "Newer match",
+  "searchNoMatches": "No matching messages",
+  "searchTooShort": "Type at least 2 characters",
+  "searchPosition": "{index} of {total}",
+  "@searchPosition": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "searchMessagesSection": "Messages",
+  "searchMessagesNone": "No matching messages in your chats"
 }

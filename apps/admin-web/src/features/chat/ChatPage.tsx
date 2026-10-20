@@ -1,5 +1,5 @@
 import { useMemo, useState, type CSSProperties } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
@@ -48,6 +48,11 @@ export function ChatPage() {
   const copy = chatCopyFor(locale)
   const navigate = useNavigate()
   const { conversationId } = useParams<{ conversationId: string }>()
+  // ?m=<messageId>: open the chat at that message (a search hit or a star).
+  const [params, setParams] = useSearchParams()
+  const focusMessageId = params.get('m')
+  const openAt = (id: string, messageId: string) =>
+    navigate(`/chat/${encodeURIComponent(id)}?m=${encodeURIComponent(messageId)}`)
   const { state } = useRealtime()
   const { staff } = useSession()
   const [creatingGroup, setCreatingGroup] = useState(false)
@@ -124,6 +129,7 @@ export function ChatPage() {
             conversations={conversations}
             selectedId={conversationId ?? null}
             onSelect={(id) => navigate(`/chat/${encodeURIComponent(id)}`)}
+            onOpenMessage={openAt}
             actions={
               <>
                 <button
@@ -152,6 +158,8 @@ export function ChatPage() {
             backTo="/chat"
             infoShown={infoShown}
             onToggleInfo={toggleInfo}
+            focusMessageId={focusMessageId}
+            onFocused={() => setParams({}, { replace: true })}
           />
         ) : (
           <EmptyState icon="conversations" title={copy.pick} />
@@ -175,9 +183,9 @@ export function ChatPage() {
       {showingStarred && (
         <StarredDialog
           onClose={() => setShowingStarred(false)}
-          onOpen={(id) => {
+          onOpen={(id, messageId) => {
             setShowingStarred(false)
-            navigate(`/chat/${encodeURIComponent(id)}`)
+            openAt(id, messageId)
           }}
         />
       )}

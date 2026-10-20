@@ -21,9 +21,12 @@ final _conversationProvider =
 });
 
 class ChatScreenRoute extends ConsumerWidget {
-  const ChatScreenRoute({super.key, required this.conversationId});
+  const ChatScreenRoute({super.key, required this.conversationId, this.focusMessageId});
 
   final String conversationId;
+
+  /// Open at this message (a search hit); see [ChatScreen.focusMessageId].
+  final String? focusMessageId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -53,6 +56,7 @@ class ChatScreenRoute extends ConsumerWidget {
         ),
       AsyncData(:final value) => ChatScreen(
           conversationId: conversationId,
+          focusMessageId: focusMessageId,
           // PD-12: the server titles a supervision conversation for its staff side;
           // the teacher reads it as their supervision chat.
           title: value.displayTitle(l10n.supervisionChatTitle, trialGroupLabel: l10n.trialGroupTitle),

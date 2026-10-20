@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
 import { listTime } from '@/features/admin/copy'
@@ -8,7 +9,9 @@ import { FilterChips } from '@/shared/components/FilterChips'
 import { Icon } from '@/shared/components/Icon'
 import { Menu } from '@/shared/components/Menu'
 import { SearchField } from '@/shared/components/SearchField'
-import type { ChatConversation, ChatLabel } from './chatApi'
+import { chatApi, chatKeys, type ChatConversation, type ChatLabel } from './chatApi'
+import { Highlighted, searchable, snippetAround, useDebounced } from './search'
+import { Avatar } from '@/shared/components/Avatar'
 import { chatCopyFor } from './copy'
 import { LabelChip } from './LabelsDialog'
 import { ConversationAvatar, conversationName, isGroup, isMuted, previewText } from './chatView'
@@ -26,11 +29,14 @@ export function ConversationList({
   conversations,
   selectedId,
   onSelect,
+  onOpenMessage,
   actions,
 }: {
   conversations: ChatConversation[]
   selectedId: string | null
   onSelect: (id: string) => void
+  /** A message search hit: open its chat at that message. */
+  onOpenMessage?: (conversationId: string, messageId: string) => void
   /** The header's buttons (New chat / New family group). */
   actions?: ReactNode
 }) {
@@ -62,6 +68,20 @@ export function ConversationList({
     )
   }, [conversations, search, staff?.id, copy, activeLabel])
 
+  // The same box also searches message text across every chat in the list
+  // (owner decision 2026-10-20); the server answers only from what this
+  // viewer may read.
+  const term = useDebounced(search.trim())
+  const textSearch = !!onOpenMessage && searchable(term)
+  const found = useQuery({
+    queryKey: chatKeys.searchAll(term),
+    queryFn: () => chatApi.searchAll(term),
+    enabled: textSearch,
+    staleTime: 30_000,
+  })
+  const hits = textSearch ? found.data?.hits ?? [] : []
+  const byId = useMemo(() => new Map(conversations.map((c) => [c.id, c])), [conversations])
+
   const archived = named.filter((c) => c.viewerState?.archived)
   const active = named.filter((c) => !c.viewerState?.archived)
   const inView = (v: View) =>
@@ -89,7 +109,7 @@ export function ConversationList({
           <span className="workspace__count">{number(active.length)}</span>
           <div className="cw-list__actions">{actions}</div>
         </div>
-        <SearchField value={search} onChange={setSearch} label={copy.search} clearLabel={copy.clearSearch} />
+        <SearchField value={search} onChange={setSearch} label={onOpenMessage ? copy.searchList : copy.search} clearLabel={copy.clearSearch} />
         <FilterChips options={options} value={view} onChange={setView} label={copy.filterLabel} formatCount={number} />
         {usedLabels.length > 0 && (
           <div className="cw-label-filter" role="group" aria-label={copy.labelFilter}>
@@ -111,7 +131,7 @@ export function ConversationList({
         {conversations.length === 0 ? (
           <EmptyState compact icon="conversations" title={copy.empty} />
         ) : rows.length === 0 ? (
-          <EmptyState compact icon="search" title={copy.noMatches} />
+          !textSearch && <EmptyState compact icon="search" title={copy.noMatches} />
         ) : (
           <ul className="conv-list" aria-label={copy.title}>
             {rows.map((c) => (
@@ -125,6 +145,42 @@ export function ConversationList({
               />
             ))}
           </ul>
+        )}
+        {textSearch && (
+          <section className="cw-hits" aria-label={copy.searchMessages}>
+            <h2 className="cw-hits__title">{copy.searchMessages}</h2>
+            {found.isLoading ? (
+              <p className="cw-hits__empty">…</p>
+            ) : hits.length === 0 ? (
+              <p className="cw-hits__empty">{copy.searchMessagesNone}</p>
+            ) : (
+              <ul className="cw-hits__list">
+                {hits.map(({ conversationId, message: m }) => {
+                  const c = byId.get(conversationId)
+                  const where = c ? conversationName(c, staff?.id, copy) : ''
+                  const who = m.authorId === staff?.id ? copy.you : m.authorDisplayName ?? ''
+                  return (
+                    <li key={m.id}>
+                      <button type="button" className="cw-hit-row" onClick={() => onOpenMessage?.(conversationId, m.id)}>
+                        <Avatar name={who || where || '?'} seed={m.authorId ?? m.authorKind} size="sm" src={m.authorAvatarUrl} />
+                        <span className="cw-hit-row__main">
+                          <span className="cw-hit-row__top">
+                            <span className="cw-hit-row__where" dir="auto">{where}</span>
+                            <time className="cw-hit-row__time" dateTime={m.createdAt}>{listTime(m.createdAt, locale)}</time>
+                          </span>
+                          <span className="cw-hit-row__body" dir="auto">
+                            {who && <span className="cw-hit-row__who">{who}: </span>}
+                            <Highlighted text={snippetAround(m.body ?? '', term)} query={term} />
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+            {hits.length >= 40 && <p className="cw-hits__empty">{copy.searchMessagesNewest}</p>}
+          </section>
         )}
       </div>
     </>

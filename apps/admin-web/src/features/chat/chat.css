@@ -408,3 +408,43 @@
 .cw-quick__textarea { resize: vertical; min-block-size: 72px; font: inherit; }
 .cw-quick__form-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
 .cw-quick__add { margin-block-start: var(--space-3); }
+
+/* Search: a bar under the chat header, matches marked in the text, and a
+   Messages section under the chat list for matches across chats. */
+.cw-search {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-block-end: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+}
+.cw-search__input {
+  flex: 1;
+  min-inline-size: 0;
+  border: 1px solid var(--border-control, var(--border-strong));
+  border-radius: var(--radius-full);
+  padding: 6px 12px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-sm);
+}
+.cw-search__input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.cw-search__status { font-size: var(--fs-xs); color: var(--text-subtle); white-space: nowrap; min-inline-size: 6ch; text-align: center; }
+mark.cw-hit { background: var(--warn-soft); color: inherit; border-radius: 2px; box-shadow: inset 0 -2px 0 var(--warn); }
+
+.cw-hits { padding: var(--space-2) 0 var(--space-4); border-block-start: 1px solid var(--border); margin-block-start: var(--space-2); }
+.cw-hits__title { margin: 0; padding: var(--space-2) var(--space-4); font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-subtle); text-transform: uppercase; letter-spacing: 0.04em; }
+.cw-hits__empty { margin: 0; padding: var(--space-2) var(--space-4); font-size: var(--fs-sm); color: var(--text-subtle); }
+.cw-hits__list { list-style: none; margin: 0; padding: 0; }
+.cw-hit-row { display: flex; align-items: flex-start; gap: var(--space-3); inline-size: 100%; padding: 8px var(--space-4); border: 0; background: none; text-align: start; cursor: pointer; color: inherit; font: inherit; }
+.cw-hit-row:hover, .cw-hit-row:focus-visible { background: var(--surface-hover); }
+.cw-hit-row__main { flex: 1; min-inline-size: 0; display: grid; gap: 2px; }
+.cw-hit-row__top { display: flex; align-items: baseline; gap: var(--space-2); }
+.cw-hit-row__where { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
+.cw-hit-row__time { flex: none; font-size: var(--fs-xs); color: var(--text-subtle); }
+.cw-hit-row__body { font-size: var(--fs-sm); color: var(--text-muted); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.cw-hit-row__who { color: var(--text); }

@@ -2850,6 +2850,66 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Cancel selection'**
   String get cancelSelection;
+
+  /// No description provided for @searchInChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Search in chat'**
+  String get searchInChat;
+
+  /// No description provided for @searchMessagesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search messages'**
+  String get searchMessagesHint;
+
+  /// No description provided for @searchClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close search'**
+  String get searchClose;
+
+  /// No description provided for @searchOlder.
+  ///
+  /// In en, this message translates to:
+  /// **'Older match'**
+  String get searchOlder;
+
+  /// No description provided for @searchNewer.
+  ///
+  /// In en, this message translates to:
+  /// **'Newer match'**
+  String get searchNewer;
+
+  /// No description provided for @searchNoMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching messages'**
+  String get searchNoMatches;
+
+  /// No description provided for @searchTooShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Type at least 2 characters'**
+  String get searchTooShort;
+
+  /// No description provided for @searchPosition.
+  ///
+  /// In en, this message translates to:
+  /// **'{index} of {total}'**
+  String searchPosition(int index, String total);
+
+  /// No description provided for @searchMessagesSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages'**
+  String get searchMessagesSection;
+
+  /// No description provided for @searchMessagesNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching messages in your chats'**
+  String get searchMessagesNone;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

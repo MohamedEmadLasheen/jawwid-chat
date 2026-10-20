@@ -173,6 +173,8 @@ export enum CommErrorCode {
   STAFF_DIRECTORY_DENIED = 'COMM.STAFF_DIRECTORY_DENIED',
   /** The message cannot leave its conversation: deleted, held, rejected, a system message or a card. 403. */
   MESSAGE_NOT_FORWARDABLE = 'COMM.MESSAGE_NOT_FORWARDABLE',
+  /** Exporting a chat (transcript + media) is the super admin's alone. 403. */
+  CONVERSATION_EXPORT_DENIED = 'COMM.CONVERSATION_EXPORT_DENIED',
   // --- Staff tools: labels and quick replies (staff only) ---
   /** Labels and quick replies are staff tools; teachers and families never reach them. 403. */
   STAFF_TOOLS_DENIED = 'COMM.STAFF_TOOLS_DENIED',

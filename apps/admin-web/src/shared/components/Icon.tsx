@@ -125,6 +125,7 @@ const PATHS = {
   ),
   close: <path d="M6 6l12 12M18 6 6 18" />,
   chevronDown: <path d="m6 9 6 6 6-6" />,
+  chevronUp: <path d="m6 15 6-6 6 6" />,
   chevronForward: <path d="m9 6 6 6-6 6" />,
   arrowBack: <path d="M19 12H5M11 6l-6 6 6 6" />,
   search: (

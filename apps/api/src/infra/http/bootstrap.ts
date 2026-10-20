@@ -187,7 +187,8 @@ function applyCors(app: INestApplication, allowedOrigins: string[]): void {
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Request-Id'],
-    exposedHeaders: ['X-Request-Id'],
+    // Content-Disposition: the file name of a chat export (a download).
+    exposedHeaders: ['X-Request-Id', 'Content-Disposition'],
     maxAge: 600,
   });
 }

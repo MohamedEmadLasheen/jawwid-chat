@@ -41,6 +41,11 @@ abstract final class Routes {
 
   static String conversation(String id) => '/chats/$id';
 
+  /// A conversation opened at one message (a search hit): the thread loads older
+  /// history until that message is on screen.
+  static String conversationAt(String id, String messageId) =>
+      '/chats/$id?m=${Uri.encodeQueryComponent(messageId)}';
+
   /// The live call (W7). Outside the tab shell and outside `/chats`, because a
   /// call is not a section of the app and is not a child of one conversation: an
   /// incoming call can arrive while the user is anywhere.
@@ -122,6 +127,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '${Routes.chats}/:conversationId',
         builder: (context, state) => ChatScreenRoute(
           conversationId: state.pathParameters['conversationId']!,
+          focusMessageId: state.uri.queryParameters['m'],
         ),
       ),
       // The profile sits outside the tab shell, like the conversation it belongs to: it is

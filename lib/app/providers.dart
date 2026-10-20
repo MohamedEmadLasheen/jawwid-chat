@@ -17,6 +17,7 @@ import '../core/storage/secure_token_store.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/domain/auth_state.dart';
 import '../features/messages/data/message_marks_repository.dart';
+import '../features/messages/data/message_search_repository.dart';
 import '../features/profile/data/profile_photo_repository.dart';
 import '../shared/models/user_role.dart';
 
@@ -75,6 +76,12 @@ final supervisionRepositoryProvider = Provider<SupervisionRepository>((ref) {
 /// Star and pin. A harmless default: a build without those routes offers neither.
 final messageMarksRepositoryProvider = Provider<MessageMarksRepository>((ref) {
   return const NoMessageMarksRepository();
+});
+
+/// Message search, inside a chat and across chats. A harmless default: a build
+/// without the routes offers no search.
+final messageSearchRepositoryProvider = Provider<MessageSearchRepository>((ref) {
+  return const NoMessageSearchRepository();
 });
 
 /// Profile photos (own and, for a parent, the children's). A harmless default:

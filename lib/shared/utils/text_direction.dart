@@ -1,5 +1,8 @@
 import 'package:flutter/widgets.dart';
 
+import '../../design/tokens.dart';
+import 'search_fold.dart';
+
 /// Paragraph direction for a string whose language is not known in advance.
 ///
 /// Flutter lays every paragraph out in the *ambient* direction, which is the app's UI
@@ -74,9 +77,15 @@ class ContentText extends StatelessWidget {
     this.maxLines,
     this.overflow,
     this.textAlign,
+    this.highlight,
   });
 
   final String data;
+
+  /// While searching: the term to mark wherever it occurs (matched the way the
+  /// server matches -- see `search_fold.dart`).
+  final String? highlight;
+
   final TextStyle? style;
   final int? maxLines;
   final TextOverflow? overflow;
@@ -89,6 +98,38 @@ class ContentText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final direction = TextDirectionOf.forContent(data);
+    final ranges = highlight == null ? const <(int, int)>[] : searchMatchRanges(data, highlight!);
+    final align = textAlign ??
+        (direction == null
+            ? null
+            : (direction == Directionality.of(context) ? TextAlign.start : TextAlign.end));
+
+    if (ranges.isNotEmpty) {
+      // The warning pair: its foreground is checked against its background,
+      // so a mark reads on an incoming and an outgoing bubble alike.
+      final tokens = JawwidTokens.of(context);
+      final mark = TextStyle(
+        backgroundColor: tokens.colorStatusWarningBg,
+        color: tokens.colorStatusWarningFg,
+        fontWeight: FontWeight.w600,
+      );
+      final spans = <TextSpan>[];
+      var last = 0;
+      for (final (start, end) in ranges) {
+        if (start > last) spans.add(TextSpan(text: data.substring(last, start)));
+        spans.add(TextSpan(text: data.substring(start, end), style: mark));
+        last = end;
+      }
+      if (last < data.length) spans.add(TextSpan(text: data.substring(last)));
+      return Text.rich(
+        TextSpan(children: spans),
+        style: style,
+        maxLines: maxLines,
+        overflow: overflow,
+        textDirection: direction,
+        textAlign: align,
+      );
+    }
 
     return Text(
       data,
