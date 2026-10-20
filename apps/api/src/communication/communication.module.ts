@@ -59,6 +59,8 @@ import { StoryController } from './api/story.controller';
 import { TeacherProfileController } from './api/teacher-profile.controller';
 import { TeacherMediaController } from './api/teacher-media.controller';
 import { TeacherProfileService } from './teacher-profile/teacher-profile.service';
+import { ParentProfileController } from './api/parent-profile.controller';
+import { ParentProfileService } from './profile/parent-profile.service';
 
 @Module({
   // AuthModule exports AuthService, which RealtimeGateway uses to verify the
@@ -82,6 +84,7 @@ import { TeacherProfileService } from './teacher-profile/teacher-profile.service
     StoryController,
     TeacherProfileController,
     TeacherMediaController,
+    ParentProfileController,
   ],
   providers: [
     redisProvider,
@@ -94,6 +97,7 @@ import { TeacherProfileService } from './teacher-profile/teacher-profile.service
     MediaPresenceService,
     LiveKitWebhookVerifier,
     AttachmentService,
+    ParentProfileService,
     StoryService,
     AvatarService,
     StaffToolsService,

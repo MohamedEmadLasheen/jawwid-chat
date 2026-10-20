@@ -105,6 +105,16 @@ final callRepositoryProvider = Provider<CallRepository>((ref) {
   throw UnimplementedError('callRepositoryProvider must be overridden');
 });
 
+/// The signed-in parent's own profile, and their children's.
+///
+/// Overridden by both composition roots: the HTTP one so a real parent edits real data, and
+/// the development one so the screen can be worked on without a backend. Unlike stories,
+/// a fixture profile is honest here -- it is the signed-in user's own, so there is no risk
+/// of a fake standing in for something another person actually published.
+final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
+  throw UnimplementedError('profileRepositoryProvider must be overridden');
+});
+
 /// Stories, read-only.
 ///
 /// Registered by the HTTP composition root only. The development composition root

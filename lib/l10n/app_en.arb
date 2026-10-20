@@ -1106,5 +1106,38 @@
   "teacherProfilePhotoRemoveTitle": "Remove your photo?",
   "teacherProfilePhotoRemoveBody": "Your profile will show your initials instead.",
   "teacherProfilePhotoUploading": "Uploading photo…",
-  "teacherProfileCertificateSave": "Save certificate"
+  "teacherProfileCertificateSave": "Save certificate",
+  "myProfileTitle": "My profile",
+  "myProfileSettingsSubtitle": "Your photo, name and about",
+  "profileAboutLabel": "About",
+  "profileAboutHint": "A little about you",
+  "profileAboutEmpty": "Nothing added yet",
+  "profileNameLabel": "Name",
+  "profileNameEmptyError": "Please enter a name",
+  "profileNameTooLongError": "That name is too long",
+  "profileAboutTooLongError": "That is too long",
+  "profileEdit": "Edit",
+  "profileSave": "Save",
+  "profileCancel": "Cancel",
+  "profileSaved": "Saved",
+  "profileSaveFailed": "That could not be saved. Please try again.",
+  "profilePhotoRemoveFailed": "That photo could not be removed. Please try again.",
+  "profilePhotoEditLabel": "Change your photo",
+  "profileChildPhotoEditLabel": "Change {name}'s photo",
+  "@profileChildPhotoEditLabel": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "profileChildEditTitle": "{name}'s profile",
+  "@profileChildEditTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "profileLoadFailed": "Your profile could not be loaded."
 }
