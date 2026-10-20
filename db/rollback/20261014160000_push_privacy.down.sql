@@ -16,6 +16,10 @@ update chat.notification_template t
     ('group_call_started', 'en', 'Jawwid',         'A call started in your group.'),
     ('group_call_started', 'ar', 'جوّيد',          'بدأت مكالمة في مجموعتك.')
   ) as v(key, locale, title, body)
- where t.key = v.key and t.locale = v.locale and t.title = v.title and t.body = v.body;
+ where t.key = v.key and t.locale = v.locale
+   -- 20261020300000 corrected the Arabic brand name in place, so a row may
+   -- carry either spelling; both are the version this migration added.
+   and t.title in (v.title, replace(v.title, 'جوّيد', 'جَوِّد'))
+   and t.body  in (v.body,  replace(v.body,  'جوّيد', 'جَوِّد'));
 
 delete from chat.schema_migrations where version = '20261014160000_chat_push_privacy_templates';

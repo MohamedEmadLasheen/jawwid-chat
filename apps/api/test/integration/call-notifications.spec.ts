@@ -276,7 +276,7 @@ describe("E/F/G — an incoming call notifies the callee, and only the callee", 
     });
     expect(push.sent[0].title.length).toBeGreaterThan(0);
     expect(JSON.stringify(push.sent[0])).not.toContain("admin_a"); // no {caller_name}, anywhere
-    expect(push.sent[0].body).toBe("مكالمة واردة على جوّيد."); // the generic incoming_call text (ar)
+    expect(push.sent[0].body).toBe("مكالمة واردة على جَوِّد."); // the generic incoming_call text (ar)
   });
 
   it("incoming_call ignores quiet hours, because the rule says it may", async () => {

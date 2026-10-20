@@ -532,8 +532,8 @@ abstract class L10n {
   /// No description provided for @typingMany.
   ///
   /// In en, this message translates to:
-  /// **'Several people are typing…'**
-  String get typingMany;
+  /// **'{count, plural, one{{count} person is typing…} other{{count} people are typing…}}'**
+  String typingMany(int count);
 
   /// No description provided for @loadingOlder.
   ///

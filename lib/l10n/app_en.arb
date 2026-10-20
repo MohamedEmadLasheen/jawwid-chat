@@ -121,7 +121,14 @@
       }
     }
   },
-  "typingMany": "Several people are typing…",
+  "typingMany": "{count, plural, one{{count} person is typing…} other{{count} people are typing…}}",
+  "@typingMany": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "loadingOlder": "Loading earlier messages…",
   "loadOlderFailed": "Could not load earlier messages.",
   "messagesEmptyTitle": "No messages yet",
