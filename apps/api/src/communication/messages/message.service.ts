@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Message, Prisma } from '@prisma/client';
+import { Conversation, Message, Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
 import { AppConfigService } from '../../platform/app-config.service';
@@ -858,5 +858,138 @@ export class MessageService {
     }
 
     return { actor, message, conv };
+  }
+
+  // -------------------------------------------------------------------
+  // Edit
+  // -------------------------------------------------------------------
+
+  /**
+   * The author rewrites their own text message, within the edit window.
+   *
+   * What may be edited: a published, never-moderated, undeleted TEXT message.
+   * A message that went through approval stays exactly as it was approved, and
+   * an author whose messages HERE would now be held for approval may not edit
+   * either -- an edit is never a way round moderation. The author must still be
+   * able to write in the conversation: the same `canSend` decision a send takes.
+   *
+   * The previous wording is kept in chat.message_revision, written in the same
+   * transaction; the database refuses a body change without one
+   * (chat.forbid_message_rewrite, 20261020130000). Neither body enters the
+   * audit or event log -- contents never do.
+   */
+  async edit(
+    messageId: string,
+    actorId: string,
+    rawBody: unknown,
+    conversationId?: string,
+  ): Promise<MessageDto> {
+    const body = typeof rawBody === 'string' ? rawBody.trim() : '';
+    if (!body) throw new CommError(CommErrorCode.EMPTY_MESSAGE, 'an edited message requires a body', 400);
+
+    const { actor, message, conv } = await this.loadForActor(messageId, actorId);
+    // The route names a conversation; a message of another one reads as absent.
+    if (conversationId !== undefined && message.conversationId !== conversationId) {
+      throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'message not found', 404);
+    }
+    if (actor.kind === ActorKind.SYSTEM || message.authorId !== actor.actorId) {
+      throw new CommError(CommErrorCode.NOT_MESSAGE_AUTHOR, 'only the author may edit a message');
+    }
+    const notEditable = (why: string) => new CommError(CommErrorCode.MESSAGE_NOT_EDITABLE, why, 409);
+    if (message.type !== MessageType.TEXT || message.deletedForAll || message.moderation !== Moderation.PUBLISHED) {
+      throw notEditable('only a published text message can be edited');
+    }
+    if ((await this.prisma.messageApproval.count({ where: { messageId } })) > 0) {
+      throw notEditable('a message that went through approval cannot be edited');
+    }
+
+    const now = new Date();
+    const windowMinutes = await this.config.get('communication.edit_window_minutes');
+    if (now.getTime() - message.createdAt.getTime() > windowMinutes * 60_000) {
+      throw new CommError(
+        CommErrorCode.EDIT_WINDOW_EXPIRED,
+        `the edit window of ${windowMinutes} minutes has expired`,
+      );
+    }
+
+    const decision = await this.canWriteNow(actor, conv, message.visibility, now);
+    if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+    if (decision.moderation !== Moderation.PUBLISHED) {
+      throw notEditable('messages here are held for approval, so they cannot be edited');
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await this.conversations.assertActorLive(tx, actor); // RT-032
+      // The row, locked: two edits at once are ordered, and each revision holds
+      // the wording it actually replaced.
+      const current = await tx.$queryRaw<Array<{ body: string | null }>>`
+        SELECT body FROM chat.message WHERE id = ${messageId}::uuid FOR UPDATE
+      `;
+      const previous = current[0]?.body ?? null;
+      if (previous === null) throw notEditable('only a text message can be edited');
+      if (previous === body) {
+        return tx.message.findUniqueOrThrow({
+          where: { id: messageId },
+          include: { attachments: true, reactions: true, receipts: true, card: true },
+        });
+      }
+      await tx.messageRevision.create({
+        data: {
+          messageId,
+          previousBody: previous,
+          editedBy: actor.actorId,
+          editedByKind: actor.kind,
+          editedAt: now,
+        },
+      });
+      const row = await tx.message.update({
+        where: { id: messageId },
+        data: { body, editedAt: now },
+        include: { attachments: true, reactions: true, receipts: true, card: true },
+      });
+      await this.audit.audit(tx, {
+        actorId: actor.actorId,
+        action: 'message.edit',
+        entity: 'message',
+        entityId: messageId,
+        after: { conversationId: conv.id, editedAt: now.toISOString() },
+        reason: 'edited by author',
+      });
+      await this.outbox.enqueue(tx, CommEvent.MESSAGE_UPDATED, {
+        conversationId: conv.id,
+        messageId,
+        visibility: message.visibility,
+        editedAt: now.toISOString(),
+      });
+      return row;
+    });
+
+    return toMessageDto(
+      updated,
+      await this.attachments.signUrlsForMessages([updated.id], actor.actorId),
+      await this.authorsFor([updated]),
+    );
+  }
+
+  /** Whether this actor may write in the conversation now: the decision a send takes. */
+  private async canWriteNow(actor: Actor, conv: Conversation, visibility: string, now: Date) {
+    const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
+    const family = conv.familyId
+      ? await this.prisma.family.findUnique({ where: { id: conv.familyId }, select: { ownerId: true } })
+      : null;
+    const members = await this.prisma.conversationMember.findMany({
+      where: { conversationId: conv.id, leftAt: null },
+      select: { actorKind: true },
+    });
+    return this.authz.canSend(
+      actor,
+      conv,
+      membership,
+      { visibility },
+      now,
+      family?.ownerId ?? null,
+      members.map((m) => m.actorKind),
+      await this.conversations.liveMembersOf(conv.id),
+    );
   }
 }

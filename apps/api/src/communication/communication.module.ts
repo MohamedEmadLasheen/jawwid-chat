@@ -47,6 +47,8 @@ import { NotificationController } from './api/notification.controller';
 import { StorageController } from './api/storage.controller';
 import { MediaController } from './api/media.controller';
 import { StoryController } from './api/story.controller';
+import { LabelController } from './api/label.controller';
+import { LabelService } from './conversations/label.service';
 
 @Module({
   // AuthModule exports AuthService, which RealtimeGateway uses to verify the
@@ -63,8 +65,10 @@ import { StoryController } from './api/story.controller';
     StorageController,
     MediaController,
     StoryController,
+    LabelController,
   ],
   providers: [
+    LabelService,
     redisProvider,
     RedisClientShutdown,
     ConversationService,

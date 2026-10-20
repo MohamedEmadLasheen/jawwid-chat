@@ -33,3 +33,7 @@
 .menu__item .icon { color: var(--text-muted); }
 .menu__item:hover, .menu__item:focus-visible { background: var(--surface-hover); outline: none; }
 .menu__item--danger, .menu__item--danger .icon { color: var(--danger); }
+
+/* An open menu lifts above its neighbours: list rows after it are positioned
+   too, and without this they painted over the open popover. */
+.menu:has(> .menu__button[aria-expanded='true']) { z-index: 40; }

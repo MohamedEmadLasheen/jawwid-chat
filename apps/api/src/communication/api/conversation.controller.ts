@@ -2,8 +2,10 @@ import { Body, Controller, Get, Param, Post, Query, UseFilters } from '@nestjs/c
 import { ConversationService } from '../conversations/conversation.service';
 import { MessageService } from '../messages/message.service';
 import { CallService } from '../calls/call.service';
+import { LabelService } from '../conversations/label.service';
 import { toConversationDto, toLastMessageDto, type ConversationViewerStateDto, type ResolvedMember } from '../contracts/dto';
 import { AuthorizationService } from '../../platform/authorization.service';
+import { isConversationStaff } from '../../platform/types';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
 
@@ -23,6 +25,7 @@ export class ConversationController {
     private readonly messages: MessageService,
     private readonly calls: CallService,
     private readonly authz: AuthorizationService,
+    private readonly labels: LabelService,
   ) {}
 
   /**
@@ -45,12 +48,14 @@ export class ConversationController {
     // authorized, each in one batch: unread counts (the caller's own
     // receipts), members with names, the viewer's own preferences, and the
     // newest message THIS viewer may see.
-    const [unread, members, states, last] = await Promise.all([
+    const [unread, members, states, last, labels] = await Promise.all([
       this.messages.unreadCountsFor(ids, actorId),
       this.conversations.membersOfMany(ids, actor),
       this.conversations.viewerStates(ids, actor.actorId),
       this.messages.lastVisibleMessages(ids, actor),
+      this.labels.labelsFor(ids, actor),
     ]);
+    const staffViewer = isConversationStaff(actor);
 
     // Search narrows the caller's own list -- it never widens it. A row matches
     // on its title, its child's name, or a member's display name.
@@ -68,6 +73,8 @@ export class ConversationController {
           viewerRequiresApproval: this.authz.viewerRequiresApproval(actor, c),
           viewerState: viewerState(states.get(c.id)),
           lastMessage: last.has(c.id) ? toLastMessageDto(last.get(c.id)!) : null,
+          // Staff only: a parent's or a teacher's DTO has no labelIds at all.
+          labelIds: staffViewer ? (labels.get(c.id) ?? []) : undefined,
         }),
       ),
     };
@@ -147,15 +154,17 @@ export class ConversationController {
     // endpoint deliberately does not load members, because that would be an
     // identity batch per row for a screen that renders none of them.
     const actor = await this.conversations.requireActor(actorId);
-    const [states, last] = await Promise.all([
+    const [states, last, labels] = await Promise.all([
       this.conversations.viewerStates([conversation.id], actor.actorId),
       this.messages.lastVisibleMessages([conversation.id], actor),
+      this.labels.labelsFor([conversation.id], actor),
     ]);
     return toConversationDto(conversation, members, {
       unreadCount: await this.messages.unreadCount(id, actorId),
       viewerRequiresApproval: this.authz.viewerRequiresApproval(actor, conversation),
       viewerState: viewerState(states.get(conversation.id)),
       lastMessage: last.has(conversation.id) ? toLastMessageDto(last.get(conversation.id)!) : null,
+      labelIds: isConversationStaff(actor) ? (labels.get(conversation.id) ?? []) : undefined,
     });
   }
 
@@ -216,16 +225,17 @@ export class ConversationController {
     return { ok: true };
   }
 
-  /** Archive / mute / pin are per-user preferences. */
+  /** Archive / mute / pin / favorite are per-user preferences. */
   @Post(':id/preferences')
   async preferences(
     @ActorId() actorId: string,
     @Param('id') id: string,
-    @Body() body: { archived?: boolean; pinned?: boolean; mutedUntil?: string | null },
+    @Body() body: { archived?: boolean; pinned?: boolean; mutedUntil?: string | null; favorite?: boolean },
   ) {
     await this.conversations.setPreferences(id, actorId, {
       archived: body.archived,
       pinned: body.pinned,
+      favorite: typeof body.favorite === 'boolean' ? body.favorite : undefined,
       mutedUntil: body.mutedUntil === undefined ? undefined : body.mutedUntil ? new Date(body.mutedUntil) : null,
     });
     return { ok: true };
@@ -234,10 +244,13 @@ export class ConversationController {
 
 /** The viewer's stored preferences, or the defaults when they never set any. */
 function viewerState(
-  row: { pinnedAt: Date | null; archivedAt: Date | null; mutedUntil: Date | null } | undefined,
+  row:
+    | { pinnedAt: Date | null; archivedAt: Date | null; mutedUntil: Date | null; favoritedAt: Date | null }
+    | undefined,
 ): ConversationViewerStateDto {
   return {
     pinned: !!row?.pinnedAt,
+    favorite: !!row?.favoritedAt,
     archived: !!row?.archivedAt,
     mutedUntil: row?.mutedUntil?.toISOString() ?? null,
   };

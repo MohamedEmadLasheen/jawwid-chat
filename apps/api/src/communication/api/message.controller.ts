@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseFilters } from '@nestjs/common';
 import { MessageService } from '../messages/message.service';
 import { AttachmentService } from '../attachments/attachment.service';
 import { ActorId } from './actor.decorator';
@@ -140,6 +140,21 @@ export class MessageController {
   async deleteForMe(@ActorId() actorId: string, @Param('messageId') messageId: string) {
     await this.messages.deleteForMe(messageId, actorId);
     return { ok: true };
+  }
+
+  /**
+   * Edit: the author rewrites their own text message within the edit window.
+   * Returns the message as it now reads; the previous wording is kept server
+   * side. See MessageService.edit for what may be edited.
+   */
+  @Patch(':messageId')
+  async edit(
+    @ActorId() actorId: string,
+    @Param('conversationId') conversationId: string,
+    @Param('messageId') messageId: string,
+    @Body() body: { body?: unknown },
+  ) {
+    return this.messages.edit(messageId, actorId, body?.body, conversationId);
   }
 
   /** Delete for everyone. Author within the window, or a manager. */

@@ -259,3 +259,6 @@
   .cw-composer { padding-inline: var(--space-2); }
   .cw-media { max-inline-size: 240px; }
 }
+
+/* The open row's menu sits above the rows after it (see menu.css). */
+.cw-row:has(.menu__button[aria-expanded='true']) { z-index: 5; }

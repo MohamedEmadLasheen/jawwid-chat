@@ -283,6 +283,8 @@ model Message {
   attachmentsJson Json @map("attachments") @default("[]")
 
   createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
+  /// Set by a recorded edit (MessageService.edit); the prior wording is in MessageRevision.
+  editedAt  DateTime? @map("edited_at") @db.Timestamptz
 
   attachments MessageAttachment[]
   /// PD-11: the structured half of a message of type `card`.
@@ -364,6 +366,8 @@ model ConversationParticipantState {
   archivedAt     DateTime?    @map("archived_at") @db.Timestamptz
   mutedUntil     DateTime?    @map("muted_until") @db.Timestamptz
   pinnedAt       DateTime?    @map("pinned_at") @db.Timestamptz
+  /// The viewer's own Favorites list.
+  favoritedAt    DateTime?    @map("favorited_at") @db.Timestamptz
   updatedAt      DateTime     @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
   @@unique([conversationId, actorId])
@@ -1368,5 +1372,51 @@ model TrialOutcome {
   coreSubscriptionRef String?   @map("core_subscription_ref")
 
   @@map("trial_outcome")
+  @@schema("chat")
+}
+
+/// The wording a message had before an edit. SQL owns the DDL
+/// (20261020130000): written with the edit, never rewritten.
+model MessageRevision {
+  id           String   @id @default(uuid()) @db.Uuid
+  messageId    String   @map("message_id") @db.Uuid
+  previousBody String   @map("previous_body")
+  editedBy     String   @map("edited_by") @db.Uuid
+  editedByKind String   @map("edited_by_kind")
+  editedAt     DateTime @map("edited_at") @db.Timestamptz
+
+  @@index([messageId, editedAt])
+  @@map("message_revision")
+  @@schema("chat")
+}
+
+/// An organization's shared conversation label. Staff only.
+model ChatLabel {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String
+  /// One of the eight label tones (1..8).
+  color          Int      @default(1) @db.SmallInt
+  createdBy      String   @map("created_by") @db.Uuid
+  createdAt      DateTime @map("created_at") @db.Timestamptz @default(now())
+  updatedAt      DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  conversations ConversationLabel[]
+
+  @@map("chat_label")
+  @@schema("chat")
+}
+
+/// A label applied to a conversation.
+model ConversationLabel {
+  conversationId String    @map("conversation_id") @db.Uuid
+  labelId        String    @map("label_id") @db.Uuid
+  label          ChatLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  labeledBy      String    @map("labeled_by") @db.Uuid
+  labeledAt      DateTime  @map("labeled_at") @db.Timestamptz @default(now())
+
+  @@id([conversationId, labelId])
+  @@index([labelId])
+  @@map("conversation_label")
   @@schema("chat")
 }
