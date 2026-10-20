@@ -81,6 +81,26 @@ export class MessageController {
     });
   }
 
+  /**
+   * Forward one or more messages of THIS conversation into up to ten others.
+   * Each message must be readable here; each destination must be writable
+   * (the ordinary send decision); media are copied, never shared by key.
+   */
+  @Post('forward')
+  async forward(
+    @ActorId() actorId: string,
+    @Param('conversationId') conversationId: string,
+    @Body() body: { messageIds?: unknown; toConversationIds?: unknown; clientMessageIds?: unknown },
+  ) {
+    return this.messages.forward({
+      actorId,
+      conversationId,
+      messageIds: body?.messageIds,
+      toConversationIds: body?.toConversationIds,
+      clientMessageIds: body?.clientMessageIds,
+    });
+  }
+
   /** Authorizes an upload before any object key exists. */
   @Post('attachments/authorize')
   async authorizeUpload(
@@ -108,6 +128,12 @@ export class MessageController {
     return { ok: true };
   }
 
+  /** The conversation's pinned messages (at most three) as this viewer may see them. */
+  @Get('pins')
+  async pins(@ActorId() actorId: string, @Param('conversationId') conversationId: string) {
+    return this.messages.pins(conversationId, actorId);
+  }
+
   @Get('unread')
   async unread(@ActorId() actorId: string, @Param('conversationId') conversationId: string) {
     return { unread: await this.messages.unreadCount(conversationId, actorId) };
@@ -132,6 +158,32 @@ export class MessageController {
   @Delete(':messageId/reactions')
   async unreact(@ActorId() actorId: string, @Param('messageId') messageId: string) {
     await this.messages.unreact(messageId, actorId);
+    return { ok: true };
+  }
+
+  /** A private bookmark; nobody else ever sees it. */
+  @Post(':messageId/star')
+  async star(@ActorId() actorId: string, @Param('messageId') messageId: string) {
+    await this.messages.star(messageId, actorId);
+    return { ok: true };
+  }
+
+  @Delete(':messageId/star')
+  async unstar(@ActorId() actorId: string, @Param('messageId') messageId: string) {
+    await this.messages.unstar(messageId, actorId);
+    return { ok: true };
+  }
+
+  /** Pinned for everyone here; anyone who may write may pin. A fourth replaces the oldest. */
+  @Post(':messageId/pin')
+  async pin(@ActorId() actorId: string, @Param('messageId') messageId: string) {
+    await this.messages.pin(messageId, actorId);
+    return { ok: true };
+  }
+
+  @Delete(':messageId/pin')
+  async unpin(@ActorId() actorId: string, @Param('messageId') messageId: string) {
+    await this.messages.unpin(messageId, actorId);
     return { ok: true };
   }
 

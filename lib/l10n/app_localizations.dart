@@ -2982,6 +2982,186 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Open chat'**
   String get callLinkOpenChat;
+
+  /// No description provided for @profilePhotoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile photo'**
+  String get profilePhotoTitle;
+
+  /// No description provided for @profilePhotoHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone you chat with sees this photo.'**
+  String get profilePhotoHint;
+
+  /// No description provided for @profilePhotoAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add photo'**
+  String get profilePhotoAdd;
+
+  /// No description provided for @profilePhotoChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Change photo'**
+  String get profilePhotoChange;
+
+  /// No description provided for @profilePhotoRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove photo'**
+  String get profilePhotoRemove;
+
+  /// No description provided for @profilePhotoSaving.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving…'**
+  String get profilePhotoSaving;
+
+  /// No description provided for @profilePhotoFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The photo could not be saved. Try again.'**
+  String get profilePhotoFailed;
+
+  /// No description provided for @profilePhotoInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Use a JPEG, PNG or WebP photo, at least 64 × 64 pixels and under 2 MB.'**
+  String get profilePhotoInvalid;
+
+  /// No description provided for @childrenPhotosTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Children\'s photos'**
+  String get childrenPhotosTitle;
+
+  /// No description provided for @childrenPhotosHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Shown in your child\'s groups, to their teacher and supervisor.'**
+  String get childrenPhotosHint;
+
+  /// No description provided for @starAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Star'**
+  String get starAction;
+
+  /// No description provided for @unstarAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Unstar'**
+  String get unstarAction;
+
+  /// No description provided for @pinAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin message'**
+  String get pinAction;
+
+  /// No description provided for @unpinAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin message'**
+  String get unpinAction;
+
+  /// No description provided for @starredMark.
+  ///
+  /// In en, this message translates to:
+  /// **'Starred'**
+  String get starredMark;
+
+  /// No description provided for @pinnedMark.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned'**
+  String get pinnedMark;
+
+  /// No description provided for @pinnedBannerOne.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned message'**
+  String get pinnedBannerOne;
+
+  /// No description provided for @pinnedBannerOf.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned message {index} of {total}'**
+  String pinnedBannerOf(int index, int total);
+
+  /// No description provided for @starredMessagesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Starred messages'**
+  String get starredMessagesTitle;
+
+  /// No description provided for @starredMessagesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No starred messages yet. Long-press a message and choose Star.'**
+  String get starredMessagesEmpty;
+
+  /// No description provided for @forwardAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Forward'**
+  String get forwardAction;
+
+  /// No description provided for @forwardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Forward to…'**
+  String get forwardTitle;
+
+  /// No description provided for @forwardEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No chats to forward to.'**
+  String get forwardEmpty;
+
+  /// No description provided for @forwardSendTo.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Send} other{Send to {count}}}'**
+  String forwardSendTo(int count);
+
+  /// No description provided for @forwardMax.
+  ///
+  /// In en, this message translates to:
+  /// **'You can choose at most 10 chats.'**
+  String get forwardMax;
+
+  /// No description provided for @forwardDone.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Forwarded to 1 chat} other{Forwarded to {count} chats}}'**
+  String forwardDone(int count);
+
+  /// No description provided for @forwardedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Forwarded'**
+  String get forwardedLabel;
+
+  /// No description provided for @selectAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Select messages'**
+  String get selectAction;
+
+  /// No description provided for @selectedCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 selected} other{{count} selected}}'**
+  String selectedCount(int count);
+
+  /// No description provided for @cancelSelection.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel selection'**
+  String get cancelSelection;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

@@ -18,6 +18,8 @@ export interface ChatMember {
   displayName: string
   /** Whether the VIEWER may open a 1:1 with this member (server-decided, advisory). */
   canOpenDirect?: boolean
+  /** Their profile photo: a signed link for this viewer in this conversation, or null. */
+  avatarUrl?: string | null
 }
 
 /** The viewer's own preferences for a conversation (POST /:id/preferences). */
@@ -51,10 +53,12 @@ export interface ChatConversation {
   lastActivityAt: string
   archivedAt: string | null
   members?: ChatMember[]
-  learner?: { id: string; name: string } | null
+  learner?: { id: string; name: string; avatarUrl?: string | null } | null
   unreadCount?: number
   viewerState?: ChatViewerState
   lastMessage?: ChatLastMessage | null
+  /** A group's picture: its one child's photo, signed for this viewer; null otherwise. */
+  avatarUrl?: string | null
 }
 
 export interface ChatAttachment {
@@ -85,6 +89,8 @@ export interface ChatMessage {
   createdAt: string
   attachments: ChatAttachment[]
   replyToMessageId?: string | null
+  /** The author's profile photo, signed for this viewer in this conversation; null when none. */
+  authorAvatarUrl?: string | null
   /** One reaction per actor (server unique index). */
   reactions?: Array<{ actorId: string; emoji: string }>
   /**
@@ -93,6 +99,12 @@ export interface ChatMessage {
    * a plain-text rendering for a card this client does not know.
    */
   card?: { kind: string; payload: Record<string, unknown> } | null
+  /** A copy forwarded by its author; shown as "Forwarded" (the source is never named). */
+  forwarded?: boolean
+  /** The viewer's private bookmark. */
+  starred?: boolean
+  /** Pinned for everyone in this conversation (at most three). */
+  pinned?: boolean
 }
 
 export interface MessagePage {
@@ -190,6 +202,31 @@ export const chatApi = {
     })
   },
   upload,
+  /**
+   * Forward messages of conversation `id` into up to ten others. The server
+   * checks each source is readable here and each destination writable; media
+   * are copied into each destination.
+   */
+  forward: (id: string, messageIds: string[], toConversationIds: string[]) =>
+    api.post<{ sent: ChatMessage[] }>(`${conv(id)}/messages/forward`, { messageIds, toConversationIds }),
+  star: (id: string, messageId: string) =>
+    api.post<{ ok: boolean }>(`${conv(id)}/messages/${encodeURIComponent(messageId)}/star`),
+  unstar: (id: string, messageId: string) =>
+    api.delete<{ ok: boolean }>(`${conv(id)}/messages/${encodeURIComponent(messageId)}/star`),
+  /** Anyone who may write here may pin; a fourth pin replaces the oldest (server-side). */
+  pin: (id: string, messageId: string) =>
+    api.post<{ ok: boolean }>(`${conv(id)}/messages/${encodeURIComponent(messageId)}/pin`),
+  unpin: (id: string, messageId: string) =>
+    api.delete<{ ok: boolean }>(`${conv(id)}/messages/${encodeURIComponent(messageId)}/pin`),
+  /** The pinned messages this viewer may see, oldest first. */
+  pins: (id: string) =>
+    api.get<{ pins: Array<{ pinnedAt: string; pinnedBy: string; message: ChatMessage }> }>(`${conv(id)}/messages/pins`).then((r) => r.pins),
+  /** The viewer's starred messages, newest star first, across conversations they can still read. */
+  starred: (before?: string) =>
+    api.get<{ items: Array<{ starredAt: string; conversationId: string; message: ChatMessage }>; nextBefore: string | null }>(
+      '/me/starred',
+      before ? { before } : undefined,
+    ),
   react: (id: string, messageId: string, emoji: string) =>
     api.post<{ ok: boolean }>(`${conv(id)}/messages/${encodeURIComponent(messageId)}/reactions`, { emoji }),
   unreact: (id: string, messageId: string) =>
@@ -249,6 +286,8 @@ export const chatKeys = {
   conversation: (id: string) => ['chat', 'conversation', id] as const,
   messages: (id: string) => ['chat', 'messages', id] as const,
   approvals: (id: string) => ['chat', 'approvals', id] as const,
+  pins: (id: string) => ['chat', 'pins', id] as const,
+  starred: ['chat', 'starred'] as const,
 }
 
 /** Server order: by seq, numerically (a string compare would put "10" before "9"). */

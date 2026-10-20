@@ -16,8 +16,13 @@ import { currentRequestOrigin } from './request-origin';
  * which is why the binding lives in the URL rather than in a header.
  */
 export type MediaVariant = 'o' | 't'; // original, thumbnail
-/** What the link addresses: a message attachment, a story's media, or a staff profile photo. */
-export type MediaKind = 'attachments' | 'stories' | 'staff';
+/**
+ * What the link addresses: a message attachment, a story's media, a staff
+ * profile photo (the staff directory's rule), or a profile photo seen in a
+ * conversation (`avatars`: any kind of person, or a child -- see
+ * communication/profile/avatar.service).
+ */
+export type MediaKind = 'attachments' | 'stories' | 'staff' | 'avatars';
 
 export interface MediaUrlClaims {
   kind: MediaKind;
@@ -70,8 +75,29 @@ export class MediaUrlSigner {
     return `${this.base()}/media/${kind}/${id}?v=${variant}&a=${actorId}&e=${expires}&s=${sig}`;
   }
 
+  /**
+   * The same link, with its expiry rounded up to a bucket boundary, so every
+   * signing within one bucket yields the SAME url. A conversation list re-read
+   * every minute then hands out an unchanged avatar url and the client's image
+   * cache keeps the picture instead of downloading it again. Safe because the
+   * signature is not the authorization: every request is re-checked.
+   */
+  urlBucketed(
+    kind: MediaKind,
+    id: string,
+    variant: MediaVariant,
+    actorId: string,
+    bucketSeconds = 3600,
+    now = Date.now(),
+  ): string {
+    const nowSeconds = Math.floor(now / 1000);
+    const expires = (Math.floor(nowSeconds / bucketSeconds) + 2) * bucketSeconds;
+    const sig = this.mac(kind, id, variant, actorId, expires);
+    return `${this.base()}/media/${kind}/${id}?v=${variant}&a=${actorId}&e=${expires}&s=${sig}`;
+  }
+
   verify(c: MediaUrlClaims, now = Date.now()): boolean {
-    if (c.kind !== 'attachments' && c.kind !== 'stories' && c.kind !== 'staff') return false;
+    if (c.kind !== 'attachments' && c.kind !== 'stories' && c.kind !== 'staff' && c.kind !== 'avatars') return false;
     if (c.variant !== 'o' && c.variant !== 't') return false;
     if (!Number.isInteger(c.expires) || c.expires < Math.floor(now / 1000)) return false;
     const expected = Buffer.from(this.mac(c.kind, c.attachmentId, c.variant, c.actorId, c.expires));

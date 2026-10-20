@@ -8,6 +8,7 @@ import {
   MessageReceipt,
 } from '@prisma/client';
 import type { ActorRef, ResolvedActors } from '../../platform/identity.service';
+import type { Actor } from '../../platform/types';
 import { actorRefKey } from '../../platform/identity.service';
 import { ConversationState, Moderation } from './vocab';
 
@@ -60,6 +61,14 @@ export interface MessageDto {
    */
   authorDisplayName: string | null;
 
+  /**
+   * The author's profile photo: a signed /media/avatars link for THIS viewer in
+   * THIS conversation, or null (no photo, a system message, an unresolved
+   * author). Each request on it is re-authorized (RT-037); the object key never
+   * leaves the server. See communication/profile/avatar-urls.
+   */
+  authorAvatarUrl: string | null;
+
   onBehalfMode: string | null;
   type: string;
   body: string | null;
@@ -77,6 +86,12 @@ export interface MessageDto {
   editedAt: string | null;
   attachments: AttachmentDto[];
   reactions: Array<{ actorId: string; emoji: string }>;
+  /** A copy forwarded by its author; shown as "Forwarded". The source is never named. */
+  forwarded: boolean;
+  /** The VIEWER's private bookmark. Set on the message page and the starred list. */
+  starred?: boolean;
+  /** Pinned for everyone in this conversation (at most three). */
+  pinned?: boolean;
   receipts: Array<{ actorId: string; state: string; deliveredAt: string | null; readAt: string | null }>;
   /**
    * PD-11: present only when `type` is `card` -- what a ticket recorded, for the
@@ -142,6 +157,9 @@ export interface ConversationMemberDto {
    * contact channel and names nobody new -- this is not a directory (§25).
    */
   canOpenDirect: boolean;
+
+  /** The member's profile photo as this viewer sees it here, or null. See MessageDto.authorAvatarUrl. */
+  avatarUrl: string | null;
 }
 
 /**
@@ -160,6 +178,8 @@ export interface ConversationMemberDto {
 export interface ConversationLearnerDto {
   id: string;
   name: string;
+  /** The child's photo, set by a parent, as this viewer sees it here; or null. */
+  avatarUrl?: string | null;
 }
 
 export interface ConversationDto {
@@ -216,6 +236,14 @@ export interface ConversationDto {
    * none. Chosen by the message page's own visibility rule.
    */
   lastMessage?: LastMessageDto | null;
+
+  /**
+   * A GROUP's picture: the photo of the one child it is about (a student group's
+   * learner, or a family group linking exactly one child), signed for the viewer
+   * here; null otherwise. Not set on a 1:1 -- a client pictures that by the
+   * other member.
+   */
+  avatarUrl?: string | null;
 }
 
 export interface ConversationViewerStateDto {
@@ -315,6 +343,8 @@ export interface ResolvedMember {
   displayName: string;
   /** Advisory; see ConversationMemberDto.canOpenDirect. False when unknown. */
   canOpenDirect: boolean;
+  /** Signed for the viewer in this conversation; null when none or unresolved. */
+  avatarUrl?: string | null;
 }
 
 export function toConversationDto(
@@ -326,6 +356,10 @@ export function toConversationDto(
     viewerState?: ConversationViewerStateDto;
     lastMessage?: LastMessageDto | null;
     labelIds?: string[];
+    /** The learner's photo link, signed by the caller for the viewer; omitted when unknown. */
+    learnerAvatarUrl?: string | null;
+    /** The group's picture (its one child's photo), signed by the caller. */
+    avatarUrl?: string | null;
   },
 ): ConversationDto {
   return {
@@ -348,16 +382,20 @@ export function toConversationDto(
       isSilent: m.isSilent,
       displayName: m.displayName,
       canOpenDirect: m.canOpenDirect,
+      avatarUrl: m.avatarUrl ?? null,
     })),
     // Two fields enumerated by hand, like every other field here: the Learner
     // row is never spread, so `level`, `nextClassAt` and `teacherId` cannot
     // reach a client because somebody widened an include.
-    learner: c.learner ? { id: c.learner.id, name: c.learner.name } : undefined,
+    learner: c.learner
+      ? { id: c.learner.id, name: c.learner.name, avatarUrl: extra?.learnerAvatarUrl ?? null }
+      : undefined,
     unreadCount: extra?.unreadCount,
     viewerRequiresApproval: extra?.viewerRequiresApproval,
     viewerState: extra?.viewerState,
     lastMessage: extra?.lastMessage,
     labelIds: extra?.labelIds,
+    avatarUrl: c.type === 'direct' ? undefined : (extra?.avatarUrl ?? null),
   };
 }
 
@@ -397,7 +435,7 @@ export function messageAuthorRef(
   return m.authorId ? { actorId: m.authorId, actorKind: m.authorType } : null;
 }
 
-type MessageWithRelations = Message & {
+export type MessageWithRelations = Message & {
   attachments?: MessageAttachment[];
   reactions?: MessageReaction[];
   receipts?: MessageReceipt[];
@@ -416,6 +454,8 @@ export function toMessageDto(
   m: MessageWithRelations,
   signedUrls: Map<string, { url: string; thumbnailUrl: string | null }> = new Map(),
   authors: ResolvedActors = new Map(),
+  /** Signs a resolved author's photo for the viewer; absent means no photo links. */
+  avatarFor?: (author: Actor) => string | null,
 ): MessageDto {
   const hidden = m.deletedForAll;
   const author = messageAuthorRef(m);
@@ -426,6 +466,10 @@ export function toMessageDto(
     authorKind: m.authorType,
     authorId: m.authorId,
     authorDisplayName: author ? (authors.get(actorRefKey(author))?.displayName ?? null) : null,
+    authorAvatarUrl: (() => {
+      const resolved = author ? authors.get(actorRefKey(author)) : undefined;
+      return resolved && avatarFor ? avatarFor(resolved) : null;
+    })(),
     onBehalfMode: m.onBehalfMode,
     type: m.type,
     // A message deleted for everyone keeps its row for auditability, but its
@@ -438,6 +482,7 @@ export function toMessageDto(
     moderation: m.moderation,
     origin: m.origin,
     replyToMessageId: m.replyToMessageId,
+    forwarded: m.forwarded,
     clientMessageId: m.clientMessageId,
     deletedAt: m.deletedAt?.toISOString() ?? null,
     deletedForAll: m.deletedForAll,

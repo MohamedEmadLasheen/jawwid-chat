@@ -73,7 +73,9 @@ describe('learner context', () => {
 
     const dto = (await listFor(s.parentId)).find((c) => c.id === group.id);
 
-    expect(dto!.learner).toEqual({ id: s.learnerId, name: 'learner_l' });
+    // avatarUrl (2026-10-19, owner decision: children's photos in chat) is a
+    // signed link or null -- here null, as no caller signed one.
+    expect(dto!.learner).toEqual({ id: s.learnerId, name: 'learner_l', avatarUrl: null });
     expect(dto!.learnerId).toBe(s.learnerId);
   });
 
@@ -88,7 +90,7 @@ describe('learner context', () => {
     expect(dto!.learnerId).toBeNull();
   });
 
-  it('exposes only id and name — never level, schedule or teacher', async () => {
+  it('exposes only id, name and the photo link — never level, schedule or teacher', async () => {
     // chat.learner also carries level, next_class_at and teacher_id. They are
     // operational detail a parent's chat list has no use for, and this is the
     // test that fails if somebody widens the include.
@@ -100,7 +102,9 @@ describe('learner context', () => {
 
     const dto = (await listFor(s.parentId)).find((c) => c.id === group.id);
 
-    expect(Object.keys(dto!.learner!).sort()).toEqual(['id', 'name']);
+    // The photo is a signed /media/avatars link (never the stored key), added
+    // with the owner's decision on children's photos; nothing else is allowed.
+    expect(Object.keys(dto!.learner!).sort()).toEqual(['avatarUrl', 'id', 'name']);
   });
 
   it('a parent never receives another family\'s learner', async () => {

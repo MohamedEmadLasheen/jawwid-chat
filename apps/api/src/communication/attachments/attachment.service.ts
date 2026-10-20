@@ -8,6 +8,7 @@ import type { ObjectStorage, UploadAuthorization } from './object-storage';
 import { ConversationService } from '../conversations/conversation.service';
 import {
   assertObjectKeyBelongsToConversation,
+  buildObjectKey,
   conversationPrefix,
   objectKeyBelongsToConversation,
 } from './object-key';
@@ -264,6 +265,71 @@ export class AttachmentService {
       assertObjectKeyBelongsToConversation(conversationId, a.objectKey);
       if (a.thumbnailObjectKey) {
         assertObjectKeyBelongsToConversation(conversationId, a.thumbnailObjectKey);
+      }
+    }
+  }
+
+  /**
+   * Forwarding media: COPY each stored object into the destination
+   * conversation's namespace (`conversations/<target>/<uuid>`), so the copy is
+   * governed by the destination's own access rules and the source keeps its
+   * own. Never shares a key across conversations. Returns the attachment
+   * inputs for the new message; on any failure the copies made so far are
+   * removed. A store that cannot copy refuses media forwards outright.
+   */
+  async copyForForward(
+    rows: ReadonlyArray<{
+      kind: string;
+      objectKey: string;
+      mimeType: string;
+      byteSize: number;
+      checksumSha256: string | null;
+      originalName: string | null;
+      durationMs: number | null;
+      width: number | null;
+      height: number | null;
+    }>,
+    targetConversationId: string,
+  ): Promise<Array<{
+    kind: string;
+    objectKey: string;
+    mimeType: string;
+    byteSize: number;
+    checksumSha256: string | null;
+    originalName: string | null;
+    durationMs: number | null;
+    width: number | null;
+    height: number | null;
+  }>> {
+    if (rows.length === 0) return [];
+    if (!this.storage.copy) {
+      throw new CommError(CommErrorCode.MESSAGE_NOT_FORWARDABLE, 'this deployment cannot forward media', 403);
+    }
+    const made: string[] = [];
+    try {
+      const out = [];
+      for (const r of rows) {
+        const key = buildObjectKey(conversationPrefix(targetConversationId));
+        if (!(await this.storage.copy(r.objectKey, key))) {
+          throw new CommError(CommErrorCode.MESSAGE_NOT_FORWARDABLE, 'an attachment of that message is no longer stored', 403);
+        }
+        made.push(key);
+        out.push({ ...r, objectKey: key });
+      }
+      return out;
+    } catch (error) {
+      await this.discardCopies(made);
+      throw error;
+    }
+  }
+
+  /** Remove objects copied for a forward that did not go through. */
+  async discardCopies(keys: readonly string[]): Promise<void> {
+    for (const key of keys) {
+      try {
+        await this.storage.delete(key);
+      } catch {
+        /* best effort: an unreferenced object is swept, never served */
       }
     }
   }

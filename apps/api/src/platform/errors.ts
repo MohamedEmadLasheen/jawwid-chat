@@ -186,6 +186,18 @@ export enum CommErrorCode {
   STAFF_ASSIGNMENT_INVALID = 'COMM.STAFF_ASSIGNMENT_INVALID',
   /** The organization-wide profile overview belongs to the super admin. 403. */
   STAFF_DIRECTORY_DENIED = 'COMM.STAFF_DIRECTORY_DENIED',
+  /** The message cannot leave its conversation: deleted, held, rejected, a system message or a card. 403. */
+  MESSAGE_NOT_FORWARDABLE = 'COMM.MESSAGE_NOT_FORWARDABLE',
+  // --- Profile photos (parents, teachers, children) ---
+  /**
+   * The photo does not exist or is not one the caller may see or change -- one
+   * code for all of them, so a photo link is not an oracle. 404.
+   */
+  PROFILE_PHOTO_NOT_FOUND = 'COMM.PROFILE_PHOTO_NOT_FOUND',
+  /** The caller may not change this photo (e.g. staff use their staff profile). 403. */
+  PROFILE_PHOTO_DENIED = 'COMM.PROFILE_PHOTO_DENIED',
+  /** The upload is not an acceptable profile photo (type, size, dimensions, key). 400. */
+  PROFILE_PHOTO_INVALID = 'COMM.PROFILE_PHOTO_INVALID',
   /** PD-8: the learner has no supervisor, so no group can carry the required admin. 409. */
   LEARNER_UNSUPERVISED = 'COMM.LEARNER_UNSUPERVISED',
   /** PD-8: the organization structure (departments, supervision, backups) may not be changed by this actor. 403. */

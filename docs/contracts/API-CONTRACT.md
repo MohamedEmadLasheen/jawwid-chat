@@ -550,6 +550,99 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 - Response: the bytes, `Content-Type` as stored, `X-Content-Type-Options: nosniff`, `Content-Disposition: inline`, `Cache-Control: private, no-store`, `Accept-Ranges: bytes`; single-range requests → 206 with `Content-Range`; out-of-range → 416. No storage URL is ever returned.
 - Guarantee: a deactivation, a removal or a deletion refuses the very NEXT request on a link minted earlier. Not covered: bytes already delivered, and one response already streaming when the change commits.
 
+### Forwarding messages (2026-10-19, owner decisions: anyone, any message they can read; text and media; up to 10 chats)
+
+**`POST /conversations/:cid/messages/forward`**
+- Body: `{ messageIds: string[], toConversationIds: string[] }`, with at most 30 messages and 10 destinations.
+- Response: `{ sent: MessageDto[] }`, ordered by destination, then by the original message order.
+
+**Two authorizations, neither implying the other:**
+- **Source:** every message must be readable by the caller in `:cid`. It must also be allowed to leave: published, not deleted, and not a system message or a ticket's card. Otherwise the request fails with `COMM.MESSAGE_NOT_FORWARDABLE` (403).
+- **Destination:** every target is checked up front with the send decision, and then each copy goes through the ordinary send path. A forward can therefore never reach a chat an ordinary message could not, and it inherits BR-1, staff scope, silencing and approval.
+
+**What a forward creates:**
+- A NEW message, authored by the forwarder, with `MessageDto.forwarded: true`.
+- No reactions, receipts or reply target from the original.
+- An internal note stays an internal note, so it can never reach a family.
+
+**Media:** each stored object is COPIED server-side (`ObjectStorage.copy`: S3 CopyObject, or the local blob store) into `conversations/<target>/<uuid>`. Keys are never shared across conversations. A store without `copy` refuses media forwards.
+
+**Provenance and audit:**
+- `chat.message.forwarded_from_message_id` is kept for audit and NEVER returned to a client (migration `20261020100000`).
+- `chat.audit_log` records `message.forwarded`.
+
+### Starred and pinned messages (2026-10-19, owner decisions: anyone who can write may pin; at most 3)
+
+**Star: a private bookmark.** Nobody else ever sees it.
+- `POST` and `DELETE /conversations/:cid/messages/:mid/star`.
+- Starring requires the caller to be able to read the message, and the message must not be deleted for everyone.
+- Unstarring always succeeds for the caller's own star.
+- `GET /me/starred?before=&limit=` returns `{ items: [{ starredAt, conversationId, message: MessageDto }], nextBefore }`. Items are newest star first, and only from conversations the caller may still read (the same visibility rule as the message page).
+
+**Pin: shared with everyone in the conversation.**
+- `POST` and `DELETE /conversations/:cid/messages/:mid/pin`.
+- Allowed exactly when the caller may WRITE there: the same `canSend` decision a send takes. Being able to read is not enough; an archived conversation refuses with `COMM.CONVERSATION_ARCHIVED`.
+- Only a published, non-system message that is not deleted can be pinned (otherwise 400 `COMM.VALIDATION`).
+- At most 3 per conversation. A fourth replaces the oldest, in one transaction under a lock on the conversation row. The `chat.enforce_message_pin` trigger also enforces the cap, and that the message belongs to the conversation, for any writer.
+- Every pin or unpin emits `conversation.updated` (clients re-read the page and the pins) and writes `chat.audit_log` (`message.pinned` or `message.unpinned`).
+- `GET /conversations/:cid/messages/pins` returns `{ pins: [{ pinnedAt, pinnedBy, message: MessageDto }] }`, oldest first. It holds only the pins this viewer could read anyway, so a pinned internal note is never shown to a family.
+
+**`MessageDto` fields:**
+- `starred`: the viewer's own bookmark.
+- `pinned`: pinned for everyone.
+- Both are set on the message page, the pins list and the starred list.
+
+**Schema:** migration `20261020090000_chat_message_star_pin.sql` adds `chat.message_star` and `chat.message_pin`. Both cascade with their message, and RLS is on with no policy (owner connection only).
+
+### Profile photos in chat (2026-10-19, owner decision: everyone, WhatsApp-style, children included)
+
+Who has a photo:
+- **Staff:** unchanged. They set it on their staff profile (`/staff-profiles/:ref/avatar…`, RT-037 directory rule).
+- **Parents and teachers:** set their own.
+- **Parents:** also set their children's.
+
+The photos reach chat as signed links on the payloads below. A client never builds a link and never sees an object key.
+
+**Payload fields** (all are `string | null`, signed for the VIEWER in the context named):
+- `MessageDto.authorAvatarUrl`: the author's photo in this conversation.
+- `ConversationMemberDto.avatarUrl`: the member's photo in this conversation.
+- `ConversationLearnerDto.avatarUrl`: the child's photo, on `GET /conversations` and `GET /conversations/:id`.
+- No `ConversationDto.avatarUrl`. A client pictures a 1:1 by the other member and a student group by its learner.
+
+**`GET /media/avatars/:id`**
+- Auth: `@Public()`, signed exactly as `/media/attachments` (`v`, `a`, `e`, `s`).
+- `:id` is `<kind>.<id>.<context>`:
+  - `kind` is `staff`, `contact`, `teacher` or `learner`;
+  - `context` is a conversation id, or `self`.
+- The link also carries `k`: 8 hex characters of the stored key's SHA-256. A new photo is therefore a new URL. `k` is not signed and grants nothing.
+- Expiry is bucketed to the hour, so a list re-read every minute hands out the same URL.
+- On every request:
+  1. signature + expiry (403);
+  2. the reader is live (403);
+  3. the decision, otherwise 404:
+     - same organization;
+     - the stored key is `avatars/<kind>/<id>/<uuid>`;
+     - for `self`: the reader's own photo, or a child of the reader's own family;
+     - for a conversation: the reader may read it NOW (staff scope included), and the person is or was a member of it or wrote in it, or the child is the one it is about.
+- Response headers match `/media/attachments` (`private, no-store`).
+
+**Endpoints** (`profile-photo.controller.ts`, `communication/profile/avatar.service.ts`):
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/me/photo` | none | `{ avatarUrl, children: [{ id, name, avatarUrl }] }`. `children` is filled for a parent only. |
+| POST | `/me/avatar/upload` | `{ mimeType, byteSize }` | A signed PUT under `avatars/<contact|teacher>/<self>/`. JPEG/PNG/WebP, at most 2 MiB. |
+| POST | `/me/avatar` | `{ objectKey }` | `{ avatarUrl }` |
+| DELETE | `/me/avatar` | none | `{ avatarUrl: null }` |
+| POST · POST · DELETE | `/me/children/:learnerId/avatar/upload`, `/me/children/:learnerId/avatar` | as above | As above, under `avatars/learner/<learnerId>/`, for a learner of the caller's own family only. |
+
+**Errors:**
+- `COMM.PROFILE_PHOTO_INVALID` (400): type, size or dimensions; bytes that are not a real image; or a key outside the owner's prefix.
+- `COMM.PROFILE_PHOTO_DENIED` (403): staff calling `/me/avatar`.
+- `COMM.PROFILE_PHOTO_NOT_FOUND` (404): any other refusal.
+
+**What a commit does:** checks the key structurally, inspects the stored bytes (`judgeAvatar`), updates only `avatar_object_key`, writes `chat.audit_log` (`profile_photo.set|removed`), and deletes the replaced object. The database CHECK of 20261014130000 independently holds every key to its own row's prefix.
+
 ### 3.7 Approvals (`approval.controller.ts`, `approval.service.ts`)
 
 ```

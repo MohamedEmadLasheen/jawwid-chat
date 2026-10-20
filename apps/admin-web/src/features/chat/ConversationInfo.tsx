@@ -32,7 +32,7 @@ export function ConversationInfo({ c }: { c: ChatConversation }) {
   return (
     <div className="cw-info">
       <div className="dp-hero">
-        <ConversationAvatar c={c} name={name} size="lg" />
+        <ConversationAvatar c={c} name={name} size="lg" selfId={staff?.id} />
         <div className="dp-hero__text">
           <span className="dp-hero__name" dir="auto">{name}</span>
           <span className="thread-head__sub">
@@ -73,7 +73,7 @@ export function ConversationInfo({ c }: { c: ChatConversation }) {
         <ul className="cw-members">
           {members.map((m) => (
             <li key={m.actorId} className="cw-member">
-              <Avatar name={m.displayName || '?'} seed={m.actorId} size="sm" />
+              <Avatar name={m.displayName || '?'} seed={m.actorId} size="sm" src={m.avatarUrl} />
               <span className="cw-member__name" dir="auto">
                 {m.actorId === staff?.id ? `${m.displayName} (${copy.you})` : m.displayName}
               </span>

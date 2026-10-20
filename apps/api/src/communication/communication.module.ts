@@ -1,3 +1,6 @@
+import { StarredController } from './api/starred.controller';
+import { ProfilePhotoController } from './api/profile-photo.controller';
+import { AvatarService } from './profile/avatar.service';
 import { Module } from '@nestjs/common';
 import { PlatformModule } from '../platform/platform.module';
 import { AuthModule } from '../platform/auth/auth.module';
@@ -64,6 +67,8 @@ import { LabelService } from './conversations/label.service';
     NotificationController,
     StorageController,
     MediaController,
+    ProfilePhotoController,
+    StarredController,
     StoryController,
     LabelController,
   ],
@@ -79,6 +84,7 @@ import { LabelService } from './conversations/label.service';
     LiveKitWebhookVerifier,
     AttachmentService,
     StoryService,
+    AvatarService,
     StoryAudienceResolver,
     StorySweeper,
     OutboxService,

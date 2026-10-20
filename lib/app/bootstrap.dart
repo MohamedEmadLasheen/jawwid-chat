@@ -29,6 +29,8 @@ import '../features/calls/data/fake_scheduled_call_repository.dart';
 import '../features/calls/data/http_account_call_history.dart';
 import '../features/calls/data/http_scheduled_call_repository.dart';
 import '../features/calls/data/scheduled_call_repository.dart';
+import '../features/messages/data/message_marks_repository.dart';
+import '../features/profile/data/profile_photo_repository.dart';
 import '../features/settings/application/locale_preference.dart';
 import '../shared/models/user_role.dart';
 import 'app.dart';
@@ -149,6 +151,12 @@ List<Override> _httpOverrides() {
     ),
     supervisionRepositoryProvider.overrideWithValue(
       HttpSupervisionRepository(client: client),
+    ),
+    messageMarksRepositoryProvider.overrideWithValue(
+      HttpMessageMarksRepository(client: client, viewerActorId: session.actorId),
+    ),
+    profilePhotoRepositoryProvider.overrideWithValue(
+      HttpProfilePhotoRepository(client: client),
     ),
     trialRepositoryProvider.overrideWithValue(
       HttpTrialRepository(client: client),

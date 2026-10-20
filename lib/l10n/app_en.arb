@@ -936,5 +936,66 @@
     }
   },
   "callLinkJoinNow": "Join now",
-  "callLinkOpenChat": "Open chat"
+  "callLinkOpenChat": "Open chat",
+  "profilePhotoTitle": "Profile photo",
+  "profilePhotoHint": "Everyone you chat with sees this photo.",
+  "profilePhotoAdd": "Add photo",
+  "profilePhotoChange": "Change photo",
+  "profilePhotoRemove": "Remove photo",
+  "profilePhotoSaving": "Saving…",
+  "profilePhotoFailed": "The photo could not be saved. Try again.",
+  "profilePhotoInvalid": "Use a JPEG, PNG or WebP photo, at least 64 × 64 pixels and under 2 MB.",
+  "childrenPhotosTitle": "Children's photos",
+  "childrenPhotosHint": "Shown in your child's groups, to their teacher and supervisor.",
+  "starAction": "Star",
+  "unstarAction": "Unstar",
+  "pinAction": "Pin message",
+  "unpinAction": "Unpin message",
+  "starredMark": "Starred",
+  "pinnedMark": "Pinned",
+  "pinnedBannerOne": "Pinned message",
+  "pinnedBannerOf": "Pinned message {index} of {total}",
+  "@pinnedBannerOf": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "starredMessagesTitle": "Starred messages",
+  "starredMessagesEmpty": "No starred messages yet. Long-press a message and choose Star.",
+  "forwardAction": "Forward",
+  "forwardTitle": "Forward to…",
+  "forwardEmpty": "No chats to forward to.",
+  "forwardSendTo": "{count, plural, =0{Send} other{Send to {count}}}",
+  "@forwardSendTo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "forwardMax": "You can choose at most 10 chats.",
+  "forwardDone": "{count, plural, =1{Forwarded to 1 chat} other{Forwarded to {count} chats}}",
+  "@forwardDone": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "forwardedLabel": "Forwarded",
+  "selectAction": "Select messages",
+  "selectedCount": "{count, plural, =1{1 selected} other{{count} selected}}",
+  "@selectedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "cancelSelection": "Cancel selection"
 }

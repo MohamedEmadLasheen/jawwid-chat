@@ -52,8 +52,9 @@ describe('GET /conversations — the response a parent actually receives', () =>
     const dto = body.conversations.find((c) => c.id === group.id)!;
 
     // Names and types, exactly as documented.
-    expect(dto.learner).toEqual({ id: expect.any(String), name: expect.any(String) });
-    expect(dto.learner).toEqual({ id: s.learnerId, name: 'learner_l' });
+    // avatarUrl: the child's photo as a signed link, or null (none set here).
+    expect(dto.learner).toEqual({ id: expect.any(String), name: expect.any(String), avatarUrl: null });
+    expect(dto.learner).toEqual({ id: s.learnerId, name: 'learner_l', avatarUrl: null });
     expect(typeof dto.unreadCount).toBe('number');
     expect(dto.unreadCount).toBe(1);
   });
@@ -121,18 +122,18 @@ describe('GET /conversations — the response a parent actually receives', () =>
 
     const dto = (await listBody(s.parentId)).conversations.find((c) => c.learner)!;
 
-    expect(Object.keys(dto.learner!).sort()).toEqual(['id', 'name']);
+    expect(Object.keys(dto.learner!).sort()).toEqual(['avatarUrl', 'id', 'name']);
   });
 });
 
 describe('GET /conversations/:id — the detail response', () => {
-  it('carries the same two fields', async () => {
+  it('carries the same fields', async () => {
     const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
     await g.messages.send({ conversationId: group.id, senderId: s.ownerId, body: 'hi' });
 
     const dto = await controller.get(s.parentId, group.id);
 
-    expect(dto.learner).toEqual({ id: s.learnerId, name: 'learner_l' });
+    expect(dto.learner).toEqual({ id: s.learnerId, name: 'learner_l', avatarUrl: null });
     expect(dto.unreadCount).toBe(1);
   });
 
@@ -188,18 +189,19 @@ describe('GET /conversations/:id — members, with names (O3)', () => {
     );
   });
 
-  it('exposes no member field beyond the six on the contract', async () => {
+  it('exposes no member field beyond the seven on the contract', async () => {
     const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
 
     const dto = await controller.get(s.teacherId, group.id);
 
     // Exact equality, not a subset: this is the tripwire that stops a widened
     // Prisma include or a convenience field reaching a client through the member
-    // list. `canOpenDirect` is the sixth and is declared in API-CONTRACT.md; a
-    // seventh should fail here until it is declared there too.
+    // list. `canOpenDirect` is the sixth; `avatarUrl` (a signed /media/avatars
+    // link or null, 2026-10-19) is the seventh -- both declared in
+    // API-CONTRACT.md. An eighth should fail here until it is declared there too.
     for (const member of dto.members!) {
       expect(Object.keys(member).sort()).toEqual(
-        ['actorId', 'actorKind', 'canOpenDirect', 'displayName', 'isSilent', 'memberRole'],
+        ['actorId', 'actorKind', 'avatarUrl', 'canOpenDirect', 'displayName', 'isSilent', 'memberRole'],
       );
     }
   });

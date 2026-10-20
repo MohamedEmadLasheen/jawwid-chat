@@ -1603,4 +1603,122 @@ class L10nAr extends L10n {
 
   @override
   String get callLinkOpenChat => 'فتح المحادثة';
+
+  @override
+  String get profilePhotoTitle => 'الصورة الشخصية';
+
+  @override
+  String get profilePhotoHint => 'يرى هذه الصورة كل من تتحدث معه.';
+
+  @override
+  String get profilePhotoAdd => 'إضافة صورة';
+
+  @override
+  String get profilePhotoChange => 'تغيير الصورة';
+
+  @override
+  String get profilePhotoRemove => 'إزالة الصورة';
+
+  @override
+  String get profilePhotoSaving => 'جارٍ الحفظ…';
+
+  @override
+  String get profilePhotoFailed => 'تعذّر حفظ الصورة. حاول مرة أخرى.';
+
+  @override
+  String get profilePhotoInvalid =>
+      'استخدم صورة JPEG أو PNG أو WebP، بحجم ٦٤ × ٦٤ بكسل على الأقل وأقل من ٢ ميغابايت.';
+
+  @override
+  String get childrenPhotosTitle => 'صور الأطفال';
+
+  @override
+  String get childrenPhotosHint => 'تظهر في مجموعات طفلك لمعلمه ومشرفه.';
+
+  @override
+  String get starAction => 'تمييز بنجمة';
+
+  @override
+  String get unstarAction => 'إلغاء التمييز';
+
+  @override
+  String get pinAction => 'تثبيت الرسالة';
+
+  @override
+  String get unpinAction => 'إلغاء تثبيت الرسالة';
+
+  @override
+  String get starredMark => 'مميّزة بنجمة';
+
+  @override
+  String get pinnedMark => 'مثبّتة';
+
+  @override
+  String get pinnedBannerOne => 'رسالة مثبّتة';
+
+  @override
+  String pinnedBannerOf(int index, int total) {
+    return 'رسالة مثبّتة $index من $total';
+  }
+
+  @override
+  String get starredMessagesTitle => 'الرسائل المميّزة بنجمة';
+
+  @override
+  String get starredMessagesEmpty =>
+      'لم تميّز أي رسالة بعد. اضغط مطولًا على رسالة واختر «تمييز بنجمة».';
+
+  @override
+  String get forwardAction => 'إعادة توجيه';
+
+  @override
+  String get forwardTitle => 'إعادة التوجيه إلى…';
+
+  @override
+  String get forwardEmpty => 'لا توجد محادثات لإعادة التوجيه إليها.';
+
+  @override
+  String forwardSendTo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'إرسال إلى $count',
+      zero: 'إرسال',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get forwardMax => 'يمكن اختيار ١٠ محادثات كحد أقصى.';
+
+  @override
+  String forwardDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'أُعيد توجيهها إلى $count محادثات',
+      one: 'أُعيد توجيهها إلى محادثة واحدة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get forwardedLabel => 'مُعاد توجيهها';
+
+  @override
+  String get selectAction => 'تحديد الرسائل';
+
+  @override
+  String selectedCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count رسائل محددة',
+      one: 'رسالة محددة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get cancelSelection => 'إلغاء التحديد';
 }

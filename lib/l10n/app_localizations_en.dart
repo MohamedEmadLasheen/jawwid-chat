@@ -1606,4 +1606,123 @@ class L10nEn extends L10n {
 
   @override
   String get callLinkOpenChat => 'Open chat';
+
+  @override
+  String get profilePhotoTitle => 'Profile photo';
+
+  @override
+  String get profilePhotoHint => 'Everyone you chat with sees this photo.';
+
+  @override
+  String get profilePhotoAdd => 'Add photo';
+
+  @override
+  String get profilePhotoChange => 'Change photo';
+
+  @override
+  String get profilePhotoRemove => 'Remove photo';
+
+  @override
+  String get profilePhotoSaving => 'Saving…';
+
+  @override
+  String get profilePhotoFailed => 'The photo could not be saved. Try again.';
+
+  @override
+  String get profilePhotoInvalid =>
+      'Use a JPEG, PNG or WebP photo, at least 64 × 64 pixels and under 2 MB.';
+
+  @override
+  String get childrenPhotosTitle => 'Children\'s photos';
+
+  @override
+  String get childrenPhotosHint =>
+      'Shown in your child\'s groups, to their teacher and supervisor.';
+
+  @override
+  String get starAction => 'Star';
+
+  @override
+  String get unstarAction => 'Unstar';
+
+  @override
+  String get pinAction => 'Pin message';
+
+  @override
+  String get unpinAction => 'Unpin message';
+
+  @override
+  String get starredMark => 'Starred';
+
+  @override
+  String get pinnedMark => 'Pinned';
+
+  @override
+  String get pinnedBannerOne => 'Pinned message';
+
+  @override
+  String pinnedBannerOf(int index, int total) {
+    return 'Pinned message $index of $total';
+  }
+
+  @override
+  String get starredMessagesTitle => 'Starred messages';
+
+  @override
+  String get starredMessagesEmpty =>
+      'No starred messages yet. Long-press a message and choose Star.';
+
+  @override
+  String get forwardAction => 'Forward';
+
+  @override
+  String get forwardTitle => 'Forward to…';
+
+  @override
+  String get forwardEmpty => 'No chats to forward to.';
+
+  @override
+  String forwardSendTo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Send to $count',
+      zero: 'Send',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get forwardMax => 'You can choose at most 10 chats.';
+
+  @override
+  String forwardDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Forwarded to $count chats',
+      one: 'Forwarded to 1 chat',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get forwardedLabel => 'Forwarded';
+
+  @override
+  String get selectAction => 'Select messages';
+
+  @override
+  String selectedCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count selected',
+      one: '1 selected',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get cancelSelection => 'Cancel selection';
 }

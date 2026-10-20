@@ -135,7 +135,7 @@ function ConversationRow({
         aria-current={selected ? 'true' : undefined}
         onClick={onSelect}
       >
-        <ConversationAvatar c={c} name={name} />
+        <ConversationAvatar c={c} name={name} selfId={selfId} />
         <span className="conv-row__body">
           <span className="conv-row__top">
             <span className="conv-row__name" dir="auto">{name}</span>
@@ -165,7 +165,7 @@ function ConversationRow({
         </span>
       </button>
       <Menu
-        label={copy.chatActions}
+        label={`${copy.chatActions}: ${name}`}
         className="cw-row__menu"
         items={[
           { key: 'pin', label: pinned ? copy.unpin : copy.pin, icon: 'pin', onSelect: () => prefs.pin(c.id, !pinned) },

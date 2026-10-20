@@ -11,7 +11,7 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import type { Actor } from '../platform/types';
 import { ActorKind, StaffRole } from '../communication/contracts/vocab';
 import type { ObjectStorage, UploadAuthorization } from '../communication/attachments/object-storage';
-import { assertSafeObjectKey } from '../communication/attachments/object-key';
+import { avatarKeyOf, avatarPrefixFor } from '../platform/avatar-keys';
 import {
   NEVER_A_TEAM_MEMBER,
   NO_PROFILE_ACCESS,
@@ -25,6 +25,7 @@ import {
   MAX_AVATAR_BYTES,
   isAvatarMime,
   judgeAvatar,
+  AVATAR_REJECTION_MESSAGE,
 } from './image-inspection';
 import {
   ABOUT_MAX,
@@ -1133,18 +1134,12 @@ export class StaffProfileService {
 // ---------------------------------------------------------------------------
 
 export function avatarPrefix(staffId: string): string {
-  return `avatars/staff/${staffId}`;
+  return avatarPrefixFor('staff', staffId);
 }
 
-/** Structural, not `startsWith`: `avatars/staff/<idA><suffix>` must not pass for idA. */
+/** Structural, not `startsWith`: see platform/avatar-keys. */
 export function avatarKeyBelongsTo(staffId: string, objectKey: string): boolean {
-  try {
-    assertSafeObjectKey(objectKey);
-  } catch {
-    return false;
-  }
-  const s = objectKey.split('/');
-  return s.length === 4 && s[0] === 'avatars' && s[1] === 'staff' && s[2] === staffId && UUID.test(s[3]);
+  return avatarKeyOf('staff', staffId, objectKey);
 }
 
 function toTarget(actor: Actor, staff: StaffRow): StaffProfileTarget {
@@ -1294,12 +1289,3 @@ function assignmentInvalid(message: string): CommError {
   return new CommError(CommErrorCode.STAFF_ASSIGNMENT_INVALID, message, 409);
 }
 
-const AVATAR_REJECTION_MESSAGE: Record<string, string> = {
-  empty: 'the uploaded photo is empty',
-  too_large_bytes: `a profile photo must be at most ${MAX_AVATAR_BYTES} bytes`,
-  unrecognized: 'the uploaded file is not a JPEG, PNG or WebP image',
-  type_mismatch: 'the uploaded bytes do not match the declared image type',
-  animated: 'animated images are not accepted as a profile photo',
-  too_small: 'a profile photo must be at least 64 x 64 pixels',
-  too_large_dimensions: 'a profile photo must be at most 4096 x 4096 pixels',
-};

@@ -1,3 +1,4 @@
+import { signAvatar } from '../profile/avatar-urls';
 import { Body, Controller, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
 import { ConversationService } from '../conversations/conversation.service';
 import { MessageService } from '../messages/message.service';
@@ -48,12 +49,14 @@ export class ConversationController {
     // authorized, each in one batch: unread counts (the caller's own
     // receipts), members with names, the viewer's own preferences, and the
     // newest message THIS viewer may see.
-    const [unread, members, states, last, labels] = await Promise.all([
+    const [unread, members, states, last, labels, children] = await Promise.all([
       this.messages.unreadCountsFor(ids, actorId),
       this.conversations.membersOfMany(ids, actor),
       this.conversations.viewerStates(ids, actor.actorId),
       this.messages.lastVisibleMessages(ids, actor),
       this.labels.labelsFor(ids, actor),
+      // A group's picture: its one child's photo (one query for the whole list).
+      this.conversations.soleChildOf(rows.filter((c) => c.type !== 'direct')),
     ]);
     const staffViewer = isConversationStaff(actor);
 
@@ -75,6 +78,12 @@ export class ConversationController {
           lastMessage: last.has(c.id) ? toLastMessageDto(last.get(c.id)!) : null,
           // Staff only: a parent's or a teacher's DTO has no labelIds at all.
           labelIds: staffViewer ? (labels.get(c.id) ?? []) : undefined,
+          learnerAvatarUrl: c.learner
+            ? signAvatar('learner', c.learner.id, c.id, actor.actorId, c.learner.avatarObjectKey)
+            : null,
+          avatarUrl: children.has(c.id)
+            ? signAvatar('learner', children.get(c.id)!.id, c.id, actor.actorId, children.get(c.id)!.avatarObjectKey)
+            : null,
         }),
       ),
     };
@@ -154,17 +163,23 @@ export class ConversationController {
     // endpoint deliberately does not load members, because that would be an
     // identity batch per row for a screen that renders none of them.
     const actor = await this.conversations.requireActor(actorId);
-    const [states, last, labels] = await Promise.all([
+    const [states, last, labels, children] = await Promise.all([
       this.conversations.viewerStates([conversation.id], actor.actorId),
       this.messages.lastVisibleMessages([conversation.id], actor),
       this.labels.labelsFor([conversation.id], actor),
+      conversation.type === 'direct' ? new Map() : this.conversations.soleChildOf([conversation]),
     ]);
+    const child = children.get(conversation.id) as { id: string; avatarObjectKey: string | null } | undefined;
     return toConversationDto(conversation, members, {
       unreadCount: await this.messages.unreadCount(id, actorId),
       viewerRequiresApproval: this.authz.viewerRequiresApproval(actor, conversation),
       viewerState: viewerState(states.get(conversation.id)),
       lastMessage: last.has(conversation.id) ? toLastMessageDto(last.get(conversation.id)!) : null,
       labelIds: isConversationStaff(actor) ? (labels.get(conversation.id) ?? []) : undefined,
+      learnerAvatarUrl: conversation.learner
+        ? signAvatar('learner', conversation.learner.id, conversation.id, actor.actorId, conversation.learner.avatarObjectKey)
+        : null,
+      avatarUrl: child ? signAvatar('learner', child.id, conversation.id, actor.actorId, child.avatarObjectKey) : null,
     });
   }
 

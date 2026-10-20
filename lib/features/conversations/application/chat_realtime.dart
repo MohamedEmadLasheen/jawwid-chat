@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/realtime/call_realtime_client.dart';
 import '../../../core/realtime/chat_signal.dart';
 import '../../calls/application/call_session.dart';
+import '../../messages/application/marks_providers.dart';
 import '../../messages/application/messages_controller.dart';
 import '../domain/conversation_list.dart';
 import 'conversations_controller.dart';
@@ -103,6 +104,12 @@ class ChatRealtimeCoordinator {
         if (thread != null) unawaited(thread.refreshLatest());
         _scheduleListRefresh();
       case ChatSignalKind.conversationUpdated:
+        // A pin or unpin arrives this way: the open thread re-reads its page
+        // (the pinned flags) and its pinned bar.
+        final thread = _openThread(id);
+        if (thread != null) unawaited(thread.refreshLatest());
+        if (id != null) _ref.invalidate(pinnedMessagesProvider(id));
+        _scheduleListRefresh();
       case ChatSignalKind.membershipChanged:
         _scheduleListRefresh();
       case ChatSignalKind.accessRevoked:

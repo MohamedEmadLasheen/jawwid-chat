@@ -618,7 +618,7 @@ describe('Chat workspace: message, chat and group actions', () => {
     expect(await screen.findByText('Old group')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /All/ }))
-    fireEvent.click(screen.getAllByRole('button', { name: 'Chat options' })[0]!)
+    fireEvent.click(screen.getByRole('button', { name: 'Chat options: Group c1' }))
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Pin chat' }))
     await waitFor(() =>
       expect(calls.find((c) => c.path === '/conversations/c1/preferences')).toMatchObject({ method: 'POST', body: { pinned: true } }),
@@ -740,5 +740,205 @@ describe('Who wrote it (WhatsApp layout)', () => {
     const row = screen.getByText('body m1').closest('li')!
     expect(row.querySelector('.cw-msg__avatar')).toBeNull()
     expect(within(row).queryByText('Parent One')).not.toBeInTheDocument()
+  })
+})
+
+describe('Profile photos', () => {
+  beforeEach(() => fakeSocket.reset())
+  afterEach(() => vi.unstubAllGlobals())
+
+  it("shows a sender's photo beside their message, and falls back to initials if it cannot load", async () => {
+    stubApi({
+      conversations: [conv('c1', { type: 'family_group' })],
+      messages: { c1: [msg('m1', 1, { authorAvatarUrl: 'http://api.test/api/v1/media/avatars/contact.p.c1?s=x' })] },
+    })
+    renderChat('/chat/c1')
+    await screen.findByText('body m1')
+    const row = screen.getByText('body m1').closest('li')!
+    const img = row.querySelector('.cw-msg__avatar img') as HTMLImageElement
+    expect(img).not.toBeNull()
+    expect(img.getAttribute('src')).toBe('http://api.test/api/v1/media/avatars/contact.p.c1?s=x')
+    fireEvent.error(img)
+    await waitFor(() => expect(row.querySelector('.cw-msg__avatar img')).toBeNull())
+    expect(within(row.querySelector('.cw-msg__avatar') as HTMLElement).getByText('PO')).toBeInTheDocument()
+  })
+
+  it("a 1:1 row shows the other person's photo; a child's group shows the child's", async () => {
+    stubApi({
+      conversations: [
+        conv('d1', {
+          type: 'direct',
+          title: null,
+          learnerId: null,
+          members: [
+            { actorId: ADMIN.id, actorKind: 'staff', memberRole: 'admin', isSilent: false, displayName: 'Admin A', avatarUrl: 'http://x/me' },
+            { actorId: 'p1', actorKind: 'contact', memberRole: 'parent', isSilent: false, displayName: 'Parent P', avatarUrl: 'http://x/parent' },
+          ],
+        }),
+        conv('g1', { title: 'Kid group', learner: { id: 'l-1', name: 'Kid', avatarUrl: 'http://x/kid' } }),
+      ],
+      messages: {},
+    })
+    renderChat()
+    await screen.findByText('Kid group')
+    const rowOf = (text: string) => screen.getByText(text).closest('li')!
+    expect(rowOf('Parent P').querySelector('img')?.getAttribute('src')).toBe('http://x/parent')
+    expect(rowOf('Kid group').querySelector('img')?.getAttribute('src')).toBe('http://x/kid')
+  })
+})
+
+describe('Star and pin (group B)', () => {
+  type Call = { method: string; path: string }
+  function stubMarks(state: { messages: ChatMessage[]; pins: ChatMessage[]; starred: ChatMessage[] }) {
+    const calls: Call[] = []
+    const json = (data: unknown, status = 200) =>
+      new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const path = new URL(String(input), 'http://localhost').pathname.replace(/^\/api\/v1/, '')
+        const method = init?.method ?? 'GET'
+        calls.push({ method, path })
+        if (path === '/me') return json(ADMIN)
+        if (path === '/approvals/pending') return json({ approvals: [] })
+        if (path === '/me/starred') {
+          return json({ items: state.starred.map((m) => ({ starredAt: m.createdAt, conversationId: 'c1', message: { ...m, starred: true } })), nextBefore: null })
+        }
+        if (path === '/conversations') return json({ conversations: [conv('c1', { title: 'Kid group' })] })
+        if (path === '/conversations/c1') return json(conv('c1', { title: 'Kid group' }))
+        if (path === '/conversations/c1/messages/pins') {
+          return json({ pins: state.pins.map((m) => ({ pinnedAt: m.createdAt, pinnedBy: 'x', message: { ...m, pinned: true } })) })
+        }
+        if (path === '/conversations/c1/messages') return json({ messages: [...state.messages].reverse(), nextBefore: null })
+        if (/\/messages\/[^/]+\/(star|pin)$/.test(path) || path.endsWith('/messages/read')) return json({ ok: true })
+        return json({ error: { code: 'NOT_FOUND', message: 'nope' } }, 404)
+      }),
+    )
+    return calls
+  }
+
+  beforeEach(() => fakeSocket.reset())
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('stars and pins from the message menu, and shows both marks', async () => {
+    const calls = stubMarks({ messages: [msg('m1', 1), msg('m2', 2, { starred: true, pinned: true })], pins: [], starred: [] })
+    renderChat('/chat/c1')
+    await screen.findByText('body m1')
+
+    const row2 = screen.getByText('body m2').closest('li')!
+    expect(within(row2).getByLabelText('Starred')).toBeInTheDocument()
+    expect(within(row2).getByLabelText('Pinned')).toBeInTheDocument()
+
+    const row1 = screen.getByText('body m1').closest('li')!
+    fireEvent.click(within(row1).getByRole('button', { name: 'Message options' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Star' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/conversations/c1/messages/m1/star')).toBe(true))
+
+    fireEvent.click(within(row1).getByRole('button', { name: 'Message options' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Pin message' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/conversations/c1/messages/m1/pin')).toBe(true))
+
+    // Already starred and pinned: the menu offers the undo.
+    fireEvent.click(within(row2).getByRole('button', { name: 'Message options' }))
+    expect(await screen.findByRole('menuitem', { name: 'Unstar' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Unpin message' })).toBeInTheDocument()
+  })
+
+  it('shows the newest pin in a bar; with several, the bar counts and moves on', async () => {
+    const one = msg('m1', 1, { body: 'the schedule' })
+    const two = msg('m2', 2, { body: 'the meeting link' })
+    stubMarks({ messages: [one, two], pins: [one, two], starred: [] })
+    renderChat('/chat/c1')
+    const bar = await screen.findByRole('button', { name: /Pinned message 2 of 2/ })
+    expect(within(bar).getByText('the meeting link')).toBeInTheDocument()
+    fireEvent.click(bar)
+    expect(await screen.findByRole('button', { name: /Pinned message 1 of 2/ })).toBeInTheDocument()
+  })
+
+  it('lists starred messages and opens the conversation a star is in', async () => {
+    stubMarks({ messages: [msg('m1', 1)], pins: [], starred: [msg('s1', 9, { body: 'keep this one' })] })
+    renderChat()
+    await screen.findByText('Kid group')
+    fireEvent.click(screen.getByRole('button', { name: 'Starred messages' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Starred messages' })
+    fireEvent.click(await within(dialog).findByText('keep this one'))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(await screen.findByText('body m1')).toBeInTheDocument()
+  })
+})
+
+describe('Forward and select (group B)', () => {
+  function stubForward(messages: ChatMessage[]) {
+    const calls: Array<{ method: string; path: string; body: unknown }> = []
+    const json = (data: unknown, status = 200) =>
+      new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const path = new URL(String(input), 'http://localhost').pathname.replace(/^\/api\/v1/, '')
+        const method = init?.method ?? 'GET'
+        const body = init?.body ? JSON.parse(String(init.body)) : undefined
+        calls.push({ method, path, body })
+        if (path === '/me') return json(ADMIN)
+        if (path === '/approvals/pending') return json({ approvals: [] })
+        if (path === '/conversations') {
+          return json({ conversations: [conv('c1', { title: 'Kid group' }), conv('c2', { title: 'Second group' }), conv('c3', { title: 'Third group' })] })
+        }
+        if (path === '/conversations/c1') return json(conv('c1', { title: 'Kid group' }))
+        if (path === '/conversations/c1/messages/pins') return json({ pins: [] })
+        if (path === '/conversations/c1/messages') return json({ messages: [...messages].reverse(), nextBefore: null })
+        if (path === '/conversations/c1/messages/forward') return json({ sent: [] })
+        if (path.endsWith('/messages/read')) return json({ ok: true })
+        return json({ error: { code: 'NOT_FOUND', message: 'nope' } }, 404)
+      }),
+    )
+    return calls
+  }
+
+  beforeEach(() => fakeSocket.reset())
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('labels a forwarded copy, and forwards one message from its menu to the chosen chats', async () => {
+    const calls = stubForward([msg('m1', 1), msg('m2', 2, { forwarded: true })])
+    renderChat('/chat/c1')
+    await screen.findByText('body m1')
+    expect(within(screen.getByText('body m2').closest('li')!).getByText('Forwarded')).toBeInTheDocument()
+
+    const row = screen.getByText('body m1').closest('li')!
+    fireEvent.click(within(row).getByRole('button', { name: 'Message options' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Forward' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Forward to…' })
+    fireEvent.click(await within(dialog).findByText('Second group'))
+    fireEvent.click(within(dialog).getByText('Third group'))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Send to 2' }))
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === '/conversations/c1/messages/forward')?.body).toEqual({ messageIds: ['m1'], toConversationIds: ['c2', 'c3'] }),
+    )
+    expect(await screen.findByText('Forwarded to 2 chats')).toBeInTheDocument()
+  })
+
+  it('select mode: choose several, then forward them together', async () => {
+    const calls = stubForward([msg('m1', 1), msg('m2', 2), msg('m3', 3)])
+    renderChat('/chat/c1')
+    await screen.findByText('body m1')
+    fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Select messages' }))
+
+    // Composer gives way to the selection bar; tapping a message selects it.
+    expect(screen.queryByLabelText('Message')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText('body m1'))
+    fireEvent.click(screen.getByText('body m3'))
+    expect(screen.getByText('2 selected')).toBeInTheDocument()
+
+    const bar = screen.getByRole('toolbar', { name: '2 selected' })
+    fireEvent.click(within(bar).getByRole('button', { name: /Forward/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'Forward to…' })
+    fireEvent.click(await within(dialog).findByText('Second group'))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Send to 1' }))
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === '/conversations/c1/messages/forward')?.body).toEqual({ messageIds: ['m1', 'm3'], toConversationIds: ['c2'] }),
+    )
+    // Done: back to the composer.
+    expect(await screen.findByLabelText('Message')).toBeInTheDocument()
   })
 })
