@@ -121,7 +121,14 @@
       }
     }
   },
-  "typingMany": "أكثر من شخص يكتب الآن…",
+  "typingMany": "{count, plural, zero{لا أحد يكتب الآن…} one{شخص واحد يكتب الآن…} two{شخصان يكتبان الآن…} few{{count} أشخاص يكتبون الآن…} many{{count} شخصًا يكتبون الآن…} other{{count} شخص يكتبون الآن…}}",
+  "@typingMany": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "loadingOlder": "جارٍ تحميل الرسائل السابقة…",
   "loadOlderFailed": "تعذّر تحميل الرسائل السابقة.",
   "messagesEmptyTitle": "لا توجد رسائل بعد",

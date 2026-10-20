@@ -260,7 +260,19 @@ class L10nAr extends L10n {
   }
 
   @override
-  String get typingMany => 'أكثر من شخص يكتب الآن…';
+  String typingMany(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count شخص يكتبون الآن…',
+      many: '$count شخصًا يكتبون الآن…',
+      few: '$count أشخاص يكتبون الآن…',
+      two: 'شخصان يكتبان الآن…',
+      one: 'شخص واحد يكتب الآن…',
+      zero: 'لا أحد يكتب الآن…',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get loadingOlder => 'جارٍ تحميل الرسائل السابقة…';
