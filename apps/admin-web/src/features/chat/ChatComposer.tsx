@@ -1,7 +1,7 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Icon } from '@/shared/components/Icon'
-import { Menu } from '@/shared/components/Menu'
+import { Menu, type MenuItem } from '@/shared/components/Menu'
 import { chatCopyFor } from './copy'
 import { VoiceRecorder } from './VoiceRecorder'
 import { matchQuickReplies, QuickRepliesDialog, useQuickReplies } from './QuickRepliesDialog'
@@ -43,6 +43,7 @@ export function ChatComposer({
   editing = null,
   onSaveEdit,
   onCancelEdit,
+  extraItems = [],
 }: {
   onSend: (input: ComposerSend) => void
   /** Editing one of the viewer's messages: the box holds its text, Enter saves. */
@@ -56,6 +57,8 @@ export function ChatComposer({
   autoStartVoice?: boolean
   onVoiceAutoStarted?: () => void
   onVoiceSent?: () => void
+  /** More "+" actions this conversation offers (a trial group's "Trial" card). */
+  extraItems?: MenuItem[]
 }) {
   const { locale } = useI18n()
   const copy = chatCopyFor(locale)
@@ -273,6 +276,7 @@ export function ChatComposer({
                 onSelect: () => doc.current?.click(),
               },
               { key: 'quick', label: copy.quickReplies, icon: 'bolt', onSelect: () => setQuickOpen(true) },
+              ...extraItems,
             ]}
           />
         )}

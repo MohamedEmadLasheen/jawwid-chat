@@ -1,7 +1,14 @@
 # Core ⇄ Chat: confirming a trial's subscription
 
-**Status:** the Chat side is built (2026-10-19). **Core must build its side** (see
-"What Core needs to build"). Record: PD-11 T4 in
+> **RETIRED 2026-10-20 (trial journey).** The owner decided that Jawwid Chat is
+> the only source of truth for a trial's outcome. Chat no longer sends
+> `trial.converted`, and a `subscription.created` delivery is recorded but
+> changes nothing. Core has nothing to build for trials. See "Trial journey as
+> built" in `docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md`. The text below is
+> kept as history.
+
+**Status (historical):** the Chat side was built (2026-10-19). Core was to
+build its side. Record: PD-11 T4 in
 `docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md`. Wire rules (signing, envelope,
 retries): `docs/architecture/core-integration-contract.md` §1–§2, §6.
 
