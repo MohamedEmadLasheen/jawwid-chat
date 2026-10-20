@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/app.dart';
@@ -11,6 +13,17 @@ import 'core/push/push_registration.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // IBM Plex Sans Arabic ships under the SIL OFL 1.1, which asks that the licence
+  // travel with the fonts wherever they are redistributed -- an app binary included.
+  // The callback is lazy: Flutter only drains it if someone opens the licence page,
+  // so this costs nothing at startup.
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks(
+      const ['IBM Plex Sans Arabic'],
+      await rootBundle.loadString('assets/fonts/OFL.txt'),
+    );
+  });
 
   final overrides = await bootstrap();
 

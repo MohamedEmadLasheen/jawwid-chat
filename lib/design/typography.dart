@@ -10,9 +10,9 @@ abstract final class JawwidTypography {
   /// §3.1. IBM Plex Sans Arabic is one family with genuinely matched Arabic and Latin
   /// designs, so a mixed string sits on one baseline.
   ///
-  /// The font files are **not yet bundled** — see `pubspec.yaml`. Until they are, the
-  /// fallbacks below carry the app, and they are mandatory regardless: Arabic must render
-  /// correctly before any custom font loads.
+  /// The four weights §3.2 uses are bundled from the SIL OFL release — see `pubspec.yaml`.
+  /// The fallbacks below stay mandatory regardless: they carry Arabic on any glyph this
+  /// family does not cover, and they are what renders if an asset ever fails to load.
   static const fontFamily = 'IBM Plex Sans Arabic';
 
   static const fontFamilyFallback = <String>[
@@ -38,6 +38,12 @@ abstract final class JawwidTypography {
       fontWeight: weight,
       // Flutter's `height` is a multiple of font size, so convert from the spec's px value.
       height: (isArabic ? lhArabic : lhLatin) / size,
+      // Naming the family here is what actually puts the brand face on the screen.
+      // `fontFamily` was declared above from the day the design system landed, but no
+      // style ever set it, so the whole app rendered in the platform fallback and a
+      // green build proved nothing. Setting it on every token means a style cannot be
+      // built that quietly opts out.
+      fontFamily: fontFamily,
       fontFamilyFallback: fontFamilyFallback,
       leadingDistribution: TextLeadingDistribution.even,
     );
