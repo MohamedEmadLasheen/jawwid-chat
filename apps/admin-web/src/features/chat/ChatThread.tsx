@@ -25,6 +25,8 @@ import { VoiceNotePlayer } from './VoiceRecorder'
 import { ConversationCallControls } from '@/features/calls/ConversationCallControls'
 import { useCallCapability } from '@/features/calls/useCallCapability'
 import { ScheduleCallDialog } from '@/features/calls-page/ScheduleCallDialog'
+import { TrialCardDialog, TrialGroupBar } from '@/features/trials/TrialCardDialog'
+import { TR } from '@/features/trials/copy'
 import { useCallsCopy } from '@/features/calls-page/hooks'
 import {
   SCHEDULED_CALL_CARD_KINDS,
@@ -170,6 +172,8 @@ export function ChatThread({
   const [labeling, setLabeling] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [scheduling, setScheduling] = useState(false)
+  // A trial group's "+ -> Trial" card (trial journey).
+  const [trialCard, setTrialCard] = useState(false)
   const [theming, setTheming] = useState(false)
   const callsCopy = useCallsCopy()
   // Schedule call rides the SAME advisory answer (and cache) as the call
@@ -382,6 +386,8 @@ export function ChatThread({
   const archived = !!conv?.viewerState?.archived
   const favorite = !!conv?.viewerState?.favorite
   const memberCount = conv?.members?.length ?? 0
+  const trialGroup = conv?.type === 'trial_group'
+  const trialCopy = (p: { en: string; ar: string }) => (locale === 'ar' ? p.ar : p.en)
   // A group always names its senders; so does a 1:1 the viewer is only
   // overseeing (two other people talking), but not one the viewer is in.
   const showsSenders = group || !(conv?.members ?? []).some((x) => x.actorId === staff?.id)
@@ -668,7 +674,15 @@ export function ChatThread({
           </div>
         </div>
       ) : (
+        <>
+        {trialGroup && (
+          <TrialGroupBar
+            conversationId={conversationId}
+            onChanged={() => void queryClient.invalidateQueries({ queryKey: chatKeys.conversation(conversationId) })}
+          />
+        )}
         <ChatComposer
+          extraItems={trialGroup ? [{ key: 'trial', label: trialCopy(TR.cardLabel), icon: 'calendar', onSelect: () => setTrialCard(true) }] : []}
           onSend={submit}
           reply={reply}
           onCancelReply={() => setReply(null)}
@@ -680,7 +694,10 @@ export function ChatThread({
           onVoiceAutoStarted={() => setSearchParams({}, { replace: true })}
           onVoiceSent={() => void queryClient.invalidateQueries({ queryKey: chatKeys.messages(conversationId) })}
         />
+        </>
       )}
+
+      {trialCard && <TrialCardDialog conversationId={conversationId} onRecorded={refreshThread} onClose={() => setTrialCard(false)} />}
 
       {theming && conv && <ThemeDialog conversation={conv} onClose={() => setTheming(false)} />}
 

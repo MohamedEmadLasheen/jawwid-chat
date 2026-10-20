@@ -96,6 +96,9 @@ const MAX_RANGE_DAYS = 93;
  * clear refusal and decided, authoritatively, by the triggers of 20261018120000
  * against the database clock.
  */
+/** A teacher's zone when none is recorded: "today" for pauses and their notices. */
+export const DEFAULT_ZONE = 'Africa/Cairo';
+
 @Injectable()
 export class LessonService {
   constructor(
@@ -265,13 +268,19 @@ export class LessonService {
       })),
       makeupsOverdue: owed.map((l) => this.toDto(l, 'manager', now, escalation)),
       // PD-11 T3: paused learners coming back within the notice window -- the
-      // team's half of the return notice (the family's half is a card).
+      // team's half of the return notice (the family's half is a card). "Today"
+      // is the pause's own, exactly as LifecycleService.sweep reads it (the
+      // learner's teacher's zone), never the database's UTC current_date: the two
+      // disagreed for the hours after local midnight.
       returningSoon: (
         await this.prisma.$queryRaw<Array<{ id: string; learner_id: string; name: string; return_on: Date }>>`
           SELECT s.id::text AS id, s.learner_id::text AS learner_id, l.name, s.return_on
             FROM chat.learner_suspension s JOIN chat.learner l ON l.id = s.learner_id
            WHERE s.organization_id = ${actor.organizationId}::uuid AND s.status = 'active' AND s.kind = 'temporary'
-             AND s.return_on - ${Number(await this.config.get('lesson.return_notice_days'))}::int <= current_date
+             AND s.return_on - ${Number(await this.config.get('lesson.return_notice_days'))}::int
+                 <= (now() AT TIME ZONE coalesce(
+                      (SELECT a.timezone FROM chat.teacher_availability a WHERE a.teacher_id = l.teacher_id LIMIT 1),
+                      ${DEFAULT_ZONE}))::date
            ORDER BY s.return_on`
       ).map((r) => ({
         suspensionId: r.id,

@@ -102,6 +102,8 @@ function TeacherList({ month, onOpen }: { month: string; onOpen: (id: string) =>
                   <th scope="col" className="num">{tx(T.colUnreported)}</th>
                   <th scope="col" className="num">{tx(T.colAttendance)}</th>
                   <th scope="col" className="num">{tx(T.colOnTime)}</th>
+                  <th scope="col" className="num">{tx(T.colTrials)}</th>
+                  <th scope="col" className="num">{tx(T.colTrialsSubscribed)}</th>
                 </tr>
               </thead>
               <tbody>
@@ -119,6 +121,8 @@ function TeacherList({ month, onOpen }: { month: string; onOpen: (id: string) =>
                     <td className={`num${r.unreported.lessons > 0 ? ' ts-attention' : ''}`}>{fmt.number(r.unreported.lessons)}</td>
                     <td className="num">{fmt.percent(r.attendanceRate)}</td>
                     <td className="num">{fmt.percent(r.reportsOnTimeRate)}</td>
+                    <td className="num">{fmt.number(r.trials?.total ?? 0)}</td>
+                    <td className="num">{fmt.number(r.trials?.subscribed ?? 0)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -234,10 +238,15 @@ function DetailBody({ detail: d }: { detail: TeacherDetail }) {
           <Metric label={tx(T.makeups)} value={tx(T.makeupsHeld, { held: fmt.number(d.makeups.held), n: fmt.number(d.makeups.lessons) })} />
         </Fact>
         <Fact title={tx(T.trials)}>
-          {d.trials.available ? (
-            <Metric label={tx(T.trials)} value={fmt.number(d.trials.lessons)} />
-          ) : (
-            <p className="ts-muted">{tx(T.trialsPending)}</p>
+          <Metric label={tx(T.trialsTotal)} value={fmt.number(d.trials.total)} />
+          <Metric label={tx(T.trialsConducted)} value={fmt.number(d.trials.conducted)} />
+          <Metric label={tx(T.trialsSubscribed)} value={fmt.number(d.trials.subscribed)} />
+          <Metric label={tx(T.trialsNotSubscribed)} value={fmt.number(d.trials.notSubscribed)} />
+          <Metric label={tx(T.trialsNoShow)} value={fmt.number(d.trials.noShow)} />
+          <Metric label={tx(T.trialsAwaiting)} value={fmt.number(d.trials.awaiting)} />
+          <Metric label={tx(T.trialsConversion)} value={fmt.percent(d.trials.conversionRate)} hint={tx(T.trialsConversionHint)} />
+          {(d.trials.upcoming > 0 || d.trials.cancelled > 0) && (
+            <p className="ts-muted ts-card__note">{tx(T.trialsOutside, { u: fmt.number(d.trials.upcoming), c: fmt.number(d.trials.cancelled) })}</p>
           )}
         </Fact>
       </section>

@@ -40,6 +40,13 @@ const FORBIDDEN = /\b(phone|phone_number|phoneNumber|msisdn|mobile_number|mobile
 const ALLOWED: ReadonlyArray<string> = [
   'phone text constraint teacher_file_phone_is_admin_only check',
   'adminOnlyPhone String?   @map("phone")',
+  // Trial journey (owner decision 2026-10-20): Sales' subscription form keeps
+  // the parent's phone for the New Students page. Same structure as the Teacher
+  // File: no request-role grant on chat.trial_subscription, and
+  // new-students-confinement.spec.ts fails the build if any source outside
+  // src/new-students names the table, its model or this field.
+  'phone            text not null constraint trial_subscription_phone_is_confined check',
+  'confinedParentPhone String    @map("phone")',
 ];
 
 /** Strip comments so prose about phone privacy is not mistaken for a column. */
