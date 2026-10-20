@@ -42,6 +42,7 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.CANNOT_APPROVE` | Only the active handler or a manager may decide. |
 | `COMM.NOT_MESSAGE_AUTHOR` | Only the author (or a manager) may delete for everyone. |
 | `COMM.DELETE_WINDOW_EXPIRED` | Past `communication.delete_for_everyone_window_minutes`. |
+| `COMM.EDIT_WINDOW_EXPIRED` | Past `communication.edit_window_minutes`. |
 
 ## Validation and state
 
@@ -57,6 +58,7 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.ATTACHMENT_TYPE_NOT_ALLOWED` | 400 | MIME type not allowed for that kind. |
 | `COMM.APPROVAL_ALREADY_DECIDED` | 409 | Someone else decided first. Refresh the queue. |
 | `COMM.APPROVAL_REASON_REQUIRED` | 400 | A rejection must state a reason. |
+| `COMM.MESSAGE_NOT_EDITABLE` | 409 | Only a published, never-moderated, undeleted text message can be edited, and not where the author's sends are held for approval. |
 | `COMM.REVOCATION_UNCONFIRMED` | 503 | RT-009. A membership removal, Student Group sync, logout or session/account revocation **is committed**, but not every API server confirmed it can no longer deliver realtime events to the revoked person on an earlier decision — so it is not reported as done. Retry the same request; it is idempotent and succeeds once every server confirms. |
 
 ## Calling

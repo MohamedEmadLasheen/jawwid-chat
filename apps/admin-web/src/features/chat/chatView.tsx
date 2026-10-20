@@ -34,11 +34,35 @@ const TYPE_GLYPH: Record<string, IconName | undefined> = {
   trial_group: 'calendar',
 }
 
-export function ConversationAvatar({ c, name, size }: { c: ChatConversation; name: string; size?: 'sm' | 'md' | 'lg' }) {
+/**
+ * The picture a conversation is shown with, WhatsApp-style: a 1:1 shows the
+ * other person's photo, a group about one child shows the child's (the server
+ * sends it as the group's `avatarUrl`, for family groups too). A group with
+ * neither keeps its initials. `selfId` is the viewer.
+ */
+export function conversationPhoto(c: ChatConversation, selfId: string | undefined): string | null {
+  if (c.type === 'direct') {
+    const others = (c.members ?? []).filter((m) => m.actorId !== selfId)
+    return others.length === 1 ? others[0]!.avatarUrl ?? null : null
+  }
+  return c.avatarUrl ?? c.learner?.avatarUrl ?? null
+}
+
+export function ConversationAvatar({
+  c,
+  name,
+  size,
+  selfId,
+}: {
+  c: ChatConversation
+  name: string
+  size?: 'sm' | 'md' | 'lg'
+  selfId?: string
+}) {
   const glyph = TYPE_GLYPH[c.type]
   return (
     <span className="typed-avatar">
-      <Avatar name={name} seed={c.id} size={size} />
+      <Avatar name={name} seed={c.id} size={size} src={conversationPhoto(c, selfId)} />
       {glyph && (
         <span className="typed-avatar__glyph" aria-hidden="true">
           <Icon name={glyph} size={11} />

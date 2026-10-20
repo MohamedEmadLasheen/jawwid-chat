@@ -1,3 +1,8 @@
+import { StaffToolsController } from './api/staff-tools.controller';
+import { StaffToolsService } from './staff-tools/staff-tools.service';
+import { StarredController } from './api/starred.controller';
+import { ProfilePhotoController } from './api/profile-photo.controller';
+import { AvatarService } from './profile/avatar.service';
 import { Module } from '@nestjs/common';
 import { PlatformModule } from '../platform/platform.module';
 import { AuthModule } from '../platform/auth/auth.module';
@@ -62,6 +67,9 @@ import { StoryController } from './api/story.controller';
     NotificationController,
     StorageController,
     MediaController,
+    ProfilePhotoController,
+    StarredController,
+    StaffToolsController,
     StoryController,
   ],
   providers: [
@@ -75,6 +83,8 @@ import { StoryController } from './api/story.controller';
     LiveKitWebhookVerifier,
     AttachmentService,
     StoryService,
+    AvatarService,
+    StaffToolsService,
     StoryAudienceResolver,
     StorySweeper,
     OutboxService,

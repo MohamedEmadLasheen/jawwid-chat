@@ -203,9 +203,9 @@ abstract final class WireMappers {
   /// child a conversation belongs to, and a client that guesses will
   /// eventually guess wrong in front of a parent with two children.
   ///
-  /// `avatarUrl` stays null because `chat.learner` has no avatar column. An
-  /// absent field is rendered as absent rather than filled in with an initial
-  /// dressed up as data.
+  /// `avatarUrl` is the child's photo, set by a parent: a signed link for this
+  /// viewer, or absent -- rendered as absent, never as an initial dressed up as
+  /// data.
   static LearnerRef? learner(Object? raw) {
     if (raw is! Map) return null;
 
@@ -216,6 +216,7 @@ abstract final class WireMappers {
     return LearnerRef(
       id: id,
       displayName: name is String ? name : '',
+      avatarUrl: _nonEmpty(raw['avatarUrl']),
     );
   }
 
@@ -266,10 +267,18 @@ abstract final class WireMappers {
                     : lastMessage['type'] as String?;
 
     final kind = conversationKind(json['type'] as String?, members: json['members']);
+    final learnerRef = WireMappers.learner(json['learner']);
 
     return Conversation(
       id: json['id']! as String,
       kind: kind,
+      // WhatsApp-style: a 1:1 shows the other person's photo, a group about a
+      // child shows the child's. Signed links, straight from the server.
+      avatarUrl: kind.isDirect
+          ? _counterpartAvatar(json['members'], viewerActorId)
+          // The group's picture: its one child's photo -- family groups too,
+          // which link their child without naming a learner on the row.
+          : _nonEmpty(json['avatarUrl']) ?? learnerRef?.avatarUrl,
       title: conversationTitle(json, viewerActorId: viewerActorId),
       // Both from the DTO. They used to be parameters this mapper's caller had
       // to supply, because the payload carried neither — which meant the child
@@ -277,7 +286,7 @@ abstract final class WireMappers {
       // against the real API. Taking them as arguments is also what would let
       // a caller pass something it inferred locally, so the parameters are
       // gone rather than merely unused.
-      learner: WireMappers.learner(json['learner']),
+      learner: learnerRef,
       updatedAt: lastActivity,
       lastMessageAt: parseTime(lastMessage?['createdAt']) ?? lastActivity,
       lastMessagePreview:
@@ -304,6 +313,16 @@ abstract final class WireMappers {
       isTeacherSupervision: json['type'] == Wire.conversationTeacherSupervision,
       isTrialGroup: json['type'] == Wire.conversationTrialGroup,
     );
+  }
+
+  /// The one other member's photo in a 1:1; null when there is not exactly one.
+  static String? _counterpartAvatar(Object? members, String viewerActorId) {
+    if (members is! List) return null;
+    final others = [
+      for (final m in members)
+        if (m is Map && m['actorId'] != viewerActorId) m,
+    ];
+    return others.length == 1 ? _nonEmpty(others.single['avatarUrl']) : null;
   }
 
   /// One message, from `MessageDto`.
@@ -362,6 +381,7 @@ abstract final class WireMappers {
       sequence: parseSeq(json['seq']),
       authorId: authorId,
       authorName: _nonEmpty(json['authorDisplayName']) ?? '',
+      authorAvatarUrl: _nonEmpty(json['authorAvatarUrl']),
       authorRole: authorRole(json['authorKind'] as String?),
       kind: messageKind(json['type'] as String?),
       body: (json['body'] as String?) ?? '',
@@ -375,6 +395,9 @@ abstract final class WireMappers {
       replyTo: null,
       replyToMessageId: json['replyToMessageId'] as String?,
       card: messageCard(json['card']),
+      isStarred: json['starred'] == true,
+      isPinned: json['pinned'] == true,
+      isForwarded: json['forwarded'] == true,
       reactions: [
         for (final entry in byEmoji.entries)
           Reaction(
@@ -506,6 +529,7 @@ abstract final class WireMappers {
       // Absent or non-boolean reads as false: an advisory that defaulted to
       // "you may" would offer actions the server then refuses.
       canOpenDirect: json['canOpenDirect'] == true,
+      avatarUrl: _nonEmpty(json['avatarUrl']),
     );
   }
 

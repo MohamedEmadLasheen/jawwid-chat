@@ -226,9 +226,11 @@ function toStaffActor(staff: {
   isActive: boolean;
   leftAt: Date | null;
   organizationId: string;
+  avatarObjectKey?: string | null;
 }): Actor {
   return {
     actorId: staff.id,
+    avatarObjectKey: staff.avatarObjectKey ?? null,
     kind: ActorKind.STAFF,
     displayName: staff.name,
     locale: 'ar',
@@ -246,9 +248,11 @@ function toContactActor(contact: {
   canMessage: boolean;
   organizationId: string;
   family: { language: string };
+  avatarObjectKey?: string | null;
 }): Actor {
   return {
     actorId: contact.id,
+    avatarObjectKey: contact.avatarObjectKey ?? null,
     kind: ActorKind.CONTACT,
     displayName: contact.name,
     locale: contact.family.language as Locale,
@@ -265,9 +269,11 @@ function toTeacherActor(teacher: {
   isActive: boolean;
   leftAt: Date | null;
   organizationId: string;
+  avatarObjectKey?: string | null;
 }): Actor {
   return {
     actorId: teacher.id,
+    avatarObjectKey: teacher.avatarObjectKey ?? null,
     kind: ActorKind.TEACHER,
     displayName: teacher.name,
     locale: 'ar',

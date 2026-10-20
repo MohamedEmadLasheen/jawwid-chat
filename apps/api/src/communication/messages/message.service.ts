@@ -1,5 +1,6 @@
+import { signActorAvatar } from '../profile/avatar-urls';
 import { Inject, Injectable } from '@nestjs/common';
-import { Message, Prisma } from '@prisma/client';
+import { Conversation, Message, Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { AuthorizationService } from '../../platform/authorization.service';
 import { AppConfigService } from '../../platform/app-config.service';
@@ -19,6 +20,7 @@ import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
 import {
   MessageDto,
+  MessageWithRelations,
   messageAuthorRef,
   toMessageDto,
   needsReply,
@@ -62,6 +64,21 @@ export interface SendMessageInput {
   attachments?: AttachmentInput[];
   /** Only assist / escalation are honoured; owner vs coverage is derived. */
   requestedMode?: string;
+  /**
+   * SERVER-ONLY: set by forward() after it authorized the source. The send
+   * route never passes it, so a client cannot claim a message is a forward.
+   */
+  forwardedFromMessageId?: string;
+}
+
+export interface ForwardInput {
+  actorId: string;
+  /** The conversation the messages are forwarded FROM (the route's). */
+  conversationId: string;
+  messageIds: unknown;
+  toConversationIds: unknown;
+  /** Optional idempotency, one per (target, message): `${target}:${messageId}` -> clientMessageId. */
+  clientMessageIds?: unknown;
 }
 
 export interface ListMessagesInput {
@@ -254,6 +271,8 @@ export class MessageService {
             seq,
             replyToMessageId: input.replyToMessageId ?? null,
             clientMessageId: input.clientMessageId ?? null,
+            forwarded: !!input.forwardedFromMessageId,
+            forwardedFromMessageId: input.forwardedFromMessageId ?? null,
             attachmentsJson: [],
             attachments: input.attachments?.length
               ? {
@@ -383,6 +402,7 @@ export class MessageService {
         created,
         await this.attachments.signUrlsForMessages([created.id], actor.actorId),
         await this.authorsFor([created]),
+        (author) => signActorAvatar(author, conv.id, actor.actorId),
       );
     } catch (e) {
       // Concurrent duplicate submission of the same client_message_id.
@@ -418,6 +438,7 @@ export class MessageService {
       found,
       await this.attachments.signUrlsForMessages([found.id], authorId),
       await this.authorsFor([found]),
+      (author) => signActorAvatar(author, conversationId, authorId),
     );
   }
 
@@ -487,7 +508,21 @@ export class MessageService {
     // map would be one round trip per message -- the shape this whole change exists
     // to remove.
     const authors = await this.authorsFor(rows);
-    const messages = rows.map((m) => toMessageDto(m, signed, authors));
+    // The viewer's own stars and the conversation's pins on this page: two
+    // indexed lookups, then flags on each message.
+    const ids = rows.map((m) => m.id);
+    const [starRows, pinRows] = await Promise.all([
+      this.prisma.messageStar.findMany({ where: { actorId: actor.actorId, messageId: { in: ids } }, select: { messageId: true } }),
+      this.prisma.messagePin.findMany({ where: { conversationId: conv.id }, select: { messageId: true } }),
+    ]);
+    const starredIds = new Set(starRows.map((r) => r.messageId));
+    const pinnedIds = new Set(pinRows.map((r) => r.messageId));
+    // Photos are signed for this viewer in THIS conversation: pure HMAC, no I/O.
+    const messages = rows.map((m) => ({
+      ...toMessageDto(m, signed, authors, (author) => signActorAvatar(author, conv.id, actor.actorId)),
+      starred: starredIds.has(m.id),
+      pinned: pinnedIds.has(m.id),
+    }));
     const nextBefore =
       !ascending && rows.length === limit ? (rows[rows.length - 1].seq?.toString() ?? null) : null;
 
@@ -734,6 +769,318 @@ export class MessageService {
   }
 
   // -------------------------------------------------------------------
+  // Star (private) and pin (shared, at most three)
+  // -------------------------------------------------------------------
+
+  /** At most this many pins per conversation; a new one replaces the oldest (owner decision). */
+  static readonly MAX_PINS = 3;
+
+  /**
+   * Whether this actor may WRITE in the conversation now: exactly the decision a
+   * send takes (staff scope, BR-1, archived, silent members, internal notes).
+   * "Anyone who can write may pin" (owner decision 2026-10-19) is this check.
+   */
+  private async mayWrite(actor: Actor, conv: Conversation, visibility: string) {
+    const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
+    const family = conv.familyId
+      ? await this.prisma.family.findUnique({ where: { id: conv.familyId }, select: { ownerId: true } })
+      : null;
+    const members = await this.prisma.conversationMember.findMany({
+      where: { conversationId: conv.id, leftAt: null },
+      select: { actorKind: true },
+    });
+    return this.authz.canSend(
+      actor,
+      conv,
+      membership,
+      { visibility },
+      new Date(),
+      family?.ownerId ?? null,
+      members.map((m) => m.actorKind),
+      await this.conversations.liveMembersOf(conv.id),
+    );
+  }
+
+  /** A private bookmark on a message the actor can read. Idempotent. */
+  async star(messageId: string, actorId: string): Promise<void> {
+    const { actor, message } = await this.loadForActor(messageId, actorId);
+    if (message.deletedForAll) throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'message not found', 404);
+    await this.prisma.messageStar.upsert({
+      where: { messageId_actorId: { messageId, actorId: actor.actorId } },
+      create: { messageId, actorId: actor.actorId },
+      update: {},
+    });
+  }
+
+  async unstar(messageId: string, actorId: string): Promise<void> {
+    const actor = await this.conversations.requireActor(actorId);
+    if (!isUuid(messageId)) throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'message not found', 404);
+    // Removing one's own bookmark needs no read check: it reveals and changes nothing else.
+    await this.prisma.messageStar.deleteMany({ where: { messageId, actorId: actor.actorId } });
+  }
+
+  /**
+   * Pin a published message for everyone in its conversation. Anyone who may
+   * write there may pin; a fourth pin replaces the oldest, in one transaction
+   * under a lock on the conversation, so two pins at once cannot exceed three.
+   */
+  async pin(messageId: string, actorId: string): Promise<void> {
+    const { actor, message, conv } = await this.loadForActor(messageId, actorId);
+    if (message.deletedForAll || message.moderation !== Moderation.PUBLISHED || message.type === MessageType.SYSTEM) {
+      throw new CommError(CommErrorCode.VALIDATION, 'only a published message can be pinned', 400);
+    }
+    const decision = await this.mayWrite(actor, conv, message.visibility);
+    if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+
+    await this.prisma.$transaction(async (tx) => {
+      await this.conversations.assertActorLive(tx, actor); // RT-032
+      await tx.$queryRaw`select id from chat.conversation where id = ${conv.id}::uuid for update`;
+      const pins = await tx.messagePin.findMany({
+        where: { conversationId: conv.id },
+        orderBy: { pinnedAt: 'asc' },
+      });
+      if (pins.some((p) => p.messageId === messageId)) return;
+      const excess = pins.length - (MessageService.MAX_PINS - 1);
+      if (excess > 0) {
+        await tx.messagePin.deleteMany({
+          where: { conversationId: conv.id, messageId: { in: pins.slice(0, excess).map((p) => p.messageId) } },
+        });
+      }
+      await tx.messagePin.create({
+        data: { conversationId: conv.id, messageId, pinnedBy: actor.actorId, pinnedByKind: actor.kind },
+      });
+      await this.announcePins(tx, conv, actor, 'message_pinned', messageId);
+    });
+  }
+
+  /** Unpin: the same right as pinning -- anyone who may write there. */
+  async unpin(messageId: string, actorId: string): Promise<void> {
+    const { actor, message, conv } = await this.loadForActor(messageId, actorId);
+    const decision = await this.mayWrite(actor, conv, message.visibility);
+    if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+    await this.prisma.$transaction(async (tx) => {
+      const removed = await tx.messagePin.deleteMany({ where: { conversationId: conv.id, messageId } });
+      if (removed.count > 0) await this.announcePins(tx, conv, actor, 'message_unpinned', messageId);
+    });
+  }
+
+  /** Every client in the conversation re-reads it (pins are part of it); the audit log records who. */
+  private async announcePins(tx: Prisma.TransactionClient, conv: Conversation, actor: Actor, type: string, messageId: string) {
+    await this.outbox.enqueue(tx, CommEvent.CONVERSATION_UPDATED, {
+      conversationId: conv.id,
+      familyId: conv.familyId,
+      state: conversationState(conv),
+      needsReply: needsReply(conv),
+      lastActivityAt: conv.lastActivityAt.toISOString(),
+      handlerId: await this.conversations.responsibleSupervisor(conv),
+    });
+    await this.audit.audit(tx, {
+      actorId: actor.actorId,
+      action: type === 'message_pinned' ? 'message.pinned' : 'message.unpinned',
+      entity: 'conversation',
+      entityId: conv.id,
+      after: { messageId },
+      reason: 'changed by a member who may write in the conversation',
+    });
+  }
+
+  /**
+   * The conversation's pins as THIS viewer may see them, oldest first: the same
+   * visibility rule as the message page, so a parent never sees a pinned
+   * internal note and nobody sees what they deleted for themselves.
+   */
+  async pins(conversationId: string, actorId: string): Promise<{ pins: Array<{ pinnedAt: string; pinnedBy: string; message: MessageDto }> }> {
+    const actor = await this.conversations.requireActor(actorId);
+    const conv = await this.conversations.requireConversation(conversationId);
+    const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
+    const decision = await this.conversations.canReadResolved(actor, conv, membership);
+    if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+
+    const pins = await this.prisma.messagePin.findMany({ where: { conversationId: conv.id }, orderBy: { pinnedAt: 'asc' } });
+    if (pins.length === 0) return { pins: [] };
+    const rows = await this.prisma.message.findMany({
+      where: { AND: [this.visibilityFilter(actor, conv.id, {} as ListMessagesInput), { id: { in: pins.map((p) => p.messageId) }, deletedForAll: false }] },
+      include: { attachments: true, reactions: true, receipts: true, card: true },
+    });
+    const dtos = await this.dtosFor(rows, conv.id, actor);
+    const byId = new Map(dtos.map((d) => [d.id, d]));
+    return {
+      pins: pins
+        .filter((p) => byId.has(p.messageId))
+        .map((p) => ({ pinnedAt: p.pinnedAt.toISOString(), pinnedBy: p.pinnedBy, message: { ...byId.get(p.messageId)!, pinned: true } })),
+    };
+  }
+
+  /**
+   * The actor's starred messages, newest star first, across every conversation
+   * they may STILL read -- a star does not outlive access: a message from a
+   * conversation they left, or one now hidden from them, is simply not listed.
+   */
+  async starred(
+    actorId: string,
+    page: { before?: string; limit?: number } = {},
+  ): Promise<{ items: Array<{ starredAt: string; conversationId: string; message: MessageDto }>; nextBefore: string | null }> {
+    const actor = await this.conversations.requireActor(actorId);
+    const limit = Math.min(Math.max(Number(page.limit) || 30, 1), 100);
+    const before = page.before ? new Date(page.before) : null;
+    const stars = await this.prisma.messageStar.findMany({
+      where: { actorId: actor.actorId, ...(before && !Number.isNaN(before.getTime()) ? { starredAt: { lt: before } } : {}) },
+      orderBy: { starredAt: 'desc' },
+      take: limit,
+    });
+    if (stars.length === 0) return { items: [], nextBefore: null };
+    const candidates = await this.prisma.message.findMany({
+      where: { id: { in: stars.map((s) => s.messageId) }, deletedForAll: false },
+      select: { id: true, conversationId: true },
+    });
+    const items: Array<{ starredAt: string; conversationId: string; message: MessageDto }> = [];
+    const byConv = new Map<string, string[]>();
+    for (const c of candidates) if (c.conversationId) byConv.set(c.conversationId, [...(byConv.get(c.conversationId) ?? []), c.id]);
+    const dtos = new Map<string, MessageDto>();
+    for (const [convId, ids] of byConv) {
+      const conv = await this.conversations.requireConversation(convId).catch(() => null);
+      if (!conv) continue;
+      const membership = await this.conversations.membershipOf(conv.id, actor.actorId);
+      if (!(await this.conversations.canReadResolved(actor, conv, membership)).allowed) continue;
+      const rows = await this.prisma.message.findMany({
+        where: { AND: [this.visibilityFilter(actor, conv.id, {} as ListMessagesInput), { id: { in: ids } }] },
+        include: { attachments: true, reactions: true, receipts: true, card: true },
+      });
+      for (const d of await this.dtosFor(rows, conv.id, actor)) dtos.set(d.id, { ...d, starred: true });
+    }
+    for (const s of stars) {
+      const m = dtos.get(s.messageId);
+      if (m?.conversationId) items.push({ starredAt: s.starredAt.toISOString(), conversationId: m.conversationId, message: m });
+    }
+    return {
+      items,
+      nextBefore: stars.length === limit ? stars[stars.length - 1]!.starredAt.toISOString() : null,
+    };
+  }
+
+  /** Message rows to DTOs for one viewer in one conversation: signed media, names, photos. */
+  private async dtosFor(rows: MessageWithRelations[], conversationId: string, actor: Actor): Promise<MessageDto[]> {
+    const signed = await this.attachments.signUrlsForMessages(rows.map((m) => m.id), actor.actorId);
+    const authors = await this.authorsFor(rows);
+    return rows.map((m) => toMessageDto(m, signed, authors, (author) => signActorAvatar(author, conversationId, actor.actorId)));
+  }
+
+  // -------------------------------------------------------------------
+  // Forward (owner decisions 2026-10-19: anyone, any message they can read,
+  // text and media, up to ten conversations)
+  // -------------------------------------------------------------------
+
+  static readonly MAX_FORWARD_TARGETS = 10;
+  static readonly MAX_FORWARD_MESSAGES = 30;
+
+  /**
+   * Copy messages into other conversations. TWO authorizations, neither
+   * implying the other (ported from the phase-7 design, 6137735):
+   *
+   *   SOURCE       each message passes loadForActor -- the forwarder may read it
+   *                where it lives -- and must be one that may leave: published,
+   *                not deleted, not a system message or a ticket's card.
+   *                Without this, forwarding would be a read primitive.
+   *   DESTINATION  every target is checked up front with the send decision
+   *                (mayWrite), then each copy goes through send() itself, so a
+   *                forward reaches nowhere a message could not and inherits
+   *                BR-1, scope, silencing and approval whole.
+   *
+   * A forward is a NEW message authored by the forwarder, flagged `forwarded`;
+   * it carries no reactions, receipts or reply target of the original. An
+   * internal note stays an internal note (only staff may write one), so it can
+   * never reach a family. Media are COPIED into the destination's namespace.
+   */
+  async forward(input: ForwardInput): Promise<{ sent: MessageDto[] }> {
+    const ids = [...new Set(Array.isArray(input.messageIds) ? input.messageIds.filter((x): x is string => typeof x === 'string') : [])];
+    const targets = [...new Set(Array.isArray(input.toConversationIds) ? input.toConversationIds.filter((x): x is string => typeof x === 'string') : [])];
+    if (ids.length === 0 || targets.length === 0) {
+      throw new CommError(CommErrorCode.VALIDATION, 'a forward needs at least one message and one destination', 400);
+    }
+    if (targets.length > MessageService.MAX_FORWARD_TARGETS) {
+      throw new CommError(CommErrorCode.VALIDATION, `a forward may reach at most ${MessageService.MAX_FORWARD_TARGETS} conversations`, 400);
+    }
+    if (ids.length > MessageService.MAX_FORWARD_MESSAGES) {
+      throw new CommError(CommErrorCode.VALIDATION, `at most ${MessageService.MAX_FORWARD_MESSAGES} messages can be forwarded at once`, 400);
+    }
+    if (!targets.every(isUuid)) throw new CommError(CommErrorCode.CONVERSATION_NOT_FOUND, 'conversation not found', 404);
+
+    // SOURCE: readable here, and allowed to leave.
+    const sources: Message[] = [];
+    let actor: Actor | null = null;
+    for (const id of ids) {
+      const loaded = await this.loadForActor(id, input.actorId);
+      actor = loaded.actor;
+      const m = loaded.message;
+      if (m.conversationId !== input.conversationId) {
+        throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'message not found', 404);
+      }
+      if (m.deletedForAll || m.moderation !== Moderation.PUBLISHED || m.type === MessageType.SYSTEM || m.type === MessageType.CARD) {
+        throw new CommError(CommErrorCode.MESSAGE_NOT_FORWARDABLE, 'that message cannot be forwarded', 403);
+      }
+      sources.push(m);
+    }
+    sources.sort((a, b) => (a.seq ?? 0n) < (b.seq ?? 0n) ? -1 : 1);
+    const forwarder = actor!;
+
+    // DESTINATION: every target may be written in, for every visibility forwarded.
+    const visibilities = [...new Set(sources.map((m) => m.visibility))];
+    for (const target of targets) {
+      const conv = await this.conversations.requireConversation(target);
+      for (const visibility of visibilities) {
+        const decision = await this.mayWrite(forwarder, conv, visibility);
+        if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+      }
+    }
+
+    const attachments = await this.prisma.messageAttachment.findMany({
+      where: { messageId: { in: sources.map((m) => m.id) } },
+      orderBy: { createdAt: 'asc' },
+    });
+    const keys = (input.clientMessageIds && typeof input.clientMessageIds === 'object' ? input.clientMessageIds : {}) as Record<string, unknown>;
+
+    const sent: MessageDto[] = [];
+    for (const target of targets) {
+      for (const m of sources) {
+        const copies = await this.attachments.copyForForward(
+          attachments.filter((a) => a.messageId === m.id),
+          target,
+        );
+        try {
+          const key = keys[`${target}:${m.id}`];
+          sent.push(
+            await this.send({
+              conversationId: target,
+              senderId: forwarder.actorId,
+              type: m.type,
+              body: m.body,
+              visibility: m.visibility,
+              clientMessageId: typeof key === 'string' ? key : undefined,
+              attachments: copies,
+              forwardedFromMessageId: m.id,
+            }),
+          );
+        } catch (error) {
+          await this.attachments.discardCopies(copies.map((c) => c.objectKey));
+          throw error;
+        }
+      }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await this.audit.audit(tx, {
+        actorId: forwarder.actorId,
+        action: 'message.forwarded',
+        entity: 'conversation',
+        entityId: input.conversationId,
+        after: { messages: sources.map((m) => m.id), to: targets, created: sent.map((s) => s.id) },
+        reason: 'forwarded by a reader who may write in each destination',
+      });
+    });
+    return { sent };
+  }
+
+  // -------------------------------------------------------------------
   // Delete
   // -------------------------------------------------------------------
 
@@ -858,5 +1205,117 @@ export class MessageService {
     }
 
     return { actor, message, conv };
+  }
+
+  // -------------------------------------------------------------------
+  // Edit
+  // -------------------------------------------------------------------
+
+  /**
+   * The author rewrites their own text message, within the edit window.
+   *
+   * What may be edited: a published, never-moderated, undeleted TEXT message.
+   * A message that went through approval stays exactly as it was approved, and
+   * an author whose messages HERE would now be held for approval may not edit
+   * either -- an edit is never a way round moderation. The author must still be
+   * able to write in the conversation: the same `canSend` decision a send takes.
+   *
+   * The previous wording is kept in chat.message_revision, written in the same
+   * transaction; the database refuses a body change without one
+   * (chat.forbid_message_rewrite, 20261020130000). Neither body enters the
+   * audit or event log -- contents never do.
+   */
+  async edit(
+    messageId: string,
+    actorId: string,
+    rawBody: unknown,
+    conversationId?: string,
+  ): Promise<MessageDto> {
+    const body = typeof rawBody === 'string' ? rawBody.trim() : '';
+    if (!body) throw new CommError(CommErrorCode.EMPTY_MESSAGE, 'an edited message requires a body', 400);
+
+    const { actor, message, conv } = await this.loadForActor(messageId, actorId);
+    // The route names a conversation; a message of another one reads as absent.
+    if (conversationId !== undefined && message.conversationId !== conversationId) {
+      throw new CommError(CommErrorCode.MESSAGE_NOT_FOUND, 'message not found', 404);
+    }
+    if (actor.kind === ActorKind.SYSTEM || message.authorId !== actor.actorId) {
+      throw new CommError(CommErrorCode.NOT_MESSAGE_AUTHOR, 'only the author may edit a message');
+    }
+    const notEditable = (why: string) => new CommError(CommErrorCode.MESSAGE_NOT_EDITABLE, why, 409);
+    if (message.type !== MessageType.TEXT || message.deletedForAll || message.moderation !== Moderation.PUBLISHED) {
+      throw notEditable('only a published text message can be edited');
+    }
+    if ((await this.prisma.messageApproval.count({ where: { messageId } })) > 0) {
+      throw notEditable('a message that went through approval cannot be edited');
+    }
+
+    const now = new Date();
+    const windowMinutes = await this.config.get('communication.edit_window_minutes');
+    if (now.getTime() - message.createdAt.getTime() > windowMinutes * 60_000) {
+      throw new CommError(
+        CommErrorCode.EDIT_WINDOW_EXPIRED,
+        `the edit window of ${windowMinutes} minutes has expired`,
+      );
+    }
+
+    const decision = await this.mayWrite(actor, conv, message.visibility);
+    if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+    if (decision.moderation !== Moderation.PUBLISHED) {
+      throw notEditable('messages here are held for approval, so they cannot be edited');
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await this.conversations.assertActorLive(tx, actor); // RT-032
+      // The row, locked: two edits at once are ordered, and each revision holds
+      // the wording it actually replaced.
+      const current = await tx.$queryRaw<Array<{ body: string | null }>>`
+        SELECT body FROM chat.message WHERE id = ${messageId}::uuid FOR UPDATE
+      `;
+      const previous = current[0]?.body ?? null;
+      if (previous === null) throw notEditable('only a text message can be edited');
+      if (previous === body) {
+        return tx.message.findUniqueOrThrow({
+          where: { id: messageId },
+          include: { attachments: true, reactions: true, receipts: true, card: true },
+        });
+      }
+      await tx.messageRevision.create({
+        data: {
+          messageId,
+          previousBody: previous,
+          editedBy: actor.actorId,
+          editedByKind: actor.kind,
+          editedAt: now,
+        },
+      });
+      const row = await tx.message.update({
+        where: { id: messageId },
+        data: { body, editedAt: now },
+        include: { attachments: true, reactions: true, receipts: true, card: true },
+      });
+      await this.audit.audit(tx, {
+        actorId: actor.actorId,
+        action: 'message.edit',
+        entity: 'message',
+        entityId: messageId,
+        after: { conversationId: conv.id, editedAt: now.toISOString() },
+        reason: 'edited by author',
+      });
+      await this.outbox.enqueue(tx, CommEvent.MESSAGE_UPDATED, {
+        conversationId: conv.id,
+        messageId,
+        visibility: message.visibility,
+        editedAt: now.toISOString(),
+      });
+      return row;
+    });
+
+    return toMessageDto(
+      updated,
+      await this.attachments.signUrlsForMessages([updated.id], actor.actorId),
+      await this.authorsFor([updated]),
+      (author) => signActorAvatar(author, conv.id, actor.actorId),
+    );
   }
 }

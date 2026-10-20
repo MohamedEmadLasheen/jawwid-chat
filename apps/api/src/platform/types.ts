@@ -38,6 +38,13 @@ export interface Actor {
    * tenant boundary. Optional because SYSTEM_ACTOR belongs to no organization.
    */
   organizationId?: string;
+
+  /**
+   * The stored profile photo's object key, read from the principal row. NEVER
+   * sent to a client: payloads carry a signed /media/avatars link instead
+   * (communication/profile/avatar-urls), whose every request is re-authorized.
+   */
+  avatarObjectKey?: string | null;
 }
 
 export const SYSTEM_ACTOR: Actor = {

@@ -87,6 +87,17 @@ export class OutboxWorker {
         return;
       }
 
+      case CommEvent.MESSAGE_UPDATED: {
+        if (!conversationId) return;
+        // An edited internal note is announced to staff only, like its creation.
+        if (payload.visibility === Visibility.INTERNAL) {
+          await this.realtime.toUsers(await this.staffMemberIds(conversationId), type, payload as never);
+        } else {
+          await this.realtime.toThread(conversationId, type, payload as never);
+        }
+        return;
+      }
+
       case CommEvent.MEMBERSHIP_CHANGED: {
         if (!conversationId) return;
         // Existing members watching the thread, exactly as before.

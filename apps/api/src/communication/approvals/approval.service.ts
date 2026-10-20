@@ -1,3 +1,4 @@
+import { signActorAvatar } from '../profile/avatar-urls';
 import { Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
@@ -136,7 +137,9 @@ export class ApprovalService {
       requestedBy: r.requestedBy,
       approverId: r.approverId,
       createdAt: r.createdAt.toISOString(),
-      message: toMessageDto(r.message, signed, authors),
+      message: toMessageDto(r.message, signed, authors, (author) =>
+        signActorAvatar(author, r.conversationId, viewerId),
+      ),
     }));
   }
 

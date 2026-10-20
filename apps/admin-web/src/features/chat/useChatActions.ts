@@ -2,10 +2,10 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { chatApi, chatKeys, type ChatConversation, type ChatViewerState } from './chatApi'
 import { muteForeverUntil } from './chatView'
 
-type Prefs = { archived?: boolean; pinned?: boolean; mutedUntil?: string | null }
+type Prefs = { archived?: boolean; pinned?: boolean; mutedUntil?: string | null; favorite?: boolean }
 
 /**
- * Archive / pin / mute: the viewer's own preferences. Applied to the cached
+ * Archive / pin / mute / favorite: the viewer's own preferences. Applied to the cached
  * list at once (they only ever affect this viewer), then confirmed by
  * re-reading the server's copy; a refusal rolls the list back.
  */
@@ -32,6 +32,7 @@ export function useConversationPreferences() {
   return {
     pin: (id: string, pinned: boolean) => mutation.mutate({ id, prefs: { pinned } }),
     archive: (id: string, archived: boolean) => mutation.mutate({ id, prefs: { archived } }),
+    favorite: (id: string, favorite: boolean) => mutation.mutate({ id, prefs: { favorite } }),
     mute: (id: string, muted: boolean) =>
       mutation.mutate({ id, prefs: { mutedUntil: muted ? muteForeverUntil() : null } }),
     error: mutation.error,
@@ -39,9 +40,10 @@ export function useConversationPreferences() {
 }
 
 function merge(state: ChatViewerState | undefined, prefs: Prefs): ChatViewerState {
-  const base = state ?? { pinned: false, archived: false, mutedUntil: null }
+  const base = state ?? { pinned: false, archived: false, mutedUntil: null, favorite: false }
   return {
     pinned: prefs.pinned ?? base.pinned,
+    favorite: prefs.favorite ?? base.favorite ?? false,
     archived: prefs.archived ?? base.archived,
     mutedUntil: prefs.mutedUntil === undefined ? base.mutedUntil : prefs.mutedUntil,
   }

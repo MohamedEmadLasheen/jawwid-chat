@@ -75,10 +75,10 @@ describe('viewerState -- what setPreferences stored, read back', () => {
     await g.conversations.setPreferences(direct.id, s.parentId, { pinned: true, archived: true, mutedUntil: until });
 
     const mine = (await row(s.parentId, direct.id))!;
-    expect(mine.viewerState).toEqual({ pinned: true, archived: true, mutedUntil: until.toISOString() });
+    expect(mine.viewerState).toEqual({ pinned: true, archived: true, mutedUntil: until.toISOString(), favorite: false });
     expect((await controller.get(s.parentId, direct.id)).viewerState!.pinned).toBe(true);
     // The other side's preferences are their own.
-    expect((await row(s.ownerId, direct.id))!.viewerState).toEqual({ pinned: false, archived: false, mutedUntil: null });
+    expect((await row(s.ownerId, direct.id))!.viewerState).toEqual({ pinned: false, archived: false, mutedUntil: null, favorite: false });
   });
 });
 

@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, Logger, Param, Query, Req, Res } from '@nestjs/common';
+import { Controller, Get, Inject, Logger, Optional, Param, Query, Req, Res } from '@nestjs/common';
 import { Public } from '../../platform/auth/auth.guard';
 import { MediaUrlSigner, type MediaVariant } from '../../platform/media-url';
 import { serveAuthorizedMedia, type MediaServeDeps, type RequestLike, type ResponseLike } from './media-serve';
@@ -7,6 +7,8 @@ import { OBJECT_STORAGE } from '../../platform/tokens';
 import type { ObjectStorage } from '../attachments/object-storage';
 import { MessageService } from '../messages/message.service';
 import { StoryService } from '../stories/story.service';
+import { AvatarService } from '../profile/avatar.service';
+import { CommError, CommErrorCode } from '../../platform/errors';
 
 /**
  * RT-037 -- every attachment byte is served here, authorized at ACCESS time.
@@ -38,6 +40,9 @@ export class MediaController {
     private readonly messages: MessageService,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
     private readonly stories: StoryService,
+    // Optional only so the positional construction the RT-037 harnesses share
+    // does not shift; without it every photo link reads as absent.
+    @Optional() private readonly avatars?: AvatarService,
   ) {}
 
   @Get('attachments/:attachmentId')
@@ -67,6 +72,28 @@ export class MediaController {
   ): Promise<void> {
     return serveAuthorizedMedia(this.deps(), 'stories', storyId, variant, actorId, expires, sig, req, res, () =>
       this.stories.authorizeMediaRead(storyId, actorId),
+    );
+  }
+
+  /**
+   * A profile photo as seen in a conversation (or the viewer's own / own
+   * child's). `id` is `<kind>.<id>.<context>`; who may see it is re-decided
+   * here, per request -- see AvatarService.authorizeAvatarRead.
+   */
+  @Get('avatars/:id')
+  async avatar(
+    @Param('id') id: string,
+    @Query('v') variant: string,
+    @Query('a') actorId: string,
+    @Query('e') expires: string,
+    @Query('s') sig: string,
+    @Req() req: RequestLike,
+    @Res() res: ResponseLike,
+  ): Promise<void> {
+    return serveAuthorizedMedia(this.deps(), 'avatars', id, variant, actorId, expires, sig, req, res, () =>
+      this.avatars
+        ? this.avatars.authorizeAvatarRead(actorId, id)
+        : Promise.reject(new CommError(CommErrorCode.PROFILE_PHOTO_NOT_FOUND, 'not available', 404)),
     );
   }
 

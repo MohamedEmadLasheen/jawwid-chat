@@ -10,9 +10,11 @@ import { Badge } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
 import { Menu, type MenuItem } from '@/shared/components/Menu'
 import { EmptyState, ErrorState, LoadingState } from '@/shared/components/States'
-import { bySeq, chatApi, chatKeys, type ChatAttachment, type ChatMessage, type UploadedAttachment } from './chatApi'
+import { EDIT_WINDOW_MS, bySeq, chatApi, chatKeys, type ChatAttachment, type ChatMessage, type UploadedAttachment } from './chatApi'
 import { chatCopyFor, systemText, type ChatCopy } from './copy'
-import { ChatComposer, type ComposerSend, type ReplyTarget } from './ChatComposer'
+import { ChatComposer, type ComposerSend, type EditTarget, type ReplyTarget } from './ChatComposer'
+import { ForwardDialog } from './ForwardDialog'
+import { LabelChip, LabelsDialog } from './LabelsDialog'
 import { ConversationAvatar, conversationName, isGroup, isMuted } from './chatView'
 import { useConversationPreferences } from './useChatActions'
 import { VoiceNotePlayer } from './VoiceRecorder'
@@ -78,6 +80,15 @@ function errorText(error: unknown, locale: 'ar' | 'en', fallback: string): strin
   return error instanceof ApiError ? error.localized(locale) : fallback
 }
 
+/** A failed message action, worded here for the codes the server words only in English. */
+function actionErrorText(error: unknown, locale: 'ar' | 'en', copy: ChatCopy): string {
+  if (error instanceof ApiError) {
+    if (error.code === 'COMM.EDIT_WINDOW_EXPIRED') return copy.editWindowExpired
+    if (error.code === 'COMM.MESSAGE_NOT_EDITABLE') return copy.notEditable
+  }
+  return errorText(error, locale, copy.actionFailed)
+}
+
 function authorName(m: ChatMessage, copy: ChatCopy): string {
   return m.authorDisplayName || (copy.role[m.authorKind] ?? m.authorKind)
 }
@@ -141,13 +152,30 @@ export function ChatThread({
   const refreshThread = () => {
     void queryClient.invalidateQueries({ queryKey: chatKeys.approvals(conversationId) })
     void queryClient.invalidateQueries({ queryKey: chatKeys.messages(conversationId) })
+    void queryClient.invalidateQueries({ queryKey: chatKeys.pins(conversationId) })
+    void queryClient.invalidateQueries({ queryKey: chatKeys.starred })
   }
   const [older, setOlder] = useState<ChatMessage[]>([])
   const [olderCursor, setOlderCursor] = useState<string | null | undefined>(undefined)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [pending, setPending] = useState<PendingSend[]>([])
   const [reply, setReply] = useState<ReplyTarget | null>(null)
+  const [editing, setEditing] = useState<EditTarget | null>(null)
   const [actionError, setActionError] = useState<unknown>(null)
+  // Select mode: a set of message ids, and the bulk actions over them.
+  const [selecting, setSelecting] = useState(false)
+  const [selected, setSelected] = useState<string[]>([])
+  const [forwarding, setForwarding] = useState<string[] | null>(null)
+  const [labeling, setLabeling] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
+  const stopSelecting = () => {
+    setSelecting(false)
+    setSelected([])
+  }
+  const flash = (text: string) => {
+    setNotice(text)
+    setTimeout(() => setNotice(null), 2500)
+  }
 
   const messages = useMemo(() => {
     const byId = new Map<string, ChatMessage>()
@@ -244,6 +272,17 @@ export function ChatThread({
     },
   })
 
+  /** Save an edit: the server decides whether it may still be edited, and its copy replaces ours. */
+  async function saveEdit(target: EditTarget, body: string) {
+    setEditing(null)
+    if (body === target.body) return
+    await act(async () => {
+      const saved = await chatApi.editMessage(conversationId, target.messageId, body)
+      setOlder((all) => all.map((x) => (x.id === saved.id ? { ...x, ...saved } : x)))
+    })
+    void queryClient.invalidateQueries({ queryKey: chatKeys.list })
+  }
+
   function submit(input: ComposerSend) {
     const p: PendingSend = {
       clientMessageId: crypto.randomUUID(),
@@ -285,6 +324,7 @@ export function ChatThread({
   const muted = conv ? isMuted(conv) : false
   const pinned = !!conv?.viewerState?.pinned
   const archived = !!conv?.viewerState?.archived
+  const favorite = !!conv?.viewerState?.favorite
   const memberCount = conv?.members?.length ?? 0
   // A group always names its senders; so does a 1:1 the viewer is only
   // overseeing (two other people talking), but not one the viewer is in.
@@ -298,18 +338,30 @@ export function ChatThread({
         </Link>
         {conv && (
           <button type="button" className="cw-head__who" onClick={onToggleInfo} aria-label={group ? copy.groupInfo : copy.contactInfo}>
-            <ConversationAvatar c={conv} name={name} />
+            <ConversationAvatar c={conv} name={name} selfId={staff?.id} />
             <span className="thread-head__text">
               <span className="thread-head__name" dir="auto">{name}</span>
               <span className="thread-head__sub">
                 {copy.kind[conv.type] ?? conv.type}
                 {memberCount > 0 && ` · ${copy.membersCount(memberCount)}`}
               </span>
+              {(conv.labels ?? []).length > 0 && (
+                <span className="cw-row__labels" aria-label={copy.labels}>
+                  {conv.labels!.map((l) => (
+                    <LabelChip key={l.id} label={l} />
+                  ))}
+                </span>
+              )}
             </span>
           </button>
         )}
         <div className="cw-head__actions">
           {conv && <ConversationCallControls conversationId={conversationId} peerLabel={name} isGroup={group} />}
+          {favorite && (
+            <span className="cw-row__mark cw-row__mark--favorite" title={copy.favoriteMark} aria-label={copy.favoriteMark}>
+              <Icon name="heart" size={16} />
+            </span>
+          )}
           {muted && (
             <span className="cw-row__mark" title={copy.mutedMark} aria-label={copy.mutedMark}>
               <Icon name="bellOff" size={16} />
@@ -330,14 +382,19 @@ export function ChatThread({
               label={copy.chatActions}
               items={[
                 { key: 'info', label: group ? copy.groupInfo : copy.contactInfo, icon: 'info', onSelect: onToggleInfo },
+                { key: 'select', label: copy.select, icon: 'checkSquare', onSelect: () => setSelecting(true) },
+                { key: 'labels', label: copy.labelsMenu, icon: 'tag', onSelect: () => setLabeling(true) },
                 { key: 'mute', label: muted ? copy.unmute : copy.mute, icon: muted ? 'notifications' : 'bellOff', onSelect: () => prefs.mute(conv.id, !muted) },
                 { key: 'pin', label: pinned ? copy.unpin : copy.pin, icon: 'pin', onSelect: () => prefs.pin(conv.id, !pinned) },
+                { key: 'favorite', label: favorite ? copy.unfavorite : copy.favorite, icon: 'heart', onSelect: () => prefs.favorite(conv.id, !favorite) },
                 { key: 'archive', label: archived ? copy.unarchive : copy.archive, icon: 'archive', onSelect: () => prefs.archive(conv.id, !archived) },
               ]}
             />
           )}
         </div>
       </header>
+
+      <PinnedBar conversationId={conversationId} scroller={scroller} />
 
       <div
         className="thread-body"
@@ -392,8 +449,19 @@ export function ChatThread({
                         mine?.emoji === emoji ? chatApi.unreact(conversationId, m.id) : chatApi.react(conversationId, m.id, emoji),
                       )
                     }}
+                    onStar={() => void act(() => (m.starred ? chatApi.unstar(conversationId, m.id) : chatApi.star(conversationId, m.id)))}
+                    onForward={() => setForwarding([m.id])}
+                    onSelectStart={() => {
+                      setSelecting(true)
+                      setSelected([m.id])
+                    }}
+                    selectMode={selecting}
+                    isSelected={selected.includes(m.id)}
+                    onToggleSelect={() => setSelected((all) => (all.includes(m.id) ? all.filter((x) => x !== m.id) : [...all, m.id]))}
+                    onPin={() => void act(() => (m.pinned ? chatApi.unpin(conversationId, m.id) : chatApi.pin(conversationId, m.id)))}
                     onDeleteForMe={() => void act(() => chatApi.deleteForMe(conversationId, m.id))}
                     onDeleteForEveryone={() => void act(() => chatApi.deleteForEveryone(conversationId, m.id))}
+                    onEdit={() => setEditing({ messageId: m.id, body: m.body ?? '' })}
                   />
                 </Fragment>
               )
@@ -440,22 +508,106 @@ export function ChatThread({
 
       {actionError !== null && (
         <div className="banner banner--warn cw-action-error" role="alert">
-          {errorText(actionError, locale, copy.actionFailed)}
+          {actionErrorText(actionError, locale, copy)}
           <button type="button" className="btn btn--ghost btn--icon btn--sm" aria-label={copy.discard} onClick={() => setActionError(null)}>
             <Icon name="close" size={14} />
           </button>
         </div>
       )}
 
-      <ChatComposer
-        onSend={submit}
-        reply={reply}
-        onCancelReply={() => setReply(null)}
-        conversationId={conversationId}
-        autoStartVoice={searchParams.get('voice') === '1'}
-        onVoiceAutoStarted={() => setSearchParams({}, { replace: true })}
-        onVoiceSent={() => void queryClient.invalidateQueries({ queryKey: chatKeys.messages(conversationId) })}
-      />
+      {notice && (
+        <div className="cw-notice" role="status">
+          {notice}
+        </div>
+      )}
+
+      {selecting ? (
+        <div className="cw-select-bar" role="toolbar" aria-label={copy.selectedCount(selected.length)}>
+          <button type="button" className="btn btn--ghost btn--icon" onClick={stopSelecting} aria-label={copy.cancelSelect} title={copy.cancelSelect}>
+            <Icon name="close" size={18} />
+          </button>
+          <strong className="cw-select-bar__count">{copy.selectedCount(selected.length)}</strong>
+          <div className="cw-select-bar__actions">
+            <button type="button" className="btn btn--sm" disabled={selected.length === 0} onClick={() => setForwarding(selected)}>
+              <Icon name="forward" size={14} />
+              {copy.forward}
+            </button>
+            <button
+              type="button"
+              className="btn btn--sm"
+              disabled={selected.length === 0}
+              onClick={() =>
+                void act(async () => {
+                  for (const id of selected) await chatApi.star(conversationId, id)
+                }).then(stopSelecting)
+              }
+            >
+              <Icon name="star" size={14} />
+              {copy.star}
+            </button>
+            <button
+              type="button"
+              className="btn btn--sm"
+              disabled={selected.length === 0}
+              onClick={() => {
+                const text = messages
+                  .filter((x) => selected.includes(x.id) && x.body && !x.deletedForAll)
+                  .map((x) => x.body)
+                  .join('\n')
+                void navigator.clipboard?.writeText(text)
+                flash(copy.copied)
+                stopSelecting()
+              }}
+            >
+              <Icon name="copy" size={14} />
+              {copy.copy}
+            </button>
+            <button
+              type="button"
+              className="btn btn--sm"
+              disabled={selected.length === 0}
+              onClick={() =>
+                void act(async () => {
+                  for (const id of selected) await chatApi.deleteForMe(conversationId, id)
+                }).then(stopSelecting)
+              }
+            >
+              <Icon name="trash" size={14} />
+              {copy.deleteForMe}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <ChatComposer
+          onSend={submit}
+          reply={reply}
+          onCancelReply={() => setReply(null)}
+          editing={editing}
+          onSaveEdit={(body) => editing && void saveEdit(editing, body)}
+          onCancelEdit={() => setEditing(null)}
+          conversationId={conversationId}
+          autoStartVoice={searchParams.get('voice') === '1'}
+          onVoiceAutoStarted={() => setSearchParams({}, { replace: true })}
+          onVoiceSent={() => void queryClient.invalidateQueries({ queryKey: chatKeys.messages(conversationId) })}
+        />
+      )}
+
+      {labeling && conv && (
+        <LabelsDialog conversationId={conv.id} current={conv.labels ?? []} onClose={() => setLabeling(false)} />
+      )}
+
+      {forwarding && (
+        <ForwardDialog
+          conversationId={conversationId}
+          messageIds={forwarding}
+          onClose={() => setForwarding(null)}
+          onDone={(n) => {
+            setForwarding(null)
+            stopSelecting()
+            flash(copy.forwardDone(n))
+          }}
+        />
+      )}
     </>
   )
 }
@@ -472,8 +624,16 @@ function MessageItem({
   onDecided,
   onReply,
   onReact,
+  onStar,
+  onForward,
+  onSelectStart,
+  selectMode,
+  isSelected,
+  onToggleSelect,
+  onPin,
   onDeleteForMe,
   onDeleteForEveryone,
+  onEdit,
 }: {
   m: ChatMessage
   side: Side
@@ -487,8 +647,16 @@ function MessageItem({
   onDecided: () => void
   onReply: () => void
   onReact: (emoji: string) => void
+  onStar: () => void
+  onForward: () => void
+  onSelectStart: () => void
+  selectMode: boolean
+  isSelected: boolean
+  onToggleSelect: () => void
+  onPin: () => void
   onDeleteForMe: () => void
   onDeleteForEveryone: () => void
+  onEdit: () => void
 }) {
   const { locale, time } = useI18n()
   const copy = chatCopyFor(locale)
@@ -526,6 +694,14 @@ function MessageItem({
   }
 
   const mine = m.authorId === selfId
+  // A hint only: the server decides (author, window, never-moderated text).
+  const editable =
+    mine &&
+    !m.deletedForAll &&
+    m.type === 'text' &&
+    m.moderation === 'published' &&
+    !!m.body &&
+    Date.now() - new Date(m.createdAt).getTime() < EDIT_WINDOW_MS
   const live = !m.deletedForAll
   // PD-13: a scheduled-call card is drawn with its Join button; any other card
   // (or one this client cannot read) keeps showing its plain-text body.
@@ -537,6 +713,17 @@ function MessageItem({
   const items: MenuItem[] = live
     ? [
         { key: 'reply', label: copy.reply, icon: 'reply', onSelect: onReply },
+        ...(editable ? [{ key: 'edit', label: copy.edit, icon: 'pencil' as const, onSelect: onEdit }] : []),
+        // Only what may leave its conversation; the server re-checks both ends.
+        ...(m.moderation === 'published' && m.type !== 'card'
+          ? [{ key: 'forward', label: copy.forward, icon: 'forward' as const, onSelect: onForward }]
+          : []),
+        { key: 'select', label: copy.select, icon: 'checkSquare' as const, onSelect: onSelectStart },
+        { key: 'star', label: m.starred ? copy.unstar : copy.star, icon: 'star' as const, onSelect: onStar },
+        // Only a published message can be pinned; the server decides who may write here.
+        ...(m.moderation === 'published'
+          ? [{ key: 'pin', label: m.pinned ? copy.unpinMessage : copy.pinMessage, icon: 'pin' as const, onSelect: onPin }]
+          : []),
         ...(m.body
           ? [{ key: 'copy', label: copy.copy, icon: 'copy' as const, onSelect: () => void navigator.clipboard?.writeText(m.body ?? '') }]
           : []),
@@ -550,13 +737,25 @@ function MessageItem({
 
   return (
     <li
-      className={`bubble-row ${SIDE_CLASS[side]} cw-msg${runStart ? ' cw-msg--run-start' : ''}${identity !== 'none' ? ' cw-msg--with-sender' : ''}`}
+      className={`bubble-row ${SIDE_CLASS[side]} cw-msg${runStart ? ' cw-msg--run-start' : ''}${identity !== 'none' ? ' cw-msg--with-sender' : ''}${selectMode ? ' cw-msg--selectable' : ''}${isSelected ? ' cw-msg--selected' : ''}`}
       data-seq={m.seq ?? undefined}
+      data-msg-id={m.id}
+      onClick={selectMode ? onToggleSelect : undefined}
     >
       <div className="cw-msg__line">
+        {selectMode && (
+          <input
+            type="checkbox"
+            className="cw-msg__check"
+            checked={isSelected}
+            onChange={onToggleSelect}
+            onClick={(e) => e.stopPropagation()}
+            aria-label={`${copy.select}: ${bodyPreview(m, copy)}`}
+          />
+        )}
         {identity === 'lead' && (
           <span className={`cw-msg__avatar cw-tone--${nameTone(m.authorId ?? m.authorKind)}`} title={authorName(m, copy)}>
-            <Avatar name={authorName(m, copy)} seed={m.authorId ?? m.authorKind} />
+            <Avatar name={authorName(m, copy)} seed={m.authorId ?? m.authorKind} src={m.authorAvatarUrl} />
           </span>
         )}
         {identity === 'follow' && <span className="cw-msg__avatar" aria-hidden="true" />}
@@ -567,6 +766,12 @@ function MessageItem({
                 {authorName(m, copy)}
               </span>
               <span className={`kind-chip kind-chip--${m.authorKind}`}>{copy.role[m.authorKind] ?? m.authorKind}</span>
+            </span>
+          )}
+          {m.forwarded && (
+            <span className="cw-forwarded">
+              <Icon name="forward" size={12} />
+              {copy.forwarded}
             </span>
           )}
           {side === 'internal' && (
@@ -596,12 +801,27 @@ function MessageItem({
             </>
           )}
           <span className="bubble__meta">
+            {m.pinned && (
+              <span className="cw-mark" title={copy.pinnedMessageMark} aria-label={copy.pinnedMessageMark}>
+                <Icon name="pin" size={12} />
+              </span>
+            )}
+            {m.starred && (
+              <span className="cw-mark cw-mark--star" title={copy.starredMark} aria-label={copy.starredMark}>
+                <Icon name="star" size={12} />
+              </span>
+            )}
             {m.moderation === 'pending' && <Badge tone="waiting">{copy.pending}</Badge>}
             {m.moderation === 'rejected' && <Badge tone="danger">{copy.rejected}</Badge>}
+            {m.editedAt && !m.deletedForAll && (
+              <span className="cw-edited" title={time(m.editedAt)}>
+                {copy.edited}
+              </span>
+            )}
             <time dateTime={m.createdAt}>{time(m.createdAt)}</time>
           </span>
         </div>
-        <Menu
+        {!selectMode && <Menu
           label={copy.messageActions}
           className="cw-msg__menu"
           align={side === 'out' ? 'end' : 'start'}
@@ -629,7 +849,7 @@ function MessageItem({
                 )
               : undefined
           }
-        />
+        />}
       </div>
       {reactions.length > 0 && (
         <div className="cw-reactions">
@@ -696,5 +916,56 @@ function AttachmentView({ a, copy }: { a: ChatAttachment; copy: ChatCopy }) {
       <Icon name="paperclip" size={14} />
       <span dir="auto">{a.originalName ?? copy.attachment}</span>
     </a>
+  )
+}
+
+/**
+ * The conversation's pinned messages (at most three), WhatsApp-style: one bar
+ * under the header showing a pin; tapping it scrolls to that message and moves
+ * the bar on to the next. Only pins this viewer could read are listed.
+ */
+function PinnedBar({ conversationId, scroller }: { conversationId: string; scroller: React.RefObject<HTMLDivElement | null> }) {
+  const { locale } = useI18n()
+  const copy = chatCopyFor(locale)
+  const pins = useQuery({ queryKey: chatKeys.pins(conversationId), queryFn: () => chatApi.pins(conversationId) })
+  const list = pins.data ?? []
+  const [index, setIndex] = useState(0)
+  if (list.length === 0) return null
+  // Newest first, as WhatsApp shows it; the counter reads oldest = 1.
+  const shown = list[list.length - 1 - (index % list.length)]!
+  const position = list.length - (index % list.length)
+  const m = shown.message
+
+  return (
+    <button
+      type="button"
+      className="cw-pinned"
+      aria-label={`${copy.pinnedBar(position, list.length)}${list.length > 1 ? ` · ${copy.pinnedNext}` : ''}`}
+      onClick={() => {
+        setIndex((i) => i + 1)
+        // Matched by value, not by building a selector from the id.
+        const el = [...(scroller.current?.querySelectorAll<HTMLElement>('[data-msg-id]') ?? [])].find(
+          (node) => node.dataset.msgId === m.id,
+        )
+        el?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+        el?.classList.add('cw-msg--flash')
+        setTimeout(() => el?.classList.remove('cw-msg--flash'), 1200)
+      }}
+    >
+      {list.length > 1 && (
+        <span className="cw-pinned__ticks" aria-hidden="true">
+          {list.map((p, i) => (
+            <span key={p.message.id} className={i === position - 1 ? 'cw-pinned__tick cw-pinned__tick--on' : 'cw-pinned__tick'} />
+          ))}
+        </span>
+      )}
+      <Icon name="pin" size={16} />
+      <span className="cw-pinned__text">
+        <span className="cw-pinned__label">{copy.pinnedBar(position, list.length)}</span>
+        <span className="cw-pinned__body" dir="auto">
+          {m.body || (copy.preview[m.attachments[0]?.kind ?? m.type] ?? copy.attachment)}
+        </span>
+      </span>
+    </button>
   )
 }

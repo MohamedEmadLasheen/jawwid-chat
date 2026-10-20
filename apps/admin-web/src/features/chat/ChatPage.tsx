@@ -18,6 +18,8 @@ import { ChatThread } from './ChatThread'
 import { ConversationInfo } from './ConversationInfo'
 import { NewFamilyGroupDialog } from './NewFamilyGroupDialog'
 import { NewDirectChatDialog } from './NewDirectChatDialog'
+import { StarredDialog } from './StarredDialog'
+import { Icon } from '@/shared/components/Icon'
 import { isGroup } from './chatView'
 import './chat.css'
 
@@ -50,6 +52,7 @@ export function ChatPage() {
   const { staff } = useSession()
   const [creatingGroup, setCreatingGroup] = useState(false)
   const [creatingDirect, setCreatingDirect] = useState(false)
+  const [showingStarred, setShowingStarred] = useState(false)
   const wide = useMediaQuery('(min-width: 1280px)')
   const resizable = useMediaQuery('(min-width: 1024px)')
   const listWidth = useResizableWidth(LIST_WIDTH_KEY, 360, 280, 520)
@@ -122,7 +125,18 @@ export function ChatPage() {
             selectedId={conversationId ?? null}
             onSelect={(id) => navigate(`/chat/${encodeURIComponent(id)}`)}
             actions={
-              newItems.length > 0 && <Menu label={copy.newMenu} icon="plus" items={newItems} className="cw-list__new" />
+              <>
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--icon btn--sm"
+                  onClick={() => setShowingStarred(true)}
+                  aria-label={copy.starredTitle}
+                  title={copy.starredTitle}
+                >
+                  <Icon name="star" size={18} />
+                </button>
+                {newItems.length > 0 && <Menu label={copy.newMenu} icon="plus" items={newItems} className="cw-list__new" />}
+              </>
             }
           />
         )}
@@ -158,6 +172,15 @@ export function ChatPage() {
         </Dialog>
       )}
 
+      {showingStarred && (
+        <StarredDialog
+          onClose={() => setShowingStarred(false)}
+          onOpen={(id) => {
+            setShowingStarred(false)
+            navigate(`/chat/${encodeURIComponent(id)}`)
+          }}
+        />
+      )}
       {creatingDirect && (
         <NewDirectChatDialog
           onClose={() => setCreatingDirect(false)}

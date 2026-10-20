@@ -129,6 +129,7 @@ class Message {
     this.sequence,
     this.authorId,
     this.authorName = '',
+    this.authorAvatarUrl,
     this.authorRole = ParticipantRole.unknown,
     this.body = '',
     this.attachments = const [],
@@ -141,6 +142,9 @@ class Message {
     this.isDeleted = false,
     this.failureCode,
     this.card,
+    this.isStarred = false,
+    this.isPinned = false,
+    this.isForwarded = false,
   });
 
   /// Server id. Null until the server has accepted the message.
@@ -156,6 +160,11 @@ class Message {
 
   final String? authorId;
   final String authorName;
+
+  /// The author's profile photo: a signed link for THIS viewer in this
+  /// conversation, re-authorized on every request by the server. Loaded with no
+  /// bearer header (it is self-authorizing). Null when there is none.
+  final String? authorAvatarUrl;
   final ParticipantRole authorRole;
   final MessageKind kind;
   final String body;
@@ -189,6 +198,16 @@ class Message {
   /// writes one; the client never composes a card.
   final MessageCard? card;
 
+  /// The viewer's own private bookmark (server `MessageDto.starred`).
+  final bool isStarred;
+
+  /// Pinned for everyone in the conversation (server `MessageDto.pinned`).
+  final bool isPinned;
+
+  /// A copy forwarded by its author (server `MessageDto.forwarded`); shown as
+  /// "Forwarded". The source is never named.
+  final bool isForwarded;
+
   bool get isSystem => kind == MessageKind.system;
   bool get isPending => deliveryState.isInFlight;
   bool get canRetry => deliveryState == DeliveryState.failed;
@@ -207,6 +226,7 @@ class Message {
         sequence: sequence,
         authorId: authorId,
         authorName: authorName,
+        authorAvatarUrl: authorAvatarUrl,
         authorRole: authorRole,
         kind: kind,
         body: body,
@@ -222,6 +242,9 @@ class Message {
         isDeleted: isDeleted,
         failureCode: failureCode,
         card: card,
+        isStarred: isStarred,
+        isPinned: isPinned,
+        isForwarded: isForwarded,
       );
 
   Message copyWith({
@@ -233,6 +256,8 @@ class Message {
     List<Reaction>? reactions,
     String? failureCode,
     bool? isDeleted,
+    bool? isStarred,
+    bool? isPinned,
   }) {
     return Message(
       id: id ?? this.id,
@@ -241,6 +266,7 @@ class Message {
       sequence: sequence ?? this.sequence,
       authorId: authorId,
       authorName: authorName,
+      authorAvatarUrl: authorAvatarUrl,
       authorRole: authorRole,
       kind: kind,
       body: body,
@@ -256,6 +282,9 @@ class Message {
       isDeleted: isDeleted ?? this.isDeleted,
       failureCode: failureCode ?? this.failureCode,
       card: card,
+      isStarred: isStarred ?? this.isStarred,
+      isPinned: isPinned ?? this.isPinned,
+      isForwarded: isForwarded,
     );
   }
 }

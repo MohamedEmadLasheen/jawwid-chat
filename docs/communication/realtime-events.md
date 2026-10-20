@@ -69,6 +69,7 @@ further, and is sent `conversation.access_revoked`.
 |---|---|---|
 | `message.created` | `{ conversationId, messageId, seq, authorKind, authorId, type, visibility, moderation, createdAt }` | Conversation room. **Internal notes go only to staff rooms.** |
 | `message.deleted` | `{ conversationId, messageId, deletedForAll }` | Conversation room |
+| `message.updated` | `{ conversationId, messageId, visibility, editedAt }` — no body; re-read the message | Conversation room. **An internal note's edit goes only to staff rooms.** |
 | `message.receipt.updated` | `{ conversationId, messageId, actorId, state, at }` | Conversation room |
 | `reaction.added` / `reaction.removed` | `{ conversationId, messageId, actorId, emoji }` | Conversation room |
 | `typing.started` / `typing.stopped` | `{ conversationId, actorId, displayName }` | Conversation room, excluding sender |

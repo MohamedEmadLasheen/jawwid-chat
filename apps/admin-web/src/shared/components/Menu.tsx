@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Icon, type IconName } from './Icon'
 import './menu.css'
 
@@ -16,6 +16,11 @@ export interface MenuItem {
  * items (wrapping), as in the rail's menus.
  *
  * `header` renders above the items (the message menu's reaction row).
+ *
+ * A menu that would run past the bottom of the pane it scrolls in (a chat row
+ * near the end of the list, a message near the composer) opens upwards
+ * instead, when there is more room above; one taller than either side scrolls
+ * within the room it has, so no item is ever cut off.
  */
 export function Menu({
   label,
@@ -33,6 +38,9 @@ export function Menu({
   className?: string
 }) {
   const [open, setOpen] = useState(false)
+  const [up, setUp] = useState(false)
+  const [maxHeight, setMaxHeight] = useState<number | undefined>(undefined)
+  const popover = useRef<HTMLDivElement>(null)
   const id = useId()
   const root = useRef<HTMLDivElement>(null)
   const button = useRef<HTMLButtonElement>(null)
@@ -41,6 +49,27 @@ export function Menu({
     setOpen(false)
     if (refocus) button.current?.focus()
   }
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setUp(false)
+      setMaxHeight(undefined)
+      return
+    }
+    const pop = popover.current
+    const anchor = button.current
+    if (!pop || !anchor) return
+    const bounds = clipBounds(anchor)
+    const a = anchor.getBoundingClientRect()
+    const height = pop.getBoundingClientRect().height
+    const below = bounds.bottom - a.bottom - 8
+    const above = a.top - bounds.top - 8
+    const flip = height > below && above > below
+    setUp(flip)
+    const room = flip ? above : below
+    // Only cap a menu that does not fit; a layout with no room measured (tests) is left alone.
+    setMaxHeight(height > room && room > 120 ? room : undefined)
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -86,7 +115,14 @@ export function Menu({
         <Icon name={icon} size={18} />
       </button>
       {open && (
-        <div className={`menu__popover menu__popover--${align}`} id={id} role="menu" aria-label={label}>
+        <div
+          ref={popover}
+          className={`menu__popover menu__popover--${align}${up ? ' menu__popover--up' : ''}`}
+          style={maxHeight ? { maxBlockSize: maxHeight, overflowY: 'auto' } : undefined}
+          id={id}
+          role="menu"
+          aria-label={label}
+        >
           {header?.(() => close())}
           {items.map((item) => (
             <button
@@ -108,4 +144,20 @@ export function Menu({
       )}
     </div>
   )
+}
+
+/** The visible box a popover can show in: the nearest scrolling ancestor, within the viewport. */
+function clipBounds(el: HTMLElement): { top: number; bottom: number } {
+  let top = 0
+  let bottom = window.innerHeight
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const overflow = getComputedStyle(p).overflowY
+    if (overflow === 'auto' || overflow === 'scroll' || overflow === 'hidden') {
+      const r = p.getBoundingClientRect()
+      top = Math.max(top, r.top)
+      bottom = Math.min(bottom, r.bottom)
+      break
+    }
+  }
+  return { top, bottom }
 }

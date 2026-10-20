@@ -35,6 +35,7 @@ class MessageBubble extends StatelessWidget {
     this.onRetry,
     this.onDiscard,
     this.onLongPress,
+    this.onTap,
     this.onTapReply,
     this.onToggleReaction,
     this.onOpenAttachment,
@@ -64,6 +65,9 @@ class MessageBubble extends StatelessWidget {
 
   /// Opens the actions sheet. Null on a message nothing can be done to.
   final VoidCallback? onLongPress;
+
+  /// A plain tap -- set only in select mode, where it toggles the selection.
+  final VoidCallback? onTap;
 
   /// Jump to the message this one answers.
   final VoidCallback? onTapReply;
@@ -146,6 +150,7 @@ class MessageBubble extends StatelessWidget {
               // quicker gesture unreachable.
               GestureDetector(
                 onLongPress: onLongPress,
+                onTap: onTap,
                 // Feedback matters here — without it a long press that opens
                 // nothing (a system message, a failed send) is indistinguishable
                 // from one the app missed.
@@ -163,6 +168,24 @@ class MessageBubble extends StatelessWidget {
                           ),
                           fontWeight: FontWeight.w700,
                         ),
+                      ),
+                    ),
+                  if (message.isForwarded)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: Spacing.spacing1),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.forward, size: 12, color: theme.colorScheme.onSurfaceVariant),
+                          const SizedBox(width: Spacing.spacing1),
+                          Text(
+                            l10n.forwardedLabel,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              fontStyle: FontStyle.italic,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   if (replyTo != null)
@@ -257,6 +280,8 @@ class MessageBubble extends StatelessWidget {
                           excludeSemantics: true,
                           child: JawwidAvatar(
                             displayName: _authorLabel(message, l10n),
+                            // A signed link: loaded with no bearer header.
+                            imageUrl: message.authorAvatarUrl,
                             size: senderAvatarSize,
                           ),
                         )
@@ -462,6 +487,22 @@ class _StatusLine extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // Pinned (for everyone) and starred (the viewer's own), each with a
+        // spoken label -- never the glyph alone (§53).
+        if (message.isPinned) ...[
+          Semantics(
+            label: l10n.pinnedMark,
+            child: Icon(Icons.push_pin, size: 12, color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(width: Spacing.spacing1),
+        ],
+        if (message.isStarred) ...[
+          Semantics(
+            label: l10n.starredMark,
+            child: Icon(Icons.star, size: 12, color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(width: Spacing.spacing1),
+        ],
         Text(stamp, style: muted),
         if (message.isMine) ...[
           const SizedBox(width: Spacing.spacing2),

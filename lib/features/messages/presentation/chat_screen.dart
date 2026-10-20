@@ -30,13 +30,16 @@ import '../../conversations/application/conversations_controller.dart';
 import '../../lessons/presentation/lesson_ticket_sheet.dart';
 import '../../supervision/presentation/supervision_ticket_sheet.dart';
 import '../../trials/presentation/trial_report_sheet.dart';
+import '../application/marks_providers.dart';
 import '../application/messages_controller.dart';
 import '../application/voice_composer_controller.dart';
 import 'attachment_preview.dart';
+import 'forward_sheet.dart';
 import 'media_viewer.dart';
 import 'message_actions.dart';
 import 'message_bubble.dart';
 import 'message_composer.dart';
+import 'pinned_banner.dart';
 
 /// One conversation.
 ///
@@ -49,6 +52,7 @@ class ChatScreen extends ConsumerStatefulWidget {
     required this.conversationId,
     required this.title,
     this.subtitle,
+    this.avatarUrl,
     this.kind = ConversationKind.jawwidSupport,
     this.requiresApproval = false,
     this.isReadOnly = false,
@@ -64,6 +68,10 @@ class ChatScreen extends ConsumerStatefulWidget {
 
   /// e.g. the owner line on the Jawwid thread. Never an internal handler id.
   final String? subtitle;
+
+  /// The header picture: the other person's photo in a 1:1, the child's in a
+  /// group about them (a signed link from the server), or null for initials.
+  final String? avatarUrl;
 
   final ConversationKind kind;
   final bool requiresApproval;
@@ -106,6 +114,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// clears it. §6 and §9 both ask for a highlight that is *temporary*: a
   /// permanent one becomes part of the message.
   String? _highlightedKey;
+
+  /// Select mode: the server ids of the chosen messages. Non-empty = selecting.
+  final Set<String> _selected = {};
+  bool get _selecting => _selected.isNotEmpty;
+
+  void _toggleSelected(Message message) {
+    final id = message.id;
+    if (id == null || !canActOn(message)) return;
+    setState(() {
+      if (!_selected.remove(id)) _selected.add(id);
+    });
+  }
   Timer? _highlightTimer;
 
   /// True when the user has scrolled away from the newest message. While true, arrivals must
@@ -331,7 +351,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final controller =
         ref.read(messagesControllerProvider(widget.conversationId).notifier);
 
-    final result = await showMessageActions(context, message: message);
+    final marks = ref.read(messageMarksRepositoryProvider);
+    final result = await showMessageActions(context, message: message, withMarks: marks.isAvailable);
     if (result == null || !mounted) return;
 
     final reaction = result.reaction;
@@ -343,6 +364,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     switch (result.action!) {
       case MessageAction.reply:
         setState(() => _replyingTo = _previewOf(message));
+      case MessageAction.forward:
+        final id = message.id;
+        if (id != null) await _forward([id]);
+      case MessageAction.select:
+        _toggleSelected(message);
+      case MessageAction.star:
+        await _guard(() => _mark(message, star: true));
+      case MessageAction.pin:
+        await _guard(() => _mark(message, star: false));
       case MessageAction.copy:
         await _copy(message);
       case MessageAction.open:
@@ -352,6 +382,100 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       case MessageAction.deleteForEveryone:
         await _guard(() => controller.deleteForEveryone(message));
     }
+  }
+
+  /// Pick destinations and forward. The server checks the source is readable
+  /// and each destination writable, and copies media; a refusal surfaces
+  /// through [_guard].
+  Future<void> _forward(List<String> messageIds) async {
+    final targets = await showForwardSheet(context);
+    if (targets == null || targets.isEmpty || !mounted) return;
+    final l10n = L10n.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    await _guard(() async {
+      await ref.read(messageMarksRepositoryProvider).forward(widget.conversationId, messageIds, targets);
+      if (!mounted) return;
+      setState(_selected.clear);
+      messenger.showSnackBar(SnackBar(
+        content: Text(l10n.forwardDone(targets.length)),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ));
+    });
+  }
+
+  /// The selection bar's bulk actions, over the messages still on screen.
+  Future<void> _bulk(MessagesState state, Future<void> Function(Message m) action) async {
+    final chosen = state.log.messages.where((m) => m.id != null && _selected.contains(m.id)).toList();
+    await _guard(() async {
+      for (final m in chosen) {
+        await action(m);
+      }
+    });
+    if (mounted) setState(_selected.clear);
+  }
+
+  PreferredSizeWidget _selectionBar(MessagesState state) {
+    final l10n = L10n.of(context);
+    final marks = ref.read(messageMarksRepositoryProvider);
+    final controller = ref.read(messagesControllerProvider(widget.conversationId).notifier);
+    return AppBar(
+      leading: IconButton(
+        icon: const Icon(Icons.close),
+        tooltip: l10n.cancelSelection,
+        onPressed: () => setState(_selected.clear),
+      ),
+      title: Text(l10n.selectedCount(_selected.length)),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.forward),
+          tooltip: l10n.forwardAction,
+          onPressed: () => _forward(_selected.toList()),
+        ),
+        IconButton(
+          icon: const Icon(Icons.star_border),
+          tooltip: l10n.starAction,
+          onPressed: () => _bulk(state, (m) async {
+            if (!m.isStarred) await marks.star(widget.conversationId, m.id!);
+          }).then((_) => controller.refreshLatest()),
+        ),
+        IconButton(
+          icon: const Icon(Icons.copy_outlined),
+          tooltip: l10n.copyAction,
+          onPressed: () async {
+            final text = state.log.messages
+                .where((m) => m.id != null && _selected.contains(m.id) && m.body.trim().isNotEmpty)
+                .map((m) => m.body)
+                .join('\n');
+            await Clipboard.setData(ClipboardData(text: text));
+            if (mounted) setState(_selected.clear);
+          },
+        ),
+        IconButton(
+          icon: const Icon(Icons.delete_outline),
+          tooltip: l10n.deleteForMeAction,
+          onPressed: () => _bulk(state, controller.deleteForMe),
+        ),
+      ],
+    );
+  }
+
+  /// Star (private) or pin (for everyone here) -- toggled from the message's
+  /// own state -- then re-read the page (the flags) and the pinned bar. The
+  /// server decides who may pin; a refusal surfaces through [_guard].
+  Future<void> _mark(Message message, {required bool star}) async {
+    final id = message.id;
+    if (id == null) return;
+    final marks = ref.read(messageMarksRepositoryProvider);
+    final conversationId = widget.conversationId;
+    if (star) {
+      await (message.isStarred ? marks.unstar(conversationId, id) : marks.star(conversationId, id));
+    } else {
+      await (message.isPinned ? marks.unpin(conversationId, id) : marks.pin(conversationId, id));
+    }
+    if (!mounted) return;
+    ref.invalidate(pinnedMessagesProvider(conversationId));
+    await ref.read(messagesControllerProvider(conversationId).notifier).refreshLatest();
   }
 
   /// Copy to the clipboard, and say so without a dialog (§11).
@@ -565,8 +689,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     _reportRead(state);
 
-    return Scaffold(
-      appBar: AppBar(
+    return PopScope(
+      // Back leaves select mode first, as in every messaging app.
+      canPop: !_selecting,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _selecting) setState(_selected.clear);
+      },
+      child: Scaffold(
+      appBar: _selecting ? _selectionBar(state) : AppBar(
         titleSpacing: 0,
         title: InkWell(
           onTap: widget.onOpenProfile,
@@ -579,6 +709,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               children: [
                 JawwidAvatar(
                   displayName: widget.title,
+                  imageUrl: widget.avatarUrl,
                   size: Sizes.avatarSm,
                 ),
                 const SizedBox(width: Spacing.spacing3),
@@ -636,6 +767,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               message: l10n.messageQueuedOffline,
               tone: JawwidBannerTone.warning,
             ),
+          PinnedBanner(
+            conversationId: widget.conversationId,
+            onJump: (messageId) => _jumpToMessage(messageId, state),
+          ),
           Expanded(child: _body(state, controller, l10n)),
           MessageComposer(
             onAttach: widget.isReadOnly ? null : _attach,
@@ -665,6 +800,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             requiresApproval: widget.requiresApproval,
           ),
         ],
+      ),
       ),
     );
   }
@@ -791,7 +927,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   showAuthor: showAuthor,
                   reserveSenderColumn: fromSomeoneElse,
                   replyTo: reply,
-                  isHighlighted: _highlightedKey == key,
+                  isHighlighted: _highlightedKey == key ||
+                      (message.id != null && _selected.contains(message.id)),
                   onRetry: message.canRetry
                       ? () => controller.retry(message.clientMessageId)
                       : null,
@@ -801,8 +938,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   // Absent rather than inert on a message nothing can be done
                   // to, so a long press there is a no-op the user feels once
                   // instead of an empty sheet they have to dismiss.
-                  onLongPress:
-                      canActOn(message) ? () => _onLongPress(message) : null,
+                  onLongPress: !canActOn(message)
+                      ? null
+                      : _selecting
+                          ? () => _toggleSelected(message)
+                          : () => _onLongPress(message),
+                  onTap: _selecting ? () => _toggleSelected(message) : null,
                   onTapReply: reply == null
                       ? null
                       : () => _jumpToMessage(reply.messageId, state),

@@ -173,6 +173,17 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const Divider(),
           ],
+          // Offered only when this build reaches the star routes.
+          if (ref.watch(messageMarksRepositoryProvider).isAvailable) ...[
+            ListTile(
+              key: const ValueKey('settings-starred'),
+              leading: const Icon(Icons.star_border),
+              title: Text(l10n.starredMessagesTitle),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push(Routes.starred),
+            ),
+            const Divider(),
+          ],
           ListTile(
             leading: const Icon(Icons.notifications_outlined),
             title: Text(l10n.settingsNotifications),

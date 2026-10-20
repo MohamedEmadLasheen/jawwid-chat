@@ -106,6 +106,8 @@ model Contact {
   canCancel         Boolean  @map("can_cancel")
   accountId         String?  @map("account_id") @db.Uuid
   account           Account? @relation(fields: [accountId], references: [id])
+  /// A profile photo: `avatars/<kind>/<this id>/<uuid>` (CHECK in 20261014130000). Never sent to a client; served as a signed /media/avatars URL.
+  avatarObjectKey String?  @map("avatar_object_key")
   isActive          Boolean  @map("is_active") @default(true)
   createdAt         DateTime @map("created_at") @db.Timestamptz @default(now())
   updatedAt         DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
@@ -126,6 +128,8 @@ model Learner {
   /// foundation and learner.teacher_id is a foreign key to it.
   teacherId   String?   @map("teacher_id") @db.Uuid
   teacher     Teacher?  @relation(fields: [teacherId], references: [id])
+  /// A profile photo: `avatars/<kind>/<this id>/<uuid>` (CHECK in 20261014130000). Never sent to a client; served as a signed /media/avatars URL.
+  avatarObjectKey String?  @map("avatar_object_key")
   nextClassAt DateTime? @map("next_class_at") @db.Timestamptz
   createdAt   DateTime  @map("created_at") @db.Timestamptz @default(now())
   updatedAt   DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
@@ -269,6 +273,9 @@ model Message {
   seq BigInt?
 
   replyToMessageId String?   @map("reply_to_message_id") @db.Uuid
+  /// A forward (20261020100000); `forwardedFromMessageId` is audit-only provenance, never sent to a client.
+  forwarded              Boolean @default(false)
+  forwardedFromMessageId String? @map("forwarded_from_message_id") @db.Uuid
   replyTo          Message?  @relation("MessageReply", fields: [replyToMessageId], references: [id])
   replies          Message[] @relation("MessageReply")
 
@@ -283,6 +290,8 @@ model Message {
   attachmentsJson Json @map("attachments") @default("[]")
 
   createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
+  /// Set by a recorded edit (MessageService.edit); the prior wording is in MessageRevision.
+  editedAt  DateTime? @map("edited_at") @db.Timestamptz
 
   attachments MessageAttachment[]
   /// PD-11: the structured half of a message of type `card`.
@@ -329,6 +338,32 @@ model MessageReaction {
   @@schema("chat")
 }
 
+/// A private bookmark (20261020091000). SQL owns the DDL; no relation fields so
+/// the Message model stays untouched -- rows cascade with their message.
+model MessageStar {
+  messageId String   @map("message_id") @db.Uuid
+  actorId   String   @map("actor_id") @db.Uuid
+  starredAt DateTime @default(now()) @map("starred_at") @db.Timestamptz
+
+  @@id([messageId, actorId])
+  @@map("message_star")
+  @@schema("chat")
+}
+
+/// A message pinned for everyone in its conversation; at most three (trigger
+/// chat.enforce_message_pin, 20261020091000).
+model MessagePin {
+  conversationId String   @map("conversation_id") @db.Uuid
+  messageId      String   @map("message_id") @db.Uuid
+  pinnedBy       String   @map("pinned_by") @db.Uuid
+  pinnedByKind   String   @map("pinned_by_kind")
+  pinnedAt       DateTime @default(now()) @map("pinned_at") @db.Timestamptz
+
+  @@id([conversationId, messageId])
+  @@map("message_pin")
+  @@schema("chat")
+}
+
 model MessageReceipt {
   id          String    @id @default(uuid()) @db.Uuid
   messageId   String    @map("message_id") @db.Uuid
@@ -364,6 +399,8 @@ model ConversationParticipantState {
   archivedAt     DateTime?    @map("archived_at") @db.Timestamptz
   mutedUntil     DateTime?    @map("muted_until") @db.Timestamptz
   pinnedAt       DateTime?    @map("pinned_at") @db.Timestamptz
+  /// The viewer's own Favorites list.
+  favoritedAt    DateTime?    @map("favorited_at") @db.Timestamptz
   updatedAt      DateTime     @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
   @@unique([conversationId, actorId])
@@ -704,6 +741,8 @@ model Teacher {
   /// Set when Jawwid Core gains a teacher entity.
   coreTeacherId String?   @unique @map("core_teacher_id")
   syncedAt      DateTime? @map("synced_at") @db.Timestamptz
+  /// A profile photo: `avatars/<kind>/<this id>/<uuid>` (CHECK in 20261014130000). Never sent to a client; served as a signed /media/avatars URL.
+  avatarObjectKey String?  @map("avatar_object_key")
   isActive      Boolean   @map("is_active") @default(true)
   leftAt        DateTime? @map("left_at") @db.Timestamptz
   createdAt     DateTime  @map("created_at") @db.Timestamptz @default(now())
@@ -1368,5 +1407,67 @@ model TrialOutcome {
   coreSubscriptionRef String?   @map("core_subscription_ref")
 
   @@map("trial_outcome")
+  @@schema("chat")
+}
+
+/// The wording a message had before an edit. SQL owns the DDL
+/// (20261020130000_chat_edit_favorites): written with the edit, never rewritten.
+model MessageRevision {
+  id           String   @id @default(uuid()) @db.Uuid
+  messageId    String   @map("message_id") @db.Uuid
+  previousBody String   @map("previous_body")
+  editedBy     String   @map("edited_by") @db.Uuid
+  editedByKind String   @map("edited_by_kind")
+  editedAt     DateTime @map("edited_at") @db.Timestamptz
+
+  @@index([messageId, editedAt])
+  @@map("message_revision")
+  @@schema("chat")
+}
+
+// =====================================================================
+// Staff tools -- 20261020110000_chat_labels_quick_replies.sql owns the DDL.
+// =====================================================================
+
+/// A staff member's PRIVATE label (owner decision 2026-10-19).
+model StaffLabel {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  ownerStaffId   String   @map("owner_staff_id") @db.Uuid
+  name           String
+  /// One of '1'..'8': a palette tone the clients render with checked contrast.
+  color          String
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  conversations ConversationLabel[]
+
+  @@map("staff_label")
+  @@schema("chat")
+}
+
+model ConversationLabel {
+  labelId        String     @map("label_id") @db.Uuid
+  label          StaffLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  conversationId String     @map("conversation_id") @db.Uuid
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz
+
+  @@id([labelId, conversationId])
+  @@map("conversation_label")
+  @@schema("chat")
+}
+
+/// A saved reply typed as /shortcut. ownerStaffId null = the team library.
+model QuickReply {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  ownerStaffId   String?  @map("owner_staff_id") @db.Uuid
+  shortcut       String
+  body           String
+  createdBy      String   @map("created_by") @db.Uuid
+  updatedBy      String   @map("updated_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("quick_reply")
   @@schema("chat")
 }

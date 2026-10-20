@@ -18,11 +18,15 @@ export interface ChatMember {
   displayName: string
   /** Whether the VIEWER may open a 1:1 with this member (server-decided, advisory). */
   canOpenDirect?: boolean
+  /** Their profile photo: a signed link for this viewer in this conversation, or null. */
+  avatarUrl?: string | null
 }
 
 /** The viewer's own preferences for a conversation (POST /:id/preferences). */
 export interface ChatViewerState {
   pinned: boolean
+  /** In the viewer's own Favorites list. Absent from servers that predate it. */
+  favorite?: boolean
   archived: boolean
   mutedUntil: string | null
 }
@@ -51,10 +55,30 @@ export interface ChatConversation {
   lastActivityAt: string
   archivedAt: string | null
   members?: ChatMember[]
-  learner?: { id: string; name: string } | null
+  learner?: { id: string; name: string; avatarUrl?: string | null } | null
   unreadCount?: number
   viewerState?: ChatViewerState
   lastMessage?: ChatLastMessage | null
+  /** A group's picture: its one child's photo, signed for this viewer; null otherwise. */
+  avatarUrl?: string | null
+  /** The viewer's OWN private labels on this chat (staff only). */
+  labels?: ChatLabel[]
+}
+
+/** A staff member's private label. `color` is a palette tone '1'..'8'. */
+export interface ChatLabel {
+  id: string
+  name: string
+  color: string
+}
+
+export interface QuickReply {
+  id: string
+  shortcut: string
+  body: string
+  /** 'team': the shared library anyone on staff may edit; 'mine': the viewer's own. */
+  scope: 'team' | 'mine'
+  updatedAt: string
 }
 
 export interface ChatAttachment {
@@ -83,8 +107,12 @@ export interface ChatMessage {
   clientMessageId: string | null
   deletedForAll: boolean
   createdAt: string
+  /** When the author last edited it; `body` is already the edited wording. */
+  editedAt?: string | null
   attachments: ChatAttachment[]
   replyToMessageId?: string | null
+  /** The author's profile photo, signed for this viewer in this conversation; null when none. */
+  authorAvatarUrl?: string | null
   /** One reaction per actor (server unique index). */
   reactions?: Array<{ actorId: string; emoji: string }>
   /**
@@ -93,7 +121,16 @@ export interface ChatMessage {
    * a plain-text rendering for a card this client does not know.
    */
   card?: { kind: string; payload: Record<string, unknown> } | null
+  /** A copy forwarded by its author; shown as "Forwarded" (the source is never named). */
+  forwarded?: boolean
+  /** The viewer's private bookmark. */
+  starred?: boolean
+  /** Pinned for everyone in this conversation (at most three). */
+  pinned?: boolean
 }
+
+/** How long after sending the server lets an author edit (communication.edit_window_minutes). */
+export const EDIT_WINDOW_MS = 15 * 60_000
 
 export interface MessagePage {
   messages: ChatMessage[]
@@ -190,6 +227,44 @@ export const chatApi = {
     })
   },
   upload,
+  /**
+   * Forward messages of conversation `id` into up to ten others. The server
+   * checks each source is readable here and each destination writable; media
+   * are copied into each destination.
+   */
+  forward: (id: string, messageIds: string[], toConversationIds: string[]) =>
+    api.post<{ sent: ChatMessage[] }>(`${conv(id)}/messages/forward`, { messageIds, toConversationIds }),
+  labels: () => api.get<{ labels: Array<ChatLabel & { conversationCount: number }> }>('/me/labels').then((r) => r.labels),
+  createLabel: (input: { name: string; color: string }) => api.post<ChatLabel>('/me/labels', input),
+  updateLabel: (labelId: string, input: { name?: string; color?: string }) =>
+    api.patch<ChatLabel>(`/me/labels/${encodeURIComponent(labelId)}`, input),
+  deleteLabel: (labelId: string) => api.delete<{ ok: boolean }>(`/me/labels/${encodeURIComponent(labelId)}`),
+  /** Replace the viewer's own labels on a chat. */
+  setLabels: (id: string, labelIds: string[]) => api.put<{ labels: ChatLabel[] }>(`${conv(id)}/labels`, { labelIds }),
+  quickReplies: () => api.get<{ team: QuickReply[]; mine: QuickReply[] }>('/quick-replies'),
+  createQuickReply: (input: { shortcut: string; body: string; scope: 'team' | 'mine' }) =>
+    api.post<QuickReply>('/quick-replies', input),
+  updateQuickReply: (replyId: string, input: { shortcut?: string; body?: string }) =>
+    api.patch<QuickReply>(`/quick-replies/${encodeURIComponent(replyId)}`, input),
+  deleteQuickReply: (replyId: string) => api.delete<{ ok: boolean }>(`/quick-replies/${encodeURIComponent(replyId)}`),
+  star: (id: string, messageId: string) =>
+    api.post<{ ok: boolean }>(`${conv(id)}/messages/${encodeURIComponent(messageId)}/star`),
+  unstar: (id: string, messageId: string) =>
+    api.delete<{ ok: boolean }>(`${conv(id)}/messages/${encodeURIComponent(messageId)}/star`),
+  /** Anyone who may write here may pin; a fourth pin replaces the oldest (server-side). */
+  pin: (id: string, messageId: string) =>
+    api.post<{ ok: boolean }>(`${conv(id)}/messages/${encodeURIComponent(messageId)}/pin`),
+  unpin: (id: string, messageId: string) =>
+    api.delete<{ ok: boolean }>(`${conv(id)}/messages/${encodeURIComponent(messageId)}/pin`),
+  /** The pinned messages this viewer may see, oldest first. */
+  pins: (id: string) =>
+    api.get<{ pins: Array<{ pinnedAt: string; pinnedBy: string; message: ChatMessage }> }>(`${conv(id)}/messages/pins`).then((r) => r.pins),
+  /** The viewer's starred messages, newest star first, across conversations they can still read. */
+  starred: (before?: string) =>
+    api.get<{ items: Array<{ starredAt: string; conversationId: string; message: ChatMessage }>; nextBefore: string | null }>(
+      '/me/starred',
+      before ? { before } : undefined,
+    ),
   react: (id: string, messageId: string, emoji: string) =>
     api.post<{ ok: boolean }>(`${conv(id)}/messages/${encodeURIComponent(messageId)}/reactions`, { emoji }),
   unreact: (id: string, messageId: string) =>
@@ -199,8 +274,14 @@ export const chatApi = {
   /** Author within the window, or a manager; the server decides. */
   deleteForEveryone: (id: string, messageId: string) =>
     api.delete<{ ok: boolean }>(`${conv(id)}/messages/${encodeURIComponent(messageId)}`),
-  /** Archive / pin / mute are the VIEWER's own preferences. */
-  setPreferences: (id: string, prefs: { archived?: boolean; pinned?: boolean; mutedUntil?: string | null }) =>
+  /** The author rewrites their own text message; the server decides whether it still may. */
+  editMessage: (id: string, messageId: string, body: string) =>
+    api.patch<ChatMessage>(`${conv(id)}/messages/${encodeURIComponent(messageId)}`, { body }),
+  /** Archive / pin / mute / favorite are the VIEWER's own preferences. */
+  setPreferences: (
+    id: string,
+    prefs: { archived?: boolean; pinned?: boolean; mutedUntil?: string | null; favorite?: boolean },
+  ) =>
     api.post<{ ok: boolean }>(`${conv(id)}/preferences`, prefs),
   /** Staff-only; every field is re-validated server-side and a reason is recorded. */
   addMember: (id: string, member: { actorId: string; actorKind: 'contact' | 'teacher'; memberRole: 'parent' | 'teacher' }, reason: string) =>
@@ -249,6 +330,10 @@ export const chatKeys = {
   conversation: (id: string) => ['chat', 'conversation', id] as const,
   messages: (id: string) => ['chat', 'messages', id] as const,
   approvals: (id: string) => ['chat', 'approvals', id] as const,
+  pins: (id: string) => ['chat', 'pins', id] as const,
+  starred: ['chat', 'starred'] as const,
+  labels: ['chat', 'labels'] as const,
+  quickReplies: ['chat', 'quick-replies'] as const,
 }
 
 /** Server order: by seq, numerically (a string compare would put "10" before "9"). */

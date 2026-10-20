@@ -12,6 +12,11 @@
 export const CommEvent = {
   MESSAGE_CREATED: 'message.created',
   MESSAGE_DELETED: 'message.deleted',
+  /**
+   * The author edited a message. Carries no body: a client re-reads the message
+   * through the authorized REST path. An internal note's edit reaches staff only.
+   */
+  MESSAGE_UPDATED: 'message.updated',
   MESSAGE_RECEIPT_UPDATED: 'message.receipt.updated',
   REACTION_ADDED: 'reaction.added',
   REACTION_REMOVED: 'reaction.removed',
@@ -104,6 +109,13 @@ export interface MessageDeletedPayload {
   conversationId: string;
   messageId: string;
   deletedForAll: boolean;
+}
+
+export interface MessageUpdatedPayload {
+  conversationId: string;
+  messageId: string;
+  visibility: string;
+  editedAt: string;
 }
 
 export interface MessageReceiptUpdatedPayload {
@@ -249,6 +261,7 @@ export interface StoryRetiredPayload {
 export interface CommEventPayloads {
   [CommEvent.MESSAGE_CREATED]: MessageCreatedPayload;
   [CommEvent.MESSAGE_DELETED]: MessageDeletedPayload;
+  [CommEvent.MESSAGE_UPDATED]: MessageUpdatedPayload;
   [CommEvent.MESSAGE_RECEIPT_UPDATED]: MessageReceiptUpdatedPayload;
   [CommEvent.REACTION_ADDED]: ReactionPayload;
   [CommEvent.REACTION_REMOVED]: ReactionPayload;

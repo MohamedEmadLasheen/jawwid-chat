@@ -1,3 +1,4 @@
+import { signActorAvatar } from '../profile/avatar-urls';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Conversation, ConversationMember, Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
@@ -440,6 +441,8 @@ export class ConversationService {
         isSilent: m.isSilent,
         displayName: actors.get(key)?.displayName ?? '',
         canOpenDirect: openable.has(key),
+        // Signed for this viewer in this conversation; without a viewer, none.
+        avatarUrl: viewer ? signActorAvatar(actors.get(key), m.conversationId, viewer.actorId) : null,
       });
     }
     return out;
@@ -1422,19 +1425,55 @@ export class ConversationService {
    * The viewer's own pin / archive / mute for these conversations, read back
    * (setPreferences writes them). THE CALLER AUTHORIZES THE IDS. One query.
    */
+  /**
+   * The child each of these groups is about, when it is about exactly ONE: the
+   * group's picture is then that child's photo (WhatsApp-style). Student groups
+   * name their learner on the row; family groups link theirs through
+   * chat.conversation_learner, read here in one query. THE CALLER AUTHORIZES
+   * THE IDS. Returns the learner's id and stored key -- never sent as such.
+   */
+  async soleChildOf(
+    conversations: ReadonlyArray<{ id: string; learner?: { id: string; avatarObjectKey?: string | null } | null }>,
+  ): Promise<Map<string, { id: string; avatarObjectKey: string | null }>> {
+    const out = new Map<string, { id: string; avatarObjectKey: string | null }>();
+    const unlinked: string[] = [];
+    for (const c of conversations) {
+      if (c.learner) out.set(c.id, { id: c.learner.id, avatarObjectKey: c.learner.avatarObjectKey ?? null });
+      else unlinked.push(c.id);
+    }
+    if (unlinked.length === 0) return out;
+    const links = await this.prisma.conversationLearner.findMany({
+      where: { conversationId: { in: unlinked } },
+      select: { conversationId: true, learnerId: true },
+    });
+    const byConv = new Map<string, string[]>();
+    for (const l of links) byConv.set(l.conversationId, [...(byConv.get(l.conversationId) ?? []), l.learnerId]);
+    const sole = [...byConv].filter(([, ids]) => ids.length === 1);
+    if (sole.length === 0) return out;
+    const learners = await this.prisma.learner.findMany({
+      where: { id: { in: sole.map(([, ids]) => ids[0]!) } },
+      select: { id: true, avatarObjectKey: true },
+    });
+    const keyOf = new Map(learners.map((l) => [l.id, l.avatarObjectKey]));
+    for (const [convId, [learnerId]] of sole) {
+      if (keyOf.has(learnerId!)) out.set(convId, { id: learnerId!, avatarObjectKey: keyOf.get(learnerId!) ?? null });
+    }
+    return out;
+  }
+
   async viewerStates(conversationIds: readonly string[], actorId: string) {
     const rows = await this.prisma.conversationParticipantState.findMany({
       where: { conversationId: { in: [...conversationIds] }, actorId },
-      select: { conversationId: true, pinnedAt: true, archivedAt: true, mutedUntil: true },
+      select: { conversationId: true, pinnedAt: true, archivedAt: true, mutedUntil: true, favoritedAt: true },
     });
     return new Map(rows.map((r) => [r.conversationId, r]));
   }
 
-  /** Archive / mute / pin are per-user; one user's pin never affects another. */
+  /** Archive / mute / pin / favorite are per-user; one user's pin never affects another. */
   async setPreferences(
     conversationId: string,
     actorId: string,
-    prefs: { archived?: boolean; pinned?: boolean; mutedUntil?: Date | null },
+    prefs: { archived?: boolean; pinned?: boolean; mutedUntil?: Date | null; favorite?: boolean },
   ): Promise<void> {
     const actor = await this.requireActor(actorId);
     const conv = await this.requireConversation(conversationId);
@@ -1446,6 +1485,7 @@ export class ConversationService {
       archivedAt: prefs.archived === undefined ? undefined : prefs.archived ? new Date() : null,
       pinnedAt: prefs.pinned === undefined ? undefined : prefs.pinned ? new Date() : null,
       mutedUntil: prefs.mutedUntil === undefined ? undefined : prefs.mutedUntil,
+      favoritedAt: prefs.favorite === undefined ? undefined : prefs.favorite ? new Date() : null,
     };
 
     await this.prisma.conversationParticipantState.upsert({

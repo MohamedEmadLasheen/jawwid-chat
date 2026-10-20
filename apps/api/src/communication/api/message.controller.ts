@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseFilters } from '@nestjs/common';
 import { MessageService } from '../messages/message.service';
 import { AttachmentService } from '../attachments/attachment.service';
 import { ActorId } from './actor.decorator';
@@ -81,6 +81,26 @@ export class MessageController {
     });
   }
 
+  /**
+   * Forward one or more messages of THIS conversation into up to ten others.
+   * Each message must be readable here; each destination must be writable
+   * (the ordinary send decision); media are copied, never shared by key.
+   */
+  @Post('forward')
+  async forward(
+    @ActorId() actorId: string,
+    @Param('conversationId') conversationId: string,
+    @Body() body: { messageIds?: unknown; toConversationIds?: unknown; clientMessageIds?: unknown },
+  ) {
+    return this.messages.forward({
+      actorId,
+      conversationId,
+      messageIds: body?.messageIds,
+      toConversationIds: body?.toConversationIds,
+      clientMessageIds: body?.clientMessageIds,
+    });
+  }
+
   /** Authorizes an upload before any object key exists. */
   @Post('attachments/authorize')
   async authorizeUpload(
@@ -106,6 +126,12 @@ export class MessageController {
   ) {
     await this.messages.markReadUpTo(conversationId, actorId, body.upToSeq);
     return { ok: true };
+  }
+
+  /** The conversation's pinned messages (at most three) as this viewer may see them. */
+  @Get('pins')
+  async pins(@ActorId() actorId: string, @Param('conversationId') conversationId: string) {
+    return this.messages.pins(conversationId, actorId);
   }
 
   @Get('unread')
@@ -135,11 +161,52 @@ export class MessageController {
     return { ok: true };
   }
 
+  /** A private bookmark; nobody else ever sees it. */
+  @Post(':messageId/star')
+  async star(@ActorId() actorId: string, @Param('messageId') messageId: string) {
+    await this.messages.star(messageId, actorId);
+    return { ok: true };
+  }
+
+  @Delete(':messageId/star')
+  async unstar(@ActorId() actorId: string, @Param('messageId') messageId: string) {
+    await this.messages.unstar(messageId, actorId);
+    return { ok: true };
+  }
+
+  /** Pinned for everyone here; anyone who may write may pin. A fourth replaces the oldest. */
+  @Post(':messageId/pin')
+  async pin(@ActorId() actorId: string, @Param('messageId') messageId: string) {
+    await this.messages.pin(messageId, actorId);
+    return { ok: true };
+  }
+
+  @Delete(':messageId/pin')
+  async unpin(@ActorId() actorId: string, @Param('messageId') messageId: string) {
+    await this.messages.unpin(messageId, actorId);
+    return { ok: true };
+  }
+
   /** Delete for me. The message stays intact for everyone else. */
   @Delete(':messageId/me')
   async deleteForMe(@ActorId() actorId: string, @Param('messageId') messageId: string) {
     await this.messages.deleteForMe(messageId, actorId);
     return { ok: true };
+  }
+
+  /**
+   * Edit: the author rewrites their own text message within the edit window.
+   * Returns the message as it now reads; the previous wording is kept server
+   * side. See MessageService.edit for what may be edited.
+   */
+  @Patch(':messageId')
+  async edit(
+    @ActorId() actorId: string,
+    @Param('conversationId') conversationId: string,
+    @Param('messageId') messageId: string,
+    @Body() body: { body?: unknown },
+  ) {
+    return this.messages.edit(messageId, actorId, body?.body, conversationId);
   }
 
   /** Delete for everyone. Author within the window, or a manager. */
