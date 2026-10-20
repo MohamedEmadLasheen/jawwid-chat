@@ -13,6 +13,9 @@ import { TrialController, TrialTicketsController } from './trial.controller';
 import { TrialGroupService } from './trial-group.service';
 import { TrialService } from './trial.service';
 import { SchedulingService } from './scheduling.service';
+import { EnrollmentService } from './enrollment.service';
+import { JourneyController } from './journey.controller';
+import { LessonRecordService } from './lesson-record.service';
 
 /**
  * PD-9 / PD-11: lessons, their one outcome, the tickets that record it, and
@@ -25,8 +28,12 @@ import { SchedulingService } from './scheduling.service';
   // SupervisionModule: the teacher's supervision conversation (PD-12), where
   // the bonus and handover cards are posted. It depends on nothing here.
   imports: [CommunicationModule, SupervisionModule],
-  controllers: [StatsController, SchedulingController, LessonController, LifecycleController, TrialController, TrialTicketsController],
-  providers: [LessonService, SchedulingService, LifecycleService, SupervisionService, StatsService, TrialService, TrialGroupService],
+  controllers: [StatsController, SchedulingController, LessonController, JourneyController, LifecycleController, TrialController, TrialTicketsController],
+  providers: [
+    LessonService, SchedulingService, LifecycleService, SupervisionService, StatsService, TrialService, TrialGroupService,
+    // PD-15: corrections and report edits / deletes; enrolment details and courses.
+    LessonRecordService, EnrollmentService,
+  ],
   exports: [LessonService, SchedulingService, LifecycleService, SupervisionService, StatsService, TrialService],
 })
 export class LessonModule {}

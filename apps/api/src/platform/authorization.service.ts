@@ -40,8 +40,9 @@ const allow = (onBehalfMode: string | null = null, moderation: string = Moderati
 /**
  * PD-9 / PD-11: how an actor stands to one lesson. `manager` -- the super admin
  * or the Teachers department; `supervisor` -- the learner's PD-8 supervisor
- * (read only); `teacher` -- the lesson's own teacher; `family` -- a contact of
- * the learner's family.
+ * (an Operations supervisor, their active backup, or the Operations manager
+ * through staff_principals); `teacher` -- the lesson's own teacher; `family` --
+ * a contact of the learner's family.
  */
 export type LessonStanding = 'manager' | 'supervisor' | 'teacher' | 'family';
 
@@ -60,26 +61,43 @@ export type LessonAct =
   | 'resolve_makeup'
   | 'read_schedule'
   | 'transfer'
-  | 'suspend';
+  | 'suspend'
+  | 'late_excuse'
+  | 'correct_outcome'
+  | 'edit_report'
+  | 'delete_report'
+  | 'manage_enrollment';
 
 /**
- * Who may record what (PD-11's table). The report is the teacher's own words,
- * so nobody writes it for them; an absence the Teachers department may record
- * when the teacher cannot; a late apology is the family's to file and never
- * the teacher's to judge.
+ * Who may record what (PD-11's table, extended by PD-15). The report is the
+ * teacher's own words, so nobody writes it for them; an absence the Teachers
+ * department may record when the teacher cannot; a late apology is the
+ * family's to file and never the teacher's to judge.
+ *
+ * PD-15: the child's supervisor (Operations) records excuses from the group --
+ * a student's before the start (`apology`) or after it (`late_excuse`, which
+ * excuses at once), and a teacher's (`teacher_apology`). Corrections, and
+ * editing or deleting any report, are the Teachers department's, Operations'
+ * and the super admin's; a teacher edits their own report only.
  */
 const LESSON_ACTS: Readonly<Record<LessonAct, readonly LessonStanding[]>> = {
   report: ['teacher'],
   absence: ['teacher', 'manager'],
-  apology: ['family', 'manager'],
-  teacher_apology: ['teacher', 'manager'],
+  apology: ['family', 'manager', 'supervisor'],
+  teacher_apology: ['teacher', 'manager', 'supervisor'],
+  late_excuse: ['manager', 'supervisor'],
+  correct_outcome: ['manager', 'supervisor'],
+  edit_report: ['teacher', 'manager', 'supervisor'],
+  delete_report: ['manager', 'supervisor'],
+  manage_enrollment: ['manager', 'supervisor'],
   cancel: ['manager'],
   teacher_no_show: ['manager'],
   late_apology: ['family'],
   decide_ruling: ['manager'],
   // PD-11 T2: a family books the make-up it is owed itself, instantly; a
-  // regular-time change it may only ask for.
-  book_makeup: ['family', 'manager'],
+  // regular-time change it may only ask for. PD-15: the teacher and the
+  // child's supervisor record the make-up time the family and teacher agreed.
+  book_makeup: ['family', 'manager', 'supervisor', 'teacher'],
   request_schedule_change: ['family'],
   decide_schedule_change: ['manager'],
   resolve_makeup: ['manager'],

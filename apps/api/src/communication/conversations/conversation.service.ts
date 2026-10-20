@@ -996,7 +996,7 @@ export class ConversationService {
       ...contacts.map((c) => ({ actorId: c.id, actorKind: ActorKind.CONTACT, memberRole: MemberRole.PARENT })),
       ...teachers.map((t) => ({ actorId: t.id, actorKind: ActorKind.TEACHER, memberRole: MemberRole.TEACHER })),
     ];
-    const title = request.title ?? `${learners.map((l) => l.name).join(' · ')} · Jawwid`;
+    const title = request.title ?? familyGroupTitle(teachers.map((t) => t.name), learners.map((l) => l.name));
 
     return this.prisma.$transaction(async (tx) => {
       await this.assertActorLive(tx, actor);
@@ -1643,4 +1643,14 @@ function validateMembershipRequest(
     isSilent: spec.isSilent ?? false,
     reason: reason.trim(),
   };
+}
+
+/**
+ * PD-15: a family group is found by its teacher and its children --
+ * "Teacher — Child · Child". With no teacher, or several, the children's names
+ * alone (the PD-8 default) say who it is about.
+ */
+export function familyGroupTitle(teacherNames: string[], learnerNames: string[]): string {
+  const children = learnerNames.join(' · ');
+  return teacherNames.length === 1 ? `${teacherNames[0]} — ${children}`.slice(0, 120) : `${children} · Jawwid`.slice(0, 120);
 }

@@ -21,6 +21,8 @@ import {
 } from '../communication/contracts/vocab';
 import {
   LESSON_INCLUDE,
+  MAKEUP_CAUSES,
+  TEACHER_MAKEUP_CAUSES,
   LessonService,
   learnerLesson,
   cancelReminders,
@@ -411,12 +413,15 @@ export class SchedulingService {
   // Make-ups
   // ------------------------------------------------------------------
 
-  /** The free start times a family may book the make-up of `lessonId` into. */
+  /**
+   * The teacher's free start times for the make-up of `lessonId`: the only
+   * times a family may book, and suggestions for the teacher and staff.
+   */
   async makeupSlots(actorId: string, lessonId: string) {
     const actor = await this.conversations.requireActor(actorId);
     const { lesson, standing } = await this.lessons.load(actor, lessonId);
     this.requireAct(actor, standing, 'book_makeup');
-    await this.assertOwed(lesson);
+    await this.assertOwed(lesson, MAKEUP_CAUSES);
     const duration = minutesBetween(lesson.startsAt, lesson.endsAt);
     const slots = await this.freeSlots(lesson.teacherId, duration);
     const tz = await this.prisma.teacherAvailability.findFirst({ where: { teacherId: lesson.teacherId }, select: { timezone: true } });
@@ -429,20 +434,31 @@ export class SchedulingService {
   }
 
   /**
-   * Book the make-up a teacher-cancelled lesson owes, into one of the teacher's
-   * real free times. Instant (PD-11): no one approves it. The database refuses a
-   * second live make-up for the same lesson and any overlap for the teacher.
+   * "Reschedule a make-up class" (PD-11 T2, PD-15): book the make-up an
+   * apologised or teacher-cancelled lesson owes. It is recorded once the family
+   * and the teacher have agreed on a time, never when the apology is filed.
+   *
+   * A family books only into one of the teacher's real free times (instant,
+   * PD-11). The teacher and staff record the time that was agreed -- any future
+   * time that is not one of the teacher's days off. Either way the database
+   * refuses a second live make-up for the same lesson and any overlap for the
+   * teacher. The make-up stays linked to the lesson it replaces (makeup_for)
+   * and counts as a completed lesson only once it is itself reported held.
    */
   async bookMakeup(actorId: string, lessonId: string, body: Record<string, unknown>) {
     const startsAt = dateField(body, 'startsAt');
     const actor = await this.conversations.requireActor(actorId);
     const { lesson, standing } = await this.lessons.load(actor, lessonId);
     this.requireAct(actor, standing, 'book_makeup');
-    await this.assertOwed(lesson);
+    await this.assertOwed(lesson, MAKEUP_CAUSES);
     const duration = minutesBetween(lesson.startsAt, lesson.endsAt);
-    const free = await this.freeSlots(lesson.teacherId, duration);
-    if (!free.some((d) => d.getTime() === startsAt.getTime())) {
-      throw stateError('that time is not free any more; choose another');
+    if (actor.kind === ActorKind.CONTACT) {
+      const free = await this.freeSlots(lesson.teacherId, duration);
+      if (!free.some((d) => d.getTime() === startsAt.getTime())) {
+        throw stateError('that time is not free any more; choose another');
+      }
+    } else {
+      await this.assertAgreedTime(lesson.teacherId, startsAt);
     }
     const lang = await this.lessons.languageOf(lesson);
     const makeup = await this.lessons.write(() =>
@@ -456,14 +472,14 @@ export class SchedulingService {
             makeupFor: lesson.id,
             startsAt,
             endsAt: new Date(startsAt.getTime() + duration * 60_000),
-            createdByKind: actor.kind === ActorKind.CONTACT ? 'contact' : 'staff',
+            createdByKind: actor.kind === ActorKind.CONTACT ? 'contact' : actor.kind === ActorKind.TEACHER ? 'teacher' : 'staff',
             createdBy: actor.actorId,
           },
           include: LESSON_INCLUDE,
         }).then(learnerLesson);
         await this.lessons.postCard(
           tx, created, actor, CardKind.LESSON_MAKEUP_BOOKED,
-          { ...this.lessons.cardBase(created), makeupFor: lesson.id, missedStartsAt: lesson.startsAt.toISOString() },
+          { ...this.lessons.cardBase(created), makeupFor: lesson.id, missedStartsAt: lesson.startsAt.toISOString(), missedOutcome: lesson.outcome },
           lang,
         );
         await this.audit.audit(tx, {
@@ -728,8 +744,35 @@ export class SchedulingService {
     return rows.map((r) => r.starts_at);
   }
 
-  private async assertOwed(lesson: { id: string; organizationId: string; learnerId: string }) {
-    const owed = await this.lessons.owedMakeups(lesson.organizationId, { learnerIds: [lesson.learnerId] });
+  /**
+   * A make-up time agreed outside the free-slot list (PD-15): in the future,
+   * within the booking horizon, and not on one of the teacher's days off (in
+   * the teacher's own zone). Overlaps are the database's to refuse.
+   */
+  private async assertAgreedTime(teacherId: string, startsAt: Date) {
+    const horizon = Number(await this.config.get('lesson.makeup_horizon_days'));
+    const rows = await this.prisma.$queryRaw<Array<{ future: boolean; within: boolean; day_off: boolean }>>`
+      SELECT ${startsAt}::timestamptz > now() AS future,
+             ${startsAt}::timestamptz <= now() + make_interval(days => ${horizon}::int) AS within,
+             EXISTS (
+               SELECT 1 FROM chat.teacher_day_off o
+                WHERE o.teacher_id = ${teacherId}::uuid
+                  AND o.day = (${startsAt}::timestamptz AT TIME ZONE coalesce(
+                        (SELECT a.timezone FROM chat.teacher_availability a WHERE a.teacher_id = ${teacherId}::uuid LIMIT 1),
+                        (SELECT c.value #>> '{}' FROM chat.config c WHERE c.key = 'schedule.timezone'),
+                        'Africa/Cairo'))::date
+             ) AS day_off`;
+    const r = rows[0];
+    if (!r.future) throw stateError('a make-up is scheduled in the future');
+    if (!r.within) throw stateError(`a make-up is scheduled within ${horizon} days`);
+    if (r.day_off) throw stateError('that is one of the teacher\'s days off; agree on another day');
+  }
+
+  private async assertOwed(
+    lesson: { id: string; organizationId: string; learnerId: string },
+    causes: readonly string[] = TEACHER_MAKEUP_CAUSES,
+  ) {
+    const owed = await this.lessons.owedMakeups(lesson.organizationId, { learnerIds: [lesson.learnerId], causes });
     if (!owed.some((l) => l.id === lesson.id)) {
       throw stateError('this lesson does not owe a make-up (it was given, or already replaced or resolved)');
     }

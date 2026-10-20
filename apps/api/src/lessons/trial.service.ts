@@ -230,7 +230,7 @@ export class TrialService {
         });
         if (attended) {
           await tx.lessonReport.create({
-            data: { lessonId: trial.id, organizationId: trial.organizationId, teacherId: trial.teacherId, covered: covered as string, rating, note },
+            data: { lessonId: trial.id, organizationId: trial.organizationId, teacherId: trial.teacherId, covered: covered as string, rating, note, enteredBy: trial.teacherId },
           });
         }
         await this.lessons.emitClosed(tx, updated, false);
@@ -382,15 +382,48 @@ export class TrialService {
            WHERE c.archived_at IS NULL AND cl.learner_id = ANY(${learnerIds}::uuid[])
         ) x`).map((r) => r.learner_id),
     );
-    const item = (r: (typeof rows)[number]) => ({
-      lessonId: r.lessonId,
-      prospect: { id: r.lesson.prospect?.id ?? '', displayName: r.lesson.prospect?.displayName ?? '' },
-      learnerId: r.lesson.prospect?.learnerId ?? null,
-      teacher: r.lesson.teacher,
-      trialAt: r.lesson.startsAt.toISOString(),
-      recordedAt: r.recordedAt.toISOString(),
-      confirmedAt: r.confirmedAt?.toISOString() ?? null,
-    });
+    // PD-15: the setup steps, in order -- the Operations manager assigns the
+    // responsible supervisor, the supervisor opens the family's group with the
+    // teacher, and records the child's details. Each row says how far it got.
+    const learners = new Map(
+      (await this.prisma.learner.findMany({
+        where: { id: { in: learnerIds }, organizationId: actor.organizationId as string },
+        select: { id: true, name: true, familyId: true, teacher: { select: { id: true, name: true } } },
+      })).map((l) => [l.id, l]),
+    );
+    const supervisors = new Map(
+      (await this.prisma.$queryRaw<Array<{ learner_id: string; id: string; name: string }>>`
+        SELECT ls.learner_id::text AS learner_id, s.id::text AS id, s.name
+          FROM chat.learner_supervision ls JOIN chat.staff s ON s.id = ls.supervisor_id
+         WHERE ls.learner_id = ANY(${learnerIds}::uuid[])`).map((r) => [r.learner_id, { id: r.id, name: r.name }]),
+    );
+    const detailed = new Set(
+      (await this.prisma.learnerEnrollment.findMany({
+        where: { learnerId: { in: learnerIds }, courseId: { not: null } },
+        select: { learnerId: true },
+      })).map((e) => e.learnerId),
+    );
+    const item = (r: (typeof rows)[number]) => {
+      const learnerId = r.lesson.prospect?.learnerId ?? null;
+      const learner = learnerId ? learners.get(learnerId) : undefined;
+      return {
+        lessonId: r.lessonId,
+        prospect: { id: r.lesson.prospect?.id ?? '', displayName: r.lesson.prospect?.displayName ?? '' },
+        learnerId,
+        teacher: r.lesson.teacher,
+        trialAt: r.lesson.startsAt.toISOString(),
+        recordedAt: r.recordedAt.toISOString(),
+        confirmedAt: r.confirmedAt?.toISOString() ?? null,
+        ...(learner
+          ? {
+              learner: { id: learner.id, name: learner.name, familyId: learner.familyId },
+              assignedTeacher: learner.teacher,
+              supervisor: supervisors.get(learner.id) ?? null,
+              hasDetails: detailed.has(learner.id),
+            }
+          : {}),
+      };
+    };
     return {
       readyForSetup: rows.filter((r) => r.confirmedAt && r.lesson.prospect?.learnerId && !grouped.has(r.lesson.prospect.learnerId)).map(item),
       awaitingStudent: rows.filter((r) => r.confirmedAt && !r.lesson.prospect?.learnerId).map(item),

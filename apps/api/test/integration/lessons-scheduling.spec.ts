@@ -205,7 +205,7 @@ describe('3. the make-up a family books', () => {
     expect((await lessons.ticketsFor(s.parentId, groupId)).tickets.some((t) => t.ticket === 'book_makeup')).toBe(false);
   });
 
-  it('a day off removes the day; a teacher cannot book; the database refuses a family-made lesson nobody owed', async () => {
+  it('a day off removes the day; a teacher records an agreed time but never on a day off; a student apology owes a make-up too (PD-15); the database refuses a make-up nobody owed', async () => {
     await openAllWeek();
     const id = (await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(48 * HOUR), endsAt: at(48.5 * HOUR) })).id;
     await lessons.teacherApology(s.teacherId, id, { reason: 'ill' });
@@ -219,15 +219,26 @@ describe('3. the make-up a family books', () => {
       offered.slots, d,
     );
     expect(Number(onDayOff[0].n)).toBe(0);
-    expect(await code(scheduling.bookMakeup(s.teacherId, id, { startsAt: offered.slots[0] }))).toBe(CommErrorCode.LESSON_DENIED);
+    // PD-15: the teacher records the time agreed with the family -- not on a day off.
+    const [{ t }] = await g.prisma.$queryRawUnsafe<Array<{ t: Date }>>(
+      `select (($1::date + time '10:00') at time zone '${TZ}') as t`, d,
+    );
+    expect(await code(scheduling.bookMakeup(s.teacherId, id, { startsAt: t.toISOString() }))).toBe(CommErrorCode.LESSON_STATE);
+    const booked = await scheduling.bookMakeup(s.teacherId, id, { startsAt: offered.slots[0] });
+    expect((await g.prisma.lesson.findUniqueOrThrow({ where: { id: booked.id } })).createdByKind).toBe('teacher');
 
+    // A family's own apology owes a make-up too, and its "+" offers it.
     const apologised = (await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(72 * HOUR), endsAt: at(72.5 * HOUR) })).id;
     await lessons.apology(s.parentId, apologised, { reason: 'travel' });
+    expect((await lessons.ticketsFor(s.parentId, groupId)).tickets.some((x) => x.ticket === 'book_makeup' && x.lessonId === apologised)).toBe(true);
+
+    // A lesson that owes nothing (still open) cannot be "replaced" by a family.
+    const open = (await lessons.schedule(tsupId, { learnerId: s.learnerId, startsAt: at(96 * HOUR), endsAt: at(96.5 * HOUR) })).id;
     await expect(g.prisma.$executeRawUnsafe(
       `insert into chat.lesson (learner_id, teacher_id, kind, makeup_for, starts_at, ends_at, created_by_kind, created_by)
        values ($1::uuid, $2::uuid, 'makeup', $3::uuid, now() + interval '5 days', now() + interval '5 days 30 minutes', 'contact', $4::uuid)`,
-      s.learnerId, s.teacherId, apologised, s.parentId,
-    )).rejects.toThrow(/make-up a teacher-cancelled lesson owes/);
+      s.learnerId, s.teacherId, open, s.parentId,
+    )).rejects.toThrow(/only the make-up an apologised or teacher-cancelled lesson owes/);
   });
 });
 
