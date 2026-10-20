@@ -8,6 +8,7 @@ import type { ObjectStorage } from '../attachments/object-storage';
 import { MessageService } from '../messages/message.service';
 import { StoryService } from '../stories/story.service';
 import { AvatarService } from '../profile/avatar.service';
+import { ChatThemeService } from '../themes/chat-theme.service';
 import { CommError, CommErrorCode } from '../../platform/errors';
 
 /**
@@ -43,6 +44,7 @@ export class MediaController {
     // Optional only so the positional construction the RT-037 harnesses share
     // does not shift; without it every photo link reads as absent.
     @Optional() private readonly avatars?: AvatarService,
+    @Optional() private readonly themes?: ChatThemeService,
   ) {}
 
   @Get('attachments/:attachmentId')
@@ -94,6 +96,28 @@ export class MediaController {
       this.avatars
         ? this.avatars.authorizeAvatarRead(actorId, id)
         : Promise.reject(new CommError(CommErrorCode.PROFILE_PHOTO_NOT_FOUND, 'not available', 404)),
+    );
+  }
+
+  /**
+   * A viewer's own chat wallpaper. `id` is the conversation; the signature
+   * binds the viewer, and the object served is THAT viewer's wallpaper for the
+   * chat, only while they can still read it -- ChatThemeService.authorizeWallpaperRead.
+   */
+  @Get('wallpapers/:id')
+  async wallpaper(
+    @Param('id') id: string,
+    @Query('v') variant: string,
+    @Query('a') actorId: string,
+    @Query('e') expires: string,
+    @Query('s') sig: string,
+    @Req() req: RequestLike,
+    @Res() res: ResponseLike,
+  ): Promise<void> {
+    return serveAuthorizedMedia(this.deps(), 'wallpapers', id, variant, actorId, expires, sig, req, res, () =>
+      this.themes
+        ? this.themes.authorizeWallpaperRead(actorId, id)
+        : Promise.reject(new CommError(CommErrorCode.CHAT_WALLPAPER_NOT_FOUND, 'not available', 404)),
     );
   }
 

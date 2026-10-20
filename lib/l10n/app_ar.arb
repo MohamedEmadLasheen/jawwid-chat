@@ -736,5 +736,20 @@
   "searchTooShort": "اكتب حرفين على الأقل",
   "searchPosition": "{index} من {total}",
   "searchMessagesSection": "الرسائل",
-  "searchMessagesNone": "لا توجد رسائل مطابقة في محادثاتك"
+  "searchMessagesNone": "لا توجد رسائل مطابقة في محادثاتك",
+  "chatThemeAction": "سمة المحادثة",
+  "chatThemeHint": "لك وحدك: تغيّر خلفية هذه المحادثة على كل أجهزتك، ولا يراها غيرك.",
+  "chatThemeDefault": "الافتراضية",
+  "chatThemeLagoon": "بحيرة",
+  "chatThemeSand": "رمل",
+  "chatThemeRose": "ورد",
+  "chatThemeSky": "سماء",
+  "chatThemeLilac": "ليلك",
+  "chatThemeOlive": "زيتون",
+  "chatThemeSlate": "رمادي",
+  "chatThemeDusk": "غروب",
+  "chatWallpaperTitle": "صورة خلفية",
+  "chatWallpaperChoose": "اختيار صورة",
+  "chatWallpaperReplace": "تغيير الصورة",
+  "chatWallpaperRemove": "إزالة الصورة"
 }

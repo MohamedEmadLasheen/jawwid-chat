@@ -2,6 +2,8 @@ import { StaffToolsController } from './api/staff-tools.controller';
 import { StaffToolsService } from './staff-tools/staff-tools.service';
 import { StarredController } from './api/starred.controller';
 import { ExportController } from './api/export.controller';
+import { ChatThemeController } from './api/chat-theme.controller';
+import { ChatThemeService } from './themes/chat-theme.service';
 import { ConversationExportService } from './export/conversation-export.service';
 import { ProfilePhotoController } from './api/profile-photo.controller';
 import { AvatarService } from './profile/avatar.service';
@@ -73,6 +75,7 @@ import { StoryController } from './api/story.controller';
     StarredController,
     StaffToolsController,
     ExportController,
+    ChatThemeController,
     StoryController,
   ],
   providers: [
@@ -89,6 +92,7 @@ import { StoryController } from './api/story.controller';
     AvatarService,
     StaffToolsService,
     ConversationExportService,
+    ChatThemeService,
     StoryAudienceResolver,
     StorySweeper,
     OutboxService,

@@ -10,12 +10,12 @@ import '../core/logging/redacting_logger.dart';
 import '../core/media/attachment_opener.dart';
 import '../core/media/media_picker.dart';
 import '../core/media/story_video_player.dart';
-
 import '../core/network/api_client.dart' show TokenProvider;
 import '../core/realtime/realtime_socket.dart';
 import '../core/storage/secure_token_store.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/domain/auth_state.dart';
+import '../features/messages/data/chat_theme_repository.dart';
 import '../features/messages/data/message_marks_repository.dart';
 import '../features/messages/data/message_search_repository.dart';
 import '../features/profile/data/profile_photo_repository.dart';
@@ -76,6 +76,12 @@ final supervisionRepositoryProvider = Provider<SupervisionRepository>((ref) {
 /// Star and pin. A harmless default: a build without those routes offers neither.
 final messageMarksRepositoryProvider = Provider<MessageMarksRepository>((ref) {
   return const NoMessageMarksRepository();
+});
+
+/// Chat themes (the viewer's own background per chat). A harmless default: a
+/// build without the routes offers no Chat theme.
+final chatThemeRepositoryProvider = Provider<ChatThemeRepository>((ref) {
+  return const NoChatThemeRepository();
 });
 
 /// Message search, inside a chat and across chats. A harmless default: a build

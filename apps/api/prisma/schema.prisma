@@ -401,6 +401,10 @@ model ConversationParticipantState {
   pinnedAt       DateTime?    @map("pinned_at") @db.Timestamptz
   /// The viewer's own Favorites list.
   favoritedAt    DateTime?    @map("favorited_at") @db.Timestamptz
+  /// The viewer's own background preset for this chat (20261020150000); null = default.
+  theme              String?
+  /// The viewer's own wallpaper photo: wallpapers/<actor_id>/<conversation_id>/<uuid>.
+  wallpaperObjectKey String?  @map("wallpaper_object_key")
   updatedAt      DateTime     @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
   @@unique([conversationId, actorId])

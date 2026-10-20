@@ -3,7 +3,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { Route, Routes } from 'react-router-dom'
 import { chatCopy } from './copy'
 import { renderWithProviders, makeStaff } from '@/test/utils'
-import type { ChatConversation, ChatMessage } from './chatApi'
+import type { ChatConversation, ChatMessage, ChatTheme } from './chatApi'
 
 /**
  * The session's socket, as the chat workspace sees it. Records what the page
@@ -50,6 +50,13 @@ const fakeSocket = {
 
 vi.mock('@/core/realtime/RealtimeProvider', () => ({
   useRealtime: () => ({ state: 'connected', hasEverConnected: true, socket: fakeSocket }),
+}))
+
+// A wallpaper is prepared on a canvas, which jsdom does not have: the test
+// stands in for that one step and checks everything around it.
+vi.mock('@/features/profile/photo', async (original) => ({
+  ...(await original<typeof import('@/features/profile/photo')>()),
+  prepareWallpaper: vi.fn(async () => ({ blob: new Blob([new Uint8Array([1, 2, 3])], { type: 'image/webp' }), previewUrl: 'blob:wall' })),
 }))
 
 // Imported after the mock.
@@ -1439,5 +1446,120 @@ describe('Schedule a call from inside a chat', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Schedule' }))
     expect(await within(dialog).findByRole('alert')).toBeInTheDocument()
     expect(screen.getByRole('dialog', { name: 'Schedule call' })).toBeInTheDocument()
+  })
+})
+
+describe('Chat theme (private, presets + own photo)', () => {
+  function stubTheme() {
+    const calls: Array<{ method: string; path: string; body: unknown; url: string }> = []
+    const state: { theme: ChatTheme | null; wallpaperUrl: string | null } = { theme: null, wallpaperUrl: null }
+    const json = (data: unknown, status = 200) =>
+      new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
+    const c1 = () => conv('c1', { title: 'Kid group', viewerState: { pinned: false, archived: false, mutedUntil: null, ...state } })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input)
+        const path = new URL(url, 'http://localhost').pathname.replace(/^\/api\/v1/, '')
+        const method = init?.method ?? 'GET'
+        const body = init?.body && typeof init.body === 'string' ? JSON.parse(init.body) : init?.body
+        calls.push({ method, path, body, url })
+        if (url.startsWith('https://storage.example/')) return new Response(null, { status: 200 })
+        if (path === '/me') return json(ADMIN)
+        if (path === '/approvals/pending') return json({ approvals: [] })
+        if (path === '/conversations') return json({ conversations: [c1()] })
+        if (path === '/conversations/c1') return json(c1())
+        if (path === '/conversations/c1/messages/pins') return json({ pins: [] })
+        if (path === '/conversations/c1/messages') return json({ messages: [msg('m1', 1)], nextBefore: null })
+        if (path.endsWith('/messages/read')) return json({ ok: true })
+        if (path === '/conversations/c1/theme' && method === 'PUT') {
+          state.theme = (body as { theme: ChatTheme | null }).theme
+          return json({ theme: state.theme })
+        }
+        if (path === '/conversations/c1/wallpaper/upload') {
+          // As S3 grants it: lower-case, and both headers are inside the signature.
+          return json({
+            uploadUrl: 'https://storage.example/put/wall',
+            method: 'PUT',
+            objectKey: 'wallpapers/a/c1/k',
+            headers: { 'content-type': 'image/webp', 'content-length': '3' },
+          })
+        }
+        if (path === '/conversations/c1/wallpaper' && method === 'POST') {
+          state.wallpaperUrl = 'http://localhost/media/wallpapers/c1?v=o&k=1'
+          return json({ wallpaperUrl: state.wallpaperUrl })
+        }
+        if (path === '/conversations/c1/wallpaper' && method === 'DELETE') {
+          state.wallpaperUrl = null
+          return json({ wallpaperUrl: null })
+        }
+        return json({ error: { code: 'NOT_FOUND', message: 'nope' } }, 404)
+      }),
+    )
+    return calls
+  }
+  const body = () => document.querySelector<HTMLElement>('.thread-body')!
+
+  beforeEach(() => fakeSocket.reset())
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('picks a preset from the menu: saved for this viewer, and the chat behind shows it', async () => {
+    const calls = stubTheme()
+    renderChat('/chat/c1')
+    await screen.findByText('body m1')
+    expect(body().className).toBe('thread-body')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Chat theme…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Chat theme' })
+    expect(within(dialog).getByText(/Only you see this/)).toBeInTheDocument()
+    expect(within(dialog).getByRole('radio', { name: 'Default' })).toHaveAttribute('aria-checked', 'true')
+
+    fireEvent.click(within(dialog).getByRole('radio', { name: 'Sand' }))
+    await waitFor(() => expect(calls.find((c) => c.method === 'PUT')).toMatchObject({ path: '/conversations/c1/theme', body: { theme: 'sand' } }))
+    await waitFor(() => expect(body().classList.contains('cw-bg--sand')).toBe(true))
+    expect(within(dialog).getByRole('radio', { name: 'Sand' })).toHaveAttribute('aria-checked', 'true')
+
+    fireEvent.click(within(dialog).getByRole('radio', { name: 'Default' }))
+    await waitFor(() => expect(calls.filter((c) => c.method === 'PUT').at(-1)?.body).toEqual({ theme: null }))
+    await waitFor(() => expect(body().className).toBe('thread-body'))
+  })
+
+  it('a photo wallpaper: authorize, PUT without the bearer, commit; shown dimmed; removable', async () => {
+    const calls = stubTheme()
+    renderChat('/chat/c1')
+    await screen.findByText('body m1')
+    fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Chat theme…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Chat theme' })
+
+    const input = within(dialog).getByTestId('wallpaper-file') as HTMLInputElement
+    fireEvent.change(input, { target: { files: [new File(['x'], 'beach.jpg', { type: 'image/jpeg' })] } })
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/conversations/c1/wallpaper')).toBe(true))
+    expect(calls.find((c) => c.path === '/conversations/c1/wallpaper/upload')?.body).toEqual({ mimeType: 'image/webp', byteSize: 3 })
+    const put = calls.find((c) => c.url.startsWith('https://storage.example/'))!
+    expect(put.method).toBe('PUT')
+    const putInit = (fetch as unknown as { mock: { calls: Array<[string, RequestInit]> } }).mock.calls.find(([u]) => String(u).startsWith('https://storage.example/'))![1]
+    const sent = new Headers(putInit.headers)
+    expect(sent.has('authorization')).toBe(false)
+    // ONE content type, exactly as signed -- not "image/webp, image/webp".
+    expect(sent.get('content-type')).toBe('image/webp')
+    expect(calls.find((c) => c.method === 'POST' && c.path === '/conversations/c1/wallpaper')?.body).toEqual({ objectKey: 'wallpapers/a/c1/k' })
+
+    await waitFor(() => expect(body().classList.contains('cw-bg--photo')).toBe(true))
+    expect(body().style.getPropertyValue('--cw-wall')).toContain('/media/wallpapers/c1')
+
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Remove photo' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'DELETE' && c.path === '/conversations/c1/wallpaper')).toBe(true))
+    await waitFor(() => expect(body().classList.contains('cw-bg--photo')).toBe(false))
+  })
+})
+
+describe('signedPutHeaders', () => {
+  it("sends the grant's own content type once, and adds one only when the grant has none", async () => {
+    const { signedPutHeaders } = await import('./chatApi')
+    expect(signedPutHeaders('image/png', { 'content-type': 'image/png', 'content-length': '9' }).get('content-type')).toBe('image/png')
+    expect(signedPutHeaders('image/png', undefined).get('content-type')).toBe('image/png')
+    expect(signedPutHeaders('image/png', {}).get('content-type')).toBe('image/png')
   })
 })

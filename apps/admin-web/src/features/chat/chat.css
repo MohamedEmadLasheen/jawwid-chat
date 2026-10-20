@@ -478,3 +478,52 @@ mark.cw-hit { background: var(--warn-soft); color: inherit; border-radius: 2px; 
 .cw-hit-row__time { flex: none; font-size: var(--fs-xs); color: var(--text-subtle); }
 .cw-hit-row__body { font-size: var(--fs-sm); color: var(--text-muted); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
 .cw-hit-row__who { color: var(--text); }
+
+/* Chat themes: the VIEWER's own background for one chat (owner decisions
+   2026-10-20). Only the background behind the messages changes -- bubbles,
+   day pills and notes keep their own colours -- so every theme reads in light
+   and dark alike. A photo wallpaper is dimmed by --cw-wall-scrim. */
+.thread-body.cw-bg { background: var(--cw-bg, var(--bg)); }
+.cw-bg--lagoon { --cw-bg: linear-gradient(160deg, #e3f1ef, #d3e9e5); }
+.cw-bg--sand { --cw-bg: linear-gradient(160deg, #f5eedf, #ede2cb); }
+.cw-bg--rose { --cw-bg: linear-gradient(160deg, #f8e8ec, #f1d9e0); }
+.cw-bg--sky { --cw-bg: linear-gradient(160deg, #e4eef8, #d6e5f4); }
+.cw-bg--lilac { --cw-bg: linear-gradient(160deg, #eee8f7, #e3daf2); }
+.cw-bg--olive { --cw-bg: linear-gradient(160deg, #ebefdf, #dfe6cc); }
+.cw-bg--slate { --cw-bg: linear-gradient(160deg, #e8ebee, #dadfe4); }
+.cw-bg--dusk { --cw-bg: linear-gradient(160deg, #f6e7dd, #eed7c7); }
+.thread-body.cw-bg--photo {
+  --cw-wall-scrim: rgb(255 255 255 / 0.55);
+  background: linear-gradient(var(--cw-wall-scrim), var(--cw-wall-scrim)), var(--cw-wall) center / cover no-repeat;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .cw-bg--lagoon { --cw-bg: linear-gradient(160deg, #0f2624, #132e2b); }
+  :root:not([data-theme='light']) .cw-bg--sand { --cw-bg: linear-gradient(160deg, #2a241a, #30291d); }
+  :root:not([data-theme='light']) .cw-bg--rose { --cw-bg: linear-gradient(160deg, #2c1a20, #331f26); }
+  :root:not([data-theme='light']) .cw-bg--sky { --cw-bg: linear-gradient(160deg, #15202c, #192634); }
+  :root:not([data-theme='light']) .cw-bg--lilac { --cw-bg: linear-gradient(160deg, #221c2e, #282135); }
+  :root:not([data-theme='light']) .cw-bg--olive { --cw-bg: linear-gradient(160deg, #1f241a, #252b1f); }
+  :root:not([data-theme='light']) .cw-bg--slate { --cw-bg: linear-gradient(160deg, #1a1d21, #1f2328); }
+  :root:not([data-theme='light']) .cw-bg--dusk { --cw-bg: linear-gradient(160deg, #2b1d16, #33231b); }
+  :root:not([data-theme='light']) .thread-body.cw-bg--photo { --cw-wall-scrim: rgb(0 0 0 / 0.55); }
+}
+
+.cw-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: var(--space-2); margin-block: var(--space-3); }
+.cw-theme {
+  display: grid;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  text-align: center;
+}
+.cw-theme[aria-checked='true'] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--focus); }
+.cw-theme:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.cw-theme__swatch { block-size: 44px; border-radius: var(--radius-sm); background: var(--cw-bg, var(--bg)); border: 1px solid var(--border); }
+.cw-wall { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-block-start: var(--space-3); padding-block-start: var(--space-3); border-block-start: 1px solid var(--border); }
+.cw-wall__preview { inline-size: 96px; block-size: 64px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-hover) center / cover no-repeat; flex: none; }

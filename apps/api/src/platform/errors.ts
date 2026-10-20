@@ -180,6 +180,10 @@ export enum CommErrorCode {
   STAFF_DIRECTORY_DENIED = 'COMM.STAFF_DIRECTORY_DENIED',
   /** The message cannot leave its conversation: deleted, held, rejected, a system message or a card. 403. */
   MESSAGE_NOT_FORWARDABLE = 'COMM.MESSAGE_NOT_FORWARDABLE',
+  /** A chat theme or wallpaper request failed validation (unknown preset, wrong image). 400. */
+  CHAT_THEME_INVALID = 'COMM.CHAT_THEME_INVALID',
+  /** No wallpaper for this viewer and chat (or not theirs to see). 404. */
+  CHAT_WALLPAPER_NOT_FOUND = 'COMM.CHAT_WALLPAPER_NOT_FOUND',
   /** Exporting a chat (transcript + media) is the super admin's alone. 403. */
   CONVERSATION_EXPORT_DENIED = 'COMM.CONVERSATION_EXPORT_DENIED',
   // --- Staff tools: labels and quick replies (staff only) ---

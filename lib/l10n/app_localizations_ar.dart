@@ -1753,4 +1753,50 @@ class L10nAr extends L10n {
 
   @override
   String get searchMessagesNone => 'لا توجد رسائل مطابقة في محادثاتك';
+
+  @override
+  String get chatThemeAction => 'سمة المحادثة';
+
+  @override
+  String get chatThemeHint =>
+      'لك وحدك: تغيّر خلفية هذه المحادثة على كل أجهزتك، ولا يراها غيرك.';
+
+  @override
+  String get chatThemeDefault => 'الافتراضية';
+
+  @override
+  String get chatThemeLagoon => 'بحيرة';
+
+  @override
+  String get chatThemeSand => 'رمل';
+
+  @override
+  String get chatThemeRose => 'ورد';
+
+  @override
+  String get chatThemeSky => 'سماء';
+
+  @override
+  String get chatThemeLilac => 'ليلك';
+
+  @override
+  String get chatThemeOlive => 'زيتون';
+
+  @override
+  String get chatThemeSlate => 'رمادي';
+
+  @override
+  String get chatThemeDusk => 'غروب';
+
+  @override
+  String get chatWallpaperTitle => 'صورة خلفية';
+
+  @override
+  String get chatWallpaperChoose => 'اختيار صورة';
+
+  @override
+  String get chatWallpaperReplace => 'تغيير الصورة';
+
+  @override
+  String get chatWallpaperRemove => 'إزالة الصورة';
 }

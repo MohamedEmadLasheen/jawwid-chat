@@ -1017,5 +1017,20 @@
     }
   },
   "searchMessagesSection": "Messages",
-  "searchMessagesNone": "No matching messages in your chats"
+  "searchMessagesNone": "No matching messages in your chats",
+  "chatThemeAction": "Chat theme",
+  "chatThemeHint": "Only you see this. It changes this chat's background on all your devices.",
+  "chatThemeDefault": "Default",
+  "chatThemeLagoon": "Lagoon",
+  "chatThemeSand": "Sand",
+  "chatThemeRose": "Rose",
+  "chatThemeSky": "Sky",
+  "chatThemeLilac": "Lilac",
+  "chatThemeOlive": "Olive",
+  "chatThemeSlate": "Slate",
+  "chatThemeDusk": "Dusk",
+  "chatWallpaperTitle": "Photo wallpaper",
+  "chatWallpaperChoose": "Choose a photo",
+  "chatWallpaperReplace": "Change photo",
+  "chatWallpaperRemove": "Remove photo"
 }
