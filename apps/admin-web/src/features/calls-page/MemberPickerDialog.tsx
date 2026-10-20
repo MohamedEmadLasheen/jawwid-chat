@@ -9,7 +9,7 @@ import { Dialog } from '@/shared/components/Dialog'
 import { Icon } from '@/shared/components/Icon'
 import { SearchField } from '@/shared/components/SearchField'
 import { QueryBoundary } from '@/shared/components/States'
-import { callApi, callKeys } from '@/features/calls/callApi'
+import { callCapabilityQuery } from '@/features/calls/useCallCapability'
 import type { ChatConversation } from '@/features/chat/chatApi'
 import { chatCopyFor } from '@/features/chat/copy'
 import { useCallActions, useCallsCopy, useConversationNaming, useConversations } from './hooks'
@@ -66,11 +66,7 @@ export function MemberPickerDialog({
     setRefusal(null)
     setChecking(c.id)
     try {
-      const capability = await queryClient.fetchQuery({
-        queryKey: callKeys.capability(c.id),
-        queryFn: () => callApi.capability(c.id),
-        staleTime: 15_000,
-      })
+      const capability = await queryClient.fetchQuery(callCapabilityQuery(c.id))
       if (!capability.canCall) {
         setRefusal(copy.cannotCall)
         return

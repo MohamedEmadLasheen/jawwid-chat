@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { callApi, callKeys } from './callApi'
+import { useCallCapability } from './useCallCapability'
 import { useCall } from './CallProvider'
 import { callCopyFor } from './copy'
 import './calls.css'
@@ -29,20 +30,14 @@ export function ConversationCallControls({
   const { state, controller } = useCall()
   const [showHistory, setShowHistory] = useState(false)
 
-  const capability = useQuery({
-    queryKey: callKeys.capability(conversationId),
-    queryFn: () => callApi.capability(conversationId),
-    // Advisory and cheap to be wrong about (start decides again); refresh it so
-    // a stale "yes" does not linger.
-    staleTime: 15_000,
-  })
+  const capability = useCallCapability(conversationId)
   const history = useQuery({
     queryKey: callKeys.history(conversationId),
     queryFn: () => callApi.history(conversationId),
     enabled: showHistory,
   })
 
-  const canCall = capability.data?.canCall === true && !!controller
+  const canCall = capability.canCall && !!controller
   const busy = state.phase !== 'idle'
 
   return (
