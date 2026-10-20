@@ -170,9 +170,9 @@ page says Core is not connected; `CORE_BASE_URL` alone never turns it on. See
 
 | Variable | Secret | Local | Staging | Production |
 |---|---|---|---|---|
-| `SENTRY_DSN` | **yes** | opt | req | req |
-| `OTEL_SERVICE_NAME` | no | opt | req | req |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | no | opt | req | req |
+| `SENTRY_DSN` | **yes** | opt | opt | req |
+| `OTEL_SERVICE_NAME` | no | opt | opt | opt |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | no | opt | opt | opt |
 | `OTEL_TRACES_SAMPLER_ARG` | no | opt | opt | opt |
 | `HEALTH_PROBE_TIMEOUT_MS` | no | opt | opt | opt |
 
@@ -284,3 +284,27 @@ the rest of Chat running (see `architecture.md` §4).
 and reported by `/health/live`. They are what makes "what exactly is running in
 production?" answerable from outside the pipeline. Required in staging and
 production; the smoke test fails if `commit` is `unknown`.
+
+**`LOG_LEVEL`** — read by the JSON logger in both processes, the API and the
+worker (`apps/api/src/infra/observability/json-logger.ts`): `trace`, `debug`,
+`info`, `warn`, `error` or `fatal`. Unset or unrecognised means `info`, and an
+unrecognised value is reported once at startup. The deploy workflows set `info`;
+`.env.example` sets `debug`. Successful health probes and CORS preflights are
+logged at `debug`, so `info` keeps a load balancer's probing out of the log.
+There is no log-format switch: output is always one JSON object per line on
+stdout (`monitoring.md` §3).
+
+**`SENTRY_DSN`** — consumed by both processes. Set, the API reports 5xx
+responses and the worker reports every subsystem failure its loop survives,
+and both report unhandled rejections and uncaught exceptions; unset or empty,
+error tracking is inert and `@sentry/node` is never loaded. Required in
+production; optional in staging, where the deploy workflow passes the
+`SENTRY_DSN` secret if one exists. The Sentry environment is `APP_ENV` and the
+release is `GIT_COMMIT` -- there is deliberately no `SENTRY_ENVIRONMENT` or
+`SENTRY_RELEASE`. What an event may and may not carry is in `monitoring.md`
+§3a; in short, it never carries a request, a body, a user, breadcrumbs,
+stack-frame variables, a signed URL or an object key.
+
+**`OTEL_*`** — optional everywhere because nothing reads them: no OpenTelemetry
+SDK is installed and no exporter is wired (`monitoring.md` §6). Return them to
+`req` in the same change that wires an exporter, not before.
