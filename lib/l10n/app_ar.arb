@@ -815,5 +815,38 @@
   "teacherProfilePhotoRemoveTitle": "إزالة صورتك؟",
   "teacherProfilePhotoRemoveBody": "سيظهر ملفك بالأحرف الأولى من اسمك بدلاً من الصورة.",
   "teacherProfilePhotoUploading": "جارٍ رفع الصورة…",
-  "teacherProfileCertificateSave": "حفظ الشهادة"
+  "teacherProfileCertificateSave": "حفظ الشهادة",
+  "myProfileTitle": "ملفي الشخصي",
+  "myProfileSettingsSubtitle": "صورتك واسمك ونبذتك",
+  "profileAboutLabel": "نبذة",
+  "profileAboutHint": "نبذة قصيرة عنك",
+  "profileAboutEmpty": "لا توجد نبذة بعد",
+  "profileNameLabel": "الاسم",
+  "profileNameEmptyError": "يُرجى إدخال الاسم",
+  "profileNameTooLongError": "الاسم طويل جدًا",
+  "profileAboutTooLongError": "النص طويل جدًا",
+  "profileEdit": "تعديل",
+  "profileSave": "حفظ",
+  "profileCancel": "إلغاء",
+  "profileSaved": "تم الحفظ",
+  "profileSaveFailed": "تعذّر الحفظ. يُرجى المحاولة مرة أخرى.",
+  "profilePhotoRemoveFailed": "تعذّر إزالة الصورة. يُرجى المحاولة مرة أخرى.",
+  "profilePhotoEditLabel": "تغيير صورتك",
+  "profileChildPhotoEditLabel": "تغيير صورة {name}",
+  "@profileChildPhotoEditLabel": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "profileChildEditTitle": "ملف {name}",
+  "@profileChildEditTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "profileLoadFailed": "تعذّر تحميل ملفك الشخصي."
 }

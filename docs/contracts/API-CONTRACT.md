@@ -740,6 +740,25 @@ The photos reach chat as signed links on the payloads below. A client never buil
 
 **What a commit does:** checks the key structurally, inspects the stored bytes (`judgeAvatar`), updates only `avatar_object_key`, writes `chat.audit_log` (`profile_photo.set|removed`), and deletes the replaced object. The database CHECK of 20261014130000 independently holds every key to its own row's prefix.
 
+### Parent profile: About for a parent and their children (on main 2026-10-21)
+
+A parent edits their own name and About, and each child's. Save is the publish. Migration `20261021010000`; `parent-profile.controller.ts`, `profile/parent-profile.service.ts`.
+
+- **Names** stay `chat.contact.name` / `chat.learner.name`. The profile tables hold no name.
+- **About** lives in `chat.contact_profile` / `chat.learner_profile`, Chat-owned siblings of the identity rows, so a Core projection can never overwrite it. At most 1000 characters; whitespace-only clears it.
+- **Photos** are the account photos, set through `/me/avatar` and `/me/children/:learnerId/avatar` (above). The profile carries their `self` links.
+- **No owner id.** The caller is the token. The one id that travels is a child's, and it resolves only inside the caller's own family.
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/me/profile` | none | `{ displayName, relationship, signInIdentity, about, avatarUrl, canMessage, children: [{ id, displayName, level, about, avatarUrl }] }`. Contacts only. |
+| PATCH | `/me/profile` | `{ name?, about? }` | The profile. An absent field is left alone; `about: null` or blank clears it. |
+| PATCH | `/me/children/:learnerId` | `{ name?, about? }` | The profile, for a child of the caller's family. |
+
+**Errors:** `COMM.PROFILE_NOT_AVAILABLE` (403, not a family contact), `COMM.PROFILE_FIELD_INVALID` (400), `COMM.LEARNER_NOT_IN_FAMILY` (404, also for a learner that does not exist).
+
+**Audit:** `profile.name.changed` and `profile.child.name.changed` (old and new name); `profile.about.saved` and `profile.child.about.saved` (the About's LENGTH, never its text). The actor is always the parent.
+
 ### Teacher professional profile (Teacher Profile V2; on main 2026-10-20)
 
 The teacher owns it: **Save is the publish.** There is no draft, no submit and no profile approval. What a reviewer still decides is each **certificate**, because an upload does not make a credential verified. Migrations `20261021000000` + `20261021000100`; `teacher-profile.controller.ts`, `teacher-profile/teacher-profile.service.ts`.

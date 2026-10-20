@@ -113,6 +113,10 @@ model Contact {
   createdAt         DateTime @map("created_at") @db.Timestamptz @default(now())
   updatedAt         DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
+  /// The Chat-owned About. A SIBLING, never a column on this row -- see
+  /// `20261021010000_chat_parent_profile.sql` for why ownership is kept separate.
+  profile           ContactProfile?
+
   @@map("contact")
   @@schema("chat")
 }
@@ -137,6 +141,10 @@ model Learner {
 
   conversations Conversation[]
   lessons       Lesson[]
+
+  /// Chat-owned About, deliberately NOT a column on this row: a learner is an
+  /// academy entity and a future Core projection must not be able to overwrite it.
+  profile       LearnerProfile?
 
   @@map("learner")
   @@schema("chat")
@@ -1063,7 +1071,7 @@ model DepartmentMember {
 
 model LearnerSupervision {
   learnerId      String   @id @map("learner_id") @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
+  organizationId String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   supervisorId   String   @map("supervisor_id") @db.Uuid
   assignedBy     String?  @map("assigned_by") @db.Uuid
   assignedAt     DateTime @map("assigned_at") @db.Timestamptz @default(now())
@@ -1078,7 +1086,7 @@ model LearnerSupervision {
 /// family's children; the database clears it when they no longer do.
 model FamilyBillingSupervision {
   familyId       String   @id @map("family_id") @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
+  organizationId String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   supervisorId   String   @map("supervisor_id") @db.Uuid
   assignedBy     String?  @map("assigned_by") @db.Uuid
   assignedAt     DateTime @map("assigned_at") @db.Timestamptz @default(now())
@@ -1110,7 +1118,7 @@ model SupervisorBackup {
 model ConversationLearner {
   conversationId String   @map("conversation_id") @db.Uuid
   learnerId      String   @map("learner_id") @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
+  organizationId String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   addedBy        String?  @map("added_by") @db.Uuid
   addedAt        DateTime @map("added_at") @db.Timestamptz @default(now())
 
@@ -1159,7 +1167,7 @@ model Lesson {
 model LessonReport {
   lessonId       String   @id @map("lesson_id") @db.Uuid
   lesson         Lesson   @relation(fields: [lessonId], references: [id])
-  organizationId String   @map("organization_id") @db.Uuid
+  organizationId String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   teacherId      String   @map("teacher_id") @db.Uuid
   covered        String
   homework       String?
@@ -1208,7 +1216,7 @@ model MessageCard {
 /// PD-11 T2: a teacher's weekly working window, in the teacher's time zone.
 model TeacherAvailability {
   id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
+  organizationId String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   teacherId      String   @map("teacher_id") @db.Uuid
   weekday        Int      @db.SmallInt
   startMinute    Int      @map("start_minute")
@@ -1223,7 +1231,7 @@ model TeacherAvailability {
 
 model TeacherDayOff {
   id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
+  organizationId String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   teacherId      String   @map("teacher_id") @db.Uuid
   day            DateTime @db.Date
   reason         String?
@@ -1278,7 +1286,7 @@ model ScheduleChangeRequest {
 /// PD-11 T3: a learner moved between teachers. Append-only.
 model LearnerTransfer {
   id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
+  organizationId String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   learnerId      String   @map("learner_id") @db.Uuid
   fromTeacherId  String?  @map("from_teacher_id") @db.Uuid
   toTeacherId    String   @map("to_teacher_id") @db.Uuid
@@ -1388,7 +1396,7 @@ model LearnerCertificate {
 /// A teacher's leave allowance for a year. Append-only: the latest row wins.
 model TeacherLeaveAllowance {
   id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
+  organizationId String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   teacherId      String   @map("teacher_id") @db.Uuid
   leaveYear      Int      @map("leave_year")
   days           Int
@@ -1469,7 +1477,7 @@ model TeacherSuspension {
 /// PD-11 T4: a prospective student, by display name only (BR-2).
 model TrialProspect {
   id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
+  organizationId String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   displayName    String   @map("display_name")
   level          String?
   note           String?
@@ -1522,7 +1530,7 @@ model MessageRevision {
 /// A staff member's PRIVATE label (owner decision 2026-10-19).
 model StaffLabel {
   id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
+  organizationId String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   ownerStaffId   String   @map("owner_staff_id") @db.Uuid
   name           String
   /// One of '1'..'8': a palette tone the clients render with checked contrast.
@@ -1549,7 +1557,7 @@ model ConversationLabel {
 /// A saved reply typed as /shortcut. ownerStaffId null = the team library.
 model QuickReply {
   id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
+  organizationId String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   ownerStaffId   String?  @map("owner_staff_id") @db.Uuid
   shortcut       String
   body           String
@@ -1559,5 +1567,37 @@ model QuickReply {
   updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   @@map("quick_reply")
+  @@schema("chat")
+}
+
+/// A family contact's own About (Parent Profile, 20261021010000).
+///
+/// Holds NO NAME and NO PHOTO. `chat.contact.name` is the only name, and the photo is
+/// `chat.contact.avatar_object_key`, set through /me/avatar. This row is Chat's own text,
+/// kept off the identity row so a Core projection can never overwrite it.
+model ContactProfile {
+  organizationId String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  /// The primary key IS the contact: one profile per person, enforced by the key itself.
+  contactId      String   @id @map("contact_id") @db.Uuid
+  contact        Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  about          String?
+  createdAt      DateTime @map("created_at") @db.Timestamptz @default(now())
+  updatedAt      DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  @@map("contact_profile")
+  @@schema("chat")
+}
+
+/// A learner's About, managed by a contact of the SAME family. No name, no photo,
+/// for the same reasons as [ContactProfile].
+model LearnerProfile {
+  organizationId String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  learnerId      String   @id @map("learner_id") @db.Uuid
+  learner        Learner  @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  about          String?
+  createdAt      DateTime @map("created_at") @db.Timestamptz @default(now())
+  updatedAt      DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  @@map("learner_profile")
   @@schema("chat")
 }

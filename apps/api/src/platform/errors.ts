@@ -297,6 +297,19 @@ export enum CommErrorCode {
   TEACHER_CERTIFICATE_TOO_LARGE = 'COMM.TEACHER_CERTIFICATE_TOO_LARGE',
   /** The upload never reached storage, so there is no file to claim. 409. */
   TEACHER_CERTIFICATE_NOT_UPLOADED = 'COMM.TEACHER_CERTIFICATE_NOT_UPLOADED',
+
+  /** The caller is authenticated but is not a family contact, so has no parent profile. */
+  PROFILE_NOT_AVAILABLE = 'COMM.PROFILE_NOT_AVAILABLE',
+  /** A submitted name or About failed server-side validation. */
+  PROFILE_FIELD_INVALID = 'COMM.PROFILE_FIELD_INVALID',
+  /**
+   * The learner is not in the caller's family.
+   *
+   * Deliberately ONE code for "no such learner" and "not your learner" alike: telling them
+   * apart would turn every child route into an oracle for which learner ids exist, which is
+   * the same reasoning STORY_NOT_FOUND above is written for.
+   */
+  LEARNER_NOT_IN_FAMILY = 'COMM.LEARNER_NOT_IN_FAMILY',
 }
 
 export class CommError extends Error {
