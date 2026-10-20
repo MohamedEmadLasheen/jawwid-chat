@@ -755,7 +755,7 @@ The teacher owns it: **Save is the publish.** There is no draft, no submit and n
 | POST | `/me/teacher-profile` | `{ bio?, specialization?, qualifications?, experience?, languages? }` | The profile, immediately current. |
 | PATCH | `/me/teacher-profile/name` | `{ name }` | `{ name, role }`, the name as stored (trimmed, whitespace collapsed). |
 | POST | `/me/teacher-profile/certificates/upload` | `{ mimeType, byteSize }` | `{ uploadUrl, uploadToken, expiresAt, headers }`. PDF/JPEG/PNG, at most 10 MiB. PUT the bytes with exactly `headers`. |
-| POST | `/me/teacher-profile/certificates` | `{ title, issuingOrganization?, issuedOn?, mimeType, byteSize, uploadToken }` | The profile; the new certificate is `pending`. |
+| POST | `/me/teacher-profile/certificates` | `{ title, issuingOrganization?, issuedOn?, mimeType, byteSize, uploadToken }` | The profile; the new certificate is `pending`. The file must already be in storage, at the declared size, and sniff as the declared type: otherwise `COMM.TEACHER_CERTIFICATE_NOT_UPLOADED` (409) or `_INVALID_TYPE` (400, and the file is deleted). |
 | PATCH | `/me/teacher-profile/certificates/:id` | `{ title, issuingOrganization?, issuedOn? }` | The profile. A retitled claim returns to `pending`; the file never moves. |
 | DELETE | `/me/teacher-profile/certificates/:id` | none | The profile. |
 | GET | `/teacher-profiles/review` | none | `{ profiles: [{ profileId, teacherName, pendingCertificates, certificates[] }] }`, reviewers only. |
@@ -764,7 +764,7 @@ The teacher owns it: **Save is the publish.** There is no draft, no submit and n
 
 **Reviewers:** admin, coverage, manager and the super admin (`AuthorizationService.canReviewTeacherProfile`, mirrored by `chat.current_can_review_teacher_profile()`), same organization.
 
-**Errors:** `COMM.TEACHER_PROFILE_NOT_A_TEACHER`, `_CANNOT_REVIEW`, `_REVIEW_NOTE_REQUIRED`, `_INVALID_CONTENT`, `_CONFLICT`, `_NOT_FOUND`; `COMM.TEACHER_NAME_INVALID`; `COMM.TEACHER_CERTIFICATE_NOT_FOUND`, `_INVALID_TYPE`, `_TOO_LARGE`.
+**Errors:** `COMM.TEACHER_PROFILE_NOT_A_TEACHER`, `_CANNOT_REVIEW`, `_REVIEW_NOTE_REQUIRED`, `_INVALID_CONTENT`, `_CONFLICT`, `_NOT_FOUND`; `COMM.TEACHER_NAME_INVALID`; `COMM.TEACHER_CERTIFICATE_NOT_FOUND`, `_INVALID_TYPE`, `_TOO_LARGE`, `_NOT_UPLOADED`.
 
 No parent-facing route exists yet: `publicProfile` (approved certificates only) is service-level, waiting for the family screen.
 

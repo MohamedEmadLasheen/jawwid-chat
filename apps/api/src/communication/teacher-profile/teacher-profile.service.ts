@@ -10,6 +10,7 @@ import type { ObjectStorage } from '../attachments/object-storage';
 import { MediaUrlSigner } from '../../platform/media-url';
 import { isUuid } from '../conversations/conversation.service';
 import { signAvatar } from '../profile/avatar-urls';
+import { sniffCertificateFile } from '../../certificates/certificate-file';
 
 /**
  * The teacher's professional profile. The teacher owns it.
@@ -229,6 +230,7 @@ export class TeacherProfileService {
     this.validateCertificate(input);
     this.requireOwnedObjectKey(actor, input.uploadToken, 'teacher-certificates');
     const title = this.requireTitle(input.title);
+    await this.requireUploadedFile(input.uploadToken, input.mimeType, input.byteSize);
 
     const profile = await this.prisma.$transaction(async (tx) => {
       const owner = await this.ensureProfile(tx, actor);
@@ -611,6 +613,34 @@ export class TeacherProfileService {
       throw new CommError(
         CommErrorCode.TEACHER_CERTIFICATE_NOT_FOUND,
         'that upload does not belong to this teacher',
+        400,
+      );
+    }
+  }
+
+  /**
+   * The claim is about a FILE, so the file must be there -- and be what the
+   * teacher declared -- before a row points at it. Without this, a failed or
+   * skipped upload still created a pending certificate that a reviewer could
+   * not open (the download answered 404). Checked on what storage actually
+   * holds: the size it recorded and the file's own signature, the same sniff
+   * PD-12's certificate files use. A file that is there but is not what it
+   * claims is deleted, so a refused claim leaves nothing behind.
+   */
+  private async requireUploadedFile(objectKey: string, mimeType: string, byteSize: number): Promise<void> {
+    const stored = await this.storage.readHead(objectKey, 16);
+    if (!stored) {
+      throw new CommError(
+        CommErrorCode.TEACHER_CERTIFICATE_NOT_UPLOADED,
+        'the file has not been uploaded',
+        409,
+      );
+    }
+    if (stored.byteSize !== byteSize || sniffCertificateFile(stored.head) !== mimeType) {
+      await this.discardObject(objectKey);
+      throw new CommError(
+        CommErrorCode.TEACHER_CERTIFICATE_INVALID_TYPE,
+        'the uploaded file is not the PDF or image it claims to be',
         400,
       );
     }

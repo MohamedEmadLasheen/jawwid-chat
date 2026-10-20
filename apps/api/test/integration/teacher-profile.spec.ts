@@ -20,12 +20,22 @@
  */
 import { CommErrorCode } from '@platform/errors';
 import { randomUUID } from 'node:crypto';
+import { LocalFsBlobStore } from '@communication/attachments/blob-store';
 import { Scenario, buildGraph, seed, truncate } from './harness';
 
 jest.setTimeout(60_000);
 
 const g = buildGraph();
 let s: Scenario;
+/** The local reference storage's bytes, so a certificate claim has a real file to point at. */
+const blobs = new LocalFsBlobStore();
+
+/** A minimal file that sniffs as a PDF, padded to the declared size. */
+function pdf(byteSize = 1024): Buffer {
+  const bytes = Buffer.alloc(byteSize, 0x20);
+  Buffer.from('%PDF-1.4\n').copy(bytes);
+  return bytes;
+}
 
 beforeAll(async () => {
   await g.prisma.$connect();
@@ -62,6 +72,7 @@ async function attachCertificate(
     mimeType: 'application/pdf',
     byteSize: 1024,
   });
+  await blobs.put(authorization.uploadToken, 'application/pdf', pdf());
   const profile = await g.teacherProfiles.addCertificate(teacherId, {
     title,
     mimeType: 'application/pdf',
@@ -558,6 +569,48 @@ describe('certificates: a credential is not verified by being uploaded', () => {
         }),
       ),
     ).toBe(CommErrorCode.TEACHER_CERTIFICATE_INVALID_TYPE);
+  });
+
+  describe('a claim needs the file it claims', () => {
+    async function claim(bytes: Buffer | null, declared = { mimeType: 'application/pdf', byteSize: 1024 }) {
+      const authorization = await g.teacherProfiles.authorizeCertificateUpload(s.teacherId, declared);
+      if (bytes) await blobs.put(authorization.uploadToken, declared.mimeType, bytes);
+      const code = await codeOf(() =>
+        g.teacherProfiles.addCertificate(s.teacherId, {
+          title: 'Ijazah',
+          ...declared,
+          uploadToken: authorization.uploadToken,
+        }),
+      );
+      return { code, key: authorization.uploadToken };
+    }
+
+    it('an upload that never reached storage creates no certificate', async () => {
+      const { code } = await claim(null);
+      expect(code).toBe(CommErrorCode.TEACHER_CERTIFICATE_NOT_UPLOADED);
+      expect(await g.prisma.teacherProfileCertificate.count()).toBe(0);
+    });
+
+    it('a file that is not the PDF it claims is refused and deleted', async () => {
+      const html = Buffer.alloc(1024, 0x20);
+      Buffer.from('<html><script>').copy(html);
+      const { code, key } = await claim(html);
+      expect(code).toBe(CommErrorCode.TEACHER_CERTIFICATE_INVALID_TYPE);
+      expect(await g.prisma.teacherProfileCertificate.count()).toBe(0);
+      expect(await blobs.get(key)).toBeNull();
+    });
+
+    it('a file of another size than declared is refused', async () => {
+      const { code } = await claim(pdf(2048));
+      expect(code).toBe(CommErrorCode.TEACHER_CERTIFICATE_INVALID_TYPE);
+      expect(await g.prisma.teacherProfileCertificate.count()).toBe(0);
+    });
+
+    it('a real PDF of the declared size is accepted, pending', async () => {
+      const { code } = await claim(pdf());
+      expect(code).toBeNull();
+      expect((await g.prisma.teacherProfileCertificate.findFirstOrThrow()).state).toBe('pending');
+    });
   });
 
   it('no certificate view ever carries the object key', async () => {
