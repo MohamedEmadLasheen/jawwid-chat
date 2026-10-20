@@ -241,16 +241,17 @@ export class ConversationController {
     return { ok: true };
   }
 
-  /** Archive / mute / pin are per-user preferences. */
+  /** Archive / mute / pin / favorite are per-user preferences. */
   @Post(':id/preferences')
   async preferences(
     @ActorId() actorId: string,
     @Param('id') id: string,
-    @Body() body: { archived?: boolean; pinned?: boolean; mutedUntil?: string | null },
+    @Body() body: { archived?: boolean; pinned?: boolean; mutedUntil?: string | null; favorite?: boolean },
   ) {
     await this.conversations.setPreferences(id, actorId, {
       archived: body.archived,
       pinned: body.pinned,
+      favorite: typeof body.favorite === 'boolean' ? body.favorite : undefined,
       mutedUntil: body.mutedUntil === undefined ? undefined : body.mutedUntil ? new Date(body.mutedUntil) : null,
     });
     return { ok: true };
@@ -259,10 +260,13 @@ export class ConversationController {
 
 /** The viewer's stored preferences, or the defaults when they never set any. */
 function viewerState(
-  row: { pinnedAt: Date | null; archivedAt: Date | null; mutedUntil: Date | null } | undefined,
+  row:
+    | { pinnedAt: Date | null; archivedAt: Date | null; mutedUntil: Date | null; favoritedAt: Date | null }
+    | undefined,
 ): ConversationViewerStateDto {
   return {
     pinned: !!row?.pinnedAt,
+    favorite: !!row?.favoritedAt,
     archived: !!row?.archivedAt,
     mutedUntil: row?.mutedUntil?.toISOString() ?? null,
   };

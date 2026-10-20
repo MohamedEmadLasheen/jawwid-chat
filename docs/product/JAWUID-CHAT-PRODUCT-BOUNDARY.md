@@ -120,7 +120,7 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-12 — CLOSED
+## 4. Product decisions PD-1 to PD-13 — CLOSED
 
 PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
 exit gate, before `main` was baselined. **PD-6 was closed by the product owner
@@ -131,6 +131,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-9 and PD-10 were closed by the product owner on 2026-10-18.**
 **PD-11 was closed by the product owner on 2026-10-18.**
 **PD-12 was closed by the product owner on 2026-10-18** and depends on PD-11.
+**PD-13 was closed by the product owner on 2026-10-19** (the Calls page).
 
 | ID | Subject | Status |
 |---|---|---|
@@ -146,6 +147,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-10** | **Teacher File (admin only); parent Billing and child pages** (2026-10-18) | **CLOSED** — tiered admin access, finance super_admin only; Billing and payroll read-only from Core; teacher sees own schedule + workload |
 | **PD-11** | **Lesson operations: tickets, apologies, make-ups, suspensions, transfers, trials** (2026-10-18) | **CLOSED** — every ticket is a form that changes one record and posts one card; rulings go to a supervision queue; money stays in Core |
 | **PD-12** | **Admin operations: instalments, student certificates, teacher discipline and leave** (2026-10-18) | **CLOSED** — Core invoices read-only with a billing supervisor; certificates delivered as one student-group card; one monthly ladder, suggested then confirmed; leave balance computed, never stored |
+| **PD-13** | **The Calls page: scheduled calls and call links** (2026-10-19) | **CLOSED** — one Calls page for every role; a scheduled call belongs to ONE conversation and announces itself with a card; a call link is members-only; nothing grants a call that `POST /calls` would refuse |
 
 ---
 
@@ -1216,7 +1218,61 @@ model. Implementation record: `docs/admin/pd012-s1.md`.
 
 ---
 
-### Decisions still open after PD-1 to PD-12
+### PD-13 · The Calls page: scheduled calls and call links
+
+**Closed by the product owner on 2026-10-19** (AskUserQuestion, all four
+recommended options). Implementation record: `../communication/scheduled-calls.md`.
+
+**Decision.** Admin, parent and teacher get one Calls page in the WhatsApp
+layout: search, Upcoming, Favorites and Recent, with four actions. The actions
+are Start call, New call link, Select a member (it replaces "Call a number") and
+Schedule call. A **scheduled call belongs to exactly one conversation**, either a
+1:1 or a group. Several people means picking their group; there is no fan-out
+across separate chats and no ad-hoc call group. A **call link is members-only**.
+It is a joinable scheduled call that starts now. No guest can use it, and nobody
+is rung until someone taps Join.
+
+**Canonical rule.** A scheduled call grants nothing.
+- Scheduling one requires the right to *start* a call in that conversation at
+  that moment, the same `decideInitiate` that `POST /calls` uses. So a parent
+  never schedules a group call (PD-2), and nobody schedules a teacher↔parent 1:1
+  (PD-7).
+- Seeing one requires reading its conversation.
+- Joining one runs `CallService.start` or `accept`, which decide again from
+  scratch.
+- Its card is an ordinary published `card` message in that conversation, so
+  every member sees it and is notified by the normal message push.
+
+**Settled by existing rules, not by this decision:**
+- Search is by name only, never by phone number (G-07).
+- Calls are voice only (G-32).
+- Favorites are the pinned conversations, the existing per-actor preference.
+- "Select a member" offers only conversations the user can already reach. There
+  is no directory of strangers.
+- Photos are initials, except for staff.
+
+**Implementation phase.** Delivered 2026-10-19 on `claude/calls-page-pd13`, which is
+built on PR #56's branch, the Admin Web call stack. It covers migration
+`20261020090000_chat_scheduled_call.sql`, `apps/api/src/scheduled-calls/*`, the
+Admin Web `/calls` page and the Flutter Calls tab. The Flutter Calls tab was
+reopened by explicit authorization; record
+`../release/REOPEN-W8W2-W7-CALLS-PAGE-2026-10-19.md`.
+
+**Consequences.**
+- A join window opens 10 minutes before the start and closes 2 hours after it.
+- Joins are serialized per scheduled call, so two simultaneous Joins make one call.
+- Only the creator cancels, and a cancellation posts its own card. Cards are
+  written once.
+- Not built yet: reminder pushes before the start, and editing or rescheduling
+  (cancel and create a new one).
+
+**Deprecated behaviour.**
+- The Calls tab's "no new-call button" rule (W8-W2, `calls_screen.dart`) is
+  retired for the Calls tab only. A call still starts only where the backend
+  authorizes it.
+- The Admin Web `calls` section placeholder is retired.
+
+### Decisions still open after PD-1 to PD-13
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
 The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their

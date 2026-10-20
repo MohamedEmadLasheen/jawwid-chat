@@ -11,6 +11,8 @@
 ///      number, so the duration stays an LTR run while everything else mirrors.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -213,6 +215,30 @@ void main() {
       expect(find.text(l10n.callFailedNotAllowed), findsOneWidget);
       expect(find.text(l10n.retryAction), findsOneWidget);
       expect(find.text(l10n.callSendMessageInstead), findsOneWidget);
+    });
+
+    testWidgets(
+        'an unreachable media room shows the failure, never "Connecting…" forever',
+        (tester) async {
+      await tester.pumpWidget(harness());
+      await tester.pump();
+      room.connectError = StateError('unreachable');
+      room.disconnectError = TimeoutException('disconnect never confirmed');
+      final l10n = await L10n.delegate.load(const Locale('en'));
+
+      await controllerOf(tester).start(
+        conversationId: 'conv_1',
+        peerLabel: 'Mr. Ahmed',
+        isGroup: false,
+      );
+      socket.emit(CallEventNames.accepted, Frames.participant());
+      await tester.pumpAndSettle();
+
+      expect(find.text(l10n.callConnecting), findsNothing);
+      expect(find.text(l10n.callFailedNetwork), findsOneWidget);
+      expect(room.disconnects, 1, reason: 'the release still ran');
+      expect(room.disposes, 1);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('a group call says so', (tester) async {
@@ -450,6 +476,171 @@ void main() {
 
       expect(find.textContaining('call_1'), findsNothing);
       expect(find.textContaining('conv_1'), findsNothing);
+    });
+  });
+  // =======================================================================
+  group('after a call that did not connect', () {
+    /// Place a call from this device and let the server end it.
+    Future<L10n> placeAndEnd(
+      WidgetTester tester,
+      String outcome, {
+      Widget? child,
+    }) async {
+      await tester.pumpWidget(
+        child == null ? harness() : harness(child: child),
+      );
+      await tester.pump();
+      await controllerOf(tester).start(
+        conversationId: 'conv_1',
+        peerLabel: 'Mr. Ahmed',
+        isGroup: false,
+      );
+      await tester.pumpAndSettle();
+      socket.emit(
+        CallEventNames.ended,
+        Frames.ended(outcome: outcome, durationSeconds: null),
+      );
+      await tester.pumpAndSettle();
+      return L10n.delegate.load(const Locale('en'));
+    }
+
+    testWidgets('the server\'s `missed` on a call placed HERE reads "No answer"',
+        (tester) async {
+      final l10n = await placeAndEnd(tester, 'missed');
+
+      expect(find.text(l10n.callNoAnswer), findsOneWidget);
+      expect(find.text(l10n.callMissedIncoming), findsNothing);
+      for (final label in [l10n.closeAction, l10n.callAgain]) {
+        expect(find.bySemanticsLabel(label), findsOneWidget, reason: label);
+      }
+    });
+
+    testWidgets('a ring missed HERE reads "Missed call"', (tester) async {
+      await pumpIncoming(tester);
+      socket.emit(
+        CallEventNames.ended,
+        Frames.ended(outcome: 'missed', durationSeconds: null),
+      );
+      await tester.pumpAndSettle();
+      final l10n = await L10n.delegate.load(const Locale('en'));
+
+      expect(find.text(l10n.callMissedIncoming), findsOneWidget);
+      expect(find.text(l10n.callNoAnswer), findsNothing);
+    });
+
+    testWidgets('Call again asks the SERVER for a new call in the same chat',
+        (tester) async {
+      final l10n = await placeAndEnd(tester, 'missed');
+      expect(calls.startCalls, ['conv_1']);
+      calls.nextCallId = 'call_2';
+
+      await tester.tap(find.bySemanticsLabel(l10n.callAgain));
+      await tester.pumpAndSettle();
+
+      expect(calls.startCalls, ['conv_1', 'conv_1']);
+      expect(find.text(l10n.callOutgoing), findsOneWidget);
+      expect(find.text('Mr. Ahmed'), findsOneWidget);
+      final state = ProviderScope.containerOf(
+        tester.element(find.byType(ActiveCallScreen)),
+      ).read(callControllerProvider);
+      expect(state.callId, 'call_2');
+      expect(state.direction, CallDirection.outgoing);
+    });
+
+    testWidgets('a refused Call again is shown once, not retried',
+        (tester) async {
+      final l10n = await placeAndEnd(tester, 'missed');
+      calls.startError = refusal(WireErrors.teacherParentNotAuthorized);
+
+      await tester.tap(find.bySemanticsLabel(l10n.callAgain));
+      await tester.pumpAndSettle();
+
+      expect(find.text(l10n.callFailedNotAllowed), findsOneWidget);
+      expect(calls.startCalls, hasLength(2));
+      expect(find.bySemanticsLabel(l10n.callAgain), findsNothing);
+    });
+
+    testWidgets('Record voice message opens the chat RECORDING, and ends nothing',
+        (tester) async {
+      final opened = <(String, bool)>[];
+      final l10n = await placeAndEnd(
+        tester,
+        'missed',
+        child: ActiveCallScreen(
+          onOpenConversation: (id, {required recordVoice}) =>
+              opened.add((id, recordVoice)),
+        ),
+      );
+
+      await tester.tap(find.bySemanticsLabel(l10n.callRecordVoice));
+      await tester.pumpAndSettle();
+
+      expect(opened, [('conv_1', true)]);
+      expect(calls.endCalls, isEmpty);
+      expect(calls.startCalls, hasLength(1));
+      final state = ProviderScope.containerOf(
+        tester.element(find.byType(ActiveCallScreen)),
+      ).read(callControllerProvider);
+      expect(state.phase, CallUiPhase.idle, reason: 'the finished call is dismissed');
+    });
+
+    testWidgets('without a way to open the chat, Record voice message is absent',
+        (tester) async {
+      final l10n = await placeAndEnd(tester, 'missed');
+      expect(find.bySemanticsLabel(l10n.callRecordVoice), findsNothing);
+    });
+
+    testWidgets('"Send a message instead" after a failure opens the chat',
+        (tester) async {
+      final opened = <(String, bool)>[];
+      await tester.pumpWidget(
+        harness(
+          child: ActiveCallScreen(
+            onOpenConversation: (id, {required recordVoice}) =>
+                opened.add((id, recordVoice)),
+          ),
+        ),
+      );
+      await tester.pump();
+      calls.startError = refusal(WireErrors.teacherParentNotAuthorized);
+      await controllerOf(tester).start(
+        conversationId: 'conv_1',
+        peerLabel: 'Mr. Ahmed',
+        isGroup: false,
+      );
+      await tester.pumpAndSettle();
+      final l10n = await L10n.delegate.load(const Locale('en'));
+
+      await tester.tap(find.bySemanticsLabel(l10n.callSendMessageInstead));
+      await tester.pumpAndSettle();
+
+      expect(opened, [('conv_1', false)]);
+    });
+
+    testWidgets('a call that never connected shows no 0:00', (tester) async {
+      await tester.pumpWidget(harness());
+      await tester.pump();
+      await controllerOf(tester).start(
+        conversationId: 'conv_1',
+        peerLabel: 'Mr. Ahmed',
+        isGroup: false,
+      );
+      await tester.pumpAndSettle();
+      socket.emit(
+        CallEventNames.ended,
+        Frames.ended(outcome: 'missed', durationSeconds: 0),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('0:00'), findsNothing);
+    });
+
+    testWidgets('a label is part of its button: tapping the word works too',
+        (tester) async {
+      final l10n = await placeAndEnd(tester, 'missed');
+      await tester.tap(find.text(l10n.callAgain));
+      await tester.pumpAndSettle();
+      expect(calls.startCalls, hasLength(2));
     });
   });
 }

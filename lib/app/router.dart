@@ -80,6 +80,30 @@ abstract final class Routes {
 
 /// Rebuilds on every authentication change, so a session ending immediately evicts every
 /// protected screen rather than leaving stale data on screen (§7).
+/// Leave the call screen for its conversation — "Message" or "Record voice
+/// message" after a call that is over.
+///
+/// The call route is popped FIRST, by us: [CallPresenter] then finds nothing of
+/// its own on top and pops nothing else. If the conversation is what is now
+/// underneath (the call was placed from it) it is REPLACED rather than pushed a
+/// second time, so Back never lands on the same chat.
+void openConversationFromCall(
+  GoRouter router,
+  String conversationId, {
+  required bool recordVoice,
+}) {
+  final target = Routes.conversation(conversationId);
+  final location = recordVoice ? '$target?voice=1' : target;
+  if (router.state.uri.path == Routes.activeCall && router.canPop()) {
+    router.pop();
+  }
+  if (router.routerDelegate.currentConfiguration.uri.path == target) {
+    router.replace(location);
+  } else {
+    router.push(location);
+  }
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
   final notifier = _AuthRefresh(ref);
   ref.onDispose(notifier.dispose);
@@ -128,6 +152,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => ChatScreenRoute(
           conversationId: state.pathParameters['conversationId']!,
           focusMessageId: state.uri.queryParameters['m'],
+          startVoiceRecording: state.uri.queryParameters['voice'] == '1',
         ),
       ),
       // The profile sits outside the tab shell, like the conversation it belongs to: it is
@@ -152,6 +177,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           onLeave: () {
             if (context.canPop()) context.pop();
           },
+          onOpenConversation: (conversationId, {required recordVoice}) =>
+              openConversationFromCall(
+                GoRouter.of(context),
+                conversationId,
+                recordVoice: recordVoice,
+              ),
         ),
       ),
       GoRoute(

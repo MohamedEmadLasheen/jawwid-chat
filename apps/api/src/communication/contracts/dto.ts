@@ -82,6 +82,8 @@ export interface MessageDto {
   deletedAt: string | null;
   deletedForAll: boolean;
   createdAt: string;
+  /** When the author last edited it; null when never edited. `body` is the current wording. */
+  editedAt: string | null;
   attachments: AttachmentDto[];
   reactions: Array<{ actorId: string; emoji: string }>;
   /** A copy forwarded by its author; shown as "Forwarded". The source is never named. */
@@ -219,7 +221,7 @@ export interface ConversationDto {
    */
   viewerRequiresApproval?: boolean;
 
-  /** The viewer's own pin / archive / mute, as setPreferences stored them. */
+  /** The viewer's own pin / archive / mute / favorite, as setPreferences stored them. */
   viewerState?: ConversationViewerStateDto;
 
   /**
@@ -241,6 +243,8 @@ export interface ConversationDto {
 
 export interface ConversationViewerStateDto {
   pinned: boolean;
+  /** In the viewer's own Favorites list. */
+  favorite: boolean;
   archived: boolean;
   mutedUntil: string | null;
 }
@@ -479,6 +483,7 @@ export function toMessageDto(
     deletedAt: m.deletedAt?.toISOString() ?? null,
     deletedForAll: m.deletedForAll,
     createdAt: m.createdAt.toISOString(),
+    editedAt: hidden ? null : (m.editedAt?.toISOString() ?? null),
     attachments: hidden
       ? []
       : (m.attachments ?? []).map((a) => {

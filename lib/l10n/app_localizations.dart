@@ -727,6 +727,42 @@ abstract class L10n {
   /// **'Send a message instead'**
   String get callSendMessageInstead;
 
+  /// No description provided for @callNoAnswer.
+  ///
+  /// In en, this message translates to:
+  /// **'No answer'**
+  String get callNoAnswer;
+
+  /// No description provided for @callMissedIncoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Missed call'**
+  String get callMissedIncoming;
+
+  /// No description provided for @callAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Call again'**
+  String get callAgain;
+
+  /// No description provided for @callRecordVoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Record voice message'**
+  String get callRecordVoice;
+
+  /// No description provided for @callMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Message'**
+  String get callMessage;
+
+  /// No description provided for @callVoiceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Jawwid voice call'**
+  String get callVoiceTitle;
+
   /// No description provided for @notificationsTitle.
   ///
   /// In en, this message translates to:
@@ -2670,6 +2706,282 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Counts once Core confirms the subscription.'**
   String get cardTrialAwaitingCore;
+
+  /// No description provided for @callsSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search by name'**
+  String get callsSearchHint;
+
+  /// No description provided for @callActionStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Start call'**
+  String get callActionStart;
+
+  /// No description provided for @callActionNewLink.
+  ///
+  /// In en, this message translates to:
+  /// **'New call link'**
+  String get callActionNewLink;
+
+  /// No description provided for @callActionSelectMember.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a member'**
+  String get callActionSelectMember;
+
+  /// No description provided for @callActionSchedule.
+  ///
+  /// In en, this message translates to:
+  /// **'Schedule call'**
+  String get callActionSchedule;
+
+  /// No description provided for @callsSectionUpcoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Upcoming'**
+  String get callsSectionUpcoming;
+
+  /// No description provided for @callsSectionFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Favourites'**
+  String get callsSectionFavorites;
+
+  /// No description provided for @callsSectionRecent.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent'**
+  String get callsSectionRecent;
+
+  /// No description provided for @callsUpcomingEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No scheduled calls'**
+  String get callsUpcomingEmpty;
+
+  /// No description provided for @callsUpcomingError.
+  ///
+  /// In en, this message translates to:
+  /// **'Upcoming calls could not be loaded.'**
+  String get callsUpcomingError;
+
+  /// No description provided for @callsFavoritesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a chat to your favourites to call it from here.'**
+  String get callsFavoritesEmpty;
+
+  /// No description provided for @callsSearchNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing matched your search'**
+  String get callsSearchNoMatch;
+
+  /// No description provided for @callsUnnamed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unnamed chat'**
+  String get callsUnnamed;
+
+  /// No description provided for @callBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Call back'**
+  String get callBack;
+
+  /// No description provided for @callDirectionOutgoing.
+  ///
+  /// In en, this message translates to:
+  /// **'Outgoing'**
+  String get callDirectionOutgoing;
+
+  /// No description provided for @callDirectionIncoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Incoming'**
+  String get callDirectionIncoming;
+
+  /// No description provided for @callWhen.
+  ///
+  /// In en, this message translates to:
+  /// **'{day}, {time}'**
+  String callWhen(String day, String time);
+
+  /// No description provided for @callPickerPeople.
+  ///
+  /// In en, this message translates to:
+  /// **'People'**
+  String get callPickerPeople;
+
+  /// No description provided for @callPickerGroups.
+  ///
+  /// In en, this message translates to:
+  /// **'Groups'**
+  String get callPickerGroups;
+
+  /// No description provided for @callPickerEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'There are no chats to choose from.'**
+  String get callPickerEmpty;
+
+  /// No description provided for @callPickerNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No chats match your search'**
+  String get callPickerNoMatch;
+
+  /// No description provided for @callRefusedParentGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Only staff or the teacher can start a group call'**
+  String get callRefusedParentGroup;
+
+  /// No description provided for @callRefusedGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Calls are not available in this chat'**
+  String get callRefusedGeneric;
+
+  /// No description provided for @scheduledCallDefaultTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduled call'**
+  String get scheduledCallDefaultTitle;
+
+  /// No description provided for @scheduledCallLinkLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Call link'**
+  String get scheduledCallLinkLabel;
+
+  /// No description provided for @scheduledCallStateOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open now'**
+  String get scheduledCallStateOpen;
+
+  /// No description provided for @scheduledCallStateUpcoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduled'**
+  String get scheduledCallStateUpcoming;
+
+  /// No description provided for @scheduledCallJoin.
+  ///
+  /// In en, this message translates to:
+  /// **'Join'**
+  String get scheduledCallJoin;
+
+  /// No description provided for @scheduledCallCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel call'**
+  String get scheduledCallCancel;
+
+  /// No description provided for @scheduledCallCancelConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel this call?'**
+  String get scheduledCallCancelConfirmTitle;
+
+  /// No description provided for @scheduledCallCancelConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone in the chat will see that it was cancelled.'**
+  String get scheduledCallCancelConfirmBody;
+
+  /// No description provided for @scheduledCallKeep.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep'**
+  String get scheduledCallKeep;
+
+  /// No description provided for @scheduledCallCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Call cancelled'**
+  String get scheduledCallCancelled;
+
+  /// No description provided for @scheduledCallBy.
+  ///
+  /// In en, this message translates to:
+  /// **'By {name}'**
+  String scheduledCallBy(String name);
+
+  /// No description provided for @scheduledCallJoinHint.
+  ///
+  /// In en, this message translates to:
+  /// **'You can join from 10 minutes before the start.'**
+  String get scheduledCallJoinHint;
+
+  /// No description provided for @scheduledJoinNotJoinable.
+  ///
+  /// In en, this message translates to:
+  /// **'This call is not open to join right now'**
+  String get scheduledJoinNotJoinable;
+
+  /// No description provided for @scheduledJoinWaitingForHost.
+  ///
+  /// In en, this message translates to:
+  /// **'The call starts when staff or the teacher join'**
+  String get scheduledJoinWaitingForHost;
+
+  /// No description provided for @scheduledJoinBusy.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish your current call first'**
+  String get scheduledJoinBusy;
+
+  /// No description provided for @callScheduleDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Date'**
+  String get callScheduleDate;
+
+  /// No description provided for @callScheduleTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get callScheduleTime;
+
+  /// No description provided for @callScheduleTitleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Title (optional)'**
+  String get callScheduleTitleLabel;
+
+  /// No description provided for @callScheduleInPast.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a time in the future'**
+  String get callScheduleInPast;
+
+  /// No description provided for @callSchedulePosted.
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduled — posted in {chat}'**
+  String callSchedulePosted(String chat);
+
+  /// No description provided for @callLinkPosted.
+  ///
+  /// In en, this message translates to:
+  /// **'Call link posted in {chat}'**
+  String callLinkPosted(String chat);
+
+  /// No description provided for @callLinkJoinNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Join now'**
+  String get callLinkJoinNow;
+
+  /// No description provided for @callLinkOpenChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Open chat'**
+  String get callLinkOpenChat;
 
   /// No description provided for @profilePhotoTitle.
   ///

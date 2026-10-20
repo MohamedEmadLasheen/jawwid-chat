@@ -33,7 +33,8 @@ export function FilterChips<T extends string>({
 }) {
   const tabs = variant === 'tabs'
   const ref = useRef<HTMLDivElement>(null)
-  const edges = useOverflowEdges(ref, tabs)
+  // Chips report hidden edges too: a pane may lay them out on one scrolling line.
+  const edges = useOverflowEdges(ref, true)
 
   useEffect(() => {
     if (!tabs) return

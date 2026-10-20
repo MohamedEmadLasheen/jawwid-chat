@@ -11,6 +11,8 @@ import { PrismaService } from './prisma.service';
 export const COMMUNICATION_CONFIG_DEFAULTS = {
   /** initial hypothesis - window in which a sender may delete for everyone */
   'communication.delete_for_everyone_window_minutes': 60,
+  /** initial hypothesis - window in which an author may edit a text message */
+  'communication.edit_window_minutes': 15,
   /** initial hypothesis - brief section 4 handoff.grace_minutes */
   'handoff.grace_minutes': 15,
   /** initial hypothesis - brief section 9 "batch wait ~60s" */

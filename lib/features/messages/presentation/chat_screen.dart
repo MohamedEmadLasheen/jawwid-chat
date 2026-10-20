@@ -63,6 +63,7 @@ class ChatScreen extends ConsumerStatefulWidget {
     this.onOpenMembers,
     this.onOpenProfile,
     this.focusMessageId,
+    this.startVoiceRecording = false,
   });
 
   final String conversationId;
@@ -95,6 +96,11 @@ class ChatScreen extends ConsumerStatefulWidget {
   /// Tapping the header — avatar or name — opens the profile, or group info for a
   /// student group. The same gesture people already use in every other chat app.
   final VoidCallback? onOpenProfile;
+
+  /// Start the ordinary voice recorder as soon as the screen is up — the call
+  /// screen's "Record voice message". The usual review → send flow follows; a
+  /// read-only conversation never starts one.
+  final bool startVoiceRecording;
 
   @override
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
@@ -157,6 +163,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    if (widget.startVoiceRecording && !widget.isReadOnly) {
+      // After the frame: the composer that renders the recording is built then,
+      // and a provider must not be written during build.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final voice = voiceComposerProvider(widget.conversationId);
+        unawaited(ref.read(voice.notifier).start());
+      });
+    }
   }
 
   /// Report the conversation read up to the newest message on screen.

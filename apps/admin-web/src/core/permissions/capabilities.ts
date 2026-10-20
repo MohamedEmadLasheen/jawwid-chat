@@ -30,6 +30,7 @@ export type NavArea =
   | 'teachers'
   | 'instalments'
   | 'trials'
+  | 'calls'
   | 'settings'
 
 /** Roles that operate the customer relationship. */
@@ -70,7 +71,9 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // `instalments` and `trials` likewise: offered as Admin Portal sections.
     // `chat` is the real conversation workspace: offered beside the read-only
     // Conversations section, so the super admin can reply (PD-8).
-    return ['chat', 'inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'teachers', 'instalments', 'trials', 'settings']
+    // `calls` stays routable too (a call link lands on /calls/join/:id); the
+    // page itself is offered as the Admin Portal's Calls section.
+    return ['chat', 'inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'teachers', 'instalments', 'trials', 'calls', 'settings']
   }
   if (isManager(role)) {
     // PD-8: the department's structure -- children's supervisors and backups.
@@ -78,7 +81,8 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // the Teachers department (see TEACHERS_DEPARTMENT_AREAS).
     // PD-12 S3 instalments and PD-11 T4 trials / new students -- each offered
     // only when the server confirms the department (see SERVER_CONFIRMED_AREAS).
-    return ['chat', 'inbox', 'families', 'organization', 'teachers', 'instalments', 'trials', 'tasks', 'coverage', 'dashboard', 'stories', 'settings']
+    // PD-13: the Calls page (voice calls, scheduled calls, call links).
+    return ['chat', 'calls', 'inbox', 'families', 'organization', 'teachers', 'instalments', 'trials', 'tasks', 'coverage', 'dashboard', 'stories', 'settings']
   }
   if (isOperator(role)) {
     // No coverage configuration, no manager dashboard, no config editing.
@@ -89,7 +93,10 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // Chat is first: the conversation workspace on the real conversation API
     // (the same conversations parents and teachers are in). The server decides
     // which ones this admin may open -- staff scope -- not this list.
-    return ['chat', 'inbox', 'families', 'teachers', 'instalments', 'trials', 'tasks', 'stories']
+    //
+    // Calls (PD-13): the account's calls, scheduled calls and call links. What
+    // each call may do is decided by the server's call capability.
+    return ['chat', 'calls', 'inbox', 'families', 'teachers', 'instalments', 'trials', 'tasks', 'stories']
   }
   if (isDepartment(role)) {
     // Departments get tasks and nothing else — they may not open family records.

@@ -156,15 +156,18 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     key: 'calls',
     group: 'communication',
     icon: 'calls',
-    status: 'in_development',
-    label: { en: 'Calls & media', ar: 'المكالمات والوسائط' },
+    // PD-13: the Calls page -- this account's voice calls, scheduled calls and
+    // call links. Its controls act (start, schedule, join, cancel), each
+    // decided by the server.
+    status: 'managed',
+    label: { en: 'Calls', ar: 'المكالمات' },
     purpose: {
-      en: 'Call history and shared media across the organization.',
-      ar: 'سجل المكالمات والوسائط المشتركة في المؤسسة.',
+      en: 'Start voice calls, schedule calls and share members-only call links.',
+      ar: 'بدء المكالمات الصوتية وجدولة المكالمات ومشاركة روابط مكالمات للأعضاء فقط.',
     },
     note: {
-      en: 'Calls work in the apps; an organization-wide history has no backend yet.',
-      ar: 'المكالمات تعمل في التطبيقات؛ السجل على مستوى المؤسسة لا واجهة خلفية له بعد.',
+      en: 'This account’s own calls. An organization-wide call history and shared media have no backend yet.',
+      ar: 'مكالمات هذا الحساب فقط. لا واجهة خلفية بعد لسجل المكالمات على مستوى المؤسسة ولا للوسائط المشتركة.',
     },
   },
   {

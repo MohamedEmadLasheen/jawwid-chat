@@ -12,6 +12,7 @@ import { OrganizationPage } from '@/features/organization/OrganizationPage'
 import { TeacherStatsPage } from '@/features/teachers/TeacherStatsPage'
 import { TeacherFilesPage } from '@/features/teacher-files/TeacherFilesPage'
 import { InstalmentsPage } from '@/features/instalments/InstalmentsPage'
+import { CallsPage } from '@/features/calls-page/CallsPage'
 
 /**
  * One route, `/admin/:section`, for every Admin Portal section. The four built
@@ -49,6 +50,8 @@ export function AdminSectionPage() {
       return <TeacherFilesPage basePath={adminSectionPath('teachers')} />
     case 'instalments':
       return <AdminInstalments section={section} />
+    case 'calls':
+      return <CallsPage />
     default:
       return <DevelopmentPlaceholder section={section} />
   }

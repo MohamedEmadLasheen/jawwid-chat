@@ -18,11 +18,15 @@ class ChatSearchField extends StatelessWidget {
     required this.controller,
     required this.onChanged,
     required this.onClear,
+    this.hintText,
   });
 
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
   final VoidCallback onClear;
+
+  /// Overrides the Chats wording, for a screen that searches something else by name.
+  final String? hintText;
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +54,7 @@ class ChatSearchField extends StatelessWidget {
             autocorrect: false,
             style: theme.textTheme.bodyMedium,
             decoration: InputDecoration(
-              hintText: l10n.searchHint,
+              hintText: hintText ?? l10n.searchHint,
               isDense: true,
               filled: true,
               fillColor: tokens.colorSurfaceMuted,

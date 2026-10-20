@@ -2,6 +2,12 @@
 -- Starred and pinned messages (Chat UI group B, owner decisions 2026-10-19)
 -- =============================================================================
 --
+-- Restamped 20261020090000 -> 20261020091000 when this branch met main:
+-- 20261020090000_chat_scheduled_call already held that version, and the
+-- migration-chain guard refuses a duplicate. Everything below is idempotent
+-- (if not exists / or replace), so a database that applied it under the old
+-- name re-runs it harmlessly.
+--
 -- STAR: a private bookmark. One row per (message, actor); nobody else ever sees
 -- it. Listed back to its owner as "Starred messages", only while the owner may
 -- still read the message.

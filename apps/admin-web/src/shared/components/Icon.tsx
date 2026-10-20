@@ -279,6 +279,21 @@ const PATHS = {
     </>
   ),
   bellOff: <path d="M6.3 6.3A6 6 0 0 0 6 9c0 6-2.5 7.5-2.5 7.5h13M9 4a6 6 0 0 1 9 5c0 2.5.4 4.2.9 5.4M10 20a2.2 2.2 0 0 0 4 0M3 3l18 18" />,
+  /** Favorite chats (WhatsApp's Favorites list). */
+  heart: <path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.4 4.3 4.3 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10Z" />,
+  /** Edit a message. */
+  pencil: <path d="M14.5 5.5 18.5 9.5M4 20l1-4.5L15.8 4.7a1.8 1.8 0 0 1 2.5 0l1 1a1.8 1.8 0 0 1 0 2.5L8.5 19 4 20Z" />,
+  // Calls page (PD-13).
+  calendarPlus: (
+    <>
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2" />
+      <path d="M3.5 10h17M8 3v4M16 3v4M12 13v5M9.5 15.5h5" />
+    </>
+  ),
+  /** A call that came in: an arrow down to the corner. */
+  callIncoming: <path d="M17 7 7 17M7 9.5V17h7.5" />,
+  /** A call this account placed: an arrow up and away. */
+  callOutgoing: <path d="M7 17 17 7M9.5 7H17v7.5" />,
   tag: (
     <>
       <path d="M3.5 12.1V4.5a1 1 0 0 1 1-1h7.6a1 1 0 0 1 .7.3l7.7 7.7a1 1 0 0 1 0 1.4l-7.6 7.6a1 1 0 0 1-1.4 0l-7.7-7.7a1 1 0 0 1-.3-.7Z" />

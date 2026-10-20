@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
@@ -10,9 +10,9 @@ import { Badge } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
 import { Menu, type MenuItem } from '@/shared/components/Menu'
 import { EmptyState, ErrorState, LoadingState } from '@/shared/components/States'
-import { bySeq, chatApi, chatKeys, type ChatAttachment, type ChatMessage, type UploadedAttachment } from './chatApi'
+import { EDIT_WINDOW_MS, bySeq, chatApi, chatKeys, type ChatAttachment, type ChatMessage, type UploadedAttachment } from './chatApi'
 import { chatCopyFor, systemText, type ChatCopy } from './copy'
-import { ChatComposer, type ComposerSend, type ReplyTarget } from './ChatComposer'
+import { ChatComposer, type ComposerSend, type EditTarget, type ReplyTarget } from './ChatComposer'
 import { ForwardDialog } from './ForwardDialog'
 import { LabelChip, LabelsDialog } from './LabelsDialog'
 import { ExportDialog } from './ExportDialog'
@@ -20,6 +20,13 @@ import { ThreadSearch } from './ThreadSearch'
 import { Highlighted, searchable } from './search'
 import { ConversationAvatar, conversationName, isGroup, isMuted } from './chatView'
 import { useConversationPreferences } from './useChatActions'
+import { VoiceNotePlayer } from './VoiceRecorder'
+import { ConversationCallControls } from '@/features/calls/ConversationCallControls'
+import {
+  SCHEDULED_CALL_CARD_KINDS,
+  ScheduledCallCard,
+  readScheduledCallCard,
+} from '@/features/calls-page/ScheduledCallCard'
 
 /** The quick reactions, the same six as the mobile app. */
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const
@@ -76,6 +83,15 @@ function errorText(error: unknown, locale: 'ar' | 'en', fallback: string): strin
   return error instanceof ApiError ? error.localized(locale) : fallback
 }
 
+/** A failed message action, worded here for the codes the server words only in English. */
+function actionErrorText(error: unknown, locale: 'ar' | 'en', copy: ChatCopy): string {
+  if (error instanceof ApiError) {
+    if (error.code === 'COMM.EDIT_WINDOW_EXPIRED') return copy.editWindowExpired
+    if (error.code === 'COMM.MESSAGE_NOT_EDITABLE') return copy.notEditable
+  }
+  return errorText(error, locale, copy.actionFailed)
+}
+
 function authorName(m: ChatMessage, copy: ChatCopy): string {
   return m.authorDisplayName || (copy.role[m.authorKind] ?? m.authorKind)
 }
@@ -113,6 +129,7 @@ export function ChatThread({
   const { staff } = useSession()
   const queryClient = useQueryClient()
   const prefs = useConversationPreferences()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const details = useQuery({
     queryKey: chatKeys.conversation(conversationId),
@@ -151,6 +168,7 @@ export function ChatThread({
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [pending, setPending] = useState<PendingSend[]>([])
   const [reply, setReply] = useState<ReplyTarget | null>(null)
+  const [editing, setEditing] = useState<EditTarget | null>(null)
   const [actionError, setActionError] = useState<unknown>(null)
   // Select mode: a set of message ids, and the bulk actions over them.
   const [selecting, setSelecting] = useState(false)
@@ -304,6 +322,17 @@ export function ChatThread({
     },
   })
 
+  /** Save an edit: the server decides whether it may still be edited, and its copy replaces ours. */
+  async function saveEdit(target: EditTarget, body: string) {
+    setEditing(null)
+    if (body === target.body) return
+    await act(async () => {
+      const saved = await chatApi.editMessage(conversationId, target.messageId, body)
+      setOlder((all) => all.map((x) => (x.id === saved.id ? { ...x, ...saved } : x)))
+    })
+    void queryClient.invalidateQueries({ queryKey: chatKeys.list })
+  }
+
   function submit(input: ComposerSend) {
     const p: PendingSend = {
       clientMessageId: crypto.randomUUID(),
@@ -345,6 +374,7 @@ export function ChatThread({
   const muted = conv ? isMuted(conv) : false
   const pinned = !!conv?.viewerState?.pinned
   const archived = !!conv?.viewerState?.archived
+  const favorite = !!conv?.viewerState?.favorite
   const memberCount = conv?.members?.length ?? 0
   // A group always names its senders; so does a 1:1 the viewer is only
   // overseeing (two other people talking), but not one the viewer is in.
@@ -376,6 +406,12 @@ export function ChatThread({
           </button>
         )}
         <div className="cw-head__actions">
+          {conv && <ConversationCallControls conversationId={conversationId} peerLabel={name} isGroup={group} />}
+          {favorite && (
+            <span className="cw-row__mark cw-row__mark--favorite" title={copy.favoriteMark} aria-label={copy.favoriteMark}>
+              <Icon name="heart" size={16} />
+            </span>
+          )}
           {muted && (
             <span className="cw-row__mark" title={copy.mutedMark} aria-label={copy.mutedMark}>
               <Icon name="bellOff" size={16} />
@@ -411,6 +447,7 @@ export function ChatThread({
                 { key: 'labels', label: copy.labelsMenu, icon: 'tag', onSelect: () => setLabeling(true) },
                 { key: 'mute', label: muted ? copy.unmute : copy.mute, icon: muted ? 'notifications' : 'bellOff', onSelect: () => prefs.mute(conv.id, !muted) },
                 { key: 'pin', label: pinned ? copy.unpin : copy.pin, icon: 'pin', onSelect: () => prefs.pin(conv.id, !pinned) },
+                { key: 'favorite', label: favorite ? copy.unfavorite : copy.favorite, icon: 'heart', onSelect: () => prefs.favorite(conv.id, !favorite) },
                 { key: 'archive', label: archived ? copy.unarchive : copy.archive, icon: 'archive', onSelect: () => prefs.archive(conv.id, !archived) },
                 // Exporting copies family data out of the system: the super admin's alone (the server enforces it).
                 ...(staff?.role === 'super_admin'
@@ -503,6 +540,7 @@ export function ChatThread({
                     onPin={() => void act(() => (m.pinned ? chatApi.unpin(conversationId, m.id) : chatApi.pin(conversationId, m.id)))}
                     onDeleteForMe={() => void act(() => chatApi.deleteForMe(conversationId, m.id))}
                     onDeleteForEveryone={() => void act(() => chatApi.deleteForEveryone(conversationId, m.id))}
+                    onEdit={() => setEditing({ messageId: m.id, body: m.body ?? '' })}
                   />
                 </Fragment>
               )
@@ -549,7 +587,7 @@ export function ChatThread({
 
       {actionError !== null && (
         <div className="banner banner--warn cw-action-error" role="alert">
-          {errorText(actionError, locale, copy.actionFailed)}
+          {actionErrorText(actionError, locale, copy)}
           <button type="button" className="btn btn--ghost btn--icon btn--sm" aria-label={copy.discard} onClick={() => setActionError(null)}>
             <Icon name="close" size={14} />
           </button>
@@ -619,7 +657,18 @@ export function ChatThread({
           </div>
         </div>
       ) : (
-        <ChatComposer onSend={submit} reply={reply} onCancelReply={() => setReply(null)} />
+        <ChatComposer
+          onSend={submit}
+          reply={reply}
+          onCancelReply={() => setReply(null)}
+          editing={editing}
+          onSaveEdit={(body) => editing && void saveEdit(editing, body)}
+          onCancelEdit={() => setEditing(null)}
+          conversationId={conversationId}
+          autoStartVoice={searchParams.get('voice') === '1'}
+          onVoiceAutoStarted={() => setSearchParams({}, { replace: true })}
+          onVoiceSent={() => void queryClient.invalidateQueries({ queryKey: chatKeys.messages(conversationId) })}
+        />
       )}
 
       {exporting && (
@@ -675,6 +724,7 @@ function MessageItem({
   onPin,
   onDeleteForMe,
   onDeleteForEveryone,
+  onEdit,
 }: {
   m: ChatMessage
   side: Side
@@ -699,6 +749,7 @@ function MessageItem({
   onPin: () => void
   onDeleteForMe: () => void
   onDeleteForEveryone: () => void
+  onEdit: () => void
 }) {
   const { locale, time } = useI18n()
   const copy = chatCopyFor(locale)
@@ -736,11 +787,26 @@ function MessageItem({
   }
 
   const mine = m.authorId === selfId
+  // A hint only: the server decides (author, window, never-moderated text).
+  const editable =
+    mine &&
+    !m.deletedForAll &&
+    m.type === 'text' &&
+    m.moderation === 'published' &&
+    !!m.body &&
+    Date.now() - new Date(m.createdAt).getTime() < EDIT_WINDOW_MS
   const live = !m.deletedForAll
+  // PD-13: a scheduled-call card is drawn with its Join button; any other card
+  // (or one this client cannot read) keeps showing its plain-text body.
+  const callCard =
+    live && m.type === 'card' && m.card && SCHEDULED_CALL_CARD_KINDS.has(m.card.kind)
+      ? readScheduledCallCard(m.card.payload)
+      : null
   const reactions = summarize(m.reactions ?? [], selfId)
   const items: MenuItem[] = live
     ? [
         { key: 'reply', label: copy.reply, icon: 'reply', onSelect: onReply },
+        ...(editable ? [{ key: 'edit', label: copy.edit, icon: 'pencil' as const, onSelect: onEdit }] : []),
         // Only what may leave its conversation; the server re-checks both ends.
         ...(m.moderation === 'published' && m.type !== 'card'
           ? [{ key: 'forward', label: copy.forward, icon: 'forward' as const, onSelect: onForward }]
@@ -817,6 +883,8 @@ function MessageItem({
           )}
           {m.deletedForAll ? (
             <em className="bubble__deleted">{copy.deleted}</em>
+          ) : callCard && m.card && m.conversationId ? (
+            <ScheduledCallCard cardKind={m.card.kind} card={callCard} conversationId={m.conversationId} />
           ) : (
             <>
               {m.attachments.map((a) => (
@@ -838,6 +906,11 @@ function MessageItem({
             )}
             {m.moderation === 'pending' && <Badge tone="waiting">{copy.pending}</Badge>}
             {m.moderation === 'rejected' && <Badge tone="danger">{copy.rejected}</Badge>}
+            {m.editedAt && !m.deletedForAll && (
+              <span className="cw-edited" title={time(m.editedAt)}>
+                {copy.edited}
+              </span>
+            )}
             <time dateTime={m.createdAt}>{time(m.createdAt)}</time>
           </span>
         </div>
@@ -930,7 +1003,7 @@ function AttachmentView({ a, copy }: { a: ChatAttachment; copy: ChatCopy }) {
     )
   }
   if (a.kind === 'video') return <video className="cw-media" src={a.url} controls preload="metadata" />
-  if (a.kind === 'voice') return <audio className="cw-audio" src={a.url} controls preload="metadata" />
+  if (a.kind === 'voice') return <VoiceNotePlayer url={a.url} durationMs={a.durationMs} copy={copy} />
   return (
     <a href={a.url} target="_blank" rel="noreferrer" className="bubble__attachment">
       <Icon name="paperclip" size={14} />

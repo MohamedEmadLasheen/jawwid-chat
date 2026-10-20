@@ -25,7 +25,10 @@ import '../features/auth/application/auth_controller.dart';
 import '../features/auth/application/session_termination.dart';
 import '../features/auth/domain/auth_state.dart';
 import '../features/calls/data/account_call_history.dart';
+import '../features/calls/data/fake_scheduled_call_repository.dart';
 import '../features/calls/data/http_account_call_history.dart';
+import '../features/calls/data/http_scheduled_call_repository.dart';
+import '../features/calls/data/scheduled_call_repository.dart';
 import '../features/messages/data/message_marks_repository.dart';
 import '../features/messages/data/message_search_repository.dart';
 import '../features/profile/data/profile_photo_repository.dart';
@@ -186,6 +189,10 @@ List<Override> _httpOverrides() {
       // Named after the OTHER participant, so the viewer's own id is read per call.
       HttpAccountCallHistory(client: client, viewerActorId: session.actorId),
     ),
+    // PD-13: scheduled calls and call links, on the same client.
+    scheduledCallRepositoryProvider.overrideWithValue(
+      HttpScheduledCallRepository(client: client),
+    ),
     pushRegistrationApiProvider.overrideWithValue(
       HttpPushRegistration(client: client),
     ),
@@ -230,6 +237,7 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
   final backend = FakeBackend(role: developmentRole);
   final tokens = InMemoryTokenStore();
   final authRepository = FakeAuthRepository(backend: backend, tokens: tokens);
+  final calls = FakeCallRepository(backend);
 
   return [
     localeOverrideProvider.overrideWith(PersistedLocaleController.new),
@@ -239,7 +247,14 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
         .overrideWithValue(FakeConversationRepository(backend)),
     messageRepositoryProvider.overrideWithValue(FakeMessageRepository(backend)),
     groupRepositoryProvider.overrideWithValue(FakeGroupRepository(backend)),
-    callRepositoryProvider.overrideWithValue(FakeCallRepository(backend)),
+    callRepositoryProvider.overrideWithValue(calls),
+    // In memory; a Join starts its call through the fixture call repository.
+    scheduledCallRepositoryProvider.overrideWithValue(
+      FakeScheduledCallRepository(
+        startCall: (conversationId) async =>
+            (await calls.start(conversationId: conversationId)).callId,
+      ),
+    ),
     // The fixture build has no server: a transport that opens nothing, so the
     // session's realtime client runs its ordinary lifecycle instead of throwing
     // on an unoverridden provider.

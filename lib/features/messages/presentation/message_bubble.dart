@@ -12,6 +12,7 @@ import '../../../shared/models/user_role.dart';
 import '../../../shared/utils/byte_size_format.dart';
 import '../../../shared/utils/relative_time.dart';
 import '../../../shared/utils/text_direction.dart';
+import '../../calls/presentation/scheduled_call_card_view.dart';
 import '../../lessons/presentation/lesson_card_view.dart';
 import '../../supervision/presentation/supervision_card_view.dart';
 import '../../trials/presentation/trial_card_view.dart';
@@ -111,7 +112,9 @@ class MessageBubble extends StatelessWidget {
         ? null
         : lessonCardView(context, card, foreground) ??
             supervisionCardView(context, card, foreground) ??
-            trialCardView(context, card, foreground);
+            trialCardView(context, card, foreground) ??
+            scheduledCallCardView(context, card, foreground,
+                conversationId: message.conversationId);
 
     // A withheld message is visually de-emphasised so its sender can see at a glance that
     // it has not reached anyone yet.

@@ -323,6 +323,12 @@ export const CardKind = {
   DISCIPLINE_WARNING: 'discipline_warning',
   DISCIPLINE_DEDUCTION: 'discipline_deduction',
   DISCIPLINE_SUSPENSION: 'discipline_suspension',
+  /** PD-13: a call scheduled for a date and time, in the conversation it will happen in. */
+  CALL_SCHEDULED: 'call_scheduled',
+  /** PD-13: a members-only call link, joinable from the moment it is posted. */
+  CALL_LINK: 'call_link',
+  /** PD-13: the scheduled call announced above will not happen. */
+  CALL_SCHEDULE_CANCELLED: 'call_schedule_cancelled',
 } as const;
 export type CardKind = (typeof CardKind)[keyof typeof CardKind];
 
@@ -369,3 +375,7 @@ export const SupervisionKind = {
   MONTHLY_COMMENT: 'monthly_comment',
   NOTE: 'note',
 } as const;
+
+/** PD-13: what a chat.scheduled_call row is. */
+export const ScheduledCallKind = { SCHEDULED: 'scheduled', LINK: 'link' } as const;
+export type ScheduledCallKind = (typeof ScheduledCallKind)[keyof typeof ScheduledCallKind];

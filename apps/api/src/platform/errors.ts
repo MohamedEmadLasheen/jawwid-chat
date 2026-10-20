@@ -61,6 +61,13 @@ export enum CommErrorCode {
   VALIDATION = 'COMMON.VALIDATION',
   NOT_MESSAGE_AUTHOR = 'COMM.NOT_MESSAGE_AUTHOR',
   DELETE_WINDOW_EXPIRED = 'COMM.DELETE_WINDOW_EXPIRED',
+  /** The author's edit window (`communication.edit_window_minutes`) has passed. */
+  EDIT_WINDOW_EXPIRED = 'COMM.EDIT_WINDOW_EXPIRED',
+  /**
+   * Only a published, never-moderated, undeleted TEXT message can be edited: a
+   * message that went through approval stays exactly as it was approved. 409.
+   */
+  MESSAGE_NOT_EDITABLE = 'COMM.MESSAGE_NOT_EDITABLE',
 
   // --- Validation / state ---
   UNKNOWN_ACTOR = 'COMM.UNKNOWN_ACTOR',
@@ -246,6 +253,12 @@ export enum CommErrorCode {
   BILLING_NOT_FOUND = 'COMM.BILLING_NOT_FOUND',
   /** PD-12 S3: Jawwid Core's invoice API did not answer, or answered something unusable. 502. */
   BILLING_CORE_UNAVAILABLE = 'COMM.BILLING_CORE_UNAVAILABLE',
+  /** PD-13: no such scheduled call, or none in a conversation this caller may read. 404. */
+  SCHEDULED_CALL_NOT_FOUND = 'COMM.SCHEDULED_CALL_NOT_FOUND',
+  /** PD-13: only someone who may start a call in the conversation schedules one there; only its creator cancels it. 403. */
+  SCHEDULED_CALL_DENIED = 'COMM.SCHEDULED_CALL_DENIED',
+  /** PD-13: cancelled, not yet open (more than 10 minutes early), or over (2 hours after its start). 409. */
+  SCHEDULED_CALL_NOT_JOINABLE = 'COMM.SCHEDULED_CALL_NOT_JOINABLE',
 }
 
 export class CommError extends Error {

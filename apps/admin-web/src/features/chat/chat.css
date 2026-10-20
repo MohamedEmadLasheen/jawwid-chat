@@ -260,6 +260,8 @@
   .cw-media { max-inline-size: 240px; }
 }
 
+/* The open row's menu sits above the rows after it (see menu.css). */
+.cw-row:has(.menu__button[aria-expanded='true']) { z-index: 5; }
 /* Star and pin (group B). */
 .cw-mark { display: inline-flex; color: var(--text-subtle); }
 .cw-mark--star { color: var(--accent-strong); }
@@ -336,6 +338,34 @@
 .cw-forward__row--on { background: var(--accent-soft); }
 .cw-forward__name { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
 .cw-forward__kind { font-size: var(--fs-xs); color: var(--text-subtle); white-space: nowrap; }
+
+/* Filters: one aligned line under the search -- All, Unread, Favorites,
+   Groups -- scrolling sideways rather than wrapping onto a ragged second row. */
+.cw-filters { display: flex; align-items: center; gap: var(--space-1); min-inline-size: 0; }
+.cw-filters .chips {
+  flex: 1;
+  min-inline-size: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-block: 2px;
+}
+.cw-filters .chips::-webkit-scrollbar { display: none; }
+.cw-filters .chip { flex: none; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.cw-filters .chip__count { margin-inline-start: 0; }
+/* A filter row that scrolls fades the side that hides more, like the tab rows. */
+.cw-filters .chips[data-more-end] { mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
+.cw-filters .chips[data-more-start] { mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); }
+.cw-filters .chips[data-more-start][data-more-end] { mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); }
+[dir='rtl'] .cw-filters .chips[data-more-end] { mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); }
+[dir='rtl'] .cw-filters .chips[data-more-start] { mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
+
+/* Favorite chats. */
+.cw-row__mark--favorite { color: var(--danger); }
+
+/* Edited messages. */
+.cw-edited { font-size: var(--fs-xs); font-style: italic; color: var(--text-subtle); }
+.cw-edit-banner .cw-quote__author { display: inline-flex; align-items: center; gap: 4px; }
 
 /* Labels (private to each staff member) and quick replies. A label's colour
    is only the dot and a faint wash; its name stays in the body text colour, so

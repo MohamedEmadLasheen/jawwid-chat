@@ -42,6 +42,7 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.CANNOT_APPROVE` | Only the active handler or a manager may decide. |
 | `COMM.NOT_MESSAGE_AUTHOR` | Only the author (or a manager) may delete for everyone. |
 | `COMM.DELETE_WINDOW_EXPIRED` | Past `communication.delete_for_everyone_window_minutes`. |
+| `COMM.EDIT_WINDOW_EXPIRED` | Past `communication.edit_window_minutes`. |
 
 ## Validation and state
 
@@ -57,6 +58,7 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.ATTACHMENT_TYPE_NOT_ALLOWED` | 400 | MIME type not allowed for that kind. |
 | `COMM.APPROVAL_ALREADY_DECIDED` | 409 | Someone else decided first. Refresh the queue. |
 | `COMM.APPROVAL_REASON_REQUIRED` | 400 | A rejection must state a reason. |
+| `COMM.MESSAGE_NOT_EDITABLE` | 409 | Only a published, never-moderated, undeleted text message can be edited, and not where the author's sends are held for approval. |
 | `COMM.REVOCATION_UNCONFIRMED` | 503 | RT-009. A membership removal, Student Group sync, logout or session/account revocation **is committed**, but not every API server confirmed it can no longer deliver realtime events to the revoked person on an earlier decision — so it is not reported as done. Retry the same request; it is idempotent and succeeds once every server confirms. |
 
 ## Calling
@@ -139,6 +141,9 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.BILLING_DENIED` | 403 | Instalments are read only by Operations supervisors (their families), the Operations Manager and the super admin; a billing supervisor is set only by the latter two. Never retry. |
 | `COMM.BILLING_NOT_FOUND` | 404 | No such family in the caller's organization, or one this caller does not reach. |
 | `COMM.BILLING_CORE_UNAVAILABLE` | 502 | Jawwid Core's invoice API did not answer or answered something unusable. Retry later; never show it as "nothing due". |
+| `COMM.SCHEDULED_CALL_NOT_FOUND` | 404 | PD-13: no such scheduled call or call link, or one in a conversation the caller cannot read. Indistinguishable on purpose. |
+| `COMM.SCHEDULED_CALL_DENIED` | 403 | PD-13: only the person who scheduled a call cancels it. (Scheduling itself answers with the call-capability refusal, e.g. `COMM.PARENT_CANNOT_START_GROUP_CALL`.) Never retry. |
+| `COMM.SCHEDULED_CALL_NOT_JOINABLE` | 409 | PD-13: cancelled, not open yet (more than 10 minutes before its start), or over (2 hours after it). Show the state; do not retry automatically. |
 
 Issuing a certificate answers `COMM.ATTACHMENT_NOT_IN_CONVERSATION` (403) for a
 file that was not uploaded into the learner's group, and

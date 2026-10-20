@@ -21,12 +21,20 @@ final _conversationProvider =
 });
 
 class ChatScreenRoute extends ConsumerWidget {
-  const ChatScreenRoute({super.key, required this.conversationId, this.focusMessageId});
+  const ChatScreenRoute({
+    super.key,
+    required this.conversationId,
+    this.focusMessageId,
+    this.startVoiceRecording = false,
+  });
 
   final String conversationId;
 
   /// Open at this message (a search hit); see [ChatScreen.focusMessageId].
   final String? focusMessageId;
+
+  /// Opened by "Record voice message" on the call screen (`?voice=1`).
+  final bool startVoiceRecording;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -91,6 +99,7 @@ class ChatScreenRoute extends ConsumerWidget {
           kind: value.kind,
           requiresApproval: value.requiresApproval,
           isReadOnly: value.isReadOnly,
+          startVoiceRecording: startVoiceRecording,
         ),
     };
   }

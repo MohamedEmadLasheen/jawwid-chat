@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { Route, Routes } from 'react-router-dom'
+import { chatCopy } from './copy'
 import { renderWithProviders, makeStaff } from '@/test/utils'
 import type { ChatConversation, ChatMessage } from './chatApi'
 
@@ -1048,6 +1049,166 @@ describe('Labels and quick replies (group B, staff only)', () => {
     fireEvent.click(await within(dialog).findByRole('button', { name: 'Insert' }))
     expect(screen.queryByRole('dialog', { name: 'Quick replies' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('Message')).toHaveValue('Thank you, we will follow up.')
+  })
+})
+
+describe('Edit and favorites', () => {
+  type Call = { method: string; path: string; body: unknown }
+  function stubWorkspace(state: {
+    conversations: ChatConversation[]
+    messages: ChatMessage[]
+    editRefusal?: { status: number; code: string; message: string }
+  }) {
+    const calls: Call[] = []
+    const json = (data: unknown, status = 200) =>
+      new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const path = new URL(String(input), 'http://localhost').pathname.replace(/^\/api\/v1/, '')
+        const method = init?.method ?? 'GET'
+        const body = init?.body ? JSON.parse(String(init.body)) : undefined
+        calls.push({ method, path, body })
+        if (path === '/me') return json(ADMIN)
+        if (path === '/approvals/pending') return json({ approvals: [] })
+        if (path === '/conversations') return json({ conversations: state.conversations })
+        if (path === '/me/labels') return json({ labels: [{ id: 'lb1', name: 'Payment issue', color: '1', conversationCount: 0 }] })
+        const prefs = path.match(/^\/conversations\/([^/]+)\/preferences$/)
+        if (prefs) {
+          const c = state.conversations.find((x) => x.id === prefs[1])!
+          c.viewerState = { pinned: false, archived: false, mutedUntil: null, ...c.viewerState, ...body }
+          return json({ ok: true })
+        }
+        const edit = path.match(/^\/conversations\/c1\/messages\/([^/]+)$/)
+        if (edit && method === 'PATCH') {
+          if (state.editRefusal) {
+            return json({ error: { code: state.editRefusal.code, message: state.editRefusal.message } }, state.editRefusal.status)
+          }
+          const m = state.messages.find((x) => x.id === edit[1])!
+          Object.assign(m, { body: body.body, editedAt: new Date().toISOString() })
+          return json(m)
+        }
+        if (path === '/conversations/c1/messages') return json({ messages: [...state.messages].reverse(), nextBefore: null })
+        if (path === '/conversations/c1/messages/pins') return json({ pins: [] })
+        if (path.endsWith('/messages/read')) return json({ ok: true })
+        const one = path.match(/^\/conversations\/([^/]+)$/)
+        if (one) return json(state.conversations.find((x) => x.id === one[1]) ?? {})
+        return json({ error: { code: 'NOT_FOUND', message: 'nope' } }, 404)
+      }),
+    )
+    return calls
+  }
+
+  beforeEach(() => fakeSocket.reset())
+  afterEach(() => vi.unstubAllGlobals())
+
+  const recent = () => new Date(Date.now() - 60_000).toISOString()
+  const mine = (id: string, seq: number, over: Partial<ChatMessage> = {}) =>
+    msg(id, seq, { authorKind: 'staff', authorId: ADMIN.id, authorDisplayName: 'Me', createdAt: recent(), ...over })
+
+  it('edits my own recent text message in the composer, and marks it edited', async () => {
+    const state = { conversations: [conv('c1')], messages: [mine('m1', 1, { body: 'Lesson at 5' })] }
+    const calls = stubWorkspace(state)
+    renderChat('/chat/c1')
+    const row = (await screen.findByText('Lesson at 5')).closest('li')!
+
+    fireEvent.click(within(row).getByRole('button', { name: 'Message options' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Edit' }))
+
+    const box = screen.getByLabelText('Editing message') as HTMLTextAreaElement
+    expect(box.value).toBe('Lesson at 5')
+    // No attachments or voice while editing: the bar is text only.
+    expect(screen.queryByRole('button', { name: 'Record voice message' })).not.toBeInTheDocument()
+    fireEvent.change(box, { target: { value: 'Lesson at 6' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save edit' }))
+
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'PATCH')).toMatchObject({ path: '/conversations/c1/messages/m1', body: { body: 'Lesson at 6' } }),
+    )
+    const edited = (await screen.findByText('Lesson at 6')).closest('li')!
+    expect(within(edited).getByText('Edited')).toBeInTheDocument()
+    // Back to an empty composer for a new message.
+    expect((screen.getByLabelText('Message') as HTMLTextAreaElement).value).toBe('')
+  })
+
+  it("offers Edit only on my own recent text: not on others' messages, nor after the window", async () => {
+    stubWorkspace({
+      conversations: [conv('c1')],
+      messages: [mine('old', 1, { body: 'old one', createdAt: '2026-01-01T08:00:00.000Z' }), msg('theirs', 2, { body: 'their one' })],
+    })
+    renderChat('/chat/c1')
+    for (const text of ['old one', 'their one']) {
+      const row = (await screen.findByText(text)).closest('li')!
+      fireEvent.click(within(row).getByRole('button', { name: 'Message options' }))
+      await screen.findByRole('menuitem', { name: 'Reply' })
+      expect(screen.queryByRole('menuitem', { name: 'Edit' })).not.toBeInTheDocument()
+      fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+    }
+  })
+
+  it('Escape cancels an edit and gives back what was being typed', async () => {
+    stubWorkspace({ conversations: [conv('c1')], messages: [mine('m1', 1, { body: 'typo here' })] })
+    renderChat('/chat/c1')
+    const row = (await screen.findByText('typo here')).closest('li')!
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'half a draft' } })
+
+    fireEvent.click(within(row).getByRole('button', { name: 'Message options' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Edit' }))
+    fireEvent.keyDown(screen.getByLabelText('Editing message'), { key: 'Escape' })
+
+    expect((screen.getByLabelText('Message') as HTMLTextAreaElement).value).toBe('half a draft')
+  })
+
+  it("shows the server's refusal of a late edit in the viewer's words", async () => {
+    stubWorkspace({
+      conversations: [conv('c1')],
+      messages: [mine('m1', 1, { body: 'almost late' })],
+      editRefusal: { status: 403, code: 'COMM.EDIT_WINDOW_EXPIRED', message: 'the edit window of 15 minutes has expired' },
+    })
+    renderChat('/chat/c1')
+    const row = (await screen.findByText('almost late')).closest('li')!
+    fireEvent.click(within(row).getByRole('button', { name: 'Message options' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Edit' }))
+    fireEvent.change(screen.getByLabelText('Editing message'), { target: { value: 'too late' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save edit' }))
+    expect(await screen.findByText(chatCopy.en.editWindowExpired)).toBeInTheDocument()
+  })
+
+  it('a message.updated event re-reads the thread', async () => {
+    const state = { conversations: [conv('c1')], messages: [msg('m1', 1, { body: 'first wording' })] }
+    stubWorkspace(state)
+    renderChat('/chat/c1')
+    await screen.findByText('first wording')
+    Object.assign(state.messages[0]!, { body: 'second wording', editedAt: new Date().toISOString() })
+    act(() => fakeSocket.serverEmits('message.updated', { conversationId: 'c1', messageId: 'm1' }))
+    expect(await screen.findByText('second wording')).toBeInTheDocument()
+  })
+
+  it('adds a chat to favorites from its row menu, and the Favorites filter shows it', async () => {
+    const state = { conversations: [conv('c1', { title: 'Kid one' }), conv('c2', { title: 'Kid two' })], messages: [] }
+    const calls = stubWorkspace(state)
+    renderChat()
+    const row = (await screen.findByText('Kid two')).closest('li')!
+    fireEvent.click(within(row).getByRole('button', { name: 'Chat options: Kid two' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Add to favorites' }))
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === '/conversations/c2/preferences')?.body).toEqual({ favorite: true }),
+    )
+    expect(await within(row).findByLabelText('Favorite')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /^Favorites/ }))
+    expect(screen.queryByText('Kid one')).not.toBeInTheDocument()
+    expect(screen.getByText('Kid two')).toBeInTheDocument()
+  })
+
+  it("opens the chat's labels from its row menu, not only from inside the chat", async () => {
+    stubWorkspace({ conversations: [conv('c1', { title: 'Kid one' })], messages: [] })
+    renderChat()
+    const row = (await screen.findByText('Kid one')).closest('li')!
+    fireEvent.click(within(row).getByRole('button', { name: 'Chat options: Kid one' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Labels…' }))
+    const dialog = await screen.findByRole('dialog', { name: chatCopy.en.labels })
+    expect(await within(dialog).findByText('Payment issue')).toBeInTheDocument()
   })
 })
 

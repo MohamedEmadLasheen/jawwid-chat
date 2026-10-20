@@ -164,6 +164,12 @@
   "callOutgoing": "Calling…",
   "callEnded": "Call ended",
   "callSendMessageInstead": "Send a message instead",
+  "callNoAnswer": "No answer",
+  "callMissedIncoming": "Missed call",
+  "callAgain": "Call again",
+  "callRecordVoice": "Record voice message",
+  "callMessage": "Message",
+  "callVoiceTitle": "Jawwid voice call",
   "notificationsTitle": "Updates",
   "notificationsEmpty": "You are all caught up",
   "notificationPermissionTitle": "Turn on notifications",
@@ -854,6 +860,83 @@
   "cardTrialNotSubscribedTitle": "Did not subscribe",
   "cardTrialLevel": "Level",
   "cardTrialAwaitingCore": "Counts once Core confirms the subscription.",
+  "callsSearchHint": "Search by name",
+  "callActionStart": "Start call",
+  "callActionNewLink": "New call link",
+  "callActionSelectMember": "Select a member",
+  "callActionSchedule": "Schedule call",
+  "callsSectionUpcoming": "Upcoming",
+  "callsSectionFavorites": "Favourites",
+  "callsSectionRecent": "Recent",
+  "callsUpcomingEmpty": "No scheduled calls",
+  "callsUpcomingError": "Upcoming calls could not be loaded.",
+  "callsFavoritesEmpty": "Add a chat to your favourites to call it from here.",
+  "callsSearchNoMatch": "Nothing matched your search",
+  "callsUnnamed": "Unnamed chat",
+  "callBack": "Call back",
+  "callDirectionOutgoing": "Outgoing",
+  "callDirectionIncoming": "Incoming",
+  "callWhen": "{day}, {time}",
+  "@callWhen": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "callPickerPeople": "People",
+  "callPickerGroups": "Groups",
+  "callPickerEmpty": "There are no chats to choose from.",
+  "callPickerNoMatch": "No chats match your search",
+  "callRefusedParentGroup": "Only staff or the teacher can start a group call",
+  "callRefusedGeneric": "Calls are not available in this chat",
+  "scheduledCallDefaultTitle": "Scheduled call",
+  "scheduledCallLinkLabel": "Call link",
+  "scheduledCallStateOpen": "Open now",
+  "scheduledCallStateUpcoming": "Scheduled",
+  "scheduledCallJoin": "Join",
+  "scheduledCallCancel": "Cancel call",
+  "scheduledCallCancelConfirmTitle": "Cancel this call?",
+  "scheduledCallCancelConfirmBody": "Everyone in the chat will see that it was cancelled.",
+  "scheduledCallKeep": "Keep",
+  "scheduledCallCancelled": "Call cancelled",
+  "scheduledCallBy": "By {name}",
+  "@scheduledCallBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "scheduledCallJoinHint": "You can join from 10 minutes before the start.",
+  "scheduledJoinNotJoinable": "This call is not open to join right now",
+  "scheduledJoinWaitingForHost": "The call starts when staff or the teacher join",
+  "scheduledJoinBusy": "Finish your current call first",
+  "callScheduleDate": "Date",
+  "callScheduleTime": "Time",
+  "callScheduleTitleLabel": "Title (optional)",
+  "callScheduleInPast": "Choose a time in the future",
+  "callSchedulePosted": "Scheduled — posted in {chat}",
+  "@callSchedulePosted": {
+    "placeholders": {
+      "chat": {
+        "type": "String"
+      }
+    }
+  },
+  "callLinkPosted": "Call link posted in {chat}",
+  "@callLinkPosted": {
+    "placeholders": {
+      "chat": {
+        "type": "String"
+      }
+    }
+  },
+  "callLinkJoinNow": "Join now",
+  "callLinkOpenChat": "Open chat",
   "profilePhotoTitle": "Profile photo",
   "profilePhotoHint": "Everyone you chat with sees this photo.",
   "profilePhotoAdd": "Add photo",

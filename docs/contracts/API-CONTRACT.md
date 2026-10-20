@@ -173,6 +173,11 @@ One row per distinct (method, path). Paths are relative to `/api/v1` unless mark
 | POST | `/calls/:id/end` | API | EXISTS | §3.8 |
 | GET | `/calls/history` | API | **EXISTS (new 2026-09-28, W8-W2)** | THIS ACTOR's calls across the conversations they may read. Paged `{items,nextCursor}`. **Not a family query.** §3.8 |
 | GET | `/calls/history/:conversationId` | API | RECONCILE | Response → `{items,nextCursor}` (Phase 1). Unchanged by W8-W2 — see §3.8. |
+| POST | `/scheduled-calls` | API | **EXISTS (new 2026-10-19, PD-13)** | Schedule a call or create a members-only call link in ONE conversation; posts a card. Needs the right to start a call there. §3.8a |
+| GET | `/scheduled-calls` | API | **EXISTS (PD-13)** | The caller's open and coming scheduled calls, soonest first. §3.8a |
+| GET | `/scheduled-calls/:id` | API | **EXISTS (PD-13)** | 404 unless the caller reads its conversation. §3.8a |
+| POST | `/scheduled-calls/:id/cancel` | API | **EXISTS (PD-13)** | Creator only; posts a cancellation card. §3.8a |
+| POST | `/scheduled-calls/:id/join` | API | **EXISTS (PD-13)** | `{callId, conversationId, mode: 'started'\|'joined'}` via `CallService.start`/`accept`. Serialized per scheduled call. §3.8a |
 | POST | `/notifications/devices` | API | RECONCILE | Token re-binding to any actor; Phase 1 binds to the authenticated session. §3.9 |
 | DELETE | `/notifications/devices/:token` | API | RECONCILE | **No actor at all.** Phase 1: auth required, own tokens only. §3.9, §5 |
 | POST | `/notifications/:id/delivered` | API | RECONCILE | **No actor at all.** Phase 1: auth required, recipient only. §3.9, §5 |
@@ -633,7 +638,25 @@ Staff only. Every route first checks that the caller is active conversation staf
 - `pinned`: pinned for everyone.
 - Both are set on the message page, the pins list and the starred list.
 
-**Schema:** migration `20261020090000_chat_message_star_pin.sql` adds `chat.message_star` and `chat.message_pin`. Both cascade with their message, and RLS is on with no policy (owner connection only).
+**Schema:** migration `20261020091000_chat_message_star_pin.sql` adds `chat.message_star` and `chat.message_pin`. Both cascade with their message, and RLS is on with no policy (owner connection only).
+
+### Editing a message (2026-10-20, owner request)
+
+`PATCH /conversations/:cid/messages/:mid` with `{ body }` returns the `MessageDto` as it now reads.
+
+- **Only the author**, and only within `communication.edit_window_minutes` (config, default 15). Anyone else gets `COMM.NOT_MESSAGE_AUTHOR`; a late edit gets `COMM.EDIT_WINDOW_EXPIRED`.
+- **Only a published, never-moderated, undeleted TEXT message** (409 `COMM.MESSAGE_NOT_EDITABLE` otherwise). A message that went through approval stays exactly as it was approved. So does any message whose author's sends here would now be held: an edit is never a way round moderation.
+- **The author must still be able to write there:** the same `canSend` decision a send takes (an archived conversation refuses with `COMM.CONVERSATION_ARCHIVED`). A message of another conversation than `:cid` reads as absent (404).
+- An empty body is 400 `COMM.EMPTY_MESSAGE`. An unchanged body is a no-op: no revision, no event.
+- **The previous wording is kept** in `chat.message_revision`, in the same transaction. `chat.forbid_message_rewrite` (now amended) refuses any body change that is not such a recorded edit of a published, unmoderated text, whoever writes. Revisions are immutable. The audit row (`message.edit`) holds no text.
+- `MessageDto.editedAt` is the time of the last edit (null when never edited); `body` is the current wording, and the chat-list preview follows it.
+- Realtime: `message.updated` `{ conversationId, messageId, visibility, editedAt }`, with no body. An internal note's edit goes to staff rooms only.
+
+### Favorite chats (2026-10-20)
+
+A viewer's own list, like pin / archive / mute: `POST /conversations/:id/preferences` with `{ favorite: true | false }`. `viewerState.favorite` comes back on the list and the detail. Nobody else sees it.
+
+**Schema:** migration `20261020130000_chat_edit_favorites.sql` adds `chat.message.edited_at`, `chat.message_revision` (RLS on with no policy: owner connection only) and `chat.conversation_participant_state.favorited_at`, plus the config row `communication.edit_window_minutes`.
 
 ### Profile photos in chat (2026-10-19, owner decision: everyone, WhatsApp-style, children included)
 
@@ -900,6 +923,10 @@ Declining again is refused with `COMM.CALL_ALREADY_ENDED` (was `COMM.CALL_PARTIC
 > account scope only and invented no predicate.
 
 **GET /calls/history/:conversationId** — EXISTS → RECONCILE · **Unchanged by W8-W2.** Its `{ calls: … }` envelope and its RECONCILE status are inherited, not endorsed: settling it would change a response shape that W6/W7 already consume, which is a behaviour change inside a closed workstream rather than the additive read capability W8-W2 was authorized to add. The two endpoints are not competing shapes — one is a bounded per-conversation list, the other a paged account list — and the account endpoint above is canonical for account scope. · Permission `conversations.read` · Scope `canRead`. Response today `{ calls: CallHistoryDto[] }` newest first, `take: 100`; Phase 1 `Page<CallHistoryDto>`.
+
+### 3.8a Scheduled calls and call links (`scheduled-call.controller.ts`) — all EXISTS (PD-13)
+
+The full contract, including the DTO, the card payloads, the join window and the error codes, is in `../communication/scheduled-calls.md`. A scheduled call grants nothing. Scheduling uses `CallService.callCapability`. Reading uses `canRead`, with the same 404 for "absent" and "not yours". Joining uses `CallService.start` or `accept`. The frozen call routes above are consumed and not changed.
 
 ### 3.8b Stories (`story.controller.ts`, `story.service.ts`) — all EXISTS
 

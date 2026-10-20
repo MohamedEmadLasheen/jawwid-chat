@@ -290,6 +290,8 @@ model Message {
   attachmentsJson Json @map("attachments") @default("[]")
 
   createdAt DateTime @map("created_at") @db.Timestamptz @default(now())
+  /// Set by a recorded edit (MessageService.edit); the prior wording is in MessageRevision.
+  editedAt  DateTime? @map("edited_at") @db.Timestamptz
 
   attachments MessageAttachment[]
   /// PD-11: the structured half of a message of type `card`.
@@ -336,7 +338,7 @@ model MessageReaction {
   @@schema("chat")
 }
 
-/// A private bookmark (20261020090000). SQL owns the DDL; no relation fields so
+/// A private bookmark (20261020091000). SQL owns the DDL; no relation fields so
 /// the Message model stays untouched -- rows cascade with their message.
 model MessageStar {
   messageId String   @map("message_id") @db.Uuid
@@ -349,7 +351,7 @@ model MessageStar {
 }
 
 /// A message pinned for everyone in its conversation; at most three (trigger
-/// chat.enforce_message_pin, 20261020090000).
+/// chat.enforce_message_pin, 20261020091000).
 model MessagePin {
   conversationId String   @map("conversation_id") @db.Uuid
   messageId      String   @map("message_id") @db.Uuid
@@ -397,6 +399,8 @@ model ConversationParticipantState {
   archivedAt     DateTime?    @map("archived_at") @db.Timestamptz
   mutedUntil     DateTime?    @map("muted_until") @db.Timestamptz
   pinnedAt       DateTime?    @map("pinned_at") @db.Timestamptz
+  /// The viewer's own Favorites list.
+  favoritedAt    DateTime?    @map("favorited_at") @db.Timestamptz
   updatedAt      DateTime     @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
   @@unique([conversationId, actorId])
@@ -583,6 +587,29 @@ model CallParticipant {
 
   @@unique([callId, actorId])
   @@map("call_participant")
+  @@schema("chat")
+}
+
+/// PD-13: a scheduled call or members-only call link, inside ONE conversation.
+/// DDL: supabase/migrations/20261020090000_chat_scheduled_call.sql. It grants
+/// nothing: Join starts or joins a call through the ordinary call path.
+model ScheduledCall {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  conversationId String    @map("conversation_id") @db.Uuid
+  kind           String
+  title          String?
+  startsAt       DateTime  @map("starts_at") @db.Timestamptz
+  createdBy      String    @map("created_by") @db.Uuid
+  createdByKind  String    @map("created_by_kind")
+  createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
+  messageId      String?   @unique @map("message_id") @db.Uuid
+  callId         String?   @map("call_id") @db.Uuid
+  cancelledAt    DateTime? @map("cancelled_at") @db.Timestamptz
+  cancelledBy    String?   @map("cancelled_by") @db.Uuid
+
+  @@index([conversationId, startsAt])
+  @@map("scheduled_call")
   @@schema("chat")
 }
 
@@ -1380,6 +1407,21 @@ model TrialOutcome {
   coreSubscriptionRef String?   @map("core_subscription_ref")
 
   @@map("trial_outcome")
+  @@schema("chat")
+}
+
+/// The wording a message had before an edit. SQL owns the DDL
+/// (20261020130000_chat_edit_favorites): written with the edit, never rewritten.
+model MessageRevision {
+  id           String   @id @default(uuid()) @db.Uuid
+  messageId    String   @map("message_id") @db.Uuid
+  previousBody String   @map("previous_body")
+  editedBy     String   @map("edited_by") @db.Uuid
+  editedByKind String   @map("edited_by_kind")
+  editedAt     DateTime @map("edited_at") @db.Timestamptz
+
+  @@index([messageId, editedAt])
+  @@map("message_revision")
   @@schema("chat")
 }
 

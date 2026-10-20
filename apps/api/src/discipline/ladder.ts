@@ -39,6 +39,8 @@ export function decisionForStep(step: number): Decision {
 
 export interface CountedViolation {
   id: string;
+  /** The ladder is each teacher's own: violations of different teachers never rank together. */
+  teacherId: string;
   occurredAt: Date;
   /** The month it counts in, YYYY-MM-01. */
   month: string;
@@ -47,14 +49,17 @@ export interface CountedViolation {
 
 /**
  * The step each violation stands at: 1 + the counted (not excused) violations
- * of the same month before it, ordered by when they happened (then by id, so
- * two at the same moment are still ordered). Capped at 5.
+ * of the SAME TEACHER in the same month before it, ordered by when they happened
+ * (then by id, so two at the same moment are still ordered). Capped at 5.
  */
 export function stepsOf(violations: readonly CountedViolation[]): Map<string, number> {
   const out = new Map<string, number>();
-  const byMonth = new Map<string, CountedViolation[]>();
-  for (const v of violations) byMonth.set(v.month, [...(byMonth.get(v.month) ?? []), v]);
-  for (const list of byMonth.values()) {
+  const byTeacherMonth = new Map<string, CountedViolation[]>();
+  for (const v of violations) {
+    const key = `${v.teacherId}|${v.month}`;
+    byTeacherMonth.set(key, [...(byTeacherMonth.get(key) ?? []), v]);
+  }
+  for (const list of byTeacherMonth.values()) {
     const ordered = [...list].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() || a.id.localeCompare(b.id));
     let counted = 0;
     for (const v of ordered) {

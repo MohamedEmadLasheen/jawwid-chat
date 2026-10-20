@@ -10,6 +10,7 @@ export const messages = {
   en: {
     'app.title': 'Jawwid Operations',
     'nav.chat': 'Conversations',
+    'nav.calls': 'Calls',
     'nav.inbox': 'Inbox',
     'nav.families': 'Families',
     'nav.organization': 'Organization',
@@ -214,6 +215,7 @@ export const messages = {
   ar: {
     'app.title': 'عمليات جَوِّد',
     'nav.chat': 'المحادثات',
+    'nav.calls': 'المكالمات',
     'nav.inbox': 'الوارد',
     'nav.families': 'العائلات',
     'nav.organization': 'الهيكل التنظيمي',

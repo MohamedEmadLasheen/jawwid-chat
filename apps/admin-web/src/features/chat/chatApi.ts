@@ -25,6 +25,8 @@ export interface ChatMember {
 /** The viewer's own preferences for a conversation (POST /:id/preferences). */
 export interface ChatViewerState {
   pinned: boolean
+  /** In the viewer's own Favorites list. Absent from servers that predate it. */
+  favorite?: boolean
   archived: boolean
   mutedUntil: string | null
 }
@@ -105,12 +107,20 @@ export interface ChatMessage {
   clientMessageId: string | null
   deletedForAll: boolean
   createdAt: string
+  /** When the author last edited it; `body` is already the edited wording. */
+  editedAt?: string | null
   attachments: ChatAttachment[]
   replyToMessageId?: string | null
   /** The author's profile photo, signed for this viewer in this conversation; null when none. */
   authorAvatarUrl?: string | null
   /** One reaction per actor (server unique index). */
   reactions?: Array<{ actorId: string; emoji: string }>
+  /**
+   * Present only when `type` is `card`: what the server recorded, for the
+   * client to draw (PD-11 lessons, PD-13 scheduled calls). `body` still carries
+   * a plain-text rendering for a card this client does not know.
+   */
+  card?: { kind: string; payload: Record<string, unknown> } | null
   /** A copy forwarded by its author; shown as "Forwarded" (the source is never named). */
   forwarded?: boolean
   /** The viewer's private bookmark. */
@@ -118,6 +128,9 @@ export interface ChatMessage {
   /** Pinned for everyone in this conversation (at most three). */
   pinned?: boolean
 }
+
+/** How long after sending the server lets an author edit (communication.edit_window_minutes). */
+export const EDIT_WINDOW_MS = 15 * 60_000
 
 export interface MessagePage {
   messages: ChatMessage[]
@@ -148,7 +161,7 @@ export interface SendInput {
 }
 
 /** POST /messages/attachments/authorize: a signed, single-use upload. */
-interface UploadGrant {
+export interface UploadGrant {
   objectKey: string
   uploadUrl: string
   method: string
@@ -268,12 +281,44 @@ export const chatApi = {
   /** Author within the window, or a manager; the server decides. */
   deleteForEveryone: (id: string, messageId: string) =>
     api.delete<{ ok: boolean }>(`${conv(id)}/messages/${encodeURIComponent(messageId)}`),
-  /** Archive / pin / mute are the VIEWER's own preferences. */
-  setPreferences: (id: string, prefs: { archived?: boolean; pinned?: boolean; mutedUntil?: string | null }) =>
+  /** The author rewrites their own text message; the server decides whether it still may. */
+  editMessage: (id: string, messageId: string, body: string) =>
+    api.patch<ChatMessage>(`${conv(id)}/messages/${encodeURIComponent(messageId)}`, { body }),
+  /** Archive / pin / mute / favorite are the VIEWER's own preferences. */
+  setPreferences: (
+    id: string,
+    prefs: { archived?: boolean; pinned?: boolean; mutedUntil?: string | null; favorite?: boolean },
+  ) =>
     api.post<{ ok: boolean }>(`${conv(id)}/preferences`, prefs),
   /** Staff-only; every field is re-validated server-side and a reason is recorded. */
   addMember: (id: string, member: { actorId: string; actorKind: 'contact' | 'teacher'; memberRole: 'parent' | 'teacher' }, reason: string) =>
     api.post<{ ok: boolean }>(`${conv(id)}/members`, { action: 'add', ...member, reason }),
+  /** Step 1 of an attachment: the server checks membership, MIME and size, then signs. */
+  authorizeAttachment: (
+    id: string,
+    input: { kind: string; mimeType: string; byteSize: number; visibility?: 'customer' | 'internal' },
+  ) =>
+    api.post<UploadGrant>(`${conv(id)}/messages/attachments/authorize`, input),
+  /** Step 3 of a voice note, after the bytes are uploaded. Retry-safe like `send`. */
+  sendVoice: (
+    id: string,
+    input: {
+      clientMessageId: string
+      visibility: 'customer' | 'internal'
+      attachment: { objectKey: string; mimeType: string; byteSize: number; durationMs: number }
+    },
+  ) =>
+    api.post<ChatMessage>(
+      `${conv(id)}/messages`,
+      {
+        type: 'voice',
+        body: '',
+        visibility: input.visibility,
+        clientMessageId: input.clientMessageId,
+        attachments: [{ kind: 'voice', ...input.attachment }],
+      },
+      input.clientMessageId,
+    ),
   markRead: (id: string, upToSeq: string) =>
     api.post<{ ok: boolean }>(`${conv(id)}/messages/read`, { upToSeq }),
   /** Held teacher/parent messages in this conversation that the caller may see. */

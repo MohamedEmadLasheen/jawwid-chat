@@ -1464,16 +1464,16 @@ export class ConversationService {
   async viewerStates(conversationIds: readonly string[], actorId: string) {
     const rows = await this.prisma.conversationParticipantState.findMany({
       where: { conversationId: { in: [...conversationIds] }, actorId },
-      select: { conversationId: true, pinnedAt: true, archivedAt: true, mutedUntil: true },
+      select: { conversationId: true, pinnedAt: true, archivedAt: true, mutedUntil: true, favoritedAt: true },
     });
     return new Map(rows.map((r) => [r.conversationId, r]));
   }
 
-  /** Archive / mute / pin are per-user; one user's pin never affects another. */
+  /** Archive / mute / pin / favorite are per-user; one user's pin never affects another. */
   async setPreferences(
     conversationId: string,
     actorId: string,
-    prefs: { archived?: boolean; pinned?: boolean; mutedUntil?: Date | null },
+    prefs: { archived?: boolean; pinned?: boolean; mutedUntil?: Date | null; favorite?: boolean },
   ): Promise<void> {
     const actor = await this.requireActor(actorId);
     const conv = await this.requireConversation(conversationId);
@@ -1485,6 +1485,7 @@ export class ConversationService {
       archivedAt: prefs.archived === undefined ? undefined : prefs.archived ? new Date() : null,
       pinnedAt: prefs.pinned === undefined ? undefined : prefs.pinned ? new Date() : null,
       mutedUntil: prefs.mutedUntil === undefined ? undefined : prefs.mutedUntil,
+      favoritedAt: prefs.favorite === undefined ? undefined : prefs.favorite ? new Date() : null,
     };
 
     await this.prisma.conversationParticipantState.upsert({
