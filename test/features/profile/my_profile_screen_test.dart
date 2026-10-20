@@ -106,7 +106,7 @@ void main() {
 
       expect(find.text('ولي أمر'), findsOneWidget);
       expect(find.text('أحمد'), findsOneWidget);
-      expect(find.text('مريم'), findsOneWidget);
+      expect(find.text('يوسف'), findsOneWidget);
       // One card per subject: the parent plus two children.
       expect(find.byType(Card), findsNWidgets(3));
     });
@@ -295,12 +295,12 @@ void main() {
       await tester.pumpAndSettle();
 
       final l10n = await strings();
-      await openEditorFor(tester, 'مريم');
-      await tester.enterText(find.byType(TextFormField).first, 'مريم حسن');
+      await openEditorFor(tester, 'يوسف');
+      await tester.enterText(find.byType(TextFormField).first, 'يوسف حسن');
       await tapVisible(tester, find.text(l10n.profileSave));
 
       final saved = await repo.me();
-      expect(saved.children.firstWhere((c) => c.id == 'learner-2').displayName, 'مريم حسن');
+      expect(saved.children.firstWhere((c) => c.id == 'learner-2').displayName, 'يوسف حسن');
       // The sibling, and the parent, are exactly as they were.
       expect(saved.children.firstWhere((c) => c.id == 'learner-1').displayName, 'أحمد');
       expect(saved.displayName, 'ولي أمر');
@@ -385,7 +385,7 @@ void main() {
       expect(photos.sets, ['learner-1']);
       final shown = tester.widgetList<JawwidAvatar>(find.byType(JawwidAvatar)).toList();
       expect(shown.firstWhere((a) => a.displayName == 'أحمد').imageUrl, isNotNull);
-      expect(shown.firstWhere((a) => a.displayName == 'مريم').imageUrl, isNull);
+      expect(shown.firstWhere((a) => a.displayName == 'يوسف').imageUrl, isNull);
       expect(shown.firstWhere((a) => a.displayName == 'ولي أمر').imageUrl, isNull);
     });
 

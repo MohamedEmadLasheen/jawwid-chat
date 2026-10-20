@@ -275,7 +275,7 @@ class FakeProfileRepository implements ProfileRepository {
     signInIdentity: 'qa.parent@qa.jawwid.test',
     children: [
       ChildProfile(id: 'learner-1', displayName: 'أحمد', level: 'الصف الرابع'),
-      ChildProfile(id: 'learner-2', displayName: 'مريم', level: 'الصف الثاني'),
+      ChildProfile(id: 'learner-2', displayName: 'يوسف', level: 'الصف الثاني'),
     ],
   );
 
