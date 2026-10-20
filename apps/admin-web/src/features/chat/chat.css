@@ -338,3 +338,88 @@
 .cw-forward__row--on { background: var(--accent-soft); }
 .cw-forward__name { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
 .cw-forward__kind { font-size: var(--fs-xs); color: var(--text-subtle); white-space: nowrap; }
+
+/* Filters: one aligned line under the search -- All, Unread, Favorites,
+   Groups, then the labels in use -- scrolling sideways rather than wrapping
+   onto a ragged second row; the label manager sits at its end. */
+.cw-filters { display: flex; align-items: center; gap: var(--space-1); min-inline-size: 0; }
+.cw-filters .chips {
+  flex: 1;
+  min-inline-size: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-block: 2px;
+}
+.cw-filters .chips::-webkit-scrollbar { display: none; }
+.cw-filters .chip { flex: none; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.cw-filters .chip__count { margin-inline-start: 0; }
+.cw-filters__manage { flex: none; }
+
+/* Labels: the tone is a dot, the name keeps the text colour (full contrast). */
+.cw-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-inline-size: 140px;
+  min-block-size: 20px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  line-height: 1.2;
+  flex: none;
+}
+.cw-label__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-label__dot { inline-size: 8px; block-size: 8px; border-radius: 50%; flex: none; background: var(--cw-label); }
+.cw-label--more { color: var(--text-subtle); }
+.cw-label-tone--1 { --cw-label: #d1495b; }
+.cw-label-tone--2 { --cw-label: #e8871e; }
+.cw-label-tone--3 { --cw-label: #d4a017; }
+.cw-label-tone--4 { --cw-label: #2e9e5b; }
+.cw-label-tone--5 { --cw-label: #1f8a9e; }
+.cw-label-tone--6 { --cw-label: #3b6fd8; }
+.cw-label-tone--7 { --cw-label: #8b55c9; }
+.cw-label-tone--8 { --cw-label: #c2478f; }
+.cw-row__labels { display: flex; flex-wrap: wrap; gap: 4px; min-inline-size: 0; padding-block-start: 2px; }
+.cw-row__mark--favorite { color: var(--danger); }
+.cw-head__labels { display: flex; flex-wrap: wrap; gap: 4px; margin-block-start: 3px; }
+
+/* Edited messages. */
+.cw-edited { font-size: var(--fs-xs); font-style: italic; color: var(--text-subtle); }
+.cw-edit-banner .cw-quote__author { display: inline-flex; align-items: center; gap: 4px; }
+
+/* Label dialogs. */
+.cw-label-form { display: grid; gap: var(--space-2); margin-block: var(--space-3); }
+.cw-label-form__row { display: flex; align-items: center; gap: var(--space-2); }
+.cw-label-form__row .input { flex: 1; min-inline-size: 0; }
+.cw-label-form--edit { margin: 0; padding: var(--space-2); border-radius: var(--radius); background: var(--surface-sunken); }
+.cw-tones { display: flex; flex-wrap: wrap; gap: 6px; }
+.cw-tone-swatch {
+  inline-size: 24px;
+  block-size: 24px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--cw-label);
+  box-shadow: 0 0 0 1px var(--border);
+  cursor: pointer;
+}
+.cw-tone-swatch[aria-checked='true'] { box-shadow: 0 0 0 2px var(--focus); }
+.cw-tone-swatch:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.cw-label-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-block-size: 50vh; overflow-y: auto; }
+.cw-label-check { display: flex; align-items: center; gap: var(--space-3); min-block-size: 40px; padding: 0 var(--space-2); border-radius: var(--radius-sm); cursor: pointer; }
+.cw-label-check:hover { background: var(--surface-hover); }
+.cw-label-check input { inline-size: 18px; block-size: 18px; accent-color: var(--accent); flex: none; }
+.cw-label-check .cw-label, .cw-label-row .cw-label { max-inline-size: 100%; font-size: var(--fs-sm); min-block-size: 26px; color: var(--text); }
+.cw-label-row { display: flex; align-items: center; gap: var(--space-2); min-block-size: 40px; padding-inline: var(--space-2); border-radius: var(--radius-sm); }
+.cw-label-row:hover { background: var(--surface-hover); }
+.cw-label-row__actions { margin-inline-start: auto; display: flex; gap: 2px; flex: none; }
+.cw-label-row__delete:hover { color: var(--danger); }
+/* A filter row that scrolls fades the side that hides more, like the tab rows. */
+.cw-filters .chips[data-more-end] { mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
+.cw-filters .chips[data-more-start] { mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); }
+.cw-filters .chips[data-more-start][data-more-end] { mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); }
+[dir='rtl'] .cw-filters .chips[data-more-end] { mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); }
+[dir='rtl'] .cw-filters .chips[data-more-start] { mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }

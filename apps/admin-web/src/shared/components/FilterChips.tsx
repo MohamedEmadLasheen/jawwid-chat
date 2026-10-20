@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 
 /**
  * A single-choice filter as a row of toggle buttons. Each option shows how many
@@ -13,6 +13,8 @@ export interface FilterOption<T extends string> {
   value: T
   label: string
   count?: number
+  /** Drawn before the label (e.g. a label's colour dot). Decorative. */
+  marker?: ReactNode
 }
 
 export function FilterChips<T extends string>({
@@ -33,7 +35,8 @@ export function FilterChips<T extends string>({
 }) {
   const tabs = variant === 'tabs'
   const ref = useRef<HTMLDivElement>(null)
-  const edges = useOverflowEdges(ref, tabs)
+  // Chips report hidden edges too: a pane may lay them out on one scrolling line.
+  const edges = useOverflowEdges(ref, true)
 
   useEffect(() => {
     if (!tabs) return
@@ -58,6 +61,7 @@ export function FilterChips<T extends string>({
           aria-pressed={o.value === value}
           onClick={() => onChange(o.value)}
         >
+          {o.marker}
           {o.label}
           {o.count !== undefined && (
             <span className={tabs ? 'seg__count' : 'chip__count'}>

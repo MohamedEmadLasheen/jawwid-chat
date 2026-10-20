@@ -25,6 +25,8 @@ export interface ChatMember {
 /** The viewer's own preferences for a conversation (POST /:id/preferences). */
 export interface ChatViewerState {
   pinned: boolean
+  /** In the viewer's own Favorites list. Absent from servers that predate it. */
+  favorite?: boolean
   archived: boolean
   mutedUntil: string | null
 }
@@ -57,6 +59,8 @@ export interface ChatConversation {
   unreadCount?: number
   viewerState?: ChatViewerState
   lastMessage?: ChatLastMessage | null
+  /** The organization's labels on this chat (ids into GET /chat-labels). Staff viewers only. */
+  labelIds?: string[]
   /** A group's picture: its one child's photo, signed for this viewer; null otherwise. */
   avatarUrl?: string | null
 }
@@ -87,6 +91,8 @@ export interface ChatMessage {
   clientMessageId: string | null
   deletedForAll: boolean
   createdAt: string
+  /** When the author last edited it; `body` is already the edited wording. */
+  editedAt?: string | null
   attachments: ChatAttachment[]
   replyToMessageId?: string | null
   /** The author's profile photo, signed for this viewer in this conversation; null when none. */
@@ -106,6 +112,16 @@ export interface ChatMessage {
   /** Pinned for everyone in this conversation (at most three). */
   pinned?: boolean
 }
+
+/** An organization's shared chat label (staff only). `color` is one of eight tones, 1..8. */
+export interface ChatLabel {
+  id: string
+  name: string
+  color: number
+}
+
+/** How long after sending the server lets an author edit (communication.edit_window_minutes). */
+export const EDIT_WINDOW_MS = 15 * 60_000
 
 export interface MessagePage {
   messages: ChatMessage[]
@@ -236,8 +252,14 @@ export const chatApi = {
   /** Author within the window, or a manager; the server decides. */
   deleteForEveryone: (id: string, messageId: string) =>
     api.delete<{ ok: boolean }>(`${conv(id)}/messages/${encodeURIComponent(messageId)}`),
-  /** Archive / pin / mute are the VIEWER's own preferences. */
-  setPreferences: (id: string, prefs: { archived?: boolean; pinned?: boolean; mutedUntil?: string | null }) =>
+  /** The author rewrites their own text message; the server decides whether it still may. */
+  editMessage: (id: string, messageId: string, body: string) =>
+    api.patch<ChatMessage>(`${conv(id)}/messages/${encodeURIComponent(messageId)}`, { body }),
+  /** Archive / pin / mute / favorite are the VIEWER's own preferences. */
+  setPreferences: (
+    id: string,
+    prefs: { archived?: boolean; pinned?: boolean; mutedUntil?: string | null; favorite?: boolean },
+  ) =>
     api.post<{ ok: boolean }>(`${conv(id)}/preferences`, prefs),
   /** Staff-only; every field is re-validated server-side and a reason is recorded. */
   addMember: (id: string, member: { actorId: string; actorKind: 'contact' | 'teacher'; memberRole: 'parent' | 'teacher' }, reason: string) =>
@@ -280,8 +302,21 @@ export const chatApi = {
 }
 
 /** Query keys for the chat workspace; realtime events invalidate through them. */
+export const labelApi = {
+  list: () => api.get<{ labels: ChatLabel[] }>('/chat-labels').then((r) => r.labels),
+  create: (input: { name: string; color: number }) => api.post<ChatLabel>('/chat-labels', input),
+  update: (labelId: string, input: { name?: string; color?: number }) =>
+    api.patch<ChatLabel>(`/chat-labels/${encodeURIComponent(labelId)}`, input),
+  remove: (labelId: string) => api.delete<{ ok: boolean }>(`/chat-labels/${encodeURIComponent(labelId)}`),
+  apply: (conversationId: string, labelId: string) =>
+    api.put<{ ok: boolean }>(`${conv(conversationId)}/labels/${encodeURIComponent(labelId)}`),
+  unapply: (conversationId: string, labelId: string) =>
+    api.delete<{ ok: boolean }>(`${conv(conversationId)}/labels/${encodeURIComponent(labelId)}`),
+}
+
 export const chatKeys = {
   all: ['chat'] as const,
+  labels: ['chat', 'labels'] as const,
   list: ['chat', 'conversations'] as const,
   conversation: (id: string) => ['chat', 'conversation', id] as const,
   messages: (id: string) => ['chat', 'messages', id] as const,

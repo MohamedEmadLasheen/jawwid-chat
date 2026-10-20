@@ -37,3 +37,5 @@
 /* An open menu lifts above its neighbours: list rows after it are positioned
    too, and without this they painted over the open popover. */
 .menu:has(> .menu__button[aria-expanded='true']) { z-index: 40; }
+/* Opens upwards when there is no room below (Menu measures). */
+.menu__popover--up { inset-block-start: auto; inset-block-end: calc(100% + 4px); }

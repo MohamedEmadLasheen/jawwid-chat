@@ -8,6 +8,8 @@ import { chatKeys } from './chatApi'
 const MESSAGE_EVENTS = [
   'message.created',
   'message.deleted',
+  // An author edited a message: the event names it, the thread re-reads it.
+  'message.updated',
   'reaction.added',
   'reaction.removed',
   'approval.decided',

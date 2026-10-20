@@ -11,6 +11,12 @@ export interface ComposerSend {
   files: File[]
 }
 
+/** The viewer's own message being edited, and the wording it has now. */
+export interface EditTarget {
+  messageId: string
+  body: string
+}
+
 export interface ReplyTarget {
   messageId: string
   author: string
@@ -33,8 +39,15 @@ export function ChatComposer({
   autoStartVoice = false,
   onVoiceAutoStarted,
   onVoiceSent,
+  editing = null,
+  onSaveEdit,
+  onCancelEdit,
 }: {
   onSend: (input: ComposerSend) => void
+  /** Editing one of the viewer's messages: the box holds its text, Enter saves. */
+  editing?: EditTarget | null
+  onSaveEdit?: (body: string) => void
+  onCancelEdit?: () => void
   reply: ReplyTarget | null
   onCancelReply: () => void
   conversationId: string
@@ -66,10 +79,35 @@ export function ChatComposer({
     if (reply) input.current?.focus()
   }, [reply])
 
-  const canSend = body.trim().length > 0 || files.length > 0
+  // Editing puts the message's text in the box; whatever was being typed is
+  // kept aside and comes back when the edit is saved or cancelled.
+  const draft = useRef<string | null>(null)
+  const editingId = editing?.messageId ?? null
+  useLayoutEffect(() => {
+    if (editingId) {
+      if (draft.current === null) draft.current = body
+      setBody(editing?.body ?? '')
+      const el = input.current
+      if (el) {
+        el.focus()
+        el.setSelectionRange(el.value.length, el.value.length)
+      }
+    } else if (draft.current !== null) {
+      setBody(draft.current)
+      draft.current = null
+    }
+    // Only when the edited message changes; `body` is read, not tracked.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingId])
+
+  const canSend = editing ? body.trim().length > 0 : body.trim().length > 0 || files.length > 0
 
   function submit() {
     if (!canSend) return
+    if (editing) {
+      onSaveEdit?.(body.trim())
+      return
+    }
     onSend({ body: body.trim(), visibility, files })
     setBody('')
     setFiles([])
@@ -80,23 +118,51 @@ export function ChatComposer({
   }
 
   return (
-    <div className={isInternal ? 'cw-composer cw-composer--internal' : 'cw-composer'}>
-      <div className="cw-composer__modes" role="group" aria-label={copy.sendAs}>
-        <button type="button" className="cw-mode" aria-pressed={!isInternal} onClick={() => setVisibility('customer')}>
-          {copy.customer}
-        </button>
-        <button
-          type="button"
-          className="cw-mode cw-mode--internal"
-          aria-pressed={isInternal}
-          onClick={() => setVisibility('internal')}
-        >
-          <Icon name="lock" size={14} />
-          {copy.internal}
-        </button>
-      </div>
+    <div className={isInternal && !editing ? 'cw-composer cw-composer--internal' : 'cw-composer'}>
+      {editing && (
+        <div className="cw-reply-banner cw-edit-banner">
+          <div className="cw-quote">
+            <span className="cw-quote__author">
+              <Icon name="pencil" size={12} /> {copy.editing}
+            </span>
+            <span className="cw-quote__text" dir="auto">
+              {editing.body}
+            </span>
+          </div>
+          <button
+            type="button"
+            className="btn btn--ghost btn--icon btn--sm"
+            aria-label={copy.cancelEdit}
+            title={copy.cancelEdit}
+            onClick={onCancelEdit}
+          >
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+      )}
+      {!editing && (
+        <div className="cw-composer__modes" role="group" aria-label={copy.sendAs}>
+          <button
+            type="button"
+            className="cw-mode"
+            aria-pressed={!isInternal}
+            onClick={() => setVisibility('customer')}
+          >
+            {copy.customer}
+          </button>
+          <button
+            type="button"
+            className="cw-mode cw-mode--internal"
+            aria-pressed={isInternal}
+            onClick={() => setVisibility('internal')}
+          >
+            <Icon name="lock" size={14} />
+            {copy.internal}
+          </button>
+        </div>
+      )}
 
-      {reply && (
+      {reply && !editing && (
         <div className="cw-reply-banner">
           <div className="cw-quote">
             <span className="cw-quote__author">{copy.replyingTo(reply.author)}</span>
@@ -114,7 +180,7 @@ export function ChatComposer({
         </div>
       )}
 
-      {files.length > 0 && (
+      {files.length > 0 && !editing && (
         <ul className="cw-files" aria-label={copy.attach}>
           {files.map((f, i) => (
             <li key={`${f.name}-${i}`} className="cw-file">
@@ -134,16 +200,28 @@ export function ChatComposer({
       )}
 
       <div className="cw-composer__bar">
-        <Menu
-          label={copy.attach}
-          icon="plus"
-          align="start"
-          className="cw-composer__attach"
-          items={[
-            { key: 'media', label: copy.attachPhoto, icon: 'image', onSelect: () => media.current?.click() },
-            { key: 'file', label: copy.attachFile, icon: 'paperclip', onSelect: () => doc.current?.click() },
-          ]}
-        />
+        {!editing && (
+          <Menu
+            label={copy.attach}
+            icon="plus"
+            align="start"
+            className="cw-composer__attach"
+            items={[
+              {
+                key: 'media',
+                label: copy.attachPhoto,
+                icon: 'image',
+                onSelect: () => media.current?.click(),
+              },
+              {
+                key: 'file',
+                label: copy.attachFile,
+                icon: 'paperclip',
+                onSelect: () => doc.current?.click(),
+              },
+            ]}
+          />
+        )}
         <input
           ref={media}
           type="file"
@@ -175,8 +253,13 @@ export function ChatComposer({
           dir="auto"
           onChange={(e) => setBody(e.target.value)}
           placeholder={isInternal ? copy.internalPlaceholder : copy.placeholder}
-          aria-label={isInternal ? copy.internal : copy.customer}
+          aria-label={editing ? copy.editing : isInternal ? copy.internal : copy.customer}
           onKeyDown={(e) => {
+            if (e.key === 'Escape' && editing) {
+              e.preventDefault()
+              onCancelEdit?.()
+              return
+            }
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault()
               submit()
@@ -185,30 +268,32 @@ export function ChatComposer({
           onPaste={(e) => {
             // A pasted screenshot becomes an attachment, as in other chat apps.
             const pasted = Array.from(e.clipboardData.files)
-            if (pasted.length > 0) {
+            if (pasted.length > 0 && !editing) {
               e.preventDefault()
               setFiles((all) => [...all, ...pasted])
             }
           }}
         />
-        <VoiceRecorder
-          conversationId={conversationId}
-          visibility={visibility}
-          copy={copy}
-          locale={locale}
-          autoStart={autoStartVoice}
-          onAutoStarted={onVoiceAutoStarted}
-          onSent={onVoiceSent}
-        />
+        {!editing && (
+          <VoiceRecorder
+            conversationId={conversationId}
+            visibility={visibility}
+            copy={copy}
+            locale={locale}
+            autoStart={autoStartVoice}
+            onAutoStarted={onVoiceAutoStarted}
+            onSent={onVoiceSent}
+          />
+        )}
         <button
           type="button"
           className="cw-send"
           disabled={!canSend}
           onClick={submit}
-          aria-label={copy.send}
-          title={copy.send}
+          aria-label={editing ? copy.saveEdit : copy.send}
+          title={editing ? copy.saveEdit : copy.send}
         >
-          <Icon name="send" size={18} />
+          <Icon name={editing ? 'check' : 'send'} size={18} />
         </button>
       </div>
     </div>

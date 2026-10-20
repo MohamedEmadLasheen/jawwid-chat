@@ -592,7 +592,36 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 - `pinned`: pinned for everyone.
 - Both are set on the message page, the pins list and the starred list.
 
-**Schema:** migration `20261020090000_chat_message_star_pin.sql` adds `chat.message_star` and `chat.message_pin`. Both cascade with their message, and RLS is on with no policy (owner connection only).
+**Schema:** migration `20261020091000_chat_message_star_pin.sql` adds `chat.message_star` and `chat.message_pin`. Both cascade with their message, and RLS is on with no policy (owner connection only).
+
+### Editing a message (2026-10-20, owner request)
+
+`PATCH /conversations/:cid/messages/:mid` with `{ body }` returns the `MessageDto` as it now reads.
+
+- **Only the author**, and only within `communication.edit_window_minutes` (config, default 15). Anyone else gets `COMM.NOT_MESSAGE_AUTHOR`; a late edit gets `COMM.EDIT_WINDOW_EXPIRED`.
+- **Only a published, never-moderated, undeleted TEXT message** (409 `COMM.MESSAGE_NOT_EDITABLE` otherwise). A message that went through approval stays exactly as it was approved. So does any message whose author's sends here would now be held: an edit is never a way round moderation.
+- **The author must still be able to write there:** the same `canSend` decision a send takes (an archived conversation refuses with `COMM.CONVERSATION_ARCHIVED`). A message of another conversation than `:cid` reads as absent (404).
+- An empty body is 400 `COMM.EMPTY_MESSAGE`. An unchanged body is a no-op: no revision, no event.
+- **The previous wording is kept** in `chat.message_revision`, in the same transaction. `chat.forbid_message_rewrite` (now amended) refuses any body change that is not such a recorded edit of a published, unmoderated text, whoever writes. Revisions are immutable. The audit row (`message.edit`) holds no text.
+- `MessageDto.editedAt` is the time of the last edit (null when never edited); `body` is the current wording, and the chat-list preview follows it.
+- Realtime: `message.updated` `{ conversationId, messageId, visibility, editedAt }`, with no body. An internal note's edit goes to staff rooms only.
+
+### Favorite chats (2026-10-20)
+
+A viewer's own list, like pin / archive / mute: `POST /conversations/:id/preferences` with `{ favorite: true | false }`. `viewerState.favorite` comes back on the list and the detail. Nobody else sees it.
+
+### Chat labels (2026-10-20, owner request: admins create and manage labels)
+
+An organization's shared tags for conversations. **Staff only**: a parent or a teacher gets 403 `COMM.LABELS_STAFF_ONLY` on every route, and their `ConversationDto` has no `labelIds` field at all.
+
+- `GET /chat-labels` → `{ labels: [{ id, name, color }] }`, the caller's organization only, oldest first.
+- `POST /chat-labels` `{ name, color? }` → the label. `name` is 1–40 characters after trimming (whitespace collapsed); `color` is an integer 1–8 (default 1). A name already used in the organization, compared case-insensitively, is 409 `COMM.LABEL_NAME_TAKEN`; at most 50 labels per organization (409 `COMM.LABEL_LIMIT_REACHED`).
+- `PATCH /chat-labels/:labelId` `{ name?, color? }` and `DELETE /chat-labels/:labelId`. Deleting removes the label from every conversation. Another organization's label reads as unknown (404 `COMM.LABEL_NOT_FOUND`).
+- `PUT` and `DELETE /conversations/:cid/labels/:labelId` apply and remove a label; both are idempotent. Applying needs read access to the conversation (the same check every read takes), and the label must be of the conversation's organization. The `chat.enforce_conversation_label_tenant` trigger enforces that for any writer.
+- `ConversationDto.labelIds` (list and detail): the ids on that conversation, for staff viewers.
+- Every create, update, delete, apply and remove writes `chat.audit_log`.
+
+**Schema:** migration `20261020130000_chat_edit_labels_favorites.sql` adds `chat.message.edited_at`, `chat.message_revision`, `chat.chat_label`, `chat.conversation_label` and `chat.conversation_participant_state.favorited_at`, plus the config row `communication.edit_window_minutes`. The new tables have RLS on with no policy (owner connection only).
 
 ### Profile photos in chat (2026-10-19, owner decision: everyone, WhatsApp-style, children included)
 
