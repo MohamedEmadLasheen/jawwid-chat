@@ -10,13 +10,13 @@ import { Badge } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
 import { Menu, type MenuItem } from '@/shared/components/Menu'
 import { EmptyState, ErrorState, LoadingState } from '@/shared/components/States'
-import { EDIT_WINDOW_MS, bySeq, chatApi, chatKeys, type ChatAttachment, type ChatLabel, type ChatMessage, type UploadedAttachment } from './chatApi'
+import { EDIT_WINDOW_MS, bySeq, chatApi, chatKeys, type ChatAttachment, type ChatMessage, type UploadedAttachment } from './chatApi'
 import { chatCopyFor, systemText, type ChatCopy } from './copy'
 import { ChatComposer, type ComposerSend, type EditTarget, type ReplyTarget } from './ChatComposer'
-import { LabelPickerDialog, LabelPill } from './LabelDialogs'
 import { ForwardDialog } from './ForwardDialog'
+import { LabelChip, LabelsDialog } from './LabelsDialog'
 import { ConversationAvatar, conversationName, isGroup, isMuted } from './chatView'
-import { useChatLabels, useConversationPreferences } from './useChatActions'
+import { useConversationPreferences } from './useChatActions'
 import { VoiceNotePlayer } from './VoiceRecorder'
 import { ConversationCallControls } from '@/features/calls/ConversationCallControls'
 import {
@@ -110,13 +110,11 @@ export function ChatThread({
   backTo,
   infoShown,
   onToggleInfo,
-  onManageLabels,
 }: {
   conversationId: string
   backTo: string
   infoShown: boolean
   onToggleInfo: () => void
-  onManageLabels?: () => void
 }) {
   const { locale } = useI18n()
   const copy = chatCopyFor(locale)
@@ -163,13 +161,12 @@ export function ChatThread({
   const [pending, setPending] = useState<PendingSend[]>([])
   const [reply, setReply] = useState<ReplyTarget | null>(null)
   const [editing, setEditing] = useState<EditTarget | null>(null)
-  const [labelling, setLabelling] = useState(false)
-  const labels = useChatLabels().data ?? []
   const [actionError, setActionError] = useState<unknown>(null)
   // Select mode: a set of message ids, and the bulk actions over them.
   const [selecting, setSelecting] = useState(false)
   const [selected, setSelected] = useState<string[]>([])
   const [forwarding, setForwarding] = useState<string[] | null>(null)
+  const [labeling, setLabeling] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const stopSelecting = () => {
     setSelecting(false)
@@ -328,9 +325,6 @@ export function ChatThread({
   const pinned = !!conv?.viewerState?.pinned
   const archived = !!conv?.viewerState?.archived
   const favorite = !!conv?.viewerState?.favorite
-  const convLabels = (conv?.labelIds ?? [])
-    .map((id) => labels.find((l) => l.id === id))
-    .filter((l): l is ChatLabel => !!l)
   const memberCount = conv?.members?.length ?? 0
   // A group always names its senders; so does a 1:1 the viewer is only
   // overseeing (two other people talking), but not one the viewer is in.
@@ -351,10 +345,10 @@ export function ChatThread({
                 {copy.kind[conv.type] ?? conv.type}
                 {memberCount > 0 && ` · ${copy.membersCount(memberCount)}`}
               </span>
-              {convLabels.length > 0 && (
-                <span className="cw-head__labels" aria-label={copy.labels}>
-                  {convLabels.map((l) => (
-                    <LabelPill key={l.id} label={l} />
+              {(conv.labels ?? []).length > 0 && (
+                <span className="cw-row__labels" aria-label={copy.labels}>
+                  {conv.labels!.map((l) => (
+                    <LabelChip key={l.id} label={l} />
                   ))}
                 </span>
               )}
@@ -389,10 +383,10 @@ export function ChatThread({
               items={[
                 { key: 'info', label: group ? copy.groupInfo : copy.contactInfo, icon: 'info', onSelect: onToggleInfo },
                 { key: 'select', label: copy.select, icon: 'checkSquare', onSelect: () => setSelecting(true) },
+                { key: 'labels', label: copy.labelsMenu, icon: 'tag', onSelect: () => setLabeling(true) },
                 { key: 'mute', label: muted ? copy.unmute : copy.mute, icon: muted ? 'notifications' : 'bellOff', onSelect: () => prefs.mute(conv.id, !muted) },
                 { key: 'pin', label: pinned ? copy.unpin : copy.pin, icon: 'pin', onSelect: () => prefs.pin(conv.id, !pinned) },
                 { key: 'favorite', label: favorite ? copy.unfavorite : copy.favorite, icon: 'heart', onSelect: () => prefs.favorite(conv.id, !favorite) },
-                ...(onManageLabels ? [{ key: 'labels', label: copy.labelChat, icon: 'tag' as const, onSelect: () => setLabelling(true) }] : []),
                 { key: 'archive', label: archived ? copy.unarchive : copy.archive, icon: 'archive', onSelect: () => prefs.archive(conv.id, !archived) },
               ]}
             />
@@ -598,15 +592,8 @@ export function ChatThread({
         />
       )}
 
-      {labelling && conv && (
-        <LabelPickerDialog
-          conversation={conv}
-          onClose={() => setLabelling(false)}
-          onManage={() => {
-            setLabelling(false)
-            onManageLabels?.()
-          }}
-        />
+      {labeling && conv && (
+        <LabelsDialog conversationId={conv.id} current={conv.labels ?? []} onClose={() => setLabeling(false)} />
       )}
 
       {forwarding && (

@@ -225,13 +225,6 @@ export interface ConversationDto {
   viewerState?: ConversationViewerStateDto;
 
   /**
-   * The organization's labels on this conversation (ids into GET /chat-labels).
-   * STAFF VIEWERS ONLY: absent for a parent or a teacher, never an empty list
-   * that would hint at the feature.
-   */
-  labelIds?: string[];
-
-  /**
    * The newest message THIS viewer may see, for a list row; null when there is
    * none. Chosen by the message page's own visibility rule.
    */
@@ -244,6 +237,8 @@ export interface ConversationDto {
    * other member.
    */
   avatarUrl?: string | null;
+  /** The VIEWER's own private labels (owner decision 2026-10-19: per staff member). Staff only. */
+  labels?: Array<{ id: string; name: string; color: string }>;
 }
 
 export interface ConversationViewerStateDto {
@@ -355,11 +350,12 @@ export function toConversationDto(
     viewerRequiresApproval?: boolean;
     viewerState?: ConversationViewerStateDto;
     lastMessage?: LastMessageDto | null;
-    labelIds?: string[];
     /** The learner's photo link, signed by the caller for the viewer; omitted when unknown. */
     learnerAvatarUrl?: string | null;
     /** The group's picture (its one child's photo), signed by the caller. */
     avatarUrl?: string | null;
+    /** The VIEWER's own private labels (staff only). Omitted for anyone else. */
+    labels?: Array<{ id: string; name: string; color: string }>;
   },
 ): ConversationDto {
   return {
@@ -394,8 +390,8 @@ export function toConversationDto(
     viewerRequiresApproval: extra?.viewerRequiresApproval,
     viewerState: extra?.viewerState,
     lastMessage: extra?.lastMessage,
-    labelIds: extra?.labelIds,
     avatarUrl: c.type === 'direct' ? undefined : (extra?.avatarUrl ?? null),
+    ...(extra?.labels ? { labels: extra.labels } : {}),
   };
 }
 

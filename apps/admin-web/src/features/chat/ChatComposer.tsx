@@ -1,9 +1,10 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Icon } from '@/shared/components/Icon'
 import { Menu } from '@/shared/components/Menu'
 import { chatCopyFor } from './copy'
 import { VoiceRecorder } from './VoiceRecorder'
+import { matchQuickReplies, QuickRepliesDialog, useQuickReplies } from './QuickRepliesDialog'
 
 export interface ComposerSend {
   body: string
@@ -65,6 +66,30 @@ export function ChatComposer({
   const input = useRef<HTMLTextAreaElement>(null)
   const media = useRef<HTMLInputElement>(null)
   const doc = useRef<HTMLInputElement>(null)
+  const [quickOpen, setQuickOpen] = useState(false)
+  const [active, setActive] = useState(0)
+  const [dismissed, setDismissed] = useState<string | null>(null)
+  const listId = useId()
+
+  // "/" at the start of an empty box, then a shortcut with no space: suggest
+  // quick replies. Picking one replaces the box; nothing is sent until Send.
+  const slash = /^\/([^\s/]*)$/.exec(body)
+  // No quick-reply suggestions while editing: an edit rewrites, it does not insert.
+  const suggesting = !editing && slash !== null && dismissed !== body
+  const { query: quick, all: replies } = useQuickReplies(suggesting || quickOpen)
+  const matches = suggesting ? matchQuickReplies(replies, slash![1]!) : []
+  const current = Math.min(active, Math.max(matches.length - 1, 0))
+
+  function insert(text: string) {
+    setBody(text)
+    setActive(0)
+    requestAnimationFrame(() => {
+      const el = input.current
+      if (!el) return
+      el.focus()
+      el.setSelectionRange(text.length, text.length)
+    })
+  }
 
   // Grow with the text up to a few lines, then scroll.
   useLayoutEffect(() => {
@@ -199,6 +224,34 @@ export function ChatComposer({
         </ul>
       )}
 
+      {suggesting && (
+        <ul id={listId} className="cw-suggest" role="listbox" aria-label={copy.quickReplies}>
+          {quick.isLoading ? (
+            <li className="cw-suggest__empty">…</li>
+          ) : matches.length === 0 ? (
+            <li className="cw-suggest__empty">{replies.length === 0 ? copy.quickNone : copy.quickNoMatch}</li>
+          ) : (
+            matches.map((r, i) => (
+              <li
+                key={r.id}
+                id={`${listId}-${i}`}
+                role="option"
+                aria-selected={i === current}
+                className="cw-suggest__item"
+                onMouseDown={(e) => {
+                  e.preventDefault() // keep focus in the box
+                  insert(r.body)
+                }}
+              >
+                <span className="cw-suggest__shortcut" dir="auto">/{r.shortcut}</span>
+                <span className="cw-suggest__body" dir="auto">{r.body}</span>
+                <span className="cw-suggest__scope">{r.scope === 'team' ? copy.quickTeam : copy.quickMine}</span>
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+
       <div className="cw-composer__bar">
         {!editing && (
           <Menu
@@ -219,6 +272,7 @@ export function ChatComposer({
                 icon: 'paperclip',
                 onSelect: () => doc.current?.click(),
               },
+              { key: 'quick', label: copy.quickReplies, icon: 'bolt', onSelect: () => setQuickOpen(true) },
             ]}
           />
         )}
@@ -251,13 +305,39 @@ export function ChatComposer({
           className="cw-composer__input"
           value={body}
           dir="auto"
-          onChange={(e) => setBody(e.target.value)}
+          onChange={(e) => {
+            setBody(e.target.value)
+            setActive(0)
+          }}
           placeholder={isInternal ? copy.internalPlaceholder : copy.placeholder}
           aria-label={editing ? copy.editing : isInternal ? copy.internal : copy.customer}
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={suggesting}
+          aria-controls={suggesting ? listId : undefined}
+          aria-activedescendant={suggesting && matches.length > 0 ? `${listId}-${current}` : undefined}
           onKeyDown={(e) => {
             if (e.key === 'Escape' && editing) {
               e.preventDefault()
               onCancelEdit?.()
+              return
+            }
+            if (suggesting && matches.length > 0) {
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault()
+                const step = e.key === 'ArrowDown' ? 1 : -1
+                setActive((current + step + matches.length) % matches.length)
+                return
+              }
+              if ((e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) || e.key === 'Tab') {
+                e.preventDefault()
+                insert(matches[current]!.body)
+                return
+              }
+            }
+            if (suggesting && e.key === 'Escape') {
+              e.preventDefault()
+              setDismissed(body)
               return
             }
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -296,6 +376,16 @@ export function ChatComposer({
           <Icon name={editing ? 'check' : 'send'} size={18} />
         </button>
       </div>
+
+      {quickOpen && (
+        <QuickRepliesDialog
+          onClose={() => setQuickOpen(false)}
+          onInsert={(text) => {
+            setQuickOpen(false)
+            insert(text)
+          }}
+        />
+      )}
     </div>
   )
 }

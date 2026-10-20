@@ -54,7 +54,7 @@ beforeEach(async () => {
   await truncate(g.prisma);
   s = await seed(g.prisma);
   g.coverage.onDutyId = s.ownerId;
-  controller = new ConversationController(g.conversations, g.messages, g.calls, g.authz, g.labels);
+  controller = new ConversationController(g.conversations, g.messages, g.calls, g.authz);
 });
 
 /** The PRD §9 "1:1 call Parent↔Admin" channel, with the family's owner. */

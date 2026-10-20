@@ -1,12 +1,11 @@
+import { StaffToolsService } from '../staff-tools/staff-tools.service';
 import { signAvatar } from '../profile/avatar-urls';
-import { Body, Controller, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
+import { Body, Controller, Optional, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
 import { ConversationService } from '../conversations/conversation.service';
 import { MessageService } from '../messages/message.service';
 import { CallService } from '../calls/call.service';
-import { LabelService } from '../conversations/label.service';
 import { toConversationDto, toLastMessageDto, type ConversationViewerStateDto, type ResolvedMember } from '../contracts/dto';
 import { AuthorizationService } from '../../platform/authorization.service';
-import { isConversationStaff } from '../../platform/types';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
 
@@ -26,7 +25,9 @@ export class ConversationController {
     private readonly messages: MessageService,
     private readonly calls: CallService,
     private readonly authz: AuthorizationService,
-    private readonly labels: LabelService,
+    // Optional only so the positional constructions the harnesses share do not
+    // shift; without it no labels are attached.
+    @Optional() private readonly tools?: StaffToolsService,
   ) {}
 
   /**
@@ -49,16 +50,16 @@ export class ConversationController {
     // authorized, each in one batch: unread counts (the caller's own
     // receipts), members with names, the viewer's own preferences, and the
     // newest message THIS viewer may see.
-    const [unread, members, states, last, labels, children] = await Promise.all([
+    const [unread, members, states, last, children] = await Promise.all([
       this.messages.unreadCountsFor(ids, actorId),
       this.conversations.membersOfMany(ids, actor),
       this.conversations.viewerStates(ids, actor.actorId),
       this.messages.lastVisibleMessages(ids, actor),
-      this.labels.labelsFor(ids, actor),
       // A group's picture: its one child's photo (one query for the whole list).
       this.conversations.soleChildOf(rows.filter((c) => c.type !== 'direct')),
     ]);
-    const staffViewer = isConversationStaff(actor);
+    // The viewer's PRIVATE labels (staff only); families never get the field.
+    const labels = actor.kind === 'staff' && this.tools ? await this.tools.labelsFor(actor.actorId, ids) : null;
 
     // Search narrows the caller's own list -- it never widens it. A row matches
     // on its title, its child's name, or a member's display name.
@@ -76,14 +77,13 @@ export class ConversationController {
           viewerRequiresApproval: this.authz.viewerRequiresApproval(actor, c),
           viewerState: viewerState(states.get(c.id)),
           lastMessage: last.has(c.id) ? toLastMessageDto(last.get(c.id)!) : null,
-          // Staff only: a parent's or a teacher's DTO has no labelIds at all.
-          labelIds: staffViewer ? (labels.get(c.id) ?? []) : undefined,
           learnerAvatarUrl: c.learner
             ? signAvatar('learner', c.learner.id, c.id, actor.actorId, c.learner.avatarObjectKey)
             : null,
           avatarUrl: children.has(c.id)
             ? signAvatar('learner', children.get(c.id)!.id, c.id, actor.actorId, children.get(c.id)!.avatarObjectKey)
             : null,
+          ...(labels ? { labels: labels.get(c.id) ?? [] } : {}),
         }),
       ),
     };
@@ -163,23 +163,24 @@ export class ConversationController {
     // endpoint deliberately does not load members, because that would be an
     // identity batch per row for a screen that renders none of them.
     const actor = await this.conversations.requireActor(actorId);
-    const [states, last, labels, children] = await Promise.all([
+    const [states, last, children] = await Promise.all([
       this.conversations.viewerStates([conversation.id], actor.actorId),
       this.messages.lastVisibleMessages([conversation.id], actor),
-      this.labels.labelsFor([conversation.id], actor),
       conversation.type === 'direct' ? new Map() : this.conversations.soleChildOf([conversation]),
     ]);
     const child = children.get(conversation.id) as { id: string; avatarObjectKey: string | null } | undefined;
+    const labels =
+      actor.kind === 'staff' && this.tools ? await this.tools.labelsFor(actor.actorId, [conversation.id]) : null;
     return toConversationDto(conversation, members, {
       unreadCount: await this.messages.unreadCount(id, actorId),
       viewerRequiresApproval: this.authz.viewerRequiresApproval(actor, conversation),
       viewerState: viewerState(states.get(conversation.id)),
       lastMessage: last.has(conversation.id) ? toLastMessageDto(last.get(conversation.id)!) : null,
-      labelIds: isConversationStaff(actor) ? (labels.get(conversation.id) ?? []) : undefined,
       learnerAvatarUrl: conversation.learner
         ? signAvatar('learner', conversation.learner.id, conversation.id, actor.actorId, conversation.learner.avatarObjectKey)
         : null,
       avatarUrl: child ? signAvatar('learner', child.id, conversation.id, actor.actorId, child.avatarObjectKey) : null,
+      ...(labels ? { labels: labels.get(conversation.id) ?? [] } : {}),
     });
   }
 

@@ -68,14 +68,6 @@ export enum CommErrorCode {
    * message that went through approval stays exactly as it was approved. 409.
    */
   MESSAGE_NOT_EDITABLE = 'COMM.MESSAGE_NOT_EDITABLE',
-  /** Labels are staff tools; a parent or a teacher has none. 403. */
-  LABELS_STAFF_ONLY = 'COMM.LABELS_STAFF_ONLY',
-  /** An unknown label, or another organization's (they read the same). 404. */
-  LABEL_NOT_FOUND = 'COMM.LABEL_NOT_FOUND',
-  /** The organization already has a label by that name (case-insensitive). 409. */
-  LABEL_NAME_TAKEN = 'COMM.LABEL_NAME_TAKEN',
-  /** The organization holds the maximum number of labels. 409. */
-  LABEL_LIMIT_REACHED = 'COMM.LABEL_LIMIT_REACHED',
 
   // --- Validation / state ---
   UNKNOWN_ACTOR = 'COMM.UNKNOWN_ACTOR',
@@ -188,6 +180,15 @@ export enum CommErrorCode {
   STAFF_DIRECTORY_DENIED = 'COMM.STAFF_DIRECTORY_DENIED',
   /** The message cannot leave its conversation: deleted, held, rejected, a system message or a card. 403. */
   MESSAGE_NOT_FORWARDABLE = 'COMM.MESSAGE_NOT_FORWARDABLE',
+  // --- Staff tools: labels and quick replies (staff only) ---
+  /** Labels and quick replies are staff tools; teachers and families never reach them. 403. */
+  STAFF_TOOLS_DENIED = 'COMM.STAFF_TOOLS_DENIED',
+  /** No such label or quick reply for this caller (or another person's private one). 404. */
+  STAFF_TOOL_NOT_FOUND = 'COMM.STAFF_TOOL_NOT_FOUND',
+  /** A name, colour, shortcut or body failed validation. 400. */
+  STAFF_TOOL_INVALID = 'COMM.STAFF_TOOL_INVALID',
+  /** That label name or shortcut is already taken in this library. 409. */
+  STAFF_TOOL_CONFLICT = 'COMM.STAFF_TOOL_CONFLICT',
   // --- Profile photos (parents, teachers, children) ---
   /**
    * The photo does not exist or is not one the caller may see or change -- one

@@ -59,10 +59,26 @@ export interface ChatConversation {
   unreadCount?: number
   viewerState?: ChatViewerState
   lastMessage?: ChatLastMessage | null
-  /** The organization's labels on this chat (ids into GET /chat-labels). Staff viewers only. */
-  labelIds?: string[]
   /** A group's picture: its one child's photo, signed for this viewer; null otherwise. */
   avatarUrl?: string | null
+  /** The viewer's OWN private labels on this chat (staff only). */
+  labels?: ChatLabel[]
+}
+
+/** A staff member's private label. `color` is a palette tone '1'..'8'. */
+export interface ChatLabel {
+  id: string
+  name: string
+  color: string
+}
+
+export interface QuickReply {
+  id: string
+  shortcut: string
+  body: string
+  /** 'team': the shared library anyone on staff may edit; 'mine': the viewer's own. */
+  scope: 'team' | 'mine'
+  updatedAt: string
 }
 
 export interface ChatAttachment {
@@ -111,13 +127,6 @@ export interface ChatMessage {
   starred?: boolean
   /** Pinned for everyone in this conversation (at most three). */
   pinned?: boolean
-}
-
-/** An organization's shared chat label (staff only). `color` is one of eight tones, 1..8. */
-export interface ChatLabel {
-  id: string
-  name: string
-  color: number
 }
 
 /** How long after sending the server lets an author edit (communication.edit_window_minutes). */
@@ -225,6 +234,19 @@ export const chatApi = {
    */
   forward: (id: string, messageIds: string[], toConversationIds: string[]) =>
     api.post<{ sent: ChatMessage[] }>(`${conv(id)}/messages/forward`, { messageIds, toConversationIds }),
+  labels: () => api.get<{ labels: Array<ChatLabel & { conversationCount: number }> }>('/me/labels').then((r) => r.labels),
+  createLabel: (input: { name: string; color: string }) => api.post<ChatLabel>('/me/labels', input),
+  updateLabel: (labelId: string, input: { name?: string; color?: string }) =>
+    api.patch<ChatLabel>(`/me/labels/${encodeURIComponent(labelId)}`, input),
+  deleteLabel: (labelId: string) => api.delete<{ ok: boolean }>(`/me/labels/${encodeURIComponent(labelId)}`),
+  /** Replace the viewer's own labels on a chat. */
+  setLabels: (id: string, labelIds: string[]) => api.put<{ labels: ChatLabel[] }>(`${conv(id)}/labels`, { labelIds }),
+  quickReplies: () => api.get<{ team: QuickReply[]; mine: QuickReply[] }>('/quick-replies'),
+  createQuickReply: (input: { shortcut: string; body: string; scope: 'team' | 'mine' }) =>
+    api.post<QuickReply>('/quick-replies', input),
+  updateQuickReply: (replyId: string, input: { shortcut?: string; body?: string }) =>
+    api.patch<QuickReply>(`/quick-replies/${encodeURIComponent(replyId)}`, input),
+  deleteQuickReply: (replyId: string) => api.delete<{ ok: boolean }>(`/quick-replies/${encodeURIComponent(replyId)}`),
   star: (id: string, messageId: string) =>
     api.post<{ ok: boolean }>(`${conv(id)}/messages/${encodeURIComponent(messageId)}/star`),
   unstar: (id: string, messageId: string) =>
@@ -302,27 +324,16 @@ export const chatApi = {
 }
 
 /** Query keys for the chat workspace; realtime events invalidate through them. */
-export const labelApi = {
-  list: () => api.get<{ labels: ChatLabel[] }>('/chat-labels').then((r) => r.labels),
-  create: (input: { name: string; color: number }) => api.post<ChatLabel>('/chat-labels', input),
-  update: (labelId: string, input: { name?: string; color?: number }) =>
-    api.patch<ChatLabel>(`/chat-labels/${encodeURIComponent(labelId)}`, input),
-  remove: (labelId: string) => api.delete<{ ok: boolean }>(`/chat-labels/${encodeURIComponent(labelId)}`),
-  apply: (conversationId: string, labelId: string) =>
-    api.put<{ ok: boolean }>(`${conv(conversationId)}/labels/${encodeURIComponent(labelId)}`),
-  unapply: (conversationId: string, labelId: string) =>
-    api.delete<{ ok: boolean }>(`${conv(conversationId)}/labels/${encodeURIComponent(labelId)}`),
-}
-
 export const chatKeys = {
   all: ['chat'] as const,
-  labels: ['chat', 'labels'] as const,
   list: ['chat', 'conversations'] as const,
   conversation: (id: string) => ['chat', 'conversation', id] as const,
   messages: (id: string) => ['chat', 'messages', id] as const,
   approvals: (id: string) => ['chat', 'approvals', id] as const,
   pins: (id: string) => ['chat', 'pins', id] as const,
   starred: ['chat', 'starred'] as const,
+  labels: ['chat', 'labels'] as const,
+  quickReplies: ['chat', 'quick-replies'] as const,
 }
 
 /** Server order: by seq, numerically (a string compare would put "10" before "9"). */

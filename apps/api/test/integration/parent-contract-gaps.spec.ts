@@ -34,7 +34,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await truncate(g.prisma);
   s = await seed(g.prisma);
-  controller = new ConversationController(g.conversations, g.messages, g.calls, g.authz, g.labels);
+  controller = new ConversationController(g.conversations, g.messages, g.calls, g.authz);
 });
 
 const send = (conversationId: string, senderId: string, body: string, visibility = 'customer') =>

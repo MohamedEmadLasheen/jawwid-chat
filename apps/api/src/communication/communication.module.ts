@@ -1,3 +1,5 @@
+import { StaffToolsController } from './api/staff-tools.controller';
+import { StaffToolsService } from './staff-tools/staff-tools.service';
 import { StarredController } from './api/starred.controller';
 import { ProfilePhotoController } from './api/profile-photo.controller';
 import { AvatarService } from './profile/avatar.service';
@@ -50,8 +52,6 @@ import { NotificationController } from './api/notification.controller';
 import { StorageController } from './api/storage.controller';
 import { MediaController } from './api/media.controller';
 import { StoryController } from './api/story.controller';
-import { LabelController } from './api/label.controller';
-import { LabelService } from './conversations/label.service';
 
 @Module({
   // AuthModule exports AuthService, which RealtimeGateway uses to verify the
@@ -69,11 +69,10 @@ import { LabelService } from './conversations/label.service';
     MediaController,
     ProfilePhotoController,
     StarredController,
+    StaffToolsController,
     StoryController,
-    LabelController,
   ],
   providers: [
-    LabelService,
     redisProvider,
     RedisClientShutdown,
     ConversationService,
@@ -85,6 +84,7 @@ import { LabelService } from './conversations/label.service';
     AttachmentService,
     StoryService,
     AvatarService,
+    StaffToolsService,
     StoryAudienceResolver,
     StorySweeper,
     OutboxService,

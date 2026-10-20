@@ -7,7 +7,7 @@ const BASE_URL: string =
 type Query = Record<string, string | number | boolean | null | undefined>
 
 export interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   query?: Query
   body?: unknown
   signal?: AbortSignal
@@ -142,7 +142,8 @@ export const api = {
     request<T>(path, { method: 'POST', body, idempotencyKey }),
   patch: <T>(path: string, body?: unknown, idempotencyKey?: string) =>
     request<T>(path, { method: 'PATCH', body, idempotencyKey }),
-  put: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PUT', body }),
+  put: <T>(path: string, body?: unknown, idempotencyKey?: string) =>
+    request<T>(path, { method: 'PUT', body, idempotencyKey }),
   delete: <T>(path: string, query?: Query) => request<T>(path, { method: 'DELETE', query }),
 }
 

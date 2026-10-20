@@ -349,39 +349,6 @@ describe('Admin chat workspace', () => {
     expect(screen.queryByRole('button', { name: 'Approve & publish' })).toBeNull()
   })
 
-  it('a voice message plays from its signed URL instead of showing as a file chip', async () => {
-    stubApi({
-      conversations: [conv('c1')],
-      messages: {
-        c1: [
-          msg('v1', 1, {
-            type: 'voice',
-            body: '',
-            attachments: [{ id: 'a1', kind: 'voice', mimeType: 'audio/mp4', url: 'https://media.test/v1', durationMs: 7000 }],
-          }),
-        ],
-      },
-    })
-    const { container } = renderChat('/chat/c1')
-    expect(await screen.findByText('0:07')).toBeInTheDocument()
-    expect(container.querySelector('audio')?.getAttribute('src')).toBe('https://media.test/v1')
-    expect(screen.queryByText(/📎/)).toBeNull()
-  })
-
-  it('?voice=1 (from the call window) starts the recorder without a click', async () => {
-    stubApi({ conversations: [conv('c1')], messages: { c1: [] } })
-    renderChat('/chat/c1?voice=1')
-    // jsdom has no microphone: the attempt itself is the evidence the flag was honoured.
-    expect(await screen.findByText(chatCopy.en.voiceUnsupported)).toBeInTheDocument()
-  })
-
-  it('without ?voice=1 nothing records until asked', async () => {
-    stubApi({ conversations: [conv('c1')], messages: { c1: [] } })
-    renderChat('/chat/c1')
-    expect(await screen.findByRole('button', { name: 'Record voice message' })).toBeInTheDocument()
-    expect(screen.queryByText(chatCopy.en.voiceUnsupported)).toBeNull()
-  })
-
   it('a system message is rendered as words, never as its raw JSON', async () => {
     stubApi({
       conversations: [conv('c1')],
@@ -943,22 +910,20 @@ describe('Forward and select (group B)', () => {
   })
 })
 
-describe('Edit, favorites and labels', () => {
-  type Call = { method: string; path: string; body: unknown }
-  const LABELS = [
-    { id: 'lb-pay', name: 'Payment issue', color: 1 },
-    { id: 'lb-trial', name: 'Trial', color: 4 },
-  ]
-  function stubWorkspace(state: {
-    conversations: ChatConversation[]
-    messages: ChatMessage[]
-    labels?: typeof LABELS
-    editRefusal?: { status: number; code: string; message: string }
+describe('Labels and quick replies (group B, staff only)', () => {
+  type Label = { id: string; name: string; color: string }
+  function stubTools(state: {
+    labels: Label[]
+    applied: Record<string, string[]>
+    team: Array<{ id: string; shortcut: string; body: string; scope: 'team' }>
+    mine: Array<{ id: string; shortcut: string; body: string; scope: 'mine' }>
   }) {
-    const calls: Call[] = []
+    const calls: Array<{ method: string; path: string; body: unknown }> = []
     const json = (data: unknown, status = 200) =>
       new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
-    const labels = state.labels ?? LABELS
+    const labelsOf = (id: string) => state.labels.filter((l) => (state.applied[id] ?? []).includes(l.id))
+    const withLabels = (c: ChatConversation) => ({ ...c, labels: labelsOf(c.id) })
+    const all = [conv('c1', { title: 'Kid group' }), conv('c2', { title: 'Second group' })]
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: string, init?: RequestInit) => {
@@ -968,20 +933,146 @@ describe('Edit, favorites and labels', () => {
         calls.push({ method, path, body })
         if (path === '/me') return json(ADMIN)
         if (path === '/approvals/pending') return json({ approvals: [] })
-        if (path === '/chat-labels' && method === 'GET') return json({ labels })
-        if (path === '/chat-labels' && method === 'POST') {
-          const created = { id: `lb-${labels.length + 1}`, name: body.name, color: body.color }
-          labels.push(created)
-          return json(created, 201)
+        if (path === '/conversations') return json({ conversations: all.map(withLabels) })
+        if (path === '/conversations/c1') return json(withLabels(all[0]!))
+        if (path === '/conversations/c1/labels' && method === 'PUT') {
+          state.applied.c1 = body.labelIds
+          return json({ labels: labelsOf('c1') })
         }
+        if (path === '/conversations/c1/messages/pins') return json({ pins: [] })
+        if (path === '/conversations/c1/messages') return json({ messages: [msg('m1', 1)], nextBefore: null })
+        if (path.endsWith('/messages/read')) return json({ ok: true })
+        if (path === '/me/labels' && method === 'GET') return json({ labels: state.labels.map((l) => ({ ...l, conversationCount: 0 })) })
+        if (path === '/me/labels' && method === 'POST') {
+          const label = { id: `lb-${state.labels.length + 1}`, name: body.name, color: body.color }
+          state.labels.push(label)
+          return json(label, 201)
+        }
+        if (path === '/quick-replies' && method === 'GET') return json({ team: state.team, mine: state.mine })
+        if (path === '/quick-replies' && method === 'POST') {
+          const reply = { id: `qr-${state.mine.length + 10}`, shortcut: body.shortcut, body: body.body, scope: body.scope }
+          if (body.scope === 'mine') state.mine.push(reply)
+          return json(reply, 201)
+        }
+        return json({ error: { code: 'NOT_FOUND', message: 'nope' } }, 404)
+      }),
+    )
+    return calls
+  }
+
+  beforeEach(() => fakeSocket.reset())
+  afterEach(() => vi.unstubAllGlobals())
+
+  it("shows the viewer's own labels on rows, and filters the list by one", async () => {
+    stubTools({ labels: [{ id: 'lb-1', name: 'VIP', color: '5' }], applied: { c2: ['lb-1'] }, team: [], mine: [] })
+    renderChat()
+    const second = (await screen.findByText('Second group')).closest('li')!
+    expect(within(second).getByText('VIP')).toBeInTheDocument()
+
+    const filter = screen.getByRole('group', { name: 'Filter by label' })
+    fireEvent.click(within(filter).getByRole('button', { name: 'VIP' }))
+    expect(screen.queryByText('Kid group')).not.toBeInTheDocument()
+    expect(screen.getByText('Second group')).toBeInTheDocument()
+    // Again clears it.
+    fireEvent.click(within(filter).getByRole('button', { name: 'VIP' }))
+    expect(screen.getByText('Kid group')).toBeInTheDocument()
+  })
+
+  it('labels a chat from its menu: tick an existing label, or make a new one in a colour', async () => {
+    const calls = stubTools({ labels: [{ id: 'lb-1', name: 'VIP', color: '5' }], applied: {}, team: [], mine: [] })
+    renderChat('/chat/c1')
+    await screen.findByText('body m1')
+    fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Labels…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Labels' })
+    expect(within(dialog).getByText(/private/)).toBeInTheDocument()
+
+    fireEvent.click(await within(dialog).findByRole('checkbox'))
+    await waitFor(() =>
+      expect(calls.filter((c) => c.method === 'PUT').at(-1)).toEqual({ method: 'PUT', path: '/conversations/c1/labels', body: { labelIds: ['lb-1'] } }),
+    )
+
+    fireEvent.change(within(dialog).getByLabelText('New label'), { target: { value: 'Late payment' } })
+    fireEvent.click(within(dialog).getByRole('radio', { name: 'Colour 3' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/me/labels')?.body).toEqual({ name: 'Late payment', color: '3' }))
+    await waitFor(() =>
+      expect(calls.filter((c) => c.method === 'PUT').at(-1)?.body).toEqual({ labelIds: ['lb-1', 'lb-2'] }),
+    )
+  })
+
+  it('"/" suggests quick replies; Enter puts the text in the box and sends nothing', async () => {
+    const calls = stubTools({
+      labels: [],
+      applied: {},
+      team: [{ id: 'qr-1', shortcut: 'schedule', body: 'Classes are Sunday to Thursday.', scope: 'team' }],
+      mine: [{ id: 'qr-2', shortcut: 'sig', body: '— Admin A', scope: 'mine' }],
+    })
+    renderChat('/chat/c1')
+    await screen.findByText('body m1')
+    const box = screen.getByLabelText('Message')
+    fireEvent.change(box, { target: { value: '/sch' } })
+    const list = await screen.findByRole('listbox', { name: 'Quick replies' })
+    expect((await within(list).findAllByRole('option')).map((o) => o.textContent)).toEqual([expect.stringContaining('/schedule')])
+
+    fireEvent.keyDown(box, { key: 'Enter' })
+    expect(box).toHaveValue('Classes are Sunday to Thursday.')
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    expect(calls.some((c) => c.method === 'POST' && c.path === '/conversations/c1/messages')).toBe(false)
+
+    // An unknown shortcut says so; Escape lets a literal "/..." be typed.
+    fireEvent.change(box, { target: { value: '/nothing' } })
+    expect(await screen.findByText('No reply with that shortcut.')).toBeInTheDocument()
+    fireEvent.keyDown(box, { key: 'Escape' })
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+
+  it('manages quick replies from the + menu: add a personal one, then insert it', async () => {
+    const calls = stubTools({ labels: [], applied: {}, team: [], mine: [] })
+    renderChat('/chat/c1')
+    await screen.findByText('body m1')
+    fireEvent.click(screen.getByRole('button', { name: 'Attach' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Quick replies' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Quick replies' })
+    fireEvent.click(within(dialog).getByRole('button', { name: /My replies/ }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add reply' }))
+    fireEvent.change(within(dialog).getByLabelText('Shortcut'), { target: { value: 'thanks' } })
+    fireEvent.change(within(dialog).getByLabelText('Reply text'), { target: { value: 'Thank you, we will follow up.' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'POST' && c.path === '/quick-replies')?.body).toEqual({
+        shortcut: 'thanks',
+        body: 'Thank you, we will follow up.',
+        scope: 'mine',
+      }),
+    )
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Insert' }))
+    expect(screen.queryByRole('dialog', { name: 'Quick replies' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Message')).toHaveValue('Thank you, we will follow up.')
+  })
+})
+
+describe('Edit and favorites', () => {
+  type Call = { method: string; path: string; body: unknown }
+  function stubWorkspace(state: {
+    conversations: ChatConversation[]
+    messages: ChatMessage[]
+    editRefusal?: { status: number; code: string; message: string }
+  }) {
+    const calls: Call[] = []
+    const json = (data: unknown, status = 200) =>
+      new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const path = new URL(String(input), 'http://localhost').pathname.replace(/^\/api\/v1/, '')
+        const method = init?.method ?? 'GET'
+        const body = init?.body ? JSON.parse(String(init.body)) : undefined
+        calls.push({ method, path, body })
+        if (path === '/me') return json(ADMIN)
+        if (path === '/approvals/pending') return json({ approvals: [] })
         if (path === '/conversations') return json({ conversations: state.conversations })
-        const labelled = path.match(/^\/conversations\/([^/]+)\/labels\/([^/]+)$/)
-        if (labelled) {
-          const c = state.conversations.find((x) => x.id === labelled[1])!
-          const ids = (c.labelIds ?? []).filter((x) => x !== labelled[2])
-          c.labelIds = method === 'PUT' ? [...ids, labelled[2]!] : ids
-          return json({ ok: true })
-        }
+        if (path === '/me/labels') return json({ labels: [{ id: 'lb1', name: 'Payment issue', color: '1', conversationCount: 0 }] })
         const prefs = path.match(/^\/conversations\/([^/]+)\/preferences$/)
         if (prefs) {
           const c = state.conversations.find((x) => x.id === prefs[1])!
@@ -1110,42 +1201,13 @@ describe('Edit, favorites and labels', () => {
     expect(screen.getByText('Kid two')).toBeInTheDocument()
   })
 
-  it("shows a chat's labels on its row, filters by a label, and labels a chat from its menu", async () => {
-    const state = {
-      conversations: [conv('c1', { title: 'Kid one', labelIds: ['lb-pay'] }), conv('c2', { title: 'Kid two', labelIds: [] })],
-      messages: [],
-    }
-    const calls = stubWorkspace(state)
+  it("opens the chat's labels from its row menu, not only from inside the chat", async () => {
+    stubWorkspace({ conversations: [conv('c1', { title: 'Kid one' })], messages: [] })
     renderChat()
-    const first = (await screen.findByText('Kid one')).closest('li')!
-    expect(await within(first).findByText('Payment issue')).toBeInTheDocument()
-
-    // A chip per label in use; it narrows the list.
-    fireEvent.click(screen.getByRole('button', { name: /^Payment issue/ }))
-    expect(screen.queryByText('Kid two')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /^All/ }))
-
-    const second = screen.getByText('Kid two').closest('li')!
-    fireEvent.click(within(second).getByRole('button', { name: 'Chat options: Kid two' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Label chat' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Label chat' })
-    fireEvent.click(await within(dialog).findByRole('checkbox', { name: /Trial/ }))
-    await waitFor(() => expect(calls.some((c) => c.method === 'PUT' && c.path === '/conversations/c2/labels/lb-trial')).toBe(true))
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }))
-    expect(await within(screen.getByText('Kid two').closest('li')!).findByText('Trial')).toBeInTheDocument()
-  })
-
-  it('creates a label from the label manager', async () => {
-    const calls = stubWorkspace({ conversations: [conv('c1')], messages: [], labels: [] })
-    renderChat()
-    await screen.findByText('Group c1')
-    fireEvent.click(screen.getByRole('button', { name: 'Manage labels' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Manage labels' })
-    expect(within(dialog).getByText(chatCopy.en.labelsEmpty)).toBeInTheDocument()
-    fireEvent.change(within(dialog).getByLabelText('Label name'), { target: { value: 'VIP' } })
-    fireEvent.click(within(dialog).getByRole('radio', { name: 'Colour 6' }))
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
-    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/chat-labels')?.body).toEqual({ name: 'VIP', color: 6 }))
-    expect(await within(dialog).findByText('VIP')).toBeInTheDocument()
+    const row = (await screen.findByText('Kid one')).closest('li')!
+    fireEvent.click(within(row).getByRole('button', { name: 'Chat options: Kid one' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Labels…' }))
+    const dialog = await screen.findByRole('dialog', { name: chatCopy.en.labels })
+    expect(await within(dialog).findByText('Payment issue')).toBeInTheDocument()
   })
 })

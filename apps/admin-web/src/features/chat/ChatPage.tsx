@@ -19,7 +19,6 @@ import { ConversationInfo } from './ConversationInfo'
 import { NewFamilyGroupDialog } from './NewFamilyGroupDialog'
 import { NewDirectChatDialog } from './NewDirectChatDialog'
 import { StarredDialog } from './StarredDialog'
-import { ManageLabelsDialog } from './LabelDialogs'
 import { Icon } from '@/shared/components/Icon'
 import { isGroup } from './chatView'
 import './chat.css'
@@ -54,7 +53,6 @@ export function ChatPage() {
   const [creatingGroup, setCreatingGroup] = useState(false)
   const [creatingDirect, setCreatingDirect] = useState(false)
   const [showingStarred, setShowingStarred] = useState(false)
-  const [managingLabels, setManagingLabels] = useState(false)
   const wide = useMediaQuery('(min-width: 1280px)')
   const resizable = useMediaQuery('(min-width: 1024px)')
   const listWidth = useResizableWidth(LIST_WIDTH_KEY, 360, 280, 520)
@@ -126,7 +124,6 @@ export function ChatPage() {
             conversations={conversations}
             selectedId={conversationId ?? null}
             onSelect={(id) => navigate(`/chat/${encodeURIComponent(id)}`)}
-            onManageLabels={() => setManagingLabels(true)}
             actions={
               <>
                 <button
@@ -155,7 +152,6 @@ export function ChatPage() {
             backTo="/chat"
             infoShown={infoShown}
             onToggleInfo={toggleInfo}
-            onManageLabels={() => setManagingLabels(true)}
           />
         ) : (
           <EmptyState icon="conversations" title={copy.pick} />
@@ -176,7 +172,6 @@ export function ChatPage() {
         </Dialog>
       )}
 
-      {managingLabels && <ManageLabelsDialog onClose={() => setManagingLabels(false)} />}
       {showingStarred && (
         <StarredDialog
           onClose={() => setShowingStarred(false)}

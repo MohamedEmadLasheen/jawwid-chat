@@ -1411,7 +1411,7 @@ model TrialOutcome {
 }
 
 /// The wording a message had before an edit. SQL owns the DDL
-/// (20261020130000): written with the edit, never rewritten.
+/// (20261020130000_chat_edit_favorites): written with the edit, never rewritten.
 model MessageRevision {
   id           String   @id @default(uuid()) @db.Uuid
   messageId    String   @map("message_id") @db.Uuid
@@ -1425,33 +1425,49 @@ model MessageRevision {
   @@schema("chat")
 }
 
-/// An organization's shared conversation label. Staff only.
-model ChatLabel {
+// =====================================================================
+// Staff tools -- 20261020110000_chat_labels_quick_replies.sql owns the DDL.
+// =====================================================================
+
+/// A staff member's PRIVATE label (owner decision 2026-10-19).
+model StaffLabel {
   id             String   @id @default(uuid()) @db.Uuid
   organizationId String   @map("organization_id") @db.Uuid
+  ownerStaffId   String   @map("owner_staff_id") @db.Uuid
   name           String
-  /// One of the eight label tones (1..8).
-  color          Int      @default(1) @db.SmallInt
-  createdBy      String   @map("created_by") @db.Uuid
-  createdAt      DateTime @map("created_at") @db.Timestamptz @default(now())
-  updatedAt      DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+  /// One of '1'..'8': a palette tone the clients render with checked contrast.
+  color          String
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   conversations ConversationLabel[]
 
-  @@map("chat_label")
+  @@map("staff_label")
   @@schema("chat")
 }
 
-/// A label applied to a conversation.
 model ConversationLabel {
-  conversationId String    @map("conversation_id") @db.Uuid
-  labelId        String    @map("label_id") @db.Uuid
-  label          ChatLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
-  labeledBy      String    @map("labeled_by") @db.Uuid
-  labeledAt      DateTime  @map("labeled_at") @db.Timestamptz @default(now())
+  labelId        String     @map("label_id") @db.Uuid
+  label          StaffLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  conversationId String     @map("conversation_id") @db.Uuid
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz
 
-  @@id([conversationId, labelId])
-  @@index([labelId])
+  @@id([labelId, conversationId])
   @@map("conversation_label")
+  @@schema("chat")
+}
+
+/// A saved reply typed as /shortcut. ownerStaffId null = the team library.
+model QuickReply {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  ownerStaffId   String?  @map("owner_staff_id") @db.Uuid
+  shortcut       String
+  body           String
+  createdBy      String   @map("created_by") @db.Uuid
+  updatedBy      String   @map("updated_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("quick_reply")
   @@schema("chat")
 }

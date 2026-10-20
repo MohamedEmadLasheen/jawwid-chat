@@ -10,14 +10,11 @@ import { Menu } from '@/shared/components/Menu'
 import { SearchField } from '@/shared/components/SearchField'
 import type { ChatConversation, ChatLabel } from './chatApi'
 import { chatCopyFor } from './copy'
+import { LabelChip, LabelsDialog } from './LabelsDialog'
 import { ConversationAvatar, conversationName, isGroup, isMuted, previewText } from './chatView'
-import { LabelPickerDialog, LabelPill } from './LabelDialogs'
-import { useChatLabels, useConversationPreferences } from './useChatActions'
+import { useConversationPreferences } from './useChatActions'
 
-type View = 'all' | 'unread' | 'favorites' | 'groups' | 'archived' | `label:${string}`
-
-/** Label tags shown on a row before the rest collapse into "+n". */
-const ROW_LABELS = 2
+type View = 'all' | 'unread' | 'favorites' | 'groups' | 'archived'
 
 /**
  * The conversation list. What is in it is exactly what the server returned
@@ -30,35 +27,41 @@ export function ConversationList({
   selectedId,
   onSelect,
   actions,
-  onManageLabels,
 }: {
   conversations: ChatConversation[]
   selectedId: string | null
   onSelect: (id: string) => void
   /** The header's buttons (New chat / New family group). */
   actions?: ReactNode
-  /** Opens the organization's label manager (staff). */
-  onManageLabels?: () => void
 }) {
   const { locale, number } = useI18n()
   const copy = chatCopyFor(locale)
   const { staff } = useSession()
   const [search, setSearch] = useState('')
   const [view, setView] = useState<View>('all')
+  const [labelId, setLabelId] = useState<string | null>(null)
   const [labelling, setLabelling] = useState<string | null>(null)
-  const labels = useChatLabels().data ?? []
-  const labelById = useMemo(() => new Map(labels.map((l) => [l.id, l])), [labels])
+
+  // The viewer's labels in use, from the list itself: a label on no chat has
+  // nothing to filter. Labels are private, so these are only ever one's own.
+  const usedLabels = useMemo(() => {
+    const byId = new Map<string, ChatLabel>()
+    for (const c of conversations) for (const l of c.labels ?? []) byId.set(l.id, l)
+    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name))
+  }, [conversations])
+  const activeLabel = labelId && usedLabels.some((l) => l.id === labelId) ? labelId : null
 
   const named = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase()
     return conversations.filter(
       (c) =>
-        !needle ||
+        (!activeLabel || (c.labels ?? []).some((l) => l.id === activeLabel)) &&
+        (!needle ||
         [conversationName(c, staff?.id, copy), ...(c.members ?? []).map((m) => m.displayName)].some((t) =>
           t.toLocaleLowerCase().includes(needle),
-        ),
+        )),
     )
-  }, [conversations, search, staff?.id, copy])
+  }, [conversations, search, staff?.id, copy, activeLabel])
 
   const archived = named.filter((c) => c.viewerState?.archived)
   const active = named.filter((c) => !c.viewerState?.archived)
@@ -67,7 +70,6 @@ export function ConversationList({
     : v === 'unread' ? active.filter((c) => (c.unreadCount ?? 0) > 0)
     : v === 'favorites' ? active.filter((c) => c.viewerState?.favorite)
     : v === 'groups' ? active.filter(isGroup)
-    : v.startsWith('label:') ? active.filter((c) => c.labelIds?.includes(v.slice(6)))
     : active
   // Pinned first; otherwise the server's order (most recent activity first).
   const rows = [...inView(view)].sort((a, b) => Number(!!b.viewerState?.pinned) - Number(!!a.viewerState?.pinned))
@@ -77,16 +79,6 @@ export function ConversationList({
     { value: 'unread' as const, label: copy.filterUnread, count: inView('unread').length },
     { value: 'favorites' as const, label: copy.filterFavorites, count: inView('favorites').length },
     { value: 'groups' as const, label: copy.filterGroups, count: inView('groups').length },
-    // One chip per label that is on a chat in view (or is the one selected).
-    ...labels
-      .map((l) => ({ l, value: `label:${l.id}` as View, count: inView(`label:${l.id}`).length }))
-      .filter(({ value, count }) => count > 0 || view === value)
-      .map(({ l, value, count }) => ({
-        value,
-        label: l.name,
-        count,
-        marker: <span className={`cw-label__dot cw-label-tone--${l.color}`} aria-hidden="true" />,
-      })),
     ...(archived.length > 0 || view === 'archived'
       ? [{ value: 'archived' as const, label: copy.filterArchived, count: archived.length }]
       : []),
@@ -111,18 +103,22 @@ export function ConversationList({
           }}
         >
           <FilterChips options={options} value={view} onChange={setView} label={copy.filterLabel} formatCount={number} />
-          {onManageLabels && (
-            <button
-              type="button"
-              className="btn btn--ghost btn--icon btn--sm cw-filters__manage"
-              onClick={onManageLabels}
-              aria-label={copy.manageLabels}
-              title={copy.manageLabels}
-            >
-              <Icon name="tag" size={16} />
-            </button>
-          )}
         </div>
+        {usedLabels.length > 0 && (
+          <div className="cw-label-filter" role="group" aria-label={copy.labelFilter}>
+            {usedLabels.map((l) => (
+              <button
+                key={l.id}
+                type="button"
+                className="cw-label-filter__item"
+                aria-pressed={activeLabel === l.id}
+                onClick={() => setLabelId(activeLabel === l.id ? null : l.id)}
+              >
+                <LabelChip label={l} />
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <div className="workspace__scroll">
         {conversations.length === 0 ? (
@@ -139,21 +135,17 @@ export function ConversationList({
                 onSelect={() => onSelect(c.id)}
                 selfId={staff?.id}
                 locale={locale}
-                labels={(c.labelIds ?? []).map((id) => labelById.get(id)).filter((l): l is ChatLabel => !!l)}
-                onLabel={onManageLabels ? () => setLabelling(c.id) : undefined}
+                onLabel={() => setLabelling(c.id)}
               />
             ))}
           </ul>
         )}
       </div>
       {labelling && conversations.some((c) => c.id === labelling) && (
-        <LabelPickerDialog
-          conversation={conversations.find((c) => c.id === labelling)!}
+        <LabelsDialog
+          conversationId={labelling}
+          current={conversations.find((c) => c.id === labelling)!.labels ?? []}
           onClose={() => setLabelling(null)}
-          onManage={() => {
-            setLabelling(null)
-            onManageLabels?.()
-          }}
         />
       )}
     </>
@@ -166,7 +158,6 @@ function ConversationRow({
   onSelect,
   selfId,
   locale,
-  labels,
   onLabel,
 }: {
   c: ChatConversation
@@ -174,9 +165,8 @@ function ConversationRow({
   onSelect: () => void
   selfId: string | undefined
   locale: 'ar' | 'en'
-  labels: ChatLabel[]
-  /** Opens the label picker for this chat; absent where labels are not offered. */
-  onLabel?: () => void
+  /** Opens this chat's labels (the viewer's own). */
+  onLabel: () => void
 }) {
   const copy = chatCopyFor(locale)
   const { dateTime } = useI18n()
@@ -229,16 +219,11 @@ function ConversationRow({
               </span>
             )}
           </span>
-          {labels.length > 0 && (
+          {(c.labels ?? []).length > 0 && (
             <span className="cw-row__labels" aria-label={copy.labels}>
-              {labels.slice(0, ROW_LABELS).map((l) => (
-                <LabelPill key={l.id} label={l} />
+              {c.labels!.map((l) => (
+                <LabelChip key={l.id} label={l} />
               ))}
-              {labels.length > ROW_LABELS && (
-                <span className="cw-label cw-label--more" title={labels.slice(ROW_LABELS).map((l) => l.name).join('، ')}>
-                  {copy.moreLabels(labels.length - ROW_LABELS)}
-                </span>
-              )}
             </span>
           )}
         </span>
@@ -248,13 +233,9 @@ function ConversationRow({
         className="cw-row__menu"
         items={[
           { key: 'pin', label: pinned ? copy.unpin : copy.pin, icon: 'pin', onSelect: () => prefs.pin(c.id, !pinned) },
-          {
-            key: 'favorite',
-            label: favorite ? copy.unfavorite : copy.favorite,
-            icon: 'heart',
-            onSelect: () => prefs.favorite(c.id, !favorite),
-          },
-          ...(onLabel ? [{ key: 'labels', label: copy.labelChat, icon: 'tag' as const, onSelect: onLabel }] : []),
+          { key: 'favorite', label: favorite ? copy.unfavorite : copy.favorite, icon: 'heart', onSelect: () => prefs.favorite(c.id, !favorite) },
+          // Staff only server-side; the Admin Web viewer is always staff.
+          { key: 'labels', label: copy.labelsMenu, icon: 'tag', onSelect: onLabel },
           { key: 'mute', label: muted ? copy.unmute : copy.mute, icon: muted ? 'notifications' : 'bellOff', onSelect: () => prefs.mute(c.id, !muted) },
           {
             key: 'archive',

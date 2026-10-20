@@ -1,5 +1,5 @@
 -- =============================================================================
--- Edited messages, chat labels and favorite chats (owner request 2026-10-19)
+-- Edited messages and favorite chats (owner request 2026-10-19)
 -- =============================================================================
 --
 -- EDIT. A sent message's body was made immutable by 20260905093000
@@ -16,11 +16,6 @@
 -- "an approver can never edit a message"; neither can its author, after).
 -- Who may edit, and for how long, is the API's decision (MessageService.edit);
 -- this is the floor any writer is held to.
---
--- LABELS. An organization's shared tags for conversations ("Payment issue",
--- "Trial", ...). Staff only: created, renamed, recoloured and deleted by
--- conversation staff, applied to conversations they can read, and never sent
--- to a parent or a teacher.
 --
 -- FAVORITES. A viewer's own list of chats, like pinned/archived/muted: one
 -- column on chat.conversation_participant_state.
@@ -107,68 +102,6 @@ insert into chat.config (key, value, scope, description) values
 on conflict (key) do nothing;
 
 -- ---------------------------------------------------------------------------
--- Labels
--- ---------------------------------------------------------------------------
-
-create table if not exists chat.chat_label (
-  id              uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references chat.organization (id) on delete cascade,
-  name            text not null check (char_length(btrim(name)) between 1 and 40),
-  -- One of the eight label tones the clients draw (1..8).
-  color           smallint not null default 1 check (color between 1 and 8),
-  created_by      uuid not null,
-  created_at      timestamptz not null default now(),
-  updated_at      timestamptz not null default now()
-);
-
-comment on table chat.chat_label is
-  'An organization''s shared conversation label. Staff only; never served to a '
-  'parent or a teacher.';
-
-create unique index if not exists chat_label_org_name_key
-  on chat.chat_label (organization_id, lower(btrim(name)));
-
-drop trigger if exists chat_label_set_updated_at on chat.chat_label;
-create trigger chat_label_set_updated_at
-  before update on chat.chat_label
-  for each row execute function chat.set_updated_at();
-
-create table if not exists chat.conversation_label (
-  conversation_id uuid not null references chat.conversation (id) on delete cascade,
-  label_id        uuid not null references chat.chat_label (id) on delete cascade,
-  labeled_by      uuid not null,
-  labeled_at      timestamptz not null default now(),
-  primary key (conversation_id, label_id)
-);
-
-create index if not exists conversation_label_label_idx
-  on chat.conversation_label (label_id);
-
--- A label is applied only inside its own organization, whoever writes.
-create or replace function chat.enforce_conversation_label_tenant()
-returns trigger
-language plpgsql
-as $$
-declare
-  v_label_org uuid;
-  v_conv_org  uuid;
-begin
-  select organization_id into v_label_org from chat.chat_label where id = new.label_id;
-  select organization_id into v_conv_org from chat.conversation where id = new.conversation_id;
-  if v_label_org is distinct from v_conv_org then
-    raise exception 'a label belongs to the organization of the conversation it is applied to'
-      using errcode = 'check_violation';
-  end if;
-  return new;
-end;
-$$;
-
-drop trigger if exists conversation_label_tenant on chat.conversation_label;
-create trigger conversation_label_tenant
-  before insert or update on chat.conversation_label
-  for each row execute function chat.enforce_conversation_label_tenant();
-
--- ---------------------------------------------------------------------------
 -- Favorites
 -- ---------------------------------------------------------------------------
 
@@ -179,9 +112,5 @@ alter table chat.conversation_participant_state add column if not exists favorit
 -- ---------------------------------------------------------------------------
 
 alter table chat.message_revision enable row level security;
-alter table chat.chat_label enable row level security;
-alter table chat.conversation_label enable row level security;
 
 grant select, insert, update, delete on chat.message_revision to service_role;
-grant select, insert, update, delete on chat.chat_label to service_role;
-grant select, insert, update, delete on chat.conversation_label to service_role;

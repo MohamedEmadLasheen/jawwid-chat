@@ -5,7 +5,6 @@ import { AppConfigService } from '@platform/app-config.service';
 import { PrismaIdentityService } from '@platform/identity.service';
 import type { IdentityService } from '@platform/identity.service';
 import { PrismaAuditService } from '@platform/audit.service';
-import { LabelService } from '@communication/conversations/label.service';
 import type { CoverageService } from '@platform/coverage.service';
 import { ConversationService } from '@communication/conversations/conversation.service';
 import { MessageService } from '@communication/messages/message.service';
@@ -83,7 +82,6 @@ export function buildGraph(
     prisma, authz, storyAudience, outbox, config, identity, storage, audit, undefined, conversations,
   );
   const storySweeper = new StorySweeper(prisma, config, outbox, storage);
-  const labels = new LabelService(prisma, conversations, audit);
 
   // A worker whose realtime publisher is a no-op: these suites assert on what
   // reaches the DATABASE (notifications, outbox status), and a socket server in
@@ -95,7 +93,7 @@ export function buildGraph(
     prisma, coverage, scope, identity, authz, conversations, messages, approvals,
     attachments, notifications, reminders, templates, quietHours, calls,
     stories, storyAudience, storySweeper, storage, outboxWorker,
-    relationships, labels,
+    relationships,
     // Exposed so a suite can drive the outbox itself: config for a worker it
     // builds, outbox to enqueue inside its own transaction.
     config, outbox,
@@ -413,6 +411,6 @@ export async function truncate(prisma: PrismaService): Promise<void> {
              chat.conversation_participant_state, chat.conversation_member,
              chat.message, chat.conversation, chat.learner,
              chat.contact, chat.family, chat.staff, chat.teacher,
-             chat.event_log, chat.audit_log, chat.principal_revocation, chat.chat_label
+             chat.event_log, chat.audit_log, chat.principal_revocation
     restart identity cascade`);
 }

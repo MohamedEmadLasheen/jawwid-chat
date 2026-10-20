@@ -280,13 +280,6 @@ const PATHS = {
   bellOff: <path d="M6.3 6.3A6 6 0 0 0 6 9c0 6-2.5 7.5-2.5 7.5h13M9 4a6 6 0 0 1 9 5c0 2.5.4 4.2.9 5.4M10 20a2.2 2.2 0 0 0 4 0M3 3l18 18" />,
   /** Favorite chats (WhatsApp's Favorites list). */
   heart: <path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.4 4.3 4.3 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10Z" />,
-  /** Chat labels. */
-  tag: (
-    <>
-      <path d="M3.5 12.1V4.9c0-.8.6-1.4 1.4-1.4h7.2l8.4 8.4a1.4 1.4 0 0 1 0 2l-7.2 7.2a1.4 1.4 0 0 1-2 0l-7.8-7.8Z" />
-      <path d="M8.5 8.5h.01" />
-    </>
-  ),
   /** Edit a message. */
   pencil: <path d="M14.5 5.5 18.5 9.5M4 20l1-4.5L15.8 4.7a1.8 1.8 0 0 1 2.5 0l1 1a1.8 1.8 0 0 1 0 2.5L8.5 19 4 20Z" />,
   // Calls page (PD-13).
@@ -300,6 +293,13 @@ const PATHS = {
   callIncoming: <path d="M17 7 7 17M7 9.5V17h7.5" />,
   /** A call this account placed: an arrow up and away. */
   callOutgoing: <path d="M7 17 17 7M9.5 7H17v7.5" />,
+  tag: (
+    <>
+      <path d="M3.5 12.1V4.5a1 1 0 0 1 1-1h7.6a1 1 0 0 1 .7.3l7.7 7.7a1 1 0 0 1 0 1.4l-7.6 7.6a1 1 0 0 1-1.4 0l-7.7-7.7a1 1 0 0 1-.3-.7Z" />
+      <path d="M8 8h.01" />
+    </>
+  ),
+  bolt: <path d="M13 3 5 13.5h6L10 21l8-10.5h-6L13 3Z" />,
 } satisfies Record<string, ReactElement>
 
 export type IconName = keyof typeof PATHS
