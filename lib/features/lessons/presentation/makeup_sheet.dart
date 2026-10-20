@@ -5,9 +5,13 @@ import '../../../app/providers.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
+import '../../../shared/models/user_role.dart';
 import 'lesson_ticket_sheet.dart';
 
-/// PD-11 T2: a parent books the make-up a teacher-cancelled lesson owes them.
+/// PD-11 T2 / PD-15: "Reschedule a make-up class" -- after any apology, once the
+/// family and the teacher agreed on a time. A parent books into the teacher's free
+/// times; a teacher may also record another agreed date and time (the server refuses
+/// a day off or a clash).
 ///
 /// Day first, then a time on that day -- the server's free instants, grouped by the
 /// reader's OWN calendar day and shown in their own clock. Booking is instant; the
@@ -38,6 +42,8 @@ class _MakeupSheetState extends ConsumerState<MakeupSheet> {
   Object? _loadError;
   DateTime? _day;
   DateTime? _picked;
+  /// PD-15: a teacher's agreed time outside the free-slot list.
+  bool _custom = false;
   bool _sending = false;
   String? _error;
 
@@ -90,12 +96,31 @@ class _MakeupSheetState extends ConsumerState<MakeupSheet> {
     }
   }
 
+  Future<void> _pickOther() async {
+    final now = DateTime.now();
+    final day = await showDatePicker(
+      context: context,
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: now.add(const Duration(days: 60)),
+      initialDate: _day ?? now,
+    );
+    if (day == null || !mounted) return;
+    final time = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(now.add(const Duration(hours: 1))));
+    if (time == null || !mounted) return;
+    setState(() {
+      _picked = DateTime(day.year, day.month, day.day, time.hour, time.minute);
+      _custom = true;
+      _error = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
     final theme = Theme.of(context);
     final m = MaterialLocalizations.of(context);
     final offer = _offer;
+    final teacher = ref.watch(currentRoleProvider) == UserRole.teacher;
 
     Widget body;
     if (_loadError != null) {
@@ -144,8 +169,11 @@ class _MakeupSheetState extends ConsumerState<MakeupSheet> {
                 ChoiceChip(
                   key: ValueKey('makeup-time-${t.toUtc().toIso8601String()}'),
                   label: Text(m.formatTimeOfDay(TimeOfDay.fromDateTime(t))),
-                  selected: t == _picked,
-                  onSelected: (_) => setState(() => _picked = t),
+                  selected: !_custom && t == _picked,
+                  onSelected: (_) => setState(() {
+                    _picked = t;
+                    _custom = false;
+                  }),
                 ),
             ],
           ),
@@ -169,8 +197,26 @@ class _MakeupSheetState extends ConsumerState<MakeupSheet> {
               ].join(' · '),
               style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
+            if (teacher) ...[
+              const SizedBox(height: Spacing.spacing2),
+              Text(l10n.makeupAgreedHint, style: theme.textTheme.bodySmall),
+            ],
             const SizedBox(height: Spacing.spacing4),
             body,
+            if (teacher) ...[
+              const SizedBox(height: Spacing.spacing3),
+              OutlinedButton.icon(
+                key: const ValueKey('makeup-other-time'),
+                onPressed: _sending ? null : _pickOther,
+                icon: const Icon(Icons.edit_calendar_outlined),
+                label: Text(l10n.makeupOtherTime),
+              ),
+              if (_custom && _picked != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: Spacing.spacing2),
+                  child: Text(l10n.makeupChosen(lessonWhen(context, _picked!)), style: theme.textTheme.bodyMedium),
+                ),
+            ],
             if (_error != null) ...[
               const SizedBox(height: Spacing.spacing2),
               Text(_error!, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error)),

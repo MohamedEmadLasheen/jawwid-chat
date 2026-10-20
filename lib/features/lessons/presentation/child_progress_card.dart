@@ -7,6 +7,7 @@ import '../../../app/router.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
+import '../domain/report_vocab.dart';
 import 'lesson_ticket_sheet.dart' show lessonWhen;
 
 /// A child's progress this month, from `GET /learners/:id/progress`.
@@ -69,7 +70,7 @@ class ChildProgressCard extends ConsumerWidget {
             Text(l10n.progressAllTime(p.attendedAllTime), style: theme.textTheme.bodySmall),
             if (p.makeupsOwed > 0) Text(l10n.progressMakeupsOwed(p.makeupsOwed), style: theme.textTheme.bodySmall),
             if (p.nextLessonAt != null) Text(l10n.progressNext(lessonWhen(context, p.nextLessonAt!)), style: theme.textTheme.bodySmall),
-            if (p.lastCovered != null) Text(l10n.progressLastCovered(p.lastCovered!), style: theme.textTheme.bodySmall),
+            if (_lastCovered(l10n, p) case final covered?) Text(l10n.progressLastCovered(covered), style: theme.textTheme.bodySmall),
             const SizedBox(height: Spacing.spacing2),
             if (p.certificates.isEmpty)
               Text(
@@ -123,4 +124,10 @@ class _Count extends StatelessWidget {
       ),
     );
   }
+}
+
+/// What the latest report covered: its topics' labels, then its short text (PD-15).
+String? _lastCovered(L10n l10n, ChildProgress p) {
+  final parts = [for (final c in p.lastCoveredTopics) topicLabel(l10n, c), ?p.lastCovered];
+  return parts.isEmpty ? null : parts.join('، ');
 }

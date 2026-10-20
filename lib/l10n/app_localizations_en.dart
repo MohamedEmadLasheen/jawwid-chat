@@ -949,7 +949,7 @@ class L10nEn extends L10n {
   String get cardReason => 'Reason';
 
   @override
-  String get ticketBookMakeup => 'Book a make-up lesson';
+  String get ticketBookMakeup => 'Reschedule a make-up class';
 
   @override
   String get ticketRequestScheduleChange => 'Change regular lesson times';
@@ -2057,4 +2057,224 @@ class L10nEn extends L10n {
 
   @override
   String get profileLoadFailed => 'Your profile could not be loaded.';
+
+  @override
+  String get ticketReportChoose => 'What happened in this lesson?';
+
+  @override
+  String get ticketReportAttended => 'Student attended';
+
+  @override
+  String get ticketReportNotAttended => 'Student did not attend';
+
+  @override
+  String get ticketAbsenceConfirm =>
+      'The group will be told that the student did not attend this lesson.';
+
+  @override
+  String get reportLessonNumberLabel => 'Lesson number';
+
+  @override
+  String get reportTopicsLabel => 'What did the student learn?';
+
+  @override
+  String get reportDetailsLabel => 'Details (optional, short)';
+
+  @override
+  String get reportPerformanceLabel => 'Performance in this lesson';
+
+  @override
+  String get reportNextLabel => 'For the next lesson';
+
+  @override
+  String get reportHomeworkDetailsLabel => 'Homework details (optional)';
+
+  @override
+  String get reportPrivateNoteLabel => 'Private note (supervisors only)';
+
+  @override
+  String get reportNeedsCovered => 'Choose a topic or write a short line.';
+
+  @override
+  String get reportEdit => 'Edit report';
+
+  @override
+  String get reportUpdated => 'Report updated';
+
+  @override
+  String get topicNewMemorization => 'New memorization';
+
+  @override
+  String get topicRevision => 'Revision';
+
+  @override
+  String get topicRecitation => 'Recitation';
+
+  @override
+  String get topicTajweed => 'Tajweed rules';
+
+  @override
+  String get topicReading => 'Reading';
+
+  @override
+  String get topicWriting => 'Writing';
+
+  @override
+  String get topicGrammar => 'Grammar';
+
+  @override
+  String get topicVocabulary => 'Vocabulary';
+
+  @override
+  String get topicIslamicStudies => 'Islamic studies';
+
+  @override
+  String get topicAssessment => 'Test / assessment';
+
+  @override
+  String get taskMemorizeNew => 'Memorize the new part';
+
+  @override
+  String get taskRevisePrevious => 'Revise previous lessons';
+
+  @override
+  String get taskPractiseRecitation => 'Practise recitation';
+
+  @override
+  String get taskPractiseReading => 'Practise reading';
+
+  @override
+  String get taskWrittenHomework => 'Written homework';
+
+  @override
+  String get taskPrepareNext => 'Prepare the next lesson';
+
+  @override
+  String get taskNothing => 'Nothing this time';
+
+  @override
+  String get level5 => 'Excellent';
+
+  @override
+  String get level4 => 'Very good';
+
+  @override
+  String get level3 => 'Good';
+
+  @override
+  String get level2 => 'Fair';
+
+  @override
+  String get level1 => 'Needs more work';
+
+  @override
+  String get cardLessonNumber => 'Lesson no.';
+
+  @override
+  String get cardNextLesson => 'For the next lesson';
+
+  @override
+  String get cardPerformance => 'Performance';
+
+  @override
+  String get cardCorrectedTitle => 'Lesson record corrected';
+
+  @override
+  String get cardCorrectedNow => 'Now recorded as';
+
+  @override
+  String get cardExcusedAfterTitle => 'Excused after the lesson started';
+
+  @override
+  String get cardReportCorrected => 'Corrected by the supervisor';
+
+  @override
+  String get cardOutcomeHeld => 'The student attended';
+
+  @override
+  String get cardOutcomeStudentNoShow => 'The student did not attend';
+
+  @override
+  String get cardOutcomeExcusedBefore => 'Student excused before the start';
+
+  @override
+  String get cardOutcomeExcusedAfter => 'Student excused after the start';
+
+  @override
+  String get cardOutcomeTeacherApology => 'The teacher apologised';
+
+  @override
+  String get cardOutcomeTeacherNoShow => 'The teacher was absent';
+
+  @override
+  String get cardOutcomeCancelled => 'Cancelled';
+
+  @override
+  String get makeupOtherTime => 'Another agreed date and time';
+
+  @override
+  String get makeupAgreedHint =>
+      'Record the make-up once you and the family have agreed on a time.';
+
+  @override
+  String makeupChosen(String when) {
+    return 'Chosen: $when';
+  }
+
+  @override
+  String get groupChildrenTitle => 'Children in this group';
+
+  @override
+  String groupChildAge(int age) {
+    String _temp0 = intl.Intl.pluralLogic(
+      age,
+      locale: localeName,
+      other: '$age years',
+      one: '1 year',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get groupChildAgeLabel => 'Age';
+
+  @override
+  String get groupChildCourse => 'Course';
+
+  @override
+  String get groupChildSchedule => 'Lesson days and times';
+
+  @override
+  String get groupChildPackage => 'Package';
+
+  @override
+  String groupChildPackageLessons(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count lessons',
+      one: '1 lesson',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get groupChildTeacher => 'Teacher';
+
+  @override
+  String get groupChildNotSet => 'Not set';
+
+  @override
+  String get groupChildNoSchedule => 'No regular times yet';
+
+  @override
+  String groupChildMinutes(int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: '$minutes min',
+      one: '1 min',
+    );
+    return '$_temp0';
+  }
 }

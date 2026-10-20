@@ -509,7 +509,7 @@
   "cardRating": "التقييم",
   "cardNote": "ملاحظة",
   "cardReason": "السبب",
-  "ticketBookMakeup": "حجز حصة تعويضية",
+  "ticketBookMakeup": "جدولة حصة تعويضية",
   "ticketRequestScheduleChange": "تغيير مواعيد الحصص الثابتة",
   "ticketFor": "لـ {name}",
   "makeupPickDay": "اختر يومًا",
@@ -848,5 +848,101 @@
       }
     }
   },
-  "profileLoadFailed": "تعذّر تحميل ملفك الشخصي."
+  "profileLoadFailed": "تعذّر تحميل ملفك الشخصي.",
+  "ticketReportChoose": "ماذا حدث في هذه الحصة؟",
+  "ticketReportAttended": "حضر الطالب",
+  "ticketReportNotAttended": "لم يحضر الطالب",
+  "ticketAbsenceConfirm": "سيُبلَّغ أعضاء المجموعة بأن الطالب لم يحضر هذه الحصة.",
+  "reportLessonNumberLabel": "رقم الحصة",
+  "reportTopicsLabel": "ماذا تعلّم الطالب؟",
+  "reportDetailsLabel": "تفاصيل (اختياري، باختصار)",
+  "reportPerformanceLabel": "مستوى الأداء في هذه الحصة",
+  "reportNextLabel": "المطلوب للحصة القادمة",
+  "reportHomeworkDetailsLabel": "تفاصيل الواجب (اختياري)",
+  "reportPrivateNoteLabel": "ملاحظة خاصة (للمشرفين فقط)",
+  "reportNeedsCovered": "اختر موضوعًا أو اكتب سطرًا قصيرًا.",
+  "reportEdit": "تعديل التقرير",
+  "reportUpdated": "تم تحديث التقرير",
+  "topicNewMemorization": "حفظ جديد",
+  "topicRevision": "مراجعة",
+  "topicRecitation": "تلاوة",
+  "topicTajweed": "أحكام التجويد",
+  "topicReading": "قراءة",
+  "topicWriting": "كتابة",
+  "topicGrammar": "قواعد",
+  "topicVocabulary": "مفردات",
+  "topicIslamicStudies": "تربية إسلامية",
+  "topicAssessment": "اختبار وتقييم",
+  "taskMemorizeNew": "حفظ المقطع الجديد",
+  "taskRevisePrevious": "مراجعة ما سبق",
+  "taskPractiseRecitation": "التدرّب على التلاوة",
+  "taskPractiseReading": "التدرّب على القراءة",
+  "taskWrittenHomework": "واجب كتابي",
+  "taskPrepareNext": "التحضير للدرس القادم",
+  "taskNothing": "لا يوجد واجب",
+  "level5": "ممتاز",
+  "level4": "جيد جدًا",
+  "level3": "جيد",
+  "level2": "مقبول",
+  "level1": "يحتاج إلى متابعة",
+  "cardLessonNumber": "رقم الحصة",
+  "cardNextLesson": "المطلوب للحصة القادمة",
+  "cardPerformance": "مستوى الأداء",
+  "cardCorrectedTitle": "تم تصحيح سجل الحصة",
+  "cardCorrectedNow": "السجل الآن",
+  "cardExcusedAfterTitle": "عذر بعد بداية الحصة",
+  "cardReportCorrected": "صحّحه المشرف",
+  "cardOutcomeHeld": "حضر الطالب",
+  "cardOutcomeStudentNoShow": "لم يحضر الطالب",
+  "cardOutcomeExcusedBefore": "عذر للطالب قبل بداية الحصة",
+  "cardOutcomeExcusedAfter": "عذر للطالب بعد بداية الحصة",
+  "cardOutcomeTeacherApology": "اعتذار المعلم",
+  "cardOutcomeTeacherNoShow": "غياب المعلم",
+  "cardOutcomeCancelled": "ملغاة",
+  "makeupOtherTime": "موعد آخر متفق عليه",
+  "makeupAgreedHint": "سجّل الحصة التعويضية بعد الاتفاق مع الأسرة على الموعد.",
+  "makeupChosen": "الموعد المختار: {when}",
+  "@makeupChosen": {
+    "description": "The make-up time picked outside the free-slot list.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "groupChildrenTitle": "الأطفال في هذه المجموعة",
+  "groupChildAge": "{age, plural, =1{سنة واحدة} =2{سنتان} few{{age} سنوات} many{{age} سنة} other{{age} سنة}}",
+  "@groupChildAge": {
+    "description": "A child's age in whole years.",
+    "placeholders": {
+      "age": {
+        "type": "int"
+      }
+    }
+  },
+  "groupChildAgeLabel": "العمر",
+  "groupChildCourse": "الدورة",
+  "groupChildSchedule": "أيام ومواعيد الحصص",
+  "groupChildPackage": "الباقة",
+  "groupChildPackageLessons": "{count, plural, =1{حصة واحدة} =2{حصتان} few{{count} حصص} many{{count} حصة} other{{count} حصة}}",
+  "@groupChildPackageLessons": {
+    "description": "The package size in lessons.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "groupChildTeacher": "المعلم",
+  "groupChildNotSet": "غير محدد",
+  "groupChildNoSchedule": "لا توجد مواعيد ثابتة بعد",
+  "groupChildMinutes": "{minutes, plural, =1{دقيقة واحدة} =2{دقيقتان} few{{minutes} دقائق} many{{minutes} دقيقة} other{{minutes} دقيقة}}",
+  "@groupChildMinutes": {
+    "description": "A lesson's length in minutes.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  }
 }

@@ -19,6 +19,7 @@ import '../../../shared/utils/text_direction.dart';
 import '../../conversations/application/conversations_controller.dart';
 import '../../conversations/application/open_direct_controller.dart';
 import '../../lessons/presentation/child_progress_card.dart';
+import '../../lessons/presentation/group_children_section.dart';
 import '../application/profile_controller.dart';
 import '../domain/profile_view.dart';
 import 'profile_photos_section.dart';
@@ -75,7 +76,11 @@ class ConversationProfileScreen extends ConsumerWidget {
             // The conversation-scoped controls. They sit on this screen and not
             // on MyAccountScreen because they belong to a conversation, not to
             // a person: muting yourself is not a thing.
-            actions: [ConversationActions(conversationId: conversationId)],
+            actions: [
+              ConversationActions(conversationId: conversationId),
+              // PD-15: each child of the group -- age, course, times, package.
+              if (value.isGroup) GroupChildrenSection(conversationId: conversationId),
+            ],
           ),
       },
     );

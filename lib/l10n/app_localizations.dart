@@ -1816,7 +1816,7 @@ abstract class L10n {
   /// No description provided for @ticketBookMakeup.
   ///
   /// In en, this message translates to:
-  /// **'Book a make-up lesson'**
+  /// **'Reschedule a make-up class'**
   String get ticketBookMakeup;
 
   /// No description provided for @ticketRequestScheduleChange.
@@ -3768,6 +3768,390 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Your profile could not be loaded.'**
   String get profileLoadFailed;
+
+  /// No description provided for @ticketReportChoose.
+  ///
+  /// In en, this message translates to:
+  /// **'What happened in this lesson?'**
+  String get ticketReportChoose;
+
+  /// No description provided for @ticketReportAttended.
+  ///
+  /// In en, this message translates to:
+  /// **'Student attended'**
+  String get ticketReportAttended;
+
+  /// No description provided for @ticketReportNotAttended.
+  ///
+  /// In en, this message translates to:
+  /// **'Student did not attend'**
+  String get ticketReportNotAttended;
+
+  /// No description provided for @ticketAbsenceConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'The group will be told that the student did not attend this lesson.'**
+  String get ticketAbsenceConfirm;
+
+  /// No description provided for @reportLessonNumberLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Lesson number'**
+  String get reportLessonNumberLabel;
+
+  /// No description provided for @reportTopicsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'What did the student learn?'**
+  String get reportTopicsLabel;
+
+  /// No description provided for @reportDetailsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Details (optional, short)'**
+  String get reportDetailsLabel;
+
+  /// No description provided for @reportPerformanceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Performance in this lesson'**
+  String get reportPerformanceLabel;
+
+  /// No description provided for @reportNextLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'For the next lesson'**
+  String get reportNextLabel;
+
+  /// No description provided for @reportHomeworkDetailsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Homework details (optional)'**
+  String get reportHomeworkDetailsLabel;
+
+  /// No description provided for @reportPrivateNoteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Private note (supervisors only)'**
+  String get reportPrivateNoteLabel;
+
+  /// No description provided for @reportNeedsCovered.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a topic or write a short line.'**
+  String get reportNeedsCovered;
+
+  /// No description provided for @reportEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit report'**
+  String get reportEdit;
+
+  /// No description provided for @reportUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Report updated'**
+  String get reportUpdated;
+
+  /// No description provided for @topicNewMemorization.
+  ///
+  /// In en, this message translates to:
+  /// **'New memorization'**
+  String get topicNewMemorization;
+
+  /// No description provided for @topicRevision.
+  ///
+  /// In en, this message translates to:
+  /// **'Revision'**
+  String get topicRevision;
+
+  /// No description provided for @topicRecitation.
+  ///
+  /// In en, this message translates to:
+  /// **'Recitation'**
+  String get topicRecitation;
+
+  /// No description provided for @topicTajweed.
+  ///
+  /// In en, this message translates to:
+  /// **'Tajweed rules'**
+  String get topicTajweed;
+
+  /// No description provided for @topicReading.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading'**
+  String get topicReading;
+
+  /// No description provided for @topicWriting.
+  ///
+  /// In en, this message translates to:
+  /// **'Writing'**
+  String get topicWriting;
+
+  /// No description provided for @topicGrammar.
+  ///
+  /// In en, this message translates to:
+  /// **'Grammar'**
+  String get topicGrammar;
+
+  /// No description provided for @topicVocabulary.
+  ///
+  /// In en, this message translates to:
+  /// **'Vocabulary'**
+  String get topicVocabulary;
+
+  /// No description provided for @topicIslamicStudies.
+  ///
+  /// In en, this message translates to:
+  /// **'Islamic studies'**
+  String get topicIslamicStudies;
+
+  /// No description provided for @topicAssessment.
+  ///
+  /// In en, this message translates to:
+  /// **'Test / assessment'**
+  String get topicAssessment;
+
+  /// No description provided for @taskMemorizeNew.
+  ///
+  /// In en, this message translates to:
+  /// **'Memorize the new part'**
+  String get taskMemorizeNew;
+
+  /// No description provided for @taskRevisePrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'Revise previous lessons'**
+  String get taskRevisePrevious;
+
+  /// No description provided for @taskPractiseRecitation.
+  ///
+  /// In en, this message translates to:
+  /// **'Practise recitation'**
+  String get taskPractiseRecitation;
+
+  /// No description provided for @taskPractiseReading.
+  ///
+  /// In en, this message translates to:
+  /// **'Practise reading'**
+  String get taskPractiseReading;
+
+  /// No description provided for @taskWrittenHomework.
+  ///
+  /// In en, this message translates to:
+  /// **'Written homework'**
+  String get taskWrittenHomework;
+
+  /// No description provided for @taskPrepareNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Prepare the next lesson'**
+  String get taskPrepareNext;
+
+  /// No description provided for @taskNothing.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing this time'**
+  String get taskNothing;
+
+  /// No description provided for @level5.
+  ///
+  /// In en, this message translates to:
+  /// **'Excellent'**
+  String get level5;
+
+  /// No description provided for @level4.
+  ///
+  /// In en, this message translates to:
+  /// **'Very good'**
+  String get level4;
+
+  /// No description provided for @level3.
+  ///
+  /// In en, this message translates to:
+  /// **'Good'**
+  String get level3;
+
+  /// No description provided for @level2.
+  ///
+  /// In en, this message translates to:
+  /// **'Fair'**
+  String get level2;
+
+  /// No description provided for @level1.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs more work'**
+  String get level1;
+
+  /// No description provided for @cardLessonNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Lesson no.'**
+  String get cardLessonNumber;
+
+  /// No description provided for @cardNextLesson.
+  ///
+  /// In en, this message translates to:
+  /// **'For the next lesson'**
+  String get cardNextLesson;
+
+  /// No description provided for @cardPerformance.
+  ///
+  /// In en, this message translates to:
+  /// **'Performance'**
+  String get cardPerformance;
+
+  /// No description provided for @cardCorrectedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Lesson record corrected'**
+  String get cardCorrectedTitle;
+
+  /// No description provided for @cardCorrectedNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Now recorded as'**
+  String get cardCorrectedNow;
+
+  /// No description provided for @cardExcusedAfterTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Excused after the lesson started'**
+  String get cardExcusedAfterTitle;
+
+  /// No description provided for @cardReportCorrected.
+  ///
+  /// In en, this message translates to:
+  /// **'Corrected by the supervisor'**
+  String get cardReportCorrected;
+
+  /// No description provided for @cardOutcomeHeld.
+  ///
+  /// In en, this message translates to:
+  /// **'The student attended'**
+  String get cardOutcomeHeld;
+
+  /// No description provided for @cardOutcomeStudentNoShow.
+  ///
+  /// In en, this message translates to:
+  /// **'The student did not attend'**
+  String get cardOutcomeStudentNoShow;
+
+  /// No description provided for @cardOutcomeExcusedBefore.
+  ///
+  /// In en, this message translates to:
+  /// **'Student excused before the start'**
+  String get cardOutcomeExcusedBefore;
+
+  /// No description provided for @cardOutcomeExcusedAfter.
+  ///
+  /// In en, this message translates to:
+  /// **'Student excused after the start'**
+  String get cardOutcomeExcusedAfter;
+
+  /// No description provided for @cardOutcomeTeacherApology.
+  ///
+  /// In en, this message translates to:
+  /// **'The teacher apologised'**
+  String get cardOutcomeTeacherApology;
+
+  /// No description provided for @cardOutcomeTeacherNoShow.
+  ///
+  /// In en, this message translates to:
+  /// **'The teacher was absent'**
+  String get cardOutcomeTeacherNoShow;
+
+  /// No description provided for @cardOutcomeCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get cardOutcomeCancelled;
+
+  /// No description provided for @makeupOtherTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Another agreed date and time'**
+  String get makeupOtherTime;
+
+  /// No description provided for @makeupAgreedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Record the make-up once you and the family have agreed on a time.'**
+  String get makeupAgreedHint;
+
+  /// The make-up time picked outside the free-slot list.
+  ///
+  /// In en, this message translates to:
+  /// **'Chosen: {when}'**
+  String makeupChosen(String when);
+
+  /// No description provided for @groupChildrenTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Children in this group'**
+  String get groupChildrenTitle;
+
+  /// A child's age in whole years.
+  ///
+  /// In en, this message translates to:
+  /// **'{age, plural, =1{1 year} other{{age} years}}'**
+  String groupChildAge(int age);
+
+  /// No description provided for @groupChildAgeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Age'**
+  String get groupChildAgeLabel;
+
+  /// No description provided for @groupChildCourse.
+  ///
+  /// In en, this message translates to:
+  /// **'Course'**
+  String get groupChildCourse;
+
+  /// No description provided for @groupChildSchedule.
+  ///
+  /// In en, this message translates to:
+  /// **'Lesson days and times'**
+  String get groupChildSchedule;
+
+  /// No description provided for @groupChildPackage.
+  ///
+  /// In en, this message translates to:
+  /// **'Package'**
+  String get groupChildPackage;
+
+  /// The package size in lessons.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 lesson} other{{count} lessons}}'**
+  String groupChildPackageLessons(int count);
+
+  /// No description provided for @groupChildTeacher.
+  ///
+  /// In en, this message translates to:
+  /// **'Teacher'**
+  String get groupChildTeacher;
+
+  /// No description provided for @groupChildNotSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get groupChildNotSet;
+
+  /// No description provided for @groupChildNoSchedule.
+  ///
+  /// In en, this message translates to:
+  /// **'No regular times yet'**
+  String get groupChildNoSchedule;
+
+  /// A lesson's length in minutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes, plural, =1{1 min} other{{minutes} min}}'**
+  String groupChildMinutes(int minutes);
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

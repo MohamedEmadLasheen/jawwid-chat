@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/providers.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
+import '../../../shared/models/user_role.dart';
 import '../../../shared/utils/text_direction.dart';
+import '../domain/report_vocab.dart';
+import 'lesson_report_sheet.dart' show showEditReportSheet;
 import 'schedule_change_sheet.dart' show weeklyLabel;
 
 /// PD-11: a ticket's card, drawn inside its message bubble.
@@ -16,7 +21,10 @@ Widget? lessonCardView(BuildContext context, MessageCard card, Color foreground)
   final title = switch (card.kind) {
     'lesson_report' => (Icons.menu_book_outlined, l10n.cardReportTitle),
     'lesson_absence' => (Icons.event_busy_outlined, l10n.cardAbsenceTitle),
-    'lesson_apology' => (Icons.front_hand_outlined, l10n.cardApologyTitle),
+    'lesson_apology' => card.text('timing') == 'after_start'
+        ? (Icons.front_hand_outlined, l10n.cardExcusedAfterTitle)
+        : (Icons.front_hand_outlined, l10n.cardApologyTitle),
+    'lesson_corrected' => (Icons.edit_note_outlined, l10n.cardCorrectedTitle),
     'lesson_teacher_apology' => (Icons.front_hand_outlined, l10n.cardTeacherApologyTitle),
     'lesson_cancelled' => card.text('outcome') == 'teacher_no_show'
         ? (Icons.person_off_outlined, l10n.cardTeacherAbsentTitle)
@@ -50,7 +58,18 @@ Widget? lessonCardView(BuildContext context, MessageCard card, Color foreground)
   );
 }
 
-class _LessonCard extends StatelessWidget {
+/// A corrected lesson's outcome, as a family reads it (PD-15).
+String? _outcomeLabel(L10n l10n, String? outcome, String? timing) => switch (outcome) {
+      'held' => l10n.cardOutcomeHeld,
+      'student_no_show' => l10n.cardOutcomeStudentNoShow,
+      'student_apology' => timing == 'after_start' ? l10n.cardOutcomeExcusedAfter : l10n.cardOutcomeExcusedBefore,
+      'teacher_apology' => l10n.cardOutcomeTeacherApology,
+      'teacher_no_show' => l10n.cardOutcomeTeacherNoShow,
+      'admin_cancelled' => l10n.cardOutcomeCancelled,
+      _ => null,
+    };
+
+class _LessonCard extends ConsumerWidget {
   const _LessonCard({
     required this.icon,
     required this.title,
@@ -64,10 +83,19 @@ class _LessonCard extends StatelessWidget {
   final Color foreground;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = L10n.of(context);
     final theme = Theme.of(context);
     final muted = foreground.withValues(alpha: 0.75);
+    // PD-15: the teacher edits their own report from its card; the server decides
+    // whether it is theirs, and the card is rewritten in place.
+    final lessonId = card.lessonId ?? card.text('lessonId');
+    final editable = card.kind == 'lesson_report' && lessonId != null && ref.watch(currentRoleProvider) == UserRole.teacher;
+    List<String> codes(String key) => [for (final c in (card.payload[key] as List?) ?? const []) if (c is String) c];
+    final topics = [for (final c in codes('coveredTopics')) topicLabel(l10n, c)];
+    final tasks = [for (final c in codes('nextTasks')) taskLabel(l10n, c)];
+    final level = performanceLabel(l10n, card.integer('rating'));
+    final corrected = card.kind == 'lesson_corrected' ? _outcomeLabel(l10n, card.text('outcome'), card.text('apologyTiming')) : null;
     final learner = card.text('learnerName');
     final starts = card.time('startsAt');
     final rating = card.integer('rating');
@@ -102,7 +130,11 @@ class _LessonCard extends StatelessWidget {
       if (card.kind == 'learner_suspended' && day('returnOn') != null) ('', l10n.cardPausedUntil(day('returnOn')!)),
       if (card.kind == 'learner_return_soon' && day('returnOn') != null) ('', l10n.cardReturnOn(day('returnOn')!)),
       for (final w in weekly) ('', w),
-      if (card.text('covered') case final v?) (l10n.cardCovered, v),
+      ?corrected == null ? null : (l10n.cardCorrectedNow, corrected),
+      if (card.integer('lessonNumber') case final n?) (l10n.cardLessonNumber, '$n'),
+      if ([...topics, ?card.text('covered')] case final c when c.isNotEmpty) (l10n.cardCovered, c.join('، ')),
+      ?level == null ? null : (l10n.cardPerformance, level),
+      if (tasks.isNotEmpty) (l10n.cardNextLesson, tasks.join('، ')),
       if (card.text('homework') case final v?) (l10n.cardHomework, v),
       if (card.text('reason') case final v?) (l10n.cardReason, v),
       if (card.text('note') case final v?) (l10n.cardNote, v),
@@ -173,6 +205,24 @@ class _LessonCard extends StatelessWidget {
             _Footnote(text: l10n.cardUnderReview, color: muted),
           if (card.flag('makeupOwed'))
             _Footnote(text: l10n.cardMakeupOwed, color: muted),
+          if (card.flag('corrected'))
+            _Footnote(text: l10n.cardReportCorrected, color: muted),
+          if (editable)
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton.icon(
+                key: ValueKey('report-edit-$lessonId'),
+                style: TextButton.styleFrom(foregroundColor: foreground, padding: EdgeInsets.zero),
+                onPressed: () async {
+                  final saved = await showEditReportSheet(context, lessonId);
+                  if (saved && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.reportUpdated)));
+                  }
+                },
+                icon: const Icon(Icons.edit_outlined, size: 16),
+                label: Text(l10n.reportEdit),
+              ),
+            ),
         ],
       ),
     );

@@ -9,6 +9,8 @@ import 'package:jawwid_chat/core/data/wire/wire_mappers.dart';
 import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/features/lessons/presentation/child_progress_card.dart';
+import 'package:jawwid_chat/features/lessons/presentation/group_children_section.dart';
+import 'package:jawwid_chat/features/lessons/presentation/lesson_report_sheet.dart';
 import 'package:jawwid_chat/features/lessons/presentation/lesson_ticket_sheet.dart';
 import 'package:jawwid_chat/features/lessons/presentation/makeup_sheet.dart';
 import 'package:jawwid_chat/features/lessons/presentation/schedule_change_sheet.dart';
@@ -18,15 +20,18 @@ import 'package:jawwid_chat/features/messages/presentation/message_composer.dart
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/lesson.dart';
 import 'package:jawwid_chat/shared/models/message.dart';
+import 'package:jawwid_chat/shared/models/user_role.dart';
 
 /// PD-11 on the client: the card a ticket posts, the "+" menu that offers tickets,
 /// and the form that sends one. Nothing here decides who may do what -- the server's
 /// answers are stubbed, and the client is held to drawing exactly what it is given.
 void main() {
-  Widget app(Widget home, {LessonRepository? lessons, Locale locale = const Locale('en')}) {
+  Widget app(Widget home, {LessonRepository? lessons, Locale locale = const Locale('en'), UserRole? role}) {
     return ProviderScope(
       overrides: [
         if (lessons != null) lessonRepositoryProvider.overrideWithValue(lessons),
+        // The signed-in role (no session in these tests): a parent unless a test says otherwise.
+        currentRoleProvider.overrideWithValue(role ?? UserRole.parent),
       ],
       child: MaterialApp(
         locale: locale,
@@ -99,6 +104,41 @@ void main() {
       expect(find.text('plain-text fallback'), findsNothing);
     });
 
+    testWidgets('PD-15: a quick report shows its number, topics, level and next steps -- and an edit only to the teacher', (tester) async {
+      final m = WireMappers.message(
+        wireCard('lesson_report', {
+          'lessonId': 'l1',
+          'learnerName': 'learner_l',
+          'lessonNumber': 8,
+          'coveredTopics': ['revision', 'tajweed'],
+          'rating': 5,
+          'nextTasks': ['revise_previous'],
+        }),
+        viewerActorId: 'p1',
+      );
+      await tester.pumpWidget(app(MessageBubble(message: m, showAuthor: true), role: UserRole.parent));
+      expect(find.text('8'), findsOneWidget);
+      expect(find.text('Revision، Tajweed rules'), findsOneWidget);
+      expect(find.text('Excellent'), findsOneWidget);
+      expect(find.text('Revise previous lessons'), findsOneWidget);
+      expect(find.text('Edit report'), findsNothing);
+      await tester.pumpWidget(app(MessageBubble(message: m, showAuthor: true), role: UserRole.teacher));
+      expect(find.text('Edit report'), findsOneWidget);
+    });
+
+    testWidgets('PD-15: an excuse after the start and a correction read as what the lesson is now', (tester) async {
+      final excused = WireMappers.message(wireCard('lesson_apology', {'learnerName': 'learner_l', 'timing': 'after_start'}), viewerActorId: 'p1');
+      await tester.pumpWidget(app(MessageBubble(message: excused, showAuthor: true)));
+      expect(find.text('Excused after the lesson started'), findsOneWidget);
+      final corrected = WireMappers.message(
+        wireCard('lesson_corrected', {'learnerName': 'learner_l', 'outcome': 'student_apology', 'apologyTiming': 'before_start'}),
+        viewerActorId: 'p1',
+      );
+      await tester.pumpWidget(app(MessageBubble(message: corrected, showAuthor: true), locale: const Locale('ar')));
+      expect(find.text('تم تصحيح سجل الحصة'), findsOneWidget);
+      expect(find.text('عذر للطالب قبل بداية الحصة'), findsOneWidget);
+    });
+
     testWidgets('a card kind this build does not know shows the plain-text body', (tester) async {
       final m = WireMappers.message(wireCard('lesson_from_the_future', {'x': 1}), viewerActorId: 'p1');
       await tester.pumpWidget(app(MessageBubble(message: m, showAuthor: true)));
@@ -161,22 +201,86 @@ void main() {
       endsAt: DateTime(2026, 10, 18, 17, 30),
     );
 
-    testWidgets('a report cannot be sent without what was covered, and sends the rest as typed', (tester) async {
+    testWidgets('PD-15: the quick report -- taps, a suggested lesson number, nothing sent until something was covered', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       final repo = _RecordingLessons();
-      await tester.pumpWidget(app(LessonTicketForm(ticket: report), lessons: repo));
-      final submit = find.byKey(const ValueKey('lesson-ticket-submit'));
-      expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+      final ticket = LessonTicket(
+        kind: LessonTicketKind.report,
+        lessonId: 'l1',
+        startsAt: DateTime(2026, 10, 18, 17),
+        endsAt: DateTime(2026, 10, 18, 17, 30),
+        suggestedLessonNumber: 8,
+      );
+      await tester.pumpWidget(app(QuickReportForm(ticket: ticket), lessons: repo));
+      final submit = find.byKey(const ValueKey('report-submit'));
+      await tester.ensureVisible(submit);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      expect(repo.reports, isEmpty);
+      expect(find.text('Choose a topic or write a short line.'), findsOneWidget);
 
-      await tester.enterText(find.byKey(const ValueKey('lesson-ticket-main')), '  Al-Mulk 1-15  ');
-      await tester.tap(find.byKey(const ValueKey('lesson-ticket-star-5')));
+      await tester.tap(find.byKey(const ValueKey('report-topic-revision')));
+      await tester.tap(find.byKey(const ValueKey('report-topic-tajweed')));
+      await tester.ensureVisible(find.byKey(const ValueKey('report-level-5')));
+      await tester.tap(find.byKey(const ValueKey('report-level-5')));
+      await tester.ensureVisible(find.byKey(const ValueKey('report-task-revise_previous')));
+      await tester.tap(find.byKey(const ValueKey('report-task-revise_previous')));
       await tester.pump();
+      await tester.ensureVisible(submit);
       await tester.tap(submit);
       await tester.pumpAndSettle();
 
-      expect(repo.reports, hasLength(1));
-      expect(repo.reports.single.covered, 'Al-Mulk 1-15');
-      expect(repo.reports.single.rating, 5);
-      expect(repo.reports.single.homework, isNull);
+      final sent = repo.reports.single;
+      expect(sent.lessonNumber, 8);
+      expect(sent.coveredTopics, ['revision', 'tajweed']);
+      expect(sent.covered, isNull);
+      expect(sent.rating, 5);
+      expect(sent.nextTasks, ['revise_previous']);
+      expect(sent.note, isNull);
+    });
+
+    testWidgets('PD-15: "Lesson report" asks what happened; "did not attend" records the absence', (tester) async {
+      final repo = _RecordingLessons();
+      await tester.pumpWidget(app(Builder(
+        builder: (context) => TextButton(onPressed: () => openLessonTicket(context, report), child: const Text('open')),
+      ), lessons: repo));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      expect(find.text('Student attended'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('report-not-attended')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('did not attend this lesson'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('lesson-ticket-submit')));
+      await tester.pumpAndSettle();
+      expect(repo.absences, ['l1']);
+    });
+
+    test('PD-15: the menu offers one entry per lesson -- its absence is inside "Lesson report"', () {
+      final absence = LessonTicket(kind: LessonTicketKind.absence, lessonId: 'l1', startsAt: DateTime(2026, 10, 18, 17));
+      final lone = LessonTicket(kind: LessonTicketKind.absence, lessonId: 'l2', startsAt: DateTime(2026, 10, 18, 18));
+      expect(menuLessonTickets([report, absence, lone]).map((t) => '${t.kind.name}:${t.lessonId}'), ['report:l1', 'absence:l2']);
+    });
+
+    testWidgets('PD-15: a teacher edits their own report; the form opens with it', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final repo = _RecordingLessons()
+        ..existing = const LessonReportDraft(lessonNumber: 7, coveredTopics: ['reading'], rating: 3, note: 'tired');
+      await tester.pumpWidget(app(const QuickReportForm(editLessonId: 'l1'), lessons: repo));
+      await tester.pumpAndSettle();
+      expect(find.text('Edit report'), findsOneWidget);
+      expect(find.text('tired'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('report-topic-writing')));
+      await tester.pump();
+      await tester.ensureVisible(find.byKey(const ValueKey('report-submit')));
+      await tester.tap(find.byKey(const ValueKey('report-submit')));
+      await tester.pumpAndSettle();
+      expect(repo.edits.single.coveredTopics, ['reading', 'writing']);
+      expect(repo.edits.single.lessonNumber, 7);
+      expect(repo.edits.single.note, 'tired');
     });
 
     testWidgets('a ticket the server no longer allows says so, and keeps what was typed', (tester) async {
@@ -218,6 +322,17 @@ void main() {
       await tester.tap(book);
       await tester.pumpAndSettle();
       expect(repo.booked, [day2]);
+    });
+
+    testWidgets('PD-15: a teacher may record another agreed time; a parent only picks a free one', (tester) async {
+      const ticket = LessonTicket(kind: LessonTicketKind.bookMakeup, lessonId: 'l9');
+      await tester.pumpWidget(app(const MakeupSheet(ticket: ticket), lessons: _RecordingLessons(), role: UserRole.teacher));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('makeup-other-time')), findsOneWidget);
+      expect(find.text('Reschedule a make-up class'), findsOneWidget);
+      await tester.pumpWidget(app(const MakeupSheet(ticket: ticket), lessons: _RecordingLessons(), role: UserRole.parent));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('makeup-other-time')), findsNothing);
     });
 
     testWidgets('no free time says the supervision team will arrange it', (tester) async {
@@ -332,6 +447,25 @@ void main() {
       expect(find.text('Certificates will appear here.'), findsOneWidget);
     });
 
+    testWidgets('PD-15: a group shows each child apart -- age, course, times, package', (tester) async {
+      final repo = _RecordingLessons()
+        ..children = const [
+          GroupChild(id: 'k1', name: 'learner_l', age: 9, courseName: 'Quran memorization', packageLessons: 12, teacherName: 'teacher_c',
+              schedule: [GroupChildSlot(weekday: 1, start: '17:00', durationMinutes: 30)]),
+          GroupChild(id: 'k2', name: 'learner_m', packageLessons: 8),
+        ];
+      await tester.pumpWidget(app(const SingleChildScrollView(child: GroupChildrenSection(conversationId: 'c1')), lessons: repo));
+      await tester.pumpAndSettle();
+      final first = find.byKey(const ValueKey('group-child-k1'));
+      final second = find.byKey(const ValueKey('group-child-k2'));
+      expect(find.descendant(of: first, matching: find.text('9 years')), findsOneWidget);
+      expect(find.descendant(of: first, matching: find.text('Quran memorization')), findsOneWidget);
+      expect(find.descendant(of: first, matching: find.text('Monday · 17:00 · 30 min')), findsOneWidget);
+      expect(find.descendant(of: first, matching: find.text('12 lessons')), findsOneWidget);
+      expect(find.descendant(of: second, matching: find.text('8 lessons')), findsOneWidget);
+      expect(find.descendant(of: second, matching: find.text('No regular times yet')), findsOneWidget);
+    });
+
     testWidgets('a build with no lesson server shows no progress at all', (tester) async {
       await tester.pumpWidget(app(const ChildProgressCard(learnerId: 'k1')));
       await tester.pumpAndSettle();
@@ -380,8 +514,28 @@ class _RecordingLessons implements LessonRepository {
     reports.add(draft);
   }
 
+  final absences = <String>[];
+  final edits = <LessonReportDraft>[];
+  LessonReportDraft? existing;
+  List<GroupChild> children = const [];
+
   @override
-  Future<void> absence(String lessonId, {String? note}) async => _maybeRefuse();
+  Future<void> absence(String lessonId, {String? note}) async {
+    _maybeRefuse();
+    absences.add(lessonId);
+  }
+
+  @override
+  Future<LessonReportDraft?> reportFor(String lessonId) async => existing;
+
+  @override
+  Future<void> editReport(String lessonId, LessonReportDraft draft) async {
+    _maybeRefuse();
+    edits.add(draft);
+  }
+
+  @override
+  Future<List<GroupChild>> groupChildren(String conversationId) async => children;
 
   @override
   Future<void> apologise(String lessonId, LessonTicketKind kind, String reason) async => _maybeRefuse();

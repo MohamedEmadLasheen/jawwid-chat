@@ -22,7 +22,9 @@ enum LessonTicketKind {
   /// Parent: an emergency apology after the start. A supervisor rules on it.
   lateApology,
 
-  /// Parent: book the make-up a teacher-cancelled lesson owes, into a free time.
+  /// "Reschedule a make-up class" (PD-15): after any apology, the time the family and
+  /// the teacher agreed. A parent picks from the teacher's free times; a teacher may
+  /// record another agreed time.
   bookMakeup,
 
   /// Parent: ask for new regular lesson times. About a child, not one lesson.
@@ -55,9 +57,13 @@ class LessonTicket {
     this.endsAt,
     this.learnerId = '',
     this.learnerName = '',
+    this.suggestedLessonNumber,
   });
 
   final LessonTicketKind kind;
+
+  /// PD-15, a report ticket only: the lesson number the form starts from.
+  final int? suggestedLessonNumber;
 
   /// Null for a ticket about the child rather than one lesson.
   final String? lessonId;
@@ -118,22 +124,75 @@ class ScheduledLesson {
   final String? outcome;
 }
 
-/// What a teacher writes about a lesson that took place. Only [covered] is required
-/// (PD-11 default template): a report has to be quick or it is not written at all.
+/// What a teacher writes about a lesson that took place (PD-15): mostly taps -- the
+/// lesson number, what was covered and what is needed next as choices, a performance
+/// level -- and short optional text. What was covered is required: at least one topic
+/// or a short line. The note is private: supervisors read it, the family never does.
 class LessonReportDraft {
   const LessonReportDraft({
-    required this.covered,
-    this.homework,
+    this.lessonNumber,
+    this.coveredTopics = const [],
+    this.covered,
     this.rating,
+    this.nextTasks = const [],
+    this.homework,
     this.note,
   });
 
-  final String covered;
-  final String? homework;
+  final int? lessonNumber;
 
-  /// 1 to 5, or null when the teacher gives none.
+  /// Codes from `report_vocab.dart` (the server's report-vocab.ts).
+  final List<String> coveredTopics;
+  final String? covered;
+
+  /// The performance level: 1 (needs more work) to 5 (excellent), or null.
   final int? rating;
+  final List<String> nextTasks;
+  final String? homework;
   final String? note;
+
+  bool get isComplete => coveredTopics.isNotEmpty || (covered?.trim().isNotEmpty ?? false);
+
+  Map<String, Object?> toJson() => {
+        'lessonNumber': ?lessonNumber,
+        'coveredTopics': coveredTopics,
+        'covered': ?covered,
+        'rating': ?rating,
+        'nextTasks': nextTasks,
+        'homework': ?homework,
+        'note': ?note,
+      };
+}
+
+/// One child of a group, as its details page shows it (PD-15): each child apart, so
+/// siblings' courses, times and packages are never confused.
+class GroupChild {
+  const GroupChild({
+    required this.id,
+    required this.name,
+    this.age,
+    this.courseName,
+    this.packageLessons,
+    this.teacherName,
+    this.schedule = const [],
+  });
+
+  final String id;
+  final String name;
+  final int? age;
+  final String? courseName;
+  final int? packageLessons;
+  final String? teacherName;
+  final List<GroupChildSlot> schedule;
+}
+
+/// A child's regular weekly time, in the teacher's zone: ISO [weekday] 1..7, [start] 'HH:MM'.
+class GroupChildSlot {
+  const GroupChildSlot({required this.weekday, required this.start, required this.durationMinutes});
+
+  final int weekday;
+  final String start;
+  final int durationMinutes;
 }
 
 /// The structured half of a message of type `card`.
@@ -181,6 +240,7 @@ class ChildProgress {
     required this.makeupsOwed,
     this.nextLessonAt,
     this.lastCovered,
+    this.lastCoveredTopics = const [],
     this.lastReportAt,
     this.certificates = const [],
   });
@@ -195,6 +255,9 @@ class ChildProgress {
   final int makeupsOwed;
   final DateTime? nextLessonAt;
   final String? lastCovered;
+
+  /// PD-15: the latest report's topic codes (shown with their labels).
+  final List<String> lastCoveredTopics;
   final DateTime? lastReportAt;
 
   /// PD-12: issued student certificates, newest first.
