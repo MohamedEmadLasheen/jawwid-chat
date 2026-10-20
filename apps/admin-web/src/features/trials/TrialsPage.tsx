@@ -7,10 +7,11 @@ import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { ActionDialog, type FieldSpec, type FieldValue } from '../teachers/ActionDialog'
 import type { Pair } from '../teachers/copy'
 import { describeOpsError, formatMinutes } from '../teachers/opsCopy'
-import { trialsApi, type NotSubscribedReason, type TrialDto } from './api'
+import { trialsApi, type TrialDto } from './api'
 import { TrialsAreaTabs, useTrialsAccess } from './area'
-import { ATTENDANCE, CONVERSION, NOT_SUBSCRIBED_REASON, TR, formatWhen, localDay } from './copy'
+import { ATTENDANCE, NOT_SUBSCRIBED_REASON, OUTCOME, TR, formatWhen, localDay } from './copy'
 import { useProspects, useTrialOp, useTrialSlots, useTrialTeachers, useTrials } from './hooks'
+import { TrialCardDialog } from './TrialCardDialog'
 import '../teachers/teachers.css'
 
 type Pending = { title: string; intro?: string; fields: FieldSpec[]; submit: (v: FieldValue) => Promise<unknown> } | null
@@ -18,9 +19,10 @@ type Filter = 'all' | 'decision' | 'upcoming'
 
 /**
  * Sales' trial page (PD-11 T4), also the Teachers department's view of trials.
- * A trial has two facts kept apart: attendance is the teacher's (reported from
- * the app), the subscription decision is Sales'. "Subscribed" waits for Core's
- * confirmation before it credits the teacher, and reads so.
+ * Each trial has ONE outcome -- did not attend, subscribed, did not subscribe --
+ * recorded with the same card as "+ -> Trial" in the teacher's trial group
+ * (TrialCardDialog), and corrected there by Sales. Chat is the only source of
+ * truth: nothing waits for Core.
  */
 export function TrialsPage() {
   const { locale } = useI18n()
@@ -30,6 +32,7 @@ export function TrialsPage() {
   const [filter, setFilter] = useState<Filter>('all')
   const [booking, setBooking] = useState(false)
   const [dialog, setDialog] = useState<Pending>(null)
+  const [card, setCard] = useState<TrialDto | null>(null)
   const op = useTrialOp((f: () => Promise<unknown>) => f())
   const navigate = useNavigate()
   const [groupError, setGroupError] = useState<unknown>(null)
@@ -47,26 +50,10 @@ export function TrialsPage() {
 
   const all = q.data?.trials ?? []
   const rows = all.filter((t) =>
-    filter === 'decision' ? t.conversion === 'pending' : filter === 'upcoming' ? t.attendance === 'upcoming' : true,
+    filter === 'decision' ? t.outcome === 'awaiting' : filter === 'upcoming' ? t.outcome === 'upcoming' : true,
   )
 
-  const reasonOptions = Object.entries(NOT_SUBSCRIBED_REASON).map(([value, label]) => ({ value, label }))
-  const decide = (t: TrialDto) =>
-    run(
-      `${tx(TR.recordDecision)} — ${t.prospect.displayName}`,
-      [
-        { key: 'result', label: TR.result, type: 'select', required: true, options: [
-          { value: 'subscribed', label: TR.subscribed },
-          { value: 'not_subscribed', label: TR.notSubscribed },
-        ] },
-        { key: 'reason', label: TR.reason, type: 'select', options: reasonOptions },
-        { key: 'note', label: TR.noteOptional, type: 'textarea' },
-      ],
-      (v) =>
-        trialsApi.outcome(t.id, v('result') === 'subscribed'
-          ? { result: 'subscribed', note: v('note') || undefined }
-          : { result: 'not_subscribed', reason: v('reason') as NotSubscribedReason, note: v('note') || undefined }),
-    )
+  const powers = { noShow: access.sales || access.lessonManager, decide: access.sales, correct: access.sales }
 
   return (
     <div className="page">
@@ -101,7 +88,7 @@ export function TrialsPage() {
         <div className="org-tabs" role="tablist" aria-label={tx(TR.trialsTitle)}>
           {(['all', 'decision', 'upcoming'] as const).map((f) => (
             <button key={f} type="button" role="tab" aria-selected={filter === f} className="org-tab" onClick={() => setFilter(f)}>
-              {tx(f === 'all' ? TR.filterAll : f === 'decision' ? TR.filterDecision : TR.filterUpcoming)}
+              {tx(f === 'all' ? TR.filterAll : f === 'decision' ? TR.filterOutcome : TR.filterUpcoming)}
             </button>
           ))}
         </div>
@@ -118,13 +105,13 @@ export function TrialsPage() {
                       <th scope="col">{tx(TR.teacher)}</th>
                       <th scope="col">{tx(TR.when)}</th>
                       <th scope="col">{tx(TR.attendance)}</th>
-                      <th scope="col">{tx(TR.decision)}</th>
+                      <th scope="col">{tx(TR.outcome)}</th>
                       <th scope="col">{tx(TR.actions)}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {rows.map((t) => {
-                      const open = t.attendance === 'upcoming' || t.attendance === 'awaiting'
+                      const open = t.outcome === 'upcoming' || (t.outcome === 'awaiting' && t.attendance === 'awaiting')
                       return (
                         <tr key={t.id}>
                           <th scope="row" dir="auto">
@@ -141,20 +128,18 @@ export function TrialsPage() {
                             {t.report && <div className="ts-muted" dir="auto" title={tx(TR.report)}>{t.report.covered}</div>}
                           </td>
                           <td>
-                            {t.conversion ? tx(CONVERSION[t.conversion] ?? { en: t.conversion, ar: t.conversion }) : '—'}
-                            {t.conversionDetail?.reason && (
-                              <div className="ts-muted">{tx(NOT_SUBSCRIBED_REASON[t.conversionDetail.reason] ?? { en: t.conversionDetail.reason, ar: t.conversionDetail.reason })}</div>
+                            {tx(OUTCOME[t.outcome] ?? { en: t.outcome, ar: t.outcome })}
+                            {t.outcomeDetail?.reason && (
+                              <div className="ts-muted">{tx(NOT_SUBSCRIBED_REASON[t.outcomeDetail.reason] ?? { en: t.outcomeDetail.reason, ar: t.outcomeDetail.reason })}</div>
                             )}
                           </td>
                           <td className="ts-actions-cell">
                             <button type="button" className="btn btn--sm" onClick={() => void openGroup(t.teacher.id)}>{tx(TR.openGroup)}</button>
-                            {access.sales && t.conversion === 'pending' && (
-                              <button type="button" className="btn btn--sm btn--primary" onClick={() => decide(t)}>{tx(TR.recordDecision)}</button>
+                            {t.outcome === 'awaiting' && powers.noShow && (
+                              <button type="button" className="btn btn--sm btn--primary" onClick={() => setCard(t)}>{tx(TR.recordOutcome)}</button>
                             )}
-                            {access.lessonManager && !access.sales && t.attendance === 'awaiting' && (
-                              <button type="button" className="btn btn--sm" onClick={() => run(tx(TR.absence), [{ key: 'note', label: TR.noteOptional, type: 'textarea' }], (v) => trialsApi.absence(t.id, v('note') || undefined))}>
-                                {tx(TR.absence)}
-                              </button>
+                            {['no_show', 'subscribed', 'not_subscribed'].includes(t.outcome) && powers.correct && (
+                              <button type="button" className="btn btn--sm" onClick={() => setCard(t)}>{tx(TR.correctOutcome)}</button>
                             )}
                             {open && (access.sales || access.lessonManager) && (
                               <button type="button" className="btn btn--sm" onClick={() => run(tx(TR.cancel), [{ key: 'reason', label: TR.cancelReason, type: 'textarea', required: true }], (v) => trialsApi.cancel(t.id, v('reason')))}>
@@ -178,6 +163,7 @@ export function TrialsPage() {
           <ActionDialog title={dialog.title} intro={dialog.intro} fields={dialog.fields} onSubmit={dialog.submit} onClose={() => setDialog(null)} />
         )}
         {booking && <BookTrialDialog onClose={() => setBooking(false)} />}
+        {card && <TrialCardDialog trial={card} powers={powers} onClose={() => setCard(null)} />}
       </div>
     </div>
   )

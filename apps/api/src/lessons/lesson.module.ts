@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { CommunicationModule } from '../communication/communication.module';
 import { SupervisionModule } from '../supervision/supervision.module';
+import { NewStudentsModule } from '../new-students/new-students.module';
 import { LessonController } from './lesson.controller';
 import { LessonService } from './lesson.service';
 import { LifecycleController } from './lifecycle.controller';
@@ -24,7 +25,9 @@ import { SchedulingService } from './scheduling.service';
 @Module({
   // SupervisionModule: the teacher's supervision conversation (PD-12), where
   // the bonus and handover cards are posted. It depends on nothing here.
-  imports: [CommunicationModule, SupervisionModule],
+  // NewStudentsModule: the confined subscription form (G-07), written in the
+  // outcome's own transaction.
+  imports: [CommunicationModule, SupervisionModule, NewStudentsModule],
   controllers: [StatsController, SchedulingController, LessonController, LifecycleController, TrialController, TrialTicketsController],
   providers: [LessonService, SchedulingService, LifecycleService, SupervisionService, StatsService, TrialService, TrialGroupService],
   exports: [LessonService, SchedulingService, LifecycleService, SupervisionService, StatsService, TrialService],

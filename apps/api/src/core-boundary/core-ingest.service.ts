@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
-import { isUuid } from '../communication/conversations/conversation.service';
 
 /** This endpoint is Jawwid Core's. The ledger's source column says so. */
 export const CORE_SOURCE = 'jawwid_core';
@@ -13,7 +12,7 @@ export type IngestOutcome =
   /** A disagreement retrying cannot fix. Kept in the ledger with its reason; Core should stop. */
   | { status: 'rejected'; reason: string };
 
-/** A valid delivery Chat cannot apply YET (Sales has not recorded the decision). Core retries. */
+/** A valid delivery Chat cannot apply YET. Core retries. (No handler raises it today.) */
 export class CoreRetryLater extends Error {
   constructor(message: string) {
     super(message);
@@ -24,8 +23,8 @@ export class CoreRetryLater extends Error {
 const MAX_ID = 200;
 
 /**
- * THE CORE BOUNDARY'S PROCESSOR, for subscriptions created from a trial
- * (PD-11 T4; docs/integration/core-subscription-confirmation.md).
+ * THE CORE BOUNDARY'S PROCESSOR. It records every delivery; since the trial
+ * journey (2026-10-20) no event changes a trial (Chat is the source of truth).
  *
  * `chat.core_event` is the existing ledger: unique (source, external_event_id),
  * written by chat.record_core_event. This service records a delivery and applies
@@ -104,41 +103,16 @@ export class CoreIngestService {
   }
 
   /**
-   * `subscription.created`: Core created a subscription. If it came from a
-   * Chat trial (`chat_trial_id`), confirm Sales' "subscribed" with it and link
-   * the student (chat.confirm_trial_subscription). A subscription that did not
-   * come from a trial is not Chat's to record: the subscription mirror stays
-   * frozen (PD-10).
+   * `subscription.created`: Core created a subscription. Since the trial
+   * journey (owner decision 2026-10-20) Jawwid Chat is the ONLY source of truth
+   * for a trial's outcome: Sales' "subscribed" in Chat is the conversion, and
+   * nothing waits for Core. So a delivery is recorded in the ledger, checked,
+   * and changes nothing -- no trial, no statistic, no New Students row.
    */
-  private async subscriptionCreated(tx: Prisma.TransactionClient, data: Record<string, unknown>): Promise<IngestOutcome> {
+  private async subscriptionCreated(_tx: Prisma.TransactionClient, data: Record<string, unknown>): Promise<IngestOutcome> {
     const subscriptionId = opaqueId(data.core_subscription_id);
     if (!subscriptionId) return { status: 'rejected', reason: 'missing_core_subscription_id' };
-    const childId = data.core_child_id === undefined || data.core_child_id === null ? null : opaqueId(data.core_child_id);
-    if (data.core_child_id !== undefined && data.core_child_id !== null && !childId) {
-      return { status: 'rejected', reason: 'invalid_core_child_id' };
-    }
-    const trialId = data.chat_trial_id;
-    if (trialId === undefined || trialId === null) return { status: 'not_applicable', detail: 'not from a Chat trial' };
-    if (!isUuid(trialId)) return { status: 'rejected', reason: 'unknown_trial' };
-
-    const lesson = await tx.lesson.findUnique({
-      where: { id: trialId.toLowerCase() },
-      select: { kind: true, trialOutcome: { select: { result: true, confirmedAt: true, coreSubscriptionRef: true } } },
-    });
-    if (!lesson || lesson.kind !== 'trial') return { status: 'rejected', reason: 'unknown_trial' };
-    const decision = lesson.trialOutcome;
-    // Core can be faster than Sales' form: retry until the decision exists.
-    if (!decision) throw new CoreRetryLater('Sales has not recorded this trial\'s decision yet');
-    if (decision.result !== 'subscribed') return { status: 'rejected', reason: 'trial_not_subscribed' };
-    if (decision.confirmedAt && decision.coreSubscriptionRef !== subscriptionId) {
-      return { status: 'rejected', reason: 'trial_confirmed_by_another_subscription' };
-    }
-
-    const [row] = await tx.$queryRaw<{ result: string }[]>`
-      select chat.confirm_trial_subscription(${trialId.toLowerCase()}::uuid, ${subscriptionId}, ${childId}) as result`;
-    const result = row?.result ?? 'confirmed';
-    if (result === 'duplicate') return { status: 'duplicate' };
-    return { status: 'applied', detail: result };
+    return { status: 'not_applicable', detail: 'trial outcomes are recorded in Chat' };
   }
 }
 

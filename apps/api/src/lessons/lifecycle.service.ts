@@ -17,7 +17,7 @@ import {
   SUSPENSION_REASONS,
   TRANSFER_REASONS,
 } from '../communication/contracts/vocab';
-import { LessonService, PAUSE_DEFAULT_ZONE, cancelReminders, invalid, pauseToday, stateError, textField, type Tx } from './lesson.service';
+import { DEFAULT_ZONE, LessonService, cancelReminders, invalid, stateError, textField, type Tx } from './lesson.service';
 import { SchedulingService } from './scheduling.service';
 import { SupervisionConversationService } from '../supervision/supervision-conversation.service';
 
@@ -25,7 +25,6 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** A temporary pause longer than this is a stop, or needs re-recording. */
 const MAX_PAUSE_DAYS = 120;
 /** The zone a learner's dates are read in when their teacher has none recorded. */
-const DEFAULT_ZONE = PAUSE_DEFAULT_ZONE;
 
 /**
  * PD-11 T3: a learner moving between teachers, and a learner's study pausing,
@@ -362,7 +361,12 @@ export class LifecycleService {
     // "Today" is each pause's own: the learner's teacher's zone.
     const due = await this.prisma.$queryRaw<Array<{ id: string; ended: boolean }>>`
       WITH s AS (
-        SELECT s.id, s.return_on, s.return_notified_at, ${pauseToday('s')} AS today
+        SELECT s.id, s.return_on, s.return_notified_at,
+               (now() AT TIME ZONE coalesce(
+                  (SELECT a.timezone FROM chat.teacher_availability a
+                     JOIN chat.learner l ON l.teacher_id = a.teacher_id
+                    WHERE l.id = s.learner_id LIMIT 1),
+                  ${DEFAULT_ZONE}))::date AS today
           FROM chat.learner_suspension s
          WHERE s.status = 'active' AND s.kind = 'temporary'
       )

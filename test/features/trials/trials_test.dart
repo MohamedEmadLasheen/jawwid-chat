@@ -91,14 +91,25 @@ void main() {
       expect(find.text('plain-text fallback'), findsNothing);
     });
 
-    testWidgets('a subscription reads as awaiting Core, in Arabic too', (tester) async {
+    testWidgets('a subscription is one short sentence, final, in Arabic too', (tester) async {
       final m = WireMappers.message(
         wireCard('trial_decision', {'trialId': 'tr1', 'prospectName': 'prospect_q', 'result': 'subscribed'}),
         viewerActorId: 't1',
       );
       await tester.pumpWidget(app(MessageBubble(message: m, showAuthor: true), locale: const Locale('ar')));
-      expect(find.text('اشترك'), findsOneWidget);
-      expect(find.text('تُحتسب بعد أن يؤكد Core الاشتراك.'), findsOneWidget);
+      expect(find.text('اشترك الطالب.'), findsOneWidget);
+      expect(find.textContaining('Core'), findsNothing);
+    });
+
+    testWidgets('a correction names the new outcome only', (tester) async {
+      final m = WireMappers.message(
+        wireCard('trial_correction', {'trialId': 'tr1', 'prospectName': 'prospect_q', 'result': 'not_subscribed'}),
+        viewerActorId: 't1',
+      );
+      await tester.pumpWidget(app(MessageBubble(message: m, showAuthor: true)));
+      expect(find.text('Outcome corrected'), findsOneWidget);
+      expect(find.text('The student did not subscribe.'), findsOneWidget);
+      expect(find.text('plain-text fallback'), findsNothing);
     });
   });
 
