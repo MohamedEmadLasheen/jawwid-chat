@@ -1,5 +1,6 @@
+import { StaffToolsService } from '../staff-tools/staff-tools.service';
 import { signAvatar } from '../profile/avatar-urls';
-import { Body, Controller, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
+import { Body, Controller, Optional, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
 import { ConversationService } from '../conversations/conversation.service';
 import { MessageService } from '../messages/message.service';
 import { CallService } from '../calls/call.service';
@@ -24,6 +25,9 @@ export class ConversationController {
     private readonly messages: MessageService,
     private readonly calls: CallService,
     private readonly authz: AuthorizationService,
+    // Optional only so the positional constructions the harnesses share do not
+    // shift; without it no labels are attached.
+    @Optional() private readonly tools?: StaffToolsService,
   ) {}
 
   /**
@@ -54,6 +58,8 @@ export class ConversationController {
       // A group's picture: its one child's photo (one query for the whole list).
       this.conversations.soleChildOf(rows.filter((c) => c.type !== 'direct')),
     ]);
+    // The viewer's PRIVATE labels (staff only); families never get the field.
+    const labels = actor.kind === 'staff' && this.tools ? await this.tools.labelsFor(actor.actorId, ids) : null;
 
     // Search narrows the caller's own list -- it never widens it. A row matches
     // on its title, its child's name, or a member's display name.
@@ -77,6 +83,7 @@ export class ConversationController {
           avatarUrl: children.has(c.id)
             ? signAvatar('learner', children.get(c.id)!.id, c.id, actor.actorId, children.get(c.id)!.avatarObjectKey)
             : null,
+          ...(labels ? { labels: labels.get(c.id) ?? [] } : {}),
         }),
       ),
     };
@@ -162,6 +169,8 @@ export class ConversationController {
       conversation.type === 'direct' ? new Map() : this.conversations.soleChildOf([conversation]),
     ]);
     const child = children.get(conversation.id) as { id: string; avatarObjectKey: string | null } | undefined;
+    const labels =
+      actor.kind === 'staff' && this.tools ? await this.tools.labelsFor(actor.actorId, [conversation.id]) : null;
     return toConversationDto(conversation, members, {
       unreadCount: await this.messages.unreadCount(id, actorId),
       viewerRequiresApproval: this.authz.viewerRequiresApproval(actor, conversation),
@@ -171,6 +180,7 @@ export class ConversationController {
         ? signAvatar('learner', conversation.learner.id, conversation.id, actor.actorId, conversation.learner.avatarObjectKey)
         : null,
       avatarUrl: child ? signAvatar('learner', child.id, conversation.id, actor.actorId, child.avatarObjectKey) : null,
+      ...(labels ? { labels: labels.get(conversation.id) ?? [] } : {}),
     });
   }
 

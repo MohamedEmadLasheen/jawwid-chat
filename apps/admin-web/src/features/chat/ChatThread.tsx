@@ -14,6 +14,7 @@ import { bySeq, chatApi, chatKeys, type ChatAttachment, type ChatMessage, type U
 import { chatCopyFor, systemText, type ChatCopy } from './copy'
 import { ChatComposer, type ComposerSend, type ReplyTarget } from './ChatComposer'
 import { ForwardDialog } from './ForwardDialog'
+import { LabelChip, LabelsDialog } from './LabelsDialog'
 import { ConversationAvatar, conversationName, isGroup, isMuted } from './chatView'
 import { useConversationPreferences } from './useChatActions'
 
@@ -147,6 +148,7 @@ export function ChatThread({
   const [selecting, setSelecting] = useState(false)
   const [selected, setSelected] = useState<string[]>([])
   const [forwarding, setForwarding] = useState<string[] | null>(null)
+  const [labeling, setLabeling] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const stopSelecting = () => {
     setSelecting(false)
@@ -313,6 +315,13 @@ export function ChatThread({
                 {copy.kind[conv.type] ?? conv.type}
                 {memberCount > 0 && ` · ${copy.membersCount(memberCount)}`}
               </span>
+              {(conv.labels ?? []).length > 0 && (
+                <span className="cw-row__labels" aria-label={copy.labels}>
+                  {conv.labels!.map((l) => (
+                    <LabelChip key={l.id} label={l} />
+                  ))}
+                </span>
+              )}
             </span>
           </button>
         )}
@@ -338,6 +347,7 @@ export function ChatThread({
               items={[
                 { key: 'info', label: group ? copy.groupInfo : copy.contactInfo, icon: 'info', onSelect: onToggleInfo },
                 { key: 'select', label: copy.select, icon: 'checkSquare', onSelect: () => setSelecting(true) },
+                { key: 'labels', label: copy.labelsMenu, icon: 'tag', onSelect: () => setLabeling(true) },
                 { key: 'mute', label: muted ? copy.unmute : copy.mute, icon: muted ? 'notifications' : 'bellOff', onSelect: () => prefs.mute(conv.id, !muted) },
                 { key: 'pin', label: pinned ? copy.unpin : copy.pin, icon: 'pin', onSelect: () => prefs.pin(conv.id, !pinned) },
                 { key: 'archive', label: archived ? copy.unarchive : copy.archive, icon: 'archive', onSelect: () => prefs.archive(conv.id, !archived) },
@@ -531,6 +541,10 @@ export function ChatThread({
         </div>
       ) : (
         <ChatComposer onSend={submit} reply={reply} onCancelReply={() => setReply(null)} />
+      )}
+
+      {labeling && conv && (
+        <LabelsDialog conversationId={conv.id} current={conv.labels ?? []} onClose={() => setLabeling(false)} />
       )}
 
       {forwarding && (

@@ -566,6 +566,25 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 - `chat.message.forwarded_from_message_id` is kept for audit and NEVER returned to a client (migration `20261020100000`).
 - `chat.audit_log` records `message.forwarded`.
 
+### Labels and quick replies (2026-10-19, owner decisions: labels private per staff member; any staff member manages; quick replies = team library + personal)
+
+Staff only. Every route first checks that the caller is active conversation staff in an organization; a teacher or a family member gets `COMM.STAFF_TOOLS_DENIED` (403) before anything is read. Errors: `COMM.STAFF_TOOL_NOT_FOUND` (404), `COMM.STAFF_TOOL_INVALID` (400), `COMM.STAFF_TOOL_CONFLICT` (409, duplicate name/shortcut).
+
+**Labels are private to their owner.** A colleague, a family or a teacher never sees them: they do not exist outside the owner's own requests.
+- `GET /me/labels` → `{ labels: [{ id, name, color, conversationCount }] }`
+- `POST /me/labels` `{ name, color }` → `LabelDto`. `name` is 1–40 characters, unique per owner (case and surrounding spaces ignored). `color` is one of `'1'`…`'8'`.
+- `PATCH /me/labels/:id` `{ name?, color? }` → `LabelDto`. `DELETE /me/labels/:id` → `{ ok: true }`, which also removes the label from every chat.
+- `PUT /conversations/:cid/labels` `{ labelIds }` → `{ labels: LabelDto[] }`. This replaces the caller's OWN labels on a chat they can read (`canReadResolved`). A colleague's tagging of the same chat is never touched. Someone else's label id is 404, just like a missing one.
+- `ConversationDto.labels?: LabelDto[]` on `GET /conversations` and `GET /conversations/:cid`: the viewer's own labels, **present only for a staff viewer**. The field is absent for teachers and families.
+
+**Quick replies:** `scope: 'team'` is the organization's library, which any staff member may add to, edit or delete. `scope: 'mine'` is personal: only its owner sees or changes it, and anyone else gets 404.
+- `GET /quick-replies` → `{ team: QuickReplyDto[], mine: QuickReplyDto[] }`, where `QuickReplyDto = { id, shortcut, body, scope, updatedAt }`
+- `POST /quick-replies` `{ shortcut, body, scope }`. `shortcut` is 1–24 letters (any script, Arabic included), digits, `_` or `-`; a typed leading `/` is dropped. Shortcuts are unique within a library, case-insensitively. `body` is 1–2000 characters.
+- `PATCH /quick-replies/:id` `{ shortcut?, body? }`. `DELETE /quick-replies/:id` → `{ ok: true }`.
+- A quick reply only fills the message box. It is sent like any other message, through the ordinary send path and all its checks.
+
+**Storage:** migration `20261020110000` adds `chat.staff_label`, `chat.conversation_label` (a same-org trigger) and `chat.quick_reply` (owner NULL = team; partial unique indexes per library). RLS is enabled with no policies, so they are reachable only through the service role.
+
 ### Starred and pinned messages (2026-10-19, owner decisions: anyone who can write may pin; at most 3)
 
 **Star: a private bookmark.** Nobody else ever sees it.

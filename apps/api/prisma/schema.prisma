@@ -1382,3 +1382,50 @@ model TrialOutcome {
   @@map("trial_outcome")
   @@schema("chat")
 }
+
+// =====================================================================
+// Staff tools -- 20261020110000_chat_labels_quick_replies.sql owns the DDL.
+// =====================================================================
+
+/// A staff member's PRIVATE label (owner decision 2026-10-19).
+model StaffLabel {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  ownerStaffId   String   @map("owner_staff_id") @db.Uuid
+  name           String
+  /// One of '1'..'8': a palette tone the clients render with checked contrast.
+  color          String
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  conversations ConversationLabel[]
+
+  @@map("staff_label")
+  @@schema("chat")
+}
+
+model ConversationLabel {
+  labelId        String     @map("label_id") @db.Uuid
+  label          StaffLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  conversationId String     @map("conversation_id") @db.Uuid
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz
+
+  @@id([labelId, conversationId])
+  @@map("conversation_label")
+  @@schema("chat")
+}
+
+/// A saved reply typed as /shortcut. ownerStaffId null = the team library.
+model QuickReply {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  ownerStaffId   String?  @map("owner_staff_id") @db.Uuid
+  shortcut       String
+  body           String
+  createdBy      String   @map("created_by") @db.Uuid
+  updatedBy      String   @map("updated_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("quick_reply")
+  @@schema("chat")
+}

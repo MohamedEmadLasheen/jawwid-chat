@@ -1,3 +1,5 @@
+import { StaffToolsController } from './api/staff-tools.controller';
+import { StaffToolsService } from './staff-tools/staff-tools.service';
 import { StarredController } from './api/starred.controller';
 import { ProfilePhotoController } from './api/profile-photo.controller';
 import { AvatarService } from './profile/avatar.service';
@@ -67,6 +69,7 @@ import { StoryController } from './api/story.controller';
     MediaController,
     ProfilePhotoController,
     StarredController,
+    StaffToolsController,
     StoryController,
   ],
   providers: [
@@ -81,6 +84,7 @@ import { StoryController } from './api/story.controller';
     AttachmentService,
     StoryService,
     AvatarService,
+    StaffToolsService,
     StoryAudienceResolver,
     StorySweeper,
     OutboxService,

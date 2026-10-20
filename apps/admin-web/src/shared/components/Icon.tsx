@@ -278,6 +278,13 @@ const PATHS = {
     </>
   ),
   bellOff: <path d="M6.3 6.3A6 6 0 0 0 6 9c0 6-2.5 7.5-2.5 7.5h13M9 4a6 6 0 0 1 9 5c0 2.5.4 4.2.9 5.4M10 20a2.2 2.2 0 0 0 4 0M3 3l18 18" />,
+  tag: (
+    <>
+      <path d="M3.5 12.1V4.5a1 1 0 0 1 1-1h7.6a1 1 0 0 1 .7.3l7.7 7.7a1 1 0 0 1 0 1.4l-7.6 7.6a1 1 0 0 1-1.4 0l-7.7-7.7a1 1 0 0 1-.3-.7Z" />
+      <path d="M8 8h.01" />
+    </>
+  ),
+  bolt: <path d="M13 3 5 13.5h6L10 21l8-10.5h-6L13 3Z" />,
 } satisfies Record<string, ReactElement>
 
 export type IconName = keyof typeof PATHS

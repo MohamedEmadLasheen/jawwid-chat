@@ -8,8 +8,9 @@ import { FilterChips } from '@/shared/components/FilterChips'
 import { Icon } from '@/shared/components/Icon'
 import { Menu } from '@/shared/components/Menu'
 import { SearchField } from '@/shared/components/SearchField'
-import type { ChatConversation } from './chatApi'
+import type { ChatConversation, ChatLabel } from './chatApi'
 import { chatCopyFor } from './copy'
+import { LabelChip } from './LabelsDialog'
 import { ConversationAvatar, conversationName, isGroup, isMuted, previewText } from './chatView'
 import { useConversationPreferences } from './useChatActions'
 
@@ -38,17 +39,28 @@ export function ConversationList({
   const { staff } = useSession()
   const [search, setSearch] = useState('')
   const [view, setView] = useState<View>('all')
+  const [labelId, setLabelId] = useState<string | null>(null)
+
+  // The viewer's labels in use, from the list itself: a label on no chat has
+  // nothing to filter. Labels are private, so these are only ever one's own.
+  const usedLabels = useMemo(() => {
+    const byId = new Map<string, ChatLabel>()
+    for (const c of conversations) for (const l of c.labels ?? []) byId.set(l.id, l)
+    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name))
+  }, [conversations])
+  const activeLabel = labelId && usedLabels.some((l) => l.id === labelId) ? labelId : null
 
   const named = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase()
     return conversations.filter(
       (c) =>
-        !needle ||
+        (!activeLabel || (c.labels ?? []).some((l) => l.id === activeLabel)) &&
+        (!needle ||
         [conversationName(c, staff?.id, copy), ...(c.members ?? []).map((m) => m.displayName)].some((t) =>
           t.toLocaleLowerCase().includes(needle),
-        ),
+        )),
     )
-  }, [conversations, search, staff?.id, copy])
+  }, [conversations, search, staff?.id, copy, activeLabel])
 
   const archived = named.filter((c) => c.viewerState?.archived)
   const active = named.filter((c) => !c.viewerState?.archived)
@@ -79,6 +91,21 @@ export function ConversationList({
         </div>
         <SearchField value={search} onChange={setSearch} label={copy.search} clearLabel={copy.clearSearch} />
         <FilterChips options={options} value={view} onChange={setView} label={copy.filterLabel} formatCount={number} />
+        {usedLabels.length > 0 && (
+          <div className="cw-label-filter" role="group" aria-label={copy.labelFilter}>
+            {usedLabels.map((l) => (
+              <button
+                key={l.id}
+                type="button"
+                className="cw-label-filter__item"
+                aria-pressed={activeLabel === l.id}
+                onClick={() => setLabelId(activeLabel === l.id ? null : l.id)}
+              >
+                <LabelChip label={l} />
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <div className="workspace__scroll">
         {conversations.length === 0 ? (
@@ -162,6 +189,13 @@ function ConversationRow({
               </span>
             )}
           </span>
+          {(c.labels ?? []).length > 0 && (
+            <span className="cw-row__labels" aria-label={copy.labels}>
+              {c.labels!.map((l) => (
+                <LabelChip key={l.id} label={l} />
+              ))}
+            </span>
+          )}
         </span>
       </button>
       <Menu

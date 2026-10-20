@@ -235,6 +235,8 @@ export interface ConversationDto {
    * other member.
    */
   avatarUrl?: string | null;
+  /** The VIEWER's own private labels (owner decision 2026-10-19: per staff member). Staff only. */
+  labels?: Array<{ id: string; name: string; color: string }>;
 }
 
 export interface ConversationViewerStateDto {
@@ -348,6 +350,8 @@ export function toConversationDto(
     learnerAvatarUrl?: string | null;
     /** The group's picture (its one child's photo), signed by the caller. */
     avatarUrl?: string | null;
+    /** The VIEWER's own private labels (staff only). Omitted for anyone else. */
+    labels?: Array<{ id: string; name: string; color: string }>;
   },
 ): ConversationDto {
   return {
@@ -383,6 +387,7 @@ export function toConversationDto(
     viewerState: extra?.viewerState,
     lastMessage: extra?.lastMessage,
     avatarUrl: c.type === 'direct' ? undefined : (extra?.avatarUrl ?? null),
+    ...(extra?.labels ? { labels: extra.labels } : {}),
   };
 }
 
