@@ -156,6 +156,8 @@ class Conversation {
     bool? isMuted,
     bool? isArchived,
     int? unreadCount,
+    String? themeKey,
+    String? wallpaperUrl,
   }) {
     return Conversation(
       id: id,
@@ -176,8 +178,8 @@ class Conversation {
       isReadOnly: isReadOnly,
       isTeacherSupervision: isTeacherSupervision,
       isTrialGroup: isTrialGroup,
-      themeKey: themeKey,
-      wallpaperUrl: wallpaperUrl,
+      themeKey: themeKey ?? this.themeKey,
+      wallpaperUrl: wallpaperUrl ?? this.wallpaperUrl,
     );
   }
 }

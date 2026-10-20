@@ -58,6 +58,10 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.ATTACHMENT_TYPE_NOT_ALLOWED` | 400 | MIME type not allowed for that kind. |
 | `COMM.APPROVAL_ALREADY_DECIDED` | 409 | Someone else decided first. Refresh the queue. |
 | `COMM.APPROVAL_REASON_REQUIRED` | 400 | A rejection must state a reason. |
+| `COMM.CHAT_WALLPAPER_TYPE` | 400 | The wallpaper is not a JPEG, PNG or WebP image, or its bytes do not match the declared type. |
+| `COMM.CHAT_WALLPAPER_TOO_LARGE` | 400 | The wallpaper is over 4 MB. |
+| `COMM.CHAT_WALLPAPER_DIMENSIONS` | 400 | Each side of a wallpaper must be 200–4096 px. |
+| `COMM.CHAT_WALLPAPER_ANIMATED` | 400 | An animated image cannot be a wallpaper. |
 | `COMM.MESSAGE_NOT_EDITABLE` | 409 | Only a published, never-moderated, undeleted text message can be edited, and not where the author's sends are held for approval. |
 | `COMM.REVOCATION_UNCONFIRMED` | 503 | RT-009. A membership removal, Student Group sync, logout or session/account revocation **is committed**, but not every API server confirmed it can no longer deliver realtime events to the revoked person on an earlier decision — so it is not reported as done. Retry the same request; it is idempotent and succeeds once every server confirms. |
 

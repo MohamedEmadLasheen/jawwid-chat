@@ -114,10 +114,24 @@ export class MediaController {
     @Req() req: RequestLike,
     @Res() res: ResponseLike,
   ): Promise<void> {
-    return serveAuthorizedMedia(this.deps(), 'wallpapers', id, variant, actorId, expires, sig, req, res, () =>
-      this.themes
-        ? this.themes.authorizeWallpaperRead(actorId, id)
-        : Promise.reject(new CommError(CommErrorCode.CHAT_WALLPAPER_NOT_FOUND, 'not available', 404)),
+    return serveAuthorizedMedia(
+      this.deps(),
+      'wallpapers',
+      id,
+      variant,
+      actorId,
+      expires,
+      sig,
+      req,
+      res,
+      () =>
+        this.themes
+          ? this.themes.authorizeWallpaperRead(actorId, id)
+          : Promise.reject(new CommError(CommErrorCode.CHAT_WALLPAPER_NOT_FOUND, 'not available', 404)),
+      // The viewer's OWN photo, at a URL fingerprinted per object: safe for the
+      // reader's private cache for an hour, so opening a chat does not
+      // re-download it every time. Never a shared cache.
+      'private, max-age=3600',
     );
   }
 

@@ -597,21 +597,25 @@ A theme is the **viewer's own** look for one chat. It is stored on their row of 
 Every route below first requires that the caller can read the conversation (`canReadResolved`).
 - `PUT /conversations/:cid/theme` `{ theme }` → `{ theme }`
   - `theme` is one of `lagoon`, `sand`, `rose`, `sky`, `lilac`, `olive`, `slate`, `dusk`, or `null` for the default look.
-  - Anything else fails with `COMM.CHAT_THEME_INVALID` (400).
+  - Anything else fails with `COMM.CHAT_THEME_INVALID` (400). So does a body **without** a `theme` field: only an explicit `null` resets to the default.
 - Setting a wallpaper takes two steps, like a profile photo:
   1. `POST /conversations/:cid/wallpaper/upload` `{ mimeType, byteSize }` → an upload grant (`uploadUrl`, `objectKey`, `headers`). The type is JPEG, PNG or WebP, the size at most 4 MB, and the key sits under `wallpapers/<actorId>/<cid>/`.
+     - The key becomes the viewer's **one pending upload** for the chat. Authorizing again deletes the previous pending object, so uploads that are never committed cannot pile up: a viewer holds at most the wallpaper in use plus one upload in flight per chat.
   2. `POST /conversations/:cid/wallpaper` `{ objectKey }` → `{ wallpaperUrl }`.
-     - The key must be the caller's own for this chat.
+     - The key must be exactly the pending one; committing the wallpaper already in use is a no-op.
      - The stored bytes are judged: the real type must match the declared one, no animation, and each side between 200 and 4096 px.
+     - The row is locked while it changes, so two commits at once are ordered and nothing is left unreferenced.
      - A rejected object is deleted, and the previous wallpaper is deleted on replace.
+  - A refused photo has its own code, so clients can word it: `COMM.CHAT_WALLPAPER_TYPE`, `COMM.CHAT_WALLPAPER_TOO_LARGE`, `COMM.CHAT_WALLPAPER_DIMENSIONS`, `COMM.CHAT_WALLPAPER_ANIMATED` (400 each). Any other refusal (unknown preset, missing field, a key that is not the pending one) stays `COMM.CHAT_THEME_INVALID`.
 - `DELETE /conversations/:cid/wallpaper` → `{ wallpaperUrl: null }`, and the object is deleted.
 - `ConversationViewerStateDto` gains `theme: string | null` and `wallpaperUrl: string | null`, on the list and on a single conversation, for the viewer only.
 
 **`GET /media/wallpapers/:cid`** (RT-037 pattern; `@Public`, signed):
 - The signature binds the viewer, and the object served is **that viewer's own** wallpaper for the chat. It is served only while they can still read the chat; every refusal is the same 404 (`COMM.CHAT_WALLPAPER_NOT_FOUND`).
-- Links are hour-bucketed and carry a `&k=` fingerprint of the object, so a replaced photo gets a new URL.
+- Links are hour-bucketed (they expire 1–2 hours after issue) and carry a `&k=` fingerprint of the object, so a replaced photo gets a new URL.
+- Served with `Cache-Control: private, max-age=3600`: the viewer's own photo at a per-object URL, so opening a chat does not re-download it. Every other media kind stays `private, no-store`. A client that holds a chat longer than a link lives re-reads the conversation for a fresh one when the photo fails to load.
 
-**Storage:** migration `20261020150000`.
+**Storage:** migrations `20261020150000` and `20261020160000` (`wallpaper_pending_key`, with the same shape CHECK and a unique index).
 - `theme` is limited to the eight presets by a CHECK.
 - `wallpaper_object_key` has a CHECK that the key names this row's own `actor_id` and `conversation_id`, plus a unique index. A copied key can never be stored on another viewer's row.
 

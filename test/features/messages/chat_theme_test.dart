@@ -9,6 +9,7 @@ import 'package:jawwid_chat/app/providers.dart';
 import 'package:jawwid_chat/core/data/fake_backend.dart';
 import 'package:jawwid_chat/core/data/fake_repositories.dart';
 import 'package:jawwid_chat/core/data/repositories.dart';
+import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/core/media/media_picker.dart';
 import 'package:jawwid_chat/design/theme.dart';
 import 'package:jawwid_chat/design/tokens.dart';
@@ -16,6 +17,7 @@ import 'package:jawwid_chat/features/messages/data/chat_theme_repository.dart';
 import 'package:jawwid_chat/features/messages/presentation/chat_screen.dart';
 import 'package:jawwid_chat/features/messages/presentation/chat_theme_sheet.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
+import 'package:jawwid_chat/shared/models/conversation.dart';
 import 'package:jawwid_chat/shared/models/message.dart';
 import 'package:jawwid_chat/shared/models/user_role.dart';
 
@@ -48,8 +50,9 @@ void main() {
     if (scratch.existsSync()) scratch.deleteSync(recursive: true);
   });
 
-  Widget app({ChatThemeRepository? repo, bool canCall = true}) {
-    final conversation = backend.listConversations().first;
+  Widget app({ChatThemeRepository? repo, bool canCall = true, ConversationRepository? conversations, String? wallpaperUrl}) {
+    final listed = backend.listConversations().first;
+    final conversation = wallpaperUrl == null ? listed : listed.copyWith(wallpaperUrl: wallpaperUrl);
     return ProviderScope(
       overrides: [
         currentRoleProvider.overrideWithValue(UserRole.parent),
@@ -57,7 +60,7 @@ void main() {
         voiceRecorderProvider.overrideWithValue(recorder),
         voicePlayerProvider.overrideWithValue(player),
         mediaPickerProvider.overrideWithValue(picker),
-        conversationRepositoryProvider.overrideWithValue(FakeConversationRepository(backend)),
+        conversationRepositoryProvider.overrideWithValue(conversations ?? FakeConversationRepository(backend)),
         messageRepositoryProvider.overrideWithValue(FakeMessageRepository(backend)),
         callRepositoryProvider.overrideWithValue(FakeCalls(capabilityAnswer: CallCapability(canCall: canCall))),
         chatThemeRepositoryProvider.overrideWithValue(repo ?? themes),
@@ -130,6 +133,28 @@ void main() {
     expect(background(tester), isNull);
   });
 
+  testWidgets('an expired wallpaper link is fetched afresh, once (review fix, PR #72)', (tester) async {
+    // The route's chat was loaded earlier; its signed link has expired. (In
+    // tests every network image fails, which stands in for the expiry.)
+    final fresh = _FreshLinks(backend, 'https://media.example/fresh');
+    await tester.pumpWidget(app(conversations: fresh, wallpaperUrl: 'https://media.example/expired'));
+    await tester.pumpAndSettle();
+    expect((background(tester)!.image!.image as NetworkImage).url, 'https://media.example/fresh');
+    // The fresh link fails too in a test: one more fetch for it, which returns
+    // the same link, and then nothing -- it cannot loop.
+    await tester.pumpAndSettle();
+    expect(fresh.fetches, lessThanOrEqualTo(2));
+  });
+
+  testWidgets("a refused photo is explained in the viewer's words (review fix, PR #72)", (tester) async {
+    await tester.pumpWidget(app(repo: _RefusingThemes()));
+    await tester.pumpAndSettle();
+    await openSheet(tester);
+    await tester.tap(find.text('Choose a photo'));
+    await tester.pumpAndSettle();
+    expect(find.text('The image must be between 200 and 4096 pixels on each side.'), findsOneWidget);
+  });
+
   testWidgets('no theme server: no Chat theme entry (and no menu at all without a call)', (tester) async {
     await tester.pumpWidget(app(repo: const NoChatThemeRepository(), canCall: false));
     await tester.pumpAndSettle();
@@ -182,4 +207,24 @@ class _OnePhoto implements MediaPicker {
   Future<PendingAttachment?> captureImage() async => null;
   @override
   Future<PendingAttachment?> pickFile() async => null;
+}
+
+/// The server's answer to "read this chat again": the same chat with a fresh wallpaper link.
+class _FreshLinks extends FakeConversationRepository {
+  _FreshLinks(super.backend, this.link);
+  final String link;
+  var fetches = 0;
+
+  @override
+  Future<Conversation> byId(String conversationId) async {
+    fetches++;
+    return (await super.byId(conversationId)).copyWith(wallpaperUrl: link);
+  }
+}
+
+/// A theme server that refuses every photo for its size.
+class _RefusingThemes extends _RecordingThemes {
+  @override
+  Future<String?> setWallpaper(String conversationId, PendingAttachment photo) async =>
+      throw const AppError(AppErrorKind.validation, code: 'COMM.CHAT_WALLPAPER_DIMENSIONS');
 }

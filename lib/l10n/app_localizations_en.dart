@@ -1765,6 +1765,21 @@ class L10nEn extends L10n {
   String get chatThemeAction => 'Chat theme';
 
   @override
+  String get chatWallpaperBadType =>
+      'That is not a valid JPEG, PNG or WebP image.';
+
+  @override
+  String get chatWallpaperTooLarge => 'That image is too large (4 MB at most).';
+
+  @override
+  String get chatWallpaperBadSize =>
+      'The image must be between 200 and 4096 pixels on each side.';
+
+  @override
+  String get chatWallpaperAnimated =>
+      'An animated image cannot be used as a wallpaper.';
+
+  @override
   String get chatThemeHint =>
       'Only you see this. It changes this chat\'s background on all your devices.';
 

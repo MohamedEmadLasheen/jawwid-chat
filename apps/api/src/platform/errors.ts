@@ -182,6 +182,16 @@ export enum CommErrorCode {
   MESSAGE_NOT_FORWARDABLE = 'COMM.MESSAGE_NOT_FORWARDABLE',
   /** A chat theme or wallpaper request failed validation (unknown preset, wrong image). 400. */
   CHAT_THEME_INVALID = 'COMM.CHAT_THEME_INVALID',
+  /**
+   * A wallpaper photo was refused for what it IS, one code per reason so the
+   * clients can say it in the viewer's language (the message stays English for
+   * logs). 400 each: not a JPEG/PNG/WebP (or bytes that do not match the
+   * declared type); over the byte limit; outside the pixel limits; animated.
+   */
+  CHAT_WALLPAPER_TYPE = 'COMM.CHAT_WALLPAPER_TYPE',
+  CHAT_WALLPAPER_TOO_LARGE = 'COMM.CHAT_WALLPAPER_TOO_LARGE',
+  CHAT_WALLPAPER_DIMENSIONS = 'COMM.CHAT_WALLPAPER_DIMENSIONS',
+  CHAT_WALLPAPER_ANIMATED = 'COMM.CHAT_WALLPAPER_ANIMATED',
   /** No wallpaper for this viewer and chat (or not theirs to see). 404. */
   CHAT_WALLPAPER_NOT_FOUND = 'COMM.CHAT_WALLPAPER_NOT_FOUND',
   /** Exporting a chat (transcript + media) is the super admin's alone. 403. */

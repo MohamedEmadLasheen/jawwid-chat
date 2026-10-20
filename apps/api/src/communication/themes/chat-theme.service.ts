@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../platform/prisma.service';
 import { OBJECT_STORAGE } from '../../platform/tokens';
 import { CommError, CommErrorCode } from '../../platform/errors';
@@ -20,6 +21,13 @@ export const MAX_WALLPAPER_DIMENSION = 4096;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const invalid = (message: string) => new CommError(CommErrorCode.CHAT_THEME_INVALID, message, 400);
+const refused = (problem: WallpaperProblem) => new CommError(problem.code, problem.message, 400);
+
+/** Why a wallpaper photo was refused: a code per reason, an English message for logs. */
+export interface WallpaperProblem {
+  code: CommErrorCode;
+  message: string;
+}
 const absent = () => new CommError(CommErrorCode.CHAT_WALLPAPER_NOT_FOUND, 'not available', 404);
 
 export function isChatTheme(value: unknown): value is ChatTheme {
@@ -71,8 +79,13 @@ export class ChatThemeService {
     return actor;
   }
 
-  /** Choose a preset (or null for the default look). The wallpaper, if any, stays. */
+  /**
+   * Choose a preset, or `null` for the default look. The wallpaper, if any,
+   * stays. `theme` must be present: an absent field (a stale or broken client)
+   * is refused rather than read as "reset to default" on every device.
+   */
   async setTheme(actorId: string, conversationId: string, theme: unknown): Promise<{ theme: ChatTheme | null }> {
+    if (theme === undefined) throw invalid('theme is required: one of the presets, or null for the default look');
     if (theme !== null && !isChatTheme(theme)) throw invalid(`theme is one of ${CHAT_THEMES.join(', ')}, or null`);
     const actor = await this.readable(actorId, conversationId);
     await this.prisma.conversationParticipantState.upsert({
@@ -83,58 +96,110 @@ export class ChatThemeService {
     return { theme };
   }
 
-  /** Step 1: a short-lived PUT bound to type and size, under this viewer's own prefix for this chat. */
+  /**
+   * Step 1: a short-lived PUT bound to type and size, under this viewer's own
+   * prefix for this chat. The key is recorded as the viewer's ONE pending
+   * upload for the chat; a previous pending upload (never committed) is
+   * deleted, so uploads that are never committed cannot pile up in storage.
+   */
   async authorizeWallpaperUpload(
     actorId: string,
     conversationId: string,
     input: { mimeType?: unknown; byteSize?: unknown },
   ): Promise<UploadAuthorization> {
     const actor = await this.readable(actorId, conversationId);
-    if (!isAvatarMime(input.mimeType)) throw invalid('a wallpaper must be a JPEG, PNG or WebP image');
-    const byteSize = Number(input.byteSize);
-    if (!Number.isInteger(byteSize) || byteSize <= 0 || byteSize > MAX_WALLPAPER_BYTES) {
-      throw invalid(`a wallpaper must be between 1 byte and ${MAX_WALLPAPER_BYTES} bytes`);
+    if (!isAvatarMime(input.mimeType)) {
+      throw refused({ code: CommErrorCode.CHAT_WALLPAPER_TYPE, message: 'a wallpaper must be a JPEG, PNG or WebP image' });
     }
-    return this.storage.authorizeUpload({ prefix: wallpaperPrefixFor(actor.actorId, conversationId), mimeType: input.mimeType, byteSize });
+    const byteSize = Number(input.byteSize);
+    if (!Number.isInteger(byteSize) || byteSize <= 0) throw invalid('byteSize must be a positive integer');
+    if (byteSize > MAX_WALLPAPER_BYTES) {
+      throw refused({ code: CommErrorCode.CHAT_WALLPAPER_TOO_LARGE, message: `a wallpaper must be at most ${MAX_WALLPAPER_BYTES} bytes` });
+    }
+    const grant = await this.storage.authorizeUpload({ prefix: wallpaperPrefixFor(actor.actorId, conversationId), mimeType: input.mimeType, byteSize });
+    const replaced = await this.prisma.$transaction(async (tx) => {
+      const row = await this.lockRow(tx, conversationId, actor.actorId);
+      await tx.conversationParticipantState.update({
+        where: { conversationId_actorId: { conversationId, actorId: actor.actorId } },
+        data: { wallpaperPendingKey: grant.objectKey },
+      });
+      return row.pending;
+    });
+    if (replaced && replaced !== grant.objectKey) await this.discard(replaced);
+    return grant;
   }
 
   /**
-   * Step 2: make an uploaded object this chat's wallpaper for the caller. The
-   * key must be under the caller's own prefix for this chat; the stored bytes
-   * are judged (real type, still image, sensible size); a rejected object is
-   * deleted, and the previous wallpaper is deleted once the new one is stored.
+   * Step 2: make the viewer's pending upload this chat's wallpaper. The key
+   * must be exactly the pending one (or the wallpaper already in use, which is
+   * a no-op); the stored bytes are judged (real type, still image, sensible
+   * size); a refused object is deleted. The row is locked while it changes, so
+   * two commits at once are ordered and the replaced wallpaper is always the
+   * one deleted -- no object is ever left behind unreferenced.
    */
   async commitWallpaper(actorId: string, conversationId: string, input: { objectKey?: unknown }): Promise<{ wallpaperUrl: string }> {
     const actor = await this.readable(actorId, conversationId);
     const objectKey = typeof input.objectKey === 'string' ? input.objectKey : '';
     if (!isWallpaperKeyOf(actor.actorId, conversationId, objectKey)) throw invalid('that object is not a wallpaper upload for this chat');
 
-    const row = await this.prisma.conversationParticipantState.findUnique({
+    const current = await this.prisma.conversationParticipantState.findUnique({
       where: { conversationId_actorId: { conversationId, actorId: actor.actorId } },
-      select: { wallpaperObjectKey: true },
+      select: { wallpaperObjectKey: true, wallpaperPendingKey: true },
     });
-    const previous = row?.wallpaperObjectKey ?? null;
-    if (objectKey !== previous) {
-      const stored = await this.storage.readHead(objectKey, AVATAR_HEAD_BYTES);
-      if (!stored) throw invalid('no uploaded wallpaper was found for that key; upload it first');
-      const problem = judgeWallpaper(stored.head, stored.byteSize, stored.contentType);
-      if (problem) {
-        await this.discard(objectKey);
-        throw invalid(problem);
-      }
-      try {
-        await this.prisma.conversationParticipantState.upsert({
-          where: { conversationId_actorId: { conversationId, actorId: actor.actorId } },
-          create: { conversationId, actorId: actor.actorId, wallpaperObjectKey: objectKey },
-          update: { wallpaperObjectKey: objectKey },
-        });
-      } catch (error) {
-        await this.discard(objectKey); // the database refused: nothing references it
-        throw error;
-      }
-      if (previous) await this.discard(previous);
+    if (current?.wallpaperObjectKey === objectKey) {
+      return { wallpaperUrl: signWallpaper(conversationId, actor.actorId, objectKey)! };
     }
+    if (current?.wallpaperPendingKey !== objectKey) throw invalid('no pending wallpaper upload matches that key; upload it first');
+
+    // Judged before the row is locked: the read is network I/O.
+    const stored = await this.storage.readHead(objectKey, AVATAR_HEAD_BYTES);
+    const problem = stored
+      ? judgeWallpaper(stored.head, stored.byteSize, stored.contentType)
+      : { code: CommErrorCode.CHAT_THEME_INVALID, message: 'no uploaded wallpaper was found for that key; upload it first' };
+
+    const outcome = await this.prisma.$transaction(async (tx) => {
+      const row = await this.lockRow(tx, conversationId, actor.actorId);
+      // Another request moved on (a newer upload, or this one already committed).
+      if (row.pending !== objectKey) return row.wallpaper === objectKey ? { kind: 'done' as const } : { kind: 'stale' as const };
+      if (problem) {
+        await tx.conversationParticipantState.update({
+          where: { conversationId_actorId: { conversationId, actorId: actor.actorId } },
+          data: { wallpaperPendingKey: null },
+        });
+        return { kind: 'refused' as const };
+      }
+      await tx.conversationParticipantState.update({
+        where: { conversationId_actorId: { conversationId, actorId: actor.actorId } },
+        data: { wallpaperObjectKey: objectKey, wallpaperPendingKey: null },
+      });
+      return { kind: 'stored' as const, previous: row.wallpaper };
+    });
+
+    if (outcome.kind === 'stale') throw invalid('no pending wallpaper upload matches that key; upload it first');
+    if (outcome.kind === 'refused') {
+      await this.discard(objectKey);
+      throw problem!.code === CommErrorCode.CHAT_THEME_INVALID ? invalid(problem!.message) : refused(problem!);
+    }
+    if (outcome.kind === 'stored' && outcome.previous && outcome.previous !== objectKey) await this.discard(outcome.previous);
     return { wallpaperUrl: signWallpaper(conversationId, actor.actorId, objectKey)! };
+  }
+
+  /** The viewer's row for this chat, created if missing, locked for the rest of `tx`. */
+  private async lockRow(
+    tx: Prisma.TransactionClient,
+    conversationId: string,
+    actorId: string,
+  ): Promise<{ wallpaper: string | null; pending: string | null }> {
+    await tx.$executeRaw`
+      INSERT INTO chat.conversation_participant_state (conversation_id, actor_id)
+      VALUES (${conversationId}::uuid, ${actorId}::uuid)
+      ON CONFLICT (conversation_id, actor_id) DO NOTHING`;
+    const rows = await tx.$queryRaw<Array<{ wallpaper: string | null; pending: string | null }>>`
+      SELECT wallpaper_object_key AS wallpaper, wallpaper_pending_key AS pending
+        FROM chat.conversation_participant_state
+       WHERE conversation_id = ${conversationId}::uuid AND actor_id = ${actorId}::uuid
+       FOR UPDATE`;
+    return rows[0] ?? { wallpaper: null, pending: null };
   }
 
   async removeWallpaper(actorId: string, conversationId: string): Promise<{ wallpaperUrl: null }> {
@@ -183,19 +248,23 @@ export class ChatThemeService {
   }
 }
 
-/** Null when the stored bytes are an acceptable wallpaper; otherwise the reason. */
-export function judgeWallpaper(head: Buffer, byteSize: number, declaredMime: string | null): string | null {
-  if (byteSize <= 0 || head.length === 0) return 'the uploaded wallpaper is empty';
-  if (byteSize > MAX_WALLPAPER_BYTES) return `a wallpaper must be at most ${MAX_WALLPAPER_BYTES} bytes`;
+/** Null when the stored bytes are an acceptable wallpaper; otherwise the reason, as a code and a message. */
+export function judgeWallpaper(head: Buffer, byteSize: number, declaredMime: string | null): WallpaperProblem | null {
+  const type = (message: string) => ({ code: CommErrorCode.CHAT_WALLPAPER_TYPE, message });
+  const dimensions = (message: string) => ({ code: CommErrorCode.CHAT_WALLPAPER_DIMENSIONS, message });
+  if (byteSize <= 0 || head.length === 0) return type('the uploaded wallpaper is empty');
+  if (byteSize > MAX_WALLPAPER_BYTES) {
+    return { code: CommErrorCode.CHAT_WALLPAPER_TOO_LARGE, message: `a wallpaper must be at most ${MAX_WALLPAPER_BYTES} bytes` };
+  }
   const image = inspectImage(head);
-  if (!image) return 'the uploaded file is not a JPEG, PNG or WebP image';
-  if (declaredMime !== image.mime) return 'the uploaded bytes do not match the declared image type';
-  if (image.animated) return 'animated images are not accepted as a wallpaper';
+  if (!image) return type('the uploaded file is not a JPEG, PNG or WebP image');
+  if (declaredMime !== image.mime) return type('the uploaded bytes do not match the declared image type');
+  if (image.animated) return { code: CommErrorCode.CHAT_WALLPAPER_ANIMATED, message: 'animated images are not accepted as a wallpaper' };
   if (image.width < MIN_WALLPAPER_DIMENSION || image.height < MIN_WALLPAPER_DIMENSION) {
-    return `a wallpaper must be at least ${MIN_WALLPAPER_DIMENSION} x ${MIN_WALLPAPER_DIMENSION} pixels`;
+    return dimensions(`a wallpaper must be at least ${MIN_WALLPAPER_DIMENSION} x ${MIN_WALLPAPER_DIMENSION} pixels`);
   }
   if (image.width > MAX_WALLPAPER_DIMENSION || image.height > MAX_WALLPAPER_DIMENSION) {
-    return `a wallpaper must be at most ${MAX_WALLPAPER_DIMENSION} x ${MAX_WALLPAPER_DIMENSION} pixels`;
+    return dimensions(`a wallpaper must be at most ${MAX_WALLPAPER_DIMENSION} x ${MAX_WALLPAPER_DIMENSION} pixels`);
   }
   return null;
 }

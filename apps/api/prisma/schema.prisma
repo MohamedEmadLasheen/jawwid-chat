@@ -405,6 +405,8 @@ model ConversationParticipantState {
   theme              String?
   /// The viewer's own wallpaper photo: wallpapers/<actor_id>/<conversation_id>/<uuid>.
   wallpaperObjectKey String?  @map("wallpaper_object_key")
+  /// One authorized-but-uncommitted wallpaper upload (20261020160000).
+  wallpaperPendingKey String? @map("wallpaper_pending_key")
   updatedAt      DateTime     @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
   @@unique([conversationId, actorId])

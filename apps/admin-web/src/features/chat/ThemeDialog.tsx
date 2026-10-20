@@ -19,7 +19,6 @@ export function ThemeDialog({ conversation, onClose }: { conversation: ChatConve
   const copy = chatCopyFor(locale)
   const queryClient = useQueryClient()
   const file = useRef<HTMLInputElement>(null)
-  const [problem, setProblem] = useState<string | null>(null)
   const state = conversation.viewerState
   const current = state?.theme ?? null
   const wallpaper = state?.wallpaperUrl ?? null
@@ -34,9 +33,23 @@ export function ThemeDialog({ conversation, onClose }: { conversation: ChatConve
       old ? { ...old, viewerState: { pinned: false, archived: false, mutedUntil: null, ...old.viewerState, ...next } } : old,
     )
 
+  // One message for the LATEST action only: each new action clears the last
+  // one's error, so an old failure never sits under a later success.
+  const [failure, setFailure] = useState<string | null>(null)
+  const describe = (e: unknown): string =>
+    e instanceof PhotoError
+      ? copy.wallpaperProblem[e.problem] ?? copy.actionFailed
+      : e instanceof ApiError
+        ? copy.wallpaperRefused[e.code] ?? e.localized(locale)
+        : copy.actionFailed
+
   const theme = useMutation({
     mutationFn: (next: ChatTheme | null) => chatApi.setTheme(conversation.id, next),
-    onMutate: (next) => patch({ theme: next }),
+    onMutate: (next) => {
+      setFailure(null)
+      patch({ theme: next })
+    },
+    onError: (e) => setFailure(describe(e)),
     onSettled: refresh,
   })
   const upload = useMutation({
@@ -48,19 +61,22 @@ export function ThemeDialog({ conversation, onClose }: { conversation: ChatConve
         URL.revokeObjectURL?.(prepared.previewUrl)
       }
     },
+    onMutate: () => setFailure(null),
     onSuccess: ({ wallpaperUrl }) => patch({ wallpaperUrl }),
-    // A photo the browser could not prepare, in our words; a server refusal is
-    // shown below in the server's; anything else (a failed PUT) generically.
-    onError: (e) =>
-      setProblem(e instanceof PhotoError ? copy.wallpaperProblem[e.problem] ?? copy.actionFailed : e instanceof ApiError ? null : copy.actionFailed),
+    // A photo the browser could not prepare, or a server refusal, in the
+    // viewer's language; anything else (a failed PUT) generically.
+    onError: (e) => setFailure(describe(e)),
     onSettled: refresh,
   })
   const remove = useMutation({
     mutationFn: () => chatApi.removeWallpaper(conversation.id),
-    onMutate: () => patch({ wallpaperUrl: null }),
+    onMutate: () => {
+      setFailure(null)
+      patch({ wallpaperUrl: null })
+    },
+    onError: (e) => setFailure(describe(e)),
     onSettled: refresh,
   })
-  const serverError = [theme.error, upload.error, remove.error].find((e) => e instanceof ApiError) as ApiError | undefined
 
   return (
     <Dialog
@@ -120,14 +136,13 @@ export function ThemeDialog({ conversation, onClose }: { conversation: ChatConve
           onChange={(e) => {
             const picked = e.target.files?.[0]
             e.target.value = ''
-            setProblem(null)
             if (picked) upload.mutate(picked)
           }}
         />
       </div>
-      {(problem || serverError) && (
+      {failure && (
         <p className="field__error" role="alert">
-          {problem ?? serverError!.localized(locale)}
+          {failure}
         </p>
       )}
     </Dialog>

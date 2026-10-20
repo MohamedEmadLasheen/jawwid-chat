@@ -65,11 +65,15 @@ export async function prepareWallpaper(file: File): Promise<PreparedPhoto> {
   if (file.size > MAX_SOURCE_BYTES) throw new PhotoError('too_big')
   const image = await decode(file)
   const { naturalWidth: w, naturalHeight: h } = image
-  if (w < WALLPAPER_MIN_SIDE || h < WALLPAPER_MIN_SIDE) throw new PhotoError('too_small')
   const scale = Math.min(1, WALLPAPER_MAX_SIDE / Math.max(w, h))
+  const width = Math.round(w * scale)
+  const height = Math.round(h * scale)
+  // Judged AFTER scaling: a wide panorama shrinks below the minimum on its
+  // short side, which the server would refuse after a wasted upload.
+  if (width < WALLPAPER_MIN_SIDE || height < WALLPAPER_MIN_SIDE) throw new PhotoError('too_small')
   const canvas = document.createElement('canvas')
-  canvas.width = Math.round(w * scale)
-  canvas.height = Math.round(h * scale)
+  canvas.width = width
+  canvas.height = height
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new PhotoError('unreadable')
   ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
