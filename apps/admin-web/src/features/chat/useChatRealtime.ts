@@ -12,10 +12,6 @@ const MESSAGE_EVENTS = [
   'message.updated',
   'reaction.added',
   'reaction.removed',
-  'approval.decided',
-  // Staff only (the server routes it to staff actor rooms): a held message
-  // now waits for a decision.
-  'approval.requested',
 ] as const
 
 /** Events that change the list (activity, unread, membership). */
@@ -98,7 +94,6 @@ export function useChatRealtime(conversationIds: readonly string[]): void {
       const id = typeof payload?.conversationId === 'string' ? payload.conversationId : null
       if (id) {
         void queryClient.invalidateQueries({ queryKey: chatKeys.messages(id) })
-        void queryClient.invalidateQueries({ queryKey: chatKeys.approvals(id) })
       }
       refreshList()
     }

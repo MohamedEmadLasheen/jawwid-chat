@@ -106,8 +106,9 @@ DELETE /conversations/:id/messages/:messageId              delete for everyone
 
 ## Approval queue (pre-PD-14 backlog only)
 
-Nothing new is ever held. These routes remain only so the messages held before
-PD-14 can still be released or rejected; the queue only drains.
+Nothing new is ever held. Admin Web has **no approve / reject UI** (removed
+2026-10-20); these routes remain only so an operator can still decide a message
+held before PD-14. Do not build a client for them.
 
 ```http
 GET  /approvals/pending?conversationId=…   → { approvals: [...] }

@@ -106,7 +106,6 @@ function stubApi(state: {
   conversations: ChatConversation[]
   messages: Record<string, ChatMessage[]>
   failSend?: { status: number; code: string; message: string } | null
-  approvals?: Array<{ approvalId: string; conversationId: string; messageId: string }>
 }) {
   const calls: Array<{ method: string; path: string; body: unknown }> = []
   const json = (data: unknown, status = 200) =>
@@ -122,15 +121,6 @@ function stubApi(state: {
       calls.push({ method, path, body })
 
       if (path === '/me') return json(ADMIN)
-      if (path === '/approvals/pending') return json({ approvals: state.approvals ?? [] })
-      const decided = path.match(/^\/approvals\/([^/]+)\/approve$/)
-      if (decided && method === 'POST') {
-        const a = (state.approvals ?? []).find((x) => x.approvalId === decided[1])
-        const m = a && state.messages[a.conversationId]?.find((x) => x.id === a.messageId)
-        if (m) m.moderation = 'published'
-        state.approvals = (state.approvals ?? []).filter((x) => x.approvalId !== decided[1])
-        return json({ ok: true })
-      }
       if (path === '/conversations' && method === 'GET') return json({ conversations: state.conversations })
       const m = path.match(/^\/conversations\/([^/]+)(\/messages(\/read)?)?$/)
       if (m) {
@@ -328,32 +318,17 @@ describe('Admin chat workspace', () => {
     ).toHaveLength(1)
   })
 
-  it('a held teacher message can be approved from the thread; the server copy then shows as published', async () => {
-    const state: Parameters<typeof stubApi>[0] = {
+  it('PD-14: no approve or reject anywhere -- a message held before it shows its badge only, and the queue is never asked for', async () => {
+    const calls = stubApi({
       conversations: [conv('c1')],
       messages: { c1: [msg('t1', 1, { authorKind: 'teacher', body: 'lesson notes', moderation: 'pending' })] },
-      approvals: [{ approvalId: 'ap-1', conversationId: 'c1', messageId: 't1' }],
-    }
-    const calls = stubApi(state)
-    renderChat('/chat/c1')
-
-    expect(await screen.findByText('Awaiting approval')).toBeInTheDocument()
-    fireEvent.click(await screen.findByRole('button', { name: 'Approve & publish' }))
-
-    await waitFor(() => expect(screen.queryByText('Awaiting approval')).toBeNull())
-    expect(calls.some((c) => c.method === 'POST' && c.path === '/approvals/ap-1/approve')).toBe(true)
-    expect(screen.getByText('lesson notes')).toBeInTheDocument()
-  })
-
-  it('a held message NOT in this admin\'s queue offers no decision', async () => {
-    stubApi({
-      conversations: [conv('c1')],
-      messages: { c1: [msg('t1', 1, { authorKind: 'teacher', moderation: 'pending' })] },
-      approvals: [],
     })
     renderChat('/chat/c1')
     expect(await screen.findByText('Awaiting approval')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Approve & publish' })).toBeNull()
+    expect(screen.getByText('lesson notes')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /approve/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /reject/i })).toBeNull()
+    expect(calls.some((c) => c.path.startsWith('/approvals'))).toBe(false)
   })
 
   it('a system message is rendered as words, never as its raw JSON', async () => {
@@ -427,7 +402,6 @@ describe('Super admin: a new 1:1 chat (PD-8)', () => {
           return json(c, 201)
         }
         if (path === '/conversations') return json({ conversations })
-        if (path === '/approvals/pending') return json({ approvals: [] })
         const m = path.match(/^\/conversations\/([^/]+)(\/messages)?$/)
         if (m) return m[2] ? json({ messages: [], nextBefore: null }) : json(conversations.find((c) => c.id === m[1]) ?? {})
         return json({ error: { code: 'NOT_FOUND', message: 'nope' } }, 404)
@@ -493,7 +467,6 @@ describe('Chat workspace: message, chat and group actions', () => {
         const body = init?.body && typeof init.body === 'string' ? JSON.parse(init.body) : init?.body
         calls.push({ method, path, body, url })
         if (path === '/me') return json(ADMIN)
-        if (path === '/approvals/pending') return json({ approvals: [] })
         if (path === '/org/group-candidates') {
           return json({
             families: [
@@ -774,7 +747,6 @@ describe('Star and pin (group B)', () => {
         const method = init?.method ?? 'GET'
         calls.push({ method, path })
         if (path === '/me') return json(ADMIN)
-        if (path === '/approvals/pending') return json({ approvals: [] })
         if (path === '/me/starred') {
           return json({ items: state.starred.map((m) => ({ starredAt: m.createdAt, conversationId: 'c1', message: { ...m, starred: true } })), nextBefore: null })
         }
@@ -854,7 +826,6 @@ describe('Forward and select (group B)', () => {
         const body = init?.body ? JSON.parse(String(init.body)) : undefined
         calls.push({ method, path, body })
         if (path === '/me') return json(ADMIN)
-        if (path === '/approvals/pending') return json({ approvals: [] })
         if (path === '/conversations') {
           return json({ conversations: [conv('c1', { title: 'Kid group' }), conv('c2', { title: 'Second group' }), conv('c3', { title: 'Third group' })] })
         }
@@ -939,7 +910,6 @@ describe('Labels and quick replies (group B, staff only)', () => {
         const body = init?.body ? JSON.parse(String(init.body)) : undefined
         calls.push({ method, path, body })
         if (path === '/me') return json(ADMIN)
-        if (path === '/approvals/pending') return json({ approvals: [] })
         if (path === '/conversations') return json({ conversations: all.map(withLabels) })
         if (path === '/conversations/c1') return json(withLabels(all[0]!))
         if (path === '/conversations/c1/labels' && method === 'PUT') {
@@ -1077,7 +1047,6 @@ describe('Edit and favorites', () => {
         const body = init?.body ? JSON.parse(String(init.body)) : undefined
         calls.push({ method, path, body })
         if (path === '/me') return json(ADMIN)
-        if (path === '/approvals/pending') return json({ approvals: [] })
         if (path === '/conversations') return json({ conversations: state.conversations })
         if (path === '/me/labels') return json({ labels: [{ id: 'lb1', name: 'Payment issue', color: '1', conversationCount: 0 }] })
         const prefs = path.match(/^\/conversations\/([^/]+)\/preferences$/)
@@ -1267,7 +1236,6 @@ describe('Search and export (group B)', () => {
         const query = Object.fromEntries(url.searchParams)
         calls.push({ method: init?.method ?? 'GET', path, query })
         if (path === '/me') return json(me)
-        if (path === '/approvals/pending') return json({ approvals: [] })
         if (path === '/conversations') return json({ conversations: [conv('c1', { title: 'Kid group' }), conv('c2', { title: 'Second group' })] })
         if (path === '/conversations/c1') return json(conv('c1', { title: 'Kid group' }))
         if (path === '/conversations/c2') return json(conv('c2', { title: 'Second group' }))
@@ -1414,7 +1382,6 @@ describe('Schedule a call from inside a chat', () => {
         const body = init?.body ? JSON.parse(String(init.body)) : undefined
         calls.push({ method, path, body })
         if (path === '/me') return json(ADMIN)
-        if (path === '/approvals/pending') return json({ approvals: [] })
         if (path === '/conversations') return json({ conversations: [conv('c1', { title: 'Kid group' })] })
         if (path === '/conversations/c1') return json(conv('c1', { title: 'Kid group' }))
         if (path === '/conversations/c1/call-capability') return json({ canCall: canCall, code: canCall ? null : 'COMM.PARENT_CANNOT_START_GROUP_CALL' })
@@ -1498,7 +1465,6 @@ describe('Chat theme (private, presets + own photo)', () => {
         calls.push({ method, path, body, url })
         if (url.startsWith('https://storage.example/')) return new Response(null, { status: 200 })
         if (path === '/me') return json(ADMIN)
-        if (path === '/approvals/pending') return json({ approvals: [] })
         if (path === '/conversations') return json({ conversations: [c1()] })
         if (path === '/conversations/c1') return json(c1())
         if (path === '/conversations/c1/messages/pins') return json({ pins: [] })
@@ -1623,7 +1589,6 @@ function stubThemeForErrors(refuseCommit?: { code: string; message: string }) {
       const body = init?.body && typeof init.body === 'string' ? JSON.parse(init.body) : undefined
       if (url.startsWith('https://storage.example/')) return new Response(null, { status: 200 })
       if (path === '/me') return json(ADMIN)
-      if (path === '/approvals/pending') return json({ approvals: [] })
       if (path === '/conversations') return json({ conversations: [c1()] })
       if (path === '/conversations/c1') return json(c1())
       if (path === '/conversations/c1/messages/pins') return json({ pins: [] })
