@@ -21,6 +21,7 @@ void main() {
   test('changes to an existing message all decode as messageChanged', () {
     for (final event in [
       'message.deleted',
+      'message.updated',
       'reaction.added',
       'reaction.removed',
       'approval.decided',

@@ -988,6 +988,10 @@
     }
   },
   "forwardedLabel": "Forwarded",
+  "editedMark": "Edited",
+  "@editedMark": {
+    "description": "Shown next to a message's time when its author edited it after sending."
+  },
   "selectAction": "Select messages",
   "selectedCount": "{count, plural, =1{1 selected} other{{count} selected}}",
   "@selectedCount": {

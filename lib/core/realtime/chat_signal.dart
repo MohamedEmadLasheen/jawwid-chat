@@ -13,8 +13,8 @@ enum ChatSignalKind {
   /// `message.created` — a published message exists at [ChatSignal.seq].
   messageCreated,
 
-  /// `message.deleted`, `reaction.added`, `reaction.removed`,
-  /// `approval.decided` — an EXISTING message changed. Its seq is unchanged,
+  /// `message.deleted`, `message.updated` (an edit), `reaction.added`,
+  /// `reaction.removed`, `approval.decided` — an EXISTING message changed. Its seq is unchanged,
   /// so a catch-up "after my newest seq" would not see it.
   messageChanged,
 
@@ -56,6 +56,7 @@ class ChatSignal {
 abstract final class ChatEventNames {
   static const messageCreated = 'message.created';
   static const messageDeleted = 'message.deleted';
+  static const messageUpdated = 'message.updated';
   static const reactionAdded = 'reaction.added';
   static const reactionRemoved = 'reaction.removed';
   static const approvalDecided = 'approval.decided';
@@ -71,6 +72,7 @@ ChatSignal? decodeChatSignal(String event, Object? payload) {
   final kind = switch (event) {
     ChatEventNames.messageCreated => ChatSignalKind.messageCreated,
     ChatEventNames.messageDeleted ||
+    ChatEventNames.messageUpdated ||
     ChatEventNames.reactionAdded ||
     ChatEventNames.reactionRemoved ||
     ChatEventNames.approvalDecided =>

@@ -1710,6 +1710,9 @@ class L10nEn extends L10n {
   String get forwardedLabel => 'Forwarded';
 
   @override
+  String get editedMark => 'Edited';
+
+  @override
   String get selectAction => 'Select messages';
 
   @override
