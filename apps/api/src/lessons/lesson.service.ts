@@ -28,6 +28,22 @@ import {
 } from '../communication/contracts/vocab';
 import { renderCardBody, type CardLanguage } from './lesson-card';
 
+/**
+ * A pause's own "today": the date in its learner's teacher's time zone (Cairo
+ * when the teacher has none). The ONE definition, shared by the worker's return
+ * sweep and the team's needs-action list -- they used to disagree, because this
+ * list compared against the database's UTC `current_date`, so for the hours
+ * either side of local midnight a learner due back soon was noticed by one and
+ * not the other. `pause` is the SQL alias of a chat.learner_suspension row.
+ */
+export const PAUSE_DEFAULT_ZONE = 'Africa/Cairo';
+export const pauseToday = (pause: string): Prisma.Sql =>
+  Prisma.sql`(now() AT TIME ZONE coalesce(
+      (SELECT a.timezone FROM chat.teacher_availability a
+         JOIN chat.learner l ON l.teacher_id = a.teacher_id
+        WHERE l.id = ${Prisma.raw(pause)}.learner_id LIMIT 1),
+      ${PAUSE_DEFAULT_ZONE}))::date`;
+
 export type Tx = Prisma.TransactionClient;
 
 /**
@@ -271,7 +287,7 @@ export class LessonService {
           SELECT s.id::text AS id, s.learner_id::text AS learner_id, l.name, s.return_on
             FROM chat.learner_suspension s JOIN chat.learner l ON l.id = s.learner_id
            WHERE s.organization_id = ${actor.organizationId}::uuid AND s.status = 'active' AND s.kind = 'temporary'
-             AND s.return_on - ${Number(await this.config.get('lesson.return_notice_days'))}::int <= current_date
+             AND s.return_on - ${Number(await this.config.get('lesson.return_notice_days'))}::int <= ${pauseToday('s')}
            ORDER BY s.return_on`
       ).map((r) => ({
         suspensionId: r.id,
