@@ -8,6 +8,14 @@ import { InfraIoAdapter } from './infra/realtime/io-adapter';
 import { readBuildInfo } from './infra/build-info';
 import { loadAuthConfig } from './platform/auth/auth.config';
 import { RealtimeRelay } from './infra/realtime/realtime-relay.service';
+import { JsonLogger } from './infra/observability/json-logger';
+import { createErrorTracker } from './infra/observability/error-tracker';
+import { flushErrorTracker, installProcessErrorHandlers } from './infra/observability/process-errors';
+import { safeErrorMessage } from './infra/observability/redact';
+import {
+  RequestErrorCaptureInterceptor,
+  requestLogMiddleware,
+} from './infra/observability/request-log';
 
 /**
  * API entrypoint.
@@ -18,9 +26,22 @@ import { RealtimeRelay } from './infra/realtime/realtime-relay.service';
  *
  * The worker runs from worker.ts, out of the same image (ADR-004).
  */
+const build = readBuildInfo();
+
+// Structured JSON to stdout, one object per line (docs/infrastructure/
+// monitoring.md §3). Constructed BEFORE the application so the lines Nest
+// writes while wiring modules are in the same format as everything after -- a
+// startup failure is exactly when a log has to be machine-readable.
+const logger = new JsonLogger('api', build);
+
+// Error tracking: Sentry when SENTRY_DSN is set, inert otherwise (every
+// developer machine). Created alongside the logger, and the process handlers
+// installed at once, so a failure during wiring is reported too.
+const errors = createErrorTracker('api', build);
+installProcessErrorHandlers(errors, logger);
+
 async function bootstrap(): Promise<void> {
   const log = new Logger('Bootstrap');
-  const build = readBuildInfo();
 
   // Authentication configuration, resolved before anything can serve a request.
   // Fail-closed: a missing or short JWT secret stops the boot with a named
@@ -37,10 +58,8 @@ async function bootstrap(): Promise<void> {
   // was containing -- see platform/identity-seam.ts.
 
   const app = await NestFactory.create(AppModule, {
-    // Nest's default logger writes to stdout, which is where the platform
-    // collects it. Structured JSON logging is a separate piece of work
-    // (docs/infrastructure/monitoring.md §3) and is deliberately not faked here.
-    logger: ['error', 'warn', 'log'],
+    // JSON lines, filtered by LOG_LEVEL (default info).
+    logger,
 
     // Keep the request body as the bytes that arrived, alongside the parsed
     // object. The LiveKit webhook's JWT carries a `sha256` claim over exactly
@@ -62,8 +81,19 @@ async function bootstrap(): Promise<void> {
   // controllers currently do, leaves any future controller inconsistent.
   app.useGlobalFilters(new CommErrorFilter());
 
-  // Security headers, the CORS allowlist, and graceful shutdown.
-  applyInfrastructure(app);
+  // One log line per request -- method, route TEMPLATE, final status, latency,
+  // request id, actor kind -- and 5xx to the error tracker. Middleware, so it
+  // also sees guard refusals and unmatched routes, which an interceptor never
+  // does; registered first, so every later middleware's response is logged.
+  // It reads no body, no query string and no header but X-Request-Id.
+  app.use(requestLogMiddleware(logger, errors));
+  // Hands the exception a handler threw to the request log, so a 5xx is
+  // reported with its stack. Logs nothing and rethrows untouched.
+  app.useGlobalInterceptors(new RequestErrorCaptureInterceptor());
+
+  // Security headers, the CORS allowlist, and graceful shutdown (which flushes
+  // the error tracker before the process exits).
+  applyInfrastructure(app, { beforeExit: () => flushErrorTracker(errors) });
 
   const ioAdapter = new InfraIoAdapter(app);
   await ioAdapter.connectToRedis(process.env.REDIS_URL);
@@ -79,17 +109,19 @@ async function bootstrap(): Promise<void> {
   // healthcheck.
   await app.listen(port, '0.0.0.0');
 
+  log.log(`error tracking: ${errors.isEnabled() ? errors.name : 'disabled (no SENTRY_DSN)'}`);
   log.log(
     `Jawwid Chat API listening on :${port} ` +
       `[env=${build.environment} commit=${build.commit} version=${build.version}]`,
   );
 }
 
-void bootstrap().catch((error: unknown) => {
-  // Nest logs the detail; this guarantees a non-zero exit so the platform sees
-  // a failed start rather than a container that exited cleanly and quietly.
-  const message = error instanceof Error ? error.message : 'unknown error';
-  // eslint-disable-next-line no-console
-  console.error(`FATAL: API failed to start: ${message}`);
+void bootstrap().catch(async (error: unknown) => {
+  // A non-zero exit so the platform sees a failed start rather than a
+  // container that exited cleanly and quietly. Logged through the JSON logger
+  // (message only, redacted), reported, and flushed before the exit.
+  logger.fatal(`API failed to start: ${safeErrorMessage(error)}`, 'Bootstrap');
+  errors.captureException(error, { route: 'bootstrap', component: 'api' });
+  await flushErrorTracker(errors);
   process.exit(1);
 });
