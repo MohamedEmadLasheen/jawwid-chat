@@ -1829,4 +1829,170 @@ class L10nEn extends L10n {
 
   @override
   String get chatWallpaperRemove => 'Remove photo';
+
+  @override
+  String get teacherProfileTitle => 'Teacher professional profile';
+
+  @override
+  String get teacherProfileSettingsEntry => 'Professional profile';
+
+  @override
+  String get teacherProfileSettingsSubtitle => 'What families read about you';
+
+  @override
+  String get teacherProfileAboutSection => 'About';
+
+  @override
+  String get teacherProfileBioLabel => 'Bio';
+
+  @override
+  String get teacherProfileBioHint => 'A short introduction for families.';
+
+  @override
+  String get teacherProfileProfessionalSection => 'Professional information';
+
+  @override
+  String get teacherProfileSpecializationLabel => 'Specialization';
+
+  @override
+  String get teacherProfileQualificationsLabel => 'Qualifications';
+
+  @override
+  String get teacherProfileExperienceLabel => 'Experience';
+
+  @override
+  String get teacherProfileLanguagesLabel => 'Languages';
+
+  @override
+  String get teacherProfileLanguagesHint =>
+      'Separate each language with a comma.';
+
+  @override
+  String get teacherProfileCertificatesSection => 'Certificates';
+
+  @override
+  String get teacherProfileCertificatesEmpty => 'No certificates yet.';
+
+  @override
+  String get teacherProfileAddCertificate => 'Add certificate';
+
+  @override
+  String get teacherProfileCertificateTitleLabel => 'Certificate title';
+
+  @override
+  String get teacherProfileCertificateIssuerLabel => 'Issuing organization';
+
+  @override
+  String get teacherProfileCertificateYearLabel => 'Year issued';
+
+  @override
+  String get teacherProfileCertificateFile => 'Choose file';
+
+  @override
+  String teacherProfileCertificateFileChosen(String name) {
+    return '$name ready to upload';
+  }
+
+  @override
+  String get teacherProfileCertificateUploading => 'Uploading…';
+
+  @override
+  String get teacherProfileCertificateOpen => 'Open';
+
+  @override
+  String get teacherProfileCertificateRemove => 'Remove';
+
+  @override
+  String get teacherProfileCertificateRemoveTitle => 'Remove this certificate?';
+
+  @override
+  String get teacherProfileCertificateRemoveBody =>
+      'It will be removed from your profile. The file is deleted.';
+
+  @override
+  String get teacherProfileCertificatePending => 'Awaiting review';
+
+  @override
+  String get teacherProfileCertificateApproved => 'Approved';
+
+  @override
+  String get teacherProfileCertificateRejected => 'Not accepted';
+
+  @override
+  String get teacherProfileSave => 'Save';
+
+  @override
+  String get teacherProfileSaving => 'Saving…';
+
+  @override
+  String get teacherProfileSaved => 'Saved';
+
+  @override
+  String get teacherProfileEmptyTitle => 'Build your professional profile';
+
+  @override
+  String get teacherProfileEmptyBody =>
+      'Tell families about your background. Your changes are saved and visible right away.';
+
+  @override
+  String get teacherProfileUnavailable =>
+      'Your professional profile is not available right now.';
+
+  @override
+  String get teacherProfileCertificateTitleRequired =>
+      'Give the certificate a title.';
+
+  @override
+  String get teacherProfileCertificateFileRequired => 'Choose a file first.';
+
+  @override
+  String get teacherProfileCertificateBadType => 'Choose a PDF, JPEG or PNG.';
+
+  @override
+  String get teacherProfileCertificateTooLarge =>
+      'That file is larger than 10 MB.';
+
+  @override
+  String get teacherProfileCertificateEdit => 'Edit';
+
+  @override
+  String get teacherProfileCertificateEditTitle => 'Edit certificate';
+
+  @override
+  String get teacherProfileCertificateEditNote =>
+      'Editing the details sends this certificate for review again. The file is not changed.';
+
+  @override
+  String get teacherProfileNameLabel => 'Your name';
+
+  @override
+  String get teacherProfileNameSave => 'Save name';
+
+  @override
+  String get teacherProfileNameSaved => 'Name saved';
+
+  @override
+  String get teacherProfileNameRequired => 'Enter your name.';
+
+  @override
+  String get teacherProfilePhotoChoose => 'Profile photo';
+
+  @override
+  String get teacherProfilePhotoReplace => 'Replace photo';
+
+  @override
+  String get teacherProfilePhotoRemove => 'Remove photo';
+
+  @override
+  String get teacherProfilePhotoRemoveTitle => 'Remove your photo?';
+
+  @override
+  String get teacherProfilePhotoRemoveBody =>
+      'Your profile will show your initials instead.';
+
+  @override
+  String get teacherProfilePhotoUploading => 'Uploading photo…';
+
+  @override
+  String get teacherProfileCertificateSave => 'Save certificate';
 }

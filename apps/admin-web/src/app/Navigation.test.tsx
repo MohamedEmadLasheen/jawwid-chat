@@ -255,9 +255,11 @@ describe('The desktop rail', () => {
       // role, destinations, direct links, menus
       // Conversations is a direct link to /chat: the legacy Inbox is not offered.
       // PD-13: Calls is its own destination for every operating role.
+      // Teacher Profile V2: the certificate review queue joins Families under
+      // People, so for admin and coverage People becomes a menu of two pages.
       ['manager', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Stories'], ['People & teams', 'More']],
-      ['admin', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Families', 'Stories', 'Tasks'], []],
-      ['coverage', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Families', 'Stories', 'Tasks'], []],
+      ['admin', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Stories', 'Tasks'], ['People & teams']],
+      ['coverage', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Stories', 'Tasks'], ['People & teams']],
       ['finance', ['more'], ['Tasks'], []],
     ]
     for (const [role, keys, links, menus] of cases) {

@@ -369,3 +369,67 @@ export const adminApi = {
       .get<{ messages: AdminMessage[] }>(`/admin/conversations/${encodeURIComponent(conversationId)}/messages`)
       .then((r) => r.messages),
 }
+
+/**
+ * Teacher professional profile review.
+ *
+ * Mirrors the API exactly and adds nothing. In particular the shapes carry NO
+ * object key, NO storage path and NO reviewer id -- the server does not send
+ * them, so there is nothing here to render by accident.
+ *
+ * `revisionId` IS present, because it is the resource handle every mutation
+ * takes, exactly as a story id is. It is used in paths and query keys and is
+ * never displayed.
+ */
+export interface ReviewCertificate {
+  id: string
+  title: string
+  issuingOrganization: string | null
+  issuedOn: string | null
+  state: 'pending' | 'approved' | 'rejected'
+  reviewNote: string | null
+  mimeType: string
+  byteSize: number
+}
+
+/**
+ * One teacher with credentials awaiting a decision.
+ *
+ * V2 removed profile-level review: a teacher saves their own profile and the
+ * save IS the publish, so there is no revision, no state and nothing to
+ * approve. What survives is CERTIFICATE review -- a document claiming a
+ * qualification does not become verified by being uploaded -- which is why this
+ * is keyed by profile and carries no revision id.
+ */
+export interface CertificateReviewItem {
+  /** Used as a React key and a query key. Never rendered. */
+  profileId: string
+  /** From chat.teacher through the server's join. Never stored client-side. */
+  teacherName: string
+  pendingCertificates: number
+  certificates: ReviewCertificate[]
+}
+
+export const teacherProfileReviewApi = {
+  pending: () =>
+    api
+      .get<{ profiles: CertificateReviewItem[] }>('/teacher-profiles/review')
+      .then((r) => r.profiles),
+
+  decideCertificate: (certificateId: string, approved: boolean, note?: string) =>
+    api.post<CertificateReviewItem>(
+      `/teacher-profiles/certificates/${certificateId}/decide`,
+      { approved, note },
+      newIdempotencyKey(),
+    ),
+
+  /**
+   * A fresh short-lived signed URL. Requested at the moment of opening and
+   * never cached: it expires, and a held URL outlives the authorization it was
+   * granted under.
+   */
+  certificateUrl: (certificateId: string) =>
+    api
+      .get<{ url: string }>(`/teacher-profiles/certificates/${certificateId}/download`)
+      .then((r) => r.url),
+}

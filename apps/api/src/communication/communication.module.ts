@@ -56,6 +56,9 @@ import { NotificationController } from './api/notification.controller';
 import { StorageController } from './api/storage.controller';
 import { MediaController } from './api/media.controller';
 import { StoryController } from './api/story.controller';
+import { TeacherProfileController } from './api/teacher-profile.controller';
+import { TeacherMediaController } from './api/teacher-media.controller';
+import { TeacherProfileService } from './teacher-profile/teacher-profile.service';
 
 @Module({
   // AuthModule exports AuthService, which RealtimeGateway uses to verify the
@@ -77,11 +80,14 @@ import { StoryController } from './api/story.controller';
     ExportController,
     ChatThemeController,
     StoryController,
+    TeacherProfileController,
+    TeacherMediaController,
   ],
   providers: [
     redisProvider,
     RedisClientShutdown,
     ConversationService,
+    TeacherProfileService,
     MessageService,
     ApprovalService,
     CallService,

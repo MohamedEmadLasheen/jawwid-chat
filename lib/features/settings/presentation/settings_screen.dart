@@ -103,6 +103,18 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
             ),
+          // Teachers only. A parent has no professional profile in this
+          // product, so the row is ABSENT for them rather than present and
+          // refused -- the same rule the rest of this app follows for an
+          // affordance with nothing behind it.
+          if (user != null && user.isTeacher)
+            ListTile(
+              leading: const Icon(Icons.workspace_premium_outlined),
+              title: Text(l10n.teacherProfileSettingsEntry),
+              subtitle: Text(l10n.teacherProfileSettingsSubtitle),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push(Routes.teacherProfile),
+            ),
           const Divider(),
 
           _SectionHeading(text: l10n.settingsLanguage),

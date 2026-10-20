@@ -42,6 +42,10 @@ const REQUEST_ROLE_ALLOWLIST: Record<string, string> = {
   record_staff_profile_audit: 'audit write whose actor is chat.trusted_staff_actor',
   // 20261015120000 (PD-8) -- read-only, answers for chat.current_staff_id() only:
   current_staff_conversation_access: "PD-8 policy helper: the caller's own scope on one conversation",
+  // 20261021000000 (Teacher Profile V2) -- policy helpers, as story's are:
+  current_teacher_ids: 'session identity, read by RLS policies',
+  current_can_review_teacher_profile: 'policy helper about the caller',
+  teacher_profile_organization_id: "policy helper: a profile row's tenant",
 };
 
 let s: Scenario;

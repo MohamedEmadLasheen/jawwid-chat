@@ -31,6 +31,7 @@ import { DisciplinePage } from '@/features/discipline/DisciplinePage'
 import { InstalmentsPage } from '@/features/instalments/InstalmentsPage'
 import { CallsPage } from '@/features/calls-page/CallsPage'
 import { JoinLinkPage } from '@/features/calls-page/JoinLinkPage'
+import { TeacherProfilesPage } from '@/features/teacher-profiles/TeacherProfilesPage'
 import { ForbiddenPage } from './ForbiddenPage'
 import type { ReactElement } from 'react'
 
@@ -110,6 +111,15 @@ export function AppRoutes() {
         <Route path="/stories" element={<Area area="stories"><StoriesStudio basePath="/stories" /></Area>} />
         <Route path="/stories/new" element={<Area area="stories"><StoryComposer basePath="/stories" /></Area>} />
         <Route path="/stories/:storyId" element={<Area area="stories"><StoryInsights basePath="/stories" /></Area>} />
+        {/*
+          Teacher qualification certificates: the review queue (Teacher Profile
+          V2). Not PD-12's student certificates, which live under Teachers.
+          The server decides every request (canReviewTeacherProfile).
+        */}
+        <Route
+          path="/teacher-profiles"
+          element={<Area area="teacher-profiles"><TeacherProfilesPage /></Area>}
+        />
         {/*
           Staff profiles: every staff role, no Area gate. What a profile shows
           and what may be changed on it is decided by /staff-profiles per

@@ -273,6 +273,28 @@ export enum CommErrorCode {
   SCHEDULED_CALL_DENIED = 'COMM.SCHEDULED_CALL_DENIED',
   /** PD-13: cancelled, not yet open (more than 10 minutes early), or over (2 hours after its start). 409. */
   SCHEDULED_CALL_NOT_JOINABLE = 'COMM.SCHEDULED_CALL_NOT_JOINABLE',
+
+  // Teacher professional profile. The review states are a vocabulary of their
+  // own: a client that cannot tell "you may not review" from "this is not ready
+  // to review" shows the wrong thing to the wrong person.
+  TEACHER_PROFILE_NOT_FOUND = 'COMM.TEACHER_PROFILE_NOT_FOUND',
+  TEACHER_PROFILE_NOT_A_TEACHER = 'COMM.TEACHER_PROFILE_NOT_A_TEACHER',
+  TEACHER_PROFILE_CANNOT_REVIEW = 'COMM.TEACHER_PROFILE_CANNOT_REVIEW',
+  TEACHER_PROFILE_REVIEW_NOTE_REQUIRED = 'COMM.TEACHER_PROFILE_REVIEW_NOTE_REQUIRED',
+  TEACHER_PROFILE_CONFLICT = 'COMM.TEACHER_PROFILE_CONFLICT',
+
+  // The profile-level review codes are gone with the workflow that raised them
+  // (NO_OPEN_REVISION, NOT_SUBMITTED, ALREADY_SUBMITTED, CERTIFICATES_UNDECIDED,
+  // REVISION_CLOSED). A teacher saves their own profile and it is immediately
+  // current, so there is no state a save can be refused for. REVIEW_NOTE_REQUIRED
+  // stays: rejecting a CERTIFICATE still needs a reason.
+
+  /** The teacher's own name, on chat.teacher -- the only teacher identity. */
+  TEACHER_NAME_INVALID = 'COMM.TEACHER_NAME_INVALID',
+  TEACHER_PROFILE_INVALID_CONTENT = 'COMM.TEACHER_PROFILE_INVALID_CONTENT',
+  TEACHER_CERTIFICATE_NOT_FOUND = 'COMM.TEACHER_CERTIFICATE_NOT_FOUND',
+  TEACHER_CERTIFICATE_INVALID_TYPE = 'COMM.TEACHER_CERTIFICATE_INVALID_TYPE',
+  TEACHER_CERTIFICATE_TOO_LARGE = 'COMM.TEACHER_CERTIFICATE_TOO_LARGE',
 }
 
 export class CommError extends Error {

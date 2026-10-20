@@ -274,6 +274,12 @@ jobs:
       - name: G-01 · PD-6 relationship predicate
         run: psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f db/tests/relationship_predicate.sql
 
+      # Teacher Profile V2: a teacher owns their profile, can never decide their
+      # own credential, and a retitled claim returns to pending -- proven as
+      # `authenticated` against the database, with the application out of it.
+      - name: Teacher professional profile row-level security
+        run: psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f db/tests/teacher_profile_rls.sql
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
