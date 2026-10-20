@@ -110,3 +110,33 @@ flutter:
     # the other, because each ink only clears contrast on its own background.
     - assets/brand/jawwid-lockup-dark-derived.png
     - assets/brand/jawwid-mark-derived.png
+
+    # Shipped so the font licence travels with the binary that uses it, and so
+    # `LicenseRegistry` (see `lib/main.dart`) can surface it in the app's own
+    # licence page. OFL 1.1 §2 requires the licence to accompany the fonts.
+    - assets/fonts/OFL.txt
+
+  # IBM Plex Sans Arabic — SIL Open Font License 1.1, © 2017 IBM Corp., Reserved
+  # Font Name "Plex". Byte-identical to the Google Fonts upstream of record
+  # (github.com/google/fonts, ofl/ibmplexsansarabic), whose own upstream is
+  # github.com/googlefonts/plex.
+  #
+  # §3.1 names this family as the base, and `typography.dart` has declared it
+  # since the design system landed — but the files were never bundled, so every
+  # string in the app was silently rendering in the platform fallback instead.
+  #
+  # Exactly the four weights §3.2 uses, and no others: 400 body, 500 caption,
+  # 600 headings/labels/buttons, 700 display/h1. The family ships no italic, so
+  # the `FontStyle.italic` call sites get a synthesised slant — unchanged from
+  # before, where the fallback font did the same thing.
+  fonts:
+    - family: IBM Plex Sans Arabic
+      fonts:
+        - asset: assets/fonts/IBMPlexSansArabic-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/IBMPlexSansArabic-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/IBMPlexSansArabic-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/IBMPlexSansArabic-Bold.ttf
+          weight: 700
