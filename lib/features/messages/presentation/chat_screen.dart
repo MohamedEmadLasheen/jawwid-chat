@@ -683,6 +683,33 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ref.watch(chatAppearanceProvider)[widget.conversationId] ??
       (themeKey: widget.conversation?.themeKey, wallpaperUrl: widget.conversation?.wallpaperUrl);
 
+  /// The link the wallpaper was last refreshed for: one fresh fetch per failed
+  /// link, so a photo that is really gone cannot loop.
+  String? _wallpaperRefreshedFor;
+
+  /// The wallpaper link failed (it is signed and expires 1-2 hours after the
+  /// chat was loaded, and the route keeps the chat for the session): read the
+  /// chat again for a fresh link.
+  Future<void> _refreshWallpaper(String failedUrl) async {
+    if (_wallpaperRefreshedFor == failedUrl) return;
+    _wallpaperRefreshedFor = failedUrl;
+    try {
+      final fresh = await ref.read(conversationRepositoryProvider).byId(widget.conversationId);
+      // Only a NEW link replaces the failed one. No link from the server (removed
+      // elsewhere, or not known yet) changes nothing visible -- a photo that
+      // fails already shows the preset -- and never overwrites this session's choice.
+      final next = fresh.wallpaperUrl;
+      if (!mounted || next == null || next == failedUrl) return;
+      // The preset is the viewer's latest choice this session, else the server's.
+      final themeKey = ref.read(chatAppearanceProvider)[widget.conversationId]?.themeKey ?? fresh.themeKey;
+      ref
+          .read(chatAppearanceProvider.notifier)
+          .set(widget.conversationId, (themeKey: themeKey, wallpaperUrl: next));
+    } catch (_) {
+      // Offline or refused: the preset stays, as before.
+    }
+  }
+
   void _openTheme() {
     final store = ref.read(chatAppearanceProvider.notifier);
     unawaited(showChatThemeSheet(
@@ -1012,7 +1039,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             conversationId: widget.conversationId,
             onJump: (messageId) => _jumpToMessage(messageId, state),
           ),
-          Expanded(child: ChatBackground(appearance: _appearance, child: _body(state, controller, l10n))),
+          Expanded(
+            child: ChatBackground(
+              appearance: _appearance,
+              onPhotoFailed: (url) => unawaited(_refreshWallpaper(url)),
+              child: _body(state, controller, l10n),
+            ),
+          ),
           MessageComposer(
             onAttach: widget.isReadOnly ? null : _attach,
             onSend: (body) {

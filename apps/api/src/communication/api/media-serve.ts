@@ -44,6 +44,12 @@ export async function serveAuthorizedMedia(
   req: RequestLike,
   res: ResponseLike,
   authorize: () => Promise<{ objectKey: string }>,
+  /**
+   * The Cache-Control to send. Default `private, no-store`: the authorization
+   * is per request, per reader. A kind may relax it to a short PRIVATE max-age
+   * when the object is the reader's own and its URL changes whenever it does.
+   */
+  cacheControl = 'private, no-store',
 ): Promise<void> {
   if (!deps.signer.verify({ kind, attachmentId: id, variant: variant as MediaVariant, actorId, expires: Number(expires), sig })) {
     return refuse(res, 403, 'invalid or expired media link');
@@ -71,7 +77,7 @@ export async function serveAuthorizedMedia(
   res.setHeader('Content-Type', object.mimeType);
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Content-Disposition', 'inline');
-  res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('Cache-Control', cacheControl);
   res.setHeader('Accept-Ranges', 'bytes');
   const length = object.range ? object.range.end - object.range.start + 1 : object.size;
   res.setHeader('Content-Length', String(length));

@@ -3235,6 +3235,30 @@ abstract class L10n {
   /// **'Chat theme'**
   String get chatThemeAction;
 
+  /// No description provided for @chatWallpaperBadType.
+  ///
+  /// In en, this message translates to:
+  /// **'That is not a valid JPEG, PNG or WebP image.'**
+  String get chatWallpaperBadType;
+
+  /// No description provided for @chatWallpaperTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'That image is too large (4 MB at most).'**
+  String get chatWallpaperTooLarge;
+
+  /// No description provided for @chatWallpaperBadSize.
+  ///
+  /// In en, this message translates to:
+  /// **'The image must be between 200 and 4096 pixels on each side.'**
+  String get chatWallpaperBadSize;
+
+  /// No description provided for @chatWallpaperAnimated.
+  ///
+  /// In en, this message translates to:
+  /// **'An animated image cannot be used as a wallpaper.'**
+  String get chatWallpaperAnimated;
+
   /// No description provided for @chatThemeHint.
   ///
   /// In en, this message translates to:

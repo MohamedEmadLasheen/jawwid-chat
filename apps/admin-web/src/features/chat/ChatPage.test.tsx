@@ -1555,6 +1555,63 @@ describe('Chat theme (private, presets + own photo)', () => {
   })
 })
 
+describe('Chat theme errors (review fix, PR #72)', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it("words the server's refusal in the viewer's language, and clears it when the next action succeeds", async () => {
+    // A commit the server refuses for the picture's size.
+    stubThemeForErrors({ code: 'COMM.CHAT_WALLPAPER_DIMENSIONS', message: 'a wallpaper must be at least 200 x 200 pixels' })
+    renderChat('/chat/c1')
+    await screen.findByText('body m1')
+    fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Chat theme…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Chat theme' })
+
+    fireEvent.change(within(dialog).getByTestId('wallpaper-file'), { target: { files: [new File(['x'], 'p.jpg', { type: 'image/jpeg' })] } })
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(chatCopy.en.wallpaperRefused['COMM.CHAT_WALLPAPER_DIMENSIONS']!)
+    expect(within(dialog).queryByText(/at least 200 x 200 pixels/)).not.toBeInTheDocument()
+
+    fireEvent.click(within(dialog).getByRole('radio', { name: 'Sand' }))
+    await waitFor(() => expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument())
+  })
+})
+
+/** The theme stub, for the errors suite (same routes as above). */
+function stubThemeForErrors(refuseCommit?: { code: string; message: string }) {
+  const json = (data: unknown, status = 200) =>
+    new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
+  let theme: string | null = null
+  const c1 = () => conv('c1', { title: 'Kid group', viewerState: { pinned: false, archived: false, mutedUntil: null, theme: theme as never } })
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: string, init?: RequestInit) => {
+      const url = String(input)
+      const path = new URL(url, 'http://localhost').pathname.replace(/^\/api\/v1/, '')
+      const method = init?.method ?? 'GET'
+      const body = init?.body && typeof init.body === 'string' ? JSON.parse(init.body) : undefined
+      if (url.startsWith('https://storage.example/')) return new Response(null, { status: 200 })
+      if (path === '/me') return json(ADMIN)
+      if (path === '/approvals/pending') return json({ approvals: [] })
+      if (path === '/conversations') return json({ conversations: [c1()] })
+      if (path === '/conversations/c1') return json(c1())
+      if (path === '/conversations/c1/messages/pins') return json({ pins: [] })
+      if (path === '/conversations/c1/messages') return json({ messages: [msg('m1', 1)], nextBefore: null })
+      if (path.endsWith('/messages/read')) return json({ ok: true })
+      if (path === '/conversations/c1/theme' && method === 'PUT') {
+        theme = (body as { theme: string | null }).theme
+        return json({ theme })
+      }
+      if (path === '/conversations/c1/wallpaper/upload') {
+        return json({ uploadUrl: 'https://storage.example/put/wall', method: 'PUT', objectKey: 'wallpapers/a/c1/k', headers: { 'content-type': 'image/webp' } })
+      }
+      if (path === '/conversations/c1/wallpaper' && method === 'POST') {
+        return refuseCommit ? json({ error: refuseCommit }, 400) : json({ wallpaperUrl: 'http://localhost/media/wallpapers/c1?v=o&k=1' })
+      }
+      return json({ error: { code: 'NOT_FOUND', message: 'nope' } }, 404)
+    }),
+  )
+}
+
 describe('signedPutHeaders', () => {
   it("sends the grant's own content type once, and adds one only when the grant has none", async () => {
     const { signedPutHeaders } = await import('./chatApi')

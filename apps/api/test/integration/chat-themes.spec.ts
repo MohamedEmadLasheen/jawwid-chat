@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import { deflateSync, crc32 } from 'node:zlib';
 import { LocalFsBlobStore } from '@communication/attachments/blob-store';
 import { ConversationController } from '@communication/api/conversation.controller';
+import { MediaController } from '@communication/api/media.controller';
 import { ChatThemeService } from '@communication/themes/chat-theme.service';
 import { CommErrorCode } from '@platform/errors';
 import { buildGraph, seed, truncate, Scenario } from './harness';
@@ -90,6 +91,10 @@ describe('A · a preset is the viewer\'s own', () => {
     expect((await stateOf(s.ownerId)).theme).toBeNull();
 
     await expect(themes.setTheme(s.ownerId, groupId, 'night_mode')).rejects.toEqual(code(CommErrorCode.CHAT_THEME_INVALID));
+    // An absent field is refused; only an explicit null resets (review fix, PR #72).
+    await themes.setTheme(s.ownerId, groupId, 'sand');
+    await expect(themes.setTheme(s.ownerId, groupId, undefined)).rejects.toEqual(code(CommErrorCode.CHAT_THEME_INVALID));
+    expect((await stateOf(s.ownerId)).theme).toBe('sand');
     await themes.setTheme(s.parentId, groupId, null);
     expect((await stateOf(s.parentId)).theme).toBeNull();
   });
@@ -123,16 +128,53 @@ describe('B · a wallpaper photo', () => {
     const parents = await uploadWallpaper(s.parentId, groupId, png(400, 300));
     await expect(themes.commitWallpaper(s.ownerId, groupId, { objectKey: parents })).rejects.toEqual(code(CommErrorCode.CHAT_THEME_INVALID));
 
+    // Each refusal has its own code, so the clients can word it (review fix, PR #72).
     const tiny = await uploadWallpaper(s.ownerId, groupId, png(50, 50));
-    await expect(themes.commitWallpaper(s.ownerId, groupId, { objectKey: tiny })).rejects.toEqual(code(CommErrorCode.CHAT_THEME_INVALID));
+    await expect(themes.commitWallpaper(s.ownerId, groupId, { objectKey: tiny })).rejects.toEqual(code(CommErrorCode.CHAT_WALLPAPER_DIMENSIONS));
     expect(await blobs().get(tiny)).toBeNull();
 
     await expect(themes.authorizeWallpaperUpload(s.ownerId, groupId, { mimeType: 'image/gif', byteSize: 10 })).rejects.toEqual(
-      code(CommErrorCode.CHAT_THEME_INVALID),
+      code(CommErrorCode.CHAT_WALLPAPER_TYPE),
     );
     await expect(themes.authorizeWallpaperUpload(s.ownerId, groupId, { mimeType: 'image/png', byteSize: 5 * 1024 * 1024 })).rejects.toEqual(
-      code(CommErrorCode.CHAT_THEME_INVALID),
+      code(CommErrorCode.CHAT_WALLPAPER_TOO_LARGE),
     );
+  });
+
+  it('uploads never committed do not pile up: one pending upload per viewer and chat (review fix, PR #72)', async () => {
+    const keys: string[] = [];
+    for (let i = 0; i < 3; i += 1) keys.push(await uploadWallpaper(s.parentId, groupId, png(400, 300)));
+    // Each new authorization deleted the previous, never-committed object.
+    expect(await blobs().get(keys[0]!)).toBeNull();
+    expect(await blobs().get(keys[1]!)).toBeNull();
+    expect(await blobs().get(keys[2]!)).not.toBeNull();
+    // Only the pending one can be committed.
+    await expect(themes.commitWallpaper(s.parentId, groupId, { objectKey: keys[1]! })).rejects.toEqual(code(CommErrorCode.CHAT_THEME_INVALID));
+    await themes.commitWallpaper(s.parentId, groupId, { objectKey: keys[2]! });
+    const row = await g.prisma.conversationParticipantState.findUniqueOrThrow({
+      where: { conversationId_actorId: { conversationId: groupId, actorId: s.parentId } },
+    });
+    expect(row.wallpaperObjectKey).toBe(keys[2]);
+    expect(row.wallpaperPendingKey).toBeNull();
+    // Committing the wallpaper already in use is a no-op, not an error.
+    await expect(themes.commitWallpaper(s.parentId, groupId, { objectKey: keys[2]! })).resolves.toEqual({ wallpaperUrl: expect.any(String) });
+  });
+
+  it('two commits at once leave no object behind (review fix, PR #72)', async () => {
+    const first = await uploadWallpaper(s.parentId, groupId, png(400, 300));
+    await themes.commitWallpaper(s.parentId, groupId, { objectKey: first });
+    const next = await uploadWallpaper(s.parentId, groupId, png(300, 400));
+    const results = await Promise.allSettled([
+      themes.commitWallpaper(s.parentId, groupId, { objectKey: next }),
+      themes.commitWallpaper(s.parentId, groupId, { objectKey: next }),
+    ]);
+    expect(results.map((r) => r.status)).toEqual(['fulfilled', 'fulfilled']);
+    expect(await blobs().get(first)).toBeNull(); // the replaced wallpaper, deleted exactly once
+    expect(await blobs().get(next)).not.toBeNull();
+    const row = await g.prisma.conversationParticipantState.findUniqueOrThrow({
+      where: { conversationId_actorId: { conversationId: groupId, actorId: s.parentId } },
+    });
+    expect([row.wallpaperObjectKey, row.wallpaperPendingKey]).toEqual([next, null]);
   });
 });
 
@@ -144,6 +186,23 @@ describe('C · served to its owner only, while they can read the chat', () => {
     // The signature binds the viewer; a colleague's own "wallpaper" for the chat is theirs, not the parent's.
     await expect(themes.authorizeWallpaperRead(s.ownerId, groupId)).rejects.toEqual(code(CommErrorCode.CHAT_WALLPAPER_NOT_FOUND));
     await expect(themes.authorizeWallpaperRead(s.unrelatedTeacherId, groupId)).rejects.toEqual(code(CommErrorCode.CHAT_WALLPAPER_NOT_FOUND));
+  });
+
+  it('is served for the owner\'s private cache, unlike other media (review fix, PR #72)', async () => {
+    const key = await uploadWallpaper(s.parentId, groupId, png(400, 300));
+    const { wallpaperUrl } = await themes.commitWallpaper(s.parentId, groupId, { objectKey: key });
+    const u = new URL(wallpaperUrl, 'http://api.test');
+    const state = { status: 0, headers: {} as Record<string, string> };
+    const res = {
+      status(c: number) { state.status = c; return res; },
+      setHeader(n: string, v: string) { state.headers[n] = v; },
+      send() {},
+      write() { return true; },
+      end() {},
+    };
+    const media = new MediaController(g.prisma, g.messages, g.storage, g.stories, undefined, themes);
+    await media.wallpaper(groupId, u.searchParams.get('v')!, u.searchParams.get('a')!, u.searchParams.get('e')!, u.searchParams.get('s')!, { headers: {} }, res as never);
+    expect(state.headers['Cache-Control']).toBe('private, max-age=3600');
   });
 
   it('stops serving once the owner can no longer read the chat', async () => {

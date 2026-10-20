@@ -100,6 +100,13 @@ export const chatCopy = {
     wallpaperUploading: 'جارٍ الرفع…',
     wallpaperHint: 'JPEG أو PNG أو WebP. تُعتَم الصورة قليلًا ليبقى النص واضحًا.',
     wallpaperProblem: { type: 'اختر صورة JPEG أو PNG أو WebP.', too_big: 'الصورة أكبر من 10 ميغابايت.', too_small: 'الصورة صغيرة جدًا (200 بكسل على الأقل).', unreadable: 'تعذّرت قراءة هذه الصورة.' } as Record<string, string>,
+    /** The server's wallpaper refusals, by code (review fix, PR #72). */
+    wallpaperRefused: {
+      'COMM.CHAT_WALLPAPER_TYPE': 'هذه ليست صورة JPEG أو PNG أو WebP صالحة.',
+      'COMM.CHAT_WALLPAPER_TOO_LARGE': 'الصورة كبيرة جدًا (4 ميغابايت على الأكثر).',
+      'COMM.CHAT_WALLPAPER_DIMENSIONS': 'يجب أن يكون طول الصورة وعرضها بين 200 و4096 بكسل.',
+      'COMM.CHAT_WALLPAPER_ANIMATED': 'لا يمكن استخدام صورة متحركة خلفيةً.',
+    } as Record<string, string>,
     searchPlaceholder: 'ابحث في الرسائل',
     searchClose: 'إغلاق البحث',
     searchOlder: 'النتيجة الأقدم',
@@ -314,6 +321,13 @@ export const chatCopy = {
     wallpaperUploading: 'Uploading…',
     wallpaperHint: 'JPEG, PNG or WebP. The photo is dimmed a little so messages stay easy to read.',
     wallpaperProblem: { type: 'Choose a JPEG, PNG or WebP image.', too_big: 'That image is larger than 10 MB.', too_small: 'That image is too small (at least 200 pixels).', unreadable: 'That image could not be read.' } as Record<string, string>,
+    /** The server's wallpaper refusals, by code (review fix, PR #72). */
+    wallpaperRefused: {
+      'COMM.CHAT_WALLPAPER_TYPE': 'That is not a valid JPEG, PNG or WebP image.',
+      'COMM.CHAT_WALLPAPER_TOO_LARGE': 'That image is too large (4 MB at most).',
+      'COMM.CHAT_WALLPAPER_DIMENSIONS': 'The image must be between 200 and 4096 pixels on each side.',
+      'COMM.CHAT_WALLPAPER_ANIMATED': 'An animated image cannot be used as a wallpaper.',
+    } as Record<string, string>,
     searchPlaceholder: 'Search messages',
     searchClose: 'Close search',
     searchOlder: 'Older match',

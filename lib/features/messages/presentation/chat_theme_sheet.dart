@@ -32,10 +32,14 @@ class ChatAppearanceStore extends Notifier<Map<String, ChatAppearance>> {
 /// Only the background changes; bubbles keep their own, contrast-checked
 /// colours, and a photo is dimmed so messages stay easy to read.
 class ChatBackground extends StatelessWidget {
-  const ChatBackground({super.key, required this.appearance, required this.child});
+  const ChatBackground({super.key, required this.appearance, required this.child, this.onPhotoFailed});
 
   final ChatAppearance appearance;
   final Widget child;
+
+  /// The photo did not load. Its link is signed and expires (1-2 hours), and a
+  /// chat's data can be older than that, so the screen fetches a fresh link.
+  final void Function(String failedUrl)? onPhotoFailed;
 
   @override
   Widget build(BuildContext context) {
@@ -58,8 +62,9 @@ class ChatBackground extends StatelessWidget {
                   brightness == Brightness.dark ? ChatThemePalette.photoScrimDark : ChatThemePalette.photoScrimLight,
                   BlendMode.srcOver,
                 ),
-                // A link that failed (expired, offline) leaves the preset showing.
-                onError: (_, _) {},
+                // A link that failed (expired, offline) leaves the preset showing,
+                // and asks for a fresh one.
+                onError: (_, _) => onPhotoFailed?.call(photo),
               ),
       ),
       child: child,
@@ -128,8 +133,17 @@ class _ChatThemeSheetState extends ConsumerState<ChatThemeSheet> {
       await action();
     } on AppError catch (error) {
       if (mounted) {
-        final message = ErrorPresenter.present(error, L10n.of(context));
-        setState(() => _error = message.body ?? message.title);
+        final l10n = L10n.of(context);
+        // The server's wallpaper refusals, worded for the viewer (review fix, PR #72).
+        final specific = switch (error.code) {
+          'COMM.CHAT_WALLPAPER_TYPE' => l10n.chatWallpaperBadType,
+          'COMM.CHAT_WALLPAPER_TOO_LARGE' => l10n.chatWallpaperTooLarge,
+          'COMM.CHAT_WALLPAPER_DIMENSIONS' => l10n.chatWallpaperBadSize,
+          'COMM.CHAT_WALLPAPER_ANIMATED' => l10n.chatWallpaperAnimated,
+          _ => null,
+        };
+        final message = ErrorPresenter.present(error, l10n);
+        setState(() => _error = specific ?? message.body ?? message.title);
       }
     } finally {
       if (mounted) setState(() => _busy = false);

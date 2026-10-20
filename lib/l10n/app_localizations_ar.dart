@@ -1761,6 +1761,20 @@ class L10nAr extends L10n {
   String get chatThemeAction => 'سمة المحادثة';
 
   @override
+  String get chatWallpaperBadType => 'هذه ليست صورة JPEG أو PNG أو WebP صالحة.';
+
+  @override
+  String get chatWallpaperTooLarge =>
+      'الصورة كبيرة جدًا (4 ميغابايت على الأكثر).';
+
+  @override
+  String get chatWallpaperBadSize =>
+      'يجب أن يكون طول الصورة وعرضها بين 200 و4096 بكسل.';
+
+  @override
+  String get chatWallpaperAnimated => 'لا يمكن استخدام صورة متحركة خلفيةً.';
+
+  @override
   String get chatThemeHint =>
       'لك وحدك: تغيّر خلفية هذه المحادثة على كل أجهزتك، ولا يراها غيرك.';
 

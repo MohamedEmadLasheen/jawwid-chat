@@ -507,6 +507,16 @@ mark.cw-hit { background: var(--warn-soft); color: inherit; border-radius: 2px; 
   :root:not([data-theme='light']) .cw-bg--dusk { --cw-bg: linear-gradient(160deg, #2b1d16, #33231b); }
   :root:not([data-theme='light']) .thread-body.cw-bg--photo { --cw-wall-scrim: rgb(0 0 0 / 0.55); }
 }
+/* The same, when Dark is chosen in the app rather than by the system (review fix, PR #72). */
+:root[data-theme='dark'] .cw-bg--lagoon { --cw-bg: linear-gradient(160deg, #0f2624, #132e2b); }
+:root[data-theme='dark'] .cw-bg--sand { --cw-bg: linear-gradient(160deg, #2a241a, #30291d); }
+:root[data-theme='dark'] .cw-bg--rose { --cw-bg: linear-gradient(160deg, #2c1a20, #331f26); }
+:root[data-theme='dark'] .cw-bg--sky { --cw-bg: linear-gradient(160deg, #15202c, #192634); }
+:root[data-theme='dark'] .cw-bg--lilac { --cw-bg: linear-gradient(160deg, #221c2e, #282135); }
+:root[data-theme='dark'] .cw-bg--olive { --cw-bg: linear-gradient(160deg, #1f241a, #252b1f); }
+:root[data-theme='dark'] .cw-bg--slate { --cw-bg: linear-gradient(160deg, #1a1d21, #1f2328); }
+:root[data-theme='dark'] .cw-bg--dusk { --cw-bg: linear-gradient(160deg, #2b1d16, #33231b); }
+:root[data-theme='dark'] .thread-body.cw-bg--photo { --cw-wall-scrim: rgb(0 0 0 / 0.55); }
 
 .cw-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: var(--space-2); margin-block: var(--space-3); }
 .cw-theme {

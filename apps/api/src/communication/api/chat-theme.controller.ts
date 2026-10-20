@@ -16,7 +16,8 @@ export class ChatThemeController {
 
   @Put('theme')
   setTheme(@ActorId() actorId: string, @Param('conversationId') conversationId: string, @Body() body: { theme?: unknown }) {
-    return this.themes.setTheme(actorId, conversationId, body?.theme ?? null);
+    // An absent `theme` is refused (only an explicit null means the default look).
+    return this.themes.setTheme(actorId, conversationId, body && 'theme' in body ? body.theme : undefined);
   }
 
   @Post('wallpaper/upload')
