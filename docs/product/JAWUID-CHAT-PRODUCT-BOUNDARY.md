@@ -120,7 +120,7 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-14 — CLOSED
+## 4. Product decisions PD-1 to PD-15 — CLOSED
 
 PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
 exit gate, before `main` was baselined. **PD-6 was closed by the product owner
@@ -133,6 +133,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-12 was closed by the product owner on 2026-10-18** and depends on PD-11.
 **PD-13 was closed by the product owner on 2026-10-19** (the Calls page).
 **PD-14 was closed by the product owner on 2026-10-20** (no pre-approval of messages).
+**PD-15 was closed by the product owner on 2026-10-21** (the student's journey after enrolment).
 
 | ID | Subject | Status |
 |---|---|---|
@@ -150,6 +151,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-12** | **Admin operations: instalments, student certificates, teacher discipline and leave** (2026-10-18) | **CLOSED** — Core invoices read-only with a billing supervisor; certificates delivered as one student-group card; one monthly ladder, suggested then confirmed; leave balance computed, never stored |
 | **PD-13** | **The Calls page: scheduled calls and call links** (2026-10-19) | **CLOSED** — one Calls page for every role; a scheduled call belongs to ONE conversation and announces itself with a card; a call link is members-only; nothing grants a call that `POST /calls` would refuse |
 | **PD-14** | **Messages publish immediately; admins moderate after sending** (2026-10-20) | **CLOSED** — no message is held for approval, for any role or conversation type; whoever is in charge of a conversation may edit or delete a teacher's or parent's message at any time afterwards; a manager or the super admin also a staff member's |
+| **PD-15** | **The student's journey after enrolment** (2026-10-21) | **CLOSED** — supervisors record student and teacher excuses from the group; one quick "Lesson report" entry; make-ups after any apology; outcomes corrected and reports edited / deleted / resent only through recorded changes; each child's age, course and package; monthly statistics in the academy's terms |
 
 ---
 
@@ -1341,7 +1343,126 @@ PD-8 scope basis (`chat.staff_conversation_access`) for that conversation, now.
 - PD-9 default 1 ("a report card bypasses Student Group moderation") is moot.
   Nothing is held.
 
-### Decisions still open after PD-1 to PD-14
+### PD-15 · The student's journey after enrolment
+
+**Closed 2026-10-21** by the product owner.
+
+The owner's requirements of 2026-10-21 run from the New Students page to the
+teacher's month: the Operations manager assigns the responsible supervisor;
+the supervisor opens the family's permanent group with the parent and the
+teacher; the teacher reports every lesson from the group's "+"; supervisors
+record student and teacher excuses there; make-ups follow any apology; and
+Teacher Statistics account for every scheduled lesson. Owner answers given the
+same day: a child's age, course and package are **entered by the supervisor**
+(Core sends none); the parent **sees the report card** (PD-9 unchanged) but
+not the teacher's private note; outcome corrections belong to the **Teachers
+department, the Operations department and the super admin**, with a mandatory
+reason; a teacher edits their own report, supervisors (same three) edit any,
+and **only supervisors delete** one, choosing at deletion to **resend a
+corrected version or leave it unsent** — and a report left unsent removes its
+lesson from **every** statistic; make-ups are scheduled **after either
+apology**, once the family and the teacher agreed, and **Chat is the source of
+truth** for all of it.
+
+**Final decision.**
+
+```
+the lesson is still the unit (PD-9): one row, exactly one outcome, statistics
+are queries over the rows -- nothing here is a second lesson record
+
+student excuse   = outcome student_apology + apology_timing
+                     before_start  the family (with its reason) or the child's
+                                   supervisor (no reason) before the start
+                     after_start   the supervisor after the start: excused AT
+                                   ONCE (a late_apology ruling recorded decided);
+                                   the reason is internal, never on the card
+                                   (a family's own late apology still waits for
+                                   a ruling, PD-11)
+teacher excuse   = teacher_apology, by the teacher or a supervisor; the reason
+                   is internal; the card says only that a make-up follows
+make-up          = owed after a teacher's OR a student's apology; recorded once
+                   the time is agreed (parent: from free times; teacher and
+                   staff: any agreed time not on a day off); linked by
+                   makeup_for; completed only when itself held
+correction       = from, to, reason, who, when (chat.lesson_correction); the
+                   database accepts an outcome change only with one written in
+                   the same transaction
+report change    = a revision (chat.lesson_report_revision) holding the previous
+                   version; the card is rewritten in place (edit) or deleted and
+                   reposted (resend); "leave unsent" voids the lesson
+voided           = final; counted nowhere -- not scheduled, not pending
+```
+
+* **Who may do what.** Teacher: their own lesson's report and absence, their
+  own apology, a make-up time they agreed, editing their own report. The
+  child's supervisor (Operations — the PD-8 supervisor, their active backup,
+  the Operations manager): student excuses before / after the start, teacher
+  excuses, make-ups, corrections, editing and deleting reports, the child's
+  enrolment details. The Teachers department and the super admin: the same,
+  plus everything PD-11 gave them. A parent: their own apology, late apology
+  and make-up booking, and nothing on the record. Staff work in Admin Web; the
+  app is for parents and teachers.
+* **Counting (monthly, `stats.zone`).** Total scheduled = every lesson that
+  still stands (moved, paused and voided lessons excluded). Conducted =
+  student attended = held, regular plus make-up (completed.total). Student did
+  not attend = absent without an excuse. Student excuses split before / after
+  the start. Teacher excuses are never conducted. Pending = no final outcome
+  yet (to come, or awaiting a report). Every lesson is in exactly one line; a
+  corrected one moves line, it is never counted twice.
+* **The quick report.** Lesson number (suggested), what was covered (topic
+  choices and/or a short line — one is required), the performance as one of
+  five levels, what is needed next (choices and a short line), a private note
+  for supervisors. The codes are `apps/api/src/lessons/report-vocab.ts`; the
+  academic team may change the lists.
+* **The group.** A family group is named "Teacher — Child · Child" by default.
+  Its details page shows each child apart: age (from the date of birth), course
+  (from the academy's course list, kept by the Operations manager), weekly
+  lesson times (the PD-11 regular times) and package (total lessons).
+* **The discipline ladder (PD-12).** A teacher excuse is a violation from the
+  moment it is written, whoever records it. A correction away from it
+  withdraws an undecided violation; a decision already taken stays on record.
+
+**Implementation phase.** Built 2026-10-21 in one change: migration
+`20261021020000_chat_pd015_student_journey.sql`, `LessonRecordService`,
+`EnrollmentService`, `JourneyController`, Admin Web `features/journey`, the app's
+`lesson_report_sheet.dart` and `group_children_section.dart`.
+
+**Consequences.**
+- PD-11's table gains the supervisor: `apology`, `teacher_apology`,
+  `book_makeup`, plus `late_excuse`, `correct_outcome`, `edit_report`,
+  `delete_report`, `manage_enrollment`. The PD-8 supervisor's lesson standing
+  is no longer read-only.
+- A written outcome now has two lawful changes: an excusing ruling (PD-11) and
+  a recorded correction. A report is no longer write-once; it changes only
+  through a revision.
+- `lesson.closed` is emitted again, with `correction: true`, after every
+  correction and every void, so Core's billing follows.
+- PD-11 T2's "a make-up after a student apology waits for the notice rule" is
+  superseded: a make-up is owed after any apology. The follow-up queue still
+  escalates only the teacher's misses.
+- A report card cannot be removed with "delete for everyone"; only the lesson
+  record deletes it, so the chat and the statistics never disagree.
+
+**Deprecated behaviour.** The teacher's reason no longer reaches the family's
+card. The free-text-only report form is replaced by the quick report.
+
+**Defaults adopted at closing** (the owner may override without reopening
+PD-15):
+1. A supervisor's excuse before the start needs no reason; after the start it
+   needs one (internal).
+2. A teacher excuse may be recorded before the start only; after the start a
+   missed lesson stays the Teachers department's `teacher_no_show` (PD-11).
+3. An excuse after the start is accepted for 48 hours (the late-apology
+   window); later, the lesson is corrected instead.
+4. A voided lesson is final; it cannot be corrected back.
+5. The report's topic and next-lesson lists are a starting set for a Quran and
+   Arabic academy.
+
+**Closed.** 2026-10-21.
+
+---
+
+### Decisions still open after PD-1 to PD-15
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
 The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their
