@@ -6,6 +6,7 @@ import { Dialog } from '@/shared/components/Dialog'
 import type { ChatConversation } from '@/features/chat/chatApi'
 import { useCallsCopy, useConversationNaming, useCreateScheduled } from './hooks'
 import { localDateTime, toDateInput, toTimeInput } from './model'
+import './calls-page.css'
 
 export const TITLE_MAX = 120
 
@@ -31,7 +32,8 @@ export function ScheduleCallDialog({
 }: {
   conversation: ChatConversation
   onClose: () => void
-  onChangeConversation: () => void
+  /** Pick another chat. Absent when opened from inside a chat: the chat is fixed. */
+  onChangeConversation?: () => void
   onScheduled: (chatName: string) => void
 }) {
   const copy = useCallsCopy()
@@ -100,9 +102,11 @@ export function ScheduleCallDialog({
           <div className="cp-picked">
             <Avatar name={chatName} seed={conversation.id} size="sm" />
             <span className="cp-row__name">{chatName}</span>
-            <button type="button" className="btn btn--sm btn--ghost cp-picked__change" onClick={onChangeConversation}>
-              {copy.change}
-            </button>
+            {onChangeConversation && (
+              <button type="button" className="btn btn--sm btn--ghost cp-picked__change" onClick={onChangeConversation}>
+                {copy.change}
+              </button>
+            )}
           </div>
         </div>
         <div className="cp-form__row">

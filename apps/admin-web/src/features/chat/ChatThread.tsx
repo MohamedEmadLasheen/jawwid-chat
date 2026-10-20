@@ -22,6 +22,9 @@ import { ConversationAvatar, conversationName, isGroup, isMuted } from './chatVi
 import { useConversationPreferences } from './useChatActions'
 import { VoiceNotePlayer } from './VoiceRecorder'
 import { ConversationCallControls } from '@/features/calls/ConversationCallControls'
+import { callApi, callKeys } from '@/features/calls/callApi'
+import { ScheduleCallDialog } from '@/features/calls-page/ScheduleCallDialog'
+import { useCallsCopy } from '@/features/calls-page/hooks'
 import {
   SCHEDULED_CALL_CARD_KINDS,
   ScheduledCallCard,
@@ -176,6 +179,16 @@ export function ChatThread({
   const [forwarding, setForwarding] = useState<string[] | null>(null)
   const [labeling, setLabeling] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [scheduling, setScheduling] = useState(false)
+  const callsCopy = useCallsCopy()
+  // Schedule call rides the SAME advisory answer (and cache) as the call
+  // button: absent, not disabled, when this viewer may not start a call here.
+  const capability = useQuery({
+    queryKey: callKeys.capability(conversationId),
+    queryFn: () => callApi.capability(conversationId),
+    staleTime: 15_000,
+  })
+  const canSchedule = capability.data?.canCall === true
   const [searching, setSearching] = useState(false)
   const [searchQ, setSearchQ] = useState('')
   const [target, setTarget] = useState<string | null>(null)
@@ -444,6 +457,9 @@ export function ChatThread({
                 { key: 'info', label: group ? copy.groupInfo : copy.contactInfo, icon: 'info', onSelect: onToggleInfo },
                 { key: 'select', label: copy.select, icon: 'checkSquare', onSelect: () => setSelecting(true) },
                 { key: 'search', label: copy.searchChat, icon: 'search', onSelect: () => setSearching(true) },
+                ...(canSchedule
+                  ? [{ key: 'schedule', label: copy.scheduleCall, icon: 'calendar' as const, onSelect: () => setScheduling(true) }]
+                  : []),
                 { key: 'labels', label: copy.labelsMenu, icon: 'tag', onSelect: () => setLabeling(true) },
                 { key: 'mute', label: muted ? copy.unmute : copy.mute, icon: muted ? 'notifications' : 'bellOff', onSelect: () => prefs.mute(conv.id, !muted) },
                 { key: 'pin', label: pinned ? copy.unpin : copy.pin, icon: 'pin', onSelect: () => prefs.pin(conv.id, !pinned) },
@@ -668,6 +684,17 @@ export function ChatThread({
           autoStartVoice={searchParams.get('voice') === '1'}
           onVoiceAutoStarted={() => setSearchParams({}, { replace: true })}
           onVoiceSent={() => void queryClient.invalidateQueries({ queryKey: chatKeys.messages(conversationId) })}
+        />
+      )}
+
+      {scheduling && conv && (
+        <ScheduleCallDialog
+          conversation={conv}
+          onClose={() => setScheduling(false)}
+          onScheduled={(chatName) => {
+            setScheduling(false)
+            flash(callsCopy.scheduled(chatName))
+          }}
         />
       )}
 
