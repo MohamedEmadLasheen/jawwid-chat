@@ -83,6 +83,8 @@ class Conversation {
     this.isReadOnly = false,
     this.isTeacherSupervision = false,
     this.isTrialGroup = false,
+    this.themeKey,
+    this.wallpaperUrl,
   });
 
   final String id;
@@ -132,6 +134,13 @@ class Conversation {
   /// Taken from the server's type, never inferred from a title.
   final bool isTrialGroup;
 
+  /// The viewer's OWN background preset for this chat (owner decisions
+  /// 2026-10-20: private, synced). Null is the default look.
+  final String? themeKey;
+
+  /// The viewer's OWN wallpaper photo for this chat, a link signed for them.
+  final String? wallpaperUrl;
+
   bool get hasUnread => unreadCount > 0;
 
   /// The name to show: the server's title, except for a supervision conversation, which
@@ -167,6 +176,8 @@ class Conversation {
       isReadOnly: isReadOnly,
       isTeacherSupervision: isTeacherSupervision,
       isTrialGroup: isTrialGroup,
+      themeKey: themeKey,
+      wallpaperUrl: wallpaperUrl,
     );
   }
 }

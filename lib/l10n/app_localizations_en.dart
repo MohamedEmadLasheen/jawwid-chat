@@ -1757,4 +1757,50 @@ class L10nEn extends L10n {
 
   @override
   String get searchMessagesNone => 'No matching messages in your chats';
+
+  @override
+  String get chatThemeAction => 'Chat theme';
+
+  @override
+  String get chatThemeHint =>
+      'Only you see this. It changes this chat\'s background on all your devices.';
+
+  @override
+  String get chatThemeDefault => 'Default';
+
+  @override
+  String get chatThemeLagoon => 'Lagoon';
+
+  @override
+  String get chatThemeSand => 'Sand';
+
+  @override
+  String get chatThemeRose => 'Rose';
+
+  @override
+  String get chatThemeSky => 'Sky';
+
+  @override
+  String get chatThemeLilac => 'Lilac';
+
+  @override
+  String get chatThemeOlive => 'Olive';
+
+  @override
+  String get chatThemeSlate => 'Slate';
+
+  @override
+  String get chatThemeDusk => 'Dusk';
+
+  @override
+  String get chatWallpaperTitle => 'Photo wallpaper';
+
+  @override
+  String get chatWallpaperChoose => 'Choose a photo';
+
+  @override
+  String get chatWallpaperReplace => 'Change photo';
+
+  @override
+  String get chatWallpaperRemove => 'Remove photo';
 }

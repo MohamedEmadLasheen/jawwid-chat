@@ -37,6 +37,7 @@ import '../application/messages_controller.dart';
 import '../application/voice_composer_controller.dart';
 import '../data/message_search_repository.dart';
 import 'attachment_preview.dart';
+import 'chat_theme_sheet.dart';
 import 'forward_sheet.dart';
 import 'media_viewer.dart';
 import 'message_actions.dart';
@@ -676,6 +677,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
   }
 
+  /// The viewer's own look for this chat: this session's latest choice, else
+  /// what the server said when the chat was opened.
+  ChatAppearance get _appearance =>
+      ref.watch(chatAppearanceProvider)[widget.conversationId] ??
+      (themeKey: widget.conversation?.themeKey, wallpaperUrl: widget.conversation?.wallpaperUrl);
+
+  void _openTheme() {
+    final store = ref.read(chatAppearanceProvider.notifier);
+    unawaited(showChatThemeSheet(
+      context,
+      conversationId: widget.conversationId,
+      current: ref.read(chatAppearanceProvider)[widget.conversationId] ??
+          (themeKey: widget.conversation?.themeKey, wallpaperUrl: widget.conversation?.wallpaperUrl),
+      onChanged: (next) => store.set(widget.conversationId, next),
+    ));
+  }
+
   /// Bring a message onto the screen for a search hit, paging back through
   /// older history until it is loaded. Bounded, and only for a hit the user
   /// asked to see -- unlike a reply's original (see [_jumpToMessage]).
@@ -974,7 +992,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               icon: const Icon(Icons.group_outlined),
               tooltip: l10n.groupMembersTitle,
             ),
-          if (widget.conversation != null) _ChatMoreMenu(conversation: widget.conversation!),
+          if (widget.conversation != null)
+            _ChatMoreMenu(
+              conversation: widget.conversation!,
+              onOpenTheme: ref.watch(chatThemeRepositoryProvider).isAvailable ? () => _openTheme() : null,
+            ),
         ],
       ),
       // The list resizes; the composer does not translate (handoff §5.8).
@@ -990,7 +1012,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             conversationId: widget.conversationId,
             onJump: (messageId) => _jumpToMessage(messageId, state),
           ),
-          Expanded(child: _body(state, controller, l10n)),
+          Expanded(child: ChatBackground(appearance: _appearance, child: _body(state, controller, l10n))),
           MessageComposer(
             onAttach: widget.isReadOnly ? null : _attach,
             onSend: (body) {
@@ -1302,13 +1324,17 @@ class _DaySeparator extends StatelessWidget {
 /// viewer may not start a call here (PD-2, PD-7). The menu itself is absent
 /// when it would be empty.
 class _ChatMoreMenu extends ConsumerWidget {
-  const _ChatMoreMenu({required this.conversation});
+  const _ChatMoreMenu({required this.conversation, this.onOpenTheme});
 
   final Conversation conversation;
 
+  /// Chat theme (the viewer's own background); null when this build has no theme server.
+  final VoidCallback? onOpenTheme;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (!ref.watch(canCallProvider(conversation.id))) return const SizedBox.shrink();
+    final canSchedule = ref.watch(canCallProvider(conversation.id));
+    if (!canSchedule && onOpenTheme == null) return const SizedBox.shrink();
     final l10n = L10n.of(context);
     return PopupMenuButton<String>(
       icon: const Icon(Icons.more_vert),
@@ -1316,9 +1342,20 @@ class _ChatMoreMenu extends ConsumerWidget {
         // The flow asks the server again, opens the sheet, and confirms that
         // the card was posted in this chat.
         if (choice == 'schedule') unawaited(scheduleFlow(context, ref, conversation: conversation));
+        if (choice == 'theme') onOpenTheme?.call();
       },
       itemBuilder: (context) => [
-        PopupMenuItem<String>(
+        if (onOpenTheme != null)
+          PopupMenuItem<String>(
+            value: 'theme',
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.palette_outlined),
+              title: Text(l10n.chatThemeAction),
+            ),
+          ),
+        if (canSchedule)
+          PopupMenuItem<String>(
           value: 'schedule',
           child: ListTile(
             contentPadding: EdgeInsets.zero,

@@ -407,3 +407,42 @@ abstract final class SenderNameColors {
     Color(0xFFF08FC7), Color(0xFF5FD3C6), Color(0xFFE9BD5C), Color(0xFFA7AEF5),
   ];
 }
+
+/// Chat themes (owner decisions 2026-10-20): the viewer's OWN background for a
+/// chat, as a soft two-stop gradient per theme, light and dark. The same eight
+/// as Admin Web (apps/admin-web/src/features/chat/chat.css). Only the
+/// background behind the messages changes; bubbles keep their checked colours.
+abstract final class ChatThemePalette {
+  /// The server's CHAT_THEMES, in display order.
+  static const keys = <String>['lagoon', 'sand', 'rose', 'sky', 'lilac', 'olive', 'slate', 'dusk'];
+
+  static const _light = <String, List<Color>>{
+    'lagoon': [Color(0xFFE3F1EF), Color(0xFFD3E9E5)],
+    'sand': [Color(0xFFF5EEDF), Color(0xFFEDE2CB)],
+    'rose': [Color(0xFFF8E8EC), Color(0xFFF1D9E0)],
+    'sky': [Color(0xFFE4EEF8), Color(0xFFD6E5F4)],
+    'lilac': [Color(0xFFEEE8F7), Color(0xFFE3DAF2)],
+    'olive': [Color(0xFFEBEFDF), Color(0xFFDFE6CC)],
+    'slate': [Color(0xFFE8EBEE), Color(0xFFDADFE4)],
+    'dusk': [Color(0xFFF6E7DD), Color(0xFFEED7C7)],
+  };
+  static const _dark = <String, List<Color>>{
+    'lagoon': [Color(0xFF0F2624), Color(0xFF132E2B)],
+    'sand': [Color(0xFF2A241A), Color(0xFF30291D)],
+    'rose': [Color(0xFF2C1A20), Color(0xFF331F26)],
+    'sky': [Color(0xFF15202C), Color(0xFF192634)],
+    'lilac': [Color(0xFF221C2E), Color(0xFF282135)],
+    'olive': [Color(0xFF1F241A), Color(0xFF252B1F)],
+    'slate': [Color(0xFF1A1D21), Color(0xFF1F2328)],
+    'dusk': [Color(0xFF2B1D16), Color(0xFF33231B)],
+  };
+
+  /// The gradient stops for [key] in this brightness; null for the default look
+  /// or a key this build does not know.
+  static List<Color>? stops(String? key, Brightness brightness) =>
+      key == null ? null : (brightness == Brightness.dark ? _dark : _light)[key];
+
+  /// Laid over a photo wallpaper so messages stay easy to read.
+  static const photoScrimLight = Color(0x8CFFFFFF);
+  static const photoScrimDark = Color(0x8C000000);
+}

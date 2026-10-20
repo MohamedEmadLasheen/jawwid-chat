@@ -590,6 +590,31 @@ Staff only. Every route first checks that the caller is active conversation staf
 
 **Storage:** migration `20261020110000` adds `chat.staff_label`, `chat.conversation_label` (a same-org trigger) and `chat.quick_reply` (owner NULL = team; partial unique indexes per library). RLS is enabled with no policies, so they are reachable only through the service role.
 
+### Chat themes (2026-10-20, owner decisions: private to the viewer; presets + own photo; saved on the server)
+
+A theme is the **viewer's own** look for one chat. It is stored on their row of `chat.conversation_participant_state`, next to mute, pin and favourite, so nobody else's view of the chat changes. It changes only the background behind the messages. Bubbles keep their own contrast-checked colours, and clients dim a photo.
+
+Every route below first requires that the caller can read the conversation (`canReadResolved`).
+- `PUT /conversations/:cid/theme` `{ theme }` → `{ theme }`
+  - `theme` is one of `lagoon`, `sand`, `rose`, `sky`, `lilac`, `olive`, `slate`, `dusk`, or `null` for the default look.
+  - Anything else fails with `COMM.CHAT_THEME_INVALID` (400).
+- Setting a wallpaper takes two steps, like a profile photo:
+  1. `POST /conversations/:cid/wallpaper/upload` `{ mimeType, byteSize }` → an upload grant (`uploadUrl`, `objectKey`, `headers`). The type is JPEG, PNG or WebP, the size at most 4 MB, and the key sits under `wallpapers/<actorId>/<cid>/`.
+  2. `POST /conversations/:cid/wallpaper` `{ objectKey }` → `{ wallpaperUrl }`.
+     - The key must be the caller's own for this chat.
+     - The stored bytes are judged: the real type must match the declared one, no animation, and each side between 200 and 4096 px.
+     - A rejected object is deleted, and the previous wallpaper is deleted on replace.
+- `DELETE /conversations/:cid/wallpaper` → `{ wallpaperUrl: null }`, and the object is deleted.
+- `ConversationViewerStateDto` gains `theme: string | null` and `wallpaperUrl: string | null`, on the list and on a single conversation, for the viewer only.
+
+**`GET /media/wallpapers/:cid`** (RT-037 pattern; `@Public`, signed):
+- The signature binds the viewer, and the object served is **that viewer's own** wallpaper for the chat. It is served only while they can still read the chat; every refusal is the same 404 (`COMM.CHAT_WALLPAPER_NOT_FOUND`).
+- Links are hour-bucketed and carry a `&k=` fingerprint of the object, so a replaced photo gets a new URL.
+
+**Storage:** migration `20261020150000`.
+- `theme` is limited to the eight presets by a CHECK.
+- `wallpaper_object_key` has a CHECK that the key names this row's own `actor_id` and `conversation_id`, plus a unique index. A copied key can never be stored on another viewer's row.
+
 ### Message search and chat export (2026-10-20, owner decisions: search inside a chat and across chats; export = super admin only, logged, transcript + media)
 
 **Search never decides who may see a message.** The route first narrows to the conversations the caller may read. Text is matched with `chat.search_fold`, and every candidate then passes the same per-message rule the message list uses (`visibilityFilter`: internal notes, held or rejected messages, deleted-for-me). Messages deleted for everyone, system messages and cards are never matched.

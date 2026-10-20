@@ -247,6 +247,10 @@ export interface ConversationViewerStateDto {
   favorite: boolean;
   archived: boolean;
   mutedUntil: string | null;
+  /** The viewer's OWN background preset for this chat; null = the default look. */
+  theme: string | null;
+  /** The viewer's OWN wallpaper photo for this chat, as a link signed for them; null when none. */
+  wallpaperUrl: string | null;
 }
 
 export interface LastMessageDto {

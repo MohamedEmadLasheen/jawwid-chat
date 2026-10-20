@@ -29,6 +29,7 @@ import '../features/calls/data/fake_scheduled_call_repository.dart';
 import '../features/calls/data/http_account_call_history.dart';
 import '../features/calls/data/http_scheduled_call_repository.dart';
 import '../features/calls/data/scheduled_call_repository.dart';
+import '../features/messages/data/chat_theme_repository.dart';
 import '../features/messages/data/message_marks_repository.dart';
 import '../features/messages/data/message_search_repository.dart';
 import '../features/profile/data/profile_photo_repository.dart';
@@ -158,6 +159,9 @@ List<Override> _httpOverrides() {
     ),
     profilePhotoRepositoryProvider.overrideWithValue(
       HttpProfilePhotoRepository(client: client),
+    ),
+    chatThemeRepositoryProvider.overrideWithValue(
+      HttpChatThemeRepository(client: client),
     ),
     messageSearchRepositoryProvider.overrideWithValue(
       HttpMessageSearchRepository(client: client, viewerActorId: session.actorId),

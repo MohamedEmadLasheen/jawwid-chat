@@ -3222,6 +3222,96 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'No matching messages in your chats'**
   String get searchMessagesNone;
+
+  /// No description provided for @chatThemeAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat theme'**
+  String get chatThemeAction;
+
+  /// No description provided for @chatThemeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Only you see this. It changes this chat\'s background on all your devices.'**
+  String get chatThemeHint;
+
+  /// No description provided for @chatThemeDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Default'**
+  String get chatThemeDefault;
+
+  /// No description provided for @chatThemeLagoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Lagoon'**
+  String get chatThemeLagoon;
+
+  /// No description provided for @chatThemeSand.
+  ///
+  /// In en, this message translates to:
+  /// **'Sand'**
+  String get chatThemeSand;
+
+  /// No description provided for @chatThemeRose.
+  ///
+  /// In en, this message translates to:
+  /// **'Rose'**
+  String get chatThemeRose;
+
+  /// No description provided for @chatThemeSky.
+  ///
+  /// In en, this message translates to:
+  /// **'Sky'**
+  String get chatThemeSky;
+
+  /// No description provided for @chatThemeLilac.
+  ///
+  /// In en, this message translates to:
+  /// **'Lilac'**
+  String get chatThemeLilac;
+
+  /// No description provided for @chatThemeOlive.
+  ///
+  /// In en, this message translates to:
+  /// **'Olive'**
+  String get chatThemeOlive;
+
+  /// No description provided for @chatThemeSlate.
+  ///
+  /// In en, this message translates to:
+  /// **'Slate'**
+  String get chatThemeSlate;
+
+  /// No description provided for @chatThemeDusk.
+  ///
+  /// In en, this message translates to:
+  /// **'Dusk'**
+  String get chatThemeDusk;
+
+  /// No description provided for @chatWallpaperTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo wallpaper'**
+  String get chatWallpaperTitle;
+
+  /// No description provided for @chatWallpaperChoose.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a photo'**
+  String get chatWallpaperChoose;
+
+  /// No description provided for @chatWallpaperReplace.
+  ///
+  /// In en, this message translates to:
+  /// **'Change photo'**
+  String get chatWallpaperReplace;
+
+  /// No description provided for @chatWallpaperRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove photo'**
+  String get chatWallpaperRemove;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

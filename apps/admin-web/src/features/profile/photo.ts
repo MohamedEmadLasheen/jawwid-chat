@@ -51,6 +51,33 @@ export async function preparePhoto(file: File): Promise<PreparedPhoto> {
   return { blob, previewUrl: URL.createObjectURL(blob) }
 }
 
+/** A chat wallpaper keeps its whole picture; the long side is cut down to this. */
+export const WALLPAPER_MAX_SIDE = 2048
+export const WALLPAPER_MIN_SIDE = 200
+
+/**
+ * A chat wallpaper: the whole picture (no crop), scaled so its long side is at
+ * most WALLPAPER_MAX_SIDE, re-encoded through a canvas (pixels only, so no
+ * location or camera metadata leaves the device), WebP or JPEG.
+ */
+export async function prepareWallpaper(file: File): Promise<PreparedPhoto> {
+  if (!(ACCEPTED_TYPES as readonly string[]).includes(file.type)) throw new PhotoError('type')
+  if (file.size > MAX_SOURCE_BYTES) throw new PhotoError('too_big')
+  const image = await decode(file)
+  const { naturalWidth: w, naturalHeight: h } = image
+  if (w < WALLPAPER_MIN_SIDE || h < WALLPAPER_MIN_SIDE) throw new PhotoError('too_small')
+  const scale = Math.min(1, WALLPAPER_MAX_SIDE / Math.max(w, h))
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.round(w * scale)
+  canvas.height = Math.round(h * scale)
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new PhotoError('unreadable')
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
+  const blob = (await toBlob(canvas, 'image/webp', 0.85)) ?? (await toBlob(canvas, 'image/jpeg', 0.85))
+  if (!blob || !(ACCEPTED_TYPES as readonly string[]).includes(blob.type)) throw new PhotoError('unreadable')
+  return { blob, previewUrl: URL.createObjectURL(blob) }
+}
+
 function decode(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file)

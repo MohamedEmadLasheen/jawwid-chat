@@ -303,6 +303,9 @@ abstract final class WireMappers {
       // Archived for everyone (server-side, read-only) or archived by this viewer
       // (a personal "hide from my list"). Only the first makes it read-only, below.
       isArchived: archivedAt != null || viewerState?['archived'] == true,
+      // The viewer's own look for this chat: a preset and/or a photo.
+      themeKey: viewerState?['theme'] is String ? viewerState!['theme'] as String : null,
+      wallpaperUrl: _nonEmpty(viewerState?['wallpaperUrl']),
       handledByLabel: handledByLabel,
       requiresApproval: requiresApproval,
       // An archived conversation is read-only for this client; the backend also refuses

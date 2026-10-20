@@ -8,6 +8,7 @@ import { toConversationDto, toLastMessageDto, type ConversationViewerStateDto, t
 import { AuthorizationService } from '../../platform/authorization.service';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
+import { signWallpaper } from '../themes/wallpaper-urls';
 
 @Controller('conversations')
 @UseFilters(CommErrorFilter)
@@ -75,7 +76,7 @@ export class ConversationController {
         toConversationDto(c, members.get(c.id), {
           unreadCount: unread.get(c.id) ?? 0,
           viewerRequiresApproval: this.authz.viewerRequiresApproval(actor, c),
-          viewerState: viewerState(states.get(c.id)),
+          viewerState: viewerState(states.get(c.id), c.id, actor.actorId),
           lastMessage: last.has(c.id) ? toLastMessageDto(last.get(c.id)!) : null,
           learnerAvatarUrl: c.learner
             ? signAvatar('learner', c.learner.id, c.id, actor.actorId, c.learner.avatarObjectKey)
@@ -174,7 +175,7 @@ export class ConversationController {
     return toConversationDto(conversation, members, {
       unreadCount: await this.messages.unreadCount(id, actorId),
       viewerRequiresApproval: this.authz.viewerRequiresApproval(actor, conversation),
-      viewerState: viewerState(states.get(conversation.id)),
+      viewerState: viewerState(states.get(conversation.id), conversation.id, actor.actorId),
       lastMessage: last.has(conversation.id) ? toLastMessageDto(last.get(conversation.id)!) : null,
       learnerAvatarUrl: conversation.learner
         ? signAvatar('learner', conversation.learner.id, conversation.id, actor.actorId, conversation.learner.avatarObjectKey)
@@ -261,13 +262,24 @@ export class ConversationController {
 /** The viewer's stored preferences, or the defaults when they never set any. */
 function viewerState(
   row:
-    | { pinnedAt: Date | null; archivedAt: Date | null; mutedUntil: Date | null; favoritedAt: Date | null }
+    | {
+        pinnedAt: Date | null
+        archivedAt: Date | null
+        mutedUntil: Date | null
+        favoritedAt: Date | null
+        theme: string | null
+        wallpaperObjectKey: string | null
+      }
     | undefined,
+  conversationId: string,
+  viewerId: string,
 ): ConversationViewerStateDto {
   return {
     pinned: !!row?.pinnedAt,
     favorite: !!row?.favoritedAt,
     archived: !!row?.archivedAt,
     mutedUntil: row?.mutedUntil?.toISOString() ?? null,
+    theme: row?.theme ?? null,
+    wallpaperUrl: signWallpaper(conversationId, viewerId, row?.wallpaperObjectKey),
   };
 }

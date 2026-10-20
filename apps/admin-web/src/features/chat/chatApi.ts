@@ -29,7 +29,15 @@ export interface ChatViewerState {
   favorite?: boolean
   archived: boolean
   mutedUntil: string | null
+  /** The viewer's OWN background preset for this chat; null/absent = default. */
+  theme?: ChatTheme | null
+  /** The viewer's OWN wallpaper photo, signed for them; null/absent = none. */
+  wallpaperUrl?: string | null
 }
+
+/** The eight background presets (the server's CHAT_THEMES). */
+export const CHAT_THEMES = ['lagoon', 'sand', 'rose', 'sky', 'lilac', 'olive', 'slate', 'dusk'] as const
+export type ChatTheme = (typeof CHAT_THEMES)[number]
 
 /** A list-row preview; `text` is null for media, system events and deletions. */
 export interface ChatLastMessage {
@@ -178,6 +186,19 @@ export function attachmentKind(mimeType: string): UploadedAttachment['kind'] {
 }
 
 /**
+ * The headers for a signed PUT: exactly the grant's, plus a content type only
+ * when the grant does not name one. Storage signs `content-type`, and spreading
+ * the grant over our own `Content-Type` sent BOTH (different case, so `fetch`
+ * joined them: "image/webp, image/webp") -- a value no signature or type check
+ * accepts.
+ */
+export function signedPutHeaders(mimeType: string, grantHeaders: Record<string, string> | undefined): Headers {
+  const headers = new Headers(grantHeaders ?? {})
+  if (!headers.has('content-type')) headers.set('content-type', mimeType)
+  return headers
+}
+
+/**
  * Authorize, then PUT the bytes to the signed URL. The PUT deliberately goes
  * through plain fetch, never `api`: the URL is self-authorizing and in
  * production addresses object storage, which must not receive the session
@@ -194,7 +215,7 @@ async function upload(conversationId: string, file: File, visibility: 'customer'
   })
   const res = await fetch(grant.uploadUrl, {
     method: grant.method || 'PUT',
-    headers: { 'Content-Type': mimeType, ...(grant.headers ?? {}) },
+    headers: signedPutHeaders(mimeType, grant.headers),
     body: file,
   })
   if (!res.ok) throw new Error(`upload failed (${res.status})`)
@@ -202,6 +223,18 @@ async function upload(conversationId: string, file: File, visibility: 'customer'
 }
 
 const conv = (id: string) => `/conversations/${encodeURIComponent(id)}`
+
+/** A wallpaper: authorize, PUT the bytes (plain fetch, never the bearer), then commit. */
+async function uploadWallpaper(conversationId: string, blob: Blob): Promise<{ wallpaperUrl: string }> {
+  const grant = await api.post<UploadGrant>(`${conv(conversationId)}/wallpaper/upload`, { mimeType: blob.type, byteSize: blob.size })
+  const res = await fetch(grant.uploadUrl, {
+    method: grant.method || 'PUT',
+    headers: signedPutHeaders(blob.type, grant.headers),
+    body: blob,
+  })
+  if (!res.ok) throw new Error(`upload failed (${res.status})`)
+  return api.post<{ wallpaperUrl: string }>(`${conv(conversationId)}/wallpaper`, { objectKey: grant.objectKey })
+}
 
 export const chatApi = {
   list: () => api.get<{ conversations: ChatConversation[] }>('/conversations').then((r) => r.conversations),
@@ -265,6 +298,10 @@ export const chatApi = {
       '/me/starred',
       before ? { before } : undefined,
     ),
+  /** The viewer's own background preset for a chat (null = default). */
+  setTheme: (id: string, theme: ChatTheme | null) => api.put<{ theme: ChatTheme | null }>(`${conv(id)}/theme`, { theme }),
+  uploadWallpaper,
+  removeWallpaper: (id: string) => api.delete<{ wallpaperUrl: null }>(`${conv(id)}/wallpaper`),
   /** Search this chat's messages, newest first; only what this viewer may read. */
   search: (id: string, q: string, before?: string) =>
     api.get<{ hits: ChatMessage[]; nextBefore: string | null }>(`${conv(id)}/messages/search`, { q, before }),

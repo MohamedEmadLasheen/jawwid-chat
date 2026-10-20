@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
@@ -10,12 +10,13 @@ import { Badge } from '@/shared/components/Badge'
 import { Icon } from '@/shared/components/Icon'
 import { Menu, type MenuItem } from '@/shared/components/Menu'
 import { EmptyState, ErrorState, LoadingState } from '@/shared/components/States'
-import { EDIT_WINDOW_MS, bySeq, chatApi, chatKeys, type ChatAttachment, type ChatMessage, type UploadedAttachment } from './chatApi'
+import { EDIT_WINDOW_MS, bySeq, chatApi, chatKeys, type ChatAttachment, type ChatConversation, type ChatMessage, type UploadedAttachment } from './chatApi'
 import { chatCopyFor, systemText, type ChatCopy } from './copy'
 import { ChatComposer, type ComposerSend, type EditTarget, type ReplyTarget } from './ChatComposer'
 import { ForwardDialog } from './ForwardDialog'
 import { LabelChip, LabelsDialog } from './LabelsDialog'
 import { ExportDialog } from './ExportDialog'
+import { ThemeDialog } from './ThemeDialog'
 import { ThreadSearch } from './ThreadSearch'
 import { Highlighted, searchable } from './search'
 import { ConversationAvatar, conversationName, isGroup, isMuted } from './chatView'
@@ -180,6 +181,7 @@ export function ChatThread({
   const [labeling, setLabeling] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [scheduling, setScheduling] = useState(false)
+  const [theming, setTheming] = useState(false)
   const callsCopy = useCallsCopy()
   // Schedule call rides the SAME advisory answer (and cache) as the call
   // button: absent, not disabled, when this viewer may not start a call here.
@@ -468,6 +470,7 @@ export function ChatThread({
                   ? [{ key: 'schedule', label: copy.scheduleCall, icon: 'calendar' as const, onSelect: () => setScheduling(true) }]
                   : []),
                 { key: 'labels', label: copy.labelsMenu, icon: 'tag', onSelect: () => setLabeling(true) },
+                { key: 'theme', label: copy.chatTheme, icon: 'image', onSelect: () => setTheming(true) },
                 { key: 'mute', label: muted ? copy.unmute : copy.mute, icon: muted ? 'notifications' : 'bellOff', onSelect: () => prefs.mute(conv.id, !muted) },
                 { key: 'pin', label: pinned ? copy.unpin : copy.pin, icon: 'pin', onSelect: () => prefs.pin(conv.id, !pinned) },
                 { key: 'favorite', label: favorite ? copy.unfavorite : copy.favorite, icon: 'heart', onSelect: () => prefs.favorite(conv.id, !favorite) },
@@ -498,7 +501,9 @@ export function ChatThread({
       <PinnedBar conversationId={conversationId} scroller={scroller} />
 
       <div
-        className="thread-body"
+        className={threadBackground(conv?.viewerState).className}
+        style={threadBackground(conv?.viewerState).style}
+        data-theme-key={conv?.viewerState?.theme ?? undefined}
         ref={scroller}
         onScroll={(e) => {
           const el = e.currentTarget
@@ -694,6 +699,8 @@ export function ChatThread({
         />
       )}
 
+      {theming && conv && <ThemeDialog conversation={conv} onClose={() => setTheming(false)} />}
+
       {scheduling && conv && (
         <ScheduleCallDialog
           conversation={conv}
@@ -734,6 +741,20 @@ export function ChatThread({
       )}
     </>
   )
+}
+
+/**
+ * The viewer's own background for this chat: a preset, a photo (dimmed in CSS),
+ * or the default. Only the background behind the messages changes.
+ */
+function threadBackground(state: ChatConversation['viewerState']): { className: string; style?: CSSProperties } {
+  const classes = ['thread-body']
+  if (state?.theme) classes.push('cw-bg', `cw-bg--${state.theme}`)
+  if (state?.wallpaperUrl) {
+    classes.push('cw-bg--photo')
+    return { className: classes.join(' '), style: { ['--cw-wall' as string]: `url("${state.wallpaperUrl}")` } }
+  }
+  return { className: classes.join(' ') }
 }
 
 function MessageItem({

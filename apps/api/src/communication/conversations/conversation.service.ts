@@ -1464,7 +1464,15 @@ export class ConversationService {
   async viewerStates(conversationIds: readonly string[], actorId: string) {
     const rows = await this.prisma.conversationParticipantState.findMany({
       where: { conversationId: { in: [...conversationIds] }, actorId },
-      select: { conversationId: true, pinnedAt: true, archivedAt: true, mutedUntil: true, favoritedAt: true },
+      select: {
+        conversationId: true,
+        pinnedAt: true,
+        archivedAt: true,
+        mutedUntil: true,
+        favoritedAt: true,
+        theme: true,
+        wallpaperObjectKey: true,
+      },
     });
     return new Map(rows.map((r) => [r.conversationId, r]));
   }

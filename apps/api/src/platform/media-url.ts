@@ -20,9 +20,10 @@ export type MediaVariant = 'o' | 't'; // original, thumbnail
  * What the link addresses: a message attachment, a story's media, a staff
  * profile photo (the staff directory's rule), or a profile photo seen in a
  * conversation (`avatars`: any kind of person, or a child -- see
- * communication/profile/avatar.service).
+ * communication/profile/avatar.service), or a viewer's own chat wallpaper
+ * (`wallpapers`: served to its owner only -- communication/themes).
  */
-export type MediaKind = 'attachments' | 'stories' | 'staff' | 'avatars';
+export type MediaKind = 'attachments' | 'stories' | 'staff' | 'avatars' | 'wallpapers';
 
 export interface MediaUrlClaims {
   kind: MediaKind;
@@ -97,7 +98,7 @@ export class MediaUrlSigner {
   }
 
   verify(c: MediaUrlClaims, now = Date.now()): boolean {
-    if (c.kind !== 'attachments' && c.kind !== 'stories' && c.kind !== 'staff' && c.kind !== 'avatars') return false;
+    if (c.kind !== 'attachments' && c.kind !== 'stories' && c.kind !== 'staff' && c.kind !== 'avatars' && c.kind !== 'wallpapers') return false;
     if (c.variant !== 'o' && c.variant !== 't') return false;
     if (!Number.isInteger(c.expires) || c.expires < Math.floor(now / 1000)) return false;
     const expected = Buffer.from(this.mac(c.kind, c.attachmentId, c.variant, c.actorId, c.expires));
