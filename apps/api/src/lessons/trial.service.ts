@@ -10,11 +10,12 @@ import { ConversationService, isUuid } from '../communication/conversations/conv
 import { LessonService, cancelReminders, dateField, invalid, stateError, textField } from './lesson.service';
 import { SchedulingService } from './scheduling.service';
 import { TrialGroupService } from './trial-group.service';
-import { OutboxService } from '../communication/outbox/outbox.service';
-import { CommEvent } from '../communication/contracts/events';
+import { NewStudentsService } from '../new-students/new-students.service';
 
 const NOT_SUBSCRIBED_REASONS: ReadonlySet<string> = new Set(['price', 'schedule', 'not_ready', 'chose_other', 'no_response', 'other']);
 const MAX_RANGE_DAYS = 93;
+/** How far back the trial group's card looks for trials to record or correct. */
+const GROUP_WINDOW_DAYS = 60;
 
 const TRIAL_INCLUDE = {
   prospect: { select: { id: true, displayName: true, level: true, learnerId: true } },
@@ -27,26 +28,29 @@ type TrialRow = Prisma.LessonGetPayload<{ include: typeof TRIAL_INCLUDE }>;
 type TrialStanding = 'sales' | 'manager' | 'teacher';
 
 /**
- * PD-11 T4 (part 1): trial lessons and their two independent facts.
+ * PD-11 T4 and the trial journey (owner decisions 2026-10-20): trial lessons
+ * and each trial's ONE outcome.
  *
- *   attendance  -- the TEACHER's fact (or the Teachers department's): the
- *                  prospect attended (with a short report) or did not
- *   conversion  -- SALES' fact, about an attended trial only: subscribed, or
- *                  not subscribed with a reason
+ *   the teacher      reports the trial from the app: attended (with a short
+ *                    report) or did not attend
+ *   a supervisor     records the outcome from the "+ -> Trial" card: no_show
+ *                    (either department), subscribed with the form, or not
+ *                    subscribed with a reason (Sales); Sales corrects it
  *
- * A subscription credits the teacher only once Core confirms it
- * (chat.confirm_trial_conversion, called by Core ingestion -- which does not
- * exist yet, so until then subscriptions read "awaiting Core"). Owner decisions
- * 2026-10-19: Sales records prospects and books trials (the Teachers department
- * may book too); a prospect is a display name only (BR-2).
+ * Jawwid Chat is the only source of truth: "subscribed" is final when Sales
+ * records it, and nothing waits for or tells Core. Sales records prospects and
+ * books trials (the Teachers department may book too); a prospect is a display
+ * name only (BR-2). The subscription form, which does carry the parent's
+ * contact details, lives in src/new-students, confined (G-07).
  *
  * A trial is a chat.lesson row (kind 'trial'), so the teacher's time, free
  * slots and the exclusion constraint already account for it. LessonService
  * never sees trials; this service is their only reader and writer.
  *
- * Part 2: every change posts its card into the teacher's trial group
- * (TrialGroupService), in the same transaction as the record -- the report is the
- * message. The not-subscribed reason never reaches the group: the teacher reads it.
+ * Every change posts its card into the teacher's trial group
+ * (TrialGroupService), in the same transaction as the record. An outcome card
+ * carries the result only: the reason, the form and its prices never reach the
+ * group, which the teacher reads.
  */
 @Injectable()
 export class TrialService {
@@ -57,7 +61,7 @@ export class TrialService {
     private readonly scheduling: SchedulingService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
     private readonly groups: TrialGroupService,
-    private readonly outbox: OutboxService,
+    private readonly forms: NewStudentsService,
   ) {}
 
   // ------------------------------------------------------------------
@@ -270,62 +274,171 @@ export class TrialService {
   }
 
   // ------------------------------------------------------------------
-  // Sales' fact: conversion
+  // The trial's one outcome (trial journey)
   // ------------------------------------------------------------------
 
   /**
-   * Subscribed, or not subscribed with a reason -- for a trial the prospect
-   * attended. Sales only. A subscription stays "awaiting Core" until Core's
-   * subscription event confirms it.
+   * The "+ -> Trial" card's three options, for a trial that has started:
+   *
+   *   no_show         the student did not attend. Either supervisor (Sales or
+   *                   the Teachers department).
+   *   subscribed      with Sales' subscription form (parent, children, payment),
+   *                   kept on the New Students page and never in the group.
+   *   not_subscribed  with a reason (fixed list) and its details, kept with
+   *                   Sales and never in the group.
+   *
+   * Subscribed / not subscribed are Sales' alone, and mark the trial attended
+   * if the teacher has not. Chat is the only source of truth: nothing here
+   * waits for, or tells, Jawwid Core. One outcome per trial, enforced by the
+   * database (chat.trial_outcome's key); a second one is a correction.
    */
   async outcome(actorId: string, lessonId: string, body: Record<string, unknown>) {
     const actor = await this.conversations.requireActor(actorId);
     const { trial, standing } = await this.load(actor, lessonId);
-    if (standing !== 'sales') throw new CommError(CommErrorCode.LESSON_DENIED, 'the subscription decision is recorded by Sales');
     const result = body.result;
-    if (result !== 'subscribed' && result !== 'not_subscribed') throw invalid('result: subscribed or not_subscribed');
-    let reasonCode: string | null = null;
-    if (result === 'not_subscribed') {
-      const r = body.reason;
-      if (typeof r !== 'string' || !NOT_SUBSCRIBED_REASONS.has(r)) throw invalid(`reason: one of ${[...NOT_SUBSCRIBED_REASONS].join(', ')}`);
-      reasonCode = r;
+    if (result !== 'no_show' && result !== 'subscribed' && result !== 'not_subscribed') {
+      throw invalid('result: no_show, subscribed or not_subscribed');
     }
-    const note = textField(body, 'note', 1000, false);
-    if (trial.outcome !== LessonOutcome.HELD) throw stateError('only a trial the prospect attended leads to a subscription decision');
-    if (trial.trialOutcome) throw stateError('the decision for this trial is already recorded');
+    if (standing === 'teacher') throw new CommError(CommErrorCode.LESSON_DENIED, 'a trial\'s outcome is recorded by a supervisor');
+    if (result !== 'no_show' && standing !== 'sales') {
+      throw new CommError(CommErrorCode.LESSON_DENIED, 'whether the student subscribed is recorded by Sales');
+    }
+    if (Date.now() < trial.startsAt.getTime()) throw stateError('the trial has not started yet');
+    if (trial.trialOutcome) throw stateError('this trial\'s outcome is already recorded; correct it instead');
+    if (trial.outcome !== null && trial.outcome !== LessonOutcome.HELD && trial.outcome !== LessonOutcome.STUDENT_NO_SHOW) {
+      throw stateError('this trial did not take place');
+    }
+    if (trial.outcome === LessonOutcome.STUDENT_NO_SHOW) {
+      throw stateError('the teacher recorded that the student did not attend; correct it instead');
+    }
+    if (result === 'no_show' && trial.outcome === LessonOutcome.HELD) {
+      throw stateError('the teacher reported that the student attended; Sales can correct it');
+    }
+    const decision = await this.decision(actor.organizationId as string, result, body);
+
     await this.lessons.write(() =>
       this.prisma.$transaction(async (tx) => {
+        await this.attend(tx, trial, actor, result === 'no_show' ? LessonOutcome.STUDENT_NO_SHOW : LessonOutcome.HELD);
         await tx.trialOutcome.create({
-          data: { lessonId: trial.id, organizationId: trial.organizationId, result, reasonCode, note, recordedBy: actor.actorId },
+          data: {
+            lessonId: trial.id, organizationId: trial.organizationId, result,
+            reasonCode: decision.reasonCode, note: decision.note, recordedBy: actor.actorId,
+          },
         });
-        // The result only: the reason and note stay with Sales.
-        await this.groups.postCard(tx, trial, actor, CardKind.TRIAL_DECISION, { result });
-        // Core creates the subscription and answers with subscription.created,
-        // carrying this trial's id back (chat.confirm_trial_subscription).
-        if (result === 'subscribed') {
-          const teacher = await tx.teacher.findUnique({ where: { id: trial.teacherId }, select: { coreTeacherId: true } });
-          await this.outbox.enqueue(tx, CommEvent.TRIAL_CONVERTED, {
-            trialId: trial.id,
-            organizationId: trial.organizationId,
-            teacherId: trial.teacherId,
-            coreTeacherId: teacher?.coreTeacherId ?? null,
-            prospect: {
-              id: trial.prospect?.id ?? '',
-              displayName: trial.prospect?.displayName ?? '',
-              level: trial.prospect?.level ?? null,
-            },
-            trialAt: trial.startsAt.toISOString(),
-            recordedBy: actor.actorId,
-            recordedAt: new Date().toISOString(),
-          });
+        if (decision.form) {
+          await this.forms.recordInTx(tx, { lessonId: trial.id, organizationId: trial.organizationId, form: decision.form, by: actor.actorId });
         }
+        // The result only: the reason, the form and the prices stay out of the group.
+        await this.groups.postCard(tx, trial, actor, result === 'no_show' ? CardKind.TRIAL_NO_SHOW : CardKind.TRIAL_DECISION, { result });
         await this.audit.audit(tx, {
           actorId: actor.actorId, action: `trial.${result}`, entity: 'lesson', entityId: trial.id,
-          after: { result, reasonCode }, reason: note ?? result,
+          after: { result, reasonCode: decision.reasonCode }, reason: result,
         });
       }),
     );
     return this.get(actorId, lessonId);
+  }
+
+  /**
+   * Correct a trial's outcome -- Sales (or the super admin), with why. The trial
+   * keeps ONE outcome: the record is changed in place, its previous value lands
+   * in chat.trial_outcome_revision (written by the database), and statistics,
+   * which read the current outcome, count it once. Moving to "subscribed"
+   * needs the form; moving away withdraws it from New Students (kept).
+   */
+  async correct(actorId: string, lessonId: string, body: Record<string, unknown>) {
+    const actor = await this.conversations.requireActor(actorId);
+    const { trial, standing } = await this.load(actor, lessonId);
+    if (standing !== 'sales') throw new CommError(CommErrorCode.LESSON_DENIED, 'a trial\'s outcome is corrected by Sales');
+    const result = body.result;
+    if (result !== 'no_show' && result !== 'subscribed' && result !== 'not_subscribed') {
+      throw invalid('result: no_show, subscribed or not_subscribed');
+    }
+    const why = textField(body, 'why', 1000, true) as string;
+    const current = trial.trialOutcome?.result
+      ?? (trial.outcome === LessonOutcome.STUDENT_NO_SHOW ? 'no_show' : null);
+    if (current === null) throw stateError('this trial has no outcome to correct yet');
+    const decision = await this.decision(actor.organizationId as string, result, body);
+    if (current === result && result !== 'not_subscribed') {
+      throw stateError(result === 'subscribed' ? 'already subscribed; edit the subscription form instead' : 'the outcome is already that');
+    }
+
+    await this.lessons.write(() =>
+      this.prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('chat.correcting_trial', 'on', true), set_config('chat.trial_correction_reason', ${why}, true)`;
+        const attendance = result === 'no_show' ? LessonOutcome.STUDENT_NO_SHOW : LessonOutcome.HELD;
+        if (trial.outcome !== attendance) {
+          await tx.lesson.update({
+            where: { id: trial.id },
+            data: { outcome: attendance, outcomeNote: null, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: new Date() },
+          });
+        }
+        if (trial.trialOutcome) {
+          await tx.trialOutcome.update({
+            where: { lessonId: trial.id },
+            data: { result, reasonCode: decision.reasonCode, note: decision.note, correctedBy: actor.actorId },
+          });
+        } else {
+          // The teacher's own "did not attend" had no supervisor's record yet.
+          await tx.trialOutcome.create({
+            data: { lessonId: trial.id, organizationId: trial.organizationId, result, reasonCode: decision.reasonCode, note: decision.note, recordedBy: actor.actorId },
+          });
+        }
+        if (decision.form) {
+          await this.forms.recordInTx(tx, { lessonId: trial.id, organizationId: trial.organizationId, form: decision.form, by: actor.actorId });
+        } else if (current === 'subscribed') {
+          await this.forms.withdrawInTx(tx, { lessonId: trial.id, by: actor.actorId });
+        }
+        await tx.$executeRaw`SELECT set_config('chat.correcting_trial', 'off', true), set_config('chat.trial_correction_reason', '', true)`;
+        await this.groups.postCard(tx, trial, actor, CardKind.TRIAL_CORRECTION, { result });
+        await this.audit.audit(tx, {
+          actorId: actor.actorId, action: 'trial.corrected', entity: 'lesson', entityId: trial.id,
+          before: { result: current }, after: { result, reasonCode: decision.reasonCode }, reason: why,
+        });
+      }),
+    );
+    return this.get(actorId, lessonId);
+  }
+
+  /** Change a subscribed trial's form (a typo, a new schedule). Sales. Nothing is posted. */
+  async updateSubscription(actorId: string, lessonId: string, body: Record<string, unknown>) {
+    const actor = await this.conversations.requireActor(actorId);
+    const { trial, standing } = await this.load(actor, lessonId);
+    if (standing !== 'sales') throw new CommError(CommErrorCode.LESSON_DENIED, 'the subscription form is Sales\'');
+    if (trial.trialOutcome?.result !== 'subscribed') throw stateError('this trial is not subscribed');
+    const form = await this.forms.validate(actor.organizationId as string, body.subscription);
+    await this.prisma.$transaction(async (tx) => {
+      await this.forms.updateInTx(tx, { lessonId: trial.id, form, by: actor.actorId });
+      await this.audit.audit(tx, {
+        actorId: actor.actorId, action: 'trial.subscription_updated', entity: 'lesson', entityId: trial.id,
+        after: { children: form.children.length }, reason: 'subscription form updated',
+      });
+    });
+    return this.forms.get(actor.organizationId as string, trial.id);
+  }
+
+  /** The outcome's own data, validated before anything is written. */
+  private async decision(organizationId: string, result: 'no_show' | 'subscribed' | 'not_subscribed', body: Record<string, unknown>) {
+    if (result === 'subscribed') {
+      return { reasonCode: null, note: null, form: await this.forms.validate(organizationId, body.subscription) };
+    }
+    if (result === 'not_subscribed') {
+      const r = body.reason;
+      if (typeof r !== 'string' || !NOT_SUBSCRIBED_REASONS.has(r)) throw invalid(`reason: one of ${[...NOT_SUBSCRIBED_REASONS].join(', ')}`);
+      const note = textField(body, 'note', 1000, r === 'other');
+      return { reasonCode: r, note, form: null };
+    }
+    return { reasonCode: null, note: null, form: null };
+  }
+
+  /** Mark the trial attended / not attended by a supervisor, unless it already is (same transaction). */
+  private async attend(tx: Prisma.TransactionClient, trial: TrialRow, actor: Actor, outcome: string) {
+    if (trial.outcome === outcome) return;
+    const updated = await tx.lesson.update({
+      where: { id: trial.id },
+      data: { outcome, outcomeNote: null, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: new Date() },
+    });
+    await this.lessons.emitClosed(tx, updated, false);
   }
 
   // ------------------------------------------------------------------
@@ -348,16 +461,59 @@ export class TrialService {
     return this.groups.ticketsFor(actorId, conversationId);
   }
 
+  /**
+   * What the Admin Web's "+ -> Trial" card needs in one trial group: who the
+   * caller is there (member, permanent, may join or leave), what they may
+   * record, and the teacher's trials -- those still awaiting an outcome first,
+   * then the recent ones that have one (to correct). Each is named by its
+   * student and time, so trials sharing a group are never confused.
+   */
+  async groupContext(actorId: string, conversationId: string) {
+    const actor = await this.conversations.requireActor(actorId);
+    const standing = await this.requireSalesOrManager(actor);
+    const context = await this.groups.context(actor, conversationId);
+    const teacherId = context.teacher?.id as string;
+    const rows = await this.prisma.lesson.findMany({
+      where: {
+        organizationId: actor.organizationId, kind: LessonKind.TRIAL, teacherId,
+        startsAt: { lte: new Date(), gte: new Date(Date.now() - GROUP_WINDOW_DAYS * 86_400_000) },
+        OR: [{ outcome: null }, { outcome: { in: [LessonOutcome.HELD, LessonOutcome.STUDENT_NO_SHOW] } }],
+      },
+      include: TRIAL_INCLUDE,
+      orderBy: { startsAt: 'desc' },
+      take: 200,
+    });
+    const trials = rows.map((r) => this.dto(r, standing));
+    const open = trials.filter((t) => t.outcome === 'awaiting').reverse();
+    const closed = trials.filter((t) => t.outcome !== 'awaiting');
+    return {
+      ...context,
+      can: { noShow: true, decide: standing === 'sales', correct: standing === 'sales' },
+      trials: [...open, ...closed].slice(0, 50),
+    };
+  }
+
+  async joinGroup(actorId: string, conversationId: string) {
+    const actor = await this.conversations.requireActor(actorId);
+    await this.requireSalesOrManager(actor);
+    await this.groups.join(actor, conversationId);
+    return this.groupContext(actorId, conversationId);
+  }
+
+  async leaveGroup(actorId: string, conversationId: string) {
+    const actor = await this.conversations.requireActor(actorId);
+    await this.requireSalesOrManager(actor);
+    await this.groups.leave(actor, conversationId);
+    return this.groupContext(actorId, conversationId);
+  }
+
   // ------------------------------------------------------------------
   // New students
   // ------------------------------------------------------------------
 
   /**
-   * The Operations team's New Students page: subscriptions Core has CONFIRMED
-   * whose learner exists and still has no live group to talk in (ready to set
-   * up); confirmed ones whose student Chat does not have yet (Core named the
-   * child, the learner arrives later and links itself); and subscriptions Sales
-   * recorded that Core has not confirmed yet.
+   * The New Students page: every subscribed trial's form -- parent, children,
+   * payment -- as Sales recorded it in Chat. Operations, Sales, super admin.
    */
   async newStudents(actorId: string) {
     const actor = await this.conversations.requireActor(actorId);
@@ -365,37 +521,7 @@ export class TrialService {
       || (await this.lessons.inDepartment(actor, 'operations'))
       || (await this.lessons.inDepartment(actor, 'sales'));
     if (!allowed) throw new CommError(CommErrorCode.LESSON_DENIED, 'the New Students page belongs to Operations and Sales');
-    const rows = await this.prisma.trialOutcome.findMany({
-      where: { organizationId: actor.organizationId, result: 'subscribed' },
-      include: { lesson: { include: TRIAL_INCLUDE } },
-      orderBy: { recordedAt: 'desc' },
-      take: 500,
-    });
-    const learnerIds = rows.map((r) => r.lesson.prospect?.learnerId).filter((x): x is string => !!x);
-    const grouped = new Set(
-      (await this.prisma.$queryRaw<Array<{ learner_id: string }>>`
-        SELECT DISTINCT x.learner_id::text AS learner_id FROM (
-          SELECT c.learner_id FROM chat.conversation c
-           WHERE c.type = 'student_group' AND c.archived_at IS NULL AND c.learner_id = ANY(${learnerIds}::uuid[])
-          UNION
-          SELECT cl.learner_id FROM chat.conversation_learner cl JOIN chat.conversation c ON c.id = cl.conversation_id
-           WHERE c.archived_at IS NULL AND cl.learner_id = ANY(${learnerIds}::uuid[])
-        ) x`).map((r) => r.learner_id),
-    );
-    const item = (r: (typeof rows)[number]) => ({
-      lessonId: r.lessonId,
-      prospect: { id: r.lesson.prospect?.id ?? '', displayName: r.lesson.prospect?.displayName ?? '' },
-      learnerId: r.lesson.prospect?.learnerId ?? null,
-      teacher: r.lesson.teacher,
-      trialAt: r.lesson.startsAt.toISOString(),
-      recordedAt: r.recordedAt.toISOString(),
-      confirmedAt: r.confirmedAt?.toISOString() ?? null,
-    });
-    return {
-      readyForSetup: rows.filter((r) => r.confirmedAt && r.lesson.prospect?.learnerId && !grouped.has(r.lesson.prospect.learnerId)).map(item),
-      awaitingStudent: rows.filter((r) => r.confirmedAt && !r.lesson.prospect?.learnerId).map(item),
-      awaitingCore: rows.filter((r) => !r.confirmedAt).map(item),
-    };
+    return { students: await this.forms.list(actor.organizationId as string) };
   }
 
   // ------------------------------------------------------------------
@@ -443,9 +569,10 @@ export class TrialService {
     }
   }
 
-  private async requireSalesOrManager(actor: Actor) {
+  private async requireSalesOrManager(actor: Actor): Promise<'sales' | 'manager'> {
     const s = await this.standing(actor, '');
     if (s !== 'sales' && s !== 'manager') throw new CommError(CommErrorCode.LESSON_DENIED, 'trials belong to Sales and the Teachers department');
+    return s;
   }
 
   private async orgTeacher(actor: Actor, teacherId: string) {
@@ -456,13 +583,15 @@ export class TrialService {
     return teacher;
   }
 
-  /** A trial as each reader may see it: a teacher never sees why a prospect did not subscribe. */
+  /**
+   * A trial as each reader may see it. `outcome` is the trial's ONE outcome:
+   * upcoming, awaiting (started, nothing recorded or attended without a
+   * decision), no_show, subscribed, not_subscribed, or cancelled. A teacher
+   * never sees why a student did not subscribe.
+   */
   private dto(t: TrialRow, standing: TrialStanding = 'sales') {
     const o = t.trialOutcome;
-    const conversion = !o
-      ? (t.outcome === LessonOutcome.HELD ? 'pending' : null)
-      : o.result === 'not_subscribed' ? 'not_subscribed'
-      : o.confirmedAt ? 'confirmed' : 'awaiting_core';
+    const outcome = trialOutcomeOf(t);
     return {
       id: t.id,
       prospect: { id: t.prospect?.id ?? '', displayName: t.prospect?.displayName ?? '', level: t.prospect?.level ?? null },
@@ -475,9 +604,14 @@ export class TrialService {
         : t.outcome === null ? (Date.now() < t.startsAt.getTime() ? 'upcoming' : 'awaiting')
         : t.outcome,
       report: t.report ? { covered: t.report.covered, rating: t.report.rating, note: t.report.note } : null,
-      conversion,
+      outcome,
       ...(standing !== 'teacher' && o
-        ? { conversionDetail: { reason: o.reasonCode, note: o.note, recordedAt: o.recordedAt.toISOString(), confirmedAt: o.confirmedAt?.toISOString() ?? null } }
+        ? {
+            outcomeDetail: {
+              reason: o.reasonCode, note: o.note, recordedAt: o.recordedAt.toISOString(),
+              correctedAt: o.correctedAt?.toISOString() ?? null,
+            },
+          }
         : {}),
     };
   }
@@ -492,4 +626,15 @@ function parse(v: string, key: string): Date {
   const d = new Date(v);
   if (Number.isNaN(d.getTime()) || !/^\d{4}-\d{2}-\d{2}T/.test(v)) throw invalid(`${key}: an ISO-8601 timestamp`);
   return d;
+}
+
+export type TrialOutcomeName = 'upcoming' | 'awaiting' | 'no_show' | 'subscribed' | 'not_subscribed' | 'cancelled';
+
+/** The trial's one outcome -- the same rule as chat.teacher_trial_stats. */
+export function trialOutcomeOf(t: { outcome: string | null; startsAt: Date; trialOutcome: { result: string } | null }): TrialOutcomeName {
+  if (t.trialOutcome) return t.trialOutcome.result as TrialOutcomeName;
+  if (t.outcome === LessonOutcome.STUDENT_NO_SHOW) return 'no_show';
+  if (t.outcome === null) return Date.now() < t.startsAt.getTime() ? 'upcoming' : 'awaiting';
+  if (t.outcome === LessonOutcome.HELD) return 'awaiting';
+  return 'cancelled';
 }

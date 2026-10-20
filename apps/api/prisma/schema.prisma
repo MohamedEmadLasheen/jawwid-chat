@@ -1491,7 +1491,9 @@ model TrialProspect {
   @@schema("chat")
 }
 
-/// PD-11 T4: Sales' fact about an attended trial; confirmed only by Core.
+/// A trial's one outcome (no_show | subscribed | not_subscribed), recorded by a
+/// supervisor in Chat -- the only source of truth. confirmedAt / coreSubscriptionRef
+/// are retired (20261021100000) and never read.
 model TrialOutcome {
   lessonId            String    @id @map("lesson_id") @db.Uuid
   lesson              Lesson    @relation(fields: [lessonId], references: [id])
@@ -1503,8 +1505,56 @@ model TrialOutcome {
   recordedAt          DateTime  @map("recorded_at") @db.Timestamptz @default(now())
   confirmedAt         DateTime? @map("confirmed_at") @db.Timestamptz
   coreSubscriptionRef String?   @map("core_subscription_ref")
+  correctedAt         DateTime? @map("corrected_at") @db.Timestamptz
+  correctedBy         String?   @map("corrected_by") @db.Uuid
 
   @@map("trial_outcome")
+  @@schema("chat")
+}
+
+/// Every correction of a trial's outcome. Written by a trigger, never by hand
+/// (20261021100000_chat_trial_journey).
+model TrialOutcomeRevision {
+  id                 String   @id @default(uuid()) @db.Uuid
+  lessonId           String   @map("lesson_id") @db.Uuid
+  organizationId     String   @map("organization_id") @db.Uuid
+  previousResult     String   @map("previous_result")
+  previousReasonCode String?  @map("previous_reason_code")
+  previousNote       String?  @map("previous_note")
+  result             String
+  reasonCode         String?  @map("reason_code")
+  note               String?
+  why                String
+  correctedBy        String   @map("corrected_by") @db.Uuid
+  correctedAt        DateTime @map("corrected_at") @db.Timestamptz @default(now())
+
+  @@map("trial_outcome_revision")
+  @@schema("chat")
+}
+
+// =====================================================================
+// Trial journey -- 20261021100000_chat_trial_journey.sql owns the DDL.
+// The parent's contact details are read and written ONLY by src/new-students
+// (new-students-confinement.spec).
+// =====================================================================
+
+/// Sales' subscription form for a subscribed trial. CONFINED (G-07).
+model TrialSubscription {
+  lessonId            String    @id @map("lesson_id") @db.Uuid
+  organizationId      String    @map("organization_id") @db.Uuid
+  parentName          String    @map("parent_name")
+  confinedEmail       String?   @map("email")
+  confinedParentPhone String    @map("phone")
+  children            Json
+  currency            String
+  paymentMethod       String    @map("payment_method")
+  recordedBy          String    @map("recorded_by") @db.Uuid
+  recordedAt          DateTime  @map("recorded_at") @db.Timestamptz @default(now())
+  updatedBy           String?   @map("updated_by") @db.Uuid
+  updatedAt           DateTime? @map("updated_at") @db.Timestamptz
+  withdrawnAt         DateTime? @map("withdrawn_at") @db.Timestamptz
+
+  @@map("trial_subscription")
   @@schema("chat")
 }
 

@@ -985,6 +985,83 @@ copy.
   teacher's group in Chat. The group shows as "Trial group" in the
   conversation lists.
 
+**Trial journey as built (2026-10-20).** Migration `20261021100000_chat_trial_journey.sql`.
+Owner decisions in the session "student trial journey", which **supersede**
+parts of T4 above. The superseded parts are the whole-Sales membership and
+Core's confirmation.
+- **Chat is the only source of truth** for a trial's outcome. Sales'
+  "subscribed" is the conversion the moment it is recorded.
+  - Nothing waits for, or is sent to, Jawwid Core: the `trial.converted` event
+    is gone, and so are the "awaiting Core" states.
+  - `chat.confirm_trial_conversion`, `chat.confirm_trial_subscription` and the
+    learner-link trigger are dropped. The `confirmed_at` / `core_*` columns stay
+    (migrations are append-only), and nothing reads them.
+  - The signed webhook still verifies and records `subscription.created`, but it
+    changes nothing.
+- **The trial group's membership.** Still one permanent group per teacher.
+  - **Permanent members:** the teacher and the Teachers department (the Teacher
+    Supervisors), synced on every ensure.
+  - **Sales supervisors join and leave by choice**, all with the same right:
+    `POST /trials/groups/:conversationId/join | leave`. A sync never adds or
+    removes one, except someone no longer in Sales.
+  - Access is unchanged: both departments read and write without being members.
+    So a supervisor who left still finds the group and rejoins. Membership only
+    decides who is notified.
+- **One outcome per trial**, from the Admin Web chat's **"+ → Trial"** card
+  (`GET /trials/groups/:conversationId` lists the teacher's trials, those awaiting
+  an outcome first, each by student and time) or from the Trials page:
+  `POST /trials/:id/outcome`.
+  - `no_show`: either supervisor (Sales or the Teachers department).
+  - `subscribed`: Sales, with the subscription form.
+  - `not_subscribed`: Sales, with a reason from the fixed list (details required
+    for "other").
+  - Options 2 and 3 mark the trial attended if the teacher has not.
+  - A trial's attendance and its outcome must agree (database).
+  - "A held lesson has a report" now also accepts a trial that Sales recorded as
+    subscribed or not subscribed.
+- **Privacy.** The group reads one sentence and which trial it is (student name
+  and time): "The student has subscribed." / "The student did not subscribe." /
+  "The student did not attend the trial lesson."
+  - The form, prices, contact details and the reason never reach a message, a
+    card, an outbox event or the audit log's payload. The reason code is audited.
+  - The form is **confined** like the Teacher File: `chat.trial_subscription` has
+    no request-role grant, and only `src/new-students` may name it
+    (`new-students-confinement.spec.ts`).
+  - The G-07 tripwire allows exactly its phone declaration. The e-mail is
+    optional.
+- **The subscription form:**
+  - the parent's name, phone and e-mail;
+  - for each child (1–10): name, age, course, assigned teacher, package price,
+    price per lesson, and weekly days and times;
+  - the payment: currency (ISO code) and bank transfer or invoice.
+
+  Sales may edit it in place (`POST /trials/:id/subscription`); nothing is
+  posted. Recording it does **not** create parent or child accounts.
+- **New Students** (`GET /trials/new-students`; Operations, Sales, super admin)
+  lists every live form, newest first, as recorded in Chat.
+- **Corrections** (`POST /trials/:id/correction`, Sales or the super admin, with
+  `why`).
+  - The trial keeps its one `chat.trial_outcome` row, changed in place. A
+    trigger writes the before and after into the append-only
+    `chat.trial_outcome_revision`.
+  - The attendance follows (`held` ⇄ `student_no_show`, allowed only inside a
+    correction).
+  - Moving away from "subscribed" withdraws the form from New Students; the form
+    is kept. Moving back restores it with the new details.
+  - The group reads "Outcome corrected: …" with the new sentence only (card kind
+    `trial_correction`).
+- **Statistics.** `chat.teacher_trial_stats` is the one definition. Trials are
+  counted per teacher, by the month they start in, each **once** by its current
+  outcome.
+  - total = subscribed + not subscribed + did not attend + awaiting an outcome.
+  - conducted = the trials the student attended.
+  - conversion = subscribed ÷ (subscribed + not subscribed).
+  - Upcoming and cancelled trials are shown outside the total.
+  - The block is on the teacher's statistics; the teachers list gains Trials and
+    Subscribed columns.
+- **App.** Trial cards read the short sentences, and a correction card shows the
+  new outcome. The "counts once Core confirms" line is gone.
+
 **Deprecated behaviour.** None removed. Explicitly **not** built: a generic ticket
 or task entity; any stored package balance; parents changing their regular
 lesson times without approval.

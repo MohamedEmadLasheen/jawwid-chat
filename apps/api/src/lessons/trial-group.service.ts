@@ -27,18 +27,28 @@ export interface TrialForCard {
 }
 
 /**
- * PD-11 T4 (part 2): each teacher's one staff-only TRIAL GROUP.
+ * PD-11 T4 (part 2), membership as decided for the trial journey (owner,
+ * 2026-10-20): each teacher's one permanent, staff-only TRIAL GROUP.
  *
- * Its members are the teacher and the Sales department's live conversation
- * staff (owner decision 2026-10-19: the whole department), synced every time
- * it is ensured. The Teachers department reads and writes it too, through
- * chat.staff_conversation_access's 'trial_group' branch, without being a
- * member -- so it is not notified of every trial of every teacher. Membership
- * only decides who is notified; access is the database's decision.
+ *   permanent  the teacher and the Teachers department's live conversation
+ *              staff (the Teacher Supervisors), synced every time the group is
+ *              ensured
+ *   by choice  Sales supervisors JOIN when a trial needs them and LEAVE when it
+ *              does not. Every Sales supervisor has the same right, and nothing
+ *              here adds or removes one on their behalf -- except one who has
+ *              left the Sales department, whose seat is ended at the next sync.
+ *
+ * Membership only decides who is notified. Access is the database's decision
+ * (chat.staff_conversation_access's 'trial_group' branch): Sales and the
+ * Teachers department read and write the group whether they are members or not,
+ * so a Sales supervisor who left can still find it and rejoin. Trial records
+ * are keyed by the trial, never by the group or its members, so joining and
+ * leaving never touch an outcome or a statistic.
  *
  * It is created when the teacher's first trial is booked (in the booking's own
  * transaction) or when Sales or the Teachers department opens it, and never
- * twice (an advisory lock plus a partial unique index).
+ * twice (an advisory lock plus a partial unique index). It is never archived
+ * here.
  */
 @Injectable()
 export class TrialGroupService {
@@ -72,9 +82,11 @@ export class TrialGroupService {
   }
 
   /**
-   * Find or create the teacher's live trial group and bring its staff
-   * membership in line with the Sales department. Runs inside the caller's
-   * transaction, so a booking and the card it posts commit together.
+   * Find or create the teacher's live trial group and bring its permanent
+   * membership in line: the teacher and the Teachers department are seated;
+   * staff who are in neither the Teachers nor the Sales department any more
+   * lose their seat. Sales supervisors who chose to join stay. Runs inside the
+   * caller's transaction, so a booking and the card it posts commit together.
    */
   async ensureInTx(tx: Tx, teacherId: string, organizationId: string, byStaffId: string | null): Promise<Conversation> {
     const teacher = await tx.teacher.findFirst({
@@ -91,7 +103,7 @@ export class TrialGroupService {
        WHERE s.organization_id = ${organizationId}::uuid
          AND s.is_active AND s.left_at IS NULL
          AND s.role IN ('admin', 'coverage', 'manager')
-         AND chat.sales_department_role(s.id) IS NOT NULL
+         AND chat.teachers_department_role(s.id) IS NOT NULL
        ORDER BY s.id`;
     const wanted = new Set(staff.map((s) => s.id));
 
@@ -143,7 +155,10 @@ export class TrialGroupService {
       });
       added.push(id);
     }
-    const leaving = [...liveStaff].filter((id) => !wanted.has(id));
+    // A seat ends only for someone who may no longer sit here at all; a Sales
+    // supervisor's own choice to stay is never undone by a sync.
+    const sales = liveStaff.size === 0 ? new Set<string>() : await this.inSales(tx, [...liveStaff]);
+    const leaving = [...liveStaff].filter((id) => !wanted.has(id) && !sales.has(id));
     if (leaving.length > 0) {
       await tx.conversationMember.updateMany({
         where: { conversationId: conv.id, actorId: { in: leaving }, leftAt: null },
@@ -176,6 +191,110 @@ export class TrialGroupService {
     };
     await this.cards.post(tx, conv, recorder, { kind, payload, body: renderTrialCardBody(kind, payload, lang) });
     return conv;
+  }
+
+  /**
+   * A Sales supervisor joins a teacher's trial group, to handle a trial in it.
+   * Idempotent: joining twice is one seat.
+   */
+  async join(actor: Actor, conversationId: string) {
+    const conv = await this.trialGroup(actor, conversationId);
+    if (!(await this.canSitAsSales(actor))) {
+      throw new CommError(CommErrorCode.LESSON_DENIED, 'only a Sales supervisor joins a trial group by choice');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'trial_group:' + (conv.trialTeacherId as string)}))`;
+      const seated = await tx.conversationMember.findFirst({ where: { conversationId: conv.id, actorId: actor.actorId, leftAt: null } });
+      if (seated) return;
+      await tx.conversationMember.create({
+        data: { conversationId: conv.id, actorId: actor.actorId, actorKind: ActorKind.STAFF, memberRole: MemberRole.ADMIN, addedBy: actor.actorId },
+      });
+      await this.outbox.enqueue(tx, CommEvent.MEMBERSHIP_CHANGED, { conversationId: conv.id, added: [actor.actorId], removed: [] });
+      await this.audit.audit(tx, {
+        actorId: actor.actorId, action: 'trial_group.joined', entity: 'conversation', entityId: conv.id,
+        after: { teacherId: conv.trialTeacherId }, reason: 'Sales supervisor joined',
+      });
+    });
+    return this.context(actor, conversationId);
+  }
+
+  /**
+   * A Sales supervisor leaves a teacher's trial group. The teacher and the
+   * Teachers department are permanent and cannot leave. Nothing about any trial
+   * changes: outcomes are the trial's, not the member's.
+   */
+  async leave(actor: Actor, conversationId: string) {
+    const conv = await this.trialGroup(actor, conversationId);
+    if (actor.kind !== ActorKind.STAFF || (await this.isPermanentStaff(actor.actorId))) {
+      throw new CommError(CommErrorCode.LESSON_DENIED, 'the teacher and the Teacher Supervisors are permanent members of a trial group');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'trial_group:' + (conv.trialTeacherId as string)}))`;
+      const left = await tx.conversationMember.updateMany({
+        where: { conversationId: conv.id, actorId: actor.actorId, leftAt: null },
+        data: { leftAt: new Date() },
+      });
+      if (left.count === 0) return;
+      await this.outbox.enqueue(tx, CommEvent.MEMBERSHIP_CHANGED, { conversationId: conv.id, added: [], removed: [actor.actorId] });
+      await this.audit.audit(tx, {
+        actorId: actor.actorId, action: 'trial_group.left', entity: 'conversation', entityId: conv.id,
+        after: { teacherId: conv.trialTeacherId }, reason: 'Sales supervisor left',
+      });
+    });
+    return this.context(actor, conversationId);
+  }
+
+  /** Who the caller is in this trial group, for the Admin Web's join/leave bar. */
+  async context(actor: Actor, conversationId: string) {
+    const conv = await this.trialGroup(actor, conversationId);
+    const teacher = await this.prisma.teacher.findUnique({ where: { id: conv.trialTeacherId as string }, select: { id: true, name: true } });
+    const seated = actor.kind === ActorKind.STAFF
+      && (await this.prisma.conversationMember.count({ where: { conversationId: conv.id, actorId: actor.actorId, leftAt: null } })) > 0;
+    const permanent = actor.kind === ActorKind.STAFF && (await this.isPermanentStaff(actor.actorId));
+    const sales = await this.canSitAsSales(actor);
+    return {
+      conversationId: conv.id,
+      teacher,
+      membership: {
+        isMember: seated,
+        permanent,
+        canJoin: sales && !seated,
+        canLeave: seated && !permanent,
+      },
+    };
+  }
+
+  /** The live trial group `conversationId`, in the caller's organization, or 404. */
+  async trialGroup(actor: Actor, conversationId: string): Promise<Conversation> {
+    if (!isUuid(conversationId)) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'trial group not found');
+    const conv = await this.prisma.conversation.findFirst({
+      where: { id: conversationId, organizationId: actor.organizationId ?? undefined, type: ConversationType.TRIAL_GROUP, archivedAt: null },
+    });
+    if (!conv || !actor.organizationId) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'trial group not found');
+    return conv;
+  }
+
+  private async canSitAsSales(actor: Actor): Promise<boolean> {
+    if (actor.kind !== ActorKind.STAFF || !actor.isActive) return false;
+    return (await this.inSales(this.prisma, [actor.actorId])).has(actor.actorId);
+  }
+
+  private async isPermanentStaff(staffId: string): Promise<boolean> {
+    const rows = await this.prisma.$queryRaw<Array<{ role: string | null }>>`
+      SELECT chat.teachers_department_role(${staffId}::uuid) AS role`;
+    return rows[0]?.role !== null && rows[0]?.role !== undefined;
+  }
+
+  /** Of `ids`, the live conversation staff who are in the Sales department. */
+  private async inSales(db: Tx | PrismaService, ids: string[]): Promise<Set<string>> {
+    const rows = await db.$queryRaw<Array<{ id: string }>>`
+      SELECT s.id::text AS id
+        FROM chat.staff s
+       WHERE s.id = ANY(${ids}::uuid[])
+         AND s.is_active AND s.left_at IS NULL
+         AND s.role IN ('admin', 'coverage', 'manager')
+         AND chat.sales_department_role(s.id) IS NOT NULL`;
+    return new Set(rows.map((r) => r.id));
   }
 
   /**

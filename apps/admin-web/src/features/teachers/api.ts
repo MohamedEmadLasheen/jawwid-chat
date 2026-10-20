@@ -30,6 +30,24 @@ export interface CategoryStats extends Bucket {
   byDuration: Array<{ durationMinutes: number } & Bucket>
 }
 
+/**
+ * A teacher's trials of the month, each counted once by its one outcome,
+ * from Chat's records only. total = subscribed + notSubscribed + noShow +
+ * awaiting; upcoming and cancelled are outside the total.
+ */
+export interface TrialStats {
+  total: number
+  conducted: number
+  subscribed: number
+  notSubscribed: number
+  noShow: number
+  awaiting: number
+  upcoming: number
+  cancelled: number
+  /** Of the trials with a decision; null when there is none. */
+  conversionRate: number | null
+}
+
 export interface TeacherRow {
   teacher: { id: string; name: string; isActive: boolean }
   held: Bucket
@@ -39,6 +57,7 @@ export interface TeacherRow {
   upcoming: Bucket
   attendanceRate: number | null
   reportsOnTimeRate: number | null
+  trials: TrialStats
 }
 
 export interface TeacherDetail {
@@ -48,7 +67,7 @@ export interface TeacherDetail {
   categories: CategoryStats[]
   totals: { counted: Bucket; scheduledMinutes: number }
   makeups: { lessons: number; held: number }
-  trials: { lessons: number; attended: number; converted: number; available: boolean }
+  trials: TrialStats
   rates: { attendance: number | null; completion: number | null; teacherReliability: number | null }
   reports: { reports: number; onTime: number; onTimeRate: number | null; medianDelayMinutes: number | null }
   replies: { familyMessages: number; answeredWithin: number; rate: number | null; medianReplyMinutes: number | null }

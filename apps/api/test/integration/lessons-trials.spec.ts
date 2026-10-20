@@ -5,9 +5,9 @@
  *   2. booking: only into the teacher's real free time; a trial takes the
  *      teacher's time like any lesson, and the lesson pages never see it
  *   3. attendance: the teacher's fact (the Teachers department may record an absence)
- *   4. conversion: Sales' fact, for an attended trial only; a teacher never
- *      sees why a prospect did not subscribe
- *   5. Core's confirmation and the New Students page
+ *   4. the outcome: subscribed / not subscribed are Sales'; a teacher never
+ *      sees why a prospect did not subscribe (the rest of the outcome rules,
+ *      corrections and New Students: trial-journey.spec.ts)
  *   6. statistics: a trial has its own block and is never a student's lesson
  *   7. the database refuses what the service would never write
  *
@@ -22,7 +22,8 @@ import { StatsService } from '../../src/lessons/stats.service';
 import { CardPoster } from '../../src/supervision/card-poster';
 import { TrialService } from '../../src/lessons/trial.service';
 import { TrialGroupService } from '../../src/lessons/trial-group.service';
-import { buildGraph, seed, truncate, withAssignmentGate, Scenario } from './harness';
+import { NewStudentsService } from '../../src/new-students/new-students.service';
+import { buildGraph, seed, truncate, Scenario } from './harness';
 
 const g = buildGraph();
 const audit = new PrismaAuditService();
@@ -30,7 +31,7 @@ const lessons = new LessonService(g.prisma, g.authz, g.conversations, g.outbox, 
 const scheduling = new SchedulingService(g.prisma, g.authz, g.conversations, lessons, g.outbox, g.config, g.reminders, audit);
 const cards = new CardPoster(g.conversations, g.outbox, audit);
 const groups = new TrialGroupService(g.prisma, g.authz, g.conversations, g.outbox, cards, g.config, audit);
-const trials = new TrialService(g.prisma, g.conversations, lessons, scheduling, audit, groups, g.outbox);
+const trials = new TrialService(g.prisma, g.conversations, lessons, scheduling, audit, groups, new NewStudentsService(g.prisma));
 const stats = new StatsService(g.prisma, g.conversations, lessons, scheduling, g.config);
 
 const TZ = 'Africa/Cairo';
@@ -88,10 +89,13 @@ async function pastTrial(startsAt: Date, minutes = 30, teacherId = s.teacherId):
   return l.id;
 }
 
-async function confirm(lessonId: string, learnerId: string | null) {
-  await g.prisma.$executeRawUnsafe(
-    `select chat.confirm_trial_conversion($1::uuid, 'core-sub-1', $2::uuid)`, lessonId, learnerId,
-  );
+/** A synthetic subscription form (G-16). */
+function form(teacherId = s.teacherId) {
+  return {
+    parent: { name: 'parent_q', email: 'parent_q@example.test', phone: '+99 000 000 000' },
+    children: [{ name: 'child_q', age: 9, course: 'course_q', teacherId, packagePrice: 1200, lessonPrice: 150, schedule: [{ weekday: 1, time: '17:00' }] }],
+    payment: { currency: 'EGP', method: 'bank_transfer' },
+  };
 }
 
 beforeAll(async () => {
@@ -143,7 +147,7 @@ describe('2. booking', () => {
     expect(await code(trials.book(salesId, { prospectId, teacherId: s.teacherId, startsAt: offGrid }))).toBe(CommErrorCode.LESSON_STATE);
 
     const t = await trials.book(salesId, { prospectId, teacherId: s.teacherId, startsAt: at });
-    expect(t).toMatchObject({ teacher: { id: s.teacherId }, prospect: { displayName: 'prospect_q' }, durationMinutes: 30, attendance: 'upcoming', conversion: null });
+    expect(t).toMatchObject({ teacher: { id: s.teacherId }, prospect: { displayName: 'prospect_q' }, durationMinutes: 30, attendance: 'upcoming', outcome: 'upcoming' });
     expect((await trials.slots(salesId, s.teacherId, '30')).slots).not.toContain(at);
 
     // The trial holds the teacher's time against a student's lesson too.
@@ -187,7 +191,7 @@ describe('3. attendance', () => {
     expect(await code(trials.attendance(s.teacherId, id, { attended: true }))).toBe(CommErrorCode.VALIDATION);
 
     const t = await trials.attendance(s.teacherId, id, { attended: true, covered: 'letters 1-5', rating: 4, note: 'keen' });
-    expect(t).toMatchObject({ attendance: 'attended', report: { covered: 'letters 1-5', rating: 4 }, conversion: 'pending' });
+    expect(t).toMatchObject({ attendance: 'attended', report: { covered: 'letters 1-5', rating: 4 }, outcome: 'awaiting' });
     expect(await code(trials.attendance(s.teacherId, id, { attended: false }))).toBe(CommErrorCode.LESSON_STATE);
     const events = await g.prisma.outboxEvent.findMany({ where: { type: 'lesson.closed' } });
     expect(events.map((e) => (e.payload as { learnerId: unknown }).learnerId)).toEqual([null]);
@@ -201,7 +205,7 @@ describe('3. attendance', () => {
 
     const id = await pastTrial(new Date(Date.now() - 2 * HOUR));
     expect(await code(trials.attendance(salesId, id, { attended: false }))).toBe(CommErrorCode.LESSON_DENIED);
-    expect(await trials.attendance(tsupId, id, { attended: false, note: 'no answer' })).toMatchObject({ attendance: 'no_show', conversion: null });
+    expect(await trials.attendance(tsupId, id, { attended: false, note: 'no answer' })).toMatchObject({ attendance: 'no_show', outcome: 'no_show' });
   });
 
   it('Sales or the department cancels an open trial with a reason; a teacher cannot', async () => {
@@ -213,79 +217,30 @@ describe('3. attendance', () => {
   });
 });
 
-describe('4. conversion', () => {
-  it('Sales only, after attendance only, once; not subscribed needs a reason the teacher never sees', async () => {
+describe('4. the outcome', () => {
+  it('Sales only, once; not subscribed needs a reason the teacher never sees', async () => {
     const id = await pastTrial(new Date(Date.now() - 2 * HOUR));
-    expect(await code(trials.outcome(salesId, id, { result: 'subscribed' }))).toBe(CommErrorCode.LESSON_STATE);
     await trials.attendance(s.teacherId, id, { attended: true, covered: 'x' });
 
-    expect(await code(trials.outcome(tsupId, id, { result: 'subscribed' }))).toBe(CommErrorCode.LESSON_DENIED);
-    expect(await code(trials.outcome(s.teacherId, id, { result: 'subscribed' }))).toBe(CommErrorCode.LESSON_DENIED);
+    expect(await code(trials.outcome(tsupId, id, { result: 'subscribed', subscription: form() }))).toBe(CommErrorCode.LESSON_DENIED);
+    expect(await code(trials.outcome(s.teacherId, id, { result: 'subscribed', subscription: form() }))).toBe(CommErrorCode.LESSON_DENIED);
     expect(await code(trials.outcome(salesId, id, { result: 'not_subscribed' }))).toBe(CommErrorCode.VALIDATION);
     expect(await code(trials.outcome(salesId, id, { result: 'maybe' }))).toBe(CommErrorCode.VALIDATION);
 
     const t = await trials.outcome(salesId, id, { result: 'not_subscribed', reason: 'price', note: 'too expensive for now' });
-    expect(t).toMatchObject({ conversion: 'not_subscribed', conversionDetail: { reason: 'price', note: 'too expensive for now' } });
-    expect(await code(trials.outcome(salesId, id, { result: 'subscribed' }))).toBe(CommErrorCode.LESSON_STATE);
+    expect(t).toMatchObject({ outcome: 'not_subscribed', outcomeDetail: { reason: 'price', note: 'too expensive for now' } });
+    expect(await code(trials.outcome(salesId, id, { result: 'subscribed', subscription: form() }))).toBe(CommErrorCode.LESSON_STATE);
 
     const seen = await trials.get(s.teacherId, id);
-    expect(seen.conversion).toBe('not_subscribed');
-    expect(seen).not.toHaveProperty('conversionDetail');
+    expect(seen.outcome).toBe('not_subscribed');
+    expect(seen).not.toHaveProperty('outcomeDetail');
   });
 
-  it('a no-show leads to no decision', async () => {
+  it('a teacher\'s no-show is the outcome; a decision on it is a correction', async () => {
     const id = await pastTrial(new Date(Date.now() - 2 * HOUR));
     await trials.attendance(s.teacherId, id, { attended: false });
-    expect(await code(trials.outcome(salesId, id, { result: 'subscribed' }))).toBe(CommErrorCode.LESSON_STATE);
-  });
-});
-
-describe('5. Core confirms; the New Students page', () => {
-  it('awaiting Core until confirmed; ready for setup once the learner exists without a group', async () => {
-    const id = await pastTrial(new Date(Date.now() - 2 * HOUR));
-    await trials.attendance(s.teacherId, id, { attended: true, covered: 'x' });
-    await trials.outcome(salesId, id, { result: 'subscribed' });
-    expect((await trials.get(salesId, id)).conversion).toBe('awaiting_core');
-
-    let page = await trials.newStudents(s.ownerId); // Operations
-    expect(page.awaitingCore.map((x) => x.lessonId)).toEqual([id]);
-    expect(page.readyForSetup).toEqual([]);
-    expect(await code(trials.newStudents(tsupId))).toBe(CommErrorCode.LESSON_DENIED);
-    expect(await code(trials.newStudents(s.teacherId))).toBe(CommErrorCode.LESSON_DENIED);
-
-    // Core's subscription arrives: the learner record exists, with no group yet.
-    const learnerId = randomUUID();
-    await withAssignmentGate(
-      g.prisma,
-      `insert into chat.learner (id, family_id, name, teacher_id) values ('${learnerId}'::uuid, '${s.familyId}'::uuid, 'learner_q', '${s.teacherId}'::uuid)`,
-    );
-    await confirm(id, learnerId);
-    await confirm(id, learnerId); // a redelivery is a no-op
-    expect((await trials.get(salesId, id)).conversion).toBe('confirmed');
-    page = await trials.newStudents(salesId);
-    expect(page.awaitingCore).toEqual([]);
-    expect(page.readyForSetup).toEqual([expect.objectContaining({ lessonId: id, learnerId })]);
-
-    // Operations assigns a supervisor and sets the group up: the student leaves the page.
-    await g.prisma.$executeRawUnsafe(
-      `insert into chat.learner_supervision (learner_id, organization_id, supervisor_id) values ($1::uuid, chat.default_organization_id(), $2::uuid)`,
-      learnerId, s.ownerId,
-    );
-    await g.conversations.ensureStudentGroup(learnerId, s.ownerId);
-    expect((await trials.newStudents(s.ownerId)).readyForSetup).toEqual([]);
-  });
-
-  it('only the server confirms, and only a recorded subscription', async () => {
-    const id = await pastTrial(new Date(Date.now() - 2 * HOUR));
-    await trials.attendance(s.teacherId, id, { attended: true, covered: 'x' });
-    await expect(confirm(id, null)).rejects.toThrow(/no subscription/);
-    await trials.outcome(salesId, id, { result: 'not_subscribed', reason: 'schedule' });
-    await expect(confirm(id, null)).rejects.toThrow(/no subscription/);
-    // The request role cannot call it at all.
-    await expect(g.prisma.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe(`set local role chat_app`);
-      await tx.$executeRawUnsafe(`select chat.confirm_trial_conversion($1::uuid, 'x', null)`, id);
-    })).rejects.toThrow(/permission denied/);
+    expect(await code(trials.outcome(salesId, id, { result: 'subscribed', subscription: form() }))).toBe(CommErrorCode.LESSON_STATE);
+    expect(await code(trials.outcome(tsupId, id, { result: 'no_show' }))).toBe(CommErrorCode.LESSON_STATE);
   });
 });
 
@@ -299,12 +254,13 @@ describe('6. statistics', () => {
     await trials.attendance(s.teacherId, a, { attended: true, covered: 'x' });
     await trials.attendance(s.teacherId, b, { attended: true, covered: 'y' });
     await trials.attendance(s.teacherId, c, { attended: false });
-    await trials.outcome(salesId, a, { result: 'subscribed' });
+    await trials.outcome(salesId, a, { result: 'subscribed', subscription: form() });
     await trials.outcome(salesId, b, { result: 'not_subscribed', reason: 'not_ready' });
-    await confirm(a, null);
 
     const d = await stats.teacher(tsupId, s.teacherId, '2026-09');
-    expect(d.trials).toEqual({ lessons: 4, attended: 2, noShow: 1, upcoming: 0, subscribed: 1, confirmed: 1, notSubscribed: 1, available: true });
+    expect(d.trials).toEqual({
+      total: 4, conducted: 2, subscribed: 1, notSubscribed: 1, noShow: 1, awaiting: 1, upcoming: 0, cancelled: 0, conversionRate: 0.5,
+    });
     expect(d.categories.every((cat) => cat.lessons === 0)).toBe(true);
     expect(d.rates.attendance).toBeNull();
     expect(d.workload.scheduledMinutes).toBe(120);
@@ -312,6 +268,7 @@ describe('6. statistics', () => {
     const row = (await stats.teachers(tsupId, '2026-09')).teachers.find((t) => t.teacher.id === s.teacherId)!;
     expect(row.held.lessons).toBe(0);
     expect(row.unreported.lessons).toBe(0);
+    expect(row.trials).toMatchObject({ total: 4, subscribed: 1, notSubscribed: 1, noShow: 1, awaiting: 1 });
   });
 
   it('access tells the Admin Web who is Sales and who is Operations', async () => {
@@ -339,7 +296,7 @@ describe('7. the database', () => {
     await expect(g.prisma.lesson.create({ data: { ...base, kind: 'trial', prospectId, createdByKind: 'teacher', createdBy: s.teacherId } })).rejects.toThrow();
   });
 
-  it('a prospect is linked to a learner only by the confirmation; outcomes are never rewritten', async () => {
+  it('a prospect is never re-linked by hand; an outcome changes only through a correction', async () => {
     await expect(g.prisma.trialProspect.update({ where: { id: prospectId }, data: { learnerId: s.learnerId } })).rejects.toThrow();
     await expect(g.prisma.trialProspect.delete({ where: { id: prospectId } })).rejects.toThrow();
 
@@ -349,7 +306,7 @@ describe('7. the database', () => {
       data: { lessonId: id, organizationId: (await g.prisma.lesson.findUniqueOrThrow({ where: { id } })).organizationId, result: 'subscribed', recordedBy: salesId },
     })).rejects.toThrow();
     await trials.attendance(s.teacherId, id, { attended: true, covered: 'x' });
-    await trials.outcome(salesId, id, { result: 'subscribed' });
+    await trials.outcome(salesId, id, { result: 'subscribed', subscription: form() });
     await expect(g.prisma.trialOutcome.update({ where: { lessonId: id }, data: { result: 'not_subscribed', reasonCode: 'price' } })).rejects.toThrow();
     await expect(g.prisma.trialOutcome.update({ where: { lessonId: id }, data: { confirmedAt: new Date(), coreSubscriptionRef: 'forged' } })).rejects.toThrow();
   });
@@ -364,13 +321,14 @@ describe('8. the trial group (part 2)', () => {
     return g.prisma.message.findMany({ where: { conversationId, type: 'card' }, include: { card: true }, orderBy: { seq: 'asc' } });
   }
 
-  it('booking opens the teacher\'s group with Sales as members, and every fact lands in it as a card', async () => {
+  it('booking opens the teacher\'s group with the teacher and the Teacher Supervisors, and every fact lands in it as a card', async () => {
     await openAllWeek();
     const { slots } = await trials.slots(salesId, s.teacherId);
     await trials.book(salesId, { prospectId, teacherId: s.teacherId, startsAt: slots[0] });
     const group = await groupOf(s.teacherId);
     const members = await g.prisma.conversationMember.findMany({ where: { conversationId: group.id, leftAt: null } });
-    expect(members.map((m) => [m.actorKind, m.actorId]).sort()).toEqual([['staff', salesId], ['teacher', s.teacherId]].sort());
+    // Sales supervisors join by choice (trial-journey.spec.ts), never automatically.
+    expect(members.map((m) => [m.actorKind, m.actorId]).sort()).toEqual([['staff', tsupId], ['teacher', s.teacherId]].sort());
     expect((await cardsIn(group.id)).map((m) => m.card?.kind)).toEqual(['trial_booked']);
     // Opening it again finds the same group.
     expect((await trials.openGroup(tsupId, s.teacherId)).conversationId).toBe(group.id);

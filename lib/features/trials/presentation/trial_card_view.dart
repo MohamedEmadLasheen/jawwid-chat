@@ -9,8 +9,9 @@ import '../../lessons/presentation/lesson_ticket_sheet.dart' show lessonWhen;
 /// PD-11 T4: a trial card, drawn inside its message bubble in the trial group.
 ///
 /// Returns null for a kind this build does not know, so the bubble falls back to the
-/// plain-text body the server always sends. The decision card carries the result only:
-/// why a family did not subscribe is Sales' and never reaches this group.
+/// plain-text body the server always sends. An outcome card carries the result only:
+/// why a family did not subscribe, the subscription form and its prices are Sales' and
+/// never reach this group. A correction names the new result, nothing else.
 Widget? trialCardView(BuildContext context, MessageCard card, Color foreground) {
   final l10n = L10n.of(context);
   final head = switch (card.kind) {
@@ -21,6 +22,7 @@ Widget? trialCardView(BuildContext context, MessageCard card, Color foreground) 
     'trial_decision' => card.text('result') == 'subscribed'
         ? (Icons.celebration_outlined, l10n.cardTrialSubscribedTitle)
         : (Icons.info_outline, l10n.cardTrialNotSubscribedTitle),
+    'trial_correction' => (Icons.edit_note_outlined, l10n.cardTrialCorrectionTitle),
     _ => null,
   };
   if (head == null) return null;
@@ -52,6 +54,8 @@ class _TrialCard extends StatelessWidget {
       if (card.integer('rating') case final v?) (l10n.trialRating, '$v/5'),
       if (card.text('reason') case final v?) (l10n.cardReason, v),
       if (card.text('note') case final v?) (l10n.cardNote, v),
+      if (card.kind == 'trial_correction')
+        if (_resultTitle(l10n, card.text('result')) case final v?) (l10n.cardTrialNewOutcome, v),
     ];
 
     return Semantics(
@@ -86,13 +90,16 @@ class _TrialCard extends StatelessWidget {
                 ],
               ),
             ),
-          if (card.kind == 'trial_decision' && card.text('result') == 'subscribed')
-            Padding(
-              padding: const EdgeInsets.only(top: Spacing.spacing2),
-              child: Text(l10n.cardTrialAwaitingCore, style: theme.textTheme.labelSmall?.copyWith(color: muted, fontStyle: FontStyle.italic)),
-            ),
         ],
       ),
     );
   }
 }
+
+/// The short sentence for an outcome, as its own card would title it.
+String? _resultTitle(L10n l10n, String? result) => switch (result) {
+      'subscribed' => l10n.cardTrialSubscribedTitle,
+      'not_subscribed' => l10n.cardTrialNotSubscribedTitle,
+      'no_show' => l10n.cardTrialNoShowTitle,
+      _ => null,
+    };
