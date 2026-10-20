@@ -21,6 +21,16 @@ export function useTrialSlots(teacherId: string, duration: number) {
   })
 }
 
+export function useTrialGroup(conversationId: string, enabled = true) {
+  return useQuery({
+    queryKey: trialKeys.group(conversationId),
+    queryFn: () => trialsApi.groupContext(conversationId),
+    enabled: enabled && conversationId !== '',
+    staleTime: 10_000,
+    retry: false,
+  })
+}
+
 export function useNewStudents() {
   return useQuery({ queryKey: trialKeys.newStudents, queryFn: trialsApi.newStudents, staleTime: 15_000 })
 }

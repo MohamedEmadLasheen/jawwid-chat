@@ -3,6 +3,25 @@ import { CardKind } from '../communication/contracts/vocab';
 export type CardLanguage = 'ar' | 'en';
 
 /**
+ * The one short sentence a trial's outcome is announced with. It never carries
+ * a reason, a price or a contact detail: those stay with Sales and the New
+ * Students page.
+ */
+export function resultSentence(result: unknown, lang: CardLanguage): string {
+  const ar = lang === 'ar';
+  switch (result) {
+    case 'subscribed':
+      return ar ? '🎉 اشترك الطالب.' : '🎉 The student has subscribed.';
+    case 'not_subscribed':
+      return ar ? 'ℹ️ لم يشترك الطالب.' : 'ℹ️ The student did not subscribe.';
+    case 'no_show':
+      return ar ? '⚠️ لم يحضر الطالب الحصة التجريبية.' : '⚠️ The student did not attend the trial lesson.';
+    default:
+      return ar ? 'تحديث' : 'Update';
+  }
+}
+
+/**
  * The plain-text body of a PD-11 T4 trial card, in the group's language. A
  * client that knows the card draws `card.payload`; one that does not still
  * shows this. Pure.
@@ -16,6 +35,9 @@ export function renderTrialCardBody(kind: string, p: Record<string, unknown>, la
   const line = (label: string, value: unknown) =>
     value === null || value === undefined || value === '' ? null : `${label}: ${String(value)}`;
   const join = (...parts: Array<string | null>) => parts.filter((x): x is string => x !== null).join('\n');
+  // Which trial: the group holds every trial of its teacher, so each card names
+  // its student and time -- and nothing else about the family.
+  const about = () => [s(p.prospectName), s(p.when)].filter((x) => x !== '').join(' · ') || null;
 
   switch (kind) {
     case CardKind.TRIAL_BOOKED:
@@ -40,18 +62,17 @@ export function renderTrialCardBody(kind: string, p: Record<string, unknown>, la
       );
     case CardKind.TRIAL_NO_SHOW:
       return join(
-        ar ? `⚠️ لم يحضر الحصة التجريبية — ${s(p.prospectName)}` : `⚠️ Did not attend the trial — ${s(p.prospectName)}`,
-        line(ar ? 'الموعد' : 'When', p.when),
+        ar ? '⚠️ لم يحضر الطالب الحصة التجريبية.' : '⚠️ The student did not attend the trial lesson.',
+        about(),
         line(ar ? 'ملاحظة' : 'Note', p.note),
       );
     case CardKind.TRIAL_DECISION:
-      return p.result === 'subscribed'
-        ? ar
-          ? `🎉 اشترك ${s(p.prospectName)} — بانتظار تأكيد Core`
-          : `🎉 ${s(p.prospectName)} subscribed — awaiting Core's confirmation`
-        : ar
-          ? `ℹ️ لم يشترك ${s(p.prospectName)}`
-          : `ℹ️ ${s(p.prospectName)} did not subscribe`;
+      return join(resultSentence(p.result, lang), about());
+    case CardKind.TRIAL_CORRECTION:
+      return join(
+        ar ? `✏️ تم تصحيح النتيجة: ${resultSentence(p.result, lang)}` : `✏️ Outcome corrected: ${resultSentence(p.result, lang)}`,
+        about(),
+      );
     default:
       return ar ? 'تحديث' : 'Update';
   }

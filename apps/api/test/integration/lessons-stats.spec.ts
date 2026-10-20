@@ -109,7 +109,9 @@ describe('the numbers', () => {
     expect(d.rates.teacherReliability).toBe(0.833); // 5 of 6 not lost by the teacher
     // Reports written weeks after the lesson are not on time.
     expect(d.reports).toMatchObject({ reports: 3, onTime: 0, onTimeRate: 0 });
-    expect(d.trials).toEqual({ lessons: 0, attended: 0, noShow: 0, upcoming: 0, subscribed: 0, confirmed: 0, notSubscribed: 0, available: true });
+    expect(d.trials).toEqual({
+      total: 0, conducted: 0, subscribed: 0, notSubscribed: 0, noShow: 0, awaiting: 0, upcoming: 0, cancelled: 0, conversionRate: null,
+    });
 
     const list = await stats.teachers(tsupId, '2026-09');
     const mine = list.teachers.find((t) => t.teacher.id === s.teacherId)!;

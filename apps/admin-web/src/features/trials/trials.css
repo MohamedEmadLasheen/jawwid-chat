@@ -1,0 +1,84 @@
+/* Trial journey: the "+ -> Trial" card, the subscription form, the trial group's
+   membership bar and the New Students cards. Tokens only. */
+
+/* The card */
+.tj-picklist { list-style: none; margin: var(--space-2) 0 0; padding: 0; display: grid; gap: var(--space-2); }
+.tj-pick,
+.tj-option {
+  inline-size: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.tj-pick:hover,
+.tj-option:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--border-strong); }
+.tj-pick:focus-visible,
+.tj-option:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.tj-pick__name { font-weight: var(--fw-semibold); flex: 1 1 auto; min-inline-size: 0; overflow-wrap: anywhere; }
+.tj-options { display: grid; gap: var(--space-2); }
+.tj-option { justify-content: space-between; font-weight: var(--fw-semibold); }
+.tj-option:disabled { cursor: not-allowed; color: var(--text-muted); background: var(--surface-sunken); }
+.tj-option__why { font-weight: normal; font-size: var(--fs-sm); }
+.tj-trial-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); margin: 0 0 var(--space-2); }
+.tj-current { margin: 0 0 var(--space-2); }
+.tj-preview {
+  display: grid;
+  gap: var(--space-1);
+  margin-block-start: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  font-size: var(--fs-sm);
+}
+.tj-preview q { font-weight: var(--fw-semibold); font-size: var(--fs-md); }
+
+/* The form */
+.tj-form { display: grid; gap: var(--space-4); }
+.tj-fieldset { border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-3); margin: 0; min-inline-size: 0; display: grid; gap: var(--space-2); }
+.tj-legend { padding-inline: var(--space-1); font-weight: var(--fw-semibold); }
+.tj-row { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); }
+.tj-row > .field { margin: 0; }
+.tj-child { display: grid; gap: var(--space-2); padding-block: var(--space-2); border-block-end: 1px dashed var(--border); }
+.tj-child:last-of-type { border-block-end: none; }
+.tj-child__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.tj-child__title { font-weight: var(--fw-semibold); }
+.tj-schedule { display: grid; gap: var(--space-2); justify-items: start; }
+.tj-slot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.tj-slot .select,
+.tj-slot .input { inline-size: auto; min-inline-size: 8rem; }
+.tj-choices { display: flex; flex-wrap: wrap; gap: var(--space-3); padding-block: var(--space-1); }
+.tj-choice { display: inline-flex; align-items: center; gap: var(--space-1); cursor: pointer; }
+
+/* The trial group's membership bar */
+.tj-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-block-start: 1px solid var(--border);
+  background: var(--surface-sunken);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+.tj-bar > span:first-child { flex: 1 1 auto; }
+
+/* New Students */
+.tj-students { display: grid; gap: var(--space-4); }
+.tj-student { display: grid; gap: var(--space-3); }
+.tj-student__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
+.tj-student__title { margin: 0; font-size: var(--fs-md); font-weight: var(--fw-semibold); }
+.tj-student__meta { font-size: var(--fs-sm); }
+.tj-facts { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); margin: 0; }
+.tj-facts > div { display: grid; gap: 2px; }
+.tj-facts dt { color: var(--text-muted); font-size: var(--fs-sm); }
+.tj-facts dd { margin: 0; overflow-wrap: anywhere; }
+.tj-schedule-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }

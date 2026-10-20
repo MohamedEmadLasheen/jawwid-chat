@@ -23,6 +23,7 @@ import { LeaveService } from '../../src/leave/leave.service';
 import { DisciplineService } from '../../src/discipline/discipline.service';
 import { SchedulingService } from '../../src/lessons/scheduling.service';
 import { TrialService } from '../../src/lessons/trial.service';
+import { NewStudentsService } from '../../src/new-students/new-students.service';
 import { TrialGroupService } from '../../src/lessons/trial-group.service';
 import { buildGraph, seed, truncate, withAssignmentGate, Scenario } from './harness';
 
@@ -33,7 +34,7 @@ const supervision = new SupervisionConversationService(g.prisma, g.authz, g.conv
 const cards = new CardPoster(g.conversations, g.outbox, audit);
 const scheduling = new SchedulingService(g.prisma, g.authz, g.conversations, lessons, g.outbox, g.config, g.reminders, audit);
 const groups = new TrialGroupService(g.prisma, g.authz, g.conversations, g.outbox, cards, g.config, audit);
-const trials = new TrialService(g.prisma, g.conversations, lessons, scheduling, audit, groups, g.outbox);
+const trials = new TrialService(g.prisma, g.conversations, lessons, scheduling, audit, groups, new NewStudentsService(g.prisma));
 const leave = new LeaveService(g.prisma, g.conversations, supervision, cards, lessons, audit, trials);
 const discipline = new DisciplineService(g.prisma, g.conversations, supervision, cards, lessons, g.outbox, g.config, audit, trials);
 
