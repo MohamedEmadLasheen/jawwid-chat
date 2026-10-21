@@ -16,6 +16,7 @@ staging.
 2. Actions → **Deploy production** → `image_tag` = the commit SHA, `confirm` = `DEPLOY`.
 3. Approve the `production` environment when prompted.
 4. The workflow then, in order: validates configuration → backs up the database
+   (encrypted; refused without the `BACKUP_ENCRYPTION_PASSPHRASE` secret)
    → uploads the backup as a 30-day artifact → applies migrations → releases →
    smoke-tests → records the release in the run summary.
 5. Watch error rate and latency for 15 minutes.

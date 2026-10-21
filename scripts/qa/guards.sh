@@ -183,7 +183,7 @@ no_match() {
 # Each gate is a function gate_<id> (dashes become underscores). The title is
 # the CI step name, kept identical so the log reads the same in both places.
 
-GATE_IDS="g18 g20 g20-meta jc011 g31 secret-scan web-env env-example env-templates backup-client ci-wiring"
+GATE_IDS="g18 g20 g20-meta jc011 g31 secret-scan web-env env-example env-templates backup-client backup-encryption ci-wiring"
 
 title() {
   case "$1" in
@@ -197,6 +197,7 @@ title() {
     env-example)   echo "The local environment example is valid" ;;
     env-templates) echo "Environment templates match the manifest" ;;
     backup-client) echo "The backup drill runs the pg_dump it is given" ;;
+    backup-encryption) echo "Backups are encrypted, and restore refuses what it must" ;;
     ci-wiring)     echo "Every gate in scripts/qa/guards.sh runs in CI" ;;
     *)             return 1 ;;
   esac
@@ -292,6 +293,14 @@ gate_backup_client() {
   # pg_dump refuses to dump from a server newer than itself, so PG_IMAGE naming
   # a client has to outrank whatever is on PATH.
   bash scripts/qa/check-backup-client-selection.sh
+}
+
+gate_backup_encryption() {
+  # A backup is every family's messages. Without a database: no key outside
+  # local/test/ci is refused before pg_dump runs, an encrypted backup leaves no
+  # plaintext and no key, and a wrong key or a modified archive is refused
+  # before the target is touched. The real-database round trip is G-41.
+  bash scripts/qa/check-backup-encryption.sh
 }
 
 gate_ci_wiring() {

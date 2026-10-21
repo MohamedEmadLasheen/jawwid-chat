@@ -176,9 +176,13 @@ jobs:
         run: scripts/db/preflight-role-capability.sh
 
       - name: Back up the database before migrating
+        # Encrypted: without the secret, backup-db.sh refuses before pg_dump
+        # runs and the deployment stops before any migration. Keep a copy of
+        # the passphrase outside GitHub; secrets here are write-only.
         env:
           APP_ENV: staging
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
         run: scripts/infra/backup-db.sh --out ./backups --schema chat
 
       - name: Apply database migrations

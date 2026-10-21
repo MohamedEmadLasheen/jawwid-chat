@@ -29,17 +29,22 @@ make_sandbox() {
   local dir="$1"
   mkdir -p "$dir/bin" "$dir/out"
 
+  # With --file the dump goes there; without it (an encrypted backup streams
+  # pg_dump's output into openssl) it goes to stdout, as the real client does.
   cat > "$dir/bin/pg_dump" <<'STUB'
 #!/usr/bin/env bash
 echo "host" > "$SELECTION_MARKER"
+file=""
 for a in "$@"; do
-  case "$a" in --file=*) printf 'dump' > "${a#--file=}" ;; esac
+  case "$a" in --file=*) file="${a#--file=}" ;; esac
 done
+if [ -n "$file" ]; then printf 'dump' > "$file"; else printf 'dump'; fi
 exit "${STUB_PG_DUMP_EXIT:-0}"
 STUB
 
   # Mirrors `docker run ... -v HOST:/backup IMAGE pg_dump --file=/backup/NAME`:
-  # the dump lands on the host path the mount points at.
+  # the dump lands on the host path the mount points at. With no mount (the
+  # encrypted path) it is written to stdout.
   cat > "$dir/bin/docker" <<'STUB'
 #!/usr/bin/env bash
 echo "container" > "$SELECTION_MARKER"
@@ -51,7 +56,7 @@ for a in "$@"; do
     --file=/backup/*) file="${a#--file=/backup/}" ;;
   esac
 done
-[ -n "$host_dir" ] && [ -n "$file" ] && printf 'dump' > "$host_dir/$file"
+if [ -n "$host_dir" ] && [ -n "$file" ]; then printf 'dump' > "$host_dir/$file"; else printf 'dump'; fi
 exit "${STUB_DOCKER_EXIT:-0}"
 STUB
 
@@ -65,7 +70,11 @@ run_case() {
   export SELECTION_MARKER="$dir/selected"
   rm -f "$SELECTION_MARKER"
 
+  # APP_ENV=ci: with no backup key, backup-db.sh refuses every other APP_ENV
+  # (including an unset one) before choosing a client at all, and this guard is
+  # about the choice. The refusal has its own guard: check-backup-encryption.sh.
   local env_args=(
+    "APP_ENV=ci"
     "DATABASE_URL=postgres://backup:hunter2@localhost:5432/jawwid_chat_test"
     "PATH=$dir/bin:/usr/bin:/bin:/usr/sbin:/sbin"
     "SELECTION_MARKER=$SELECTION_MARKER"

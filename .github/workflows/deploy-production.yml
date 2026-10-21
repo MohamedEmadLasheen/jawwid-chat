@@ -127,9 +127,17 @@ jobs:
         # Before migrations, every time, no exceptions. This is the artifact the
         # rollback procedure depends on; a migration that drops a column cannot
         # be undone by redeploying the previous image.
+        #
+        # ENCRYPTED, because the next step uploads it to GitHub as an artifact
+        # and it is every family's messages. Without the secret, backup-db.sh
+        # refuses before pg_dump runs, which stops the deployment before any
+        # migration -- deliberately. The passphrase must ALSO be held outside
+        # GitHub (secrets here are write-only): an archive nobody can decrypt is
+        # not a backup. docs/infrastructure/backup-recovery.md §3.
         env:
           APP_ENV: production
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
         run: scripts/infra/backup-db.sh --out ./backups --schema chat
 
       - name: Upload the pre-deployment backup

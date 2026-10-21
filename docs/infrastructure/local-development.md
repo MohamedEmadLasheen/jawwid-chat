@@ -77,10 +77,11 @@ scripts/db/test-db.sh psql      # interactive shell
 DATABASE_URL=... scripts/db/apply.sh   # apply pending migrations
 ```
 
-Jawwid Chat lives in a `chat` schema alongside Jawwid Core's `public` schema.
-`db/test/00_core_shim.sql` stands in for Core locally. This matters for backups:
-a `chat`-only dump is **not** restorable without the Core tables first — see
-`backup-recovery.md`.
+Jawwid Chat lives in its own `chat` schema and builds from an empty database
+(RT-023); there is no Core shim any more. A `chat`-only dump restores on its own
+into a bare `postgres:17` — `restore-db.sh` prepares the roles and extensions it
+needs. Locally, `APP_ENV=local` lets `backup-db.sh` write an unencrypted dump;
+anywhere else it needs a key — see `backup-recovery.md`.
 
 `prisma generate` produces the typed client. Do **not** run `prisma migrate` or
 `prisma db push` against a shared database; there is one migration authority
