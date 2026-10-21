@@ -234,7 +234,7 @@ export class TrialService {
         });
         if (attended) {
           await tx.lessonReport.create({
-            data: { lessonId: trial.id, organizationId: trial.organizationId, teacherId: trial.teacherId, covered: covered as string, rating, note },
+            data: { lessonId: trial.id, organizationId: trial.organizationId, teacherId: trial.teacherId, covered: covered as string, rating, note, enteredBy: trial.teacherId },
           });
         }
         await this.lessons.emitClosed(tx, updated, false);

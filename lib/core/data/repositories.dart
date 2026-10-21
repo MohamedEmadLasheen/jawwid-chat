@@ -630,6 +630,16 @@ abstract interface class LessonRepository {
 
   /// `GET /stats/me` -- a teacher's own month.
   Future<TeacherWorkload> myWorkload();
+
+  /// PD-15: `GET /lessons/:id` -- the lesson's live report, to edit it (null when none).
+  Future<LessonReportDraft?> reportFor(String lessonId);
+
+  /// PD-15: `POST /lessons/:id/report/edit` -- the whole report again; its card is
+  /// rewritten in place and the previous version is kept.
+  Future<void> editReport(String lessonId, LessonReportDraft draft);
+
+  /// PD-15: `GET /conversations/:id/learners` -- each child of a group, apart.
+  Future<List<GroupChild>> groupChildren(String conversationId);
 }
 
 /// The lesson repository of a build with no lesson server (the fixture build, tests
@@ -728,6 +738,16 @@ class NoLessonRepository implements LessonRepository {
 
   @override
   Future<TeacherWorkload> myWorkload() => throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<LessonReportDraft?> reportFor(String lessonId) => throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<void> editReport(String lessonId, LessonReportDraft draft) =>
+      throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<List<GroupChild>> groupChildren(String conversationId) async => const [];
 }
 
 /// PD-11 T4: the teacher's trial group -- the trials they may report under "+", and the

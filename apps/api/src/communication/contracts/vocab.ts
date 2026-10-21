@@ -280,11 +280,15 @@ export const LessonOutcome = {
   RESCHEDULED: 'rescheduled',
   /** PD-11 T3: a future lesson removed because the learner's study is paused or stopped. Not counted. */
   SUSPENDED: 'suspended',
+  /** PD-15: its report was deleted and not resent. Gone from every statistic; final. */
+  VOIDED: 'voided',
 } as const;
 export type LessonOutcome = (typeof LessonOutcome)[keyof typeof LessonOutcome];
 
 export const CardKind = {
   LESSON_REPORT: 'lesson_report',
+  /** PD-15: an outcome corrected by the Teachers or Operations department or the super admin. */
+  LESSON_CORRECTED: 'lesson_corrected',
   LESSON_ABSENCE: 'lesson_absence',
   LESSON_APOLOGY: 'lesson_apology',
   LESSON_TEACHER_APOLOGY: 'lesson_teacher_apology',

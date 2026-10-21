@@ -5,7 +5,7 @@ import { CommError, CommErrorCode } from '../platform/errors';
 import type { Actor } from '../platform/types';
 import { ActorKind, LessonOutcome, StaffRole } from '../communication/contracts/vocab';
 import { ConversationService, isUuid } from '../communication/conversations/conversation.service';
-import { LessonService, invalid } from './lesson.service';
+import { LessonService, MAKEUP_CAUSES, invalid } from './lesson.service';
 import { SchedulingService } from './scheduling.service';
 
 /** Every category chat.lesson_category can answer, in the order a dashboard shows them. */
@@ -74,15 +74,17 @@ export class StatsService {
     await this.requireStatsReader(actor);
     const period = await this.period(month);
     const org = actor.organizationId as string;
-    const [teachers, rows, reports, trials] = await Promise.all([
+    const [teachers, rows, reports, trials, timings] = await Promise.all([
       this.prisma.teacher.findMany({ where: { organizationId: org }, select: { id: true, name: true, isActive: true }, orderBy: { name: 'asc' } }),
       this.lessonRows(org, period),
       this.reportRows(org, period),
       this.trialRows(org, period),
+      this.timingRows(org, period),
     ]);
     const byTeacher = groupBy(rows, (r) => r.teacher_id);
     const reportsOf = new Map(reports.map((r) => [r.teacher_id, r]));
     const trialsOf = new Map(trials.map((r) => [r.teacher_id, r]));
+    const timingsOf = groupBy(timings, (r) => r.teacher_id);
     return {
       month: period.month,
       zone: period.zone,
@@ -102,6 +104,7 @@ export class StatsService {
           attendanceRate: rate(held.lessons, held.lessons + total('student_no_show').lessons),
           reportsOnTimeRate: r ? rate(r.on_time, r.reports) : null,
           trials: trialBlock(trialsOf.get(t.id)),
+          summary: monthSummary(mine, timingsOf.get(t.id) ?? []),
         };
       }),
     };
@@ -134,12 +137,13 @@ export class StatsService {
     const actor = await this.conversations.requireActor(actorId);
     const { learner } = await this.scheduling.learnerFor(actor, learnerId, 'read_schedule');
     const period = await this.period(month);
-    const lessons = await this.prisma.lesson.findMany({
+    // A voided lesson (PD-15: its report deleted, not resent) is in no number.
+    const lessons = (await this.prisma.lesson.findMany({
       where: { learnerId: learner.id },
       include: { report: true },
       orderBy: { startsAt: 'desc' },
       take: 500,
-    });
+    })).filter((l) => l.outcome !== LessonOutcome.VOIDED);
     const now = Date.now();
     const inMonth = lessons.filter((l) => l.startsAt >= period.from && l.startsAt < period.to);
     const count = (outcomes: string[], set = inMonth) => set.filter((l) => l.outcome && outcomes.includes(l.outcome)).length;
@@ -151,9 +155,9 @@ export class StatsService {
       if (l.outcome === LessonOutcome.HELD) streak += 1;
       else if (l.outcome === LessonOutcome.STUDENT_NO_SHOW || l.outcome === LessonOutcome.STUDENT_APOLOGY) break;
     }
-    const owed = await this.lessons.owedMakeups(learner.organizationId, { learnerIds: [learner.id] });
+    const owed = await this.lessons.owedMakeups(learner.organizationId, { learnerIds: [learner.id], causes: MAKEUP_CAUSES });
     const next = [...lessons].reverse().find((l) => l.outcome === null && l.startsAt.getTime() > now) ?? null;
-    const lastReport = lessons.find((l) => l.report !== null) ?? null;
+    const lastReport = lessons.find((l) => l.outcome === LessonOutcome.HELD && l.report !== null && l.report.deletedAt === null) ?? null;
     // PD-12: the learner's issued student certificates. The file itself is the
     // attachment of the card in `conversationId`, signed per reader there.
     const certificates = await this.prisma.learnerCertificate.findMany({
@@ -180,7 +184,10 @@ export class StatsService {
         ? {
             lessonId: lastReport.id,
             startsAt: lastReport.startsAt.toISOString(),
+            lessonNumber: lastReport.report.lessonNumber,
+            coveredTopics: lastReport.report.coveredTopics,
             covered: lastReport.report.covered,
+            nextTasks: lastReport.report.nextTasks,
             homework: lastReport.report.homework,
             rating: lastReport.report.rating,
           }
@@ -207,12 +214,13 @@ export class StatsService {
     if (!teacher) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
     const period = await this.period(month);
     const previous = await this.period(shiftMonth(period.month, -1));
-    const [allRows, prevRows, reports, replies, trials] = await Promise.all([
+    const [allRows, prevRows, reports, replies, trials, timings] = await Promise.all([
       this.lessonRows(org, period, teacherId),
       this.lessonRows(org, previous, teacherId),
       this.reportRows(org, period, teacherId),
       this.replyRows(org, period, teacherId),
       this.trialRows(org, period, teacherId),
+      this.timingRows(org, period, teacherId),
     ]);
     // A trial is not a student's lesson: it has its own block below, and only
     // its time joins the workload.
@@ -250,6 +258,8 @@ export class StatsService {
       month: period.month,
       zone: period.zone,
       categories,
+      // PD-15: the month as the Teachers department reads it (monthSummary).
+      summary: monthSummary(rows, timings),
       totals: { counted, scheduledMinutes },
       makeups: { lessons: makeups.lessons, held: makeupsHeld.lessons },
       // Each trial once, by its one outcome, from Chat's records (chat.teacher_trial_stats).
@@ -280,6 +290,17 @@ export class StatsService {
         FROM chat.teacher_lesson_stats(${org}::uuid, ${p.from}::timestamptz, ${p.to}::timestamptz)
        WHERE ${teacherId ?? null}::uuid IS NULL OR teacher_id = ${teacherId ?? null}::uuid`;
     return rows.map((r) => ({ ...r, duration_minutes: Number(r.duration_minutes), lessons: Number(r.lessons), minutes: Number(r.minutes) }));
+  }
+
+  /** Student apologies by when they were excused (PD-15), per teacher and kind. */
+  private async timingRows(org: string, p: Period, teacherId?: string): Promise<TimingRow[]> {
+    const rows = await this.prisma.$queryRaw<TimingRow[]>`
+      SELECT teacher_id::text AS teacher_id, kind, before_start, after_start
+        FROM chat.teacher_apology_timing_stats(${org}::uuid, ${p.from}::timestamptz, ${p.to}::timestamptz)
+       WHERE ${teacherId ?? null}::uuid IS NULL OR teacher_id = ${teacherId ?? null}::uuid`;
+    return rows
+      .filter((r) => r.kind !== 'trial')
+      .map((r) => ({ ...r, before_start: Number(r.before_start), after_start: Number(r.after_start) }));
   }
 
   /** Trials of the month per teacher, each counted once by its current outcome. */
@@ -369,6 +390,54 @@ export class StatsService {
       throw new CommError(CommErrorCode.LESSON_DENIED, 'teacher statistics belong to the Teachers department and the super admin');
     }
   }
+}
+
+type TimingRow = { teacher_id: string; kind: string; before_start: number; after_start: number };
+
+/**
+ * PD-15: a teacher's month in the owner's terms. Every lesson of the month is
+ * in exactly one line (one lesson row, one category -- nothing is counted
+ * twice); replaced (`rescheduled`) and paused (`suspended`) lessons are left
+ * out of the total, and a voided lesson never reaches here (the SQL drops it).
+ *
+ *   totalScheduled   every lesson that still stands: closed + still pending
+ *   conducted        held -- a report confirms the learner attended; regular
+ *                    and make-up lessons both count (completed.total)
+ *   studentAttended  the same lessons, from the learner's side
+ *   studentNoShow    absent without an excuse
+ *   studentExcuses   excused, split by before / after the start
+ *   teacherExcuses   the teacher apologised (never counted as conducted)
+ *   teacherNoShow    the teacher did not come
+ *   cancelled        Jawwid cancelled it
+ *   pending          no final outcome yet (still to come, or awaiting a report)
+ *   makeups          make-up lessons: completed, still scheduled, total
+ */
+export function monthSummary(rows: Row[], timings: TimingRow[]) {
+  const learnerRows = rows.filter((r) => r.kind !== 'trial');
+  const n = (pred: (r: Row) => boolean) => learnerRows.filter(pred).reduce((a, r) => a + r.lessons, 0);
+  const is = (...cats: string[]) => (r: Row) => cats.includes(r.category);
+  const heldRegular = n((r) => r.category === 'held' && r.kind !== 'makeup');
+  const heldMakeup = n((r) => r.category === 'held' && r.kind === 'makeup');
+  const pendingAll = n(is('upcoming', 'unreported'));
+  const before = timings.reduce((a, t) => a + t.before_start, 0);
+  const after = timings.reduce((a, t) => a + t.after_start, 0);
+  return {
+    totalScheduled: n((r) => r.category !== 'rescheduled' && r.category !== 'suspended'),
+    conducted: heldRegular + heldMakeup,
+    studentAttended: heldRegular + heldMakeup,
+    studentNoShow: n(is('student_no_show')),
+    studentExcuses: { total: n(is('student_apology')), beforeStart: before, afterStart: after },
+    teacherExcuses: n(is('teacher_apology')),
+    teacherNoShow: n(is('teacher_no_show')),
+    cancelled: n(is('admin_cancelled')),
+    pending: { total: pendingAll, upcoming: n(is('upcoming')), awaitingReport: n(is('unreported')) },
+    completed: { regular: heldRegular, makeup: heldMakeup, total: heldRegular + heldMakeup },
+    makeups: {
+      completed: heldMakeup,
+      scheduled: n((r) => r.kind === 'makeup' && (r.category === 'upcoming' || r.category === 'unreported')),
+      total: n((r) => r.kind === 'makeup' && r.category !== 'rescheduled' && r.category !== 'suspended'),
+    },
+  };
 }
 
 interface Period {

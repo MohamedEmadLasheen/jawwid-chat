@@ -218,6 +218,62 @@ describe('lesson tickets over HTTP, in a PD-8 family group', () => {
     expect((await http(fam.siblingTeacher, 'GET', `/lessons/${id}/makeup-slots`)).status).toBe(404);
   });
 
+  it('PD-15: the supervisor\'s cards, make-ups, report edits and deletes, corrections and the group\'s children', async () => {
+    const [{ supervisor_id: supId }] = await g.prisma.$queryRawUnsafe<Array<{ supervisor_id: string }>>(
+      `select supervisor_id::text from chat.learner_supervision where learner_id = $1::uuid`, fam.child.id,
+    );
+    const sup = [...m.supervisors, ...m.backups].find((x) => x.id === supId)!.subject;
+    const ops = m.operationsManager.subject;
+    const ticketsOf = async (who: string, id: string) =>
+      ((await http(who, 'GET', `/conversations/${fam.groupId}/lesson-tickets`)).json.tickets as Array<{ ticket: string; lessonId: string }>)
+        .filter((t) => t.lessonId === id).map((t) => t.ticket).sort();
+
+    // A student's excuse before the start, recorded by the supervisor; the teacher records the agreed make-up.
+    const ahead = await schedule(6 * 60 * MIN);
+    expect(await ticketsOf(sup, ahead)).toEqual(['apology', 'teacher_apology']);
+    const excused = await http(sup, 'POST', `/lessons/${ahead}/apology`, {});
+    expect(excused.status).toBe(201);
+    expect(excused.json.apologyTiming).toBe('before_start');
+    expect(await ticketsOf(fam.teacher, ahead)).toContain('book_makeup');
+    expect((await http(fam.teacher, 'POST', `/lessons/${ahead}/makeup`, { startsAt: at(2 * 24 * 60 * MIN + 7 * MIN) })).status).toBe(201);
+
+    // After the start: excused at once by the supervisor, never by the parent through this card.
+    const started = await schedule(-90 * MIN);
+    expect((await http(fam.parent, 'POST', `/lessons/${started}/late-excuse`, { reason: 'x' })).status).toBe(403);
+    expect((await http(sup, 'POST', `/lessons/${started}/late-excuse`, { reason: 'sick' })).json.apologyTiming).toBe('after_start');
+
+    // Corrections: Operations yes, the teacher no; the history is staff's.
+    expect((await http(fam.teacher, 'POST', `/lessons/${started}/correction`, { outcome: 'student_no_show', reason: 'x' })).status).toBe(403);
+    const corrected = await http(ops, 'POST', `/lessons/${started}/correction`, { outcome: 'student_no_show', reason: 'the excuse was for another day' });
+    expect(corrected.status).toBe(201);
+    expect(corrected.json.outcome).toBe('student_no_show');
+    expect((await http(fam.parent, 'GET', `/lessons/${started}/history`)).status).toBe(403);
+    expect(((await http(sup, 'GET', `/lessons/${started}/history`)).json.corrections as unknown[])).toHaveLength(1);
+
+    // A report: edited by its teacher, deleted (not resent) by the supervisor only.
+    const taught = await schedule(-130 * MIN);
+    expect((await http(fam.teacher, 'POST', `/lessons/${taught}/report`, { lessonNumber: 3, coveredTopics: ['reading'], rating: 4 })).status).toBe(201);
+    const edited = await http(fam.teacher, 'POST', `/lessons/${taught}/report/edit`, { lessonNumber: 4, coveredTopics: ['reading', 'writing'] });
+    expect(edited.status).toBe(201);
+    expect((edited.json.report as { version: number }).version).toBe(2);
+    expect((await http(fam.teacher, 'POST', `/lessons/${taught}/report/delete`, { reason: 'x', resend: false })).status).toBe(403);
+    const deleted = await http(sup, 'POST', `/lessons/${taught}/report/delete`, { reason: 'lesson did not belong here', resend: false });
+    expect(deleted.status).toBe(201);
+    expect(deleted.json.outcome).toBe('voided');
+
+    // The group's children, one by one; the course list and a child's details.
+    const kids = await http(fam.parent, 'GET', `/conversations/${fam.groupId}/learners`);
+    expect(kids.status).toBe(200);
+    expect((kids.json.learners as unknown[]).length).toBeGreaterThanOrEqual(2);
+    expect((await http(fam.parent, 'GET', '/courses')).status).toBe(403);
+    const course = await http(ops, 'POST', '/courses', { name: 'Noor Al-Bayan' });
+    expect(course.status).toBe(201);
+    expect((await http(sup, 'POST', `/learners/${fam.child.id}/enrollment`, { courseId: course.json.id, packageLessons: 12 })).status).toBe(201);
+    expect((await http(fam.teacher, 'POST', `/learners/${fam.child.id}/enrollment`, { packageLessons: 1 })).status).toBe(403);
+    const after = (await http(fam.teacher, 'GET', `/conversations/${fam.groupId}/learners`)).json.learners as Array<{ id: string; course: { name: string } | null; packageLessons: number | null }>;
+    expect(after.find((l) => l.id === fam.child.id)).toMatchObject({ course: { name: 'Noor Al-Bayan' }, packageLessons: 12 });
+  });
+
   it('T3: a transfer inside a family group swaps the teachers there, and the old one loses the chat', async () => {
     const third = m.teachers.find((t) => t.subject !== fam.teacher && t.subject !== fam.siblingTeacher)!;
     expect((await http(fam.teacher, 'POST', `/learners/${fam.child.id}/transfer`, { toTeacherId: third.id, reason: 'schedule_fit' })).status).toBe(403);
@@ -309,4 +365,5 @@ describe('lesson tickets over HTTP, in a PD-8 family group', () => {
     });
     expect(forged.status).toBe(400);
   });
+
 });

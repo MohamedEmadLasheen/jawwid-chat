@@ -568,7 +568,7 @@
   "cardRating": "Rating",
   "cardNote": "Note",
   "cardReason": "Reason",
-  "ticketBookMakeup": "Book a make-up lesson",
+  "ticketBookMakeup": "Reschedule a make-up class",
   "ticketRequestScheduleChange": "Change regular lesson times",
   "ticketFor": "For {name}",
   "@ticketFor": {
@@ -1140,5 +1140,101 @@
       }
     }
   },
-  "profileLoadFailed": "Your profile could not be loaded."
+  "profileLoadFailed": "Your profile could not be loaded.",
+  "ticketReportChoose": "What happened in this lesson?",
+  "ticketReportAttended": "Student attended",
+  "ticketReportNotAttended": "Student did not attend",
+  "ticketAbsenceConfirm": "The group will be told that the student did not attend this lesson.",
+  "reportLessonNumberLabel": "Lesson number",
+  "reportTopicsLabel": "What did the student learn?",
+  "reportDetailsLabel": "Details (optional, short)",
+  "reportPerformanceLabel": "Performance in this lesson",
+  "reportNextLabel": "For the next lesson",
+  "reportHomeworkDetailsLabel": "Homework details (optional)",
+  "reportPrivateNoteLabel": "Private note (supervisors only)",
+  "reportNeedsCovered": "Choose a topic or write a short line.",
+  "reportEdit": "Edit report",
+  "reportUpdated": "Report updated",
+  "topicNewMemorization": "New memorization",
+  "topicRevision": "Revision",
+  "topicRecitation": "Recitation",
+  "topicTajweed": "Tajweed rules",
+  "topicReading": "Reading",
+  "topicWriting": "Writing",
+  "topicGrammar": "Grammar",
+  "topicVocabulary": "Vocabulary",
+  "topicIslamicStudies": "Islamic studies",
+  "topicAssessment": "Test / assessment",
+  "taskMemorizeNew": "Memorize the new part",
+  "taskRevisePrevious": "Revise previous lessons",
+  "taskPractiseRecitation": "Practise recitation",
+  "taskPractiseReading": "Practise reading",
+  "taskWrittenHomework": "Written homework",
+  "taskPrepareNext": "Prepare the next lesson",
+  "taskNothing": "Nothing this time",
+  "level5": "Excellent",
+  "level4": "Very good",
+  "level3": "Good",
+  "level2": "Fair",
+  "level1": "Needs more work",
+  "cardLessonNumber": "Lesson no.",
+  "cardNextLesson": "For the next lesson",
+  "cardPerformance": "Performance",
+  "cardCorrectedTitle": "Lesson record corrected",
+  "cardCorrectedNow": "Now recorded as",
+  "cardExcusedAfterTitle": "Excused after the lesson started",
+  "cardReportCorrected": "Corrected by the supervisor",
+  "cardOutcomeHeld": "The student attended",
+  "cardOutcomeStudentNoShow": "The student did not attend",
+  "cardOutcomeExcusedBefore": "Student excused before the start",
+  "cardOutcomeExcusedAfter": "Student excused after the start",
+  "cardOutcomeTeacherApology": "The teacher apologised",
+  "cardOutcomeTeacherNoShow": "The teacher was absent",
+  "cardOutcomeCancelled": "Cancelled",
+  "makeupOtherTime": "Another agreed date and time",
+  "makeupAgreedHint": "Record the make-up once you and the family have agreed on a time.",
+  "makeupChosen": "Chosen: {when}",
+  "@makeupChosen": {
+    "description": "The make-up time picked outside the free-slot list.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "groupChildrenTitle": "Children in this group",
+  "groupChildAge": "{age, plural, =1{1 year} other{{age} years}}",
+  "@groupChildAge": {
+    "description": "A child's age in whole years.",
+    "placeholders": {
+      "age": {
+        "type": "int"
+      }
+    }
+  },
+  "groupChildAgeLabel": "Age",
+  "groupChildCourse": "Course",
+  "groupChildSchedule": "Lesson days and times",
+  "groupChildPackage": "Package",
+  "groupChildPackageLessons": "{count, plural, =1{1 lesson} other{{count} lessons}}",
+  "@groupChildPackageLessons": {
+    "description": "The package size in lessons.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "groupChildTeacher": "Teacher",
+  "groupChildNotSet": "Not set",
+  "groupChildNoSchedule": "No regular times yet",
+  "groupChildMinutes": "{minutes, plural, =1{1 min} other{{minutes} min}}",
+  "@groupChildMinutes": {
+    "description": "A lesson's length in minutes.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  }
 }
