@@ -236,6 +236,8 @@ export enum CommErrorCode {
   TEACHER_FILE_NOT_FOUND = 'COMM.TEACHER_FILE_NOT_FOUND',
   /** PD-10: the timeline refused the entry (already resolved, already recorded, wrong target). 409. */
   TEACHER_FILE_CONFLICT = 'COMM.TEACHER_FILE_CONFLICT',
+  /** PD-18: payout accounts cannot be sealed or opened (no payout key configured, or a retired key). 503. */
+  TEACHER_PAYROLL_UNAVAILABLE = 'COMM.TEACHER_PAYROLL_UNAVAILABLE',
   /** PD-12: no such certificate, or none this caller may see. 404. */
   CERTIFICATE_NOT_FOUND = 'COMM.CERTIFICATE_NOT_FOUND',
   /** PD-12: this caller may not request, issue or decline this certificate. 403. */

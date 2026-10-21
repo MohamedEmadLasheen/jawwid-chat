@@ -6,7 +6,7 @@ import { T, describeError, useCopy } from './copy'
 import { useCalendarDate } from './calendar'
 import { useAddEntry, useUpdatePersonal } from './hooks'
 
-function Footer({ onCancel, onSave, pending }: { onCancel: () => void; onSave: () => void; pending: boolean }) {
+export function Footer({ onCancel, onSave, pending }: { onCancel: () => void; onSave: () => void; pending: boolean }) {
   const tx = useCopy()
   return (
     <>
@@ -28,7 +28,7 @@ function ServerError({ error }: { error: unknown }) {
   )
 }
 
-function Field({
+export function Field({
   label,
   value,
   onChange,
@@ -39,7 +39,7 @@ function Field({
   label: string
   value: string
   onChange: (v: string) => void
-  type?: 'text' | 'tel' | 'email' | 'date' | 'month'
+  type?: 'text' | 'tel' | 'email' | 'date' | 'month' | 'number'
   multiline?: boolean
   error?: string | null
 }) {
@@ -93,6 +93,7 @@ export function EditPersonalDialog({ file, onClose }: { file: TeacherFile; onClo
     phone: file.personal.phone ?? '',
     email: file.personal.email ?? '',
     joinedOn: file.personal.joinedOn ?? '',
+    teachingMarket: file.employment?.teachingMarket ?? '',
   }
   const [form, setForm] = useState(initial)
   const [reason, setReason] = useState('')
@@ -124,6 +125,7 @@ export function EditPersonalDialog({ file, onClose }: { file: TeacherFile; onClo
       <Field label={tx(T.phone)} type="tel" value={form.phone} onChange={set('phone')} />
       <Field label={tx(T.email)} type="email" value={form.email} onChange={set('email')} />
       <Field label={tx(T.joinedOn)} type="date" value={form.joinedOn} onChange={set('joinedOn')} />
+      <Field label={tx(T.teachingMarket)} value={form.teachingMarket} onChange={set('teachingMarket')} />
       <Field
         label={tx(T.reason)}
         value={reason}

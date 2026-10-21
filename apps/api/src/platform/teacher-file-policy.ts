@@ -8,7 +8,7 @@ import type { Actor } from './types';
  *   personal info, assigned students           read                  read          never
  *   personal info: edit                        manager only          yes           never
  *   supervision timeline                       read + write          read + write  never
- *   financial summary                          --                    read          never
+ *   payroll (PD-18): read + write              --                    yes           never
  *
  * "Teachers-dept staff" is the manager of the organization's Teachers
  * department and that department's members (PD-8 §1). Operations supervisors
@@ -26,7 +26,7 @@ export interface TeacherFileAccess {
   canView: boolean;
   canEditPersonal: boolean;
   canWriteSupervision: boolean;
-  /** PD-10 step 3: salary, bonuses, deductions. Core's data, shown read-only. */
+  /** PD-18: payroll -- pay terms, payout account, amounts, financial summary. Read and written in Chat; super admin only. */
   canViewFinance: boolean;
 }
 

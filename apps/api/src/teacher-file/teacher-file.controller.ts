@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Post, UseFilters } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Post, Query, UseFilters } from '@nestjs/common';
 import { ActorId } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { TeacherFileService } from './teacher-file.service';
+import { TeacherPayrollService } from './teacher-payroll.service';
 
 /**
  * PD-10 Teacher File, administration only. Every route is behind the global
@@ -12,7 +13,10 @@ import { TeacherFileService } from './teacher-file.service';
 @Controller('teacher-files')
 @UseFilters(CommErrorFilter)
 export class TeacherFileController {
-  constructor(private readonly files: TeacherFileService) {}
+  constructor(
+    private readonly files: TeacherFileService,
+    private readonly payroll: TeacherPayrollService,
+  ) {}
 
   @Get()
   list(@ActorId() actorId: string) {
@@ -32,5 +36,35 @@ export class TeacherFileController {
   @Post(':teacherId/entries')
   addEntry(@ActorId() actorId: string, @Param('teacherId') teacherId: string, @Body() body: Record<string, unknown>) {
     return this.files.addEntry(actorId, teacherId, body ?? {});
+  }
+
+  // PD-18 payroll: super admin only, decided in TeacherPayrollService.
+
+  @Get(':teacherId/finance')
+  @Header('Cache-Control', 'no-store')
+  finance(@ActorId() actorId: string, @Param('teacherId') teacherId: string, @Query('month') month?: string) {
+    return this.payroll.finance(actorId, teacherId, month);
+  }
+
+  @Post(':teacherId/finance/terms')
+  setTerms(@ActorId() actorId: string, @Param('teacherId') teacherId: string, @Body() body: Record<string, unknown>) {
+    return this.payroll.setTerms(actorId, teacherId, body ?? {});
+  }
+
+  @Post(':teacherId/finance/payout-account')
+  setPayoutAccount(@ActorId() actorId: string, @Param('teacherId') teacherId: string, @Body() body: Record<string, unknown>) {
+    return this.payroll.setPayoutAccount(actorId, teacherId, body ?? {});
+  }
+
+  /** The details in clear. Audited with its reason; never cached. */
+  @Post(':teacherId/finance/payout-account/reveal')
+  @Header('Cache-Control', 'no-store')
+  revealPayoutAccount(@ActorId() actorId: string, @Param('teacherId') teacherId: string, @Body() body: Record<string, unknown>) {
+    return this.payroll.revealPayoutAccount(actorId, teacherId, body ?? {});
+  }
+
+  @Post(':teacherId/finance/adjustments')
+  addAdjustment(@ActorId() actorId: string, @Param('teacherId') teacherId: string, @Body() body: Record<string, unknown>) {
+    return this.payroll.addAdjustment(actorId, teacherId, body ?? {});
   }
 }
