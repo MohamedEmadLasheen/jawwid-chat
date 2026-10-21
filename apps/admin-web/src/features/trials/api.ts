@@ -80,6 +80,28 @@ export interface NewStudentDto {
     schedule: ScheduleSlot[]
   }>
   payment: { currency: string; method: PaymentMethod }
+  /** PD-16: null until the Operations manager assigns the student. */
+  enrolment?: NewStudentEnrolment | null
+}
+
+/** PD-16: how far a new student's setup got. */
+export interface NewStudentEnrolment {
+  familyId: string
+  learnerIds: string[]
+  supervisor: { id: string; name: string } | null
+  assignedAt: string
+  groupConversationId: string | null
+  canCreateGroup: boolean
+  parentSignup:
+    | { state: 'not_started' }
+    | { state: 'code_waiting'; code?: string | null; expiresAt?: string }
+    | { state: 'signed_up' }
+}
+
+export interface AssignResult {
+  familyId: string
+  learnerIds: string[]
+  schedules: Array<{ learnerId: string; set: boolean; reason: string | null }>
 }
 
 /** What the "+ -> Trial" card needs in one trial group. */
@@ -121,7 +143,12 @@ export const trialsApi = {
   groupContext: (conversationId: string) => api.get<TrialGroupContextDto>(`/trials/groups/${id(conversationId)}`),
   joinGroup: (conversationId: string) => api.post<TrialGroupContextDto>(`/trials/groups/${id(conversationId)}/join`),
   leaveGroup: (conversationId: string) => api.post<TrialGroupContextDto>(`/trials/groups/${id(conversationId)}/leave`),
-  newStudents: () => api.get<{ students: NewStudentDto[] }>('/trials/new-students'),
+  newStudents: () => api.get<{ students: NewStudentDto[]; canAssign?: boolean }>('/trials/new-students'),
+  /** PD-16: the Operations manager assigns the supervisor; Chat creates the family. */
+  assignNewStudent: (trialId: string, body: { supervisorId: string; email?: string }) =>
+    api.post<AssignResult>(`/trials/new-students/${id(trialId)}/assign`, body),
+  /** PD-16: the responsible supervisor opens the family's group. */
+  createNewStudentGroup: (trialId: string) => api.post<{ conversationId: string }>(`/trials/new-students/${id(trialId)}/group`),
 }
 
 export const trialKeys = {

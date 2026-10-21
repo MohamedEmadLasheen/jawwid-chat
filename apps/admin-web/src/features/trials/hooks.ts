@@ -32,7 +32,8 @@ export function useTrialGroup(conversationId: string, enabled = true) {
 }
 
 export function useNewStudents() {
-  return useQuery({ queryKey: trialKeys.newStudents, queryFn: trialsApi.newStudents, staleTime: 15_000 })
+  // PD-16: refreshed every 15 s, so a parent's sign-up code reaches the supervisor promptly.
+  return useQuery({ queryKey: trialKeys.newStudents, queryFn: trialsApi.newStudents, staleTime: 15_000, refetchInterval: 15_000 })
 }
 
 /** Every trial action can change the list, the free times and the New Students page: refresh all of them. */
