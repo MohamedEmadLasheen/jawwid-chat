@@ -6,7 +6,7 @@ export function useInstalmentAccess(enabled: boolean) {
   return useQuery({ queryKey: instalmentKeys.access, queryFn: instalmentsApi.access, enabled, staleTime: 5 * 60_000 })
 }
 
-/** Read from Core on every request: kept fresh for a minute, never persisted. */
+/** Kept fresh for a minute; a payment recorded on a Parent Profile invalidates it. */
 export function useInstalments(query: InstalmentQuery) {
   return useQuery({ queryKey: instalmentKeys.list(query), queryFn: () => instalmentsApi.list(query), staleTime: 60_000 })
 }

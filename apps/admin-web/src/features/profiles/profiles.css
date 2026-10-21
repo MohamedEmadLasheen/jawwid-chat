@@ -1,0 +1,24 @@
+/* PD-17 Parent and Student Profiles. Reuses the Teacher File's .tf-* layout, the staff
+   profile's photo picker (.sp-file-*) and the design system. */
+@import '../teacher-files/teacher-files.css';
+@import '../profile/profile.css';
+
+.pf-contact { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: flex-start; margin-block-start: var(--space-3); }
+.pf-kv { flex: 1 1 20rem; margin: 0; }
+.pf-photo { display: flex; gap: var(--space-3); align-items: flex-start; flex-wrap: wrap; }
+.pf-photo__img { inline-size: 64px; block-size: 64px; border-radius: 50%; object-fit: cover; }
+.pf-photo__controls { display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start; max-inline-size: 260px; }
+.pf-note { margin: var(--space-2) 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pf-people { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; gap: var(--space-2); }
+.pf-person { display: inline-flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.pf-slots { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
+.pf-row { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.pf-row > .field { flex: 1 1 10rem; }
+.pf-timeline { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; gap: var(--space-3); }
+.pf-entry { padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); display: grid; gap: var(--space-2); justify-items: start; }
+.pf-entry--voided { opacity: 0.7; }
+.pf-entry--voided .pf-amount { text-decoration: line-through; }
+.pf-entry__head { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.pf-entry__meta { margin: 0; display: flex; flex-wrap: wrap; gap: var(--space-2); color: var(--text-muted); font-size: var(--fs-sm); }
+.pf-amount { font-variant-numeric: tabular-nums; font-weight: var(--fw-medium); }
+.pf-overdue { color: var(--danger); }

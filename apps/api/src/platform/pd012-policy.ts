@@ -71,36 +71,54 @@ export function canRequestCertificate(
 }
 
 /**
- * PD-12 S3: who reads Instalment Payments, and who sets a family's billing
- * supervisor.
+ * PD-12 S3 + PD-17: who reads a family's money (Instalment Payments, the
+ * Parent Profile), who records it, who edits the parent's contact record, and
+ * who sets a family's billing supervisor.
  *
- *   act                              Operations supervisor   Operations Manager   super admin   anyone else
- *   read instalments (billing.       families they reach     every family         every family  never
- *     family_read)                   (PD-8 scope)
- *   set / clear a billing supervisor --                      yes                  yes           never
+ *   act                          Operations supervisor   Operations Manager   Sales (manager, member)   super admin   anyone else
+ *   read (billing.family_read)   families they reach     every family         every family              every family  never
+ *   record payments, instalments families they reach     every family         every family              every family  never
+ *   edit contact, note, photo    families they reach     every family         --                        every family  never
+ *   set a billing supervisor     --                      yes                  --                        yes           never
  *
- * "Operations" is chat.operations_department_role(). Teachers-department staff
- * and teachers never see an invoice (PD-10, PD-12 §1).
+ * PD-17 (owner, 2026-10-21): "Operations and Sales record payments". Sales
+ * reads the Parent Profile so it can find the family, but the contact record
+ * stays the Operations department's. "Operations" / "Sales" are
+ * chat.operations_department_role() / chat.sales_department_role().
+ * Teachers-department staff and teachers never see money (PD-10, PD-12 §1).
  */
 export type OperationsDepartmentRole = 'manager' | 'member' | null;
+export type SalesDepartmentRole = 'manager' | 'member' | null;
 
 export interface BillingAccess {
   /** null = no access; 'all' = every family of the organization; 'reach' = chat.staff_reaches_family. */
   scope: 'all' | 'reach' | null;
+  /** Set or clear a family's billing supervisor. */
   canAssign: boolean;
+  /** Create instalments, record payments, void, set the plan and payment method (inside `scope`). */
+  canRecord: boolean;
+  /** Edit the Parent Profile's contact record: name, phone, e-mail, region, note, photo (inside `scope`). */
+  canEditParent: boolean;
 }
 
-export const NO_BILLING_ACCESS: BillingAccess = Object.freeze({ scope: null, canAssign: false });
+export const NO_BILLING_ACCESS: BillingAccess = Object.freeze({ scope: null, canAssign: false, canRecord: false, canEditParent: false });
 
-export function decideBillingAccess(actor: Actor, operationsRole: OperationsDepartmentRole): BillingAccess {
+export function decideBillingAccess(
+  actor: Actor,
+  operationsRole: OperationsDepartmentRole,
+  salesRole: SalesDepartmentRole = null,
+): BillingAccess {
   if (actor.kind !== ActorKind.STAFF || !actor.isActive || !actor.organizationId) return NO_BILLING_ACCESS;
-  if (actor.staffRole === StaffRole.SUPER_ADMIN) return { scope: 'all', canAssign: true };
-  if (operationsRole === 'manager' && actor.staffRole === StaffRole.MANAGER) return { scope: 'all', canAssign: true };
+  if (actor.staffRole === StaffRole.SUPER_ADMIN) return { scope: 'all', canAssign: true, canRecord: true, canEditParent: true };
+  if (operationsRole === 'manager' && actor.staffRole === StaffRole.MANAGER) {
+    return { scope: 'all', canAssign: true, canRecord: true, canEditParent: true };
+  }
   if (
     operationsRole === 'member' &&
     (actor.staffRole === StaffRole.ADMIN || actor.staffRole === StaffRole.COVERAGE)
   ) {
-    return { scope: 'reach', canAssign: false };
+    return { scope: 'reach', canAssign: false, canRecord: true, canEditParent: true };
   }
+  if (salesRole !== null) return { scope: 'all', canAssign: false, canRecord: true, canEditParent: false };
   return NO_BILLING_ACCESS;
 }

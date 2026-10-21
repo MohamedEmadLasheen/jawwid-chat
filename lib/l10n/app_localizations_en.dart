@@ -2334,4 +2334,142 @@ class L10nEn extends L10n {
 
   @override
   String get signupFailed => 'Something went wrong. Try again.';
+
+  @override
+  String get studentProfileTitle => 'Student profile';
+
+  @override
+  String get studentProfileView => 'View profile';
+
+  @override
+  String get studentProfileTeacher => 'Assigned teacher';
+
+  @override
+  String get studentProfileSchedule => 'Class schedule';
+
+  @override
+  String studentProfileTimeZone(String zone) {
+    return 'Times in $zone';
+  }
+
+  @override
+  String get studentProfileNotYoursTitle =>
+      'You can\'t open this student\'s profile';
+
+  @override
+  String get studentProfileNotYoursBody =>
+      'Only the student\'s own teacher can see it.';
+
+  @override
+  String get myPaymentsTitle => 'Payments';
+
+  @override
+  String get myPaymentsSettingsSubtitle =>
+      'Your instalments and what has been paid';
+
+  @override
+  String get billingPlanLabel => 'Plan';
+
+  @override
+  String billingPlanMonths(int months) {
+    String _temp0 = intl.Intl.pluralLogic(
+      months,
+      locale: localeName,
+      other: '$months-month plan',
+      one: '1-month plan',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get billingNoPlan => 'No plan';
+
+  @override
+  String get billingMethodLabel => 'Payment method';
+
+  @override
+  String get billingMethodInvoice => 'Invoice';
+
+  @override
+  String get billingMethodBankTransfer => 'Bank transfer';
+
+  @override
+  String get billingNotSet => 'Not set';
+
+  @override
+  String get billingPaidTotal => 'Paid';
+
+  @override
+  String get billingOutstandingTotal => 'Outstanding';
+
+  @override
+  String get billingOverdueTotal => 'of which overdue';
+
+  @override
+  String get billingInstalmentsTitle => 'Instalments';
+
+  @override
+  String get billingStatusOverdue => 'Overdue';
+
+  @override
+  String get billingStatusDue => 'Due today';
+
+  @override
+  String get billingStatusUpcoming => 'Upcoming';
+
+  @override
+  String get billingStatusPaid => 'Paid';
+
+  @override
+  String get billingFamily => 'Family';
+
+  @override
+  String billingDueOn(String date) {
+    return 'Due $date';
+  }
+
+  @override
+  String billingPaidOn(String date, String method) {
+    return 'Paid $date · $method';
+  }
+
+  @override
+  String billingPaidOnNoMethod(String date) {
+    return 'Paid $date';
+  }
+
+  @override
+  String billingDaysLate(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days days late',
+      one: '1 day late',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String billingDaysUntil(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'in $days days',
+      one: 'in 1 day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get billingEmptyTitle => 'No payments yet';
+
+  @override
+  String get billingEmptyBody => 'Your instalments will appear here.';
+
+  @override
+  String get billingDeniedTitle =>
+      'Payments are managed by the parent responsible for billing';
+
+  @override
+  String get billingDeniedBody => 'If you have a question, ask the academy.';
 }

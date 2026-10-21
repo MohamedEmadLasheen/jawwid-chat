@@ -2,8 +2,10 @@ import '../../shared/models/auth.dart';
 import '../../shared/models/conversation.dart';
 import '../../shared/models/lesson.dart';
 import '../../shared/models/message.dart';
+import '../../shared/models/parent_billing.dart';
 import '../../shared/models/parent_profile.dart';
 import '../../shared/models/story.dart';
+import '../../shared/models/student_profile.dart';
 import '../../shared/models/supervision.dart';
 import '../../shared/models/teacher_profile.dart';
 import '../../shared/models/trial.dart';
@@ -664,6 +666,10 @@ abstract interface class LessonRepository {
 
   /// PD-15: `GET /conversations/:id/learners` -- each child of a group, apart.
   Future<List<GroupChild>> groupChildren(String conversationId);
+
+  /// PD-17: `GET /learners/:id/profile` -- the Student Profile, for the child's own
+  /// teacher. Any other teacher gets a 404 (`COMM.LESSON_NOT_FOUND`), passed on intact.
+  Future<StudentProfile> studentProfile(String learnerId);
 }
 
 /// The lesson repository of a build with no lesson server (the fixture build, tests
@@ -772,6 +778,27 @@ class NoLessonRepository implements LessonRepository {
 
   @override
   Future<List<GroupChild>> groupChildren(String conversationId) async => const [];
+
+  @override
+  Future<StudentProfile> studentProfile(String learnerId) =>
+      throw UnsupportedError('no lesson server in this build');
+}
+
+/// PD-17: the signed-in parent's own payments. One endpoint; NO AUTHORIZATION LIVES
+/// HERE -- the server answers only the parent who holds billing for their family and
+/// refuses everyone else (`COMM.BILLING_DENIED`), and that refusal reaches the caller.
+abstract interface class BillingRepository {
+  /// `GET /me/billing`
+  Future<ParentBilling> myBilling();
+}
+
+/// The build with no billing server: refuses rather than answering "no payments",
+/// because an empty list would tell a parent who owes money that they owe none.
+class NoBillingRepository implements BillingRepository {
+  const NoBillingRepository();
+
+  @override
+  Future<ParentBilling> myBilling() => throw UnsupportedError('no billing server in this build');
 }
 
 /// PD-11 T4: the teacher's trial group -- the trials they may report under "+", and the

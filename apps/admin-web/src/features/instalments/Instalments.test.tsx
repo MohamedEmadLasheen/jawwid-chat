@@ -10,9 +10,9 @@ import type { Instalment, InstalmentList } from './api'
 /**
  * PD-12 S3 Instalment Payments page, through the real routes and the real API
  * client, with `fetch` answered at the network boundary. These prove the
- * page's side: the server's order and status are shown as sent, "Core not
- * connected" and "Core down" never read as "nothing due", and setting a
- * billing supervisor asks for a reason first. Who sees which family, and what
+ * page's side: the server's order and status are shown as sent, an error
+ * never reads as "nothing due", the payer opens their Parent Profile (PD-17),
+ * and setting a billing supervisor asks for a reason first. Who sees which family, and what
  * the database allows, is proven server-side (apps/api pd012-s3.spec.ts).
  */
 
@@ -37,7 +37,7 @@ function row(over: Partial<Instalment> = {}): Instalment {
   return {
     id: 'inv-1',
     family: { id: 'f-1', name: 'Family Alpha' },
-    account: { name: 'Parent Alpha' },
+    account: { id: 'p-1', name: 'Parent Alpha' },
     child: null,
     amountMinor: 150000,
     currency: 'EGP',
@@ -55,7 +55,6 @@ function row(over: Partial<Instalment> = {}): Instalment {
 
 function list(items: Instalment[], over: Partial<InstalmentList> = {}): InstalmentList {
   return {
-    source: 'core',
     today: '2026-10-19',
     canAssignBillingSupervisor: false,
     items,
@@ -133,18 +132,17 @@ describe('the instalments page', () => {
     await waitFor(() => expect(calls('GET', /\/instalments\?responsible=none&paid=true$/)).toHaveLength(1))
   })
 
-  it('Core not connected is said plainly -- never "Nothing due"', async () => {
-    on('GET', /\/instalments\?/, () => json(list([], { source: 'not_connected' })))
+  it('a server error is said, never shown as "Nothing due"', async () => {
+    on('GET', /\/instalments\?/, () => json({ error: { code: 'COMM.BILLING_DENIED', message: 'no' } }, 403))
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/instalments' })
-    expect(await screen.findByText('Jawwid Core is not connected yet')).toBeInTheDocument()
+    expect(await screen.findByText(/for the Operations and Sales departments/, {}, { timeout: 4000 })).toBeInTheDocument()
     expect(screen.queryByText('Nothing due.')).not.toBeInTheDocument()
   })
 
-  it('Core down is an error, not an empty list', async () => {
-    on('GET', /\/instalments\?/, () => json({ error: { code: 'COMM.BILLING_CORE_UNAVAILABLE', message: 'down' } }, 502))
+  it('the payer opens their Parent Profile, where payments are recorded (PD-17)', async () => {
+    on('GET', /\/instalments\?/, () => json(list([row()])))
     renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/instalments' })
-    expect(await screen.findByText(/Jawwid Core did not answer/, {}, { timeout: 4000 })).toBeInTheDocument()
-    expect(screen.queryByText('Nothing due.')).not.toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'Open the Parent Profile of Parent Alpha' })).toHaveAttribute('href', '/parents/p-1')
   })
 
   it('the Operations Manager sets a family\'s billing supervisor among its children\'s supervisors, with a reason', async () => {

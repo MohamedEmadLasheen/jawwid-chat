@@ -12,6 +12,7 @@ import { LessonService } from '../lessons/lesson.service';
 import { SchedulingService } from '../lessons/scheduling.service';
 import { normalizeEmail } from '../platform/auth/parent-signup.service';
 import { NewStudentsService } from './new-students.service';
+import { seedFromEnrolment } from '../parent-profile/parent-record.service';
 
 type PresentedForm = NonNullable<Awaited<ReturnType<NewStudentsService['get']>>>;
 
@@ -36,7 +37,8 @@ type PresentedForm = NonNullable<Awaited<ReturnType<NewStudentsService['get']>>>
  *
  * Lives in src/new-students because it reads the confined form (G-07); it is
  * provided by LessonModule, which owns the scheduling it calls. The parent's
- * phone is read by nothing here and copied nowhere.
+ * phone and e-mail are copied to exactly one place: the parent's admin-only
+ * file (PD-17, seedFromEnrolment), itself confined to src/parent-profile.
  */
 @Injectable()
 export class NewStudentEnrolmentService {
@@ -182,6 +184,17 @@ export class NewStudentEnrolmentService {
           },
         });
         await tx.family.update({ where: { id: family.id }, data: { primaryContactId: contact.id } });
+        // PD-17: the administration's record of the parent, and how the family pays.
+        await seedFromEnrolment(tx, {
+          contactId: contact.id,
+          familyId: family.id,
+          organizationId: org,
+          actorId: actor.actorId,
+          phone: form.parent.phone,
+          email,
+          paymentMethod: form.payment.method,
+          currency: form.payment.currency,
+        });
 
         const learners: Array<{ id: string; child: PresentedForm['children'][number] }> = [];
         for (const child of form.children) {

@@ -101,6 +101,7 @@ export const J = {
   notSet: { en: 'Not set', ar: 'غير محدد' },
   noSchedule: { en: 'No regular times yet', ar: 'لا توجد مواعيد ثابتة بعد' },
   editDetails: { en: 'Edit details', ar: 'تعديل البيانات' },
+  viewProfile: { en: 'View profile', ar: 'عرض الملف' },
   detailsTitle: { en: (name: string) => `${name}: enrolment details`, ar: (name: string) => `بيانات تسجيل ${name}` },
   birthDate: { en: 'Date of birth', ar: 'تاريخ الميلاد' },
   noCourse: { en: 'No course', ar: 'بدون دورة' },

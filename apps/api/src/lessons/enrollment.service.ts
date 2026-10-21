@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional, type OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../platform/prisma.service';
 import { AuthorizationService } from '../platform/authorization.service';
 import { CommError, CommErrorCode } from '../platform/errors';
@@ -9,6 +9,8 @@ import { ConversationService, isUuid } from '../communication/conversations/conv
 import { ActorKind, StaffRole } from '../communication/contracts/vocab';
 import { LessonService, invalid, textField } from './lesson.service';
 import { SchedulingService } from './scheduling.service';
+import { signAvatar } from '../communication/profile/avatar-urls';
+import { AvatarService } from '../communication/profile/avatar.service';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -25,7 +27,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
  * course list, the super admin and the Operations manager.
  */
 @Injectable()
-export class EnrollmentService {
+export class EnrollmentService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly authz: AuthorizationService,
@@ -33,7 +35,14 @@ export class EnrollmentService {
     private readonly lessons: LessonService,
     private readonly scheduling: SchedulingService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
+    // PD-17: a child's photo on the Student Profile. Optional so the positional
+    // construction in the unit harnesses does not change.
+    @Optional() private readonly avatars?: AvatarService,
   ) {}
+
+  onModuleInit(): void {
+    this.avatars?.registerProfileReader('learner', (viewer, learnerId) => this.mayOpenProfile(viewer, learnerId));
+  }
 
   /** Each child a student or family group is about, separately. */
   async groupLearners(actorId: string, conversationId: string) {
@@ -87,6 +96,65 @@ export class EnrollmentService {
         };
       }),
     };
+  }
+
+  /**
+   * PD-17: the Student Profile. The child's photo, name, age, weekly lesson
+   * days and times, teacher and course -- for the administration and the
+   * child's own teacher (LESSON_ACTS.read_profile). A teacher of another child
+   * gets the same 404 as an id that does not exist. Staff also get the date of
+   * birth and the family's parents (to open their Parent Profile, whose own
+   * rule then decides); a teacher never gets either, nor anything about money.
+   */
+  async profile(actorId: string, learnerId: string) {
+    const actor = await this.conversations.requireActor(actorId);
+    const { learner, standing } = await this.scheduling.learnerFor(actor, learnerId, 'read_profile');
+    const staffView = standing === 'manager' || standing === 'supervisor';
+    const now = new Date();
+    const [enrollment, slots, teacher, family] = await Promise.all([
+      this.prisma.learnerEnrollment.findUnique({
+        where: { learnerId: learner.id },
+        include: { course: { select: { id: true, name: true } } },
+      }),
+      this.prisma.learnerScheduleSlot.findMany({
+        where: { learnerId: learner.id, validTo: null },
+        orderBy: [{ weekday: 'asc' }, { startMinute: 'asc' }],
+      }),
+      learner.teacherId
+        ? this.prisma.teacher.findUnique({ where: { id: learner.teacherId }, select: { id: true, name: true, avatarObjectKey: true } })
+        : Promise.resolve(null),
+      staffView
+        ? this.prisma.family.findUnique({
+            where: { id: learner.familyId },
+            select: { id: true, displayName: true, contacts: { where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } } },
+          })
+        : Promise.resolve(null),
+    ]);
+    const e = enrollment;
+    return {
+      id: learner.id,
+      name: learner.name,
+      avatarUrl: signAvatar('learner', learner.id, 'profile', actor.actorId, learner.avatarObjectKey),
+      age: e?.birthDate ? ageOn(e.birthDate, now) : e?.statedAge && e.statedAgeOn ? e.statedAge + ageOn(e.statedAgeOn, now) : null,
+      ...(staffView ? { birthDate: e?.birthDate ? e.birthDate.toISOString().slice(0, 10) : null } : {}),
+      course: e?.course ? { id: e.course.id, name: e.course.name } : null,
+      teacher: teacher ? { id: teacher.id, name: teacher.name } : null,
+      schedule: slots.map((s) => ({ weekday: s.weekday, start: hhmm(s.startMinute), durationMinutes: s.durationMinutes, timezone: s.timezone })),
+      ...(staffView && family
+        ? { family: { id: family.id, name: family.displayName, parents: family.contacts.map((c) => ({ id: c.id, name: c.name })) } }
+        : {}),
+      viewer: standing === 'teacher' ? 'teacher' : 'staff',
+    };
+  }
+
+  /** May `viewer` open this child's Student Profile? The rule behind its photo's `profile` link. */
+  async mayOpenProfile(viewer: Actor, learnerId: string): Promise<boolean> {
+    try {
+      await this.scheduling.learnerFor(viewer, learnerId, 'read_profile');
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /** A child's details, set by the child's supervisor. Each field present is written; null clears it. */

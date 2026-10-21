@@ -1,5 +1,7 @@
 import { useId, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
+import { studentPath } from '@/features/profiles/api'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { Icon } from '@/shared/components/Icon'
 import { QueryBoundary } from '@/shared/components/States'
@@ -44,6 +46,10 @@ function ChildCard({ l, onEdit }: { l: GroupLearner; onEdit: () => void }) {
     <>
       <div className="jr-child__head">
         <strong dir="auto">{l.name}</strong>
+        {/* PD-17: the child's Student Profile; the server decides who may open it. */}
+        <Link className="btn btn--ghost btn--sm" to={studentPath(l.id)} aria-label={`${tx(J.viewProfile)}: ${l.name}`}>
+          {tx(J.viewProfile)}
+        </Link>
         {l.canEdit && (
           <button type="button" className="btn btn--ghost btn--sm" onClick={onEdit} aria-label={`${tx(J.editDetails)}: ${l.name}`}>
             <Icon name="pencil" size={14} />

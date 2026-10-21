@@ -4260,6 +4260,210 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Something went wrong. Try again.'**
   String get signupFailed;
+
+  /// No description provided for @studentProfileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Student profile'**
+  String get studentProfileTitle;
+
+  /// No description provided for @studentProfileView.
+  ///
+  /// In en, this message translates to:
+  /// **'View profile'**
+  String get studentProfileView;
+
+  /// No description provided for @studentProfileTeacher.
+  ///
+  /// In en, this message translates to:
+  /// **'Assigned teacher'**
+  String get studentProfileTeacher;
+
+  /// No description provided for @studentProfileSchedule.
+  ///
+  /// In en, this message translates to:
+  /// **'Class schedule'**
+  String get studentProfileSchedule;
+
+  /// Under a student's weekly lesson times: the time zone they are written in (an IANA name such as Africa/Cairo).
+  ///
+  /// In en, this message translates to:
+  /// **'Times in {zone}'**
+  String studentProfileTimeZone(String zone);
+
+  /// No description provided for @studentProfileNotYoursTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'You can\'t open this student\'s profile'**
+  String get studentProfileNotYoursTitle;
+
+  /// No description provided for @studentProfileNotYoursBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the student\'s own teacher can see it.'**
+  String get studentProfileNotYoursBody;
+
+  /// No description provided for @myPaymentsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments'**
+  String get myPaymentsTitle;
+
+  /// No description provided for @myPaymentsSettingsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your instalments and what has been paid'**
+  String get myPaymentsSettingsSubtitle;
+
+  /// No description provided for @billingPlanLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Plan'**
+  String get billingPlanLabel;
+
+  /// The family's subscription plan, by its length in months.
+  ///
+  /// In en, this message translates to:
+  /// **'{months, plural, =1{1-month plan} other{{months}-month plan}}'**
+  String billingPlanMonths(int months);
+
+  /// No description provided for @billingNoPlan.
+  ///
+  /// In en, this message translates to:
+  /// **'No plan'**
+  String get billingNoPlan;
+
+  /// No description provided for @billingMethodLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment method'**
+  String get billingMethodLabel;
+
+  /// No description provided for @billingMethodInvoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Invoice'**
+  String get billingMethodInvoice;
+
+  /// No description provided for @billingMethodBankTransfer.
+  ///
+  /// In en, this message translates to:
+  /// **'Bank transfer'**
+  String get billingMethodBankTransfer;
+
+  /// No description provided for @billingNotSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get billingNotSet;
+
+  /// No description provided for @billingPaidTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get billingPaidTotal;
+
+  /// No description provided for @billingOutstandingTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Outstanding'**
+  String get billingOutstandingTotal;
+
+  /// No description provided for @billingOverdueTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'of which overdue'**
+  String get billingOverdueTotal;
+
+  /// No description provided for @billingInstalmentsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Instalments'**
+  String get billingInstalmentsTitle;
+
+  /// No description provided for @billingStatusOverdue.
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue'**
+  String get billingStatusOverdue;
+
+  /// No description provided for @billingStatusDue.
+  ///
+  /// In en, this message translates to:
+  /// **'Due today'**
+  String get billingStatusDue;
+
+  /// No description provided for @billingStatusUpcoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Upcoming'**
+  String get billingStatusUpcoming;
+
+  /// No description provided for @billingStatusPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get billingStatusPaid;
+
+  /// No description provided for @billingFamily.
+  ///
+  /// In en, this message translates to:
+  /// **'Family'**
+  String get billingFamily;
+
+  /// An instalment's due date, already formatted for the reader.
+  ///
+  /// In en, this message translates to:
+  /// **'Due {date}'**
+  String billingDueOn(String date);
+
+  /// A paid instalment: the day it was paid and how.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid {date} · {method}'**
+  String billingPaidOn(String date, String method);
+
+  /// A paid instalment whose payment method is not known.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid {date}'**
+  String billingPaidOnNoMethod(String date);
+
+  /// How many days an overdue instalment is late.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =1{1 day late} other{{days} days late}}'**
+  String billingDaysLate(int days);
+
+  /// How many days until an upcoming instalment is due.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =1{in 1 day} other{in {days} days}}'**
+  String billingDaysUntil(int days);
+
+  /// No description provided for @billingEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No payments yet'**
+  String get billingEmptyTitle;
+
+  /// No description provided for @billingEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your instalments will appear here.'**
+  String get billingEmptyBody;
+
+  /// No description provided for @billingDeniedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments are managed by the parent responsible for billing'**
+  String get billingDeniedTitle;
+
+  /// No description provided for @billingDeniedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'If you have a question, ask the academy.'**
+  String get billingDeniedBody;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

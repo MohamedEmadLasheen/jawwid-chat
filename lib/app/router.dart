@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../features/auth/domain/auth_state.dart';
 import '../features/auth/presentation/sign_in_screen.dart';
+import '../features/billing/presentation/my_payments_screen.dart';
 import '../features/calls/presentation/active_call_screen.dart';
 import '../features/calls/presentation/calls_screen.dart';
 import '../features/conversations/application/chat_realtime.dart';
@@ -16,6 +17,7 @@ import '../features/profile/presentation/my_profile_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/stories/presentation/story_viewer_screen.dart';
+import '../features/student_profile/presentation/student_profile_screen.dart';
 import '../features/supervision/presentation/my_leave_screen.dart';
 import '../features/teacher_profile/presentation/teacher_profile_screen.dart';
 import '../shared/models/user_role.dart';
@@ -81,6 +83,11 @@ abstract final class Routes {
   /// the teacher role: conflating them would hand a teacher controls that do not apply.
   static const myProfile = '/settings/profile';
 
+  /// PD-17: the parent's own payments. Parents only -- anyone else following a link here
+  /// is sent to Chats (see the redirect) -- and of parents, the server answers only the
+  /// one who holds billing for the family.
+  static const myPayments = '/settings/payments';
+
   /// One story, opened full-screen from the rail.
   ///
   /// A real route rather than a bare `Navigator.push`, for the same reason the media screen is
@@ -88,6 +95,12 @@ abstract final class Routes {
   /// have to land somewhere, and a story that lapsed before the link was followed must reach a
   /// screen that says so rather than a 404.
   static String story(String id) => '/stories/$id';
+
+  /// PD-17: one of the signed-in teacher's own students. Teachers only -- anyone else
+  /// following a link here is sent to Chats (see the redirect) -- and the server answers
+  /// a teacher who is not this child's with a 404 regardless.
+  static String studentProfile(String learnerId) => '$studentsPrefix/$learnerId';
+  static const studentsPrefix = '/students';
 }
 
 /// Rebuilds on every authentication change, so a session ending immediately evicts every
@@ -217,6 +230,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: Routes.myProfile,
         builder: (context, state) => const MyProfileScreen(),
       ),
+      GoRoute(
+        path: Routes.myPayments,
+        builder: (context, state) => const MyPaymentsScreen(),
+      ),
+      GoRoute(
+        path: '${Routes.studentsPrefix}/:learnerId',
+        builder: (context, state) => StudentProfileScreen(
+          learnerId: state.pathParameters['learnerId']!,
+        ),
+      ),
       // Full-screen, above the tab bar: a story is the whole viewport for as long as it is
       // open, and a tab bar underneath it would be something to tap by accident.
       GoRoute(
@@ -278,6 +301,17 @@ String? _redirect(Ref ref, String location) {
   // The Schedule is a teacher's (PD-10). A parent following a stale or shared link lands
   // on their chats, where their children's lessons already arrive as cards.
   if (location == Routes.schedule && ref.read(currentRoleProvider) != UserRole.teacher) {
+    return Routes.chats;
+  }
+
+  // A Student Profile is a teacher's (PD-17). A parent never reaches one: their own
+  // children are in their own screens, and nothing of another family is theirs to open.
+  if (location.startsWith('${Routes.studentsPrefix}/') && ref.read(currentRoleProvider) != UserRole.teacher) {
+    return Routes.chats;
+  }
+
+  // Payments are a parent's (PD-17). A teacher never sees a family's money.
+  if (location == Routes.myPayments && ref.read(currentRoleProvider) != UserRole.parent) {
     return Routes.chats;
   }
 

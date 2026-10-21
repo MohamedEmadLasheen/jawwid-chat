@@ -33,6 +33,7 @@ export type AdminSectionKey =
   | 'teams'
   | 'teachers'
   | 'instalments'
+  | 'parents'
   | 'stories'
   | 'quality'
   | 'reports'
@@ -241,16 +242,32 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     key: 'instalments',
     group: 'operations',
     icon: 'calendar',
-    // PD-12 S3: Jawwid Core's invoices, read at request time, never stored.
+    // PD-12 S3 / PD-17: the instalments recorded in Chat, as a queue.
     status: 'read_only',
     label: { en: 'Instalment payments', ar: 'الأقساط' },
     purpose: {
-      en: 'Every family’s invoices from Jawwid Core, overdue first, with the supervisor responsible for each.',
-      ar: 'فواتير كل أسرة من نظام جوّد الأساسي، المتأخر أولًا، مع المشرف المسؤول عن كل فاتورة.',
+      en: 'Every family’s open instalments, overdue first, with the supervisor responsible for each.',
+      ar: 'الأقساط المفتوحة لكل أسرة، المتأخر أولًا، مع المشرف المسؤول عن كل قسط.',
     },
     note: {
-      en: 'Amounts and dates come from Jawwid Core at the moment you open the page; paying stays in Core.',
-      ar: 'تأتي المبالغ والتواريخ من نظام جوّد الأساسي لحظة فتح الصفحة، ويبقى الدفع في النظام الأساسي.',
+      en: 'Instalments and payments are recorded on each family’s Parent Profile, in Jawwid Chat.',
+      ar: 'تُسجَّل الأقساط والمدفوعات في ملف ولي الأمر لكل أسرة، داخل جوّد للمحادثات.',
+    },
+  },
+  {
+    key: 'parents',
+    group: 'operations',
+    icon: 'users',
+    // PD-17: contact information, the internal note, payments. Administration only.
+    status: 'managed',
+    label: { en: 'Parents', ar: 'أولياء الأمور' },
+    purpose: {
+      en: 'Each parent’s profile: contact information, children, subscription, payment method and payment timeline.',
+      ar: 'ملف كل ولي أمر: بيانات التواصل والأطفال والاشتراك وطريقة الدفع وسجل المدفوعات.',
+    },
+    note: {
+      en: 'Administration only. Teachers never see a parent’s profile or payments.',
+      ar: 'للإدارة فقط. لا يرى المعلمون ملف ولي الأمر ولا مدفوعاته.',
     },
   },
   {

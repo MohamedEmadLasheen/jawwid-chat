@@ -14,6 +14,7 @@ import { SupervisionTimeline } from './SupervisionTimeline'
 import { EmploymentSection, FinancialSummarySection, HistorySection, usePayroll } from './Payroll'
 import { MonthlyKpis, TeacherScheduleSection, currentMonth, teacherAreaLinks, type TeacherWorkLinks } from './TeacherWork'
 import './teacher-files.css'
+import { studentPath } from '@/features/profiles/api'
 import { OpenSupervisionButton, TeacherLeaveSection } from '@/features/supervision/TeacherLeaveSection'
 
 /**
@@ -194,7 +195,10 @@ function Students({ file }: { file: TeacherFile }) {
             <tbody>
               {rows.map((s) => (
                 <tr key={s.learnerId}>
-                  <td dir="auto">{s.name}</td>
+                  <td dir="auto">
+                    {/* PD-17: the child's Student Profile. */}
+                    <Link to={studentPath(s.learnerId)}>{s.name}</Link>
+                  </td>
                   <td dir="auto">{s.level ?? tx(T.none)}</td>
                   <td dir="auto">{s.family.displayName}</td>
                   <td dir="auto">{s.supervisor?.name ?? tx(T.none)}</td>
