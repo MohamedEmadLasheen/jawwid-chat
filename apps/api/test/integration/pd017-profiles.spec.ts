@@ -16,8 +16,8 @@
  *      an administrator may change a parent's photo, a teacher may not
  *   6. Sales (owner, 2026-10-21): reads every parent and records payments, but
  *      does not edit the contact record
- *   7. a parent's own payments: the billing parent of the family only, without
- *      voided rows or who recorded what
+ *   7. a parent's own payments: every active parent of the family (both
+ *      parents), without voided rows or who recorded what
  *
  * Synthetic people only (G-20).
  */
@@ -433,14 +433,46 @@ describe('7. a parent\'s own payments', () => {
     }
   });
 
-  it('a contact without the family\'s billing permission, a teacher and staff are refused', async () => {
+  it('both parents read it -- the billing permission is not needed (owner, 2026-10-21)', async () => {
     const f = m.families[0]!;
+    await billing.createInstalments(m.superAdmin.id, f.id, { label: 'Fees', amountMinor: 50000, currency: 'AED', firstDueDate: today });
     await g.prisma.contact.update({ where: { id: f.parent.id }, data: { canManageBilling: false } });
     try {
-      expect(await code(billing.mine(f.parent.id))).toBe(CommErrorCode.BILLING_DENIED);
+      expect((await billing.mine(f.parent.id)).instalments.length).toBeGreaterThan(0);
     } finally {
       await g.prisma.contact.update({ where: { id: f.parent.id }, data: { canManageBilling: true } });
     }
+    const second = await g.prisma.contact.create({
+      data: {
+        organizationId: orgId,
+        familyId: f.id,
+        name: 'Second Parent',
+        relationship: 'parent',
+        rolePreset: 'authorized_contact',
+        canMessage: true,
+        canViewProgress: true,
+        canManageSchedule: false,
+        canManageBilling: false,
+        canManageContacts: false,
+        canCancel: false,
+        isActive: true,
+      },
+    });
+    try {
+      const both = [await billing.mine(f.parent.id), await billing.mine(second.id)];
+      expect(both[1]).toEqual(both[0]);
+      // Another family's parent never reads this family's.
+      const other = await billing.mine(m.families[1]!.parent.id);
+      expect(other.instalments.map((i) => i.id)).not.toEqual(expect.arrayContaining(both[0].instalments.map((i) => i.id)));
+      await g.prisma.contact.update({ where: { id: second.id }, data: { isActive: false } });
+      expect(await code(billing.mine(second.id))).toBe(CommErrorCode.BILLING_DENIED);
+    } finally {
+      await g.prisma.contact.update({ where: { id: second.id }, data: { isActive: false } });
+    }
+  });
+
+  it('a teacher and staff are refused', async () => {
+    const f = m.families[0]!;
     for (const who of [f.children[0]!.teacherId, m.superAdmin.id, m.operationsManager.id]) {
       expect(await code(billing.mine(who))).toBe(CommErrorCode.BILLING_DENIED);
     }

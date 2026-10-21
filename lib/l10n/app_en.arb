@@ -1345,6 +1345,6 @@
   },
   "billingEmptyTitle": "No payments yet",
   "billingEmptyBody": "Your instalments will appear here.",
-  "billingDeniedTitle": "Payments are managed by the parent responsible for billing",
+  "billingDeniedTitle": "Payments are shown to the family's parents",
   "billingDeniedBody": "If you have a question, ask the academy."
 }

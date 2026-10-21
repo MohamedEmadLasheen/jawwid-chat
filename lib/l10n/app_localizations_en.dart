@@ -2468,7 +2468,7 @@ class L10nEn extends L10n {
 
   @override
   String get billingDeniedTitle =>
-      'Payments are managed by the parent responsible for billing';
+      'Payments are shown to the family\'s parents';
 
   @override
   String get billingDeniedBody => 'If you have a question, ask the academy.';

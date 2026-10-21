@@ -4456,7 +4456,7 @@ abstract class L10n {
   /// No description provided for @billingDeniedTitle.
   ///
   /// In en, this message translates to:
-  /// **'Payments are managed by the parent responsible for billing'**
+  /// **'Payments are shown to the family\'s parents'**
   String get billingDeniedTitle;
 
   /// No description provided for @billingDeniedBody.

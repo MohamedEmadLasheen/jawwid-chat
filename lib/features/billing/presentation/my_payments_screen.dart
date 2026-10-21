@@ -16,10 +16,10 @@ import '../domain/money_format.dart';
 /// PD-17: "Payments" -- the parent's own plan, what has been paid and what is still
 /// owed, then every instalment in due-date order.
 ///
-/// Parents only, and of those only the one who holds billing for the family: the
-/// route sends a teacher away, and the server refuses anyone else. That refusal is a
-/// plain sentence naming who does see this, not an error to retry -- asking again
-/// cannot change who is responsible for billing.
+/// Parents only -- every parent of the family (PD-17, "both parents"): the route
+/// sends a teacher away, and the server refuses anyone else. That refusal is a plain
+/// sentence naming who does see this, not an error to retry -- asking again cannot
+/// make someone a parent of the family.
 class MyPaymentsScreen extends ConsumerWidget {
   const MyPaymentsScreen({super.key});
 

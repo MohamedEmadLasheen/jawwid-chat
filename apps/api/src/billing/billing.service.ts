@@ -437,21 +437,22 @@ export class BillingService {
   }
 
   /**
-   * PD-17: the parent's own payments, for the app's Settings > Payments. Only a
-   * family contact who holds the family's billing permission
-   * (contact.can_manage_billing -- the primary parent at enrolment). The
-   * family is the caller's own; nothing here takes a family id. Voided rows,
-   * void reasons, who recorded what and every internal note stay staff-side.
+   * PD-17: the parents' own payments, for the app's Settings > Payments. Every
+   * active parent of the family reads them (owner, 2026-10-21: "both parents"),
+   * not only the one holding the billing permission -- reading is not managing,
+   * and paying is still recorded by staff. The family is the caller's own;
+   * nothing here takes a family id. Voided rows, void reasons, who recorded what
+   * and every internal note stay staff-side.
    */
   async mine(actorId: string) {
     const actor = await this.conversations.requireActor(actorId);
-    const denied = () => new CommError(CommErrorCode.BILLING_DENIED, 'payments are shown to the parent responsible for billing');
+    const denied = () => new CommError(CommErrorCode.BILLING_DENIED, 'payments are shown to the family\'s parents');
     if (actor.kind !== 'contact' || !actor.isActive || !actor.familyId) throw denied();
     const contact = await this.prisma.contact.findUnique({
       where: { id: actor.actorId },
-      select: { familyId: true, organizationId: true, canManageBilling: true, isActive: true },
+      select: { familyId: true, organizationId: true, isActive: true },
     });
-    if (!contact || !contact.isActive || !contact.canManageBilling || contact.familyId !== actor.familyId) throw denied();
+    if (!contact || !contact.isActive || contact.familyId !== actor.familyId) throw denied();
     const today = todayIn(await this.timeZone());
     const [family, billing, rows] = await Promise.all([
       this.prisma.family.findUniqueOrThrow({ where: { id: contact.familyId }, select: { subscriptionPlanMonths: true } }),
