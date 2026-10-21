@@ -1579,9 +1579,28 @@ model TrialProspect {
   createdBy      String   @map("created_by") @db.Uuid
   createdAt      DateTime @map("created_at") @db.Timestamptz @default(now())
 
-  lessons Lesson[]
+  lessons  Lesson[]
+  students TrialStudent[]
 
   @@map("trial_prospect")
+  @@schema("chat")
+}
+
+/// One student of a trial booking, by display name only (BR-2). Written with
+/// the booking, never changed (20261021130000_chat_trial_booking_students).
+model TrialStudent {
+  id             String        @id @default(uuid()) @db.Uuid
+  prospectId     String        @map("prospect_id") @db.Uuid
+  prospect       TrialProspect @relation(fields: [prospectId], references: [id])
+  organizationId String        @map("organization_id") @db.Uuid
+  position       Int           @db.SmallInt
+  displayName    String        @map("display_name")
+  level          String?
+  note           String?
+  createdAt      DateTime      @map("created_at") @db.Timestamptz @default(now())
+
+  @@unique([prospectId, position])
+  @@map("trial_student")
   @@schema("chat")
 }
 

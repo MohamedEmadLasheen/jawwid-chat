@@ -18,10 +18,12 @@
   text-align: start;
   cursor: pointer;
 }
-.tj-pick:hover,
+.tj-pick:hover:not(:disabled),
 .tj-option:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--border-strong); }
 .tj-pick:focus-visible,
 .tj-option:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.tj-pick:disabled { cursor: default; color: var(--text-muted); background: var(--surface-sunken); }
+.tj-pick__hint { margin: var(--space-1) 0 0; font-size: var(--fs-sm); }
 .tj-pick__name { font-weight: var(--fw-semibold); flex: 1 1 auto; min-inline-size: 0; overflow-wrap: anywhere; }
 .tj-options { display: grid; gap: var(--space-2); }
 .tj-option { justify-content: space-between; font-weight: var(--fw-semibold); }

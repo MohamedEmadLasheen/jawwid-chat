@@ -17,7 +17,7 @@ export function useTrialSlots(teacherId: string, duration: number) {
   return useQuery({
     queryKey: trialKeys.slots(teacherId, duration),
     queryFn: () => trialsApi.slots(teacherId, duration),
-    enabled: teacherId !== '',
+    enabled: teacherId !== '' && duration > 0,
   })
 }
 

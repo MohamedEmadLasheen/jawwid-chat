@@ -1066,6 +1066,38 @@ Core's confirmation.
 - **App.** Trial cards read the short sentences, and a correction card shows the
   new outcome. The "counts once Core confirms" line is gone.
 
+**Trial booking with students (2026-10-21).** Migration `20261021130000_chat_trial_booking_students.sql`.
+Owner decisions in the session "student trial journey".
+- **One booking form.** "Record a prospect" is gone from the Admin Web.
+  - "Book a trial" takes the students directly: name, optional level and note,
+    and "Add another student" (up to 10).
+  - Siblings or a small group share **one** trial, one teacher time, one card and
+    **one outcome** (the owner chose one outcome per booking, not per student).
+  - The students are `chat.trial_student`, written with the booking and never
+    changed. Older bookings were backfilled as one student each.
+  - The booking's label (`trial_prospect.display_name`) is the students' names
+    joined.
+  - When the outcome is "subscribed", the form starts with the booked students
+    as the children.
+  - `POST /trials` takes `students`; `prospectId` is still accepted.
+- **Operations is part of the trial desk.** Operations supervisors work trials
+  exactly like Sales: they book, record every outcome, fill and edit the
+  subscription form, correct outcomes, and join or leave trial groups.
+  - `chat.trial_desk_role` (Sales or Operations) replaces the Sales-only check
+    in the trial group's member guard, `staff_conversation_access` and the chat
+    list.
+- **Editing a booked trial.** A trial that has not started can be moved to
+  another time, length or teacher (`POST /trials/:id/reschedule`; the trial
+  desk or the Teachers department).
+  - As every PD-11 move, the old row becomes `rescheduled` and the trial
+    continues as a new row for the same students, so reminders and free times
+    stay right. Statistics and lists count it once.
+  - The group reads a `trial_rescheduled` card (new and previous time). When
+    the teacher changes, the old group reads "moved to another teacher" and the
+    new teacher's group gets the booking.
+- **Upcoming trials in "+ → Trial".** They are listed, greyed out: an outcome
+  is accepted only once a trial has started.
+
 **Deprecated behaviour.** None removed. Explicitly **not** built: a generic ticket
 or task entity; any stored package balance; parents changing their regular
 lesson times without approval.
