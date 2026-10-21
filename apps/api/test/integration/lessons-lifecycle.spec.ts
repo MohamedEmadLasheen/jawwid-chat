@@ -237,6 +237,38 @@ describe('2. a temporary pause', () => {
     expect(second.resumed).toBe(1);
     expect(await g.prisma.learnerSuspension.count({ where: { learnerId: s.secondLearnerId, status: 'ended' } })).toBe(1);
   });
+
+  it("the team's list and the worker's sweep agree on the pause's own today, whatever the UTC date", async () => {
+    // They used to disagree: the needs-action list compared against the database's
+    // UTC current_date, the sweep against the teacher's local date. Pick a zone whose
+    // date differs from UTC's right now, so this runs the disagreement at any hour:
+    // far ahead (UTC+14) from 11:00 UTC, far behind (UTC-11) before it.
+    const [{ hour }] = await g.prisma.$queryRawUnsafe<Array<{ hour: number }>>(
+      `select extract(hour from now() at time zone 'UTC')::int as hour`,
+    );
+    const ahead = hour >= 11;
+    const zone = ahead ? 'Pacific/Kiritimati' : 'Pacific/Pago_Pago';
+    await scheduling.setAvailability(tsupId, s.teacherId, {
+      timezone: zone,
+      windows: [1, 2, 3, 4, 5, 6, 7].map((weekday) => ({ weekday, start: '00:00', end: '24:00' })),
+    });
+    const days = Number(await g.config.get('lesson.return_notice_days'));
+    // Ahead: due back exactly at the edge of the notice window locally -- noticed.
+    // Behind: one day past the edge locally, but inside it by the UTC date -- not yet.
+    const offset = ahead ? days : days + 1;
+    const [{ id }] = await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `insert into chat.learner_suspension (organization_id, learner_id, kind, reason_code, starts_on, return_on, created_by)
+       values (chat.default_organization_id(), $1::uuid, 'temporary', 'exams',
+               (now() at time zone $2)::date, (now() at time zone $2)::date + $3::int, $4::uuid)
+       returning id::text as id`,
+      s.learnerId, zone, offset, tsupId,
+    );
+
+    const listed = (await lessons.needsAction(tsupId)).returningSoon.map((r) => r.suspensionId);
+    const noticed = (await lifecycle.sweep()).noticed;
+    expect(listed).toEqual(ahead ? [id] : []);
+    expect(noticed).toBe(ahead ? 1 : 0);
+  });
 });
 
 describe('3. a permanent stop', () => {
