@@ -27,6 +27,7 @@ import { StatsService } from '../../src/lessons/stats.service';
 import { TrialGroupService } from '../../src/lessons/trial-group.service';
 import { TrialService } from '../../src/lessons/trial.service';
 import { NewStudentsService } from '../../src/new-students/new-students.service';
+import { NewStudentEnrolmentService } from '../../src/new-students/enrolment.service';
 import { CardPoster } from '../../src/supervision/card-poster';
 import { buildGraph, seed, truncate, Scenario } from './harness';
 
@@ -37,6 +38,8 @@ const scheduling = new SchedulingService(g.prisma, g.authz, g.conversations, les
 const cards = new CardPoster(g.conversations, g.outbox, audit);
 const groups = new TrialGroupService(g.prisma, g.authz, g.conversations, g.outbox, cards, g.config, audit);
 const trials = new TrialService(g.prisma, g.conversations, lessons, scheduling, audit, groups, new NewStudentsService(g.prisma));
+// PD-16: the page is NewStudentEnrolmentService's (filtered per viewer).
+const enrolment = new NewStudentEnrolmentService(g.prisma, g.authz, g.conversations, new NewStudentsService(g.prisma), lessons, scheduling, audit);
 const stats = new StatsService(g.prisma, g.conversations, lessons, scheduling, g.config);
 
 const MIN = 60_000;
@@ -329,11 +332,11 @@ describe('3. privacy: the group gets one short sentence', () => {
 });
 
 describe('4. the New Students page', () => {
-  it('shows each subscription as Sales recorded it, to Operations and Sales only', async () => {
+  it('shows each subscription as Sales recorded it, to the Operations manager and Sales only', async () => {
     const id = await pastTrial(new Date(Date.now() - 2 * HOUR));
     await trials.outcome(salesId, id, { result: 'subscribed', subscription: form() });
 
-    const page = await trials.newStudents(s.ownerId); // Operations
+    const page = await enrolment.page(s.managerId); // the Operations manager
     expect(page.students).toEqual([
       expect.objectContaining({
         trialId: id,
@@ -352,10 +355,12 @@ describe('4. the New Students page', () => {
         ],
       }),
     ]);
-    expect((await trials.newStudents(salesId)).students).toHaveLength(1);
-    expect(await code(trials.newStudents(tsupId))).toBe(CommErrorCode.LESSON_DENIED);
-    expect(await code(trials.newStudents(s.teacherId))).toBe(CommErrorCode.LESSON_DENIED);
-    expect(await code(trials.newStudents(s.parentId))).toBe(CommErrorCode.LESSON_DENIED);
+    expect((await enrolment.page(salesId)).students).toHaveLength(1);
+    // PD-16: an Operations supervisor sees only the students assigned to them.
+    expect((await enrolment.page(s.ownerId)).students).toHaveLength(0);
+    expect(await code(enrolment.page(tsupId))).toBe(CommErrorCode.LESSON_DENIED);
+    expect(await code(enrolment.page(s.teacherId))).toBe(CommErrorCode.LESSON_DENIED);
+    expect(await code(enrolment.page(s.parentId))).toBe(CommErrorCode.LESSON_DENIED);
   });
 
   it('Sales edits the form in place; still one row, nothing posted', async () => {
@@ -367,7 +372,7 @@ describe('4. the New Students page', () => {
     const updated = await trials.updateSubscription(sales2Id, id, { subscription: form({ payment: { currency: 'USD', method: 'bank_transfer' } }) });
     expect(updated).toMatchObject({ payment: { currency: 'USD', method: 'bank_transfer' } });
     expect(updated?.updatedAt).not.toBeNull();
-    expect((await trials.newStudents(salesId)).students).toHaveLength(1);
+    expect((await enrolment.page(salesId)).students).toHaveLength(1);
     expect((await cardsIn(conv)).length).toBe(before);
   });
 });
@@ -386,7 +391,7 @@ describe('5. corrections', () => {
     let t = await trials.correct(salesId, id, { result: 'not_subscribed', reason: 'chose_other', why: 'the family cancelled the next day' });
     expect(t).toMatchObject({ outcome: 'not_subscribed', outcomeDetail: { reason: 'chose_other' } });
     expect(t.outcomeDetail?.correctedAt).not.toBeNull();
-    expect((await trials.newStudents(salesId)).students).toEqual([]);
+    expect((await enrolment.page(salesId)).students).toEqual([]);
 
     // -> no-show: the attendance follows.
     t = await trials.correct(sales2Id, id, { result: 'no_show', why: 'the teacher confirmed nobody joined' });
@@ -395,7 +400,7 @@ describe('5. corrections', () => {
     // -> subscribed again, with a fresh form: the same row comes back.
     t = await trials.correct(salesId, id, { result: 'subscribed', subscription: form({ payment: { currency: 'SAR', method: 'invoice' } }), why: 'the family came back' });
     expect(t).toMatchObject({ attendance: 'attended', outcome: 'subscribed' });
-    const page = await trials.newStudents(salesId);
+    const page = await enrolment.page(salesId);
     expect(page.students.map((x) => [x.trialId, x.payment.currency])).toEqual([[id, 'SAR']]);
 
     expect(await g.prisma.trialOutcome.count({ where: { lessonId: id } })).toBe(1);

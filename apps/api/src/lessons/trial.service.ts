@@ -615,21 +615,8 @@ export class TrialService {
   }
 
   // ------------------------------------------------------------------
-  // New students
+  // New students: the page and its setup are NewStudentEnrolmentService's (PD-16).
   // ------------------------------------------------------------------
-
-  /**
-   * The New Students page: every subscribed trial's form -- parent, children,
-   * payment -- as Sales recorded it in Chat. Operations, Sales, super admin.
-   */
-  async newStudents(actorId: string) {
-    const actor = await this.conversations.requireActor(actorId);
-    const allowed = actor.staffRole === StaffRole.SUPER_ADMIN
-      || (await this.lessons.inDepartment(actor, 'operations'))
-      || (await this.lessons.inDepartment(actor, 'sales'));
-    if (!allowed) throw new CommError(CommErrorCode.LESSON_DENIED, 'the New Students page belongs to Operations and Sales');
-    return { students: await this.forms.list(actor.organizationId as string) };
-  }
 
   /** The booking's party: one prospect, named by its students, and the students in order. */
   private async recordParty(tx: Prisma.TransactionClient, actor: Actor, students: BookingStudent[]) {

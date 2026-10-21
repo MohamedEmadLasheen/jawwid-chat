@@ -945,5 +945,22 @@
         "type": "int"
       }
     }
-  }
+  },
+  "signupOpen": "ولي أمر جديد؟ أنشئ حسابك",
+  "signupTitle": "إنشاء حساب ولي الأمر",
+  "signupEmailIntro": "أدخل البريد الإلكتروني الذي سجّلته لدى الأكاديمية عند الاشتراك.",
+  "signupEmailLabel": "البريد الإلكتروني",
+  "signupEmailInvalid": "أدخل بريدًا إلكترونيًا صحيحًا.",
+  "signupSendCode": "احصل على الرمز",
+  "signupCodeSent": "سيرسل إليك مشرفك رمزًا من 6 أرقام عبر واتساب. أدخله أدناه مع كلمة المرور التي تريدها.",
+  "signupCodeLabel": "الرمز المكوّن من 6 أرقام",
+  "signupPasswordLabel": "كلمة مرور جديدة (8 أحرف على الأقل)",
+  "signupPasswordConfirmLabel": "أعد كتابة كلمة المرور",
+  "signupPasswordTooShort": "استخدم 8 أحرف على الأقل.",
+  "signupPasswordsDiffer": "كلمتا المرور غير متطابقتين.",
+  "signupFinish": "إنشاء الحساب",
+  "signupCodeInvalid": "هذا الرمز غير صالح أو انتهت صلاحيته. اطلب رمزًا جديدًا.",
+  "signupNewCode": "أرسل رمزًا جديدًا",
+  "signupTooMany": "محاولات كثيرة. حاول مرة أخرى بعد دقائق.",
+  "signupFailed": "حدث خطأ. حاول مرة أخرى."
 }

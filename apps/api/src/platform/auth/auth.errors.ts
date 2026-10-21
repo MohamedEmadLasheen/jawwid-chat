@@ -33,6 +33,14 @@ export enum AuthErrorCode {
    * filter that sets the `Retry-After` header.
    */
   RATE_LIMITED = 'COMMON.RATE_LIMITED',
+  /**
+   * 401. PD-16 parent sign-up: the code is wrong, expired, used up or was never
+   * issued -- one code for all of them, and the same whether the e-mail is
+   * known or not, so the sign-up cannot enumerate parents.
+   */
+  SIGNUP_CODE_INVALID = 'AUTH.SIGNUP_CODE_INVALID',
+  /** 400. PD-16 parent sign-up: the chosen password is too short. */
+  PASSWORD_TOO_WEAK = 'AUTH.PASSWORD_TOO_WEAK',
 }
 
 /**
@@ -56,6 +64,8 @@ const MESSAGES: Record<AuthErrorCode, string> = {
   // not -- a rate-limit response that differs would enumerate accounts just as
   // effectively as a login response that differs.
   [AuthErrorCode.RATE_LIMITED]: 'too many attempts; try again later',
+  [AuthErrorCode.SIGNUP_CODE_INVALID]: 'the code is not valid; ask for a new one',
+  [AuthErrorCode.PASSWORD_TOO_WEAK]: 'choose a password of at least 8 characters',
 };
 
 const STATUS: Record<AuthErrorCode, number> = {
@@ -66,6 +76,8 @@ const STATUS: Record<AuthErrorCode, number> = {
   [AuthErrorCode.SESSION_REVOKED]: 401,
   [AuthErrorCode.FORBIDDEN]: 403,
   [AuthErrorCode.RATE_LIMITED]: 429,
+  [AuthErrorCode.SIGNUP_CODE_INVALID]: 401,
+  [AuthErrorCode.PASSWORD_TOO_WEAK]: 400,
 };
 
 /**

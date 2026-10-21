@@ -1,3 +1,5 @@
+import { ParentSignupController } from './parent-signup.controller';
+import { ParentSignupService } from './parent-signup.service';
 import { Logger, Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import Redis from 'ioredis';
@@ -76,9 +78,11 @@ export const loginRateLimitStoreProvider = {
 };
 
 @Module({
-  controllers: [AuthController, MeController],
+  // PD-16: ParentSignupController -- a parent sets the password of the account Chat created at enrolment.
+  controllers: [AuthController, MeController, ParentSignupController],
   providers: [
     AuthService,
+    ParentSignupService,
     LoginRateLimiter,
     loginRateLimitStoreProvider,
     // Resolved once at boot, from the same variable bootstrap.ts uses to set
