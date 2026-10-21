@@ -1846,6 +1846,8 @@ now meaning "recorded in Chat":
 money in Chat" is no longer forbidden for teacher payroll. Chat still **pays
 nobody**: it records what is owed and how to pay.
 
+**Closed.** 2026-10-21.
+
 ---
 
 ### PD-19 · A member may start a call in their own chat (supersedes PD-2)
