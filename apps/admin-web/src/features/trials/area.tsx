@@ -4,8 +4,8 @@ import { useLessonAccess } from '../teachers/hooks'
 import type { Pair } from '../teachers/copy'
 
 /**
- * The Trials area (PD-11 T4): Trial lessons for Sales and the Teachers
- * department, New students for Operations and Sales. One probe -- GET
+ * The Trials area (PD-11 T4): Trial lessons for the trial desk (Sales and
+ * Operations) and the Teachers department, New students for Operations and Sales. One probe -- GET
  * /lessons/access -- decides which tabs a reader is offered; each page still
  * asks the server.
  */
@@ -19,7 +19,7 @@ interface TrialsTab {
 }
 
 export const TRIALS_TABS: TrialsTab[] = [
-  { key: 'trials', path: TRIALS_AREA_BASE, label: { en: 'Trial lessons', ar: 'الحصص التجريبية' }, offered: (a) => a.sales || a.lessonManager },
+  { key: 'trials', path: TRIALS_AREA_BASE, label: { en: 'Trial lessons', ar: 'الحصص التجريبية' }, offered: (a) => a.sales || a.operations || a.lessonManager },
   { key: 'new-students', path: `${TRIALS_AREA_BASE}/new-students`, label: { en: 'New students', ar: 'الطلاب الجدد' }, offered: (a) => a.sales || a.operations },
 ]
 

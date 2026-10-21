@@ -88,6 +88,12 @@ export class TrialController {
     return this.trials.attendance(actorId, id, body ?? {});
   }
 
+  /** Move a booked trial that has not started: time, length or teacher. */
+  @Post(':id/reschedule')
+  reschedule(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.trials.reschedule(actorId, id, body ?? {});
+  }
+
   @Post(':id/cancel')
   cancel(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.trials.cancel(actorId, id, body ?? {});

@@ -349,7 +349,8 @@ describe('lesson tickets over HTTP, in a PD-8 family group', () => {
     expect(JSON.stringify(read.json)).toContain('trial_booked');
     expect((await http(sales, 'GET', `/conversations/${gid}/messages`)).status).toBe(200);
     expect((await http(tsup, 'GET', `/conversations/${gid}/messages`)).status).toBe(200);
-    expect([403, 404]).toContain((await http(m.operationsManager.subject, 'GET', `/conversations/${gid}/messages`)).status);
+    // Operations is part of the trial desk since 2026-10-21: it reads the group too.
+    expect((await http(m.operationsManager.subject, 'GET', `/conversations/${gid}/messages`)).status).toBe(200);
     expect([403, 404]).toContain((await http(fam.siblingTeacher, 'GET', `/conversations/${gid}/messages`)).status);
     // Nothing has started yet, so "+" offers no trial report.
     const tickets = await http(fam.teacher, 'GET', `/conversations/${gid}/trial-tickets`);
