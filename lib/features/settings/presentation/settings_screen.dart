@@ -8,6 +8,7 @@ import '../../../app/router.dart';
 import '../../../design/tokens.dart';
 import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/models/user_role.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../application/theme_mode_controller.dart';
 
@@ -129,6 +130,17 @@ class SettingsScreen extends ConsumerWidget {
               subtitle: Text(l10n.myProfileSettingsSubtitle),
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () => context.push(Routes.myProfile),
+            ),
+          // PD-17: the parent's own payments. Absent for a teacher, never refused: a
+          // teacher has no payments here and must never see a family's.
+          if (user != null && user.role == UserRole.parent)
+            ListTile(
+              key: const ValueKey('settings-my-payments'),
+              leading: const Icon(Icons.receipt_long_outlined),
+              title: Text(l10n.myPaymentsTitle),
+              subtitle: Text(l10n.myPaymentsSettingsSubtitle),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => context.push(Routes.myPayments),
             ),
           const Divider(),
 

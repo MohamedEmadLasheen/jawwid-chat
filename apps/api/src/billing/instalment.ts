@@ -2,7 +2,7 @@
  * PD-12 S3: an instalment's derived status and the page's order. Pure, so the
  * rules are unit-testable whole.
  *
- *   status = paid      Core says paid
+ *   status = paid      a payment is recorded (PD-17: Chat's own record)
  *            overdue   open, due before today
  *            due       open, due today
  *            upcoming  open, due after today
@@ -33,4 +33,13 @@ export function compareInstalments(
 /** Whole days late (overdue) or until due (upcoming); 0 today. */
 export function daysFrom(today: string, dueDate: string): number {
   return Math.round((Date.parse(`${dueDate}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
+}
+
+/** `date` plus `months` calendar months; the 31st becomes the month's last day. */
+export function addMonths(date: string, months: number): string {
+  const [y, m, d] = date.split('-').map(Number) as [number, number, number];
+  const first = new Date(Date.UTC(y, m - 1 + months, 1));
+  const last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+  first.setUTCDate(Math.min(d, last));
+  return first.toISOString().slice(0, 10);
 }

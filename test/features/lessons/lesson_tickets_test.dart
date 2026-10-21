@@ -20,6 +20,7 @@ import 'package:jawwid_chat/features/messages/presentation/message_composer.dart
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/lesson.dart';
 import 'package:jawwid_chat/shared/models/message.dart';
+import 'package:jawwid_chat/shared/models/student_profile.dart';
 import 'package:jawwid_chat/shared/models/user_role.dart';
 
 /// PD-11 on the client: the card a ticket posts, the "+" menu that offers tickets,
@@ -576,4 +577,11 @@ class _RecordingLessons implements LessonRepository {
 
   @override
   Future<TeacherWorkload> myWorkload() async => workload ?? (throw UnsupportedError('none'));
+
+  /// What studentProfile answers; null refuses as the server does a stranger (404).
+  StudentProfile? profile;
+
+  @override
+  Future<StudentProfile> studentProfile(String learnerId) async =>
+      profile ?? (throw const AppError(AppErrorKind.notFound, code: 'COMM.LESSON_NOT_FOUND'));
 }

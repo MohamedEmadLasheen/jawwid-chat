@@ -12,6 +12,7 @@ import { OrganizationPage } from '@/features/organization/OrganizationPage'
 import { TeacherStatsPage } from '@/features/teachers/TeacherStatsPage'
 import { TeacherFilesPage } from '@/features/teacher-files/TeacherFilesPage'
 import { InstalmentsPage } from '@/features/instalments/InstalmentsPage'
+import { ParentsPage } from '@/features/profiles/ParentsPage'
 import { CallsPage } from '@/features/calls-page/CallsPage'
 
 /**
@@ -50,11 +51,19 @@ export function AdminSectionPage() {
       return <TeacherFilesPage basePath={adminSectionPath('teachers')} />
     case 'instalments':
       return <AdminInstalments section={section} />
+    case 'parents':
+      return <AdminParents section={section} />
     case 'calls':
       return <CallsPage />
     default:
       return <DevelopmentPlaceholder section={section} />
   }
+}
+
+/** PD-17: the parents list; each opens at /parents/:id, the one URL a Parent Profile has. */
+function AdminParents({ section }: { section: NonNullable<ReturnType<typeof findAdminSection>> }) {
+  const eyebrow = useEyebrow(section)
+  return <ParentsPage eyebrow={eyebrow} />
 }
 
 function AdminInstalments({ section }: { section: NonNullable<ReturnType<typeof findAdminSection>> }) {

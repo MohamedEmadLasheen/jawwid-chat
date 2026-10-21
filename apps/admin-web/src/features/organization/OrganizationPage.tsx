@@ -11,6 +11,8 @@ import { useLearners, useStructure } from './hooks'
 import { AssignSupervisorDialog, BackupActionDialog, CreateBackupDialog } from './OrgDialogs'
 import type { BackupAction } from './hooks'
 import './organization.css'
+import { Link } from 'react-router-dom'
+import { studentPath } from '@/features/profiles/api'
 
 type Tab = 'children' | 'structure'
 
@@ -124,7 +126,10 @@ function ChildrenTab({ operations }: { operations: Department }) {
             <tbody>
               {rows.map((l) => (
                 <tr key={l.learnerId}>
-                  <td dir="auto">{l.name}</td>
+                  <td dir="auto">
+                    {/* PD-17: the child's Student Profile. */}
+                    <Link to={studentPath(l.learnerId)}>{l.name}</Link>
+                  </td>
                   <td dir="auto">{l.family.displayName}</td>
                   <td dir="auto">{l.teacher?.name ?? <span className="org-muted">{tx(T.noTeacher)}</span>}</td>
                   <td dir="auto">{l.supervisor?.name ?? <Badge tone="warn" dot>{tx(T.unassigned)}</Badge>}</td>

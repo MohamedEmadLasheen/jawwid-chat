@@ -2339,4 +2339,148 @@ class L10nAr extends L10n {
 
   @override
   String get signupFailed => 'حدث خطأ. حاول مرة أخرى.';
+
+  @override
+  String get studentProfileTitle => 'ملف الطالب';
+
+  @override
+  String get studentProfileView => 'عرض الملف';
+
+  @override
+  String get studentProfileTeacher => 'المعلّم المسؤول';
+
+  @override
+  String get studentProfileSchedule => 'مواعيد الحصص';
+
+  @override
+  String studentProfileTimeZone(String zone) {
+    return 'المواعيد بتوقيت $zone';
+  }
+
+  @override
+  String get studentProfileNotYoursTitle => 'لا يمكنك فتح ملف هذا الطالب';
+
+  @override
+  String get studentProfileNotYoursBody => 'يراه معلّم الطالب فقط.';
+
+  @override
+  String get myPaymentsTitle => 'المدفوعات';
+
+  @override
+  String get myPaymentsSettingsSubtitle => 'أقساطك وما تم دفعه';
+
+  @override
+  String get billingPlanLabel => 'الخطة';
+
+  @override
+  String billingPlanMonths(int months) {
+    String _temp0 = intl.Intl.pluralLogic(
+      months,
+      locale: localeName,
+      other: 'خطة $months شهر',
+      many: 'خطة $months شهرًا',
+      few: 'خطة $months أشهر',
+      two: 'خطة شهرين',
+      one: 'خطة شهر واحد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get billingNoPlan => 'لا توجد خطة';
+
+  @override
+  String get billingMethodLabel => 'طريقة الدفع';
+
+  @override
+  String get billingMethodInvoice => 'فاتورة';
+
+  @override
+  String get billingMethodBankTransfer => 'تحويل بنكي';
+
+  @override
+  String get billingNotSet => 'غير محدد';
+
+  @override
+  String get billingPaidTotal => 'المدفوع';
+
+  @override
+  String get billingOutstandingTotal => 'المتبقي';
+
+  @override
+  String get billingOverdueTotal => 'منه متأخر';
+
+  @override
+  String get billingInstalmentsTitle => 'الأقساط';
+
+  @override
+  String get billingStatusOverdue => 'متأخر';
+
+  @override
+  String get billingStatusDue => 'مستحق اليوم';
+
+  @override
+  String get billingStatusUpcoming => 'قادم';
+
+  @override
+  String get billingStatusPaid => 'مدفوع';
+
+  @override
+  String get billingFamily => 'العائلة';
+
+  @override
+  String billingDueOn(String date) {
+    return 'يستحق في $date';
+  }
+
+  @override
+  String billingPaidOn(String date, String method) {
+    return 'دُفع في $date · $method';
+  }
+
+  @override
+  String billingPaidOnNoMethod(String date) {
+    return 'دُفع في $date';
+  }
+
+  @override
+  String billingDaysLate(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'متأخر $days يوم',
+      many: 'متأخر $days يومًا',
+      few: 'متأخر $days أيام',
+      two: 'متأخر يومين',
+      one: 'متأخر يومًا واحدًا',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String billingDaysUntil(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'بعد $days يوم',
+      many: 'بعد $days يومًا',
+      few: 'بعد $days أيام',
+      two: 'بعد يومين',
+      one: 'بعد يوم واحد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get billingEmptyTitle => 'لا توجد مدفوعات بعد';
+
+  @override
+  String get billingEmptyBody => 'ستظهر أقساطك هنا.';
+
+  @override
+  String get billingDeniedTitle =>
+      'يتابع المدفوعات وليّ الأمر المسؤول عن الدفع';
+
+  @override
+  String get billingDeniedBody => 'إن كان لديك سؤال، تواصل مع الأكاديمية.';
 }

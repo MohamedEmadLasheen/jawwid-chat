@@ -13,6 +13,9 @@ import { chatCopyFor } from './copy'
 import { ConversationAvatar, conversationName, isGroup, isMuted } from './chatView'
 import { useConversationPreferences } from './useChatActions'
 import { GroupChildren } from '@/features/journey/GroupChildren'
+import { Link } from 'react-router-dom'
+import { parentPath } from '@/features/profiles/api'
+import { useMayOpenParentProfiles } from '@/features/profiles/hooks'
 
 /**
  * Contact info / group info: who is in the conversation, and this viewer's
@@ -23,6 +26,7 @@ export function ConversationInfo({ c }: { c: ChatConversation }) {
   const { locale } = useI18n()
   const copy = chatCopyFor(locale)
   const { staff } = useSession()
+  const mayOpenParents = useMayOpenParentProfiles()
   const prefs = useConversationPreferences()
   const [adding, setAdding] = useState(false)
   const name = conversationName(c, staff?.id, copy)
@@ -78,7 +82,14 @@ export function ConversationInfo({ c }: { c: ChatConversation }) {
             <li key={m.actorId} className="cw-member">
               <Avatar name={m.displayName || '?'} seed={m.actorId} size="sm" src={m.avatarUrl} />
               <span className="cw-member__name" dir="auto">
-                {m.actorId === staff?.id ? `${m.displayName} (${copy.you})` : m.displayName}
+                {m.actorKind === 'contact' && mayOpenParents ? (
+                  // PD-17: a parent opens their Parent Profile -- offered only to the administration.
+                  <Link to={parentPath(m.actorId)}>{m.displayName}</Link>
+                ) : m.actorId === staff?.id ? (
+                  `${m.displayName} (${copy.you})`
+                ) : (
+                  m.displayName
+                )}
               </span>
               <span className={`kind-chip kind-chip--${m.actorKind}`}>{copy.role[m.actorKind] ?? m.actorKind}</span>
             </li>

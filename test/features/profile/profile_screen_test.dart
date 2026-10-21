@@ -306,6 +306,24 @@ void main() {
     });
   });
 
+  group('PD-17: Settings offers Payments to a parent only', () {
+    testWidgets('a parent sees the Payments row', (tester) async {
+      await tester.pumpWidget(harness(role: UserRole.parent, child: const SettingsScreen()));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('settings-my-payments')), findsOneWidget);
+      expect(find.text('Payments'), findsOneWidget);
+    });
+
+    testWidgets('a teacher does not -- absent, not disabled', (tester) async {
+      await tester.pumpWidget(harness(role: UserRole.teacher, child: const SettingsScreen()));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('settings-my-payments')), findsNothing);
+      expect(find.text('Payments'), findsNothing);
+    });
+  });
+
   group('the bottom navigation is untouched', () {
     testWidgets('there is still no Profile destination', (tester) async {
       await tester.pumpWidget(

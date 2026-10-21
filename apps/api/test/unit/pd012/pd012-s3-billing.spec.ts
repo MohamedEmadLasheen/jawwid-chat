@@ -1,51 +1,44 @@
 /**
- * PD-12 S3, the pure parts: who reads instalments, the derived status and the
- * page order, and the Core invoice boundary (strict parsing, scope never widened
- * by Core, "not connected" unless switched on).
+ * PD-12 S3 / PD-17, the pure parts: who reads (and records) a family's money,
+ * the derived status and the page order, and a plan's due dates. Since PD-17
+ * nothing is read from Jawwid Core, so there is no Core boundary to test.
  */
 import { decideBillingAccess } from '@platform/pd012-policy';
 import type { Actor } from '@platform/types';
-import { compareInstalments, daysFrom, statusOf } from '../../../src/billing/instalment';
-import {
-  CoreInvoiceSourceError,
-  HttpCoreInvoiceSource,
-  coreInvoiceSourceFromEnv,
-  parseInvoices,
-} from '../../../src/billing/core-invoice-source';
+import { addMonths, compareInstalments, daysFrom, statusOf } from '../../../src/billing/instalment';
 
 const ORG = '11111111-1111-1111-1111-111111111111';
-// Core's ids are MongoDB ObjectIds -- opaque text, not UUIDs (20261019200000).
-const P1 = '652f1c2ab8e4a10012ab34cd';
-const P2 = '652f1c2ab8e4a10012ab34ce';
-const C1 = '652f1c2ab8e4a10012ab9f01';
 
 function staff(role: string, over: Partial<Actor> = {}): Actor {
   return { actorId: 's', kind: 'staff', displayName: 's', locale: 'ar', isActive: true, staffRole: role as never, organizationId: ORG, ...over };
 }
 
-describe('who reads instalments (billing.family_read)', () => {
+describe('who reads and records a family\'s money (billing.family_read, PD-17)', () => {
   it.each`
-    role             | dept         | scope      | assign
-    ${'super_admin'} | ${null}      | ${'all'}   | ${true}
-    ${'manager'}     | ${'manager'} | ${'all'}   | ${true}
-    ${'admin'}       | ${'member'}  | ${'reach'} | ${false}
-    ${'coverage'}    | ${'member'}  | ${'reach'} | ${false}
-    ${'manager'}     | ${null}      | ${null}    | ${false}
-    ${'manager'}     | ${'member'}  | ${null}    | ${false}
-    ${'admin'}       | ${null}      | ${null}    | ${false}
-    ${'admin'}       | ${'manager'} | ${null}    | ${false}
-    ${'finance'}     | ${'member'}  | ${null}    | ${false}
-  `('$role in Operations as $dept -> $scope', ({ role, dept, scope, assign }) => {
-    expect(decideBillingAccess(staff(role), dept)).toEqual({ scope, canAssign: assign });
+    role             | ops          | sales        | scope      | assign   | record   | edit
+    ${'super_admin'} | ${null}      | ${null}      | ${'all'}   | ${true}  | ${true}  | ${true}
+    ${'manager'}     | ${'manager'} | ${null}      | ${'all'}   | ${true}  | ${true}  | ${true}
+    ${'admin'}       | ${'member'}  | ${null}      | ${'reach'} | ${false} | ${true}  | ${true}
+    ${'coverage'}    | ${'member'}  | ${null}      | ${'reach'} | ${false} | ${true}  | ${true}
+    ${'manager'}     | ${null}      | ${'manager'} | ${'all'}   | ${false} | ${true}  | ${false}
+    ${'admin'}       | ${null}      | ${'member'}  | ${'all'}   | ${false} | ${true}  | ${false}
+    ${'manager'}     | ${null}      | ${null}      | ${null}    | ${false} | ${false} | ${false}
+    ${'manager'}     | ${'member'}  | ${null}      | ${null}    | ${false} | ${false} | ${false}
+    ${'admin'}       | ${null}      | ${null}      | ${null}    | ${false} | ${false} | ${false}
+    ${'admin'}       | ${'manager'} | ${null}      | ${null}    | ${false} | ${false} | ${false}
+    ${'finance'}     | ${'member'}  | ${null}      | ${null}    | ${false} | ${false} | ${false}
+  `('$role, Operations $ops, Sales $sales -> $scope', ({ role, ops, sales, scope, assign, record, edit }) => {
+    expect(decideBillingAccess(staff(role), ops, sales)).toEqual({ scope, canAssign: assign, canRecord: record, canEditParent: edit });
   });
 
-  it('never a teacher, a parent, an inactive or org-less staff member', () => {
+  it('never a teacher, a parent, an inactive or org-less staff member -- whatever department they claim', () => {
     const teacher: Actor = { actorId: 't', kind: 'teacher', displayName: 't', locale: 'ar', isActive: true, organizationId: ORG };
     const parent: Actor = { actorId: 'p', kind: 'contact', displayName: 'p', locale: 'ar', isActive: true, organizationId: ORG };
-    expect(decideBillingAccess(teacher, 'manager').scope).toBeNull();
-    expect(decideBillingAccess(parent, 'manager').scope).toBeNull();
+    expect(decideBillingAccess(teacher, 'manager', 'manager').scope).toBeNull();
+    expect(decideBillingAccess(parent, 'manager', 'manager').scope).toBeNull();
     expect(decideBillingAccess(staff('super_admin', { isActive: false }), null).scope).toBeNull();
     expect(decideBillingAccess(staff('super_admin', { organizationId: undefined }), null).scope).toBeNull();
+    expect(decideBillingAccess(staff('admin', { isActive: false }), null, 'member').scope).toBeNull();
   });
 });
 
@@ -78,89 +71,13 @@ describe('the instalment status and order', () => {
   });
 });
 
-describe('the Core invoice boundary', () => {
-  const asked = new Set([P1]);
-  const good = { id: 'inv-1', parent_id: P1, child_id: null, amount_minor: 150000, currency: 'EGP', due_date: '2026-10-25', status: 'open' };
-
-  it('reads a well-formed invoice, family or per child, keeping Core ids exactly as sent', () => {
-    const out = parseInvoices({ invoices: [good, { ...good, id: 'inv-2', child_id: C1, label: ' Quran ' }] }, asked, false);
-    expect(out).toEqual([
-      { id: 'inv-1', parentId: P1, childId: null, amountMinor: 150000, currency: 'EGP', dueDate: '2026-10-25', status: 'open', paidAt: null, label: null },
-      { id: 'inv-2', parentId: P1, childId: C1, amountMinor: 150000, currency: 'EGP', dueDate: '2026-10-25', status: 'open', paidAt: null, label: 'Quran' },
-    ]);
-  });
-
-  it('drops an invoice for a parent Chat did not ask about: Core cannot widen the scope', () => {
-    expect(parseInvoices({ invoices: [{ ...good, parent_id: P2 }] }, asked, false)).toEqual([]);
-    // Exact comparison: a re-cased id is another id, not the same one.
-    expect(parseInvoices({ invoices: [{ ...good, parent_id: P1.toUpperCase() }] }, asked, false)).toEqual([]);
-  });
-
-  it('drops malformed invoices instead of guessing, and void ones always', () => {
-    const bad = [
-      { ...good, amount_minor: 1.5 },
-      { ...good, amount_minor: -1 },
-      { ...good, amount_minor: '100' },
-      { ...good, currency: 'egp' },
-      { ...good, due_date: '25/10/2026' },
-      { ...good, status: 'void' },
-      { ...good, child_id: 42 },
-      { ...good, child_id: '   ' },
-      { ...good, child_id: 'x'.repeat(201) },
-      { ...good, id: '' },
-      null,
-      'x',
-    ];
-    expect(parseInvoices({ invoices: bad }, asked, true)).toEqual([]);
-  });
-
-  it('hides paid invoices unless asked for them', () => {
-    const paid = { ...good, status: 'paid', paid_at: '2026-10-02T09:00:00Z' };
-    expect(parseInvoices({ invoices: [paid] }, asked, false)).toEqual([]);
-    expect(parseInvoices({ invoices: [paid] }, asked, true)[0]).toMatchObject({ status: 'paid', paidAt: '2026-10-02T09:00:00Z' });
-  });
-
-  it('refuses an answer without an invoices list', () => {
-    expect(() => parseInvoices({}, asked, false)).toThrow(CoreInvoiceSourceError);
-    expect(() => parseInvoices(null, asked, false)).toThrow(CoreInvoiceSourceError);
-  });
-
-  it('is not connected unless explicitly switched on', () => {
-    expect(coreInvoiceSourceFromEnv({}).connected).toBe(false);
-    expect(coreInvoiceSourceFromEnv({ CORE_BASE_URL: 'http://localhost:54321', CORE_API_KEY: 'k' }).connected).toBe(false);
-    expect(coreInvoiceSourceFromEnv({ CORE_INVOICES_ENABLED: 'true', CORE_BASE_URL: 'http://core' }).connected).toBe(false);
-    expect(coreInvoiceSourceFromEnv({ CORE_INVOICES_ENABLED: 'true', CORE_BASE_URL: 'http://core', CORE_API_KEY: 'k' }).connected).toBe(true);
-  });
-
-  it('asks Core for exactly the parents in scope, with the API key, in batches', async () => {
-    const calls: { url: string; init: RequestInit }[] = [];
-    const fake = (async (url: string, init: RequestInit) => {
-      calls.push({ url, init });
-      return new Response(JSON.stringify({ invoices: [good] }), { status: 200 });
-    }) as unknown as typeof fetch;
-    const parents = Array.from({ length: 450 }, (_, i) => (i === 0 ? P1 : `652f1c2ab8e4a1${String(i).padStart(10, '0')}`));
-    const source = new HttpCoreInvoiceSource('http://core/', 'secret', 1000, fake);
-    const out = await source.invoicesFor(parents, { includePaid: false });
-    expect(calls).toHaveLength(3);
-    expect(calls[0]!.url).toBe('http://core/integration/chat/invoices/query');
-    expect((calls[0]!.init.headers as Record<string, string>).authorization).toBe('Bearer secret');
-    const sent = calls.map((c) => JSON.parse(c.init.body as string) as { parent_ids: string[]; include_paid: boolean });
-    expect(sent.flatMap((b) => b.parent_ids)).toEqual(parents);
-    expect(sent.every((b) => b.include_paid === false)).toBe(true);
-    // P1 is only in the first batch: the same invoice echoed by the others is dropped.
-    expect(out).toHaveLength(1);
-  });
-
-  it('turns an unreachable or failing Core into one error, never an empty list', async () => {
-    const down = (async () => {
-      throw new TypeError('fetch failed');
-    }) as unknown as typeof fetch;
-    const failing = (async () => new Response('nope', { status: 500 })) as unknown as typeof fetch;
-    await expect(new HttpCoreInvoiceSource('http://core', 'k', 1000, down).invoicesFor([P1], { includePaid: false })).rejects.toThrow(
-      CoreInvoiceSourceError,
-    );
-    await expect(new HttpCoreInvoiceSource('http://core', 'k', 1000, failing).invoicesFor([P1], { includePaid: false })).rejects.toThrow(
-      CoreInvoiceSourceError,
-    );
+describe('a plan\'s due dates (PD-17)', () => {
+  it('adds calendar months, keeping the day, and the 31st becomes the month\'s last day', () => {
+    expect(addMonths('2026-01-15', 1)).toBe('2026-02-15');
+    expect(addMonths('2026-01-31', 1)).toBe('2026-02-28');
+    expect(addMonths('2028-01-31', 1)).toBe('2028-02-29');
+    expect(addMonths('2026-11-30', 3)).toBe('2027-02-28');
+    expect(addMonths('2026-10-21', 0)).toBe('2026-10-21');
+    expect(addMonths('2026-12-31', 12)).toBe('2027-12-31');
   });
 });

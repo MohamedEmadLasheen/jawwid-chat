@@ -163,9 +163,15 @@ void main() {
       // type that has no field cannot leak one. Scanning the source keeps that true as
       // the feature grows, in the spirit of the existing directionality guard.
       final offenders = <String>[];
-      final dir = Directory('lib/features/profile');
+      // PD-17: the teacher's Student Profile is held to the same rule, model included.
+      final files = [
+        for (final dir in ['lib/features/profile', 'lib/features/student_profile'])
+          ...Directory(dir).listSync(recursive: true).whereType<File>(),
+        File('lib/shared/models/student_profile.dart'),
+      ];
+      expect(Directory('lib/features/student_profile').existsSync(), isTrue);
 
-      for (final file in dir.listSync(recursive: true).whereType<File>()) {
+      for (final file in files) {
         if (!file.path.endsWith('.dart')) continue;
         final lines = file.readAsLinesSync();
         for (var i = 0; i < lines.length; i++) {

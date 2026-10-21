@@ -1,4 +1,5 @@
 import '../../../shared/models/lesson.dart';
+import '../../../shared/models/student_profile.dart';
 import '../../network/api_client.dart';
 import '../repositories.dart';
 
@@ -86,6 +87,7 @@ class HttpLessonRepository implements LessonRepository {
         age: (raw['age'] as num?)?.toInt(),
         courseName: course?['name'] as String?,
         packageLessons: (raw['packageLessons'] as num?)?.toInt(),
+        teacherId: teacher?['id'] as String?,
         teacherName: teacher?['name'] as String?,
         schedule: [
           for (final s in (raw['schedule'] as List?) ?? const [])
@@ -99,6 +101,35 @@ class HttpLessonRepository implements LessonRepository {
       ));
     }
     return out;
+  }
+
+  /// Reads exactly the teacher's half of the profile. Whatever else a response may
+  /// carry (the administration's view adds the date of birth and the family) is
+  /// never read, so it cannot reach a screen.
+  @override
+  Future<StudentProfile> studentProfile(String learnerId) async {
+    final d = (await _client.get<Map<String, Object?>>('/learners/$learnerId/profile')).data ?? const {};
+    final course = d['course'] is Map ? d['course'] as Map : null;
+    final teacher = d['teacher'] is Map ? d['teacher'] as Map : null;
+    String? text(Object? v) => v is String && v.trim().isNotEmpty ? v : null;
+    return StudentProfile(
+      id: d['id'] as String? ?? learnerId,
+      name: d['name'] as String? ?? '',
+      avatarUrl: text(d['avatarUrl']),
+      age: (d['age'] as num?)?.toInt(),
+      courseName: text(course?['name']),
+      teacherName: text(teacher?['name']),
+      schedule: [
+        for (final s in (d['schedule'] as List?) ?? const [])
+          if (s is Map && s['weekday'] is num && s['start'] is String)
+            StudentProfileSlot(
+              weekday: (s['weekday'] as num).toInt(),
+              start: s['start'] as String,
+              durationMinutes: (s['durationMinutes'] as num?)?.toInt() ?? 0,
+              timezone: text(s['timezone']),
+            ),
+      ],
+    );
   }
 
   @override

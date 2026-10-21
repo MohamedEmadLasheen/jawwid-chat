@@ -173,6 +173,7 @@ class GroupChild {
     this.age,
     this.courseName,
     this.packageLessons,
+    this.teacherId,
     this.teacherName,
     this.schedule = const [],
   });
@@ -182,6 +183,10 @@ class GroupChild {
   final int? age;
   final String? courseName;
   final int? packageLessons;
+
+  /// PD-17: whose student this child is. Only a match with the signed-in teacher
+  /// offers the Student Profile; the server still decides when it is opened.
+  final String? teacherId;
   final String? teacherName;
   final List<GroupChildSlot> schedule;
 }

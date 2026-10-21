@@ -161,9 +161,20 @@ describe('1. Assign', () => {
     expect(await g.prisma.course.count()).toBe(1);
     const enrolments = await g.prisma.learnerEnrollment.findMany({ where: { learnerId: { in: done.learnerIds } } });
     expect(enrolments.map((e) => e.statedAge).sort()).toEqual([11, 8].sort());
-    // The phone stays in the confined form: it is on no record Chat created.
+    // The phone stays confined: on no record the chat engine reads -- only in the
+    // form and (PD-17) the parent's admin-only file, with the family's billing.
     const created = JSON.stringify({ family, contact, account, learners });
     expect(created).not.toContain('333 444');
+    expect(await g.prisma.parentFile.findUniqueOrThrow({ where: { contactId: contact.id } })).toMatchObject({
+      adminOnlyParentPhone: '+99 000 333 444',
+      adminOnlyParentEmail: LOWER,
+    });
+    expect(await g.prisma.familyBilling.findUniqueOrThrow({ where: { familyId: family.id } })).toMatchObject({
+      paymentMethod: 'invoice',
+      currency: 'EGP',
+    });
+    const audits = await g.prisma.auditLog.findMany({ select: { before: true, after: true, reason: true } });
+    expect(JSON.stringify(audits)).not.toContain('333 444');
     expect(await g.prisma.auditLog.count({ where: { action: 'new_student.enrolled' } })).toBe(1);
     // Weekly times: the teacher has no availability yet, so they wait (and the answer says so).
     expect(done.schedules.every((x) => !x.set && x.reason)).toBe(true);

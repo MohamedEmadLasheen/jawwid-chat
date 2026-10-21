@@ -1,32 +1,27 @@
 /**
  * PD-12 S3 -- Instalment Payments, end to end on the PD-8 synthetic organization.
+ * Since PD-17 the instalments are Chat's own (chat.family_instalment); nothing
+ * is read from Jawwid Core. Recording them is pd017-billing.spec.ts.
  *
  *   1. who reads: Operations supervisors (their families only), the Operations
- *      Manager and the super admin (every family); nobody else -- and Core is
- *      asked ONLY about the families the viewer may see
+ *      Manager and the super admin (every family); nobody else
  *   2. each row: the payer by name, the child or "family", the responsible
  *      supervisor (the child's PD-8 supervisor, or the family's billing
  *      supervisor), the status and order, the conversation to follow up in
  *   3. the billing supervisor: set by the Operations Manager only, chosen
  *      among the supervisors of the family's children, cleared by the database
  *      the moment they supervise none of them
- *   4. Core not connected, Core down: said, never shown as "nothing due"
+ *   4. voided rows are history, not work
  *   5. the request role (chat_app) reads none of it (needs DATABASE_APP_URL)
  *
- * Core is a fake here: the HTTP boundary is unit-tested in pd012-s3-billing.spec.
  * Synthetic people only (G-20).
  */
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { PrismaAuditService } from '@platform/audit.service';
 import { hashPassword } from '@platform/auth/password';
 import { CommError, CommErrorCode } from '@platform/errors';
 import { BillingService } from '../../src/billing/billing.service';
-import {
-  CoreInvoiceSourceError,
-  type CoreInvoice,
-  type CoreInvoiceSource,
-} from '../../src/billing/core-invoice-source';
 import { OrgStructureService } from '../../src/org/org-structure.service';
 import { todayIn } from '../../src/leave/leave.service';
 import { seedOrgChat, type SeedManifest } from '../../src/cli/org-chat-seed';
@@ -37,32 +32,14 @@ jest.setTimeout(300_000);
 const PASSWORD = 'pd12-s3-spec-password-1';
 const DOMAIN = 'pd12s3.qa.jawwid.test';
 
-class FakeCore implements CoreInvoiceSource {
-  connected = true;
-  down = false;
-  asked: string[][] = [];
-  invoices: CoreInvoice[] = [];
-  async invoicesFor(parentIds: readonly string[], opts: { includePaid: boolean }) {
-    this.asked.push([...parentIds]);
-    if (this.down) throw new CoreInvoiceSourceError('Jawwid Core did not answer');
-    const asked = new Set(parentIds);
-    return this.invoices.filter((i) => asked.has(i.parentId) && (opts.includePaid || i.status === 'open'));
-  }
-}
-
 const g = buildGraph();
 const audit = new PrismaAuditService();
-const core = new FakeCore();
-const billing = new BillingService(g.prisma, g.conversations, core, audit);
+const billing = new BillingService(g.prisma, g.conversations, audit);
 const org = new OrgStructureService(g.prisma, g.authz, g.conversations, audit);
 
 let m: SeedManifest;
 let orgId: string;
 let today: string;
-const parentOf = new Map<string, string>(); // family id -> core parent id
-const childCore = new Map<string, string>(); // learner id -> core child id
-/** Core's ids are MongoDB ObjectIds: 24 hex characters, opaque text in Chat (20261019200000). */
-const objectId = () => randomBytes(12).toString('hex');
 
 const shift = (days: number) => {
   const d = new Date(`${today}T00:00:00Z`);
@@ -70,19 +47,35 @@ const shift = (days: number) => {
   return d.toISOString().slice(0, 10);
 };
 
-function invoice(familyId: string, over: Partial<CoreInvoice> = {}): CoreInvoice {
-  return {
-    id: `inv-${randomUUID().slice(0, 8)}`,
-    parentId: parentOf.get(familyId)!,
-    childId: null,
-    amountMinor: 120000,
-    currency: 'EGP',
-    dueDate: shift(3),
-    status: 'open',
-    paidAt: null,
-    label: null,
-    ...over,
-  };
+/** One instalment, written as the API would (the super admin as its author). Returns its id. */
+async function instalment(
+  familyId: string,
+  over: { label?: string; dueDate?: string; learnerId?: string | null; paid?: boolean; voided?: boolean } = {},
+): Promise<string> {
+  const row = await g.prisma.familyInstalment.create({
+    data: {
+      familyId,
+      learnerId: over.learnerId ?? null,
+      label: over.label ?? `inst-${randomUUID().slice(0, 8)}`,
+      amountMinor: BigInt(120000),
+      currency: 'EGP',
+      dueDate: new Date(`${over.dueDate ?? shift(3)}T00:00:00Z`),
+      createdBy: m.superAdmin.id,
+    },
+  });
+  if (over.paid) {
+    await g.prisma.familyInstalment.update({
+      where: { id: row.id },
+      data: { paidOn: new Date(`${today}T00:00:00Z`), paidMethod: 'bank_transfer', paidRecordedBy: m.superAdmin.id, paidRecordedAt: new Date() },
+    });
+  }
+  if (over.voided) {
+    await g.prisma.familyInstalment.update({
+      where: { id: row.id },
+      data: { voidedAt: new Date(), voidedBy: m.superAdmin.id, voidReason: 'entered twice' },
+    });
+  }
+  return row.id;
 }
 
 async function code(p: Promise<unknown>): Promise<string> {
@@ -130,17 +123,6 @@ beforeAll(async () => {
     passwordHash: await hashPassword(PASSWORD),
     messages: false,
   });
-  // Core identities: the seed has none (it is not a Core sync).
-  for (const f of m.families) {
-    const p = objectId();
-    parentOf.set(f.id, p);
-    await g.prisma.$executeRaw`update chat.family set core_parent_id = ${p} where id = ${f.id}::uuid`;
-    for (const c of f.children) {
-      const k = objectId();
-      childCore.set(c.id, k);
-      await g.prisma.$executeRaw`update chat.learner set core_child_id = ${k} where id = ${c.id}::uuid`;
-    }
-  }
   today = todayIn('Africa/Cairo');
 });
 
@@ -151,38 +133,45 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  core.connected = true;
-  core.down = false;
-  core.asked = [];
-  core.invoices = [];
+  // Money rows are never deleted (chat.guard_family_instalment); a test starts from none.
+  await g.prisma.$executeRawUnsafe(`truncate chat.family_instalment`);
   await g.prisma.$executeRaw`delete from chat.family_billing_supervision where organization_id = ${orgId}::uuid`;
 });
 
 describe('1. who reads instalments', () => {
-  it('Operations supervisors read their own families; Core is asked about nothing else', async () => {
+  it('Operations supervisors read their own families\' instalments and nobody else\'s', async () => {
+    for (const f of m.families) await instalment(f.id, { label: `fam-${f.id}` });
     for (const s of m.supervisors) {
-      core.asked = [];
       const out = await billing.list(s.id, {});
-      expect(out.source).toBe('core');
-      const expected = [...reachableFamilies(s.id)].map((id) => parentOf.get(id)!).sort();
+      const expected = [...reachableFamilies(s.id)].sort();
       expect(expected.length).toBeGreaterThan(0);
-      expect(core.asked.flat().sort()).toEqual(expected);
+      expect(out.items.map((i) => i.family.id).sort()).toEqual(expected);
     }
   });
 
   it('the Operations Manager and the super admin read every family', async () => {
+    for (const f of m.families) await instalment(f.id);
     for (const who of [m.operationsManager.id, m.superAdmin.id]) {
-      core.asked = [];
-      await billing.list(who, {});
-      expect(new Set(core.asked.flat())).toEqual(new Set(parentOf.values()));
+      const out = await billing.list(who, {});
+      expect(new Set(out.items.map((i) => i.family.id))).toEqual(new Set(m.families.map((f) => f.id)));
     }
     expect((await billing.access(m.operationsManager.id)).canAssignBillingSupervisor).toBe(true);
   });
 
-  it('nobody else: Teachers and Sales departments, a teacher, a parent', async () => {
+  it('Sales reads every family (PD-17: Sales records payments) but sets no billing supervisor', async () => {
+    for (const f of m.families) await instalment(f.id);
+    const out = await billing.list(m.salesManager.id, {})
+    expect(new Set(out.items.map((i) => i.family.id))).toEqual(new Set(m.families.map((f) => f.id)));
+    expect(await billing.access(m.salesManager.id)).toEqual({ billingReader: true, canAssignBillingSupervisor: false, canRecordPayments: true });
+    const f = singleFamily();
+    expect(await code(billing.setBillingSupervisor(m.salesManager.id, f.id, { supervisorId: f.children[0]!.supervisorId, reason: 'r' }))).toBe(
+      CommErrorCode.BILLING_DENIED,
+    );
+  });
+
+  it('nobody else: the Teachers department, a teacher, a parent', async () => {
     const refused = [
       m.teachersManager.id,
-      m.salesManager.id,
       ...m.teacherSupervisors.map((s) => s.id),
       m.teachers[0]!.id,
       m.families[0]!.parent.id,
@@ -191,7 +180,6 @@ describe('1. who reads instalments', () => {
       expect(await code(billing.list(who, {}))).toBe(CommErrorCode.BILLING_DENIED);
       expect((await billing.access(who)).billingReader).toBe(false);
     }
-    expect(core.asked).toEqual([]);
   });
 });
 
@@ -199,18 +187,16 @@ describe('2. the rows', () => {
   it('names the payer, the child or "family", the responsible supervisor, and orders them', async () => {
     const f = splitFamily();
     const [c0, c1] = f.children as [SeedManifest['families'][0]['children'][0], SeedManifest['families'][0]['children'][0]];
-    core.invoices = [
-      invoice(f.id, { id: 'upcoming-far', dueDate: shift(20) }),
-      invoice(f.id, { id: 'overdue-new', dueDate: shift(-2), childId: childCore.get(c0.id)! }),
-      invoice(f.id, { id: 'due-today', dueDate: today, childId: childCore.get(c1.id)! }),
-      invoice(f.id, { id: 'overdue-old', dueDate: shift(-30) }),
-      invoice(f.id, { id: 'upcoming-near', dueDate: shift(1) }),
-      invoice(f.id, { id: 'paid', dueDate: shift(-60), status: 'paid', paidAt: new Date().toISOString() }),
-    ];
+    await instalment(f.id, { label: 'upcoming-far', dueDate: shift(20) });
+    await instalment(f.id, { label: 'overdue-new', dueDate: shift(-2), learnerId: c0.id });
+    await instalment(f.id, { label: 'due-today', dueDate: today, learnerId: c1.id });
+    await instalment(f.id, { label: 'overdue-old', dueDate: shift(-30) });
+    await instalment(f.id, { label: 'upcoming-near', dueDate: shift(1) });
+    await instalment(f.id, { label: 'paid', dueDate: shift(-60), paid: true });
     const out = await billing.list(m.operationsManager.id, {});
     const mine = out.items.filter((i) => i.family.id === f.id);
-    expect(mine.map((i) => i.id)).toEqual(['overdue-old', 'overdue-new', 'due-today', 'upcoming-near', 'upcoming-far']);
-    const byId = new Map(mine.map((i) => [i.id, i]));
+    expect(mine.map((i) => i.label)).toEqual(['overdue-old', 'overdue-new', 'due-today', 'upcoming-near', 'upcoming-far']);
+    const byId = new Map(mine.map((i) => [i.label, i]));
     expect(byId.get('overdue-old')).toMatchObject({ status: 'overdue', days: 30, child: null, responsibleBasis: 'family', responsibleSupervisor: null });
     expect(byId.get('overdue-new')).toMatchObject({
       status: 'overdue',
@@ -220,24 +206,22 @@ describe('2. the rows', () => {
     });
     expect(byId.get('due-today')).toMatchObject({ status: 'due', responsibleSupervisor: { id: c1.supervisorId } });
     expect(byId.get('upcoming-near')).toMatchObject({ status: 'upcoming', days: 1 });
-    expect(mine[0]!.account.name).toBe(f.parent.name);
+    expect(mine[0]!.account).toEqual({ id: f.parent.id, name: f.parent.name });
     expect(out.counts).toMatchObject({ overdue: 2, due: 1, upcoming: 2, paid: 0, unassigned: 3 });
 
     const withPaid = await billing.list(m.operationsManager.id, { paid: 'true' });
-    expect(withPaid.items.filter((i) => i.family.id === f.id).map((i) => i.id).at(-1)).toBe('paid');
+    expect(withPaid.items.filter((i) => i.family.id === f.id).map((i) => i.label).at(-1)).toBe('paid');
   });
 
-  it('a child Core names outside the payer\'s family is unknown, never another family\'s supervisor', async () => {
+  it('the database refuses an instalment for another family\'s child', async () => {
     const f = singleFamily();
     const other = splitFamily();
-    core.invoices = [invoice(f.id, { id: 'foreign-child', childId: childCore.get(other.children[0]!.id)! })];
-    const [row] = (await billing.list(m.operationsManager.id, {})).items;
-    expect(row).toMatchObject({ id: 'foreign-child', child: { id: null, name: null, known: false }, responsibleSupervisor: null });
+    await expect(instalment(f.id, { learnerId: other.children[0]!.id })).rejects.toThrow(/child of that family/);
   });
 
   it('opens a direct conversation of the family that this viewer may open', async () => {
     const f = m.families.find((x) => x.directs.length > 0)!;
-    core.invoices = [invoice(f.id)];
+    await instalment(f.id);
     const supervisor = f.directs[0]!.supervisorId;
     const [row] = (await billing.list(supervisor, {})).items;
     expect(f.directs.map((d) => d.conversationId)).toContain(row!.conversationId);
@@ -249,7 +233,7 @@ describe('2. the rows', () => {
   it('a supervisor reads every invoice of a family they reach -- and only those families', async () => {
     const f = splitFamily();
     const outsider = m.supervisors.find((s) => !reachableFamilies(s.id).has(f.id))!;
-    core.invoices = [invoice(f.id, { childId: childCore.get(f.children[1]!.id)! })];
+    await instalment(f.id, { learnerId: f.children[1]!.id });
     expect((await billing.list(f.children[0]!.supervisorId, {})).items).toHaveLength(1);
     expect((await billing.list(outsider.id, {})).items).toHaveLength(0);
   });
@@ -263,14 +247,14 @@ describe('3. the family billing supervisor', () => {
     expect(view.current).toBeNull();
     expect(view.candidates.map((c) => c.id).sort()).toEqual([...new Set(f.children.map((c) => c.supervisorId))].sort());
 
-    core.invoices = [invoice(f.id, { id: 'family-inv' })];
-    expect((await billing.list(m.operationsManager.id, { responsible: 'none' })).items.map((i) => i.id)).toEqual(['family-inv']);
+    await instalment(f.id, { label: 'family-inv' });
+    expect((await billing.list(m.operationsManager.id, { responsible: 'none' })).items.map((i) => i.label)).toEqual(['family-inv']);
 
     await billing.setBillingSupervisor(m.operationsManager.id, f.id, { supervisorId: chosen, reason: 'billing follows the elder child' });
     const [row] = (await billing.list(m.operationsManager.id, {})).items;
     expect(row!.responsibleSupervisor).toMatchObject({ id: chosen });
     expect((await billing.list(m.operationsManager.id, { responsible: 'none' })).items).toEqual([]);
-    expect((await billing.list(chosen, { responsible: 'me' })).items.map((i) => i.id)).toEqual(['family-inv']);
+    expect((await billing.list(chosen, { responsible: 'me' })).items.map((i) => i.label)).toEqual(['family-inv']);
 
     const audited = await g.prisma.auditLog.findFirst({ where: { entityId: f.id, action: 'family.billing_supervisor_set' } });
     expect(audited).toMatchObject({ actorId: m.operationsManager.id, after: { supervisorId: chosen } });
@@ -325,30 +309,17 @@ describe('3. the family billing supervisor', () => {
   });
 });
 
-describe('4. Core not connected, Core down', () => {
-  it('not connected: said so, and Core is never asked', async () => {
-    core.connected = false;
-    const out = await billing.list(m.operationsManager.id, {});
-    expect(out).toMatchObject({ source: 'not_connected', items: [] });
-    expect(core.asked).toEqual([]);
-    expect((await billing.access(m.operationsManager.id)).coreConnected).toBe(false);
-  });
-
-  it('down: a 502 BILLING_CORE_UNAVAILABLE, never an empty "nothing due" list', async () => {
-    core.down = true;
-    const err = await billing.list(m.operationsManager.id, {}).catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(CommError);
-    expect(err).toMatchObject({ code: CommErrorCode.BILLING_CORE_UNAVAILABLE, status: 502 });
-  });
-
-  it('nothing about an invoice is written anywhere in Chat', async () => {
+describe('4. voided instalments', () => {
+  it('are history on the family\'s timeline, never work on this page', async () => {
     const f = singleFamily();
-    core.invoices = [invoice(f.id, { id: 'inv-not-stored-7731' })];
-    await billing.list(m.operationsManager.id, {});
-    const hits = await g.prisma.$queryRaw<{ n: bigint }[]>`
-      select (select count(*) from chat.audit_log where before::text like '%inv-not-stored-7731%' or after::text like '%inv-not-stored-7731%')
-           + (select count(*) from chat.event_log where payload::text like '%inv-not-stored-7731%') as n`;
-    expect(Number(hits[0]!.n)).toBe(0);
+    await instalment(f.id, { label: 'void-me', voided: true });
+    await instalment(f.id, { label: 'keep-me' });
+    const out = await billing.list(m.operationsManager.id, { paid: 'true' });
+    expect(out.items.map((i) => i.label)).toEqual(['keep-me']);
+    const timeline = await billing.familyBilling(m.operationsManager.id, f.id);
+    expect(timeline.instalments.map((i) => [i.label, i.status])).toEqual(
+      expect.arrayContaining([['void-me', 'voided'], ['keep-me', 'upcoming']]),
+    );
   });
 });
 
@@ -360,6 +331,15 @@ const appUrl = process.env.DATABASE_APP_URL;
   });
   afterAll(async () => {
     await app2.$disconnect();
+  });
+
+  it('reads none of a family\'s money', async () => {
+    const f = singleFamily();
+    await instalment(f.id);
+    for (const table of ['family_instalment', 'family_billing', 'parent_file']) {
+      const read = await app2.$queryRawUnsafe(`select * from chat.${table}`).catch((e: Error) => e);
+      expect({ table, refused: read instanceof Error }).toEqual({ table, refused: true });
+    }
   });
 
   it('reads and writes no billing supervision, and cannot call the clearing function', async () => {

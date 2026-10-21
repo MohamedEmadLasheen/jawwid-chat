@@ -101,6 +101,12 @@ final profilePhotoRepositoryProvider = Provider<ProfilePhotoRepository>((ref) {
   return const NoProfilePhotoRepository();
 });
 
+/// PD-17: the parent's own payments. The default refuses (never "no payments"); both
+/// composition roots override it.
+final billingRepositoryProvider = Provider<BillingRepository>((ref) {
+  return const NoBillingRepository();
+});
+
 /// PD-11 T4. A harmless default too: a build without a trial server offers no trial report.
 final trialRepositoryProvider = Provider<TrialRepository>((ref) {
   return const NoTrialRepository();
