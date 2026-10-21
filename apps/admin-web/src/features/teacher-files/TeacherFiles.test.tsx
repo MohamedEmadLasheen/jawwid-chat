@@ -36,7 +36,7 @@ const TEACHERS: TeacherSummary[] = [
 
 const brief = (id: string, body: string) => ({ id, body, createdAt: '2026-10-18T09:00:00Z', author: { id: 's-1', name: 'Supervisor One' } })
 
-function file(access = { canEditPersonal: false, canWriteSupervision: true }): TeacherFile {
+function file(access: TeacherFile["access"] = { canEditPersonal: false, canWriteSupervision: true }): TeacherFile {
   return {
     access,
     teacher: { id: 't-1', name: 'Teacher One', isActive: true, leftAt: null },
@@ -55,6 +55,16 @@ function file(access = { canEditPersonal: false, canWriteSupervision: true }): T
       complaints: [{ ...brief('c-1', 'Started late.'), source: null, resolution: null }],
       monthlyComments: [{ month: '2026-09', current: brief('m-2', 'Strong month.'), earlierVersions: [brief('m-1', 'Draft.')] }],
       daysOff: [{ ...brief('d-1', 'Family matter.'), date: '2026-10-21', cancellation: null }],
+    },
+    employment: { teachingMarket: 'Gulf', studentCount: 1 },
+    history: {
+      bonuses: [
+        { id: 'b-1', reason: 'Two trial students stayed', createdAt: '2026-10-05T09:00:00Z', author: { id: 'm-1', name: 'Teachers Manager' } },
+        { id: 'b-2', reason: 'Covered Saturdays', createdAt: '2026-10-12T09:00:00Z', author: { id: 'm-1', name: 'Teachers Manager' } },
+      ],
+      deductions: [
+        { id: 'v-1', step: 'deduction_1', violation: 'late', month: '2026-10', note: 'Late twice', decidedAt: '2026-10-15T09:00:00Z', author: { id: 's-1', name: 'Supervisor One' } },
+      ],
     },
   }
 }
@@ -124,7 +134,17 @@ describe('a teacher file', () => {
     expect(within(monthly).getByText('September 2026')).toBeInTheDocument()
     expect(within(monthly).getByText('1 earlier version(s)')).toBeInTheDocument()
     expect(within(screen.getByRole('region', { name: 'Days off' })).getByText('21 Oct 2026')).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: 'Not here yet' })).toHaveTextContent(/Salary/)
+    const employment = screen.getByRole('region', { name: 'Employment' })
+    expect(within(employment).getByText('Gulf')).toBeInTheDocument()
+    // A Teachers-department reader: no payroll at all, and the finance route is never asked.
+    expect(within(employment).queryByText('Salary type')).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Financial summary' })).not.toBeInTheDocument()
+    expect(calls('GET', /\/finance/)).toHaveLength(0)
+    const bonuses = screen.getByRole('region', { name: 'Bonus history' })
+    expect(within(bonuses).getByText('Two trial students stayed')).toBeInTheDocument()
+    expect(within(bonuses).queryByText('Amount')).not.toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Deduction history' })).getByText(/First deduction — Late twice/)).toBeInTheDocument()
+    expect(screen.queryByText('Not here yet')).not.toBeInTheDocument()
   })
 
   it('offers only the controls the server grants: a supervisor writes notes but cannot edit personal information', async () => {
@@ -346,5 +366,147 @@ describe('schedule and monthly performance', () => {
     const monthly = screen.getByRole('region', { name: 'Monthly performance' })
     await within(monthly).findByLabelText('Key indicators')
     expect(within(monthly).queryByRole('link')).not.toBeInTheDocument()
+  })
+})
+
+describe('payroll (PD-18), the super admin only', () => {
+  const owner = makeStaff({ id: 'o-1', name: 'QA Owner', role: 'super_admin' })
+  const person = { id: 'o-1', name: 'QA Owner' }
+  const finance = (over: Record<string, unknown> = {}) => ({
+    month: '2026-10',
+    keyConfigured: true,
+    terms: [],
+    currentTerms: { effectiveMonth: '2026-09', salaryType: 'shift', currency: 'EGP', monthlyAmount: '6000.00', hourlyRate: null, reason: 'contract' },
+    payoutAccount: { method: 'bank_transfer', last4: '0002', updatedAt: '2026-10-01T09:00:00Z', updatedBy: person },
+    adjustments: [
+      { id: 'a-1', kind: 'bonus', month: '2026-10', amount: '500.00', currency: 'EGP', reason: 'trial bonus', bonusEntryId: 'b-1', violationId: null, replaces: null, live: true, createdBy: person, createdAt: '2026-10-06T09:00:00Z' },
+      { id: 'a-2', kind: 'deduction', month: '2026-10', amount: '0.00', currency: 'EGP', reason: 'cancelled', bonusEntryId: null, violationId: 'v-1', replaces: 'a-0', live: true, createdBy: person, createdAt: '2026-10-16T09:00:00Z' },
+      { id: 'a-3', kind: 'deduction', month: '2026-10', amount: '75.00', currency: 'EGP', reason: 'Equipment loss', bonusEntryId: null, violationId: null, replaces: null, live: true, createdBy: person, createdAt: '2026-10-17T09:00:00Z' },
+    ],
+    unpriced: { bonusEntryIds: ['b-2'], violationIds: [] },
+    summary: [
+      { month: '2026-10', currency: 'EGP', salaryType: 'shift', paidMinutes: 0, base: '6000.00', bonuses: '500.00', deductions: '75.00', net: '6425.00' },
+      { month: '2026-09', currency: null, salaryType: null, paidMinutes: 0, base: null, bonuses: '0.00', deductions: '0.00', net: null },
+    ],
+    ...over,
+  })
+
+  beforeEach(() => {
+    on('GET', /\/teacher-files\/t-1$/, () => json(file({ canEditPersonal: true, canWriteSupervision: true, canViewFinance: true })))
+    on('GET', /\/teacher-files\/t-1\/finance/, () => json(finance()))
+  })
+
+  it('shows the salary, the payment method masked, the month as the server computed it, and every amount', async () => {
+    renderWithProviders(<AppRoutes />, { staff: owner, route: '/admin/teachers/t-1' })
+    const employment = await screen.findByRole('region', { name: 'Employment' })
+    expect(await within(employment).findByText('Shift-based')).toBeInTheDocument()
+    expect(within(employment).getByText('EGP')).toBeInTheDocument()
+    expect(within(employment).getByText(/6,000\.00/)).toBeInTheDocument()
+    expect(within(employment).getByText('ending in 0002')).toBeInTheDocument()
+
+    const summary = screen.getByRole('region', { name: 'Financial summary' })
+    const october = within(summary).getByText('October 2026').closest('tr')!
+    expect(within(october).getByText(/6,425\.00/)).toBeInTheDocument()
+    // A month with no terms has no salary and no net -- a dash, never 0.
+    const september = within(summary).getByText('September 2026').closest('tr')!
+    expect(within(september).getAllByText('—')).toHaveLength(4)
+
+    const bonuses = screen.getByRole('region', { name: 'Bonus history' })
+    expect(within(within(bonuses).getByText('Two trial students stayed').closest('tr')!).getByText(/500\.00/)).toBeInTheDocument()
+    expect(within(within(bonuses).getByText('Covered Saturdays').closest('tr')!).getByText('Amount not set')).toBeInTheDocument()
+    const deductions = screen.getByRole('region', { name: 'Deduction history' })
+    expect(within(within(deductions).getByText(/First deduction/).closest('tr')!).getByText('Cancelled')).toBeInTheDocument()
+    expect(within(within(deductions).getByText('Equipment loss').closest('tr')!).getByText(/75\.00/)).toBeInTheDocument()
+  })
+
+  it('prices a recorded bonus and corrects an amount, sending what the server expects', async () => {
+    on('POST', /\/finance\/adjustments$/, () => json({ id: 'a-9', kind: 'bonus', month: '2026-10', amount: '250.00', currency: 'EGP' }, 201))
+    renderWithProviders(<AppRoutes />, { staff: owner, route: '/admin/teachers/t-1' })
+    const bonuses = await screen.findByRole('region', { name: 'Bonus history' })
+    const unpriced = (await within(bonuses).findByText('Covered Saturdays')).closest('tr')!
+    await userEvent.click(within(unpriced).getByRole('button', { name: 'Set amount' }))
+    let dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByLabelText('Month')).not.toBeInTheDocument()
+    await userEvent.type(within(dialog).getByLabelText('Amount'), '250')
+    await userEvent.type(within(dialog).getByLabelText('Reason for this amount'), 'Saturday cover')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(calls('POST', /\/adjustments$/)).toHaveLength(1))
+    expect(bodyOf(calls('POST', /\/adjustments$/)[0]!)).toEqual({ kind: 'bonus', amount: '250', reason: 'Saturday cover', bonusEntryId: 'b-2' })
+
+    const priced = within(bonuses).getByText('Two trial students stayed').closest('tr')!
+    await userEvent.click(within(priced).getByRole('button', { name: 'Correct' }))
+    dialog = await screen.findByRole('dialog')
+    const amount = within(dialog).getByLabelText('Amount')
+    expect(amount).toHaveValue(500)
+    await userEvent.clear(amount)
+    await userEvent.type(amount, '450.5')
+    await userEvent.type(within(dialog).getByLabelText('Reason for this amount'), 'typo')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(calls('POST', /\/adjustments$/)).toHaveLength(2))
+    expect(bodyOf(calls('POST', /\/adjustments$/)[1]!)).toEqual({ replaces: 'a-1', amount: '450.5', reason: 'typo' })
+  })
+
+  it('reveals the account details only with a reason, and only inside the dialog', async () => {
+    on('POST', /\/payout-account\/reveal$/, () => json({ method: 'bank_transfer', details: { bankName: 'QA Bank', accountNumber: '100200300400' } }, 201))
+    renderWithProviders(<AppRoutes />, { staff: owner, route: '/admin/teachers/t-1' })
+    const employment = await screen.findByRole('region', { name: 'Employment' })
+    await userEvent.click(await within(employment).findByRole('button', { name: 'Show account details' }))
+    let dialog = await screen.findByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Show' }))
+    expect(calls('POST', /\/reveal$/)).toHaveLength(0)
+    await userEvent.type(within(dialog).getByLabelText('Why you need them'), 'paying October')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Show' }))
+    expect(await within(dialog).findByText('100200300400')).toBeInTheDocument()
+    expect(bodyOf(calls('POST', /\/reveal$/)[0]!)).toEqual({ reason: 'paying October' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+    expect(screen.queryByText('100200300400')).not.toBeInTheDocument()
+
+    await userEvent.click(within(employment).getByRole('button', { name: 'Show account details' }))
+    dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByText('100200300400')).not.toBeInTheDocument()
+    expect(within(dialog).getByLabelText('Why you need them')).toBeInTheDocument()
+  })
+
+  it('sets a payment method with only that method\'s fields, and new hourly terms with a rate', async () => {
+    on('POST', /\/finance\/payout-account$/, () => json({ method: 'e_wallet', last4: '4567' }, 201))
+    on('POST', /\/finance\/terms$/, () => json({ id: 'p-1' }, 201))
+    renderWithProviders(<AppRoutes />, { staff: owner, route: '/admin/teachers/t-1' })
+    const employment = await screen.findByRole('region', { name: 'Employment' })
+    await userEvent.click(await within(employment).findByRole('button', { name: 'Set payment method' }))
+    let dialog = await screen.findByRole('dialog')
+    await userEvent.selectOptions(within(dialog).getByLabelText('Method'), 'bank_transfer')
+    expect(within(dialog).getByLabelText('IBAN (optional)')).toBeInTheDocument()
+    await userEvent.selectOptions(within(dialog).getByLabelText('Method'), 'e_wallet')
+    expect(within(dialog).queryByLabelText('IBAN (optional)')).not.toBeInTheDocument()
+    await userEvent.type(within(dialog).getByLabelText('Wallet provider'), 'QA Wallet')
+    await userEvent.type(within(dialog).getByLabelText('Wallet number'), '01001234567')
+    await userEvent.type(within(dialog).getByLabelText('Reason for the change'), 'new wallet')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(calls('POST', /\/payout-account$/)).toHaveLength(1))
+    expect(bodyOf(calls('POST', /\/payout-account$/)[0]!)).toEqual({
+      method: 'e_wallet', details: { provider: 'QA Wallet', walletNumber: '01001234567' }, reason: 'new wallet',
+    })
+
+    await userEvent.click(within(employment).getByRole('button', { name: 'Change salary terms' }))
+    dialog = await screen.findByRole('dialog')
+    await userEvent.selectOptions(within(dialog).getByLabelText('Salary type'), 'hourly')
+    const rate = within(dialog).getByLabelText('Hourly rate')
+    await userEvent.clear(rate)
+    await userEvent.type(rate, '120')
+    await userEvent.type(within(dialog).getByLabelText('Reason for the change'), 'moved to hourly')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(calls('POST', /\/terms$/)).toHaveLength(1))
+    expect(bodyOf(calls('POST', /\/terms$/)[0]!)).toEqual({
+      effectiveMonth: '2026-10', salaryType: 'hourly', currency: 'EGP', hourlyRate: '120', reason: 'moved to hourly',
+    })
+  })
+
+  it('without an encryption key on the server, says so and offers no account controls', async () => {
+    on('GET', /\/teacher-files\/t-1\/finance/, () => json(finance({ keyConfigured: false })))
+    renderWithProviders(<AppRoutes />, { staff: owner, route: '/admin/teachers/t-1' })
+    const employment = await screen.findByRole('region', { name: 'Employment' })
+    expect(await within(employment).findByText(/switched off on this server/)).toBeInTheDocument()
+    expect(within(employment).queryByRole('button', { name: 'Set payment method' })).not.toBeInTheDocument()
+    expect(within(employment).queryByRole('button', { name: 'Show account details' })).not.toBeInTheDocument()
   })
 })

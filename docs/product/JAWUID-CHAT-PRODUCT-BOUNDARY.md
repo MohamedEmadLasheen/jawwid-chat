@@ -134,6 +134,8 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-13 was closed by the product owner on 2026-10-19** (the Calls page).
 **PD-14 was closed by the product owner on 2026-10-20** (no pre-approval of messages).
 **PD-15 was closed by the product owner on 2026-10-21** (the student's journey after enrolment).
+**PD-18 was closed by the product owner on 2026-10-21** (teacher payroll lives in Chat) and supersedes PD-10 item 4.
+PD-16 and PD-17 are numbered by work in flight on other branches (PR #92, and the parent and student profiles).
 
 | ID | Subject | Status |
 |---|---|---|
@@ -152,6 +154,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-13** | **The Calls page: scheduled calls and call links** (2026-10-19) | **CLOSED** — one Calls page for every role; a scheduled call belongs to ONE conversation and announces itself with a card; a call link is members-only; nothing grants a call that `POST /calls` would refuse |
 | **PD-14** | **Messages publish immediately; admins moderate after sending** (2026-10-20) | **CLOSED** — no message is held for approval, for any role or conversation type; whoever is in charge of a conversation may edit or delete a teacher's or parent's message at any time afterwards; a manager or the super admin also a staff member's |
 | **PD-15** | **The student's journey after enrolment** (2026-10-21) | **CLOSED** — supervisors record student and teacher excuses from the group; one quick "Lesson report" entry; make-ups after any apology; outcomes corrected and reports edited / deleted / resent only through recorded changes; each child's age, course and package; monthly statistics in the academy's terms |
+| **PD-18** | **Teacher payroll in Chat** (2026-10-21) | **CLOSED** — salary terms, a sealed payout account and the amounts of bonuses and deductions are recorded in Chat, for the super admin only; the month's financial summary is computed, never stored; supersedes PD-10 item 4 |
 
 ---
 
@@ -632,7 +635,8 @@ workload.
    off, assigned students.
 4. **Payroll.** Salary type, monthly salary, bonuses, deductions and the
    financial summary stay in Core / HR and are shown **read-only**, fetched at
-   request time and not stored in Chat.
+   request time and not stored in Chat. **Superseded by PD-18 (2026-10-21):
+   payroll is recorded in Chat.**
 5. **Teacher self-view.** A teacher sees their own schedule and workload in the
    teacher app, and nothing else from the Teacher File.
 
@@ -1571,6 +1575,83 @@ PD-15):
 4. A voided lesson is final; it cannot be corrected back.
 5. The report's topic and next-lesson lists are a starting set for a Quran and
    Arabic academy.
+
+**Closed.** 2026-10-21.
+
+---
+
+### PD-18 · Teacher payroll in Chat
+
+**Closed 2026-10-21** by the product owner. Supersedes PD-10 item 4.
+
+The owner asked for an administration-only Teacher Profile that includes
+salary type, payment method with account details, currency, teaching market,
+monthly salary, a financial summary and the bonus and deduction histories.
+Asked on the same day, the owner chose: **payroll lives in Chat**; **payout
+account details are stored, protected**; **a teacher never sees their own
+profile**.
+
+**Final decision.**
+
+1. **Salary terms** (salary type, currency, amount) are recorded in Chat, one
+   version per effective month. A change is a new version; earlier months keep
+   the terms they had.
+2. **Payout account.** The method (e-wallet, InstaPay or bank transfer) and its
+   account details are recorded. The details are **encrypted by the server**
+   before they reach the database. The file shows the method and the last four
+   characters. The details in clear are shown on request, with a reason, and
+   every such request is audited.
+3. **Amounts.** The super admin sets the amount of each bonus the Teachers
+   department records (PD-11) and of each deduction decided on the ladder
+   (PD-12), and may add a standalone bonus or deduction. A correction replaces
+   an amount; zero cancels it.
+4. **Financial summary**, per payroll month: salary + bonuses − deductions =
+   net. It is computed on every read, never stored.
+5. **Teaching market** is employment information, recorded in the Teacher File
+   by the Teachers manager (closes PD-10 open item 1 for the market).
+6. **Teacher self-view** is unchanged: never (PD-10).
+
+**Canonical rule — who sees what.** PD-10's table stands, with its finance row
+now meaning "recorded in Chat":
+
+| Section | Teachers-dept supervisors and manager | Super admin | The teacher | Anyone else |
+|---|---|---|---|---|
+| Teaching market, current students | read (manager edits the market) | read + write | — | **never** |
+| Bonus and deduction history: date, reason, who | read | read | — | **never** |
+| Salary terms, payout account, amounts, financial summary | — | read + write | — | **never** |
+
+* Enforced in the server and the database. No request role has a grant on the
+  payroll tables, and only `src/teacher-file` may name them
+  (`teacher-file-confinement.spec.ts`).
+* The audit trail records what changed and why, **never an amount or an account
+  detail**, because the audit trail is read more widely than payroll is.
+* Payout details are sealed with AES-256-GCM under `TEACHER_PAYOUT_KEYS`. Without
+  the key the server refuses to save or reveal them (503). Payroll **fails
+  closed**; nothing is ever stored in clear.
+
+**Defaults adopted at closing** (the owner may override these without reopening PD-18):
+1. A **shift-based** salary is a fixed monthly amount. A **per-hour** salary is
+   the rate times the hours of the lessons the teacher was there for: held, or
+   the student did not come.
+2. A bonus or deduction is paid in the payroll month of the record it prices.
+   That is the month the bonus was recorded, or the deduction's ladder month.
+3. Only the super admin holds the finance tier (PD-10). A separate finance role
+   is a new decision.
+
+**Implementation phase.** Built with the decision: migration
+`20261021160000_chat_pd018_teacher_payroll.sql`; `docs/admin/teacher-file.md`.
+
+**Consequences.**
+- §1.1's CRM row no longer applies to teacher pay. Core may still hold its own
+  copy, but Chat's record is the one the academy edits.
+- PD-12's rule "Teachers-department staff never see salary or amounts" stands.
+- A deployment needs a `TEACHER_PAYOUT_KEYS` secret before payout accounts work,
+  and that key must be backed up together with the database backups. Losing it
+  loses every saved account.
+
+**Deprecated behaviour.** PD-10's "any stored copy of pay; any write path for
+money in Chat" is no longer forbidden for teacher payroll. Chat still **pays
+nobody**: it records what is owed and how to pay.
 
 **Closed.** 2026-10-21.
 

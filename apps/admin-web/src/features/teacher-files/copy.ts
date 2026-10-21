@@ -32,6 +32,7 @@ export const T = {
   phone: { en: 'Phone number', ar: 'رقم الهاتف' },
   email: { en: 'Email address', ar: 'البريد الإلكتروني' },
   joinedOn: { en: 'Joining date', ar: 'تاريخ الانضمام' },
+  teachingMarket: { en: 'Teaching market', ar: 'سوق التدريس' },
   notRecorded: { en: 'Not recorded', ar: 'غير مسجّل' },
   lastEdit: { en: 'Last changed by {name}, {date}', ar: 'آخر تعديل: {name}، {date}' },
   edit: { en: 'Edit', ar: 'تعديل' },
@@ -113,11 +114,6 @@ export const T = {
   fullStats: { en: 'Full statistics for this month', ar: 'الإحصائيات الكاملة لهذا الشهر' },
   comments: { en: 'Supervisor comments', ar: 'تعليقات المشرف' },
 
-  notHereYet: { en: 'Not here yet', ar: 'غير متاح بعد' },
-  notHereYetBody: {
-    en: 'Salary, payment method, bonus and deduction amounts and the financial summary are next.',
-    ar: 'الراتب وطريقة الدفع ومبالغ المكافآت والخصومات والملخص المالي هي الخطوة التالية.',
-  },
 
   // Forms
   details: { en: 'Details', ar: 'التفاصيل' },
@@ -140,8 +136,8 @@ export const T = {
   recordBonus: { en: 'Record a bonus', ar: 'تسجيل مكافأة' },
   bonusReason: { en: 'Why the bonus', ar: 'سبب المكافأة' },
   bonusHint: {
-    en: 'The teacher sees the reason in their supervision chat. The amount is set in payroll (Jawwid Core / HR), never here.',
-    ar: 'يرى المعلم السبب في محادثة الإشراف. يُحدَّد المبلغ في الرواتب (نظام جوّد الأساسي / الموارد البشرية)، وليس هنا.',
+    en: 'The teacher sees the reason in their supervision chat. The super admin sets the amount in the Bonus history, never here.',
+    ar: 'يرى المعلم السبب في محادثة الإشراف. يحدّد المدير العام المبلغ في سجل المكافآت، وليس هنا.',
   },
   filterAll: { en: 'All', ar: 'الكل' },
   filterRecognition: { en: 'Notes & bonuses', ar: 'ملاحظات ومكافآت' },

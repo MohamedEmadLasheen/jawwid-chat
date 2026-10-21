@@ -1,13 +1,13 @@
-# Teacher File (PD-10, step 1)
+# Teacher File (PD-10, PD-18)
 
-Status: **built, step 1 of 3** · Decision: `docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4 PD-10
-(closed 2026-10-18)
+Status: **built** · Decisions: `docs/product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4 PD-10
+(closed 2026-10-18) and PD-18 (payroll, closed 2026-10-21)
 
 The administration-only record of a teacher (`chat.teacher`, not `chat.staff`).
 Parents and teachers never reach it. A teacher's own schedule and workload
 arrive with PD-9 through their own routes, never through this one.
 
-## What step 1 contains
+## What it contains
 
 | Section | Source | Status |
 |---|---|---|
@@ -18,11 +18,15 @@ arrive with PD-9 through their own routes, never through this one.
 | Extra days off, with cancellation | `chat.teacher_supervision_entry` | built |
 | Schedule: working hours and the next 14 days' lessons | `GET /teachers/:id/availability`, `GET /lessons?teacherId=` (PD-11) | built (2026-10-21), read-only; edits stay on the Schedules tab |
 | Monthly performance: the month's KPIs beside the supervisor's comment | `GET /stats/teachers/:id?month=` (PD-11 T5) | built (2026-10-21) |
-| Salary type, monthly salary, bonuses, deductions, financial summary | Jawwid Core, read-only, never stored | step 3, needs a Core API |
-| Teaching market, specializations | open: Core or Chat | not decided |
+| Teaching market, current students | `chat.teacher_file.teaching_market`, `chat.learner.teacher_id` | built (PD-18, 2026-10-21) |
+| Salary type, currency, monthly salary or hourly rate | `chat.teacher_pay_terms`, versioned by effective month | built (PD-18), super admin only |
+| Salary payment method and account details | `chat.teacher_payout_account`, details sealed with AES-256-GCM | built (PD-18), super admin only |
+| Bonus and deduction history | PD-11 bonus entries, PD-12 deduction decisions, plus `chat.teacher_pay_adjustment` for the amounts | built (PD-18); the amounts are for the super admin only |
+| Financial summary | computed on every read: salary + bonuses − deductions | built (PD-18), super admin only |
+| Specializations | open: Core or Chat | not decided |
 
-The page says "Not here yet" for the later steps. It never shows a zero, and a
-rate the server cannot compute yet is a dash, not 0%.
+The page never shows a zero for something it does not know. A rate or amount
+the server cannot compute is a dash, not 0 or 0%.
 
 The Schedule and Monthly performance sections read the same routes as the
 Schedules and Statistics tabs, so the file cannot disagree with them. In the
@@ -39,7 +43,7 @@ Decided by `AuthorizationService.teacherFileAccess`
 (`apps/api/src/platform/teacher-file-policy.ts`). The caller resolves the
 actor's relation to the organization's **Teachers** department (PD-8).
 
-| | View | Edit personal info | Write the timeline | Finance (step 3) |
+| | View | Edit personal info and teaching market | Write the timeline | Payroll (PD-18) |
 |---|---|---|---|---|
 | Super admin | yes | yes | yes | yes |
 | Teachers department manager | yes | yes | yes | no |
@@ -65,6 +69,22 @@ shared admin-web client has no PUT.
 | `GET /teacher-files/:teacherId` | view | `{ access, teacher, personal, assignedStudents, supervision: { complaints, monthlyComments, daysOff } }` |
 | `POST /teacher-files/:teacherId/personal` `{ phone?, email?, joinedOn?, reason }` | edit personal info | the file. A field left out is unchanged, and `null` clears it. `reason` is required. |
 | `POST /teacher-files/:teacherId/entries` `{ kind, body, month?, dayOffOn?, refersTo?, sourceConversationId?, sourceMessageId? }` | write the timeline | `{ id, kind, createdAt }` |
+| `GET /teacher-files/:teacherId/finance?month=YYYY-MM` | payroll | `{ month, keyConfigured, terms, currentTerms, payoutAccount: { method, last4 } \| null, adjustments, unpriced, summary }`. The summary covers six months ending at `month` (default: this payroll month). `Cache-Control: no-store`. |
+| `POST /teacher-files/:teacherId/finance/terms` `{ effectiveMonth, salaryType: shift\|hourly, currency, monthlyAmount \| hourlyRate, reason }` | payroll | the new version |
+| `POST /teacher-files/:teacherId/finance/payout-account` `{ method, details, reason }` | payroll | `{ method, last4 }`. Without a key: `503 COMM.TEACHER_PAYROLL_UNAVAILABLE` |
+| `POST /teacher-files/:teacherId/finance/payout-account/reveal` `{ reason }` | payroll | `{ method, details }`, audited with the reason. `Cache-Control: no-store`. |
+| `POST /teacher-files/:teacherId/finance/adjustments` `{ kind?, amount, month?, reason, bonusEntryId?, violationId?, replaces? }` | payroll | `{ id, kind, month, amount, currency }` |
+
+`GET /teacher-files/:teacherId` also returns `employment: { teachingMarket,
+studentCount }` and `history: { bonuses, deductions }`. These are what was
+recorded (date, reason, who), and no amounts, for every reader of the file.
+`access.canViewFinance` tells the page whether to show the payroll sections.
+
+Payout `details` by method: `e_wallet` `{ provider, walletNumber }`,
+`instapay` `{ address }`, `bank_transfer` `{ bankName, accountHolder,
+accountNumber, iban?, swift? }`. Unknown fields are refused. Amounts are
+strings with at most two decimals. An amount is in the currency of that
+month's terms, so a month with no terms refuses an amount (409).
 
 `kind` is one of the following:
 
@@ -98,6 +118,39 @@ or for another teacher.
   which fields changed and the entry kind. They never contain a phone, an email
   or an entry's text, because the audit trail is read more widely than the
   Teacher File is.
+
+## Payroll (PD-18)
+
+- **Who.** Only the super admin, which is PD-10's finance tier. The Teachers
+  department sees the recorded bonuses and deductions, never an amount.
+- **Append-only.** `chat.teacher_pay_terms` and `chat.teacher_pay_adjustment`
+  refuse `UPDATE` and `DELETE` by trigger. A change of terms is a new version.
+  A corrected amount is a new row that `replaces` the old one, and zero cancels.
+  A recorded bonus or deduction decision is priced by at most one original row,
+  and a row is replaced at most once.
+- **Sealed details.** `details_sealed` holds iv ‖ tag ‖ AES-256-GCM ciphertext.
+  The additional authenticated data names the organization, the teacher and the
+  method, so a value copied onto another row does not open. Only `method` and
+  `last4` are stored in clear.
+- **Key.** `TEACHER_PAYOUT_KEYS=keyid:base64key[,keyid:base64key…]`, each key
+  32 bytes. The first key seals and every listed key opens. To rotate, put the
+  new key first and keep the old one until every account has been re-saved.
+  Without the variable, saving and revealing are refused (503); the rest of
+  payroll still works. **Back the key up with the database backups.** Losing it
+  loses every saved account.
+- **Audit.** `teacher_file.pay_terms_set`, `.payout_account_set`,
+  `.payout_account_revealed` (with the reason) and `.pay_adjustment_added`.
+  None of them contains an amount or an account detail.
+- **The summary.** A shift salary is its monthly amount. An hourly salary is the
+  rate times the minutes of the teacher's lessons in that payroll month
+  (`chat.academy_month`) that closed `held` or `student_no_show`. Bonuses and
+  deductions are the live amounts of that month. Everything is computed in
+  hundredths, never in floating point.
+- **Confinement.** `teacher-file-confinement.spec.ts` fails the build if any
+  source outside `src/teacher-file/` names a payroll table, model, the sealed
+  column or the key variable.
+- **Rollback.** `db/rollback/20261021160000_pd018.down.sql` refuses while any
+  payroll row or teaching market exists.
 
 ## The phone column and G-07
 

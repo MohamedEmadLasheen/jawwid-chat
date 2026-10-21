@@ -1444,10 +1444,70 @@ model TeacherFile {
   adminOnlyPhone String?   @map("phone")
   email          String?
   joinedOn       DateTime? @map("joined_on") @db.Date
+  /// PD-18: employment, not finance.
+  teachingMarket String?   @map("teaching_market")
   updatedAt      DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
   updatedBy      String?   @map("updated_by") @db.Uuid
 
   @@map("teacher_file")
+  @@schema("chat")
+}
+
+// =====================================================================
+// PD-18 -- 20261021160000_chat_pd018_teacher_payroll.sql owns the DDL and every
+// rule. Read and written ONLY by src/teacher-file (teacher-file-confinement.spec).
+// =====================================================================
+
+/// A teacher's salary terms from an effective month. Append-only.
+model TeacherPayTerms {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  teacherId      String   @map("teacher_id") @db.Uuid
+  effectiveMonth DateTime @map("effective_month") @db.Date
+  salaryType     String   @map("salary_type")
+  currency       String
+  monthlyAmount  Decimal? @map("monthly_amount") @db.Decimal(12, 2)
+  hourlyRate     Decimal? @map("hourly_rate") @db.Decimal(12, 2)
+  reason         String
+  createdBy      String   @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("teacher_pay_terms")
+  @@schema("chat")
+}
+
+/// How a teacher is paid. `detailsSealed` is AES-256-GCM ciphertext; only the server's key opens it.
+model TeacherPayoutAccount {
+  teacherId      String   @id @map("teacher_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  method         String
+  detailsSealed  Bytes    @map("details_sealed")
+  keyId          String   @map("key_id")
+  last4          String
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  updatedBy      String   @map("updated_by") @db.Uuid
+
+  @@map("teacher_payout_account")
+  @@schema("chat")
+}
+
+/// The amount of a bonus or deduction. Append-only; a correction replaces a row.
+model TeacherPayAdjustment {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  teacherId      String   @map("teacher_id") @db.Uuid
+  kind           String
+  month          DateTime @db.Date
+  amount         Decimal  @db.Decimal(12, 2)
+  currency       String
+  reason         String
+  bonusEntryId   String?  @map("bonus_entry_id") @db.Uuid
+  violationId    String?  @map("violation_id") @db.Uuid
+  replaces       String?  @db.Uuid
+  createdBy      String   @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("teacher_pay_adjustment")
   @@schema("chat")
 }
 

@@ -98,7 +98,7 @@ export class TeacherFileService {
     const { actor, access } = await this.gate(actorId, (a) => a.canView);
     const teacher = await this.requireTeacher(actor, teacherId);
 
-    const [file, learners, entries, daysOff] = await Promise.all([
+    const [file, learners, entries, daysOff, deductions] = await Promise.all([
       this.prisma.teacherFile.findUnique({ where: { teacherId: teacher.id } }),
       this.prisma.learner.findMany({
         where: { organizationId: teacher.organizationId, teacherId: teacher.id },
@@ -110,6 +110,10 @@ export class TeacherFileService {
         orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
       }),
       this.prisma.teacherDayOff.findMany({ where: { teacherId: teacher.id }, orderBy: { day: 'desc' } }),
+      this.prisma.teacherViolation.findMany({
+        where: { teacherId: teacher.id, decision: { in: ['deduction_1', 'deduction_2'] } },
+        orderBy: { decidedAt: 'desc' },
+      }),
     ]);
 
     const supervision = await this.prisma.learnerSupervision.findMany({
@@ -120,6 +124,7 @@ export class TeacherFileService {
       ...supervision.map((r) => r.supervisorId),
       ...entries.map((e) => e.createdBy),
       ...daysOff.map((d) => d.createdBy),
+      ...deductions.map((v) => v.decidedBy as string),
     ]);
     if (file?.updatedBy) staffIds.add(file.updatedBy);
     const staff = await this.prisma.staff.findMany({
@@ -155,7 +160,24 @@ export class TeacherFileService {
           supervisor: supervisorId ? person(supervisorId) : null,
         };
       }),
+      employment: { teachingMarket: file?.teachingMarket ?? null, studentCount: learners.length },
       supervision: shapeTimeline(entries, daysOff, person),
+      // PD-18: what was recorded, for everyone who reads the file. The AMOUNTS are
+      // payroll's and come only from GET /teacher-files/:id/finance (super admin).
+      history: {
+        bonuses: entries
+          .filter((e) => e.kind === 'bonus')
+          .map((e) => ({ id: e.id, reason: e.body, createdAt: e.createdAt, author: person(e.createdBy) })),
+        deductions: deductions.map((v) => ({
+          id: v.id,
+          step: v.decision as 'deduction_1' | 'deduction_2',
+          violation: v.kind,
+          month: isoDate(v.month).slice(0, 7),
+          note: v.decisionNote,
+          decidedAt: v.decidedAt,
+          author: person(v.decidedBy as string),
+        })),
+      },
     };
   }
 
@@ -171,17 +193,21 @@ export class TeacherFileService {
   async updatePersonal(
     actorId: string,
     teacherId: string,
-    body: { phone?: unknown; email?: unknown; joinedOn?: unknown; reason?: unknown },
+    body: { phone?: unknown; email?: unknown; joinedOn?: unknown; teachingMarket?: unknown; reason?: unknown },
   ) {
     const { actor } = await this.gate(actorId, (a) => a.canEditPersonal);
     const teacher = await this.requireTeacher(actor, teacherId);
 
-    const patch: { adminOnlyPhone?: string | null; email?: string | null; joinedOn?: Date | null } = {};
+    const patch: { adminOnlyPhone?: string | null; email?: string | null; joinedOn?: Date | null; teachingMarket?: string | null } = {};
     if (body.phone !== undefined) patch.adminOnlyPhone = optionalMatching('phone', body.phone, PHONE, 'is not a phone number');
     if (body.email !== undefined) {
       const email = optionalMatching('email', body.email, EMAIL, 'is not an email address');
       if (email && email.length > 254) throw invalid('email', 'must be at most 254 characters');
       patch.email = email ? email.toLowerCase() : null;
+    }
+    if (body.teachingMarket !== undefined) {
+      const market = optionalMatching('teachingMarket', body.teachingMarket, /^.{1,80}$/u, 'must be at most 80 characters');
+      patch.teachingMarket = market;
     }
     if (body.joinedOn !== undefined) patch.joinedOn = body.joinedOn === null ? null : requireDate('joinedOn', body.joinedOn);
     if (Object.keys(patch).length === 0) throw invalid('body', 'nothing to change');
@@ -335,7 +361,8 @@ export class TeacherFileService {
 
   // ------------------------------------------------------------------
 
-  private async gate(actorId: string, needs: (a: TeacherFileAccess) => boolean) {
+  /** Shared with TeacherPayrollService: the access decision runs before any teacher lookup. */
+  async gate(actorId: string, needs: (a: TeacherFileAccess) => boolean) {
     const actor = await this.conversations.requireActor(actorId);
     const access = this.authz.teacherFileAccess(actor, {
       organizationId: actor.organizationId ?? '',
@@ -361,7 +388,7 @@ export class TeacherFileService {
     return dept.members.length > 0 ? 'member' : null;
   }
 
-  private async requireTeacher(actor: Actor, teacherId: string) {
+  async requireTeacher(actor: Actor, teacherId: string) {
     const notFound = new CommError(CommErrorCode.TEACHER_FILE_NOT_FOUND, 'teacher not found');
     if (!isUuid(teacherId)) throw notFound;
     const teacher = await this.prisma.teacher.findUnique({ where: { id: teacherId } });
@@ -406,9 +433,9 @@ export class TeacherFileService {
   }
 }
 
-/** The access flags a client may see. Finance is not part of step 1's contract. */
+/** The access flags a client may see. `canViewFinance` offers PD-18's payroll sections, which re-check it. */
 function publicAccess(a: TeacherFileAccess) {
-  return { canEditPersonal: a.canEditPersonal, canWriteSupervision: a.canWriteSupervision };
+  return { canEditPersonal: a.canEditPersonal, canWriteSupervision: a.canWriteSupervision, canViewFinance: a.canViewFinance };
 }
 
 /**

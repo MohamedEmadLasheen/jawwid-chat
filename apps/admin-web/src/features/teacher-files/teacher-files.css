@@ -32,3 +32,6 @@
 .tf-kpi dd { margin: 0; display: grid; gap: 2px; }
 .tf-kpi dd strong { font-size: var(--fs-lg); }
 .tf-kpi__hint { font-size: var(--fs-sm); }
+
+/* Payroll (Payroll.tsx) */
+.tf-inline-actions { display: inline-flex; margin-inline-start: var(--space-2); vertical-align: middle; }
