@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AppRoutes } from '@/app/AppRoutes'
 import { tokenStore } from '@/core/auth/tokens'
@@ -257,5 +257,94 @@ describe('the supervision timeline', () => {
     await screen.findByRole('region', { name: 'Personal information' })
     await waitFor(() => expect(calls('GET', /\/teachers\/t-1\/supervision$/).length).toBeGreaterThan(1))
     expect(screen.queryByRole('region', { name: 'Supervision timeline' })).not.toBeInTheDocument()
+  })
+})
+
+describe('schedule and monthly performance', () => {
+  const availability = {
+    teacherId: 't-1',
+    timezone: 'Africa/Cairo',
+    windows: [
+      { weekday: 3, start: '18:00', end: '21:00' },
+      { weekday: 1, start: '16:00', end: '20:00' },
+    ],
+    daysOff: [],
+  }
+  const lesson = {
+    id: 'ls-1',
+    learner: { id: 'l-1', name: 'Child Alpha' },
+    teacher: { id: 't-1', name: 'Teacher One' },
+    kind: 'makeup',
+    makeupFor: 'ls-0',
+    startsAt: '2026-10-22T16:00:00Z',
+    endsAt: '2026-10-22T16:30:00Z',
+    durationMinutes: 30,
+    phase: 'overdue',
+    outcome: null,
+    outcomeNote: null,
+  }
+  const stats = (attendance: number | null) => ({
+    teacher: { id: 't-1', name: 'Teacher One' },
+    month: '2026-10',
+    zone: 'Africa/Cairo',
+    categories: [{ key: 'held', counted: true, lessons: 12, minutes: 360, byDuration: [] }],
+    totals: { counted: { lessons: 12, minutes: 360 }, scheduledMinutes: 600 },
+    makeups: { lessons: 0, held: 0 },
+    trials: { total: 0, conducted: 0, subscribed: 0, notSubscribed: 0, noShow: 0, awaiting: 0, upcoming: 0, cancelled: 0, conversionRate: null },
+    rates: { attendance, completion: null, teacherReliability: null },
+    reports: { reports: 12, onTime: 9, onTimeRate: 0.75, medianDelayMinutes: 40 },
+    replies: { familyMessages: 4, answeredWithin: 4, rate: 1, medianReplyMinutes: 12 },
+    workload: { availableMinutes: 1200, scheduledMinutes: 600, freeMinutes: 600 },
+    previous: { month: '2026-09', held: { lessons: 10, minutes: 300 } },
+  })
+
+  beforeEach(() => {
+    on('GET', /\/teachers\/t-1\/availability$/, () => json(availability))
+    on('GET', /\/lessons\?/, () => json({ lessons: [lesson] }))
+    on('GET', /\/stats\/teachers\/t-1\?month=/, (url) => json(stats(url.includes('2026-09') ? 0.5 : 0.9)))
+  })
+
+  it("shows the teacher's working hours and next lessons, read from the Schedules routes", async () => {
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
+    const section = await screen.findByRole('region', { name: 'Schedule' })
+    expect(await within(section).findByText('16:00–20:00')).toBeInTheDocument()
+    const days = within(section).getAllByRole('term').map((d) => d.textContent)
+    expect(days).toEqual(['Monday', 'Wednesday'])
+    expect(within(section).getByText('Times in Africa/Cairo')).toBeInTheDocument()
+    const row = (await within(section).findByText('Child Alpha')).closest('tr')!
+    expect(within(row).getByText('Make-up')).toBeInTheDocument()
+    expect(within(row).getByText('Report overdue')).toBeInTheDocument()
+    expect(within(section).getByRole('link', { name: 'Edit in Schedules' })).toHaveAttribute('href', '/teachers/schedules?teacher=t-1')
+    const query = new URL(String(calls('GET', /\/lessons\?/)[0]![0]), 'http://admin.test').searchParams
+    expect(query.get('teacherId')).toBe('t-1')
+    expect(new Date(query.get('to')!).getTime() - new Date(query.get('from')!).getTime()).toBe(14 * 86_400_000)
+  })
+
+  it("shows the month's KPIs, a rate the server could not compute as a dash, and follows the month picked", async () => {
+    renderWithProviders(<AppRoutes />, { staff: teachersSupervisor, route: '/teachers/files/t-1' })
+    const section = await screen.findByRole('region', { name: 'Monthly performance' })
+    await within(section).findByLabelText('Key indicators')
+    // Re-found each time: a new month replaces the list.
+    const value = (label: string) => within(within(section).getByLabelText('Key indicators')).getByText(label).closest('div')!.querySelector('strong')!.textContent
+    expect(value('Lessons held')).toBe('12')
+    expect(value('Student attendance')).toBe('90%')
+    expect(value('Teacher reliability')).toBe('—')
+    expect(value('Reports on time')).toBe('75%')
+    expect(within(section).getByText('Strong month.')).toBeInTheDocument()
+
+    const picker = within(section).getByLabelText('Month')
+    fireEvent.change(picker, { target: { value: '2026-09' } })
+    await waitFor(() => expect(value('Student attendance')).toBe('50%'))
+    expect(within(section).getByRole('link', { name: 'Full statistics for this month' })).toHaveAttribute('href', '/teachers?teacher=t-1&month=2026-09')
+  })
+
+  it("the super admin's copy of the file shows the same sections without links into the Teachers area", async () => {
+    renderWithProviders(<AppRoutes />, { staff: makeStaff({ role: 'super_admin' }), route: '/admin/teachers/t-1' })
+    const schedule = await screen.findByRole('region', { name: 'Schedule' })
+    expect(await within(schedule).findByText('Child Alpha')).toBeInTheDocument()
+    expect(within(schedule).queryByRole('link')).not.toBeInTheDocument()
+    const monthly = screen.getByRole('region', { name: 'Monthly performance' })
+    await within(monthly).findByLabelText('Key indicators')
+    expect(within(monthly).queryByRole('link')).not.toBeInTheDocument()
   })
 })

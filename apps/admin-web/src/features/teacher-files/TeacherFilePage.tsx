@@ -11,6 +11,7 @@ import { Refusal, isTeacherFileRefusal } from './Refusal'
 import { useTeacherFile } from './hooks'
 import { AddEntryDialog, EditPersonalDialog, type EntryIntent } from './TeacherFileDialogs'
 import { SupervisionTimeline } from './SupervisionTimeline'
+import { MonthlyKpis, TeacherScheduleSection, currentMonth, teacherAreaLinks, type TeacherWorkLinks } from './TeacherWork'
 import './teacher-files.css'
 import { OpenSupervisionButton, TeacherLeaveSection } from '@/features/supervision/TeacherLeaveSection'
 
@@ -26,6 +27,7 @@ export function TeacherFilePage({ basePath, eyebrow }: { basePath: string; eyebr
   const [editing, setEditing] = useState(false)
   const [intent, setIntent] = useState<EntryIntent | null>(null)
   const data = file.data
+  const links = teacherAreaLinks(basePath)
 
   return (
     <div className="page">
@@ -51,8 +53,9 @@ export function TeacherFilePage({ basePath, eyebrow }: { basePath: string; eyebr
                 />
                 <Personal file={data} onEdit={() => setEditing(true)} />
                 <Students file={data} />
+                <TeacherScheduleSection teacherId={data.teacher.id} links={links} />
+                <Monthly file={data} onAdd={setIntent} links={links} />
                 <Complaints file={data} onAdd={setIntent} />
-                <Monthly file={data} onAdd={setIntent} />
                 <DaysOff file={data} onAdd={setIntent} />
                 {/* PD-11's timeline: every record about the teacher in one line, plus notes and the bonus ticket. */}
                 <SupervisionTimeline teacherId={data.teacher.id} canWrite={data.access.canWriteSupervision} />
@@ -242,23 +245,39 @@ function Complaints({ file, onAdd }: { file: TeacherFile; onAdd: (i: EntryIntent
   )
 }
 
-function Monthly({ file, onAdd }: { file: TeacherFile; onAdd: (i: EntryIntent) => void }) {
+function Monthly({ file, onAdd, links }: { file: TeacherFile; onAdd: (i: EntryIntent) => void; links?: TeacherWorkLinks }) {
   const tx = useCopy()
   const { number } = useI18n()
   const cal = useCalendarDate()
+  const [month, setMonth] = useState(currentMonth)
   const items = file.supervision.monthlyComments
   return (
     <Section
       id="tf-monthly"
       title={tx(T.monthly)}
       action={
-        file.access.canWriteSupervision && (
+        <label className="tf-month">
+          <span className="field__label">{tx(T.month)}</span>
+          <input
+            className="input"
+            type="month"
+            value={month}
+            max={currentMonth()}
+            onChange={(e) => e.target.value && setMonth(e.target.value)}
+            aria-label={tx(T.month)}
+          />
+        </label>
+      }
+    >
+      <MonthlyKpis teacherId={file.teacher.id} month={month} links={links} />
+      <div className="tf-section__head">
+        <h3 className="tf-subtitle">{tx(T.comments)}</h3>
+        {file.access.canWriteSupervision && (
           <button type="button" className="btn btn--sm" onClick={() => onAdd({ kind: 'monthly_comment' })}>
             {tx(T.addMonthly)}
           </button>
-        )
-      }
-    >
+        )}
+      </div>
       {items.length === 0 ? (
         <p className="tf-muted">{tx(T.noMonthly)}</p>
       ) : (

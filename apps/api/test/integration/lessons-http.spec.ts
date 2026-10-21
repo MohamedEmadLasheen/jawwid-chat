@@ -181,6 +181,19 @@ describe('lesson tickets over HTTP, in a PD-8 family group', () => {
     expect(r.code).toBe(CommErrorCode.LESSON_NOT_FOUND);
   });
 
+  it('the super admin lists every lesson of a teacher, not only the learners they supervise (the Teacher File schedule)', async () => {
+    const id = await schedule(26 * 60 * MIN);
+    const from = at(-MIN);
+    const to = at(2 * 24 * 60 * MIN);
+    const q = `/lessons?teacherId=${fam.child.teacherId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+    const owner = await http(`owner@${DOMAIN}`, 'GET', q);
+    expect(owner.status).toBe(200);
+    expect((owner.json.lessons as Array<{ id: string }>).map((l) => l.id)).toContain(id);
+    // The Teachers department reads the same list; this is the rule the super admin now shares.
+    const dept = await http(tsup, 'GET', q);
+    expect((dept.json.lessons as Array<{ id: string }>).map((l) => l.id)).toContain(id);
+  });
+
   it('the parent is offered an apology for an upcoming lesson, and may not write a report', async () => {
     const id = await schedule(3 * 60 * MIN);
     const offered = await http(fam.parent, 'GET', `/conversations/${fam.groupId}/lesson-tickets`);

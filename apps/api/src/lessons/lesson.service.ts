@@ -24,6 +24,7 @@ import {
   ReceiptState,
   RulingDecision,
   RulingKind,
+  StaffRole,
   Visibility,
 } from '../communication/contracts/vocab';
 import { renderCardBody, type CardLanguage } from './lesson-card';
@@ -202,7 +203,9 @@ export class LessonService {
       standing = 'family';
       where.learner = { familyId: actor.familyId };
     } else if (actor.kind === ActorKind.STAFF) {
-      if (await this.isManager(actor)) {
+      // The same rule as AuthorizationService.lessonStanding: the super admin
+      // reads every lesson (PD-8), not only the learners they supervise.
+      if (actor.staffRole === StaffRole.SUPER_ADMIN || (await this.isManager(actor))) {
         standing = 'manager';
       } else {
         standing = 'supervisor';

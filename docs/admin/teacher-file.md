@@ -16,11 +16,22 @@ arrive with PD-9 through their own routes, never through this one.
 | Complaints, with their resolution | `chat.teacher_supervision_entry` | built |
 | Monthly performance comment, versioned per month | `chat.teacher_supervision_entry` | built |
 | Extra days off, with cancellation | `chat.teacher_supervision_entry` | built |
-| Schedule, workload analytics, weekly day off | PD-9 lessons + availability | step 2 |
+| Schedule: working hours and the next 14 days' lessons | `GET /teachers/:id/availability`, `GET /lessons?teacherId=` (PD-11) | built (2026-10-21), read-only; edits stay on the Schedules tab |
+| Monthly performance: the month's KPIs beside the supervisor's comment | `GET /stats/teachers/:id?month=` (PD-11 T5) | built (2026-10-21) |
 | Salary type, monthly salary, bonuses, deductions, financial summary | Jawwid Core, read-only, never stored | step 3, needs a Core API |
 | Teaching market, specializations | open: Core or Chat | not decided |
 
-The page says "Not here yet" for the later steps. It never shows a zero.
+The page says "Not here yet" for the later steps. It never shows a zero, and a
+rate the server cannot compute yet is a dash, not 0%.
+
+The Schedule and Monthly performance sections read the same routes as the
+Schedules and Statistics tabs, so the file cannot disagree with them. In the
+Teachers area they link to those tabs; the super admin's copy
+(`/admin/teachers/:id`) has no such tabs and shows no links. `GET /lessons` now
+gives the super admin the manager's standing (every lesson of the organization),
+the same rule `AuthorizationService.lessonStanding` already applied to a single
+lesson. Before, it narrowed the super admin to learners they supervise, so the
+file's schedule would have looked empty.
 
 ## Who may do what
 
