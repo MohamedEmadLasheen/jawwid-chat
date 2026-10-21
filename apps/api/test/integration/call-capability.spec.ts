@@ -350,20 +350,17 @@ describe('7. one policy, not two', () => {
       expect(capability.code).toBe(refusal);
     });
 
-  it('PD-2 is reported, not bypassed: a parent may not INITIATE a group call',
+  it('PD-19: a parent member may INITIATE a group call, and capability says so',
     async () => {
-      // canCall is intent-aware and capability asks the INITIATE question, so a
-      // parent must be refused for a group exactly as start refuses them.
+      // Capability asks the INITIATE question; for a parent in their group the
+      // answer is now yes, and start agrees.
       const group = await g.conversations.ensureStudentGroup(s.learnerId);
 
       const capability = await controller.callCapability(s.parentId, group.id);
-      const refusal = await g.calls
-        .start(group.id, s.parentId)
-        .then(() => null)
-        .catch((error: { code: string }) => error.code);
+      const started = await g.calls.start(group.id, s.parentId);
 
-      expect(capability.canCall).toBe(false);
-      expect(capability.code).toBe(refusal);
+      expect(capability).toEqual({ canCall: true, code: null });
+      expect(started.callId).toEqual(expect.any(String));
     });
 });
 

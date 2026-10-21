@@ -1,7 +1,7 @@
 # Jawwid Chat — Authorization Model (roles, permissions, scope)
 
 Status: **CANONICAL** · Locked in Phase 0 (2026-09-07) · Implemented in Phase 1
-Product decisions PD-2, PD-3, PD-5 and **PD-6** are CLOSED; the record is `../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4.
+Product decisions PD-3, PD-5, **PD-6** and **PD-19** (which supersedes PD-2) are CLOSED; the record is `../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4.
 **PD-7 (2026-10-14) supersedes PD-6 and restores BR-1**: direct Parent ↔ Teacher chat and calls are forbidden whatever the relationship (`COMM.BR1_TEACHER_PARENT_DIRECT`). PD-6 (2026-09-23) had allowed them for an *authorized relationship*; §4.1 is kept as that history. **Staff scope — PD-8 (2026-10-15), superseding the 2026-10-14 rule:** a staff member reads a conversation only on a basis from `chat.staff_conversation_access` — supervisor of the child(ren), live member who still reaches the family, ACTIVE backup, department manager, or the super admin (full read/write). Family ownership, on duty and sticky grant nothing. Record: `ORG-SCOPE-PD8.md`.
 Companions: `IDENTITY-MODEL.md`, `SUPERVISOR-OWNERSHIP.md`, `TENANCY-MODEL.md`,
 `../security/RLS-STRATEGY.md`, `../contracts/API-CONTRACT.md` §1.2.
@@ -87,7 +87,7 @@ Family-facing staff (may take part in family conversations): `admin`,
 ¹ only on families with an active **explicit temporary assignment** to the coverage admin (PD-3; scope, §6). A shift schedule is not an authorization input.
 ² in `student_group`/`class_group`, published on send (PD-14: nothing is held for approval; an admin in charge moderates afterwards by edit or delete — `AuthorizationService.moderatableAuthorKinds`); refused entirely when no live admin is present (C-4).
 ³ a parent reads only their own family; a teacher reads only the families of learners they teach, through the group.
-⁴ **PD-2, CLOSED 2026-09-07.** A parent may start a 1:1 call to their handler, and may JOIN a Student Group or Class Group call, but may **never initiate** one. Group calls are initiated by a teacher or by admin / authorized staff. Enforced by `canCall`'s `CallIntent` parameter, which defaults to the stricter `initiate`; denial code `COMM.PARENT_CANNOT_START_GROUP_CALL`. Protected by `apps/api/test/unit/authorization/pd002-group-call-initiation.spec.ts`.
+⁴ **PD-19, CLOSED 2026-10-21 (supersedes PD-2).** A member who may write in a conversation may also start a call in it, parents included (family group, Student Group, Class Group, and their 1:1 with their supervisor). Non-members (D1), a direct teacher↔parent pair (BR-1 / PD-7), a group with no live admin (C-4) and silent members are still refused. `canCall`'s `CallIntent` stays on the signature but no rule distinguishes start from join. Protected by `apps/api/test/unit/authorization/pd019-member-may-start-call.spec.ts`.
 
 The table is the *default* mapping. Phase 1 stores it in `chat.role_permission`
 (`role`, `permission`) seeded by migration, exposes it through `GET /config`
@@ -105,7 +105,7 @@ for UX, and asserts the TypeScript mirror equals the table in a protected test.
 | `canSend(actor, conv, membership, intent, now, familyOwnerId, participantKinds, liveMembers)` | ✔ | read → silence → C-4 admin presence → moderation policy for parents/teachers; ownership/coverage/stickiness → on-behalf mode for staff; assist/escalation fail closed (JC-005) | routing reads the **assignment** rather than `family.owner_id` + `on_duty()` (see `SUPERVISOR-OWNERSHIP.md` §6) |
 | `canManageMembership(actor)` | ✔ | staff only | scope + permission key |
 | `canApprove(actor, activeHandlerId)` | ✔ | active handler or manager | queue **listing** must also be scoped (§6) — today `approval.service.ts:45-61` lists every pending approval in the system |
-| `canCall(actor, conv, membership, participants, now, familyOwnerId, liveMembers, intent, pairing)` | ✔ | read + refusal of any direct teacher/parent pair (BR-1, PD-7) + C-4 + **PD-2** (a parent may join a group call, never start one) | scope; the PD-2 rule is already implemented |
+| `canCall(actor, conv, membership, participants, now, familyOwnerId, liveMembers, intent, pairing)` | ✔ | read + refusal of any direct teacher/parent pair (BR-1, PD-7) + C-4 (since **PD-19** a parent member may start a group call too) | scope |
 | `can(actor, permission, scope)` | ✘ | generic permission-key check for the new admin surface (families, assignment, staff, audit, config) | **new** — the single entry point for Phase 1 controllers |
 | `visibleFamilies(actor)` / `visibleConversationsWhere(actor)` | ✘ | the *query predicate* for lists, so every list endpoint is scoped by construction | **new** |
 

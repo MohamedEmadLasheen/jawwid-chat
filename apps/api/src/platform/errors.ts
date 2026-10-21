@@ -107,7 +107,8 @@ export enum CommErrorCode {
    * refused. Accepting it would record an answer nobody gave.
    */
   CALL_ALREADY_DECLINED = 'COMM.CALL_ALREADY_DECLINED',
-  /** PD-2: a family contact may join a Student Group call but never start one. */
+  /** RETIRED by PD-19 (2026-10-21): no longer issued -- a parent member may
+   *  start a group call. Kept so clients that still map it keep compiling. */
   PARENT_CANNOT_START_GROUP_CALL = 'COMM.PARENT_CANNOT_START_GROUP_CALL',
 
   // --- Stories ---

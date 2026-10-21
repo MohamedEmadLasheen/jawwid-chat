@@ -57,12 +57,12 @@ const notFound = () => new CommError(CommErrorCode.SCHEDULED_CALL_NOT_FOUND, 'sc
  *
  *   - scheduling one requires being able to START a call there right now
  *     (CallService.callCapability -- the same decideInitiate POST /calls uses),
- *     so a parent cannot schedule a Student Group call (PD-2) and nobody can
- *     schedule a teacher<->parent 1:1 (PD-7);
+ *     so whoever may start a call in a conversation may schedule one there
+ *     (since PD-19 that includes a parent in their family's group) and nobody
+ *     can schedule a teacher<->parent 1:1 (PD-7);
  *   - seeing one requires reading its conversation (canRead);
  *   - joining one runs CallService.start or CallService.accept, which decide
- *     again from scratch. A parent's Join on a group call nobody has started yet
- *     is refused by PD-2 exactly as a call button would be.
+ *     again from scratch, exactly as a call button would.
  *
  * The call stack itself (W1-W7, frozen) is consumed, never changed.
  */
@@ -243,7 +243,7 @@ export class ScheduledCallService {
           return { callId: live.id, conversationId: row.conversationId, mode: 'joined' as const };
         }
         // Nothing live: start one. CallService.start decides authorization from
-        // scratch (PD-2 refuses a parent here, PD-7 a teacher<->parent pair).
+        // scratch (PD-7 refuses a teacher<->parent pair).
         const started = await this.calls.start(row.conversationId, actor.actorId);
         await tx.scheduledCall.update({ where: { id: row.id }, data: { callId: started.callId } });
         return { callId: started.callId, conversationId: row.conversationId, mode: 'started' as const };

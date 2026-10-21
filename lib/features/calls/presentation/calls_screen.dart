@@ -33,8 +33,8 @@ import 'calls_actions.dart';
 /// THERE IS STILL NO DIAL PAD AND NO DIRECTORY. Every action picks one of the
 /// user's OWN conversations, and every call is started or joined inside that
 /// conversation with the backend's permission, decided again on each request
-/// (§31, §35). A parent may join a Student Group call but never start one
-/// (PD-2): the server refuses and this screen says so in words. Voice only.
+/// (§31, §35). When the server refuses, this screen says so in words. Voice
+/// only.
 ///
 /// Nothing on this screen is fabricated. When calling has not been switched on
 /// for the build, the Recent section says exactly that instead of showing an

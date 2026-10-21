@@ -77,7 +77,7 @@ export const ConversationType = {
   TRIAL_GROUP: 'trial_group',
 } as const;
 
-/** Group conversations: BR-1 admin presence, moderation and PD-2 apply. */
+/** Group conversations: BR-1 admin presence (C-4) applies. */
 export const GROUP_CONVERSATION_TYPES: ReadonlySet<string> = new Set([
   ConversationType.STUDENT_GROUP,
   ConversationType.CLASS_GROUP,

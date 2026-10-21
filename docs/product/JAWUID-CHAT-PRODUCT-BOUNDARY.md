@@ -120,7 +120,7 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-16 — CLOSED
+## 4. Product decisions PD-1 to PD-19 — CLOSED
 
 PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
 exit gate, before `main` was baselined. **PD-6 was closed by the product owner
@@ -135,11 +135,12 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-14 was closed by the product owner on 2026-10-20** (no pre-approval of messages).
 **PD-15 was closed by the product owner on 2026-10-21** (the student's journey after enrolment).
 **PD-16 was closed by the product owner on 2026-10-21** (Chat enrols new students and parents sign up).
+**PD-19 was closed by the product owner on 2026-10-21** (a member may start a call in their own chat; supersedes PD-2).
 
 | ID | Subject | Status |
 |---|---|---|
 | PD-1 | Coverage admin membership of Student Groups | **CLOSED** — window-only |
-| PD-2 | Who may initiate a Student Group call | **CLOSED** — not the parent |
+| PD-2 | Who may initiate a Student Group call | **SUPERSEDED by PD-19** (2026-10-21) — was: not the parent |
 | PD-3 | Coverage model | **CLOSED** — explicit temporary assignment |
 | PD-4 | Representation of system-generated events | **CLOSED** — system messages |
 | PD-5 | Role model | **CLOSED** — `super_admin` exists from day one |
@@ -154,6 +155,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-14** | **Messages publish immediately; admins moderate after sending** (2026-10-20) | **CLOSED** — no message is held for approval, for any role or conversation type; whoever is in charge of a conversation may edit or delete a teacher's or parent's message at any time afterwards; a manager or the super admin also a staff member's |
 | **PD-15** | **The student's journey after enrolment** (2026-10-21) | **CLOSED** — supervisors record student and teacher excuses from the group; one quick "Lesson report" entry; make-ups after any apology; outcomes corrected and reports edited / deleted / resent only through recorded changes; each child's age, course and package; monthly statistics in the academy's terms |
 | **PD-16** | **Enrolling a new student in Chat; the parent's own sign-up** (2026-10-21) | **CLOSED** — Assign on New Students creates the family, parent and children in Chat from Sales' form; an assigned entry is the supervisor's (and their manager's); the supervisor opens the family group; the parent signs up with their e-mail and a one-time code relayed by the supervisor until WhatsApp sending is connected |
+| **PD-19** | **Who may start a call: every member of their own chat** (2026-10-21) | **CLOSED** — teachers, parents and supervisors may start a call in any chat they may write in; parents may now start their family / Student Group calls; chats a person is not a member of, BR-1 / PD-7, C-4 and the no-phantom-call rule are unchanged |
 
 ---
 
@@ -189,6 +191,9 @@ member option is rejected and must not be implemented.
 ---
 
 ### PD-2 · Who may initiate a Student Group call
+
+> **SUPERSEDED by PD-19 on 2026-10-21.** Parents may now start group calls in
+> their own chats. Kept as history.
 
 **Final decision.** Parents **may join** Student Group calls. Parents **may not
 initiate** them. A Student Group call is initiated by a teacher or by
@@ -1349,9 +1354,9 @@ is rung until someone taps Join.
 
 **Canonical rule.** A scheduled call grants nothing.
 - Scheduling one requires the right to *start* a call in that conversation at
-  that moment, the same `decideInitiate` that `POST /calls` uses. So a parent
-  never schedules a group call (PD-2), and nobody schedules a teacher↔parent 1:1
-  (PD-7).
+  that moment, the same `decideInitiate` that `POST /calls` uses. So nobody
+  schedules a teacher↔parent 1:1 (PD-7); since PD-19 a parent may schedule a
+  call in their own group.
 - Seeing one requires reading its conversation.
 - Joining one runs `CallService.start` or `accept`, which decide again from
   scratch.
@@ -1661,7 +1666,56 @@ PD-16):
 
 ---
 
-### Decisions still open after PD-1 to PD-16
+### PD-19 · A member may start a call in their own chat (supersedes PD-2)
+
+**Closed by the product owner on 2026-10-21** (owner request: "teachers,
+parents, and supervisors [should] have calling permissions within their own
+chats … while keeping the existing access rules for other chats unchanged").
+
+**Background.** The call button is drawn only where the server says the viewer
+may start a call (`GET /conversations/:id/call-capability`). Measured on the
+system-test stack before the change: teachers and supervisors could already
+start a call in every chat they belong to; the one member chat with no button
+was a **parent in their family group**, refused by PD-2
+(`COMM.PARENT_CANNOT_START_GROUP_CALL`).
+
+**Decision.** Whoever may write in a conversation may also start a call in it.
+A parent may start a call in their family group, Student Group or Class Group,
+as well as in their 1:1 with their supervisor.
+
+**Canonical rule.** `AuthorizationService.canCall` = `canSend` (customer
+visibility) + the BR-1 / PD-7 refusal of any direct teacher<->parent pair. No
+rule distinguishes starting from joining any more; `CallIntent` stays on the
+signature so callers still say which question they ask.
+
+**Unchanged — "the existing access rules for other chats".**
+- A person who is not a member of a chat cannot start a call there (D1, the
+  no-phantom-call rule). This includes the super admin and a department manager
+  reading a chat on a PD-8 basis.
+- BR-1 / PD-7: no direct teacher<->parent chat or call, ever.
+- C-4: a group that pairs a teacher with a parent needs a live Jawwid admin in
+  it, for a call exactly as for a message.
+- A silent member may not start a call.
+
+**Consequences.**
+- The parent's app shows the call button in their family group with no client
+  change: the button already follows the server's answer.
+- Scheduling a call (PD-13) asks the same question, so a parent may also
+  schedule a call in their group, and a parent tapping **Join** on a scheduled
+  call nobody has started yet starts it.
+- `COMM.PARENT_CANNOT_START_GROUP_CALL` is no longer issued. The code stays in
+  the error vocabulary so clients that still map it keep working.
+- Protected by `apps/api/test/unit/authorization/pd019-member-may-start-call.spec.ts`,
+  which replaces the PD-2 file and pins both the new permission and the limits
+  above.
+
+**Deprecated behaviour.** PD-2's start-only refusal for parents.
+
+**Closed.** 2026-10-21.
+
+---
+
+### Decisions still open after PD-1 to PD-19
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
 The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their

@@ -30,7 +30,7 @@ test/core/data/wire_mappers_test.dart	60	Client classification fails closed (PD-
 db/tests/relationship_predicate.sql	20	Relationship predicate (PD-6 origin; under PD-7 it opens no channel, asserted in section H): the database's independent answer to which teacher-parent pairs are related, including tenant isolation, liveness, revocation and fail-closed on every unknown
 db/tests/schema_acceptance.sql	61	RT-023 fresh-database acceptance: every table, FK, trigger and index a running system needs
 apps/api/test/unit/auth/identity-seam.spec.ts	12	RT-001 containment: PR-B closed the HTTP half (no source reads x-actor-id); the WebSocket handshake seam still cannot start outside local/test/ci
-apps/api/test/unit/authorization/pd002-group-call-initiation.spec.ts	15	PD-2 a parent may join a Student Group call but never start one; BR-1/C-4 still take precedence
+apps/api/test/unit/authorization/pd019-member-may-start-call.spec.ts	15	PD-19 (supersedes PD-2) a member may start a call in their own chat, parents included; BR-1/PD-7, C-4, membership and silence still refuse
 apps/api/test/unit/auth/identity-security.spec.ts	24	RT-001/NF-08 closed: a forged x-actor-id, body or query actorId cannot influence identity; cross-principal, cross-family and cross-organization impersonation refused
 apps/api/test/unit/auth/jwt.spec.ts	30	RT-001 token forgery: alg confusion, alg=none, unknown kid, foreign issuer/audience, expiry and tampering are each refused
 apps/api/test/unit/auth/session.spec.ts	36	Session revocation is immediate (logout, manager revoke, deactivation) and a replayed refresh token revokes every session on the account
