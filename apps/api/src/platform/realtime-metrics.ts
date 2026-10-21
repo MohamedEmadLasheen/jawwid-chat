@@ -31,6 +31,8 @@ export const realtimeMetrics = {
   mediaRemovalFailed: 0,
   /** RT-037: media downloads refused at access time (actor not live, or not allowed to read). */
   mediaDownloadsRefused: 0,
+  /** Phase 8: sockets disconnected for exceeding their per-minute frame budget. */
+  framesOverBudget: 0,
 };
 
 export type RealtimeMetrics = typeof realtimeMetrics;

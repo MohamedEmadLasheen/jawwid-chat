@@ -105,9 +105,25 @@ Source of truth: `apps/api/src/platform/errors.ts`. Default HTTP status of a `Co
 | `COMMON.VALIDATION` | 400 | Body / query fails schema validation. `message` names the field. |
 | `COMMON.NOT_FOUND` | 404 | Unknown route or resource with no domain-specific code. |
 | `COMMON.IDEMPOTENCY_CONFLICT` | 409 | Same `Idempotency-Key`, different request body. |
-| `COMMON.RATE_LIMITED` | 429 | Includes `Retry-After`. |
+| `COMMON.RATE_LIMITED` | 429 | Includes `Retry-After`. Raised by login (§3.1) and by the authenticated-action limits (§1.1a). |
 
 Flutter already distinguishes `unauthenticated`, `accountDisabled` and `sessionRevoked` (`lib/core/network/api_client.dart#_onError`); the three `AUTH.*` codes above are what its `ErrorMapper` must map to.
+
+### 1.1a Abuse limits on authenticated actions (Phase 8, 2026-10-21)
+
+A handful of authenticated actions are rationed per ACTOR (the token's actor, never anything in the request), in a fixed window, in Redis. Over the limit the route answers **429 `COMMON.RATE_LIMITED`** with `Retry-After` (seconds until the window ends) and the body `{ error: { code: 'COMMON.RATE_LIMITED', message: 'too many attempts; try again later' } }` — the same code and header as login, so a client handles both once. The check runs after authentication and before the handler, so a refused request has no effect, and every attempt counts (a request later refused for another reason still spent budget).
+
+| Route | Budget (chat.config key) | Default per 60 s |
+|---|---|---|
+| `POST /conversations/:id/messages` | `abuse.throttle.message_send_actor` | 60 |
+| `POST /conversations/:id/messages/forward` | `abuse.throttle.message_send_actor` (shared with send) | 60 |
+| `POST /conversations/:id/messages/attachments/authorize` | `abuse.throttle.attachment_upload_actor` | 30 |
+| `POST /stories/media` | `abuse.throttle.attachment_upload_actor` (shared) | 30 |
+| `POST /stories/:id/publish` | `abuse.throttle.story_publish_actor` | 20 |
+| `POST /calls` | `abuse.throttle.call_start_actor` | 20 |
+| `POST /scheduled-calls/:id/join` | `abuse.throttle.call_start_actor` (shared) | 20 |
+
+The window is `abuse.throttle.window_seconds` (60). If the rate limit store is unreachable these routes are **served, not refused** (fail open, logged) — the opposite of login. WebSocket frames are bounded separately: a socket sending more than `abuse.realtime.frames_per_socket_per_minute` (600) frames in a minute has the excess frame dropped and is disconnected by the server (`io server disconnect`). Details: `docs/security/ABUSE-LIMITS.md`.
 
 ### 1.2 Permission keys
 
@@ -501,7 +517,7 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 - Auth: required. Permission: `messages.send`. Scope: `AuthorizationService.canSend` (membership, BR-1, C-4 admin presence, on-duty / sticky / manager, silent, `can_message`, archived).
 - Request: `{ type?: 'text'|'image'|'video'|'voice'|'file' (default text; 'system' is downgraded to text for non-system actors), body?: string, visibility?: 'customer'|'internal' (default customer), clientMessageId?: string (strongly recommended), replyToMessageId?: string, requestedMode?: 'assist'|'escalation' (only these are honoured; owner/coverage are derived), attachments?: [{ kind, objectKey, mimeType, byteSize, checksumSha256?, originalName?, durationMs?, width?, height?, thumbnailObjectKey? }] }`.
 - Response: `200 MessageDto` (`moderation` is always `'published'` since PD-14 — nothing is held for approval; `onBehalfMode` derived).
-- Errors: `COMM.EMPTY_MESSAGE` 400 · `COMM.ATTACHMENT_*` 400 · `COMM.MESSAGE_NOT_FOUND` 404 (reply target) · `COMM.REPLY_TARGET_CROSS_CONVERSATION` 403 · `COMM.CONVERSATION_ARCHIVED` 403 · every matrix code in §1.1.
+- Errors: `COMM.EMPTY_MESSAGE` 400 · `COMM.ATTACHMENT_*` 400 · `COMM.MESSAGE_NOT_FOUND` 404 (reply target) · `COMM.REPLY_TARGET_CROSS_CONVERSATION` 403 · `COMM.CONVERSATION_ARCHIVED` 403 · every matrix code in §1.1 · `COMMON.RATE_LIMITED` 429 (abuse limit, §1.1a).
 - Idempotency: **`clientMessageId`** (fast-path lookup + unique-index P2002 re-read, scoped to `(conversationId, authorId, clientMessageId)` — the unique index is asserted by the service comment; not re-verified in the migrations here). `Idempotency-Key` is redundant for this route.
 - Side effects: `seq = last_seq + 1` under `FOR UPDATE`; `lastActivityAt`; for published customer-visible messages a contact author sets `lastCustomerMessageAt` and clears `resolvedAt`, a staff author sets `lastStaffMessageAt` and becomes sticky handler for `handoff.grace_minutes` (15); receipts `sent` created for live members other than the author (internal notes: staff only); pending messages create a `message_approval` and **no receipts**.
 - Audit: `event_log` `{type:'message_sent', payload:{conversationId, messageId, type, visibility, moderation}}` (never the body); `audit_log` `{action:'message.assist'|'message.escalation', entity:'conversation', after:{messageId}, reason}` when `onBehalfMode` is assist / escalation.
@@ -543,7 +559,7 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 - Auth: required. Permission: `messages.send`. Scope today: `canRead` only (a silent member or a contact without `can_message` can mint an upload key). **Phase 1: `canSend`.**
 - Request: `{ kind: 'image'|'video'|'voice'|'file', mimeType: string, byteSize: number }`. Limits: image 10 MiB, video 100 MiB, voice 16 MiB, file 25 MiB (env-tunable); MIME allow-lists per kind.
 - Response: `{ objectKey, uploadUrl, method: 'PUT', headers: Record<string,string>, expiresAt }` (`UploadAuthorization`). Client PUTs to `uploadUrl`, then sends the message with `attachments[].objectKey`. Limits are re-validated on send.
-- Errors: `COMM.ATTACHMENT_TYPE_NOT_ALLOWED` 400 · `COMM.ATTACHMENT_TOO_LARGE` 400 · `canRead` codes.
+- Errors: `COMM.ATTACHMENT_TYPE_NOT_ALLOWED` 400 · `COMM.ATTACHMENT_TOO_LARGE` 400 · `canRead` codes · `COMMON.RATE_LIMITED` 429 (abuse limit, §1.1a).
 - Audit / Realtime: none. Download: never a permanent URL — `AttachmentDto.url` is minted per read and served by the media route below.
 
 ### GET /media/attachments/:attachmentId · GET /media/stories/:storyId (RT-037, 2026-10-14)
@@ -557,6 +573,7 @@ FamilyAssignmentDto { id: string /* audit_log.id as string */, familyId, fromSta
 **`POST /conversations/:cid/messages/forward`**
 - Body: `{ messageIds: string[], toConversationIds: string[] }`, with at most 30 messages and 10 destinations.
 - Response: `{ sent: MessageDto[] }`, ordered by destination, then by the original message order.
+- Rate limit: one attempt against the sender's message-send budget, whatever the fan-out: `COMMON.RATE_LIMITED` 429 (abuse limit, §1.1a).
 
 **Two authorizations, neither implying the other:**
 - **Source:** every message must be readable by the caller in `:cid`. It must also be allowed to leave: published, not deleted, and not a system message or a ticket's card. Otherwise the request fails with `COMM.MESSAGE_NOT_FORWARDABLE` (403).
@@ -889,7 +906,7 @@ unauthorized lifecycle rule.
 - Auth: required. Permission: `calls.start`. Scope: `canCall(intent = initiate)` = `canSend` (customer visibility) + refusal of any direct teacher/parent pair (**BR-1, PD-7**) + C-4 + **PD-2**. Participants = live, active, non-silent members (server-derived; never client-supplied). Room name minted server-side.
 - **PD-2:** a family contact may not start a `student_group` or `class_group` call. A parent's 1:1 call to their handler is unaffected.
 - Request: `{ conversationId: string }`. Response: `{ callId, roomName }`.
-- Errors: matrix codes; `COMM.BR1_TEACHER_PARENT_DIRECT` 403; `COMM.PARENT_CANNOT_START_GROUP_CALL` 403.
+- Errors: matrix codes; `COMM.BR1_TEACHER_PARENT_DIRECT` 403; `COMM.PARENT_CANNOT_START_GROUP_CALL` 403; `COMMON.RATE_LIMITED` 429 (abuse limit, §1.1a).
 - Audit: `event_log` `call_started`. Realtime: `call.incoming { callId, conversationId, type, initiatorId, initiatorName }` to the conversation room. **`roomName` was removed from this payload 2026-09-24:** the room handle comes back from `POST /calls/:id/token` with the token that makes it usable, so broadcasting it added nothing and put a media handle in a fan-out.
 
 **POST /calls/:id/token** — EXISTS
@@ -1008,7 +1025,7 @@ Declining again is refused with `COMM.CALL_ALREADY_ENDED` (was `COMM.CALL_PARTIC
 
 ### 3.8a Scheduled calls and call links (`scheduled-call.controller.ts`) — all EXISTS (PD-13)
 
-The full contract, including the DTO, the card payloads, the join window and the error codes, is in `../communication/scheduled-calls.md`. A scheduled call grants nothing. Scheduling uses `CallService.callCapability`. Reading uses `canRead`, with the same 404 for "absent" and "not yours". Joining uses `CallService.start` or `accept`. The frozen call routes above are consumed and not changed.
+The full contract, including the DTO, the card payloads, the join window and the error codes, is in `../communication/scheduled-calls.md`. A scheduled call grants nothing. Scheduling uses `CallService.callCapability`. Reading uses `canRead`, with the same 404 for "absent" and "not yours". Joining uses `CallService.start` or `accept`. The frozen call routes above are consumed and not changed. `POST /scheduled-calls/:id/join` shares the call-start budget with `POST /calls` (it starts the call when nobody is in it yet): `COMMON.RATE_LIMITED` 429 (abuse limit, §1.1a).
 
 ### 3.8b Stories (`story.controller.ts`, `story.service.ts`) — all EXISTS
 
@@ -1058,7 +1075,7 @@ either: every handler takes the authenticated actor from `@ActorId()`.
 - Auth: required. Scope: `canPublishStory`. Request `{ mimeType, byteSize }`. Reuses the attachment object-storage seam with prefix `stories/`; the signature is bound to the MIME type and byte size.
 - Accepted: `image/jpeg|png|webp|heic` ≤ 10 MB, `video/mp4|quicktime|webm` ≤ 100 MB, `audio/mp4|mpeg|aac|wav` ≤ 20 MB (voice; webm/ogg refused because iOS cannot play them).
 - Response: `UploadAuthorization { objectKey, uploadUrl, method: 'PUT', headers, expiresAt }`.
-- Errors: `COMM.ATTACHMENT_TYPE_NOT_ALLOWED` 400 · `COMM.ATTACHMENT_TOO_LARGE` 400.
+- Errors: `COMM.ATTACHMENT_TYPE_NOT_ALLOWED` 400 · `COMM.ATTACHMENT_TOO_LARGE` 400 · `COMMON.RATE_LIMITED` 429 (abuse limit, §1.1a) (shares the attachment upload budget).
 
 **POST /stories** — EXISTS
 - Auth: required. Scope: `canPublishStory`. Creates a **draft**; the audience is validated against the author's scope but not yet materialised.
@@ -1084,7 +1101,7 @@ either: every handler takes the authenticated actor from `@ActorId()`.
 - Resolves the audience **again** under the publisher's live scope and writes `chat.story_recipient` in the same transaction as the state change. **`expires_at = NULL`** (2026-10-17: stories do not expire; `story.default_lifetime_hours` is unused).
 - **Reply scope.** With `cta.kind = 'message_publisher'`, contacts are kept only when the publisher reaches their family (PD-8 `reachesFamily`; the super admin reaches all); teachers are always kept. The estimate reports how many were left out.
 - Response: `StoryAdminItem`. Audit: `audit_log` `story.published` with `recipientCount` / `familyCount`. Realtime: `story.published` to each recipient's actor room; notification `story_published` per recipient.
-- Errors: `COMM.STORY_NOT_FOUND` 404 · `COMM.STORY_ALREADY_PUBLISHED` 409 · `COMM.STORY_EXPIRED` 410 · `COMM.STORY_AUDIENCE_EMPTY` 400.
+- Errors: `COMM.STORY_NOT_FOUND` 404 · `COMM.STORY_ALREADY_PUBLISHED` 409 · `COMM.STORY_EXPIRED` 410 · `COMM.STORY_AUDIENCE_EMPTY` 400 · `COMMON.RATE_LIMITED` 429 (abuse limit, §1.1a).
 
 **POST /stories/:id/view** — EXISTS
 - Auth: required. Scope: `canReadStories` **and** a `chat.story_recipient` row for the caller — the recipient join is part of the lookup, not a check after it, so a non-recipient gets `STORY_NOT_FOUND` and learns nothing. Expiry is checked against the clock, not the state column. Idempotent (composite PK).

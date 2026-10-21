@@ -29,6 +29,9 @@ import { ConversationService } from '../conversations/conversation.service';
 import { ActorKind, ReceiptState } from '../contracts/vocab';
 import { AuthService } from '../../platform/auth/auth.service';
 import { bearerToken } from '../../platform/auth/auth.guard';
+import { configInteger } from '../../platform/auth/action-throttle.guard';
+import { AppConfigService, COMMUNICATION_CONFIG_DEFAULTS } from '../../platform/app-config.service';
+import { FrameBudget } from './frame-budget';
 import {
   RealtimeRevocationHub,
   RevocationUnconfirmedError,
@@ -277,6 +280,9 @@ export class RealtimeGateway
     // RT-032. Confirms deactivations written to the database (by any writer)
     // with this node's completion barrier. Optional for the same reason.
     @Optional() private readonly revocationConfirmer?: RevocationConfirmer,
+    // Phase 8 frame budget. Optional for the same reason; without it the
+    // compiled default limit applies, never "no limit".
+    @Optional() private readonly config?: AppConfigService,
   ) {}
 
   /**
@@ -496,6 +502,9 @@ export class RealtimeGateway
     client.accountId = authenticated.accountId;
     client.sessionId = authenticated.sessionId;
 
+    // Phase 8. Bound how fast this socket may send, before it can join anything.
+    await this.installFrameBudget(client);
+
     // Every socket joins its own actor room, so multi-device fan-out is free.
     // The room is named from the RESOLVED actor, never from anything the client
     // sent, so a forged handshake field cannot place a socket in another
@@ -510,6 +519,48 @@ export class RealtimeGateway
     await this.presence.online(authenticated.actor.actorId, client.id).catch((e: Error) =>
       this.log.warn(`presence not recorded: ${e.name}`),
     );
+  }
+
+  /**
+   * Phase 8: drop a socket that stops behaving like a client.
+   *
+   * Socket middleware rather than a check in each handler, because the thing
+   * worth bounding is FRAMES -- including frames for events nothing subscribes
+   * to, which reach no handler and would be free in a per-handler check.
+   * Installed only AFTER authentication, so an unauthenticated socket cannot
+   * spend anything: it has already been disconnected above.
+   *
+   * Over budget, the frame is REFUSED (never passed on, so no handler runs) AND
+   * the connection is ended. Refusing alone would leave a runaway client looping
+   * against a socket that keeps answering it, costing this node the parse on
+   * every iteration. A server disconnect, not a transport close: socket.io
+   * clients do not auto-reconnect from one, which is what ends the loop. The
+   * frame is dropped rather than failed with `next(error)` because a socket
+   * error with no listener is printed to stderr per frame -- the noise the
+   * budget exists to stop.
+   */
+  private async installFrameBudget(client: AuthedSocket): Promise<void> {
+    const limit = await this.frameLimit();
+    const budget = new FrameBudget(limit);
+    let refused = false;
+    client.use((_packet, next) => {
+      if (refused) return;
+      if (budget.admit()) return next();
+      refused = true;
+      realtimeMetrics.framesOverBudget++;
+      this.log.warn(`socket ${client.id} exceeded ${limit} frames/minute; disconnecting it`);
+      client.disconnect(true);
+    });
+  }
+
+  /** `abuse.realtime.frames_per_socket_per_minute`, or its default if unreadable. */
+  private async frameLimit(): Promise<number> {
+    const key = 'abuse.realtime.frames_per_socket_per_minute';
+    try {
+      return configInteger(await this.config?.get(key), 0) ?? COMMUNICATION_CONFIG_DEFAULTS[key];
+    } catch {
+      return COMMUNICATION_CONFIG_DEFAULTS[key];
+    }
   }
 
   async handleDisconnect(client: AuthedSocket): Promise<void> {

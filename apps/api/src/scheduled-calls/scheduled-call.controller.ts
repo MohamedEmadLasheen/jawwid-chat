@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, UseFilters } from '@nestjs/common';
 import { ActorId } from '../communication/api/actor.decorator';
+import { ActionScope, RateLimited } from '../platform/auth/action-throttle.guard';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { ScheduledCallService } from './scheduled-call.service';
 
@@ -33,6 +34,9 @@ export class ScheduledCallController {
 
   /** `{ callId, conversationId, mode: 'started' | 'joined' }`. */
   @Post(':id/join')
+  // Starts the call when nobody is in it yet, so it shares the call-start
+  // budget with POST /calls rather than being a second way around it.
+  @RateLimited(ActionScope.CALL_START)
   join(@ActorId() actorId: string, @Param('id') id: string) {
     return this.scheduled.join(actorId, id);
   }

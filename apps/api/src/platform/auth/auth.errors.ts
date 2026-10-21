@@ -22,11 +22,15 @@ export enum AuthErrorCode {
   /** 403. Authenticated, but lacks the permission key. */
   FORBIDDEN = 'AUTH.FORBIDDEN',
   /**
-   * 429. Too many login attempts from this identifier or this source.
+   * 429. Too many login attempts from this identifier or this source -- or,
+   * since Phase 8, too many of one rationed action (message send, upload grant,
+   * story publish, call start) by one authenticated actor (ActionThrottleGuard).
+   * One code for every rate limit, so a client handles `Retry-After` once.
    *
    * A COMMON.* code rather than an AUTH.* one because that is what
    * API-CONTRACT §2 names, and §3.1 lists it among POST /auth/login's errors.
-   * It is served through this filter because login is where it is raised.
+   * It is served through this filter, for both raisers, because this is the
+   * filter that sets the `Retry-After` header.
    */
   RATE_LIMITED = 'COMMON.RATE_LIMITED',
 }

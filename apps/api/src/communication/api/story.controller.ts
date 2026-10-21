@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
 import { StoryService, type StoryCtaInput } from '../stories/story.service';
 import type { AudienceClause } from '../stories/story-audience.resolver';
+import { ActionScope, RateLimited } from '../../platform/auth/action-throttle.guard';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
 
@@ -96,6 +97,9 @@ export class StoryController {
    * The bytes never pass through this API when storage is S3.
    */
   @Post('media')
+  // An upload grant like an attachment's, and the same budget: each one
+  // authorises a write to object storage.
+  @RateLimited(ActionScope.ATTACHMENT_UPLOAD)
   async media(
     @ActorId() actorId: string,
     @Body() body: { mimeType: string; byteSize: number },
@@ -158,6 +162,7 @@ export class StoryController {
 
   /** Resolve the audience and go live. Publisher-only, checked server-side. */
   @Post(':id/publish')
+  @RateLimited(ActionScope.STORY_PUBLISH)
   async publish(@ActorId() actorId: string, @Param('id') id: string) {
     return this.stories.publish(id, actorId);
   }
