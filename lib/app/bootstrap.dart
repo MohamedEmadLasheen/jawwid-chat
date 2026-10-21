@@ -10,6 +10,7 @@ import '../core/data/http/http_conversation_repository.dart';
 import '../core/data/http/http_group_repository.dart';
 import '../core/data/http/http_lesson_repository.dart';
 import '../core/data/http/http_message_repository.dart';
+import '../core/data/http/http_parent_signup_repository.dart';
 import '../core/data/http/http_profile_repository.dart';
 import '../core/data/http/http_story_repository.dart';
 import '../core/data/http/http_supervision_repository.dart';
@@ -110,10 +111,12 @@ List<Override> _httpOverrides() {
 
   late final ApiClient client;
 
+  // Login, refresh and the parent's sign-up go over the public transport, which has no
+  // refresh interceptor to re-enter. See AuthTransport for the recursion this forecloses.
+  final publicTransport = buildAuthTransport(config: config);
+
   final auth = HttpAuthRepository(
-    // Login and refresh go over the public transport, which has no refresh interceptor to
-    // re-enter. See AuthTransport for the recursion this forecloses.
-    transport: buildAuthTransport(config: config),
+    transport: publicTransport,
     protected: () => client,
     device: PlatformDeviceDescriptor(),
     currentAccessToken: () async => (await tokenStore.read())?.accessToken,
@@ -137,6 +140,9 @@ List<Override> _httpOverrides() {
     localeOverrideProvider.overrideWith(PersistedLocaleController.new),
     tokenStoreProvider.overrideWithValue(tokenStore),
     authRepositoryProvider.overrideWithValue(auth),
+    parentSignupRepositoryProvider.overrideWithValue(
+      HttpParentSignupRepository(transport: publicTransport),
+    ),
     conversationRepositoryProvider.overrideWithValue(
       HttpConversationRepository(
         client: client,

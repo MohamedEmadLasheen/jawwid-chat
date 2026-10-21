@@ -4158,6 +4158,108 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'{minutes, plural, =1{1 min} other{{minutes} min}}'**
   String groupChildMinutes(int minutes);
+
+  /// No description provided for @signupOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'New parent? Create your account'**
+  String get signupOpen;
+
+  /// No description provided for @signupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Create your parent account'**
+  String get signupTitle;
+
+  /// No description provided for @signupEmailIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the e-mail address you gave the academy when you subscribed.'**
+  String get signupEmailIntro;
+
+  /// No description provided for @signupEmailLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'E-mail'**
+  String get signupEmailLabel;
+
+  /// No description provided for @signupEmailInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid e-mail address.'**
+  String get signupEmailInvalid;
+
+  /// No description provided for @signupSendCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Get my code'**
+  String get signupSendCode;
+
+  /// No description provided for @signupCodeSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Your supervisor will send you a 6-digit code on WhatsApp. Enter it below with the password you want.'**
+  String get signupCodeSent;
+
+  /// No description provided for @signupCodeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'6-digit code'**
+  String get signupCodeLabel;
+
+  /// No description provided for @signupPasswordLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'New password (at least 8 characters)'**
+  String get signupPasswordLabel;
+
+  /// No description provided for @signupPasswordConfirmLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat the password'**
+  String get signupPasswordConfirmLabel;
+
+  /// No description provided for @signupPasswordTooShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Use at least 8 characters.'**
+  String get signupPasswordTooShort;
+
+  /// No description provided for @signupPasswordsDiffer.
+  ///
+  /// In en, this message translates to:
+  /// **'The passwords do not match.'**
+  String get signupPasswordsDiffer;
+
+  /// No description provided for @signupFinish.
+  ///
+  /// In en, this message translates to:
+  /// **'Create account'**
+  String get signupFinish;
+
+  /// No description provided for @signupCodeInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'That code is not valid or has expired. Ask for a new one.'**
+  String get signupCodeInvalid;
+
+  /// No description provided for @signupNewCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Send a new code'**
+  String get signupNewCode;
+
+  /// No description provided for @signupTooMany.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many attempts. Try again in a few minutes.'**
+  String get signupTooMany;
+
+  /// No description provided for @signupFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Try again.'**
+  String get signupFailed;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

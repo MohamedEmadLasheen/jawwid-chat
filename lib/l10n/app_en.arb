@@ -1236,5 +1236,22 @@
         "type": "int"
       }
     }
-  }
+  },
+  "signupOpen": "New parent? Create your account",
+  "signupTitle": "Create your parent account",
+  "signupEmailIntro": "Enter the e-mail address you gave the academy when you subscribed.",
+  "signupEmailLabel": "E-mail",
+  "signupEmailInvalid": "Enter a valid e-mail address.",
+  "signupSendCode": "Get my code",
+  "signupCodeSent": "Your supervisor will send you a 6-digit code on WhatsApp. Enter it below with the password you want.",
+  "signupCodeLabel": "6-digit code",
+  "signupPasswordLabel": "New password (at least 8 characters)",
+  "signupPasswordConfirmLabel": "Repeat the password",
+  "signupPasswordTooShort": "Use at least 8 characters.",
+  "signupPasswordsDiffer": "The passwords do not match.",
+  "signupFinish": "Create account",
+  "signupCodeInvalid": "That code is not valid or has expired. Ask for a new one.",
+  "signupNewCode": "Send a new code",
+  "signupTooMany": "Too many attempts. Try again in a few minutes.",
+  "signupFailed": "Something went wrong. Try again."
 }

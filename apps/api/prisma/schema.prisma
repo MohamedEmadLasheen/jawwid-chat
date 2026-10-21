@@ -1264,6 +1264,9 @@ model LearnerEnrollment {
   courseId       String?   @map("course_id") @db.Uuid
   course         Course?   @relation(fields: [courseId], references: [id])
   packageLessons Int?      @map("package_lessons")
+  /// PD-16: the age Sales recorded, and the day it was true (until a date of birth is entered).
+  statedAge      Int?      @map("stated_age") @db.SmallInt
+  statedAgeOn    DateTime? @map("stated_age_on") @db.Date
   updatedBy      String    @map("updated_by") @db.Uuid
   updatedAt      DateTime  @default(now()) @map("updated_at") @db.Timestamptz
 
@@ -1759,5 +1762,42 @@ model LearnerProfile {
   updatedAt      DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
   @@map("learner_profile")
+  @@schema("chat")
+}
+
+/// PD-16: a subscription form the Operations manager assigned, and the family,
+/// parent, account and children Chat created from it (20261021140000).
+model StudentEnrolment {
+  lessonId            String    @id @map("lesson_id") @db.Uuid
+  organizationId      String    @map("organization_id") @db.Uuid
+  familyId            String    @unique @map("family_id") @db.Uuid
+  contactId           String    @map("contact_id") @db.Uuid
+  accountId           String    @map("account_id") @db.Uuid
+  learnerIds          String[]  @map("learner_ids") @db.Uuid
+  assignedBy          String    @map("assigned_by") @db.Uuid
+  assignedAt          DateTime  @default(now()) @map("assigned_at") @db.Timestamptz
+  groupConversationId String?   @map("group_conversation_id") @db.Uuid
+  groupCreatedBy      String?   @map("group_created_by") @db.Uuid
+  groupCreatedAt      DateTime? @map("group_created_at") @db.Timestamptz
+
+  @@map("student_enrolment")
+  @@schema("chat")
+}
+
+/// PD-16: a parent's one-time sign-up code. Short-lived, five tries at most.
+model ParentSignupCode {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  accountId      String    @map("account_id") @db.Uuid
+  codeHash       String    @map("code_hash")
+  relayCode      String?   @map("relay_code")
+  delivery       String    @default("relay")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz
+  attempts       Int       @default(0)
+  usedAt         DateTime? @map("used_at") @db.Timestamptz
+  supersededAt   DateTime? @map("superseded_at") @db.Timestamptz
+
+  @@map("parent_signup_code")
   @@schema("chat")
 }

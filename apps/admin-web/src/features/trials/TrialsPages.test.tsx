@@ -505,3 +505,59 @@ describe('New students', () => {
     }]))
   })
 })
+
+describe('New students: assign, group and the parent\'s sign-up (PD-16)', () => {
+  const BASE: NewStudentDto = {
+    trialId: 'tr-new',
+    prospectName: 'Prospect Delta',
+    trialTeacher: { id: 't-1', name: 'Teacher One' },
+    trialAt: '2026-10-10T15:00:00Z',
+    recordedAt: '2026-10-11T10:00:00Z',
+    recordedBy: { id: 's-1', name: 'Sales One' },
+    updatedAt: null,
+    parent: { name: 'Parent Delta', email: 'delta@example.test', phone: '+99 000 444' },
+    children: [{ name: 'Child D1', age: 9, course: 'Course A', teacher: { id: 't-1', name: 'Teacher One' }, packagePrice: 1000, lessonPrice: 125, schedule: [{ weekday: 2, time: '16:00' }] }],
+    payment: { currency: 'EGP', method: 'invoice' },
+    enrolment: null,
+  }
+
+  it('the Operations manager assigns a supervisor with the parent\'s sign-in e-mail', async () => {
+    access({ operations: true })
+    on('GET', /\/trials\/new-students$/, () => json({ students: [BASE], canAssign: true }))
+    on('GET', /\/org\/structure$/, () => json({ departments: [{ id: 'd-ops', kind: 'operations', displayName: 'Operations', manager: null, backups: [],
+      members: [{ id: 'sup-1', name: 'Supervisor One', role: 'admin', isActive: true, position: 'supervisor', learnerCount: 4 }] }] }))
+    on('POST', /\/trials\/new-students\/tr-new\/assign$/, () => json({ familyId: 'f-1', learnerIds: ['k-1'], schedules: [{ learnerId: 'k-1', set: true, reason: null }] }))
+    renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
+    const card = (await screen.findByRole('heading', { name: 'Parent Delta' })).closest('article')!
+    await userEvent.click(within(card).getByRole('button', { name: 'Assign' }))
+    const dialog = await screen.findByRole('dialog', { name: /Assign a supervisor/ })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Assign' }))
+    expect(sent('POST', /assign$/)).toEqual([])
+    await userEvent.selectOptions(await within(dialog).findByLabelText('Supervisor'), 'sup-1')
+    expect(within(dialog).getByLabelText(/sign-in e-mail/)).toHaveValue('delta@example.test')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Assign' }))
+    await waitFor(() => expect(sent('POST', /\/trials\/new-students\/tr-new\/assign$/)).toEqual([{ supervisorId: 'sup-1', email: 'delta@example.test' }]))
+  })
+
+  it('the supervisor sees the parent\'s code to relay, and creates the group; Sales can no longer edit the form', async () => {
+    access({ operations: true, sales: true })
+    const assigned: NewStudentDto = {
+      ...BASE,
+      enrolment: {
+        familyId: 'f-1', learnerIds: ['k-1'], supervisor: { id: 'sup-1', name: 'Supervisor One' }, assignedAt: '2026-10-21T08:00:00Z',
+        groupConversationId: null, canCreateGroup: true, parentSignup: { state: 'code_waiting', code: '482913', expiresAt: '2026-10-21T08:10:00Z' },
+      },
+    }
+    on('GET', /\/trials\/new-students$/, () => json({ students: [assigned], canAssign: false }))
+    on('POST', /\/trials\/new-students\/tr-new\/group$/, () => json({ conversationId: 'c-new' }))
+    renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
+    const card = (await screen.findByRole('heading', { name: 'Parent Delta' })).closest('article')!
+    expect(within(card).getByText('Supervisor One')).toBeInTheDocument()
+    expect(within(card).getByText('482913')).toBeInTheDocument()
+    expect(within(card).queryByRole('button', { name: 'Assign' })).not.toBeInTheDocument()
+    expect(within(card).queryByRole('button', { name: 'Edit subscription' })).not.toBeInTheDocument()
+    await userEvent.click(within(card).getByRole('button', { name: 'Create group' }))
+    await waitFor(() => expect(sent('POST', /\/trials\/new-students\/tr-new\/group$/)).toHaveLength(1))
+  })
+})
+
