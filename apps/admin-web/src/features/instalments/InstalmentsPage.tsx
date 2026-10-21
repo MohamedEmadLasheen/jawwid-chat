@@ -9,16 +9,18 @@ import type { Instalment, InstalmentStatus, Responsible } from './api'
 import { I, STATUS_LABEL, describeError, formatDay, formatMoney, useCopy } from './copy'
 import { useInstalments } from './hooks'
 import { BillingSupervisorDialog } from './BillingSupervisorDialog'
+import { parentPath } from '@/features/profiles/api'
 import './instalments.css'
 
 const STATUS_TONE: Record<InstalmentStatus, Tone> = { overdue: 'danger', due: 'warn', upcoming: 'info', paid: 'ok' }
 
 /**
  * PD-12 S3: Instalment Payments. One list, in the server's order (overdue
- * oldest first, due today, upcoming soonest), of Jawwid Core's invoices for
- * the families this viewer may see. A row opens the family's conversation;
- * the Operations Manager (and the super admin) set a family's billing
- * supervisor from it. Nothing here changes an invoice.
+ * oldest first, due today, upcoming soonest), of the instalments recorded in
+ * Chat (PD-17) for the families this viewer may see. A row opens the payer's
+ * Parent Profile -- where payments are recorded -- and the family's
+ * conversation; the Operations Manager (and the super admin) set a family's
+ * billing supervisor from it.
  */
 export function InstalmentsPage({ eyebrow }: { eyebrow?: string }) {
   const tx = useCopy()
@@ -53,9 +55,7 @@ export function InstalmentsPage({ eyebrow }: { eyebrow?: string }) {
           <EmptyState icon="alert" title={describeError(list.error, locale)} />
         ) : (
           <QueryBoundary isLoading={list.isLoading} error={null} onRetry={() => void list.refetch()}>
-            {data?.source === 'not_connected' ? (
-              <EmptyState icon="info" title={tx(I.notConnectedTitle)} hint={tx(I.notConnected)} />
-            ) : (
+            {
               <>
                 {data && (
                   <p className="in-summary" role="status">
@@ -94,7 +94,7 @@ export function InstalmentsPage({ eyebrow }: { eyebrow?: string }) {
                   </div>
                 )}
               </>
-            )}
+            }
           </QueryBoundary>
         )}
         {assigning && (
@@ -120,12 +120,18 @@ function InstalmentRow({ row, canAssign, onAssign }: { row: Instalment; canAssig
         : row.status === 'paid' && row.paidAt
           ? tx(I.paidOn, { date: date(row.paidAt) })
           : null
-  const forWhom = row.child === null ? tx(I.family) : row.child.known ? row.child.name : tx(I.unknownChild)
+  const forWhom = row.child === null ? tx(I.family) : row.child.name ?? ''
   return (
     <tr>
       <td>
         <div className="in-cell">
-          <strong dir="auto">{row.account.name}</strong>
+          {row.account.id ? (
+            <Link to={parentPath(row.account.id)} aria-label={tx(I.openProfile, { name: row.account.name })}>
+              <strong dir="auto">{row.account.name}</strong>
+            </Link>
+          ) : (
+            <strong dir="auto">{row.account.name}</strong>
+          )}
           {row.account.name !== row.family.name && (
             <span className="in-muted" dir="auto">
               {row.family.name}

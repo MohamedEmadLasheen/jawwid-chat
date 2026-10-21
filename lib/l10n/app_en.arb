@@ -1253,5 +1253,98 @@
   "signupCodeInvalid": "That code is not valid or has expired. Ask for a new one.",
   "signupNewCode": "Send a new code",
   "signupTooMany": "Too many attempts. Try again in a few minutes.",
-  "signupFailed": "Something went wrong. Try again."
+  "signupFailed": "Something went wrong. Try again.",
+  "studentProfileTitle": "Student profile",
+  "studentProfileView": "View profile",
+  "studentProfileTeacher": "Assigned teacher",
+  "studentProfileSchedule": "Class schedule",
+  "studentProfileTimeZone": "Times in {zone}",
+  "@studentProfileTimeZone": {
+    "description": "Under a student's weekly lesson times: the time zone they are written in (an IANA name such as Africa/Cairo).",
+    "placeholders": {
+      "zone": {
+        "type": "String"
+      }
+    }
+  },
+  "studentProfileNotYoursTitle": "You can't open this student's profile",
+  "studentProfileNotYoursBody": "Only the student's own teacher can see it.",
+  "myPaymentsTitle": "Payments",
+  "myPaymentsSettingsSubtitle": "Your instalments and what has been paid",
+  "billingPlanLabel": "Plan",
+  "billingPlanMonths": "{months, plural, =1{1-month plan} other{{months}-month plan}}",
+  "@billingPlanMonths": {
+    "description": "The family's subscription plan, by its length in months.",
+    "placeholders": {
+      "months": {
+        "type": "int"
+      }
+    }
+  },
+  "billingNoPlan": "No plan",
+  "billingMethodLabel": "Payment method",
+  "billingMethodInvoice": "Invoice",
+  "billingMethodBankTransfer": "Bank transfer",
+  "billingNotSet": "Not set",
+  "billingPaidTotal": "Paid",
+  "billingOutstandingTotal": "Outstanding",
+  "billingOverdueTotal": "of which overdue",
+  "billingInstalmentsTitle": "Instalments",
+  "billingStatusOverdue": "Overdue",
+  "billingStatusDue": "Due today",
+  "billingStatusUpcoming": "Upcoming",
+  "billingStatusPaid": "Paid",
+  "billingFamily": "Family",
+  "billingDueOn": "Due {date}",
+  "@billingDueOn": {
+    "description": "An instalment's due date, already formatted for the reader.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "billingPaidOn": "Paid {date} · {method}",
+  "@billingPaidOn": {
+    "description": "A paid instalment: the day it was paid and how.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "method": {
+        "type": "String"
+      }
+    }
+  },
+  "billingPaidOnNoMethod": "Paid {date}",
+  "@billingPaidOnNoMethod": {
+    "description": "A paid instalment whose payment method is not known.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "billingDaysLate": "{days, plural, =1{1 day late} other{{days} days late}}",
+  "@billingDaysLate": {
+    "description": "How many days an overdue instalment is late.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "billingDaysUntil": "{days, plural, =1{in 1 day} other{in {days} days}}",
+  "@billingDaysUntil": {
+    "description": "How many days until an upcoming instalment is due.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "billingEmptyTitle": "No payments yet",
+  "billingEmptyBody": "Your instalments will appear here.",
+  "billingDeniedTitle": "Payments are managed by the parent responsible for billing",
+  "billingDeniedBody": "If you have a question, ask the academy."
 }

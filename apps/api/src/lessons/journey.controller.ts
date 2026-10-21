@@ -53,6 +53,12 @@ export class JourneyController {
     return this.enrollment.groupLearners(actorId, id);
   }
 
+  /** PD-17: the Student Profile -- the administration and the child's own teacher. */
+  @Get('learners/:id/profile')
+  studentProfile(@ActorId() actorId: string, @Param('id') id: string) {
+    return this.enrollment.profile(actorId, id);
+  }
+
   @Post('learners/:id/enrollment')
   setEnrollment(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.enrollment.setEnrollment(actorId, id, body ?? {});

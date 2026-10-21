@@ -962,5 +962,98 @@
   "signupCodeInvalid": "هذا الرمز غير صالح أو انتهت صلاحيته. اطلب رمزًا جديدًا.",
   "signupNewCode": "أرسل رمزًا جديدًا",
   "signupTooMany": "محاولات كثيرة. حاول مرة أخرى بعد دقائق.",
-  "signupFailed": "حدث خطأ. حاول مرة أخرى."
+  "signupFailed": "حدث خطأ. حاول مرة أخرى.",
+  "studentProfileTitle": "ملف الطالب",
+  "studentProfileView": "عرض الملف",
+  "studentProfileTeacher": "المعلّم المسؤول",
+  "studentProfileSchedule": "مواعيد الحصص",
+  "studentProfileTimeZone": "المواعيد بتوقيت {zone}",
+  "@studentProfileTimeZone": {
+    "description": "Under a student's weekly lesson times: the time zone they are written in (an IANA name such as Africa/Cairo).",
+    "placeholders": {
+      "zone": {
+        "type": "String"
+      }
+    }
+  },
+  "studentProfileNotYoursTitle": "لا يمكنك فتح ملف هذا الطالب",
+  "studentProfileNotYoursBody": "يراه معلّم الطالب فقط.",
+  "myPaymentsTitle": "المدفوعات",
+  "myPaymentsSettingsSubtitle": "أقساطك وما تم دفعه",
+  "billingPlanLabel": "الخطة",
+  "billingPlanMonths": "{months, plural, =1{خطة شهر واحد} =2{خطة شهرين} few{خطة {months} أشهر} many{خطة {months} شهرًا} other{خطة {months} شهر}}",
+  "@billingPlanMonths": {
+    "description": "The family's subscription plan, by its length in months.",
+    "placeholders": {
+      "months": {
+        "type": "int"
+      }
+    }
+  },
+  "billingNoPlan": "لا توجد خطة",
+  "billingMethodLabel": "طريقة الدفع",
+  "billingMethodInvoice": "فاتورة",
+  "billingMethodBankTransfer": "تحويل بنكي",
+  "billingNotSet": "غير محدد",
+  "billingPaidTotal": "المدفوع",
+  "billingOutstandingTotal": "المتبقي",
+  "billingOverdueTotal": "منه متأخر",
+  "billingInstalmentsTitle": "الأقساط",
+  "billingStatusOverdue": "متأخر",
+  "billingStatusDue": "مستحق اليوم",
+  "billingStatusUpcoming": "قادم",
+  "billingStatusPaid": "مدفوع",
+  "billingFamily": "العائلة",
+  "billingDueOn": "يستحق في {date}",
+  "@billingDueOn": {
+    "description": "An instalment's due date, already formatted for the reader.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "billingPaidOn": "دُفع في {date} · {method}",
+  "@billingPaidOn": {
+    "description": "A paid instalment: the day it was paid and how.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "method": {
+        "type": "String"
+      }
+    }
+  },
+  "billingPaidOnNoMethod": "دُفع في {date}",
+  "@billingPaidOnNoMethod": {
+    "description": "A paid instalment whose payment method is not known.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "billingDaysLate": "{days, plural, =1{متأخر يومًا واحدًا} =2{متأخر يومين} few{متأخر {days} أيام} many{متأخر {days} يومًا} other{متأخر {days} يوم}}",
+  "@billingDaysLate": {
+    "description": "How many days an overdue instalment is late.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "billingDaysUntil": "{days, plural, =1{بعد يوم واحد} =2{بعد يومين} few{بعد {days} أيام} many{بعد {days} يومًا} other{بعد {days} يوم}}",
+  "@billingDaysUntil": {
+    "description": "How many days until an upcoming instalment is due.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "billingEmptyTitle": "لا توجد مدفوعات بعد",
+  "billingEmptyBody": "ستظهر أقساطك هنا.",
+  "billingDeniedTitle": "يتابع المدفوعات وليّ الأمر المسؤول عن الدفع",
+  "billingDeniedBody": "إن كان لديك سؤال، تواصل مع الأكاديمية."
 }

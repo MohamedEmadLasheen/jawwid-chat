@@ -66,7 +66,8 @@ export type LessonAct =
   | 'correct_outcome'
   | 'edit_report'
   | 'delete_report'
-  | 'manage_enrollment';
+  | 'manage_enrollment'
+  | 'read_profile';
 
 /**
  * Who may record what (PD-11's table, extended by PD-15). The report is the
@@ -106,6 +107,10 @@ const LESSON_ACTS: Readonly<Record<LessonAct, readonly LessonStanding[]>> = {
   // pause or a stop may also be recorded by the child's own (Operations) supervisor.
   transfer: ['manager'],
   suspend: ['manager', 'supervisor'],
+  // PD-17: the Student Profile -- the administration (the Teachers department,
+  // the super admin, the child's supervisor) and the child's own teacher. Not
+  // the family: parents see their children on their own profile.
+  read_profile: ['manager', 'supervisor', 'teacher'],
 };
 
 export interface SendIntent {

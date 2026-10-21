@@ -47,6 +47,18 @@ const ALLOWED: ReadonlyArray<string> = [
   // src/new-students names the table, its model or this field.
   'phone            text not null constraint trial_subscription_phone_is_confined check',
   'confinedParentPhone String    @map("phone")',
+  // PD-17 (owner decision 2026-10-21): the Parent Profile shows the parent's
+  // phone to the administration only. Same structure again: no request-role
+  // grant on chat.parent_file, and parent-file-confinement.spec.ts fails the
+  // build if any source outside src/parent-profile names the table, its model
+  // or these fields. The audit trail names changed fields, never their values.
+  'phone text constraint parent_file_phone_is_admin_only check',
+  'adminOnlyParentPhone String?  @map("phone")',
+  // ...and its one-time backfill, which copies the phone Sales typed for a
+  // family already enrolled (PD-16) from one confined table to the other.
+  // Nothing outside the two confined tables is read or written.
+  'insert into chat.parent_file (contact_id, organization_id, phone, email)',
+  'select e.contact_id, e.organization_id, btrim(t.phone), lower(btrim(t.email))',
 ];
 
 /** Strip comments so prose about phone privacy is not mistaken for a column. */

@@ -48,7 +48,7 @@ communication safe and answerable, never as a general workflow system.
 | **Audit** — append-only event log and audit log, reasons mandatory for sensitive actions | MVP | `chat.event_log`, `chat.audit_log` |
 | **Access control** — one server-side `AuthorizationService`, BR-1 enforced in the API and in the database | MVP | `apps/api/src/platform/authorization.service.ts`, `093000`/`093300`/`094000` |
 | **Supervisor ownership** — every family has exactly one current supervisor; reassignment by a manager with a reason; history | MVP | `SUPERVISOR-OWNERSHIP.md` |
-| **CRM integration boundary** — Jawwid Core is the source of truth for teachers and payments, for students, parents and enrolments other than those Chat enrolled from a subscription form (**PD-16**), and for lessons and schedules of teachers not yet cut over to Chat (**PD-9**); Chat mirrors what it needs through an API/webhook boundary, never SQL | MVP boundary; ingestion to be re-implemented on the canonical schema | `chat.core_event`, `chat.sync_state`, `core-integration-contract.md` (reference) |
+| **CRM integration boundary** — Jawwid Core is the source of truth for teachers (and payroll), for students, parents and enrolments other than those Chat enrolled from a subscription form (**PD-16**), and for lessons and schedules of teachers not yet cut over to Chat (**PD-9**); Chat mirrors what it needs through an API/webhook boundary, never SQL. **Family payments and instalment plans are Chat's own records since PD-17**; nothing about them is read from Core | MVP boundary; ingestion to be re-implemented on the canonical schema | `chat.core_event`, `chat.sync_state`, `core-integration-contract.md` (reference) |
 
 ### 1.2 Jawwid Chat IS NOT
 
@@ -120,7 +120,7 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-16 — CLOSED
+## 4. Product decisions PD-1 to PD-18 — CLOSED
 
 PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
 exit gate, before `main` was baselined. **PD-6 was closed by the product owner
@@ -135,8 +135,8 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-14 was closed by the product owner on 2026-10-20** (no pre-approval of messages).
 **PD-15 was closed by the product owner on 2026-10-21** (the student's journey after enrolment).
 **PD-16 was closed by the product owner on 2026-10-21** (Chat enrols new students and parents sign up).
+**PD-17 was closed by the product owner on 2026-10-21** (Parent and Student Profiles; payments recorded in Chat). It supersedes PD-10 §1 and PD-12's "Core invoices, read-only" for family money.
 **PD-18 was closed by the product owner on 2026-10-21** (teacher payroll lives in Chat) and supersedes PD-10 item 4.
-PD-17 is numbered by work in flight on another branch (the parent and student profiles).
 
 | ID | Subject | Status |
 |---|---|---|
@@ -156,6 +156,7 @@ PD-17 is numbered by work in flight on another branch (the parent and student pr
 | **PD-14** | **Messages publish immediately; admins moderate after sending** (2026-10-20) | **CLOSED** — no message is held for approval, for any role or conversation type; whoever is in charge of a conversation may edit or delete a teacher's or parent's message at any time afterwards; a manager or the super admin also a staff member's |
 | **PD-15** | **The student's journey after enrolment** (2026-10-21) | **CLOSED** — supervisors record student and teacher excuses from the group; one quick "Lesson report" entry; make-ups after any apology; outcomes corrected and reports edited / deleted / resent only through recorded changes; each child's age, course and package; monthly statistics in the academy's terms |
 | **PD-16** | **Enrolling a new student in Chat; the parent's own sign-up** (2026-10-21) | **CLOSED** — Assign on New Students creates the family, parent and children in Chat from Sales' form; an assigned entry is the supervisor's (and their manager's); the supervisor opens the family group; the parent signs up with their e-mail and a one-time code relayed by the supervisor until WhatsApp sending is connected |
+| **PD-17** | **Parent Profile and Student Profile; family payments recorded in Chat** (2026-10-21) | **CLOSED** — a Parent Profile (contact details, internal note, children, subscription, payment method, payment timeline) for the administration only, by the Instalment Payments rule plus Sales; Operations and Sales record payments; the parent sees their own payments in the app; a Student Profile for the administration and the child's own teacher; instalments and payments are Chat's own append-only records, nothing is read from Core; teachers reach neither a parent nor money by any route |
 | **PD-18** | **Teacher payroll in Chat** (2026-10-21) | **CLOSED** — salary terms, a sealed payout account and the amounts of bonuses and deductions are recorded in Chat, for the super admin only; the month's financial summary is computed, never stored; supersedes PD-10 item 4 |
 
 ---
@@ -620,7 +621,7 @@ workload.
 
 **Final decision.**
 
-1. **Billing (parent).** Core stays the source of truth for invoices. The
+1. **Billing (parent).** *(Superseded by PD-17, 2026-10-21: family payments and instalment plans are Chat's own records; nothing is read from Core.)* Core stays the source of truth for invoices. The
    parent's *Settings › Billing* shows them **read-only**, fetched from a Core
    API at request time and **not stored** in Chat (the frozen `chat.subscription`
    mirror is not revived). One list with a derived status: **Upcoming**,
@@ -1660,6 +1661,108 @@ PD-16):
    Twilio Verify): business account, number and an approved authentication
    template. Delivery then switches from `relay` with no change to the flow.
 2. A parent who forgets their password has no self-service reset yet.
+
+**Closed.** 2026-10-21.
+
+---
+
+### PD-17 · Parent Profile and Student Profile; family payments recorded in Chat
+
+**Closed 2026-10-21** by the product owner.
+
+The owner's requirements of 2026-10-21: a **Parent Profile** visible to admins
+only -- full name, phone, e-mail, number of children, a photo that can be
+uploaded or changed, an editable name, a short description, country, emirate
+or governorate; and, for admins only, a payment timeline, the current
+subscription and the payment method (invoice or bank transfer). A **Student
+Profile** visible to admins and the student's assigned teacher only -- photo,
+name, age, class schedule, assigned teacher, enrolled course. Enforced in the
+frontend AND the backend, so a teacher reaches no parent profile and no
+payment information even by a direct API request. Owner answers given the
+same day: "admins" are **the Instalment Payments rule**; **payments and
+instalment plans are implemented in Jawwid Chat**, because nothing may be
+retrieved or reused from Jawwid Core; the current subscription is **one
+family plan**; the short description is **an internal note** the parent never
+sees. Later the same day: **parents see their own payments in the app**, and
+**the Operations and Sales teams record payments**.
+
+**Final decision.**
+
+```
+who opens a Parent Profile    = who reads a family's money (billingAccessOf):
+  (and its money)               the super admin and the Operations Manager every
+                                family; an Operations supervisor / coverage the
+                                families they reach (PD-8); the Sales department
+                                every family. Nobody else -- never a teacher, the
+                                Teachers department, or a parent.
+who records money             = the same people: Operations (in scope), Sales,
+                                the super admin.
+who edits the contact record  = Operations (in scope) and the super admin; Sales
+                                reads it only.
+a parent's own payments       = GET /me/billing, the app's Settings > Payments: the
+                                family contact holding the billing permission
+                                (can_manage_billing). Plan, method, every
+                                instalment that stands; never a voided row, a
+                                reason, who recorded it, or the internal note.
+who opens a Student Profile   = LESSON_ACTS.read_profile: the Teachers department,
+                                the super admin, the child's supervisor (+ backup,
+                                manager), and the child's OWN teacher. Not the
+                                family (their children are on their own profile).
+
+parent file      = chat.parent_file: phone, e-mail, emirate/governorate, internal
+                   note. Admin-only and confined like the Teacher File (G-07).
+                   Filled from Sales' form at Assign (PD-16), then edited by admins.
+name, photo      = chat.contact.name / avatar_object_key -- the ones every chat shows
+country, plan    = chat.family.country_code / subscription_plan_months (1/3/6/12),
+                   the columns Stories targeting already reads
+payment method   = chat.family_billing: invoice | bank_transfer (+ currency)
+instalment       = chat.family_instalment: label, amount (minor units), currency,
+                   due date, optional child, optional plan id. Paid ONCE (day,
+                   method, reference). Voided, finally, with a reason. Never
+                   edited, never deleted -- the database refuses it.
+payment timeline = the family's instalments in date order, voided ones included
+```
+
+* **A teacher's view.** The Student Profile of their own students: photo,
+  name, age, weekly lesson days and times, teacher, course. Never a date of
+  birth, a parent, a package or an amount. Another teacher's student is the same
+  404 as an id that does not exist. The app has no Parent Profile, and calls no
+  `/parent-profiles`, `/families/*/billing` or `/instalments` route.
+* **Photos on a profile** are served under a `profile` context that re-applies
+  the profile's own rule on every request (AvatarService.registerProfileReader).
+  An administrator may change a parent's photo; the bytes are judged exactly as
+  when the parent sets it, and the audit row says an administrator did.
+* **Audit.** A parent-file edit records which fields changed, never the phone
+  or e-mail; money writes record the amount, currency and dates.
+
+**Implementation phase.** Built 2026-10-21 in one change: migration
+`20261021150000_chat_pd017_parent_student_profiles.sql` (after PD-16's
+`20261021140000`), `src/parent-profile`, `BillingService` on Chat's own rows,
+`EnrollmentService.profile`, Admin Web `features/profiles` (Parents, Parent
+Profile, Student Profile), the app's teacher-only Student Profile. Workflow and
+routes: `../admin/pd017-parent-student-profiles.md`.
+
+**Consequences.**
+- PD-10 §1 ("Core stays the source of truth for invoices ... not stored in
+  Chat") and PD-12 S3's Core invoice read are superseded for family money:
+  `CoreInvoiceSource` is removed and Instalment Payments lists Chat's rows. The
+  frozen `chat.subscription` mirror stays frozen; it is not revived.
+- Teacher payroll is unchanged: still Core's, read-only (PD-10 §4).
+- G-07 has a third deliberate exception, `chat.parent_file.phone`, with its own
+  confinement test.
+
+**Deprecated behaviour.** Instalment Payments no longer says "Jawwid Core is
+not connected"; `COMM.BILLING_CORE_UNAVAILABLE` is gone.
+
+**Defaults adopted at closing** (the owner may override without reopening PD-17):
+1. Sales reads and records money for every family, as Sales takes the
+   payment at subscription time; it does not set billing supervisors.
+2. A plan is up to 24 instalments, 1 to 12 months apart; a 31st falls on the
+   month's last day.
+3. A payment is recorded on or before today, never ahead of time.
+4. The parent never sees the internal note. Their Payments screen shows only
+   what stands (voided instalments are staff history), and only to the contact
+   with the family's billing permission.
 
 **Closed.** 2026-10-21.
 

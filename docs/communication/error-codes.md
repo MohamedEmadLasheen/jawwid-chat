@@ -142,9 +142,11 @@ Source of truth: `apps/api/src/platform/errors.ts`.
 | `COMM.DISCIPLINE_DENIED` | 403 | Discipline is read, recorded and decided only by the Teachers department and the super admin. Never retry. |
 | `COMM.DISCIPLINE_STATE` | 409 | Not allowed now: already decided, below the late threshold, the lesson was not held, the suspension starts in the past, or the teacher still has students (permanent suspension). |
 | `COMM.DISCIPLINE_LESSONS_COLLIDE` | 409 | Open lessons fall inside the suspension. Decide again with `cancelCollidingLessons: true` to cancel them (each family is told in its group). |
-| `COMM.BILLING_DENIED` | 403 | Instalments are read only by Operations supervisors (their families), the Operations Manager and the super admin; a billing supervisor is set only by the latter two. Never retry. |
+| `COMM.BILLING_DENIED` | 403 | A family's money (PD-17: read and recorded) is only for Operations supervisors (their families), the Operations Manager, the Sales department and the super admin, and a parent's own (`/me/billing`) only for the family's billing parent; a billing supervisor is set only by the Operations Manager and the super admin. Never retry. |
 | `COMM.BILLING_NOT_FOUND` | 404 | No such family in the caller's organization, or one this caller does not reach. |
-| `COMM.BILLING_CORE_UNAVAILABLE` | 502 | Jawwid Core's invoice API did not answer or answered something unusable. Retry later; never show it as "nothing due". |
+| `COMM.BILLING_STATE` | 409 | PD-17: the instalment is already paid or voided. Reload the family's timeline; never retry blindly. |
+| `COMM.PARENT_PROFILE_DENIED` | 403 | PD-17: Parent Profiles are the administration's (Operations in scope, the Operations Manager, Sales, the super admin) — never a teacher or a parent — and their contact record is edited by Operations and the super admin only (Sales gets this on an edit). Answered before any parent is looked up. Never retry. |
+| `COMM.PARENT_PROFILE_NOT_FOUND` | 404 | PD-17: no such parent in the caller's organization, or one this caller does not reach. Indistinguishable on purpose. |
 | `COMM.SCHEDULED_CALL_NOT_FOUND` | 404 | PD-13: no such scheduled call or call link, or one in a conversation the caller cannot read. Indistinguishable on purpose. |
 | `COMM.SCHEDULED_CALL_DENIED` | 403 | PD-13: only the person who scheduled a call cancels it. (Scheduling itself answers with the call-capability refusal, e.g. `COMM.PARENT_CANNOT_START_GROUP_CALL`.) Never retry. |
 | `COMM.SCHEDULED_CALL_NOT_JOINABLE` | 409 | PD-13: cancelled, not open yet (more than 10 minutes before its start), or over (2 hours after it). Show the state; do not retry automatically. |

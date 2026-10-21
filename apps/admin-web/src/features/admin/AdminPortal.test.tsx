@@ -105,11 +105,11 @@ afterEach(() => {
 })
 
 describe('Admin Portal registry and navigation', () => {
-  it('registers exactly the nineteen planned sections, each in a group', () => {
+  it('registers exactly the twenty planned sections, each in a group', () => {
     expect(ADMIN_SECTIONS.map((s) => s.key).sort()).toEqual(
       [
         'academy', 'approvals', 'audit', 'calls', 'conversations', 'dashboard', 'forms', 'instalments', 'integrations',
-        'notifications', 'quality', 'reports', 'settings', 'stories', 'tasks', 'teachers', 'teams', 'users', 'whatsapp',
+        'notifications', 'parents', 'quality', 'reports', 'settings', 'stories', 'tasks', 'teachers', 'teams', 'users', 'whatsapp',
       ].sort(),
     )
     // Every one has both languages, a purpose and a stated backend status.
@@ -119,16 +119,17 @@ describe('Admin Portal registry and navigation', () => {
         expect(b.ar.length).toBeGreaterThan(0)
       }
     }
-    expect(ADMIN_GROUPS.flatMap((g) => sectionsInGroup(g.key))).toHaveLength(19)
+    expect(ADMIN_GROUPS.flatMap((g) => sectionsInGroup(g.key))).toHaveLength(20)
     // Only the sections with a real endpoint claim to be built: five read-only
     // views -- Reports is the PD-11 teacher statistics (2026-10-19), Instalments
-    // reads Jawwid Core's invoices (PD-12 S3) -- and four
+    // lists the instalments recorded in Chat (PD-12 S3, PD-17) -- and those
     // whose controls act: Organization (PD-8), Stories (2026-10-17: the
-    // super admin publishes) and Calls (PD-13: start, schedule, join).
+    // super admin publishes), Calls (PD-13: start, schedule, join) and
+    // Parents (PD-17: contact information and payments).
     expect(ADMIN_SECTIONS.filter((s) => s.status === 'read_only').map((s) => s.key).sort()).toEqual(
       ['conversations', 'dashboard', 'instalments', 'reports', 'users'],
     )
-    expect(ADMIN_SECTIONS.filter((s) => s.status === 'managed').map((s) => s.key).sort()).toEqual(['calls', 'stories', 'teachers', 'teams'])
+    expect(ADMIN_SECTIONS.filter((s) => s.status === 'managed').map((s) => s.key).sort()).toEqual(['calls', 'parents', 'stories', 'teachers', 'teams'])
   })
 
   it('every section is reachable from the navigation, and the unbuilt ones are marked', async () => {
@@ -136,10 +137,10 @@ describe('Admin Portal registry and navigation', () => {
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/teams' })
     const nav = await screen.findByRole('navigation')
 
-    // Five destinations hold all nineteen sections plus Chat. Below desktop
+    // Five destinations hold all twenty sections plus Chat. Below desktop
     // width the drawer lists every one of them, none behind a toggle. (The
     // desktop rail's menus are covered in app/Navigation.test.tsx.)
-    expect(within(nav).getAllByRole('link')).toHaveLength(20)
+    expect(within(nav).getAllByRole('link')).toHaveLength(21)
     const inDevelopment = ADMIN_SECTIONS.filter((s) => s.status === 'in_development').length
     expect(within(nav).getAllByText('In development')).toHaveLength(inDevelopment)
   })

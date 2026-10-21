@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/misc.dart';
 import '../core/data/fake_backend.dart';
 import '../core/data/fake_repositories.dart';
 import '../core/data/http/http_auth_repository.dart';
+import '../core/data/http/http_billing_repository.dart';
 import '../core/data/http/http_call_repository.dart';
 import '../core/data/http/http_conversation_repository.dart';
 import '../core/data/http/http_group_repository.dart';
@@ -177,6 +178,9 @@ List<Override> _httpOverrides() {
     trialRepositoryProvider.overrideWithValue(
       HttpTrialRepository(client: client),
     ),
+    billingRepositoryProvider.overrideWithValue(
+      HttpBillingRepository(client: client),
+    ),
     profileRepositoryProvider.overrideWithValue(
       HttpProfileRepository(client: client),
     ),
@@ -286,6 +290,8 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
     // A fixture profile is honest here, unlike a fixture story: it is the signed-in user's
     // OWN, so nothing fake stands in for something another person actually published.
     profileRepositoryProvider.overrideWithValue(FakeProfileRepository()),
+    // The fixture parent has billed nothing: an honest empty answer about their OWN account.
+    billingRepositoryProvider.overrideWithValue(const FakeBillingRepository()),
     authControllerProvider.overrideWith(
       () => AuthController(
         repository: authRepository,

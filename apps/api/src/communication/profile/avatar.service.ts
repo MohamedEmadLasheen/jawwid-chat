@@ -21,6 +21,13 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Whose photo a write is about: the caller themself, or one of their children. */
 export type AvatarTarget = { kind: 'self' } | { kind: 'child'; learnerId: string };
 
+/**
+ * PD-17: may `viewer` see `targetId`'s photo on that person's profile (context
+ * `profile`)? Registered by the module that owns the profile, which applies the
+ * same rule its own page does. Re-run on every request, like every other context.
+ */
+export type ProfileAvatarReader = (viewer: Actor, targetId: string) => Promise<boolean>;
+
 interface PhotoRow {
   id: string;
   organizationId: string;
@@ -42,7 +49,9 @@ const invalid = (message: string) => new CommError(CommErrorCode.PROFILE_PHOTO_I
  *   - a conversation: you may read that conversation NOW (the one read check
  *     every path uses, staff scope included), and the person is or was a member
  *     of it or wrote in it, or the child is the one it is about -- in the same
- *     organization.
+ *     organization;
+ *   - `profile` (PD-17): you may open that person's Parent or Student Profile
+ *     now, by the rule the profile's own module registered.
  * Every refusal is the same 404.
  *
  * WRITE -- the key a photo is committed under must be structurally under the
@@ -53,6 +62,7 @@ const invalid = (message: string) => new CommError(CommErrorCode.PROFILE_PHOTO_I
 @Injectable()
 export class AvatarService {
   private readonly logger = new Logger(AvatarService.name);
+  private readonly profileReaders = new Map<AvatarKind, ProfileAvatarReader>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -63,12 +73,17 @@ export class AvatarService {
 
   // ---------------------------------------------------------------- read
 
+  /** PD-17: the rule for `profile` links of one kind. Without one, every such link is refused. */
+  registerProfileReader(kind: AvatarKind, reader: ProfileAvatarReader): void {
+    this.profileReaders.set(kind, reader);
+  }
+
   async authorizeAvatarRead(viewerId: string, mediaId: string): Promise<{ objectKey: string }> {
     const parts = String(mediaId).split('.');
     if (parts.length !== 3) throw absent();
     const [kind, targetId, context] = parts as [string, string, string];
     if (!AVATAR_KINDS.has(kind) || !UUID.test(targetId)) throw absent();
-    if (context !== 'self' && !UUID.test(context)) throw absent();
+    if (context !== 'self' && context !== 'profile' && !UUID.test(context)) throw absent();
 
     const viewer = await this.conversations.requireActor(viewerId).catch(() => null);
     if (!viewer?.organizationId) throw absent();
@@ -79,9 +94,17 @@ export class AvatarService {
     const allowed =
       context === 'self'
         ? this.isSelfOrOwnChild(viewer, kind as AvatarKind, target)
-        : await this.isSeenIn(viewer, kind as AvatarKind, targetId, context);
+        : context === 'profile'
+          ? await this.onProfile(viewer, kind as AvatarKind, targetId)
+          : await this.isSeenIn(viewer, kind as AvatarKind, targetId, context);
     if (!allowed) throw absent();
     return { objectKey: target.avatarObjectKey };
+  }
+
+  private async onProfile(viewer: Actor, kind: AvatarKind, targetId: string): Promise<boolean> {
+    const reader = this.profileReaders.get(kind);
+    if (!reader) return false;
+    return reader(viewer, targetId).catch(() => false);
   }
 
   private isSelfOrOwnChild(viewer: Actor, kind: AvatarKind, target: PhotoRow): boolean {
@@ -168,6 +191,10 @@ export class AvatarService {
   ): Promise<UploadAuthorization> {
     const actor = await this.conversations.requireActor(actorId);
     const { kind, row } = await this.owned(actor, target);
+    return this.uploadFor(kind, row, input);
+  }
+
+  private uploadFor(kind: AvatarKind, row: PhotoRow, input: { mimeType?: unknown; byteSize?: unknown }): Promise<UploadAuthorization> {
     if (!isAvatarMime(input.mimeType)) throw invalid('a profile photo must be a JPEG, PNG or WebP image');
     const byteSize = Number(input.byteSize);
     if (!Number.isInteger(byteSize) || byteSize <= 0 || byteSize > MAX_AVATAR_BYTES) {
@@ -186,6 +213,18 @@ export class AvatarService {
   async commit(actorId: string, target: AvatarTarget, input: { objectKey?: unknown }): Promise<{ avatarUrl: string | null }> {
     const actor = await this.conversations.requireActor(actorId);
     const { kind, row } = await this.owned(actor, target);
+    const reason = kind === 'learner' ? 'set by a parent of the family' : 'set by the account holder';
+    return this.commitFor(actor, kind, row, input, reason, 'self');
+  }
+
+  private async commitFor(
+    actor: Actor,
+    kind: AvatarKind,
+    row: PhotoRow,
+    input: { objectKey?: unknown },
+    reason: string,
+    context: 'self' | 'profile',
+  ): Promise<{ avatarUrl: string | null }> {
     const objectKey = typeof input.objectKey === 'string' ? input.objectKey : '';
     if (!avatarKeyOf(kind, row.id, objectKey)) throw invalid('that object is not an upload for this photo');
     // Captured before the write: the row is read once, and what replaces it must
@@ -200,25 +239,59 @@ export class AvatarService {
         throw invalid(AVATAR_REJECTION_MESSAGE[verdict.reason]);
       }
       try {
-        await this.write(actor, kind, row, objectKey, { width: verdict.image.width, height: verdict.image.height });
+        await this.write(actor, kind, row, objectKey, { width: verdict.image.width, height: verdict.image.height }, reason);
       } catch (error) {
         await this.discard(objectKey); // the database refused: nothing references it
         throw error;
       }
       if (previous) await this.discard(previous);
     }
-    return { avatarUrl: signAvatar(kind, row.id, 'self', actor.actorId, objectKey) };
+    return { avatarUrl: signAvatar(kind, row.id, context, actor.actorId, objectKey) };
   }
 
   async remove(actorId: string, target: AvatarTarget): Promise<{ avatarUrl: null }> {
     const actor = await this.conversations.requireActor(actorId);
     const { kind, row } = await this.owned(actor, target);
+    const reason = kind === 'learner' ? 'set by a parent of the family' : 'set by the account holder';
+    return this.removeFor(actor, kind, row, reason);
+  }
+
+  private async removeFor(actor: Actor, kind: AvatarKind, row: PhotoRow, reason: string): Promise<{ avatarUrl: null }> {
     const previous = row.avatarObjectKey;
     if (previous) {
-      await this.write(actor, kind, row, null, null);
+      await this.write(actor, kind, row, null, null, reason);
       await this.discard(previous);
     }
     return { avatarUrl: null };
+  }
+
+  // ------------------------------------------- PD-17: a parent's photo, by the administration
+
+  /**
+   * The same three steps, for a parent's photo changed from their Parent
+   * Profile. The CALLER has already decided the staff member may (the profile's
+   * own rule, src/parent-profile); this only re-checks that the contact is in
+   * the staff member's organization. The bytes are judged and the key bound to
+   * the contact's own prefix exactly as when the parent sets it themself, and
+   * the audit row says an administrator set it.
+   */
+  async authorizeUploadForContact(staff: Actor, contactId: string, input: { mimeType?: unknown; byteSize?: unknown }) {
+    return this.uploadFor('contact', await this.contactRow(staff, contactId), input);
+  }
+
+  async commitForContact(staff: Actor, contactId: string, input: { objectKey?: unknown }) {
+    return this.commitFor(staff, 'contact', await this.contactRow(staff, contactId), input, 'set by an administrator', 'profile');
+  }
+
+  async removeForContact(staff: Actor, contactId: string) {
+    return this.removeFor(staff, 'contact', await this.contactRow(staff, contactId), 'removed by an administrator');
+  }
+
+  private async contactRow(staff: Actor, contactId: string): Promise<PhotoRow> {
+    if (staff.kind !== 'staff' || !staff.isActive || !staff.organizationId || !UUID.test(contactId)) throw absent();
+    const row = await this.row('contact', contactId);
+    if (!row || row.organizationId !== staff.organizationId) throw absent();
+    return row;
   }
 
   /** The caller's own photo (and, for a parent, each child's), as links for them. */
@@ -255,6 +328,7 @@ export class AvatarService {
     row: PhotoRow,
     objectKey: string | null,
     image: { width: number; height: number } | null,
+    reason: string,
   ): Promise<void> {
     const hadPhoto = row.avatarObjectKey !== null;
     await this.prisma.$transaction(async (tx) => {
@@ -276,7 +350,7 @@ export class AvatarService {
         entityId: row.id,
         before: { hasPhoto: hadPhoto },
         after: objectKey ? { hasPhoto: true, ...image } : { hasPhoto: false },
-        reason: kind === 'learner' ? 'set by a parent of the family' : 'set by the account holder',
+        reason,
       });
     });
   }

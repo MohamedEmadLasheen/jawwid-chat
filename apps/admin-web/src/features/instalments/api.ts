@@ -1,17 +1,19 @@
 import { api } from '@/core/api/client'
 
 /**
- * PD-12 S3 wire contract, mirrored from apps/api/src/billing. Every invoice is
- * Jawwid Core's, read by the server at request time and never stored; this
- * page shows what the server derived (status, order, responsible supervisor).
+ * PD-12 S3 wire contract, mirrored from apps/api/src/billing. Since PD-17 the
+ * instalments are Jawwid Chat's own records (chat.family_instalment), written
+ * on each family's Parent Profile; this page shows what the server derived
+ * (status, order, responsible supervisor).
  */
 export type InstalmentStatus = 'overdue' | 'due' | 'upcoming' | 'paid'
 
 export interface Instalment {
   id: string
   family: { id: string; name: string }
-  account: { name: string }
-  /** null = a family invoice; `known: false` = Core named a child Chat does not have in this family. */
+  /** The payer: the family's primary parent, whose Parent Profile the row opens. */
+  account: { id: string | null; name: string }
+  /** null = a family instalment. */
   child: { id: string | null; name: string | null; known: boolean } | null
   amountMinor: number
   currency: string
@@ -27,8 +29,6 @@ export interface Instalment {
 }
 
 export interface InstalmentList {
-  /** `not_connected`: Core's invoice API is not connected in this deployment. */
-  source: 'core' | 'not_connected'
   today: string
   canAssignBillingSupervisor: boolean
   items: Instalment[]
@@ -46,7 +46,7 @@ export interface BillingSupervisorView {
 }
 
 export const instalmentsApi = {
-  access: () => api.get<{ billingReader: boolean; canAssignBillingSupervisor: boolean; coreConnected: boolean }>('/instalments/access'),
+  access: () => api.get<{ billingReader: boolean; canAssignBillingSupervisor: boolean; canRecordPayments?: boolean }>('/instalments/access'),
   list: (q: InstalmentQuery) =>
     api.get<InstalmentList>('/instalments', { responsible: q.responsible, ...(q.paid ? { paid: 'true' } : {}) }),
   billingSupervisor: (familyId: string) =>

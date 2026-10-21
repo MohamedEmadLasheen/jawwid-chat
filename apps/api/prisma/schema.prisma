@@ -1861,3 +1861,65 @@ model ParentSignupCode {
   @@map("parent_signup_code")
   @@schema("chat")
 }
+
+// =====================================================================
+// PD-17 -- 20261021150000_chat_pd017_parent_student_profiles.sql owns the
+// DDL and every rule. No relations declared: these rows are read by key.
+// =====================================================================
+
+/// The administration's record of a parent. Admin-only; read and written only
+/// by src/parent-profile (parent-file-confinement.spec.ts, G-07).
+model ParentFile {
+  contactId            String   @id @map("contact_id") @db.Uuid
+  organizationId       String   @map("organization_id") @db.Uuid
+  adminOnlyParentPhone String?  @map("phone")
+  adminOnlyParentEmail String?  @map("email")
+  region               String?
+  adminNote            String?  @map("admin_note")
+  updatedBy            String?  @map("updated_by") @db.Uuid
+  createdAt            DateTime @map("created_at") @db.Timestamptz @default(now())
+  updatedAt            DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  @@map("parent_file")
+  @@schema("chat")
+}
+
+/// How a family pays. The plan is Family.subscriptionPlanMonths.
+model FamilyBilling {
+  familyId       String   @id @map("family_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  paymentMethod  String?  @map("payment_method")
+  currency       String?
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  createdAt      DateTime @map("created_at") @db.Timestamptz @default(now())
+  updatedAt      DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
+
+  @@map("family_billing")
+  @@schema("chat")
+}
+
+/// What a family owes and has paid. Append-only (chat.guard_family_instalment).
+model FamilyInstalment {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
+  familyId       String    @map("family_id") @db.Uuid
+  learnerId      String?   @map("learner_id") @db.Uuid
+  planId         String?   @map("plan_id") @db.Uuid
+  label          String
+  amountMinor    BigInt    @map("amount_minor")
+  currency       String
+  dueDate        DateTime  @map("due_date") @db.Date
+  createdBy      String    @map("created_by") @db.Uuid
+  createdAt      DateTime  @map("created_at") @db.Timestamptz @default(now())
+  paidOn         DateTime? @map("paid_on") @db.Date
+  paidMethod     String?   @map("paid_method")
+  paidReference  String?   @map("paid_reference")
+  paidRecordedBy String?   @map("paid_recorded_by") @db.Uuid
+  paidRecordedAt DateTime? @map("paid_recorded_at") @db.Timestamptz
+  voidedAt       DateTime? @map("voided_at") @db.Timestamptz
+  voidedBy       String?   @map("voided_by") @db.Uuid
+  voidReason     String?   @map("void_reason")
+
+  @@map("family_instalment")
+  @@schema("chat")
+}

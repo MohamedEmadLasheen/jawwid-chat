@@ -37,8 +37,9 @@ void main() {
   late InMemoryTokenStore tokens;
   late ProviderContainer container;
 
-  setUp(() {
-    backend = FakeBackend(role: UserRole.parent);
+  /// The fixture world for one signed-in [role]; a parent unless a test rebuilds it.
+  void build(UserRole role) {
+    backend = FakeBackend(role: role);
     tokens = InMemoryTokenStore();
 
     final auth = FakeAuthRepository(backend: backend, tokens: tokens);
@@ -69,7 +70,9 @@ void main() {
         ),
       ],
     );
-  });
+  }
+
+  setUp(() => build(UserRole.parent));
 
   tearDown(() {
     container.dispose();
@@ -206,6 +209,66 @@ void main() {
         await settle(tester);
         expect(currentLocation(), Routes.chats, reason: '$retired must forward');
       }
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('PD-17: a Student Profile is a teacher\'s', () {
+    testWidgets('a parent following a Student Profile link lands on Chats', (tester) async {
+      await pumpApp(tester);
+      await controller().restore();
+      await controller().signIn(username: 'parent', password: 'secret');
+      await settle(tester);
+
+      router().go(Routes.studentProfile('k1'));
+      await settle(tester);
+      expect(currentLocation(), Routes.chats);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a teacher reaches it (the server still decides what it shows)', (tester) async {
+      container.dispose();
+      backend.dispose();
+      build(UserRole.teacher);
+
+      await pumpApp(tester);
+      await controller().restore();
+      await controller().signIn(username: 'teacher', password: 'secret');
+      await settle(tester);
+
+      router().go(Routes.studentProfile('k1'));
+      await settle(tester);
+      expect(currentLocation(), '/students/k1');
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('PD-17: Payments are a parent\'s', () {
+    testWidgets('a parent reaches their Payments', (tester) async {
+      await pumpApp(tester);
+      await controller().restore();
+      await controller().signIn(username: 'parent', password: 'secret');
+      await settle(tester);
+
+      router().go(Routes.myPayments);
+      await settle(tester);
+      expect(currentLocation(), '/settings/payments');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a teacher following a Payments link lands on Chats', (tester) async {
+      container.dispose();
+      backend.dispose();
+      build(UserRole.teacher);
+
+      await pumpApp(tester);
+      await controller().restore();
+      await controller().signIn(username: 'teacher', password: 'secret');
+      await settle(tester);
+
+      router().go(Routes.myPayments);
+      await settle(tester);
+      expect(currentLocation(), Routes.chats);
       expect(tester.takeException(), isNull);
     });
   });

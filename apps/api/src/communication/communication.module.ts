@@ -150,6 +150,8 @@ import { ParentProfileService } from './profile/parent-profile.service';
     ReminderService,
     OutboxWorker,
     RealtimeRelay,
+    // PD-17: the Parent and Student Profiles show and (for a parent) change photos.
+    AvatarService,
   ],
 })
 export class CommunicationModule {}

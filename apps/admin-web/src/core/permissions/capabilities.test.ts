@@ -119,10 +119,12 @@ describe('the legacy Inbox is routable but never offered', () => {
     }
   })
 
-  it('nothing else is hidden: navigation is the openable areas minus Inbox -- and minus Teacher statistics and Instalments until the server confirms the department', () => {
+  it('nothing else is hidden: navigation is the openable areas minus Inbox -- and minus Teacher statistics, Instalments and Parents until the server confirms the department', () => {
     for (const role of ROLES) {
-      expect(navAreas(role)).toEqual(visibleAreas(role).filter((a) => a !== 'inbox' && a !== 'teachers' && a !== 'trials' && a !== 'instalments'))
-      expect(navAreas(role, { lessonManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'inbox' && a !== 'instalments'))
+      expect(navAreas(role)).toEqual(
+        visibleAreas(role).filter((a) => a !== 'inbox' && a !== 'teachers' && a !== 'trials' && a !== 'instalments' && a !== 'parents'),
+      )
+      expect(navAreas(role, { lessonManager: true })).toEqual(visibleAreas(role).filter((a) => a !== 'inbox' && a !== 'instalments' && a !== 'parents'))
       expect(navAreas(role, { lessonManager: true, billingReader: true })).toEqual(visibleAreas(role).filter((a) => a !== 'inbox'))
     }
   })

@@ -5,14 +5,14 @@ import type { InstalmentStatus } from './api'
 export { useCopy, type Pair } from '@/features/organization/copy'
 
 /**
- * PD-12 S3 copy, Arabic and English side by side. Wording rule: the page reads
- * Jawwid Core; it never says Chat holds, changes or collects a payment.
+ * PD-12 S3 copy, Arabic and English side by side. Since PD-17 the instalments
+ * are Jawwid Chat's own records, written on each family's Parent Profile.
  */
 export const I = {
   title: { en: 'Instalment payments', ar: 'الأقساط' },
   subtitle: {
-    en: 'Invoices from Jawwid Core, read now: overdue first, then due today, then upcoming. Follow up in the family’s conversation; paying stays in Core.',
-    ar: 'الفواتير من نظام جوّد الأساسي، تُقرأ الآن: المتأخر أولًا، ثم المستحق اليوم، ثم القادم. تابِع في محادثة الأسرة، ويبقى الدفع في النظام الأساسي.',
+    en: 'Open instalments: overdue first, then due today, then upcoming. Follow up in the family’s conversation; record a payment on the Parent Profile.',
+    ar: 'الأقساط المفتوحة: المتأخر أولًا، ثم المستحق اليوم، ثم القادم. تابِع في محادثة الأسرة، وسجّل الدفعة في ملف ولي الأمر.',
   },
   all: { en: 'All', ar: 'الكل' },
   mine: { en: 'Mine', ar: 'مسؤوليتي' },
@@ -21,7 +21,6 @@ export const I = {
   account: { en: 'Responsible account', ar: 'الحساب المسؤول' },
   forWhom: { en: 'For', ar: 'عن' },
   family: { en: 'The family', ar: 'الأسرة' },
-  unknownChild: { en: 'A child not in Chat', ar: 'طفل غير مسجّل في المحادثات' },
   amount: { en: 'Amount', ar: 'المبلغ' },
   dueDate: { en: 'Due date', ar: 'تاريخ الاستحقاق' },
   supervisor: { en: 'Responsible supervisor', ar: 'المشرف المسؤول' },
@@ -35,11 +34,7 @@ export const I = {
   changeSupervisor: { en: 'Change', ar: 'تغيير' },
   empty: { en: 'Nothing due.', ar: 'لا شيء مستحق.' },
   emptyFiltered: { en: 'Nothing matches this filter.', ar: 'لا شيء يطابق هذا التصفية.' },
-  notConnectedTitle: { en: 'Jawwid Core is not connected yet', ar: 'نظام جوّد الأساسي غير متصل بعد' },
-  notConnected: {
-    en: 'This page reads invoices from Jawwid Core when you open it. Core’s invoice API is not connected in this deployment, so nothing can be shown — this does not mean nothing is due.',
-    ar: 'تقرأ هذه الصفحة الفواتير من نظام جوّد الأساسي عند فتحها. واجهة الفواتير في النظام الأساسي غير متصلة في هذه البيئة، لذا لا يمكن عرض شيء — وهذا لا يعني أنه لا شيء مستحق.',
-  },
+  openProfile: { en: 'Open the Parent Profile of {name}', ar: 'فتح ملف ولي الأمر {name}' },
   counts: {
     en: '{overdue} overdue · {due} due today · {upcoming} upcoming',
     ar: '{overdue} متأخر · {due} مستحق اليوم · {upcoming} قادم',
@@ -51,8 +46,8 @@ export const I = {
 
   dialogTitle: { en: 'Billing supervisor: {family}', ar: 'مشرف التحصيل: {family}' },
   dialogHint: {
-    en: 'Responsible for this family’s family invoices (an invoice for one child goes to that child’s supervisor). Choose among the supervisors of its children; if they stop supervising all of them, this is cleared and the family returns to “No billing supervisor”.',
-    ar: 'مسؤول عن فواتير الأسرة العامة (أما فاتورة طفل بعينه فلمشرف ذلك الطفل). اختر من بين مشرفي أطفالها؛ وإذا لم يعد يشرف على أي منهم يُلغى التحديد وتعود الأسرة إلى «بلا مشرف تحصيل».',
+    en: 'Responsible for this family’s family instalments (an instalment for one child goes to that child’s supervisor). Choose among the supervisors of its children; if they stop supervising all of them, this is cleared and the family returns to “No billing supervisor”.',
+    ar: 'مسؤول عن أقساط الأسرة العامة (أما قسط طفل بعينه فلمشرف ذلك الطفل). اختر من بين مشرفي أطفالها؛ وإذا لم يعد يشرف على أي منهم يُلغى التحديد وتعود الأسرة إلى «بلا مشرف تحصيل».',
   },
   supervises: { en: 'supervises {children}', ar: 'يشرف على {children}' },
   noCandidates: {
@@ -75,14 +70,10 @@ export const STATUS_LABEL: Record<InstalmentStatus, Pair> = {
 
 const BY_CODE: Record<string, Pair> = {
   'COMM.BILLING_DENIED': {
-    en: 'Instalments are for the Operations department and the super admin.',
-    ar: 'الأقساط لقسم العمليات والمدير العام فقط.',
+    en: 'Instalments are for the Operations and Sales departments and the super admin.',
+    ar: 'الأقساط لقسمي العمليات والمبيعات والمدير العام فقط.',
   },
   'COMM.BILLING_NOT_FOUND': { en: 'Not found.', ar: 'غير موجود.' },
-  'COMM.BILLING_CORE_UNAVAILABLE': {
-    en: 'Jawwid Core did not answer, so the invoices cannot be shown right now. Try again shortly.',
-    ar: 'لم يستجب نظام جوّد الأساسي، لذا لا يمكن عرض الفواتير الآن. حاول بعد قليل.',
-  },
 }
 
 export function describeError(error: unknown, locale: 'ar' | 'en'): string {
@@ -94,7 +85,7 @@ export function describeError(error: unknown, locale: 'ar' | 'en'): string {
   return pick({ en: 'Something went wrong. Try again.', ar: 'حدث خطأ. حاول مرة أخرى.' })
 }
 
-/** Core sends minor units; the currency decides how many decimals that is. */
+/** Amounts are minor units; the currency decides how many decimals that is. */
 export function formatMoney(amountMinor: number, currency: string, locale: 'ar' | 'en'): string {
   const tag = locale === 'ar' ? 'ar-EG' : 'en-GB'
   try {

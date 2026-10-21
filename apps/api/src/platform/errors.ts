@@ -267,8 +267,12 @@ export enum CommErrorCode {
   BILLING_DENIED = 'COMM.BILLING_DENIED',
   /** PD-12 S3: no such family in the caller's organization, or none this caller may see. 404. */
   BILLING_NOT_FOUND = 'COMM.BILLING_NOT_FOUND',
-  /** PD-12 S3: Jawwid Core's invoice API did not answer, or answered something unusable. 502. */
-  BILLING_CORE_UNAVAILABLE = 'COMM.BILLING_CORE_UNAVAILABLE',
+  /** PD-17: the instalment is already paid or voided, so it cannot be paid or voided again. 409. */
+  BILLING_STATE = 'COMM.BILLING_STATE',
+  /** PD-17: Parent Profiles are the administration's -- Operations (in scope), the Operations Manager and the super admin. Never a teacher. 403. */
+  PARENT_PROFILE_DENIED = 'COMM.PARENT_PROFILE_DENIED',
+  /** PD-17: no such parent in the caller's organization, or none this caller may see. 404. */
+  PARENT_PROFILE_NOT_FOUND = 'COMM.PARENT_PROFILE_NOT_FOUND',
   /** PD-13: no such scheduled call, or none in a conversation this caller may read. 404. */
   SCHEDULED_CALL_NOT_FOUND = 'COMM.SCHEDULED_CALL_NOT_FOUND',
   /** PD-13: only someone who may start a call in the conversation schedules one there; only its creator cancels it. 403. */

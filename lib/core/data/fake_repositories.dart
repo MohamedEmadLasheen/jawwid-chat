@@ -3,6 +3,7 @@ import 'dart:async';
 import '../../shared/models/auth.dart';
 import '../../shared/models/conversation.dart';
 import '../../shared/models/message.dart';
+import '../../shared/models/parent_billing.dart';
 import '../../shared/models/parent_profile.dart';
 import '../errors/app_error.dart';
 import '../storage/secure_token_store.dart';
@@ -254,6 +255,15 @@ class FakeCallRepository implements CallRepository {
 /// the WHOLE profile, an omitted field is left alone, and a blank About is a clear. It also
 /// reproduces the two failure shapes a screen has to handle — a load that throws and a
 /// mutation that throws — because those are what the error and retry paths are built for.
+/// PD-17, for the fixture build: nothing billed yet. Honest, because it is the
+/// signed-in fixture parent's OWN account -- there is no real one behind it.
+class FakeBillingRepository implements BillingRepository {
+  const FakeBillingRepository();
+
+  @override
+  Future<ParentBilling> myBilling() async => ParentBilling.empty;
+}
+
 class FakeProfileRepository implements ProfileRepository {
   FakeProfileRepository({
     ParentProfile? initial,
