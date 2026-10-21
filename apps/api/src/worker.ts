@@ -10,6 +10,10 @@ import { LifecycleService } from './lessons/lifecycle.service';
 import { NotificationService } from './communication/notifications/notification.service';
 import { readBuildInfo } from './infra/build-info';
 import { listenForOutboxWake, OutboxPacer } from './communication/outbox/outbox-wake';
+import { JsonLogger } from './infra/observability/json-logger';
+import { createErrorTracker, type ErrorTracker } from './infra/observability/error-tracker';
+import { flushErrorTracker, installProcessErrorHandlers } from './infra/observability/process-errors';
+import { safeErrorMessage } from './infra/observability/redact';
 
 /**
  * Background worker entrypoint. Same image as the API, different command
@@ -72,13 +76,37 @@ const LESSON_SWEEP_MS = Number(process.env.LESSON_SWEEP_MS ?? 300_000);
 const WAKE_WINDOW_MS = 2000;
 const WAKE_POLL_MS = 50;
 
+const build = readBuildInfo();
+
+// The same JSON lines as the API (docs/infrastructure/monitoring.md §3), with
+// service "worker", so one log pipeline parses both processes.
+const logger = new JsonLogger('worker', build);
+
+// The worker needs error tracking MORE than the API does, not less. An API
+// fault surfaces as a 500 somebody sees; a worker fault is a notification that
+// silently never went out, and the loop below deliberately swallows every
+// subsystem error to keep the others running. Without a tracker those are a
+// log line on a machine nobody is watching. Inert without SENTRY_DSN.
+const errors: ErrorTracker = createErrorTracker('worker', build);
+installProcessErrorHandlers(errors, logger);
+
+/**
+ * A subsystem failure the loop survived: logged and reported, never rethrown.
+ * The log carries the error's redacted message -- a Prisma error only as its
+ * class and code, because Prisma prints the arguments of the failed call --
+ * and never its stack. `route` names the subsystem, a fixed label.
+ */
+function report(log: Logger, what: string, route: string, e: unknown): void {
+  log.error(`${what} failed: ${safeErrorMessage(e)}`);
+  errors.captureException(e, { component: 'worker', route });
+}
+
 async function bootstrap(): Promise<void> {
   const log = new Logger('Worker');
-  const build = readBuildInfo();
 
   // No HTTP server: this process serves no traffic and must not hold a port.
   const app = await NestFactory.createApplicationContext(AppModule, {
-    logger: ['error', 'warn', 'log'],
+    logger,
   });
   const outbox = app.get(OutboxWorker);
   const stories = app.get(StorySweeper);
@@ -100,7 +128,9 @@ async function bootstrap(): Promise<void> {
     const wait = setInterval(() => {
       if (!draining) {
         clearInterval(wait);
-        void app.close().then(() => process.exit(0));
+        void flushErrorTracker(errors)
+          .then(() => app.close())
+          .then(() => process.exit(0));
       }
     }, 100);
     // Backstop, so a wedged batch cannot block the deployment forever.
@@ -144,7 +174,7 @@ async function bootstrap(): Promise<void> {
     } catch (e) {
       // Never exit on a drain failure: the row stays pending and is retried.
       // A worker that dies on one bad event stops delivering every other event.
-      log.error(`drain failed: ${e instanceof Error ? e.message : 'unknown error'}`);
+      report(log, 'drain', 'outbox.drain', e);
     } finally {
       draining = false;
     }
@@ -158,7 +188,7 @@ async function bootstrap(): Promise<void> {
       try {
         await stories.sweep();
       } catch (e) {
-        log.error(`story sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`);
+        report(log, 'story sweep', 'stories.sweep', e);
       } finally {
         draining = false;
         // Scheduled from completion rather than from the previous start, so a
@@ -182,7 +212,7 @@ async function bootstrap(): Promise<void> {
       } catch (e) {
         // Same rule as the drain: a failed sweep is retried on the next pass.
         // The calls it did not expire are still ringing and still match.
-        log.error(`call sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`);
+        report(log, 'call sweep', 'calls.expireRinging', e);
       }
     }
 
@@ -196,7 +226,7 @@ async function bootstrap(): Promise<void> {
         await lifecycle.sweep();
         await scheduling.sweep();
       } catch (e) {
-        log.error(`lesson sweep failed: ${e instanceof Error ? e.message : 'unknown error'}`);
+        report(log, 'lesson sweep', 'lessons.sweep', e);
       } finally {
         draining = false;
         nextLessonSweep = Date.now() + LESSON_SWEEP_MS;
@@ -215,7 +245,7 @@ async function bootstrap(): Promise<void> {
     } catch (e) {
       // A row that failed to dispatch is rescheduled with backoff by the
       // service itself; a throw here must not stop the drain loop.
-      log.error(`notification dispatch failed: ${e instanceof Error ? e.message : 'unknown error'}`);
+      report(log, 'notification dispatch', 'notifications.dispatchDue', e);
     }
     if (!running) break;
     // Back off when there is nothing to do, so an idle deployment is not
@@ -227,9 +257,11 @@ async function bootstrap(): Promise<void> {
   await closeWake?.();
 }
 
-void bootstrap().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : 'unknown error';
-  // eslint-disable-next-line no-console
-  console.error(`FATAL: worker failed to start: ${message}`);
+void bootstrap().catch(async (error: unknown) => {
+  // Logged through the JSON logger (message only, redacted), reported, and
+  // flushed before the non-zero exit the platform needs to see.
+  logger.fatal(`worker failed: ${safeErrorMessage(error)}`, 'Worker');
+  errors.captureException(error, { route: 'bootstrap', component: 'worker' });
+  await flushErrorTracker(errors);
   process.exit(1);
 });
