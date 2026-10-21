@@ -48,7 +48,7 @@ communication safe and answerable, never as a general workflow system.
 | **Audit** — append-only event log and audit log, reasons mandatory for sensitive actions | MVP | `chat.event_log`, `chat.audit_log` |
 | **Access control** — one server-side `AuthorizationService`, BR-1 enforced in the API and in the database | MVP | `apps/api/src/platform/authorization.service.ts`, `093000`/`093300`/`094000` |
 | **Supervisor ownership** — every family has exactly one current supervisor; reassignment by a manager with a reason; history | MVP | `SUPERVISOR-OWNERSHIP.md` |
-| **CRM integration boundary** — Jawwid Core is the source of truth for students, parents, teachers, enrolments and payments, and for lessons and schedules of teachers not yet cut over to Chat (**PD-9**); Chat mirrors what it needs through an API/webhook boundary, never SQL | MVP boundary; ingestion to be re-implemented on the canonical schema | `chat.core_event`, `chat.sync_state`, `core-integration-contract.md` (reference) |
+| **CRM integration boundary** — Jawwid Core is the source of truth for teachers and payments, for students, parents and enrolments other than those Chat enrolled from a subscription form (**PD-16**), and for lessons and schedules of teachers not yet cut over to Chat (**PD-9**); Chat mirrors what it needs through an API/webhook boundary, never SQL | MVP boundary; ingestion to be re-implemented on the canonical schema | `chat.core_event`, `chat.sync_state`, `core-integration-contract.md` (reference) |
 
 ### 1.2 Jawwid Chat IS NOT
 
@@ -120,7 +120,7 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-15 — CLOSED
+## 4. Product decisions PD-1 to PD-16 — CLOSED
 
 PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
 exit gate, before `main` was baselined. **PD-6 was closed by the product owner
@@ -134,8 +134,9 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-13 was closed by the product owner on 2026-10-19** (the Calls page).
 **PD-14 was closed by the product owner on 2026-10-20** (no pre-approval of messages).
 **PD-15 was closed by the product owner on 2026-10-21** (the student's journey after enrolment).
+**PD-16 was closed by the product owner on 2026-10-21** (Chat enrols new students and parents sign up).
 **PD-18 was closed by the product owner on 2026-10-21** (teacher payroll lives in Chat) and supersedes PD-10 item 4.
-PD-16 and PD-17 are numbered by work in flight on other branches (PR #92, and the parent and student profiles).
+PD-17 is numbered by work in flight on another branch (the parent and student profiles).
 
 | ID | Subject | Status |
 |---|---|---|
@@ -154,6 +155,7 @@ PD-16 and PD-17 are numbered by work in flight on other branches (PR #92, and th
 | **PD-13** | **The Calls page: scheduled calls and call links** (2026-10-19) | **CLOSED** — one Calls page for every role; a scheduled call belongs to ONE conversation and announces itself with a card; a call link is members-only; nothing grants a call that `POST /calls` would refuse |
 | **PD-14** | **Messages publish immediately; admins moderate after sending** (2026-10-20) | **CLOSED** — no message is held for approval, for any role or conversation type; whoever is in charge of a conversation may edit or delete a teacher's or parent's message at any time afterwards; a manager or the super admin also a staff member's |
 | **PD-15** | **The student's journey after enrolment** (2026-10-21) | **CLOSED** — supervisors record student and teacher excuses from the group; one quick "Lesson report" entry; make-ups after any apology; outcomes corrected and reports edited / deleted / resent only through recorded changes; each child's age, course and package; monthly statistics in the academy's terms |
+| **PD-16** | **Enrolling a new student in Chat; the parent's own sign-up** (2026-10-21) | **CLOSED** — Assign on New Students creates the family, parent and children in Chat from Sales' form; an assigned entry is the supervisor's (and their manager's); the supervisor opens the family group; the parent signs up with their e-mail and a one-time code relayed by the supervisor until WhatsApp sending is connected |
 | **PD-18** | **Teacher payroll in Chat** (2026-10-21) | **CLOSED** — salary terms, a sealed payout account and the amounts of bonuses and deductions are recorded in Chat, for the super admin only; the month's financial summary is computed, never stored; supersedes PD-10 item 4 |
 
 ---
@@ -1580,6 +1582,89 @@ PD-15):
 
 ---
 
+### PD-16 · Enrolling a new student in Chat; the parent's own sign-up
+
+**Closed 2026-10-21** by the product owner.
+
+The owner's request of 2026-10-21: an **Assign** action on the New Students
+page lets the Operations Manager assign students to their supervisors; an
+assigned student is visible only to the responsible supervisor; that
+supervisor creates the group chat between the parent and the teacher. Owner
+answers the same day: **Chat creates the family, the parent and the children**
+from Sales' subscription form (Chat becomes the source of truth for the
+enrolments it makes, as it already is for trials); the entry stays visible to
+**the supervisor and their manager** (the Operations manager) and the super
+admin; the parent **downloads the app and signs up with the e-mail they gave
+the academy**, proving it with a **one-time code delivered on WhatsApp** — and,
+until a WhatsApp sender is connected, **relayed by the supervisor** (the owner
+rejected e-mail delivery: a full inbox would block it).
+
+**Final decision.**
+
+```
+Assign (Operations manager | super admin)            one transaction
+  family            owner = the supervisor (PD-8 grants nothing by owner)
+  parent (contact)  + account: subject = the e-mail, kind family, NO password
+  each child        chat.enrol_learner -- the teacher Sales chose (the third
+                    writer of learner.teacher_id), learner_supervision, the
+                    course (matched or added to the course list), stated age
+  the form          frozen: never edited nor withdrawn afterwards
+  weekly times      from the form, where the teacher is free (best effort)
+
+visible           unassigned: Sales, the Operations manager, the super admin
+                  assigned:   the children's supervisor (+ active backup), the
+                              Operations manager, the super admin
+
+Create group      the responsible supervisor: family group (parent, teacher(s),
+                  supervisor), named "Teacher — Child · Child" (PD-15), and the
+                  parent's direct chat with the supervisor
+
+sign-up           e-mail -> 6-digit code (10 min, 5 tries, one live, hashed)
+                  delivery 'relay': the supervisor reads it on New Students and
+                  sends it on WhatsApp; -> the parent sets a password -> signs
+                  in through POST /auth/login like anyone else
+                  same answer for any e-mail; metered by the login limiter
+```
+
+* **The phone stays confined (G-07).** The form's phone is copied onto nothing
+  Chat creates; a future WhatsApp sender reads it inside `src/new-students`.
+* **No public registration.** Only an account Chat created at enrolment, with
+  no password yet, can be claimed — never staff, teachers or strangers.
+
+**Implementation phase.** Built 2026-10-21: migration
+`20261021140000_chat_new_student_enrolment.sql`, `NewStudentEnrolmentService`
+(`src/new-students`), `ParentSignupService` / `ParentSignupController`
+(`/auth/signup/*`), Admin Web `trials/NewStudentSetup.tsx`, the app's
+`parent_signup_screen.dart`.
+
+**Consequences.**
+- §1.1's CRM-boundary row changes: Core is no longer the source of truth for
+  students, parents and enrolments Chat enrolled itself.
+- PRD §7.1 ("no registration in the MVP") is narrowed: a parent may set the
+  password of an account the academy created, with a relayed one-time code.
+- The New Students page is filtered per viewer; an Operations supervisor sees
+  only the students assigned to them.
+
+**Deprecated behaviour.** None removed.
+
+**Defaults adopted at closing** (the owner may override without reopening
+PD-16):
+1. The code lives 10 minutes and allows 5 tries; a parent may ask for 5 codes
+   an hour.
+2. A regular lesson lasts as long as the trial did (30 minutes when unknown).
+3. A family is named after the parent; the account's e-mail is the one Sales
+   recorded unless the Operations manager types another at Assign.
+
+**Open implementation items.**
+1. Connect a WhatsApp sender (Meta WhatsApp Cloud API or a provider such as
+   Twilio Verify): business account, number and an approved authentication
+   template. Delivery then switches from `relay` with no change to the flow.
+2. A parent who forgets their password has no self-service reset yet.
+
+**Closed.** 2026-10-21.
+
+---
+
 ### PD-18 · Teacher payroll in Chat
 
 **Closed 2026-10-21** by the product owner. Supersedes PD-10 item 4.
@@ -1657,7 +1742,7 @@ nobody**: it records what is owed and how to pay.
 
 ---
 
-### Decisions still open after PD-1 to PD-15
+### Decisions still open after PD-1 to PD-18
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
 The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their

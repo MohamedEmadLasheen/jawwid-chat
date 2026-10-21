@@ -74,7 +74,8 @@ export class EnrollmentService {
         return {
           id: l.id,
           name: l.name,
-          age: e?.birthDate ? ageOn(e.birthDate, now) : null,
+          // A date of birth when there is one; else the age Sales recorded (PD-16), grown by the years since.
+          age: e?.birthDate ? ageOn(e.birthDate, now) : e?.statedAge && e.statedAgeOn ? e.statedAge + ageOn(e.statedAgeOn, now) : null,
           ...(staffView ? { birthDate: e?.birthDate ? e.birthDate.toISOString().slice(0, 10) : null } : {}),
           course: e?.course ? { id: e.course.id, name: e.course.name } : null,
           packageLessons: e?.packageLessons ?? null,

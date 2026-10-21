@@ -307,6 +307,30 @@ abstract interface class AuthRepository {
   Stream<void> get sessionRevoked;
 }
 
+/// PD-16: a parent whose account the academy created (when their child was enrolled) sets
+/// their own password. Both calls are PUBLIC -- they go over the same transport as sign-in,
+/// never the authenticated client -- and neither says whether an e-mail is known.
+abstract interface class ParentSignupRepository {
+  /// `POST /auth/signup/request` -- the family's supervisor then receives a one-time code to
+  /// send the parent on WhatsApp. Succeeds the same way for any e-mail.
+  Future<void> requestCode(String email);
+
+  /// `POST /auth/signup/verify` -- sets the password. The caller then signs in normally.
+  Future<void> verify({required String email, required String code, required String password});
+}
+
+/// The build with no sign-up server (fixtures, tests that do not override it).
+class NoParentSignupRepository implements ParentSignupRepository {
+  const NoParentSignupRepository();
+
+  @override
+  Future<void> requestCode(String email) => throw UnsupportedError('no sign-up server in this build');
+
+  @override
+  Future<void> verify({required String email, required String code, required String password}) =>
+      throw UnsupportedError('no sign-up server in this build');
+}
+
 abstract interface class ConversationRepository {
   Future<List<Conversation>> list({bool includeArchived = false});
 
