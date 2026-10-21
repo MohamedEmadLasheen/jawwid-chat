@@ -1,10 +1,9 @@
-import { Body, Controller, Headers, HttpCode, Inject, Ip, Optional, Post } from '@nestjs/common';
+import { Body, Controller, HttpCode, Inject, Ip, Optional, Post } from '@nestjs/common';
 import { Public } from './auth.guard';
 import { AuthError, AuthErrorCode } from './auth.errors';
 import { LoginRateLimiter } from './login-rate-limit';
 import { ParentSignupService } from './parent-signup.service';
 import { CLIENT_ADDRESS_POLICY, readClientAddressPolicy, sourceAddress, type ClientAddressPolicy } from './client-address';
-import { toTokenPairDto, type TokenPairDto } from './auth.dto';
 
 /**
  * PD-16: a parent sets the password of the account Chat created for them at
@@ -33,19 +32,16 @@ export class ParentSignupController {
     return this.signup.request(email);
   }
 
+  /** Sets the password; the client then signs in with POST /auth/login. */
   @Public()
   @Post('verify')
   @HttpCode(200)
-  async verify(
-    @Body() body: { email?: unknown; code?: unknown; password?: unknown },
-    @Headers('user-agent') userAgent?: string,
-    @Ip() ip?: string,
-  ): Promise<TokenPairDto> {
+  async verify(@Body() body: { email?: unknown; code?: unknown; password?: unknown }, @Ip() ip?: string) {
     const email = typeof body?.email === 'string' ? body.email : '';
     const code = typeof body?.code === 'string' ? body.code : '';
     const password = typeof body?.password === 'string' ? body.password : '';
     if (!email || !code) throw new AuthError(AuthErrorCode.SIGNUP_CODE_INVALID);
     await this.rateLimit.reserve(`signup:${email.trim().toLowerCase()}`, sourceAddress(ip, this.addressPolicy));
-    return toTokenPairDto(await this.signup.verify(email, code, password, { userAgent, ip }));
+    return this.signup.verify(email, code, password);
   }
 }

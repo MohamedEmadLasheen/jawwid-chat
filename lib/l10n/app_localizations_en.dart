@@ -2280,4 +2280,58 @@ class L10nEn extends L10n {
     );
     return '$_temp0';
   }
+
+  @override
+  String get signupOpen => 'New parent? Create your account';
+
+  @override
+  String get signupTitle => 'Create your parent account';
+
+  @override
+  String get signupEmailIntro =>
+      'Enter the e-mail address you gave the academy when you subscribed.';
+
+  @override
+  String get signupEmailLabel => 'E-mail';
+
+  @override
+  String get signupEmailInvalid => 'Enter a valid e-mail address.';
+
+  @override
+  String get signupSendCode => 'Get my code';
+
+  @override
+  String get signupCodeSent =>
+      'Your supervisor will send you a 6-digit code on WhatsApp. Enter it below with the password you want.';
+
+  @override
+  String get signupCodeLabel => '6-digit code';
+
+  @override
+  String get signupPasswordLabel => 'New password (at least 8 characters)';
+
+  @override
+  String get signupPasswordConfirmLabel => 'Repeat the password';
+
+  @override
+  String get signupPasswordTooShort => 'Use at least 8 characters.';
+
+  @override
+  String get signupPasswordsDiffer => 'The passwords do not match.';
+
+  @override
+  String get signupFinish => 'Create account';
+
+  @override
+  String get signupCodeInvalid =>
+      'That code is not valid or has expired. Ask for a new one.';
+
+  @override
+  String get signupNewCode => 'Send a new code';
+
+  @override
+  String get signupTooMany => 'Too many attempts. Try again in a few minutes.';
+
+  @override
+  String get signupFailed => 'Something went wrong. Try again.';
 }

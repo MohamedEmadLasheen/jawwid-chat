@@ -4,7 +4,6 @@ import { PrismaService } from '../prisma.service';
 import { AUDIT_SERVICE } from '../tokens';
 import type { AuditService } from '../audit.service';
 import { AuthError, AuthErrorCode } from './auth.errors';
-import { AuthService, type LoginContext, type TokenPair } from './auth.service';
 import { hashPassword, spendComparableTime } from './password';
 
 /** How long a code lives: long enough for a supervisor to pass it on by hand. */
@@ -24,8 +23,9 @@ const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
  *   1. request(email)  -- the parent types the e-mail Sales recorded. If it is
  *      an enrolled parent who has not signed up, a 6-digit code is issued
  *      (10 minutes, 5 tries); any earlier live code is superseded.
- *   2. verify(email, code, password) -- the code is checked, the password set,
- *      and the parent is signed in.
+ *   2. verify(email, code, password) -- the code is checked and the password
+ *      set. The client then signs in through POST /auth/login like anyone else,
+ *      so a sign-up never opens a session of its own.
  *
  * DELIVERY. Until a WhatsApp sender is connected the code is RELAYED: it is
  * kept (hashed, and in plain text only while it is live) for the family's
@@ -43,7 +43,6 @@ export class ParentSignupService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly auth: AuthService,
     @Inject(AUDIT_SERVICE) private readonly audit: AuditService,
   ) {}
 
@@ -77,7 +76,7 @@ export class ParentSignupService {
     return { ok: true, delivery: 'relay' };
   }
 
-  async verify(rawEmail: string, rawCode: string, password: string, context: LoginContext = {}): Promise<TokenPair> {
+  async verify(rawEmail: string, rawCode: string, password: string): Promise<{ ok: true }> {
     const email = normalizeEmail(rawEmail);
     const code = rawCode.trim();
     if (password.length < MIN_PASSWORD || password.length > MAX_PASSWORD) {
@@ -127,7 +126,7 @@ export class ParentSignupService {
       });
     });
     this.log.log(`account ${account.id} completed its parent sign-up`);
-    return this.auth.login(email as string, password, context);
+    return { ok: true };
   }
 
   /**

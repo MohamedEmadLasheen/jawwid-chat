@@ -2285,4 +2285,58 @@ class L10nAr extends L10n {
     );
     return '$_temp0';
   }
+
+  @override
+  String get signupOpen => 'ولي أمر جديد؟ أنشئ حسابك';
+
+  @override
+  String get signupTitle => 'إنشاء حساب ولي الأمر';
+
+  @override
+  String get signupEmailIntro =>
+      'أدخل البريد الإلكتروني الذي سجّلته لدى الأكاديمية عند الاشتراك.';
+
+  @override
+  String get signupEmailLabel => 'البريد الإلكتروني';
+
+  @override
+  String get signupEmailInvalid => 'أدخل بريدًا إلكترونيًا صحيحًا.';
+
+  @override
+  String get signupSendCode => 'احصل على الرمز';
+
+  @override
+  String get signupCodeSent =>
+      'سيرسل إليك مشرفك رمزًا من 6 أرقام عبر واتساب. أدخله أدناه مع كلمة المرور التي تريدها.';
+
+  @override
+  String get signupCodeLabel => 'الرمز المكوّن من 6 أرقام';
+
+  @override
+  String get signupPasswordLabel => 'كلمة مرور جديدة (8 أحرف على الأقل)';
+
+  @override
+  String get signupPasswordConfirmLabel => 'أعد كتابة كلمة المرور';
+
+  @override
+  String get signupPasswordTooShort => 'استخدم 8 أحرف على الأقل.';
+
+  @override
+  String get signupPasswordsDiffer => 'كلمتا المرور غير متطابقتين.';
+
+  @override
+  String get signupFinish => 'إنشاء الحساب';
+
+  @override
+  String get signupCodeInvalid =>
+      'هذا الرمز غير صالح أو انتهت صلاحيته. اطلب رمزًا جديدًا.';
+
+  @override
+  String get signupNewCode => 'أرسل رمزًا جديدًا';
+
+  @override
+  String get signupTooMany => 'محاولات كثيرة. حاول مرة أخرى بعد دقائق.';
+
+  @override
+  String get signupFailed => 'حدث خطأ. حاول مرة أخرى.';
 }

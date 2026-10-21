@@ -63,6 +63,11 @@ final groupRepositoryProvider = Provider<GroupRepository>((ref) {
 
 /// PD-11. Unlike the others this has a harmless default rather than a throw: a build
 /// without a lesson server simply offers no lesson ticket.
+/// PD-16: the parent's own sign-up. Overridden at startup with the HTTP implementation.
+final parentSignupRepositoryProvider = Provider<ParentSignupRepository>((ref) {
+  return const NoParentSignupRepository();
+});
+
 final lessonRepositoryProvider = Provider<LessonRepository>((ref) {
   return const NoLessonRepository();
 });

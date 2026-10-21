@@ -42,7 +42,7 @@ const trials = new TrialService(g.prisma, g.conversations, lessons, scheduling, 
 const enrolment = new NewStudentEnrolmentService(g.prisma, g.authz, g.conversations, new NewStudentsService(g.prisma), lessons, scheduling, audit);
 const details = new EnrollmentService(g.prisma, g.authz, g.conversations, lessons, scheduling, audit);
 const auth = new AuthService(g.prisma, new PrismaIdentityService(g.prisma), audit);
-const signup = new ParentSignupService(g.prisma, auth, audit);
+const signup = new ParentSignupService(g.prisma, audit);
 
 const MIN = 60_000;
 const PASSWORD = 'pd16-parent-password';
@@ -255,11 +255,11 @@ describe('4. the parent signs up', () => {
     expect((await enrolment.page(salesId)).students).toEqual([]);
 
     expect(await code(signup.verify(EMAIL, relayed, 'short'))).toBe(AuthErrorCode.PASSWORD_TOO_WEAK);
-    const pair = await signup.verify(EMAIL, relayed, PASSWORD);
-    expect(pair.accessToken).toBeTruthy();
+    expect(await signup.verify(EMAIL, relayed, PASSWORD)).toEqual({ ok: true });
+    // The app then signs in like anyone else.
+    expect((await auth.login(LOWER, PASSWORD)).accessToken).toBeTruthy();
     expect((await enrolment.page(s.ownerId)).students[0].enrolment?.parentSignup).toEqual({ state: 'signed_up' });
-    // From now on it is an ordinary sign-in; the code is spent.
-    await expect(auth.login(LOWER, PASSWORD)).resolves.toBeTruthy();
+    // The code is spent.
     expect(await code(signup.verify(EMAIL, relayed, PASSWORD))).toBe(AuthErrorCode.SIGNUP_CODE_INVALID);
     expect(await signup.request(EMAIL)).toEqual({ ok: true, delivery: 'relay' });
     expect(await g.prisma.parentSignupCode.count({ where: { usedAt: null, supersededAt: null } })).toBe(0);
