@@ -582,15 +582,21 @@ describe('9. moving a booked trial', () => {
   it('to another time: the old row is history, the trial continues once, and its group is told', async () => {
     await openAllWeek(s.teacherId);
     const { slots } = await trials.slots(salesId, s.teacherId);
-    const t = await trials.book(s.ownerId, { students: [{ name: 'Karim' }, { name: 'Huda' }], teacherId: s.teacherId, startsAt: slots[2] });
+    // The start is one the server offers for the LONGER length too. A lesson
+    // fits inside one day's window, so a start offered for 30 minutes is not
+    // always free for 60 (23:30 is the last 30-minute start, 23:00 the last
+    // 60-minute one); a wall-clock pick failed every evening from 20:00 to 20:30.
+    const at = (await trials.slots(salesId, s.teacherId, '60')).slots[2];
+    expect(slots).toContain(at);
+    const t = await trials.book(s.ownerId, { students: [{ name: 'Karim' }, { name: 'Huda' }], teacherId: s.teacherId, startsAt: at });
 
     expect(await code(trials.reschedule(s.teacherId, t.id, { startsAt: slots[5] }))).toBe(CommErrorCode.LESSON_DENIED);
-    expect(await code(trials.reschedule(salesId, t.id, { startsAt: slots[2] }))).toBe(CommErrorCode.LESSON_STATE); // nothing changed
+    expect(await code(trials.reschedule(salesId, t.id, { startsAt: at }))).toBe(CommErrorCode.LESSON_STATE); // nothing changed
     const off = new Date(new Date(slots[5]).getTime() + 7 * MIN).toISOString();
     expect(await code(trials.reschedule(salesId, t.id, { startsAt: off }))).toBe(CommErrorCode.LESSON_STATE); // not an offered time
     // Overlapping its own old time is fine (same start, longer): the old time is released first.
-    const moved = await trials.reschedule(salesId, t.id, { startsAt: slots[2], durationMinutes: 60 });
-    expect(moved).toMatchObject({ outcome: 'upcoming', startsAt: slots[2], durationMinutes: 60, students: [{ name: 'Karim' }, { name: 'Huda' }] });
+    const moved = await trials.reschedule(salesId, t.id, { startsAt: at, durationMinutes: 60 });
+    expect(moved).toMatchObject({ outcome: 'upcoming', startsAt: at, durationMinutes: 60, students: [{ name: 'Karim' }, { name: 'Huda' }] });
     expect(moved.id).not.toBe(t.id);
     expect(await g.prisma.lesson.findUniqueOrThrow({ where: { id: t.id } })).toMatchObject({ outcome: 'rescheduled' });
 

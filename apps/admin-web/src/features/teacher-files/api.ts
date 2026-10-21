@@ -10,6 +10,8 @@ import { api } from '@/core/api/client'
 export interface TeacherFileAccessFlags {
   canEditPersonal: boolean
   canWriteSupervision: boolean
+  /** PD-18: offer the payroll sections (super admin). Optional: older servers omit it. */
+  canViewFinance?: boolean
 }
 
 export interface TeacherSummary {
@@ -74,6 +76,22 @@ export interface TeacherFile {
     monthlyComments: MonthlyComment[]
     daysOff: DayOff[]
   }
+  /** PD-18. Optional: older servers omit them. */
+  employment?: { teachingMarket: string | null; studentCount: number }
+  /** What was recorded, for every reader. Amounts are only in `/finance`. */
+  history?: {
+    bonuses: Array<{ id: string; reason: string; createdAt: string; author: Person }>
+    deductions: Array<{
+      id: string
+      step: 'deduction_1' | 'deduction_2'
+      violation: string
+      /** YYYY-MM, the payroll month */
+      month: string
+      note: string | null
+      decidedAt: string
+      author: Person
+    }>
+  }
 }
 
 /** A field left out is unchanged; null clears it. */
@@ -81,6 +99,7 @@ export interface PersonalPatch {
   phone?: string | null
   email?: string | null
   joinedOn?: string | null
+  teachingMarket?: string | null
   reason: string
 }
 
@@ -156,4 +175,97 @@ export const supervisionTimelineApi = {
 
 export const timelineKeys = {
   timeline: (teacherId: string) => ['teacher-files', 'timeline', teacherId] as const,
+}
+
+/**
+ * PD-18 payroll (`/teacher-files/:id/finance*`), super admin only. Mirrored
+ * from apps/api/src/teacher-file/teacher-payroll.service.ts. Amounts are
+ * strings with two decimals ("1500.00"); the page formats them and never
+ * computes a total itself -- the summary is the server's.
+ */
+export type SalaryType = 'shift' | 'hourly'
+export type PayoutMethod = 'e_wallet' | 'instapay' | 'bank_transfer'
+
+export interface PayTerms {
+  /** YYYY-MM */
+  effectiveMonth: string
+  salaryType: SalaryType
+  currency: string
+  monthlyAmount: string | null
+  hourlyRate: string | null
+  reason: string
+}
+
+export interface PayAdjustment {
+  id: string
+  kind: 'bonus' | 'deduction'
+  month: string
+  amount: string
+  currency: string
+  reason: string
+  bonusEntryId: string | null
+  violationId: string | null
+  replaces: string | null
+  /** Not replaced by a correction. A live amount of 0.00 is a cancellation. */
+  live: boolean
+  createdBy: Person
+  createdAt: string
+}
+
+export interface MonthPay {
+  month: string
+  currency: string | null
+  salaryType: SalaryType | null
+  paidMinutes: number
+  base: string | null
+  bonuses: string
+  deductions: string
+  net: string | null
+}
+
+export interface TeacherFinance {
+  month: string
+  /** False: the server has no payout key, so accounts can be neither saved nor shown. */
+  keyConfigured: boolean
+  terms: Array<PayTerms & { createdBy: Person; createdAt: string }>
+  currentTerms: PayTerms | null
+  payoutAccount: { method: PayoutMethod; last4: string; updatedAt: string; updatedBy: Person } | null
+  adjustments: PayAdjustment[]
+  unpriced: { bonusEntryIds: string[]; violationIds: string[] }
+  /** Newest month first. */
+  summary: MonthPay[]
+}
+
+export type PayoutDetails =
+  | { provider: string; walletNumber: string }
+  | { address: string }
+  | { bankName: string; accountHolder: string; accountNumber: string; iban?: string; swift?: string }
+
+export interface NewAdjustment {
+  kind?: 'bonus' | 'deduction'
+  amount: string
+  month?: string
+  reason: string
+  bonusEntryId?: string
+  violationId?: string
+  replaces?: string
+}
+
+const finance = (teacherId: string) => `/teacher-files/${encodeURIComponent(teacherId)}/finance`
+
+export const payrollApi = {
+  finance: (teacherId: string, month?: string) => api.get<TeacherFinance>(finance(teacherId), month ? { month } : undefined),
+  setTerms: (teacherId: string, body: { effectiveMonth: string; salaryType: SalaryType; currency: string; monthlyAmount?: string; hourlyRate?: string; reason: string }) =>
+    api.post<PayTerms & { id: string }>(`${finance(teacherId)}/terms`, body),
+  setPayoutAccount: (teacherId: string, body: { method: PayoutMethod; details: PayoutDetails; reason: string }) =>
+    api.post<{ method: PayoutMethod; last4: string }>(`${finance(teacherId)}/payout-account`, body),
+  revealPayoutAccount: (teacherId: string, reason: string) =>
+    api.post<{ method: PayoutMethod; details: Record<string, string> }>(`${finance(teacherId)}/payout-account/reveal`, { reason }),
+  addAdjustment: (teacherId: string, body: NewAdjustment) =>
+    api.post<{ id: string; kind: string; month: string; amount: string; currency: string }>(`${finance(teacherId)}/adjustments`, body),
+}
+
+export const payrollKeys = {
+  all: (teacherId: string) => ['teacher-files', 'finance', teacherId] as const,
+  finance: (teacherId: string, month: string) => ['teacher-files', 'finance', teacherId, month] as const,
 }

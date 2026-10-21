@@ -115,6 +115,14 @@ CORE_API_KEY	core	yes	opt	opt	req
 CORE_WEBHOOK_SECRET	core	yes	opt	opt	req
 CORE_TIMEOUT_MS	core	no	opt	opt	req
 CORE_RETRY_MAX	core	no	opt	opt	req
+# TEACHER_PAYOUT_KEYS is CONSUMED by apps/api/src/teacher-file (PD-18): the keys
+# that seal a teacher's payout account details (AES-256-GCM) before they reach
+# the database. `keyid:base64key[,keyid:base64key...]`, each key 32 bytes; the
+# first seals, every listed key opens (rotation). Unset = payout accounts can be
+# neither saved nor revealed (503) -- payroll fails closed, never in clear. Losing
+# the key loses every saved account: back it up with the database backups' key.
+# Generate one with: echo "k1:$(openssl rand -base64 32)"
+TEACHER_PAYOUT_KEYS	payroll	yes	opt	opt	opt
 # SENTRY_DSN is CONSUMED: when set, the API and the worker report 5xx responses,
 # swallowed worker-subsystem failures and process-level faults to Sentry
 # (apps/api/src/infra/observability/sentry-error-tracker.ts); when unset or

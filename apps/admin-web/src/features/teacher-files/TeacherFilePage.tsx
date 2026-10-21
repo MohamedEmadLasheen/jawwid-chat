@@ -11,6 +11,8 @@ import { Refusal, isTeacherFileRefusal } from './Refusal'
 import { useTeacherFile } from './hooks'
 import { AddEntryDialog, EditPersonalDialog, type EntryIntent } from './TeacherFileDialogs'
 import { SupervisionTimeline } from './SupervisionTimeline'
+import { EmploymentSection, FinancialSummarySection, HistorySection, usePayroll } from './Payroll'
+import { MonthlyKpis, TeacherScheduleSection, currentMonth, teacherAreaLinks, type TeacherWorkLinks } from './TeacherWork'
 import './teacher-files.css'
 import { studentPath } from '@/features/profiles/api'
 import { OpenSupervisionButton, TeacherLeaveSection } from '@/features/supervision/TeacherLeaveSection'
@@ -27,6 +29,7 @@ export function TeacherFilePage({ basePath, eyebrow }: { basePath: string; eyebr
   const [editing, setEditing] = useState(false)
   const [intent, setIntent] = useState<EntryIntent | null>(null)
   const data = file.data
+  const links = teacherAreaLinks(basePath)
 
   return (
     <div className="page">
@@ -50,21 +53,7 @@ export function TeacherFilePage({ basePath, eyebrow }: { basePath: string; eyebr
                   }
                   actions={data.teacher.isActive && data.access.canWriteSupervision ? <OpenSupervisionButton teacherId={data.teacher.id} /> : undefined}
                 />
-                <Personal file={data} onEdit={() => setEditing(true)} />
-                <Students file={data} />
-                <Complaints file={data} onAdd={setIntent} />
-                <Monthly file={data} onAdd={setIntent} />
-                <DaysOff file={data} onAdd={setIntent} />
-                {/* PD-11's timeline: every record about the teacher in one line, plus notes and the bonus ticket. */}
-                <SupervisionTimeline teacherId={data.teacher.id} canWrite={data.access.canWriteSupervision} />
-                {/* PD-12: the manager (and super admin) edit the record; the same two set the allowance. */}
-                <TeacherLeaveSection teacherId={data.teacher.id} canSetAllowance={data.access.canEditPersonal} />
-                <section className="card panel tf-section" aria-labelledby="tf-later">
-                  <h2 id="tf-later" className="tf-section__title">
-                    {tx(T.notHereYet)}
-                  </h2>
-                  <p className="tf-muted">{tx(T.notHereYetBody)}</p>
-                </section>
+                <FileSections file={data} links={links} onEdit={() => setEditing(true)} onAdd={setIntent} />
                 {editing && <EditPersonalDialog file={data} onClose={() => setEditing(false)} />}
                 {intent && <AddEntryDialog teacherId={data.teacher.id} intent={intent} onClose={() => setIntent(null)} />}
               </>
@@ -73,6 +62,41 @@ export function TeacherFilePage({ basePath, eyebrow }: { basePath: string; eyebr
         )}
       </div>
     </div>
+  )
+}
+
+/** The sections in the order the owner listed them (2026-10-21); the timeline closes the file. */
+function FileSections({
+  file,
+  links,
+  onEdit,
+  onAdd,
+}: {
+  file: TeacherFile
+  links?: TeacherWorkLinks
+  onEdit: () => void
+  onAdd: (i: EntryIntent) => void
+}) {
+  const payroll = usePayroll(file)
+  return (
+    <>
+      <Personal file={file} onEdit={onEdit} />
+      <EmploymentSection file={file} payroll={payroll} onEdit={onEdit} />
+      <Students file={file} />
+      <TeacherScheduleSection teacherId={file.teacher.id} links={links} />
+      <Monthly file={file} onAdd={onAdd} links={links} />
+      <Complaints file={file} onAdd={onAdd} />
+      {/* PD-18: the super admin only; the server re-checks every route. */}
+      <FinancialSummarySection payroll={payroll} />
+      <HistorySection kind="bonus" file={file} payroll={payroll} />
+      <HistorySection kind="deduction" file={file} payroll={payroll} />
+      <DaysOff file={file} onAdd={onAdd} />
+      {/* PD-12: the manager (and super admin) edit the record; the same two set the allowance. */}
+      <TeacherLeaveSection teacherId={file.teacher.id} canSetAllowance={file.access.canEditPersonal} />
+      {/* PD-11's timeline: every record about the teacher in one line, plus notes and the bonus ticket. */}
+      <SupervisionTimeline teacherId={file.teacher.id} canWrite={file.access.canWriteSupervision} />
+      {payroll.dialogs}
+    </>
   )
 }
 
@@ -246,23 +270,39 @@ function Complaints({ file, onAdd }: { file: TeacherFile; onAdd: (i: EntryIntent
   )
 }
 
-function Monthly({ file, onAdd }: { file: TeacherFile; onAdd: (i: EntryIntent) => void }) {
+function Monthly({ file, onAdd, links }: { file: TeacherFile; onAdd: (i: EntryIntent) => void; links?: TeacherWorkLinks }) {
   const tx = useCopy()
   const { number } = useI18n()
   const cal = useCalendarDate()
+  const [month, setMonth] = useState(currentMonth)
   const items = file.supervision.monthlyComments
   return (
     <Section
       id="tf-monthly"
       title={tx(T.monthly)}
       action={
-        file.access.canWriteSupervision && (
+        <label className="tf-month">
+          <span className="field__label">{tx(T.month)}</span>
+          <input
+            className="input"
+            type="month"
+            value={month}
+            max={currentMonth()}
+            onChange={(e) => e.target.value && setMonth(e.target.value)}
+            aria-label={tx(T.month)}
+          />
+        </label>
+      }
+    >
+      <MonthlyKpis teacherId={file.teacher.id} month={month} links={links} />
+      <div className="tf-section__head">
+        <h3 className="tf-subtitle">{tx(T.comments)}</h3>
+        {file.access.canWriteSupervision && (
           <button type="button" className="btn btn--sm" onClick={() => onAdd({ kind: 'monthly_comment' })}>
             {tx(T.addMonthly)}
           </button>
-        )
-      }
-    >
+        )}
+      </div>
       {items.length === 0 ? (
         <p className="tf-muted">{tx(T.noMonthly)}</p>
       ) : (
