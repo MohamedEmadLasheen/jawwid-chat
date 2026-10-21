@@ -1459,12 +1459,27 @@ export class AuthorizationService {
    * conversation without being a member; through canCall they could otherwise
    * start a call that rings everyone else while they hold no seat in it (a
    * phantom call). Joining is unaffected: it already requires a participant row.
+   *
+   * PD-19 amendment (2026-10-21): the SUPER ADMIN may start a GROUP call in a
+   * conversation they are not a member of, and CallService then gives them a
+   * seat on that call -- a call participant row, not chat membership. That keeps
+   * D1's point (the caller is on the call they start). A 1:1 between two other
+   * people stays refused: a direct call has exactly two seats (the database
+   * enforces it). Managers and backups are unchanged.
    */
   canStartCallAsParticipant(
-    actor: Pick<Actor, 'actorId'>,
+    actor: Pick<Actor, 'actorId' | 'kind' | 'staffRole'>,
     participants: ReadonlyArray<Pick<Actor, 'actorId'>>,
+    conv: Pick<Conv, 'type'>,
   ): Decision {
     if (participants.some((p) => p.actorId === actor.actorId)) return allow();
+    if (
+      actor.kind === ActorKind.STAFF &&
+      actor.staffRole === StaffRole.SUPER_ADMIN &&
+      GROUP_CONVERSATION_TYPES.has(conv.type)
+    ) {
+      return allow();
+    }
     return deny(CommErrorCode.NOT_CONVERSATION_MEMBER, 'the caller would not be a participant of this call');
   }
 
