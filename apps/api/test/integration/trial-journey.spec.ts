@@ -12,6 +12,8 @@
  *   5. corrections: one outcome per trial, history kept, counted once
  *   6. statistics: a monthly partition per teacher, from Chat's records only
  *   7. Core no longer confirms anything
+ *   8. booking with students; Operations works trials like Sales (2026-10-21)
+ *   9. moving a booked trial: time, length or teacher
  *
  * Synthetic fixtures only (QA gate G-16).
  */
@@ -25,6 +27,7 @@ import { StatsService } from '../../src/lessons/stats.service';
 import { TrialGroupService } from '../../src/lessons/trial-group.service';
 import { TrialService } from '../../src/lessons/trial.service';
 import { NewStudentsService } from '../../src/new-students/new-students.service';
+import { NewStudentEnrolmentService } from '../../src/new-students/enrolment.service';
 import { CardPoster } from '../../src/supervision/card-poster';
 import { buildGraph, seed, truncate, Scenario } from './harness';
 
@@ -35,6 +38,8 @@ const scheduling = new SchedulingService(g.prisma, g.authz, g.conversations, les
 const cards = new CardPoster(g.conversations, g.outbox, audit);
 const groups = new TrialGroupService(g.prisma, g.authz, g.conversations, g.outbox, cards, g.config, audit);
 const trials = new TrialService(g.prisma, g.conversations, lessons, scheduling, audit, groups, new NewStudentsService(g.prisma));
+// PD-16: the page is NewStudentEnrolmentService's (filtered per viewer).
+const enrolment = new NewStudentEnrolmentService(g.prisma, g.authz, g.conversations, new NewStudentsService(g.prisma), lessons, scheduling, audit);
 const stats = new StatsService(g.prisma, g.conversations, lessons, scheduling, g.config);
 
 const MIN = 60_000;
@@ -186,9 +191,8 @@ describe('1. the trial group', () => {
     expect(events.length).toBeGreaterThanOrEqual(4);
   });
 
-  it('only Sales joins by choice; someone who left Sales loses the seat at the next sync', async () => {
+  it('only the trial desk joins by choice; someone who left it loses the seat at the next sync', async () => {
     const id = await groupId();
-    expect(await code(trials.joinGroup(s.ownerId, id))).toBe(CommErrorCode.LESSON_DENIED); // Operations
     expect(await code(trials.joinGroup(s.teacherId, id))).toBe(CommErrorCode.LESSON_DENIED);
     expect(await code(trials.joinGroup(salesId, randomUUID()))).toBe(CommErrorCode.LESSON_NOT_FOUND);
 
@@ -200,24 +204,26 @@ describe('1. the trial group', () => {
 });
 
 describe('2. the "+ -> Trial" card', () => {
-  it('lists the teacher\'s trials awaiting an outcome first, each by student and time, with what the caller may do', async () => {
+  it('lists the teacher\'s trials awaiting an outcome first, then upcoming ones, each by student and time, with what the caller may do', async () => {
     const id = await groupId();
     const older = await pastTrial(new Date(Date.now() - 5 * HOUR));
     const newer = await pastTrial(new Date(Date.now() - 2 * HOUR));
     const done = await pastTrial(new Date(Date.now() - 3 * HOUR));
-    await pastTrial(new Date(Date.now() + 20 * HOUR)); // not started: not offered
+    const future = await pastTrial(new Date(Date.now() + 20 * HOUR)); // not started: listed, not recordable
     await pastTrial(new Date(Date.now() - 2 * HOUR), s.unrelatedTeacherId); // another teacher's
     await trials.outcome(tsupId, done, { result: 'no_show' });
 
     const ctx = await trials.groupContext(salesId, id);
     expect(ctx.teacher).toMatchObject({ id: s.teacherId });
     expect(ctx.can).toEqual({ noShow: true, decide: true, correct: true });
-    expect(ctx.trials.map((t) => [t.id, t.outcome])).toEqual([[older, 'awaiting'], [newer, 'awaiting'], [done, 'no_show']]);
+    expect(ctx.trials.map((t) => [t.id, t.outcome])).toEqual([[older, 'awaiting'], [newer, 'awaiting'], [future, 'upcoming'], [done, 'no_show']]);
+    expect(await code(trials.outcome(salesId, future, { result: 'no_show' }))).toBe(CommErrorCode.LESSON_STATE);
     expect(ctx.trials[0]).toMatchObject({ prospect: { displayName: 'prospect_j' }, durationMinutes: 30 });
 
     expect((await trials.groupContext(tsupId, id)).can).toEqual({ noShow: true, decide: false, correct: false });
     expect(await code(trials.groupContext(s.teacherId, id))).toBe(CommErrorCode.LESSON_DENIED);
-    expect(await code(trials.groupContext(s.ownerId, id))).toBe(CommErrorCode.LESSON_DENIED);
+    // Operations is the trial desk too (owner, 2026-10-21).
+    expect((await trials.groupContext(s.ownerId, id)).can).toEqual({ noShow: true, decide: true, correct: true });
   });
 
   it('option 1: either supervisor records a no-show, once, after the start', async () => {
@@ -326,11 +332,11 @@ describe('3. privacy: the group gets one short sentence', () => {
 });
 
 describe('4. the New Students page', () => {
-  it('shows each subscription as Sales recorded it, to Operations and Sales only', async () => {
+  it('shows each subscription as Sales recorded it, to the Operations manager and Sales only', async () => {
     const id = await pastTrial(new Date(Date.now() - 2 * HOUR));
     await trials.outcome(salesId, id, { result: 'subscribed', subscription: form() });
 
-    const page = await trials.newStudents(s.ownerId); // Operations
+    const page = await enrolment.page(s.managerId); // the Operations manager
     expect(page.students).toEqual([
       expect.objectContaining({
         trialId: id,
@@ -349,10 +355,12 @@ describe('4. the New Students page', () => {
         ],
       }),
     ]);
-    expect((await trials.newStudents(salesId)).students).toHaveLength(1);
-    expect(await code(trials.newStudents(tsupId))).toBe(CommErrorCode.LESSON_DENIED);
-    expect(await code(trials.newStudents(s.teacherId))).toBe(CommErrorCode.LESSON_DENIED);
-    expect(await code(trials.newStudents(s.parentId))).toBe(CommErrorCode.LESSON_DENIED);
+    expect((await enrolment.page(salesId)).students).toHaveLength(1);
+    // PD-16: an Operations supervisor sees only the students assigned to them.
+    expect((await enrolment.page(s.ownerId)).students).toHaveLength(0);
+    expect(await code(enrolment.page(tsupId))).toBe(CommErrorCode.LESSON_DENIED);
+    expect(await code(enrolment.page(s.teacherId))).toBe(CommErrorCode.LESSON_DENIED);
+    expect(await code(enrolment.page(s.parentId))).toBe(CommErrorCode.LESSON_DENIED);
   });
 
   it('Sales edits the form in place; still one row, nothing posted', async () => {
@@ -364,7 +372,7 @@ describe('4. the New Students page', () => {
     const updated = await trials.updateSubscription(sales2Id, id, { subscription: form({ payment: { currency: 'USD', method: 'bank_transfer' } }) });
     expect(updated).toMatchObject({ payment: { currency: 'USD', method: 'bank_transfer' } });
     expect(updated?.updatedAt).not.toBeNull();
-    expect((await trials.newStudents(salesId)).students).toHaveLength(1);
+    expect((await enrolment.page(salesId)).students).toHaveLength(1);
     expect((await cardsIn(conv)).length).toBe(before);
   });
 });
@@ -383,7 +391,7 @@ describe('5. corrections', () => {
     let t = await trials.correct(salesId, id, { result: 'not_subscribed', reason: 'chose_other', why: 'the family cancelled the next day' });
     expect(t).toMatchObject({ outcome: 'not_subscribed', outcomeDetail: { reason: 'chose_other' } });
     expect(t.outcomeDetail?.correctedAt).not.toBeNull();
-    expect((await trials.newStudents(salesId)).students).toEqual([]);
+    expect((await enrolment.page(salesId)).students).toEqual([]);
 
     // -> no-show: the attendance follows.
     t = await trials.correct(sales2Id, id, { result: 'no_show', why: 'the teacher confirmed nobody joined' });
@@ -392,7 +400,7 @@ describe('5. corrections', () => {
     // -> subscribed again, with a fresh form: the same row comes back.
     t = await trials.correct(salesId, id, { result: 'subscribed', subscription: form({ payment: { currency: 'SAR', method: 'invoice' } }), why: 'the family came back' });
     expect(t).toMatchObject({ attendance: 'attended', outcome: 'subscribed' });
-    const page = await trials.newStudents(salesId);
+    const page = await enrolment.page(salesId);
     expect(page.students.map((x) => [x.trialId, x.payment.currency])).toEqual([[id, 'SAR']]);
 
     expect(await g.prisma.trialOutcome.count({ where: { lessonId: id } })).toBe(1);
@@ -503,3 +511,132 @@ describe('7. Core no longer confirms anything', () => {
     expect(fns).toEqual([]);
   });
 });
+
+describe('8. booking with students; Operations is the trial desk', () => {
+  async function openAllWeek() {
+    await scheduling.setAvailability(tsupId, s.teacherId, {
+      timezone: 'Africa/Cairo',
+      windows: [1, 2, 3, 4, 5, 6, 7].map((weekday) => ({ weekday, start: '00:00', end: '24:00' })),
+    });
+  }
+
+  it('the students are typed in the booking: siblings share one trial, one card and one outcome', async () => {
+    await openAllWeek();
+    const { slots } = await trials.slots(s.ownerId, s.teacherId);
+    const body = (students: unknown) => ({ students, teacherId: s.teacherId, startsAt: slots[0], durationMinutes: 30 });
+    for (const bad of [[], Array.from({ length: 11 }, (_, i) => ({ name: `k${i}` })), [{ level: 'x' }], 'karim']) {
+      expect(await code(trials.book(s.ownerId, body(bad)))).toBe(CommErrorCode.VALIDATION);
+    }
+    expect(await code(trials.book(s.teacherId, body([{ name: 'x' }])))).toBe(CommErrorCode.LESSON_DENIED);
+
+    // Operations books for two siblings.
+    const t = await trials.book(s.ownerId, body([
+      { name: 'كريم', level: 'مبتدئ', note: 'shy' },
+      { name: 'هدى', level: 'مبتدئ' },
+    ]));
+    expect(t.students).toEqual([
+      { name: 'كريم', level: 'مبتدئ', note: 'shy' },
+      { name: 'هدى', level: 'مبتدئ', note: null },
+    ]);
+    expect(t.prospect).toMatchObject({ displayName: 'كريم، هدى', level: 'مبتدئ' });
+    expect(await g.prisma.lesson.count({ where: { kind: 'trial' } })).toBe(1);
+    const [card] = await cardsIn(await groupId());
+    expect(card.card?.kind).toBe('trial_booked');
+    expect(card.card?.payload).toMatchObject({ prospectName: 'كريم، هدى', students: ['كريم', 'هدى'] });
+    expect(json(card)).not.toContain('shy'); // a student's note stays with the desk
+
+    // Latin names join with a comma; mixed levels leave the booking's level empty.
+    const u = await trials.book(salesId, { ...body([{ name: 'Adam', level: 'A1' }, { name: 'Lina', level: 'A2' }]), startsAt: slots[3] });
+    expect(u.prospect).toMatchObject({ displayName: 'Adam, Lina', level: null });
+  });
+
+  it('Operations records outcomes, fills the form, corrects, and joins or leaves the group', async () => {
+    const id = await pastTrial(new Date(Date.now() - 2 * HOUR));
+    const group = await groupId();
+    await trials.joinGroup(s.ownerId, group);
+    expect(await seats(group)).toContain(s.ownerId);
+    await trials.outcome(s.ownerId, id, { result: 'subscribed', subscription: form() });
+    await trials.correct(s.ownerId, id, { result: 'not_subscribed', reason: 'price', why: 'family changed its mind' });
+    expect((await trials.get(s.ownerId, id)).outcome).toBe('not_subscribed');
+    await trials.leaveGroup(s.ownerId, group);
+    expect(await seats(group)).not.toContain(s.ownerId);
+  });
+
+  it('an older booking keeps its one student; a booking\'s students are never rewritten', async () => {
+    const id = await pastTrial(new Date(Date.now() - 2 * HOUR)); // prospect recorded the old way
+    expect((await trials.get(salesId, id)).students).toEqual([{ name: 'prospect_j', level: null, note: null }]);
+    const student = await g.prisma.trialStudent.findFirstOrThrow({ where: { prospectId } });
+    await expect(g.prisma.trialStudent.update({ where: { id: student.id }, data: { displayName: 'x' } })).rejects.toThrow(/never changed/);
+    await expect(g.prisma.trialStudent.delete({ where: { id: student.id } })).rejects.toThrow(/never changed/);
+  });
+});
+
+describe('9. moving a booked trial', () => {
+  async function openAllWeek(teacherId: string) {
+    await scheduling.setAvailability(tsupId, teacherId, {
+      timezone: 'Africa/Cairo',
+      windows: [1, 2, 3, 4, 5, 6, 7].map((weekday) => ({ weekday, start: '00:00', end: '24:00' })),
+    });
+  }
+
+  it('to another time: the old row is history, the trial continues once, and its group is told', async () => {
+    await openAllWeek(s.teacherId);
+    const { slots } = await trials.slots(salesId, s.teacherId);
+    // The start is one the server offers for the LONGER length too. A lesson
+    // fits inside one day's window, so a start offered for 30 minutes is not
+    // always free for 60 (23:30 is the last 30-minute start, 23:00 the last
+    // 60-minute one); a wall-clock pick failed every evening from 20:00 to 20:30.
+    const at = (await trials.slots(salesId, s.teacherId, '60')).slots[2];
+    expect(slots).toContain(at);
+    const t = await trials.book(s.ownerId, { students: [{ name: 'Karim' }, { name: 'Huda' }], teacherId: s.teacherId, startsAt: at });
+
+    expect(await code(trials.reschedule(s.teacherId, t.id, { startsAt: slots[5] }))).toBe(CommErrorCode.LESSON_DENIED);
+    expect(await code(trials.reschedule(salesId, t.id, { startsAt: at }))).toBe(CommErrorCode.LESSON_STATE); // nothing changed
+    const off = new Date(new Date(slots[5]).getTime() + 7 * MIN).toISOString();
+    expect(await code(trials.reschedule(salesId, t.id, { startsAt: off }))).toBe(CommErrorCode.LESSON_STATE); // not an offered time
+    // Overlapping its own old time is fine (same start, longer): the old time is released first.
+    const moved = await trials.reschedule(salesId, t.id, { startsAt: at, durationMinutes: 60 });
+    expect(moved).toMatchObject({ outcome: 'upcoming', startsAt: at, durationMinutes: 60, students: [{ name: 'Karim' }, { name: 'Huda' }] });
+    expect(moved.id).not.toBe(t.id);
+    expect(await g.prisma.lesson.findUniqueOrThrow({ where: { id: t.id } })).toMatchObject({ outcome: 'rescheduled' });
+
+    // Listed once (the new row); its old time is free again; the group reads the move.
+    const listed = (await trials.list(salesId, {})).trials.map((x) => x.id);
+    expect(listed).toEqual([moved.id]);
+    const kinds = (await cardsIn(await groupId())).map((m) => [m.card?.kind, (m.card?.payload as { previousWhen?: string }).previousWhen ? 'with-previous' : '']);
+    expect(kinds).toEqual([['trial_booked', ''], ['trial_rescheduled', 'with-previous']]);
+    // A moved trial can be moved again, but never the old row.
+    expect(await code(trials.reschedule(salesId, t.id, { startsAt: slots[8] }))).toBe(CommErrorCode.LESSON_STATE);
+  });
+
+  it('to another teacher: the old group learns it left, the new teacher\'s group gets the booking', async () => {
+    await openAllWeek(s.teacherId);
+    await openAllWeek(s.unrelatedTeacherId);
+    const { slots } = await trials.slots(salesId, s.teacherId);
+    const t = await trials.book(salesId, { students: [{ name: 'Adam' }], teacherId: s.teacherId, startsAt: slots[1] });
+    const otherSlots = (await trials.slots(salesId, s.unrelatedTeacherId)).slots;
+    const moved = await trials.reschedule(tsupId, t.id, { teacherId: s.unrelatedTeacherId, startsAt: otherSlots[4] });
+    expect(moved.teacher.id).toBe(s.unrelatedTeacherId);
+    const oldCards = await cardsIn(await groupId(s.teacherId));
+    expect(oldCards.map((m) => m.card?.kind)).toEqual(['trial_booked', 'trial_rescheduled']);
+    expect(oldCards[1].card?.payload).toMatchObject({ movedAway: true });
+    expect((await cardsIn(await groupId(s.unrelatedTeacherId))).map((m) => m.card?.kind)).toEqual(['trial_booked']);
+  });
+
+  it('a trial that has started cannot be moved; statistics count a moved trial once', async () => {
+    const started = await pastTrial(new Date(Date.now() - 2 * HOUR));
+    expect(await code(trials.reschedule(salesId, started, { startsAt: new Date(Date.now() + 50 * HOUR).toISOString() }))).toBe(CommErrorCode.LESSON_STATE);
+
+    await openAllWeek(s.teacherId);
+    const { slots } = await trials.slots(salesId, s.teacherId);
+    const t = await trials.book(salesId, { students: [{ name: 'Lina' }], teacherId: s.teacherId, startsAt: slots[3] });
+    await trials.reschedule(salesId, t.id, { startsAt: slots[10] });
+    const month = (iso: string) => iso.slice(0, 7);
+    if (month(slots[3]) === month(slots[10])) {
+      const d = await stats.teacher(tsupId, s.teacherId, month(slots[3]));
+      expect(d.trials.upcoming + d.trials.awaiting).toBeGreaterThanOrEqual(1);
+      expect(d.trials.cancelled).toBe(0);
+    }
+  });
+});
+

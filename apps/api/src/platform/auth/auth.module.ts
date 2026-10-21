@@ -1,8 +1,11 @@
+import { ParentSignupController } from './parent-signup.controller';
+import { ParentSignupService } from './parent-signup.service';
 import { Logger, Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import Redis from 'ioredis';
 import { AuthService } from './auth.service';
 import { AuthenticatedGuard } from './auth.guard';
+import { ActionThrottleGuard } from './action-throttle.guard';
 import { AuthController, MeController } from './auth.controller';
 import { AuthErrorFilter } from './auth.errors';
 import { LoginRateLimiter, RATE_LIMIT_STORE, type RateLimitStore } from './login-rate-limit';
@@ -75,9 +78,11 @@ export const loginRateLimitStoreProvider = {
 };
 
 @Module({
-  controllers: [AuthController, MeController],
+  // PD-16: ParentSignupController -- a parent sets the password of the account Chat created at enrolment.
+  controllers: [AuthController, MeController, ParentSignupController],
   providers: [
     AuthService,
+    ParentSignupService,
     LoginRateLimiter,
     loginRateLimitStoreProvider,
     // Resolved once at boot, from the same variable bootstrap.ts uses to set
@@ -85,6 +90,12 @@ export const loginRateLimitStoreProvider = {
     // client is identifiable.
     { provide: CLIENT_ADDRESS_POLICY, useFactory: () => readClientAddressPolicy() },
     { provide: APP_GUARD, useClass: AuthenticatedGuard },
+    // Phase 8 abuse limits. MUST stay after AuthenticatedGuard: Nest runs
+    // global guards in registration order, and this one counts against the
+    // actor that guard resolved from the token. It shares the login limiter's
+    // store (RATE_LIMIT_STORE) under its own key prefix, but not its failure
+    // policy -- see action-throttle.guard.ts.
+    { provide: APP_GUARD, useClass: ActionThrottleGuard },
     { provide: APP_FILTER, useClass: AuthErrorFilter },
   ],
   exports: [AuthService, LoginRateLimiter],

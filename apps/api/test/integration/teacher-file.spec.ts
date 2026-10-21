@@ -240,7 +240,7 @@ describe('4. personal information', () => {
     });
     const read = await http(m.teacherSupervisors[0].subject, 'GET', `/teacher-files/${teacher().id}`);
     expect(read.json.personal.phone).toBe(PHONE);
-    expect(read.json.access).toEqual({ canEditPersonal: false, canWriteSupervision: true });
+    expect(read.json.access).toEqual({ canEditPersonal: false, canWriteSupervision: true, canViewFinance: false });
   });
 
   it('a Teachers supervisor may read it but not edit it', async () => {

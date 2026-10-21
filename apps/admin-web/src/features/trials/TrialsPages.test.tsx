@@ -31,6 +31,7 @@ const sent = (method: string, pattern: RegExp) =>
 const trial = (id: string, over: Partial<TrialDto> = {}): TrialDto => ({
   id,
   prospect: { id: 'p-1', displayName: 'Prospect Alpha', level: 'beginner' },
+  students: [{ name: 'Prospect Alpha', level: 'beginner', note: null }],
   teacher: { id: 't-1', name: 'Teacher One' },
   startsAt: '2026-10-17T15:00:00Z',
   endsAt: '2026-10-17T15:30:00Z',
@@ -52,6 +53,13 @@ const TRIALS: TrialDto[] = [
 ]
 
 const SLOTS = ['2026-11-02T15:00:00Z', '2026-11-02T15:30:00Z']
+
+/** The free-time list, once it can be used (it is shown, disabled, until then). */
+async function freeTime(dialog: HTMLElement): Promise<HTMLElement> {
+  const select = within(dialog).getByLabelText('Free time')
+  await waitFor(() => expect(select).toBeEnabled())
+  return select
+}
 
 function access(a: { lessonManager?: boolean; sales?: boolean; operations?: boolean }) {
   on('GET', /\/lessons\/access$/, () => json({ lessonManager: false, sales: false, operations: false, ...a }))
@@ -93,7 +101,9 @@ describe('Trial lessons, as Sales', () => {
     expect(within(row).queryByRole('button', { name: 'Record outcome' })).not.toBeInTheDocument()
     const pending = screen.getByText('Prospect Alpha').closest('tr')!
     expect(within(pending).getByRole('button', { name: 'Record outcome' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Record a prospect' })).toBeInTheDocument()
+    // Prospects are typed in the booking itself: no separate step.
+    expect(screen.queryByRole('button', { name: 'Record a prospect' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Book a trial' })).toBeInTheDocument()
     // Sales sees both of the area's tabs.
     const tabs = screen.getByRole('navigation', { name: 'Trials' })
     expect(within(tabs).getAllByRole('link').map((l) => l.textContent)).toEqual(['Trial lessons', 'New students'])
@@ -139,6 +149,9 @@ describe('Trial lessons, as Sales', () => {
     await userEvent.type(within(dialog).getByLabelText('Phone number'), '+99 000 111')
     await userEvent.type(within(dialog).getByLabelText('E-mail (optional)'), 'parent@example.test')
     const child = within(dialog).getByRole('group', { name: 'Child 1' })
+    // The trial's student is the first child already; the supervisor may rename.
+    expect(within(child).getByLabelText('Name')).toHaveValue('Prospect Alpha')
+    await userEvent.clear(within(child).getByLabelText('Name'))
     await userEvent.type(within(child).getByLabelText('Name'), 'Child Alpha')
     await userEvent.type(within(child).getByLabelText('Age'), '9')
     await userEvent.type(within(child).getByLabelText('Course'), 'Course A')
@@ -180,26 +193,150 @@ describe('Trial lessons, as Sales', () => {
     await waitFor(() => expect(sent('POST', /\/trials\/tr-sub\/correction$/)).toEqual([{ result: 'no_show', why: 'wrong trial' }]))
   })
 
-  it('books only a time the server offered', async () => {
+  it('books siblings in one trial, typed in the booking, into a time the server offered', async () => {
     access({ sales: true })
     on('POST', /\/trials$/, () => json(trial('tr-new', { attendance: 'upcoming', outcome: 'upcoming' }), 201))
     renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
     await userEvent.click(await screen.findByRole('button', { name: 'Book a trial' }))
     const dialog = await screen.findByRole('dialog')
     const book = within(dialog).getByRole('button', { name: 'Book' })
-    expect(book).toBeDisabled()
-    await waitFor(() => expect(within(within(dialog).getByLabelText('Prospect')).getAllByRole('option')).toHaveLength(2))
-    await userEvent.selectOptions(within(dialog).getByLabelText('Prospect'), 'p-9')
+    expect(within(dialog).queryByLabelText('Prospect')).not.toBeInTheDocument()
+    // Day and time are there from the start, saying what comes first.
+    expect(within(dialog).getByLabelText('Day')).toBeDisabled()
+    expect(within(dialog).getByLabelText('Free time')).toHaveDisplayValue('Choose the teacher first')
+
+    await userEvent.type(within(dialog).getByLabelText('Student name'), 'Karim')
+    await userEvent.type(within(dialog).getByLabelText('Level (optional)'), 'beginner')
+    await userEvent.type(within(dialog).getByLabelText('Note (optional)'), 'shy at first')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add another student' }))
+    const second = within(dialog).getByRole('group', { name: 'Student 2' })
+    expect(within(second).getByLabelText('Level (optional)')).toHaveValue('beginner') // carried over
+    await userEvent.type(within(second).getByLabelText('Student name'), 'Huda')
+
     await waitFor(() => expect(within(within(dialog).getByLabelText('Teacher')).getAllByRole('option')).toHaveLength(3))
     await userEvent.selectOptions(within(dialog).getByLabelText('Teacher'), 't-2')
-    const time = await within(dialog).findByLabelText('Free time')
+    const time = await freeTime(dialog)
     expect(within(time).getAllByRole('option')).toHaveLength(SLOTS.length + 1)
+    // A 12-hour clock with AM / PM, as the academy reads it.
+    for (const o of within(time).getAllByRole('option').slice(1)) expect(o.textContent).toMatch(/^\d{2}:\d{2}\s?(AM|PM)$/)
     await userEvent.selectOptions(time, SLOTS[1]!)
     await userEvent.click(book)
     await waitFor(() =>
-      expect(sent('POST', /\/trials$/)).toEqual([{ prospectId: 'p-9', teacherId: 't-2', startsAt: SLOTS[1], durationMinutes: 30 }]),
+      expect(sent('POST', /\/trials$/)).toEqual([{
+        students: [{ name: 'Karim', level: 'beginner', note: 'shy at first' }, { name: 'Huda', level: 'beginner' }],
+        teacherId: 't-2',
+        startsAt: SLOTS[1],
+        durationMinutes: 30,
+      }]),
     )
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('edits an upcoming trial: another teacher and time, same students', async () => {
+    access({ sales: true })
+    const upcoming = trial('tr-up', {
+      prospect: { id: 'p-7', displayName: 'Karim, Huda', level: null },
+      attendance: 'upcoming', outcome: 'upcoming', report: null, startsAt: '2026-11-05T15:00:00Z', endsAt: '2026-11-05T15:30:00Z',
+    })
+    on('GET', /\/trials(\?.*)?$/, () => json({ trials: [...TRIALS, upcoming] }))
+    on('POST', /\/trials\/tr-up\/reschedule$/, () => json(trial('tr-up2', { outcome: 'upcoming' }), 201))
+    renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
+    const row = (await screen.findByText('Karim, Huda')).closest('tr')!
+    // Only a trial that has not started can be edited.
+    expect(within(screen.getByText('Prospect Alpha').closest('tr')!).queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
+    await userEvent.click(within(row).getByRole('button', { name: 'Edit' }))
+    const dialog = await screen.findByRole('dialog', { name: /Edit — Karim, Huda/ })
+    expect(within(dialog).queryByLabelText('Student name')).not.toBeInTheDocument()
+    await waitFor(() => expect(within(dialog).getByLabelText('Teacher')).toHaveValue('t-1'))
+    await userEvent.selectOptions(within(dialog).getByLabelText('Teacher'), 't-2')
+    await userEvent.selectOptions(await freeTime(dialog), SLOTS[1]!)
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() =>
+      expect(sent('POST', /\/trials\/tr-up\/reschedule$/)).toEqual([{ teacherId: 't-2', startsAt: SLOTS[1], durationMinutes: 30 }]),
+    )
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('Book says what is missing instead of greying out, and sends nothing until it is fixed', async () => {
+    access({ sales: true })
+    on('POST', /\/trials$/, () => json(trial('tr-new', { attendance: 'upcoming', outcome: 'upcoming' }), 201))
+    renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Book a trial' }))
+    const dialog = await screen.findByRole('dialog')
+    const book = within(dialog).getByRole('button', { name: 'Book' })
+    expect(book).toBeEnabled()
+    await userEvent.click(book)
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Enter a name for every student')
+    expect(within(dialog).getByLabelText('Student name')).toHaveAttribute('aria-invalid', 'true')
+
+    await userEvent.type(within(dialog).getByLabelText('Student name'), 'Karim')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add another student' }))
+    await waitFor(() => expect(within(within(dialog).getByLabelText('Teacher')).getAllByRole('option')).toHaveLength(3))
+    await userEvent.selectOptions(within(dialog).getByLabelText('Teacher'), 't-2')
+    await userEvent.selectOptions(await freeTime(dialog), SLOTS[0]!)
+    await userEvent.click(book)
+    // The empty second row is the reason, and it can simply be removed.
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Enter a name for every student, or remove the empty one.')
+    expect(sent('POST', /\/trials$/)).toEqual([])
+    await userEvent.click(within(within(dialog).getByRole('group', { name: 'Student 2' })).getByRole('button', { name: 'Remove this student' }))
+    await userEvent.click(book)
+    await waitFor(() => expect(sent('POST', /\/trials$/)).toHaveLength(1))
+  })
+
+  it('the length is typed in minutes; outside 15 to 120 it is refused before anything is sent', async () => {
+    access({ sales: true })
+    on('POST', /\/trials$/, () => json(trial('tr-new', { attendance: 'upcoming', outcome: 'upcoming' }), 201))
+    renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Book a trial' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.type(within(dialog).getByLabelText('Student name'), 'Karim')
+    await waitFor(() => expect(within(within(dialog).getByLabelText('Teacher')).getAllByRole('option')).toHaveLength(3))
+    await userEvent.selectOptions(within(dialog).getByLabelText('Teacher'), 't-2')
+    const length = within(dialog).getByLabelText('Length (minutes)')
+    expect(length).toHaveValue(30)
+    await userEvent.clear(length)
+    await userEvent.type(length, '5')
+    expect(within(dialog).getByLabelText('Free time')).toBeDisabled()
+    expect(within(dialog).getByLabelText('Free time')).toHaveDisplayValue('Enter the length first')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Book' }))
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Enter a length from 15 to 120 minutes.')
+    await userEvent.clear(length)
+    await userEvent.type(length, '40')
+    await userEvent.selectOptions(await freeTime(dialog), SLOTS[0]!)
+    expect(fetchMock.mock.calls.some(([u]) => /\/trials\/slots\?.*durationMinutes=40/.test(String(u)))).toBe(true)
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Book' }))
+    await waitFor(() => expect(sent('POST', /\/trials$/)).toEqual([{ students: [{ name: 'Karim' }], teacherId: 't-2', startsAt: SLOTS[0], durationMinutes: 40 }]))
+  })
+
+  it('names the next missing choice: the teacher, then a free time', async () => {
+    access({ sales: true })
+    renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Book a trial' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.type(within(dialog).getByLabelText('Student name'), 'Karim')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Book' }))
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Choose the teacher.')
+    await waitFor(() => expect(within(within(dialog).getByLabelText('Teacher')).getAllByRole('option')).toHaveLength(3))
+    await userEvent.selectOptions(within(dialog).getByLabelText('Teacher'), 't-2')
+    await freeTime(dialog)
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Choose a free time.')
+  })
+})
+
+describe('Trial lessons, as Operations (the trial desk)', () => {
+  it('books, records and corrects like Sales', async () => {
+    access({ operations: true })
+    renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
+    const tabs = await screen.findByRole('navigation', { name: 'Trials' })
+    expect(within(tabs).getAllByRole('link').map((l) => l.textContent)).toEqual(['Trial lessons', 'New students'])
+    expect(await screen.findByRole('button', { name: 'Book a trial' })).toBeInTheDocument()
+    const pending = (await screen.findByText('Prospect Alpha')).closest('tr')!
+    await userEvent.click(within(pending).getByRole('button', { name: 'Record outcome' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByRole('button', { name: 'The student subscribed' })).toBeEnabled()
+    expect(within(dialog).getByRole('button', { name: /Why didn't the student subscribe/ })).toBeEnabled()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    expect(within((await screen.findByText('Prospect Gamma')).closest('tr')!).getByRole('button', { name: 'Correct outcome' })).toBeInTheDocument()
   })
 })
 
@@ -245,6 +382,19 @@ describe('The "+ -> Trial" card in a trial group', () => {
       trial('tr-sub', { prospect: { id: 'p-3', displayName: 'Prospect Gamma', level: null }, outcome: 'subscribed' }),
     ],
   }
+
+  it('shows a trial that has not started, greyed out, saying when its outcome can be recorded', async () => {
+    on('GET', /\/trials\/groups\/conv-trial-1$/, () => json({
+      ...CONTEXT,
+      trials: [trial('tr-soon', { prospect: { id: 'p-4', displayName: 'Prospect Soon', level: null }, attendance: 'upcoming', outcome: 'upcoming' })],
+    }))
+    renderWithProviders(<TrialCardDialog conversationId="conv-trial-1" onClose={vi.fn()} />, { staff })
+    const dialog = await screen.findByRole('dialog', { name: 'Trial' })
+    const pick = await within(dialog).findByRole('button', { name: /Prospect Soon/ })
+    expect(pick).toBeDisabled()
+    expect(pick).toHaveAccessibleDescription('Not started yet: its outcome can be recorded once the trial starts.')
+    expect(within(dialog).getByText('Upcoming')).toBeInTheDocument()
+  })
 
   it('asks which trial first, by student and time, then offers the three options', async () => {
     on('GET', /\/trials\/groups\/conv-trial-1$/, () => json(CONTEXT))
@@ -355,3 +505,59 @@ describe('New students', () => {
     }]))
   })
 })
+
+describe('New students: assign, group and the parent\'s sign-up (PD-16)', () => {
+  const BASE: NewStudentDto = {
+    trialId: 'tr-new',
+    prospectName: 'Prospect Delta',
+    trialTeacher: { id: 't-1', name: 'Teacher One' },
+    trialAt: '2026-10-10T15:00:00Z',
+    recordedAt: '2026-10-11T10:00:00Z',
+    recordedBy: { id: 's-1', name: 'Sales One' },
+    updatedAt: null,
+    parent: { name: 'Parent Delta', email: 'delta@example.test', phone: '+99 000 444' },
+    children: [{ name: 'Child D1', age: 9, course: 'Course A', teacher: { id: 't-1', name: 'Teacher One' }, packagePrice: 1000, lessonPrice: 125, schedule: [{ weekday: 2, time: '16:00' }] }],
+    payment: { currency: 'EGP', method: 'invoice' },
+    enrolment: null,
+  }
+
+  it('the Operations manager assigns a supervisor with the parent\'s sign-in e-mail', async () => {
+    access({ operations: true })
+    on('GET', /\/trials\/new-students$/, () => json({ students: [BASE], canAssign: true }))
+    on('GET', /\/org\/structure$/, () => json({ departments: [{ id: 'd-ops', kind: 'operations', displayName: 'Operations', manager: null, backups: [],
+      members: [{ id: 'sup-1', name: 'Supervisor One', role: 'admin', isActive: true, position: 'supervisor', learnerCount: 4 }] }] }))
+    on('POST', /\/trials\/new-students\/tr-new\/assign$/, () => json({ familyId: 'f-1', learnerIds: ['k-1'], schedules: [{ learnerId: 'k-1', set: true, reason: null }] }))
+    renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
+    const card = (await screen.findByRole('heading', { name: 'Parent Delta' })).closest('article')!
+    await userEvent.click(within(card).getByRole('button', { name: 'Assign' }))
+    const dialog = await screen.findByRole('dialog', { name: /Assign a supervisor/ })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Assign' }))
+    expect(sent('POST', /assign$/)).toEqual([])
+    await userEvent.selectOptions(await within(dialog).findByLabelText('Supervisor'), 'sup-1')
+    expect(within(dialog).getByLabelText(/sign-in e-mail/)).toHaveValue('delta@example.test')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Assign' }))
+    await waitFor(() => expect(sent('POST', /\/trials\/new-students\/tr-new\/assign$/)).toEqual([{ supervisorId: 'sup-1', email: 'delta@example.test' }]))
+  })
+
+  it('the supervisor sees the parent\'s code to relay, and creates the group; Sales can no longer edit the form', async () => {
+    access({ operations: true, sales: true })
+    const assigned: NewStudentDto = {
+      ...BASE,
+      enrolment: {
+        familyId: 'f-1', learnerIds: ['k-1'], supervisor: { id: 'sup-1', name: 'Supervisor One' }, assignedAt: '2026-10-21T08:00:00Z',
+        groupConversationId: null, canCreateGroup: true, parentSignup: { state: 'code_waiting', code: '482913', expiresAt: '2026-10-21T08:10:00Z' },
+      },
+    }
+    on('GET', /\/trials\/new-students$/, () => json({ students: [assigned], canAssign: false }))
+    on('POST', /\/trials\/new-students\/tr-new\/group$/, () => json({ conversationId: 'c-new' }))
+    renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
+    const card = (await screen.findByRole('heading', { name: 'Parent Delta' })).closest('article')!
+    expect(within(card).getByText('Supervisor One')).toBeInTheDocument()
+    expect(within(card).getByText('482913')).toBeInTheDocument()
+    expect(within(card).queryByRole('button', { name: 'Assign' })).not.toBeInTheDocument()
+    expect(within(card).queryByRole('button', { name: 'Edit subscription' })).not.toBeInTheDocument()
+    await userEvent.click(within(card).getByRole('button', { name: 'Create group' }))
+    await waitFor(() => expect(sent('POST', /\/trials\/new-students\/tr-new\/group$/)).toHaveLength(1))
+  })
+})
+

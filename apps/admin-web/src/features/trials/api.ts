@@ -24,9 +24,18 @@ export type RecordedResult = 'no_show' | 'subscribed' | 'not_subscribed'
 export type NotSubscribedReason = 'price' | 'schedule' | 'not_ready' | 'chose_other' | 'no_response' | 'other'
 export type PaymentMethod = 'bank_transfer' | 'invoice'
 
+export interface TrialStudent {
+  name: string
+  level: string | null
+  note: string | null
+}
+
 export interface TrialDto {
   id: string
+  /** The booking's label: its students' names, joined. */
   prospect: { id: string; displayName: string; level: string | null }
+  /** The students booked together (siblings or a small group); one outcome for all. */
+  students: TrialStudent[]
   teacher: { id: string; name: string }
   startsAt: string
   endsAt: string
@@ -80,6 +89,28 @@ export interface NewStudentDto {
     schedule: ScheduleSlot[]
   }>
   payment: { currency: string; method: PaymentMethod }
+  /** PD-16: null until the Operations manager assigns the student. */
+  enrolment?: NewStudentEnrolment | null
+}
+
+/** PD-16: how far a new student's setup got. */
+export interface NewStudentEnrolment {
+  familyId: string
+  learnerIds: string[]
+  supervisor: { id: string; name: string } | null
+  assignedAt: string
+  groupConversationId: string | null
+  canCreateGroup: boolean
+  parentSignup:
+    | { state: 'not_started' }
+    | { state: 'code_waiting'; code?: string | null; expiresAt?: string }
+    | { state: 'signed_up' }
+}
+
+export interface AssignResult {
+  familyId: string
+  learnerIds: string[]
+  schedules: Array<{ learnerId: string; set: boolean; reason: string | null }>
 }
 
 /** What the "+ -> Trial" card needs in one trial group. */
@@ -106,8 +137,12 @@ export const trialsApi = {
   slots: (teacherId: string, durationMinutes: number) =>
     api.get<{ teacherId: string; durationMinutes: number; slots: string[] }>('/trials/slots', { teacherId, durationMinutes: String(durationMinutes) }),
   list: (query: { from?: string; to?: string; teacherId?: string } = {}) => api.get<{ trials: TrialDto[] }>('/trials', query),
-  book: (body: { prospectId: string; teacherId: string; startsAt: string; durationMinutes: number }) => api.post<TrialDto>('/trials', body),
+  book: (body: { students: Array<{ name: string; level?: string; note?: string }>; teacherId: string; startsAt: string; durationMinutes: number }) =>
+    api.post<TrialDto>('/trials', body),
   absence: (trialId: string, note?: string) => api.post<TrialDto>(`/trials/${id(trialId)}/attendance`, note ? { attended: false, note } : { attended: false }),
+  /** Move a booked trial that has not started: another time, length or teacher. */
+  reschedule: (trialId: string, body: { teacherId: string; startsAt: string; durationMinutes: number }) =>
+    api.post<TrialDto>(`/trials/${id(trialId)}/reschedule`, body),
   cancel: (trialId: string, reason: string) => api.post<TrialDto>(`/trials/${id(trialId)}/cancel`, { reason }),
   /** The trial's one outcome, from the "+ -> Trial" card or the Trials page. */
   outcome: (trialId: string, body: OutcomeInput) => api.post<TrialDto>(`/trials/${id(trialId)}/outcome`, body),
@@ -121,7 +156,12 @@ export const trialsApi = {
   groupContext: (conversationId: string) => api.get<TrialGroupContextDto>(`/trials/groups/${id(conversationId)}`),
   joinGroup: (conversationId: string) => api.post<TrialGroupContextDto>(`/trials/groups/${id(conversationId)}/join`),
   leaveGroup: (conversationId: string) => api.post<TrialGroupContextDto>(`/trials/groups/${id(conversationId)}/leave`),
-  newStudents: () => api.get<{ students: NewStudentDto[] }>('/trials/new-students'),
+  newStudents: () => api.get<{ students: NewStudentDto[]; canAssign?: boolean }>('/trials/new-students'),
+  /** PD-16: the Operations manager assigns the supervisor; Chat creates the family. */
+  assignNewStudent: (trialId: string, body: { supervisorId: string; email?: string }) =>
+    api.post<AssignResult>(`/trials/new-students/${id(trialId)}/assign`, body),
+  /** PD-16: the responsible supervisor opens the family's group. */
+  createNewStudentGroup: (trialId: string) => api.post<{ conversationId: string }>(`/trials/new-students/${id(trialId)}/group`),
 }
 
 export const trialKeys = {

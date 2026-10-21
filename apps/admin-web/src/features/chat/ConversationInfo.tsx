@@ -12,6 +12,7 @@ import { chatApi, chatKeys, type ChatConversation } from './chatApi'
 import { chatCopyFor } from './copy'
 import { ConversationAvatar, conversationName, isGroup, isMuted } from './chatView'
 import { useConversationPreferences } from './useChatActions'
+import { GroupChildren } from '@/features/journey/GroupChildren'
 
 /**
  * Contact info / group info: who is in the conversation, and this viewer's
@@ -59,6 +60,8 @@ export function ConversationInfo({ c }: { c: ChatConversation }) {
           </button>
         </div>
       </section>
+
+      {(c.type === 'student_group' || c.type === 'family_group') && <GroupChildren conversationId={c.id} />}
 
       <section className="dp-section">
         <div className="cw-info__members-head">

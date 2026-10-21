@@ -91,11 +91,11 @@ export class DisciplineService {
       ...(query.teacherId ? { teacherId: query.teacherId } : {}),
       ...(query.kind === 'late' ? { kind: 'late' } : query.kind === 'cancellations' ? { kind: { in: ['teacher_apology', 'teacher_no_show'] } } : {}),
     };
-    const rows = await this.prisma.teacherViolation.findMany({
+    const rows = await this.standing(await this.prisma.teacherViolation.findMany({
       where,
       orderBy: state === 'open' ? { occurredAt: 'asc' } : { occurredAt: 'desc' },
       take: 500,
-    });
+    }));
     return { violations: await this.dtos(rows) };
   }
 
@@ -105,10 +105,10 @@ export class DisciplineService {
     const teacher = await this.requireTeacher(actor, teacherId);
     const m = month ?? todayIn(await this.timeZone()).slice(0, 7);
     if (!MONTH_RE.test(m)) throw invalid('month: YYYY-MM');
-    const rows = await this.prisma.teacherViolation.findMany({
+    const rows = await this.standing(await this.prisma.teacherViolation.findMany({
       where: { teacherId: teacher.id, month: new Date(`${m}-01T00:00:00Z`) },
       orderBy: { occurredAt: 'asc' },
-    });
+    }));
     const counted = rows.filter((r) => r.decision !== Decision.EXCUSED).length;
     const suspensions = await this.prisma.teacherSuspension.findMany({
       where: { teacherId: teacher.id },
@@ -352,10 +352,10 @@ export class DisciplineService {
 
   /** The step this violation stands at now, among its teacher's month. */
   private async stepOf(v: TeacherViolation): Promise<number> {
-    const month = await this.prisma.teacherViolation.findMany({
+    const month = await this.standing(await this.prisma.teacherViolation.findMany({
       where: { teacherId: v.teacherId, month: v.month },
-      select: { id: true, teacherId: true, occurredAt: true, month: true, decision: true },
-    });
+      select: { id: true, teacherId: true, occurredAt: true, month: true, decision: true, lessonId: true, kind: true },
+    }));
     return stepsOf(month.map((m) => ({ ...m, month: isoDate(m.month) }))).get(v.id) ?? 1;
   }
 
@@ -388,10 +388,10 @@ export class DisciplineService {
     if (rows.length === 0) return [];
     // Every violation of the teacher-months involved, so each step is computed in its whole month.
     const keys = [...new Set(rows.map((r) => `${r.teacherId}|${isoDate(r.month)}`))];
-    const all = await this.prisma.teacherViolation.findMany({
+    const all = await this.standing(await this.prisma.teacherViolation.findMany({
       where: { OR: keys.map((k) => ({ teacherId: k.split('|')[0], month: asDate(k.split('|')[1]) })) },
-      select: { id: true, teacherId: true, occurredAt: true, month: true, decision: true },
-    });
+      select: { id: true, teacherId: true, occurredAt: true, month: true, decision: true, lessonId: true, kind: true },
+    }));
     const steps = stepsOf(all.map((m) => ({ ...m, month: isoDate(m.month) })));
     const lessons = await this.prisma.lesson.findMany({
       where: { id: { in: [...new Set(rows.map((r) => r.lessonId))] } },
@@ -439,8 +439,26 @@ export class DisciplineService {
   private async load(actor: Actor, id: string): Promise<TeacherViolation> {
     if (!isUuid(id)) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'violation not found');
     const v = await this.prisma.teacherViolation.findFirst({ where: { id, organizationId: actor.organizationId } });
-    if (!v) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'violation not found');
+    if (!v || (await this.standing([v])).length === 0) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'violation not found');
     return v;
+  }
+
+  /**
+   * PD-15: the violations that still stand. A lesson whose outcome was
+   * corrected away from the teacher's apology or absence (or, for lateness,
+   * away from held) withdraws its UNDECIDED violation: it no longer counts
+   * toward the month's ladder and cannot be decided. A decision already taken
+   * stays on record -- reversing one is the Teachers department's own act.
+   */
+  private async standing<T extends { lessonId: string; kind: string; decision: string | null }>(rows: T[]): Promise<T[]> {
+    const open = rows.filter((r) => r.decision === null);
+    if (open.length === 0) return rows;
+    const lessons = await this.prisma.lesson.findMany({
+      where: { id: { in: [...new Set(open.map((r) => r.lessonId))] } },
+      select: { id: true, outcome: true },
+    });
+    const outcomeOf = new Map(lessons.map((l) => [l.id, l.outcome]));
+    return rows.filter((r) => r.decision !== null || outcomeOf.get(r.lessonId) === (r.kind === 'late' ? 'held' : r.kind));
   }
 
   private async requireSupervisor(actorId: string): Promise<Actor> {

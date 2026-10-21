@@ -6,6 +6,10 @@
  * chat.teacher_file. This guard is what makes that exception safe: only
  * src/teacher-file may name that table, its Prisma model or the phone field.
  *
+ * PD-18 (2026-10-21) put payroll in the same place: salary terms, pay amounts
+ * and the sealed payout account, and the key that opens it. They are confined
+ * the same way, for the same reason -- the engine never holds what it cannot leak.
+ *
  * The supervision timeline (chat.teacher_supervision_entry) used to be guarded
  * here too. Since the PD-10/PD-11 reconciliation (2026-10-19) it is PD-11's
  * table, shared with src/lessons, and carries no contact channel -- so it is not
@@ -21,7 +25,7 @@ const SRC = join(__dirname, '..', '..', '..', 'src');
 const OWNER = 'teacher-file/';
 
 /** The table names and the Prisma accessors / fields that reach them. Case-sensitive on purpose. */
-const NAMES = /\bteacher_file\b|\bteacherFile\b|\badminOnlyPhone\b|\bTeacherFile\b(?!Module|Controller|Service|Access|EntryKind)/;
+const NAMES = /\bteacher_file\b|\bteacherFile\b|\badminOnlyPhone\b|\bTeacherFile\b(?!Module|Controller|Service|Access|EntryKind)|\bteacher_pay(?:_terms|out_account|_adjustment)\b|\bteacherPay(?:Terms|outAccount|Adjustment)\b|\bTeacherPay(?:Terms|outAccount|Adjustment)\b|\bdetailsSealed\b|\bdetails_sealed\b|\bTEACHER_PAYOUT_KEYS\b/;
 
 function sources(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -55,6 +59,10 @@ describe('the Teacher File is read only by src/teacher-file (PD-10, G-07)', () =
       'select phone from chat.teacher_file',
       'const p: TeacherFile = row;',
       'return { phone: file.adminOnlyPhone };',
+      'await this.prisma.teacherPayoutAccount.findUnique({ where: { teacherId } });',
+      'select amount from chat.teacher_pay_adjustment',
+      'const raw = process.env.TEACHER_PAYOUT_KEYS;',
+      'return row.detailsSealed;',
     ];
     for (const text of fires) {
       expect({ text, hit: offenders([{ rel: 'communication/messages/x.ts', text }]).length }).toEqual({ text, hit: 1 });

@@ -48,7 +48,7 @@ communication safe and answerable, never as a general workflow system.
 | **Audit** — append-only event log and audit log, reasons mandatory for sensitive actions | MVP | `chat.event_log`, `chat.audit_log` |
 | **Access control** — one server-side `AuthorizationService`, BR-1 enforced in the API and in the database | MVP | `apps/api/src/platform/authorization.service.ts`, `093000`/`093300`/`094000` |
 | **Supervisor ownership** — every family has exactly one current supervisor; reassignment by a manager with a reason; history | MVP | `SUPERVISOR-OWNERSHIP.md` |
-| **CRM integration boundary** — Jawwid Core is the source of truth for students, parents, teachers, enrolments and payments, and for lessons and schedules of teachers not yet cut over to Chat (**PD-9**); Chat mirrors what it needs through an API/webhook boundary, never SQL | MVP boundary; ingestion to be re-implemented on the canonical schema | `chat.core_event`, `chat.sync_state`, `core-integration-contract.md` (reference) |
+| **CRM integration boundary** — Jawwid Core is the source of truth for teachers and payments, for students, parents and enrolments other than those Chat enrolled from a subscription form (**PD-16**), and for lessons and schedules of teachers not yet cut over to Chat (**PD-9**); Chat mirrors what it needs through an API/webhook boundary, never SQL | MVP boundary; ingestion to be re-implemented on the canonical schema | `chat.core_event`, `chat.sync_state`, `core-integration-contract.md` (reference) |
 
 ### 1.2 Jawwid Chat IS NOT
 
@@ -120,7 +120,7 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-14 — CLOSED
+## 4. Product decisions PD-1 to PD-16 — CLOSED
 
 PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
 exit gate, before `main` was baselined. **PD-6 was closed by the product owner
@@ -133,6 +133,10 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-12 was closed by the product owner on 2026-10-18** and depends on PD-11.
 **PD-13 was closed by the product owner on 2026-10-19** (the Calls page).
 **PD-14 was closed by the product owner on 2026-10-20** (no pre-approval of messages).
+**PD-15 was closed by the product owner on 2026-10-21** (the student's journey after enrolment).
+**PD-16 was closed by the product owner on 2026-10-21** (Chat enrols new students and parents sign up).
+**PD-18 was closed by the product owner on 2026-10-21** (teacher payroll lives in Chat) and supersedes PD-10 item 4.
+PD-17 is numbered by work in flight on another branch (the parent and student profiles).
 
 | ID | Subject | Status |
 |---|---|---|
@@ -150,6 +154,9 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-12** | **Admin operations: instalments, student certificates, teacher discipline and leave** (2026-10-18) | **CLOSED** — Core invoices read-only with a billing supervisor; certificates delivered as one student-group card; one monthly ladder, suggested then confirmed; leave balance computed, never stored |
 | **PD-13** | **The Calls page: scheduled calls and call links** (2026-10-19) | **CLOSED** — one Calls page for every role; a scheduled call belongs to ONE conversation and announces itself with a card; a call link is members-only; nothing grants a call that `POST /calls` would refuse |
 | **PD-14** | **Messages publish immediately; admins moderate after sending** (2026-10-20) | **CLOSED** — no message is held for approval, for any role or conversation type; whoever is in charge of a conversation may edit or delete a teacher's or parent's message at any time afterwards; a manager or the super admin also a staff member's |
+| **PD-15** | **The student's journey after enrolment** (2026-10-21) | **CLOSED** — supervisors record student and teacher excuses from the group; one quick "Lesson report" entry; make-ups after any apology; outcomes corrected and reports edited / deleted / resent only through recorded changes; each child's age, course and package; monthly statistics in the academy's terms |
+| **PD-16** | **Enrolling a new student in Chat; the parent's own sign-up** (2026-10-21) | **CLOSED** — Assign on New Students creates the family, parent and children in Chat from Sales' form; an assigned entry is the supervisor's (and their manager's); the supervisor opens the family group; the parent signs up with their e-mail and a one-time code relayed by the supervisor until WhatsApp sending is connected |
+| **PD-18** | **Teacher payroll in Chat** (2026-10-21) | **CLOSED** — salary terms, a sealed payout account and the amounts of bonuses and deductions are recorded in Chat, for the super admin only; the month's financial summary is computed, never stored; supersedes PD-10 item 4 |
 
 ---
 
@@ -630,7 +637,8 @@ workload.
    off, assigned students.
 4. **Payroll.** Salary type, monthly salary, bonuses, deductions and the
    financial summary stay in Core / HR and are shown **read-only**, fetched at
-   request time and not stored in Chat.
+   request time and not stored in Chat. **Superseded by PD-18 (2026-10-21):
+   payroll is recorded in Chat.**
 5. **Teacher self-view.** A teacher sees their own schedule and workload in the
    teacher app, and nothing else from the Teacher File.
 
@@ -1062,6 +1070,38 @@ Core's confirmation.
 - **App.** Trial cards read the short sentences, and a correction card shows the
   new outcome. The "counts once Core confirms" line is gone.
 
+**Trial booking with students (2026-10-21).** Migration `20261021130000_chat_trial_booking_students.sql`.
+Owner decisions in the session "student trial journey".
+- **One booking form.** "Record a prospect" is gone from the Admin Web.
+  - "Book a trial" takes the students directly: name, optional level and note,
+    and "Add another student" (up to 10).
+  - Siblings or a small group share **one** trial, one teacher time, one card and
+    **one outcome** (the owner chose one outcome per booking, not per student).
+  - The students are `chat.trial_student`, written with the booking and never
+    changed. Older bookings were backfilled as one student each.
+  - The booking's label (`trial_prospect.display_name`) is the students' names
+    joined.
+  - When the outcome is "subscribed", the form starts with the booked students
+    as the children.
+  - `POST /trials` takes `students`; `prospectId` is still accepted.
+- **Operations is part of the trial desk.** Operations supervisors work trials
+  exactly like Sales: they book, record every outcome, fill and edit the
+  subscription form, correct outcomes, and join or leave trial groups.
+  - `chat.trial_desk_role` (Sales or Operations) replaces the Sales-only check
+    in the trial group's member guard, `staff_conversation_access` and the chat
+    list.
+- **Editing a booked trial.** A trial that has not started can be moved to
+  another time, length or teacher (`POST /trials/:id/reschedule`; the trial
+  desk or the Teachers department).
+  - As every PD-11 move, the old row becomes `rescheduled` and the trial
+    continues as a new row for the same students, so reminders and free times
+    stay right. Statistics and lists count it once.
+  - The group reads a `trial_rescheduled` card (new and previous time). When
+    the teacher changes, the old group reads "moved to another teacher" and the
+    new teacher's group gets the booking.
+- **Upcoming trials in "+ → Trial".** They are listed, greyed out: an outcome
+  is accepted only once a trial has started.
+
 **Deprecated behaviour.** None removed. Explicitly **not** built: a generic ticket
 or task entity; any stored package balance; parents changing their regular
 lesson times without approval.
@@ -1418,7 +1458,291 @@ PD-8 scope basis (`chat.staff_conversation_access`) for that conversation, now.
 - PD-9 default 1 ("a report card bypasses Student Group moderation") is moot.
   Nothing is held.
 
-### Decisions still open after PD-1 to PD-14
+### PD-15 · The student's journey after enrolment
+
+**Closed 2026-10-21** by the product owner.
+
+The owner's requirements of 2026-10-21 run from the New Students page to the
+teacher's month: the Operations manager assigns the responsible supervisor;
+the supervisor opens the family's permanent group with the parent and the
+teacher; the teacher reports every lesson from the group's "+"; supervisors
+record student and teacher excuses there; make-ups follow any apology; and
+Teacher Statistics account for every scheduled lesson. Owner answers given the
+same day: a child's age, course and package are **entered by the supervisor**
+(Core sends none); the parent **sees the report card** (PD-9 unchanged) but
+not the teacher's private note; outcome corrections belong to the **Teachers
+department, the Operations department and the super admin**, with a mandatory
+reason; a teacher edits their own report, supervisors (same three) edit any,
+and **only supervisors delete** one, choosing at deletion to **resend a
+corrected version or leave it unsent** — and a report left unsent removes its
+lesson from **every** statistic; make-ups are scheduled **after either
+apology**, once the family and the teacher agreed, and **Chat is the source of
+truth** for all of it.
+
+**Final decision.**
+
+```
+the lesson is still the unit (PD-9): one row, exactly one outcome, statistics
+are queries over the rows -- nothing here is a second lesson record
+
+student excuse   = outcome student_apology + apology_timing
+                     before_start  the family (with its reason) or the child's
+                                   supervisor (no reason) before the start
+                     after_start   the supervisor after the start: excused AT
+                                   ONCE (a late_apology ruling recorded decided);
+                                   the reason is internal, never on the card
+                                   (a family's own late apology still waits for
+                                   a ruling, PD-11)
+teacher excuse   = teacher_apology, by the teacher or a supervisor; the reason
+                   is internal; the card says only that a make-up follows
+make-up          = owed after a teacher's OR a student's apology; recorded once
+                   the time is agreed (parent: from free times; teacher and
+                   staff: any agreed time not on a day off); linked by
+                   makeup_for; completed only when itself held
+correction       = from, to, reason, who, when (chat.lesson_correction); the
+                   database accepts an outcome change only with one written in
+                   the same transaction
+report change    = a revision (chat.lesson_report_revision) holding the previous
+                   version; the card is rewritten in place (edit) or deleted and
+                   reposted (resend); "leave unsent" voids the lesson
+voided           = final; counted nowhere -- not scheduled, not pending
+```
+
+* **Who may do what.** Teacher: their own lesson's report and absence, their
+  own apology, a make-up time they agreed, editing their own report. The
+  child's supervisor (Operations — the PD-8 supervisor, their active backup,
+  the Operations manager): student excuses before / after the start, teacher
+  excuses, make-ups, corrections, editing and deleting reports, the child's
+  enrolment details. The Teachers department and the super admin: the same,
+  plus everything PD-11 gave them. A parent: their own apology, late apology
+  and make-up booking, and nothing on the record. Staff work in Admin Web; the
+  app is for parents and teachers.
+* **Counting (monthly, `stats.zone`).** Total scheduled = every lesson that
+  still stands (moved, paused and voided lessons excluded). Conducted =
+  student attended = held, regular plus make-up (completed.total). Student did
+  not attend = absent without an excuse. Student excuses split before / after
+  the start. Teacher excuses are never conducted. Pending = no final outcome
+  yet (to come, or awaiting a report). Every lesson is in exactly one line; a
+  corrected one moves line, it is never counted twice.
+* **The quick report.** Lesson number (suggested), what was covered (topic
+  choices and/or a short line — one is required), the performance as one of
+  five levels, what is needed next (choices and a short line), a private note
+  for supervisors. The codes are `apps/api/src/lessons/report-vocab.ts`; the
+  academic team may change the lists.
+* **The group.** A family group is named "Teacher — Child · Child" by default.
+  Its details page shows each child apart: age (from the date of birth), course
+  (from the academy's course list, kept by the Operations manager), weekly
+  lesson times (the PD-11 regular times) and package (total lessons).
+* **The discipline ladder (PD-12).** A teacher excuse is a violation from the
+  moment it is written, whoever records it. A correction away from it
+  withdraws an undecided violation; a decision already taken stays on record.
+
+**Implementation phase.** Built 2026-10-21 in one change: migration
+`20261021120000_chat_pd015_student_journey.sql`, `LessonRecordService`,
+`EnrollmentService`, `JourneyController`, Admin Web `features/journey`, the app's
+`lesson_report_sheet.dart` and `group_children_section.dart`. It runs after the
+trial journey's `20261021100000` and rebuilds `chat.guard_lesson` and
+`chat.assert_held_lesson_has_report` on top of that migration's versions. The
+supervisor is assigned on Organization → Children and the group is created in
+Chat: the New Students page lists Sales' subscription forms (#83), whose
+children are not Chat learners yet.
+
+**Consequences.**
+- PD-11's table gains the supervisor: `apology`, `teacher_apology`,
+  `book_makeup`, plus `late_excuse`, `correct_outcome`, `edit_report`,
+  `delete_report`, `manage_enrollment`. The PD-8 supervisor's lesson standing
+  is no longer read-only.
+- A written outcome now has two lawful changes: an excusing ruling (PD-11) and
+  a recorded correction. A report is no longer write-once; it changes only
+  through a revision.
+- `lesson.closed` is emitted again, with `correction: true`, after every
+  correction and every void, so Core's billing follows.
+- PD-11 T2's "a make-up after a student apology waits for the notice rule" is
+  superseded: a make-up is owed after any apology. The follow-up queue still
+  escalates only the teacher's misses.
+- A report card cannot be removed with "delete for everyone"; only the lesson
+  record deletes it, so the chat and the statistics never disagree.
+
+**Deprecated behaviour.** The teacher's reason no longer reaches the family's
+card. The free-text-only report form is replaced by the quick report.
+
+**Defaults adopted at closing** (the owner may override without reopening
+PD-15):
+1. A supervisor's excuse before the start needs no reason; after the start it
+   needs one (internal).
+2. A teacher excuse may be recorded before the start only; after the start a
+   missed lesson stays the Teachers department's `teacher_no_show` (PD-11).
+3. An excuse after the start is accepted for 48 hours (the late-apology
+   window); later, the lesson is corrected instead.
+4. A voided lesson is final; it cannot be corrected back.
+5. The report's topic and next-lesson lists are a starting set for a Quran and
+   Arabic academy.
+
+**Closed.** 2026-10-21.
+
+---
+
+### PD-16 · Enrolling a new student in Chat; the parent's own sign-up
+
+**Closed 2026-10-21** by the product owner.
+
+The owner's request of 2026-10-21: an **Assign** action on the New Students
+page lets the Operations Manager assign students to their supervisors; an
+assigned student is visible only to the responsible supervisor; that
+supervisor creates the group chat between the parent and the teacher. Owner
+answers the same day: **Chat creates the family, the parent and the children**
+from Sales' subscription form (Chat becomes the source of truth for the
+enrolments it makes, as it already is for trials); the entry stays visible to
+**the supervisor and their manager** (the Operations manager) and the super
+admin; the parent **downloads the app and signs up with the e-mail they gave
+the academy**, proving it with a **one-time code delivered on WhatsApp** — and,
+until a WhatsApp sender is connected, **relayed by the supervisor** (the owner
+rejected e-mail delivery: a full inbox would block it).
+
+**Final decision.**
+
+```
+Assign (Operations manager | super admin)            one transaction
+  family            owner = the supervisor (PD-8 grants nothing by owner)
+  parent (contact)  + account: subject = the e-mail, kind family, NO password
+  each child        chat.enrol_learner -- the teacher Sales chose (the third
+                    writer of learner.teacher_id), learner_supervision, the
+                    course (matched or added to the course list), stated age
+  the form          frozen: never edited nor withdrawn afterwards
+  weekly times      from the form, where the teacher is free (best effort)
+
+visible           unassigned: Sales, the Operations manager, the super admin
+                  assigned:   the children's supervisor (+ active backup), the
+                              Operations manager, the super admin
+
+Create group      the responsible supervisor: family group (parent, teacher(s),
+                  supervisor), named "Teacher — Child · Child" (PD-15), and the
+                  parent's direct chat with the supervisor
+
+sign-up           e-mail -> 6-digit code (10 min, 5 tries, one live, hashed)
+                  delivery 'relay': the supervisor reads it on New Students and
+                  sends it on WhatsApp; -> the parent sets a password -> signs
+                  in through POST /auth/login like anyone else
+                  same answer for any e-mail; metered by the login limiter
+```
+
+* **The phone stays confined (G-07).** The form's phone is copied onto nothing
+  Chat creates; a future WhatsApp sender reads it inside `src/new-students`.
+* **No public registration.** Only an account Chat created at enrolment, with
+  no password yet, can be claimed — never staff, teachers or strangers.
+
+**Implementation phase.** Built 2026-10-21: migration
+`20261021140000_chat_new_student_enrolment.sql`, `NewStudentEnrolmentService`
+(`src/new-students`), `ParentSignupService` / `ParentSignupController`
+(`/auth/signup/*`), Admin Web `trials/NewStudentSetup.tsx`, the app's
+`parent_signup_screen.dart`.
+
+**Consequences.**
+- §1.1's CRM-boundary row changes: Core is no longer the source of truth for
+  students, parents and enrolments Chat enrolled itself.
+- PRD §7.1 ("no registration in the MVP") is narrowed: a parent may set the
+  password of an account the academy created, with a relayed one-time code.
+- The New Students page is filtered per viewer; an Operations supervisor sees
+  only the students assigned to them.
+
+**Deprecated behaviour.** None removed.
+
+**Defaults adopted at closing** (the owner may override without reopening
+PD-16):
+1. The code lives 10 minutes and allows 5 tries; a parent may ask for 5 codes
+   an hour.
+2. A regular lesson lasts as long as the trial did (30 minutes when unknown).
+3. A family is named after the parent; the account's e-mail is the one Sales
+   recorded unless the Operations manager types another at Assign.
+
+**Open implementation items.**
+1. Connect a WhatsApp sender (Meta WhatsApp Cloud API or a provider such as
+   Twilio Verify): business account, number and an approved authentication
+   template. Delivery then switches from `relay` with no change to the flow.
+2. A parent who forgets their password has no self-service reset yet.
+
+**Closed.** 2026-10-21.
+
+---
+
+### PD-18 · Teacher payroll in Chat
+
+**Closed 2026-10-21** by the product owner. Supersedes PD-10 item 4.
+
+The owner asked for an administration-only Teacher Profile that includes
+salary type, payment method with account details, currency, teaching market,
+monthly salary, a financial summary and the bonus and deduction histories.
+Asked on the same day, the owner chose: **payroll lives in Chat**; **payout
+account details are stored, protected**; **a teacher never sees their own
+profile**.
+
+**Final decision.**
+
+1. **Salary terms** (salary type, currency, amount) are recorded in Chat, one
+   version per effective month. A change is a new version; earlier months keep
+   the terms they had.
+2. **Payout account.** The method (e-wallet, InstaPay or bank transfer) and its
+   account details are recorded. The details are **encrypted by the server**
+   before they reach the database. The file shows the method and the last four
+   characters. The details in clear are shown on request, with a reason, and
+   every such request is audited.
+3. **Amounts.** The super admin sets the amount of each bonus the Teachers
+   department records (PD-11) and of each deduction decided on the ladder
+   (PD-12), and may add a standalone bonus or deduction. A correction replaces
+   an amount; zero cancels it.
+4. **Financial summary**, per payroll month: salary + bonuses − deductions =
+   net. It is computed on every read, never stored.
+5. **Teaching market** is employment information, recorded in the Teacher File
+   by the Teachers manager (closes PD-10 open item 1 for the market).
+6. **Teacher self-view** is unchanged: never (PD-10).
+
+**Canonical rule — who sees what.** PD-10's table stands, with its finance row
+now meaning "recorded in Chat":
+
+| Section | Teachers-dept supervisors and manager | Super admin | The teacher | Anyone else |
+|---|---|---|---|---|
+| Teaching market, current students | read (manager edits the market) | read + write | — | **never** |
+| Bonus and deduction history: date, reason, who | read | read | — | **never** |
+| Salary terms, payout account, amounts, financial summary | — | read + write | — | **never** |
+
+* Enforced in the server and the database. No request role has a grant on the
+  payroll tables, and only `src/teacher-file` may name them
+  (`teacher-file-confinement.spec.ts`).
+* The audit trail records what changed and why, **never an amount or an account
+  detail**, because the audit trail is read more widely than payroll is.
+* Payout details are sealed with AES-256-GCM under `TEACHER_PAYOUT_KEYS`. Without
+  the key the server refuses to save or reveal them (503). Payroll **fails
+  closed**; nothing is ever stored in clear.
+
+**Defaults adopted at closing** (the owner may override these without reopening PD-18):
+1. A **shift-based** salary is a fixed monthly amount. A **per-hour** salary is
+   the rate times the hours of the lessons the teacher was there for: held, or
+   the student did not come.
+2. A bonus or deduction is paid in the payroll month of the record it prices.
+   That is the month the bonus was recorded, or the deduction's ladder month.
+3. Only the super admin holds the finance tier (PD-10). A separate finance role
+   is a new decision.
+
+**Implementation phase.** Built with the decision: migration
+`20261021160000_chat_pd018_teacher_payroll.sql`; `docs/admin/teacher-file.md`.
+
+**Consequences.**
+- §1.1's CRM row no longer applies to teacher pay. Core may still hold its own
+  copy, but Chat's record is the one the academy edits.
+- PD-12's rule "Teachers-department staff never see salary or amounts" stands.
+- A deployment needs a `TEACHER_PAYOUT_KEYS` secret before payout accounts work,
+  and that key must be backed up together with the database backups. Losing it
+  loses every saved account.
+
+**Deprecated behaviour.** PD-10's "any stored copy of pay; any write path for
+money in Chat" is no longer forbidden for teacher payroll. Chat still **pays
+nobody**: it records what is owed and how to pay.
+
+**Closed.** 2026-10-21.
+
+---
+
+### Decisions still open after PD-1 to PD-18
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
 The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their

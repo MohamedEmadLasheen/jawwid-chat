@@ -80,6 +80,9 @@ class FakeSocket {
     this.disconnected = true;
     this.forcedDisconnect = force === true;
   }
+
+  /** Phase 8: the gateway installs its frame budget as socket middleware. */
+  use(): void {}
 }
 
 /**

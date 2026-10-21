@@ -6,6 +6,7 @@ import '../../../core/errors/app_error.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
+import 'lesson_report_sheet.dart';
 import 'makeup_sheet.dart';
 import 'schedule_change_sheet.dart';
 
@@ -46,18 +47,20 @@ String lessonWhen(BuildContext context, DateTime startsAt) {
 /// Open whichever sheet a ticket needs. Resolves true when something was sent.
 Future<bool> openLessonTicket(BuildContext context, LessonTicket ticket) {
   return switch (ticket.kind) {
+    // PD-15: one entry -- Student attended (the quick report) or did not attend.
+    LessonTicketKind.report => showLessonReportEntry(context, ticket),
     LessonTicketKind.bookMakeup => showMakeupSheet(context, ticket),
     LessonTicketKind.requestScheduleChange => showScheduleChangeSheet(context, ticket),
     _ => showLessonTicketSheet(context, ticket),
   };
 }
 
-/// Open one lesson ticket's form. Resolves true when it was sent.
+/// Open an absence or apology form. Resolves true when it was sent. (A report has its
+/// own quick form: lesson_report_sheet.dart.)
 ///
-/// Built to be finished in seconds: a report needs only "what was covered"; everything
-/// else is optional. The server decides again on submit, so a ticket that stopped being
-/// allowed while the form was open (another device closed the lesson) is refused with
-/// its own message rather than silently dropped.
+/// The server decides again on submit, so a ticket that stopped being allowed while
+/// the form was open (another device closed the lesson) is refused with its own
+/// message rather than silently dropped.
 Future<bool> showLessonTicketSheet(BuildContext context, LessonTicket ticket) async {
   final sent = await showModalBottomSheet<bool>(
     context: context,
@@ -80,9 +83,6 @@ class LessonTicketForm extends ConsumerStatefulWidget {
 
 class _LessonTicketFormState extends ConsumerState<LessonTicketForm> {
   final _main = TextEditingController();
-  final _homework = TextEditingController();
-  final _note = TextEditingController();
-  int? _rating;
   bool _sending = false;
   String? _error;
 
@@ -97,8 +97,6 @@ class _LessonTicketFormState extends ConsumerState<LessonTicketForm> {
   @override
   void dispose() {
     _main.dispose();
-    _homework.dispose();
-    _note.dispose();
     super.dispose();
   }
 
@@ -121,15 +119,7 @@ class _LessonTicketFormState extends ConsumerState<LessonTicketForm> {
     try {
       switch (_kind) {
         case LessonTicketKind.report:
-          await repo.report(
-            id,
-            LessonReportDraft(
-              covered: _main.text.trim(),
-              homework: _optional(_homework),
-              rating: _rating,
-              note: _optional(_note),
-            ),
-          );
+          return; // the quick report (showLessonReportEntry)
         case LessonTicketKind.absence:
           await repo.absence(id, note: _optional(_main));
         case LessonTicketKind.apology || LessonTicketKind.teacherApology || LessonTicketKind.lateApology:
@@ -156,7 +146,7 @@ class _LessonTicketFormState extends ConsumerState<LessonTicketForm> {
     final l10n = L10n.of(context);
     final theme = Theme.of(context);
     final hint = switch (_kind) {
-      LessonTicketKind.absence => l10n.ticketAbsenceHint,
+      LessonTicketKind.absence => l10n.ticketAbsenceConfirm,
       LessonTicketKind.lateApology => l10n.ticketLateApologyHint,
       LessonTicketKind.teacherApology => l10n.ticketTeacherApologyHint,
       _ => null,
@@ -186,50 +176,19 @@ class _LessonTicketFormState extends ConsumerState<LessonTicketForm> {
               TextField(
                 key: const ValueKey('lesson-ticket-main'),
                 controller: _main,
-                autofocus: true,
+                autofocus: _kind != LessonTicketKind.absence,
                 minLines: 2,
                 maxLines: 5,
                 maxLength: 1000,
                 textCapitalization: TextCapitalization.sentences,
                 decoration: InputDecoration(
                   labelText: switch (_kind) {
-                    LessonTicketKind.report => l10n.reportCoveredLabel,
                     LessonTicketKind.absence => l10n.reportNoteLabel,
                     _ => l10n.ticketReasonLabel,
                   },
                   border: const OutlineInputBorder(),
                 ),
               ),
-              if (_kind == LessonTicketKind.report) ...[
-                const SizedBox(height: Spacing.spacing2),
-                TextField(
-                  key: const ValueKey('lesson-ticket-homework'),
-                  controller: _homework,
-                  maxLength: 1000,
-                  decoration: InputDecoration(labelText: l10n.reportHomeworkLabel, border: const OutlineInputBorder()),
-                ),
-                const SizedBox(height: Spacing.spacing2),
-                Text(l10n.reportRatingLabel, style: theme.textTheme.labelLarge),
-                Row(
-                  children: [
-                    for (var i = 1; i <= 5; i++)
-                      IconButton(
-                        key: ValueKey('lesson-ticket-star-$i'),
-                        onPressed: () => setState(() => _rating = _rating == i ? null : i),
-                        icon: Icon(_rating != null && i <= _rating! ? Icons.star : Icons.star_border),
-                        tooltip: '$i/5',
-                      ),
-                  ],
-                ),
-                TextField(
-                  key: const ValueKey('lesson-ticket-note'),
-                  controller: _note,
-                  maxLength: 2000,
-                  maxLines: 3,
-                  minLines: 1,
-                  decoration: InputDecoration(labelText: l10n.reportNoteLabel, border: const OutlineInputBorder()),
-                ),
-              ],
               if (_error != null) ...[
                 const SizedBox(height: Spacing.spacing2),
                 Text(_error!, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error)),

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Conversation, Lesson, LessonReport, LessonRuling, Prisma } from '@prisma/client';
+import { Conversation, Lesson, LessonCorrection, LessonReport, LessonRuling, Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { AppConfigService } from '../platform/app-config.service';
 import { AuthorizationService, type LessonAct, type LessonStanding } from '../platform/authorization.service';
@@ -24,9 +24,11 @@ import {
   ReceiptState,
   RulingDecision,
   RulingKind,
+  StaffRole,
   Visibility,
 } from '../communication/contracts/vocab';
 import { renderCardBody, type CardLanguage } from './lesson-card';
+import { COVERED_TOPICS, NEXT_TASKS } from './report-vocab';
 
 export type Tx = Prisma.TransactionClient;
 
@@ -39,6 +41,7 @@ export type LessonWithRelations = Lesson & {
   learnerId: string;
   report: LessonReport | null;
   rulings: LessonRuling[];
+  corrections?: LessonCorrection[];
   learner: { id: string; name: string; familyId: string };
   teacher: { id: string; name: string };
 };
@@ -70,6 +73,7 @@ export interface CardSubject {
 export const LESSON_INCLUDE = {
   report: true,
   rulings: true,
+  corrections: { orderBy: { correctedAt: 'asc' } },
   learner: { select: { id: true, name: true, familyId: true } },
   teacher: { select: { id: true, name: true } },
 } as const;
@@ -81,6 +85,8 @@ export type LessonPhase = 'upcoming' | 'in_progress' | 'awaiting_close' | 'overd
 const LATE_APOLOGY_HOURS = 48;
 const MAX_TEXT = 1000;
 const MAX_NOTE = 2000;
+/** PD-15: the short "details" lines beside the quick choices. */
+const MAX_SHORT = 500;
 const MAX_RANGE_DAYS = 93;
 
 /**
@@ -197,7 +203,9 @@ export class LessonService {
       standing = 'family';
       where.learner = { familyId: actor.familyId };
     } else if (actor.kind === ActorKind.STAFF) {
-      if (await this.isManager(actor)) {
+      // The same rule as AuthorizationService.lessonStanding: the super admin
+      // reads every lesson (PD-8), not only the learners they supervise.
+      if (actor.staffRole === StaffRole.SUPER_ADMIN || (await this.isManager(actor))) {
         standing = 'manager';
       } else {
         standing = 'supervisor';
@@ -306,21 +314,24 @@ export class LessonService {
    */
   async owedMakeups(
     organizationId: string,
-    opts: { closedDaysAgo?: number; learnerIds?: string[]; since?: Date } = {},
+    opts: { closedDaysAgo?: number; learnerIds?: string[]; since?: Date; causes?: readonly string[] } = {},
   ): Promise<LessonWithRelations[]> {
+    // The follow-up queue stays the teacher's misses only; a family's own
+    // apology owes a make-up (PD-15) but is never escalated.
+    const causes = [...(opts.causes ?? TEACHER_MAKEUP_CAUSES)];
     const ids = await this.prisma.$queryRaw<Array<{ id: string }>>`
       SELECT l.id::text AS id
         FROM chat.lesson l
        WHERE l.organization_id = ${organizationId}::uuid
          AND l.kind <> 'trial'
-         AND l.outcome IN ('teacher_apology', 'teacher_no_show')
+         AND l.outcome = ANY(${causes}::text[])
          AND (${opts.closedDaysAgo ?? null}::int IS NULL OR l.outcome_at <= now() - make_interval(days => ${opts.closedDaysAgo ?? null}::int))
          AND (${opts.since ?? null}::timestamptz IS NULL OR l.starts_at >= ${opts.since ?? null}::timestamptz)
          AND (${opts.learnerIds ?? null}::uuid[] IS NULL OR l.learner_id = ANY(${opts.learnerIds ?? null}::uuid[]))
          AND NOT EXISTS (
            SELECT 1 FROM chat.lesson m
             WHERE m.makeup_for = l.id AND m.kind = 'makeup'
-              AND (m.outcome IS NULL OR m.outcome NOT IN ('teacher_apology', 'teacher_no_show', 'admin_cancelled', 'rescheduled')))
+              AND (m.outcome IS NULL OR m.outcome NOT IN ('teacher_apology', 'teacher_no_show', 'admin_cancelled', 'rescheduled', 'voided')))
          AND NOT EXISTS (SELECT 1 FROM chat.lesson_ruling r WHERE r.lesson_id = l.id AND r.kind = 'makeup_followup')
        ORDER BY l.outcome_at ASC
        LIMIT 500`;
@@ -363,27 +374,48 @@ export class LessonService {
       learner: { id: string; name: string };
       startsAt: string | null;
       endsAt: string | null;
+      /** PD-15, a report ticket only: the number the report form starts from. */
+      suggestedLessonNumber?: number;
     }> = [];
+    // PD-15: a staff member's standing is computed exactly as load() computes
+    // it, so the child's supervisor sees the excuse cards in the group.
+    const staff = actor.kind === ActorKind.STAFF;
+    const teachersDepartment = staff ? await this.isManager(actor) : false;
+    const supervised = new Set(staff && !teachersDepartment ? await this.supervisedLearnerIds(actor, now) : []);
+    const standingFor = (l: { learnerId: string } & Parameters<LessonService['scopeOf']>[0]) =>
+      this.authz.lessonStanding(actor, this.scopeOf(l), { teachersDepartment, supervisesLearner: supervised.has(l.learnerId) });
+    const lessonNumbers = new Map<string, number>();
     for (const l of rows) {
-      const standing = this.authz.lessonStanding(actor, this.scopeOf(l), { teachersDepartment: false, supervisesLearner: false });
+      const standing = standingFor(l);
       if (!standing) continue;
       for (const act of availableActs(l, now)) {
         if (this.authz.canRecordLessonAct(actor, standing, act).allowed) {
+          let suggestedLessonNumber: number | undefined;
+          if (act === 'report') {
+            if (!lessonNumbers.has(l.learnerId)) lessonNumbers.set(l.learnerId, await this.nextLessonNumber(l.learnerId));
+            suggestedLessonNumber = lessonNumbers.get(l.learnerId);
+          }
           tickets.push({
             ticket: act,
             lessonId: l.id,
             learner: { id: l.learner.id, name: l.learner.name },
             startsAt: l.startsAt.toISOString(),
             endsAt: l.endsAt.toISOString(),
+            ...(suggestedLessonNumber !== undefined ? { suggestedLessonNumber } : {}),
           });
         }
       }
     }
 
-    // PD-11 T2: the make-ups this family is owed, and asking for new regular times.
-    const owed = await this.owedMakeups(conv.organizationId, { learnerIds, since: new Date(now.getTime() - 60 * 86_400_000) });
+    // PD-11 T2 / PD-15: the make-ups owed here -- after a teacher's or a
+    // student's apology -- and asking for new regular times.
+    const owed = await this.owedMakeups(conv.organizationId, {
+      learnerIds,
+      since: new Date(now.getTime() - 60 * 86_400_000),
+      causes: MAKEUP_CAUSES,
+    });
     for (const l of owed) {
-      const standing = this.authz.lessonStanding(actor, this.scopeOf(l), { teachersDepartment: false, supervisesLearner: false });
+      const standing = standingFor(l);
       if (standing && this.authz.canRecordLessonAct(actor, standing, 'book_makeup').allowed) {
         tickets.push({
           ticket: 'book_makeup',
@@ -425,20 +457,49 @@ export class LessonService {
   // Tickets
   // ------------------------------------------------------------------
 
-  /** Case 1: the learner attended. The report closes the lesson as held and is posted once. */
+  /**
+   * Case 1: the learner attended. The report closes the lesson as held and is
+   * posted once. PD-15: mostly taps -- the lesson number, topic and
+   * next-lesson choices and a performance level -- plus optional short text.
+   * The teacher's note is staff-only and never reaches the card.
+   */
   async report(actorId: string, lessonId: string, body: Record<string, unknown>) {
-    const covered = textField(body, 'covered', MAX_TEXT, true) as string;
-    const homework = textField(body, 'homework', MAX_TEXT, false);
-    const note = textField(body, 'note', MAX_NOTE, false);
-    const rating = ratingField(body);
+    const fields = reportFields(body);
     return this.close(actorId, lessonId, 'report', LessonOutcome.HELD, null, async (tx, lesson, actor, lang) => {
       await tx.lessonReport.create({
-        data: { lessonId: lesson.id, organizationId: lesson.organizationId, teacherId: lesson.teacherId, covered, homework, rating, note },
+        data: {
+          lessonId: lesson.id, organizationId: lesson.organizationId, teacherId: lesson.teacherId,
+          ...fields, enteredByKind: 'teacher', enteredBy: actor.actorId,
+        },
       });
-      const payload = { ...this.cardBase(lesson), covered, homework, rating, note };
-      const messageId = await this.postCard(tx, lesson, actor, CardKind.LESSON_REPORT, payload, lang);
+      const messageId = await this.postCard(tx, lesson, actor, CardKind.LESSON_REPORT, this.reportPayload(lesson, fields), lang);
       if (messageId) await tx.lessonReport.update({ where: { lessonId: lesson.id }, data: { messageId } });
     });
+  }
+
+  /** What a report card carries: everything but the private note. */
+  reportPayload(lesson: LessonWithRelations, f: ReportFields) {
+    return {
+      ...this.cardBase(lesson),
+      lessonNumber: f.lessonNumber,
+      coveredTopics: f.coveredTopics,
+      covered: f.covered,
+      rating: f.rating,
+      nextTasks: f.nextTasks,
+      homework: f.homework,
+    };
+  }
+
+  /** The number a new report starts from: the child's live reported lessons, plus one. */
+  async nextLessonNumber(learnerId: string): Promise<number> {
+    const last = await this.prisma.lessonReport.findFirst({
+      where: { deletedAt: null, lessonNumber: { not: null }, lesson: { learnerId, outcome: LessonOutcome.HELD } },
+      orderBy: { submittedAt: 'desc' },
+      select: { lessonNumber: true },
+    });
+    if (last?.lessonNumber) return last.lessonNumber + 1;
+    const held = await this.prisma.lesson.count({ where: { learnerId, outcome: LessonOutcome.HELD, ...LEARNER_LESSON } });
+    return held + 1;
   }
 
   /** Case 2b: no apology and the start has passed -- an absence, credited to the teacher. */
@@ -449,25 +510,110 @@ export class LessonService {
     });
   }
 
-  /** Case 2a: the family excuses the learner before the start. No report is needed. */
+  /**
+   * Case 2a: the learner is excused before the start -- by the family (with
+   * its reason, shown on the card) or, PD-15, by the child's supervisor from
+   * the group, for whom no reason is asked. No report is needed; a make-up is
+   * owed and is booked once the family and the teacher agree on a time.
+   */
   async apology(actorId: string, lessonId: string, body: Record<string, unknown>) {
-    const reason = textField(body, 'reason', MAX_TEXT, true) as string;
-    return this.close(actorId, lessonId, 'apology', LessonOutcome.STUDENT_APOLOGY, reason, async (tx, lesson, actor, lang) => {
+    const actor = await this.conversations.requireActor(actorId);
+    const family = actor.kind === ActorKind.CONTACT;
+    const reason = textField(body, 'reason', MAX_TEXT, family);
+    return this.close(actorId, lessonId, 'apology', LessonOutcome.STUDENT_APOLOGY, reason, async (tx, lesson, recorder, lang) => {
       const noticeMinutes = Math.max(0, Math.round((lesson.startsAt.getTime() - Date.now()) / 60_000));
-      await this.postCard(tx, lesson, actor, CardKind.LESSON_APOLOGY, { ...this.cardBase(lesson), reason, noticeMinutes }, lang);
-    });
+      await this.postCard(
+        tx, lesson, recorder, CardKind.LESSON_APOLOGY,
+        { ...this.cardBase(lesson), timing: 'before_start', noticeMinutes, makeupOwed: true, ...(family ? { reason } : {}) },
+        lang,
+      );
+    }, !family && reason === null ? 'student excused before the start' : null);
   }
 
-  /** The teacher cannot teach, before the start. A make-up is owed (PD-11, booked in T2). */
+  /**
+   * The teacher cannot teach, before the start -- recorded by the teacher or,
+   * PD-15, by a supervisor. The reason stays with the lesson for staff; the
+   * family's card says only that a make-up follows.
+   */
   async teacherApology(actorId: string, lessonId: string, body: Record<string, unknown>) {
     const reason = textField(body, 'reason', MAX_TEXT, true) as string;
     return this.close(actorId, lessonId, 'teacher_apology', LessonOutcome.TEACHER_APOLOGY, reason, async (tx, lesson, actor, lang) => {
       await this.postCard(
         tx, lesson, actor, CardKind.LESSON_TEACHER_APOLOGY,
-        { ...this.cardBase(lesson), reason, makeupOwed: true },
+        { ...this.cardBase(lesson), makeupOwed: true },
         lang,
       );
     });
+  }
+
+  /**
+   * PD-15: the child's supervisor (or the Teachers department) excuses the
+   * learner AFTER the start. Unlike a family's late apology, which waits for a
+   * ruling, the supervisor's card is the decision: the lesson becomes a student
+   * apology timed `after_start` at once, and a ruling decided `excused` records
+   * it (the authority chat.guard_lesson needs). The reason is internal: it is
+   * kept on the ruling and the audit log, never on the card. If the family
+   * already filed a late apology, that ruling is the one decided.
+   */
+  async lateExcuse(actorId: string, lessonId: string, body: Record<string, unknown>) {
+    const reason = textField(body, 'reason', MAX_TEXT, true) as string;
+    const actor = await this.conversations.requireActor(actorId);
+    const { lesson, standing } = await this.load(actor, lessonId);
+    this.requireAct(actor, standing, 'late_excuse');
+    const now = new Date();
+    if (now < lesson.startsAt) throw stateError('the lesson has not started: record an excuse before the start instead');
+    if (now.getTime() > lesson.startsAt.getTime() + LATE_APOLOGY_HOURS * 3_600_000) {
+      throw stateError(`an excuse after the start is accepted for ${LATE_APOLOGY_HOURS} hours; correct the lesson instead`);
+    }
+    if (lesson.outcome !== null && lesson.outcome !== LessonOutcome.STUDENT_NO_SHOW) {
+      throw stateError(
+        lesson.outcome === LessonOutcome.STUDENT_APOLOGY
+          ? 'this lesson is already excused'
+          : 'this lesson already has another outcome; correct it instead',
+      );
+    }
+    const existing = lesson.rulings.find((r) => r.kind === RulingKind.LATE_APOLOGY) ?? null;
+    if (existing?.decision) throw stateError('a decision on an excuse for this lesson was already recorded; correct the lesson instead');
+
+    const lang = await this.languageOf(lesson);
+    await this.write(() =>
+      this.prisma.$transaction(async (tx) => {
+        const ruling = existing ?? await tx.lessonRuling.create({
+          data: {
+            organizationId: lesson.organizationId,
+            lessonId: lesson.id,
+            kind: RulingKind.LATE_APOLOGY,
+            openedByKind: ActorKind.STAFF,
+            openedBy: actor.actorId,
+            reason,
+          },
+        });
+        await tx.lessonRuling.update({
+          where: { id: ruling.id },
+          data: { decision: RulingDecision.EXCUSED, decidedBy: actor.actorId, decidedAt: now, decisionNote: reason },
+        });
+        const updated = await tx.lesson.update({
+          where: { id: lesson.id },
+          data: { outcome: LessonOutcome.STUDENT_APOLOGY, outcomeNote: reason, outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: now },
+        });
+        await this.emitClosed(tx, updated, lesson.outcome !== null);
+        await this.postCard(
+          tx, lesson, actor, CardKind.LESSON_APOLOGY,
+          { ...this.cardBase(lesson), timing: 'after_start', makeupOwed: true },
+          lang,
+        );
+        await this.audit.audit(tx, {
+          actorId: actor.actorId,
+          action: 'lesson.student_excused_after_start',
+          entity: 'lesson',
+          entityId: lesson.id,
+          before: { outcome: lesson.outcome },
+          after: { outcome: LessonOutcome.STUDENT_APOLOGY, apologyTiming: 'after_start', rulingId: ruling.id },
+          reason,
+        });
+      }),
+    );
+    return this.get(actorId, lessonId);
   }
 
   /** Jawwid cancels a lesson. The reason is mandatory and the family is told. */
@@ -609,6 +755,8 @@ export class LessonService {
     outcome: string,
     outcomeNote: string | null,
     then: (tx: Tx, lesson: LessonWithRelations, actor: Actor, lang: CardLanguage) => Promise<void>,
+    /** PD-15: audit a close that carries no note (a supervisor's excuse before the start) under this reason. */
+    auditReason: string | null = null,
   ) {
     const actor = await this.conversations.requireActor(actorId);
     const { lesson, standing } = await this.load(actor, lessonId);
@@ -645,14 +793,14 @@ export class LessonService {
         if (beforeStart || outcome === LessonOutcome.ADMIN_CANCELLED) await cancelReminders(tx, lesson.id);
         await this.emitClosed(tx, updated, false);
         await this.recordAttendance(tx, updated, actor, lesson.learner.familyId);
-        if (outcomeNote !== null && act !== 'report') {
+        if ((outcomeNote !== null || auditReason !== null) && act !== 'report') {
           await this.audit.audit(tx, {
             actorId: actor.actorId,
             action: `lesson.${outcome}`,
             entity: 'lesson',
             entityId: lesson.id,
-            after: { outcome },
-            reason: outcomeNote,
+            after: { outcome, ...(updated.apologyTiming ? { apologyTiming: updated.apologyTiming } : {}) },
+            reason: outcomeNote ?? (auditReason as string),
           });
         }
       }),
@@ -937,6 +1085,7 @@ export class LessonService {
 
   toDto(lesson: LessonWithRelations, standing: LessonStanding, now: Date, escalationMs: number) {
     const ruling = lesson.rulings.find((r) => r.kind === RulingKind.LATE_APOLOGY) ?? null;
+    const staffView = standing === 'manager' || standing === 'supervisor';
     return {
       id: lesson.id,
       learner: { id: lesson.learner.id, name: lesson.learner.name },
@@ -948,23 +1097,47 @@ export class LessonService {
       durationMinutes: Math.round((lesson.endsAt.getTime() - lesson.startsAt.getTime()) / 60_000),
       phase: phaseOf(lesson, now, escalationMs),
       outcome: lesson.outcome,
-      outcomeNote: lesson.outcomeNote,
+      apologyTiming: lesson.apologyTiming,
+      // PD-15: internal reasons (a teacher's apology, a supervisor's excuse, a
+      // correction) are staff's. A family reads only its own apology's reason
+      // and a cancellation's, which its card already told it.
+      outcomeNote: staffView || standing === 'teacher' || familyMayReadNote(lesson) ? lesson.outcomeNote : null,
       outcomeAt: lesson.outcomeAt?.toISOString() ?? null,
       // Who recorded it is staff-facing; a family sees what happened, not whom to blame.
-      outcomeBy: standing === 'manager' || standing === 'supervisor'
+      outcomeBy: staffView
         ? (lesson.outcomeBy ? { kind: lesson.outcomeByKind, id: lesson.outcomeBy } : null)
         : undefined,
-      report: lesson.report
+      report: lesson.report && (lesson.report.deletedAt === null || staffView)
         ? {
+            lessonNumber: lesson.report.lessonNumber,
+            coveredTopics: lesson.report.coveredTopics,
             covered: lesson.report.covered,
-            homework: lesson.report.homework,
             rating: lesson.report.rating,
-            note: lesson.report.note,
+            nextTasks: lesson.report.nextTasks,
+            homework: lesson.report.homework,
+            // The private note: the teacher who wrote it and staff only.
+            ...(staffView || standing === 'teacher' ? { note: lesson.report.note } : {}),
             submittedAt: lesson.report.submittedAt.toISOString(),
+            updatedAt: lesson.report.updatedAt.toISOString(),
+            version: lesson.report.version,
+            enteredBy: staffView ? { kind: lesson.report.enteredByKind, id: lesson.report.enteredBy } : undefined,
+            deletedAt: lesson.report.deletedAt?.toISOString() ?? null,
             messageId: lesson.report.messageId,
           }
         : null,
-      ruling: ruling ? rulingDto(ruling) : null,
+      // A supervisor's excuse keeps its reason on the ruling: staff's only.
+      ruling: ruling && (staffView || ruling.openedByKind === ActorKind.CONTACT) ? rulingDto(ruling) : null,
+      corrections: staffView
+        ? (lesson.corrections ?? []).map((c) => ({
+            id: c.id,
+            from: c.fromOutcome,
+            to: c.toOutcome,
+            apologyTiming: c.apologyTiming,
+            reason: c.reason,
+            by: c.correctedBy,
+            at: c.correctedAt.toISOString(),
+          }))
+        : undefined,
     };
   }
 }
@@ -989,7 +1162,7 @@ export function phaseOf(lesson: Pick<Lesson, 'outcome' | 'startsAt' | 'endsAt'>,
 }
 
 /** The tickets a lesson's state and the clock allow -- before asking who may open them. */
-export function availableActs(lesson: Pick<Lesson, 'outcome' | 'startsAt'> & { rulings: Pick<LessonRuling, 'kind'>[] }, now: Date): LessonAct[] {
+export function availableActs(lesson: Pick<Lesson, 'outcome' | 'startsAt'> & { rulings: Pick<LessonRuling, 'kind' | 'decision'>[] }, now: Date): LessonAct[] {
   const started = now >= lesson.startsAt;
   const acts: LessonAct[] = [];
   if (lesson.outcome === null) {
@@ -997,14 +1170,71 @@ export function availableActs(lesson: Pick<Lesson, 'outcome' | 'startsAt'> & { r
     else acts.push('apology', 'teacher_apology');
   }
   const withinLate = started && now.getTime() <= lesson.startsAt.getTime() + LATE_APOLOGY_HOURS * 3_600_000;
-  if (
-    withinLate &&
-    (lesson.outcome === null || lesson.outcome === LessonOutcome.STUDENT_NO_SHOW) &&
-    !lesson.rulings.some((r) => r.kind === RulingKind.LATE_APOLOGY)
-  ) {
+  const absentOrOpen = lesson.outcome === null || lesson.outcome === LessonOutcome.STUDENT_NO_SHOW;
+  if (withinLate && absentOrOpen && !lesson.rulings.some((r) => r.kind === RulingKind.LATE_APOLOGY)) {
     acts.push('late_apology');
   }
+  // PD-15: a supervisor's excuse after the start -- also when the family's own
+  // late apology is still waiting, which it then decides.
+  if (withinLate && absentOrOpen && !lesson.rulings.some((r) => r.kind === RulingKind.LATE_APOLOGY && r.decision !== null)) {
+    acts.push('late_excuse');
+  }
   return acts;
+}
+
+/** The outcomes that owe a make-up (PD-15): the teacher's misses and the student's apologies. */
+export const MAKEUP_CAUSES = ['teacher_apology', 'teacher_no_show', 'student_apology'] as const;
+/** The ones the follow-up queue escalates when no make-up is booked: the teacher's (PD-11 T2). */
+export const TEACHER_MAKEUP_CAUSES = ['teacher_apology', 'teacher_no_show'] as const;
+
+function familyMayReadNote(lesson: Pick<Lesson, 'outcome' | 'outcomeByKind'>): boolean {
+  return lesson.outcome === LessonOutcome.ADMIN_CANCELLED
+    || (lesson.outcome === LessonOutcome.STUDENT_APOLOGY && lesson.outcomeByKind === ActorKind.CONTACT);
+}
+
+export interface ReportFields {
+  lessonNumber: number | null;
+  coveredTopics: string[];
+  covered: string | null;
+  rating: number | null;
+  nextTasks: string[];
+  homework: string | null;
+  note: string | null;
+}
+
+/**
+ * The fields of a lesson report (PD-15). What was covered is required: at
+ * least one topic choice or a short text. Everything else is optional.
+ */
+export function reportFields(body: Record<string, unknown>): ReportFields {
+  const coveredTopics = codeList(body, 'coveredTopics', Object.keys(COVERED_TOPICS));
+  const covered = textField(body, 'covered', MAX_TEXT, false);
+  if (coveredTopics.length === 0 && covered === null) throw invalid('coveredTopics or covered: say what the lesson covered');
+  return {
+    lessonNumber: lessonNumberField(body),
+    coveredTopics,
+    covered,
+    rating: ratingField(body),
+    nextTasks: codeList(body, 'nextTasks', Object.keys(NEXT_TASKS)),
+    homework: textField(body, 'homework', MAX_SHORT, false),
+    note: textField(body, 'note', MAX_NOTE, false),
+  };
+}
+
+function codeList(body: Record<string, unknown>, key: string, known: string[]): string[] {
+  const v = body[key];
+  if (v === undefined || v === null) return [];
+  if (!Array.isArray(v) || v.some((c) => typeof c !== 'string' || !known.includes(c))) {
+    throw invalid(`${key}: a list of ${known.join(', ')}`);
+  }
+  return [...new Set(v as string[])];
+}
+
+function lessonNumberField(body: Record<string, unknown>): number | null {
+  const v = body.lessonNumber;
+  if (v === undefined || v === null) return null;
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > 9999) throw invalid('lessonNumber: an integer from 1 to 9999');
+  return v;
 }
 
 /** ReminderService.cancelForSubject, inside the caller's transaction. */
@@ -1051,7 +1281,7 @@ export function textField(body: Record<string, unknown>, key: string, max: numbe
   if (t.length > max) throw invalid(`${key}: at most ${max} characters`);
   return t;
 }
-function ratingField(body: Record<string, unknown>): number | null {
+export function ratingField(body: Record<string, unknown>): number | null {
   const v = body.rating;
   if (v === undefined || v === null) return null;
   if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > 5) throw invalid('rating: an integer from 1 to 5');

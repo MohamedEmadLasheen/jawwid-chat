@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseFilters } from '@nestjs/common';
 import { MessageService } from '../messages/message.service';
 import { AttachmentService } from '../attachments/attachment.service';
+import { ActionScope, RateLimited } from '../../platform/auth/action-throttle.guard';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
 import { ReceiptState } from '../contracts/vocab';
@@ -40,6 +41,7 @@ export class MessageController {
    * original message instead of creating a duplicate.
    */
   @Post()
+  @RateLimited(ActionScope.MESSAGE_SEND)
   async send(
     @ActorId() actorId: string,
     @Param('conversationId') conversationId: string,
@@ -87,6 +89,9 @@ export class MessageController {
    * (the ordinary send decision); media are copied, never shared by key.
    */
   @Post('forward')
+  // The same budget as a send: forwarding is sending, and a separate one would
+  // be a second, unmetered way to flood a thread.
+  @RateLimited(ActionScope.MESSAGE_SEND)
   async forward(
     @ActorId() actorId: string,
     @Param('conversationId') conversationId: string,
@@ -103,6 +108,7 @@ export class MessageController {
 
   /** Authorizes an upload before any object key exists. */
   @Post('attachments/authorize')
+  @RateLimited(ActionScope.ATTACHMENT_UPLOAD)
   async authorizeUpload(
     @ActorId() actorId: string,
     @Param('conversationId') conversationId: string,

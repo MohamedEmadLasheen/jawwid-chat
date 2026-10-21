@@ -307,6 +307,30 @@ abstract interface class AuthRepository {
   Stream<void> get sessionRevoked;
 }
 
+/// PD-16: a parent whose account the academy created (when their child was enrolled) sets
+/// their own password. Both calls are PUBLIC -- they go over the same transport as sign-in,
+/// never the authenticated client -- and neither says whether an e-mail is known.
+abstract interface class ParentSignupRepository {
+  /// `POST /auth/signup/request` -- the family's supervisor then receives a one-time code to
+  /// send the parent on WhatsApp. Succeeds the same way for any e-mail.
+  Future<void> requestCode(String email);
+
+  /// `POST /auth/signup/verify` -- sets the password. The caller then signs in normally.
+  Future<void> verify({required String email, required String code, required String password});
+}
+
+/// The build with no sign-up server (fixtures, tests that do not override it).
+class NoParentSignupRepository implements ParentSignupRepository {
+  const NoParentSignupRepository();
+
+  @override
+  Future<void> requestCode(String email) => throw UnsupportedError('no sign-up server in this build');
+
+  @override
+  Future<void> verify({required String email, required String code, required String password}) =>
+      throw UnsupportedError('no sign-up server in this build');
+}
+
 abstract interface class ConversationRepository {
   Future<List<Conversation>> list({bool includeArchived = false});
 
@@ -630,6 +654,16 @@ abstract interface class LessonRepository {
 
   /// `GET /stats/me` -- a teacher's own month.
   Future<TeacherWorkload> myWorkload();
+
+  /// PD-15: `GET /lessons/:id` -- the lesson's live report, to edit it (null when none).
+  Future<LessonReportDraft?> reportFor(String lessonId);
+
+  /// PD-15: `POST /lessons/:id/report/edit` -- the whole report again; its card is
+  /// rewritten in place and the previous version is kept.
+  Future<void> editReport(String lessonId, LessonReportDraft draft);
+
+  /// PD-15: `GET /conversations/:id/learners` -- each child of a group, apart.
+  Future<List<GroupChild>> groupChildren(String conversationId);
 }
 
 /// The lesson repository of a build with no lesson server (the fixture build, tests
@@ -728,6 +762,16 @@ class NoLessonRepository implements LessonRepository {
 
   @override
   Future<TeacherWorkload> myWorkload() => throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<LessonReportDraft?> reportFor(String lessonId) => throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<void> editReport(String lessonId, LessonReportDraft draft) =>
+      throw UnsupportedError('no lesson server in this build');
+
+  @override
+  Future<List<GroupChild>> groupChildren(String conversationId) async => const [];
 }
 
 /// PD-11 T4: the teacher's trial group -- the trials they may report under "+", and the

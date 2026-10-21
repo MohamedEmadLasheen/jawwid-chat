@@ -1148,7 +1148,10 @@ model Lesson {
   outcomeByKind  String?   @map("outcome_by_kind")
   outcomeBy      String?   @map("outcome_by") @db.Uuid
   outcomeAt      DateTime? @map("outcome_at") @db.Timestamptz
-  /// staff / contact (a make-up the family booked) / system (materialized from a slot).
+  /// PD-15: a student apology's `before_start` / `after_start`. Written by chat.guard_lesson only.
+  apologyTiming  String?   @map("apology_timing")
+  /// staff / contact (a make-up the family booked) / teacher (PD-15: a make-up the
+  /// teacher booked) / system (materialized from a slot).
   createdByKind  String    @default("staff") @map("created_by_kind")
   createdBy      String?   @map("created_by") @db.Uuid
   scheduleSlotId String?   @map("schedule_slot_id") @db.Uuid
@@ -1159,6 +1162,7 @@ model Lesson {
   report       LessonReport?
   rulings      LessonRuling[]
   trialOutcome TrialOutcome?
+  corrections  LessonCorrection[]
 
   @@map("lesson")
   @@schema("chat")
@@ -1169,14 +1173,104 @@ model LessonReport {
   lesson         Lesson   @relation(fields: [lessonId], references: [id])
   organizationId String   @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid
   teacherId      String   @map("teacher_id") @db.Uuid
-  covered        String
+  /// PD-15: optional once a topic is chosen (lesson_report_says_what_was_covered).
+  covered        String?
   homework       String?
+  /// The performance level, 1 (needs work) .. 5 (excellent).
   rating         Int?     @db.SmallInt
+  /// PD-15: staff-only -- never on the card.
   note           String?
   messageId      String?  @unique @map("message_id") @db.Uuid
   submittedAt    DateTime @map("submitted_at") @db.Timestamptz @default(now())
+  /// PD-15 quick-report fields.
+  lessonNumber   Int?     @map("lesson_number")
+  coveredTopics  String[] @default([]) @map("covered_topics")
+  nextTasks      String[] @default([]) @map("next_tasks")
+  enteredByKind  String   @default("teacher") @map("entered_by_kind")
+  /// Never null in the database: chat.guard_lesson_report fills it with the teacher when a writer leaves it out.
+  enteredBy      String?  @map("entered_by") @db.Uuid
+  /// Raised by chat.guard_lesson_report on every revision; never written by the API.
+  version        Int      @default(1)
+  updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+  deletedBy      String?  @map("deleted_by") @db.Uuid
+  deleteReason   String?  @map("delete_reason")
+
+  revisions      LessonReportRevision[]
 
   @@map("lesson_report")
+  @@schema("chat")
+}
+
+/// PD-15: each previous version of a report. Append-only (20261021120000).
+model LessonReportRevision {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  lessonId       String   @map("lesson_id") @db.Uuid
+  report         LessonReport @relation(fields: [lessonId], references: [lessonId])
+  action         String
+  previous       Json
+  byKind         String   @map("by_kind")
+  byId           String   @map("by_id") @db.Uuid
+  at             DateTime @default(now()) @db.Timestamptz
+  reason         String?
+  txid           BigInt   @default(dbgenerated("txid_current()"))
+
+  @@map("lesson_report_revision")
+  @@schema("chat")
+}
+
+/// PD-15: a corrected lesson outcome. Append-only; honoured by chat.guard_lesson
+/// only in the transaction that wrote it.
+model LessonCorrection {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  lessonId       String   @map("lesson_id") @db.Uuid
+  lesson         Lesson   @relation(fields: [lessonId], references: [id])
+  fromOutcome    String   @map("from_outcome")
+  toOutcome      String   @map("to_outcome")
+  apologyTiming  String?  @map("apology_timing")
+  reason         String
+  correctedBy    String   @map("corrected_by") @db.Uuid
+  correctedAt    DateTime @default(now()) @map("corrected_at") @db.Timestamptz
+  txid           BigInt   @default(dbgenerated("txid_current()"))
+
+  @@map("lesson_correction")
+  @@schema("chat")
+}
+
+/// PD-15: the academy's courses. Retired, never deleted.
+model Course {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String
+  isActive       Boolean  @default(true) @map("is_active")
+  createdBy      String   @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  enrollments    LearnerEnrollment[]
+
+  @@map("course")
+  @@schema("chat")
+}
+
+/// PD-15: a child's date of birth, course and package size, entered by
+/// Operations. Current state; every change is in chat.audit_log.
+model LearnerEnrollment {
+  learnerId      String    @id @map("learner_id") @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  birthDate      DateTime? @map("birth_date") @db.Date
+  courseId       String?   @map("course_id") @db.Uuid
+  course         Course?   @relation(fields: [courseId], references: [id])
+  packageLessons Int?      @map("package_lessons")
+  /// PD-16: the age Sales recorded, and the day it was true (until a date of birth is entered).
+  statedAge      Int?      @map("stated_age") @db.SmallInt
+  statedAgeOn    DateTime? @map("stated_age_on") @db.Date
+  updatedBy      String    @map("updated_by") @db.Uuid
+  updatedAt      DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+
+  @@map("learner_enrollment")
   @@schema("chat")
 }
 
@@ -1353,10 +1447,70 @@ model TeacherFile {
   adminOnlyPhone String?   @map("phone")
   email          String?
   joinedOn       DateTime? @map("joined_on") @db.Date
+  /// PD-18: employment, not finance.
+  teachingMarket String?   @map("teaching_market")
   updatedAt      DateTime  @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
   updatedBy      String?   @map("updated_by") @db.Uuid
 
   @@map("teacher_file")
+  @@schema("chat")
+}
+
+// =====================================================================
+// PD-18 -- 20261021160000_chat_pd018_teacher_payroll.sql owns the DDL and every
+// rule. Read and written ONLY by src/teacher-file (teacher-file-confinement.spec).
+// =====================================================================
+
+/// A teacher's salary terms from an effective month. Append-only.
+model TeacherPayTerms {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  teacherId      String   @map("teacher_id") @db.Uuid
+  effectiveMonth DateTime @map("effective_month") @db.Date
+  salaryType     String   @map("salary_type")
+  currency       String
+  monthlyAmount  Decimal? @map("monthly_amount") @db.Decimal(12, 2)
+  hourlyRate     Decimal? @map("hourly_rate") @db.Decimal(12, 2)
+  reason         String
+  createdBy      String   @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("teacher_pay_terms")
+  @@schema("chat")
+}
+
+/// How a teacher is paid. `detailsSealed` is AES-256-GCM ciphertext; only the server's key opens it.
+model TeacherPayoutAccount {
+  teacherId      String   @id @map("teacher_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  method         String
+  detailsSealed  Bytes    @map("details_sealed")
+  keyId          String   @map("key_id")
+  last4          String
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  updatedBy      String   @map("updated_by") @db.Uuid
+
+  @@map("teacher_payout_account")
+  @@schema("chat")
+}
+
+/// The amount of a bonus or deduction. Append-only; a correction replaces a row.
+model TeacherPayAdjustment {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  teacherId      String   @map("teacher_id") @db.Uuid
+  kind           String
+  month          DateTime @db.Date
+  amount         Decimal  @db.Decimal(12, 2)
+  currency       String
+  reason         String
+  bonusEntryId   String?  @map("bonus_entry_id") @db.Uuid
+  violationId    String?  @map("violation_id") @db.Uuid
+  replaces       String?  @db.Uuid
+  createdBy      String   @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("teacher_pay_adjustment")
   @@schema("chat")
 }
 
@@ -1485,9 +1639,28 @@ model TrialProspect {
   createdBy      String   @map("created_by") @db.Uuid
   createdAt      DateTime @map("created_at") @db.Timestamptz @default(now())
 
-  lessons Lesson[]
+  lessons  Lesson[]
+  students TrialStudent[]
 
   @@map("trial_prospect")
+  @@schema("chat")
+}
+
+/// One student of a trial booking, by display name only (BR-2). Written with
+/// the booking, never changed (20261021130000_chat_trial_booking_students).
+model TrialStudent {
+  id             String        @id @default(uuid()) @db.Uuid
+  prospectId     String        @map("prospect_id") @db.Uuid
+  prospect       TrialProspect @relation(fields: [prospectId], references: [id])
+  organizationId String        @map("organization_id") @db.Uuid
+  position       Int           @db.SmallInt
+  displayName    String        @map("display_name")
+  level          String?
+  note           String?
+  createdAt      DateTime      @map("created_at") @db.Timestamptz @default(now())
+
+  @@unique([prospectId, position])
+  @@map("trial_student")
   @@schema("chat")
 }
 
@@ -1649,5 +1822,42 @@ model LearnerProfile {
   updatedAt      DateTime @map("updated_at") @db.Timestamptz @default(now()) @updatedAt
 
   @@map("learner_profile")
+  @@schema("chat")
+}
+
+/// PD-16: a subscription form the Operations manager assigned, and the family,
+/// parent, account and children Chat created from it (20261021140000).
+model StudentEnrolment {
+  lessonId            String    @id @map("lesson_id") @db.Uuid
+  organizationId      String    @map("organization_id") @db.Uuid
+  familyId            String    @unique @map("family_id") @db.Uuid
+  contactId           String    @map("contact_id") @db.Uuid
+  accountId           String    @map("account_id") @db.Uuid
+  learnerIds          String[]  @map("learner_ids") @db.Uuid
+  assignedBy          String    @map("assigned_by") @db.Uuid
+  assignedAt          DateTime  @default(now()) @map("assigned_at") @db.Timestamptz
+  groupConversationId String?   @map("group_conversation_id") @db.Uuid
+  groupCreatedBy      String?   @map("group_created_by") @db.Uuid
+  groupCreatedAt      DateTime? @map("group_created_at") @db.Timestamptz
+
+  @@map("student_enrolment")
+  @@schema("chat")
+}
+
+/// PD-16: a parent's one-time sign-up code. Short-lived, five tries at most.
+model ParentSignupCode {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  accountId      String    @map("account_id") @db.Uuid
+  codeHash       String    @map("code_hash")
+  relayCode      String?   @map("relay_code")
+  delivery       String    @default("relay")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz
+  attempts       Int       @default(0)
+  usedAt         DateTime? @map("used_at") @db.Timestamptz
+  supersededAt   DateTime? @map("superseded_at") @db.Timestamptz
+
+  @@map("parent_signup_code")
   @@schema("chat")
 }

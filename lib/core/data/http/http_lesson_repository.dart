@@ -39,6 +39,7 @@ class HttpLessonRepository implements LessonRepository {
         endsAt: endsAt?.toLocal(),
         learnerId: learnerId,
         learnerName: learner['name'] as String? ?? '',
+        suggestedLessonNumber: (row['suggestedLessonNumber'] as num?)?.toInt(),
       ));
     }
     return tickets;
@@ -46,12 +47,58 @@ class HttpLessonRepository implements LessonRepository {
 
   @override
   Future<void> report(String lessonId, LessonReportDraft draft) async {
-    await _client.post<Object?>('/lessons/$lessonId/report', data: {
-      'covered': draft.covered,
-      if (draft.homework != null) 'homework': draft.homework,
-      if (draft.rating != null) 'rating': draft.rating,
-      if (draft.note != null) 'note': draft.note,
-    });
+    await _client.post<Object?>('/lessons/$lessonId/report', data: draft.toJson());
+  }
+
+  @override
+  Future<void> editReport(String lessonId, LessonReportDraft draft) async {
+    await _client.post<Object?>('/lessons/$lessonId/report/edit', data: draft.toJson());
+  }
+
+  @override
+  Future<LessonReportDraft?> reportFor(String lessonId) async {
+    final d = (await _client.get<Map<String, Object?>>('/lessons/$lessonId')).data ?? const {};
+    final r = d['report'];
+    if (r is! Map || r['deletedAt'] != null) return null;
+    List<String> codes(Object? v) => [for (final c in (v as List?) ?? const []) if (c is String) c];
+    return LessonReportDraft(
+      lessonNumber: (r['lessonNumber'] as num?)?.toInt(),
+      coveredTopics: codes(r['coveredTopics']),
+      covered: r['covered'] as String?,
+      rating: (r['rating'] as num?)?.toInt(),
+      nextTasks: codes(r['nextTasks']),
+      homework: r['homework'] as String?,
+      note: r['note'] as String?,
+    );
+  }
+
+  @override
+  Future<List<GroupChild>> groupChildren(String conversationId) async {
+    final d = (await _client.get<Map<String, Object?>>('/conversations/$conversationId/learners')).data ?? const {};
+    final out = <GroupChild>[];
+    for (final raw in (d['learners'] as List?) ?? const []) {
+      if (raw is! Map || raw['id'] is! String) continue;
+      final course = raw['course'] is Map ? raw['course'] as Map : null;
+      final teacher = raw['teacher'] is Map ? raw['teacher'] as Map : null;
+      out.add(GroupChild(
+        id: raw['id'] as String,
+        name: raw['name'] as String? ?? '',
+        age: (raw['age'] as num?)?.toInt(),
+        courseName: course?['name'] as String?,
+        packageLessons: (raw['packageLessons'] as num?)?.toInt(),
+        teacherName: teacher?['name'] as String?,
+        schedule: [
+          for (final s in (raw['schedule'] as List?) ?? const [])
+            if (s is Map && s['weekday'] is num && s['start'] is String)
+              GroupChildSlot(
+                weekday: (s['weekday'] as num).toInt(),
+                start: s['start'] as String,
+                durationMinutes: (s['durationMinutes'] as num?)?.toInt() ?? 0,
+              ),
+        ],
+      ));
+    }
+    return out;
   }
 
   @override
@@ -155,6 +202,7 @@ class HttpLessonRepository implements LessonRepository {
       makeupsOwed: n(d['makeupsOwed']),
       nextLessonAt: next == null ? null : DateTime.tryParse('${next['startsAt']}')?.toLocal(),
       lastCovered: last?['covered'] as String?,
+      lastCoveredTopics: [for (final c in (last?['coveredTopics'] as List?) ?? const []) if (c is String) c],
       lastReportAt: last == null ? null : DateTime.tryParse('${last['startsAt']}')?.toLocal(),
       certificates: [
         for (final c in (d['certificates'] as List?) ?? const [])

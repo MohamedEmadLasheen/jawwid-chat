@@ -8,6 +8,8 @@ import type { Bucket, CategoryStats, TeacherDetail, TeacherRow } from './api'
 import { CATEGORY_LABEL, CATEGORY_TONE, T, type Pair } from './copy'
 import { useTeacherDetail, useTeacherStats } from './hooks'
 import { TeachersAreaTabs } from './area'
+import { MonthSummaryPanel, S } from '@/features/journey/MonthSummary'
+import { useJourneyCopy } from '@/features/journey/copy'
 import './teachers.css'
 
 /**
@@ -72,6 +74,7 @@ export function TeacherStatsPage({ inTeachersArea = false }: { inTeachersArea?: 
 // ---------------------------------------------------------------------------
 
 function TeacherList({ month, onOpen }: { month: string; onOpen: (id: string) => void }) {
+  const { tx: jx } = useJourneyCopy()
   const tx = useCopy()
   const fmt = useFormat()
   const q = useTeacherStats(month)
@@ -102,6 +105,9 @@ function TeacherList({ month, onOpen }: { month: string; onOpen: (id: string) =>
                   <th scope="col" className="num">{tx(T.colUnreported)}</th>
                   <th scope="col" className="num">{tx(T.colAttendance)}</th>
                   <th scope="col" className="num">{tx(T.colOnTime)}</th>
+                  <th scope="col" className="num">{jx(S.makeups)}</th>
+                  <th scope="col" className="num">{jx(S.studentExcuses)}</th>
+                  <th scope="col" className="num">{jx(S.teacherExcuses)}</th>
                   <th scope="col" className="num">{tx(T.colTrials)}</th>
                   <th scope="col" className="num">{tx(T.colTrialsSubscribed)}</th>
                 </tr>
@@ -121,6 +127,11 @@ function TeacherList({ month, onOpen }: { month: string; onOpen: (id: string) =>
                     <td className={`num${r.unreported.lessons > 0 ? ' ts-attention' : ''}`}>{fmt.number(r.unreported.lessons)}</td>
                     <td className="num">{fmt.percent(r.attendanceRate)}</td>
                     <td className="num">{fmt.percent(r.reportsOnTimeRate)}</td>
+                    <td className="num">{r.summary ? `${fmt.number(r.summary.makeups.completed)} / ${fmt.number(r.summary.makeups.total)}` : '—'}</td>
+                    <td className="num">
+                      {r.summary ? `${fmt.number(r.summary.studentExcuses.beforeStart)} + ${fmt.number(r.summary.studentExcuses.afterStart)}` : '—'}
+                    </td>
+                    <td className="num">{r.summary ? fmt.number(r.summary.teacherExcuses) : '—'}</td>
                     <td className="num">{fmt.number(r.trials?.total ?? 0)}</td>
                     <td className="num">{fmt.number(r.trials?.subscribed ?? 0)}</td>
                   </tr>
@@ -195,6 +206,7 @@ function DetailBody({ detail: d }: { detail: TeacherDetail }) {
 
   return (
     <>
+      {d.summary && <MonthSummaryPanel summary={d.summary} />}
       <section className="ts-grid" aria-label={tx(T.title)}>
         {cards.map((c) => (
           <CategoryCard key={c.key} category={c} />

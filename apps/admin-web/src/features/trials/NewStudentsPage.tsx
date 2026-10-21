@@ -10,6 +10,7 @@ import { TrialsAreaTabs, useTrialsAccess } from './area'
 import { PAYMENT_METHOD, TR, WEEKDAY, formatMoney, formatWhen } from './copy'
 import { useNewStudents, useTrialOp } from './hooks'
 import { SubscriptionForm, draftFrom, formErrors, toInput, type SubscriptionDraft } from './SubscriptionForm'
+import { NewStudentSetup } from './NewStudentSetup'
 import '../teachers/teachers.css'
 import './trials.css'
 
@@ -40,7 +41,13 @@ export function NewStudentsPage() {
           ) : (
             <div className="tj-students">
               {students.map((s) => (
-                <StudentCard key={s.trialId} s={s} onEdit={access.sales ? () => setEditing(s) : undefined} />
+                <StudentCard
+                  key={s.trialId}
+                  s={s}
+                  canAssign={q.data?.canAssign === true}
+                  // PD-16: a form that became a family is frozen.
+                  onEdit={access.sales && !s.enrolment ? () => setEditing(s) : undefined}
+                />
               ))}
             </div>
           )}
@@ -51,7 +58,7 @@ export function NewStudentsPage() {
   )
 }
 
-function StudentCard({ s, onEdit }: { s: NewStudentDto; onEdit?: () => void }) {
+function StudentCard({ s, onEdit, canAssign }: { s: NewStudentDto; onEdit?: () => void; canAssign: boolean }) {
   const { locale } = useI18n()
   const tx = (p: Pair) => (locale === 'ar' ? p.ar : p.en)
   const money = (n: number) => formatMoney(n, s.payment.currency, locale)
@@ -123,6 +130,8 @@ function StudentCard({ s, onEdit }: { s: NewStudentDto; onEdit?: () => void }) {
           </tbody>
         </table>
       </div>
+
+      <NewStudentSetup s={s} canAssign={canAssign} />
 
       <p className="ts-muted tj-student__meta">
         {tx(TR.recordedBy)} {s.recordedBy.name} · {formatWhen(s.recordedAt, locale)}

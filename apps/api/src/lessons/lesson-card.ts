@@ -1,4 +1,5 @@
 import { CardKind, LessonOutcome, RulingDecision } from '../communication/contracts/vocab';
+import { performanceLabel, taskLabel, topicLabel } from './report-vocab';
 
 export type CardLanguage = 'ar' | 'en';
 
@@ -19,12 +20,13 @@ export function renderCardBody(kind: string, p: Record<string, unknown>, lang: C
 
   switch (kind) {
     case CardKind.LESSON_REPORT:
+      // PD-15: the teacher's private note is never on the card.
+      return reportBody(p, ar, ar ? `📘 تقرير حصة ${learner}` : `📘 Lesson report — ${learner}`);
+    case CardKind.LESSON_CORRECTED:
       return join(
-        ar ? `📘 تقرير حصة ${learner}` : `📘 Lesson report — ${learner}`,
-        line(ar ? 'ما تمت دراسته' : 'Covered', p.covered),
-        line(ar ? 'الواجب' : 'Homework', p.homework),
-        p.rating ? `${ar ? 'التقييم' : 'Rating'}: ${'★'.repeat(Number(p.rating))}` : null,
-        line(ar ? 'ملاحظة' : 'Note', p.note),
+        ar ? `✏️ تم تصحيح سجل حصة ${learner}` : `✏️ ${learner}'s lesson record was corrected`,
+        line(ar ? 'السجل الآن' : 'Now recorded as', outcomeLabel(String(p.outcome ?? ''), String(p.apologyTiming ?? ''), ar)),
+        p.outcome === LessonOutcome.HELD ? reportBody(p, ar, null) || null : null,
       );
     case CardKind.LESSON_ABSENCE:
       return join(
@@ -33,14 +35,21 @@ export function renderCardBody(kind: string, p: Record<string, unknown>, lang: C
         ar ? 'إذا كان هناك ظرف طارئ يمكنكم تقديم اعتذار متأخر.' : 'If there was an emergency, you can send a late apology.',
       );
     case CardKind.LESSON_APOLOGY:
-      return join(
-        ar ? `🙏 اعتذار عن حصة ${learner}` : `🙏 Apology for ${learner}'s lesson`,
-        line(ar ? 'السبب' : 'Reason', p.reason),
-      );
+      // A supervisor's excuse carries no reason (PD-15): only the family's own does.
+      return p.timing === 'after_start'
+        ? join(
+            ar ? `🙏 سُجّل اعتذار ${learner} عن حصة اليوم بعد بدايتها` : `🙏 ${learner}'s absence from today's lesson is excused`,
+            ar ? 'يمكن ترتيب حصة تعويضية بالاتفاق مع المعلم.' : 'A make-up lesson can be arranged with the teacher.',
+          )
+        : join(
+            ar ? `🙏 لدى ${learner} عذر ولن يتمكن من حضور الحصة` : `🙏 ${learner} has an excuse and will not attend the lesson`,
+            line(ar ? 'السبب' : 'Reason', p.reason),
+            ar ? 'يمكن ترتيب حصة تعويضية بالاتفاق مع المعلم.' : 'A make-up lesson can be arranged with the teacher.',
+          );
     case CardKind.LESSON_TEACHER_APOLOGY:
+      // The teacher's reason is internal (PD-15): the family is told only that a make-up follows.
       return join(
         ar ? `🙏 اعتذر المعلم عن حصة ${learner}` : `🙏 The teacher cannot teach ${learner}'s lesson`,
-        line(ar ? 'السبب' : 'Reason', p.reason),
         ar ? 'سيتم ترتيب حصة تعويضية.' : 'A make-up lesson will be arranged.',
       );
     case CardKind.LESSON_CANCELLED:
@@ -67,7 +76,7 @@ export function renderCardBody(kind: string, p: Record<string, unknown>, lang: C
         line(ar ? 'ملاحظة' : 'Note', p.note),
       );
     case CardKind.LESSON_MAKEUP_BOOKED:
-      return ar ? `📅 حُجزت حصة تعويضية لـ ${learner}` : `📅 A make-up lesson was booked for ${learner}`;
+      return ar ? `📅 تم تحديد موعد حصة تعويضية لـ ${learner}` : `📅 A make-up lesson is scheduled for ${learner}`;
     case CardKind.LESSON_MAKEUP_RESOLVED:
       return join(
         ar ? `ℹ️ تمت معالجة الحصة التي لم يقدمها المعلم لـ ${learner}` : `ℹ️ The lesson ${learner} missed through the teacher has been resolved`,
@@ -111,6 +120,41 @@ export function renderCardBody(kind: string, p: Record<string, unknown>, lang: C
       return join(ar ? '🏅 مكافأة' : '🏅 A bonus for you', line(ar ? 'السبب' : 'Reason', p.reason));
     default:
       return ar ? 'تحديث على الحصة' : 'Lesson update';
+  }
+}
+
+/** The report's own lines, shared by the report card and a correction to held. */
+function reportBody(p: Record<string, unknown>, ar: boolean, title: string | null): string {
+  const list = (v: unknown, label: (code: string, ar: boolean) => string) =>
+    Array.isArray(v) && v.length > 0 ? v.map((c) => label(String(c), ar)).join('، ') : null;
+  const line = (label: string, value: unknown) =>
+    value === null || value === undefined || value === '' ? null : `${label}: ${String(value)}`;
+  const performance = typeof p.rating === 'number' ? performanceLabel(p.rating, ar) : null;
+  return [
+    title,
+    line(ar ? 'رقم الحصة' : 'Lesson no.', p.lessonNumber),
+    line(ar ? 'ما تمت دراسته' : 'Covered', list(p.coveredTopics, topicLabel)),
+    line(ar ? 'التفاصيل' : 'Details', p.covered),
+    line(ar ? 'مستوى الأداء' : 'Performance', performance),
+    line(ar ? 'المطلوب للحصة القادمة' : 'For next lesson', list(p.nextTasks, taskLabel)),
+    line(ar ? 'الواجب' : 'Homework', p.homework),
+  ].filter((x): x is string => x !== null).join('\n');
+}
+
+/** A lesson outcome as a family reads it. */
+export function outcomeLabel(outcome: string, timing: string, ar: boolean): string {
+  switch (outcome) {
+    case LessonOutcome.HELD: return ar ? 'حضر الطالب' : 'The student attended';
+    case LessonOutcome.STUDENT_NO_SHOW: return ar ? 'لم يحضر الطالب' : 'The student did not attend';
+    case LessonOutcome.STUDENT_APOLOGY:
+      return timing === 'after_start'
+        ? ar ? 'عذر للطالب بعد بداية الحصة' : 'Student excused after the start'
+        : ar ? 'عذر للطالب قبل بداية الحصة' : 'Student excused before the start';
+    case LessonOutcome.TEACHER_APOLOGY: return ar ? 'اعتذار المعلم' : 'The teacher apologised';
+    case LessonOutcome.TEACHER_NO_SHOW: return ar ? 'غياب المعلم' : 'The teacher was absent';
+    case LessonOutcome.ADMIN_CANCELLED: return ar ? 'أُلغيت الحصة' : 'Cancelled';
+    case LessonOutcome.VOIDED: return ar ? 'حُذفت الحصة من السجل' : 'Removed from the record';
+    default: return outcome;
   }
 }
 

@@ -951,7 +951,7 @@ class L10nAr extends L10n {
   String get cardReason => 'السبب';
 
   @override
-  String get ticketBookMakeup => 'حجز حصة تعويضية';
+  String get ticketBookMakeup => 'جدولة حصة تعويضية';
 
   @override
   String get ticketRequestScheduleChange => 'تغيير مواعيد الحصص الثابتة';
@@ -2056,4 +2056,287 @@ class L10nAr extends L10n {
 
   @override
   String get profileLoadFailed => 'تعذّر تحميل ملفك الشخصي.';
+
+  @override
+  String get ticketReportChoose => 'ماذا حدث في هذه الحصة؟';
+
+  @override
+  String get ticketReportAttended => 'حضر الطالب';
+
+  @override
+  String get ticketReportNotAttended => 'لم يحضر الطالب';
+
+  @override
+  String get ticketAbsenceConfirm =>
+      'سيُبلَّغ أعضاء المجموعة بأن الطالب لم يحضر هذه الحصة.';
+
+  @override
+  String get reportLessonNumberLabel => 'رقم الحصة';
+
+  @override
+  String get reportTopicsLabel => 'ماذا تعلّم الطالب؟';
+
+  @override
+  String get reportDetailsLabel => 'تفاصيل (اختياري، باختصار)';
+
+  @override
+  String get reportPerformanceLabel => 'مستوى الأداء في هذه الحصة';
+
+  @override
+  String get reportNextLabel => 'المطلوب للحصة القادمة';
+
+  @override
+  String get reportHomeworkDetailsLabel => 'تفاصيل الواجب (اختياري)';
+
+  @override
+  String get reportPrivateNoteLabel => 'ملاحظة خاصة (للمشرفين فقط)';
+
+  @override
+  String get reportNeedsCovered => 'اختر موضوعًا أو اكتب سطرًا قصيرًا.';
+
+  @override
+  String get reportEdit => 'تعديل التقرير';
+
+  @override
+  String get reportUpdated => 'تم تحديث التقرير';
+
+  @override
+  String get topicNewMemorization => 'حفظ جديد';
+
+  @override
+  String get topicRevision => 'مراجعة';
+
+  @override
+  String get topicRecitation => 'تلاوة';
+
+  @override
+  String get topicTajweed => 'أحكام التجويد';
+
+  @override
+  String get topicReading => 'قراءة';
+
+  @override
+  String get topicWriting => 'كتابة';
+
+  @override
+  String get topicGrammar => 'قواعد';
+
+  @override
+  String get topicVocabulary => 'مفردات';
+
+  @override
+  String get topicIslamicStudies => 'تربية إسلامية';
+
+  @override
+  String get topicAssessment => 'اختبار وتقييم';
+
+  @override
+  String get taskMemorizeNew => 'حفظ المقطع الجديد';
+
+  @override
+  String get taskRevisePrevious => 'مراجعة ما سبق';
+
+  @override
+  String get taskPractiseRecitation => 'التدرّب على التلاوة';
+
+  @override
+  String get taskPractiseReading => 'التدرّب على القراءة';
+
+  @override
+  String get taskWrittenHomework => 'واجب كتابي';
+
+  @override
+  String get taskPrepareNext => 'التحضير للدرس القادم';
+
+  @override
+  String get taskNothing => 'لا يوجد واجب';
+
+  @override
+  String get level5 => 'ممتاز';
+
+  @override
+  String get level4 => 'جيد جدًا';
+
+  @override
+  String get level3 => 'جيد';
+
+  @override
+  String get level2 => 'مقبول';
+
+  @override
+  String get level1 => 'يحتاج إلى متابعة';
+
+  @override
+  String get cardLessonNumber => 'رقم الحصة';
+
+  @override
+  String get cardNextLesson => 'المطلوب للحصة القادمة';
+
+  @override
+  String get cardPerformance => 'مستوى الأداء';
+
+  @override
+  String get cardCorrectedTitle => 'تم تصحيح سجل الحصة';
+
+  @override
+  String get cardCorrectedNow => 'السجل الآن';
+
+  @override
+  String get cardExcusedAfterTitle => 'عذر بعد بداية الحصة';
+
+  @override
+  String get cardReportCorrected => 'صحّحه المشرف';
+
+  @override
+  String get cardOutcomeHeld => 'حضر الطالب';
+
+  @override
+  String get cardOutcomeStudentNoShow => 'لم يحضر الطالب';
+
+  @override
+  String get cardOutcomeExcusedBefore => 'عذر للطالب قبل بداية الحصة';
+
+  @override
+  String get cardOutcomeExcusedAfter => 'عذر للطالب بعد بداية الحصة';
+
+  @override
+  String get cardOutcomeTeacherApology => 'اعتذار المعلم';
+
+  @override
+  String get cardOutcomeTeacherNoShow => 'غياب المعلم';
+
+  @override
+  String get cardOutcomeCancelled => 'ملغاة';
+
+  @override
+  String get makeupOtherTime => 'موعد آخر متفق عليه';
+
+  @override
+  String get makeupAgreedHint =>
+      'سجّل الحصة التعويضية بعد الاتفاق مع الأسرة على الموعد.';
+
+  @override
+  String makeupChosen(String when) {
+    return 'الموعد المختار: $when';
+  }
+
+  @override
+  String get groupChildrenTitle => 'الأطفال في هذه المجموعة';
+
+  @override
+  String groupChildAge(int age) {
+    String _temp0 = intl.Intl.pluralLogic(
+      age,
+      locale: localeName,
+      other: '$age سنة',
+      many: '$age سنة',
+      few: '$age سنوات',
+      two: 'سنتان',
+      one: 'سنة واحدة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get groupChildAgeLabel => 'العمر';
+
+  @override
+  String get groupChildCourse => 'الدورة';
+
+  @override
+  String get groupChildSchedule => 'أيام ومواعيد الحصص';
+
+  @override
+  String get groupChildPackage => 'الباقة';
+
+  @override
+  String groupChildPackageLessons(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count حصة',
+      many: '$count حصة',
+      few: '$count حصص',
+      two: 'حصتان',
+      one: 'حصة واحدة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get groupChildTeacher => 'المعلم';
+
+  @override
+  String get groupChildNotSet => 'غير محدد';
+
+  @override
+  String get groupChildNoSchedule => 'لا توجد مواعيد ثابتة بعد';
+
+  @override
+  String groupChildMinutes(int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: '$minutes دقيقة',
+      many: '$minutes دقيقة',
+      few: '$minutes دقائق',
+      two: 'دقيقتان',
+      one: 'دقيقة واحدة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get signupOpen => 'ولي أمر جديد؟ أنشئ حسابك';
+
+  @override
+  String get signupTitle => 'إنشاء حساب ولي الأمر';
+
+  @override
+  String get signupEmailIntro =>
+      'أدخل البريد الإلكتروني الذي سجّلته لدى الأكاديمية عند الاشتراك.';
+
+  @override
+  String get signupEmailLabel => 'البريد الإلكتروني';
+
+  @override
+  String get signupEmailInvalid => 'أدخل بريدًا إلكترونيًا صحيحًا.';
+
+  @override
+  String get signupSendCode => 'احصل على الرمز';
+
+  @override
+  String get signupCodeSent =>
+      'سيرسل إليك مشرفك رمزًا من 6 أرقام عبر واتساب. أدخله أدناه مع كلمة المرور التي تريدها.';
+
+  @override
+  String get signupCodeLabel => 'الرمز المكوّن من 6 أرقام';
+
+  @override
+  String get signupPasswordLabel => 'كلمة مرور جديدة (8 أحرف على الأقل)';
+
+  @override
+  String get signupPasswordConfirmLabel => 'أعد كتابة كلمة المرور';
+
+  @override
+  String get signupPasswordTooShort => 'استخدم 8 أحرف على الأقل.';
+
+  @override
+  String get signupPasswordsDiffer => 'كلمتا المرور غير متطابقتين.';
+
+  @override
+  String get signupFinish => 'إنشاء الحساب';
+
+  @override
+  String get signupCodeInvalid =>
+      'هذا الرمز غير صالح أو انتهت صلاحيته. اطلب رمزًا جديدًا.';
+
+  @override
+  String get signupNewCode => 'أرسل رمزًا جديدًا';
+
+  @override
+  String get signupTooMany => 'محاولات كثيرة. حاول مرة أخرى بعد دقائق.';
+
+  @override
+  String get signupFailed => 'حدث خطأ. حاول مرة أخرى.';
 }

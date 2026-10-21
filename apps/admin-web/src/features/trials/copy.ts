@@ -9,26 +9,46 @@ export const TR = {
   areaLabel: { en: 'Trials', ar: 'الحصص التجريبية' },
   trialsTitle: { en: 'Trial lessons', ar: 'الحصص التجريبية' },
   trialsSubtitle: {
-    en: 'Book a prospect into a teacher\'s real free time. Each trial gets one outcome, recorded from the teacher\'s trial group with "+ → Trial" or here.',
-    ar: 'احجز للمهتم في وقت فارغ فعلي لدى المعلم. لكل حصة تجريبية نتيجة واحدة تُسجَّل من مجموعة المعلم التجريبية عبر «+ ← تجريبية» أو من هنا.',
+    en: 'Book one or more students into a teacher\'s real free time. Each trial gets one outcome, recorded from the teacher\'s trial group with "+ → Trial" or here.',
+    ar: 'احجز لطالب أو أكثر في وقت فارغ فعلي لدى المعلم. لكل حصة تجريبية نتيجة واحدة تُسجَّل من مجموعة المعلم التجريبية عبر «+ ← تجريبية» أو من هنا.',
   },
   newProspect: { en: 'Record a prospect', ar: 'تسجيل مهتم' },
   bookTrial: { en: 'Book a trial', ar: 'حجز حصة تجريبية' },
-  prospect: { en: 'Prospect', ar: 'المهتم' },
+  prospect: { en: 'Students', ar: 'الطلاب' },
   displayName: { en: 'Name to show', ar: 'الاسم الظاهر' },
   level: { en: 'Level (optional)', ar: 'المستوى (اختياري)' },
   noteOptional: { en: 'Note (optional)', ar: 'ملاحظة (اختيارية)' },
   note: { en: 'Note', ar: 'ملاحظة' },
   teacher: { en: 'Teacher', ar: 'المعلم' },
-  duration: { en: 'Length', ar: 'المدة' },
+  duration: { en: 'Length (minutes)', ar: 'المدة (بالدقائق)' },
+  lengthHint: { en: 'From 15 to 120 minutes.', ar: 'من ١٥ إلى ١٢٠ دقيقة.' },
+  missingLength: { en: 'Enter a length from 15 to 120 minutes.', ar: 'اكتب مدة من ١٥ إلى ١٢٠ دقيقة.' },
   day: { en: 'Day', ar: 'اليوم' },
   time: { en: 'Free time', ar: 'الوقت المتاح' },
   noSlots: {
     en: 'This teacher has no free time in the coming weeks (or no working hours recorded).',
     ar: 'لا يوجد وقت فارغ لدى هذا المعلم في الأسابيع القادمة (أو لم تُسجّل ساعات عمله).',
   },
+  chooseTeacherFirst: { en: 'Choose the teacher first', ar: 'اختر المعلم أولًا' },
+  enterLengthFirst: { en: 'Enter the length first', ar: 'اكتب المدة أولًا' },
+  noSlotsShort: { en: 'No free time', ar: 'لا يوجد وقت متاح' },
   loadingSlots: { en: 'Loading free times…', ar: 'جارٍ تحميل الأوقات المتاحة…' },
-  noProspects: { en: 'Record a prospect first.', ar: 'سجّل المهتم أولًا.' },
+  students: { en: 'Students', ar: 'الطلاب' },
+  student: { en: 'Student', ar: 'الطالب' },
+  studentName: { en: 'Student name', ar: 'اسم الطالب' },
+  studentLevel: { en: 'Level (optional)', ar: 'المستوى (اختياري)' },
+  addStudent: { en: 'Add another student', ar: 'إضافة طالب آخر' },
+  missingStudentName: {
+    en: 'Enter a name for every student, or remove the empty one.',
+    ar: 'اكتب اسم كل طالب، أو احذف الطالب الفارغ.',
+  },
+  missingTeacher: { en: 'Choose the teacher.', ar: 'اختر المعلم.' },
+  missingTime: { en: 'Choose a free time.', ar: 'اختر وقتًا متاحًا.' },
+  removeStudent: { en: 'Remove this student', ar: 'حذف هذا الطالب' },
+  studentsHint: {
+    en: 'Siblings or a small group can share one trial. The trial gets one outcome for all of them.',
+    ar: 'يمكن للإخوة أو لمجموعة صغيرة حضور حصة تجريبية واحدة، ولها نتيجة واحدة للجميع.',
+  },
   book: { en: 'Book', ar: 'احجز' },
   save: { en: 'Save', ar: 'حفظ' },
   when: { en: 'When', ar: 'الموعد' },
@@ -45,6 +65,8 @@ export const TR = {
   notSubscribed: { en: 'Did not subscribe', ar: 'لم يشترك' },
   reason: { en: 'Reason (if not subscribed)', ar: 'السبب (إن لم يشترك)' },
   cancel: { en: 'Cancel trial', ar: 'إلغاء الحصة' },
+  editTrial: { en: 'Edit', ar: 'تعديل' },
+  currentTime: { en: 'Now booked for', ar: 'الموعد الحالي' },
   cancelReason: { en: 'Reason', ar: 'السبب' },
   absence: { en: 'Prospect absent', ar: 'غياب المهتم' },
   report: { en: 'Teacher\'s report', ar: 'تقرير المعلم' },
@@ -63,8 +85,12 @@ export const TR = {
     en: 'This group holds every trial of this teacher. Pick the student and time.',
     ar: 'تضم هذه المجموعة كل الحصص التجريبية لهذا المعلم. اختر الطالب والموعد.',
   },
-  noTrials: { en: 'No started trial of this teacher needs an outcome.', ar: 'لا توجد حصة تجريبية بدأت وتحتاج إلى نتيجة لهذا المعلم.' },
+  noTrials: { en: 'This teacher has no trials to record yet.', ar: 'لا توجد حصص تجريبية لهذا المعلم بعد.' },
   needsOutcome: { en: 'Needs an outcome', ar: 'بحاجة إلى نتيجة' },
+  upcomingHint: {
+    en: 'Not started yet: its outcome can be recorded once the trial starts.',
+    ar: 'لم تبدأ بعد: يمكن تسجيل نتيجتها بعد بدء الحصة.',
+  },
   recorded: { en: 'Recorded', ar: 'مسجّلة' },
   optionNoShow: { en: 'The student did not attend the trial', ar: 'الطالب لم يحضر الحصة التجريبية' },
   optionSubscribed: { en: 'The student subscribed', ar: 'الطالب اشترك' },
@@ -196,7 +222,7 @@ export const NOT_SUBSCRIBED_REASON: Record<string, Pair> = {
   other: { en: 'Other', ar: 'أخرى' },
 }
 
-/** An instant in the reader's language and zone: "Mon 21 Oct, 17:30". */
+/** An instant in the reader's language and zone: "Mon 21 Oct, 05:30 PM". */
 export function formatWhen(iso: string, locale: 'ar' | 'en'): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso

@@ -71,6 +71,21 @@ export const COMMUNICATION_CONFIG_DEFAULTS = {
   'stats.report_grace_hours': 24,
   /** A family message counts as answered when the teacher replied within this many hours. */
   'stats.reply_within_hours': 24,
+  /**
+   * initial hypothesis - Phase 8 abuse limits (docs/security/ABUSE-LIMITS.md).
+   * The fixed window every authenticated-action counter below is measured over.
+   */
+  'abuse.throttle.window_seconds': 60,
+  /** initial hypothesis - message sends (and forwards) per actor per window. */
+  'abuse.throttle.message_send_actor': 60,
+  /** initial hypothesis - upload grants (attachments, story media) per actor per window. */
+  'abuse.throttle.attachment_upload_actor': 30,
+  /** initial hypothesis - story publications per actor per window. */
+  'abuse.throttle.story_publish_actor': 20,
+  /** initial hypothesis - call starts (and scheduled-call joins) per actor per window. */
+  'abuse.throttle.call_start_actor': 20,
+  /** initial hypothesis - inbound WebSocket frames one socket may send per minute. */
+  'abuse.realtime.frames_per_socket_per_minute': 600,
 } as const;
 
 export type CommunicationConfigKey = keyof typeof COMMUNICATION_CONFIG_DEFAULTS;

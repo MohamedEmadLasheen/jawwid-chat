@@ -72,6 +72,8 @@ class FakeSocket {
   disconnect(): void {
     this.disconnected = true;
   }
+  /** Phase 8: the gateway installs its frame budget as socket middleware. */
+  use(): void {}
 }
 
 async function login(username: string, password: string): Promise<string> {

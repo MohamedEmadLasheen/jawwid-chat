@@ -36,6 +36,12 @@ const ROWS: TeacherRow[] = [
     attendanceRate: 0.9,
     reportsOnTimeRate: 0.75,
     trials: { total: 7, conducted: 5, subscribed: 3, notSubscribed: 1, noShow: 2, awaiting: 1, upcoming: 2, cancelled: 1, conversionRate: 0.75 },
+    summary: {
+      totalScheduled: 130, conducted: 99, studentAttended: 99, studentNoShow: 10,
+      studentExcuses: { total: 12, beforeStart: 9, afterStart: 3 }, teacherExcuses: 4, teacherNoShow: 1, cancelled: 2,
+      pending: { total: 2, upcoming: 0, awaitingReport: 2 }, completed: { regular: 91, makeup: 8, total: 99 },
+      makeups: { completed: 8, scheduled: 1, total: 9 },
+    },
   },
   {
     teacher: { id: 't-2', name: 'Teacher Two', isActive: false },
@@ -47,6 +53,12 @@ const ROWS: TeacherRow[] = [
     attendanceRate: null,
     reportsOnTimeRate: null,
     trials: { total: 0, conducted: 0, subscribed: 0, notSubscribed: 0, noShow: 0, awaiting: 0, upcoming: 0, cancelled: 0, conversionRate: null },
+    summary: {
+      totalScheduled: 0, conducted: 0, studentAttended: 0, studentNoShow: 0,
+      studentExcuses: { total: 0, beforeStart: 0, afterStart: 0 }, teacherExcuses: 0, teacherNoShow: 0, cancelled: 0,
+      pending: { total: 0, upcoming: 0, awaitingReport: 0 }, completed: { regular: 0, makeup: 0, total: 0 },
+      makeups: { completed: 0, scheduled: 0, total: 0 },
+    },
   },
 ]
 
@@ -129,6 +141,9 @@ describe('the statistics', () => {
     const one = within(table).getByRole('button', { name: 'Teacher One' }).closest('tr')!
     expect(within(one).getByText('99 lessons · 65.8 h')).toBeInTheDocument()
     expect(within(one).getByText('90%')).toBeInTheDocument()
+    // PD-15: make-ups completed of all, student excuses before + after the start, teacher excuses.
+    expect(within(one).getByText('8 / 9')).toBeInTheDocument()
+    expect(within(one).getByText('9 + 3')).toBeInTheDocument()
     const two = within(table).getByRole('button', { name: 'Teacher Two' }).closest('tr')!
     expect(within(two).getByText(/Inactive/)).toBeInTheDocument()
     expect(within(two).getAllByText('—')).toHaveLength(2)

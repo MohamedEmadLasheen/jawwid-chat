@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query, UseFilters } from '@nestjs/common';
 import { CallService } from '../calls/call.service';
+import { ActionScope, RateLimited } from '../../platform/auth/action-throttle.guard';
 import { ActorId } from './actor.decorator';
 import { CommErrorFilter } from './http-exception.filter';
 
@@ -13,6 +14,7 @@ export class CallController {
    * the room name is minted server-side; neither is client-supplied.
    */
   @Post()
+  @RateLimited(ActionScope.CALL_START)
   async start(@ActorId() actorId: string, @Body() body: { conversationId: string }) {
     return this.calls.start(body.conversationId, actorId);
   }

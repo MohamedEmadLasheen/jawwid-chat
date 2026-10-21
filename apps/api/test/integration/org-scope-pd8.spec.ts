@@ -173,6 +173,8 @@ class FakeSocket {
   disconnect(): void {
     this.disconnected = true;
   }
+  /** Phase 8: the gateway installs its frame budget as socket middleware. */
+  use(): void {}
 }
 
 // ---------------------------------------------------------------------------

@@ -57,7 +57,10 @@ export function ChatComposer({
   autoStartVoice?: boolean
   onVoiceAutoStarted?: () => void
   onVoiceSent?: () => void
-  /** More "+" actions this conversation offers (a trial group's "Trial" card). */
+  /**
+   * More "+" actions this conversation offers: a trial group's "Trial" card, and
+   * (PD-15) the lesson cards the server offers in a family's group.
+   */
   extraItems?: MenuItem[]
 }) {
   const { locale } = useI18n()

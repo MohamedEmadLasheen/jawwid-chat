@@ -28,6 +28,10 @@ import { ScheduleCallDialog } from '@/features/calls-page/ScheduleCallDialog'
 import { TrialCardDialog, TrialGroupBar } from '@/features/trials/TrialCardDialog'
 import { TR } from '@/features/trials/copy'
 import { useCallsCopy } from '@/features/calls-page/hooks'
+import { useLessonCards } from '@/features/journey/LessonCardDialogs'
+import { LessonRecordDialog } from '@/features/journey/LessonRecordDialog'
+import { LESSON_CARD_KINDS } from '@/features/journey/api'
+import { journeyCopyFor } from '@/features/journey/journeyCopyFor'
 import {
   SCHEDULED_CALL_CARD_KINDS,
   ScheduledCallCard,
@@ -175,6 +179,10 @@ export function ChatThread({
   // A trial group's "+ -> Trial" card (trial journey).
   const [trialCard, setTrialCard] = useState(false)
   const [theming, setTheming] = useState(false)
+  // PD-15: the supervisor's lesson cards under "+", and a lesson card's record.
+  const lessonGroup = details.data?.type === 'student_group' || details.data?.type === 'family_group'
+  const lessonCards = useLessonCards(conversationId, lessonGroup)
+  const [recordOf, setRecordOf] = useState<string | null>(null)
   const callsCopy = useCallsCopy()
   // Schedule call rides the SAME advisory answer (and cache) as the call
   // button: absent, not disabled, when this viewer may not start a call here.
@@ -558,6 +566,7 @@ export function ChatThread({
                     onDeleteForMe={() => void act(() => chatApi.deleteForMe(conversationId, m.id))}
                     onDeleteForEveryone={() => void act(() => chatApi.deleteForEveryone(conversationId, m.id))}
                     onEdit={() => setEditing({ messageId: m.id, body: m.body ?? '' })}
+                    onOpenLesson={lessonIdOf(m) ? () => setRecordOf(lessonIdOf(m)) : undefined}
                   />
                 </Fragment>
               )
@@ -682,7 +691,10 @@ export function ChatThread({
           />
         )}
         <ChatComposer
-          extraItems={trialGroup ? [{ key: 'trial', label: trialCopy(TR.cardLabel), icon: 'calendar', onSelect: () => setTrialCard(true) }] : []}
+          extraItems={[
+            ...(trialGroup ? [{ key: 'trial', label: trialCopy(TR.cardLabel), icon: 'calendar' as const, onSelect: () => setTrialCard(true) }] : []),
+            ...lessonCards.items,
+          ]}
           onSend={submit}
           reply={reply}
           onCancelReply={() => setReply(null)}
@@ -696,6 +708,8 @@ export function ChatThread({
         />
         </>
       )}
+      {lessonCards.dialog}
+      {recordOf && <LessonRecordDialog lessonId={recordOf} conversationId={conversationId} onClose={() => setRecordOf(null)} />}
 
       {trialCard && <TrialCardDialog conversationId={conversationId} onRecorded={refreshThread} onClose={() => setTrialCard(false)} />}
 
@@ -779,6 +793,7 @@ function MessageItem({
   onDeleteForMe,
   onDeleteForEveryone,
   onEdit,
+  onOpenLesson,
 }: {
   m: ChatMessage
   side: Side
@@ -804,6 +819,8 @@ function MessageItem({
   onDeleteForMe: () => void
   onDeleteForEveryone: () => void
   onEdit: () => void
+  /** PD-15: a lesson card opens its lesson's record (correct, edit, delete / resend). */
+  onOpenLesson?: () => void
 }) {
   const { locale, time } = useI18n()
   const copy = chatCopyFor(locale)
@@ -836,8 +853,11 @@ function MessageItem({
       ? readScheduledCallCard(m.card.payload)
       : null
   const reactions = summarize(m.reactions ?? [], selfId)
+  // A lesson report's card is changed only from its lesson record (PD-15).
+  const reportCard = m.type === 'card' && m.card?.kind === 'lesson_report'
   const items: MenuItem[] = live
     ? [
+        ...(onOpenLesson ? [{ key: 'lesson', label: journeyCopyFor(locale).openRecord, icon: 'academy' as const, onSelect: onOpenLesson }] : []),
         { key: 'reply', label: copy.reply, icon: 'reply', onSelect: onReply },
         ...(editable ? [{ key: 'edit', label: copy.edit, icon: 'pencil' as const, onSelect: onEdit }] : []),
         // Only what may leave its conversation; the server re-checks both ends.
@@ -856,7 +876,7 @@ function MessageItem({
         { key: 'delete-me', label: copy.deleteForMe, icon: 'trash', onSelect: onDeleteForMe },
         // The server allows it to the author within the window, a manager, or an
         // admin moderating it (PD-14); it answers anyone else.
-        ...(mine || canModerate || moderated
+        ...((mine || canModerate || moderated) && !reportCard
           ? [{ key: 'delete-all', label: copy.deleteForEveryone, icon: 'trash' as const, danger: true, onSelect: onDeleteForEveryone }]
           : []),
       ]
@@ -1084,4 +1104,11 @@ function PinnedBar({ conversationId, scroller }: { conversationId: string; scrol
       </span>
     </button>
   )
+}
+
+/** The lesson a lesson card is about (its payload's lessonId), or null. */
+function lessonIdOf(m: ChatMessage): string | null {
+  if (m.type !== 'card' || !m.card || !LESSON_CARD_KINDS.has(m.card.kind) || m.deletedForAll) return null
+  const id = m.card.payload.lessonId
+  return typeof id === 'string' ? id : null
 }
