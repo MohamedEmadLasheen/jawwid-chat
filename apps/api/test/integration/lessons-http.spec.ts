@@ -366,4 +366,16 @@ describe('lesson tickets over HTTP, in a PD-8 family group', () => {
     expect(forged.status).toBe(400);
   });
 
+  it('PD-16: the parent sign-up routes are public and say nothing about who exists; New Students is staff-only', async () => {
+    const ask = await http(null, 'POST', '/auth/signup/request', { email: 'nobody-pd16@example.test' });
+    expect(ask.status).toBe(200);
+    expect(ask.json).toEqual({ ok: true, delivery: 'relay' });
+    const wrong = await http(null, 'POST', '/auth/signup/verify', { email: 'nobody-pd16@example.test', code: '123456', password: 'long-enough-1' });
+    expect(wrong.status).toBe(401);
+    expect(wrong.code).toBe('AUTH.SIGNUP_CODE_INVALID');
+    expect((await http(fam.parent, 'GET', '/trials/new-students')).status).toBe(403);
+    expect((await http(fam.parent, 'POST', `/trials/new-students/${randomUUID()}/assign`, { supervisorId: randomUUID() })).status).toBe(403);
+    expect((await http(m.operationsManager.subject, 'GET', '/trials/new-students')).status).toBe(200);
+  });
 });
+

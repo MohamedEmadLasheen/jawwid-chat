@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Query, UseFilters } from '@nestjs/c
 import { ActorId } from '../communication/api/actor.decorator';
 import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { TrialService } from './trial.service';
+import { NewStudentEnrolmentService } from '../new-students/enrolment.service';
 
 /**
  * PD-11 T4 and the trial journey: trial lessons, prospects, each trial's one
@@ -11,7 +12,10 @@ import { TrialService } from './trial.service';
 @Controller('trials')
 @UseFilters(CommErrorFilter)
 export class TrialController {
-  constructor(private readonly trials: TrialService) {}
+  constructor(
+    private readonly trials: TrialService,
+    private readonly enrolment: NewStudentEnrolmentService,
+  ) {}
 
   @Post('prospects')
   createProspect(@ActorId() actorId: string, @Body() body: Record<string, unknown>) {
@@ -63,9 +67,22 @@ export class TrialController {
     return this.trials.leaveGroup(actorId, conversationId);
   }
 
+  /** PD-16: the page, filtered for the viewer, each entry with its setup state. */
   @Get('new-students')
   newStudents(@ActorId() actorId: string) {
-    return this.trials.newStudents(actorId);
+    return this.enrolment.page(actorId);
+  }
+
+  /** PD-16: the Operations manager assigns the supervisor; Chat creates the family. */
+  @Post('new-students/:trialId/assign')
+  assignNewStudent(@ActorId() actorId: string, @Param('trialId') trialId: string, @Body() body: Record<string, unknown>) {
+    return this.enrolment.assign(actorId, trialId, body ?? {});
+  }
+
+  /** PD-16: the responsible supervisor opens the family's group. */
+  @Post('new-students/:trialId/group')
+  createNewStudentGroup(@ActorId() actorId: string, @Param('trialId') trialId: string) {
+    return this.enrolment.createGroup(actorId, trialId);
   }
 
   @Get()
