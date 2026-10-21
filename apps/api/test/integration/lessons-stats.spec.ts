@@ -132,7 +132,12 @@ describe('the numbers', () => {
   });
 
   it('apologies count; moved and paused lessons are shown but never counted', async () => {
-    const at = new Date(Date.now() + 40 * DAY);
+    // 09:00 UTC (11:00-12:00 in the academy's zone) on a day 40 days out, so the
+    // three lessons (at, +2h, +4h) share one calendar day and so one month. From
+    // `Date.now()` itself, an evening run on the 40th day before a month's end
+    // put the +4h lesson into the next month and it was not counted here.
+    const day = new Date(Date.now() + 40 * DAY);
+    const at = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), 9));
     const month = await monthOf(at);
     await lessons.apology(s.parentId, await lessonAt(at, 30), { reason: 'travel' });
     await lessons.teacherApology(s.teacherId, await lessonAt(new Date(at.getTime() + 2 * HOUR), 30), { reason: 'ill' });
