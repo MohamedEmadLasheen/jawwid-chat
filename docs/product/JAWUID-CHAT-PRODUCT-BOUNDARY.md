@@ -1502,7 +1502,12 @@ voided           = final; counted nowhere -- not scheduled, not pending
 **Implementation phase.** Built 2026-10-21 in one change: migration
 `20261021120000_chat_pd015_student_journey.sql`, `LessonRecordService`,
 `EnrollmentService`, `JourneyController`, Admin Web `features/journey`, the app's
-`lesson_report_sheet.dart` and `group_children_section.dart`.
+`lesson_report_sheet.dart` and `group_children_section.dart`. It runs after the
+trial journey's `20261021100000` and rebuilds `chat.guard_lesson` and
+`chat.assert_held_lesson_has_report` on top of that migration's versions. The
+supervisor is assigned on Organization → Children and the group is created in
+Chat: the New Students page lists Sales' subscription forms (#83), whose
+children are not Chat learners yet.
 
 **Consequences.**
 - PD-11's table gains the supervisor: `apology`, `teacher_apology`,

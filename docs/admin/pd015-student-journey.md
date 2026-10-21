@@ -8,9 +8,9 @@ parallel lesson record.
 
 | Step | Who | Where | Record |
 |---|---|---|---|
-| Assign the responsible supervisor | Operations manager | Admin Web → Trials & new students → New students → **Assign** (or Organization → Children) | `chat.learner_supervision` + `audit_log learner.supervisor_assigned` |
-| Create the permanent group | The child's supervisor | New students → **Create group** (prefilled) or Chat → New family group | `family_group`, named "Teacher — Child · Child" |
-| Record the child's details | The child's supervisor | New students → **Details**, or the group's info panel → Children → Edit details | `chat.learner_enrollment` (date of birth, course, package) + `audit_log learner.enrollment_set` |
+| Assign the responsible supervisor | Operations manager | Admin Web → Organization → Children → assign (the New Students page lists Sales' subscription forms, whose children are not Chat learners yet) | `chat.learner_supervision` + `audit_log learner.supervisor_assigned` |
+| Create the permanent group | The child's supervisor | Admin Web → Chat → New family group | `family_group`, named "Teacher — Child · Child" |
+| Record the child's details | The child's supervisor | The group's info panel → Children → Edit details | `chat.learner_enrollment` (date of birth, course, package) + `audit_log learner.enrollment_set` |
 | Report a lesson | The teacher | App → group → "+" → **Lesson report** → Student attended / did not attend | `held` + `chat.lesson_report` + card, or `student_no_show` + card |
 | Student excuse | The child's supervisor | Admin Web → group → "+" → **Student excuse** → before / after the start | `student_apology` + `apology_timing`; after the start also a `late_apology` ruling decided `excused` |
 | Teacher excuse | The child's supervisor (or the teacher) | "+" → **Teacher excuse** | `teacher_apology` (and a PD-12 violation) |
@@ -59,6 +59,12 @@ make-ups completed / scheduled.
   (`COMM.MESSAGE_NOT_EDITABLE`).
 
 ## Known limits
+
+- Sales' subscription form (trial journey, #83) already records each child's
+  age, course and prices for a prospect. It is confined (it holds the parent's
+  phone) and is not linked to a Chat learner, so it does not fill
+  `chat.learner_enrollment`; linking the two once a learner exists is a
+  follow-up.
 
 - The topic / next-lesson lists are a starting set (`report-vocab.ts`, mirrored
   in Admin Web `journey/api.ts` and the app's `report_vocab.dart`).

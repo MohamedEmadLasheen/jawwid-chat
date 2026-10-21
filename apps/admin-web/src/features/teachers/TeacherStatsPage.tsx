@@ -105,11 +105,11 @@ function TeacherList({ month, onOpen }: { month: string; onOpen: (id: string) =>
                   <th scope="col" className="num">{tx(T.colUnreported)}</th>
                   <th scope="col" className="num">{tx(T.colAttendance)}</th>
                   <th scope="col" className="num">{tx(T.colOnTime)}</th>
-                  <th scope="col" className="num">{tx(T.colTrials)}</th>
-                  <th scope="col" className="num">{tx(T.colTrialsSubscribed)}</th>
                   <th scope="col" className="num">{jx(S.makeups)}</th>
                   <th scope="col" className="num">{jx(S.studentExcuses)}</th>
                   <th scope="col" className="num">{jx(S.teacherExcuses)}</th>
+                  <th scope="col" className="num">{tx(T.colTrials)}</th>
+                  <th scope="col" className="num">{tx(T.colTrialsSubscribed)}</th>
                 </tr>
               </thead>
               <tbody>
@@ -127,13 +127,13 @@ function TeacherList({ month, onOpen }: { month: string; onOpen: (id: string) =>
                     <td className={`num${r.unreported.lessons > 0 ? ' ts-attention' : ''}`}>{fmt.number(r.unreported.lessons)}</td>
                     <td className="num">{fmt.percent(r.attendanceRate)}</td>
                     <td className="num">{fmt.percent(r.reportsOnTimeRate)}</td>
-                    <td className="num">{fmt.number(r.trials?.total ?? 0)}</td>
-                    <td className="num">{fmt.number(r.trials?.subscribed ?? 0)}</td>
                     <td className="num">{r.summary ? `${fmt.number(r.summary.makeups.completed)} / ${fmt.number(r.summary.makeups.total)}` : '—'}</td>
                     <td className="num">
                       {r.summary ? `${fmt.number(r.summary.studentExcuses.beforeStart)} + ${fmt.number(r.summary.studentExcuses.afterStart)}` : '—'}
                     </td>
                     <td className="num">{r.summary ? fmt.number(r.summary.teacherExcuses) : '—'}</td>
+                    <td className="num">{fmt.number(r.trials?.total ?? 0)}</td>
+                    <td className="num">{fmt.number(r.trials?.subscribed ?? 0)}</td>
                   </tr>
                 ))}
               </tbody>
