@@ -24,7 +24,6 @@ import { SupervisionConversationService } from '../supervision/supervision-conve
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** A temporary pause longer than this is a stop, or needs re-recording. */
 const MAX_PAUSE_DAYS = 120;
-/** The zone a learner's dates are read in when their teacher has none recorded. */
 
 /**
  * PD-11 T3: a learner moving between teachers, and a learner's study pausing,

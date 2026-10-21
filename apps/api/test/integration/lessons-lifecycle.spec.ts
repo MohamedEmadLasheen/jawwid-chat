@@ -237,6 +237,37 @@ describe('2. a temporary pause', () => {
     expect(second.resumed).toBe(1);
     expect(await g.prisma.learnerSuspension.count({ where: { learnerId: s.secondLearnerId, status: 'ended' } })).toBe(1);
   });
+
+  it('reads "today" in the teacher\'s zone, whatever the hour the suite runs', async () => {
+    // A zone whose date is not the database's current_date right now. One always
+    // exists: UTC+14 is a day ahead from 10:00 UTC, UTC-12 a day behind until
+    // 12:00 UTC. In Cairo the two disagree only around local midnight, so the
+    // test above could only catch a UTC "today" at that hour.
+    const [{ zone }] = await g.prisma.$queryRawUnsafe<Array<{ zone: string }>>(
+      `select case when (now() at time zone 'Pacific/Kiritimati')::date <> current_date
+                   then 'Pacific/Kiritimati' else 'Etc/GMT+12' end as zone`,
+    );
+    await scheduling.setAvailability(tsupId, s.teacherId, { timezone: zone, windows: [{ weekday: 1, start: '09:00', end: '17:00' }] });
+    const local = async (days: number) => {
+      const [{ d }] = await g.prisma.$queryRawUnsafe<Array<{ d: string }>>(
+        `select to_char((now() at time zone $1)::date + $2::int, 'YYYY-MM-DD') as d`, zone, days,
+      );
+      return d;
+    };
+    const notice = Number(await g.config.get('lesson.return_notice_days'));
+
+    // A day before the notice window, in the teacher's zone: neither the family nor the team is told.
+    const pause = await lifecycle.suspend(tsupId, s.learnerId, { kind: 'temporary', reason: 'exams', returnOn: await local(notice + 1) });
+    expect((await lifecycle.sweep()).noticed).toBe(0);
+    expect((await lessons.needsAction(tsupId)).returningSoon).toEqual([]);
+
+    // The window's first day: both, on the same day.
+    await lifecycle.extend(tsupId, pause.id, { returnOn: await local(notice) });
+    expect((await lifecycle.sweep()).noticed).toBe(1);
+    expect((await lessons.needsAction(tsupId)).returningSoon).toEqual([
+      expect.objectContaining({ suspensionId: pause.id, returnOn: await local(notice) }),
+    ]);
+  });
 });
 
 describe('3. a permanent stop', () => {
