@@ -68,6 +68,18 @@ export function renderTrialCardBody(kind: string, p: Record<string, unknown>, la
       );
     case CardKind.TRIAL_DECISION:
       return join(resultSentence(p.result, lang), about());
+    case CardKind.TRIAL_RESCHEDULED:
+      return p.movedAway
+        ? join(
+            ar ? `↪️ نُقلت الحصة التجريبية إلى معلم آخر — ${s(p.prospectName)}` : `↪️ Trial moved to another teacher — ${s(p.prospectName)}`,
+            line(ar ? 'الموعد السابق' : 'Was', p.previousWhen),
+          )
+        : join(
+            ar ? `🔁 تغيّر موعد الحصة التجريبية — ${s(p.prospectName)}` : `🔁 Trial rescheduled — ${s(p.prospectName)}`,
+            line(ar ? 'الموعد الجديد' : 'Now', p.when),
+            line(ar ? 'الموعد السابق' : 'Was', p.previousWhen),
+            line(ar ? 'المدة' : 'Length', p.durationMinutes === undefined ? null : ar ? `${s(p.durationMinutes)} دقيقة` : `${s(p.durationMinutes)} min`),
+          );
     case CardKind.TRIAL_CORRECTION:
       return join(
         ar ? `✏️ تم تصحيح النتيجة: ${resultSentence(p.result, lang)}` : `✏️ Outcome corrected: ${resultSentence(p.result, lang)}`,

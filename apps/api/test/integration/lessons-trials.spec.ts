@@ -121,13 +121,13 @@ beforeEach(async () => {
 });
 
 describe('1. prospects', () => {
-  it('Sales records a prospect; the Teachers department reads them; a teacher and Operations do neither', async () => {
+  it('the trial desk (Sales, Operations) records a prospect; the Teachers department reads them; a teacher does neither', async () => {
     expect(await code(trials.createProspect(tsupId, { displayName: 'x' }))).toBe(CommErrorCode.LESSON_DENIED);
-    expect(await code(trials.createProspect(s.ownerId, { displayName: 'x' }))).toBe(CommErrorCode.LESSON_DENIED);
+    await trials.createProspect(s.ownerId, { displayName: 'x' }); // Operations, since 2026-10-21
     expect(await code(trials.createProspect(s.teacherId, { displayName: 'x' }))).toBe(CommErrorCode.LESSON_DENIED);
     expect(await code(trials.createProspect(salesId, {}))).toBe(CommErrorCode.VALIDATION);
 
-    expect((await trials.prospects(tsupId)).prospects.map((p) => p.id)).toEqual([prospectId]);
+    expect((await trials.prospects(tsupId)).prospects.map((p) => p.id)).toContain(prospectId);
     expect(await code(trials.prospects(s.teacherId))).toBe(CommErrorCode.LESSON_DENIED);
     expect(await code(trials.prospects(s.parentId))).toBe(CommErrorCode.LESSON_DENIED);
   });
@@ -362,7 +362,7 @@ describe('8. the trial group (part 2)', () => {
     expect((await trials.ticketsFor(s.teacherId, conversationId)).tickets).toEqual([]);
   });
 
-  it('Sales and the Teachers department are parties; Operations and a family never are', async () => {
+  it('the trial desk and the Teachers department are parties; staff outside them and a family never are', async () => {
     const { conversationId } = await trials.openGroup(salesId, s.teacherId);
     const access = async (staffId: string) => {
       const [{ a }] = await g.prisma.$queryRawUnsafe<Array<{ a: string | null }>>(
@@ -372,19 +372,23 @@ describe('8. the trial group (part 2)', () => {
     };
     expect(await access(salesId)).toBe('member');
     expect(await access(tsupId)).toBe('member');
-    expect(await access(s.ownerId)).toBeNull(); // Operations
+    expect(await access(s.ownerId)).toBe('member'); // Operations: the trial desk since 2026-10-21
+    const outsider = randomUUID();
+    await g.prisma.$executeRawUnsafe(`insert into chat.staff (id, name, role, is_active) values ($1::uuid, 'outsider_a', 'admin', true)`, outsider);
+    expect(await access(outsider)).toBeNull();
     const visible = async (staffId: string) =>
       (await g.prisma.$queryRawUnsafe<Array<{ id: string }>>(`select chat.staff_visible_conversation_ids($1::uuid)::text as id`, staffId)).map((r) => r.id);
     expect(await visible(tsupId)).toContain(conversationId);
-    expect(await visible(s.ownerId)).not.toContain(conversationId);
+    expect(await visible(s.ownerId)).toContain(conversationId);
+    expect(await visible(outsider)).not.toContain(conversationId);
 
     // The row refuses anyone else as a member.
     await expect(g.prisma.conversationMember.create({
       data: { conversationId, actorId: s.parentId, actorKind: 'contact', memberRole: 'parent' },
     })).rejects.toThrow(/never admits a family contact/);
     await expect(g.prisma.conversationMember.create({
-      data: { conversationId, actorId: s.ownerId, actorKind: 'staff', memberRole: 'admin' },
-    })).rejects.toThrow(/Sales or the Teachers department/);
+      data: { conversationId, actorId: outsider, actorKind: 'staff', memberRole: 'admin' },
+    })).rejects.toThrow(/Sales, Operations or the Teachers department/);
     await expect(g.prisma.conversationMember.create({
       data: { conversationId, actorId: s.unrelatedTeacherId, actorKind: 'teacher', memberRole: 'teacher' },
     })).rejects.toThrow(/only the teacher it belongs to/);

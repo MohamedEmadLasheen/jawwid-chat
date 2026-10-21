@@ -7,7 +7,7 @@ import { describeOpsError, formatMinutes } from '../teachers/opsCopy'
 import { trialsApi, type NotSubscribedReason, type OutcomeInput, type RecordedResult, type TrialDto } from './api'
 import { NOT_SUBSCRIBED_REASON, OUTCOME, TR, formatWhen } from './copy'
 import { useTrialGroup, useTrialOp } from './hooks'
-import { SubscriptionForm, emptyDraft, formErrors, toInput, type SubscriptionDraft } from './SubscriptionForm'
+import { SubscriptionForm, emptyChild, emptyDraft, formErrors, toInput, type SubscriptionDraft } from './SubscriptionForm'
 import './trials.css'
 
 export interface TrialPowers {
@@ -20,6 +20,14 @@ type Step =
   | { at: 'pick' }
   | { at: 'options'; trial: TrialDto }
   | { at: RecordedResult; trial: TrialDto }
+
+/** A fresh form for this trial: one child per booked student, with the trial's teacher. */
+export function draftForTrial(trial: TrialDto): SubscriptionDraft {
+  const draft = emptyDraft(trial.teacher.id)
+  const students = trial.students ?? []
+  if (students.length === 0) return draft
+  return { ...draft, children: students.map((x) => ({ ...emptyChild(trial.teacher.id), name: x.name })) }
+}
 
 const SENTENCE: Record<RecordedResult, Pair> = {
   no_show: TR.sentenceNoShow,
@@ -55,7 +63,7 @@ export function TrialCardDialog(
   const group = useTrialGroup(props.conversationId ?? '', props.conversationId !== undefined)
   const powers: TrialPowers = props.powers ?? group.data?.can ?? { noShow: false, decide: false, correct: false }
   const [step, setStep] = useState<Step>(props.trial ? { at: 'options', trial: props.trial } : { at: 'pick' })
-  const [draft, setDraft] = useState<SubscriptionDraft>(() => emptyDraft(props.trial?.teacher.id ?? ''))
+  const [draft, setDraft] = useState<SubscriptionDraft>(() => (props.trial ? draftForTrial(props.trial) : emptyDraft()))
   const [reason, setReason] = useState<NotSubscribedReason | ''>('')
   const [note, setNote] = useState('')
   const [why, setWhy] = useState('')
@@ -68,7 +76,11 @@ export function TrialCardDialog(
   const go = (next: Step) => {
     setError(null)
     setTried(false)
-    if (next.at === 'subscribed' && draft.children.every((c) => c.teacherId === '')) setDraft(emptyDraft(next.trial.teacher.id))
+    // The form starts with the trial's own students as the children, taught
+    // by the trial's teacher -- unless the supervisor has typed something.
+    if (next.at === 'subscribed' && draft.children.every((c) => c.name.trim() === '')) {
+      setDraft(draftForTrial(next.trial))
+    }
     setStep(next)
   }
 
@@ -146,13 +158,24 @@ export function TrialCardDialog(
                 <ul className="tj-picklist" aria-label={tx(TR.pickTrial)}>
                   {trials.map((t) => (
                     <li key={t.id}>
-                      <button type="button" className="tj-pick" onClick={() => go({ at: 'options', trial: t })}>
+                      {/* A trial that has not started is shown, but its outcome is
+                          accepted only once it starts (the server's rule). */}
+                      <button
+                        type="button"
+                        className="tj-pick"
+                        disabled={t.outcome === 'upcoming'}
+                        aria-describedby={t.outcome === 'upcoming' ? `tj-up-${t.id}` : undefined}
+                        onClick={() => go({ at: 'options', trial: t })}
+                      >
                         <span dir="auto" className="tj-pick__name">{t.prospect.displayName}</span>
                         <span className="ts-muted">{formatWhen(t.startsAt, locale)}</span>
                         <span className={`badge${t.outcome === 'awaiting' ? ' badge--warn' : ''}`}>
                           {tx(t.outcome === 'awaiting' ? TR.needsOutcome : OUTCOME[t.outcome] ?? TR.recorded)}
                         </span>
                       </button>
+                      {t.outcome === 'upcoming' && (
+                        <p id={`tj-up-${t.id}`} className="ts-muted tj-pick__hint">{tx(TR.upcomingHint)}</p>
+                      )}
                     </li>
                   ))}
                 </ul>

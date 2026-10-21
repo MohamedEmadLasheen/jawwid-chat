@@ -325,6 +325,8 @@ export const CardKind = {
   TRIAL_DECISION: 'trial_decision',
   /** Trial journey: a supervisor corrected a trial's outcome. Carries the new result only. */
   TRIAL_CORRECTION: 'trial_correction',
+  /** A booked trial moved to another time, or away to another teacher's group. */
+  TRIAL_RESCHEDULED: 'trial_rescheduled',
   /** PD-12 S2: a confirmed ladder step, in the teacher's supervision conversation. */
   DISCIPLINE_WARNING: 'discipline_warning',
   DISCIPLINE_DEDUCTION: 'discipline_deduction',

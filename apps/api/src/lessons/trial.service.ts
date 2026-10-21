@@ -16,9 +16,16 @@ const NOT_SUBSCRIBED_REASONS: ReadonlySet<string> = new Set(['price', 'schedule'
 const MAX_RANGE_DAYS = 93;
 /** How far back the trial group's card looks for trials to record or correct. */
 const GROUP_WINDOW_DAYS = 60;
+/** How far ahead the trial group's card lists booked trials that have not started yet. */
+const UPCOMING_WINDOW_DAYS = 31;
 
 const TRIAL_INCLUDE = {
-  prospect: { select: { id: true, displayName: true, level: true, learnerId: true } },
+  prospect: {
+    select: {
+      id: true, displayName: true, level: true, learnerId: true,
+      students: { select: { displayName: true, level: true, note: true }, orderBy: { position: 'asc' } },
+    },
+  },
   teacher: { select: { id: true, name: true } },
   report: true,
   trialOutcome: true,
@@ -78,6 +85,9 @@ export class TrialService {
       const created = await tx.trialProspect.create({
         data: { organizationId: actor.organizationId as string, displayName, level, note, createdBy: actor.actorId },
       });
+      await tx.trialStudent.create({
+        data: { prospectId: created.id, organizationId: created.organizationId, position: 1, displayName, level, note },
+      });
       await this.audit.audit(tx, {
         actorId: actor.actorId, action: 'trial.prospect_recorded', entity: 'trial_prospect', entityId: created.id,
         after: { displayName }, reason: 'prospect recorded',
@@ -130,23 +140,33 @@ export class TrialService {
     return { teacherId: teacher.id, durationMinutes: duration, slots: slots.map((d) => d.toISOString()) };
   }
 
-  /** Book a trial into one of the teacher's real free times. Sales, or the Teachers department. */
+  /**
+   * Book a trial into one of the teacher's real free times -- the trial desk
+   * (Sales, Operations) or the Teachers department. The students are typed in
+   * the booking itself (`students`: 1 to 10 of {name, level?, note?}; siblings
+   * or a small group share one booking and one outcome). `prospectId`, an
+   * already recorded party, is still accepted.
+   */
   async book(actorId: string, body: Record<string, unknown>) {
     const actor = await this.conversations.requireActor(actorId);
     await this.requireSalesOrManager(actor);
-    const prospectId = uuid(body.prospectId, 'prospectId');
+    const students = body.students === undefined ? null : bookingStudents(body.students);
+    const prospectId = students ? null : uuid(body.prospectId, 'prospectId');
     const teacher = await this.orgTeacher(actor, uuid(body.teacherId, 'teacherId'));
     const startsAt = dateField(body, 'startsAt');
     const duration = body.durationMinutes === undefined ? 30 : Number(body.durationMinutes);
     if (!Number.isInteger(duration) || duration < 15 || duration > 120) throw invalid('durationMinutes: 15 to 120');
-    const prospect = await this.prisma.trialProspect.findFirst({ where: { id: prospectId, organizationId: actor.organizationId } });
-    if (!prospect) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'prospect not found');
+    const existing = prospectId
+      ? await this.prisma.trialProspect.findFirst({ where: { id: prospectId, organizationId: actor.organizationId } })
+      : null;
+    if (prospectId && !existing) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'prospect not found');
     const free = await this.scheduling.freeSlots(teacher.id, duration);
     if (!free.some((d) => d.getTime() === startsAt.getTime())) {
       throw stateError('that time is not free for this teacher; choose one of the offered times');
     }
     const trial = await this.lessons.write(() =>
       this.prisma.$transaction(async (tx) => {
+        const prospect = existing ?? (await this.recordParty(tx, actor, students as BookingStudent[]));
         const created = await tx.lesson.create({
           data: {
             organizationId: actor.organizationId as string,
@@ -164,7 +184,9 @@ export class TrialService {
           actorId: actor.actorId, action: 'trial.booked', entity: 'lesson', entityId: created.id,
           after: { prospectId: prospect.id, teacherId: teacher.id, startsAt: startsAt.toISOString() }, reason: 'trial booked',
         });
-        await this.groups.postCard(tx, created, actor, CardKind.TRIAL_BOOKED);
+        await this.groups.postCard(tx, created, actor, CardKind.TRIAL_BOOKED, {
+          students: created.prospect?.students.map((x) => x.displayName) ?? [],
+        });
         return created;
       }),
     );
@@ -188,6 +210,8 @@ export class TrialService {
         organizationId: actor.organizationId,
         kind: LessonKind.TRIAL,
         startsAt: { gte: from, lt: to },
+        // A moved trial lives on as its new row; the old one is history.
+        OR: [{ outcome: null }, { outcome: { not: LessonOutcome.RESCHEDULED } }],
         ...(standing === 'teacher' ? { teacherId: actor.actorId } : query.teacherId ? { teacherId: query.teacherId } : {}),
       },
       include: TRIAL_INCLUDE,
@@ -247,6 +271,77 @@ export class TrialService {
       }),
     );
     return this.get(actorId, lessonId);
+  }
+
+  /**
+   * Move a booked trial that has not started: another time, length or teacher.
+   * The trial desk or the Teachers department. As every lesson move in PD-11,
+   * the old row becomes `rescheduled` (its reminders cancelled) and the trial
+   * continues as a new row for the same students -- so reminders, free times and
+   * history stay right. The new time must be free for the teacher once the old
+   * one is released, which is checked inside the same transaction.
+   */
+  async reschedule(actorId: string, lessonId: string, body: Record<string, unknown>) {
+    const actor = await this.conversations.requireActor(actorId);
+    const { trial, standing } = await this.load(actor, lessonId);
+    if (standing === 'teacher') throw new CommError(CommErrorCode.LESSON_DENIED, 'a trial is moved by a supervisor');
+    if (trial.outcome !== null || trial.startsAt.getTime() <= Date.now()) {
+      throw stateError('only a trial that has not started can be moved');
+    }
+    const teacher = body.teacherId === undefined || body.teacherId === null
+      ? await this.orgTeacher(actor, trial.teacherId)
+      : await this.orgTeacher(actor, uuid(body.teacherId, 'teacherId'));
+    const startsAt = dateField(body, 'startsAt');
+    const current = Math.round((trial.endsAt.getTime() - trial.startsAt.getTime()) / 60_000);
+    const duration = body.durationMinutes === undefined ? current : Number(body.durationMinutes);
+    if (!Number.isInteger(duration) || duration < 15 || duration > 120) throw invalid('durationMinutes: 15 to 120');
+    if (teacher.id === trial.teacherId && startsAt.getTime() === trial.startsAt.getTime() && duration === current) {
+      throw stateError('nothing changed');
+    }
+    const previousWhen = await this.groups.when(trial.startsAt, 'ar');
+
+    const moved = await this.lessons.write(() =>
+      this.prisma.$transaction(async (tx) => {
+        await tx.lesson.update({
+          where: { id: trial.id },
+          data: { outcome: LessonOutcome.RESCHEDULED, outcomeNote: 'trial moved', outcomeByKind: ActorKind.STAFF, outcomeBy: actor.actorId, outcomeAt: new Date() },
+        });
+        await cancelReminders(tx, trial.id);
+        const free = await this.scheduling.freeSlots(teacher.id, duration, tx);
+        if (!free.some((d) => d.getTime() === startsAt.getTime())) {
+          throw stateError('that time is not free for this teacher; choose one of the offered times');
+        }
+        const created = await tx.lesson.create({
+          data: {
+            organizationId: trial.organizationId,
+            kind: LessonKind.TRIAL,
+            prospectId: trial.prospectId,
+            teacherId: teacher.id,
+            startsAt,
+            endsAt: new Date(startsAt.getTime() + duration * 60_000),
+            createdByKind: 'staff',
+            createdBy: actor.actorId,
+          },
+          include: TRIAL_INCLUDE,
+        });
+        const students = created.prospect?.students.map((x) => x.displayName) ?? [];
+        if (teacher.id === trial.teacherId) {
+          await this.groups.postCard(tx, created, actor, CardKind.TRIAL_RESCHEDULED, { previousWhen, students });
+        } else {
+          // The old teacher's group learns it left; the new teacher's group gets the booking.
+          await this.groups.postCard(tx, trial, actor, CardKind.TRIAL_RESCHEDULED, { movedAway: true, previousWhen, students });
+          await this.groups.postCard(tx, created, actor, CardKind.TRIAL_BOOKED, { students });
+        }
+        await this.audit.audit(tx, {
+          actorId: actor.actorId, action: 'trial.rescheduled', entity: 'lesson', entityId: created.id,
+          before: { lessonId: trial.id, teacherId: trial.teacherId, startsAt: trial.startsAt.toISOString() },
+          after: { teacherId: teacher.id, startsAt: startsAt.toISOString(), durationMinutes: duration },
+          reason: 'trial moved',
+        });
+        return created;
+      }),
+    );
+    return this.dto(moved, standing);
   }
 
   /** Jawwid cancels a trial before it happens (or one nobody held). Reason required. */
@@ -464,8 +559,9 @@ export class TrialService {
   /**
    * What the Admin Web's "+ -> Trial" card needs in one trial group: who the
    * caller is there (member, permanent, may join or leave), what they may
-   * record, and the teacher's trials -- those still awaiting an outcome first,
-   * then the recent ones that have one (to correct). Each is named by its
+   * record, and the teacher's trials -- those awaiting an outcome first, then
+   * the booked ones that have not started (shown, not recordable yet), then the
+   * recent ones that have an outcome (to correct). Each is named by its
    * student and time, so trials sharing a group are never confused.
    */
   async groupContext(actorId: string, conversationId: string) {
@@ -473,11 +569,20 @@ export class TrialService {
     const standing = await this.requireSalesOrManager(actor);
     const context = await this.groups.context(actor, conversationId);
     const teacherId = context.teacher?.id as string;
+    const now = Date.now();
     const rows = await this.prisma.lesson.findMany({
       where: {
         organizationId: actor.organizationId, kind: LessonKind.TRIAL, teacherId,
-        startsAt: { lte: new Date(), gte: new Date(Date.now() - GROUP_WINDOW_DAYS * 86_400_000) },
-        OR: [{ outcome: null }, { outcome: { in: [LessonOutcome.HELD, LessonOutcome.STUDENT_NO_SHOW] } }],
+        OR: [
+          // Started within the window: awaiting an outcome, or recorded (to correct).
+          {
+            startsAt: { lte: new Date(now), gte: new Date(now - GROUP_WINDOW_DAYS * 86_400_000) },
+            OR: [{ outcome: null }, { outcome: { in: [LessonOutcome.HELD, LessonOutcome.STUDENT_NO_SHOW] } }],
+          },
+          // Booked and not started yet: listed so the supervisor sees it, but
+          // an outcome is accepted only once it starts (the database's rule).
+          { startsAt: { gt: new Date(now), lte: new Date(now + UPCOMING_WINDOW_DAYS * 86_400_000) }, outcome: null },
+        ],
       },
       include: TRIAL_INCLUDE,
       orderBy: { startsAt: 'desc' },
@@ -485,11 +590,13 @@ export class TrialService {
     });
     const trials = rows.map((r) => this.dto(r, standing));
     const open = trials.filter((t) => t.outcome === 'awaiting').reverse();
-    const closed = trials.filter((t) => t.outcome !== 'awaiting');
+    const upcoming = trials.filter((t) => t.outcome === 'upcoming').reverse();
+    const closed = trials.filter((t) => t.outcome !== 'awaiting' && t.outcome !== 'upcoming');
     return {
       ...context,
       can: { noShow: true, decide: standing === 'sales', correct: standing === 'sales' },
-      trials: [...open, ...closed].slice(0, 50),
+      // Awaiting an outcome (oldest first), then upcoming (soonest first), then recorded (newest first).
+      trials: [...open, ...upcoming, ...closed].slice(0, 50),
     };
   }
 
@@ -524,6 +631,31 @@ export class TrialService {
     return { students: await this.forms.list(actor.organizationId as string) };
   }
 
+  /** The booking's party: one prospect, named by its students, and the students in order. */
+  private async recordParty(tx: Prisma.TransactionClient, actor: Actor, students: BookingStudent[]) {
+    const levels = [...new Set(students.map((x) => x.level).filter((x): x is string => x !== null))];
+    const created = await tx.trialProspect.create({
+      data: {
+        organizationId: actor.organizationId as string,
+        displayName: joinNames(students.map((x) => x.name)),
+        level: levels.length === 1 ? levels[0] : null,
+        note: null,
+        createdBy: actor.actorId,
+      },
+    });
+    await tx.trialStudent.createMany({
+      data: students.map((x, i) => ({
+        prospectId: created.id, organizationId: created.organizationId, position: i + 1,
+        displayName: x.name, level: x.level, note: x.note,
+      })),
+    });
+    await this.audit.audit(tx, {
+      actorId: actor.actorId, action: 'trial.prospect_recorded', entity: 'trial_prospect', entityId: created.id,
+      after: { students: students.length }, reason: 'recorded with the booking',
+    });
+    return created;
+  }
+
   // ------------------------------------------------------------------
   // Internals
   // ------------------------------------------------------------------
@@ -546,12 +678,20 @@ export class TrialService {
     return { trial, standing };
   }
 
-  /** Sales first (the conversion is theirs), then the Teachers department, then the trial's own teacher. */
+  /**
+   * The trial desk first (Sales or Operations: the conversion is theirs), then
+   * the Teachers department, then the trial's own teacher.
+   */
   private async standing(actor: Actor, teacherId: string): Promise<TrialStanding | null> {
     if (!actor.isActive || !actor.organizationId) return null;
     if (actor.kind === ActorKind.TEACHER) return actor.actorId === teacherId ? 'teacher' : null;
     if (actor.kind !== ActorKind.STAFF) return null;
-    if (actor.staffRole === StaffRole.SUPER_ADMIN || (await this.lessons.inDepartment(actor, 'sales'))) return 'sales';
+    // The trial desk: Sales and Operations work trials alike (owner, 2026-10-21).
+    if (
+      actor.staffRole === StaffRole.SUPER_ADMIN
+      || (await this.lessons.inDepartment(actor, 'sales'))
+      || (await this.lessons.inDepartment(actor, 'operations'))
+    ) return 'sales';
     if (await this.lessons.isManager(actor)) return 'manager';
     return null;
   }
@@ -595,6 +735,7 @@ export class TrialService {
     return {
       id: t.id,
       prospect: { id: t.prospect?.id ?? '', displayName: t.prospect?.displayName ?? '', level: t.prospect?.level ?? null },
+      students: (t.prospect?.students ?? []).map((x) => ({ name: x.displayName, level: x.level, note: x.note })),
       teacher: t.teacher,
       startsAt: t.startsAt.toISOString(),
       endsAt: t.endsAt.toISOString(),
@@ -615,6 +756,31 @@ export class TrialService {
         : {}),
     };
   }
+}
+
+interface BookingStudent {
+  name: string;
+  level: string | null;
+  note: string | null;
+}
+
+/** The students typed in a booking: 1 to 10, each a name with an optional level and note. */
+function bookingStudents(v: unknown): BookingStudent[] {
+  if (!Array.isArray(v) || v.length < 1 || v.length > 10) throw invalid('students: 1 to 10');
+  return v.map((raw, i) => {
+    if (typeof raw !== 'object' || raw === null) throw invalid(`students[${i}]: required`);
+    const o = raw as Record<string, unknown>;
+    return {
+      name: textField({ name: o.name }, 'name', 120, true) as string,
+      level: textField({ level: o.level }, 'level', 80, false),
+      note: textField({ note: o.note }, 'note', 1000, false),
+    };
+  });
+}
+
+/** The booking's label: its students' names, joined in the script they are written in. */
+export function joinNames(names: string[]): string {
+  return names.join(names.some((n) => /[\u0600-\u06FF]/.test(n)) ? '، ' : ', ');
 }
 
 function uuid(v: unknown, key: string): string {

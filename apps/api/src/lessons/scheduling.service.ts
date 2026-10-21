@@ -730,11 +730,12 @@ export class SchedulingService {
   }
 
   /** Free start times for one lesson of `duration` (shared with TrialService). */
-  async freeSlots(teacherId: string, duration: number): Promise<Date[]> {
+  /** `db` lets a caller ask inside its own transaction (a trial being moved frees its old time first). */
+  async freeSlots(teacherId: string, duration: number, db: Pick<Prisma.TransactionClient, '$queryRaw'> = this.prisma): Promise<Date[]> {
     const lead = Number(await this.config.get('lesson.booking_lead_minutes'));
     const horizon = Number(await this.config.get('lesson.makeup_horizon_days'));
     const step = Number(await this.config.get('lesson.slot_step_minutes'));
-    const rows = await this.prisma.$queryRaw<Array<{ starts_at: Date }>>`
+    const rows = await db.$queryRaw<Array<{ starts_at: Date }>>`
       SELECT starts_at FROM chat.teacher_free_slots(
         ${teacherId}::uuid,
         now() + make_interval(mins => ${lead}::int),

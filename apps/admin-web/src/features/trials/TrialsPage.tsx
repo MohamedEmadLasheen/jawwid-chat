@@ -10,12 +10,17 @@ import { describeOpsError, formatMinutes } from '../teachers/opsCopy'
 import { trialsApi, type TrialDto } from './api'
 import { TrialsAreaTabs, useTrialsAccess } from './area'
 import { ATTENDANCE, NOT_SUBSCRIBED_REASON, OUTCOME, TR, formatWhen, localDay } from './copy'
-import { useProspects, useTrialOp, useTrialSlots, useTrialTeachers, useTrials } from './hooks'
+import { useTrialOp, useTrialSlots, useTrialTeachers, useTrials } from './hooks'
 import { TrialCardDialog } from './TrialCardDialog'
 import '../teachers/teachers.css'
+import './trials.css'
 
 type Pending = { title: string; intro?: string; fields: FieldSpec[]; submit: (v: FieldValue) => Promise<unknown> } | null
 type Filter = 'all' | 'decision' | 'upcoming'
+type StudentDraft = { name: string; level: string; note: string }
+
+const MIN_LENGTH = 15
+const MAX_LENGTH = 120
 
 /**
  * Sales' trial page (PD-11 T4), also the Teachers department's view of trials.
@@ -33,6 +38,7 @@ export function TrialsPage() {
   const [booking, setBooking] = useState(false)
   const [dialog, setDialog] = useState<Pending>(null)
   const [card, setCard] = useState<TrialDto | null>(null)
+  const [editing, setEditing] = useState<TrialDto | null>(null)
   const op = useTrialOp((f: () => Promise<unknown>) => f())
   const navigate = useNavigate()
   const [groupError, setGroupError] = useState<unknown>(null)
@@ -53,7 +59,9 @@ export function TrialsPage() {
     filter === 'decision' ? t.outcome === 'awaiting' : filter === 'upcoming' ? t.outcome === 'upcoming' : true,
   )
 
-  const powers = { noShow: access.sales || access.lessonManager, decide: access.sales, correct: access.sales }
+  // The trial desk: Sales and Operations work trials alike (owner, 2026-10-21).
+  const desk = access.sales || access.operations
+  const powers = { noShow: desk || access.lessonManager, decide: desk, correct: desk }
 
   return (
     <div className="page">
@@ -64,22 +72,7 @@ export function TrialsPage() {
           subtitle={tx(TR.trialsSubtitle)}
           actions={
             <>
-              {access.sales && (
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() =>
-                    run(tx(TR.newProspect), [
-                      { key: 'displayName', label: TR.displayName, type: 'text', required: true },
-                      { key: 'level', label: TR.level, type: 'text' },
-                      { key: 'note', label: TR.noteOptional, type: 'textarea' },
-                    ], (v) => trialsApi.createProspect({ displayName: v('displayName'), level: v('level') || undefined, note: v('note') || undefined }))
-                  }
-                >
-                  {tx(TR.newProspect)}
-                </button>
-              )}
-              {(access.sales || access.lessonManager) && (
+              {(desk || access.lessonManager) && (
                 <button type="button" className="btn btn--primary" onClick={() => setBooking(true)}>{tx(TR.bookTrial)}</button>
               )}
             </>
@@ -141,7 +134,10 @@ export function TrialsPage() {
                             {['no_show', 'subscribed', 'not_subscribed'].includes(t.outcome) && powers.correct && (
                               <button type="button" className="btn btn--sm" onClick={() => setCard(t)}>{tx(TR.correctOutcome)}</button>
                             )}
-                            {open && (access.sales || access.lessonManager) && (
+                            {t.outcome === 'upcoming' && (desk || access.lessonManager) && (
+                              <button type="button" className="btn btn--sm" onClick={() => setEditing(t)}>{tx(TR.editTrial)}</button>
+                            )}
+                            {open && (desk || access.lessonManager) && (
                               <button type="button" className="btn btn--sm" onClick={() => run(tx(TR.cancel), [{ key: 'reason', label: TR.cancelReason, type: 'textarea', required: true }], (v) => trialsApi.cancel(t.id, v('reason')))}>
                                 {tx(TR.cancel)}
                               </button>
@@ -163,6 +159,7 @@ export function TrialsPage() {
           <ActionDialog title={dialog.title} intro={dialog.intro} fields={dialog.fields} onSubmit={dialog.submit} onClose={() => setDialog(null)} />
         )}
         {booking && <BookTrialDialog onClose={() => setBooking(false)} />}
+        {editing && <BookTrialDialog editing={editing} onClose={() => setEditing(null)} />}
         {card && <TrialCardDialog trial={card} powers={powers} onClose={() => setCard(null)} />}
       </div>
     </div>
@@ -170,23 +167,29 @@ export function TrialsPage() {
 }
 
 /**
- * Booking offers only the times the server says are free for that teacher and
- * length (GET /trials/slots); the server checks again, and the database's
+ * Booking: the students are typed here (one or more -- siblings or a small
+ * group share one trial and one outcome), then the teacher and one of the
+ * times the server says are free for that teacher and length (GET
+ * /trials/slots). The server checks again, and the database's
  * no-double-booking rule has the last word.
  */
-function BookTrialDialog({ onClose }: { onClose: () => void }) {
+function BookTrialDialog({ onClose, editing }: { onClose: () => void; editing?: TrialDto }) {
   const { locale } = useI18n()
   const tx = (p: Pair) => (locale === 'ar' ? p.ar : p.en)
-  const prospects = useProspects()
   const teachers = useTrialTeachers(true)
-  const [prospectId, setProspectId] = useState('')
-  const [teacherId, setTeacherId] = useState('')
-  const [duration, setDuration] = useState(30)
+  const [students, setStudents] = useState<StudentDraft[]>([{ name: '', level: '', note: '' }])
+  // Editing moves an existing trial: same students, a new teacher / length / time.
+  const [teacherId, setTeacherId] = useState(editing?.teacher.id ?? '')
+  // The length is typed, in minutes (15 to 120, the server's range).
+  const [lengthText, setLengthText] = useState(String(editing?.durationMinutes ?? 30))
+  const typed = Number(lengthText)
+  const lengthOk = lengthText.trim() !== '' && Number.isInteger(typed) && typed >= MIN_LENGTH && typed <= MAX_LENGTH
+  const duration = lengthOk ? typed : 0
   const [day, setDay] = useState('')
   const [slot, setSlot] = useState('')
   const [error, setError] = useState<unknown>(null)
   const slots = useTrialSlots(teacherId, duration)
-  const book = useTrialOp((body: Parameters<typeof trialsApi.book>[0]) => trialsApi.book(body))
+  const book = useTrialOp((f: () => Promise<unknown>) => f())
 
   const byDay = useMemo(() => {
     const m = new Map<string, string[]>()
@@ -200,14 +203,37 @@ function BookTrialDialog({ onClose }: { onClose: () => void }) {
   const chosenDay = day && byDay.has(day) ? day : days[0] ?? ''
   const times = byDay.get(chosenDay) ?? []
   const chosenSlot = slot && times.includes(slot) ? slot : ''
-  const openProspects = (prospects.data?.prospects ?? []).filter((p) => !p.learnerId)
-  const ready = prospectId !== '' && teacherId !== '' && chosenSlot !== ''
+  // What still stops the booking, in the order the form asks for it. The Book
+  // button stays clickable and says this, rather than greying out silently.
+  const unnamed = editing ? [] : students.map((x, i) => (x.name.trim() === '' ? i : -1)).filter((i) => i >= 0)
+  const missing: Pair | null = unnamed.length > 0 ? TR.missingStudentName
+    : teacherId === '' ? TR.missingTeacher
+    : !lengthOk ? TR.missingLength
+    : chosenSlot === '' ? TR.missingTime
+    : null
+  const [tried, setTried] = useState(false)
+  const setStudent = (i: number, patch: Partial<StudentDraft>) =>
+    setStudents(students.map((x, k) => (k === i ? { ...x, ...patch } : x)))
 
   const submit = async () => {
-    if (!ready || book.isPending) return
+    setTried(true)
+    if (missing || book.isPending) return
     setError(null)
     try {
-      await book.mutateAsync({ prospectId, teacherId, startsAt: chosenSlot, durationMinutes: duration })
+      await book.mutateAsync(() =>
+        editing
+          ? trialsApi.reschedule(editing.id, { teacherId, startsAt: chosenSlot, durationMinutes: duration })
+          : trialsApi.book({
+              students: students.map((x) => ({
+                name: x.name.trim(),
+                ...(x.level.trim() ? { level: x.level.trim() } : {}),
+                ...(x.note.trim() ? { note: x.note.trim() } : {}),
+              })),
+              teacherId,
+              startsAt: chosenSlot,
+              durationMinutes: duration,
+            }),
+      )
       onClose()
     } catch (e) {
       setError(e)
@@ -221,27 +247,67 @@ function BookTrialDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Dialog
-      title={tx(TR.bookTrial)}
+      title={editing ? `${tx(TR.editTrial)} — ${editing.prospect.displayName}` : tx(TR.bookTrial)}
       onClose={onClose}
       footer={
         <>
           <DialogCancelButton onClick={onClose} />
-          <button type="button" className="btn btn--primary" disabled={!ready || book.isPending} onClick={() => void submit()}>
-            {tx(TR.book)}
+          <button type="button" className="btn btn--primary" disabled={book.isPending} onClick={() => void submit()}>
+            {tx(editing ? TR.save : TR.book)}
           </button>
         </>
       }
     >
-      <div className="field">
-        <label className="field__label" htmlFor="bt-prospect">{tx(TR.prospect)}</label>
-        <select id="bt-prospect" className="select" value={prospectId} onChange={(e) => setProspectId(e.target.value)}>
-          <option value="">—</option>
-          {openProspects.map((p) => (
-            <option key={p.id} value={p.id}>{p.displayName}{p.level ? ` · ${p.level}` : ''}</option>
+      {editing ? (
+        <p className="tj-trial-head">
+          <span className="ts-muted">{tx(TR.currentTime)}:</span>
+          <strong>{formatWhen(editing.startsAt, locale)}</strong>
+          <span className="ts-muted">· {editing.teacher.name}</span>
+        </p>
+      ) : (
+        <fieldset className="tj-fieldset">
+          <legend className="tj-legend">{tx(TR.students)}</legend>
+          <p className="ts-muted">{tx(TR.studentsHint)}</p>
+          {students.map((x, i) => (
+            <div className="tj-child" key={i} role="group" aria-label={`${tx(TR.student)} ${i + 1}`}>
+              {students.length > 1 && (
+                <div className="tj-child__head">
+                  <span className="tj-child__title">{tx(TR.student)} {i + 1}</span>
+                  <button type="button" className="btn btn--sm btn--ghost" onClick={() => setStudents(students.filter((_, k) => k !== i))}>
+                    {tx(TR.removeStudent)}
+                  </button>
+                </div>
+              )}
+              <div className="tj-row">
+                <div className="field">
+                  <label className="field__label" htmlFor={`bt-name-${i}`}>{tx(TR.studentName)}</label>
+                  <input
+                    id={`bt-name-${i}`}
+                    className="input"
+                    dir="auto"
+                    value={x.name}
+                    aria-invalid={tried && unnamed.includes(i)}
+                    onChange={(e) => setStudent(i, { name: e.target.value })}
+                  />
+                </div>
+                <div className="field">
+                  <label className="field__label" htmlFor={`bt-level-${i}`}>{tx(TR.studentLevel)}</label>
+                  <input id={`bt-level-${i}`} className="input" dir="auto" value={x.level} onChange={(e) => setStudent(i, { level: e.target.value })} />
+                </div>
+              </div>
+              <div className="field">
+                <label className="field__label" htmlFor={`bt-note-${i}`}>{tx(TR.noteOptional)}</label>
+                <textarea id={`bt-note-${i}`} className="input" rows={2} dir="auto" value={x.note} onChange={(e) => setStudent(i, { note: e.target.value })} />
+              </div>
+            </div>
           ))}
-        </select>
-        {prospects.data && openProspects.length === 0 && <span className="ts-muted">{tx(TR.noProspects)}</span>}
-      </div>
+          {students.length < 10 && (
+            <button type="button" className="btn btn--sm" onClick={() => setStudents([...students, { name: '', level: students.at(-1)?.level ?? '', note: '' }])}>
+              {tx(TR.addStudent)}
+            </button>
+          )}
+        </fieldset>
+      )}
       <div className="field">
         <label className="field__label" htmlFor="bt-teacher">{tx(TR.teacher)}</label>
         <select id="bt-teacher" className="select" value={teacherId} onChange={(e) => { setTeacherId(e.target.value); setDay(''); setSlot('') }}>
@@ -253,39 +319,70 @@ function BookTrialDialog({ onClose }: { onClose: () => void }) {
       </div>
       <div className="field">
         <label className="field__label" htmlFor="bt-duration">{tx(TR.duration)}</label>
-        <select id="bt-duration" className="select" value={duration} onChange={(e) => { setDuration(Number(e.target.value)); setSlot('') }}>
-          {[30, 45, 60].map((n) => (
-            <option key={n} value={n}>{formatMinutes(n, locale)}</option>
-          ))}
-        </select>
+        <input
+          id="bt-duration"
+          className="input"
+          type="number"
+          inputMode="numeric"
+          min={MIN_LENGTH}
+          max={MAX_LENGTH}
+          dir="ltr"
+          value={lengthText}
+          aria-invalid={tried && !lengthOk}
+          aria-describedby="bt-duration-hint"
+          onChange={(e) => { setLengthText(e.target.value); setSlot('') }}
+        />
+        <span id="bt-duration-hint" className="ts-muted">{tx(TR.lengthHint)}</span>
       </div>
-      {teacherId !== '' && (
-        slots.isLoading ? (
-          <p className="ts-muted">{tx(TR.loadingSlots)}</p>
-        ) : days.length === 0 ? (
-          <p className="ts-muted">{tx(TR.noSlots)}</p>
-        ) : (
+      {/* Day and time are always shown, so the form reads the same from the
+          start; until they can be chosen they say what comes first. */}
+      {(() => {
+        const waiting: Pair | null = teacherId === '' ? TR.chooseTeacherFirst
+          : !lengthOk ? TR.enterLengthFirst
+          : slots.isLoading ? TR.loadingSlots
+          : null
+        const none = waiting === null && days.length === 0
+        return (
           <>
             <div className="field">
               <label className="field__label" htmlFor="bt-day">{tx(TR.day)}</label>
-              <select id="bt-day" className="select" value={chosenDay} onChange={(e) => { setDay(e.target.value); setSlot('') }}>
-                {days.map((k) => (
-                  <option key={k} value={k}>{dayLabel(k)}</option>
-                ))}
+              <select
+                id="bt-day"
+                className="select"
+                value={waiting || none ? '' : chosenDay}
+                disabled={waiting !== null || none}
+                onChange={(e) => { setDay(e.target.value); setSlot('') }}
+              >
+                {waiting || none ? (
+                  <option value="">{tx(waiting ?? TR.noSlotsShort)}</option>
+                ) : (
+                  days.map((k) => (
+                    <option key={k} value={k}>{dayLabel(k)}</option>
+                  ))
+                )}
               </select>
             </div>
             <div className="field">
               <label className="field__label" htmlFor="bt-time">{tx(TR.time)}</label>
-              <select id="bt-time" className="select" value={chosenSlot} onChange={(e) => setSlot(e.target.value)}>
-                <option value="">—</option>
-                {times.map((s) => (
+              <select
+                id="bt-time"
+                className="select"
+                value={chosenSlot}
+                disabled={waiting !== null || none}
+                aria-invalid={tried && missing === TR.missingTime}
+                onChange={(e) => setSlot(e.target.value)}
+              >
+                <option value="">{waiting || none ? tx(waiting ?? TR.noSlotsShort) : '—'}</option>
+                {!waiting && times.map((s) => (
                   <option key={s} value={s}>{timeLabel(s)}</option>
                 ))}
               </select>
             </div>
+            {none && <p className="ts-muted">{tx(TR.noSlots)}</p>}
           </>
         )
-      )}
+      })()}
+      {tried && missing && <p className="field__error" role="alert">{tx(missing)}</p>}
       {error !== null && (
         <div className="banner banner--danger" role="alert">{describeOpsError(error, locale)}</div>
       )}
