@@ -152,7 +152,7 @@ void main() {
       await tester.pumpWidget(app(repo));
       await tester.pumpAndSettle();
 
-      expect(find.text('Payments are managed by the parent responsible for billing'), findsOneWidget);
+      expect(find.text('Payments are shown to the family\'s parents'), findsOneWidget);
       expect(find.byIcon(Icons.refresh), findsNothing);
       expect(repo.calls, 1, reason: 'a refusal is never retried');
     });
@@ -217,7 +217,7 @@ void main() {
 
       await tester.pumpWidget(app(_Billing(), locale: ar));
       await tester.pumpAndSettle();
-      expect(find.text('يتابع المدفوعات وليّ الأمر المسؤول عن الدفع'), findsOneWidget);
+      expect(find.text('تظهر المدفوعات لأولياء أمور الأسرة'), findsOneWidget);
     });
   });
 

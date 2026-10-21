@@ -8,11 +8,11 @@ Code: `apps/api/src/parent-profile`, `apps/api/src/billing`, `apps/api/src/lesso
 
 ## Who sees what
 
-| | Super admin, Operations Manager | Operations supervisor / coverage | Sales department | Child's own teacher | Teachers department | The family's billing parent | Anyone else |
+| | Super admin, Operations Manager | Operations supervisor / coverage | Sales department | Child's own teacher | Teachers department | The family's parents | Anyone else |
 |---|---|---|---|---|---|---|---|
 | Parent Profile: contact, note, children — read | every parent | parents of families they reach (PD-8) | every parent | **never** | **never** | **never** | **never** |
 | — edit (name, phone, e-mail, region, note, photo) | every parent | families they reach | **no** | **never** | **never** | **never** | **never** |
-| Family money: read and record (plan, method, instalments, payments, voids) | every family | families they reach | every family | **never** | **never** | own family, **read only** (`/me/billing`), nothing voided | **never** |
+| Family money: read and record (plan, method, instalments, payments, voids) | every family | families they reach | every family | **never** | **never** | own family, **read only** (`/me/billing`), nothing voided — both parents | **never** |
 | Billing supervisor | set | — | — | — | — | — | — |
 | Student Profile | every child | children they supervise (+ backup, manager) | **never** | **their own students** | every child | **never** (their children are on their own profile) | **never** |
 
@@ -36,7 +36,7 @@ non-student, the same 404 as an unknown id).
 | `POST /instalments/:id/payment` | `{paidOn (≤ today), method?, reference?}` — once; `COMM.BILLING_STATE` (409) after. |
 | `POST /instalments/:id/void` | `{reason}` — final. |
 | `GET /instalments` | Instalment Payments: open (and with `paid=true`, paid) rows in scope; voided rows never. |
-| `GET /me/billing` | The parent's own family: plan, method, currency, every instalment that stands (no voided rows, no staff names, no reasons), totals. Only the contact with `can_manage_billing`; anyone else `COMM.BILLING_DENIED`. |
+| `GET /me/billing` | The parent's own family: plan, method, currency, every instalment that stands (no voided rows, no staff names, no reasons), totals. Every active parent (contact) of the family; anyone else `COMM.BILLING_DENIED`. |
 | `GET /learners/:id/profile` | Photo, name, age, course, teacher, weekly slots; staff also `birthDate` and `family.parents`. |
 
 Photos on both profiles are `/media/avatars/<kind>.<id>.profile` links; each
@@ -69,7 +69,7 @@ never a phone or e-mail. `family.billing_set`, `instalment.created`,
   `billingReader` (the super admin has it as an Admin Portal section); a parent's
   name links to their profile in a conversation's members only for those viewers.
   The pages render the server's 403/404 as a plain refusal. The server is the control.
-* **App (parents):** Settings › Payments, for the billing parent only; it calls `/me/billing` and nothing else about money.
+* **App (parents):** Settings › Payments, for every active parent of the family; it calls `/me/billing` and nothing else about money.
 * **App (teachers):** a teacher opens `/students/:learnerId` from a child's card in group
   info, only for their own students; anyone else is redirected. There is no Parent
   Profile in the app, and a guard test fails if any file under `lib/` names

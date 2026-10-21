@@ -2478,8 +2478,7 @@ class L10nAr extends L10n {
   String get billingEmptyBody => 'ستظهر أقساطك هنا.';
 
   @override
-  String get billingDeniedTitle =>
-      'يتابع المدفوعات وليّ الأمر المسؤول عن الدفع';
+  String get billingDeniedTitle => 'تظهر المدفوعات لأولياء أمور الأسرة';
 
   @override
   String get billingDeniedBody => 'إن كان لديك سؤال، تواصل مع الأكاديمية.';

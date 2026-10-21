@@ -1054,6 +1054,6 @@
   },
   "billingEmptyTitle": "لا توجد مدفوعات بعد",
   "billingEmptyBody": "ستظهر أقساطك هنا.",
-  "billingDeniedTitle": "يتابع المدفوعات وليّ الأمر المسؤول عن الدفع",
+  "billingDeniedTitle": "تظهر المدفوعات لأولياء أمور الأسرة",
   "billingDeniedBody": "إن كان لديك سؤال، تواصل مع الأكاديمية."
 }

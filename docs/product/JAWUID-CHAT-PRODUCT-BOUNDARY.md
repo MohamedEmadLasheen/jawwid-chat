@@ -1704,9 +1704,9 @@ who records money             = the same people: Operations (in scope), Sales,
                                 the super admin.
 who edits the contact record  = Operations (in scope) and the super admin; Sales
                                 reads it only.
-a parent's own payments       = GET /me/billing, the app's Settings > Payments: the
-                                family contact holding the billing permission
-                                (can_manage_billing). Plan, method, every
+a parent's own payments       = GET /me/billing, the app's Settings > Payments: every
+                                active parent of the family (owner, later the same
+                                day: "both parents"). Plan, method, every
                                 instalment that stands; never a voided row, a
                                 reason, who recorded it, or the internal note.
 who opens a Student Profile   = LESSON_ACTS.read_profile: the Teachers department,
@@ -1766,8 +1766,8 @@ not connected"; `COMM.BILLING_CORE_UNAVAILABLE` is gone.
    month's last day.
 3. A payment is recorded on or before today, never ahead of time.
 4. The parent never sees the internal note. Their Payments screen shows only
-   what stands (voided instalments are staff history), and only to the contact
-   with the family's billing permission.
+   what stands (voided instalments are staff history), to every active parent
+   of the family; reading is not managing, and payments are recorded by staff.
 
 **Closed.** 2026-10-21.
 
