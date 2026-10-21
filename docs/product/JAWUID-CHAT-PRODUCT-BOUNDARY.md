@@ -159,7 +159,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-16** | **Enrolling a new student in Chat; the parent's own sign-up** (2026-10-21) | **CLOSED** — Assign on New Students creates the family, parent and children in Chat from Sales' form; an assigned entry is the supervisor's (and their manager's); the supervisor opens the family group; the parent signs up with their e-mail and a one-time code relayed by the supervisor until WhatsApp sending is connected |
 | **PD-17** | **Parent Profile and Student Profile; family payments recorded in Chat** (2026-10-21) | **CLOSED** — a Parent Profile (contact details, internal note, children, subscription, payment method, payment timeline) for the administration only, by the Instalment Payments rule plus Sales; Operations and Sales record payments; the parent sees their own payments in the app; a Student Profile for the administration and the child's own teacher; instalments and payments are Chat's own append-only records, nothing is read from Core; teachers reach neither a parent nor money by any route |
 | **PD-18** | **Teacher payroll in Chat** (2026-10-21) | **CLOSED** — salary terms, a sealed payout account and the amounts of bonuses and deductions are recorded in Chat, for the super admin only; the month's financial summary is computed, never stored; supersedes PD-10 item 4 |
-| **PD-19** | **Who may start a call: every member of their own chat** (2026-10-21) | **CLOSED** — teachers, parents and supervisors may start a call in any chat they may write in; parents may now start their family / Student Group calls; chats a person is not a member of, BR-1 / PD-7, C-4 and the no-phantom-call rule are unchanged |
+| **PD-19** | **Who may start a call: every member of their own chat** (2026-10-21) | **CLOSED** — teachers, parents and supervisors may start a call in any chat they may write in; parents may now start their family / Student Group calls; chats a person is not a member of, BR-1 / PD-7, C-4 and the no-phantom-call rule are unchanged; amended the same day so the super admin may start a group call in any chat they may write in, with a seat on the call |
 
 ---
 
@@ -1874,8 +1874,9 @@ signature so callers still say which question they ask.
 
 **Unchanged — "the existing access rules for other chats".**
 - A person who is not a member of a chat cannot start a call there (D1, the
-  no-phantom-call rule). This includes the super admin and a department manager
-  reading a chat on a PD-8 basis.
+  no-phantom-call rule). This includes a department manager or an active backup
+  reading a chat on a PD-8 basis. (The super admin was in this list until the
+  amendment below.)
 - BR-1 / PD-7: no direct teacher<->parent chat or call, ever.
 - C-4: a group that pairs a teacher with a parent needs a live Jawwid admin in
   it, for a call exactly as for a message.
@@ -1896,6 +1897,21 @@ signature so callers still say which question they ask.
 **Deprecated behaviour.** PD-2's start-only refusal for parents.
 
 **Closed.** 2026-10-21.
+
+**Amendment, 2026-10-21 — the super admin may call too** (owner request: "let
+the super admin call too").
+- The super admin may start a **group** call (family group, Student Group,
+  Class Group) in any chat they may write in under PD-8, member or not.
+- They get a **seat on the call**, not membership of the chat: the server adds
+  them as a call participant, so the caller is on the call they start. That
+  is what D1 exists to guarantee. The chat's member list does not change.
+- A **1:1 between two other people** stays refused: a direct call has exactly
+  two seats, and the database enforces it. The super admin's own 1:1 chats work
+  as for anyone.
+- Department managers and active backups are unchanged: no seat, no call, in a
+  chat they are not a member of.
+- Protected by the D1 block of
+  `apps/api/test/integration/staff-call-participation.spec.ts`.
 
 ---
 

@@ -6,7 +6,9 @@
  *              conversation they are not a member of; without D1 they could
  *              start a call that rings the family while holding no seat in it
  *              (a "phantom call"). Starting a call needs membership; reading and
- *              sending are unchanged.
+ *              sending are unchanged. PD-19 amendment: the super admin may
+ *              start a GROUP call anyway, because the server gives them a seat
+ *              on the call itself; a 1:1 between two others stays refused.
  *   D3         Every call operation establishes the organization first: another
  *              organization's conversation or call is answered exactly like an
  *              unknown id (404), before membership or call state can be read.
@@ -91,6 +93,48 @@ describe('D1 -- whoever starts a call must be on it (no phantom calls)', () => {
     const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
     await expect(g.calls.start(group.id, s.teacherId)).resolves.toEqual(expect.objectContaining({ callId: expect.any(String) }));
     await expect(g.calls.start(group.id, s.parentId)).resolves.toEqual(expect.objectContaining({ callId: expect.any(String) }));
+  });
+});
+
+describe('PD-19 amendment -- the super admin may start a GROUP call without being a member', () => {
+  it('starts it, holds a seat on the call (not in the chat), rings the members, and can join it', async () => {
+    const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
+    const owner = await superAdmin();
+    const membersBefore = await g.prisma.conversationMember.count({ where: { conversationId: group.id } });
+
+    expect(await g.calls.callCapability(group.id, owner)).toEqual({ canCall: true, code: null });
+    const { callId } = await g.calls.start(group.id, owner);
+
+    const seats = (await g.prisma.callParticipant.findMany({ where: { callId } })).map((p) => p.actorId);
+    expect(seats).toContain(owner);
+    expect(seats).toEqual(expect.arrayContaining([s.teacherId, s.parentId, s.ownerId]));
+    // A seat on the call, never chat membership.
+    expect(await g.prisma.conversationMember.count({ where: { conversationId: group.id } })).toBe(membersBefore);
+    expect(await g.prisma.conversationMember.count({ where: { conversationId: group.id, actorId: owner } })).toBe(0);
+    // The members are rung.
+    expect(await g.prisma.outboxEvent.count({ where: { type: 'call.incoming' } })).toBe(1);
+
+    // The caller can enter their own call, and a member can answer it.
+    await expect(g.calls.issueToken(callId, owner)).resolves.toEqual(expect.objectContaining({ token: expect.any(String) }));
+    await g.calls.accept(callId, s.parentId);
+    expect((await g.prisma.call.findUniqueOrThrow({ where: { id: callId } })).status).toBe('active');
+  });
+
+  it('a 1:1 between two other people stays refused for the super admin -- a direct call has two seats', async () => {
+    const owner = await superAdmin();
+    expect(await refusal(g.calls.start(direct, owner))).toEqual({ code: CommErrorCode.NOT_CONVERSATION_MEMBER, status: 403 });
+    expect(await g.calls.callCapability(direct, owner)).toEqual({ canCall: false, code: CommErrorCode.NOT_CONVERSATION_MEMBER });
+  });
+
+  it('the department manager and an ACTIVE backup are unchanged: no seat, no call, nothing written', async () => {
+    const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
+    await activateBackup(g.prisma, s.ownerId, s.otherAdminId);
+    for (const staff of [s.managerId, s.otherAdminId]) {
+      const before = await footprint();
+      expect(await refusal(g.calls.start(group.id, staff))).toEqual({ code: CommErrorCode.NOT_CONVERSATION_MEMBER, status: 403 });
+      expect(await footprint()).toEqual(before);
+      expect(await g.calls.callCapability(group.id, staff)).toEqual({ canCall: false, code: CommErrorCode.NOT_CONVERSATION_MEMBER });
+    }
   });
 });
 

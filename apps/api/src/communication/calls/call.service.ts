@@ -208,8 +208,14 @@ export class CallService {
     // manager, an ACTIVE backup or the super admin may SEND into a conversation
     // they are not a member of -- and so, through canCall, could start a call
     // that rings everyone else while the caller holds no seat in it: a phantom
-    // call. Starting a call is taking part in it, so it needs membership.
-    return { decision: this.authz.canStartCallAsParticipant(initiator, participantActors), participantActors };
+    // call. Starting a call is taking part in it, so it needs membership --
+    // except the super admin in a group (PD-19 amendment), who is given a seat
+    // on the call itself below.
+    const seat = this.authz.canStartCallAsParticipant(initiator, participantActors, conv);
+    if (seat.allowed && !participantActors.some((a) => a.actorId === initiator.actorId)) {
+      participantActors.push(initiator);
+    }
+    return { decision: seat, participantActors };
   }
 
   /**

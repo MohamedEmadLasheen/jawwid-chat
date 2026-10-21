@@ -905,6 +905,7 @@ unauthorized lifecycle rule.
 **POST /calls** — EXISTS
 - Auth: required. Permission: `calls.start`. Scope: `canCall(intent = initiate)` = `canSend` (customer visibility) + refusal of any direct teacher/parent pair (**BR-1, PD-7**) + C-4. Participants = live, active, non-silent members (server-derived; never client-supplied). Room name minted server-side.
 - **PD-19** (supersedes PD-2): a family contact who is a member may start a `student_group`, `class_group` or `family_group` call, as well as their 1:1 with their handler. Only live members may start a call (D1).
+- **PD-19 amendment:** the super admin may start a `student_group`, `class_group` or `family_group` call in a conversation they may write in without being a member; the server adds them to the call as a participant (`call_participant`), never to the conversation. A direct call between two other people stays `COMM.NOT_CONVERSATION_MEMBER` (two seats). Managers and backups are unchanged.
 - Request: `{ conversationId: string }`. Response: `{ callId, roomName }`.
 - Errors: matrix codes; `COMM.BR1_TEACHER_PARENT_DIRECT` 403; `COMM.PARENT_CANNOT_START_GROUP_CALL` 403; `COMMON.RATE_LIMITED` 429 (abuse limit, §1.1a).
 - Audit: `event_log` `call_started`. Realtime: `call.incoming { callId, conversationId, type, initiatorId, initiatorName }` to the conversation room. **`roomName` was removed from this payload 2026-09-24:** the room handle comes back from `POST /calls/:id/token` with the token that makes it usable, so broadcasting it added nothing and put a media handle in a fan-out.
