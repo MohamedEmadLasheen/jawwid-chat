@@ -1448,20 +1448,23 @@ class L10nEn extends L10n {
   String get cardTrialReportTitle => 'Trial report';
 
   @override
-  String get cardTrialNoShowTitle => 'Did not attend the trial';
+  String get cardTrialNoShowTitle =>
+      'The student did not attend the trial lesson.';
 
   @override
-  String get cardTrialSubscribedTitle => 'Subscribed';
+  String get cardTrialSubscribedTitle => 'The student has subscribed.';
 
   @override
-  String get cardTrialNotSubscribedTitle => 'Did not subscribe';
+  String get cardTrialNotSubscribedTitle => 'The student did not subscribe.';
 
   @override
   String get cardTrialLevel => 'Level';
 
   @override
-  String get cardTrialAwaitingCore =>
-      'Counts once Core confirms the subscription.';
+  String get cardTrialCorrectionTitle => 'Outcome corrected';
+
+  @override
+  String get cardTrialNewOutcome => 'Now';
 
   @override
   String get callsSearchHint => 'Search by name';

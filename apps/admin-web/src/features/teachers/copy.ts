@@ -73,7 +73,17 @@ export const T = {
   makeups: { en: 'Make-up lessons', ar: 'الحصص التعويضية' },
   makeupsHeld: { en: '{held} of {n} held', ar: '{held} من {n} منعقدة' },
   trials: { en: 'Trial lessons', ar: 'الحصص التجريبية' },
-  trialsPending: { en: 'Recorded once trial lessons are built (PD-11 T4).', ar: 'تُسجّل بعد بناء الحصص التجريبية (PD-11 T4).' },
+  trialsTotal: { en: 'Total trials', ar: 'إجمالي الحصص التجريبية' },
+  trialsConducted: { en: 'Conducted', ar: 'المنعقدة' },
+  trialsSubscribed: { en: 'Subscribed', ar: 'اشتركوا' },
+  trialsNotSubscribed: { en: 'Did not subscribe', ar: 'لم يشتركوا' },
+  trialsNoShow: { en: 'Did not attend', ar: 'لم يحضروا' },
+  trialsAwaiting: { en: 'Awaiting an outcome', ar: 'بانتظار النتيجة' },
+  trialsConversion: { en: 'Conversion', ar: 'نسبة الاشتراك' },
+  trialsConversionHint: { en: 'Subscribed, of the trials with a decision.', ar: 'نسبة من اشتركوا من الحصص التي سُجّل قرارها.' },
+  trialsOutside: { en: '{u} upcoming and {c} cancelled are not counted.', ar: 'لا تُحتسب {u} قادمة و{c} ملغاة.' },
+  colTrials: { en: 'Trials', ar: 'التجريبية' },
+  colTrialsSubscribed: { en: 'Trials subscribed', ar: 'اشتركوا بعد التجريبية' },
   none: { en: '—', ar: '—' },
 } satisfies Record<string, Pair>
 

@@ -46,8 +46,6 @@ export function ChatComposer({
   extraItems = [],
 }: {
   onSend: (input: ComposerSend) => void
-  /** PD-15: the lesson cards the server offers in this group (student / teacher excuse, make-up). */
-  extraItems?: MenuItem[]
   /** Editing one of the viewer's messages: the box holds its text, Enter saves. */
   editing?: EditTarget | null
   onSaveEdit?: (body: string) => void
@@ -59,6 +57,11 @@ export function ChatComposer({
   autoStartVoice?: boolean
   onVoiceAutoStarted?: () => void
   onVoiceSent?: () => void
+  /**
+   * More "+" actions this conversation offers: a trial group's "Trial" card, and
+   * (PD-15) the lesson cards the server offers in a family's group.
+   */
+  extraItems?: MenuItem[]
 }) {
   const { locale } = useI18n()
   const copy = chatCopyFor(locale)

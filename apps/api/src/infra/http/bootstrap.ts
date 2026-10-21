@@ -36,6 +36,12 @@ export interface InfrastructureOptions {
   readonly allowedOrigins?: string[];
   /** Defaults to SHUTDOWN_GRACE_MS, else 15s. */
   readonly shutdownGraceMs?: number;
+  /**
+   * Runs after the application has closed and before the process exits --
+   * the error tracker's flush, so a report queued during shutdown is sent.
+   * Must not throw; it is awaited inside the grace period's hard stop.
+   */
+  readonly beforeExit?: () => Promise<void>;
 }
 
 export function applyInfrastructure(
@@ -47,7 +53,11 @@ export function applyInfrastructure(
   applyRequestOrigin(app);
   applySecurityHeaders(app);
   applyCors(app, options.allowedOrigins ?? parseOrigins(process.env.CORS_ALLOWED_ORIGINS));
-  applyGracefulShutdown(app, options.shutdownGraceMs ?? Number(process.env.SHUTDOWN_GRACE_MS ?? 15000));
+  applyGracefulShutdown(
+    app,
+    options.shutdownGraceMs ?? Number(process.env.SHUTDOWN_GRACE_MS ?? 15000),
+    options.beforeExit ?? (async () => undefined),
+  );
 }
 
 /**
@@ -193,7 +203,11 @@ function applyCors(app: INestApplication, allowedOrigins: string[]): void {
   });
 }
 
-function applyGracefulShutdown(app: INestApplication, graceMs: number): void {
+function applyGracefulShutdown(
+  app: INestApplication,
+  graceMs: number,
+  beforeExit: () => Promise<void>,
+): void {
   const logger = new Logger('Shutdown');
   app.enableShutdownHooks();
 
@@ -214,13 +228,15 @@ function applyGracefulShutdown(app: INestApplication, graceMs: number): void {
 
     void app
       .close()
-      .then(() => {
+      .then(async () => {
         logger.log('closed cleanly');
+        await beforeExit().catch(() => undefined);
         clearTimeout(hardStop);
         process.exit(0);
       })
-      .catch((e: unknown) => {
+      .catch(async (e: unknown) => {
         logger.error(`error during shutdown: ${e instanceof Error ? e.name : 'unknown'}`);
+        await beforeExit().catch(() => undefined);
         process.exit(1);
       });
   };

@@ -47,7 +47,7 @@ const MAX_REASON = 1000;
  * when are therefore always on record (plus chat.audit_log).
  *
  * Statistics follow by construction: they are queries over the lesson rows
- * (20261019100000, 20261021020000), so a corrected lesson is counted once, in
+ * (20261019100000, 20261021120000), so a corrected lesson is counted once, in
  * its new category, and a voided one nowhere.
  *
  * Who: corrections and deleting reports are the Teachers department's,

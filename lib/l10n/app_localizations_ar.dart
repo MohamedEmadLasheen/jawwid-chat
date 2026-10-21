@@ -1452,19 +1452,22 @@ class L10nAr extends L10n {
   String get cardTrialReportTitle => 'تقرير الحصة التجريبية';
 
   @override
-  String get cardTrialNoShowTitle => 'لم يحضر الحصة التجريبية';
+  String get cardTrialNoShowTitle => 'لم يحضر الطالب الحصة التجريبية.';
 
   @override
-  String get cardTrialSubscribedTitle => 'اشترك';
+  String get cardTrialSubscribedTitle => 'اشترك الطالب.';
 
   @override
-  String get cardTrialNotSubscribedTitle => 'لم يشترك';
+  String get cardTrialNotSubscribedTitle => 'لم يشترك الطالب.';
 
   @override
   String get cardTrialLevel => 'المستوى';
 
   @override
-  String get cardTrialAwaitingCore => 'تُحتسب بعد أن يؤكد Core الاشتراك.';
+  String get cardTrialCorrectionTitle => 'تم تصحيح النتيجة';
+
+  @override
+  String get cardTrialNewOutcome => 'الآن';
 
   @override
   String get callsSearchHint => 'ابحث بالاسم';

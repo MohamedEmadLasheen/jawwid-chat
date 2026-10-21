@@ -35,6 +35,7 @@ const ROWS: TeacherRow[] = [
     upcoming: { lessons: 99, minutes: 3852 },
     attendanceRate: 0.9,
     reportsOnTimeRate: 0.75,
+    trials: { total: 7, conducted: 5, subscribed: 3, notSubscribed: 1, noShow: 2, awaiting: 1, upcoming: 2, cancelled: 1, conversionRate: 0.75 },
     summary: {
       totalScheduled: 130, conducted: 99, studentAttended: 99, studentNoShow: 10,
       studentExcuses: { total: 12, beforeStart: 9, afterStart: 3 }, teacherExcuses: 4, teacherNoShow: 1, cancelled: 2,
@@ -51,6 +52,7 @@ const ROWS: TeacherRow[] = [
     upcoming: { lessons: 0, minutes: 0 },
     attendanceRate: null,
     reportsOnTimeRate: null,
+    trials: { total: 0, conducted: 0, subscribed: 0, notSubscribed: 0, noShow: 0, awaiting: 0, upcoming: 0, cancelled: 0, conversionRate: null },
     summary: {
       totalScheduled: 0, conducted: 0, studentAttended: 0, studentNoShow: 0,
       studentExcuses: { total: 0, beforeStart: 0, afterStart: 0 }, teacherExcuses: 0, teacherNoShow: 0, cancelled: 0,
@@ -89,7 +91,7 @@ const DETAIL: TeacherDetail = {
   ],
   totals: { counted: { lessons: 100, minutes: 3978 }, scheduledMinutes: 3978 },
   makeups: { lessons: 3, held: 2 },
-  trials: { lessons: 0, attended: 0, converted: 0, available: false },
+  trials: { total: 7, conducted: 5, subscribed: 3, notSubscribed: 1, noShow: 2, awaiting: 1, upcoming: 2, cancelled: 1, conversionRate: 0.75 },
   rates: { attendance: 0.9, completion: 0.99, teacherReliability: 1 },
   reports: { reports: 99, onTime: 90, onTimeRate: 0.909, medianDelayMinutes: 35 },
   replies: { familyMessages: 40, answeredWithin: 38, rate: 0.95, medianReplyMinutes: 12 },
@@ -145,6 +147,9 @@ describe('the statistics', () => {
     const two = within(table).getByRole('button', { name: 'Teacher Two' }).closest('tr')!
     expect(within(two).getByText(/Inactive/)).toBeInTheDocument()
     expect(within(two).getAllByText('—')).toHaveLength(2)
+    // Trials this month, and how many subscribed.
+    const cells = within(one).getAllByRole('cell').map((c) => c.textContent)
+    expect(cells.slice(-2)).toEqual(['7', '3'])
     expect(calls(/\/stats\/teachers\?month=2026-10$/)).toBeGreaterThan(0)
   })
 
@@ -162,7 +167,17 @@ describe('the statistics', () => {
     // What Core never saw.
     expect(within(screen.getByRole('article', { name: 'Lesson reports' })).getByText('91% · 90/99')).toBeInTheDocument()
     expect(within(screen.getByRole('article', { name: 'Replies to families' })).getByText('95%')).toBeInTheDocument()
-    expect(within(screen.getByRole('article', { name: 'Trial lessons' })).getByText(/PD-11 T4/)).toBeInTheDocument()
+    // Each trial once, by its outcome: the month's breakdown, from Chat's records.
+    const trials = screen.getByRole('article', { name: 'Trial lessons' })
+    const metric = (label: string) => within(trials).getByText(label).closest('div')!
+    expect(within(metric('Total trials')).getByText('7')).toBeInTheDocument()
+    expect(within(metric('Conducted')).getByText('5')).toBeInTheDocument()
+    expect(within(metric('Subscribed')).getByText('3')).toBeInTheDocument()
+    expect(within(metric('Did not subscribe')).getByText('1')).toBeInTheDocument()
+    expect(within(metric('Did not attend')).getByText('2')).toBeInTheDocument()
+    expect(within(metric('Awaiting an outcome')).getByText('1')).toBeInTheDocument()
+    expect(within(metric('Conversion')).getByText('75%')).toBeInTheDocument()
+    expect(within(trials).getByText('2 upcoming and 1 cancelled are not counted.')).toBeInTheDocument()
     expect(screen.getByText('60 h held in 2026-09')).toBeInTheDocument()
   })
 

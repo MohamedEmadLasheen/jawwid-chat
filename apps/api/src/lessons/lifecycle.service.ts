@@ -17,7 +17,7 @@ import {
   SUSPENSION_REASONS,
   TRANSFER_REASONS,
 } from '../communication/contracts/vocab';
-import { LessonService, cancelReminders, invalid, stateError, textField, type Tx } from './lesson.service';
+import { DEFAULT_ZONE, LessonService, cancelReminders, invalid, stateError, textField, type Tx } from './lesson.service';
 import { SchedulingService } from './scheduling.service';
 import { SupervisionConversationService } from '../supervision/supervision-conversation.service';
 
@@ -25,7 +25,6 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** A temporary pause longer than this is a stop, or needs re-recording. */
 const MAX_PAUSE_DAYS = 120;
 /** The zone a learner's dates are read in when their teacher has none recorded. */
-const DEFAULT_ZONE = 'Africa/Cairo';
 
 /**
  * PD-11 T3: a learner moving between teachers, and a learner's study pausing,

@@ -1,16 +1,16 @@
 import type { Pair } from '../teachers/copy'
 
 /**
- * Trial and New Students copy, Arabic and English side by side. Wording rule:
- * "Subscribed" is what Sales recorded; only "Confirmed by Core" credits the
- * teacher -- the page never lets the first read as the second.
+ * Trial and New Students copy, Arabic and English side by side. Jawwid Chat is
+ * the only source of truth for a trial's outcome: "Subscribed" is final when
+ * Sales records it, and no wording waits for Core.
  */
 export const TR = {
   areaLabel: { en: 'Trials', ar: 'الحصص التجريبية' },
   trialsTitle: { en: 'Trial lessons', ar: 'الحصص التجريبية' },
   trialsSubtitle: {
-    en: 'Book a prospect into a teacher\'s real free time. The teacher reports the trial from the app; Sales records whether the family subscribed.',
-    ar: 'احجز للمهتم في وقت فارغ فعلي لدى المعلم. يكتب المعلم تقرير الحصة من التطبيق، ويسجّل قسم المبيعات هل اشتركت الأسرة.',
+    en: 'Book a prospect into a teacher\'s real free time. Each trial gets one outcome, recorded from the teacher\'s trial group with "+ → Trial" or here.',
+    ar: 'احجز للمهتم في وقت فارغ فعلي لدى المعلم. لكل حصة تجريبية نتيجة واحدة تُسجَّل من مجموعة المعلم التجريبية عبر «+ ← تجريبية» أو من هنا.',
   },
   newProspect: { en: 'Record a prospect', ar: 'تسجيل مهتم' },
   bookTrial: { en: 'Book a trial', ar: 'حجز حصة تجريبية' },
@@ -50,47 +50,141 @@ export const TR = {
   report: { en: 'Teacher\'s report', ar: 'تقرير المعلم' },
   openGroup: { en: 'Trial group', ar: 'مجموعة التجريبية' },
 
+  outcome: { en: 'Outcome', ar: 'النتيجة' },
+  recordOutcome: { en: 'Record outcome', ar: 'تسجيل النتيجة' },
+  correctOutcome: { en: 'Correct outcome', ar: 'تصحيح النتيجة' },
+  filterOutcome: { en: 'Needs an outcome', ar: 'بانتظار النتيجة' },
+
+  // The "+ -> Trial" card
+  cardLabel: { en: 'Trial', ar: 'تجريبية' },
+  cardTitle: { en: 'Trial', ar: 'الحصة التجريبية' },
+  pickTrial: { en: 'Which trial?', ar: 'أي حصة تجريبية؟' },
+  pickTrialHint: {
+    en: 'This group holds every trial of this teacher. Pick the student and time.',
+    ar: 'تضم هذه المجموعة كل الحصص التجريبية لهذا المعلم. اختر الطالب والموعد.',
+  },
+  noTrials: { en: 'No started trial of this teacher needs an outcome.', ar: 'لا توجد حصة تجريبية بدأت وتحتاج إلى نتيجة لهذا المعلم.' },
+  needsOutcome: { en: 'Needs an outcome', ar: 'بحاجة إلى نتيجة' },
+  recorded: { en: 'Recorded', ar: 'مسجّلة' },
+  optionNoShow: { en: 'The student did not attend the trial', ar: 'الطالب لم يحضر الحصة التجريبية' },
+  optionSubscribed: { en: 'The student subscribed', ar: 'الطالب اشترك' },
+  optionNotSubscribed: { en: 'Why didn\'t the student subscribe?', ar: 'لماذا لم يشترك الطالب؟' },
+  salesOnly: { en: 'Recorded by Sales', ar: 'يسجّلها قسم المبيعات' },
+  groupWillRead: { en: 'The group will read only:', ar: 'ستقرأ المجموعة فقط:' },
+  privateNote: {
+    en: 'The details stay private: they are saved for the New Students page and never posted in the group.',
+    ar: 'تبقى التفاصيل خاصة: تُحفظ لصفحة الطلاب الجدد ولا تُنشر في المجموعة أبدًا.',
+  },
+  reasonPrivate: {
+    en: 'The reason is saved with Sales and never posted in the group.',
+    ar: 'يُحفظ السبب لدى قسم المبيعات ولا يُنشر في المجموعة أبدًا.',
+  },
+  confirm: { en: 'Confirm', ar: 'تأكيد' },
+  submit: { en: 'Submit', ar: 'إرسال' },
+  back: { en: 'Back', ar: 'رجوع' },
+  why: { en: 'Why are you correcting it?', ar: 'لماذا تصحّح النتيجة؟' },
+  current: { en: 'Current outcome', ar: 'النتيجة الحالية' },
+  reasonRequired: { en: 'Reason', ar: 'السبب' },
+  details: { en: 'Details', ar: 'التفاصيل' },
+  detailsOptional: { en: 'Details (required for "Other")', ar: 'التفاصيل (مطلوبة عند «أخرى»)' },
+  sentenceNoShow: { en: 'The student did not attend the trial lesson.', ar: 'لم يحضر الطالب الحصة التجريبية.' },
+  sentenceSubscribed: { en: 'The student has subscribed.', ar: 'اشترك الطالب.' },
+  sentenceNotSubscribed: { en: 'The student did not subscribe.', ar: 'لم يشترك الطالب.' },
+
+  // The subscription form
+  formTitle: { en: 'The student subscribed', ar: 'الطالب اشترك' },
+  editForm: { en: 'Edit subscription', ar: 'تعديل الاشتراك' },
+  parentSection: { en: 'Parent', ar: 'ولي الأمر' },
+  parentName: { en: 'Parent\'s name', ar: 'اسم ولي الأمر' },
+  parentEmail: { en: 'E-mail (optional)', ar: 'البريد الإلكتروني (اختياري)' },
+  email: { en: 'E-mail', ar: 'البريد الإلكتروني' },
+  parentPhone: { en: 'Phone number', ar: 'رقم الهاتف' },
+  childrenSection: { en: 'Children', ar: 'الأبناء' },
+  child: { en: 'Child', ar: 'الابن' },
+  addChild: { en: 'Add a child', ar: 'إضافة ابن' },
+  removeChild: { en: 'Remove this child', ar: 'حذف هذا الابن' },
+  childName: { en: 'Name', ar: 'الاسم' },
+  childAge: { en: 'Age', ar: 'العمر' },
+  course: { en: 'Course', ar: 'الدورة' },
+  assignedTeacher: { en: 'Assigned teacher', ar: 'المعلم المسؤول' },
+  packagePrice: { en: 'Package price', ar: 'سعر الباقة' },
+  lessonPrice: { en: 'Price per lesson', ar: 'سعر الحصة' },
+  schedule: { en: 'Schedule', ar: 'المواعيد' },
+  addTime: { en: 'Add a day', ar: 'إضافة يوم' },
+  removeTime: { en: 'Remove', ar: 'حذف' },
+  weekday: { en: 'Day', ar: 'اليوم' },
+  lessonTime: { en: 'Time', ar: 'الساعة' },
+  paymentSection: { en: 'Payment', ar: 'الدفع' },
+  currency: { en: 'Currency', ar: 'العملة' },
+  paymentMethod: { en: 'Paid by', ar: 'طريقة الدفع' },
+  bankTransfer: { en: 'Bank account transfer', ar: 'تحويل بنكي' },
+  invoice: { en: 'Invoice', ar: 'فاتورة' },
+  fillRequired: { en: 'Fill in every required field.', ar: 'املأ كل الحقول المطلوبة.' },
+
+  // Trial group membership
+  memberBarPermanent: { en: 'You are a permanent member of this trial group.', ar: 'أنت عضو دائم في هذه المجموعة التجريبية.' },
+  memberBarIn: { en: 'You are in this trial group.', ar: 'أنت عضو في هذه المجموعة التجريبية.' },
+  memberBarOut: {
+    en: 'You are not in this trial group. Join to be notified of its trials.',
+    ar: 'لست عضوًا في هذه المجموعة التجريبية. انضم لتصلك تنبيهات حصصها.',
+  },
+  join: { en: 'Join group', ar: 'انضمام' },
+  leave: { en: 'Leave group', ar: 'مغادرة' },
+
   newTitle: { en: 'New students', ar: 'الطلاب الجدد' },
   newSubtitle: {
-    en: 'Families who subscribed after a trial. Core confirms the subscription; then Operations assigns a supervisor and opens the family\'s group.',
-    ar: 'أسر اشتركت بعد حصة تجريبية. يؤكد Core الاشتراك، ثم يعيّن قسم العمليات مشرفًا ويفتح مجموعة الأسرة.',
+    en: 'Families who subscribed after a trial, as Sales recorded them. Contact and payment details are visible here only.',
+    ar: 'الأسر التي اشتركت بعد حصة تجريبية كما سجّلها قسم المبيعات. بيانات التواصل والدفع تظهر هنا فقط.',
   },
-  ready: { en: 'Ready to set up', ar: 'جاهزون للتجهيز' },
-  readyHint: {
-    en: 'Confirmed by Core, with no group yet. The Operations manager assigns the supervisor; the supervisor creates the group with the parent and the teacher and records the child\'s details.',
-    ar: 'أكّدها Core ولا توجد لهم مجموعة بعد. يعيّن مدير العمليات المشرف، ثم ينشئ المشرف المجموعة مع ولي الأمر والمعلم ويسجّل بيانات الطفل.',
-  },
-  awaitingStudent: { en: 'Confirmed — student not in Chat yet', ar: 'مؤكَّد — الطالب غير موجود في المحادثات بعد' },
-  awaitingStudentHint: {
-    en: 'Core confirmed the subscription and named the student, who has not reached Chat yet. They move to "Ready to set up" by themselves when they do.',
-    ar: 'أكّد Core الاشتراك وحدّد الطالب، لكنه لم يصل إلى المحادثات بعد. سينتقل وحده إلى «جاهزون للتجهيز» عند وصوله.',
-  },
-  awaitingCore: { en: 'Awaiting Core', ar: 'بانتظار Core' },
-  awaitingCoreHint: {
-    en: 'Sales recorded a subscription that Core has not confirmed yet. Nothing to do here until it does.',
-    ar: 'سجّل قسم المبيعات اشتراكًا لم يؤكده Core بعد. لا إجراء هنا حتى يؤكده.',
-  },
+  nothingNew: { en: 'No subscriptions recorded yet.', ar: 'لا توجد اشتراكات مسجّلة بعد.' },
   trialOn: { en: 'Trial', ar: 'الحصة التجريبية' },
-  recordedOn: { en: 'Recorded', ar: 'تاريخ التسجيل' },
-  confirmedOn: { en: 'Confirmed', ar: 'تاريخ التأكيد' },
-  nothingReady: { en: 'No one is waiting to be set up.', ar: 'لا يوجد من ينتظر التجهيز.' },
-  nothingAwaiting: { en: 'Nothing is awaiting Core.', ar: 'لا شيء بانتظار Core.' },
-  nothingAwaitingStudent: { en: 'No confirmed student is missing.', ar: 'لا يوجد طالب مؤكَّد غير موجود.' },
+  recordedBy: { en: 'Recorded by', ar: 'سجّلها' },
+  updated: { en: 'Updated', ar: 'عُدّلت' },
 } satisfies Record<string, Pair>
 
 export const ATTENDANCE: Record<string, Pair> = {
   upcoming: { en: 'Upcoming', ar: 'قادمة' },
-  awaiting: { en: 'Awaiting the teacher', ar: 'بانتظار المعلم' },
+  awaiting: { en: 'Not recorded yet', ar: 'لم تُسجَّل بعد' },
   attended: { en: 'Attended', ar: 'حضر' },
   no_show: { en: 'Did not attend', ar: 'لم يحضر' },
   admin_cancelled: { en: 'Cancelled', ar: 'ملغاة' },
 }
 
-export const CONVERSION: Record<string, Pair> = {
-  pending: { en: 'Needs a decision', ar: 'بانتظار قرار' },
-  awaiting_core: { en: 'Subscribed — awaiting Core', ar: 'اشترك — بانتظار Core' },
-  confirmed: { en: 'Confirmed by Core', ar: 'أكّده Core' },
+export const OUTCOME: Record<string, Pair> = {
+  upcoming: { en: 'Upcoming', ar: 'قادمة' },
+  awaiting: { en: 'Needs an outcome', ar: 'بانتظار النتيجة' },
+  no_show: { en: 'Did not attend', ar: 'لم يحضر' },
+  subscribed: { en: 'Subscribed', ar: 'اشترك' },
   not_subscribed: { en: 'Did not subscribe', ar: 'لم يشترك' },
+  cancelled: { en: 'Did not take place', ar: 'لم تُعقد' },
+}
+
+export const PAYMENT_METHOD: Record<string, Pair> = {
+  bank_transfer: TR.bankTransfer,
+  invoice: TR.invoice,
+}
+
+/** ISO weekday 1..7. */
+export const WEEKDAY: Record<number, Pair> = {
+  1: { en: 'Monday', ar: 'الاثنين' },
+  2: { en: 'Tuesday', ar: 'الثلاثاء' },
+  3: { en: 'Wednesday', ar: 'الأربعاء' },
+  4: { en: 'Thursday', ar: 'الخميس' },
+  5: { en: 'Friday', ar: 'الجمعة' },
+  6: { en: 'Saturday', ar: 'السبت' },
+  7: { en: 'Sunday', ar: 'الأحد' },
+}
+
+/** The currencies offered first; any three-letter code is accepted by the server. */
+export const CURRENCIES = ['EGP', 'SAR', 'AED', 'KWD', 'QAR', 'BHD', 'OMR', 'JOD', 'USD', 'EUR', 'GBP', 'CAD', 'AUD'] as const
+
+/** "1,234.50 EGP", in the reader's language. */
+export function formatMoney(amount: number, currency: string, locale: 'ar' | 'en'): string {
+  try {
+    return new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en', { style: 'currency', currency }).format(amount)
+  } catch {
+    return `${amount} ${currency}`
+  }
 }
 
 export const NOT_SUBSCRIBED_REASON: Record<string, Pair> = {

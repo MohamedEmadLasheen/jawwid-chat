@@ -31,8 +31,8 @@ Legend: ✅ done and verified · 🟡 partial · ❌ not done · ⛔ blocked
 | 🟡 | Core integration configured | 🟡 | Boundary being reworked to API/webhook per the locked decision |
 | 🟡 | Realtime configured | 🟡 | Gateway exists; multi-instance Redis adapter unproven |
 | ✅ | Health checks | ✅ | Liveness/readiness implemented; 200 and 503 paths both tested |
-| ❌ | Monitoring | ❌ | Specified, nothing provisioned. BLOCKER-3 |
-| ❌ | Error tracking | ❌ | `SENTRY_DSN` defined, SDK not wired |
+| ❌ | Monitoring | ❌ | Structured JSON logs implemented (`monitoring.md` §3); metrics, dashboards, alerts not provisioned. BLOCKER-3 |
+| 🟡 | Error tracking | 🟡 | Sentry wired in API and worker behind a privacy allowlist (`monitoring.md` §3a, 2026-10-21); no Sentry project or DSN provisioned |
 | ✅ | CI configured | ✅ | Executes on GitHub-hosted runners; green on `main` |
 | 🟡 | CD configured | 🟡 | Complete except the release step, which fails deliberately |
 | ✅ | Rollback documented | ✅ | Including which migrations are *not* reversible |

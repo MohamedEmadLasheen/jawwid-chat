@@ -186,3 +186,29 @@ communication · phone leakage · data corruption or loss · broken authenticati
 integration. **P2** important functional/UX. **P3** minor/cosmetic.
 
 **READY is never declared while any P0 or critical P1 is open.**
+
+## 8. Running the fast gates before you push
+
+```
+bash scripts/qa/guards.sh            # every fast gate, then a PASS/FAIL summary
+bash scripts/qa/guards.sh g20        # one gate (ids: --list)
+```
+
+`scripts/qa/guards.sh` is the single definition of CI's **Release-gate guards
+(fast)** job: each step of that job in `.github/workflows/ci.yml` is one call
+into it, and its `ci-wiring` gate fails if a gate it defines is not called from
+CI. It covers G-18, G-20, the G-20 meta-guard, JC-011, G-31..G-35, the secret
+scan, the client-bundle and environment checks, the env-template/manifest diff
+and the backup-client check. It runs every gate even after one fails and exits
+non-zero if any did. Slow suites (jest, flutter test, the migration gate) are
+not in it.
+
+It works the same on macOS (bash 3.2, BSD userland) and Ubuntu. The pattern
+gates scan with a byte-exact python3 matcher, not grep: the old G-20 one-liner
+silently passed on a Mac, because zsh rewrites `\|` inside `$'...'`, and on
+2026-10-20 only CI caught a protected name in a fixture. Files scanned are the
+tracked ones plus untracked, not-ignored ones (`git ls-files -co
+--exclude-standard`) -- the same set as CI's fresh checkout, plus the file you
+have not added yet. `scripts/qa/check-employee-name-guard.sh` is the meta-guard:
+it proves G-20 detects every name on its list and still passes a clean tree; it
+does not scan this repository.

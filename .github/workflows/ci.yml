@@ -36,89 +36,54 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: G-18 · no secrets committed
-        run: |
-          set -uo pipefail
-          # Hard patterns: never legitimate anywhere in the tree.
-          if grep -rInE '(AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----)' \
-               --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist . ; then
-            echo "::error::G-18 FAIL — credential material committed"; exit 1
-          fi
-          # JWT-shaped strings, excluding test files. A synthetic token inside a
-          # redaction test is the control working, not a leak (AI #3's
-          # redacting_logger_test.dart asserts such a token never reaches a log),
-          # so test paths are exempt from this heuristic only.
-          if grep -rInE 'eyJhbGciOi[A-Za-z0-9_-]{10,}' \
-               --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist \
-               --exclude-dir=test --exclude-dir=tests \
-               --exclude='*_test.dart' --exclude='*.spec.ts' --exclude='*.test.ts' . ; then
-            echo "::error::G-18 FAIL — JWT-shaped credential committed outside a test"; exit 1
-          fi
-          if git ls-files | grep -E '(^|/)\.env$|(^|/)\.env\.(local|production)$' ; then
-            echo "::error::G-18 FAIL — a real .env file is tracked"; exit 1
-          fi
-          echo "G-18 pass"
+      # Every step below is ONE call into scripts/qa/guards.sh, which holds the
+      # patterns, exclusions and commands. Developers run the identical gates
+      # before pushing with `bash scripts/qa/guards.sh`; a gate written inline
+      # here would drift from that copy, and the copy that drifts is the one
+      # nobody runs. The step names are the gate titles guards.sh prints.
 
+      - name: G-18 · no secrets committed
+        run: bash scripts/qa/guards.sh g18
+
+      # The product brief names real staff: acceptable in docs/, never in code,
+      # fixtures or seed data (system-inventory.md §4). The list lives in
+      # guards.sh, and the scan is byte-exact python rather than grep: the old
+      # GNU-grep one-liner fake-passed when run on a Mac (zsh rewrites `\|`
+      # inside $'...'), so only CI ever caught a name.
       - name: G-20 · no real employee names in source, tests or seed data
-        run: |
-          set -uo pipefail
-          # The product brief names real staff. They are acceptable in docs/,
-          # never in code, fixtures or seed data (system-inventory.md §4).
-          #
-          # .github is excluded because the forbidden list is declared on the very
-          # next line: without it the guard matches itself and can never pass, no
-          # matter how clean the source tree is. The exclusion is the definition
-          # site only -- application and test sources are still scanned.
-          hits=$(grep -rIl $'رحاب\|زينب\|دينا\|أسماء\|مريم\|رضوى\|رقيه' \
-            --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist \
-            --exclude-dir=docs --exclude-dir=.github . || true)
-          if [ -n "$hits" ]; then
-            echo "::error::G-20 FAIL — real employee names outside docs/:"; echo "$hits"; exit 1
-          fi
-          echo "G-20 pass"
+        run: bash scripts/qa/guards.sh g20
 
       # A guard that cannot pass is as useless as one that cannot fail. G-20 was
       # red on every commit because it matched its own definition, which took the
-      # whole pipeline down with it; this proves both directions still hold.
+      # whole pipeline down with it; this proves both directions still hold, for
+      # every name on the list.
       - name: G-20 meta-guard · the employee-name guard can pass, and can still fail
-        run: bash scripts/qa/check-employee-name-guard.sh
+        run: bash scripts/qa/guards.sh g20-meta
 
       - name: JC-011 · protected regression tests must not be deleted or gutted
-        run: bash scripts/qa/check-protected-tests.sh
+        run: bash scripts/qa/guards.sh jc011
 
       - name: G-31..G-35 · Phase 2 functionality must not ship in MVP
-        run: |
-          set -uo pipefail
-          # Advisory scan. Fails only on unmistakable Phase 2 feature wiring.
-          if grep -rInE '\b(videoCall|enableVideo|startVideo|broadcastToAll|aiScore|aiSuggest|draftWithAI)\b' \
-               --include='*.ts' --include='*.dart' --include='*.tsx' \
-               --exclude-dir=node_modules --exclude-dir=dist . ; then
-            echo "::error::G-31..G-35 FAIL — Phase 2 capability referenced in MVP code"; exit 1
-          fi
-          echo "G-31..G-35 pass"
+        run: bash scripts/qa/guards.sh g31
 
       # ---- infrastructure guardrails (AI #7) --------------------------------
       # Complementary to G-18 above, not a replacement: G-18 catches credential
       # material anywhere; these catch this project's specific failure modes.
 
       - name: Secret scan — worktree and history
-        run: scripts/infra/scan-secrets.sh --history
+        run: bash scripts/qa/guards.sh secret-scan
 
       - name: Server secrets must not be reachable from a client bundle
-        run: scripts/infra/check-web-env.sh
+        run: bash scripts/qa/guards.sh web-env
 
       - name: The local environment example is valid
-        run: scripts/infra/check-env.sh local --file .env.example
+        run: bash scripts/qa/guards.sh env-example
 
       - name: Environment templates match the manifest
         # The templates are generated from infra/env/manifest.tsv. A
         # hand-edited template drifts from the checker that deployments run,
         # and the drift is only discovered by a failed release.
-        run: |
-          scripts/infra/render-env-template.sh staging    > /tmp/staging.env.example
-          scripts/infra/render-env-template.sh production > /tmp/production.env.example
-          diff -u infra/env/staging.env.example    /tmp/staging.env.example
-          diff -u infra/env/production.env.example /tmp/production.env.example
+        run: bash scripts/qa/guards.sh env-templates
 
       - name: The backup drill runs the pg_dump it is given
         # pg_dump refuses to dump from a server newer than itself, so PG_IMAGE
@@ -126,7 +91,11 @@ jobs:
         # runner installs postgresql-client 16 for psql, so the G-19 backup
         # drill ran pg_dump 16 against the postgres:17 service and aborted,
         # with the documented remedy already applied and silently ignored.
-        run: bash scripts/qa/check-backup-client-selection.sh
+        run: bash scripts/qa/guards.sh backup-client
+
+      - name: Every gate in scripts/qa/guards.sh runs in CI
+        # Anti-drift: fails if guards.sh defines a gate this job never calls.
+        run: bash scripts/qa/guards.sh ci-wiring
 
   # ------------------------------------------------------------------ backend
   api:

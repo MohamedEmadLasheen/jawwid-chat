@@ -4,8 +4,8 @@ import { CommErrorFilter } from '../communication/api/http-exception.filter';
 import { TrialService } from './trial.service';
 
 /**
- * PD-11 T4: trial lessons, prospects, the two trial facts, and the New
- * Students page. Behind the global bearer guard; who may do what is decided in
+ * PD-11 T4 and the trial journey: trial lessons, prospects, each trial's one
+ * outcome, the trial group's membership, and the New Students page. Behind the global bearer guard; who may do what is decided in
  * TrialService. POST for every change.
  */
 @Controller('trials')
@@ -45,6 +45,24 @@ export class TrialController {
     return this.trials.openOwnGroup(actorId);
   }
 
+  /** The "+ -> Trial" card's context in one trial group: membership, permissions, trials. */
+  @Get('groups/:conversationId')
+  groupContext(@ActorId() actorId: string, @Param('conversationId') conversationId: string) {
+    return this.trials.groupContext(actorId, conversationId);
+  }
+
+  /** A Sales supervisor joins a teacher's trial group. */
+  @Post('groups/:conversationId/join')
+  joinGroup(@ActorId() actorId: string, @Param('conversationId') conversationId: string) {
+    return this.trials.joinGroup(actorId, conversationId);
+  }
+
+  /** A Sales supervisor leaves a teacher's trial group. */
+  @Post('groups/:conversationId/leave')
+  leaveGroup(@ActorId() actorId: string, @Param('conversationId') conversationId: string) {
+    return this.trials.leaveGroup(actorId, conversationId);
+  }
+
   @Get('new-students')
   newStudents(@ActorId() actorId: string) {
     return this.trials.newStudents(actorId);
@@ -75,9 +93,22 @@ export class TrialController {
     return this.trials.cancel(actorId, id, body ?? {});
   }
 
+  /** The trial's one outcome: no_show, subscribed (with the form) or not_subscribed (with a reason). */
   @Post(':id/outcome')
   outcome(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.trials.outcome(actorId, id, body ?? {});
+  }
+
+  /** Sales corrects the outcome, saying why. */
+  @Post(':id/correction')
+  correct(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.trials.correct(actorId, id, body ?? {});
+  }
+
+  /** Sales changes a subscribed trial's form. */
+  @Post(':id/subscription')
+  updateSubscription(@ActorId() actorId: string, @Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.trials.updateSubscription(actorId, id, body ?? {});
   }
 }
 

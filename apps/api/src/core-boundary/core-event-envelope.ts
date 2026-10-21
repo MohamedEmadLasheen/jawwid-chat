@@ -12,7 +12,8 @@
  * sessions, which PD-11 moved into Chat.)
  */
 export const ACCEPTED_EVENT_TYPES: ReadonlySet<string> = new Set([
-  // PD-11 T4: Core created the subscription Sales recorded after a trial.
+  // Recorded and acknowledged; since the trial journey it changes no trial (Chat
+  // is the source of truth for trial outcomes).
   'subscription.created',
 ]);
 

@@ -184,7 +184,8 @@ create trigger lesson_correction_is_coherent
 -- 4. The lesson guard: corrections, `voided`, timing, teacher make-ups
 -- ===========================================================================
 
--- chat.guard_lesson as 20261019120000, plus:
+-- chat.guard_lesson as 20261021100000 (the trial journey's attendance
+-- correction arm kept as it is), plus:
 --   * a teacher may book a make-up for their own owed lesson, in the future;
 --   * a family's or teacher's make-up may replace a student apology too;
 --   * a written outcome may change through a correction of this transaction;
@@ -331,10 +332,16 @@ begin
   end if;
 
   if old.outcome is not null then
-    -- Two changes are lawful: an absence the supervisor excused, and a
-    -- correction recorded in this very transaction.
-    if not ((old.outcome = 'student_no_show' and new.outcome = 'student_apology' and v_excused)
-            or v_corr.id is not null) then
+    if new.kind = 'trial' and old.outcome in ('held', 'student_no_show') and new.outcome in ('held', 'student_no_show')
+       and chat.caller_is_server_side() and coalesce(current_setting('chat.correcting_trial', true), '') = 'on' then
+      -- Trial journey (20261021100000): a supervisor's correction of a trial's
+      -- attendance, made only through TrialService's correction (history in
+      -- chat.trial_outcome_revision).
+      null;
+    -- PD-15: two changes are lawful for a learner's lesson: an absence the
+    -- supervisor excused, and a correction recorded in this very transaction.
+    elsif not ((old.outcome = 'student_no_show' and new.outcome = 'student_apology' and v_excused)
+               or v_corr.id is not null) then
       raise exception 'an outcome is written once; only an excusing ruling or a recorded correction changes it'
         using errcode = 'check_violation';
     end if;
@@ -513,14 +520,19 @@ begin
 end;
 $$;
 
--- "held requires a LIVE report".
+-- "held requires a LIVE report" -- as 20261021100000 (a trial Sales decided
+-- needs none), with a deleted report no longer counting as one.
 create or replace function chat.assert_held_lesson_has_report()
 returns trigger
 language plpgsql
 as $$
 begin
   if exists (select 1 from chat.lesson l where l.id = new.id and l.outcome = 'held')
-     and not exists (select 1 from chat.lesson_report r where r.lesson_id = new.id and r.deleted_at is null) then
+     and not exists (select 1 from chat.lesson_report r where r.lesson_id = new.id and r.deleted_at is null)
+     and not exists (
+       select 1 from chat.lesson l join chat.trial_outcome o on o.lesson_id = l.id
+        where l.id = new.id and l.kind = 'trial' and o.result in ('subscribed', 'not_subscribed')
+     ) then
     raise exception 'a held lesson has a report' using errcode = 'check_violation';
   end if;
   return null;

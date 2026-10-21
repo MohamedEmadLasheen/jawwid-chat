@@ -323,6 +323,8 @@ export const CardKind = {
   TRIAL_NO_SHOW: 'trial_no_show',
   /** Sales' decision. Never carries the not-subscribed reason: the teacher reads this group. */
   TRIAL_DECISION: 'trial_decision',
+  /** Trial journey: a supervisor corrected a trial's outcome. Carries the new result only. */
+  TRIAL_CORRECTION: 'trial_correction',
   /** PD-12 S2: a confirmed ladder step, in the teacher's supervision conversation. */
   DISCIPLINE_WARNING: 'discipline_warning',
   DISCIPLINE_DEDUCTION: 'discipline_deduction',

@@ -1,90 +1,154 @@
 #!/usr/bin/env bash
 # G-20 meta-guard: prove the employee-name guard actually works.
 #
-# G-20 was red on every commit for a reason no source change could fix: the
-# forbidden list is declared inline in ci.yml, and the scan covered .github, so
-# the guard matched its own definition. It could never pass. Because one failing
-# step collapses the whole `guards` job, and six other jobs declare
-# `needs: guards`, that single self-match meant CI never ran at all.
+# This does NOT scan this repository -- G-20 does that:
 #
-# A guard that cannot pass is as useless as one that cannot fail, so this checks
-# both directions:
+#   bash scripts/qa/guards.sh g20      # the guard, on this tree
+#   bash scripts/qa/guards.sh          # every fast release gate
 #
-#   A. a clean tree passes, even though ci.yml itself contains every name
-#   B. a protected name planted in application source still fails
+# It proves the guard itself, in both directions, on throwaway trees:
 #
-# It does NOT reimplement the scan. It extracts the real `run:` body of the G-20
-# step from ci.yml and executes it, so if someone edits the guard, this exercises
-# whatever they wrote -- a copy would happily agree with itself while the real
-# guard rotted.
+#   A. a clean tree passes, even with the guard's own definition present
+#   B. a protected name planted in lib/ (tracked) is still detected
+#   C. EVERY protected name, planted in an untracked fixture, is detected under
+#      both the C locale and a UTF-8 locale
+#   D. docs/ stays exempt: the brief may name staff
+#
+# Why C exists. G-20 used to be a GNU-grep one-liner in ci.yml, and this script
+# ran that one-liner. On a Mac it fake-passed: zsh rewrites the `\|` inside
+# $'...' to a literal pipe, and a different grep can read the same regex
+# differently. On 2026-10-20 a fixture named a child after a protected name;
+# every local check passed and only CI's GNU grep caught it (b160b1ac). B never
+# noticed, because it planted only the FIRST name on the list. C plants every
+# name in the shape of that fixture, so a guard that matches some names and not
+# others -- the way a broken alternation fails -- cannot pass.
+#
+# It does NOT reimplement the scan. It copies the real scripts/qa/guards.sh into
+# each tree and runs its `g20` gate, and reads the protected list back out of it
+# (`guards.sh --g20-names`), so if someone edits the guard or the list this
+# exercises whatever they wrote -- a copy would happily agree with itself while
+# the real guard rotted. That is also why no protected name is spelled out here:
+# this file is scanned by G-20 like any other.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+GUARDS="$ROOT/scripts/qa/guards.sh"
 CI="$ROOT/.github/workflows/ci.yml"
 fail=0
 
-if [ ! -f "$CI" ]; then
-  echo "::error::G-20 meta-guard — $CI not found"
+for f in "$GUARDS" "$CI"; do
+  if [ ! -f "$f" ]; then
+    echo "::error::G-20 meta-guard — $f not found"
+    exit 1
+  fi
+done
+
+NAMES=()
+while IFS= read -r n; do
+  [ -n "$n" ] && NAMES+=("$n")
+done < <(bash "$GUARDS" --g20-names)
+if [ "${#NAMES[@]}" -eq 0 ]; then
+  echo "::error::G-20 meta-guard — could not read the protected list from guards.sh --g20-names"
   exit 1
 fi
 
-# The script body of the G-20 step, dedented so bash can run it.
-extract_guard() {
-  awk '
-    /- name: G-20 · no real employee names/ { found = 1; next }
-    found && /^      - name: /              { exit }
-    found && /^        run: \|/             { inblock = 1; next }
-    inblock                                 { sub(/^          /, ""); print }
-  ' "$CI"
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+
+# A throwaway git work tree holding the real guard and the real ci.yml, so the
+# guard sees the same file set (tracked + untracked, not ignored) it sees here.
+# It is called as $(new_tree) -- a subshell -- so every tree lives under $WORK
+# and the one trap above removes them all.
+new_tree() {
+  local t
+  t="$(mktemp -d "$WORK/tree.XXXXXX")"
+  mkdir -p "$t/scripts/qa" "$t/.github/workflows" "$t/lib" "$t/docs"
+  cp "$GUARDS" "$t/scripts/qa/guards.sh"
+  cp "$CI" "$t/.github/workflows/ci.yml"
+  git -C "$t" init -q
+  printf '%s\n' "$t"
 }
 
-GUARD="$(extract_guard)"
-if [ -z "$GUARD" ]; then
-  echo "::error::G-20 meta-guard — could not extract the G-20 step from ci.yml"
-  echo "           the step name or its indentation changed; update this script"
-  exit 1
-fi
-
-# A name the guard must catch. Taken from the guard's own list so the two can
-# never drift apart: if the list is rewritten, this reads the new first entry.
-PROTECTED="$(printf '%s' "$GUARD" | grep -oE "\\\$'[^']+'" | head -1 | sed "s/^\\\$'//; s/'$//" | cut -d'|' -f1 | sed 's/\\\\$//')"
-if [ -z "$PROTECTED" ]; then
-  echo "::error::G-20 meta-guard — could not read a protected name out of the guard"
-  exit 1
-fi
-
+# Runs the g20 gate in a tree. Prints its output; returns the gate's status.
 run_guard_in() {
-  ( cd "$1" && bash -c "$GUARD" >/dev/null 2>&1 )
+  local tree="$1" locale="${2:-}"
+  if [ -n "$locale" ]; then
+    ( cd "$tree" && LC_ALL="$locale" bash scripts/qa/guards.sh g20 ) 2>&1
+  else
+    ( cd "$tree" && bash scripts/qa/guards.sh g20 ) 2>&1
+  fi
 }
 
-# --- A. a clean tree passes, with ci.yml present and full of the names --------
-CLEAN="$(mktemp -d)"
-trap 'rm -rf "$CLEAN" "${DIRTY:-}"' EXIT
-mkdir -p "$CLEAN/.github/workflows" "$CLEAN/lib"
-cp "$CI" "$CLEAN/.github/workflows/ci.yml"
-printf "const learner = 'Layla';\n" > "$CLEAN/lib/fixture.dart"
+# "Detected" means the gate failed BECAUSE of the planted file -- not merely
+# that it exited non-zero, which a crashed scanner would also do.
+detected() {
+  local out="$1" path="$2"
+  printf '%s\n' "$out" | grep -q 'G-20 FAIL — real employee names' &&
+    printf '%s\n' "$out" | grep -qxF "$path"
+}
 
-if run_guard_in "$CLEAN"; then
-  echo "  ok  A · a clean tree passes even though ci.yml declares every name"
+# --- A. a clean tree passes, with the guard's definition present -------------
+CLEAN="$(new_tree)"
+printf "const learner = 'Layla';\n" > "$CLEAN/lib/fixture.dart"
+git -C "$CLEAN" add lib/fixture.dart
+if out="$(run_guard_in "$CLEAN")"; then
+  echo "  ok  A · a clean tree passes even though guards.sh declares every name"
 else
+  printf '%s\n' "$out" | sed 's/^/      /'
   echo "::error::G-20 meta-guard A FAIL — the guard rejects a clean tree."
   echo "           It is almost certainly matching its own definition again;"
-  echo "           .github must stay excluded from the scan."
+  echo "           scripts/qa/guards.sh must stay exempt from the scan."
   fail=1
 fi
 
-# --- B. a planted name in application source still fails ---------------------
-DIRTY="$(mktemp -d)"
-mkdir -p "$DIRTY/.github/workflows" "$DIRTY/lib"
-cp "$CI" "$DIRTY/.github/workflows/ci.yml"
-printf "const learner = '%s';\n" "$PROTECTED" > "$DIRTY/lib/fixture.dart"
-
-if run_guard_in "$DIRTY"; then
+# --- B. a planted name in tracked application source still fails ------------
+DIRTY="$(new_tree)"
+printf "const learner = '%s';\n" "${NAMES[0]}" > "$DIRTY/lib/fixture.dart"
+git -C "$DIRTY" add lib/fixture.dart
+out="$(run_guard_in "$DIRTY")"
+if detected "$out" "lib/fixture.dart"; then
+  echo "  ok  B · a protected name planted in lib/ is still detected"
+else
+  printf '%s\n' "$out" | sed 's/^/      /'
   echo "::error::G-20 meta-guard B FAIL — a protected employee name in lib/ was NOT detected."
   echo "           The guard has been weakened; it must still scan application and test sources."
   fail=1
+fi
+
+# --- C. every name, untracked, in the shape of the 2026-10-20 fixture --------
+missed=""
+for locale in C en_US.UTF-8; do
+  i=0
+  for name in "${NAMES[@]}"; do
+    i=$((i + 1))
+    T="$(new_tree)"
+    mkdir -p "$T/lib/core/data"
+    printf "ChildProfile(id: 'learner-2', displayName: '%s', level: 'x'),\n" "$name" \
+      > "$T/lib/core/data/fake_repositories.dart"
+    out="$(run_guard_in "$T" "$locale")"
+    detected "$out" "lib/core/data/fake_repositories.dart" ||
+      missed="$missed name #$i under LC_ALL=$locale;"
+    rm -rf "$T"
+  done
+done
+if [ -z "$missed" ]; then
+  echo "  ok  C · every protected name (${#NAMES[@]}) planted in an untracked fixture is detected, in C and UTF-8 locales"
 else
-  echo "  ok  B · a protected name planted in lib/ is still detected"
+  echo "::error::G-20 meta-guard C FAIL — the guard missed:$missed"
+  echo "           A guard that catches some names and not others is a broken"
+  echo "           pattern (this is how the 2026-10-20 fake pass looked)."
+  fail=1
+fi
+
+# --- D. docs/ stays exempt -----------------------------------------------------
+DOCS="$(new_tree)"
+printf 'The brief names %s.\n' "${NAMES[0]}" > "$DOCS/docs/brief.md"
+if out="$(run_guard_in "$DOCS")"; then
+  echo "  ok  D · a name in docs/ is allowed"
+else
+  printf '%s\n' "$out" | sed 's/^/      /'
+  echo "::error::G-20 meta-guard D FAIL — the guard rejects a name inside docs/, where the brief belongs."
+  fail=1
 fi
 
 if [ "$fail" -ne 0 ]; then

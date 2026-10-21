@@ -4,13 +4,15 @@ import userEvent from '@testing-library/user-event'
 import { AppRoutes } from '@/app/AppRoutes'
 import { tokenStore } from '@/core/auth/tokens'
 import { makeStaff, renderWithProviders } from '@/test/utils'
-import type { NewStudentDto, TrialDto } from './api'
+import type { NewStudentDto, TrialDto, TrialGroupContextDto } from './api'
+import { TrialCardDialog, TrialGroupBar } from './TrialCardDialog'
 
 /**
- * PD-11 T4's Admin Web pages through the real routes and API client, with
- * `fetch` answered at the network boundary: who is offered which control, the
- * exact request each sends, and that "subscribed" never reads as "confirmed".
- * What the server allows is proven in lessons-trials.spec.ts. Synthetic people only.
+ * PD-11 T4 and the trial journey's Admin Web through the real routes and API
+ * client, with `fetch` answered at the network boundary: who is offered which
+ * control, the exact request each sends, and what the group will read. What the
+ * server allows is proven in lessons-trials.spec.ts and trial-journey.spec.ts.
+ * Synthetic people only.
  */
 
 function json(body: unknown, status = 200) {
@@ -35,17 +37,17 @@ const trial = (id: string, over: Partial<TrialDto> = {}): TrialDto => ({
   durationMinutes: 30,
   attendance: 'attended',
   report: { covered: 'letters 1-5', rating: 4, note: null },
-  conversion: 'pending',
+  outcome: 'awaiting',
   ...over,
 })
 
 const TRIALS: TrialDto[] = [
   trial('tr-pending'),
-  trial('tr-awaiting', { prospect: { id: 'p-2', displayName: 'Prospect Beta', level: null }, attendance: 'awaiting', report: null, conversion: null }),
+  trial('tr-awaiting', { prospect: { id: 'p-2', displayName: 'Prospect Beta', level: null }, attendance: 'awaiting', report: null }),
   trial('tr-sub', {
     prospect: { id: 'p-3', displayName: 'Prospect Gamma', level: null },
-    conversion: 'awaiting_core',
-    conversionDetail: { reason: null, note: null, recordedAt: '2026-10-18T10:00:00Z', confirmedAt: null },
+    outcome: 'subscribed',
+    outcomeDetail: { reason: null, note: null, recordedAt: '2026-10-18T10:00:00Z', correctedAt: null },
   }),
 ]
 
@@ -80,35 +82,107 @@ afterEach(() => {
 })
 
 describe('Trial lessons, as Sales', () => {
-  it('lists trials with both facts apart, and "subscribed" reads as awaiting Core', async () => {
+  it('lists each trial with its one outcome; recorded ones offer a correction', async () => {
     access({ sales: true })
     renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
     const row = (await screen.findByText('Prospect Gamma')).closest('tr')!
     expect(within(row).getByText('Attended')).toBeInTheDocument()
-    expect(within(row).getByText('Subscribed — awaiting Core')).toBeInTheDocument()
-    expect(within(row).queryByRole('button', { name: 'Record decision' })).not.toBeInTheDocument()
+    expect(within(row).getByText('Subscribed')).toBeInTheDocument()
+    expect(screen.queryByText(/Core/)).not.toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: 'Correct outcome' })).toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: 'Record outcome' })).not.toBeInTheDocument()
+    const pending = screen.getByText('Prospect Alpha').closest('tr')!
+    expect(within(pending).getByRole('button', { name: 'Record outcome' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Record a prospect' })).toBeInTheDocument()
     // Sales sees both of the area's tabs.
     const tabs = screen.getByRole('navigation', { name: 'Trials' })
     expect(within(tabs).getAllByRole('link').map((l) => l.textContent)).toEqual(['Trial lessons', 'New students'])
   })
 
-  it('records "did not subscribe" with its reason', async () => {
+  it('option 3: "did not subscribe" with its reason; the group reads one sentence', async () => {
     access({ sales: true })
-    on('POST', /\/trials\/tr-pending\/outcome$/, () => json(trial('tr-pending', { conversion: 'not_subscribed' }), 201))
+    on('POST', /\/trials\/tr-pending\/outcome$/, () => json(trial('tr-pending', { outcome: 'not_subscribed' }), 201))
     renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
     const row = (await screen.findByText('Prospect Alpha')).closest('tr')!
-    await userEvent.click(within(row).getByRole('button', { name: 'Record decision' }))
+    await userEvent.click(within(row).getByRole('button', { name: 'Record outcome' }))
     const dialog = await screen.findByRole('dialog')
-    await userEvent.selectOptions(within(dialog).getByLabelText('Result'), 'not_subscribed')
-    await userEvent.selectOptions(within(dialog).getByLabelText('Reason (if not subscribed)'), 'schedule')
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(sent('POST', /\/trials\/tr-pending\/outcome$/)).toEqual([{ result: 'not_subscribed', reason: 'schedule' }]))
+    await userEvent.click(within(dialog).getByRole('button', { name: /Why didn't the student subscribe\?/ }))
+    expect(within(dialog).getByRole('note')).toHaveTextContent('The student did not subscribe.')
+    expect(within(dialog).getByRole('note')).toHaveTextContent('never posted in the group')
+    // Nothing is sent without a reason.
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Submit' }))
+    expect(sent('POST', /\/outcome$/)).toEqual([])
+    await userEvent.selectOptions(within(dialog).getByLabelText('Reason'), 'schedule')
+    await userEvent.type(within(dialog).getByLabelText('Details (required for "Other")'), 'evenings only')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Submit' }))
+    await waitFor(() =>
+      expect(sent('POST', /\/trials\/tr-pending\/outcome$/)).toEqual([{ result: 'not_subscribed', reason: 'schedule', note: 'evenings only' }]),
+    )
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('option 2: "subscribed" sends the whole form, and only the sentence is previewed for the group', async () => {
+    access({ sales: true })
+    on('POST', /\/trials\/tr-pending\/outcome$/, () => json(trial('tr-pending', { outcome: 'subscribed' }), 201))
+    renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
+    const row = (await screen.findByText('Prospect Alpha')).closest('tr')!
+    await userEvent.click(within(row).getByRole('button', { name: 'Record outcome' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'The student subscribed' }))
+    expect(within(dialog).getByRole('note')).toHaveTextContent('The student has subscribed.')
+    // Required fields are refused before anything is sent.
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Submit' }))
+    expect(within(dialog).getByText('Fill in every required field.')).toBeInTheDocument()
+    expect(sent('POST', /\/outcome$/)).toEqual([])
+
+    await userEvent.type(within(dialog).getByLabelText("Parent's name"), 'Parent Alpha')
+    await userEvent.type(within(dialog).getByLabelText('Phone number'), '+99 000 111')
+    await userEvent.type(within(dialog).getByLabelText('E-mail (optional)'), 'parent@example.test')
+    const child = within(dialog).getByRole('group', { name: 'Child 1' })
+    await userEvent.type(within(child).getByLabelText('Name'), 'Child Alpha')
+    await userEvent.type(within(child).getByLabelText('Age'), '9')
+    await userEvent.type(within(child).getByLabelText('Course'), 'Course A')
+    await waitFor(() => expect(within(within(child).getByLabelText('Assigned teacher')).getAllByRole('option')).toHaveLength(3))
+    expect(within(child).getByLabelText('Assigned teacher')).toHaveValue('t-1') // the trial's teacher, by default
+    await userEvent.type(within(child).getByLabelText('Package price'), '1200')
+    await userEvent.type(within(child).getByLabelText('Price per lesson'), '150')
+    await userEvent.selectOptions(within(child).getByLabelText('Day'), '1')
+    await userEvent.type(within(child).getByLabelText('Time'), '17:30')
+    await userEvent.selectOptions(within(dialog).getByLabelText('Currency'), 'SAR')
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'Invoice' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Submit' }))
+    await waitFor(() =>
+      expect(sent('POST', /\/trials\/tr-pending\/outcome$/)).toEqual([{
+        result: 'subscribed',
+        subscription: {
+          parent: { name: 'Parent Alpha', email: 'parent@example.test', phone: '+99 000 111' },
+          children: [{ name: 'Child Alpha', age: 9, course: 'Course A', teacherId: 't-1', packagePrice: 1200, lessonPrice: 150, schedule: [{ weekday: 1, time: '17:30' }] }],
+          payment: { currency: 'SAR', method: 'invoice' },
+        },
+      }]),
+    )
+  })
+
+  it('corrects an outcome, saying why', async () => {
+    access({ sales: true })
+    on('POST', /\/trials\/tr-sub\/correction$/, () => json(trial('tr-sub', { outcome: 'no_show' }), 201))
+    renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
+    const row = (await screen.findByText('Prospect Gamma')).closest('tr')!
+    await userEvent.click(within(row).getByRole('button', { name: 'Correct outcome' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/Current outcome/)).toHaveTextContent('Subscribed')
+    expect(within(dialog).queryByRole('button', { name: 'The student subscribed' })).not.toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'The student did not attend the trial' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Submit' }))
+    expect(sent('POST', /\/correction$/)).toEqual([])
+    await userEvent.type(within(dialog).getByLabelText('Why are you correcting it?'), 'wrong trial')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Submit' }))
+    await waitFor(() => expect(sent('POST', /\/trials\/tr-sub\/correction$/)).toEqual([{ result: 'no_show', why: 'wrong trial' }]))
   })
 
   it('books only a time the server offered', async () => {
     access({ sales: true })
-    on('POST', /\/trials$/, () => json(trial('tr-new', { attendance: 'upcoming', conversion: null }), 201))
+    on('POST', /\/trials$/, () => json(trial('tr-new', { attendance: 'upcoming', outcome: 'upcoming' }), 201))
     renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
     await userEvent.click(await screen.findByRole('button', { name: 'Book a trial' }))
     const dialog = await screen.findByRole('dialog')
@@ -141,87 +215,143 @@ describe('The trial group', () => {
 })
 
 describe('Trial lessons, as the Teachers department', () => {
-  it('records an absence the teacher did not; never the subscription decision or a prospect', async () => {
+  it('records a no-show; never the subscription decision or a prospect', async () => {
     access({ lessonManager: true })
-    on('POST', /\/trials\/tr-awaiting\/attendance$/, () => json(trial('tr-awaiting', { attendance: 'no_show' }), 201))
+    on('POST', /\/trials\/tr-awaiting\/outcome$/, () => json(trial('tr-awaiting', { attendance: 'no_show', outcome: 'no_show' }), 201))
     renderWithProviders(<AppRoutes />, { staff, route: '/trials' })
     const row = (await screen.findByText('Prospect Beta')).closest('tr')!
     expect(screen.queryByRole('button', { name: 'Record a prospect' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Record decision' })).not.toBeInTheDocument()
-    await userEvent.click(within(row).getByRole('button', { name: 'Prospect absent' }))
-    await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(sent('POST', /\/trials\/tr-awaiting\/attendance$/)).toEqual([{ attended: false }]))
+    expect(screen.queryByRole('button', { name: 'Correct outcome' })).not.toBeInTheDocument()
+    await userEvent.click(within(row).getByRole('button', { name: 'Record outcome' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByRole('button', { name: /The student subscribed/ })).toBeDisabled()
+    expect(within(dialog).getByRole('button', { name: /Why didn't the student subscribe/ })).toBeDisabled()
+    expect(within(dialog).getAllByText('Recorded by Sales')).toHaveLength(2)
+    await userEvent.click(within(dialog).getByRole('button', { name: 'The student did not attend the trial' }))
+    expect(within(dialog).getByRole('note')).toHaveTextContent('The student did not attend the trial lesson.')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
+    await waitFor(() => expect(sent('POST', /\/trials\/tr-awaiting\/outcome$/)).toEqual([{ result: 'no_show' }]))
   })
 })
 
-describe('New students, as Operations', () => {
-  it('shows who is ready to set up, apart from what Core has not confirmed', async () => {
+describe('The "+ -> Trial" card in a trial group', () => {
+  const CONTEXT: TrialGroupContextDto = {
+    conversationId: 'conv-trial-1',
+    teacher: { id: 't-1', name: 'Teacher One' },
+    membership: { isMember: false, permanent: false, canJoin: true, canLeave: false },
+    can: { noShow: true, decide: true, correct: true },
+    trials: [
+      trial('tr-awaiting', { prospect: { id: 'p-2', displayName: 'Prospect Beta', level: null }, attendance: 'awaiting', report: null }),
+      trial('tr-sub', { prospect: { id: 'p-3', displayName: 'Prospect Gamma', level: null }, outcome: 'subscribed' }),
+    ],
+  }
+
+  it('asks which trial first, by student and time, then offers the three options', async () => {
+    on('GET', /\/trials\/groups\/conv-trial-1$/, () => json(CONTEXT))
+    on('POST', /\/trials\/tr-awaiting\/outcome$/, () => json(trial('tr-awaiting', { outcome: 'no_show' }), 201))
+    const onClose = vi.fn()
+    renderWithProviders(<TrialCardDialog conversationId="conv-trial-1" onClose={onClose} />, { staff })
+    const dialog = await screen.findByRole('dialog', { name: 'Trial' })
+    const list = await within(dialog).findByRole('list', { name: 'Which trial?' })
+    const picks = within(list).getAllByRole('button')
+    expect(picks.map((b) => b.textContent)).toEqual([
+      expect.stringMatching(/Prospect Beta.*Needs an outcome/),
+      expect.stringMatching(/Prospect Gamma.*Subscribed/),
+    ])
+    await userEvent.click(picks[0]!)
+    expect(within(dialog).getAllByRole('button').map((b) => b.textContent)).toEqual(expect.arrayContaining([
+      'The student did not attend the trial', 'The student subscribed', "Why didn't the student subscribe?",
+    ]))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'The student did not attend the trial' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
+    await waitFor(() => expect(sent('POST', /\/trials\/tr-awaiting\/outcome$/)).toEqual([{ result: 'no_show' }]))
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
+  })
+
+  it('a Sales supervisor joins and leaves the group from the bar', async () => {
+    let member = false
+    const ctx = () => ({ ...CONTEXT, membership: { isMember: member, permanent: false, canJoin: !member, canLeave: member } })
+    on('GET', /\/trials\/groups\/conv-trial-1$/, () => json(ctx()))
+    on('POST', /\/trials\/groups\/conv-trial-1\/join$/, () => { member = true; return json(ctx(), 201) })
+    on('POST', /\/trials\/groups\/conv-trial-1\/leave$/, () => { member = false; return json(ctx(), 201) })
+    renderWithProviders(<TrialGroupBar conversationId="conv-trial-1" />, { staff })
+    expect(await screen.findByText(/You are not in this trial group/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Join group' }))
+    expect(await screen.findByText('You are in this trial group.')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Leave group' }))
+    expect(await screen.findByRole('button', { name: 'Join group' })).toBeInTheDocument()
+    expect(sent('POST', /\/join$/)).toHaveLength(1)
+    expect(sent('POST', /\/leave$/)).toHaveLength(1)
+  })
+
+  it('a permanent member is told so and offered neither', async () => {
+    on('GET', /\/trials\/groups\/conv-trial-1$/, () => json({ ...CONTEXT, membership: { isMember: true, permanent: true, canJoin: false, canLeave: false } }))
+    renderWithProviders(<TrialGroupBar conversationId="conv-trial-1" />, { staff })
+    expect(await screen.findByText('You are a permanent member of this trial group.')).toBeInTheDocument()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  })
+})
+
+describe('New students', () => {
+  const STUDENT: NewStudentDto = {
+    trialId: 'tr-sub',
+    prospectName: 'Prospect Gamma',
+    trialTeacher: { id: 't-1', name: 'Teacher One' },
+    trialAt: '2026-10-10T15:00:00Z',
+    recordedAt: '2026-10-11T10:00:00Z',
+    recordedBy: { id: 's-1', name: 'Sales One' },
+    updatedAt: null,
+    parent: { name: 'Parent Gamma', email: 'gamma@example.test', phone: '+99 000 222' },
+    children: [
+      { name: 'Child G1', age: 8, course: 'Course A', teacher: { id: 't-1', name: 'Teacher One' }, packagePrice: 1200, lessonPrice: 150,
+        schedule: [{ weekday: 1, time: '17:00' }, { weekday: 4, time: '18:30' }] },
+      { name: 'Child G2', age: 11, course: 'Course B', teacher: { id: 't-2', name: 'Teacher Two' }, packagePrice: 900, lessonPrice: 112.5,
+        schedule: [{ weekday: 6, time: '10:00' }] },
+    ],
+    payment: { currency: 'USD', method: 'bank_transfer' },
+  }
+
+  it('shows each subscription in full, as recorded in Chat; Operations cannot edit it', async () => {
     access({ operations: true })
-    const item = (id: string, name: string, confirmedAt: string | null): NewStudentDto => ({
-      lessonId: id, prospect: { id: `p-${id}`, displayName: name }, learnerId: confirmedAt ? `k-${id}` : null,
-      teacher: { id: 't-1', name: 'Teacher One' }, trialAt: '2026-10-10T15:00:00Z', recordedAt: '2026-10-11T10:00:00Z', confirmedAt,
-    })
-    on('GET', /\/trials\/new-students$/, () =>
-      json({
-        readyForSetup: [item('a', 'Prospect Ready', '2026-10-12T10:00:00Z')],
-        awaitingStudent: [{ ...item('c', 'Prospect Confirmed', '2026-10-13T10:00:00Z'), learnerId: null }],
-        awaitingCore: [item('b', 'Prospect Waiting', null)],
-      }),
-    )
+    on('GET', /\/trials\/new-students$/, () => json({ students: [STUDENT] }))
     renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
-    const ready = await screen.findByRole('region', { name: /Ready to set up/ })
-    expect(within(ready).getByText('Prospect Ready')).toBeInTheDocument()
-    expect(within(ready).queryByText('Prospect Waiting')).not.toBeInTheDocument()
-    expect(within(screen.getByRole('region', { name: /Awaiting Core/ })).getByText('Prospect Waiting')).toBeInTheDocument()
-    const confirmed = screen.getByRole('region', { name: /student not in Chat yet/ })
-    expect(within(confirmed).getByText('Prospect Confirmed')).toBeInTheDocument()
-    expect(within(ready).queryByText('Prospect Confirmed')).not.toBeInTheDocument()
-    // Operations alone has one page: no tab strip.
-    expect(screen.queryByRole('navigation', { name: 'Trials' })).not.toBeInTheDocument()
+    const card = (await screen.findByRole('heading', { name: 'Parent Gamma' })).closest('article')!
+    expect(within(card).getByText('+99 000 222')).toBeInTheDocument()
+    expect(within(card).getByText('gamma@example.test')).toBeInTheDocument()
+    expect(within(card).getByText('Bank account transfer')).toBeInTheDocument()
+    expect(within(card).getByText('USD')).toBeInTheDocument()
+    const rows = within(card).getAllByRole('row').slice(1)
+    expect(rows).toHaveLength(2)
+    expect(within(rows[0]!).getByText('Child G1')).toBeInTheDocument()
+    expect(within(rows[0]!).getByText('$1,200.00')).toBeInTheDocument()
+    expect(within(rows[0]!).getByText('$150.00')).toBeInTheDocument()
+    expect(within(rows[0]!).getByText(/Monday/)).toBeInTheDocument()
+    expect(within(rows[0]!).getByText(/Thursday/)).toBeInTheDocument()
+    expect(within(rows[1]!).getByText('Teacher Two')).toBeInTheDocument()
+    expect(within(card).getByText(/Sales One/)).toBeInTheDocument()
+    expect(within(card).queryByRole('button', { name: 'Edit subscription' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Core/)).not.toBeInTheDocument()
+  })
+
+  it('Sales edits a form in place', async () => {
+    access({ sales: true })
+    on('GET', /\/trials\/new-students$/, () => json({ students: [STUDENT] }))
+    on('POST', /\/trials\/tr-sub\/subscription$/, () => json(STUDENT, 201))
+    renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit subscription' }))
+    const dialog = await screen.findByRole('dialog')
+    const phone = within(dialog).getByLabelText('Phone number')
+    await userEvent.clear(phone)
+    await userEvent.type(phone, '+99 000 333')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(sent('POST', /\/trials\/tr-sub\/subscription$/)).toEqual([{
+      subscription: {
+        parent: { name: 'Parent Gamma', email: 'gamma@example.test', phone: '+99 000 333' },
+        children: STUDENT.children.map((c) => ({
+          name: c.name, age: c.age, course: c.course, teacherId: c.teacher.id, packagePrice: c.packagePrice, lessonPrice: c.lessonPrice, schedule: c.schedule,
+        })),
+        payment: { currency: 'USD', method: 'bank_transfer' },
+      },
+    }]))
   })
 })
-
-describe('New students: the setup steps (PD-15)', () => {
-  it('the Operations manager assigns the supervisor; the group waits for one; details open for the child', async () => {
-    access({ operations: true })
-    const base = {
-      prospect: { id: 'p-x', displayName: 'Prospect' }, teacher: { id: 't-1', name: 'Teacher One' },
-      trialAt: '2026-10-10T15:00:00Z', recordedAt: '2026-10-11T10:00:00Z', confirmedAt: '2026-10-12T10:00:00Z',
-      assignedTeacher: { id: 't-1', name: 'Teacher One' }, hasDetails: false,
-    }
-    on('GET', /\/trials\/new-students$/, () =>
-      json({
-        readyForSetup: [
-          { ...base, lessonId: 'a', prospect: { id: 'p-a', displayName: 'Prospect Unassigned' }, learnerId: 'k-a', learner: { id: 'k-a', name: 'Child Unassigned', familyId: 'f-1' }, supervisor: null },
-          { ...base, lessonId: 'b', prospect: { id: 'p-b', displayName: 'Prospect Assigned' }, learnerId: 'k-b', learner: { id: 'k-b', name: 'Child Assigned', familyId: 'f-2' }, supervisor: { id: 's-1', name: 'Supervisor One' } },
-        ],
-        awaitingStudent: [],
-        awaitingCore: [],
-      }),
-    )
-    on('GET', /\/org\/structure$/, () =>
-      json({
-        departments: [{
-          id: 'd-ops', kind: 'operations', displayName: 'Operations', manager: null, backups: [],
-          members: [{ id: 's-1', name: 'Supervisor One', role: 'admin', isActive: true, position: 'supervisor', learnerCount: 3 }],
-        }],
-      }),
-    )
-    on('GET', /\/courses$/, () => json({ canManage: true, courses: [] }))
-    renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
-    const ready = await screen.findByRole('region', { name: /Ready to set up/ })
-    const unassigned = within(ready).getByText('Prospect Unassigned').closest('tr')!
-    const assigned = within(ready).getByText('Prospect Assigned').closest('tr')!
-    expect(within(assigned).getByText('Supervisor One')).toBeInTheDocument()
-    expect(within(unassigned).getByRole('button', { name: 'Create group' })).toBeDisabled()
-    expect(within(assigned).getByRole('button', { name: 'Create group' })).toBeEnabled()
-
-    await userEvent.click(await within(unassigned).findByRole('button', { name: 'Assign' }))
-    expect(await screen.findByRole('dialog', { name: /Child Unassigned/ })).toBeInTheDocument()
-    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }))
-
-    await userEvent.click(within(assigned).getByRole('button', { name: 'Details' }))
-    expect(await screen.findByRole('dialog', { name: /Child Assigned: enrolment details/ })).toBeInTheDocument()
-  })
-})
-
