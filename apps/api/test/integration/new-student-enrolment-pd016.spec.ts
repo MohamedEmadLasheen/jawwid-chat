@@ -33,6 +33,10 @@ import { buildGraph, seed, truncate, Scenario } from './harness';
 process.env.JWT_ACCESS_SECRET ??= 'integration-access-secret-32-chars-min!';
 process.env.JWT_REFRESH_SECRET ??= 'integration-refresh-secret-32-chars-min!';
 
+// Each test seeds an organization and records a subscribed trial before it starts: a cold
+// first run in the full suite overruns Jest's 5 s default for that hook.
+jest.setTimeout(60_000);
+
 const g = buildGraph();
 const audit = new PrismaAuditService();
 const lessons = new LessonService(g.prisma, g.authz, g.conversations, g.outbox, g.config, audit);
