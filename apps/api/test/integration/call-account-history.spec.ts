@@ -419,7 +419,7 @@ describe('11/12/13. what a history row may carry', () => {
    */
   it('orders participants by invitedAt, not by how they were stored', async () => {
     const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
-    // Staff starts it: PD-2 forbids a parent starting a group call.
+    // Staff starts it.
     const { callId } = await g.calls.start(group.id, s.ownerId);
 
     const stored = await g.prisma.callParticipant.findMany({

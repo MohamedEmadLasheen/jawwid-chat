@@ -87,10 +87,10 @@ describe('D1 -- whoever starts a call must be on it (no phantom calls)', () => {
     expect(await g.calls.callCapability(direct, s.ownerId)).toEqual({ canCall: true, code: null });
   });
 
-  it('in a Student Group the teacher still starts a call; the parent still may not (PD-2, unchanged)', async () => {
+  it('in a Student Group the teacher starts a call, and since PD-19 the parent may too', async () => {
     const group = await g.conversations.ensureStudentGroup(s.learnerId, s.ownerId);
     await expect(g.calls.start(group.id, s.teacherId)).resolves.toEqual(expect.objectContaining({ callId: expect.any(String) }));
-    expect((await refusal(g.calls.start(group.id, s.parentId))).code).toBe(CommErrorCode.PARENT_CANNOT_START_GROUP_CALL);
+    await expect(g.calls.start(group.id, s.parentId)).resolves.toEqual(expect.objectContaining({ callId: expect.any(String) }));
   });
 });
 

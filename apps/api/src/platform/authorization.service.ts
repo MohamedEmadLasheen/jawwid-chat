@@ -122,13 +122,11 @@ export interface SendIntent {
 /**
  * Why the actor is being authorized for a call.
  *
- * Product decision PD-2 (closed 2026-09-07): a parent may JOIN a Student Group
- * call but may never START one. Starting is reserved for a teacher or
- * authorized staff. The two paths therefore need different verdicts for the
- * same actor, conversation and participant set.
- *
- * The default is INITIATE, the stricter of the two, so a caller that does not
- * state its intent is denied rather than allowed.
+ * PD-2 (2026-09-07) once refused a parent STARTING a group call while letting
+ * them JOIN one. PD-19 (2026-10-21) superseded it: a member who may speak in a
+ * conversation may start a call there, parents included. No rule currently
+ * answers the two intents differently; start() and the join path still name
+ * theirs, and INITIATE stays the default.
  */
 export const CallIntent = {
   INITIATE: 'initiate',
@@ -1485,8 +1483,9 @@ export class AuthorizationService {
      *  Calling is never more permissive than messaging, so it runs the same
      *  check with the same data. */
     liveMembers: LiveMember[] = [],
-    /** PD-2: starting a group call is not the same permission as joining one.
-     *  Defaults to the stricter INITIATE. */
+    /** Which question the caller is asking: start a call, or join one. Since
+     *  PD-19 no rule answers them differently; callers still say which, so a
+     *  future start-only rule has exactly one place to go. */
     intent: CallIntent = CallIntent.INITIATE,
   ): Promise<Decision> {
     const sendable = await this.canSend(
@@ -1515,24 +1514,13 @@ export class AuthorizationService {
     if (direct) return direct;
 
     /**
-     * PD-2 (closed 2026-09-07). A group call is the official Teacher <-> Parent
-     * channel (PRD section 9), and it is opened by Jawwid, not by the family: a
-     * parent may join a Student Group or Class Group call but may never start
-     * one. Evaluated AFTER the BR-1 checks above so that a constitutional
-     * violation always reports its own code rather than this policy one.
-     *
-     * The parent's 1:1 call to their handler (PRD section 9, "1:1 call |
-     * Parent | Parent <-> Admin") is untouched: this rule is scoped to group
-     * conversations.
+     * PD-19 (2026-10-21, supersedes PD-2). Every member who may speak in a
+     * conversation may also start a call in it -- a parent included, in their
+     * family's group. There is no start-only refusal any more: whoever reaches
+     * this point has passed canSend (membership, scope, C-4 admin presence) and
+     * the BR-1 refusal above, and D1 in CallService still requires the caller
+     * to be a live member. Chats a person is not a member of are unchanged.
      */
-    const isGroup = GROUP_CONVERSATION_TYPES.has(conv.type);
-    if (intent === CallIntent.INITIATE && isGroup && actor.kind === ActorKind.CONTACT) {
-      return deny(
-        CommErrorCode.PARENT_CANNOT_START_GROUP_CALL,
-        'PD-2: a parent may join a group call but may not start one; a teacher or admin starts it',
-      );
-    }
-
     return allow();
   }
 }

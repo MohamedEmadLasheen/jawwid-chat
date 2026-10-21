@@ -20,7 +20,7 @@ able to read the conversation. There is no guest access.
 
 | Action | Who | Decided by |
 |---|---|---|
-| Schedule / create link | anyone who may **start** a call in the conversation right now | `CallService.callCapability` (the same `decideInitiate` as `POST /calls`). So a parent cannot schedule a group call (PD-2), and nobody can schedule a teacher↔parent 1:1 (PD-7). |
+| Schedule / create link | anyone who may **start** a call in the conversation right now | `CallService.callCapability` (the same `decideInitiate` as `POST /calls`). So nobody can schedule a teacher↔parent 1:1 (PD-7); since PD-19 a parent may schedule a call in their own group. |
 | See (list, get) | anyone who can read the conversation | `canRead` (404 otherwise, indistinguishably) |
 | Join | any member with a seat | `CallService.start` (first) / `accept` (later). A parent's Join on a group call nobody has started is refused with `COMM.PARENT_CANNOT_START_GROUP_CALL`; show "waiting for the host". |
 | Cancel | the creator only, before it is over | service; posts a `call_schedule_cancelled` card |

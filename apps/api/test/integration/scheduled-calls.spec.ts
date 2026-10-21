@@ -92,14 +92,12 @@ describe('scheduling posts ONE card into the ONE conversation', () => {
 
 // =========================================================================
 describe('scheduling needs the right to START a call there', () => {
-  it('a parent may not schedule a Student Group call (PD-2)', async () => {
+  it('a parent member may schedule a Student Group call (PD-19)', async () => {
     const group = await g.conversations.ensureStudentGroup(s.learnerId);
 
-    await expect(
-      scheduled.create(s.parentId, { conversationId: group.id, startsAt: inMinutes(60) }),
-    ).rejects.toMatchObject({ code: CommErrorCode.PARENT_CANNOT_START_GROUP_CALL });
-    expect(await g.prisma.scheduledCall.count()).toBe(0);
-    expect(await cardsIn(group.id)).toHaveLength(0);
+    await scheduled.create(s.parentId, { conversationId: group.id, startsAt: inMinutes(60) });
+    expect(await g.prisma.scheduledCall.count()).toBe(1);
+    expect(await cardsIn(group.id)).toHaveLength(1);
   });
 
   it('a parent may schedule a 1:1 with their supervisor', async () => {
@@ -190,7 +188,7 @@ describe('Join starts the call, or takes a seat in the live one', () => {
     await g.calls.accept(teacher.callId, s.teacherId);
     expect((await g.prisma.call.findUniqueOrThrow({ where: { id: first.callId } })).status).toBe('active');
 
-    // A parent may JOIN a live group call (PD-2 forbids only starting one).
+    // A parent JOINS the live group call rather than starting a second one.
     const parent = await scheduled.join(s.parentId, row.id);
     expect(parent).toMatchObject({ callId: first.callId, mode: 'joined' });
     await g.calls.accept(parent.callId, s.parentId);
@@ -200,13 +198,11 @@ describe('Join starts the call, or takes a seat in the live one', () => {
     expect(await g.prisma.call.count()).toBe(1);
   });
 
-  it('a parent cannot START the group call by tapping Join first', async () => {
+  it('a parent tapping Join first starts the group call (PD-19)', async () => {
     const { row } = await groupCall();
 
-    await expect(scheduled.join(s.parentId, row.id)).rejects.toMatchObject({
-      code: CommErrorCode.PARENT_CANNOT_START_GROUP_CALL,
-    });
-    expect(await g.prisma.call.count()).toBe(0);
+    expect(await scheduled.join(s.parentId, row.id)).toMatchObject({ mode: 'started' });
+    expect(await g.prisma.call.count()).toBe(1);
   });
 
   it('two simultaneous Joins produce ONE call', async () => {

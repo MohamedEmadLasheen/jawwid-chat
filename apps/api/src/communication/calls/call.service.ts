@@ -198,8 +198,7 @@ export class CallService {
       // C-4: the call path runs the same admin-presence check as the message
       // path. Calling is never more permissive than messaging.
       await this.conversations.liveMembersOf(conv.id),
-      // PD-2: this is the START path. A parent is refused here and allowed on
-      // the join path.
+      // The START path. Since PD-19 a parent member may start one too.
       CallIntent.INITIATE,
     );
     if (!decision.allowed) return { decision, participantActors };
@@ -1069,8 +1068,7 @@ export class CallService {
       // C-4: the call path runs the same admin-presence check as the message
       // path. Calling is never more permissive than messaging.
       await this.conversations.liveMembersOf(conv.id),
-      // PD-2: joining an existing call, which a parent may do. The call was
-      // already started by a teacher or an admin.
+      // Joining an existing call.
       CallIntent.JOIN,
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);

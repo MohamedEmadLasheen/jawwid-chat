@@ -1345,8 +1345,8 @@ class _DaySeparator extends StatelessWidget {
 /// The chat's "more" menu: Chat theme (when this build has a theme server) and
 /// Schedule call (owner request 2026-10-20: schedule from inside the chat). The
 /// latter is offered under the SAME server answer that draws the call button --
-/// absent, not disabled, when the viewer may not start a call here (PD-2,
-/// PD-7). The menu itself is absent when it would be empty.
+/// absent, not disabled, when the viewer may not start a call here (PD-7,
+/// non-members). The menu itself is absent when it would be empty.
 class _ChatMoreMenu extends ConsumerWidget {
   const _ChatMoreMenu({required this.conversation, this.onOpenTheme});
 
