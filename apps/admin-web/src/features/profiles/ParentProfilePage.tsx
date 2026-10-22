@@ -10,18 +10,27 @@ import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
 import { preparePhoto, type PreparedPhoto } from '@/features/profile/photo'
 import { formatDay, formatMoney } from '@/features/instalments/copy'
+import type { Payment, PaymentRequest } from '@/features/payments/api'
+import { METHOD, PAY } from '@/features/payments/copy'
+import { InvoiceDownloadButton, InvoiceStatusBadge, PaymentList, ReceiptFile, ReceiptStatusBadge, RequestList } from '@/features/payments/PaymentParts'
 import { parentPath, studentPath, type FamilyBilling, type ParentProfile, type TimelineInstalment, type TimelineStatus } from './api'
 import { METHOD_LABEL, P, TIMELINE_STATUS, countryName, describeError, isProfileRefusal, planLabel, useCopy } from './copy'
 import { useFamilyBilling, useParent, useParentPhoto } from './hooks'
 import {
+  CancelRequestDialog,
   EditBillingDialog,
   EditContactDialog,
   EditNoteDialog,
+  InstalmentLinkDialog,
   NewInstalmentsDialog,
+  RecordFamilyPaymentDialog,
   RecordPaymentDialog,
+  RefundPaymentDialog,
+  RequestPaymentDialog,
   VoidInstalmentDialog,
+  VoidPaymentDialog,
 } from './ProfileDialogs'
-import './profiles.css'
+import '@/features/payments/payments.css'
 
 const STATUS_TONE: Record<TimelineStatus, Tone> = { overdue: 'danger', due: 'warn', upcoming: 'info', paid: 'ok', voided: 'outline' }
 
@@ -32,6 +41,12 @@ type Dialogs =
   | { kind: 'new' }
   | { kind: 'pay'; instalment: TimelineInstalment }
   | { kind: 'void'; instalment: TimelineInstalment }
+  | { kind: 'request' }
+  | { kind: 'link'; instalment: TimelineInstalment }
+  | { kind: 'cancelRequest'; request: PaymentRequest }
+  | { kind: 'cash' }
+  | { kind: 'voidPayment'; payment: Payment }
+  | { kind: 'refund'; payment: Payment }
 
 /**
  * PD-17: the Parent Profile, administration only. Contact information (with
@@ -94,6 +109,12 @@ export function ParentProfilePage({ eyebrow }: { eyebrow?: string }) {
                 {billing.data && dialog?.kind === 'new' && <NewInstalmentsDialog billing={billing.data} children={data.children} onClose={close} />}
                 {billing.data && dialog?.kind === 'pay' && <RecordPaymentDialog billing={billing.data} instalment={dialog.instalment} onClose={close} />}
                 {billing.data && dialog?.kind === 'void' && <VoidInstalmentDialog billing={billing.data} instalment={dialog.instalment} onClose={close} />}
+                {billing.data && dialog?.kind === 'request' && <RequestPaymentDialog billing={billing.data} children={data.children} onClose={close} />}
+                {billing.data && dialog?.kind === 'link' && <InstalmentLinkDialog billing={billing.data} instalment={dialog.instalment} onClose={close} />}
+                {billing.data && dialog?.kind === 'cancelRequest' && <CancelRequestDialog billing={billing.data} request={dialog.request} onClose={close} />}
+                {billing.data && dialog?.kind === 'cash' && <RecordFamilyPaymentDialog billing={billing.data} children={data.children} onClose={close} />}
+                {billing.data && dialog?.kind === 'voidPayment' && <VoidPaymentDialog billing={billing.data} payment={dialog.payment} onClose={close} />}
+                {billing.data && dialog?.kind === 'refund' && <RefundPaymentDialog billing={billing.data} payment={dialog.payment} onClose={close} />}
               </>
             )}
           </QueryBoundary>
@@ -370,6 +391,139 @@ function PaymentsSection({ billing, onOpen }: { billing: FamilyBilling; onOpen: 
           </ol>
         )}
       </Section>
+      <MoneySections billing={billing} onOpen={onOpen} />
+    </>
+  )
+}
+
+/**
+ * PD-27: payment requests (each with its own link), the payments that
+ * arrived, their invoices, and the receipts the parents uploaded. Every
+ * control is the server's answer: `canRecord` creates requests and records
+ * cash; `canVerify` records bank transfers, voids and refunds.
+ */
+function MoneySections({ billing, onOpen }: { billing: FamilyBilling; onOpen: (d: Dialogs) => void }) {
+  const tx = useCopy()
+  const { locale, dateTime } = useI18n()
+  const { staff } = useSession()
+  const paymentsPath = staff && isSuperAdmin(staff.role) ? adminSectionPath('payments') : '/payments'
+  const fullyPaid = new Set(billing.instalments.filter((i) => i.status === 'paid').map((i) => i.id))
+  const pending = billing.receipts.filter((r) => r.status === 'pending').length
+  return (
+    <>
+      <Section
+        id="pf-requests"
+        title={tx(PAY.requests)}
+        hint={tx(PAY.requestsHint)}
+        action={
+          billing.canRecord && (
+            <button type="button" className="btn btn--primary btn--sm" onClick={() => onOpen({ kind: 'request' })}>
+              {tx(PAY.requestPayment)}
+            </button>
+          )
+        }
+      >
+        <RequestList requests={billing.requests} canCancel={billing.canRecord} onCancel={(request) => onOpen({ kind: 'cancelRequest', request })} />
+      </Section>
+      <Section
+        id="pf-received"
+        title={tx(PAY.received)}
+        hint={tx(PAY.receivedHint)}
+        action={
+          billing.canRecord && (
+            <button type="button" className="btn btn--sm" onClick={() => onOpen({ kind: 'cash' })}>
+              {tx(PAY.recordCash)}
+            </button>
+          )
+        }
+      >
+        <PaymentList
+          payments={billing.payments}
+          canVerify={billing.canVerify}
+          // A payment whose instalment is fully paid is corrected by voiding the instalment.
+          voidable={(p) => !(p.instalmentId && fullyPaid.has(p.instalmentId))}
+          onVoid={(payment) => onOpen({ kind: 'voidPayment', payment })}
+          onRefund={(payment) => onOpen({ kind: 'refund', payment })}
+        />
+      </Section>
+      <Section id="pf-invoices" title={tx(PAY.invoices)} hint={tx(PAY.invoicesHint)}>
+        {billing.invoices.length === 0 ? (
+          <p className="tf-muted">{tx(PAY.noInvoices)}</p>
+        ) : (
+          <ol className="pf-timeline">
+            {billing.invoices.map((inv) => (
+              <li key={inv.id} className={inv.status === 'void' ? 'pf-entry pf-entry--voided' : 'pf-entry'}>
+                <div className="pf-entry__head">
+                  <InvoiceStatusBadge status={inv.status} />
+                  <strong>
+                    <bdi dir="ltr">{inv.number}</bdi>
+                  </strong>
+                  <span dir="auto">{inv.label}</span>
+                  <span className="pf-amount">{formatMoney(inv.amountMinor, inv.currency, locale)}</span>
+                </div>
+                <div className="pf-entry__meta">
+                  <span>{tx(PAY.issued, { date: dateTime(inv.issuedAt) })}</span>
+                  <span>{tx(METHOD[inv.method])}</span>
+                  {inv.child && <span dir="auto">{inv.child.name}</span>}
+                  {inv.refundedMinor > 0 && <span>{tx(PAY.refunded, { amount: formatMoney(inv.refundedMinor, inv.currency, locale) })}</span>}
+                </div>
+                <div className="tf-actions">
+                  <InvoiceDownloadButton invoiceId={inv.id} number={inv.number} />
+                </div>
+              </li>
+            ))}
+          </ol>
+        )}
+      </Section>
+      <Section
+        id="pf-receipts"
+        title={tx(PAY.familyReceipts)}
+        hint={tx(PAY.familyReceiptsHint)}
+        action={
+          billing.canVerify &&
+          pending > 0 && (
+            <Link className="btn btn--sm" to={paymentsPath}>
+              {tx(PAY.reviewInPayments)}
+            </Link>
+          )
+        }
+      >
+        {billing.receipts.length === 0 ? (
+          <p className="tf-muted">{tx(PAY.noFamilyReceipts)}</p>
+        ) : (
+          <ol className="pf-timeline">
+            {billing.receipts.map((r) => (
+              <li key={r.id} className="pf-entry">
+                <div className="pf-entry__head">
+                  <ReceiptStatusBadge status={r.status} />
+                  <strong dir="auto">{r.label}</strong>
+                  <span className="pf-amount">{formatMoney(r.amountMinor, r.currency, locale)}</span>
+                </div>
+                <div className="pf-entry__meta">
+                  <span>
+                    {tx(PAY.transferredOn)}: {formatDay(r.transferredOn, locale)}
+                  </span>
+                  <span>
+                    {tx(PAY.uploadedAt)}: {dateTime(r.uploadedAt)}
+                  </span>
+                  {r.uploadedBy && <span dir="auto">{tx(PAY.uploadedBy, { name: r.uploadedBy.name })}</span>}
+                </div>
+                {r.note && (
+                  <p className="pf-entry__meta" dir="auto">
+                    {r.note}
+                  </p>
+                )}
+                {r.rejectReason && (
+                  <p className="pf-entry__meta" dir="auto">
+                    {tx(PAY.rejectedBecause, { reason: r.rejectReason })}
+                  </p>
+                )}
+                <ReceiptFile fileUrl={r.fileUrl} mimeType={r.mimeType} label={r.label} />
+              </li>
+            ))}
+          </ol>
+        )}
+      </Section>
     </>
   )
 }
@@ -410,18 +564,29 @@ function TimelineRow({ item, canRecord, onOpen }: { item: TimelineInstalment; ca
         </Badge>
         <strong dir="auto">{item.label}</strong>
         <span className="pf-amount">{formatMoney(item.amountMinor, item.currency, locale)}</span>
+        {open && item.partial && <Badge tone="warn">{tx(PAY.partiallyPaid)}</Badge>}
       </div>
+      {open && item.partial && (
+        <p className="pf-entry__meta pf-amount">
+          {tx(PAY.paidRemaining, {
+            paid: formatMoney(item.paidMinor, item.currency, locale),
+            remaining: formatMoney(item.remainingMinor, item.currency, locale),
+          })}
+        </p>
+      )}
       <div className="pf-entry__meta">
         <span>{tx(P.dueOn, { date: formatDay(item.dueDate, locale) })}</span>
         <span dir="auto">{item.child ? tx(P.forChild, { name: item.child.name }) : tx(P.forFamily)}</span>
       </div>
       {item.payment && (
         <p className="pf-entry__meta">
-          {tx(P.paidOnBy, {
-            date: formatDay(item.payment.paidOn, locale),
-            method: tx(METHOD_LABEL[item.payment.method]),
-            name: item.payment.recordedBy.name,
-          })}
+          {item.payment.recordedBy
+            ? tx(P.paidOnBy, {
+                date: formatDay(item.payment.paidOn, locale),
+                method: tx(METHOD[item.payment.method]),
+                name: item.payment.recordedBy.name,
+              })
+            : tx(P.paidOnByStripe, { date: formatDay(item.payment.paidOn, locale), method: tx(METHOD[item.payment.method]) })}
           {item.payment.reference && (
             <>
               {' · '}
@@ -440,6 +605,11 @@ function TimelineRow({ item, canRecord, onOpen }: { item: TimelineInstalment; ca
           {open && (
             <button type="button" className="btn btn--sm btn--primary" onClick={() => onOpen({ kind: 'pay', instalment: item })}>
               {tx(P.recordPayment)}
+            </button>
+          )}
+          {open && (
+            <button type="button" className="btn btn--sm" onClick={() => onOpen({ kind: 'link', instalment: item })}>
+              {tx(PAY.paymentLink)}
             </button>
           )}
           <button type="button" className="btn btn--sm btn--ghost" onClick={() => onOpen({ kind: 'void', instalment: item })}>

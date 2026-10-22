@@ -1,5 +1,9 @@
 import { useState } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
+import { useSession } from '@/core/auth/SessionProvider'
+import { isSuperAdmin } from '@/core/permissions/capabilities'
+import { TrialPaymentsDialog } from '@/features/payments/TrialPaymentsDialog'
+import { PAY } from '@/features/payments/copy'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { PageHeader } from '@/shared/components/PageHeader'
 import { EmptyState, QueryBoundary } from '@/shared/components/States'
@@ -28,7 +32,12 @@ export function NewStudentsPage() {
   const q = useNewStudents()
   const access = useTrialsAccess()
   const [editing, setEditing] = useState<NewStudentDto | null>(null)
+  const [paying, setPaying] = useState<NewStudentDto | null>(null)
+  const { staff } = useSession()
   const students = q.data?.students ?? []
+  // PD-27: before Assign, Sales, the Operations Manager (who assigns) and the
+  // super admin ask for the subscription payment. The server decides each request.
+  const mayRequestPayment = access.sales || q.data?.canAssign === true || (staff !== null && isSuperAdmin(staff.role))
 
   return (
     <div className="page">
@@ -47,18 +56,20 @@ export function NewStudentsPage() {
                   canAssign={q.data?.canAssign === true}
                   // PD-16: a form that became a family is frozen.
                   onEdit={access.sales && !s.enrolment ? () => setEditing(s) : undefined}
+                  onPayments={mayRequestPayment && !s.enrolment ? () => setPaying(s) : undefined}
                 />
               ))}
             </div>
           )}
         </QueryBoundary>
         {editing && <EditSubscriptionDialog student={editing} onClose={() => setEditing(null)} />}
+        {paying && <TrialPaymentsDialog trialId={paying.trialId} name={paying.parent.name} onClose={() => setPaying(null)} />}
       </div>
     </div>
   )
 }
 
-function StudentCard({ s, onEdit, canAssign }: { s: NewStudentDto; onEdit?: () => void; canAssign: boolean }) {
+function StudentCard({ s, onEdit, onPayments, canAssign }: { s: NewStudentDto; onEdit?: () => void; onPayments?: () => void; canAssign: boolean }) {
   const { locale } = useI18n()
   const tx = (p: Pair) => (locale === 'ar' ? p.ar : p.en)
   const money = (n: number) => formatMoney(n, s.payment.currency, locale)
@@ -73,6 +84,9 @@ function StudentCard({ s, onEdit, canAssign }: { s: NewStudentDto; onEdit?: () =
         </span>
         {onEdit && (
           <button type="button" className="btn btn--sm" onClick={onEdit}>{tx(TR.editForm)}</button>
+        )}
+        {onPayments && (
+          <button type="button" className="btn btn--sm" onClick={onPayments}>{tx(PAY.trialAction)}</button>
         )}
       </div>
 

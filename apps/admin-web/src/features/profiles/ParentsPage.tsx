@@ -1,5 +1,5 @@
 import { useDeferredValue, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Avatar } from '@/shared/components/Avatar'
 import { PageHeader } from '@/shared/components/PageHeader'
@@ -18,7 +18,9 @@ import './profiles.css'
 export function ParentsPage({ eyebrow }: { eyebrow?: string }) {
   const tx = useCopy()
   const { locale, t } = useI18n()
-  const [q, setQ] = useState('')
+  // `?q=` opens the list already searched (PD-27: New Students links here once a family is assigned).
+  const [params] = useSearchParams()
+  const [q, setQ] = useState(() => params.get('q') ?? '')
   const deferred = useDeferredValue(q.trim())
   const list = useParents(deferred)
   const items = list.data?.items ?? []

@@ -1,0 +1,27 @@
+/* PD-27 Payments. Reuses the Parent Profile's .pf-* entries (and through it the Teacher
+   File's .tf-* layout) and the design system. Logical properties only: RTL-safe. */
+@import '../profiles/profiles.css';
+
+.pf-entry--closed { opacity: 0.8; }
+.pay-link { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); margin-block: var(--space-2); }
+.pay-link__what { margin: 0; }
+.pay-link__url { font-family: var(--font-mono, monospace); font-size: var(--fs-sm); inline-size: 100%; }
+.pay-tabs { margin-block-end: var(--space-3); }
+.pay-summary { margin-block: 0 var(--space-3); color: var(--text-muted); }
+.pay-receipts { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+.pay-receipt { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-3); align-items: start; }
+.pay-receipt__body { display: grid; gap: var(--space-2); justify-items: start; min-inline-size: 0; }
+.pay-receipt__thumb { display: block; inline-size: 9rem; }
+.pay-receipt__thumb img { display: block; inline-size: 100%; max-block-size: 12rem; object-fit: contain; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-2, transparent); }
+.pay-settings { display: grid; gap: var(--space-4); }
+.pay-settings fieldset { border: 0; margin: 0; padding: 0; min-inline-size: 0; }
+.pay-reminders { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; gap: var(--space-2); }
+.pay-reminders label { display: inline-flex; gap: var(--space-2); align-items: center; }
+.pay-schedule { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.pay-schedule__row { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: flex-end; }
+.pay-schedule__row > .field { flex: 1 1 8rem; margin: 0; }
+.pay-mode { display: flex; flex-wrap: wrap; gap: var(--space-3); border: 0; margin: 0 0 var(--space-2); padding: 0; }
+.pay-mode label { display: inline-flex; gap: var(--space-1); align-items: center; }
+@media (max-width: 480px) {
+  .pay-receipt { grid-template-columns: 1fr; }
+}

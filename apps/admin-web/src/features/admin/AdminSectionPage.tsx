@@ -13,6 +13,7 @@ import { TeacherStatsPage } from '@/features/teachers/TeacherStatsPage'
 import { TeacherFilesPage } from '@/features/teacher-files/TeacherFilesPage'
 import { InstalmentsPage } from '@/features/instalments/InstalmentsPage'
 import { ParentsPage } from '@/features/profiles/ParentsPage'
+import { PaymentsPage } from '@/features/payments/PaymentsPage'
 import { CallsPage } from '@/features/calls-page/CallsPage'
 
 /**
@@ -53,6 +54,8 @@ export function AdminSectionPage() {
       return <AdminInstalments section={section} />
     case 'parents':
       return <AdminParents section={section} />
+    case 'payments':
+      return <AdminPayments section={section} />
     case 'calls':
       return <CallsPage />
     default:
@@ -64,6 +67,12 @@ export function AdminSectionPage() {
 function AdminParents({ section }: { section: NonNullable<ReturnType<typeof findAdminSection>> }) {
   const eyebrow = useEyebrow(section)
   return <ParentsPage eyebrow={eyebrow} />
+}
+
+/** PD-27: receipts and settings; the same page operators open at /payments. */
+function AdminPayments({ section }: { section: NonNullable<ReturnType<typeof findAdminSection>> }) {
+  const eyebrow = useEyebrow(section)
+  return <PaymentsPage eyebrow={eyebrow} />
 }
 
 function AdminInstalments({ section }: { section: NonNullable<ReturnType<typeof findAdminSection>> }) {
