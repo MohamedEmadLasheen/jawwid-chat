@@ -137,7 +137,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-16 was closed by the product owner on 2026-10-21** (Chat enrols new students and parents sign up).
 **PD-17 was closed by the product owner on 2026-10-21** (Parent and Student Profiles; payments recorded in Chat). It supersedes PD-10 §1 and PD-12's "Core invoices, read-only" for family money.
 **PD-18 was closed by the product owner on 2026-10-21** (teacher payroll lives in Chat) and supersedes PD-10 item 4.
-**PD-19 was closed by the product owner on 2026-10-21** (a member may start a call in their own chat; supersedes PD-2).
+**PD-19 was closed by the product owner on 2026-10-21** (a member may start a call in their own chat; supersedes PD-2), amended 2026-10-21 (the super admin's group calls) and 2026-10-22 (calls in the trial group and the supervision conversation).
 **PD-20 was closed by the product owner on 2026-10-22** (the Sales team uses the app: chats, calls and payments). It amends PD-15's "staff work in Admin Web; the app is for parents and teachers".
 
 | ID | Subject | Status |
@@ -160,7 +160,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-16** | **Enrolling a new student in Chat; the parent's own sign-up** (2026-10-21) | **CLOSED** — Assign on New Students creates the family, parent and children in Chat from Sales' form; an assigned entry is the supervisor's (and their manager's); the supervisor opens the family group; the parent signs up with their e-mail and a one-time code relayed by the supervisor until WhatsApp sending is connected |
 | **PD-17** | **Parent Profile and Student Profile; family payments recorded in Chat** (2026-10-21) | **CLOSED** — a Parent Profile (contact details, internal note, children, subscription, payment method, payment timeline) for the administration only, by the Instalment Payments rule plus Sales; Operations and Sales record payments; the parent sees their own payments in the app; a Student Profile for the administration and the child's own teacher; instalments and payments are Chat's own append-only records, nothing is read from Core; teachers reach neither a parent nor money by any route |
 | **PD-18** | **Teacher payroll in Chat** (2026-10-21) | **CLOSED** — salary terms, a sealed payout account and the amounts of bonuses and deductions are recorded in Chat, for the super admin only; the month's financial summary is computed, never stored; supersedes PD-10 item 4 |
-| **PD-19** | **Who may start a call: every member of their own chat** (2026-10-21) | **CLOSED** — teachers, parents and supervisors may start a call in any chat they may write in; parents may now start their family / Student Group calls; chats a person is not a member of, BR-1 / PD-7, C-4 and the no-phantom-call rule are unchanged; amended the same day so the super admin may start a group call in any chat they may write in, with a seat on the call |
+| **PD-19** | **Who may start a call: every member of their own chat** (2026-10-21) | **CLOSED** — teachers, parents and supervisors may start a call in any chat they may write in; parents may now start their family / Student Group calls; chats a person is not a member of, BR-1 / PD-7, C-4 and the no-phantom-call rule are unchanged; amended the same day so the super admin may start a group call in any chat they may write in, with a seat on the call; amended 2026-10-22 so trial-group and supervision calls are group calls (they were refused by the database) |
 | **PD-20** | **The Sales team in the app** (2026-10-22) | **CLOSED** — Sales-department staff sign in to the app and get Chats, Calls, Payments and Settings; they view and record payments (record once, void with a reason); instalment plans, the contact record and every other staff role stay in Admin Web; the app never holds a parent's phone or e-mail |
 
 ---
@@ -1914,6 +1914,32 @@ the super admin call too").
   chat they are not a member of.
 - Protected by the D1 block of
   `apps/api/test/integration/staff-call-participation.spec.ts`.
+
+**Second amendment, 2026-10-22: calls in the trial group and the supervision
+conversation** (owner answer: "Allow + super admin").
+- **The defect.** A teacher's trial group (PD-11 T4) and their supervision
+  conversation (PD-11 / PD-12) seat the teacher with several staff. The call
+  button was offered there, but the server typed those calls as **direct**,
+  and the database refuses a direct call with more than two participants, so
+  every start failed with a server error. The capability check and the start
+  disagreed.
+- **Decision.** Calls are allowed there, and they are **group** calls. Any
+  member may start one (the teacher, a Teachers-department member, or a Sales or
+  Operations supervisor who has joined the trial group).
+- The super admin may start one there without being a member, with **a seat on
+  the call**, as in the first amendment. The chat's member list does not change.
+- **Unchanged.** Someone who may write in these chats without being a member
+  (for example a Sales supervisor who has not joined a trial group), a
+  department manager or an active backup still may not start a call (D1). A
+  direct call still has exactly two seats. C-4 is unaffected: no family contact
+  can be a member of either chat.
+- **Canonical rule.** `GROUP_CALL_CONVERSATION_TYPES` (in
+  `apps/api/src/communication/contracts/vocab.ts`) decides a call's type and
+  the super admin's seat. It is the family-facing groups plus `trial_group` and
+  `teacher_supervision`. `GROUP_CONVERSATION_TYPES`, which drives C-4 admin
+  presence, does not change.
+- Protected by `apps/api/test/integration/call-staff-group-chats.spec.ts` and
+  `apps/api/test/unit/authorization/call-seat-group-call-types.spec.ts`.
 
 ---
 
