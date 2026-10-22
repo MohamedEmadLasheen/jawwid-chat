@@ -335,7 +335,7 @@ function DevicesDialog({
               {tx(D.signOutAll)}
             </button>
           </div>
-          <SessionList sessions={sessions} onSignOut={onRevoke} />
+          <SessionList sessions={sessions} onSignOut={onRevoke} compact />
         </QueryBoundary>
       </section>
     </Dialog>

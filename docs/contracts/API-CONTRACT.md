@@ -355,7 +355,7 @@ Page<T> { items: T[], nextCursor: string|null }
 
 **POST /auth/login**
 - Auth: none. Permission: —. Scope: any active principal (staff, contact, teacher).
-- Request: `{ username: string, password: string, device?: { platform: 'ios'|'android'|'web', name?: string } }`. Whether `username` holds a username or an email is the open item in `docs/integration/authentication-decision-gate.md` §5; the **wire field name is `username` either way** (Flutter's `AuthRepository.signIn({username,password})`; Admin Web renames `email`).
+- Request: `{ username: string, password: string, device?: { platform: 'ios'|'android'|'web', name?: string }, remember?: boolean }`. PD-23: `remember: true` asks for Admin Web "keep me signed in"; it is granted only to staff (never the super admin) on `platform: 'web'`. Whether `username` holds a username or an email is the open item in `docs/integration/authentication-decision-gate.md` §5; the **wire field name is `username` either way** (Flutter's `AuthRepository.signIn({username,password})`; Admin Web renames `email`).
 - Response: `200 TokenPairDto`.
 - Errors: `AUTH.INVALID_CREDENTIALS` 401 · `AUTH.ACCOUNT_DISABLED` 403 · `AUTH.ACCOUNT_LOCKED` 403 · `COMMON.RATE_LIMITED` 429.
 - Idempotency: none (no header).
@@ -365,6 +365,8 @@ Page<T> { items: T[], nextCursor: string|null }
 **POST /auth/refresh**
 - Auth: none (the refresh token is the credential). Request: `{ refreshToken: string }`.
 - Response: `200 TokenPairDto` with a **rotated** refresh token; the presented one is invalidated. Presenting an already-rotated token revokes the whole session (reuse detection).
+- PD-23: the successor keeps the login's `authenticated_at`, client and `remembered`; its `expiresAt` is the earlier of the role's idle and absolute limits. Past the absolute limit the session is revoked as `session lifetime reached` (never as `rotated`) and the answer is `AUTH.SESSION_REVOKED` 401.
+- PD-23 (login and refresh): `TokenPairDto.session` is `{ id, createdAt, remembered, expiresAt, absoluteExpiresAt: string|null }`. Admin Web keeps the refresh token in `localStorage` only when `remembered` is true.
 - Errors: `AUTH.SESSION_REVOKED` 401 · `AUTH.ACCOUNT_DISABLED` 403.
 - Audit: `event_log` `auth.refresh_reuse_detected` on reuse. Realtime: `session.revoked` to the actor room on reuse (§4).
 
@@ -374,6 +376,18 @@ Page<T> { items: T[], nextCursor: string|null }
 - RT-009 (2026-10-12): `{ ok: true }` is returned only once every API node has confirmed it can no longer deliver to this session on a decision made before the revocation; otherwise `COMM.REVOCATION_UNCONFIRMED` 503 — the session IS revoked; retry. A repeat is held to the same confirmation.
 - Side effects: session revoked; device tokens registered under this session deactivated (`chat.device_token.is_active=false`); sockets of this session disconnected.
 - Audit: `audit_log` `{action:'session.revoked', entity:'session', entityId, reason:'logout'}`. Realtime: none to others.
+
+### 3.1a Devices & sessions (`MeSessionsController`) — EXISTS (PD-23)
+
+```
+SessionDto { id, current: boolean, platform: 'ios'|'android'|'web'|null, deviceName: string|null, appVersion: string|null,
+             signedInAt, lastSeenAt: string|null, expiresAt, remembered: boolean }   // no ip, no user agent, no token material
+```
+
+Keyed by the verified request only. Support sessions (PD-21) are never listed and may not call the POSTs (`COMM.SUPPORT_SESSION_FORBIDDEN` 403).
+- **GET /me/sessions** — `{ sessions: SessionDto[] }`, current first, then most recently active.
+- **POST /me/sessions/:sessionId/revoke** — `200 { ok: true }`. The current session = sign out (reason `logout`); another = reason `signed out from another device`. Not one of the caller's live sessions: `COMM.SESSION_NOT_FOUND` 404.
+- **POST /me/sessions/revoke-others** — `200 { revoked }`. Every other live session of the account, in one transaction with one audit row; their sockets disconnect (RT-009).
 
 **POST /auth/password-reset** — EXISTS (PD-21)
 - Auth: none (the one-time code is the credential). Rate-limited by the login limiter, per identifier (`reset:<username>`) and per source, before anything else.
@@ -1241,7 +1255,7 @@ AuditEntryDto { id: string, actorId: string|null, action, entity, entityId, befo
 AccountSummaryDto { accountId, kind: 'family'|'teacher'|'staff', name, staffRole: string|null,
                     familyName: string|null, children: string[], status: 'provisioned'|'active'|'suspended'|'deactivated',
                     hasLogin: boolean, lockedUntil: string|null, lastLoginAt: string|null,
-                    allowed: { resetPassword, suspend, reactivate } }   // advisory; decided again per action
+                    allowed: { resetPassword, suspend, reactivate, impersonate, signOut } }   // advisory; decided again per action
 ```
 
 Permission (every route): `AuthorizationService.canAdministerAccount` — any active staff role, same organization, on a parent or teacher account; a staff account only by the super admin; never the super admin's account or the caller's own. A non-staff caller gets `COMM.ACCOUNT_ADMIN_DENIED` 403 before any lookup; another tenant's account is `COMM.ACCOUNT_ADMIN_NOT_FOUND` 404. No route returns a password, a hash, a login identifier or a contact channel.
@@ -1255,6 +1269,11 @@ Permission (every route): `AuthorizationService.canAdministerAccount` — any ac
 **POST /admin/accounts/:accountId/suspend** — Request: `{ reason }`. Response: `200 AccountSummaryDto`. One transaction: `chat.deactivate_principal('account', …, 'suspended')` (RT-032 journal), every session revoked, audit `account.suspended` `{before:{status:'active'}, after:{status:'suspended', revokedSessions}}`; then the RT-009 barrier (`COMM.REVOCATION_UNCONFIRMED` 503 → retry; idempotent). Suspending a suspended account changes nothing and writes no audit row. Errors: `COMM.ACCOUNT_ADMIN_STATE` 409 (provisioned / deactivated).
 
 **POST /admin/accounts/:accountId/reactivate** — Request: `{ reason }`. Response: `200 AccountSummaryDto`. `chat.reactivate_account` (suspended → active only); earlier sessions stay revoked. Audit `account.reactivated`. An active account is left alone (no audit row). Errors: `COMM.ACCOUNT_ADMIN_STATE` 409 (deactivated / provisioned).
+
+**PD-23 — an account's sessions.** Permission `canAdministerAccount(…, 'sign_out')` (the suspend rule).
+- **GET /admin/accounts/:accountId/sessions** — `{ sessions: SessionDto[] }` (see §3.1a; `current` always false).
+- **POST /admin/accounts/:accountId/sessions/:sessionId/revoke** — Request `{ reason }`. `200 { ok: true }`. Reason stored as `signed out by an administrator: <reason>`; audit `session.revoked`. A session not of this account: `COMM.SESSION_NOT_FOUND` 404.
+- **POST /admin/accounts/:accountId/sessions/revoke-all** — Request `{ reason }`. `200 { revoked }`. Every session, a support session included (as a suspension does); the account stays active. RT-009 barrier as for suspend.
 
 ### 3.10b Support sessions — impersonation (`impersonation.controller.ts`) — EXISTS (PD-21)
 
