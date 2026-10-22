@@ -46,6 +46,9 @@ const lifecycle = new LifecycleService(g.prisma, g.conversations, lessons, sched
 const files = new TeacherFileService(g.prisma, g.authz, g.conversations, audit);
 const payroll = new TeacherPayrollService(g.prisma, files, audit);
 
+// Each test truncates and seeds the database first; on a loaded machine that alone outruns Jest's 5 s default.
+jest.setTimeout(120_000);
+
 const HOUR = 3_600_000;
 const at = (ms: number) => new Date(Date.now() + ms).toISOString();
 
