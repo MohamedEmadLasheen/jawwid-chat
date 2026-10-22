@@ -18,6 +18,7 @@ import {
   ActorKind,
   CONVERSATION_STAFF_ROLES,
   ConversationType,
+  GROUP_CALL_CONVERSATION_TYPES,
   GROUP_CONVERSATION_TYPES,
   MemberRole,
   Moderation,
@@ -1466,6 +1467,10 @@ export class AuthorizationService {
    * D1's point (the caller is on the call they start). A 1:1 between two other
    * people stays refused: a direct call has exactly two seats (the database
    * enforces it). Managers and backups are unchanged.
+   *
+   * Second amendment (2026-10-22): "group" here means every conversation whose
+   * call is a GROUP call (GROUP_CALL_CONVERSATION_TYPES), so the teacher's trial
+   * group and supervision conversation are included.
    */
   canStartCallAsParticipant(
     actor: Pick<Actor, 'actorId' | 'kind' | 'staffRole'>,
@@ -1476,7 +1481,7 @@ export class AuthorizationService {
     if (
       actor.kind === ActorKind.STAFF &&
       actor.staffRole === StaffRole.SUPER_ADMIN &&
-      GROUP_CONVERSATION_TYPES.has(conv.type)
+      GROUP_CALL_CONVERSATION_TYPES.has(conv.type)
     ) {
       return allow();
     }
