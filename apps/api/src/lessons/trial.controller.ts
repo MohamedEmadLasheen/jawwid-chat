@@ -79,6 +79,12 @@ export class TrialController {
     return this.enrolment.assign(actorId, trialId, body ?? {});
   }
 
+  /** PD-24: the Operations manager changes the supervisor; everything moves with the children. */
+  @Post('new-students/:trialId/supervisor')
+  changeNewStudentSupervisor(@ActorId() actorId: string, @Param('trialId') trialId: string, @Body() body: Record<string, unknown>) {
+    return this.enrolment.changeSupervisor(actorId, trialId, body ?? {});
+  }
+
   /** PD-16: the responsible supervisor opens the family's group. */
   @Post('new-students/:trialId/group')
   createNewStudentGroup(@ActorId() actorId: string, @Param('trialId') trialId: string) {

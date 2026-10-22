@@ -305,6 +305,9 @@ String previewText(Conversation conversation, L10n l10n) {
     return switch (kind.substring('system:'.length)) {
       'group.created' => l10n.systemGroupCreatedNoLearner,
       'group.archived' => l10n.systemGroupArchived,
+      'group.supervisor_changed' => l10n.systemGroupSupervisorChangedNoName,
+      'direct.supervisor_changed' => l10n.systemDirectSupervisorChangedNoName,
+      'group.learner_detached' => l10n.systemGroupLearnerDetached,
       _ => l10n.systemUpdate,
     };
   }
