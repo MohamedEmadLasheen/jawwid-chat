@@ -1058,6 +1058,7 @@
   "billingDeniedBody": "إن كان لديك سؤال، تواصل مع الأكاديمية.",
   "tabPayments": "المدفوعات",
   "roleSales": "المبيعات",
+  "roleSuperAdmin": "المدير العام",
   "conversationsEmptyBodySales": "ستظهر هنا مجموعات الحصص التجريبية ومحادثاتك.",
   "internalNoteLabel": "ملاحظة داخلية",
   "trialGroupNotMember": "لست عضوًا في هذه المجموعة بعد.",

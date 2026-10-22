@@ -2490,6 +2490,9 @@ class L10nAr extends L10n {
   String get roleSales => 'المبيعات';
 
   @override
+  String get roleSuperAdmin => 'المدير العام';
+
+  @override
   String get conversationsEmptyBodySales =>
       'ستظهر هنا مجموعات الحصص التجريبية ومحادثاتك.';
 

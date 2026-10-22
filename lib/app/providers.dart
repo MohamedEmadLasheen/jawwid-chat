@@ -310,6 +310,12 @@ final currentRoleProvider = Provider<UserRole?>(
   (ref) => ref.watch(authControllerProvider).user?.role,
 );
 
+/// PD-20 amendment: whether the signed-in user is the organization's super admin (who uses
+/// the app with the Sales tabs). False when signed out.
+final isSuperAdminProvider = Provider<bool>(
+  (ref) => ref.watch(authControllerProvider).user?.isSuperAdmin ?? false,
+);
+
 /// THE SESSION BOUNDARY: the authenticated principal's id, or null when signed out.
 ///
 /// ─────────────────────────────────────────────────────────────────────────────────────
