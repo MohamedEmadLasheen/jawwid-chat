@@ -45,7 +45,7 @@ function account(over: Partial<AccountSummary> = {}): AccountSummary {
     hasLogin: true,
     lockedUntil: null,
     lastLoginAt: '2026-10-20T08:00:00.000Z',
-    allowed: { resetPassword: true, suspend: true, reactivate: false },
+    allowed: { resetPassword: true, suspend: true, reactivate: false, impersonate: true },
     ...over,
   }
 }
@@ -94,7 +94,7 @@ describe('PD-20: the Accounts page', () => {
 
   it('shows only the actions the server allows', async () => {
     on('GET', /\/admin\/accounts(\?|$)/, () =>
-      json({ accounts: [account({ status: 'suspended', allowed: { resetPassword: true, suspend: false, reactivate: true } })], truncated: false }),
+      json({ accounts: [account({ status: 'suspended', allowed: { resetPassword: true, suspend: false, reactivate: true, impersonate: false } })], truncated: false }),
     )
     renderWithProviders(<AppRoutes />, { staff: finance, route: '/accounts' })
     await screen.findByText('Parent Alpha')

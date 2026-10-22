@@ -1,4 +1,6 @@
 import { useDeferredValue, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
 import { isSuperAdmin } from '@/core/permissions/capabilities'
@@ -13,6 +15,8 @@ import { ApiError } from '@/core/api/errors'
 import type { AccountStatus, AccountSummary, IssuedReset } from './api'
 import { A, KIND, STATUS, describeError, useCopy } from './copy'
 import { useAccounts, useIssueReset, useReactivate, useSuspend } from './hooks'
+import { supportAdminApi, supportKeys, supportTokens } from '@/features/support/api'
+import { S, describeError as describeSupportError } from '@/features/support/copy'
 import './accounts.css'
 
 type Kind = 'all' | 'family' | 'teacher' | 'staff'
@@ -21,6 +25,7 @@ type Pending =
   | { act: 'suspend'; account: AccountSummary }
   | { act: 'reactivate'; account: AccountSummary }
   | { act: 'code'; account: AccountSummary; issued: IssuedReset }
+  | { act: 'impersonate'; account: AccountSummary }
 
 const STATUS_TONE: Record<AccountStatus, Tone> = {
   provisioned: 'outline',
@@ -117,6 +122,11 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
                             {tx(A.suspend)}
                           </button>
                         )}
+                        {a.allowed.impersonate && (
+                          <button type="button" className="btn btn--sm" onClick={() => setPending({ act: 'impersonate', account: a })}>
+                            {tx(S.open, { name: a.name })}
+                          </button>
+                        )}
                         {a.allowed.reactivate && (
                           <button type="button" className="btn btn--sm" onClick={() => setPending({ act: 'reactivate', account: a })}>
                             {tx(A.reactivate)}
@@ -131,6 +141,7 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
           </div>
           {list.data?.truncated && <p className="field__hint">{tx(A.truncated)}</p>}
         </QueryBoundary>
+        <SupportRecord />
       </div>
 
       {pending?.act === 'reset' && (
@@ -143,6 +154,7 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
       {pending?.act === 'code' && (
         <CodeDialog account={pending.account} issued={pending.issued} onClose={() => setPending(null)} />
       )}
+      {pending?.act === 'impersonate' && <StartSupportDialog account={pending.account} onClose={() => setPending(null)} />}
       {(pending?.act === 'suspend' || pending?.act === 'reactivate') && (
         <StatusDialog act={pending.act} account={pending.account} onClose={() => setPending(null)} />
       )}
@@ -245,6 +257,80 @@ function StatusDialog({
       onConfirm={(reason) => mutation.mutate({ id: account.accountId, reason }, { onSuccess: onClose })}
       onClose={onClose}
     />
+  )
+}
+
+/** PD-20: opening an account as its person -- a support session, on the record. */
+function StartSupportDialog({ account, onClose }: { account: AccountSummary; onClose: () => void }) {
+  const tx = useCopy()
+  const navigate = useNavigate()
+  const start = useMutation({
+    mutationFn: (reason: string) => supportAdminApi.start(account.accountId, reason),
+    onSuccess: (token) => {
+      // In memory only: the token never reaches a URL, history state or storage.
+      supportTokens.set(token)
+      navigate(`/support/${encodeURIComponent(token.session.id)}`)
+    },
+  })
+  return (
+    <ReasonDialog
+      title={tx(S.startTitle, { name: account.name })}
+      label={tx(S.reason)}
+      confirmLabel={tx(S.start)}
+      isPending={start.isPending}
+      error={start.error == null ? undefined : new ApiError({ status: 0, code: 'CLIENT', messageEn: describeSupportError(start.error, 'en'), messageAr: describeSupportError(start.error, 'ar') })}
+      extra={<p>{tx(S.startExplain, { name: account.name })}</p>}
+      onConfirm={(reason) => start.mutate(reason)}
+      onClose={onClose}
+    />
+  )
+}
+
+/**
+ * PD-20: the record of support sessions -- the super admin's whole
+ * organization, anyone else their own. Who, whom, why, when, how many requests.
+ */
+function SupportRecord() {
+  const tx = useCopy()
+  const { dateTime } = useI18n()
+  const record = useQuery({ queryKey: supportKeys.record(), queryFn: () => supportAdminApi.list() })
+  const sessions = record.data ?? []
+  return (
+    <section className="acct-record" aria-labelledby="acct-record-title">
+      <h2 id="acct-record-title" className="acct-record__title">
+        {tx(S.recordTitle)}
+      </h2>
+      {record.data && sessions.length === 0 ? (
+        <p className="field__hint">{tx(S.noRecord)}</p>
+      ) : (
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th scope="col">{tx(A.person)}</th>
+                <th scope="col">{tx(S.recordBy)}</th>
+                <th scope="col">{tx(A.reason)}</th>
+                <th scope="col">{tx(S.recordStarted)}</th>
+                <th scope="col">{tx(S.recordEnded)}</th>
+                <th scope="col">{tx(S.recordActions)}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sessions.map((s) => (
+                <tr key={s.id}>
+                  <td dir="auto">{s.target.name}</td>
+                  <td dir="auto">{s.staff.name}</td>
+                  <td dir="auto">{s.reason}</td>
+                  <td>{dateTime(s.startedAt)}</td>
+                  <td>{s.endedAt ? dateTime(s.endedAt) : <Badge tone="danger">{tx(S.recordLive)}</Badge>}</td>
+                  <td>{s.actions}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   )
 }
 

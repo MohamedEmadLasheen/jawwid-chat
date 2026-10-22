@@ -9,6 +9,7 @@ import {
 import type { IdentityService } from '../identity.service';
 import type { AuditService, Tx } from '../audit.service';
 import type { Actor } from '../types';
+import { AuthorizationService } from '../authorization.service';
 import { AuthError, AuthErrorCode } from './auth.errors';
 import { AuthConfig, loadAuthConfig } from './auth.config';
 import {
@@ -46,6 +47,22 @@ const LOCKOUT_MINUTES = 15;
 /** Statuses that may hold a session. Anything else is refused everywhere. */
 const ACTIVE_STATUS = 'active';
 
+/**
+ * PD-20 support sessions: each step (a fresh token from the administrator's own
+ * session) gives this many minutes, never past MAX_MINUTES from the start.
+ * The database states the hour too (impersonation_session_at_most_an_hour).
+ */
+export const SUPPORT_SESSION = { STEP_MINUTES: 15, MAX_MINUTES: 60 } as const;
+
+/** PD-20: what a request on a support session carries beyond its actor. */
+export interface SupportSessionFacts {
+  /** chat.impersonation_session.id */
+  readonly id: string;
+  /** The administrator: staff id and account id. */
+  readonly staffId: string;
+  readonly staffAccountId: string;
+}
+
 /** The revocation reason a reuse sweep writes. Read back by the audit tests. */
 export const REUSE_REASON = 'refresh reuse detected';
 
@@ -66,6 +83,8 @@ export interface AuthenticatedSession {
   readonly accountId: string;
   readonly sessionId: string;
   readonly claims: AccessClaims;
+  /** PD-20: present when this is a support session -- an administrator acting as the account. */
+  readonly impersonation?: SupportSessionFacts;
 }
 
 export interface TokenPair {
@@ -112,6 +131,9 @@ export class AuthService {
     @Optional()
     @Inject(REALTIME_REVOCATION)
     private readonly revocation: RealtimeRevocation = NO_REALTIME_REVOCATION,
+    // PD-20: re-decides a support session's permission on every request.
+    // Absent (a hand-built test service), every support session is refused.
+    @Optional() private readonly authz?: AuthorizationService,
   ) {}
 
   /**
@@ -428,6 +450,7 @@ export class AuthService {
         revokedAt: true,
         expiresAt: true,
         accountId: true,
+        impersonationId: true,
         account: {
           select: { id: true, subject: true, kind: true, isActive: true, status: true, organizationId: true },
         },
@@ -444,7 +467,105 @@ export class AuthService {
     const actor = await this.liveActorOf(account, claims.act, claims.knd);
     if (!actor) return null;
 
+    if (session.impersonationId) {
+      const impersonation = await this.liveSupportSession(session.impersonationId, account);
+      if (!impersonation) return null;
+      return { actor, accountId: account.id, sessionId: session.id, claims, impersonation };
+    }
     return { actor, accountId: account.id, sessionId: session.id, claims };
+  }
+
+  /**
+   * PD-20, gate 5 -- for a support session only. Everything that let the
+   * administrator open it must STILL hold, now:
+   *   - the support session has not ended and has not expired;
+   *   - the administrator's own session is live (signing out ends it);
+   *   - the administrator's account and staff row are live;
+   *   - canAdministerAccount still allows them to impersonate this account.
+   * Anything else ends the support session on the record and refuses.
+   */
+  private async liveSupportSession(
+    impersonationId: string,
+    target: { id: string; organizationId: string; kind: string },
+  ): Promise<SupportSessionFacts | null> {
+    const row = await this.prisma.impersonationSession.findUnique({ where: { id: impersonationId } });
+    if (!row || row.targetAccountId !== target.id || row.endedAt) return null;
+    const refuse = async (why: string) => {
+      await this.prisma.impersonationSession
+        .updateMany({ where: { id: row.id, endedAt: null }, data: { endedAt: new Date(), endedReason: why } })
+        .catch(() => undefined);
+      return null;
+    };
+    if (row.expiresAt <= new Date()) return refuse('expired');
+    if (!this.authz) return refuse('support sessions are not served here');
+
+    const staffSession = await this.prisma.session.findUnique({
+      where: { id: row.staffSessionId },
+      select: {
+        revokedAt: true,
+        revokedReason: true,
+        expiresAt: true,
+        account: { select: { id: true, subject: true, kind: true, isActive: true, status: true, organizationId: true } },
+      },
+    });
+    // Mid-refresh: the administrator's session was just rotated and refresh()
+    // is about to move the support session onto its successor. Refuse THIS
+    // request, but do not end the support session over it.
+    if (staffSession?.revokedReason === 'rotated') return null;
+    if (!staffSession || staffSession.revokedAt || staffSession.expiresAt <= new Date() || staffSession.account.id !== row.staffAccountId) {
+      return refuse("the administrator's own session ended");
+    }
+    const staff = await this.liveActorOf(staffSession.account, row.staffId, 'staff');
+    if (!staff) return refuse('the administrator is no longer active');
+    const decision = this.authz.canAdministerAccount(
+      staff,
+      { accountId: target.id, organizationId: target.organizationId, kind: target.kind },
+      'impersonate',
+    );
+    if (!decision.allowed) return refuse('the administrator may no longer open this account');
+    return { id: row.id, staffId: row.staffId, staffAccountId: row.staffAccountId };
+  }
+
+  /**
+   * PD-20: the TARGET-side session of a support session, inside the caller's
+   * transaction. Not a login: no device, no last_login_at, no failure reset,
+   * no session.created audit (the caller writes impersonation.started). Its
+   * refresh token is generated and DISCARDED -- the column is NOT NULL and
+   * unique -- so the session can never be refreshed; a new access token comes
+   * only from the administrator's own session (signSupportAccessToken).
+   */
+  async openSupportSessionInTx(
+    tx: Tx,
+    input: { impersonationId: string; account: { id: string; organizationId: string }; expiresAt: Date },
+  ): Promise<string> {
+    const config = this.config();
+    const created = await tx.session.create({
+      data: {
+        organizationId: input.account.organizationId,
+        accountId: input.account.id,
+        deviceId: null,
+        refreshTokenHash: hashRefreshToken(newRefreshToken(), config.refreshSecret),
+        expiresAt: input.expiresAt,
+        lastSeenAt: new Date(),
+        impersonationId: input.impersonationId,
+      },
+      select: { id: true },
+    });
+    return created.id;
+  }
+
+  /** PD-20: an access token for a support session's target-side session. */
+  signSupportAccessToken(
+    account: { subject: string; organizationId: string },
+    actor: Actor,
+    sessionId: string,
+  ): { accessToken: string; expiresInSeconds: number } {
+    const config = this.config();
+    const accessToken = signAccessToken(
+      { sub: account.subject, sid: sessionId, act: actor.actorId, knd: actor.kind, org: actor.organizationId ?? account.organizationId },
+      config,
+    );
+    return { accessToken, expiresInSeconds: config.accessTtlSeconds };
   }
 
   /**
@@ -562,6 +683,8 @@ export class AuthService {
     }
 
     if (session.expiresAt <= new Date()) throw new AuthError(AuthErrorCode.SESSION_REVOKED);
+    // PD-20: a support session has no refresh token to present. Belt and braces.
+    if (session.impersonationId) throw new AuthError(AuthErrorCode.SESSION_REVOKED);
 
     const account = session.account;
     if (!account.isActive || account.status !== ACTIVE_STATUS) {
@@ -585,6 +708,12 @@ export class AuthService {
     // bound to the retired session now also answer to its successor, so a
     // later logout of the successor still reaches them.
     this.revocation.sessionRotated(session.id, pair.sessionId);
+    // PD-20: a support session started from this session follows it to its
+    // successor (the database allows that move through a rotation only).
+    await this.prisma.impersonationSession.updateMany({
+      where: { staffSessionId: session.id, endedAt: null },
+      data: { staffSessionId: pair.sessionId },
+    });
     return pair;
   }
 

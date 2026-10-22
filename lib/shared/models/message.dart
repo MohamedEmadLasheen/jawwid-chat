@@ -145,6 +145,7 @@ class Message {
     this.isStarred = false,
     this.isPinned = false,
     this.isForwarded = false,
+    this.isSentBySupport = false,
     this.editedAt,
   });
 
@@ -209,6 +210,10 @@ class Message {
   /// "Forwarded". The source is never named.
   final bool isForwarded;
 
+  /// PD-20: an administrator sent it in a support session, acting as its author (server
+  /// `MessageDto.sentBySupport`). Shown to everyone as "Sent by support".
+  final bool isSentBySupport;
+
   /// When the author last edited it (server `MessageDto.editedAt`); null when
   /// never edited. [body] is already the edited wording. Shown as "Edited".
   final DateTime? editedAt;
@@ -250,6 +255,7 @@ class Message {
         isStarred: isStarred,
         isPinned: isPinned,
         isForwarded: isForwarded,
+        isSentBySupport: isSentBySupport,
         editedAt: editedAt,
       );
 
@@ -291,6 +297,7 @@ class Message {
       isStarred: isStarred ?? this.isStarred,
       isPinned: isPinned ?? this.isPinned,
       isForwarded: isForwarded,
+      isSentBySupport: isSentBySupport,
       editedAt: editedAt,
     );
   }

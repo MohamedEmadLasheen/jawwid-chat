@@ -2,8 +2,10 @@ import { ParentSignupController } from './parent-signup.controller';
 import { ParentSignupService } from './parent-signup.service';
 import { PasswordResetController } from './password-reset.controller';
 import { PasswordResetService } from './password-reset.service';
-import { Logger, Module } from '@nestjs/common';
-import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { Logger, Module, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { RequestContextMiddleware } from '../request-context';
+import { SupportSessionInterceptor } from './support-session.interceptor';
 import Redis from 'ioredis';
 import { AuthService } from './auth.service';
 import { AuthenticatedGuard } from './auth.guard';
@@ -101,7 +103,20 @@ export const loginRateLimitStoreProvider = {
     // policy -- see action-throttle.guard.ts.
     { provide: APP_GUARD, useClass: ActionThrottleGuard },
     { provide: APP_FILTER, useClass: AuthErrorFilter },
+    // PD-20: a support session may write only what its allowlist says, and
+    // every request it makes is recorded.
+    { provide: APP_INTERCEPTOR, useClass: SupportSessionInterceptor },
   ],
   exports: [AuthService, LoginRateLimiter, PasswordResetService],
 })
-export class AuthModule {}
+export class AuthModule implements NestModule {
+  /**
+   * PD-20: one request context per HTTP request, opened BEFORE the guards so
+   * the guard can mark a support session in it and everything downstream
+   * (audit, messages) reads it. A support session that reached a handler with
+   * no context would go unstamped, so the guard refuses it instead.
+   */
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(RequestContextMiddleware).forRoutes('{*splat}');
+  }
+}

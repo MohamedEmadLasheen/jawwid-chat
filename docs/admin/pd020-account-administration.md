@@ -8,7 +8,7 @@ Wire contract: `../contracts/API-CONTRACT.md` §3.1 (`POST /auth/password-reset`
 |---|---|---|
 | B | Password reset by one-time code | built |
 | A | Set inactive / reactivate | built |
-| C | Impersonation ("support session") | designed below; not built yet |
+| C | Impersonation ("support session") | built |
 
 ## Who may do what
 
@@ -77,31 +77,82 @@ reason, in the same transaction as the change:
 | `account.suspended` / `account.reactivated` | status change (`before`/`after` status, sessions ended) | staff |
 | `session.revoked` | sessions ended by any of the above | staff, or none on completion |
 
-## Impersonation — design (C, not built yet)
+## Impersonation — support sessions (C)
 
-Owner decisions:
-- parent **and** teacher accounts only (never staff);
-- messages sent while impersonating are **allowed but labelled** to recipients;
-- the same "who may" rule as above.
+Owner decisions: parent **and** teacher accounts (never staff); messages sent meanwhile
+**allowed but labelled**; the same "who may" rule as above.
 
-- `POST /admin/impersonations {accountId, reason}` creates a **support session**: a
-  `chat.session` row for the target, marked with its `chat.impersonation_session` (the
-  administrator, the target, the reason, the start, a hard 60-minute expiry). It returns a
-  15-minute access token **only**, with no refresh token. Extending the session and
-  **Exit** (`…/:id/end`) use the administrator's own token.
-- Every request on a support session also checks that the administrator is still live,
-  still allowed, and that their own session is alive. Signing the administrator out or
-  suspending them ends it.
-- Every write request is recorded against the support session (method, route, status; no
-  bodies). Every audit row written meanwhile carries the support-session id.
-- Messages and calls carry the support-session id, and clients label them "sent by support
-  on behalf of …".
-- Read receipts and delivery acknowledgements are not sent, `last_login_at` is not
-  touched, no push device is registered, and presence is not shown.
-- The account's password cannot be changed, and no account administration can be done,
-  from inside a support session.
-- Admin Web shows the parent or teacher view with a permanent "Acting as … — Exit" banner.
-  The administrator's own session is never replaced.
+**Opening.** From **Accounts → Open as …**, with a reason. `POST /admin/impersonations`
+creates `chat.impersonation_session` (administrator, their own account and session, the
+target, the reason, the start, an expiry) and a `chat.session` row **for the target**
+marked with it. The administrator's browser gets an access token for that session —
+**and no refresh token** (one is generated and discarded). Admin Web keeps it in memory
+only; a reload asks for a new one with the administrator's own session.
+
+**Lifetime.** 15 minutes per step (**Keep working**), never more than an hour from the
+start (`impersonation_session_at_most_an_hour`). One live support session per
+administrator: opening another ends the first. Every request on the support token
+re-checks, in `AuthService.authenticate`:
+- the support session is neither ended nor expired;
+- the administrator's own session is live: signing out ends it, while a token refresh
+  carries the support session over to the rotated session (the database allows that move
+  through a rotation only);
+- the administrator's account and staff row are live (suspending them ends it);
+- `canAdministerAccount(…, 'impersonate')` still allows it.
+
+Any failure ends the support session on the record and answers `401`.
+
+**What it may do** (`SupportSessionInterceptor`, deny by default). Reads are allowed:
+seeing what the person sees is the point, and no read route writes anything (no read
+receipt is sent). The writes allowed are:
+- sending a message, labelled;
+- the person's own profile, photos, children's photos, a teacher's own professional
+  profile and leave requests;
+- private state: star, delete-for-me, chat preferences.
+
+**Everything else is refused** with `COMM.SUPPORT_SESSION_FORBIDDEN`, because it would act
+in the person's name where others see it, unlabelled:
+- read and delivery receipts, reactions, pins, edits, deletes for everyone, forwards;
+- **calls of every kind** (see below);
+- story views and taps, push devices, notification acknowledgements;
+- lesson reports, apologies and bookings (they post cards in the person's name);
+- new chats or member changes;
+- logout (Exit ends it from the administrator's own account).
+
+The realtime gateway refuses a support token outright, so there is no presence, no
+delivery acknowledgement, and no way round the HTTP allowlist. A support session cannot
+reach any account administration either: its actor is the parent or teacher.
+
+**The label.** `chat.message.impersonation_id` is set on every message sent in a support
+session. Every client shows `MessageDto.sentBySupport` as **"Sent by support" / «أرسلها
+الدعم»**: Admin Web's chat, the support view, and the mobile app, including to the person
+themself. Who the administrator was is in the record, not on the message.
+
+**The record.**
+- `chat.impersonation_session`: who, whom, why, start, expiry, end and how it ended.
+  Never deleted; the database refuses a staff target, a session over an hour, and any
+  rewrite.
+- `chat.impersonation_action`: every request, refusals included (method, route
+  template, status; never a body). Append-only.
+- `chat.audit_log.impersonation_id`: set on every audit row written during the session.
+  `PrismaAuditService` stamps it from the request context, so no writer has to remember.
+- Audit rows for the session itself: `impersonation.started`, `impersonation.extended`
+  and `impersonation.ended`, with the administrator as actor and their reason.
+- Where to see it:
+  - Admin Web **Accounts → Support sessions**: the super admin sees the whole
+    organization, anyone else their own;
+  - `GET /admin/impersonations/:id/actions`: the full trail.
+
+**Calls — a deliberate departure.** The plan said calls started in a support session
+would carry the label too. They are **refused** instead. A live voice call in the
+person's name is the administrator's own voice, and a label on the call screen is weaker
+than a text label. Labelled calls need call-screen work on both clients; they can be
+added later as their own change.
+
+**What the administrator sees.** Everything the person sees, the parent's login e-mail on
+their own profile included. Since every staff role may open parent and teacher accounts
+(owner decision), staff who otherwise never see family data (finance, technical,
+academic) can see it here, on the record.
 
 ## Known limits
 
@@ -131,3 +182,19 @@ Owner decisions:
 - `apps/admin-web/src/features/accounts/Accounts.test.tsx`: the page and the sign-in reset
   form.
 - `test/features/auth/password_reset_test.dart`: the mobile reset screen.
+- `apps/api/test/integration/pd020-impersonation-http.spec.ts`: over real HTTP:
+  - who may;
+  - acting as the person, with the labelled message;
+  - no receipts;
+  - the trail and the audit stamping;
+  - every refusal;
+  - ending on Exit, on the administrator's sign-out and on their suspension;
+  - one session per administrator;
+  - re-tokening only by its administrator;
+  - the database guard;
+  - the record.
+- `apps/api/test/unit/account-admin/support-session-allowlist.spec.ts`: the allowlist,
+  deny by default.
+- `apps/admin-web/src/features/support/Support.test.tsx`: opening, the support token
+  never replacing the staff session, the label, Exit, reload.
+- `test/features/messages/sent_by_support_label_test.dart`: the mobile label.

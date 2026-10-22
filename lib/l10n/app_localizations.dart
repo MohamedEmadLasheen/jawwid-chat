@@ -3151,6 +3151,12 @@ abstract class L10n {
   /// **'Forwarded'**
   String get forwardedLabel;
 
+  /// No description provided for @sentBySupportLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent by support'**
+  String get sentBySupportLabel;
+
   /// Shown next to a message's time when its author edited it after sending.
   ///
   /// In en, this message translates to:

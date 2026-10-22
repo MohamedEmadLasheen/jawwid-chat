@@ -1255,6 +1255,30 @@ Permission (every route): `AuthorizationService.canAdministerAccount` — any ac
 
 **POST /admin/accounts/:accountId/reactivate** — Request: `{ reason }`. Response: `200 AccountSummaryDto`. `chat.reactivate_account` (suspended → active only); earlier sessions stay revoked. Audit `account.reactivated`. An active account is left alone (no audit row). Errors: `COMM.ACCOUNT_ADMIN_STATE` 409 (deactivated / provisioned).
 
+### 3.10b Support sessions — impersonation (`impersonation.controller.ts`) — EXISTS (PD-20)
+
+```
+SupportSessionDto { id, target: { accountId, kind: 'family'|'teacher', name, actorId }, staff: { id, name },
+                    reason, startedAt, expiresAt, endsAtLatest, endedAt: string|null, endedReason: string|null, actions: number }
+SupportTokenDto   { session: SupportSessionDto, accessToken, expiresInSeconds }   // NO refresh token, ever
+```
+
+Every route runs on the **administrator's own** token. Permission: `canAdministerAccount(…, 'impersonate')` — any staff role, a parent or teacher account of the organization, never staff.
+
+**POST /admin/impersonations** — Request `{ accountId, reason }`. Response `201 SupportTokenDto`. The account must be able to sign in (`COMM.ACCOUNT_ADMIN_STATE` 409 otherwise). Ends the administrator's previous live support session (`superseded by a new support session`). Audit `impersonation.started`.
+
+**POST /admin/impersonations/:id/token** — A fresh access token for a live support session of the caller's; extends it by 15 minutes, never past an hour from its start. Audit `impersonation.extended` when it extends. Errors: `COMM.IMPERSONATION_NOT_FOUND` 404 · `COMM.IMPERSONATION_ENDED` 409.
+
+**POST /admin/impersonations/:id/end** — Exit; revokes the support session's session. Idempotent. Audit `impersonation.ended`.
+
+**GET /admin/impersonations** (`?accountId=`) — the record: the super admin's whole organization, anyone else their own; newest first, at most 100. **GET /admin/impersonations/:id/actions** — its trail: `{ session, actions: [{ method, route, status, at }] }` (route templates; never a body).
+
+**On the support token** (the account's own routes, as that person):
+- every request re-checks the support session (not ended or expired), the administrator's own session, account and permission — any of them gone ends it (`401`);
+- reads are allowed and send no receipt; writes only from the allowlist (`SupportSessionInterceptor`: sending a message, the person's own profile / photos / teacher profile / leave requests, star, delete-for-me, chat preferences) — anything else `COMM.SUPPORT_SESSION_FORBIDDEN` 403;
+- every request is recorded in `chat.impersonation_action`; every audit row written carries `impersonation_id`; every message sent carries it and is served with `MessageDto.sentBySupport: true`;
+- `POST /auth/refresh` has nothing to present; `POST /auth/logout` is refused; the realtime gateway refuses the token.
+
 ### 3.11 Health (`infra/health/health.controller.ts`) — EXISTS, unauthenticated, no prefix
 
 | Route | Response | Status |

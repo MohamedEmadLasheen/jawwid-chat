@@ -285,6 +285,16 @@ export enum CommErrorCode {
   ACCOUNT_ADMIN_NOT_FOUND = 'COMM.ACCOUNT_ADMIN_NOT_FOUND',
   /** PD-20: not in a state for this (suspend an inactive account, reactivate one that is not suspended, impersonate an inactive one). 409. */
   ACCOUNT_ADMIN_STATE = 'COMM.ACCOUNT_ADMIN_STATE',
+  /**
+   * PD-20: not allowed in a support session (an administrator acting as a
+   * parent or teacher): it would act in the person's name where others see it,
+   * unlabelled -- receipts, calls, reactions, edits, devices, logout, ... 403.
+   */
+  SUPPORT_SESSION_FORBIDDEN = 'COMM.SUPPORT_SESSION_FORBIDDEN',
+  /** PD-20: no such support session of the caller's. 404. */
+  IMPERSONATION_NOT_FOUND = 'COMM.IMPERSONATION_NOT_FOUND',
+  /** PD-20: the support session has ended, expired or reached its hour. 409. */
+  IMPERSONATION_ENDED = 'COMM.IMPERSONATION_ENDED',
   /** PD-13: no such scheduled call, or none in a conversation this caller may read. 404. */
   SCHEDULED_CALL_NOT_FOUND = 'COMM.SCHEDULED_CALL_NOT_FOUND',
   /** PD-13: only someone who may start a call in the conversation schedules one there; only its creator cancels it. 403. */

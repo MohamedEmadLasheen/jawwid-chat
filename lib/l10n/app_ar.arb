@@ -732,6 +732,7 @@
   "forwardMax": "يمكن اختيار ١٠ محادثات كحد أقصى.",
   "forwardDone": "{count, plural, =1{أُعيد توجيهها إلى محادثة واحدة} other{أُعيد توجيهها إلى {count} محادثات}}",
   "forwardedLabel": "مُعاد توجيهها",
+  "sentBySupportLabel": "أرسلها الدعم",
   "editedMark": "معدّلة",
   "selectAction": "تحديد الرسائل",
   "selectedCount": "{count, plural, =1{رسالة محددة} other{{count} رسائل محددة}}",

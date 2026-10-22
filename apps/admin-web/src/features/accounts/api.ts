@@ -23,7 +23,7 @@ export interface AccountSummary {
   hasLogin: boolean
   lockedUntil: string | null
   lastLoginAt: string | null
-  allowed: { resetPassword: boolean; suspend: boolean; reactivate: boolean }
+  allowed: { resetPassword: boolean; suspend: boolean; reactivate: boolean; impersonate: boolean }
 }
 
 export interface AccountList {

@@ -996,6 +996,7 @@
     }
   },
   "forwardedLabel": "Forwarded",
+  "sentBySupportLabel": "Sent by support",
   "editedMark": "Edited",
   "@editedMark": {
     "description": "Shown next to a message's time when its author edited it after sending."

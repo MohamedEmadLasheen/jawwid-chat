@@ -39,7 +39,7 @@ export interface AccountSummaryDto {
   lockedUntil: string | null;
   lastLoginAt: string | null;
   /** What THIS caller may do now. Advisory: every action is decided again on the server. */
-  allowed: { resetPassword: boolean; suspend: boolean; reactivate: boolean };
+  allowed: { resetPassword: boolean; suspend: boolean; reactivate: boolean; impersonate: boolean };
 }
 
 const ACCOUNT_SELECT = {
@@ -325,6 +325,8 @@ export class AccountAdminService {
         resetPassword: may('reset_password') && row.status !== 'deactivated',
         suspend: may('suspend') && row.status === 'active',
         reactivate: may('reactivate') && row.status === 'suspended',
+        // PD-20: only an account that could sign in itself can be opened.
+        impersonate: may('impersonate') && row.status === 'active',
       },
     };
   }

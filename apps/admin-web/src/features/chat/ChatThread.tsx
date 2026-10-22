@@ -921,6 +921,13 @@ function MessageItem({
               {copy.forwarded}
             </span>
           )}
+          {/* PD-20: an administrator wrote this in a support session, as its author. */}
+          {m.sentBySupport && (
+            <span className="cw-forwarded cw-support">
+              <Icon name="info" size={12} />
+              {copy.sentBySupport}
+            </span>
+          )}
           {side === 'internal' && (
             <span className="bubble__flag">
               <Icon name="lock" size={12} />

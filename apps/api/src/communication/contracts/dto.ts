@@ -88,6 +88,12 @@ export interface MessageDto {
   reactions: Array<{ actorId: string; emoji: string }>;
   /** A copy forwarded by its author; shown as "Forwarded". The source is never named. */
   forwarded: boolean;
+  /**
+   * PD-20: an administrator sent it in a support session, acting as its author.
+   * Every client shows it as "Sent by support"; who the administrator was is in
+   * the audit record, not on the message.
+   */
+  sentBySupport: boolean;
   /** The VIEWER's private bookmark. Set on the message page and the starred list. */
   starred?: boolean;
   /** Pinned for everyone in this conversation (at most three). */
@@ -492,6 +498,7 @@ export function toMessageDto(
     origin: m.origin,
     replyToMessageId: m.replyToMessageId,
     forwarded: m.forwarded,
+    sentBySupport: m.impersonationId !== null,
     clientMessageId: m.clientMessageId,
     deletedAt: m.deletedAt?.toISOString() ?? null,
     deletedForAll: m.deletedForAll,

@@ -1955,7 +1955,9 @@ revoke sessions — was the super admin's alone, and no route served it.
    labelled** to recipients as sent by support on the person's behalf. Every
    support session records the administrator, the target, the reason, the start
    and the end, and every action taken; it is short-lived and ends with the
-   administrator's own session.
+   administrator's own session. Calls, receipts and anything else that would act
+   in the person's name unlabelled are refused in a support session (record:
+   `../admin/pd020-account-administration.md`).
 
 **Canonical rule.** `AuthorizationService.canAdministerAccount(actor, target,
 act)` decides all four acts; `AccountAdminService` asks it before it reveals or

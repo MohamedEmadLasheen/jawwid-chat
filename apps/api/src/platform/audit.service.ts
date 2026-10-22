@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { currentImpersonationId } from './request-context';
 
 export type Tx = Prisma.TransactionClient;
 
@@ -12,6 +13,13 @@ export interface AuditWriteInput {
   after?: unknown;
   /** NOT NULL by design: a sensitive action without a reason is a bug. */
   reason: string;
+  /**
+   * PD-20: the support session the action belongs to. Defaults to the
+   * request's own (an administrator acting as someone), so no writer has to
+   * remember it; given explicitly only where the support session is the
+   * subject rather than the context (starting or ending one).
+   */
+  impersonationId?: string | null;
 }
 
 export interface EventWriteInput {
@@ -45,6 +53,7 @@ export class PrismaAuditService implements AuditService {
         before: (input.before ?? Prisma.DbNull) as Prisma.InputJsonValue,
         after: (input.after ?? Prisma.DbNull) as Prisma.InputJsonValue,
         reason: input.reason,
+        impersonationId: input.impersonationId ?? currentImpersonationId(),
       },
     });
   }
