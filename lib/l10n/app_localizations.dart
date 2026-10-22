@@ -1597,6 +1597,36 @@ abstract class L10n {
   /// **'Group archived'**
   String get systemGroupArchived;
 
+  /// PD-24 system message: the group was handed to another supervisor; history kept.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is now this group\'s supervisor'**
+  String systemGroupSupervisorChanged(String name);
+
+  /// No description provided for @systemGroupSupervisorChangedNoName.
+  ///
+  /// In en, this message translates to:
+  /// **'This group\'s supervisor changed'**
+  String get systemGroupSupervisorChangedNoName;
+
+  /// PD-24 system message in the parent's 1:1 with their supervisor after a transfer.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is now your supervisor; the chat history is kept'**
+  String systemDirectSupervisorChanged(String name);
+
+  /// No description provided for @systemDirectSupervisorChangedNoName.
+  ///
+  /// In en, this message translates to:
+  /// **'Your supervisor changed; the chat history is kept'**
+  String get systemDirectSupervisorChangedNoName;
+
+  /// No description provided for @systemGroupLearnerDetached.
+  ///
+  /// In en, this message translates to:
+  /// **'A child of this group moved to another supervisor'**
+  String get systemGroupLearnerDetached;
+
   /// No description provided for @systemUpdate.
   ///
   /// In en, this message translates to:
@@ -3151,6 +3181,12 @@ abstract class L10n {
   /// **'Forwarded'**
   String get forwardedLabel;
 
+  /// No description provided for @sentBySupportLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent by support'**
+  String get sentBySupportLabel;
+
   /// Shown next to a message's time when its author edited it after sending.
   ///
   /// In en, this message translates to:
@@ -4260,6 +4296,54 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Something went wrong. Try again.'**
   String get signupFailed;
+
+  /// No description provided for @resetOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Forgot your password? I have a reset code'**
+  String get resetOpen;
+
+  /// No description provided for @resetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a new password'**
+  String get resetTitle;
+
+  /// No description provided for @resetIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask the academy for a one-time code. Then enter your login, the code and a new password of your own. Nobody else will know it.'**
+  String get resetIntro;
+
+  /// No description provided for @resetUsernameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Your login (e-mail)'**
+  String get resetUsernameLabel;
+
+  /// No description provided for @resetUsernameRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your login.'**
+  String get resetUsernameRequired;
+
+  /// No description provided for @resetCodeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'6-digit code'**
+  String get resetCodeLabel;
+
+  /// No description provided for @resetCodeInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'That code is not valid, has expired or was already used. Ask the academy for a new one.'**
+  String get resetCodeInvalid;
+
+  /// No description provided for @resetFinish.
+  ///
+  /// In en, this message translates to:
+  /// **'Set password'**
+  String get resetFinish;
 
   /// No description provided for @studentProfileTitle.
   ///

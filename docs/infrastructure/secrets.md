@@ -7,7 +7,7 @@ Owner: AI #7 · Date: 2026-09-05
 | Environment | Store |
 |---|---|
 | Local | `.env`, gitignored, throwaway values only |
-| Staging | GitHub Environment `staging` (secrets scoped to it) + the hosting platform's store |
+| Staging | GitHub Environment `staging` (secrets scoped to it), copied into the App Platform app at each deploy |
 | Production | GitHub Environment `production`, protected by required reviewers |
 
 Secrets are injected as environment variables at deploy time. They are scoped to
@@ -29,7 +29,16 @@ injectable: GitHub secrets are write-only, and an encrypted backup whose key
 exists only there cannot be restored by anyone. Keep it in the team's password
 manager as well, and test a restore with that copy (`backup-recovery.md` §3).
 
-Marked `SECRET` in `infra/env/manifest.tsv`; that file is the list.
+Marked `SECRET` in `infra/env/manifest.tsv`; that file is the list. The deploy
+itself needs three more, per Environment, that the running app never sees:
+`DIGITALOCEAN_ACCESS_TOKEN`, `DIGITALOCEAN_APP_ID` and `GHCR_PULL_CREDENTIALS`
+(`production-readiness.md`, owner steps).
+
+**App Platform (ADR-012).** The GitHub Environment is the only store anyone
+edits. Each deploy resolves `.do/app.<env>.yaml` on the runner and sends every
+value to App Platform, which encrypts the `SECRET` ones. A value changed in the
+DigitalOcean console is overwritten by the next deploy. Rotate in GitHub, then
+redeploy.
 
 ## 3. Rules
 

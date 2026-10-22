@@ -84,7 +84,7 @@ Source of truth: `apps/api/src/platform/errors.ts`. Default HTTP status of a `Co
 | `COMM.APPROVAL_ALREADY_DECIDED` | 409 | Refresh, do not retry. |
 | `COMM.APPROVAL_REASON_REQUIRED` | 400 | Rejection without a non-blank reason. |
 | `COMM.GROUP_ALREADY_EXISTS` | — | Declared; **no raise site found** in the services reviewed (`ensureStudentGroup` returns the existing group instead). Reserved. |
-| `COMM.CALL_NOT_FOUND` | 404 | |
+| `COMM.CALL_NOT_FOUND` | 404 | Also any `/calls/:id` route whose id is not a uuid (e.g. `None`); it names no call. |
 | `COMM.CALL_ALREADY_ENDED` | 409 | Token requested for an ended call. |
 | `COMM.CALL_PARTICIPANT_LEFT` | 409 | The actor is a recorded participant but has already left the call (`accept`, `decline`, `POST /calls/:id/token`). |
 | `COMM.CALL_NOT_RINGING` | 409 | `decline` on a call that is no longer ringing. |
@@ -374,6 +374,14 @@ Page<T> { items: T[], nextCursor: string|null }
 - RT-009 (2026-10-12): `{ ok: true }` is returned only once every API node has confirmed it can no longer deliver to this session on a decision made before the revocation; otherwise `COMM.REVOCATION_UNCONFIRMED` 503 — the session IS revoked; retry. A repeat is held to the same confirmation.
 - Side effects: session revoked; device tokens registered under this session deactivated (`chat.device_token.is_active=false`); sockets of this session disconnected.
 - Audit: `audit_log` `{action:'session.revoked', entity:'session', entityId, reason:'logout'}`. Realtime: none to others.
+
+**POST /auth/password-reset** — EXISTS (PD-21)
+- Auth: none (the one-time code is the credential). Rate-limited by the login limiter, per identifier (`reset:<username>`) and per source, before anything else.
+- Request: `{ username: string, code: string /* 6 digits */, password: string /* 8..128 */ }`.
+- Response: `200 { ok: true }`. Opens no session: the client signs in with `POST /auth/login`.
+- Side effects (one transaction): the code is spent, the password set (Argon2id), the lockout cleared, **every session of the account revoked**; then sockets disconnected (RT-009 barrier, an unconfirmed barrier is logged, not returned, since the reset happened).
+- Errors: `AUTH.RESET_CODE_INVALID` 401 — one code for an unknown login, a wrong / expired / used / superseded code, and a code spent by its fifth miss · `AUTH.PASSWORD_TOO_WEAK` 400 · `COMMON.RATE_LIMITED` 429.
+- Audit: `audit_log` `{action:'account.password_reset_completed', entity:'account', entityId, actorId:null, after:{resetCodeId, issuedBy, revokedSessions}}` and `session.revoked`.
 
 ### 3.2 Me / Config — MISSING (Phase 1)
 
@@ -924,6 +932,7 @@ unauthorized lifecycle rule.
 - **PD-19 amendment:** the super admin may start a `student_group`, `class_group` or `family_group` call in a conversation they may write in without being a member; the server adds them to the call as a participant (`call_participant`), never to the conversation. A direct call between two other people stays `COMM.NOT_CONVERSATION_MEMBER` (two seats). Managers and backups are unchanged.
 - Request: `{ conversationId: string }`. Response: `{ callId, roomName }`.
 - Errors: matrix codes; `COMM.BR1_TEACHER_PARENT_DIRECT` 403; `COMM.PARENT_CANNOT_START_GROUP_CALL` 403; `COMMON.RATE_LIMITED` 429 (abuse limit, §1.1a).
+- **Never a 500 for a refused seat set (2026-10-22).** The call type is decided with the decision: `group` for `student_group`, `class_group`, `family_group`, `trial_group` and `teacher_supervision`, otherwise `direct`. A direct call with more than two seats is refused as `COMM.INVALID_PARTICIPANTS` 403, by `POST /calls` and `GET /conversations/:id/call-capability` alike, before anything is written. Should the BR-1 call triggers (`chat.assert_call_br1`) still refuse the set at commit, the refusal is answered as `COMM.INVALID_PARTICIPANTS`, `COMM.BR1_TEACHER_PARENT_DIRECT` or `COMM.BR1_ADMIN_PRESENCE_REQUIRED` (403), nothing is written, and the API logs it as a defect.
 - Audit: `event_log` `call_started`. Realtime: `call.incoming { callId, conversationId, type, initiatorId, initiatorName }` to the conversation room. **`roomName` was removed from this payload 2026-09-24:** the room handle comes back from `POST /calls/:id/token` with the token that makes it usable, so broadcasting it added nothing and put a media handle in a fan-out.
 
 **POST /calls/:id/token** — EXISTS
@@ -1241,6 +1250,51 @@ AuditEntryDto { id: string, actorId: string|null, action, entity, entityId, befo
 - Auth: required. Permission: `audit.read`. Scope: manager; organization only.
 - Query: `entity?`, `entityId?`, `actorId?`, `action?` (prefix match, e.g. `message.`), `from?`, `to?` (ISO-8601), `cursor`, `limit` (default 50, max 200). Response: `Page<AuditEntryDto>` newest first, read from `chat.audit_log`. `before`/`after` are returned as stored; they never contain message bodies (no writer stores one).
 - Audit: reading the audit log is itself recorded in `event_log` `{type:'audit_viewed', actorId, payload:{filters}}`.
+
+### 3.10a Account administration (`account-admin.controller.ts`) — EXISTS (PD-21)
+
+```
+AccountSummaryDto { accountId, kind: 'family'|'teacher'|'staff', name, staffRole: string|null,
+                    familyName: string|null, children: string[], status: 'provisioned'|'active'|'suspended'|'deactivated',
+                    hasLogin: boolean, lockedUntil: string|null, lastLoginAt: string|null,
+                    allowed: { resetPassword, suspend, reactivate } }   // advisory; decided again per action
+```
+
+Permission (every route): `AuthorizationService.canAdministerAccount` — any active staff role, same organization, on a parent or teacher account; a staff account only by the super admin; never the super admin's account or the caller's own. A non-staff caller gets `COMM.ACCOUNT_ADMIN_DENIED` 403 before any lookup; another tenant's account is `COMM.ACCOUNT_ADMIN_NOT_FOUND` 404. No route returns a password, a hash, a login identifier or a contact channel.
+
+**GET /admin/accounts** — Query: `q?` (the person's, the family's or a child's name), `kind?` (`family`|`teacher`|`staff`; staff for the super admin only). Response: `{ accounts: AccountSummaryDto[], truncated }`, at most 100, never the caller's own nor the super admin's.
+
+**GET /admin/accounts/:accountId** — Response: `AccountSummaryDto`; an account the caller may not administer is `404`.
+
+**POST /admin/accounts/:accountId/password-reset** — Request: `{ reason: string, signOutEverywhere?: boolean }`. Response: `201 { code, expiresAt, expiresInMinutes, signedOutSessions }` — the plain code exists only in this response. Any earlier live code is superseded. Errors: `COMMON.VALIDATION` 400 (reason) · `COMM.ACCOUNT_ADMIN_STATE` 409 (deactivated) · `COMMON.RATE_LIMITED` 429 (10 codes per account per hour). Audit: `account.password_reset_issued` `{actorId: staff, reason, after:{resetCodeId, expiresAt, signOutEverywhere}}`; `session.revoked` when signing out everywhere.
+
+**POST /admin/accounts/:accountId/suspend** — Request: `{ reason }`. Response: `200 AccountSummaryDto`. One transaction: `chat.deactivate_principal('account', …, 'suspended')` (RT-032 journal), every session revoked, audit `account.suspended` `{before:{status:'active'}, after:{status:'suspended', revokedSessions}}`; then the RT-009 barrier (`COMM.REVOCATION_UNCONFIRMED` 503 → retry; idempotent). Suspending a suspended account changes nothing and writes no audit row. Errors: `COMM.ACCOUNT_ADMIN_STATE` 409 (provisioned / deactivated).
+
+**POST /admin/accounts/:accountId/reactivate** — Request: `{ reason }`. Response: `200 AccountSummaryDto`. `chat.reactivate_account` (suspended → active only); earlier sessions stay revoked. Audit `account.reactivated`. An active account is left alone (no audit row). Errors: `COMM.ACCOUNT_ADMIN_STATE` 409 (deactivated / provisioned).
+
+### 3.10b Support sessions — impersonation (`impersonation.controller.ts`) — EXISTS (PD-21)
+
+```
+SupportSessionDto { id, target: { accountId, kind: 'family'|'teacher', name, actorId }, staff: { id, name },
+                    reason, startedAt, expiresAt, endsAtLatest, endedAt: string|null, endedReason: string|null, actions: number }
+SupportTokenDto   { session: SupportSessionDto, accessToken, expiresInSeconds }   // NO refresh token, ever
+```
+
+Every route runs on the **administrator's own** token. Permission: `canAdministerAccount(…, 'impersonate')` — any staff role, a parent or teacher account of the organization, never staff.
+
+**POST /admin/impersonations** — Request `{ accountId, reason }`. Response `201 SupportTokenDto`. The account must be able to sign in (`COMM.ACCOUNT_ADMIN_STATE` 409 otherwise). Ends the administrator's previous live support session (`superseded by a new support session`). Audit `impersonation.started`.
+
+**POST /admin/impersonations/:id/token** — A fresh access token for a live support session of the caller's; extends it by 15 minutes, never past an hour from its start. Audit `impersonation.extended` when it extends. Errors: `COMM.IMPERSONATION_NOT_FOUND` 404 · `COMM.IMPERSONATION_ENDED` 409.
+
+**POST /admin/impersonations/:id/end** — Exit; revokes the support session's session. Idempotent. Audit `impersonation.ended`.
+
+**GET /admin/impersonations** (`?accountId=`) — the record: the super admin's whole organization, anyone else their own; newest first, at most 100. **GET /admin/impersonations/:id/actions** — its trail: `{ session, actions: [{ method, route, status, at }] }` (route templates; never a body).
+
+**On the support token** (the account's own routes, as that person):
+- every request re-checks the support session (not ended or expired), the administrator's own session, account and permission — any of them gone ends it (`401`);
+- reads are allowed and send no receipt; writes only from the allowlist (`SupportSessionInterceptor`: sending a message, the person's own profile / photos / teacher profile / leave requests, star, delete-for-me, chat preferences) — anything else `COMM.SUPPORT_SESSION_FORBIDDEN` 403;
+- every request is recorded in `chat.impersonation_action`; every audit row written carries `impersonation_id`; every message sent carries it and is served with `MessageDto.sentBySupport: true`;
+- `POST /auth/refresh` has nothing to present; `POST /auth/logout` is refused; the realtime gateway refuses the token.
 
 ### 3.11 Health (`infra/health/health.controller.ts`) — EXISTS, unauthenticated, no prefix
 

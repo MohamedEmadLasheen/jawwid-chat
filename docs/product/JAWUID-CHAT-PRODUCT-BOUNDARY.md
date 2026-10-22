@@ -120,7 +120,7 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-22 — CLOSED
+## 4. Product decisions PD-1 to PD-22 and PD-24 — CLOSED
 
 PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
 exit gate, before `main` was baselined. **PD-6 was closed by the product owner
@@ -139,7 +139,8 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-18 was closed by the product owner on 2026-10-21** (teacher payroll lives in Chat) and supersedes PD-10 item 4.
 **PD-19 was closed by the product owner on 2026-10-21** (a member may start a call in their own chat; supersedes PD-2), amended 2026-10-21 (the super admin's group calls) and 2026-10-22 (calls in the trial group and the supervision conversation).
 **PD-20 was closed by the product owner on 2026-10-22** (the Sales team uses the app: chats, calls and payments). It amends PD-15's "staff work in Admin Web; the app is for parents and teachers".
-**PD-22 was closed by the product owner on 2026-10-22** (every account has its own time zone). PD-21 is reserved by the teacher supervision hub.
+**PD-21 was closed by the product owner on 2026-10-22** (account administration: password reset, inactive accounts, impersonation).
+**PD-22 was closed by the product owner on 2026-10-22** (every account has its own time zone).
 
 | ID | Subject | Status |
 |---|---|---|
@@ -163,6 +164,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-18** | **Teacher payroll in Chat** (2026-10-21) | **CLOSED** — salary terms, a sealed payout account and the amounts of bonuses and deductions are recorded in Chat, for the super admin only; the month's financial summary is computed, never stored; supersedes PD-10 item 4 |
 | **PD-19** | **Who may start a call: every member of their own chat** (2026-10-21) | **CLOSED** — teachers, parents and supervisors may start a call in any chat they may write in; parents may now start their family / Student Group calls; chats a person is not a member of, BR-1 / PD-7, C-4 and the no-phantom-call rule are unchanged; amended the same day so the super admin may start a group call in any chat they may write in, with a seat on the call; amended 2026-10-22 so trial-group and supervision calls are group calls (they were refused by the database) |
 | **PD-20** | **The Sales team in the app** (2026-10-22) | **CLOSED** — Sales-department staff sign in to the app and get Chats, Calls, Payments and Settings; they view and record payments (record once, void with a reason); instalment plans, the contact record and every other staff role stay in Admin Web; the app never holds a parent's phone or e-mail |
+| **PD-21** | **Account administration: password reset, inactive accounts, impersonation** (2026-10-22) | **CLOSED** — every staff role, org-wide, for parent and teacher accounts; staff accounts by the super admin only; never the super admin's or one's own; a reset is a one-time code the person completes with their own password; inactive = suspended, signed out everywhere, reactivation revives no session; impersonation of parents and teachers only, labelled messages, fully audited |
 | **PD-22** | **Each account's time zone** (2026-10-22) | **CLOSED** — every person's times are shown and notified in their own zone, taken from their phone's OS zone ("Set automatically", like a phone) or picked by hand; teachers follow their phone too; a weekly lesson stays anchored in the teacher's zone; Admin Web shows Cairo time, named, with the family's local time beside it; reminders say the time in the recipient's zone. Record: `../architecture/TIME-ZONES.md` |
 
 ---
@@ -2014,6 +2016,71 @@ pages (Organization, Teacher Files, discipline, the Admin Portal) are not in the
 
 ---
 
+### PD-21 · Account administration: password reset, inactive accounts, impersonation
+
+**Closed by the product owner on 2026-10-22** (owner request: admins, the super
+admin included, may impersonate a student's account, reset another account's
+password, and set any account inactive; permissions enforced on the backend,
+every action in the audit log, existing account security preserved). The plan
+was reviewed before any change; the owner answered four design questions.
+
+**Background.** Students have no login: a learner has no account, and the PRD
+defers student login (row 8, "one parent login, all children"). The family
+(parent) account holds the children. `users.manage`
+(`../architecture/AUTHORIZATION-MODEL.md` §3) — suspend, reset credentials,
+revoke sessions — was the super admin's alone, and no route served it.
+
+**Decision.**
+1. **Who.** Every staff role (admin, coverage, manager, finance, technical,
+   academic, super admin), organization-wide, on any **parent or teacher**
+   account. A **staff** account only by the super admin. **Nobody** acts on the
+   super admin's account (the bootstrap CLI stays its only credential writer)
+   or on their own.
+2. **Password reset.** The administrator never sees or chooses a password. They
+   issue a **one-time 6-digit code** (10 minutes, 5 tries, only its hash
+   stored), shown to them once, and pass it on by hand. The person enters their
+   login, the code and a password of their own (`POST /auth/password-reset`,
+   public, rate-limited like login). Completing it sets the password, clears
+   the lockout and **ends every session of the account**. The administrator may
+   also sign the account out everywhere at issue time (a compromised account).
+3. **Inactive.** "Set inactive" is `chat.account.status = 'suspended'`
+   (reversible). The account is signed out everywhere at once — sessions
+   revoked, sockets cut, call rooms and scheduled notifications cleaned up
+   (RT-032) — and every login answers `AUTH.ACCOUNT_DISABLED`. Reactivation
+   returns it to active; **no earlier session or refresh token comes back**.
+   `deactivated` (offboarding) is never reversed from here.
+4. **Impersonation** ("support session"). Of **parent and teacher** accounts —
+   never a staff account. Messages sent while impersonating are **allowed but
+   labelled** to recipients as sent by support on the person's behalf. Every
+   support session records the administrator, the target, the reason, the start
+   and the end, and every action taken; it is short-lived and ends with the
+   administrator's own session. Calls, receipts and anything else that would act
+   in the person's name unlabelled are refused in a support session (record:
+   `../admin/pd021-account-administration.md`).
+
+**Canonical rule.** `AuthorizationService.canAdministerAccount(actor, target,
+act)` decides all four acts; `AccountAdminService` asks it before it reveals or
+changes anything. The database states the same rule for reset codes
+(`chat.guard_password_reset_code`), and reactivation is server-side only
+(`chat.reactivate_account`). Every act writes `chat.audit_log` in its own
+transaction with the administrator as actor and their reason.
+
+**Consequences.**
+- Admin Web: an **Accounts** page for every staff role (search by the person's,
+  the family's or a child's name); "Forgot your password? I have a reset code"
+  on the sign-in page. The mobile app has the same reset screen.
+- Departments (finance, technical, academic) gain one page: Accounts.
+- Supersedes the super-admin-only scope of `users.manage` for these acts.
+- Record: `../admin/pd021-account-administration.md`.
+
+**Deprecated behaviour.** `users.manage` as a super-admin-only key for reset and
+suspension. PRD §7.1's "temporary password" wording: the administrator issues a
+code, never a password.
+
+**Closed.** 2026-10-22.
+
+---
+
 ### PD-22 · Each account's time zone
 
 **Closed 2026-10-22** by the product owner.
@@ -2064,7 +2131,7 @@ academy calendar     = instalment due dates, payroll month, leave days stay date
                         schedule.timezone; they are never converted
 ```
 
-**Implementation phase.** Migration `20261022120000_chat_pd022_account_time_zone.sql`
+**Implementation phase.** Migration `20261022130000_chat_pd022_account_time_zone.sql`
 (table + reminder templates v2); `/me/time-zone` (API-CONTRACT §3.6a); the app's
 `AppClock`, `TimeZoneController` and Settings -> Date & time; Admin Web's
 `core/time/academyTime.ts`.
@@ -2102,9 +2169,74 @@ member's browser.
 
 ---
 
-### Decisions still open after PD-1 to PD-22
+### PD-24 · Changing a family's supervisor without losing anything
 
-None at the decision level (PD-21 is held by the teacher supervision hub). PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
+**Closed 2026-10-22** by the product owner. Amends PD-8's reassignment rule.
+(PD-23 is reserved by work in progress: convenient sign-in.)
+
+The owner's request of 2026-10-22: a group's supervisor can be changed; the
+chat history, participants, messages and attachments stay and the group is not
+recreated; the current supervisor leaves the group and the new one joins it. On
+the New Students page the super admin and the Operations Manager change the
+assigned supervisor at any time. The student's complete profile and the
+parent's information and records move to the new supervisor, who sees the whole
+history; the previous supervisor no longer sees the student. Owner answer the
+same day: **the parent's 1:1 with the old supervisor is handed over** (same
+conversation, whole history) rather than left behind as PD-8 had it.
+
+**Final decision.**
+
+```
+who          the super admin, or the Operations Manager who runs both the old
+             and the new supervisor (canAssignSupervision); a reason is required
+where        Admin Web: the group's info panel ("Change supervisor") and the
+             New Students card ("Change", after Assign); the Organization page
+             keeps its per-child reassignment
+the unit     the group's children (or the enrolment's), plus every child who
+             shares a live family group with them -- a group is never split
+in one transaction, nothing created again:
+  supervision     one learner_supervision row per child, audited (before,
+                  after, reason, who)
+  groups          the same conversation: the old supervisor's seat ends
+                  (left_at, kept on record), the new one is seated as admin,
+                  a system line "X is now this group's supervisor"
+  parent's 1:1    the same conversation passes to the new supervisor (seat
+                  swapped, pair key rewritten, a system line) once the old
+                  supervisor has no child of the family left; if the parent
+                  already has a 1:1 with the new supervisor, nothing is
+                  duplicated and the old one stays as history
+  billing         the family's billing supervisor follows
+  owner           family.owner_id (workload) follows, via transfer_ownership
+read through scope, so they move with the row and the previous supervisor
+loses them at once: the Student and Parent Profiles, lessons and reports,
+payments, the New Students card, the learners list
+```
+
+**Implementation phase.** Built 2026-10-22, no migration:
+`OrgStructureService.transferLearners` / `transferGroup`,
+`ConversationService.reconcileSupervisionChange` (now several children at once)
+and `transferFamilyDirects`; routes `POST /org/conversations/:id/supervisor` and
+`POST /trials/new-students/:trialId/supervisor`; Admin Web
+`organization/ChangeSupervisorDialog.tsx`; the system lines in both clients.
+
+**Consequences.** `../architecture/ORG-SCOPE-PD8.md` §2: a former supervisor's
+1:1 with the parent now passes to the new supervisor instead of being lost. The
+per-child reassignment (Organization page) also hands over the 1:1, billing and
+owner when the child was the old supervisor's last in the family.
+
+**Deprecated behaviour.** "Private 1:1s never transfer" (PD-8).
+
+**Defaults adopted at closing** (the owner may override without reopening PD-24):
+1. A reason is required, as for every structure change.
+2. Only Operations primary supervisors can receive a family (PD-8's rule).
+
+**Closed.** 2026-10-22.
+
+---
+
+### Decisions still open after PD-1 to PD-22 and PD-24
+
+None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
 The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their
 phase starts and do not reopen either decision. Any new product question is
 recorded here with a new `PD-n` and the same six fields: decision, canonical

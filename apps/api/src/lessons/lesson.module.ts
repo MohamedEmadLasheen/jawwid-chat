@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { CommunicationModule } from '../communication/communication.module';
 import { SupervisionModule } from '../supervision/supervision.module';
 import { NewStudentsModule } from '../new-students/new-students.module';
+import { OrgStructureModule } from '../org/org-structure.module';
 import { LessonController } from './lesson.controller';
 import { LessonService } from './lesson.service';
 import { LifecycleController } from './lifecycle.controller';
@@ -31,7 +32,8 @@ import { NewStudentEnrolmentService } from '../new-students/enrolment.service';
   // the bonus and handover cards are posted. It depends on nothing here.
   // NewStudentsModule: the confined subscription form (G-07), written in the
   // outcome's own transaction.
-  imports: [CommunicationModule, SupervisionModule, NewStudentsModule],
+  // OrgStructureModule: PD-24, a new student's supervisor changes through the one transfer.
+  imports: [CommunicationModule, SupervisionModule, NewStudentsModule, OrgStructureModule],
   controllers: [StatsController, SchedulingController, LessonController, JourneyController, LifecycleController, TrialController, TrialTicketsController],
   providers: [
     LessonService, SchedulingService, LifecycleService, SupervisionService, StatsService, TrialService, TrialGroupService,

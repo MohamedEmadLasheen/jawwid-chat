@@ -10,7 +10,8 @@
  *      supervisor), the status and order, the conversation to follow up in
  *   3. the billing supervisor: set by the Operations Manager only, chosen
  *      among the supervisors of the family's children, cleared by the database
- *      the moment they supervise none of them
+ *      the moment they supervise none of them -- and, when that is because the
+ *      children were transferred, handed to the new supervisor (PD-24)
  *   4. voided rows are history, not work
  *   5. the request role (chat_app) reads none of it (needs DATABASE_APP_URL)
  *
@@ -278,20 +279,24 @@ describe('3. the family billing supervisor', () => {
     expect(await code(billing.billingSupervisor(m.operationsManager.id, randomUUID()))).toBe(CommErrorCode.BILLING_NOT_FOUND);
   });
 
-  it('is cleared, with an audit row, when the children move away from the billing supervisor', async () => {
+  it('passes to the new supervisor when the children move away from the billing supervisor (PD-24)', async () => {
     const f = splitFamily();
     const [c0, c1] = f.children as [SeedManifest['families'][0]['children'][0], SeedManifest['families'][0]['children'][0]];
     await billing.setBillingSupervisor(m.superAdmin.id, f.id, { supervisorId: c0.supervisorId, reason: 'r' });
     // c0 moves to c1's supervisor: the billing supervisor supervises nobody in the family any more.
     await org.assignSupervisor(m.superAdmin.id, c0.id, { supervisorId: c1.supervisorId, reason: 'rebalance' });
     try {
-      expect(await g.prisma.familyBillingSupervision.findUnique({ where: { familyId: f.id } })).toBeNull();
+      // The database clears the stale row (audited with no actor); the transfer re-points it to the new supervisor.
+      expect((await g.prisma.familyBillingSupervision.findUnique({ where: { familyId: f.id } }))?.supervisorId).toBe(c1.supervisorId);
       const cleared = await g.prisma.auditLog.findFirst({
         where: { entityId: f.id, action: 'family.billing_supervisor_cleared', actorId: null },
       });
       expect(cleared?.before).toEqual({ supervisorId: c0.supervisorId });
+      const transferred = await g.prisma.auditLog.findFirst({ where: { entityId: f.id, action: 'family.billing_supervisor_transferred' } });
+      expect(transferred).toMatchObject({ actorId: m.superAdmin.id, before: { supervisorId: c0.supervisorId }, after: { supervisorId: c1.supervisorId } });
     } finally {
       await org.assignSupervisor(m.superAdmin.id, c0.id, { supervisorId: c0.supervisorId, reason: 'restore' });
+      await g.prisma.familyBillingSupervision.deleteMany({ where: { familyId: f.id } });
     }
   });
 

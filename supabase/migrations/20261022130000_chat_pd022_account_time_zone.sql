@@ -74,11 +74,11 @@ insert into chat.notification_template (key, locale, version, title, body)
 select v.key, v.locale, 2, v.title, v.body
   from (values
     ('lesson_reminder_tomorrow', 'en', 'Jawwid', 'Reminder: there is a lesson tomorrow at {time}.'),
-    ('lesson_reminder_tomorrow', 'ar', 'جوّيد',  'تذكير: لديكم حصة غدًا الساعة {time}.'),
+    ('lesson_reminder_tomorrow', 'ar', 'جَوِّد',  'تذكير: لديكم حصة غدًا الساعة {time}.'),
     ('lesson_reminder_soon',     'en', 'Jawwid', 'A lesson starts in 30 minutes, at {time}.'),
-    ('lesson_reminder_soon',     'ar', 'جوّيد',  'تبدأ الحصة بعد ٣٠ دقيقة، الساعة {time}.'),
+    ('lesson_reminder_soon',     'ar', 'جَوِّد',  'تبدأ الحصة بعد ٣٠ دقيقة، الساعة {time}.'),
     ('lesson_reminder_teacher',  'en', 'Jawwid', 'Your next lesson starts in 15 minutes, at {time}.'),
-    ('lesson_reminder_teacher',  'ar', 'جوّيد',  'تبدأ حصتك القادمة بعد ١٥ دقيقة، الساعة {time}.')
+    ('lesson_reminder_teacher',  'ar', 'جَوِّد',  'تبدأ حصتك القادمة بعد ١٥ دقيقة، الساعة {time}.')
   ) as v(key, locale, title, body)
  where not exists (
    select 1 from chat.notification_template t where t.key = v.key and t.locale = v.locale and t.version = 2);

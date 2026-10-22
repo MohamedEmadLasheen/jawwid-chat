@@ -52,6 +52,7 @@ export const chatCopy = {
     close: 'إغلاق',
     forward: 'إعادة توجيه',
     forwarded: 'مُعاد توجيهها',
+    sentBySupport: 'أرسلها الدعم',
     forwardTo: 'إعادة التوجيه إلى…',
     forwardHint: 'اختر حتى ١٠ محادثات. يتحقق الخادم من أنك تستطيع الكتابة في كل منها.',
     forwardSend: (n: number) => (n > 0 ? `إرسال إلى ${n}` : 'إرسال'),
@@ -218,6 +219,11 @@ export const chatCopy = {
       'group.membership_changed': (p: Record<string, unknown>) =>
         `تحدّث أعضاء المجموعة (+${Number(p.added ?? 0)} / −${Number(p.removed ?? 0)})`,
       'group.archived': () => 'أُرشفت المجموعة',
+      'group.supervisor_changed': (p: Record<string, unknown>) =>
+        p.supervisor ? `أصبح ${String(p.supervisor)} مشرف هذه المجموعة` : 'تغيّر مشرف هذه المجموعة',
+      'direct.supervisor_changed': (p: Record<string, unknown>) =>
+        p.supervisor ? `أصبح ${String(p.supervisor)} مشرفك؛ سجلّ المحادثة كما هو` : 'تغيّر مشرفك؛ سجلّ المحادثة كما هو',
+      'group.learner_detached': () => 'انتقل طفل من هذه المجموعة إلى مشرف آخر',
       fallback: () => 'تحديث من النظام',
     } as Record<string, (p: Record<string, unknown>) => string>,
   },
@@ -269,6 +275,7 @@ export const chatCopy = {
     close: 'Close',
     forward: 'Forward',
     forwarded: 'Forwarded',
+    sentBySupport: 'Sent by support',
     forwardTo: 'Forward to…',
     forwardHint: 'Choose up to 10 chats. The server checks you can write in each one.',
     forwardSend: (n: number) => (n > 0 ? `Send to ${n}` : 'Send'),
@@ -435,6 +442,11 @@ export const chatCopy = {
       'group.membership_changed': (p: Record<string, unknown>) =>
         `Group members updated (+${Number(p.added ?? 0)} / −${Number(p.removed ?? 0)})`,
       'group.archived': () => 'Group archived',
+      'group.supervisor_changed': (p: Record<string, unknown>) =>
+        p.supervisor ? `${String(p.supervisor)} is now this group's supervisor` : "This group's supervisor changed",
+      'direct.supervisor_changed': (p: Record<string, unknown>) =>
+        p.supervisor ? `${String(p.supervisor)} is now your supervisor; the chat history is kept` : 'Your supervisor changed; the chat history is kept',
+      'group.learner_detached': () => 'A child of this group moved to another supervisor',
       fallback: () => 'System update',
     } as Record<string, (p: Record<string, unknown>) => string>,
   },
