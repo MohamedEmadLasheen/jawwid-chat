@@ -1915,7 +1915,10 @@ model PasswordResetCode {
   id             String    @id @default(uuid()) @db.Uuid
   organizationId String    @map("organization_id") @db.Uuid
   accountId      String    @map("account_id") @db.Uuid
-  issuedBy       String    @map("issued_by") @db.Uuid
+  /// PD-25: null for a code the parent asked for themself (channel email / whatsapp).
+  issuedBy       String?   @map("issued_by") @db.Uuid
+  /// PD-25: admin | email | whatsapp.
+  channel        String    @default("admin")
   codeHash       String    @map("code_hash")
   reason         String
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
@@ -1923,6 +1926,8 @@ model PasswordResetCode {
   attempts       Int       @default(0)
   usedAt         DateTime? @map("used_at") @db.Timestamptz
   supersededAt   DateTime? @map("superseded_at") @db.Timestamptz
+  /// PD-25: the forgot-e-mail flow confirmed the code; it stays live for a reset.
+  verifiedAt     DateTime? @map("verified_at") @db.Timestamptz
 
   @@map("password_reset_code")
   @@schema("chat")

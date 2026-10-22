@@ -231,6 +231,14 @@ jobs:
           CORE_TIMEOUT_MS: '5000'
           CORE_RETRY_MAX: '3'
           TEACHER_PAYOUT_KEYS: ${{ secrets.TEACHER_PAYOUT_KEYS }}
+          # PD-25 parent self-recovery: each channel stays off until all of its variables are set.
+          SMTP_URL: ${{ secrets.SMTP_URL }}
+          RECOVERY_MAIL_FROM: ${{ vars.RECOVERY_MAIL_FROM }}
+          WHATSAPP_PHONE_NUMBER_ID: ${{ vars.WHATSAPP_PHONE_NUMBER_ID }}
+          WHATSAPP_ACCESS_TOKEN: ${{ secrets.WHATSAPP_ACCESS_TOKEN }}
+          WHATSAPP_RECOVERY_TEMPLATE: ${{ vars.WHATSAPP_RECOVERY_TEMPLATE }}
+          WHATSAPP_TEMPLATE_LANGUAGE: ${{ vars.WHATSAPP_TEMPLATE_LANGUAGE }}
+          WHATSAPP_API_VERSION: ${{ vars.WHATSAPP_API_VERSION }}
           # PD-27: card payments (optional; unset = no card option, bank transfer
           # and cash still work) and the public origin payment links point at.
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}

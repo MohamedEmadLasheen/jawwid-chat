@@ -29,22 +29,22 @@ claimed. The decision text itself still lives in
 | PD | Subject | Branch | State |
 |----|---------|--------|-------|
 | PD-1 … PD-21 | see the boundary doc §4 | — | CLOSED, on `main` |
-| PD-22 | Every account has its own time zone | `claude/multi-timezone-accounts-afdfa6` | built, merge queue #1 |
-| PD-22 amendment | Warn families before a clock change (DST) | `claude/pd22-dst-warning` | in progress, after PD-22 |
-| PD-23 | Convenient login: session policy, devices, app lock, keep me signed in | `claude/biometric-convenient-auth-4049fd` | in progress |
-| PD-24 | Change a family's supervisor without losing anything | `claude/supervisor-transfer` | built, verifying |
-| PD-25 | Parent self-recovery (reset code, forgot email) | `claude/parent-account-recovery-6cd585` | in progress |
-| PD-26 | The Teacher Supervision page (leaves, absences, lateness, grants, complaints) | `claude/admin-teacher-management-41f08a` | built — renumbered from "PD-24" |
-| PD-27 | Payments: Stripe payment links, bank-transfer receipts, cash, invoices, instalment reminders | `claude/payment-subscription-system-c58769` | built, verifying |
+| PD-22 | Every account has its own time zone | `claude/multi-timezone-accounts-afdfa6` | MERGED #109 |
+| PD-22 amendment | Warn families before a clock change (DST) | `claude/pd22-dst-warning` | MERGED #115 |
+| PD-23 | Convenient login: session policy, devices, app lock, keep me signed in | `claude/biometric-convenient-auth-4049fd` | MERGED #111 |
+| PD-24 | Change a family's supervisor without losing anything | `claude/supervisor-transfer` | MERGED #107 |
+| PD-25 | Parent self-recovery (reset code, forgot email) | `claude/parent-account-recovery-6cd585` | MERGED #112 |
+| PD-26 | The Teacher Supervision page (leaves, absences, lateness, grants, complaints) | `claude/admin-teacher-management-41f08a` | MERGED #108 (renumbered from "PD-24") |
+| PD-27 | Payments: Stripe payment links, bank-transfer receipts, cash, invoices, instalment reminders | `claude/payment-subscription-system-c58769` | built, PR open |
 | PD-28 | next free number | — | — |
 
-## Migration slots (open branches)
+## Migration slots claimed on 2026-10-22
 
-| Slot | Branch |
+| Slot | Owner |
 |------|--------|
 | `20261022130000` | PD-22 — `chat_pd022_account_time_zone` |
-| `20261022140000` | PD-23 — `chat_pd023_session_policy` (rename from `130000`) |
-| `20261022150000` | PD-26 — `chat_pd026_teacher_supervision` (rename from `pd024`) |
+| `20261022140000` | PD-23 — `chat_pd023_session_policy` (renamed from `130000`; merged after 150000 by an accepted exception: no shared tables) |
+| `20261022150000` | PD-26 — `chat_pd026_teacher_supervision` (renamed from `pd024`) |
 | `20261022160000` | PD-25 — `chat_pd025_parent_self_recovery` |
 | `20261022163000` | PD-22 amendment — `chat_pd022_clock_shift_warning` |
 | `20261022170000` | PD-27 — `chat_pd027_payments` |

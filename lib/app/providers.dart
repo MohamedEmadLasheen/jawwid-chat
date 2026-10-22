@@ -75,6 +75,12 @@ final passwordResetRepositoryProvider = Provider<PasswordResetRepository>((ref) 
   return const NoPasswordResetRepository();
 });
 
+/// PD-25: a parent recovers their own account (forgot password / forgot e-mail). Overridden
+/// at startup with the HTTP implementation; the default offers no self-service way in.
+final accountRecoveryRepositoryProvider = Provider<AccountRecoveryRepository>((ref) {
+  return const NoAccountRecoveryRepository();
+});
+
 final lessonRepositoryProvider = Provider<LessonRepository>((ref) {
   return const NoLessonRepository();
 });

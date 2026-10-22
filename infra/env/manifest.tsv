@@ -176,9 +176,25 @@ HEALTH_PROBE_TIMEOUT_MS	observability	no	opt	opt	opt
 GIT_COMMIT	release	no	opt	req	req
 BUILD_VERSION	release	no	opt	req	req
 BUILD_TIME	release	no	opt	req	req
+# PD-25 parent self-recovery (apps/api/src/account-recovery/recovery-delivery.ts).
+# Each channel is OFF until all of its variables are set, and the sign-in screen
+# hides a channel that is off (GET /auth/recovery/options): e-mail needs
+# SMTP_URL + RECOVERY_MAIL_FROM; WhatsApp needs WHATSAPP_PHONE_NUMBER_ID +
+# WHATSAPP_ACCESS_TOKEN + WHATSAPP_RECOVERY_TEMPLATE (an APPROVED Meta
+# authentication template). SMTP_URL embeds the SMTP password, so it is secret.
+SMTP_URL	recovery	yes	opt	opt	opt
+RECOVERY_MAIL_FROM	recovery	no	opt	opt	opt
+WHATSAPP_PHONE_NUMBER_ID	recovery	no	opt	opt	opt
+WHATSAPP_ACCESS_TOKEN	recovery	yes	opt	opt	opt
+WHATSAPP_RECOVERY_TEMPLATE	recovery	no	opt	opt	opt
+WHATSAPP_TEMPLATE_LANGUAGE	recovery	no	opt	opt	opt
+WHATSAPP_API_VERSION	recovery	no	opt	opt	opt
 PRISMA_MIGRATE_SKIP_GENERATE	guardrail	no	opt	opt	opt
 DEBUG	guardrail	no	opt	forbid	forbid
 PRISMA_STUDIO	guardrail	no	opt	forbid	forbid
 USE_MOCK_PUSH	guardrail	no	opt	forbid	forbid
 USE_MOCK_CORE	guardrail	no	opt	forbid	forbid
 ALLOW_INSECURE_TLS	guardrail	no	forbid	forbid	forbid
+# PD-25: writes recovery codes to the API log instead of sending them. The API
+# also refuses to boot with it under NODE_ENV=production.
+RECOVERY_DELIVERY_LOG	guardrail	no	opt	opt	forbid
