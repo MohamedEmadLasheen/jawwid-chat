@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app.dart';
 import '../../../app/providers.dart';
 import '../../../app/router.dart';
+import '../../../core/time/time_zone_controller.dart';
 import '../../../design/tokens.dart';
 import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../l10n/app_localizations.dart';
@@ -13,6 +14,7 @@ import '../../../shared/utils/text_direction.dart';
 import '../../app_lock/application/app_lock_controller.dart';
 import '../../app_lock/domain/app_lock_settings.dart';
 import '../application/theme_mode_controller.dart';
+import 'date_time_screen.dart';
 
 /// Profile and settings.
 ///
@@ -233,6 +235,18 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const Divider(),
           ],
+          // PD-22: the account's time zone, under the same name a phone uses.
+          ListTile(
+            key: const ValueKey('settings-date-time'),
+            leading: const Icon(Icons.schedule_outlined),
+            title: Text(l10n.settingsDateTime),
+            subtitle: switch (ref.watch(timeZoneControllerProvider).value?.effectiveZone) {
+              final zone? => Text(l10n.settingsDateTimeSubtitle(zoneDisplayName(zone, Localizations.localeOf(context).languageCode))),
+              null => null,
+            },
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push(Routes.dateTime),
+          ),
           ListTile(
             leading: const Icon(Icons.notifications_outlined),
             title: Text(l10n.settingsNotifications),

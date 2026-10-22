@@ -11,6 +11,8 @@ import { LessonService, invalid, textField } from './lesson.service';
 import { SchedulingService } from './scheduling.service';
 import { signAvatar } from '../communication/profile/avatar-urls';
 import { AvatarService } from '../communication/profile/avatar.service';
+import { nextWeeklyStart } from '../platform/time-zone';
+import { familyZonesOf } from '../platform/time-zone.service';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -91,7 +93,7 @@ export class EnrollmentService implements OnModuleInit {
           teacher: l.teacher ? { id: l.teacher.id, name: l.teacher.name } : null,
           schedule: slots
             .filter((s) => s.learnerId === l.id)
-            .map((s) => ({ weekday: s.weekday, start: hhmm(s.startMinute), durationMinutes: s.durationMinutes, timezone: s.timezone })),
+            .map((s) => slotDto(s, now)),
           canEdit: this.authz.canRecordLessonAct(actor, standing, 'manage_enrollment').allowed,
         };
       }),
@@ -139,9 +141,13 @@ export class EnrollmentService implements OnModuleInit {
       ...(staffView ? { birthDate: e?.birthDate ? e.birthDate.toISOString().slice(0, 10) : null } : {}),
       course: e?.course ? { id: e.course.id, name: e.course.name } : null,
       teacher: teacher ? { id: teacher.id, name: teacher.name } : null,
-      schedule: slots.map((s) => ({ weekday: s.weekday, start: hhmm(s.startMinute), durationMinutes: s.durationMinutes, timezone: s.timezone })),
+      schedule: slots.map((s) => slotDto(s, now)),
       ...(staffView && family
-        ? { family: { id: family.id, name: family.displayName, parents: family.contacts.map((c) => ({ id: c.id, name: c.name })) } }
+        ? {
+            family: { id: family.id, name: family.displayName, parents: family.contacts.map((c) => ({ id: c.id, name: c.name })) },
+            // PD-22: Admin Web shows the family's local time beside the teacher's.
+            familyTimeZone: (await familyZonesOf(this.prisma, [family.id])).get(family.id) ?? null,
+          }
         : {}),
       viewer: standing === 'teacher' ? 'teacher' : 'staff',
     };
@@ -304,6 +310,22 @@ export function ageOn(birth: Date, at: Date): number {
     || (at.getUTCMonth() === birth.getUTCMonth() && at.getUTCDate() < birth.getUTCDate());
   if (beforeBirthday) age -= 1;
   return Math.max(0, age);
+}
+
+/**
+ * A weekly slot as every reader gets it. `start` is the TEACHER's wall clock in
+ * `timezone` (the anchor, PD-11 T2 kept by PD-22); `nextStartsAt` is the next
+ * real lesson start, which each client words in its reader's own zone -- the
+ * weekday can differ across zones, so a client never converts `start` alone.
+ */
+function slotDto(s: { weekday: number; startMinute: number; durationMinutes: number; timezone: string }, now: Date) {
+  return {
+    weekday: s.weekday,
+    start: hhmm(s.startMinute),
+    durationMinutes: s.durationMinutes,
+    timezone: s.timezone,
+    nextStartsAt: nextWeeklyStart(s.weekday, s.startMinute, s.timezone, now).toISOString(),
+  };
 }
 
 function hhmm(minute: number): string {

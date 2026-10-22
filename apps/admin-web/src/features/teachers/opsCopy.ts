@@ -83,7 +83,7 @@ export const O = {
   effectiveFrom: { en: 'From (optional, default today)', ar: 'ابتداءً من (اختياري، اليوم افتراضيًا)' },
   saveTimes: { en: 'Save times', ar: 'حفظ المواعيد' },
   oneOff: { en: 'One-off lesson', ar: 'حصة منفردة' },
-  startsAt: { en: 'Starts', ar: 'تبدأ' },
+  startsAt: { en: 'Starts (Cairo time)', ar: 'تبدأ (بتوقيت القاهرة)' },
   minutes: { en: 'Minutes', ar: 'الدقائق' },
   transfer: { en: 'Transfer', ar: 'نقل' },
   toTeacher: { en: 'New teacher', ar: 'المعلم الجديد' },

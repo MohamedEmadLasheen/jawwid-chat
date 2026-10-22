@@ -13,6 +13,7 @@ import '../core/media/story_video_player.dart';
 import '../core/network/api_client.dart' show TokenProvider;
 import '../core/realtime/realtime_socket.dart';
 import '../core/storage/secure_token_store.dart';
+import '../core/time/time_zone_controller.dart' show appZoneRevisionProvider;
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/domain/auth_state.dart';
 import '../features/messages/data/chat_theme_repository.dart';
@@ -199,6 +200,12 @@ mixin SessionScoped<ValueT> on AsyncNotifier<ValueT> {
       // one — not even for the single frame between the two.
       state = AsyncData(sessionEmptyValue);
       ref.invalidateSelf();
+    });
+    // PD-22: times are converted to the account's zone when they are parsed, so a change of
+    // zone (a manual pick, or the phone landing in another country) reloads what this holds.
+    // A reload, not a reset: it is still the same person's data.
+    ref.listen(appZoneRevisionProvider, (previous, next) {
+      if (previous != next) ref.invalidateSelf();
     });
   }
 }

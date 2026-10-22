@@ -5,12 +5,13 @@ import '../../../app/providers.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
+import '../../../shared/utils/app_clock.dart';
 
 /// The teacher's own lessons for the next two weeks (and today's earlier ones), straight
 /// from `GET /lessons` -- the server answers a teacher with their own lessons only.
 final myScheduleProvider = FutureProvider.autoDispose<List<ScheduledLesson>>((ref) {
-  final now = DateTime.now();
-  final from = DateTime(now.year, now.month, now.day);
+  final now = AppClock.now();
+  final from = AppClock.wallClock(now.year, now.month, now.day);
   return ref.watch(lessonRepositoryProvider).myLessons(from, from.add(const Duration(days: 14)));
 });
 

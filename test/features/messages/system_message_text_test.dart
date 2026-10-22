@@ -40,6 +40,23 @@ void main() {
     expect(systemMessageText('{"kind":"group.archived","reason":"x"}', en), 'Group archived');
   });
 
+  test('PD-24: a supervisor change reads as words in the group and in the parent\'s 1:1', () {
+    expect(
+      systemMessageText('{"kind":"group.supervisor_changed","supervisor":"Salma Khalil"}', en),
+      "Salma Khalil is now this group's supervisor",
+    );
+    expect(
+      systemMessageText('{"kind":"group.supervisor_changed","supervisor":"Salma Khalil"}', ar),
+      'أصبح Salma Khalil مشرف هذه المجموعة',
+    );
+    expect(systemMessageText('{"kind":"group.supervisor_changed"}', en), "This group's supervisor changed");
+    expect(
+      systemMessageText('{"kind":"direct.supervisor_changed","supervisor":"Salma Khalil"}', en),
+      'Salma Khalil is now your supervisor; the chat history is kept',
+    );
+    expect(systemMessageText('{"kind":"group.learner_detached"}', en), 'A child of this group moved to another supervisor');
+  });
+
   test('an unknown kind, non-object JSON or non-JSON reads as a generic update, never raw', () {
     for (final body in ['{"kind":"some.future.kind"}', '[1,2]', 'not json', '']) {
       final text = systemMessageText(body, en);

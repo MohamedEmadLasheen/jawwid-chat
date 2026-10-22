@@ -10,6 +10,7 @@ import type { Pair } from './copy'
 import { opsApi, type Availability, type Roster, type SuspensionReason, type TransferReason, type WeeklySlot } from './opsApi'
 import { O, SUSPENSION_REASON, TRANSFER_REASON, WEEKDAY, describeOpsError, formatDay, formatMinutes } from './opsCopy'
 import { useAvailability, useOp, useRoster } from './opsHooks'
+import { academyWallClockToIso } from '@/core/time/academyTime'
 import './teachers.css'
 
 type Learner = Roster['learners'][number]
@@ -113,7 +114,9 @@ export function SchedulesPage() {
                                     { key: 'startsAt', label: O.startsAt, type: 'datetime', required: true },
                                     { key: 'minutes', label: O.minutes, type: 'number', required: true, initial: String(l.slots[0]?.durationMinutes ?? 30) },
                                   ], (v) => {
-                                    const start = new Date(v('startsAt'))
+                                    // PD-22: typed on the academy's (Cairo) clock, not the browser's.
+                                    const typed = v('startsAt')
+                                    const start = new Date(academyWallClockToIso(typed.slice(0, 10), typed.slice(11, 16)) ?? Number.NaN)
                                     return opsApi.schedule({
                                       learnerId: l.id,
                                       startsAt: start.toISOString(),

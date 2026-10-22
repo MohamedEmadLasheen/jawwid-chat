@@ -85,6 +85,14 @@ jobs:
         # and the drift is only discovered by a failed release.
         run: bash scripts/qa/guards.sh env-templates
 
+      - name: Install doctl (offline app spec validation, no credentials)
+        run: scripts/infra/install-doctl.sh
+
+      - name: App Platform specs match the manifest and DigitalOcean's schema
+        # ADR-008/ADR-009: .do/app.<env>.yaml is rendered from the manifest and
+        # validated with `doctl apps spec validate --schema-only`.
+        run: bash scripts/qa/guards.sh app-spec
+
       - name: The backup drill runs the pg_dump it is given
         # pg_dump refuses to dump from a server newer than itself, so PG_IMAGE
         # naming a client has to outrank whatever is on PATH. It did not: this

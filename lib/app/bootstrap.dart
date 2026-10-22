@@ -27,6 +27,7 @@ import '../core/network/http_stack.dart';
 import '../core/push/push_registration.dart';
 import '../core/realtime/realtime_socket.dart';
 import '../core/storage/secure_token_store.dart';
+import '../core/time/time_zone_api.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/application/session_termination.dart';
 import '../features/auth/domain/auth_state.dart';
@@ -237,6 +238,10 @@ List<Override> _httpOverrides() {
     ),
     pushRegistrationApiProvider.overrideWithValue(
       HttpPushRegistration(client: client),
+    ),
+    // PD-22: the account's time zone, on the same client.
+    timeZoneApiProvider.overrideWithValue(
+      HttpTimeZoneApi(client: client),
     ),
     // The socket authenticates with a token from this same provider. It does
     // NOT name an actor: `handshake.auth.token` is verified server-side by the

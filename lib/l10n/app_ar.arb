@@ -551,6 +551,11 @@
   "systemGroupCreatedNoLearner": "أُنشئت مجموعة الطالب",
   "systemGroupMembersUpdated": "تحدّث أعضاء المجموعة (+{added} / −{removed})",
   "systemGroupArchived": "أُرشفت المجموعة",
+  "systemGroupSupervisorChanged": "أصبح {name} مشرف هذه المجموعة",
+  "systemGroupSupervisorChangedNoName": "تغيّر مشرف هذه المجموعة",
+  "systemDirectSupervisorChanged": "أصبح {name} مشرفك؛ سجلّ المحادثة كما هو",
+  "systemDirectSupervisorChangedNoName": "تغيّر مشرفك؛ سجلّ المحادثة كما هو",
+  "systemGroupLearnerDetached": "انتقل طفل من هذه المجموعة إلى مشرف آخر",
   "systemUpdate": "تحديث من النظام",
   "lessonTicketsHeader": "الحصة",
   "ticketReport": "تقرير الحصة",
@@ -1212,5 +1217,15 @@
   "salesVoidConfirm": "إلغاء القسط",
   "salesBillingStateConflict": "سبق دفع هذا القسط أو إلغاؤه. تم تحديث القائمة.",
   "salesBillingInvalid": "تحقّق من التاريخ والمرجع ثم حاول مجددًا.",
-  "salesWriteFailed": "تعذّر الحفظ. حاول مرة أخرى."
+  "salesWriteFailed": "تعذّر الحفظ. حاول مرة أخرى.",
+  "settingsDateTime": "التاريخ والوقت",
+  "settingsDateTimeSubtitle": "المنطقة الزمنية: {zone}",
+  "timeZoneSetAutomatically": "الضبط تلقائيًا",
+  "timeZoneAutomaticHint": "يستخدم المنطقة الزمنية لهاتفك، وتتغيّر من تلقاء نفسها عند السفر.",
+  "timeZoneLabel": "المنطقة الزمنية",
+  "timeZoneUnknown": "غير معروفة بعد",
+  "timeZoneAppliesTo": "تظهر مواعيد الحصص والتذكيرات والإشعارات بهذه المنطقة الزمنية.",
+  "timeZoneSearchHint": "ابحث عن مدينة",
+  "timeZoneNoMatch": "لا توجد منطقة زمنية مطابقة.",
+  "timeZoneSaveFailed": "تعذّر تغيير المنطقة الزمنية. حاول مرة أخرى."
 }

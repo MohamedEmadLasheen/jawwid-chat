@@ -120,7 +120,7 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-23 — CLOSED
+## 4. Product decisions PD-1 to PD-24 — CLOSED
 
 PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
 exit gate, before `main` was baselined. **PD-6 was closed by the product owner
@@ -140,7 +140,8 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-19 was closed by the product owner on 2026-10-21** (a member may start a call in their own chat; supersedes PD-2), amended 2026-10-21 (the super admin's group calls) and 2026-10-22 (calls in the trial group and the supervision conversation).
 **PD-20 was closed by the product owner on 2026-10-22** (the Sales team uses the app: chats, calls and payments). It amends PD-15's "staff work in Admin Web; the app is for parents and teachers".
 **PD-21 was closed by the product owner on 2026-10-22** (account administration: password reset, inactive accounts, impersonation).
-**PD-23 was closed by the product owner on 2026-10-22** (convenient sign-in: session lifetimes per role, devices and sessions, app lock, "keep me signed in" on Admin Web). PD-22 is the per-account time zones decision, recorded on its own branch.
+**PD-22 was closed by the product owner on 2026-10-22** (every account has its own time zone).
+**PD-23 was closed by the product owner on 2026-10-22** (convenient sign-in: session lifetimes per role, devices and sessions, app lock, "keep me signed in" on Admin Web).
 
 | ID | Subject | Status |
 |---|---|---|
@@ -165,6 +166,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-19** | **Who may start a call: every member of their own chat** (2026-10-21) | **CLOSED** — teachers, parents and supervisors may start a call in any chat they may write in; parents may now start their family / Student Group calls; chats a person is not a member of, BR-1 / PD-7, C-4 and the no-phantom-call rule are unchanged; amended the same day so the super admin may start a group call in any chat they may write in, with a seat on the call; amended 2026-10-22 so trial-group and supervision calls are group calls (they were refused by the database) |
 | **PD-20** | **The Sales team in the app** (2026-10-22) | **CLOSED** — Sales-department staff sign in to the app and get Chats, Calls, Payments and Settings; they view and record payments (record once, void with a reason); instalment plans, the contact record and every other staff role stay in Admin Web; the app never holds a parent's phone or e-mail |
 | **PD-21** | **Account administration: password reset, inactive accounts, impersonation** (2026-10-22) | **CLOSED** — every staff role, org-wide, for parent and teacher accounts; staff accounts by the super admin only; never the super admin's or one's own; a reset is a one-time code the person completes with their own password; inactive = suspended, signed out everywhere, reactivation revives no session; impersonation of parents and teachers only, labelled messages, fully audited |
+| **PD-22** | **Each account's time zone** (2026-10-22) | **CLOSED** — every person's times are shown and notified in their own zone, taken from their phone's OS zone ("Set automatically", like a phone) or picked by hand; teachers follow their phone too; a weekly lesson stays anchored in the teacher's zone; Admin Web shows Cairo time, named, with the family's local time beside it; reminders say the time in the recipient's zone. Record: `../architecture/TIME-ZONES.md` |
 | **PD-23** | **Convenient sign-in** (2026-10-22) | **CLOSED** — a session ends after an idle and an absolute limit per role (parents/teachers 30 d idle; staff app 14 d / 30 d; Admin Web kept signed in 7 d / 30 d, otherwise 12 h / 7 d; super admin 12 h / 7 d and never kept signed in); everyone sees and ends their own devices; staff sign out an account's devices under the PD-21 rule; an app lock with the phone's own Face ID / fingerprint / passcode, opt-in for families and on by default for staff; passkeys wait for a production domain. Record: `../security/pd023-convenient-sign-in.md` |
 
 ---
@@ -2081,7 +2083,134 @@ code, never a password.
 
 ---
 
-### Decisions still open after PD-1 to PD-21
+### PD-22 · Each account's time zone
+
+**Closed 2026-10-22** by the product owner.
+
+The owner asked that every account have its own time zone, applied across the whole
+application and kept current when the person travels "like on mobile phones":
+teachers see lesson times in Cairo time, parents and students in their own country's
+time, and reminders arrive and read at the right local time. Owner answers the same
+day:
+
+1. **Teachers follow their phone** like everyone else (not locked to Cairo).
+2. **A weekly lesson stays anchored in the teacher's zone.** When Egypt changes its
+   clocks and the Gulf does not, the family's local time moves by an hour and the
+   teacher's does not.
+3. **Admin Web shows Cairo time, named, with the family's local time beside it.**
+4. **Push reminders state the local time** (still naming nobody).
+
+**Final decision.**
+
+```
+source of the zone   = the phone's OS time zone (IANA, e.g. Asia/Kuwait), reported
+                        by the app at sign-in and whenever it returns to the
+                        foreground. NEVER the location: the OS zone is what a phone
+                        itself uses, and needs no permission.
+setting              = "Set automatically" (default) follows the phone; turned off,
+                        the person picks a zone, which wins on every device until
+                        they turn it back on.            chat.actor_time_zone
+storage              = unchanged: every moment is an instant (timestamptz); a weekly
+                        lesson is a wall-clock time in the teacher's zone
+                        (PD-11 T2), materialized by Postgres AT TIME ZONE
+display (app)        = every instant in the account's zone; a weekly slot by its
+                        next real start (`nextStartsAt`), because the weekday can
+                        differ across zones
+display (Admin Web)  = Africa/Cairo for everyone, labelled; the family's local time
+                        beside a lesson where it differs
+text read by many    = a scheduled-call or trial card's text names its zone
+                        ("17:00 (Cairo time)"); the app draws `startsAt` instead
+reminders            = fire at the same instant as before (offsets from the lesson);
+                        the text's {time} is worded at SEND time in the recipient's
+                        zone; unknown zone -> the academy's time, named
+quiet hours          = the recipient's own night, in their zone
+academy calendar     = instalment due dates, payroll month, leave days stay dates in
+                        schedule.timezone; they are never converted
+```
+
+**Implementation phase.** Migration `20261022130000_chat_pd022_account_time_zone.sql`
+(table + reminder templates v2); `/me/time-zone` (API-CONTRACT §3.6a); the app's
+`AppClock`, `TimeZoneController` and Settings -> Date & time; Admin Web's
+`core/time/academyTime.ts`.
+
+**Consequences.** A family abroad sees a lesson move by an hour twice a year when
+Egypt changes its clocks; no teacher is ever double-booked by a clock change. A
+person's zone is visible to the administration only as "the family's local time".
+
+**Deprecated behaviour.** The 2026-10-14 rule "a reminder shows no time" is replaced:
+the time is now right for its reader. Times in Admin Web no longer follow the staff
+member's browser.
+
+**Closed.** 2026-10-22.
+
+---
+
+### PD-24 · Changing a family's supervisor without losing anything
+
+**Closed 2026-10-22** by the product owner. Amends PD-8's reassignment rule.
+(PD-23 is reserved by work in progress: convenient sign-in.)
+
+The owner's request of 2026-10-22: a group's supervisor can be changed; the
+chat history, participants, messages and attachments stay and the group is not
+recreated; the current supervisor leaves the group and the new one joins it. On
+the New Students page the super admin and the Operations Manager change the
+assigned supervisor at any time. The student's complete profile and the
+parent's information and records move to the new supervisor, who sees the whole
+history; the previous supervisor no longer sees the student. Owner answer the
+same day: **the parent's 1:1 with the old supervisor is handed over** (same
+conversation, whole history) rather than left behind as PD-8 had it.
+
+**Final decision.**
+
+```
+who          the super admin, or the Operations Manager who runs both the old
+             and the new supervisor (canAssignSupervision); a reason is required
+where        Admin Web: the group's info panel ("Change supervisor") and the
+             New Students card ("Change", after Assign); the Organization page
+             keeps its per-child reassignment
+the unit     the group's children (or the enrolment's), plus every child who
+             shares a live family group with them -- a group is never split
+in one transaction, nothing created again:
+  supervision     one learner_supervision row per child, audited (before,
+                  after, reason, who)
+  groups          the same conversation: the old supervisor's seat ends
+                  (left_at, kept on record), the new one is seated as admin,
+                  a system line "X is now this group's supervisor"
+  parent's 1:1    the same conversation passes to the new supervisor (seat
+                  swapped, pair key rewritten, a system line) once the old
+                  supervisor has no child of the family left; if the parent
+                  already has a 1:1 with the new supervisor, nothing is
+                  duplicated and the old one stays as history
+  billing         the family's billing supervisor follows
+  owner           family.owner_id (workload) follows, via transfer_ownership
+read through scope, so they move with the row and the previous supervisor
+loses them at once: the Student and Parent Profiles, lessons and reports,
+payments, the New Students card, the learners list
+```
+
+**Implementation phase.** Built 2026-10-22, no migration:
+`OrgStructureService.transferLearners` / `transferGroup`,
+`ConversationService.reconcileSupervisionChange` (now several children at once)
+and `transferFamilyDirects`; routes `POST /org/conversations/:id/supervisor` and
+`POST /trials/new-students/:trialId/supervisor`; Admin Web
+`organization/ChangeSupervisorDialog.tsx`; the system lines in both clients.
+
+**Consequences.** `../architecture/ORG-SCOPE-PD8.md` §2: a former supervisor's
+1:1 with the parent now passes to the new supervisor instead of being lost. The
+per-child reassignment (Organization page) also hands over the 1:1, billing and
+owner when the child was the old supervisor's last in the family.
+
+**Deprecated behaviour.** "Private 1:1s never transfer" (PD-8).
+
+**Defaults adopted at closing** (the owner may override without reopening PD-24):
+1. A reason is required, as for every structure change.
+2. Only Operations primary supervisors can receive a family (PD-8's rule).
+
+**Closed.** 2026-10-22.
+
+---
+
+### Decisions still open after PD-1 to PD-24
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
 The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their

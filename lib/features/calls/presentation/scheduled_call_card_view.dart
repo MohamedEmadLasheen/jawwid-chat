@@ -172,8 +172,11 @@ class _ScheduledCallCardState extends ConsumerState<ScheduledCallCard> {
         : (Icons.event_outlined, l10n.scheduledCallDefaultTitle);
 
     final title = card.text('title');
+    // PD-22: the moment, in THIS reader's zone. The server's `when` is written in the
+    // academy's zone for everyone in the conversation; it is only the fallback for a card
+    // that carries no `startsAt`.
     final when =
-        card.text('when') ?? _formatStart(context, card.time('startsAt'));
+        _formatStart(context, card.time('startsAt')) ?? card.text('when');
     final by = card.text('byName');
     final open = _open(_now());
     final notYet =

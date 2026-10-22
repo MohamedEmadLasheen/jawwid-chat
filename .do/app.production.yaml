@@ -1,0 +1,615 @@
+# Jawwid Chat -- DigitalOcean App Platform app spec (production).
+#
+# GENERATED FILE. Do not edit by hand. After changing infra/env/manifest.tsv
+# or scripts/infra/app-spec.py, regenerate it:
+#   python3 scripts/infra/app-spec.py render production > .do/app.production.yaml
+# CI fails while it is stale (`bash scripts/qa/guards.sh app-spec`).
+#
+# Holds structure, never a value. Every ${NAME} is filled at deploy time from
+# the `production` GitHub Environment by `app-spec.py resolve`
+# (.github/workflows/deploy-production.yml), which refuses an unset required
+# value, drops an unset optional one, and writes the deployable spec outside
+# the repository. ADR-009, ADR-010, ADR-011 in docs/infrastructure/decisions.md.
+name: jawwid-chat-production
+# Frankfurt: the closest App Platform region to the users.
+region: fra
+alerts:
+  - rule: DEPLOYMENT_FAILED
+  - rule: DOMAIN_FAILED
+# One host per component, each matching the URL the clients are built
+# against. Admin Web is a separate origin from the API on purpose: its CSP
+# names the API origin, and the API's CORS allowlist names Admin Web.
+domains:
+  - domain: ${API_DOMAIN}
+    type: PRIMARY
+    minimum_tls_version: "1.2"
+  - domain: ${ADMIN_WEB_DOMAIN}
+    type: ALIAS
+    minimum_tls_version: "1.2"
+ingress:
+  rules:
+    - match:
+        authority:
+          exact: ${API_DOMAIN}
+        path:
+          prefix: /
+      component:
+        name: api
+    - match:
+        authority:
+          exact: ${ADMIN_WEB_DOMAIN}
+        path:
+          prefix: /
+      component:
+        name: admin-web
+services:
+  # The API (ADR-004: the same image as the worker, a different command).
+  - name: api
+    image:
+      registry_type: GHCR
+      registry: mohamedemadlasheen
+      repository: jawwid-chat/api
+      tag: ${API_IMAGE_TAG}
+      registry_credentials: ${GHCR_PULL_CREDENTIALS}
+    run_command: node dist/main.js
+    http_port: 3000
+    instance_size_slug: apps-s-1vcpu-2gb
+    instance_count: 1
+    # Readiness (ADR-007): checks Postgres and Redis. Failing it takes the
+    # instance out of routing; it never restarts the container.
+    health_check:
+      http_path: /health/ready
+      initial_delay_seconds: 10
+      period_seconds: 10
+      timeout_seconds: 5
+      failure_threshold: 3
+      success_threshold: 1
+    # Liveness (ADR-007): touches no dependency, so a database blip removes
+    # instances from routing instead of restarting every one of them.
+    liveness_health_check:
+      http_path: /health/live
+      initial_delay_seconds: 20
+      period_seconds: 30
+      timeout_seconds: 5
+      failure_threshold: 3
+    # Longer than SHUTDOWN_GRACE_MS, so the graceful drain finishes first.
+    termination:
+      grace_period_seconds: 20
+    envs:
+      - key: NODE_ENV
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${NODE_ENV}
+      - key: APP_ENV
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${APP_ENV}
+      - key: TRUSTED_PROXY_HOPS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${TRUSTED_PROXY_HOPS}
+      - key: PORT
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${PORT}
+      - key: LOG_LEVEL
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${LOG_LEVEL}
+      - key: CORS_ALLOWED_ORIGINS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${CORS_ALLOWED_ORIGINS}
+      - key: REQUEST_TIMEOUT_MS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${REQUEST_TIMEOUT_MS}
+      - key: SHUTDOWN_GRACE_MS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${SHUTDOWN_GRACE_MS}
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+        value: ${DATABASE_URL}
+      - key: DATABASE_STATEMENT_TIMEOUT_MS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${DATABASE_STATEMENT_TIMEOUT_MS}
+      - key: DATABASE_POOL_MAX
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${DATABASE_POOL_MAX}
+      - key: REDIS_URL
+        scope: RUN_TIME
+        type: SECRET
+        value: ${REDIS_URL}
+      - key: QUEUE_PREFIX
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${QUEUE_PREFIX}
+      - key: WORKER_CONCURRENCY
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${WORKER_CONCURRENCY}
+      - key: JWT_ACCESS_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        value: ${JWT_ACCESS_SECRET}
+      - key: JWT_REFRESH_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        value: ${JWT_REFRESH_SECRET}
+      - key: JWT_ACCESS_TTL
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${JWT_ACCESS_TTL}
+      - key: JWT_REFRESH_TTL
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${JWT_REFRESH_TTL}
+      - key: STORAGE_ENDPOINT
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${STORAGE_ENDPOINT}
+      - key: STORAGE_REGION
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${STORAGE_REGION}
+      - key: STORAGE_BUCKET
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${STORAGE_BUCKET}
+      - key: STORAGE_ACCESS_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: ${STORAGE_ACCESS_KEY}
+      - key: STORAGE_SECRET_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: ${STORAGE_SECRET_KEY}
+      - key: STORAGE_SIGNED_URL_TTL_SECONDS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${STORAGE_SIGNED_URL_TTL_SECONDS}
+      - key: STORAGE_SIGNING_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        value: ${STORAGE_SIGNING_SECRET}
+      - key: MEDIA_PUBLIC_BASE_URL
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${MEDIA_PUBLIC_BASE_URL}
+      - key: STORAGE_LOCAL_ROOT
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${STORAGE_LOCAL_ROOT}
+      - key: STORAGE_PUBLIC_BASE_URL
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${STORAGE_PUBLIC_BASE_URL}
+      - key: OUTBOX_POLL_MS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${OUTBOX_POLL_MS}
+      - key: OUTBOX_BATCH_SIZE
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${OUTBOX_BATCH_SIZE}
+      - key: OUTBOX_IDLE_BACKOFF_MS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${OUTBOX_IDLE_BACKOFF_MS}
+      - key: ATTACHMENT_MAX_BYTES_IMAGE
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${ATTACHMENT_MAX_BYTES_IMAGE}
+      - key: ATTACHMENT_MAX_BYTES_VIDEO
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${ATTACHMENT_MAX_BYTES_VIDEO}
+      - key: ATTACHMENT_MAX_BYTES_VOICE
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${ATTACHMENT_MAX_BYTES_VOICE}
+      - key: ATTACHMENT_MAX_BYTES_FILE
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${ATTACHMENT_MAX_BYTES_FILE}
+      - key: ATTACHMENT_MAX_VOICE_DURATION_MS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${ATTACHMENT_MAX_VOICE_DURATION_MS}
+      - key: FCM_PROJECT_ID
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${FCM_PROJECT_ID}
+      - key: FCM_SERVICE_ACCOUNT_JSON
+        scope: RUN_TIME
+        type: SECRET
+        value: ${FCM_SERVICE_ACCOUNT_JSON}
+      - key: APNS_KEY_ID
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${APNS_KEY_ID}
+      - key: APNS_TEAM_ID
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${APNS_TEAM_ID}
+      - key: APNS_BUNDLE_ID
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${APNS_BUNDLE_ID}
+      - key: APNS_PRIVATE_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: ${APNS_PRIVATE_KEY}
+      - key: APNS_PRODUCTION
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${APNS_PRODUCTION}
+      - key: LIVEKIT_URL
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${LIVEKIT_URL}
+      - key: LIVEKIT_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: ${LIVEKIT_API_KEY}
+      - key: LIVEKIT_API_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        value: ${LIVEKIT_API_SECRET}
+      - key: CORE_BASE_URL
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${CORE_BASE_URL}
+      - key: CORE_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: ${CORE_API_KEY}
+      - key: CORE_WEBHOOK_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        value: ${CORE_WEBHOOK_SECRET}
+      - key: CORE_TIMEOUT_MS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${CORE_TIMEOUT_MS}
+      - key: CORE_RETRY_MAX
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${CORE_RETRY_MAX}
+      - key: TEACHER_PAYOUT_KEYS
+        scope: RUN_TIME
+        type: SECRET
+        value: ${TEACHER_PAYOUT_KEYS}
+      - key: SENTRY_DSN
+        scope: RUN_TIME
+        type: SECRET
+        value: ${SENTRY_DSN}
+      - key: OTEL_SERVICE_NAME
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${OTEL_SERVICE_NAME}
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      - key: OTEL_TRACES_SAMPLER_ARG
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${OTEL_TRACES_SAMPLER_ARG}
+      - key: HEALTH_PROBE_TIMEOUT_MS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${HEALTH_PROBE_TIMEOUT_MS}
+      - key: GIT_COMMIT
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${GIT_COMMIT}
+      - key: BUILD_VERSION
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${BUILD_VERSION}
+      - key: BUILD_TIME
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${BUILD_TIME}
+      - key: PRISMA_MIGRATE_SKIP_GENERATE
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${PRISMA_MIGRATE_SKIP_GENERATE}
+  # Admin Web: its nginx container, not a static site (ADR-011). The bundle
+  # is built per environment (ADR-006); the runtime env is the CSP's origins.
+  - name: admin-web
+    image:
+      registry_type: GHCR
+      registry: mohamedemadlasheen
+      repository: jawwid-chat/admin-web
+      tag: ${ADMIN_WEB_IMAGE_TAG}
+      registry_credentials: ${GHCR_PULL_CREDENTIALS}
+    http_port: 8080
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    instance_count: 1
+    health_check:
+      http_path: /healthz
+    liveness_health_check:
+      http_path: /healthz
+    envs:
+      - key: API_ORIGIN
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${API_ORIGIN}
+      - key: REALTIME_ORIGIN
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${REALTIME_ORIGIN}
+      - key: LIVEKIT_ORIGIN
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${LIVEKIT_ORIGIN}
+      - key: STORAGE_ORIGIN
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${STORAGE_ORIGIN}
+workers:
+  # The outbox worker: the API image, the worker command (ADR-004). It serves
+  # no HTTP, so it has no health check; a crash exits and is restarted.
+  - name: worker
+    image:
+      registry_type: GHCR
+      registry: mohamedemadlasheen
+      repository: jawwid-chat/api
+      tag: ${API_IMAGE_TAG}
+      registry_credentials: ${GHCR_PULL_CREDENTIALS}
+    run_command: node dist/worker.js
+    instance_size_slug: apps-s-1vcpu-1gb
+    instance_count: 1
+    termination:
+      grace_period_seconds: 20
+    envs:
+      - key: NODE_ENV
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${NODE_ENV}
+      - key: APP_ENV
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${APP_ENV}
+      - key: TRUSTED_PROXY_HOPS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${TRUSTED_PROXY_HOPS}
+      - key: PORT
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${PORT}
+      - key: LOG_LEVEL
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${LOG_LEVEL}
+      - key: CORS_ALLOWED_ORIGINS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${CORS_ALLOWED_ORIGINS}
+      - key: REQUEST_TIMEOUT_MS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${REQUEST_TIMEOUT_MS}
+      - key: SHUTDOWN_GRACE_MS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${SHUTDOWN_GRACE_MS}
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+        value: ${DATABASE_URL}
+      - key: DATABASE_STATEMENT_TIMEOUT_MS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${DATABASE_STATEMENT_TIMEOUT_MS}
+      - key: DATABASE_POOL_MAX
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${DATABASE_POOL_MAX}
+      - key: REDIS_URL
+        scope: RUN_TIME
+        type: SECRET
+        value: ${REDIS_URL}
+      - key: QUEUE_PREFIX
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${QUEUE_PREFIX}
+      - key: WORKER_CONCURRENCY
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${WORKER_CONCURRENCY}
+      - key: JWT_ACCESS_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        value: ${JWT_ACCESS_SECRET}
+      - key: JWT_REFRESH_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        value: ${JWT_REFRESH_SECRET}
+      - key: JWT_ACCESS_TTL
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${JWT_ACCESS_TTL}
+      - key: JWT_REFRESH_TTL
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${JWT_REFRESH_TTL}
+      - key: STORAGE_ENDPOINT
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${STORAGE_ENDPOINT}
+      - key: STORAGE_REGION
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${STORAGE_REGION}
+      - key: STORAGE_BUCKET
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${STORAGE_BUCKET}
+      - key: STORAGE_ACCESS_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: ${STORAGE_ACCESS_KEY}
+      - key: STORAGE_SECRET_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: ${STORAGE_SECRET_KEY}
+      - key: STORAGE_SIGNED_URL_TTL_SECONDS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${STORAGE_SIGNED_URL_TTL_SECONDS}
+      - key: STORAGE_SIGNING_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        value: ${STORAGE_SIGNING_SECRET}
+      - key: MEDIA_PUBLIC_BASE_URL
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${MEDIA_PUBLIC_BASE_URL}
+      - key: STORAGE_LOCAL_ROOT
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${STORAGE_LOCAL_ROOT}
+      - key: STORAGE_PUBLIC_BASE_URL
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${STORAGE_PUBLIC_BASE_URL}
+      - key: OUTBOX_POLL_MS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${OUTBOX_POLL_MS}
+      - key: OUTBOX_BATCH_SIZE
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${OUTBOX_BATCH_SIZE}
+      - key: OUTBOX_IDLE_BACKOFF_MS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${OUTBOX_IDLE_BACKOFF_MS}
+      - key: ATTACHMENT_MAX_BYTES_IMAGE
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${ATTACHMENT_MAX_BYTES_IMAGE}
+      - key: ATTACHMENT_MAX_BYTES_VIDEO
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${ATTACHMENT_MAX_BYTES_VIDEO}
+      - key: ATTACHMENT_MAX_BYTES_VOICE
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${ATTACHMENT_MAX_BYTES_VOICE}
+      - key: ATTACHMENT_MAX_BYTES_FILE
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${ATTACHMENT_MAX_BYTES_FILE}
+      - key: ATTACHMENT_MAX_VOICE_DURATION_MS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${ATTACHMENT_MAX_VOICE_DURATION_MS}
+      - key: FCM_PROJECT_ID
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${FCM_PROJECT_ID}
+      - key: FCM_SERVICE_ACCOUNT_JSON
+        scope: RUN_TIME
+        type: SECRET
+        value: ${FCM_SERVICE_ACCOUNT_JSON}
+      - key: APNS_KEY_ID
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${APNS_KEY_ID}
+      - key: APNS_TEAM_ID
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${APNS_TEAM_ID}
+      - key: APNS_BUNDLE_ID
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${APNS_BUNDLE_ID}
+      - key: APNS_PRIVATE_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: ${APNS_PRIVATE_KEY}
+      - key: APNS_PRODUCTION
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${APNS_PRODUCTION}
+      - key: LIVEKIT_URL
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${LIVEKIT_URL}
+      - key: LIVEKIT_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: ${LIVEKIT_API_KEY}
+      - key: LIVEKIT_API_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        value: ${LIVEKIT_API_SECRET}
+      - key: CORE_BASE_URL
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${CORE_BASE_URL}
+      - key: CORE_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: ${CORE_API_KEY}
+      - key: CORE_WEBHOOK_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        value: ${CORE_WEBHOOK_SECRET}
+      - key: CORE_TIMEOUT_MS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${CORE_TIMEOUT_MS}
+      - key: CORE_RETRY_MAX
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${CORE_RETRY_MAX}
+      - key: TEACHER_PAYOUT_KEYS
+        scope: RUN_TIME
+        type: SECRET
+        value: ${TEACHER_PAYOUT_KEYS}
+      - key: SENTRY_DSN
+        scope: RUN_TIME
+        type: SECRET
+        value: ${SENTRY_DSN}
+      - key: OTEL_SERVICE_NAME
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${OTEL_SERVICE_NAME}
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      - key: OTEL_TRACES_SAMPLER_ARG
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${OTEL_TRACES_SAMPLER_ARG}
+      - key: HEALTH_PROBE_TIMEOUT_MS
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${HEALTH_PROBE_TIMEOUT_MS}
+      - key: GIT_COMMIT
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${GIT_COMMIT}
+      - key: BUILD_VERSION
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${BUILD_VERSION}
+      - key: BUILD_TIME
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${BUILD_TIME}
+      - key: PRISMA_MIGRATE_SKIP_GENERATE
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${PRISMA_MIGRATE_SKIP_GENERATE}

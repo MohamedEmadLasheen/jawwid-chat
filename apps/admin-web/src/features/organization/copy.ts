@@ -59,9 +59,24 @@ export const T = {
   assignTo: { en: 'New supervisor', ar: 'المشرف الجديد' },
   choose: { en: 'Choose…', ar: 'اختر…' },
   assignHint: {
-    en: "The child's groups move with them. The previous supervisor keeps no access to this child's conversations, and private chats with the parent are never handed over.",
-    ar: 'تنتقل مجموعات الطفل معه. لا يحتفظ المشرف السابق بأي وصول إلى محادثات هذا الطفل، ولا تُنقل المحادثات الخاصة مع ولي الأمر أبدًا.',
+    en: "The child's groups move with them. The parent's 1:1 with the previous supervisor passes to the new one once the previous supervisor has none of the family's children left.",
+    ar: 'تنتقل مجموعات الطفل معه. وتنتقل محادثة ولي الأمر الخاصة مع المشرف السابق إلى المشرف الجديد عندما لا يبقى للمشرف السابق أي طفل من الأسرة.',
   },
+
+  // PD-24: changing the supervisor of a group / a new student
+  changeSupervisor: { en: 'Change supervisor', ar: 'تغيير المشرف' },
+  changeSupervisorTitle: { en: 'Change supervisor — {name}', ar: 'تغيير المشرف — {name}' },
+  currentSupervisor: { en: 'Current supervisor', ar: 'المشرف الحالي' },
+  movesChildren: { en: 'Moves: {names}', ar: 'ينقل: {names}' },
+  transferHint: {
+    en: 'Nothing is recreated and nothing is lost. The group stays the same chat, with all its members, messages and files; the current supervisor leaves it and the new one joins it. The children\'s and the parent\'s profiles, lessons, payments and the parent\'s 1:1 with their supervisor move to the new supervisor, and the previous one stops seeing them.',
+    ar: 'لا يُعاد إنشاء أي شيء ولا يضيع أي شيء. تبقى المجموعة المحادثة نفسها بكل أعضائها ورسائلها وملفاتها؛ يخرج منها المشرف الحالي وينضم إليها الجديد. وتنتقل ملفات الأطفال وولي الأمر والحصص والمدفوعات ومحادثة ولي الأمر الخاصة مع مشرفه إلى المشرف الجديد، ولا يعود المشرف السابق يراها.',
+  },
+  transferred: {
+    en: '{names} moved to {supervisor}. The chat history is unchanged.',
+    ar: 'انتقل {names} إلى {supervisor}. سجلّ المحادثة كما هو.',
+  },
+  transferUnchanged: { en: 'Already with this supervisor — nothing changed.', ar: 'مع هذا المشرف بالفعل — لم يتغير شيء.' },
 
   // Structure
   manager: { en: 'Manager', ar: 'المدير' },
