@@ -56,12 +56,57 @@ everywhere. Their text carries `{time}`, rendered at **send time** in the recipi
 zone (`NotificationService.inRecipientZone`); with no zone known, the academy's time
 with its name. Quiet hours use the recipient's zone.
 
+## When the clocks change
+
+Anchoring a weekly lesson in the teacher's zone means a family in another zone sees
+it move when either zone changes its clocks and the other does not. Egypt leaves
+summer time at the end of the last Thursday of October (Thursday 29 October 2026 is
+still UTC+3; Friday 30 October is UTC+2) and returns to it on the last Friday of
+April. The Gulf has no summer time; Europe changes on other dates.
+
+The family is told beforehand. `SchedulingService.scheduleClockShiftWarnings`
+(hourly, inside `sweep()`, driven by the worker's lesson sweep):
+
+1. For every weekly time still live (`learner_schedule_slot`, `valid_to` null or
+   ahead), takes four consecutive starts from 8 days back (`weeklyStartsAround`).
+   Each is the slot's wall clock in its own zone on its own date, which is what
+   Postgres materializes. The window opens 8 days back, not 7, because two starts
+   across a change are 7 days +-1 hour apart. Starts outside the slot's
+   `valid_from`/`valid_to` are dropped: a family whose time begins after the
+   change never had the old one.
+2. For each active parent of the learner's family whose zone is known
+   (`chat.actor_time_zone`), compares the local weekday and clock of consecutive
+   starts (`readerClockShifts`). A difference means the later start is the first
+   lesson at the new local time.
+3. Schedules one notification per parent per slot per change through the reminder
+   engine: event `lesson_clock_shift`, rule `lesson_clock_shift_parent` (3 days
+   before that lesson, quiet hours respected), dedupe key
+   `lesson_clock_shift_parent:<slot>:<its date in the slot's zone>:<parent>`.
+   `variables.startsAt` is that lesson's start, so `{day}` and `{time}` are rendered
+   at send time in the recipient's zone (`NotificationService.inRecipientZone`):
+   *"The clocks are changing: from Friday 30 October, the lesson starts at 18:00
+   your time."* It names nobody (push privacy, 2026-10-14).
+4. Re-checks every unsent warning: one that no longer holds (slot replaced, parent
+   now in a zone where nothing moves, the lesson has begun) is cancelled with
+   `failure_code = 'CLOCK_SHIFT_GONE'`; one cancelled that way that holds again is
+   revived, because the dedupe key is unique and could never be scheduled twice.
+
+Not warned: a parent whose local time does not move, a parent with no known zone
+(their reminders already say Cairo time, named), and teachers (a slot is anchored in
+the zone they work in).
+
 ## Tests
 
 - `apps/api/test/unit/time-zone/time-zone.spec.ts` — wall clock to instant across
   Egypt's clock change, next weekly start, weekday shift, zone names.
 - `apps/api/test/integration/account-time-zone-pd022.spec.ts` — the endpoints, manual
   vs automatic, teachers, reminder text per recipient, quiet hours.
+- `apps/api/test/unit/time-zone/clock-shift.spec.ts` — weekly starts and local-clock
+  shifts across 2026-10-29 (Kuwait, Cairo, London, Riyadh, a weekday shift) and
+  April 2027.
+- `apps/api/test/integration/clock-shift-warning-pd022.spec.ts` — the warning on a real
+  database: once per parent per slot per change, its text, who is not told,
+  cancel and revive.
 - `test/shared/app_clock_test.dart`, `test/core/time/time_zone_controller_test.dart` —
   the app's clock and sync.
 - `apps/admin-web/src/core/time/academyTime.test.ts` — Cairo wall clock, family time.

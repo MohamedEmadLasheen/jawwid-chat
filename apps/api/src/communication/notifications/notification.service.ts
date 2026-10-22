@@ -9,7 +9,7 @@ import { TemplateService } from './template.service';
 import { QuietHoursService } from './quiet-hours.service';
 import { NotificationStatus } from '../contracts/vocab';
 import { buildPushData, isCallNotification, mayDeliverTo } from './call-push-routing';
-import { ACADEMY_ZONE, canonicalZone, clockIn, zoneLabel } from '../../platform/time-zone';
+import { ACADEMY_ZONE, canonicalZone, clockIn, dayIn, zoneLabel } from '../../platform/time-zone';
 
 export interface ScheduleInput {
   /**
@@ -259,7 +259,9 @@ export class NotificationService {
    * at send time, so a parent who travelled since the reminder was scheduled is
    * told their new local time. Someone whose phone never reported a zone is told
    * the academy's time with its name ("17:00 (Cairo time)"), never a bare clock
-   * they could take for their own.
+   * they could take for their own. `{day}` is the same moment's local date
+   * ("Sunday 1 November"), for a text that names the day (the daylight-saving
+   * warning).
    */
   private async inRecipientZone(
     recipientId: string,
@@ -270,10 +272,14 @@ export class NotificationService {
     if (!at || Number.isNaN(at.getTime())) return variables;
     const lang = locale === 'en' ? 'en' : 'ar';
     const own = await this.prisma.actorTimeZone.findUnique({ where: { actorId: recipientId }, select: { timeZone: true } });
-    if (own) return { ...variables, time: clockIn(at, own.timeZone, lang) };
+    if (own) return { ...variables, time: clockIn(at, own.timeZone, lang), day: dayIn(at, own.timeZone, lang) };
     const row = await this.prisma.config.findUnique({ where: { key: 'schedule.timezone' } });
     const academy = canonicalZone(row?.value) ?? ACADEMY_ZONE;
-    return { ...variables, time: `${clockIn(at, academy, lang)} (${zoneLabel(academy, lang)})` };
+    return {
+      ...variables,
+      time: `${clockIn(at, academy, lang)} (${zoneLabel(academy, lang)})`,
+      day: dayIn(at, academy, lang),
+    };
   }
 
   private async fail(notificationId: string, code: string): Promise<void> {
