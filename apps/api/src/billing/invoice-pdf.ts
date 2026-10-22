@@ -33,7 +33,9 @@ const ARABIC_LETTER = /[؀-ٟٮ-ۯۺ-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/;
 /** The line's segments in visual order (left to right), each ready for the font. */
 export function visualSegments(text: string): string[] {
   if (!text) return [];
-  const levels = bidi.getEmbeddingLevels(text, ARABIC_LETTER.test(text) ? 'rtl' : 'ltr');
+  // The paragraph's direction is its first strong character's (UAX #9 P2):
+  // "3-month package · باقة" reads left to right, "باقة 3 أشهر" right to left.
+  const levels = bidi.getEmbeddingLevels(text);
   const visual = bidi.getReorderedString(text, levels);
   const out: string[] = [];
   let current = '';
@@ -120,7 +122,7 @@ export function renderInvoicePdf(doc: InvoiceDocument): Promise<Buffer> {
     line('فاتورة', left, y, width, 'right', 'bold', 16, BRAND);
     y += 24;
     if (s.issuer?.address) { line(s.issuer.address, left, y, width * 0.6, 'left', 'regular', 9, MUTED); y += 13; }
-    if (s.issuer?.taxId) { line(`Tax ID · الرقم الضريبي: ${s.issuer.taxId}`, left, y, width * 0.6, 'left', 'regular', 9, MUTED); y += 13; }
+    if (s.issuer?.taxId) { line(`Tax ID ${s.issuer.taxId} · الرقم الضريبي`, left, y, width * 0.6, 'left', 'regular', 9, MUTED); y += 13; }
     line('INVOICE', left, 72, width, 'right', 'bold', 11, MUTED);
     y = Math.max(y, 96) + 8;
     rule(y);
