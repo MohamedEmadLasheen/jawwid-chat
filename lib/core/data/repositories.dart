@@ -809,6 +809,10 @@ abstract interface class TrialRepository {
 
   /// `POST /trials/:id/attendance` -- the card lands in the trial group.
   Future<void> reportAttendance(String trialId, TrialAttendanceDraft draft);
+
+  /// PD-20: `POST /trials/groups/:id/join` -- a Sales seat becomes a live member of a
+  /// teacher's trial group (and from then on the server's call capability applies).
+  Future<void> joinGroup(String conversationId);
 }
 
 /// The build with no trial server (fixtures, tests that do not override it): "+" offers
@@ -822,4 +826,7 @@ class NoTrialRepository implements TrialRepository {
   @override
   Future<void> reportAttendance(String trialId, TrialAttendanceDraft draft) =>
       throw UnsupportedError('no trial server in this build');
+
+  @override
+  Future<void> joinGroup(String conversationId) => throw UnsupportedError('no trial server in this build');
 }

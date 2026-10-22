@@ -15,6 +15,8 @@ import '../features/messages/presentation/conversation_media_screen.dart';
 import '../features/messages/presentation/starred_messages_screen.dart';
 import '../features/profile/presentation/my_profile_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
+import '../features/sales_payments/presentation/family_billing_screen.dart';
+import '../features/sales_payments/presentation/sales_payments_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/stories/presentation/story_viewer_screen.dart';
 import '../features/student_profile/presentation/student_profile_screen.dart';
@@ -87,6 +89,13 @@ abstract final class Routes {
   /// is sent to Chats (see the redirect) -- and of parents, the server answers only the
   /// one who holds billing for the family.
   static const myPayments = '/settings/payments';
+
+  /// PD-20: Sales' Payments tab -- find a family by a parent's name. Sales only (see the
+  /// redirect); the server decides again on every request.
+  static const salesPayments = '/payments';
+
+  /// One family's instalments, opened from a search result.
+  static String salesFamilyBilling(String familyId) => '$salesPayments/families/$familyId';
 
   /// One story, opened full-screen from the rail.
   ///
@@ -168,6 +177,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: Routes.schedule,
             builder: (context, state) => const TeacherScheduleScreen(),
           ),
+          GoRoute(
+            path: Routes.salesPayments,
+            builder: (context, state) => const SalesPaymentsScreen(),
+          ),
         ],
       ),
       // Conversations open full-screen, above the tab bar, so the thread gets the whole
@@ -233,6 +246,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.myPayments,
         builder: (context, state) => const MyPaymentsScreen(),
+      ),
+      // Outside the shell, like a conversation: pushed over the search, with a back
+      // button. The family's name rides along only for the title while it loads.
+      GoRoute(
+        path: '${Routes.salesPayments}/families/:familyId',
+        builder: (context, state) => FamilyBillingScreen(
+          familyId: state.pathParameters['familyId']!,
+          familyName: state.extra is String ? state.extra! as String : null,
+        ),
       ),
       GoRoute(
         path: '${Routes.studentsPrefix}/:learnerId',
@@ -312,6 +334,20 @@ String? _redirect(Ref ref, String location) {
 
   // Payments are a parent's (PD-17). A teacher never sees a family's money.
   if (location == Routes.myPayments && ref.read(currentRoleProvider) != UserRole.parent) {
+    return Routes.chats;
+  }
+
+  // PD-20: the remaining one-role screens. A parent's own editable profile is a
+  // parent's; a teacher's professional profile and leave are a teacher's. Sales -- staff,
+  // whom the server refuses on every one of them -- reaches none.
+  final role = ref.read(currentRoleProvider);
+  if (location == Routes.myProfile && role != UserRole.parent) return Routes.chats;
+  if ((location == Routes.teacherProfile || location == Routes.myLeave) && role != UserRole.teacher) {
+    return Routes.chats;
+  }
+
+  // Sales' Payments (find a family, its instalments, record a payment) is Sales' alone.
+  if ((location == Routes.salesPayments || location.startsWith('${Routes.salesPayments}/')) && role != UserRole.sales) {
     return Routes.chats;
   }
 

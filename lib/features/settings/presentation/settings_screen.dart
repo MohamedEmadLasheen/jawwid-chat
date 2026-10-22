@@ -83,9 +83,11 @@ class SettingsScreen extends ConsumerWidget {
                               const SizedBox(height: Spacing.spacing1),
                               Text(
                                 // The role label, not an internal role id.
-                                user.isTeacher
-                                    ? l10n.groupMemberRoleTeacher
-                                    : l10n.groupMemberRoleParent,
+                                switch (user.role) {
+                                  UserRole.teacher => l10n.groupMemberRoleTeacher,
+                                  UserRole.sales => l10n.roleSales,
+                                  UserRole.parent => l10n.groupMemberRoleParent,
+                                },
                                 style: Theme.of(context)
                                     .textTheme
                                     .bodySmall
@@ -123,7 +125,7 @@ class SettingsScreen extends ConsumerWidget {
           // three for each child. A teacher has no parent profile (the server refuses them
           // outright), so offering them the row would be offering a screen that can only
           // fail.
-          if (user != null && !user.isTeacher)
+          if (user != null && user.isParent)
             ListTile(
               leading: const Icon(Icons.badge_outlined),
               title: Text(l10n.myProfileTitle),

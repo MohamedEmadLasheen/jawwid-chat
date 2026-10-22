@@ -68,9 +68,14 @@ class ChatScreen extends ConsumerStatefulWidget {
     this.focusMessageId,
     this.conversation,
     this.startVoiceRecording = false,
+    this.banner,
   });
 
   final String conversationId;
+
+  /// A strip above the thread for something about THIS conversation (PD-20: Sales'
+  /// "Join this group" on a trial group). Null for nothing.
+  final Widget? banner;
 
   /// Open at this message (a search hit from the chats list): older history is
   /// loaded until it is on screen, then it is briefly highlighted.
@@ -1037,6 +1042,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               message: l10n.messageQueuedOffline,
               tone: JawwidBannerTone.warning,
             ),
+          ?widget.banner,
           PinnedBanner(
             conversationId: widget.conversationId,
             onJump: (messageId) => _jumpToMessage(messageId, state),

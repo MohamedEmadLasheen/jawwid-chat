@@ -64,8 +64,16 @@ class FakeBackend {
   Stream<void> get sessionRevoked => _sessionRevoked.stream;
 
   AuthUser get user => AuthUser(
-        id: role == UserRole.parent ? 'u_parent' : 'u_teacher',
-        displayName: role == UserRole.parent ? 'ولي أمر' : 'معلم',
+        id: switch (role) {
+          UserRole.parent => 'u_parent',
+          UserRole.teacher => 'u_teacher',
+          UserRole.sales => 'u_sales',
+        },
+        displayName: switch (role) {
+          UserRole.parent => 'ولي أمر',
+          UserRole.teacher => 'معلم',
+          UserRole.sales => 'فريق المبيعات',
+        },
         role: role,
         timeZone: 'Africa/Cairo',
       );
@@ -95,6 +103,21 @@ class FakeBackend {
         conversationId: 'c_group_2',
         learner: const LearnerRef(id: 'l_2', displayName: 'ليلى'),
         includeParent: true,
+      );
+    } else if (role == UserRole.sales) {
+      // PD-20: Sales sees every teacher's trial group (a GROUP, named by the server after
+      // its teacher) and their own 1:1s. Placeholder names only (§80).
+      _addTrialGroup(conversationId: 'c_trial_1', teacherName: 'خديجة', withViewer: true);
+      _addTrialGroup(conversationId: 'c_trial_2', teacherName: 'حسن', withViewer: false);
+      _addConversation(
+        Conversation(
+          id: 'c_admin',
+          kind: ConversationKind.adminDirect,
+          title: 'إدارة جَوِّد',
+          updatedAt: _now.subtract(const Duration(hours: 2)),
+          lastMessageAt: _now.subtract(const Duration(hours: 2)),
+          lastMessagePreview: 'تم تحديث جدول الحصص التجريبية.',
+        ),
       );
     } else {
       _addGroup(
@@ -170,6 +193,48 @@ class FakeBackend {
           role: ParticipantRole.admin,
         ),
       ],
+    );
+  }
+
+  /// A teacher's trial group with Sales. [withViewer]: whether the signed-in Sales seat
+  /// is a live member (they join one with `POST /trials/groups/:id/join`).
+  void _addTrialGroup({required String conversationId, required String teacherName, required bool withViewer}) {
+    _addConversation(
+      Conversation(
+        id: conversationId,
+        kind: ConversationKind.studentGroup,
+        title: teacherName,
+        isTrialGroup: true,
+        namedByServer: true,
+        updatedAt: _now.subtract(const Duration(minutes: 30)),
+        lastMessageAt: _now.subtract(const Duration(minutes: 30)),
+        lastMessagePreview: 'تم حجز حصة تجريبية جديدة.',
+      ),
+    );
+    _groups[conversationId] = StudentGroup(
+      conversationId: conversationId,
+      learner: const LearnerRef(id: '', displayName: ''),
+      requiresApproval: false,
+      members: [
+        GroupMember(id: 'm_teacher_$conversationId', displayName: teacherName, role: ParticipantRole.teacher),
+        if (withViewer) GroupMember(id: user.id, displayName: user.displayName, role: ParticipantRole.admin),
+      ],
+    );
+  }
+
+  /// `POST /trials/groups/:id/join`: the Sales seat becomes a live member.
+  void joinTrialGroup(String conversationId) {
+    _maybeFail();
+    final group = _groups[conversationId];
+    if (group == null || !(_conversations[conversationId]?.isTrialGroup ?? false)) {
+      throw const AppError(AppErrorKind.notFound, code: 'COMM.CONVERSATION_NOT_FOUND');
+    }
+    if (group.members.any((m) => m.id == user.id)) return;
+    _groups[conversationId] = StudentGroup(
+      conversationId: conversationId,
+      learner: group.learner,
+      requiresApproval: group.requiresApproval,
+      members: [...group.members, GroupMember(id: user.id, displayName: user.displayName, role: ParticipantRole.admin)],
     );
   }
 
@@ -302,9 +367,11 @@ class FakeBackend {
       sequence: _sequence,
       authorId: user.id,
       authorName: user.displayName,
-      authorRole: role == UserRole.parent
-          ? ParticipantRole.parent
-          : ParticipantRole.teacher,
+      authorRole: switch (role) {
+        UserRole.parent => ParticipantRole.parent,
+        UserRole.teacher => ParticipantRole.teacher,
+        UserRole.sales => ParticipantRole.admin,
+      },
       kind: outgoing.kind,
       body: outgoing.body,
       replyToMessageId: outgoing.replyToMessageId,

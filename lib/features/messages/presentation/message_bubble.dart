@@ -174,6 +174,27 @@ class MessageBubble extends StatelessWidget {
                         ),
                       ),
                     ),
+                  // Staff-only: labelled so it can never be read as something the family
+                  // saw. A parent or teacher is never sent one; rendered the same if so.
+                  if (message.isInternal)
+                    Padding(
+                      key: const ValueKey('message-internal-label'),
+                      padding: const EdgeInsets.only(bottom: Spacing.spacing1),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.lock_outline, size: 12, color: JawwidTokens.of(context).colorStatusWarningFg),
+                          const SizedBox(width: Spacing.spacing1),
+                          Text(
+                            l10n.internalNoteLabel,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: JawwidTokens.of(context).colorStatusWarningFg,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   if (message.isForwarded)
                     Padding(
                       padding: const EdgeInsets.only(bottom: Spacing.spacing1),

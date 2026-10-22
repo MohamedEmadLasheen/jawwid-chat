@@ -195,4 +195,36 @@ describe('PD-17 over HTTP', () => {
     expect(student.status).toBe(200);
     expect(student.json).toMatchObject({ viewer: 'staff', family: { id: f.id } });
   });
+
+  it('PD-20: a Sales token does everything the app\'s Payments tab asks, over HTTP', async () => {
+    const f = m.families[0]!;
+    const sales = m.salesManager.subject;
+    const access = await http(sales, 'GET', '/lessons/access');
+    expect(access.json).toMatchObject({ sales: true });
+    const me = await http(sales, 'GET', '/me');
+    expect(me.json).toMatchObject({ kind: 'staff', staffRole: 'manager' });
+
+    const list = await http(sales, 'GET', `/parent-profiles?q=${encodeURIComponent(f.parent.name.split(' ')[0]!)}`);
+    expect(list.status).toBe(200);
+    const item = (list.json.items as Array<Record<string, unknown>>).find((p) => p.id === f.parent.id)!;
+    // The list carries no contact channel: the app never asks for the detail route.
+    expect(Object.keys(item).sort()).toEqual(['avatarUrl', 'childrenCount', 'family', 'id', 'name']);
+
+    const created = await http(m.superAdmin.subject, 'POST', `/families/${f.id}/instalments`, {
+      label: 'Sales app fees', amountMinor: 70000, currency: 'AED', firstDueDate: '2026-10-01',
+    });
+    const id = (created.json.instalments as Array<{ id: string; label: string }>).find((i) => i.label === 'Sales app fees')!.id;
+    const billing = await http(sales, 'GET', `/families/${f.id}/billing`);
+    expect(billing.json).toMatchObject({ canRecord: true });
+    const paid = await http(sales, 'POST', `/instalments/${id}/payment`, { paidOn: '2026-10-02', method: 'bank_transfer', reference: 'TRX-1' });
+    expect(paid.status).toBe(201);
+    expect(await http(sales, 'POST', `/instalments/${id}/payment`, { paidOn: '2026-10-02', method: 'bank_transfer' })).toMatchObject({
+      status: 409,
+      code: CommErrorCode.BILLING_STATE,
+    });
+    const voided = await http(sales, 'POST', `/instalments/${id}/void`, { reason: 'recorded on the wrong family' });
+    expect(voided.status).toBe(201);
+    // Sales never edits the contact record, from any client.
+    expect((await http(sales, 'POST', `/parent-profiles/${f.parent.id}`, { region: 'x' })).status).toBe(403);
+  });
 });

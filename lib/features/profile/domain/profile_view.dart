@@ -199,9 +199,12 @@ abstract final class ProfileViewBuilder {
       subject: ProfilePerson(
         id: id,
         displayName: displayName,
-        role: role == UserRole.parent
-            ? ParticipantRole.parent
-            : ParticipantRole.teacher,
+        role: switch (role) {
+          UserRole.parent => ParticipantRole.parent,
+          UserRole.teacher => ParticipantRole.teacher,
+          // PD-20: a Sales seat is Jawwid staff, never a parent with children.
+          UserRole.sales => ParticipantRole.admin,
+        },
         avatarUrl: avatarUrl,
       ),
       isGroup: false,

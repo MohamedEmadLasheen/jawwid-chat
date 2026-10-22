@@ -369,6 +369,26 @@ void main() {
       expect(state.reason, SignedOutReason.roleNotSupported);
       expect(await tokens.read(), isNull);
       expect(adopted, isEmpty);
+      // PD-20: the server issued a real session; it is ended, not orphaned.
+      expect(repository.signOutCalls, 1, reason: 'POST /auth/logout before the tokens are forgotten');
+    });
+
+    test('a refused principal is still signed out locally when the logout fails', () async {
+      repository
+        ..currentUserError = const AppError(AppErrorKind.forbidden, code: AuthFailures.roleNotSupported)
+        ..signOutThrows = true;
+
+      await controller().signIn(username: 'staff', password: 'pw');
+
+      expect((container.read(provider) as AuthSignedOut).reason, SignedOutReason.roleNotSupported);
+      expect(repository.signOutCalls, 1);
+      expect(await tokens.read(), isNull);
+    });
+
+    test('an ordinary sign-in failure sends no logout (there is no session)', () async {
+      repository.signInError = const AppError(AppErrorKind.invalidCredentials);
+      await controller().signIn(username: 'mona', password: 'wrong');
+      expect(repository.signOutCalls, 0);
     });
 
     test('a refused principal on restore ends the stored session', () async {
@@ -392,6 +412,18 @@ void main() {
         isNull,
         reason: 'a staff token on a phone is not a session to keep for later',
       );
+      expect(repository.signOutCalls, 1, reason: 'the refused session is logged out on the server too');
+    });
+
+    test('a transient failure on restore keeps the session and logs nothing out', () async {
+      await tokens.write(AuthSession(accessToken: 'a', refreshToken: 'r', accessTokenExpiresAt: DateTime.utc(2030)));
+      repository.currentUserError = const AppError(AppErrorKind.network);
+
+      await controller().restore();
+
+      expect(container.read(provider), isA<AuthUnreachable>());
+      expect(repository.signOutCalls, 0);
+      expect(await tokens.read(), isNotNull);
     });
   });
 }

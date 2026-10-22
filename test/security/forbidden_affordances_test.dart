@@ -162,7 +162,7 @@ void main() {
   });
 
   group('navigation shell', () {
-    testWidgets('a parent gets exactly Chats, Calls and Settings; a teacher adds only their Schedule', (tester) async {
+    testWidgets('a parent gets exactly Chats, Calls and Settings; a teacher adds only their Schedule; Sales only Payments', (tester) async {
       // Three destinations for a parent, and no fourth. Home, Jawwid and Groups were all
       // views of the same conversations; keeping them as destinations is what made "where
       // are my chats?" a question with three answers. PD-9/PD-10 (2026-10-18) reopened the
@@ -181,7 +181,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.byType(NavigationDestination), findsNWidgets(role == UserRole.teacher ? 4 : 3));
+        expect(find.byType(NavigationDestination), findsNWidgets(role == UserRole.parent ? 3 : 4));
       }
 
       expect(
@@ -191,6 +191,11 @@ void main() {
       expect(
         Shells.forRole(UserRole.teacher).map((d) => d.route),
         ['/chats', '/schedule', '/calls', '/settings'],
+      );
+      // PD-20 (2026-10-22): Sales gets Chats, Calls, Payments and Settings -- no Schedule.
+      expect(
+        Shells.forRole(UserRole.sales).map((d) => d.route),
+        ['/chats', '/calls', '/payments', '/settings'],
       );
     });
 

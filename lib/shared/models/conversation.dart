@@ -83,6 +83,7 @@ class Conversation {
     this.isReadOnly = false,
     this.isTeacherSupervision = false,
     this.isTrialGroup = false,
+    this.namedByServer = false,
     this.themeKey,
     this.wallpaperUrl,
   });
@@ -134,6 +135,11 @@ class Conversation {
   /// Taken from the server's type, never inferred from a title.
   final bool isTrialGroup;
 
+  /// PD-20: shown under the server's title even when it is a trial group. A teacher has
+  /// one trial group and reads it as "Trial lessons"; Sales sees one per teacher, and
+  /// only the server's title (the teacher's name) tells them apart.
+  final bool namedByServer;
+
   /// The viewer's OWN background preset for this chat (owner decisions
   /// 2026-10-20: private, synced). Null is the default look.
   final String? themeKey;
@@ -147,7 +153,7 @@ class Conversation {
   /// the teacher reads under its own localized name ([supervisionLabel]).
   String displayTitle(String supervisionLabel, {String? trialGroupLabel}) => isTeacherSupervision
       ? supervisionLabel
-      : isTrialGroup && trialGroupLabel != null
+      : isTrialGroup && trialGroupLabel != null && !namedByServer
           ? trialGroupLabel
           : title;
 
@@ -178,6 +184,7 @@ class Conversation {
       isReadOnly: isReadOnly,
       isTeacherSupervision: isTeacherSupervision,
       isTrialGroup: isTrialGroup,
+      namedByServer: namedByServer,
       themeKey: themeKey ?? this.themeKey,
       wallpaperUrl: wallpaperUrl ?? this.wallpaperUrl,
     );
