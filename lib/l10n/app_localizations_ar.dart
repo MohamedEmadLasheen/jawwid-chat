@@ -2370,6 +2370,144 @@ class L10nAr extends L10n {
   String get resetFinish => 'تعيين كلمة المرور';
 
   @override
+  String get recoveryOpen => 'لا تستطيع تسجيل الدخول؟';
+
+  @override
+  String get recoveryTitle => 'استعادة حسابك';
+
+  @override
+  String get recoveryIntro =>
+      'اختر ما تحتاج المساعدة فيه. لن يستغرق الأمر سوى دقيقة.';
+
+  @override
+  String get recoveryUnavailable =>
+      'لاستعادة حسابك، اطلب من مشرفك رمز إعادة تعيين لمرة واحدة، ثم أدخله هنا.';
+
+  @override
+  String get recoveryForgotPassword => 'نسيت كلمة المرور';
+
+  @override
+  String get recoveryForgotPasswordHint =>
+      'سنرسل رمزًا إلى البريد الإلكتروني الذي تسجّل الدخول به.';
+
+  @override
+  String get recoveryForgotEmail => 'نسيت بريدي الإلكتروني';
+
+  @override
+  String get recoveryForgotEmailHint =>
+      'سنرسل رمزًا عبر واتساب إلى رقم الهاتف المسجّل لك لدى الأكاديمية.';
+
+  @override
+  String get recoveryHaveCode => 'لديّ رمز من الأكاديمية';
+
+  @override
+  String get recoveryHaveCodeHint => 'أعطاك مشرفك رمز إعادة تعيين لمرة واحدة.';
+
+  @override
+  String get recoveryStillStuck =>
+      'ما زلت تواجه مشكلة؟ يمكن لمشرفك أن يرسل لك رمز إعادة تعيين لمرة واحدة.';
+
+  @override
+  String recoveryStep(int number, int total) {
+    return 'الخطوة $number من $total';
+  }
+
+  @override
+  String get recoverySendCode => 'إرسال الرمز';
+
+  @override
+  String get recoveryResend => 'إرسال رمز جديد';
+
+  @override
+  String recoveryResendIn(int seconds) {
+    return 'إرسال رمز جديد بعد $seconds ث';
+  }
+
+  @override
+  String get recoveryResent => 'تم إرسال رمز جديد. يعمل أحدث رمز فقط.';
+
+  @override
+  String get recoveryContinue => 'متابعة';
+
+  @override
+  String get recoveryChangeEmail => 'استخدام بريد إلكتروني آخر';
+
+  @override
+  String get recoveryChangePhone => 'استخدام رقم آخر';
+
+  @override
+  String get recoveryCodeFormat => 'أدخل أرقام الرمز الستة.';
+
+  @override
+  String get recoveryCodeInvalid =>
+      'الرمز غير صحيح أو انتهت صلاحيته. تحقّق منه، أو اطلب رمزًا جديدًا.';
+
+  @override
+  String get forgotPasswordTitle => 'إعادة تعيين كلمة المرور';
+
+  @override
+  String get forgotPasswordIntro =>
+      'أدخل البريد الإلكتروني الذي تسجّل الدخول به، وسنرسل لك رمزًا من 6 أرقام.';
+
+  @override
+  String forgotPasswordCodeSent(String email, int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: '$minutes دقيقة',
+      many: '$minutes دقيقة',
+      few: '$minutes دقائق',
+      two: 'دقيقتين',
+      one: 'دقيقة واحدة',
+    );
+    return 'إذا كان $email حساب وليّ أمر، فإن رمزًا من 6 أرقام في الطريق إليه. يعمل الرمز لمدة $_temp0؛ تحقّق من مجلد الرسائل غير المرغوب فيها إن لم تجده. ثم اختر كلمة مرور جديدة.';
+  }
+
+  @override
+  String get forgotEmailTitle => 'معرفة بريد تسجيل الدخول';
+
+  @override
+  String get forgotEmailIntro =>
+      'أدخل رقم هاتفك المسجّل لدى الأكاديمية، وسنرسل إليه رمزًا من 6 أرقام عبر واتساب.';
+
+  @override
+  String get forgotEmailPhoneLabel => 'رقم الهاتف';
+
+  @override
+  String get forgotEmailPhoneHint =>
+      'إذا لم يكن رقمك مصريًا، فابدأ بـ + ثم رمز الدولة.';
+
+  @override
+  String get forgotEmailPhoneInvalid => 'أدخل رقم هاتفك.';
+
+  @override
+  String forgotEmailCodeSent(int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: '$minutes دقيقة',
+      many: '$minutes دقيقة',
+      few: '$minutes دقائق',
+      two: 'دقيقتين',
+      one: 'دقيقة واحدة',
+    );
+    return 'إذا كان هذا الرقم مسجّلًا لدى الأكاديمية، فإن رمزًا من 6 أرقام في الطريق إليك عبر واتساب. يعمل الرمز لمدة $_temp0.';
+  }
+
+  @override
+  String get forgotEmailFound => 'بريدك الإلكتروني لتسجيل الدخول هو:';
+
+  @override
+  String get forgotEmailFoundMany =>
+      'رقم الهاتف هذا مرتبط بأكثر من حساب. اختر الحساب الذي تريده:';
+
+  @override
+  String get forgotEmailSignIn => 'تسجيل الدخول بهذا البريد';
+
+  @override
+  String get forgotEmailSetPassword => 'نسيت كلمة المرور أيضًا';
+
+  @override
   String get studentProfileTitle => 'ملف الطالب';
 
   @override

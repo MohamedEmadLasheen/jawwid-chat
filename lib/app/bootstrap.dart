@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/misc.dart';
 
 import '../core/data/fake_backend.dart';
 import '../core/data/fake_repositories.dart';
+import '../core/data/http/http_account_recovery_repository.dart';
 import '../core/data/http/http_auth_repository.dart';
 import '../core/data/http/http_billing_repository.dart';
 import '../core/data/http/http_call_repository.dart';
@@ -153,6 +154,9 @@ List<Override> _httpOverrides() {
     ),
     passwordResetRepositoryProvider.overrideWithValue(
       HttpPasswordResetRepository(transport: publicTransport),
+    ),
+    accountRecoveryRepositoryProvider.overrideWithValue(
+      HttpAccountRecoveryRepository(transport: publicTransport),
     ),
     conversationRepositoryProvider.overrideWithValue(
       HttpConversationRepository(

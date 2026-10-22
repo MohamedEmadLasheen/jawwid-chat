@@ -352,6 +352,60 @@ class NoPasswordResetRepository implements PasswordResetRepository {
       throw UnsupportedError('no reset server in this build');
 }
 
+/// PD-25: which self-service ways back in this deployment offers. Configuration only -- the
+/// same answer for everyone.
+class RecoveryOptions {
+  const RecoveryOptions({required this.email, required this.whatsapp, required this.codeMinutes});
+
+  /// Forgot password: a code is e-mailed to the sign-in address.
+  final bool email;
+
+  /// Forgot e-mail: a code goes by WhatsApp to the phone the academy has on file.
+  final bool whatsapp;
+
+  final int codeMinutes;
+
+  /// What an unreachable server or an older API means: no self-service way in.
+  static const none = RecoveryOptions(email: false, whatsapp: false, codeMinutes: 10);
+}
+
+/// PD-25: a parent recovers their own account from the sign-in screen. PUBLIC -- the sign-in
+/// transport, never the authenticated client. The two requests succeed the same way whatever
+/// was typed, so nothing here says whether an e-mail or phone belongs to an account. The new
+/// password is set through [PasswordResetRepository.complete] with the code received.
+abstract interface class AccountRecoveryRepository {
+  /// `GET /auth/recovery/options`.
+  Future<RecoveryOptions> options();
+
+  /// `POST /auth/recovery/password` -- e-mails a code to [email] if it is a parent's sign-in.
+  Future<void> requestPasswordCode(String email);
+
+  /// `POST /auth/recovery/email` -- sends a code by WhatsApp to the phone on file.
+  Future<void> requestEmailCode(String phone);
+
+  /// `POST /auth/recovery/email/verify` -- the sign-in e-mails the code is good for. A refusal
+  /// is an AppError (`AUTH.RESET_CODE_INVALID`, `COMMON.RATE_LIMITED`).
+  Future<List<String>> verifyEmailCode({required String phone, required String code});
+}
+
+/// The build with no recovery server (fixtures, tests that do not override it).
+class NoAccountRecoveryRepository implements AccountRecoveryRepository {
+  const NoAccountRecoveryRepository();
+
+  @override
+  Future<RecoveryOptions> options() async => RecoveryOptions.none;
+
+  @override
+  Future<void> requestPasswordCode(String email) => throw UnsupportedError('no recovery server in this build');
+
+  @override
+  Future<void> requestEmailCode(String phone) => throw UnsupportedError('no recovery server in this build');
+
+  @override
+  Future<List<String>> verifyEmailCode({required String phone, required String code}) =>
+      throw UnsupportedError('no recovery server in this build');
+}
+
 abstract interface class ConversationRepository {
   Future<List<Conversation>> list({bool includeArchived = false});
 

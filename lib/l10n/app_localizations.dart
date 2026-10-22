@@ -4315,6 +4315,210 @@ abstract class L10n {
   /// **'Set password'**
   String get resetFinish;
 
+  /// No description provided for @recoveryOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Trouble signing in?'**
+  String get recoveryOpen;
+
+  /// No description provided for @recoveryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Get back into your account'**
+  String get recoveryTitle;
+
+  /// No description provided for @recoveryIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose what you need help with. It only takes a minute.'**
+  String get recoveryIntro;
+
+  /// No description provided for @recoveryUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'To get back into your account, ask your supervisor for a one-time reset code, then enter it here.'**
+  String get recoveryUnavailable;
+
+  /// No description provided for @recoveryForgotPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'I forgot my password'**
+  String get recoveryForgotPassword;
+
+  /// No description provided for @recoveryForgotPasswordHint.
+  ///
+  /// In en, this message translates to:
+  /// **'We\'ll e-mail a code to the address you sign in with.'**
+  String get recoveryForgotPasswordHint;
+
+  /// No description provided for @recoveryForgotEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'I forgot my e-mail'**
+  String get recoveryForgotEmail;
+
+  /// No description provided for @recoveryForgotEmailHint.
+  ///
+  /// In en, this message translates to:
+  /// **'We\'ll send a code on WhatsApp to the phone number the academy has for you.'**
+  String get recoveryForgotEmailHint;
+
+  /// No description provided for @recoveryHaveCode.
+  ///
+  /// In en, this message translates to:
+  /// **'I have a code from the academy'**
+  String get recoveryHaveCode;
+
+  /// No description provided for @recoveryHaveCodeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Your supervisor gave you a one-time reset code.'**
+  String get recoveryHaveCodeHint;
+
+  /// No description provided for @recoveryStillStuck.
+  ///
+  /// In en, this message translates to:
+  /// **'Still stuck? Your supervisor can send you a one-time reset code.'**
+  String get recoveryStillStuck;
+
+  /// No description provided for @recoveryStep.
+  ///
+  /// In en, this message translates to:
+  /// **'Step {number} of {total}'**
+  String recoveryStep(int number, int total);
+
+  /// No description provided for @recoverySendCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Send code'**
+  String get recoverySendCode;
+
+  /// No description provided for @recoveryResend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send a new code'**
+  String get recoveryResend;
+
+  /// No description provided for @recoveryResendIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Send a new code in {seconds} s'**
+  String recoveryResendIn(int seconds);
+
+  /// No description provided for @recoveryResent.
+  ///
+  /// In en, this message translates to:
+  /// **'A new code is on its way. Only the newest code works.'**
+  String get recoveryResent;
+
+  /// No description provided for @recoveryContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get recoveryContinue;
+
+  /// No description provided for @recoveryChangeEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Use a different e-mail'**
+  String get recoveryChangeEmail;
+
+  /// No description provided for @recoveryChangePhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Use a different number'**
+  String get recoveryChangePhone;
+
+  /// No description provided for @recoveryCodeFormat.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the 6 digits of the code.'**
+  String get recoveryCodeFormat;
+
+  /// No description provided for @recoveryCodeInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'That code is wrong or has expired. Check it, or send a new one.'**
+  String get recoveryCodeInvalid;
+
+  /// No description provided for @forgotPasswordTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset your password'**
+  String get forgotPasswordTitle;
+
+  /// No description provided for @forgotPasswordIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the e-mail you sign in with. We\'ll send you a 6-digit code.'**
+  String get forgotPasswordIntro;
+
+  /// No description provided for @forgotPasswordCodeSent.
+  ///
+  /// In en, this message translates to:
+  /// **'If {email} is a parent account, a 6-digit code is on its way. It works for {minutes, plural, =1{1 minute} other{{minutes} minutes}}; check your spam folder if you can\'t see it. Then choose a new password.'**
+  String forgotPasswordCodeSent(String email, int minutes);
+
+  /// No description provided for @forgotEmailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Find your sign-in e-mail'**
+  String get forgotEmailTitle;
+
+  /// No description provided for @forgotEmailIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your phone number, the one the academy has for you. We\'ll send a 6-digit code to it on WhatsApp.'**
+  String get forgotEmailIntro;
+
+  /// No description provided for @forgotEmailPhoneLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone number'**
+  String get forgotEmailPhoneLabel;
+
+  /// No description provided for @forgotEmailPhoneHint.
+  ///
+  /// In en, this message translates to:
+  /// **'If your number is not Egyptian, start with + and the country code.'**
+  String get forgotEmailPhoneHint;
+
+  /// No description provided for @forgotEmailPhoneInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your phone number.'**
+  String get forgotEmailPhoneInvalid;
+
+  /// No description provided for @forgotEmailCodeSent.
+  ///
+  /// In en, this message translates to:
+  /// **'If this number is on file, a 6-digit code is on its way on WhatsApp. It works for {minutes, plural, =1{1 minute} other{{minutes} minutes}}.'**
+  String forgotEmailCodeSent(int minutes);
+
+  /// No description provided for @forgotEmailFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Your sign-in e-mail is:'**
+  String get forgotEmailFound;
+
+  /// No description provided for @forgotEmailFoundMany.
+  ///
+  /// In en, this message translates to:
+  /// **'This phone number belongs to more than one account. Choose the one you want:'**
+  String get forgotEmailFoundMany;
+
+  /// No description provided for @forgotEmailSignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with this e-mail'**
+  String get forgotEmailSignIn;
+
+  /// No description provided for @forgotEmailSetPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'I forgot my password too'**
+  String get forgotEmailSetPassword;
+
   /// No description provided for @studentProfileTitle.
   ///
   /// In en, this message translates to:

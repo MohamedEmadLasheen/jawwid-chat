@@ -120,7 +120,7 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-21 — CLOSED
+## 4. Product decisions PD-1 to PD-25 — CLOSED
 
 PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
 exit gate, before `main` was baselined. **PD-6 was closed by the product owner
@@ -140,6 +140,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-19 was closed by the product owner on 2026-10-21** (a member may start a call in their own chat; supersedes PD-2), amended 2026-10-21 (the super admin's group calls) and 2026-10-22 (calls in the trial group and the supervision conversation).
 **PD-20 was closed by the product owner on 2026-10-22** (the Sales team uses the app: chats, calls and payments). It amends PD-15's "staff work in Admin Web; the app is for parents and teachers".
 **PD-21 was closed by the product owner on 2026-10-22** (account administration: password reset, inactive accounts, impersonation).
+**PD-25 was closed by the product owner on 2026-10-22** (a parent recovers their own account: forgot password, forgot e-mail). It builds on PD-21's reset code. (PD-22 to PD-24 are recorded on their own branches.)
 
 | ID | Subject | Status |
 |---|---|---|
@@ -164,6 +165,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-19** | **Who may start a call: every member of their own chat** (2026-10-21) | **CLOSED** — teachers, parents and supervisors may start a call in any chat they may write in; parents may now start their family / Student Group calls; chats a person is not a member of, BR-1 / PD-7, C-4 and the no-phantom-call rule are unchanged; amended the same day so the super admin may start a group call in any chat they may write in, with a seat on the call; amended 2026-10-22 so trial-group and supervision calls are group calls (they were refused by the database) |
 | **PD-20** | **The Sales team in the app** (2026-10-22) | **CLOSED** — Sales-department staff sign in to the app and get Chats, Calls, Payments and Settings; they view and record payments (record once, void with a reason); instalment plans, the contact record and every other staff role stay in Admin Web; the app never holds a parent's phone or e-mail |
 | **PD-21** | **Account administration: password reset, inactive accounts, impersonation** (2026-10-22) | **CLOSED** — every staff role, org-wide, for parent and teacher accounts; staff accounts by the super admin only; never the super admin's or one's own; a reset is a one-time code the person completes with their own password; inactive = suspended, signed out everywhere, reactivation revives no session; impersonation of parents and teachers only, labelled messages, fully audited |
+| **PD-25** | **A parent recovers their own account** (2026-10-22) | **CLOSED** — from the app's sign-in screen: forgot password = a one-time code e-mailed to the sign-in address; forgot e-mail = a one-time code by WhatsApp to the phone in the parent file, then the sign-in e-mail is shown; both end in PD-21's reset; parents only; nothing says whether an account exists. Record: `../admin/pd025-parent-self-recovery.md` |
 
 ---
 
@@ -2079,6 +2081,46 @@ code, never a password.
 
 ---
 
+
+### PD-25 · A parent recovers their own account
+
+**Closed by the product owner on 2026-10-22** (owner request: a simple, secure
+recovery for parents who forget the e-mail or password they registered with,
+from the app's sign-in screen, without contacting support for every case). The
+owner answered three design questions.
+
+**Background.** A parent's login is the e-mail Sales recorded (PD-16), and the
+only code delivery that existed was a person: the supervisor relays sign-up
+codes (PD-16) and administrators hand over reset codes (PD-21). Chat had no
+e-mail, SMS or WhatsApp sender.
+
+**Decision.**
+1. **Forgot password → e-mail.** The parent types their sign-in e-mail; a
+   one-time 6-digit code is e-mailed to that address. They enter it with a
+   password of their own (PD-21's completion: every other session ends).
+2. **Forgot e-mail → WhatsApp.** The parent types their phone; a one-time code
+   goes by WhatsApp to the phone **in the parent file** (PD-17) — never to the
+   number typed. The code reveals the sign-in e-mail; the parent signs in with
+   the password they remember, or uses the same code to set a new one.
+3. **The parent-file phone is trusted** as the parent's verified phone (staff
+   recorded it at enrolment). Known risk, accepted: a phone mistyped by staff
+   would receive the codes; correcting it in the Parent Profile fixes it.
+4. **Same code machinery as PD-21.** One table, one completion route, one live
+   code per account (the newest wins), 10 minutes, 5 tries — shared between the
+   two steps of the forgot-e-mail flow.
+5. **Parents only.** A signed-up, active parent account. Teachers and staff keep
+   going through an administrator (the database refuses them a self-service
+   code); a suspended account stays suspended; a parent who never signed up
+   uses sign-up.
+6. **No enumeration.** Both requests answer the same whatever was typed, and
+   send after answering; a resend waits 60 s; 5 codes per account per hour;
+   the login limiter meters every call.
+7. **A channel is off until configured** (SMTP for e-mail; the Meta WhatsApp
+   Cloud API with an approved authentication template for WhatsApp). The app
+   offers only what is on; "I have a code from the academy" and the supervisor
+   remain the fallback.
+
+Record: `../admin/pd025-parent-self-recovery.md`.
 ### Decisions still open after PD-1 to PD-21
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
