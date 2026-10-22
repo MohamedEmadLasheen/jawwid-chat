@@ -8,6 +8,7 @@ import { AppConfigService } from './app-config.service';
 import { PrismaRelationshipService } from './relationship.service';
 import { RealtimeRevocationHub } from './realtime-revocation';
 import { SqlStaffScope } from './staff-scope';
+import { TimeZoneService } from './time-zone.service';
 import {
   AUDIT_SERVICE,
   COVERAGE_SERVICE,
@@ -30,6 +31,8 @@ import {
     PrismaService,
     AppConfigService,
     AuthorizationService,
+    // PD-22. Each person's zone; read by notifications, cards and Admin Web views.
+    TimeZoneService,
     { provide: IDENTITY_SERVICE, useClass: PrismaIdentityService },
     { provide: COVERAGE_SERVICE, useClass: SqlCoverageService },
     { provide: AUDIT_SERVICE, useClass: PrismaAuditService },
@@ -49,6 +52,7 @@ import {
     PrismaService,
     AppConfigService,
     AuthorizationService,
+    TimeZoneService,
     IDENTITY_SERVICE,
     COVERAGE_SERVICE,
     AUDIT_SERVICE,

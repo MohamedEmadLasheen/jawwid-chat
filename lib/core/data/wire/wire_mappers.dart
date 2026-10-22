@@ -5,6 +5,7 @@ import '../../../shared/models/story.dart';
 import '../../../shared/models/supervision.dart' show parseCalendarDay;
 import '../../../shared/models/teacher_profile.dart';
 import '../../../shared/models/user_role.dart';
+import '../../../shared/utils/app_clock.dart';
 import '../repositories.dart';
 import 'wire_vocab.dart';
 
@@ -28,8 +29,8 @@ abstract final class WireMappers {
         _ => null,
       };
 
-  static DateTime? parseTime(Object? raw) =>
-      raw is String ? DateTime.tryParse(raw)?.toLocal() : null;
+  /// An ISO instant, shown in the account's zone (PD-22, [AppClock]).
+  static DateTime? parseTime(Object? raw) => AppClock.parse(raw);
 
   /// Classify a conversation from its wire payload.
   ///

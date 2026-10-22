@@ -1143,5 +1143,15 @@
   "salesVoidConfirm": "إلغاء القسط",
   "salesBillingStateConflict": "سبق دفع هذا القسط أو إلغاؤه. تم تحديث القائمة.",
   "salesBillingInvalid": "تحقّق من التاريخ والمرجع ثم حاول مجددًا.",
-  "salesWriteFailed": "تعذّر الحفظ. حاول مرة أخرى."
+  "salesWriteFailed": "تعذّر الحفظ. حاول مرة أخرى.",
+  "settingsDateTime": "التاريخ والوقت",
+  "settingsDateTimeSubtitle": "المنطقة الزمنية: {zone}",
+  "timeZoneSetAutomatically": "الضبط تلقائيًا",
+  "timeZoneAutomaticHint": "يستخدم المنطقة الزمنية لهاتفك، وتتغيّر من تلقاء نفسها عند السفر.",
+  "timeZoneLabel": "المنطقة الزمنية",
+  "timeZoneUnknown": "غير معروفة بعد",
+  "timeZoneAppliesTo": "تظهر مواعيد الحصص والتذكيرات والإشعارات بهذه المنطقة الزمنية.",
+  "timeZoneSearchHint": "ابحث عن مدينة",
+  "timeZoneNoMatch": "لا توجد منطقة زمنية مطابقة.",
+  "timeZoneSaveFailed": "تعذّر تغيير المنطقة الزمنية. حاول مرة أخرى."
 }

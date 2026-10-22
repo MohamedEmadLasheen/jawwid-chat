@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { messages, type Locale, type MessageKey } from './messages'
+import { ACADEMY_ZONE } from '@/core/time/academyTime'
 
 type Params = Record<string, string | number>
 
@@ -69,9 +70,11 @@ export function I18nProvider({
 
     const rtf = new Intl.RelativeTimeFormat(tag, { numeric: 'auto', style: 'long' })
     const numberFmt = new Intl.NumberFormat(tag)
-    const dateTimeFmt = new Intl.DateTimeFormat(tag, { dateStyle: 'medium', timeStyle: 'short' })
-    const dateFmt = new Intl.DateTimeFormat(tag, { dateStyle: 'medium' })
-    const timeFmt = new Intl.DateTimeFormat(tag, { timeStyle: 'short' })
+    // PD-22: staff read every time in the academy's zone, never their browser's, so two
+    // supervisors in two countries see the same clock.
+    const dateTimeFmt = new Intl.DateTimeFormat(tag, { dateStyle: 'medium', timeStyle: 'short', timeZone: ACADEMY_ZONE })
+    const dateFmt = new Intl.DateTimeFormat(tag, { dateStyle: 'medium', timeZone: ACADEMY_ZONE })
+    const timeFmt = new Intl.DateTimeFormat(tag, { timeStyle: 'short', timeZone: ACADEMY_ZONE })
 
     return {
       locale,

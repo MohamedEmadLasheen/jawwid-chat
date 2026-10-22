@@ -9,6 +9,7 @@ import { TemplateService } from './template.service';
 import { QuietHoursService } from './quiet-hours.service';
 import { NotificationStatus } from '../contracts/vocab';
 import { buildPushData, isCallNotification, mayDeliverTo } from './call-push-routing';
+import { ACADEMY_ZONE, canonicalZone, clockIn, zoneLabel } from '../../platform/time-zone';
 
 export interface ScheduleInput {
   /**
@@ -168,7 +169,7 @@ export class NotificationService {
     const rendered = await this.templates.render(
       n.templateKey,
       n.locale,
-      (n.variables ?? {}) as Record<string, unknown>,
+      await this.inRecipientZone(n.recipientId, n.locale, (n.variables ?? {}) as Record<string, unknown>),
     );
     if (!rendered) {
       await this.fail(notificationId, 'TEMPLATE_MISSING');
@@ -251,6 +252,28 @@ export class NotificationService {
     // delivery metrics lie. DELIVERED/OPENED are set only by markDelivered /
     // markOpened, driven by a real client or provider callback.
     return true;
+  }
+
+  /**
+   * PD-22: `{time}` is the clock time of `startsAt` for THIS recipient, worked out
+   * at send time, so a parent who travelled since the reminder was scheduled is
+   * told their new local time. Someone whose phone never reported a zone is told
+   * the academy's time with its name ("17:00 (Cairo time)"), never a bare clock
+   * they could take for their own.
+   */
+  private async inRecipientZone(
+    recipientId: string,
+    locale: string,
+    variables: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const at = typeof variables.startsAt === 'string' ? new Date(variables.startsAt) : null;
+    if (!at || Number.isNaN(at.getTime())) return variables;
+    const lang = locale === 'en' ? 'en' : 'ar';
+    const own = await this.prisma.actorTimeZone.findUnique({ where: { actorId: recipientId }, select: { timeZone: true } });
+    if (own) return { ...variables, time: clockIn(at, own.timeZone, lang) };
+    const row = await this.prisma.config.findUnique({ where: { key: 'schedule.timezone' } });
+    const academy = canonicalZone(row?.value) ?? ACADEMY_ZONE;
+    return { ...variables, time: `${clockIn(at, academy, lang)} (${zoneLabel(academy, lang)})` };
   }
 
   private async fail(notificationId: string, code: string): Promise<void> {

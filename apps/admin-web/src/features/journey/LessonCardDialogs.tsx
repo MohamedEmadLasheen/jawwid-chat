@@ -6,6 +6,7 @@ import { describeError } from '@/features/organization/copy'
 import { chatKeys } from '@/features/chat/chatApi'
 import { journeyApi, journeyKeys, type LessonTicket } from './api'
 import { J, formatLessonWhen, useJourneyCopy } from './copy'
+import { academyWallClockToIso, isoToAcademyWallClock } from '@/core/time/academyTime'
 
 export type CardKind = 'student_excuse' | 'teacher_excuse' | 'makeup'
 
@@ -90,7 +91,9 @@ export function LessonCardDialog({
 
   const title = tx(kind === 'student_excuse' ? J.menuStudentExcuse : kind === 'teacher_excuse' ? J.menuTeacherExcuse : J.menuMakeup)
   const needsReason = kind === 'teacher_excuse' || (kind === 'student_excuse' && timing === 'after')
-  const startsAt = date && time ? new Date(`${date}T${time}`) : null
+  // PD-22: what is typed is the academy's (Cairo) clock, whatever the browser's zone.
+  const typed = date && time ? academyWallClockToIso(date, time) : null
+  const startsAt = typed ? new Date(typed) : date && time ? new Date(Number.NaN) : null
   const invalid =
     !lessonId ||
     (kind === 'student_excuse' && !timing) ||
@@ -218,17 +221,16 @@ export function LessonCardDialog({
                   <span className="field__label">{tx(J.suggested)}</span>
                   <div className="jr-chips">
                     {slots.data!.slots.slice(0, 8).map((s) => {
-                      const d = new Date(s)
-                      const local = new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString()
+                      const local = isoToAcademyWallClock(s)
                       return (
                         <button
                           key={s}
                           type="button"
                           className="jr-chip"
-                          aria-pressed={date === local.slice(0, 10) && time === local.slice(11, 16)}
+                          aria-pressed={date === local.date && time === local.time}
                           onClick={() => {
-                            setDate(local.slice(0, 10))
-                            setTime(local.slice(11, 16))
+                            setDate(local.date)
+                            setTime(local.time)
                           }}
                         >
                           {formatLessonWhen(s, locale)}

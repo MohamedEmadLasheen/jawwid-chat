@@ -6,6 +6,7 @@ import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
 import '../../../shared/models/user_role.dart';
+import '../../../shared/utils/app_clock.dart';
 import 'lesson_ticket_sheet.dart';
 
 /// PD-11 T2 / PD-15: "Reschedule a make-up class" -- after any apology, once the
@@ -97,7 +98,7 @@ class _MakeupSheetState extends ConsumerState<MakeupSheet> {
   }
 
   Future<void> _pickOther() async {
-    final now = DateTime.now();
+    final now = AppClock.now();
     final day = await showDatePicker(
       context: context,
       firstDate: DateTime(now.year, now.month, now.day),
@@ -108,7 +109,8 @@ class _MakeupSheetState extends ConsumerState<MakeupSheet> {
     final time = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(now.add(const Duration(hours: 1))));
     if (time == null || !mounted) return;
     setState(() {
-      _picked = DateTime(day.year, day.month, day.day, time.hour, time.minute);
+      // PD-22: the picked wall clock is the account's zone, which may not be the phone's.
+      _picked = AppClock.wallClock(day.year, day.month, day.day, time.hour, time.minute);
       _custom = true;
       _error = null;
     });

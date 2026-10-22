@@ -16,6 +16,7 @@ import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/lesson.dart';
 import 'package:jawwid_chat/shared/models/student_profile.dart';
 import 'package:jawwid_chat/shared/models/user_role.dart';
+import 'package:jawwid_chat/shared/utils/app_clock.dart';
 
 /// PD-17 on the client: a teacher's Student Profile, and the one way in -- their own
 /// student's card in the group's info. The server's answers are stubbed; the client is
@@ -101,6 +102,33 @@ void main() {
       expect(find.text('مواعيد الحصص'), findsOneWidget);
       expect(inRow('schedule', 'الاثنين · 16:30 · 30 دقيقة'), findsOneWidget);
       expect(inRow('schedule', 'المواعيد بتوقيت Africa/Cairo'), findsOneWidget);
+    });
+
+    testWidgets('PD-22: a reader abroad sees the next real start in their own zone, weekday included', (tester) async {
+      // Monday 23:30 in Cairo in winter is 00:30 TUESDAY in Riyadh.
+      AppClock.useZone('Asia/Riyadh');
+      addTearDown(() => AppClock.useZone(null));
+      final lessons = _Lessons()
+        ..profile = StudentProfile(
+          id: 'k1',
+          name: 'سارة',
+          schedule: [
+            StudentProfileSlot(
+              weekday: 1,
+              start: '23:30',
+              durationMinutes: 30,
+              timezone: 'Africa/Cairo',
+              nextStartsAt: AppClock.parse('2026-12-07T21:30:00Z'),
+            ),
+          ],
+        );
+      await tester.pumpWidget(app(const StudentProfileScreen(learnerId: 'k1'), lessons: lessons));
+      await tester.pumpAndSettle();
+
+      expect(inRow('schedule', 'Tuesday · 12:30 AM · 30 min'), findsOneWidget);
+      expect(find.textContaining('23:30'), findsNothing);
+      // The time IS the reader's own, so no zone is named.
+      expect(find.textContaining('Times in'), findsNothing);
     });
 
     testWidgets('a missing value says "Not set", never a blank (English and Arabic)', (tester) async {

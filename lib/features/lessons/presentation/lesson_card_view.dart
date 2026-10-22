@@ -6,6 +6,7 @@ import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/lesson.dart';
 import '../../../shared/models/user_role.dart';
+import '../../../shared/utils/app_clock.dart';
 import '../../../shared/utils/text_direction.dart';
 import '../domain/report_vocab.dart';
 import 'lesson_report_sheet.dart' show showEditReportSheet;
@@ -111,7 +112,7 @@ class _LessonCard extends ConsumerWidget {
     final weekly = <String>[
       for (final raw in (card.payload['slots'] as List?) ?? const [])
         if (raw is Map && raw['nextStartsAt'] is String && DateTime.tryParse(raw['nextStartsAt'] as String) != null)
-          l10n.cardEveryWeek(weeklyLabel(context, DateTime.parse(raw['nextStartsAt'] as String).toLocal())),
+          l10n.cardEveryWeek(weeklyLabel(context, AppClock.view(DateTime.parse(raw['nextStartsAt'] as String)))),
     ];
     // Dates the server sends as calendar days (YYYY-MM-DD), shown in the reader's format.
     String? day(String key) {

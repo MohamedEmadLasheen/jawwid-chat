@@ -6,6 +6,7 @@ import { ChatThemeController } from './api/chat-theme.controller';
 import { ChatThemeService } from './themes/chat-theme.service';
 import { ConversationExportService } from './export/conversation-export.service';
 import { ProfilePhotoController } from './api/profile-photo.controller';
+import { TimeZoneController } from './api/time-zone.controller';
 import { AvatarService } from './profile/avatar.service';
 import { Module } from '@nestjs/common';
 import { PlatformModule } from '../platform/platform.module';
@@ -77,6 +78,7 @@ import { ParentProfileService } from './profile/parent-profile.service';
     StorageController,
     MediaController,
     ProfilePhotoController,
+    TimeZoneController,
     StarredController,
     StaffToolsController,
     ExportController,
