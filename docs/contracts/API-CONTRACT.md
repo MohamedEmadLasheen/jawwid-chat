@@ -84,7 +84,7 @@ Source of truth: `apps/api/src/platform/errors.ts`. Default HTTP status of a `Co
 | `COMM.APPROVAL_ALREADY_DECIDED` | 409 | Refresh, do not retry. |
 | `COMM.APPROVAL_REASON_REQUIRED` | 400 | Rejection without a non-blank reason. |
 | `COMM.GROUP_ALREADY_EXISTS` | — | Declared; **no raise site found** in the services reviewed (`ensureStudentGroup` returns the existing group instead). Reserved. |
-| `COMM.CALL_NOT_FOUND` | 404 | |
+| `COMM.CALL_NOT_FOUND` | 404 | Also any `/calls/:id` route whose id is not a uuid (e.g. `None`); it names no call. |
 | `COMM.CALL_ALREADY_ENDED` | 409 | Token requested for an ended call. |
 | `COMM.CALL_PARTICIPANT_LEFT` | 409 | The actor is a recorded participant but has already left the call (`accept`, `decline`, `POST /calls/:id/token`). |
 | `COMM.CALL_NOT_RINGING` | 409 | `decline` on a call that is no longer ringing. |
@@ -908,6 +908,7 @@ unauthorized lifecycle rule.
 - **PD-19 amendment:** the super admin may start a `student_group`, `class_group` or `family_group` call in a conversation they may write in without being a member; the server adds them to the call as a participant (`call_participant`), never to the conversation. A direct call between two other people stays `COMM.NOT_CONVERSATION_MEMBER` (two seats). Managers and backups are unchanged.
 - Request: `{ conversationId: string }`. Response: `{ callId, roomName }`.
 - Errors: matrix codes; `COMM.BR1_TEACHER_PARENT_DIRECT` 403; `COMM.PARENT_CANNOT_START_GROUP_CALL` 403; `COMMON.RATE_LIMITED` 429 (abuse limit, §1.1a).
+- **Never a 500 for a refused seat set (2026-10-22).** The call type is decided with the decision: `group` for `student_group`, `class_group`, `family_group`, `trial_group` and `teacher_supervision`, otherwise `direct`. A direct call with more than two seats is refused as `COMM.INVALID_PARTICIPANTS` 403, by `POST /calls` and `GET /conversations/:id/call-capability` alike, before anything is written. Should the BR-1 call triggers (`chat.assert_call_br1`) still refuse the set at commit, the refusal is answered as `COMM.INVALID_PARTICIPANTS`, `COMM.BR1_TEACHER_PARENT_DIRECT` or `COMM.BR1_ADMIN_PRESENCE_REQUIRED` (403), nothing is written, and the API logs it as a defect.
 - Audit: `event_log` `call_started`. Realtime: `call.incoming { callId, conversationId, type, initiatorId, initiatorName }` to the conversation room. **`roomName` was removed from this payload 2026-09-24:** the room handle comes back from `POST /calls/:id/token` with the token that makes it usable, so broadcasting it added nothing and put a media handle in a fan-out.
 
 **POST /calls/:id/token** — EXISTS
