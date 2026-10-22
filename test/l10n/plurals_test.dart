@@ -88,6 +88,12 @@ void main() {
       // «رسالة مثبّتة {index} من {total}» — the same position, after a noun
       // in the singular that names one item, whatever the numbers are.
       'pinnedBannerOf': 'a position (index of total), not a count',
+      // «الخطوة {number} من {total}» — PD-25 recovery: which step of the flow,
+      // the same position as searchPosition.
+      'recoveryStep': 'a position (step of total), not a count',
+      // «إرسال رمز جديد بعد {seconds} ث» — an abbreviated unit symbol, like
+      // callDuration; it does not inflect.
+      'recoveryResendIn': 'abbreviated unit symbol, which does not inflect',
     };
 
     /// Counted strings that predate this guard and still put a number beside a

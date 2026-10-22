@@ -316,10 +316,42 @@ services:
         scope: RUN_TIME
         type: GENERAL
         value: ${BUILD_TIME}
+      - key: SMTP_URL
+        scope: RUN_TIME
+        type: SECRET
+        value: ${SMTP_URL}
+      - key: RECOVERY_MAIL_FROM
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${RECOVERY_MAIL_FROM}
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${WHATSAPP_PHONE_NUMBER_ID}
+      - key: WHATSAPP_ACCESS_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+        value: ${WHATSAPP_ACCESS_TOKEN}
+      - key: WHATSAPP_RECOVERY_TEMPLATE
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${WHATSAPP_RECOVERY_TEMPLATE}
+      - key: WHATSAPP_TEMPLATE_LANGUAGE
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${WHATSAPP_TEMPLATE_LANGUAGE}
+      - key: WHATSAPP_API_VERSION
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${WHATSAPP_API_VERSION}
       - key: PRISMA_MIGRATE_SKIP_GENERATE
         scope: RUN_TIME
         type: GENERAL
         value: ${PRISMA_MIGRATE_SKIP_GENERATE}
+      - key: RECOVERY_DELIVERY_LOG
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${RECOVERY_DELIVERY_LOG}
   # Admin Web: its nginx container, not a static site (ADR-011). The bundle
   # is built per environment (ADR-006); the runtime env is the CSP's origins.
   - name: admin-web
@@ -609,7 +641,39 @@ workers:
         scope: RUN_TIME
         type: GENERAL
         value: ${BUILD_TIME}
+      - key: SMTP_URL
+        scope: RUN_TIME
+        type: SECRET
+        value: ${SMTP_URL}
+      - key: RECOVERY_MAIL_FROM
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${RECOVERY_MAIL_FROM}
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${WHATSAPP_PHONE_NUMBER_ID}
+      - key: WHATSAPP_ACCESS_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+        value: ${WHATSAPP_ACCESS_TOKEN}
+      - key: WHATSAPP_RECOVERY_TEMPLATE
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${WHATSAPP_RECOVERY_TEMPLATE}
+      - key: WHATSAPP_TEMPLATE_LANGUAGE
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${WHATSAPP_TEMPLATE_LANGUAGE}
+      - key: WHATSAPP_API_VERSION
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${WHATSAPP_API_VERSION}
       - key: PRISMA_MIGRATE_SKIP_GENERATE
         scope: RUN_TIME
         type: GENERAL
         value: ${PRISMA_MIGRATE_SKIP_GENERATE}
+      - key: RECOVERY_DELIVERY_LOG
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${RECOVERY_DELIVERY_LOG}

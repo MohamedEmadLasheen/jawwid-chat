@@ -395,7 +395,28 @@ Keyed by the verified request only. Support sessions (PD-21) are never listed an
 - Response: `200 { ok: true }`. Opens no session: the client signs in with `POST /auth/login`.
 - Side effects (one transaction): the code is spent, the password set (Argon2id), the lockout cleared, **every session of the account revoked**; then sockets disconnected (RT-009 barrier, an unconfirmed barrier is logged, not returned, since the reset happened).
 - Errors: `AUTH.RESET_CODE_INVALID` 401 — one code for an unknown login, a wrong / expired / used / superseded code, and a code spent by its fifth miss · `AUTH.PASSWORD_TOO_WEAK` 400 · `COMMON.RATE_LIMITED` 429.
-- Audit: `audit_log` `{action:'account.password_reset_completed', entity:'account', entityId, actorId:null, after:{resetCodeId, issuedBy, revokedSessions}}` and `session.revoked`.
+- Audit: `audit_log` `{action:'account.password_reset_completed', entity:'account', entityId, actorId:null, after:{resetCodeId, channel, issuedBy, revokedSessions}}` and `session.revoked`. `channel` is `admin` (PD-21) or `email` / `whatsapp` (PD-25, `issuedBy` null).
+
+**PD-25 parent self-recovery — `/auth/recovery`** — EXISTS. All public; every POST spends the login limiter (per identifier and per source) before anything else. Parents only: an active, signed-up family account. Neither request says whether an account exists, and both send AFTER answering. Record: `../admin/pd025-parent-self-recovery.md`.
+
+**GET /auth/recovery/options**
+- Response: `200 { email: boolean, whatsapp: boolean, codeMinutes: number }` — which channels this deployment has configured. The same for everyone; the app hides a channel that is off.
+
+**POST /auth/recovery/password** (forgot password)
+- Request: `{ email: string }`. Limiter identifier `recover-email:<email>`.
+- Response: `200 { ok: true }` always. When the e-mail is a parent's sign-in and e-mail is on: a 6-digit code (10 min, 5 tries, hash only) is e-mailed to it, superseding any live code; nothing inside the 60 s resend wait or past 5 codes per account per hour.
+- Then: `POST /auth/password-reset { username: email, code, password }`.
+- Audit: `account.recovery_code_sent` `{actorId:null, after:{resetCodeId, channel:'email', expiresAt}}`.
+
+**POST /auth/recovery/email** (forgot e-mail, step 1)
+- Request: `{ phone: string }` — any spacing, `+`/`00` international or local (Egypt by default). Limiter identifier `recover-phone:<last 9 digits>`.
+- Response: `200 { ok: true }` always. When the phone matches a parent file (E.164 equality) of a signed-up parent and WhatsApp is on: ONE code by WhatsApp to the number ON FILE, one code row per matching account.
+- Audit: `account.recovery_code_sent` with `channel:'whatsapp'`, per account.
+
+**POST /auth/recovery/email/verify** (forgot e-mail, step 2)
+- Request: `{ phone: string, code: string }`.
+- Response: `200 { emails: string[] }` — the sign-in e-mail of every account the code is good for. Stamps `verified_at`; the code stays live, so `POST /auth/password-reset { username: <one of emails>, code, password }` may follow. A miss spends one of the code's 5 tries (shared with the completion).
+- Errors: `AUTH.RESET_CODE_INVALID` 401 (unknown phone, wrong / expired / spent code, or a non-WhatsApp code) · `COMMON.RATE_LIMITED` 429.
 
 ### 3.2 Me / Config — MISSING (Phase 1)
 

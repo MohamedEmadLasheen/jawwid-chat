@@ -5,12 +5,12 @@ import '../../../app/providers.dart';
 import '../../../design/tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../domain/auth_state.dart';
+import 'account_recovery_screen.dart';
 import 'parent_signup_screen.dart';
-import 'password_reset_screen.dart';
 
-/// Username + password sign-in. There is no public registration and no self-service reset:
-/// accounts are provisioned by Jawwid (§8), so the screen says so rather than offering a
-/// dead-end "forgot password" link.
+/// Username + password sign-in. Accounts are provisioned by Jawwid (§8); a parent whose child
+/// was enrolled creates their own (PD-16), and anyone locked out starts at "Trouble signing
+/// in?" (PD-25), which offers only the ways back in this deployment has switched on.
 class SignInScreen extends ConsumerStatefulWidget {
   const SignInScreen({super.key});
 
@@ -43,13 +43,20 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     await ref.read(authControllerProvider.notifier).signIn(username: result.email, password: result.password);
   }
 
-  /// PD-21: finishing a reset the academy issued, then signing in normally with the new password.
-  Future<void> _openReset() async {
-    final result = await PasswordResetScreen.open(context, initialUsername: _username.text.trim());
+  /// PD-25 (and PD-21's academy code): a recovery that set a new password signs in normally
+  /// with it; one that only found the e-mail fills the login and waits for the password.
+  Future<void> _openRecovery() async {
+    final result = await AccountRecoveryScreen.open(context, initialUsername: _username.text.trim());
     if (result == null || !mounted) return;
     _username.text = result.username;
-    _password.text = result.password;
-    await ref.read(authControllerProvider.notifier).signIn(username: result.username, password: result.password);
+    final password = result.password;
+    if (password == null) {
+      _password.clear();
+      _passwordFocus.requestFocus();
+      return;
+    }
+    _password.text = password;
+    await ref.read(authControllerProvider.notifier).signIn(username: result.username, password: password);
   }
 
   Future<void> _submit() async {
@@ -149,9 +156,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                       child: Text(l10n.signupOpen),
                     ),
                     TextButton(
-                      key: const ValueKey('password-reset-open'),
-                      onPressed: isBusy ? null : _openReset,
-                      child: Text(l10n.resetOpen),
+                      key: const ValueKey('account-recovery-open'),
+                      onPressed: isBusy ? null : _openRecovery,
+                      child: Text(l10n.recoveryOpen),
                     ),
                   ],
                 ),

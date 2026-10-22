@@ -2554,6 +2554,140 @@ class L10nEn extends L10n {
   String get resetFinish => 'Set password';
 
   @override
+  String get recoveryOpen => 'Trouble signing in?';
+
+  @override
+  String get recoveryTitle => 'Get back into your account';
+
+  @override
+  String get recoveryIntro =>
+      'Choose what you need help with. It only takes a minute.';
+
+  @override
+  String get recoveryUnavailable =>
+      'To get back into your account, ask your supervisor for a one-time reset code, then enter it here.';
+
+  @override
+  String get recoveryForgotPassword => 'I forgot my password';
+
+  @override
+  String get recoveryForgotPasswordHint =>
+      'We\'ll e-mail a code to the address you sign in with.';
+
+  @override
+  String get recoveryForgotEmail => 'I forgot my e-mail';
+
+  @override
+  String get recoveryForgotEmailHint =>
+      'We\'ll send a code on WhatsApp to the phone number the academy has for you.';
+
+  @override
+  String get recoveryHaveCode => 'I have a code from the academy';
+
+  @override
+  String get recoveryHaveCodeHint =>
+      'Your supervisor gave you a one-time reset code.';
+
+  @override
+  String get recoveryStillStuck =>
+      'Still stuck? Your supervisor can send you a one-time reset code.';
+
+  @override
+  String recoveryStep(int number, int total) {
+    return 'Step $number of $total';
+  }
+
+  @override
+  String get recoverySendCode => 'Send code';
+
+  @override
+  String get recoveryResend => 'Send a new code';
+
+  @override
+  String recoveryResendIn(int seconds) {
+    return 'Send a new code in $seconds s';
+  }
+
+  @override
+  String get recoveryResent =>
+      'A new code is on its way. Only the newest code works.';
+
+  @override
+  String get recoveryContinue => 'Continue';
+
+  @override
+  String get recoveryChangeEmail => 'Use a different e-mail';
+
+  @override
+  String get recoveryChangePhone => 'Use a different number';
+
+  @override
+  String get recoveryCodeFormat => 'Enter the 6 digits of the code.';
+
+  @override
+  String get recoveryCodeInvalid =>
+      'That code is wrong or has expired. Check it, or send a new one.';
+
+  @override
+  String get forgotPasswordTitle => 'Reset your password';
+
+  @override
+  String get forgotPasswordIntro =>
+      'Enter the e-mail you sign in with. We\'ll send you a 6-digit code.';
+
+  @override
+  String forgotPasswordCodeSent(String email, int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: '$minutes minutes',
+      one: '1 minute',
+    );
+    return 'If $email is a parent account, a 6-digit code is on its way. It works for $_temp0; check your spam folder if you can\'t see it. Then choose a new password.';
+  }
+
+  @override
+  String get forgotEmailTitle => 'Find your sign-in e-mail';
+
+  @override
+  String get forgotEmailIntro =>
+      'Enter your phone number, the one the academy has for you. We\'ll send a 6-digit code to it on WhatsApp.';
+
+  @override
+  String get forgotEmailPhoneLabel => 'Phone number';
+
+  @override
+  String get forgotEmailPhoneHint =>
+      'If your number is not Egyptian, start with + and the country code.';
+
+  @override
+  String get forgotEmailPhoneInvalid => 'Enter your phone number.';
+
+  @override
+  String forgotEmailCodeSent(int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: '$minutes minutes',
+      one: '1 minute',
+    );
+    return 'If this number is on file, a 6-digit code is on its way on WhatsApp. It works for $_temp0.';
+  }
+
+  @override
+  String get forgotEmailFound => 'Your sign-in e-mail is:';
+
+  @override
+  String get forgotEmailFoundMany =>
+      'This phone number belongs to more than one account. Choose the one you want:';
+
+  @override
+  String get forgotEmailSignIn => 'Sign in with this e-mail';
+
+  @override
+  String get forgotEmailSetPassword => 'I forgot my password too';
+
+  @override
   String get studentProfileTitle => 'Student profile';
 
   @override

@@ -132,6 +132,15 @@ class AuthTransport {
       throw ErrorMapper.map(error);
     }
   }
+
+  /// PD-25: the one public read, `GET /auth/recovery/options`.
+  Future<Response<T>> get<T>(String path) async {
+    try {
+      return await _dio.get<T>(path);
+    } catch (error) {
+      throw ErrorMapper.map(error);
+    }
+  }
 }
 
 /// Builds the public-route transport. Same base options as [buildApiClient], deliberately

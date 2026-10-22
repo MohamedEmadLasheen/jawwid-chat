@@ -17,6 +17,7 @@ import { ParentRecordModule } from './parent-profile/parent-record.module';
 import { CoreBoundaryModule } from './core-boundary/core-boundary.module';
 import { ScheduledCallModule } from './scheduled-calls/scheduled-call.module';
 import { AccountAdminModule } from './account-admin/account-admin.module';
+import { AccountRecoveryModule } from './account-recovery/account-recovery.module';
 
 /**
  * The root module. Composition only -- it declares no provider and no
@@ -57,6 +58,8 @@ import { AccountAdminModule } from './account-admin/account-admin.module';
     CoreBoundaryModule,
     ScheduledCallModule,
     AccountAdminModule,
+    // PD-25: parents recover their own account from the sign-in screen.
+    AccountRecoveryModule,
   ],
 })
 export class AppModule {}
