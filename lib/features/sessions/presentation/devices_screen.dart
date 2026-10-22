@@ -250,14 +250,25 @@ Future<bool> _confirm(
 }
 
 /// The device's own name, or what kind of device it is when it never said.
+///
+/// iOS reports a model code (`iPhone18,1`) rather than a name a person recognises; that is
+/// shown as its family (`iPhone`). Every other name is shown as the device gave it.
 String deviceLabel(AccountSession session, L10n l10n) =>
-    session.deviceName ??
+    _readableDeviceName(session.deviceName) ??
     switch (session.platform) {
       SessionPlatform.ios => l10n.devicesPlatformIphone,
       SessionPlatform.android => l10n.devicesPlatformAndroid,
       SessionPlatform.web => l10n.devicesPlatformWeb,
       null => l10n.devicesPlatformUnknown,
     };
+
+final _appleModelCode = RegExp(r'^(iPhone|iPad|iPod)\d+,\d+$');
+
+String? _readableDeviceName(String? name) {
+  final trimmed = name?.trim();
+  if (trimmed == null || trimmed.isEmpty) return null;
+  return _appleModelCode.firstMatch(trimmed)?.group(1) ?? trimmed;
+}
 
 IconData platformIcon(SessionPlatform? platform) => switch (platform) {
       SessionPlatform.ios => Icons.phone_iphone,

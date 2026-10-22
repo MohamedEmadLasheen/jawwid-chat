@@ -8,6 +8,7 @@ import {
   tokenStore,
 } from './tokens'
 import { deviceLabel } from './device'
+import { readableDeviceName } from '@/features/devices/SessionList'
 import { installFakeLocks, removeFakeLocks } from '@/test/locks'
 
 /**
@@ -238,5 +239,15 @@ describe('PD-23: the device name', () => {
     expect(label).toBe('Samsung Internet on Android')
     expect(label.length).toBeLessThanOrEqual(60)
     expect(label).not.toMatch(/\d/)
+  })
+})
+
+describe('PD-23: how a device is named in the lists', () => {
+  it('shows an iOS model code as its family and every real name as given', () => {
+    expect(readableDeviceName('iPhone18,1')).toBe('iPhone')
+    expect(readableDeviceName('iPad13,4')).toBe('iPad')
+    expect(readableDeviceName('Galaxy A54')).toBe('Galaxy A54')
+    expect(readableDeviceName('Chrome on macOS')).toBe('Chrome on macOS')
+    expect(readableDeviceName(null)).toBe('')
   })
 })

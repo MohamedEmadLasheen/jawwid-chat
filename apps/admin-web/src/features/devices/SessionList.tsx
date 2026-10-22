@@ -3,9 +3,17 @@ import { Badge } from '@/shared/components/Badge'
 import type { SessionDto } from './api'
 import { D, PLATFORM, useCopy } from './copy'
 
+/** iOS reports a model code ("iPhone18,1"), not a name: show its family ("iPhone"). */
+const APPLE_MODEL_CODE = /^(iPhone|iPad|iPod)\d+,\d+$/
+
+export function readableDeviceName(name: string | null): string {
+  const trimmed = name?.trim() ?? ''
+  return APPLE_MODEL_CODE.exec(trimmed)?.[1] ?? trimmed
+}
+
 export function useDeviceName() {
   const tx = useCopy()
-  return (s: SessionDto) => s.deviceName?.trim() || tx(PLATFORM[s.platform ?? 'unknown']) || tx(D.unknownDevice)
+  return (s: SessionDto) => readableDeviceName(s.deviceName) || tx(PLATFORM[s.platform ?? 'unknown']) || tx(D.unknownDevice)
 }
 
 /**
