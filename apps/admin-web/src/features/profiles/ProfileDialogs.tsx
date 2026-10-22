@@ -2,9 +2,24 @@ import { useId, useState, type ReactNode } from 'react'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { CURRENCIES } from '@/features/trials/copy'
-import type { FamilyBilling, ParentProfile, ParentUpdate, PaymentMethod, TimelineInstalment } from './api'
+import { formatMoney } from '@/features/instalments/copy'
+import type { Payment, PaymentRequest, PlanMonths, RequestPurpose } from '@/features/payments/api'
+import { METHOD, PAY, PURPOSE_LABEL, fromMinor, owed } from '@/features/payments/copy'
+import { LinkPanel, ReasonDialog, ServerError as PaymentError } from '@/features/payments/PaymentParts'
+import type { FamilyBilling, InstalmentPaymentMethod, NewFamilyPayment, NewPaymentRequest, ParentProfile, ParentUpdate, PaymentMethod, TimelineInstalment } from './api'
 import { COUNTRIES, EMIRATES, METHOD_LABEL, P, PLAN_MONTHS, countryName, describeError, planLabel, toMinor, useCopy } from './copy'
-import { useCreateInstalments, useRecordPayment, useUpdateBilling, useUpdateParent, useVoidInstalment } from './hooks'
+import {
+  useCancelPaymentRequest,
+  useCreateInstalments,
+  useCreatePaymentRequest,
+  useRecordFamilyPayment,
+  useRecordPayment,
+  useRefundPayment,
+  useUpdateBilling,
+  useUpdateParent,
+  useVoidInstalment,
+  useVoidPayment,
+} from './hooks'
 
 function Footer({ onCancel, onSave, pending, saveLabel }: { onCancel: () => void; onSave: () => void; pending: boolean; saveLabel?: string }) {
   const tx = useCopy()
@@ -211,7 +226,10 @@ export function EditBillingDialog({ billing, onClose }: { billing: FamilyBilling
   )
 }
 
-/** One instalment, or a plan of several a fixed number of months apart. */
+/**
+ * One instalment, a plan of several a fixed number of months apart, or (PD-27)
+ * a custom schedule of 1-24 rows, each with its own amount and due date.
+ */
 export function NewInstalmentsDialog({
   billing,
   children,
@@ -222,89 +240,177 @@ export function NewInstalmentsDialog({
   onClose: () => void
 }) {
   const tx = useCopy()
+  const { locale } = useI18n()
   const create = useCreateInstalments(billing.familyId)
+  const [mode, setMode] = useState<'equal' | 'custom'>('equal')
   const [label, setLabel] = useState('')
   const [amount, setAmount] = useState('')
   const [currency, setCurrency] = useState(billing.currency ?? 'AED')
   const [firstDueDate, setFirstDueDate] = useState(billing.today)
   const [count, setCount] = useState('1')
   const [every, setEvery] = useState('1')
+  const [rows, setRows] = useState<Array<{ amount: string; dueDate: string }>>([{ amount: '', dueDate: billing.today }])
   const [learnerId, setLearnerId] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const modeName = useId()
+
+  const setRow = (i: number, patch: Partial<{ amount: string; dueDate: string }>) =>
+    setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)))
+  const rowMinor = rows.map((r) => toMinor(r.amount, currency))
+  const total = rowMinor.reduce<number>((sum, n) => sum + (n ?? 0), 0)
 
   const submit = () => {
-    const amountMinor = toMinor(amount, currency)
     const next: Record<string, string> = {}
     if (label.trim() === '') next.label = tx(P.required)
-    if (amountMinor === null) next.amount = tx(P.invalidAmount)
-    if (!firstDueDate) next.firstDueDate = tx(P.required)
+    if (mode === 'equal') {
+      const amountMinor = toMinor(amount, currency)
+      if (amountMinor === null) next.amount = tx(P.invalidAmount)
+      if (!firstDueDate) next.firstDueDate = tx(P.required)
+      setErrors(next)
+      if (Object.keys(next).length > 0 || amountMinor === null) return
+      create.mutate(
+        {
+          label: label.trim(),
+          amountMinor,
+          currency,
+          firstDueDate,
+          count: Number(count),
+          everyMonths: Number(every),
+          learnerId: learnerId || null,
+        },
+        { onSuccess: onClose },
+      )
+      return
+    }
+    rows.forEach((r, i) => {
+      if (rowMinor[i] === null) next[`amount${i}`] = tx(P.invalidAmount)
+      if (!r.dueDate) next[`due${i}`] = tx(P.required)
+    })
     setErrors(next)
-    if (Object.keys(next).length > 0 || amountMinor === null) return
+    if (Object.keys(next).length > 0) return
     create.mutate(
       {
         label: label.trim(),
-        amountMinor,
         currency,
-        firstDueDate,
-        count: Number(count),
-        everyMonths: Number(every),
         learnerId: learnerId || null,
+        items: rows.map((r, i) => ({ amountMinor: rowMinor[i]!, dueDate: r.dueDate })),
       },
       { onSuccess: onClose },
     )
   }
 
+  const currencyField = (
+    <Field label={tx(P.currency)}>
+      {(id) => (
+        <select id={id} className="select" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+          {[...new Set([...(billing.currency ? [billing.currency] : []), ...CURRENCIES])].map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+      )}
+    </Field>
+  )
+
   return (
     <Dialog title={tx(P.newTitle)} onClose={onClose} footer={<Footer onCancel={onClose} onSave={submit} pending={create.isPending} saveLabel={tx(P.create)} />}>
       <ServerError error={create.error} />
+      <fieldset className="pay-mode">
+        <legend className="sr-only">{tx(P.scheduleMode)}</legend>
+        <label>
+          <input type="radio" name={modeName} checked={mode === 'equal'} onChange={() => setMode('equal')} />
+          {tx(P.equalMode)}
+        </label>
+        <label>
+          <input type="radio" name={modeName} checked={mode === 'custom'} onChange={() => setMode('custom')} />
+          {tx(P.customMode)}
+        </label>
+      </fieldset>
       <Field label={tx(P.label)} hint={tx(P.labelHint)} error={errors.label}>
         {(id, d) => <input id={id} className="input" dir="auto" value={label} maxLength={100} aria-describedby={d} onChange={(e) => setLabel(e.target.value)} />}
       </Field>
-      <div className="pf-row">
-        <Field label={tx(P.amount)} error={errors.amount}>
-          {(id, d) => <input id={id} className="input" inputMode="decimal" dir="ltr" value={amount} aria-describedby={d} onChange={(e) => setAmount(e.target.value)} />}
-        </Field>
-        <Field label={tx(P.currency)}>
-          {(id) => (
-            <select id={id} className="select" value={currency} onChange={(e) => setCurrency(e.target.value)}>
-              {[...new Set([...(billing.currency ? [billing.currency] : []), ...CURRENCIES])].map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          )}
-        </Field>
-      </div>
-      <div className="pf-row">
-        <Field label={tx(P.firstDue)} error={errors.firstDueDate}>
-          {(id) => <input id={id} className="input" type="date" dir="ltr" value={firstDueDate} onChange={(e) => setFirstDueDate(e.target.value)} />}
-        </Field>
-        <Field label={tx(P.count)}>
-          {(id) => (
-            <select id={id} className="select" value={count} onChange={(e) => setCount(e.target.value)}>
-              {Array.from({ length: 24 }, (_, i) => i + 1).map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          )}
-        </Field>
-        {count !== '1' && (
-          <Field label={tx(P.every)}>
-            {(id) => (
-              <select id={id} className="select" value={every} onChange={(e) => setEvery(e.target.value)}>
-                {[1, 2, 3, 6, 12].map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
+      {mode === 'equal' ? (
+        <>
+          <div className="pf-row">
+            <Field label={tx(P.amount)} error={errors.amount}>
+              {(id, d) => <input id={id} className="input" inputMode="decimal" dir="ltr" value={amount} aria-describedby={d} onChange={(e) => setAmount(e.target.value)} />}
+            </Field>
+            {currencyField}
+          </div>
+          <div className="pf-row">
+            <Field label={tx(P.firstDue)} error={errors.firstDueDate}>
+              {(id) => <input id={id} className="input" type="date" dir="ltr" value={firstDueDate} onChange={(e) => setFirstDueDate(e.target.value)} />}
+            </Field>
+            <Field label={tx(P.count)}>
+              {(id) => (
+                <select id={id} className="select" value={count} onChange={(e) => setCount(e.target.value)}>
+                  {Array.from({ length: 24 }, (_, i) => i + 1).map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Field>
+            {count !== '1' && (
+              <Field label={tx(P.every)}>
+                {(id) => (
+                  <select id={id} className="select" value={every} onChange={(e) => setEvery(e.target.value)}>
+                    {[1, 2, 3, 6, 12].map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </Field>
             )}
-          </Field>
-        )}
-      </div>
+          </div>
+        </>
+      ) : (
+        <>
+          {currencyField}
+          <ol className="pay-schedule">
+            {rows.map((r, i) => (
+              <li key={i} className="pay-schedule__row">
+                <Field label={tx(P.rowAmount, { n: i + 1 })} error={errors[`amount${i}`]}>
+                  {(id, d) => (
+                    <input id={id} className="input" inputMode="decimal" dir="ltr" value={r.amount} aria-describedby={d} onChange={(e) => setRow(i, { amount: e.target.value })} />
+                  )}
+                </Field>
+                <Field label={tx(P.rowDue, { n: i + 1 })} error={errors[`due${i}`]}>
+                  {(id) => <input id={id} className="input" type="date" dir="ltr" value={r.dueDate} onChange={(e) => setRow(i, { dueDate: e.target.value })} />}
+                </Field>
+                {rows.length > 1 && (
+                  <button
+                    type="button"
+                    className="btn btn--sm btn--ghost"
+                    aria-label={tx(P.removeRow, { n: i + 1 })}
+                    onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}
+                  >
+                    ×
+                  </button>
+                )}
+              </li>
+            ))}
+          </ol>
+          <div className="tf-actions">
+            <button
+              type="button"
+              className="btn btn--sm"
+              disabled={rows.length >= 24}
+              onClick={() => setRows((rs) => [...rs, { amount: '', dueDate: rs[rs.length - 1]?.dueDate ?? billing.today }])}
+            >
+              {tx(P.addRow)}
+            </button>
+            <span className="field__hint" role="status">
+              {tx(P.scheduleTotal, { amount: formatMoney(total, currency, locale) })}
+              {rows.length >= 24 && ` · ${tx(P.scheduleMax)}`}
+            </span>
+          </div>
+        </>
+      )}
       {children.length > 0 && (
         <Field label={tx(P.child)}>
           {(id) => (
@@ -323,12 +429,15 @@ export function NewInstalmentsDialog({
   )
 }
 
-/** A payment, once: the day it arrived, how, and an optional reference. */
+const INSTALMENT_METHODS: readonly InstalmentPaymentMethod[] = ['invoice', 'bank_transfer', 'cash']
+
+/** A payment for the whole remaining amount: the day it arrived, how, and an optional reference. */
 export function RecordPaymentDialog({ billing, instalment, onClose }: { billing: FamilyBilling; instalment: TimelineInstalment; onClose: () => void }) {
   const tx = useCopy()
+  const { locale } = useI18n()
   const pay = useRecordPayment(billing.familyId)
   const [paidOn, setPaidOn] = useState(billing.today)
-  const [method, setMethod] = useState<PaymentMethod>(billing.paymentMethod ?? 'bank_transfer')
+  const [method, setMethod] = useState<InstalmentPaymentMethod>(billing.paymentMethod ?? 'bank_transfer')
   const [reference, setReference] = useState('')
   const submit = () => pay.mutate({ id: instalment.id, paidOn, method, reference: reference.trim() || undefined }, { onSuccess: onClose })
   return (
@@ -339,15 +448,18 @@ export function RecordPaymentDialog({ billing, instalment, onClose }: { billing:
     >
       <ServerError error={pay.error} />
       <p className="field__hint">{tx(P.payOnce)}</p>
+      {instalment.partial && (
+        <p className="field__hint">{tx(P.wholeRemaining, { amount: formatMoney(instalment.remainingMinor, instalment.currency, locale) })}</p>
+      )}
       <Field label={tx(P.paidOn)}>
         {(id) => <input id={id} className="input" type="date" dir="ltr" max={billing.today} value={paidOn} onChange={(e) => setPaidOn(e.target.value)} />}
       </Field>
       <Field label={tx(P.method)}>
         {(id) => (
-          <select id={id} className="select" value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}>
-            {(Object.keys(METHOD_LABEL) as PaymentMethod[]).map((m) => (
+          <select id={id} className="select" value={method} onChange={(e) => setMethod(e.target.value as InstalmentPaymentMethod)}>
+            {INSTALMENT_METHODS.map((m) => (
               <option key={m} value={m}>
-                {tx(METHOD_LABEL[m])}
+                {tx(METHOD[m])}
               </option>
             ))}
           </select>
@@ -379,6 +491,432 @@ export function VoidInstalmentDialog({ billing, instalment, onClose }: { billing
       <ServerError error={voiding.error} />
       <p className="field__hint">{tx(P.voidHint)}</p>
       <Field label={tx(P.reason)} error={error}>
+        {(id, d) => <textarea id={id} className="input tf-textarea" dir="auto" rows={3} maxLength={500} value={reason} aria-describedby={d} onChange={(e) => setReason(e.target.value)} />}
+      </Field>
+    </Dialog>
+  )
+}
+
+/* ------------------------------------------------------------------ PD-27 */
+
+const PURPOSES: readonly RequestPurpose[] = ['subscription', 'renewal', 'instalment', 'balance', 'other']
+/** A package is what a subscription or a renewal buys. */
+const takesPackage = (p: RequestPurpose) => p === 'subscription' || p === 'renewal'
+
+function currencyChoices(current: string | null): string[] {
+  return [...new Set([...(current ? [current] : []), ...CURRENCIES])]
+}
+
+/** "Link valid for (days)": 1-90, the server's default 14. Null when out of range. */
+function expiryDays(input: string): number | null {
+  const n = Number(input)
+  return Number.isInteger(n) && n >= 1 && n <= 90 ? n : null
+}
+
+/**
+ * PD-27: a payment request with its own link. Once created the dialog shows
+ * the link with Copy and "Send on WhatsApp"; the server sends nothing.
+ */
+export function RequestPaymentDialog({
+  billing,
+  children,
+  onClose,
+}: {
+  billing: FamilyBilling
+  children: Array<{ id: string; name: string }>
+  onClose: () => void
+}) {
+  const tx = useCopy()
+  const { locale } = useI18n()
+  const create = useCreatePaymentRequest(billing.familyId)
+  const [created, setCreated] = useState<PaymentRequest | null>(null)
+  const [purpose, setPurpose] = useState<RequestPurpose>('subscription')
+  const [label, setLabel] = useState('')
+  const [amount, setAmount] = useState('')
+  const [currency, setCurrency] = useState(billing.currency ?? 'AED')
+  const [learnerId, setLearnerId] = useState('')
+  const [plan, setPlan] = useState(billing.planMonths && (PLAN_MONTHS as readonly number[]).includes(billing.planMonths) ? String(billing.planMonths) : '')
+  const [periodStart, setPeriodStart] = useState('')
+  const [periodEnd, setPeriodEnd] = useState('')
+  const [days, setDays] = useState('14')
+  const [errors, setErrors] = useState<Record<string, string>>({})
+
+  if (created) {
+    return (
+      <Dialog
+        title={tx(PAY.requestTitle)}
+        onClose={onClose}
+        footer={
+          <button type="button" className="btn btn--primary" onClick={onClose}>
+            {tx(PAY.done)}
+          </button>
+        }
+      >
+        <LinkPanel request={created} />
+      </Dialog>
+    )
+  }
+
+  const submit = () => {
+    const amountMinor = toMinor(amount, currency)
+    const expiresInDays = expiryDays(days)
+    const next: Record<string, string> = {}
+    if (label.trim() === '') next.label = tx(PAY.required)
+    if (amountMinor === null) next.amount = tx(PAY.invalidAmount)
+    if (expiresInDays === null) next.days = tx(PAY.invalidDays)
+    if (periodStart && periodEnd && periodEnd < periodStart) next.period = tx(PAY.periodOrder)
+    setErrors(next)
+    if (Object.keys(next).length > 0 || amountMinor === null || expiresInDays === null) return
+    const pkg = takesPackage(purpose)
+    const body: NewPaymentRequest = { purpose, label: label.trim(), amountMinor, currency, expiresInDays }
+    if (learnerId) body.learnerId = learnerId
+    if (pkg && plan) body.planMonths = Number(plan) as PlanMonths
+    if (pkg && periodStart) body.periodStart = periodStart
+    if (pkg && periodEnd) body.periodEnd = periodEnd
+    create.mutate(body, { onSuccess: ({ request }) => setCreated(request) })
+  }
+
+  return (
+    <Dialog
+      title={tx(PAY.requestTitle)}
+      onClose={onClose}
+      footer={<Footer onCancel={onClose} onSave={submit} pending={create.isPending} saveLabel={tx(PAY.createLink)} />}
+    >
+      <PaymentError error={create.error} />
+      <p className="field__hint">{tx(PAY.requestHint)}</p>
+      <Field label={tx(PAY.purpose)}>
+        {(id) => (
+          <select id={id} className="select" value={purpose} onChange={(e) => setPurpose(e.target.value as RequestPurpose)}>
+            {PURPOSES.map((p) => (
+              <option key={p} value={p}>
+                {tx(PURPOSE_LABEL[p])}
+              </option>
+            ))}
+          </select>
+        )}
+      </Field>
+      <Field label={tx(PAY.label)} hint={tx(PAY.labelHint)} error={errors.label}>
+        {(id, d) => <input id={id} className="input" dir="auto" value={label} maxLength={100} aria-describedby={d} onChange={(e) => setLabel(e.target.value)} />}
+      </Field>
+      <div className="pf-row">
+        <Field label={tx(PAY.amount)} error={errors.amount}>
+          {(id, d) => <input id={id} className="input" inputMode="decimal" dir="ltr" value={amount} aria-describedby={d} onChange={(e) => setAmount(e.target.value)} />}
+        </Field>
+        <Field label={tx(PAY.currency)}>
+          {(id) => (
+            <select id={id} className="select" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+              {currencyChoices(billing.currency).map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
+      </div>
+      {children.length > 0 && (
+        <Field label={tx(PAY.child)}>
+          {(id) => (
+            <select id={id} className="select" value={learnerId} onChange={(e) => setLearnerId(e.target.value)}>
+              <option value="">{tx(PAY.wholeFamily)}</option>
+              {children.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
+      )}
+      {takesPackage(purpose) && (
+        <>
+          <Field label={tx(PAY.plan)}>
+            {(id) => (
+              <select id={id} className="select" value={plan} onChange={(e) => setPlan(e.target.value)}>
+                <option value="">{tx(PAY.noPlan)}</option>
+                {PLAN_MONTHS.map((n) => (
+                  <option key={n} value={n}>
+                    {planLabel(n, locale)}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Field>
+          <div className="pf-row">
+            <Field label={tx(PAY.periodStart)} error={errors.period}>
+              {(id) => <input id={id} className="input" type="date" dir="ltr" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />}
+            </Field>
+            <Field label={tx(PAY.periodEnd)}>
+              {(id) => <input id={id} className="input" type="date" dir="ltr" min={periodStart || undefined} value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />}
+            </Field>
+          </div>
+        </>
+      )}
+      <Field label={tx(PAY.expiresIn)} hint={tx(PAY.expiresInHint)} error={errors.days}>
+        {(id, d) => (
+          <input id={id} className="input" type="number" inputMode="numeric" dir="ltr" min={1} max={90} value={days} aria-describedby={d} onChange={(e) => setDays(e.target.value)} />
+        )}
+      </Field>
+    </Dialog>
+  )
+}
+
+/**
+ * PD-27: an open instalment's own link. When it already has an open request
+ * its link is shown (no second request); otherwise one is created for what the
+ * instalment still owes (the server fills in the amount and the purpose).
+ */
+export function InstalmentLinkDialog({ billing, instalment, onClose }: { billing: FamilyBilling; instalment: TimelineInstalment; onClose: () => void }) {
+  const tx = useCopy()
+  const { locale } = useI18n()
+  const create = useCreatePaymentRequest(billing.familyId)
+  const existing = instalment.requestId ? billing.requests.find((r) => r.id === instalment.requestId && r.status === 'open') : undefined
+  const [created, setCreated] = useState<PaymentRequest | null>(null)
+  const [days, setDays] = useState('14')
+  const [error, setError] = useState<string | null>(null)
+  const shown = created ?? existing ?? null
+  const title = tx(PAY.instalmentLinkTitle, { label: instalment.label })
+  const remaining = instalment.partial ? instalment.remainingMinor : instalment.amountMinor
+
+  if (shown) {
+    return (
+      <Dialog
+        title={title}
+        onClose={onClose}
+        footer={
+          <button type="button" className="btn btn--primary" onClick={onClose}>
+            {tx(PAY.done)}
+          </button>
+        }
+      >
+        <LinkPanel request={shown} />
+      </Dialog>
+    )
+  }
+
+  const submit = () => {
+    const expiresInDays = expiryDays(days)
+    if (expiresInDays === null) return setError(tx(PAY.invalidDays))
+    setError(null)
+    create.mutate(
+      { purpose: 'instalment', label: instalment.label, instalmentId: instalment.id, expiresInDays },
+      { onSuccess: ({ request }) => setCreated(request) },
+    )
+  }
+  return (
+    <Dialog title={title} onClose={onClose} footer={<Footer onCancel={onClose} onSave={submit} pending={create.isPending} saveLabel={tx(PAY.createLink)} />}>
+      <PaymentError error={create.error} />
+      <p className="field__hint">{tx(PAY.instalmentLinkHint, { amount: formatMoney(remaining, instalment.currency, locale) })}</p>
+      <Field label={tx(PAY.expiresIn)} hint={tx(PAY.expiresInHint)} error={error}>
+        {(id, d) => (
+          <input id={id} className="input" type="number" inputMode="numeric" dir="ltr" min={1} max={90} value={days} aria-describedby={d} onChange={(e) => setDays(e.target.value)} />
+        )}
+      </Field>
+    </Dialog>
+  )
+}
+
+export function CancelRequestDialog({ billing, request, onClose }: { billing: FamilyBilling; request: PaymentRequest; onClose: () => void }) {
+  const tx = useCopy()
+  const cancel = useCancelPaymentRequest(billing.familyId)
+  return (
+    <ReasonDialog
+      title={tx(PAY.cancelRequestNamed, { label: request.label })}
+      hint={tx(PAY.cancelHint)}
+      confirmLabel={tx(PAY.cancelConfirm)}
+      pending={cancel.isPending}
+      error={cancel.error}
+      onSubmit={(reason) => cancel.mutate({ id: request.id, reason }, { onSuccess: onClose })}
+      onClose={onClose}
+    />
+  )
+}
+
+/**
+ * PD-27: money already received -- cash or a bank transfer, by any payment
+ * recorder (PD-17 / PD-20). Optionally towards an open request or
+ * instalment, whose remaining amount it prefills.
+ */
+export function RecordFamilyPaymentDialog({
+  billing,
+  children,
+  onClose,
+}: {
+  billing: FamilyBilling
+  children: Array<{ id: string; name: string }>
+  onClose: () => void
+}) {
+  const tx = useCopy()
+  const { locale } = useI18n()
+  const record = useRecordFamilyPayment(billing.familyId)
+  const [method, setMethod] = useState<NewFamilyPayment['method']>('cash')
+  const [towards, setTowards] = useState('')
+  const [amount, setAmount] = useState('')
+  const [currency, setCurrency] = useState(billing.currency ?? 'AED')
+  const [paidOn, setPaidOn] = useState(billing.today)
+  const [learnerId, setLearnerId] = useState('')
+  const [reference, setReference] = useState('')
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const openRequests = billing.requests.filter((r) => r.status === 'open')
+  const openInstalments = billing.instalments.filter((i) => i.status !== 'paid' && i.status !== 'voided')
+  const instalmentOwes = (i: TimelineInstalment) => (i.partial ? i.remainingMinor : i.amountMinor)
+
+  const choose = (value: string) => {
+    setTowards(value)
+    const [kind, id] = [value.slice(0, 2), value.slice(2)]
+    const target =
+      kind === 'r:'
+        ? openRequests.find((r) => r.id === id)
+        : kind === 'i:'
+          ? openInstalments.find((i) => i.id === id)
+          : undefined
+    if (!target) return
+    const due = 'purpose' in target ? owed(target) : instalmentOwes(target)
+    setCurrency(target.currency)
+    setAmount(fromMinor(due, target.currency))
+    if (target.child?.id) setLearnerId(target.child.id)
+  }
+
+  const submit = () => {
+    const amountMinor = toMinor(amount, currency)
+    const next: Record<string, string> = {}
+    if (amountMinor === null) next.amount = tx(PAY.invalidAmount)
+    if (!paidOn) next.paidOn = tx(PAY.required)
+    setErrors(next)
+    if (Object.keys(next).length > 0 || amountMinor === null) return
+    const body: NewFamilyPayment = { method, amountMinor, paidOn }
+    if (towards.startsWith('r:')) body.requestId = towards.slice(2)
+    if (towards.startsWith('i:')) body.instalmentId = towards.slice(2)
+    if (learnerId) body.learnerId = learnerId
+    if (reference.trim()) body.reference = reference.trim()
+    record.mutate(body, { onSuccess: onClose })
+  }
+
+  return (
+    <Dialog
+      title={tx(PAY.recordTitle)}
+      onClose={onClose}
+      footer={<Footer onCancel={onClose} onSave={submit} pending={record.isPending} saveLabel={tx(PAY.record)} />}
+    >
+      <PaymentError error={record.error} />
+      <p className="field__hint">{tx(PAY.recordHint)}</p>
+      <Field label={tx(PAY.method)}>
+        {(id) => (
+          <select id={id} className="select" value={method} onChange={(e) => setMethod(e.target.value as NewFamilyPayment['method'])}>
+            <option value="cash">{tx(METHOD.cash)}</option>
+            <option value="bank_transfer">{tx(METHOD.bank_transfer)}</option>
+          </select>
+        )}
+      </Field>
+      {(openRequests.length > 0 || openInstalments.length > 0) && (
+        <Field label={tx(PAY.towards)}>
+          {(id) => (
+            <select id={id} className="select" value={towards} onChange={(e) => choose(e.target.value)}>
+              <option value="">{tx(PAY.towardsNothing)}</option>
+              {openRequests.map((r) => (
+                <option key={r.id} value={`r:${r.id}`}>
+                  {tx(PAY.towardsRequest, { label: r.label, remaining: formatMoney(owed(r), r.currency, locale) })}
+                </option>
+              ))}
+              {openInstalments.map((i) => (
+                <option key={i.id} value={`i:${i.id}`}>
+                  {tx(PAY.towardsInstalment, { label: i.label, remaining: formatMoney(instalmentOwes(i), i.currency, locale) })}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
+      )}
+      <div className="pf-row">
+        <Field label={tx(PAY.amount)} error={errors.amount}>
+          {(id, d) => <input id={id} className="input" inputMode="decimal" dir="ltr" value={amount} aria-describedby={d} onChange={(e) => setAmount(e.target.value)} />}
+        </Field>
+        {towards === '' && (
+          <Field label={tx(PAY.currency)}>
+            {(id) => (
+              <select id={id} className="select" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+                {currencyChoices(billing.currency).map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Field>
+        )}
+      </div>
+      <Field label={tx(PAY.paidOn)} error={errors.paidOn}>
+        {(id) => <input id={id} className="input" type="date" dir="ltr" max={billing.today} value={paidOn} onChange={(e) => setPaidOn(e.target.value)} />}
+      </Field>
+      {children.length > 0 && (
+        <Field label={tx(PAY.child)}>
+          {(id) => (
+            <select id={id} className="select" value={learnerId} onChange={(e) => setLearnerId(e.target.value)}>
+              <option value="">{tx(PAY.wholeFamily)}</option>
+              {children.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
+      )}
+      <Field label={tx(PAY.reference)} hint={tx(PAY.referenceHint)}>
+        {(id, d) => <input id={id} className="input" dir="ltr" value={reference} maxLength={120} aria-describedby={d} onChange={(e) => setReference(e.target.value)} />}
+      </Field>
+    </Dialog>
+  )
+}
+
+export function VoidPaymentDialog({ billing, payment, onClose }: { billing: FamilyBilling; payment: Payment; onClose: () => void }) {
+  const tx = useCopy()
+  const { locale } = useI18n()
+  const voiding = useVoidPayment(billing.familyId)
+  return (
+    <ReasonDialog
+      title={tx(PAY.voidTitle, { amount: formatMoney(payment.amountMinor, payment.currency, locale) })}
+      hint={tx(PAY.voidHint)}
+      confirmLabel={tx(PAY.voidPayment)}
+      pending={voiding.isPending}
+      error={voiding.error}
+      onSubmit={(reason) => voiding.mutate({ id: payment.id, reason }, { onSuccess: onClose })}
+      onClose={onClose}
+    />
+  )
+}
+
+/** At most what is still refundable on the payment; a card payment is refunded through Stripe. */
+export function RefundPaymentDialog({ billing, payment, onClose }: { billing: FamilyBilling; payment: Payment; onClose: () => void }) {
+  const tx = useCopy()
+  const { locale } = useI18n()
+  const refund = useRefundPayment(billing.familyId)
+  const refundable = payment.amountMinor - payment.refundedMinor
+  const [amount, setAmount] = useState(fromMinor(refundable, payment.currency))
+  const [reason, setReason] = useState('')
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const submit = () => {
+    const amountMinor = toMinor(amount, payment.currency)
+    const next: Record<string, string> = {}
+    if (amountMinor === null) next.amount = tx(PAY.invalidAmount)
+    else if (amountMinor > refundable) next.amount = tx(PAY.refundTooMuch)
+    if (reason.trim() === '') next.reason = tx(PAY.reasonRequired)
+    setErrors(next)
+    if (Object.keys(next).length > 0 || amountMinor === null) return
+    refund.mutate({ id: payment.id, amountMinor, reason: reason.trim() }, { onSuccess: onClose })
+  }
+  return (
+    <Dialog
+      title={tx(PAY.refundTitle, { amount: formatMoney(payment.amountMinor, payment.currency, locale) })}
+      onClose={onClose}
+      footer={<Footer onCancel={onClose} onSave={submit} pending={refund.isPending} saveLabel={tx(PAY.refund)} />}
+    >
+      <PaymentError error={refund.error} />
+      <p className="field__hint">{tx(PAY.refundHint, { amount: formatMoney(refundable, payment.currency, locale) })}</p>
+      <Field label={tx(PAY.refundAmount)} error={errors.amount}>
+        {(id, d) => <input id={id} className="input" inputMode="decimal" dir="ltr" value={amount} aria-describedby={d} onChange={(e) => setAmount(e.target.value)} />}
+      </Field>
+      <Field label={tx(PAY.reason)} error={errors.reason}>
         {(id, d) => <textarea id={id} className="input tf-textarea" dir="auto" rows={3} maxLength={500} value={reason} aria-describedby={d} onChange={(e) => setReason(e.target.value)} />}
       </Field>
     </Dialog>

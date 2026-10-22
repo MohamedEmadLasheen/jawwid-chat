@@ -59,13 +59,13 @@ afterEach(() => {
 })
 
 describe('The navigation registry', () => {
-  it('gives each of the twenty sections exactly one destination, with the Dashboard under More', () => {
+  it('gives each of the twenty-one sections exactly one destination, with the Dashboard under More', () => {
     const destinations = destinationsFor('super_admin')
     expect(destinations.map((d) => d.key)).toEqual(['conversations', 'calls', 'people', 'stories', 'more'])
     const keys = destinations.flatMap((d) => entriesOf(d).map((e) => e.key))
-    // The twenty sections, plus Chat (PD-8: where the super admin replies) and
+    // The twenty-one sections, plus Chat (PD-8: where the super admin replies) and
     // Accounts (PD-21: where every staff role administers accounts).
-    expect(keys).toHaveLength(22)
+    expect(keys).toHaveLength(23)
     expect([...keys].sort()).toEqual([...ADMIN_SECTIONS.map((s) => s.key), 'chat', 'accounts'].sort())
     const conversations = destinations.find((d) => d.key === 'conversations')!
     expect(entriesOf(conversations).map((e) => e.path)).toEqual(['/chat', '/admin/conversations'])
@@ -94,6 +94,8 @@ describe('The navigation registry', () => {
           ...(!billingReader && visibleAreas(role).includes('instalments') ? ['instalments'] : []),
           // PD-17: the Parent Profile follows the money's rule (GET /instalments/access).
           ...(!billingReader && visibleAreas(role).includes('parents') ? ['parents'] : []),
+          // PD-27: Payments likewise.
+          ...(!billingReader && visibleAreas(role).includes('payments') ? ['payments'] : []),
           ...(!lessonManager && visibleAreas(role).includes('trials') ? ['trials'] : []),
         ]
         expect(visibleAreas(role).filter((a) => !navAreas(role, { lessonManager, billingReader }).includes(a)), role).toEqual(withheld)
@@ -213,7 +215,8 @@ describe('The desktop rail', () => {
     expect(more).toHaveAttribute('aria-expanded', 'true')
 
     const menu = document.getElementById(more.getAttribute('aria-controls')!)!
-    expect(within(menu).getAllByRole('link')).toHaveLength(13)
+    // 13 + Payments (PD-27, beside Instalments under Operations & performance).
+    expect(within(menu).getAllByRole('link')).toHaveLength(14)
     expect(within(menu).getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual([
       'Overview', 'Communication', 'Operations & performance', 'Administration',
     ])
@@ -319,7 +322,7 @@ describe('The drawer, below desktop width', () => {
     expect(within(nav).getByRole('group', { name: 'الأشخاص والفرق' })).toBeInTheDocument()
     const more = within(nav).getByRole('group', { name: 'المزيد' })
     expect(within(more).getByRole('link', { name: 'لوحة المتابعة' })).toBeInTheDocument()
-    expect(within(nav).getAllByRole('link')).toHaveLength(22)
+    expect(within(nav).getAllByRole('link')).toHaveLength(23)
   })
 
   it('opens from the menu button and closes with Escape, giving focus back', async () => {

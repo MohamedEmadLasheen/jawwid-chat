@@ -31,6 +31,7 @@ import { InstalmentsPage } from '@/features/instalments/InstalmentsPage'
 import { ParentsPage } from '@/features/profiles/ParentsPage'
 import { ParentProfilePage } from '@/features/profiles/ParentProfilePage'
 import { StudentProfilePage } from '@/features/profiles/StudentProfilePage'
+import { PaymentsPage } from '@/features/payments/PaymentsPage'
 import { CallsPage } from '@/features/calls-page/CallsPage'
 import { JoinLinkPage } from '@/features/calls-page/JoinLinkPage'
 import { TeacherProfilesPage } from '@/features/teacher-profiles/TeacherProfilesPage'
@@ -110,6 +111,8 @@ export function AppRoutes() {
         {/* PD-17: the administration's Parent Profile (the super admin lists parents at /admin/parents). */}
         <Route path="/parents" element={<Area area="parents"><ParentsPage /></Area>} />
         <Route path="/parents/:contactId" element={<Area area="parents"><ParentProfilePage /></Area>} />
+        {/* PD-27: receipts to verify and payment settings (the super admin reaches it as /admin/payments). */}
+        <Route path="/payments" element={<Area area="payments"><PaymentsPage /></Area>} />
         {/* PD-17: the Student Profile. Several departments open it, so the server alone decides. */}
         <Route path="/students/:learnerId" element={<StudentProfilePage />} />
         <Route path="/tasks" element={<Area area="tasks"><TasksPage /></Area>} />

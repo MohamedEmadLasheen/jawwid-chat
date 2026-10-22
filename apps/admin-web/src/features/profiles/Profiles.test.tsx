@@ -71,6 +71,10 @@ function instalment(over: Partial<TimelineInstalment> = {}): TimelineInstalment 
     createdBy: { id: 's-1', name: 'Supervisor One' },
     payment: null,
     void: null,
+    paidMinor: 0,
+    remainingMinor: 125050,
+    partial: false,
+    requestId: null,
     ...over,
   }
 }
@@ -95,6 +99,12 @@ function billing(over: Partial<FamilyBilling> = {}): FamilyBilling {
     ],
     totals: [{ currency: 'AED', paidMinor: 125050, outstandingMinor: 125050, overdueMinor: 125050 }],
     canRecord: true,
+    requests: [],
+    payments: [],
+    invoices: [],
+    receipts: [],
+    canVerify: false,
+    cardAvailable: false,
     ...over,
   }
 }

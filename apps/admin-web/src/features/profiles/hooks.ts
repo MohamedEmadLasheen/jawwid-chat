@@ -8,11 +8,14 @@ import {
   profileKeys,
   profilesApi,
   type BillingUpdate,
+  type CustomInstalments,
   type FamilyBilling,
+  type InstalmentPaymentMethod,
+  type NewFamilyPayment,
   type NewInstalments,
+  type NewPaymentRequest,
   type ParentProfile,
   type ParentUpdate,
-  type PaymentMethod,
 } from './api'
 
 /**
@@ -105,15 +108,45 @@ export function useUpdateBilling(familyId: string) {
 }
 
 export function useCreateInstalments(familyId: string) {
-  return useBillingWrite(familyId, (body: NewInstalments) => profilesApi.createInstalments(familyId, body))
+  return useBillingWrite(familyId, (body: NewInstalments | CustomInstalments) => profilesApi.createInstalments(familyId, body))
 }
 
 export function useRecordPayment(familyId: string) {
-  return useBillingWrite(familyId, (v: { id: string; paidOn: string; method: PaymentMethod; reference?: string }) =>
+  return useBillingWrite(familyId, (v: { id: string; paidOn: string; method: InstalmentPaymentMethod; reference?: string }) =>
     profilesApi.recordPayment(v.id, { paidOn: v.paidOn, method: v.method, ...(v.reference ? { reference: v.reference } : {}) }),
   )
 }
 
 export function useVoidInstalment(familyId: string) {
   return useBillingWrite(familyId, (v: { id: string; reason: string }) => profilesApi.voidInstalment(v.id, v.reason))
+}
+
+/** PD-27: answers the new request (to show its link) and the family's billing (cached). */
+export function useCreatePaymentRequest(familyId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: NewPaymentRequest) => profilesApi.createPaymentRequest(familyId, body),
+    onSuccess: ({ billing }) => {
+      qc.setQueryData(profileKeys.billing(familyId), billing)
+      void qc.invalidateQueries({ queryKey: instalmentKeys.all })
+    },
+  })
+}
+
+export function useCancelPaymentRequest(familyId: string) {
+  return useBillingWrite(familyId, (v: { id: string; reason: string }) => profilesApi.cancelPaymentRequest(v.id, v.reason))
+}
+
+export function useRecordFamilyPayment(familyId: string) {
+  return useBillingWrite(familyId, (body: NewFamilyPayment) => profilesApi.recordFamilyPayment(familyId, body))
+}
+
+export function useVoidPayment(familyId: string) {
+  return useBillingWrite(familyId, (v: { id: string; reason: string }) => profilesApi.voidPayment(v.id, v.reason))
+}
+
+export function useRefundPayment(familyId: string) {
+  return useBillingWrite(familyId, (v: { id: string; amountMinor: number; reason: string }) =>
+    profilesApi.refundPayment(v.id, { amountMinor: v.amountMinor, reason: v.reason }),
+  )
 }
