@@ -735,6 +735,12 @@ model Session {
   userAgent        String?   @map("user_agent")
   /// PD-21: this session is a support session (an administrator acting as the account).
   impersonationId  String?   @unique @map("impersonation_id") @db.Uuid
+  /// PD-23: when the password for this login chain was entered; copied on rotation.
+  authenticatedAt  DateTime  @map("authenticated_at") @db.Timestamptz @default(now())
+  /// PD-23: app | web.
+  client           String?
+  /// PD-23: Admin Web "keep me signed in on this device".
+  remembered       Boolean   @default(false)
 
   @@map("session")
   @@schema("chat")

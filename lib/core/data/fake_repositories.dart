@@ -50,20 +50,6 @@ class FakeAuthRepository implements AuthRepository {
   Future<void> signOut() async {}
 
   @override
-  Future<List<DeviceSession>> devices() async => [
-        DeviceSession(
-          id: 'this',
-          label: 'iPhone',
-          platform: 'iOS',
-          lastSeenAt: DateTime.now(),
-          isCurrent: true,
-        ),
-      ];
-
-  @override
-  Future<void> revokeDevice(String deviceId) async {}
-
-  @override
   Stream<void> get sessionRevoked => backend.sessionRevoked;
 }
 

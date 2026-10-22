@@ -497,12 +497,6 @@ class _SwitchableAuthRepository implements AuthRepository {
 
   @override
   Future<void> signOut() async => session.principal = null;
-
-  @override
-  Future<List<DeviceSession>> devices() async => const [];
-
-  @override
-  Future<void> revokeDevice(String deviceId) async {}
 }
 
 /// Answers only for whoever is signed in, and refuses when nobody is — which is what the real

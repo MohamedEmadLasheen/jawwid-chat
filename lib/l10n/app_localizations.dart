@@ -862,7 +862,7 @@ abstract class L10n {
   /// No description provided for @settingsDevices.
   ///
   /// In en, this message translates to:
-  /// **'Active devices'**
+  /// **'Devices & sessions'**
   String get settingsDevices;
 
   /// No description provided for @devicesThisDevice.
@@ -882,6 +882,222 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Sign out this device'**
   String get devicesSignOutOther;
+
+  /// No description provided for @devicesSignedIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in {date}'**
+  String devicesSignedIn(String date);
+
+  /// No description provided for @devicesJustNow.
+  ///
+  /// In en, this message translates to:
+  /// **'just now'**
+  String get devicesJustNow;
+
+  /// No description provided for @devicesMinutesAgo.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 minute ago} other{{count} minutes ago}}'**
+  String devicesMinutesAgo(int count);
+
+  /// No description provided for @devicesHoursAgo.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 hour ago} other{{count} hours ago}}'**
+  String devicesHoursAgo(int count);
+
+  /// No description provided for @devicesDaysAgo.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 day ago} other{{count} days ago}}'**
+  String devicesDaysAgo(int count);
+
+  /// No description provided for @devicesNeverUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'Not used since sign-in'**
+  String get devicesNeverUsed;
+
+  /// No description provided for @devicesPlatformIphone.
+  ///
+  /// In en, this message translates to:
+  /// **'iPhone'**
+  String get devicesPlatformIphone;
+
+  /// No description provided for @devicesPlatformAndroid.
+  ///
+  /// In en, this message translates to:
+  /// **'Android phone'**
+  String get devicesPlatformAndroid;
+
+  /// No description provided for @devicesPlatformWeb.
+  ///
+  /// In en, this message translates to:
+  /// **'Web browser'**
+  String get devicesPlatformWeb;
+
+  /// No description provided for @devicesPlatformUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown device'**
+  String get devicesPlatformUnknown;
+
+  /// No description provided for @devicesSignOutConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out {device}?'**
+  String devicesSignOutConfirmTitle(String device);
+
+  /// No description provided for @devicesSignOutConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'That device will need your password to sign in again.'**
+  String get devicesSignOutConfirmBody;
+
+  /// No description provided for @devicesSignOutAllOthers.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out all other devices'**
+  String get devicesSignOutAllOthers;
+
+  /// No description provided for @devicesSignOutAllOthersConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out of every other device? Only this device stays signed in.'**
+  String get devicesSignOutAllOthersConfirm;
+
+  /// No description provided for @devicesSignedOutOne.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed out of that device'**
+  String get devicesSignedOutOne;
+
+  /// No description provided for @devicesSignedOutOthers.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No other devices were signed in} =1{Signed out of 1 device} other{Signed out of {count} devices}}'**
+  String devicesSignedOutOthers(int count);
+
+  /// No description provided for @devicesSignOutFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not sign that device out. Try again.'**
+  String get devicesSignOutFailed;
+
+  /// No description provided for @devicesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No active sessions'**
+  String get devicesEmpty;
+
+  /// No description provided for @appLockTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'App lock'**
+  String get appLockTitle;
+
+  /// No description provided for @appLockToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Lock with Face ID, fingerprint or passcode'**
+  String get appLockToggle;
+
+  /// No description provided for @appLockToggleSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask to unlock when you return to the app'**
+  String get appLockToggleSubtitle;
+
+  /// No description provided for @appLockUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up Face ID, a fingerprint or a passcode on this device to use app lock.'**
+  String get appLockUnavailable;
+
+  /// No description provided for @appLockTimeoutLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Lock automatically'**
+  String get appLockTimeoutLabel;
+
+  /// No description provided for @appLockTimeoutImmediately.
+  ///
+  /// In en, this message translates to:
+  /// **'Immediately'**
+  String get appLockTimeoutImmediately;
+
+  /// No description provided for @appLockTimeoutOneMinute.
+  ///
+  /// In en, this message translates to:
+  /// **'After 1 minute'**
+  String get appLockTimeoutOneMinute;
+
+  /// No description provided for @appLockTimeoutFifteenMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'After 15 minutes'**
+  String get appLockTimeoutFifteenMinutes;
+
+  /// No description provided for @appLockTimeoutOneHour.
+  ///
+  /// In en, this message translates to:
+  /// **'After 1 hour'**
+  String get appLockTimeoutOneHour;
+
+  /// No description provided for @appLockReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock Jawwid'**
+  String get appLockReason;
+
+  /// No description provided for @appLockLockedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Jawwid is locked'**
+  String get appLockLockedTitle;
+
+  /// No description provided for @appLockLockedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock to see your chats.'**
+  String get appLockLockedBody;
+
+  /// No description provided for @appLockUnlockAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock'**
+  String get appLockUnlockAction;
+
+  /// No description provided for @appLockFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not unlock. Try again.'**
+  String get appLockFailed;
+
+  /// No description provided for @appLockOfferTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Lock the app?'**
+  String get appLockOfferTitle;
+
+  /// No description provided for @appLockOfferBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Use Face ID, your fingerprint or your passcode to open Jawwid, so your chats stay private if someone else picks up your phone. You can change this anytime in Settings.'**
+  String get appLockOfferBody;
+
+  /// No description provided for @appLockOfferAccept.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on'**
+  String get appLockOfferAccept;
+
+  /// No description provided for @appLockOfferDecline.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get appLockOfferDecline;
 
   /// No description provided for @searchHint.
   ///

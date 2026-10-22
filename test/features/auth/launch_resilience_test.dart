@@ -83,12 +83,6 @@ class _Repository implements AuthRepository {
     final thrown = signOutThrows;
     if (thrown != null) throw thrown;
   }
-
-  @override
-  Future<List<DeviceSession>> devices() async => const [];
-
-  @override
-  Future<void> revokeDevice(String deviceId) async {}
 }
 
 void main() {

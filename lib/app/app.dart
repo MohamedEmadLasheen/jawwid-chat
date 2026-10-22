@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../design/theme.dart';
+import '../features/app_lock/presentation/app_lock_gate.dart';
 import '../features/calls/presentation/call_presenter.dart';
 import '../features/settings/application/theme_mode_controller.dart';
 import '../l10n/app_localizations.dart';
@@ -75,7 +76,14 @@ class JawwidApp extends ConsumerWidget {
           // W7: a call has to be able to appear wherever the user is, so the
           // presenter wraps the whole router rather than one screen. It renders
           // nothing itself; see `call_presenter.dart`.
-          child: CallPresenter(child: child ?? const SizedBox.shrink()),
+          //
+          // PD-23: the app lock sits over everything the router renders, so no
+          // protected route can show above an unlocked check -- except the call
+          // screen, which a locked app still rings and answers on (see
+          // `app_lock_gate.dart`).
+          child: CallPresenter(
+            child: AppLockGate(child: child ?? const SizedBox.shrink()),
+          ),
         );
       },
     );

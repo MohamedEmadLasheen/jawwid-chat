@@ -120,7 +120,7 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-22, PD-24 and PD-26 — CLOSED
+## 4. Product decisions PD-1 to PD-24 and PD-26 — CLOSED
 
 PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
 exit gate, before `main` was baselined. **PD-6 was closed by the product owner
@@ -141,7 +141,8 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-20 was closed by the product owner on 2026-10-22** (the Sales team uses the app: chats, calls and payments). It amends PD-15's "staff work in Admin Web; the app is for parents and teachers".
 **PD-21 was closed by the product owner on 2026-10-22** (account administration: password reset, inactive accounts, impersonation).
 **PD-22 was closed by the product owner on 2026-10-22** (every account has its own time zone).
-PD-23 and PD-25 are reserved by work in progress; `PD-NUMBER-REGISTRY.md` assigns them. PD-24 is recorded below.
+**PD-23 was closed by the product owner on 2026-10-22** (convenient sign-in: session lifetimes per role, devices and sessions, app lock, "keep me signed in" on Admin Web).
+PD-25 is reserved by work in progress; `PD-NUMBER-REGISTRY.md` assigns it. PD-24 is recorded below.
 **PD-26 was closed by the product owner on 2026-10-22** (the Teacher Supervision page). It amends PD-12 (complaints join the ladder; a decided deduction is priced at once) and PD-18 item 3.
 
 | ID | Subject | Status |
@@ -168,6 +169,7 @@ PD-23 and PD-25 are reserved by work in progress; `PD-NUMBER-REGISTRY.md` assign
 | **PD-20** | **The Sales team in the app** (2026-10-22) | **CLOSED** — Sales-department staff sign in to the app and get Chats, Calls, Payments and Settings; they view and record payments (record once, void with a reason); instalment plans, the contact record and every other staff role stay in Admin Web; the app never holds a parent's phone or e-mail |
 | **PD-21** | **Account administration: password reset, inactive accounts, impersonation** (2026-10-22) | **CLOSED** — every staff role, org-wide, for parent and teacher accounts; staff accounts by the super admin only; never the super admin's or one's own; a reset is a one-time code the person completes with their own password; inactive = suspended, signed out everywhere, reactivation revives no session; impersonation of parents and teachers only, labelled messages, fully audited |
 | **PD-22** | **Each account's time zone** (2026-10-22) | **CLOSED** — every person's times are shown and notified in their own zone, taken from their phone's OS zone ("Set automatically", like a phone) or picked by hand; teachers follow their phone too; a weekly lesson stays anchored in the teacher's zone; Admin Web shows Cairo time, named, with the family's local time beside it; reminders say the time in the recipient's zone. Record: `../architecture/TIME-ZONES.md` |
+| **PD-23** | **Convenient sign-in** (2026-10-22) | **CLOSED** — a session ends after an idle and an absolute limit per role (parents/teachers 30 d idle; staff app 14 d / 30 d; Admin Web kept signed in 7 d / 30 d, otherwise 12 h / 7 d; super admin 12 h / 7 d and never kept signed in); everyone sees and ends their own devices; staff sign out an account's devices under the PD-21 rule; an app lock with the phone's own Face ID / fingerprint / passcode, opt-in for families and on by default for staff; passkeys wait for a production domain. Record: `../security/pd023-convenient-sign-in.md` |
 | **PD-26** | **The Teacher Supervision page** (2026-10-22) | **CLOSED** — one page for leave, apologies and absences, lateness (trial / regular), rewards and complaints; a teacher on leave is shown as such and given no new students, but may still be messaged; an absence with no lesson and an upheld complaint join the monthly ladder; a decided deduction is priced at once from the super admin's default; complaints carry their source, handler, follow-ups and the action taken |
 
 ---
@@ -2326,7 +2328,7 @@ priced deduction     = decided deduction_1|2 + terms(month).currency +
 
 ---
 
-### Decisions still open after PD-1 to PD-22, PD-24 and PD-26
+### Decisions still open after PD-1 to PD-24 and PD-26
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
 The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their

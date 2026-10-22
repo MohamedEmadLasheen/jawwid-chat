@@ -62,12 +62,6 @@ class _FakeAuthRepository implements AuthRepository {
     signOutCalls++;
     if (signOutThrows) throw const AppError(AppErrorKind.network);
   }
-
-  @override
-  Future<List<DeviceSession>> devices() async => const [];
-
-  @override
-  Future<void> revokeDevice(String deviceId) async {}
 }
 
 void main() {

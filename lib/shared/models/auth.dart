@@ -14,8 +14,8 @@ abstract final class AuthFailures {
   /// since the alternative is to guess a role and hand someone a screen.
   static const roleNotSupported = 'auth_role_not_supported';
 
-  /// `GET /me/sessions` and `DELETE /me/sessions/:id` are named in the identity model but
-  /// are not published by the backend. The client says so rather than fabricating a list.
+  /// A build with no session registry wired (PD-23's `GET /me/sessions` family). The client
+  /// says so rather than fabricating a list of devices.
   static const sessionsNotSupported = 'auth_sessions_not_supported';
 }
 

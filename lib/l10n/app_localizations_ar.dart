@@ -443,7 +443,7 @@ class L10nAr extends L10n {
   String get settingsNotifications => 'الإشعارات';
 
   @override
-  String get settingsDevices => 'الأجهزة النشطة';
+  String get settingsDevices => 'الأجهزة والجلسات';
 
   @override
   String get devicesThisDevice => 'هذا الجهاز';
@@ -455,6 +455,171 @@ class L10nAr extends L10n {
 
   @override
   String get devicesSignOutOther => 'تسجيل الخروج من هذا الجهاز';
+
+  @override
+  String devicesSignedIn(String date) {
+    return 'تسجيل الدخول $date';
+  }
+
+  @override
+  String get devicesJustNow => 'الآن';
+
+  @override
+  String devicesMinutesAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'منذ $count دقيقة',
+      many: 'منذ $count دقيقة',
+      few: 'منذ $count دقائق',
+      two: 'منذ دقيقتين',
+      one: 'منذ دقيقة',
+      zero: 'الآن',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String devicesHoursAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'منذ $count ساعة',
+      many: 'منذ $count ساعة',
+      few: 'منذ $count ساعات',
+      two: 'منذ ساعتين',
+      one: 'منذ ساعة',
+      zero: 'الآن',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String devicesDaysAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'منذ $count يوم',
+      many: 'منذ $count يومًا',
+      few: 'منذ $count أيام',
+      two: 'منذ يومين',
+      one: 'منذ يوم',
+      zero: 'اليوم',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get devicesNeverUsed => 'لم يُستخدم منذ تسجيل الدخول';
+
+  @override
+  String get devicesPlatformIphone => 'آيفون';
+
+  @override
+  String get devicesPlatformAndroid => 'هاتف أندرويد';
+
+  @override
+  String get devicesPlatformWeb => 'متصفح ويب';
+
+  @override
+  String get devicesPlatformUnknown => 'جهاز غير معروف';
+
+  @override
+  String devicesSignOutConfirmTitle(String device) {
+    return 'تسجيل الخروج من $device؟';
+  }
+
+  @override
+  String get devicesSignOutConfirmBody =>
+      'سيحتاج ذلك الجهاز إلى كلمة المرور لتسجيل الدخول مرة أخرى.';
+
+  @override
+  String get devicesSignOutAllOthers => 'تسجيل الخروج من جميع الأجهزة الأخرى';
+
+  @override
+  String get devicesSignOutAllOthersConfirm =>
+      'تسجيل الخروج من كل الأجهزة الأخرى؟ سيبقى هذا الجهاز وحده مسجّلًا الدخول.';
+
+  @override
+  String get devicesSignedOutOne => 'تم تسجيل الخروج من ذلك الجهاز';
+
+  @override
+  String devicesSignedOutOthers(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'تم تسجيل الخروج من $count جهاز',
+      many: 'تم تسجيل الخروج من $count جهازًا',
+      few: 'تم تسجيل الخروج من $count أجهزة',
+      two: 'تم تسجيل الخروج من جهازين',
+      one: 'تم تسجيل الخروج من جهاز واحد',
+      zero: 'لا توجد أجهزة أخرى مسجّلة الدخول',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get devicesSignOutFailed =>
+      'تعذّر تسجيل خروج ذلك الجهاز. حاول مرة أخرى.';
+
+  @override
+  String get devicesEmpty => 'لا توجد جلسات نشطة';
+
+  @override
+  String get appLockTitle => 'قفل التطبيق';
+
+  @override
+  String get appLockToggle => 'القفل ببصمة الوجه أو الإصبع أو رمز المرور';
+
+  @override
+  String get appLockToggleSubtitle => 'اطلب فتح القفل عند العودة إلى التطبيق';
+
+  @override
+  String get appLockUnavailable =>
+      'لاستخدام قفل التطبيق، فعّل بصمة الوجه أو بصمة الإصبع أو رمز مرور على هذا الجهاز.';
+
+  @override
+  String get appLockTimeoutLabel => 'القفل تلقائيًا';
+
+  @override
+  String get appLockTimeoutImmediately => 'فورًا';
+
+  @override
+  String get appLockTimeoutOneMinute => 'بعد دقيقة واحدة';
+
+  @override
+  String get appLockTimeoutFifteenMinutes => 'بعد 15 دقيقة';
+
+  @override
+  String get appLockTimeoutOneHour => 'بعد ساعة واحدة';
+
+  @override
+  String get appLockReason => 'افتح قفل التطبيق';
+
+  @override
+  String get appLockLockedTitle => 'التطبيق مقفل';
+
+  @override
+  String get appLockLockedBody => 'افتح القفل لرؤية محادثاتك.';
+
+  @override
+  String get appLockUnlockAction => 'فتح القفل';
+
+  @override
+  String get appLockFailed => 'تعذّر فتح القفل. حاول مرة أخرى.';
+
+  @override
+  String get appLockOfferTitle => 'قفل التطبيق؟';
+
+  @override
+  String get appLockOfferBody =>
+      'استخدم بصمة الوجه أو بصمة الإصبع أو رمز المرور لفتح التطبيق، لتبقى محادثاتك خاصة إذا أمسك أحد غيرك بهاتفك. يمكنك تغيير ذلك في أي وقت من الإعدادات.';
+
+  @override
+  String get appLockOfferAccept => 'تفعيل';
+
+  @override
+  String get appLockOfferDecline => 'ليس الآن';
 
   @override
   String get searchHint => 'ابحث في محادثاتك';

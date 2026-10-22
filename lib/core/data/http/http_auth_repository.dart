@@ -185,21 +185,6 @@ class HttpAuthRepository implements AuthRepository {
     }
   }
 
-  @override
-  Future<List<DeviceSession>> devices() async => throw _sessionsUnavailable;
-
-  @override
-  Future<void> revokeDevice(String deviceId) async => throw _sessionsUnavailable;
-
-  /// `GET /me/sessions` and `DELETE /me/sessions/:id` are named in IDENTITY-MODEL §4 but are
-  /// not published by the backend. Failing loudly is the honest answer: a fabricated list of
-  /// devices is worse than no list, because a user would act on it.
-  static const _sessionsUnavailable = AppError(
-    AppErrorKind.notFound,
-    code: AuthFailures.sessionsNotSupported,
-    debugDetail: 'No session registry endpoint exists in the published contract.',
-  );
-
   /// No server-push channel exists for revocation on this branch, so this never emits.
   ///
   /// Revocation is still enforced, and immediately: `AuthService.authenticate` re-reads the

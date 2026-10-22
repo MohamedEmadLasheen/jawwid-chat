@@ -120,7 +120,7 @@ describe('the DTO boundary carries no private data', () => {
     expect(serialised).not.toContain('argon2id');
   });
 
-  it('the token pair exposes the session id and created-at, never the hash', () => {
+  it('the token pair exposes the session id, created-at and its PD-23 lifetime, never the hash', () => {
     const dto = toTokenPairDto({
       accessToken: 'a.b.c',
       refreshToken: 'opaque-refresh',
@@ -128,11 +128,16 @@ describe('the DTO boundary carries no private data', () => {
       sessionId: 'session-1',
       sessionCreatedAt: new Date('2026-09-11T00:00:00.000Z'),
       actor: contactActor(),
+      remembered: false,
+      expiresAt: new Date('2026-10-11T00:00:00.000Z'),
+      absoluteExpiresAt: null,
     });
 
     expect(dto.tokenType).toBe('Bearer');
     expect(dto.expiresIn).toBe(900);
-    expect(Object.keys(dto.session).sort()).toEqual(['createdAt', 'id']);
+    expect(Object.keys(dto.session).sort()).toEqual(['absoluteExpiresAt', 'createdAt', 'expiresAt', 'id', 'remembered']);
+    expect(dto.session.expiresAt).toBe('2026-10-11T00:00:00.000Z');
+    expect(dto.session.absoluteExpiresAt).toBeNull();
     expect(dto.session.createdAt).toBe('2026-09-11T00:00:00.000Z');
     expect(Object.keys(dto).sort()).toEqual(
       ['accessToken', 'actor', 'expiresIn', 'refreshToken', 'session', 'tokenType'].sort(),
