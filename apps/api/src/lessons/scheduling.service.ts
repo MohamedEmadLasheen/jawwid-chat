@@ -17,8 +17,11 @@ import {
   LessonKind,
   LessonOutcome,
   MakeupAction,
+  NotificationStatus,
   RulingKind,
 } from '../communication/contracts/vocab';
+import { localDate, readerClockShifts, weeklyStartsAround } from '../platform/time-zone';
+import { zonesOf } from '../platform/time-zone.service';
 import {
   LESSON_INCLUDE,
   MAKEUP_CAUSES,
@@ -39,6 +42,17 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const HHMM_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const MAKEUP_ACTIONS: ReadonlySet<string> = new Set(Object.values(MakeupAction));
 
+/** PD-22: the event of the daylight-saving warning (rule lesson_clock_shift_parent). */
+export const CLOCK_SHIFT_EVENT = 'lesson_clock_shift';
+/**
+ * How often the worker looks for clock changes. A warning goes out days ahead,
+ * and the look formats three starts of every slot in every parent's zone, so the
+ * lesson sweep's five minutes would be work for nothing.
+ */
+const CLOCK_SHIFT_SWEEP_MS = 3_600_000;
+/** failure_code of a warning cancelled because it no longer holds -- and may be revived. */
+const CLOCK_SHIFT_GONE = 'CLOCK_SHIFT_GONE';
+
 /**
  * PD-11 T2: a teacher's availability, a learner's regular weekly times, the
  * make-up a family books itself, a family's request to change its regular
@@ -56,6 +70,8 @@ const MAKEUP_ACTIONS: ReadonlySet<string> = new Set(Object.values(MakeupAction))
  */
 @Injectable()
 export class SchedulingService {
+  private nextClockShiftSweepAt = 0;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly authz: AuthorizationService,
@@ -550,11 +566,19 @@ export class SchedulingService {
   // The sweep (the worker)
   // ------------------------------------------------------------------
 
-  /** Materialize lessons from regular times, then schedule the reminders now due. */
-  async sweep(): Promise<{ materialized: number; reminded: number }> {
+  /**
+   * Materialize lessons from regular times, schedule the reminders now due, and
+   * (hourly) the daylight-saving warnings.
+   */
+  async sweep(): Promise<{ materialized: number; reminded: number; clockWarnings: number | null }> {
     const materialized = await this.materialize();
     const reminded = await this.scheduleDueReminders();
-    return { materialized, reminded };
+    let clockWarnings: number | null = null;
+    if (Date.now() >= this.nextClockShiftSweepAt) {
+      clockWarnings = await this.scheduleClockShiftWarnings();
+      this.nextClockShiftSweepAt = Date.now() + CLOCK_SHIFT_SWEEP_MS;
+    }
+    return { materialized, reminded, clockWarnings };
   }
 
   async materialize(): Promise<number> {
@@ -605,6 +629,109 @@ export class SchedulingService {
       await this.prisma.lesson.update({ where: { id: lesson.id }, data: { remindersScheduledAt: new Date() } });
     }
     return due.length;
+  }
+
+  /**
+   * PD-22: the daylight-saving warning. A weekly lesson stays anchored in the
+   * teacher's zone, so when that zone changes its clocks and a parent's does not
+   * (Egypt and the Gulf), or the parent's changes and the teacher's does not
+   * (Cairo and London), the parent's local lesson time moves by an hour. Each
+   * parent whose zone is known is told once per slot per change, a few days
+   * before the first lesson at the new time (rule lesson_clock_shift_parent,
+   * offset from that lesson's start). The text says the day and time in the
+   * parent's zone, worked out at send time, and names nobody.
+   *
+   * A warning that no longer holds when the sweep looks again -- the slot was
+   * replaced, the parent moved to a zone where nothing changes, the lesson
+   * already started -- is cancelled before it is sent. Returns the warnings that
+   * stand, one per (slot, change, parent).
+   */
+  async scheduleClockShiftWarnings(now: Date = new Date()): Promise<number> {
+    const slots = await this.prisma.learnerScheduleSlot.findMany({
+      where: { OR: [{ validTo: null }, { validTo: { gt: now } }] },
+      select: { id: true, learnerId: true, weekday: true, startMinute: true, timezone: true, validFrom: true, validTo: true },
+    });
+    const learners = await this.prisma.learner.findMany({
+      where: { id: { in: [...new Set(slots.map((x) => x.learnerId))] } },
+      select: { id: true, familyId: true, family: { select: { language: true } } },
+    });
+    const learnerOf = new Map(learners.map((l) => [l.id, l]));
+    const parents = await this.prisma.contact.findMany({
+      where: { familyId: { in: [...new Set(learners.map((l) => l.familyId))] }, isActive: true, canMessage: true },
+      select: { id: true, familyId: true },
+    });
+    const zones = await zonesOf(this.prisma, parents.map((p) => p.id));
+
+    // `:subject:recipient`, the part of each dedupe key every rule shares (ReminderService.dedupeKey).
+    const wanted = new Set<string>();
+    for (const slot of slots) {
+      const learner = learnerOf.get(slot.learnerId);
+      if (!learner) continue;
+      const from = slot.validFrom.toISOString().slice(0, 10);
+      const to = slot.validTo ? slot.validTo.toISOString().slice(0, 10) : null;
+      // Only starts the slot really has: a family never had the old time if the
+      // slot began after it, and gets no new time if it ends before.
+      const starts = weeklyStartsAround(slot.weekday, slot.startMinute, slot.timezone, now).filter((at) => {
+        const d = localDate(at, slot.timezone);
+        return d >= from && (to === null || d < to);
+      });
+      const changes = new Map<string, { at: Date; parentIds: string[] }>();
+      for (const parent of parents) {
+        if (parent.familyId !== learner.familyId) continue;
+        const zone = zones.get(parent.id);
+        // No zone: their reminders say Cairo time, named, so nothing moves for them.
+        if (!zone) continue;
+        for (const at of readerClockShifts(starts, zone)) {
+          if (at.getTime() <= now.getTime()) continue;
+          const change = localDate(at, slot.timezone);
+          const entry = changes.get(change) ?? { at, parentIds: [] };
+          entry.parentIds.push(parent.id);
+          changes.set(change, entry);
+        }
+      }
+      const locale = learner.family.language === 'en' ? 'en' : 'ar';
+      for (const [change, { at, parentIds }] of changes) {
+        const subjectId = `${slot.id}:${change}`;
+        await this.reminders.scheduleForEvent(CLOCK_SHIFT_EVENT, {
+          subjectId,
+          anchorAt: at,
+          recipients: parentIds.map((actorId) => ({ actorId, role: 'parent', locale })),
+          familyId: learner.familyId,
+          variables: { startsAt: at.toISOString() },
+        });
+        for (const id of parentIds) wanted.add(`:${subjectId}:${id}`);
+      }
+    }
+
+    // The dedupe key is unique, so a warning cancelled here could never be
+    // scheduled again. One that holds again (the parent flew to Cairo and back)
+    // is revived instead; only cancellations made here, never another reason's.
+    const unsent = await this.prisma.notification.findMany({
+      where: {
+        eventType: CLOCK_SHIFT_EVENT,
+        OR: [
+          { status: NotificationStatus.SCHEDULED },
+          { status: NotificationStatus.CANCELLED, failureCode: CLOCK_SHIFT_GONE },
+        ],
+      },
+      select: { id: true, dedupeKey: true, status: true },
+    });
+    const holds = (n: { dedupeKey: string }) => wanted.has(n.dedupeKey.slice(n.dedupeKey.indexOf(':')));
+    const stale = unsent.filter((n) => n.status === NotificationStatus.SCHEDULED && !holds(n)).map((n) => n.id);
+    const revived = unsent.filter((n) => n.status === NotificationStatus.CANCELLED && holds(n)).map((n) => n.id);
+    if (stale.length > 0) {
+      await this.prisma.notification.updateMany({
+        where: { id: { in: stale }, status: NotificationStatus.SCHEDULED },
+        data: { status: NotificationStatus.CANCELLED, failureCode: CLOCK_SHIFT_GONE },
+      });
+    }
+    if (revived.length > 0) {
+      await this.prisma.notification.updateMany({
+        where: { id: { in: revived }, status: NotificationStatus.CANCELLED, failureCode: CLOCK_SHIFT_GONE },
+        data: { status: NotificationStatus.SCHEDULED, failureCode: null },
+      });
+    }
+    return wanted.size;
   }
 
   // ------------------------------------------------------------------

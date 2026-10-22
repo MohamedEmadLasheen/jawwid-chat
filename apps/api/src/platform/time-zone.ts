@@ -152,3 +152,55 @@ export function nextWeeklyStart(isoWeekday: number, minuteOfDay: number, zone: s
   // Unreachable for a weekday in 1..7: day 7 is today's weekday a week on.
   throw new RangeError(`isoWeekday ${isoWeekday} is not 1..7`);
 }
+
+/** "Sunday 1 November" / "الأحد ١ نوفمبر" -- the local date of an instant in a zone. */
+export function dayIn(at: Date, zone: string, lang: 'ar' | 'en'): string {
+  return new Intl.DateTimeFormat(lang === 'ar' ? 'ar-EG' : 'en-GB', {
+    timeZone: zone,
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  }).format(at);
+}
+
+/** "2026-10-29" -- the local calendar date of an instant in a zone. */
+export function localDate(at: Date, zone: string): string {
+  const { y, m, d } = localDay(at, zone);
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+/** "4 17:00" -- ISO weekday and clock of an instant in a zone: what a reader calls "the time" of a weekly lesson. */
+function weekClock(at: Date, zone: string): string {
+  const shifted = new Date(at.getTime() + offsetMinutes(at, zone) * 60_000);
+  const dow = shifted.getUTCDay() === 0 ? 7 : shifted.getUTCDay();
+  return `${dow} ${shifted.toISOString().slice(11, 16)}`;
+}
+
+/**
+ * Four consecutive starts of a weekly slot, from about a week before `now`: the
+ * last start before now is always among them, and so are the next two. Each is
+ * the slot's wall clock in ITS zone on its own date, so a clock change in that
+ * zone moves nothing there (and two starts across it are 7 days +-1 hour apart,
+ * which is why the window opens 8 days back, not 7).
+ */
+export function weeklyStartsAround(isoWeekday: number, minuteOfDay: number, zone: string, now: Date): Date[] {
+  const starts = [nextWeeklyStart(isoWeekday, minuteOfDay, zone, new Date(now.getTime() - 8 * 86_400_000))];
+  while (starts.length < 4) {
+    starts.push(nextWeeklyStart(isoWeekday, minuteOfDay, zone, new Date(starts[starts.length - 1]!.getTime() + 1)));
+  }
+  return starts;
+}
+
+/**
+ * PD-22 daylight-saving warning: of consecutive weekly starts, each one a
+ * reader in `readerZone` sees at another weekday or clock time than the start
+ * before it -- the first lesson at the new local time. Empty when the reader's
+ * clock and the slot's zone moved together (or neither moved).
+ */
+export function readerClockShifts(starts: readonly Date[], readerZone: string): Date[] {
+  const shifts: Date[] = [];
+  for (let i = 1; i < starts.length; i += 1) {
+    if (weekClock(starts[i - 1]!, readerZone) !== weekClock(starts[i]!, readerZone)) shifts.push(starts[i]!);
+  }
+  return shifts;
+}

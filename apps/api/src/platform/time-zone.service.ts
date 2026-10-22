@@ -76,13 +76,8 @@ export class TimeZoneService {
   }
 
   /** Each known person's zone. A person who never opened the app is absent. */
-  async zonesOf(actorIds: readonly string[]): Promise<Map<string, string>> {
-    if (actorIds.length === 0) return new Map();
-    const rows = await this.prisma.actorTimeZone.findMany({
-      where: { actorId: { in: [...new Set(actorIds)] } },
-      select: { actorId: true, timeZone: true },
-    });
-    return new Map(rows.map((r) => [r.actorId, r.timeZone]));
+  zonesOf(actorIds: readonly string[]): Promise<Map<string, string>> {
+    return zonesOf(this.prisma, actorIds);
   }
 
   /**
@@ -104,6 +99,16 @@ export class TimeZoneService {
     if (!actor.organizationId) throw new CommError(CommErrorCode.UNKNOWN_ACTOR, 'no organization', 403);
     return actor.organizationId;
   }
+}
+
+/** {@link TimeZoneService.zonesOf}, for services constructed without it. */
+export async function zonesOf(prisma: PrismaService, actorIds: readonly string[]): Promise<Map<string, string>> {
+  if (actorIds.length === 0) return new Map();
+  const rows = await prisma.actorTimeZone.findMany({
+    where: { actorId: { in: [...new Set(actorIds)] } },
+    select: { actorId: true, timeZone: true },
+  });
+  return new Map(rows.map((r) => [r.actorId, r.timeZone]));
 }
 
 /** {@link TimeZoneService.familyZones}, for services constructed without it. */
