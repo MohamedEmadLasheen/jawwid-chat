@@ -16,7 +16,11 @@ function violation(p: Record<string, unknown>, ar: boolean): string {
       ? ar ? `تأخر ${String(p.lateMinutes ?? '')} دقيقة` : `${String(p.lateMinutes ?? '')} minutes late`
       : p.violationKind === 'teacher_no_show'
         ? ar ? 'غياب عن الحصة' : 'absent from the lesson'
-        : ar ? 'اعتذار عن الحصة' : 'apologised for the lesson';
+        : p.violationKind === 'absence'
+          ? ar ? 'غياب' : 'absent'
+          : p.violationKind === 'complaint'
+            ? ar ? 'شكوى ثبتت' : 'a complaint was upheld'
+            : ar ? 'اعتذار عن الحصة' : 'apologised for the lesson';
   const whose = p.learnerName ? (ar ? ` (${String(p.learnerName)})` : ` (${String(p.learnerName)})`) : '';
   const when = p.lessonDay ? ` — ${String(p.lessonDay)}` : '';
   return `${what}${whose}${when}`;

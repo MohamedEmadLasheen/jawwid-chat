@@ -14,12 +14,20 @@ export interface TeacherFileAccessFlags {
   canViewFinance?: boolean
 }
 
+/** PD-26: away today, and the last day (YYYY-MM-DD). Computed from the days off on every read. */
+export interface Away {
+  kind: 'leave' | 'suspended' | 'day_off'
+  until: string
+}
+
 export interface TeacherSummary {
   id: string
   name: string
   isActive: boolean
   studentCount: number
   openComplaints: number
+  /** PD-26. Optional: older servers omit it. */
+  away?: Away | null
 }
 
 export interface Person {
@@ -34,9 +42,18 @@ export interface EntryBrief {
   author: Person
 }
 
+export type ComplaintStatus = 'open' | 'upheld' | 'actioned' | 'resolved'
+
 export interface Complaint extends EntryBrief {
   source: { conversationId: string; messageId: string | null } | null
   resolution: EntryBrief | null
+  /** PD-26 (optional on older servers). Null on complaints recorded before it. */
+  from?: 'management' | 'parent' | null
+  handledBy?: Person | null
+  followUps?: EntryBrief[]
+  /** Upheld: the violation on the ladder, and its decision once taken -- the action. */
+  action?: { violationId: string; decision: string | null; decidedAt: string | null } | null
+  status?: ComplaintStatus
 }
 
 export interface MonthlyComment {
@@ -54,7 +71,7 @@ export interface DayOff extends EntryBrief {
 
 export interface TeacherFile {
   access: TeacherFileAccessFlags
-  teacher: { id: string; name: string; isActive: boolean; leftAt: string | null }
+  teacher: { id: string; name: string; isActive: boolean; leftAt: string | null; away?: Away | null }
   personal: {
     fullName: string
     phone: string | null
@@ -104,14 +121,16 @@ export interface PersonalPatch {
 }
 
 export type NewEntry =
-  | { kind: 'complaint'; body: string }
+  | { kind: 'complaint'; body: string; source: 'management' | 'parent'; handledBy?: string }
   | { kind: 'complaint_resolution'; body: string; refersTo: string }
+  | { kind: 'complaint_followup'; body: string; refersTo: string }
   | { kind: 'monthly_comment'; body: string; month: string }
   | { kind: 'day_off'; body: string; dayOffOn: string }
   | { kind: 'day_off_cancellation'; body: string; refersTo: string }
 
 export const teacherFileApi = {
-  list: () => api.get<{ access: TeacherFileAccessFlags; teachers: TeacherSummary[] }>('/teacher-files'),
+  list: () =>
+    api.get<{ access: TeacherFileAccessFlags; teachers: TeacherSummary[]; supervisors?: Person[] }>('/teacher-files'),
   detail: (teacherId: string) => api.get<TeacherFile>(`/teacher-files/${encodeURIComponent(teacherId)}`),
   updatePersonal: (teacherId: string, body: PersonalPatch) =>
     api.post<TeacherFile>(`/teacher-files/${encodeURIComponent(teacherId)}/personal`, body),

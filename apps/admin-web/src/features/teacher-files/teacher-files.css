@@ -12,6 +12,7 @@
 .tf-entries { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; gap: var(--space-3); }
 .tf-entry { padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); display: grid; gap: var(--space-2); justify-items: start; }
 .tf-entry__head { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.tf-entry__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block-start: var(--space-2); }
 .tf-entry__body { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .tf-followup { padding-inline-start: var(--space-3); border-inline-start: 3px solid var(--border); display: grid; gap: var(--space-1); }
 .tf-struck { text-decoration: line-through; }
@@ -35,3 +36,4 @@
 
 /* Payroll (Payroll.tsx) */
 .tf-inline-actions { display: inline-flex; margin-inline-start: var(--space-2); vertical-align: middle; }
+.tf-badges { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); }

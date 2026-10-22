@@ -1426,6 +1426,22 @@ class L10nEn extends L10n {
   String get cardViolationApology => 'Apologised for the lesson';
 
   @override
+  String get cardViolationAbsence => 'Absent';
+
+  @override
+  String get cardViolationComplaint => 'A complaint was upheld';
+
+  @override
+  String chatTeacherOnLeave(String name, String date) {
+    return '$name is on leave until $date. Messages still reach them.';
+  }
+
+  @override
+  String chatTeacherAway(String name, String date) {
+    return '$name is away until $date. Messages still reach them.';
+  }
+
+  @override
   String cardViolationStep(String step) {
     return 'Violation $step this month';
   }

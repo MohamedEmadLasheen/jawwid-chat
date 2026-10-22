@@ -138,6 +138,8 @@ class _SupervisionCard extends StatelessWidget {
     final what = switch (card.text('violationKind')) {
       'late' => l10n.cardViolationLate('${card.integer('lateMinutes') ?? ''}'),
       'teacher_no_show' => l10n.cardViolationNoShow,
+      'absence' => l10n.cardViolationAbsence,
+      'complaint' => l10n.cardViolationComplaint,
       _ => l10n.cardViolationApology,
     };
     final day = parseCalendarDay(card.payload['lessonDay']);

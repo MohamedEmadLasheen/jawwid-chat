@@ -2623,6 +2623,30 @@ abstract class L10n {
   /// **'Apologised for the lesson'**
   String get cardViolationApology;
 
+  /// No description provided for @cardViolationAbsence.
+  ///
+  /// In en, this message translates to:
+  /// **'Absent'**
+  String get cardViolationAbsence;
+
+  /// No description provided for @cardViolationComplaint.
+  ///
+  /// In en, this message translates to:
+  /// **'A complaint was upheld'**
+  String get cardViolationComplaint;
+
+  /// No description provided for @chatTeacherOnLeave.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is on leave until {date}. Messages still reach them.'**
+  String chatTeacherOnLeave(String name, String date);
+
+  /// No description provided for @chatTeacherAway.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is away until {date}. Messages still reach them.'**
+  String chatTeacherAway(String name, String date);
+
   /// No description provided for @cardViolationStep.
   ///
   /// In en, this message translates to:

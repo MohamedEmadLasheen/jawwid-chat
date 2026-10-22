@@ -4,7 +4,7 @@ import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import type { NewEntry, TeacherFile } from './api'
 import { T, describeError, useCopy } from './copy'
 import { useCalendarDate } from './calendar'
-import { useAddEntry, useUpdatePersonal } from './hooks'
+import { useAddEntryFor, useTeacherList, useUpdatePersonal } from './hooks'
 
 export function Footer({ onCancel, onSave, pending }: { onCancel: () => void; onSave: () => void; pending: boolean }) {
   const tx = useCopy()
@@ -138,25 +138,37 @@ export function EditPersonalDialog({ file, onClose }: { file: TeacherFile; onClo
 }
 
 export type EntryIntent =
-  | { kind: 'complaint' }
+  | { kind: 'complaint'; source?: 'management' | 'parent' }
   | { kind: 'monthly_comment' }
   | { kind: 'day_off' }
   | { kind: 'complaint_resolution'; refersTo: string }
+  | { kind: 'complaint_followup'; refersTo: string }
   | { kind: 'day_off_cancellation'; refersTo: string; date: string }
 
-/** One new timeline entry. Entries are never edited: a correction is another entry. */
+/**
+ * One new timeline entry. Entries are never edited: a correction is another
+ * entry. `teacherId` null (the Supervision page) asks which teacher first.
+ */
 export function AddEntryDialog({
   teacherId,
   intent,
   onClose,
 }: {
-  teacherId: string
+  teacherId: string | null
   intent: EntryIntent
   onClose: () => void
 }) {
   const tx = useCopy()
   const cal = useCalendarDate()
-  const add = useAddEntry(teacherId)
+  const add = useAddEntryFor()
+  const teacherFieldId = useId()
+  const sourceId = useId()
+  const handlerId = useId()
+  // The supervisors a complaint may be handed to, and the teachers to choose from.
+  const directory = useTeacherList(intent.kind === 'complaint' || teacherId === null)
+  const [chosen, setChosen] = useState(teacherId ?? '')
+  const [source, setSource] = useState<'' | 'management' | 'parent'>(intent.kind === 'complaint' ? (intent.source ?? '') : '')
+  const [handler, setHandler] = useState('')
   const [body, setBody] = useState('')
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7))
   const [day, setDay] = useState('')
@@ -167,13 +179,17 @@ export function AddEntryDialog({
       ? tx(T.addComplaint)
       : intent.kind === 'complaint_resolution'
         ? tx(T.resolveTitle)
-        : intent.kind === 'monthly_comment'
+        : intent.kind === 'complaint_followup'
+          ? tx(T.followUpTitle)
+          : intent.kind === 'monthly_comment'
           ? tx(T.addMonthly)
           : intent.kind === 'day_off'
             ? tx(T.addDayOff)
             : tx(T.cancelTitle, { date: cal.day(intent.date) })
 
   const missing = {
+    teacher: !chosen,
+    source: intent.kind === 'complaint' && !source,
     body: !body.trim(),
     month: intent.kind === 'monthly_comment' && !/^\d{4}-\d{2}$/.test(month),
     day: intent.kind === 'day_off' && !/^\d{4}-\d{2}-\d{2}$/.test(day),
@@ -183,7 +199,9 @@ export function AddEntryDialog({
     const text = body.trim()
     switch (intent.kind) {
       case 'complaint':
-        return { kind: 'complaint', body: text }
+        return { kind: 'complaint', body: text, source: source || 'management', ...(handler ? { handledBy: handler } : {}) }
+      case 'complaint_followup':
+        return { kind: 'complaint_followup', body: text, refersTo: intent.refersTo }
       case 'monthly_comment':
         return { kind: 'monthly_comment', body: text, month }
       case 'day_off':
@@ -213,12 +231,60 @@ export function AddEntryDialog({
           pending={add.isPending}
           onSave={() => {
             setTouched(true)
-            if (missing.body || missing.month || missing.day) return
-            add.mutate(entry(), { onSuccess: onClose })
+            if (Object.values(missing).some(Boolean)) return
+            add.mutate({ teacherId: chosen, body: entry() }, { onSuccess: onClose })
           }}
         />
       }
     >
+      {teacherId === null && (
+        <div className="field">
+          <label className="field__label" htmlFor={teacherFieldId}>
+            {tx(T.name)}
+          </label>
+          <select id={teacherFieldId} className="input" value={chosen} onChange={(e) => setChosen(e.target.value)}>
+            <option value="">{tx(T.chooseTeacher)}</option>
+            {(directory.data?.teachers ?? [])
+              .filter((t) => t.isActive)
+              .map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+          </select>
+          {touched && missing.teacher && <span className="field__error">{tx(T.required)}</span>}
+        </div>
+      )}
+      {intent.kind === 'complaint' && (
+        <>
+          <div className="field">
+            <label className="field__label" htmlFor={sourceId}>
+              {tx(T.source)}
+            </label>
+            <select id={sourceId} className="input" value={source} onChange={(e) => setSource(e.target.value as typeof source)}>
+              <option value="" disabled>
+                {tx(T.source)}
+              </option>
+              <option value="management">{tx(T.sourceManagement)}</option>
+              <option value="parent">{tx(T.sourceParent)}</option>
+            </select>
+            {touched && missing.source && <span className="field__error">{tx(T.required)}</span>}
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor={handlerId}>
+              {tx(T.handler)}
+            </label>
+            <select id={handlerId} className="input" value={handler} onChange={(e) => setHandler(e.target.value)}>
+              <option value="">{tx(T.handlerMe)}</option>
+              {(directory.data?.supervisors ?? []).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </>
+      )}
       {intent.kind === 'monthly_comment' && (
         <>
           <Field

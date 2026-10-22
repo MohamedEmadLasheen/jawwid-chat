@@ -26,8 +26,7 @@ import { NewStudentsPage } from '@/features/trials/NewStudentsPage'
 import { TeacherFilesPage } from '@/features/teacher-files/TeacherFilesPage'
 import { TeacherFilePage } from '@/features/teacher-files/TeacherFilePage'
 import { CertificatesPage } from '@/features/supervision/CertificatesPage'
-import { LeaveRequestsPage } from '@/features/supervision/LeaveRequestsPage'
-import { DisciplinePage } from '@/features/discipline/DisciplinePage'
+import { TeacherSupervisionPage } from '@/features/teacher-supervision/TeacherSupervisionPage'
 import { InstalmentsPage } from '@/features/instalments/InstalmentsPage'
 import { ParentsPage } from '@/features/profiles/ParentsPage'
 import { ParentProfilePage } from '@/features/profiles/ParentProfilePage'
@@ -98,11 +97,13 @@ export function AppRoutes() {
         <Route path="/teachers/files/:teacherId" element={<Area area="teachers"><TeacherFilePage basePath="/teachers/files" /></Area>} />
         {/* PD-12: the department's queues, tabs of the same area. */}
         <Route path="/teachers/certificates" element={<Area area="teachers"><CertificatesPage basePath="/teachers" /></Area>} />
-        <Route path="/teachers/leave" element={<Area area="teachers"><LeaveRequestsPage basePath="/teachers" /></Area>} />
+        {/* PD-26: leave, absences, lateness, rewards and complaints are one page; the old tabs land on their section. */}
+        <Route path="/teachers/supervision" element={<Area area="teachers"><TeacherSupervisionPage basePath="/teachers" /></Area>} />
+        <Route path="/teachers/leave" element={<Navigate to="/teachers/supervision?section=leave" replace />} />
         {/* PD-11 T4: Sales' trials and Operations' new students (features/trials/area.tsx). */}
         <Route path="/trials" element={<Area area="trials"><TrialsPage /></Area>} />
         <Route path="/trials/new-students" element={<Area area="trials"><NewStudentsPage /></Area>} />
-        <Route path="/teachers/discipline" element={<Area area="teachers"><DisciplinePage basePath="/teachers" /></Area>} />
+        <Route path="/teachers/discipline" element={<Navigate to="/teachers/supervision?section=absences" replace />} />
         {/* PD-12 S3: Operations; the super admin reaches it as /admin/instalments. */}
         <Route path="/instalments" element={<Area area="instalments"><InstalmentsPage /></Area>} />
         {/* PD-17: the administration's Parent Profile (the super admin lists parents at /admin/parents). */}
@@ -151,11 +152,15 @@ export function AppRoutes() {
         />
         <Route
           path="/admin/teachers/discipline"
-          element={<SuperAdminOnly><DisciplinePage basePath={adminSectionPath('teachers')} /></SuperAdminOnly>}
+          element={<Navigate to={`${adminSectionPath('teachers')}/supervision?section=absences`} replace />}
         />
         <Route
           path="/admin/teachers/leave"
-          element={<SuperAdminOnly><LeaveRequestsPage basePath={adminSectionPath('teachers')} /></SuperAdminOnly>}
+          element={<Navigate to={`${adminSectionPath('teachers')}/supervision?section=leave`} replace />}
+        />
+        <Route
+          path="/admin/teachers/supervision"
+          element={<SuperAdminOnly><TeacherSupervisionPage basePath={adminSectionPath('teachers')} /></SuperAdminOnly>}
         />
         <Route
           path="/admin/teachers/:teacherId"
