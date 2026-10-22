@@ -1,5 +1,5 @@
 /**
- * PD-23 over real HTTP, on the real database (the 20261022130000 migration):
+ * PD-23 over real HTTP, on the real database (the 20261022140000 migration):
  *
  *   - login writes the policy: client, remembered, authenticated_at, and an
  *     expires_at inside the role's limits; the super admin is never kept

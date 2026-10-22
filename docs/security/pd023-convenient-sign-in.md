@@ -42,7 +42,7 @@ answer:
   `rotated` and then presented again reads as token theft, and that would sign out every
   device on the account.
 - The database enforces the rest: `remembered` only on `client = 'web'`, and
-  `authenticated_at <= created_at` (migration `20261022130000`).
+  `authenticated_at <= created_at` (migration `20261022140000`).
 
 ## 2. Devices & sessions
 
