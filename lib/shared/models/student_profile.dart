@@ -36,10 +36,15 @@ class StudentProfileSlot {
     required this.start,
     required this.durationMinutes,
     this.timezone,
+    this.nextStartsAt,
   });
 
   final int weekday;
   final String start;
   final int durationMinutes;
   final String? timezone;
+
+  /// PD-22: the next real start, in the account's zone. What a reader is shown: the
+  /// weekday itself can differ from [weekday] in another country.
+  final DateTime? nextStartsAt;
 }

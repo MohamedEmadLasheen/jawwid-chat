@@ -598,6 +598,8 @@ export class SchedulingService {
           ...parents.map((p) => ({ actorId: p.id, role: 'parent', locale })),
         ],
         familyId: lesson.learner?.familyId ?? null,
+        // PD-22: the push says the time, worded in each recipient's own zone at send time.
+        variables: { startsAt: lesson.startsAt.toISOString() },
         skipPast: true,
       });
       await this.prisma.lesson.update({ where: { id: lesson.id }, data: { remindersScheduledAt: new Date() } });

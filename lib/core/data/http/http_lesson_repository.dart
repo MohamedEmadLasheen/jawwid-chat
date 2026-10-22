@@ -1,5 +1,6 @@
 import '../../../shared/models/lesson.dart';
 import '../../../shared/models/student_profile.dart';
+import '../../../shared/utils/app_clock.dart';
 import '../../network/api_client.dart';
 import '../repositories.dart';
 
@@ -36,8 +37,8 @@ class HttpLessonRepository implements LessonRepository {
       tickets.add(LessonTicket(
         kind: kind,
         lessonId: lessonId,
-        startsAt: startsAt?.toLocal(),
-        endsAt: endsAt?.toLocal(),
+        startsAt: startsAt == null ? null : AppClock.view(startsAt),
+        endsAt: endsAt == null ? null : AppClock.view(endsAt),
         learnerId: learnerId,
         learnerName: learner['name'] as String? ?? '',
         suggestedLessonNumber: (row['suggestedLessonNumber'] as num?)?.toInt(),
@@ -96,6 +97,7 @@ class HttpLessonRepository implements LessonRepository {
                 weekday: (s['weekday'] as num).toInt(),
                 start: s['start'] as String,
                 durationMinutes: (s['durationMinutes'] as num?)?.toInt() ?? 0,
+                nextStartsAt: AppClock.parse(s['nextStartsAt']),
               ),
         ],
       ));
@@ -127,6 +129,7 @@ class HttpLessonRepository implements LessonRepository {
               start: s['start'] as String,
               durationMinutes: (s['durationMinutes'] as num?)?.toInt() ?? 0,
               timezone: text(s['timezone']),
+              nextStartsAt: AppClock.parse(s['nextStartsAt']),
             ),
       ],
     );
@@ -157,7 +160,7 @@ class HttpLessonRepository implements LessonRepository {
       durationMinutes: (data['durationMinutes'] as num?)?.toInt() ?? 0,
       slots: [
         for (final raw in (data['slots'] as List?) ?? const [])
-          if (raw is String && DateTime.tryParse(raw) != null) DateTime.parse(raw).toLocal(),
+          if (raw is String && DateTime.tryParse(raw) != null) AppClock.view(DateTime.parse(raw)),
       ],
     );
   }
@@ -177,7 +180,7 @@ class HttpLessonRepository implements LessonRepository {
           WeeklyOption(
             weekday: (raw['weekday'] as num).toInt(),
             start: raw['start'] as String,
-            nextStartsAt: DateTime.parse(raw['nextStartsAt'] as String).toLocal(),
+            nextStartsAt: AppClock.view(DateTime.parse(raw['nextStartsAt'] as String)),
           ),
     ];
   }
@@ -206,8 +209,8 @@ class HttpLessonRepository implements LessonRepository {
       out.add(ScheduledLesson(
         id: id,
         learnerName: (raw['learner'] is Map ? (raw['learner'] as Map)['name'] as String? : null) ?? '',
-        startsAt: starts.toLocal(),
-        endsAt: ends.toLocal(),
+        startsAt: AppClock.view(starts),
+        endsAt: AppClock.view(ends),
         kind: raw['kind'] as String? ?? 'regular',
         phase: raw['phase'] as String? ?? 'upcoming',
         outcome: raw['outcome'] as String?,
@@ -231,10 +234,10 @@ class HttpLessonRepository implements LessonRepository {
       attendedAllTime: n(all['attended']),
       streak: n(d['streak']),
       makeupsOwed: n(d['makeupsOwed']),
-      nextLessonAt: next == null ? null : DateTime.tryParse('${next['startsAt']}')?.toLocal(),
+      nextLessonAt: next == null ? null : AppClock.parse('${next['startsAt']}'),
       lastCovered: last?['covered'] as String?,
       lastCoveredTopics: [for (final c in (last?['coveredTopics'] as List?) ?? const []) if (c is String) c],
-      lastReportAt: last == null ? null : DateTime.tryParse('${last['startsAt']}')?.toLocal(),
+      lastReportAt: last == null ? null : AppClock.parse('${last['startsAt']}'),
       certificates: [
         for (final c in (d['certificates'] as List?) ?? const [])
           if (c is Map && c['id'] is String && c['title'] is String && DateTime.tryParse('${c['achievedOn']}T00:00:00Z') != null)

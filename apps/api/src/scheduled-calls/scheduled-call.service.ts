@@ -9,6 +9,7 @@ import { ConversationService, isUuid } from '../communication/conversations/conv
 import { CallStatus, CardKind, ScheduledCallKind } from '../communication/contracts/vocab';
 import { CardPoster } from '../supervision/card-poster';
 import { renderScheduledCallCardBody, type CardLanguage } from './scheduled-call-cards';
+import { ACADEMY_ZONE, canonicalZone, whenWithZone } from '../platform/time-zone';
 
 /** A scheduled call opens this long before its start... */
 export const JOIN_OPENS_BEFORE_MS = 10 * 60_000;
@@ -302,12 +303,14 @@ export class ScheduledCallService {
     };
   }
 
-  /** The instant in the academy's zone, as the conversation reads it. */
+  /**
+   * The instant in the academy's zone, naming that zone (PD-22): members of one
+   * conversation live in different countries, so the text must not pass for
+   * anyone's own clock. Clients draw `startsAt` in the reader's zone instead.
+   */
   private async when(at: Date, lang: CardLanguage): Promise<string> {
-    const zone = String(await this.config.get('stats.zone'));
-    return new Intl.DateTimeFormat(lang === 'ar' ? 'ar-EG' : 'en-GB', {
-      timeZone: zone, weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
-    }).format(at);
+    const zone = canonicalZone(await this.config.get('stats.zone')) ?? ACADEMY_ZONE;
+    return whenWithZone(at, zone, lang);
   }
 }
 

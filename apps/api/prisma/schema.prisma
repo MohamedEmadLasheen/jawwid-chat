@@ -562,6 +562,19 @@ model QuietHours {
   @@schema("chat")
 }
 
+/// PD-22: the zone a person sees and is notified in. 20261022130000 owns the DDL.
+/// automatic = follows the phone's OS zone (reported by the app); false = picked by hand.
+model ActorTimeZone {
+  actorId        String   @id @map("actor_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  timeZone       String   @map("time_zone")
+  automatic      Boolean  @default(true)
+  updatedAt      DateTime @map("updated_at") @db.Timestamptz @default(now())
+
+  @@map("actor_time_zone")
+  @@schema("chat")
+}
+
 model Call {
   /// PRD 2.3 -- organization_id on every root entity. SQL owns the DDL.
   organizationId String @default(dbgenerated("chat.default_organization_id()")) @map("organization_id") @db.Uuid

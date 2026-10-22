@@ -8,6 +8,7 @@ import { WEEKDAY } from '@/features/trials/copy'
 import { parentPath, type StudentProfile } from './api'
 import { P, describeError, isProfileRefusal, useCopy } from './copy'
 import { useStudent } from './hooks'
+import { familyTime } from '@/core/time/academyTime'
 import './profiles.css'
 
 /**
@@ -108,6 +109,11 @@ function StudentCard({ s }: { s: StudentProfile }) {
                     <li key={i}>
                       {tx(WEEKDAY[x.weekday] ?? { en: String(x.weekday), ar: String(x.weekday) })} · <bdi dir="ltr">{x.start}</bdi> ·{' '}
                       {tx(P.minutes, { n: x.durationMinutes })}
+                      {/* PD-22: the family's own clock beside the teacher's, when they differ. */}
+                      {(() => {
+                        const theirs = x.nextStartsAt ? familyTime(x.nextStartsAt, s.familyTimeZone, locale) : null
+                        return theirs ? <span className="tf-muted"> · {tx(P.familyLocal, { time: theirs })}</span> : null
+                      })()}
                     </li>
                   ))}
                 </ul>

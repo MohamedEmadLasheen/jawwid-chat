@@ -143,6 +143,7 @@ export const P = {
   noSchedule: { en: 'No regular lesson times yet', ar: 'لا توجد مواعيد ثابتة للحصص بعد' },
   minutes: { en: '{n} min', ar: '{n} دقيقة' },
   timezone: { en: 'Times in {zone}', ar: 'المواعيد بتوقيت {zone}' },
+  familyLocal: { en: "family's time: {time}", ar: 'بتوقيت الأسرة: {time}' },
   notSet: { en: 'Not set', ar: 'غير محدد' },
   parents: { en: 'Parents', ar: 'أولياء الأمور' },
   parentsHint: {

@@ -86,7 +86,17 @@ void main() {
 
       expect(find.text(l10n.scheduledCallDefaultTitle), findsOneWidget);
       expect(find.text('Weekly review'), findsOneWidget);
-      expect(find.text('Tue 20 Oct, 18:00'), findsOneWidget);
+      // PD-22: the reader's own clock, from `startsAt` -- not the server's `when`, which is
+      // written in the academy's zone for everyone in the conversation.
+      const material = DefaultMaterialLocalizations();
+      expect(
+        find.text(
+          '${material.formatMediumDate(start)} · '
+          '${material.formatTimeOfDay(TimeOfDay.fromDateTime(start))}',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Tue 20 Oct, 18:00'), findsNothing);
       expect(find.text(l10n.scheduledCallBy('Ms. Dina')), findsOneWidget);
       expect(joinButton(tester).onPressed, isNull);
       expect(find.text(l10n.scheduledCallJoinHint), findsOneWidget);

@@ -1446,5 +1446,51 @@
   "salesVoidConfirm": "Void instalment",
   "salesBillingStateConflict": "This instalment was already paid or voided. The list has been refreshed.",
   "salesBillingInvalid": "Check the date and the reference, then try again.",
-  "salesWriteFailed": "Could not save. Try again."
+  "salesWriteFailed": "Could not save. Try again.",
+  "settingsDateTime": "Date & time",
+  "@settingsDateTime": {
+    "description": "PD-22: Settings -> Date & time."
+  },
+  "settingsDateTimeSubtitle": "Time zone: {zone}",
+  "@settingsDateTimeSubtitle": {
+    "description": "PD-22: Settings -> Date & time.",
+    "placeholders": {
+      "zone": {
+        "type": "String",
+        "example": "Kuwait (GMT+3)"
+      }
+    }
+  },
+  "timeZoneSetAutomatically": "Set automatically",
+  "@timeZoneSetAutomatically": {
+    "description": "PD-22: Settings -> Date & time."
+  },
+  "timeZoneAutomaticHint": "Uses your phone's time zone, and changes by itself when you travel.",
+  "@timeZoneAutomaticHint": {
+    "description": "PD-22: Settings -> Date & time."
+  },
+  "timeZoneLabel": "Time zone",
+  "@timeZoneLabel": {
+    "description": "PD-22: Settings -> Date & time."
+  },
+  "timeZoneUnknown": "Not known yet",
+  "@timeZoneUnknown": {
+    "description": "PD-22: Settings -> Date & time."
+  },
+  "timeZoneAppliesTo": "Lesson times, reminders and notifications are shown in this time zone.",
+  "@timeZoneAppliesTo": {
+    "description": "PD-22: Settings -> Date & time."
+  },
+  "timeZoneSearchHint": "Search for a city",
+  "@timeZoneSearchHint": {
+    "description": "PD-22: Settings -> Date & time."
+  },
+  "timeZoneNoMatch": "No time zone matches.",
+  "@timeZoneNoMatch": {
+    "description": "PD-22: Settings -> Date & time."
+  },
+  "timeZoneSaveFailed": "Could not change the time zone. Try again.",
+  "@timeZoneSaveFailed": {
+    "description": "PD-22: Settings -> Date & time."
+  }
 }

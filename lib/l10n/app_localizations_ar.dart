@@ -2640,4 +2640,39 @@ class L10nAr extends L10n {
 
   @override
   String get salesWriteFailed => 'تعذّر الحفظ. حاول مرة أخرى.';
+
+  @override
+  String get settingsDateTime => 'التاريخ والوقت';
+
+  @override
+  String settingsDateTimeSubtitle(String zone) {
+    return 'المنطقة الزمنية: $zone';
+  }
+
+  @override
+  String get timeZoneSetAutomatically => 'الضبط تلقائيًا';
+
+  @override
+  String get timeZoneAutomaticHint =>
+      'يستخدم المنطقة الزمنية لهاتفك، وتتغيّر من تلقاء نفسها عند السفر.';
+
+  @override
+  String get timeZoneLabel => 'المنطقة الزمنية';
+
+  @override
+  String get timeZoneUnknown => 'غير معروفة بعد';
+
+  @override
+  String get timeZoneAppliesTo =>
+      'تظهر مواعيد الحصص والتذكيرات والإشعارات بهذه المنطقة الزمنية.';
+
+  @override
+  String get timeZoneSearchHint => 'ابحث عن مدينة';
+
+  @override
+  String get timeZoneNoMatch => 'لا توجد منطقة زمنية مطابقة.';
+
+  @override
+  String get timeZoneSaveFailed =>
+      'تعذّر تغيير المنطقة الزمنية. حاول مرة أخرى.';
 }
