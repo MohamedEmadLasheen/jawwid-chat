@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { sessionApi } from '@/core/api/endpoints'
+import { persistenceSupported } from '@/core/auth/tokens'
 import { qk } from '@/core/api/queryKeys'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { ApiError } from '@/core/api/errors'
@@ -14,6 +15,10 @@ export function LoginPage() {
   const queryClient = useQueryClient()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  // PD-23: unticked by default, and offered only where cross-tab refresh can
+  // be serialized (Web Locks) -- otherwise a shared token could be replayed.
+  const [canRemember] = useState(persistenceSupported)
+  const [remember, setRemember] = useState(false)
   // PD-21: finishing a reset an administrator issued, on the same page.
   const [mode, setMode] = useState<'signIn' | 'reset'>('signIn')
   const [resetDone, setResetDone] = useState(false)
@@ -21,7 +26,7 @@ export function LoginPage() {
 
   const login = useMutation({
     // The login identifier is the account subject; for staff, their email.
-    mutationFn: () => sessionApi.login(email.trim(), password),
+    mutationFn: () => sessionApi.login(email.trim(), password, canRemember && remember),
     onSuccess: (staff) => {
       queryClient.setQueryData(qk.me, staff)
       void queryClient.invalidateQueries()
@@ -86,6 +91,13 @@ export function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
               />
             </label>
+
+            {canRemember && (
+              <label className="login__remember">
+                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+                <span>{t('auth.keepSignedIn')}</span>
+              </label>
+            )}
 
             {login.error && (
               <div className="field__error" role="alert">

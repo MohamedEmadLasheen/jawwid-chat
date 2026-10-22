@@ -1,0 +1,5 @@
+/* PD-23 devices & sessions. Uses the design system's table, badge and dialog. */
+.dev-page { display: flex; flex-direction: column; gap: var(--space-4); }
+.dev-name { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.dev-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; align-items: center; }
+.dev-section { margin-block-start: var(--space-2); }

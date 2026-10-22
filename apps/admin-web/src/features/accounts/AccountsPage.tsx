@@ -1,6 +1,6 @@
 import { useDeferredValue, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
 import { isSuperAdmin } from '@/core/permissions/capabilities'
@@ -17,6 +17,10 @@ import { A, KIND, STATUS, describeError, useCopy } from './copy'
 import { useAccounts, useIssueReset, useReactivate, useSuspend } from './hooks'
 import { supportAdminApi, supportKeys, supportTokens } from '@/features/support/api'
 import { S, describeError as describeSupportError } from '@/features/support/copy'
+import { accountSessionsApi, sessionKeys, type SessionDto } from '@/features/devices/api'
+import { D, isSessionGone } from '@/features/devices/copy'
+import { SessionList, useDeviceName } from '@/features/devices/SessionList'
+import '@/features/devices/devices.css'
 import './accounts.css'
 
 type Kind = 'all' | 'family' | 'teacher' | 'staff'
@@ -26,6 +30,9 @@ type Pending =
   | { act: 'reactivate'; account: AccountSummary }
   | { act: 'code'; account: AccountSummary; issued: IssuedReset }
   | { act: 'impersonate'; account: AccountSummary }
+  | { act: 'devices'; account: AccountSummary; notice?: string }
+  | { act: 'revokeSession'; account: AccountSummary; session: SessionDto }
+  | { act: 'revokeAll'; account: AccountSummary }
 
 const STATUS_TONE: Record<AccountStatus, Tone> = {
   provisioned: 'outline',
@@ -127,6 +134,11 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
                             {tx(S.open, { name: a.name })}
                           </button>
                         )}
+                        {a.allowed.signOut === true && (
+                          <button type="button" className="btn btn--sm" onClick={() => setPending({ act: 'devices', account: a })}>
+                            {tx(D.devicesButton)}
+                          </button>
+                        )}
                         {a.allowed.reactivate && (
                           <button type="button" className="btn btn--sm" onClick={() => setPending({ act: 'reactivate', account: a })}>
                             {tx(A.reactivate)}
@@ -155,6 +167,23 @@ export function AccountsPage({ eyebrow }: { eyebrow?: string }) {
         <CodeDialog account={pending.account} issued={pending.issued} onClose={() => setPending(null)} />
       )}
       {pending?.act === 'impersonate' && <StartSupportDialog account={pending.account} onClose={() => setPending(null)} />}
+      {pending?.act === 'devices' && (
+        <DevicesDialog
+          account={pending.account}
+          notice={pending.notice}
+          onRevoke={(session) => setPending({ act: 'revokeSession', account: pending.account, session })}
+          onRevokeAll={() => setPending({ act: 'revokeAll', account: pending.account })}
+          onClose={() => setPending(null)}
+        />
+      )}
+      {(pending?.act === 'revokeSession' || pending?.act === 'revokeAll') && (
+        <RevokeSessionDialog
+          account={pending.account}
+          session={pending.act === 'revokeSession' ? pending.session : null}
+          onDone={(notice) => setPending({ act: 'devices', account: pending.account, notice })}
+          onClose={() => setPending({ act: 'devices', account: pending.account })}
+        />
+      )}
       {(pending?.act === 'suspend' || pending?.act === 'reactivate') && (
         <StatusDialog act={pending.act} account={pending.account} onClose={() => setPending(null)} />
       )}
@@ -255,6 +284,111 @@ function StatusDialog({
       error={localized(mutation.error)}
       extra={<p>{tx(act === 'suspend' ? A.suspendExplain : A.reactivateExplain, { name: account.name })}</p>}
       onConfirm={(reason) => mutation.mutate({ id: account.accountId, reason }, { onSuccess: onClose })}
+      onClose={onClose}
+    />
+  )
+}
+
+/**
+ * PD-23: the account's active devices. Shown only where the server's
+ * `allowed.signOut` says this administrator may end them; every revoke is
+ * decided again server-side and needs a reason.
+ */
+function DevicesDialog({
+  account,
+  notice,
+  onRevoke,
+  onRevokeAll,
+  onClose,
+}: {
+  account: AccountSummary
+  notice?: string
+  onRevoke: (session: SessionDto) => void
+  onRevokeAll: () => void
+  onClose: () => void
+}) {
+  const tx = useCopy()
+  const list = useQuery({
+    queryKey: sessionKeys.account(account.accountId),
+    queryFn: () => accountSessionsApi.list(account.accountId),
+  })
+  const sessions = list.data ?? []
+  return (
+    <Dialog title={tx(D.devicesOf, { name: account.name })} onClose={onClose} variant="sheet">
+      <section className="dev-section" aria-label={tx(D.devicesOf, { name: account.name })}>
+        <p className="field__hint">{tx(D.devicesExplain, { name: account.name })}</p>
+        {notice && (
+          <p className="field__hint" role="status">
+            {notice}
+          </p>
+        )}
+        <QueryBoundary
+          isLoading={list.isLoading}
+          error={list.error}
+          isEmpty={sessions.length === 0}
+          emptyTitle={tx(D.empty)}
+          onRetry={() => void list.refetch()}
+          compact
+        >
+          <div className="dev-toolbar">
+            <button type="button" className="btn btn--sm btn--danger" onClick={onRevokeAll}>
+              {tx(D.signOutAll)}
+            </button>
+          </div>
+          <SessionList sessions={sessions} onSignOut={onRevoke} />
+        </QueryBoundary>
+      </section>
+    </Dialog>
+  )
+}
+
+/** One device (`session`) or all of them (`session` null), with a reason -- the suspend pattern. */
+function RevokeSessionDialog({
+  account,
+  session,
+  onDone,
+  onClose,
+}: {
+  account: AccountSummary
+  session: SessionDto | null
+  onDone: (notice?: string) => void
+  onClose: () => void
+}) {
+  const tx = useCopy()
+  const deviceName = useDeviceName()
+  const client = useQueryClient()
+  const key = sessionKeys.account(account.accountId)
+  const revoke = useMutation({
+    mutationFn: async (reason: string): Promise<number | null> => {
+      if (session) {
+        await accountSessionsApi.revoke(account.accountId, session.id, reason)
+        return null
+      }
+      return (await accountSessionsApi.revokeAll(account.accountId, reason)).revoked
+    },
+    onSuccess: (revoked) => {
+      void client.invalidateQueries({ queryKey: key })
+      onDone(revoked === null ? undefined : tx(D.revokedAll, { n: revoked }))
+    },
+    onError: (error) => {
+      // Already ended: refresh the list behind the dialog (inactive while this
+      // dialog covers it, hence 'all'); the message says why.
+      if (isSessionGone(error)) void client.invalidateQueries({ queryKey: key, refetchType: 'all' })
+    },
+  })
+  return (
+    <ReasonDialog
+      title={
+        session
+          ? tx(D.adminRevokeTitle, { name: account.name, device: deviceName(session) })
+          : tx(D.adminRevokeAllTitle, { name: account.name })
+      }
+      label={tx(A.reason)}
+      confirmLabel={tx(session ? D.signOut : D.signOutAll)}
+      isPending={revoke.isPending}
+      error={localized(revoke.error)}
+      extra={<p>{tx(D.devicesExplain, { name: account.name })}</p>}
+      onConfirm={(reason) => revoke.mutate(reason)}
       onClose={onClose}
     />
   )
