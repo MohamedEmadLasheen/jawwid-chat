@@ -14,6 +14,7 @@ import 'package:jawwid_chat/features/auth/application/auth_controller.dart';
 import 'package:jawwid_chat/features/auth/domain/auth_state.dart';
 import 'package:jawwid_chat/features/conversations/presentation/chats_screen.dart';
 import 'package:jawwid_chat/features/conversations/presentation/conversation_tile.dart';
+import 'package:jawwid_chat/features/profile/presentation/profile_photos_section.dart';
 import 'package:jawwid_chat/features/profile/presentation/profile_screen.dart';
 import 'package:jawwid_chat/features/profile/presentation/profile_sections.dart';
 import 'package:jawwid_chat/features/settings/presentation/settings_screen.dart';
@@ -43,11 +44,8 @@ void main() {
         authControllerProvider.overrideWith(
           () => _SignedIn(
             backend: backend,
-            user: AuthUser(
-              id: role == UserRole.parent ? 'u_parent' : 'u_teacher',
-              displayName: role == UserRole.parent ? 'ولي أمر' : 'معلم',
-              role: role,
-            ),
+            // The fixture's own principal for the role (PD-20 added Sales).
+            user: AuthUser(id: backend.user.id, displayName: backend.user.displayName, role: role),
           ),
         ),
       ],
@@ -321,6 +319,35 @@ void main() {
 
       expect(find.byKey(const ValueKey('settings-my-payments')), findsNothing);
       expect(find.text('Payments'), findsNothing);
+    });
+  });
+
+  group('PD-20: Settings for Sales', () {
+    testWidgets('labelled Sales, with no parent, teacher or photo rows', (tester) async {
+      await tester.pumpWidget(harness(role: UserRole.sales, child: const SettingsScreen()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sales'), findsOneWidget);
+      expect(find.byKey(const ValueKey('settings-my-payments')), findsNothing);
+      expect(find.byKey(const ValueKey('settings-my-leave')), findsNothing);
+      expect(find.text('My profile'), findsNothing);
+      expect(find.byIcon(Icons.workspace_premium_outlined), findsNothing);
+      expect(find.byIcon(Icons.badge_outlined), findsNothing);
+    });
+
+    testWidgets('in Arabic too', (tester) async {
+      await tester.pumpWidget(harness(role: UserRole.sales, child: const SettingsScreen(), locale: const Locale('ar')));
+      await tester.pumpAndSettle();
+      expect(find.text('المبيعات'), findsOneWidget);
+    });
+
+    testWidgets('My account offers Sales no photo controls (the server refuses staff photos)', (tester) async {
+      await tester.pumpWidget(harness(role: UserRole.sales, child: const MyAccountScreen()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('فريق المبيعات'), findsWidgets);
+      expect(find.byType(ProfilePhotosSection), findsNothing);
+      expect(find.text('Children'), findsNothing);
     });
   });
 

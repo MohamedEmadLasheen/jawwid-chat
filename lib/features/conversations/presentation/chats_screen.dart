@@ -635,9 +635,11 @@ class _EmptyState extends StatelessWidget {
       ChatFilter.groups => JawwidEmptyView(
           icon: Icons.groups_outlined,
           title: l10n.filterEmptyGroups,
-          body: role == UserRole.teacher
-              ? l10n.conversationsEmptyBodyTeacher
-              : l10n.conversationsEmptyBodyParent,
+          body: switch (role) {
+            UserRole.teacher => l10n.conversationsEmptyBodyTeacher,
+            UserRole.sales => l10n.conversationsEmptyBodySales,
+            _ => l10n.conversationsEmptyBodyParent,
+          },
         ),
       ChatFilter.favorites => JawwidEmptyView(
           icon: Icons.star_outline,
@@ -646,9 +648,11 @@ class _EmptyState extends StatelessWidget {
         ),
       ChatFilter.all => JawwidEmptyView(
           title: l10n.conversationsEmptyTitle,
-          body: role == UserRole.teacher
-              ? l10n.conversationsEmptyBodyTeacher
-              : l10n.conversationsEmptyBodyParent,
+          body: switch (role) {
+            UserRole.teacher => l10n.conversationsEmptyBodyTeacher,
+            UserRole.sales => l10n.conversationsEmptyBodySales,
+            _ => l10n.conversationsEmptyBodyParent,
+          },
         ),
     };
   }

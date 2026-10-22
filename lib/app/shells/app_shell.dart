@@ -23,7 +23,8 @@ class ShellDestination {
   final String Function(L10n) label;
 }
 
-/// **Chats · Calls · Settings**, for both roles.
+/// **Chats · Calls · Settings**, for every role (plus Schedule for a teacher, Payments
+/// for Sales).
 ///
 /// The shells used to differ (`decisions.md` DD-08): a parent got Home · Jawwid · Groups ·
 /// Settings and a teacher got Home · Groups · Settings, on the reasoning that a parent's
@@ -68,17 +69,29 @@ abstract final class Shells {
     label: _scheduleLabel,
   );
 
+  /// PD-20 (2026-10-22): Sales' Payments -- find a family, read its instalments, record
+  /// a payment. Sales only; third, before Settings.
+  static const salesPayments = ShellDestination(
+    route: '/payments',
+    icon: Icons.receipt_long_outlined,
+    selectedIcon: Icons.receipt_long,
+    label: _paymentsLabel,
+  );
+
   /// The destinations for a role: a parent's are [destinations]; a teacher's add
-  /// [schedule] after Chats. This is where a role difference belongs, not in a widget.
+  /// [schedule] after Chats; Sales' add [salesPayments] before Settings. This is where a
+  /// role difference belongs, not in a widget.
   static List<ShellDestination> forRole(UserRole role) => switch (role) {
         UserRole.parent => destinations,
         UserRole.teacher => [chats, schedule, ...destinations.skip(1)],
+        UserRole.sales => [chats, destinations[1], salesPayments, destinations[2]],
       };
 
   static String _chatsLabel(L10n l10n) => l10n.tabChats;
   static String _callsLabel(L10n l10n) => l10n.callHistoryTitle;
   static String _settingsLabel(L10n l10n) => l10n.settingsTitle;
   static String _scheduleLabel(L10n l10n) => l10n.tabSchedule;
+  static String _paymentsLabel(L10n l10n) => l10n.tabPayments;
 }
 
 /// The tabbed frame around every signed-in screen.

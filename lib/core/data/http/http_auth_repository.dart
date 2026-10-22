@@ -16,6 +16,7 @@ import '../wire/wire_vocab.dart';
 /// | POST | `/auth/login` | `@Public()` | [AuthTransport] |
 /// | POST | `/auth/refresh` | `@Public()` | [AuthTransport] |
 /// | GET | `/me` | bearer | [ApiClient] |
+/// | GET | `/lessons/access` | bearer | [ApiClient] (staff only: the department, PD-20) |
 /// | POST | `/auth/logout` | bearer | [ApiClient] |
 ///
 /// ## Why two transports
@@ -111,6 +112,21 @@ class HttpAuthRepository implements AuthRepository {
         AppErrorKind.server,
         debugDetail: 'GET /me returned an empty body',
       );
+    }
+    // PD-20: a staff member may use the app only as Sales. The department is not on
+    // `/me`, so it is asked for -- and only when the staff role could qualify at all, so
+    // nobody else's sign-in costs a second request.
+    if (body['kind'] == Wire.actorStaff && salesStaffRoles.contains(body['staffRole'])) {
+      final Map<String, Object?>? access;
+      try {
+        access = (await _protected().get<Map<String, Object?>>('/lessons/access')).data;
+      } on AppError catch (error) {
+        // A network failure is not a verdict: let restore keep the session and retry. A
+        // refusal is -- this staff member cannot be classified as Sales, so they are not.
+        if (error.isTransient || error.terminatesSession || error.isRefreshable) rethrow;
+        return principalFrom(body);
+      }
+      return principalFrom(body, salesDepartment: access?['sales'] == true);
     }
     return principalFrom(body);
   }
@@ -232,7 +248,9 @@ class HttpAuthRepository implements AuthRepository {
   ///
   /// Visible for testing: this is the mapping that decides who may hold a session on a
   /// phone, so it is exercised directly rather than only through a scripted login.
-  static AuthUser principalFrom(Map<String, Object?> actor) {
+  ///
+  /// [salesDepartment] is `GET /lessons/access`'s `sales`, asked only for staff.
+  static AuthUser principalFrom(Map<String, Object?> actor, {bool salesDepartment = false}) {
     final id = actor['actorId'];
     if (id is! String || id.isEmpty) {
       throw const AppError(
@@ -247,7 +265,7 @@ class HttpAuthRepository implements AuthRepository {
     return AuthUser(
       id: id,
       displayName: displayName is String ? displayName : '',
-      role: roleFor(actor['kind']),
+      role: roleFor(actor['kind'], staffRole: actor['staffRole'], salesDepartment: salesDepartment),
       locale: locale is String && locale.isNotEmpty ? locale : null,
     );
   }
@@ -255,15 +273,21 @@ class HttpAuthRepository implements AuthRepository {
   /// `ActorDto.kind` -> [UserRole].
   ///
   /// The server's vocabulary is `contact | staff | teacher | system`; this app models
-  /// `parent | teacher` and says why: "a parent may see an admin in a group, but the app can
-  /// never authenticate as one" (`user_role.dart`).
+  /// `parent | teacher | sales`.
   ///
-  /// **Fails closed.** `staff`, `system` and anything this build has not heard of are
-  /// refused, never defaulted. Defaulting an unknown kind to `parent` would hand a screen —
-  /// and a set of approval policies — to a principal nobody classified.
-  static UserRole roleFor(Object? kind) => switch (kind) {
+  /// PD-20: a `staff` principal is [UserRole.sales] only when ALL of these hold:
+  ///  * [salesDepartment] -- `GET /lessons/access` says `sales: true`;
+  ///  * the staff role is one the chat API serves (`admin | coverage | manager`);
+  ///  * it is not `super_admin` -- whom `/lessons/access` also calls sales, but who is the
+  ///    whole organization's administrator, not a Sales seat, and belongs in the console.
+  ///
+  /// **Fails closed.** Any other staff member, `system` and anything this build has not
+  /// heard of are refused, never defaulted. Defaulting an unknown kind to `parent` would
+  /// hand a screen -- and a set of approval policies -- to a principal nobody classified.
+  static UserRole roleFor(Object? kind, {Object? staffRole, bool salesDepartment = false}) => switch (kind) {
         Wire.actorContact => UserRole.parent,
         Wire.actorTeacher => UserRole.teacher,
+        Wire.actorStaff when salesDepartment && salesStaffRoles.contains(staffRole) => UserRole.sales,
         _ => throw AppError(
             AppErrorKind.forbidden,
             code: AuthFailures.roleNotSupported,
@@ -271,3 +295,7 @@ class HttpAuthRepository implements AuthRepository {
           ),
       };
 }
+
+/// The staff roles the chat API serves to a Sales seat (`admin | coverage | manager`).
+/// `super_admin`, `finance`, `technical` and `academic` are deliberately absent.
+const salesStaffRoles = {'admin', 'coverage', 'manager'};

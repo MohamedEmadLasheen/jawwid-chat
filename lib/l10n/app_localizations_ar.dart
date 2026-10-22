@@ -2482,4 +2482,109 @@ class L10nAr extends L10n {
 
   @override
   String get billingDeniedBody => 'إن كان لديك سؤال، تواصل مع الأكاديمية.';
+
+  @override
+  String get tabPayments => 'المدفوعات';
+
+  @override
+  String get roleSales => 'المبيعات';
+
+  @override
+  String get conversationsEmptyBodySales =>
+      'ستظهر هنا مجموعات الحصص التجريبية ومحادثاتك.';
+
+  @override
+  String get internalNoteLabel => 'ملاحظة داخلية';
+
+  @override
+  String get trialGroupNotMember => 'لست عضوًا في هذه المجموعة بعد.';
+
+  @override
+  String get trialGroupJoin => 'انضم إلى هذه المجموعة';
+
+  @override
+  String get salesSearchHint => 'ابحث عن ولي أمر أو عائلة';
+
+  @override
+  String get salesSearchEmpty => 'لم يُعثر على أولياء أمور';
+
+  @override
+  String get salesSearchTruncated =>
+      'تُعرض أولى النتائج فقط. اكتب المزيد لتضييق البحث.';
+
+  @override
+  String salesChildrenCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count ابن',
+      many: '$count ابنًا',
+      few: '$count أبناء',
+      two: 'ابنان',
+      one: 'ابن واحد',
+      zero: 'لا أبناء',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get salesPaymentsDenied => 'المدفوعات غير متاحة لحسابك.';
+
+  @override
+  String get billingCurrencyLabel => 'العملة';
+
+  @override
+  String get billingStatusVoided => 'ملغى';
+
+  @override
+  String salesPaidRecordedBy(String date, String method, String name) {
+    return 'دُفع في $date · $method · سجّله $name';
+  }
+
+  @override
+  String salesVoidedBy(String name, String reason) {
+    return 'ألغاه $name: $reason';
+  }
+
+  @override
+  String salesVoidedReason(String reason) {
+    return 'أُلغي: $reason';
+  }
+
+  @override
+  String get salesRecordPayment => 'تسجيل دفعة';
+
+  @override
+  String get salesVoid => 'إلغاء';
+
+  @override
+  String get salesPaidOnLabel => 'تاريخ الدفع';
+
+  @override
+  String get salesReferenceLabel => 'المرجع (اختياري)';
+
+  @override
+  String get salesRecordSave => 'تسجيل';
+
+  @override
+  String get salesVoidTitle => 'إلغاء هذا القسط؟';
+
+  @override
+  String get salesVoidFinal => 'الإلغاء نهائي: لا يمكن دفع هذا القسط بعد ذلك.';
+
+  @override
+  String get salesVoidReasonLabel => 'السبب';
+
+  @override
+  String get salesVoidConfirm => 'إلغاء القسط';
+
+  @override
+  String get salesBillingStateConflict =>
+      'سبق دفع هذا القسط أو إلغاؤه. تم تحديث القائمة.';
+
+  @override
+  String get salesBillingInvalid => 'تحقّق من التاريخ والمرجع ثم حاول مجددًا.';
+
+  @override
+  String get salesWriteFailed => 'تعذّر الحفظ. حاول مرة أخرى.';
 }

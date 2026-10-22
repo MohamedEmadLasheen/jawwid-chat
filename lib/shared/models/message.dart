@@ -146,6 +146,7 @@ class Message {
     this.isPinned = false,
     this.isForwarded = false,
     this.editedAt,
+    this.isInternal = false,
   });
 
   /// Server id. Null until the server has accepted the message.
@@ -213,6 +214,11 @@ class Message {
   /// never edited. [body] is already the edited wording. Shown as "Edited".
   final DateTime? editedAt;
 
+  /// Staff-only (server `MessageDto.visibility == 'internal'`). A parent or teacher is
+  /// never sent one; a Sales viewer may be, and it is labelled "Internal note" in the
+  /// thread so it is never mistaken for something the family read.
+  final bool isInternal;
+
   bool get isSystem => kind == MessageKind.system;
   bool get isPending => deliveryState.isInFlight;
   bool get canRetry => deliveryState == DeliveryState.failed;
@@ -251,6 +257,7 @@ class Message {
         isPinned: isPinned,
         isForwarded: isForwarded,
         editedAt: editedAt,
+        isInternal: isInternal,
       );
 
   Message copyWith({
@@ -292,6 +299,7 @@ class Message {
       isPinned: isPinned ?? this.isPinned,
       isForwarded: isForwarded,
       editedAt: editedAt,
+      isInternal: isInternal,
     );
   }
 }

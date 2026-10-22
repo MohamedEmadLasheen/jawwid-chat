@@ -13,6 +13,7 @@ import '../core/data/http/http_lesson_repository.dart';
 import '../core/data/http/http_message_repository.dart';
 import '../core/data/http/http_parent_signup_repository.dart';
 import '../core/data/http/http_profile_repository.dart';
+import '../core/data/http/http_sales_payments_repository.dart';
 import '../core/data/http/http_story_repository.dart';
 import '../core/data/http/http_supervision_repository.dart';
 import '../core/data/http/http_teacher_profile_repository.dart';
@@ -37,6 +38,7 @@ import '../features/messages/data/chat_theme_repository.dart';
 import '../features/messages/data/message_marks_repository.dart';
 import '../features/messages/data/message_search_repository.dart';
 import '../features/profile/data/profile_photo_repository.dart';
+import '../features/sales_payments/data/sales_payments_repository.dart';
 import '../features/settings/application/locale_preference.dart';
 import '../shared/models/user_role.dart';
 import 'app.dart';
@@ -56,8 +58,11 @@ enum DataSource {
 ///
 /// Selection is by build-time configuration, not by a runtime flag: a build either was given
 /// a backend or it was not, and there is no way to flip a shipped app into fixture mode.
+///
+/// The fixture build signs in as [developmentRole]; when not given it is read from
+/// `--dart-define=JAWWID_DEV_ROLE=parent|teacher|sales` (PD-20 added `sales`), parent if unset.
 Future<List<Override>> bootstrap({
-  UserRole developmentRole = UserRole.parent,
+  UserRole? developmentRole,
 }) async {
   if (ApiConfig.isConfigured) return _httpOverrides();
 
@@ -77,6 +82,7 @@ Future<List<Override>> bootstrap({
     );
   }
 
+  developmentRole ??= UserRole.tryParse(const String.fromEnvironment('JAWWID_DEV_ROLE')) ?? UserRole.parent;
   return _fakeOverrides(developmentRole);
 }
 
@@ -180,6 +186,10 @@ List<Override> _httpOverrides() {
     ),
     billingRepositoryProvider.overrideWithValue(
       HttpBillingRepository(client: client),
+    ),
+    // PD-20: Sales' Payments (search, a family's instalments, record / void).
+    salesPaymentsRepositoryProvider.overrideWithValue(
+      HttpSalesPaymentsRepository(client: client),
     ),
     profileRepositoryProvider.overrideWithValue(
       HttpProfileRepository(client: client),
@@ -292,6 +302,8 @@ List<Override> _fakeOverrides(UserRole developmentRole) {
     profileRepositoryProvider.overrideWithValue(FakeProfileRepository()),
     // The fixture parent has billed nothing: an honest empty answer about their OWN account.
     billingRepositoryProvider.overrideWithValue(const FakeBillingRepository()),
+    // A Sales seat can join a fixture trial group (PD-20).
+    trialRepositoryProvider.overrideWithValue(FakeTrialRepository(backend)),
     authControllerProvider.overrideWith(
       () => AuthController(
         repository: authRepository,

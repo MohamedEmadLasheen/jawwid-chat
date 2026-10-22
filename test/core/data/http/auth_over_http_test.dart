@@ -258,6 +258,86 @@ void main() {
       });
     }
 
+    group('PD-20: a staff member is Sales, or refused', () {
+      Map<String, Object?> staff(String? staffRole) => {...actorDto(kind: Wire.actorStaff), 'staffRole': staffRole, 'familyId': null};
+      Reply access({required bool sales}) => Reply.ok({'lessonManager': false, 'sales': sales, 'operations': !sales});
+
+      for (final role in ['admin', 'coverage', 'manager']) {
+        test('a Sales-department $role is Sales', () async {
+          server.on('GET', '/me', [Reply.ok(staff(role))]);
+          server.on('GET', '/lessons/access', [access(sales: true)]);
+
+          final user = await stack().auth.currentUser();
+
+          expect(user.role, UserRole.sales);
+          expect(user.id, 'actor-1');
+          expect(server.countOf('GET', '/lessons/access'), 1);
+        });
+      }
+
+      Future<void> expectRefused() => expectLater(
+            stack().auth.currentUser(),
+            throwsA(isA<AppError>().having((e) => e.code, 'code', AuthFailures.roleNotSupported)),
+          );
+
+      test('a super admin is refused, even though /lessons/access calls them Sales', () async {
+        server.on('GET', '/me', [Reply.ok(staff('super_admin'))]);
+        server.on('GET', '/lessons/access', [access(sales: true)]);
+
+        await expectRefused();
+        expect(server.countOf('GET', '/lessons/access'), 0, reason: 'decided from /me alone');
+      });
+
+      for (final role in ['finance', 'technical', 'academic', null]) {
+        test('a "$role" staff member is refused without asking for the department', () async {
+          server.on('GET', '/me', [Reply.ok(staff(role))]);
+          server.on('GET', '/lessons/access', [access(sales: true)]);
+
+          await expectRefused();
+          expect(server.countOf('GET', '/lessons/access'), 0);
+        });
+      }
+
+      test('an Operations (non-Sales) manager is refused', () async {
+        server.on('GET', '/me', [Reply.ok(staff('manager'))]);
+        server.on('GET', '/lessons/access', [access(sales: false)]);
+
+        await expectRefused();
+        expect(server.countOf('GET', '/lessons/access'), 1);
+      });
+
+      test('a refused department lookup is a refusal, not a guess', () async {
+        server.on('GET', '/me', [Reply.ok(staff('manager'))]);
+        server.on('GET', '/lessons/access', [Reply.commError(403, 'COMM.FORBIDDEN')]);
+
+        await expectRefused();
+      });
+
+      test('a failing department lookup is not a verdict: it stays transient', () async {
+        server.on('GET', '/me', [Reply.ok(staff('manager'))]);
+        server.on('GET', '/lessons/access', [const Reply(503, {'error': {'code': 'X', 'message': 'down'}})]);
+
+        await expectLater(
+          stack().auth.currentUser(),
+          throwsA(isA<AppError>().having((e) => e.isTransient, 'isTransient', isTrue)),
+        );
+      });
+
+      test('roleFor, directly: every condition is required', () {
+        expect(HttpAuthRepository.roleFor(Wire.actorStaff, staffRole: 'manager', salesDepartment: true), UserRole.sales);
+        for (final (role, sales) in [('manager', false), ('super_admin', true), ('finance', true), (null, true)]) {
+          expect(
+            () => HttpAuthRepository.roleFor(Wire.actorStaff, staffRole: role, salesDepartment: sales),
+            throwsA(isA<AppError>()),
+            reason: '$role / sales=$sales',
+          );
+        }
+        // A contact or teacher is never Sales, whatever the department says.
+        expect(HttpAuthRepository.roleFor(Wire.actorContact, staffRole: 'manager', salesDepartment: true), UserRole.parent);
+        expect(HttpAuthRepository.roleFor(Wire.actorTeacher, salesDepartment: true), UserRole.teacher);
+      });
+    });
+
     test('the refusal never echoes the server body', () async {
       expect(
         () => HttpAuthRepository.roleFor(Wire.actorStaff),

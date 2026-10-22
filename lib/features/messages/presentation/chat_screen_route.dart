@@ -8,6 +8,7 @@ import '../../../core/errors/error_presenter.dart';
 import '../../../design/widgets/state_views.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/conversation.dart';
+import '../../trials/presentation/trial_group_join_banner.dart';
 import 'chat_screen.dart';
 
 /// Resolves a conversation id — which may have arrived from a deep link or a notification —
@@ -101,6 +102,13 @@ class ChatScreenRoute extends ConsumerWidget {
           requiresApproval: value.requiresApproval,
           isReadOnly: value.isReadOnly,
           startVoiceRecording: startVoiceRecording,
+          // PD-20: Sales sees every trial group but must join one to take part in it.
+          banner: value.isTrialGroup
+              ? TrialGroupJoinBanner(
+                  conversationId: conversationId,
+                  onJoined: () => ref.invalidate(_conversationProvider(conversationId)),
+                )
+              : null,
         ),
     };
   }

@@ -8,8 +8,8 @@ abstract final class AuthFailures {
   /// The credentials were good, but this principal cannot use the mobile app.
   ///
   /// `ActorDto.kind` is one of `contact | staff | teacher | system`, and [UserRole] models
-  /// only `parent | teacher` — deliberately, because "the app can never authenticate as"
-  /// an admin. Staff belong in the Jawwid console. An unrecognised kind lands here too:
+  /// `parent | teacher | sales`. Of staff, only the Sales department may (PD-20); every
+  /// other staff member belongs in the Jawwid console. An unrecognised kind lands here too:
   /// failing closed on a value this build has never heard of is the only safe direction,
   /// since the alternative is to guess a role and hand someone a screen.
   static const roleNotSupported = 'auth_role_not_supported';
@@ -68,6 +68,7 @@ class AuthUser {
 
   bool get isParent => role == UserRole.parent;
   bool get isTeacher => role == UserRole.teacher;
+  bool get isSales => role == UserRole.sales;
 
   @override
   String toString() => 'AuthUser(${role.name})';

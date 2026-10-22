@@ -68,7 +68,8 @@ void main() {
       final c = mapped('trial_group');
       expect(c.isTrialGroup, isTrue);
       expect(c.isTeacherSupervision, isFalse);
-      expect(c.kind, ConversationKind.adminDirect);
+      // PD-20: a GROUP, so it lists under Groups for the teacher (and for Sales).
+      expect(c.kind, ConversationKind.studentGroup);
       expect(c.displayTitle('Supervision', trialGroupLabel: 'Trial lessons'), 'Trial lessons');
       expect(mapped('direct').isTrialGroup, isFalse);
       expect(mapped('direct').displayTitle('Supervision', trialGroupLabel: 'Trial lessons'), 'teacher_c');
@@ -176,6 +177,11 @@ class _RecordingTrials implements TrialRepository {
 
   @override
   Future<List<TrialTicket>> tickets(String conversationId) async => const [];
+
+  final joined = <String>[];
+
+  @override
+  Future<void> joinGroup(String conversationId) async => joined.add(conversationId);
 
   @override
   Future<void> reportAttendance(String trialId, TrialAttendanceDraft draft) async {

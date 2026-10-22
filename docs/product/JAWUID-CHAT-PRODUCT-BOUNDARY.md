@@ -120,7 +120,7 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-19 — CLOSED
+## 4. Product decisions PD-1 to PD-20 — CLOSED
 
 PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
 exit gate, before `main` was baselined. **PD-6 was closed by the product owner
@@ -138,6 +138,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-17 was closed by the product owner on 2026-10-21** (Parent and Student Profiles; payments recorded in Chat). It supersedes PD-10 §1 and PD-12's "Core invoices, read-only" for family money.
 **PD-18 was closed by the product owner on 2026-10-21** (teacher payroll lives in Chat) and supersedes PD-10 item 4.
 **PD-19 was closed by the product owner on 2026-10-21** (a member may start a call in their own chat; supersedes PD-2), amended 2026-10-21 (the super admin's group calls) and 2026-10-22 (calls in the trial group and the supervision conversation).
+**PD-20 was closed by the product owner on 2026-10-22** (the Sales team uses the app: chats, calls and payments). It amends PD-15's "staff work in Admin Web; the app is for parents and teachers".
 
 | ID | Subject | Status |
 |---|---|---|
@@ -160,6 +161,7 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-17** | **Parent Profile and Student Profile; family payments recorded in Chat** (2026-10-21) | **CLOSED** — a Parent Profile (contact details, internal note, children, subscription, payment method, payment timeline) for the administration only, by the Instalment Payments rule plus Sales; Operations and Sales record payments; the parent sees their own payments in the app; a Student Profile for the administration and the child's own teacher; instalments and payments are Chat's own append-only records, nothing is read from Core; teachers reach neither a parent nor money by any route |
 | **PD-18** | **Teacher payroll in Chat** (2026-10-21) | **CLOSED** — salary terms, a sealed payout account and the amounts of bonuses and deductions are recorded in Chat, for the super admin only; the month's financial summary is computed, never stored; supersedes PD-10 item 4 |
 | **PD-19** | **Who may start a call: every member of their own chat** (2026-10-21) | **CLOSED** — teachers, parents and supervisors may start a call in any chat they may write in; parents may now start their family / Student Group calls; chats a person is not a member of, BR-1 / PD-7, C-4 and the no-phantom-call rule are unchanged; amended the same day so the super admin may start a group call in any chat they may write in, with a seat on the call; amended 2026-10-22 so trial-group and supervision calls are group calls (they were refused by the database) |
+| **PD-20** | **The Sales team in the app** (2026-10-22) | **CLOSED** — Sales-department staff sign in to the app and get Chats, Calls, Payments and Settings; they view and record payments (record once, void with a reason); instalment plans, the contact record and every other staff role stay in Admin Web; the app never holds a parent's phone or e-mail |
 
 ---
 
@@ -1941,7 +1943,66 @@ conversation** (owner answer: "Allow + super admin").
 
 ---
 
-### Decisions still open after PD-1 to PD-19
+### PD-20 · The Sales team in the app
+
+**Closed 2026-10-22** by the product owner. Amends PD-15 ("staff work in Admin
+Web; the app is for parents and teachers") for the Sales department only.
+
+The owner asked to "let Sales see the Payments in the app too". Staff could not
+sign in to the app at all. Owner answers the same day: Sales **views and records**
+payments in the app (as in Admin Web: record a payment once, void a mistake with
+a reason; instalment plans stay in Admin Web), and also gets **Chats and Calls**.
+
+**Final decision.**
+
+```
+who signs in          = a parent, a teacher (unchanged), or a Sales-department
+                        staff member whose staff role is a conversation role
+                        (admin, coverage, manager). GET /lessons/access says
+                        `sales`. Every other staff member -- the super admin
+                        included -- is still sent to Admin Web.
+Sales tabs            = Chats, Calls, Payments, Settings
+Chats                 = what the server already shows Sales (every trial group,
+                        their own directs and supervised groups); trial groups
+                        list as groups; an internal note is labelled as one
+Calls                 = the server's call capability, unchanged: only a live
+                        member starts a call (D1), so a Sales viewer first joins a
+                        trial group from the app ("Join this group")
+Payments              = search families (GET /parent-profiles?q=), a family's
+                        timeline (GET /families/:id/billing), record a payment
+                        (POST /instalments/:id/payment), void with a reason
+                        (POST /instalments/:id/void) -- PD-17's rules, server-side
+```
+
+* **No contact channel in the app.** The app never calls a Parent Profile's
+  detail route, so it never holds a parent's phone or e-mail (G-07, the
+  Contact File rule). A guard test confines the payment routes to the Sales
+  payments feature and fails on any parent-profile detail path anywhere in the
+  app.
+* **The server is unchanged** and remains the control: every route Sales uses
+  in the app is the one Admin Web already uses, with the same refusals.
+* A staff account the app refuses is now signed out on the server too (no
+  orphaned session).
+
+**Implementation phase.** Flutter only: `UserRole.sales`, the Sales shell, the
+`sales_payments` feature, trial groups as groups, internal-note labels, Join this
+group.
+
+**Consequences.** PD-15's sentence holds for every other staff role. Adding
+another department to the app is a new decision.
+
+**Deprecated behaviour.** "Staff accounts use the Jawwid console" no longer
+applies to Sales.
+
+**Defaults adopted at closing** (the owner may override without reopening PD-20):
+1. The super admin keeps using Admin Web; the app does not admit it as Sales.
+2. Composing an internal note from the app is not offered.
+
+**Closed.** 2026-10-22.
+
+---
+
+### Decisions still open after PD-1 to PD-20
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
 The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their

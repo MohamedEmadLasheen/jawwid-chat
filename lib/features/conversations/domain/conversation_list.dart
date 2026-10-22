@@ -43,6 +43,9 @@ abstract final class ConversationListBuilder {
     return switch (role) {
       UserRole.parent => _buildForParent(visible),
       UserRole.teacher => _buildForTeacher(visible),
+      // PD-20: Sales reads like a teacher -- groups (the trial groups, any group they
+      // supervise) first, then their 1:1s. Never by child: Sales sees many families.
+      UserRole.sales => _buildForTeacher(visible),
     };
   }
 
