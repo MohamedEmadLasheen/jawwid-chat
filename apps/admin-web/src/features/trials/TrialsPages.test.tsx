@@ -558,6 +558,43 @@ describe('New students: assign, group and the parent\'s sign-up (PD-16)', () => 
     expect(within(card).queryByRole('button', { name: 'Edit subscription' })).not.toBeInTheDocument()
     await userEvent.click(within(card).getByRole('button', { name: 'Create group' }))
     await waitFor(() => expect(sent('POST', /\/trials\/new-students\/tr-new\/group$/)).toHaveLength(1))
+    // Only the Operations manager changes the supervisor (PD-24).
+    expect(within(card).queryByRole('button', { name: 'Change' })).not.toBeInTheDocument()
+  })
+
+  it('PD-24: the Operations manager changes the supervisor after Assign, with a reason; the history is kept', async () => {
+    access({ operations: true })
+    const assigned: NewStudentDto = {
+      ...BASE,
+      enrolment: {
+        familyId: 'f-1', learnerIds: ['k-1'], supervisor: { id: 'sup-1', name: 'Supervisor One' }, assignedAt: '2026-10-21T08:00:00Z',
+        groupConversationId: 'c-new', canCreateGroup: false, parentSignup: { state: 'signed_up' },
+      },
+    }
+    on('GET', /\/trials\/new-students$/, () => json({ students: [assigned], canAssign: true }))
+    on('GET', /\/org\/structure$/, () => json({ departments: [{ id: 'd-ops', kind: 'operations', displayName: 'Operations', manager: null, backups: [],
+      members: [
+        { id: 'sup-1', name: 'Supervisor One', role: 'admin', isActive: true, position: 'supervisor', learnerCount: 4 },
+        { id: 'sup-2', name: 'Supervisor Two', role: 'admin', isActive: true, position: 'supervisor', learnerCount: 2 },
+      ] }] }))
+    on('POST', /\/trials\/new-students\/tr-new\/supervisor$/, () =>
+      json({ supervisorId: 'sup-2', changed: true, learners: [{ id: 'k-1', name: 'Child D1' }], groups: 1, directChats: 1 }, 201))
+    renderWithProviders(<AppRoutes />, { staff, route: '/trials/new-students' })
+    const card = (await screen.findByRole('heading', { name: 'Parent Delta' })).closest('article')!
+    await userEvent.click(within(card).getByRole('button', { name: 'Change' }))
+    const dialog = await screen.findByRole('dialog', { name: /Change supervisor/ })
+    expect(within(dialog).getByText(/Nothing is recreated and nothing is lost/)).toBeInTheDocument()
+    expect(within(dialog).getByText('Moves: Child D1')).toBeInTheDocument()
+    // The current supervisor is not offered; a supervisor and a reason are both required.
+    const select = await within(dialog).findByLabelText('New supervisor')
+    await waitFor(() => expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual(['Choose…', 'Supervisor Two (2)']))
+    await userEvent.selectOptions(select, 'sup-2')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Change supervisor' }))
+    expect(sent('POST', /supervisor$/)).toEqual([])
+    await userEvent.type(within(dialog).getByLabelText('Reason (required)'), 'supervisor on leave')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Change supervisor' }))
+    await waitFor(() => expect(sent('POST', /\/trials\/new-students\/tr-new\/supervisor$/)).toEqual([{ supervisorId: 'sup-2', reason: 'supervisor on leave' }]))
+    expect(await within(card).findByText('Child D1 moved to Supervisor Two. The chat history is unchanged.')).toBeInTheDocument()
   })
 })
 

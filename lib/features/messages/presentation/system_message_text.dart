@@ -31,6 +31,18 @@ String systemMessageText(String body, L10n l10n) {
       );
     case 'group.archived':
       return l10n.systemGroupArchived;
+    case 'group.supervisor_changed':
+      final name = facts['supervisor'];
+      return name is String && name.isNotEmpty
+          ? l10n.systemGroupSupervisorChanged(name)
+          : l10n.systemGroupSupervisorChangedNoName;
+    case 'direct.supervisor_changed':
+      final name = facts['supervisor'];
+      return name is String && name.isNotEmpty
+          ? l10n.systemDirectSupervisorChanged(name)
+          : l10n.systemDirectSupervisorChangedNoName;
+    case 'group.learner_detached':
+      return l10n.systemGroupLearnerDetached;
     default:
       return l10n.systemUpdate;
   }

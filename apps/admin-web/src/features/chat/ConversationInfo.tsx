@@ -3,7 +3,10 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useI18n } from '@/core/i18n/I18nProvider'
 import { useSession } from '@/core/auth/SessionProvider'
 import { ApiError } from '@/core/api/errors'
-import { useGroupCandidates } from '@/features/organization/hooks'
+import { useGroupCandidates, useStructure } from '@/features/organization/hooks'
+import { ChangeSupervisorDialog, transferNotice } from '@/features/organization/ChangeSupervisorDialog'
+import { T as OrgT, useCopy as useOrgCopy } from '@/features/organization/copy'
+import { orgApi, orgKeys } from '@/features/organization/api'
 import { Avatar } from '@/shared/components/Avatar'
 import { Dialog, DialogCancelButton } from '@/shared/components/Dialog'
 import { Icon } from '@/shared/components/Icon'
@@ -66,6 +69,7 @@ export function ConversationInfo({ c }: { c: ChatConversation }) {
       </section>
 
       {(c.type === 'student_group' || c.type === 'family_group') && <GroupChildren conversationId={c.id} />}
+      {(c.type === 'student_group' || c.type === 'family_group') && <GroupSupervisor c={c} name={name} />}
 
       <section className="dp-section">
         <div className="cw-info__members-head">
@@ -99,6 +103,56 @@ export function ConversationInfo({ c }: { c: ChatConversation }) {
 
       {adding && c.familyId && <AddMemberDialog c={c} familyId={c.familyId} onClose={() => setAdding(false)} />}
     </div>
+  )
+}
+
+/**
+ * PD-24: the group's supervisor, and -- for the super admin and the Operations
+ * manager -- a way to hand the group to another one. The same conversation
+ * stays, with every member, message and file; the server moves every child of
+ * the group and decides who may.
+ */
+function GroupSupervisor({ c, name }: { c: ChatConversation; name: string }) {
+  const otx = useOrgCopy()
+  const { staff } = useSession()
+  const queryClient = useQueryClient()
+  const mayAsk = staff?.role === 'super_admin' || staff?.role === 'manager'
+  const structure = useStructure(mayAsk)
+  const ops = structure.data?.departments.find((d) => d.kind === 'operations')
+  const mayChange = !!ops && (staff?.role === 'super_admin' || ops.manager?.id === staff?.id)
+  const [open, setOpen] = useState(false)
+  const [done, setDone] = useState<string | null>(null)
+  if (!mayChange || !ops) return null
+  const supervisorIds = new Set(ops.members.filter((m) => m.position === 'supervisor').map((m) => m.id))
+  const seated = (c.members ?? []).find((m) => m.actorKind === 'staff' && supervisorIds.has(m.actorId))
+  const current = seated ? { id: seated.actorId, name: seated.displayName } : null
+
+  return (
+    <section className="dp-section">
+      <div className="cw-info__members-head">
+        <h3 className="dp-section__title">{otx(OrgT.currentSupervisor)}</h3>
+        <button type="button" className="btn btn--sm" onClick={() => setOpen(true)}>
+          <Icon name="users" size={14} />
+          {otx(OrgT.changeSupervisor)}
+        </button>
+      </div>
+      <p dir="auto">{current?.name ?? '—'}</p>
+      {done && <p className="banner banner--info" role="status">{done}</p>}
+      {open && (
+        <ChangeSupervisorDialog
+          name={name}
+          current={current}
+          submit={(body) => orgApi.transferGroup(c.id, body)}
+          onClose={() => setOpen(false)}
+          onDone={(result, supervisorName) => {
+            setOpen(false)
+            setDone(transferNotice(otx, result, supervisorName))
+            void queryClient.invalidateQueries({ queryKey: chatKeys.all })
+            void queryClient.invalidateQueries({ queryKey: orgKeys.structure })
+          }}
+        />
+      )}
+    </section>
   )
 }
 

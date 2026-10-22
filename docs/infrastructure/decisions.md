@@ -77,6 +77,11 @@ implementation of it.
 
 ## ADR-003 · Hosting is not chosen yet, and the pipeline says so
 
+> **Superseded in part by ADR-010 (2026-10-22).** The provider is chosen. The
+> release step still fails loudly until the DigitalOcean deploy command and its
+> IaC replace it together (ADR-009). The "Recommendation" and "UNRESOLVED"
+> paragraphs below are history.
+
 **Decision.** The deployment workflows are complete up to the release step. That
 step **fails loudly** with a link to the blocker instead of pretending.
 
@@ -238,6 +243,10 @@ step is enforced by CI, so it cannot be skipped.
 
 ## ADR-009 · Infrastructure as code is required, and is blocked on the provider
 
+> **Unblocked by ADR-010 (2026-10-22).** The provider is DigitalOcean App
+> Platform, whose declarative format is the app spec. The rule below stands:
+> the app spec lands in the same change as the real release step.
+
 **Decision.** No IaC tool is introduced yet. The requirement is recorded here so
 it is not lost, and the implementation follows provider selection rather than
 preceding it.
@@ -270,3 +279,91 @@ both Dockerfiles, the deployment workflows, and the SQL migration chain
 release step, so that the platform's resources and the platform's deploy
 command land together and neither is described by a document instead of by
 code.
+
+---
+
+## ADR-010 · Compute is hosted on DigitalOcean App Platform
+
+**Decision.** The product owner chose **DigitalOcean App Platform** as the
+hosting provider on 2026-10-22. The API, the worker and Admin Web run there as
+App Platform components. Their declarative description is an App Platform app
+spec kept in this repository (ADR-009).
+
+**Alternatives.** Those recorded in ADR-003: Fly.io or Render, which ADR-003
+recommended, and Hetzner or AWS, which PRD §12.3 named. This decision resolves
+ADR-003's open conflict between them. It supersedes the compute line of
+PRD §12.3.
+
+**Why.** It is the owner's choice of vendor, and choosing a vendor is the
+owner's decision (ADR-003). App Platform satisfies what the repository already
+assumes. It runs OCI images, so ADR-004's one image with two commands
+deploys as one service component plus one worker component. It routes traffic
+on health checks, which ADR-007's liveness/readiness split feeds. And it takes
+per-component environment variables and secrets, which ADR-008's manifest
+generates.
+
+**What this does not decide.** Each of the following is still open and is
+decided on its own evidence:
+
+* **The database host.** DigitalOcean Managed PostgreSQL is the natural fit.
+  But `20260910120200` grants BYPASSRLS unconditionally, and DigitalOcean's
+  admin role is not a superuser. Run `scripts/db/preflight-role-capability.sh`
+  against a trial cluster **before** committing to it. If it fails, either the
+  migration changes or the database lives elsewhere (Supabase, matching Core).
+* **Redis, object storage (Spaces or R2), push credentials, LiveKit.** Each
+  needs an account, chosen when it is provisioned.
+* **The domain.** It also blocks passkeys (PD-23 Phase B).
+
+**Trade-offs.** App Platform is a managed PaaS: less control than droplets or
+Kubernetes, and per-component pricing that is higher than raw VMs at scale. At
+MVP scale that is the right trade. A move later means rewriting the app spec,
+not the application. The images, the manifest and the migrations stay
+provider-neutral.
+
+---
+
+## ADR-011 · Admin Web is served by its nginx container
+
+*Ported from an uncommitted draft on `gate2/deploy-pipeline`, written
+2026-09-09 against DigitalOcean's documentation. Recorded now that ADR-010
+makes DigitalOcean the platform.*
+
+**Decision.** Admin Web deploys to App Platform as a **container component**
+running `apps/admin-web/Dockerfile`.
+`apps/admin-web/infra-nginx/default.conf.template` is the reference
+implementation of the delivery contract, not an incidental convenience.
+
+**Alternatives.** An App Platform **static site** component, the "static
+hosting" that ADR-003 recommended. ADR-003 already noted that this is not what
+the repository builds.
+
+**Why.** The delivery contract is HTTP response behaviour.
+`scripts/infra/smoke.sh` §7 checks it against the deployed site: `GET /`
+returns 200, deep links fall back to the SPA, a `Content-Security-Policy`
+header is present, and `index.html` is not cacheable. The static-site component
+cannot produce most of it:
+
+| Required behaviour | Static site component |
+|---|---|
+| SPA deep-link fallback | supported: `catchall_document: index.html` |
+| `Content-Security-Policy` response header | no arbitrary response-header field |
+| CSP `frame-ancestors` | not expressible |
+| CSP `connect-src` pinning | not expressible |
+| HSTS | not set by the platform; "set the headers in your app's code" |
+| `Cache-Control: no-store` on `index.html` | no response-header configuration |
+| immutable caching for hashed `/assets` | no response-header configuration |
+| `/healthz` | not applicable: a static site has no liveness probe |
+
+Two of the gaps are security properties. `frame-ancestors` guards against
+clickjacking on a console that can transfer family ownership and impersonate
+accounts (PD-21), and a `<meta http-equiv>` CSP cannot express it.
+`connect-src` stops injected script from sending customer messages to an
+arbitrary host.
+
+**Trade-offs.** A web server runs where none is strictly required. It costs
+more than static hosting, it does not scale to zero, and nginx becomes a
+surface to patch. ADR-006 stays in force: production needs its own Admin Web
+image built with production URLs, and a rollback rebuilds the bundle.
+
+**Impact.** Any change to `default.conf.template` changes the production
+security posture.
