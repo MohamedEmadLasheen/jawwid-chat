@@ -328,7 +328,12 @@ describe('4. amounts', () => {
     expect(r.json.history.bonuses).toEqual([
       expect.objectContaining({ id: bonusEntryId, reason: 'Two trial students stayed', author: { id: m.teachersManager.id, name: m.teachersManager.name } }),
     ]);
-    for (const amount of ['450.5', '500', '100.25', '6000', '6350']) expect(r.text).not.toContain(amount);
+    // Ids and timestamps are random digits that may contain "500" (a family id `bd1514c2-500e-...`
+    // failed CI once): look for the amounts only in what is left.
+    const values = r.text
+      .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '<id>')
+      .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z/g, '<at>');
+    for (const amount of ['450.5', '500', '100.25', '6000', '6350']) expect(values).not.toContain(amount);
     expect(r.text).not.toMatch(/"amount"|"currency"|"net"/);
   });
 });
