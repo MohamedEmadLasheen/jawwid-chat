@@ -4,7 +4,7 @@ import type { Pair } from '@/features/organization/copy'
 export { useCopy, type Pair } from '@/features/organization/copy'
 
 /**
- * PD-20 support-session copy, Arabic and English side by side. Wording rule:
+ * PD-21 support-session copy, Arabic and English side by side. Wording rule:
  * the administrator is never told they ARE the person -- they act as them,
  * on the record, and what they send says so.
  */

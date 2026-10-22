@@ -6,7 +6,7 @@ import { PasswordResetService } from './password-reset.service';
 import { CLIENT_ADDRESS_POLICY, readClientAddressPolicy, sourceAddress, type ClientAddressPolicy } from './client-address';
 
 /**
- * PD-20: the person finishes the password reset an administrator started.
+ * PD-21: the person finishes the password reset an administrator started.
  * Public, and metered by the login limiter BEFORE anything else -- per
  * identifier and per source -- exactly like POST /auth/login. Issuing a code is
  * POST /admin/accounts/:accountId/password-reset (AccountAdminController).

@@ -6,7 +6,7 @@ import { CommError, CommErrorCode } from '../errors';
 import type { SupportSessionFacts } from './auth.service';
 
 /**
- * PD-20: what a support session (an administrator acting as a parent or
+ * PD-21: what a support session (an administrator acting as a parent or
  * teacher) may WRITE. Deny by default: anything not listed here is refused
  * with COMM.SUPPORT_SESSION_FORBIDDEN before its handler runs. Reads are all
  * allowed -- seeing what the person sees is the point -- and no read route

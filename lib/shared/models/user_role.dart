@@ -2,13 +2,19 @@
 ///
 /// The value is always server-asserted (see `docs/mobile/decisions.md` D3); a locally
 /// cached role is never trusted for an authorization decision.
+///
+/// PD-20 (2026-10-22): [sales] is a Sales-department staff member (an admin, coverage or
+/// manager staff role in the Sales department). They get Chats, Calls, Payments and
+/// Settings -- never a teacher's or a parent's own screens.
 enum UserRole {
   parent,
-  teacher;
+  teacher,
+  sales;
 
   static UserRole? tryParse(String? raw) => switch (raw) {
         'parent' => UserRole.parent,
         'teacher' => UserRole.teacher,
+        'sales' => UserRole.sales,
         _ => null,
       };
 

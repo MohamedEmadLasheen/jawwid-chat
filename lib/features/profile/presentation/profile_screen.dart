@@ -110,9 +110,14 @@ class MyAccountScreen extends ConsumerWidget {
           ),
         // The viewer's own photo (and, for a parent, the children's) sits
         // right under the header, where WhatsApp puts it.
+        // Not for Sales (PD-20): the server refuses a staff member's own photo writes,
+        // so the controls would offer only a failure.
         AsyncData(:final value) => ProfileBody(
             view: value,
-            actions: [ProfilePhotosSection(displayName: value.subject.displayName)],
+            actions: [
+              if (ref.watch(currentRoleProvider) != UserRole.sales)
+                ProfilePhotosSection(displayName: value.subject.displayName),
+            ],
           ),
       },
     );

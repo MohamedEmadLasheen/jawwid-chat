@@ -137,7 +137,7 @@ describe('Admin Portal registry and navigation', () => {
     renderWithProviders(<AppRoutes />, { staff: superAdmin, route: '/admin/teams' })
     const nav = await screen.findByRole('navigation')
 
-    // Five destinations hold all twenty sections plus Chat and (PD-20)
+    // Five destinations hold all twenty sections plus Chat and (PD-21)
     // Accounts. Below desktop width the drawer lists every one of them, none
     // behind a toggle. (The desktop rail's menus are covered in
     // app/Navigation.test.tsx.)

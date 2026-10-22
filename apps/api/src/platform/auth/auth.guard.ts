@@ -16,7 +16,7 @@ export interface AuthenticatedRequest {
   actor?: Actor;
   accountId?: string;
   sessionId?: string;
-  /** PD-20: present when the request runs in a support session (an administrator acting as the account). */
+  /** PD-21: present when the request runs in a support session (an administrator acting as the account). */
   impersonation?: SupportSessionFacts;
 }
 
@@ -68,7 +68,7 @@ export class AuthenticatedGuard implements CanActivate {
     request.actor = authenticated.actor;
     request.accountId = authenticated.accountId;
     request.sessionId = authenticated.sessionId;
-    // PD-20: a support session. The interceptor gates and records it; the audit
+    // PD-21: a support session. The interceptor gates and records it; the audit
     // writer and the message writer stamp it, through the request context.
     if (authenticated.impersonation) {
       request.impersonation = authenticated.impersonation;

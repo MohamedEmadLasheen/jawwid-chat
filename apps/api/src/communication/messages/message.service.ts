@@ -274,7 +274,7 @@ export class MessageService {
             clientMessageId: input.clientMessageId ?? null,
             forwarded: !!input.forwardedFromMessageId,
             forwardedFromMessageId: input.forwardedFromMessageId ?? null,
-            // PD-20: written by an administrator in a support session -- labelled to every reader.
+            // PD-21: written by an administrator in a support session -- labelled to every reader.
             impersonationId: currentImpersonationId(),
             attachmentsJson: [],
             attachments: input.attachments?.length

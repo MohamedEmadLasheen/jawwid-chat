@@ -130,9 +130,9 @@ export function AppRoutes() {
           path="/teacher-profiles"
           element={<Area area="teacher-profiles"><TeacherProfilesPage /></Area>}
         />
-        {/* PD-20: account administration -- every staff role; the server decides each account and action. */}
+        {/* PD-21: account administration -- every staff role; the server decides each account and action. */}
         <Route path="/accounts" element={<Area area="accounts"><AccountsPage /></Area>} />
-        {/* PD-20: a support session (acting as a parent or teacher); the token lives in memory only. */}
+        {/* PD-21: a support session (acting as a parent or teacher); the token lives in memory only. */}
         <Route path="/support/:impersonationId" element={<Area area="accounts"><SupportSessionPage /></Area>} />
         {/*
           Staff profiles: every staff role, no Area gate. What a profile shows

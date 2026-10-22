@@ -6,7 +6,7 @@ import { ImpersonationController } from './impersonation.controller';
 import { ImpersonationService } from './impersonation.service';
 
 /**
- * PD-20 account administration. PlatformModule is @Global (Prisma, audit,
+ * PD-21 account administration. PlatformModule is @Global (Prisma, audit,
  * AuthorizationService); AuthModule provides the session revocation and the
  * password-reset codes.
  */

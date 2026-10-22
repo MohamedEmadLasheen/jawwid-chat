@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { Injectable, type NestMiddleware } from '@nestjs/common';
 
 /**
- * PD-20: what the rest of a request needs to know about HOW it was
+ * PD-21: what the rest of a request needs to know about HOW it was
  * authenticated, without threading it through every signature.
  *
  * One fact today: the support session (impersonation) the request runs in, if

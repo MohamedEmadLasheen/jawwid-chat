@@ -273,6 +273,61 @@ void main() {
     });
   });
 
+  group('PD-20: Sales reaches its own screens and no one else\'s', () {
+    Future<void> signInAs(WidgetTester tester, UserRole role) async {
+      container.dispose();
+      backend.dispose();
+      build(role);
+      await pumpApp(tester);
+      await controller().restore();
+      await controller().signIn(username: role.name, password: 'secret');
+      await settle(tester);
+    }
+
+    testWidgets('Sales lands on Chats and reaches Payments and a family', (tester) async {
+      await signInAs(tester, UserRole.sales);
+      expect(currentLocation(), Routes.chats);
+
+      for (final location in [Routes.salesPayments, Routes.salesFamilyBilling('f1')]) {
+        router().go(location);
+        await settle(tester);
+        expect(currentLocation(), location);
+      }
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets("Sales following a teacher's or a parent's link lands on Chats", (tester) async {
+      await signInAs(tester, UserRole.sales);
+
+      for (final location in [
+        Routes.schedule,
+        Routes.studentProfile('k1'),
+        Routes.teacherProfile,
+        Routes.myLeave,
+        Routes.myProfile,
+        Routes.myPayments,
+      ]) {
+        router().go(location);
+        await settle(tester);
+        expect(currentLocation(), Routes.chats, reason: location);
+      }
+      expect(tester.takeException(), isNull);
+    });
+
+    for (final role in [UserRole.parent, UserRole.teacher]) {
+      testWidgets("a ${role.name} following Sales' Payments links lands on Chats", (tester) async {
+        await signInAs(tester, role);
+
+        for (final location in [Routes.salesPayments, Routes.salesFamilyBilling('f1')]) {
+          router().go(location);
+          await settle(tester);
+          expect(currentLocation(), Routes.chats, reason: location);
+        }
+        expect(tester.takeException(), isNull);
+      });
+    }
+  });
+
   group('signing out returns to sign-in', () {
     testWidgets('a signed-out user cannot come to rest anywhere protected',
         (tester) async {

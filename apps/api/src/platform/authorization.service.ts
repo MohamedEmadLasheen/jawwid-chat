@@ -18,6 +18,7 @@ import {
   ActorKind,
   CONVERSATION_STAFF_ROLES,
   ConversationType,
+  GROUP_CALL_CONVERSATION_TYPES,
   GROUP_CONVERSATION_TYPES,
   MemberRole,
   Moderation,
@@ -26,10 +27,10 @@ import {
   Visibility,
 } from '../communication/contracts/vocab';
 
-/** PD-20: what an administrator may do to another account. */
+/** PD-21: what an administrator may do to another account. */
 export type AccountAdminAct = 'reset_password' | 'suspend' | 'reactivate' | 'impersonate';
 
-/** PD-20: the account an administrator acts on, resolved by the caller. */
+/** PD-21: the account an administrator acts on, resolved by the caller. */
 export interface AccountAdminTarget {
   accountId: string;
   organizationId: string;
@@ -1292,12 +1293,12 @@ export class AuthorizationService {
   }
 
   // ------------------------------------------------------------------
-  // PD-20: account administration
+  // PD-21: account administration
   // ------------------------------------------------------------------
 
   /**
    * May `actor` reset the password of, suspend, reactivate or impersonate the
-   * account `target`? Owner decision 2026-10-22 (PD-20), which widens
+   * account `target`? Owner decision 2026-10-22 (PD-21), which widens
    * AUTHORIZATION-MODEL §3 `users.manage` from the super admin to every staff
    * role -- for PARENT and TEACHER accounts:
    *
@@ -1533,6 +1534,10 @@ export class AuthorizationService {
    * D1's point (the caller is on the call they start). A 1:1 between two other
    * people stays refused: a direct call has exactly two seats (the database
    * enforces it). Managers and backups are unchanged.
+   *
+   * Second amendment (2026-10-22): "group" here means every conversation whose
+   * call is a GROUP call (GROUP_CALL_CONVERSATION_TYPES), so the teacher's trial
+   * group and supervision conversation are included.
    */
   canStartCallAsParticipant(
     actor: Pick<Actor, 'actorId' | 'kind' | 'staffRole'>,
@@ -1543,7 +1548,7 @@ export class AuthorizationService {
     if (
       actor.kind === ActorKind.STAFF &&
       actor.staffRole === StaffRole.SUPER_ADMIN &&
-      GROUP_CONVERSATION_TYPES.has(conv.type)
+      GROUP_CALL_CONVERSATION_TYPES.has(conv.type)
     ) {
       return allow();
     }

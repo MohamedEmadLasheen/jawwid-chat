@@ -79,7 +79,7 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     // `teacher-profiles` (the teacher certificate review queue) is routable
     // too: the server admits the super admin as a reviewer.
     // `parents` (PD-17) likewise: offered as the Admin Portal's Parents section.
-    // `accounts` (PD-20) is offered beside the read-only Users section.
+    // `accounts` (PD-21) is offered beside the read-only Users section.
     return ['chat', 'inbox', 'families', 'tasks', 'coverage', 'dashboard', 'stories', 'teachers', 'instalments', 'parents', 'trials', 'calls', 'teacher-profiles', 'accounts', 'settings']
   }
   if (isManager(role)) {
@@ -109,7 +109,7 @@ export function visibleAreas(role: StaffRole): NavArea[] {
     return ['chat', 'calls', 'inbox', 'families', 'teachers', 'instalments', 'parents', 'trials', 'tasks', 'stories', 'teacher-profiles', 'accounts']
   }
   if (isDepartment(role)) {
-    // Departments get tasks — they may not open family records — and, PD-20
+    // Departments get tasks — they may not open family records — and, PD-21
     // (owner decision: every staff role), account administration.
     return ['tasks', 'accounts']
   }

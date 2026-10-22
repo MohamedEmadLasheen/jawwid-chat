@@ -89,7 +89,7 @@ export interface MessageDto {
   /** A copy forwarded by its author; shown as "Forwarded". The source is never named. */
   forwarded: boolean;
   /**
-   * PD-20: an administrator sent it in a support session, acting as its author.
+   * PD-21: an administrator sent it in a support session, acting as its author.
    * Every client shows it as "Sent by support"; who the administrator was is in
    * the audit record, not on the message.
    */

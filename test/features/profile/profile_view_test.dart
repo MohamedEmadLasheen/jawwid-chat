@@ -165,11 +165,15 @@ void main() {
       final offenders = <String>[];
       // PD-17: the teacher's Student Profile is held to the same rule, model included.
       final files = [
-        for (final dir in ['lib/features/profile', 'lib/features/student_profile'])
+        // PD-20: and Sales' Payments, which finds parents by name and must hold nothing
+        // more about them.
+        for (final dir in ['lib/features/profile', 'lib/features/student_profile', 'lib/features/sales_payments'])
           ...Directory(dir).listSync(recursive: true).whereType<File>(),
         File('lib/shared/models/student_profile.dart'),
+        File('lib/core/data/http/http_sales_payments_repository.dart'),
       ];
       expect(Directory('lib/features/student_profile').existsSync(), isTrue);
+      expect(Directory('lib/features/sales_payments').existsSync(), isTrue);
 
       for (final file in files) {
         if (!file.path.endsWith('.dart')) continue;

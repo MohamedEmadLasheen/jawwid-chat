@@ -38,7 +38,7 @@ const BY_CODE: Record<string, Pair> = {
 }
 
 /**
- * PD-20: the person finishes a password reset an administrator issued. The
+ * PD-21: the person finishes a password reset an administrator issued. The
  * administrator handed over a one-time code; the password is the person's own
  * and goes to the server only. Nothing here opens a session.
  */

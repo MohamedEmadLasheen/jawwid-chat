@@ -1,6 +1,6 @@
-# PD-20 · Account administration
+# PD-21 · Account administration
 
-Decision record: `../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4, PD-20 (closed 2026-10-22).
+Decision record: `../product/JAWUID-CHAT-PRODUCT-BOUNDARY.md` §4, PD-21 (closed 2026-10-22).
 Permission matrix: `../architecture/AUTHORIZATION-MODEL.md` §3, footnote ⁵.
 Wire contract: `../contracts/API-CONTRACT.md` §3.1 (`POST /auth/password-reset`) and §3.10a.
 
@@ -157,7 +157,7 @@ academic) can see it here, on the record.
 ## Known limits
 
 - **RT-037**: a signed media link handed out before a suspension stays usable until it
-  expires. This is unchanged by PD-20; see `../red-team/findings.md`.
+  expires. This is unchanged by PD-21; see `../red-team/findings.md`.
 - The API connects as the table owner, so row-level security is not engaged
   (`../security/RLS-STRATEGY.md` §7). `AuthorizationService` is the boundary, and the
   tests prove it over real HTTP.
@@ -168,7 +168,7 @@ academic) can see it here, on the record.
 
 - `apps/api/test/unit/account-admin/account-admin-authorization.spec.ts`: the full rule,
   every role against every kind of target.
-- `apps/api/test/integration/pd020-account-admin-http.spec.ts`: over real HTTP:
+- `apps/api/test/integration/pd021-account-admin-http.spec.ts`: over real HTTP:
   - who may;
   - code only, never a password;
   - five misses spend a code;
@@ -182,7 +182,7 @@ academic) can see it here, on the record.
 - `apps/admin-web/src/features/accounts/Accounts.test.tsx`: the page and the sign-in reset
   form.
 - `test/features/auth/password_reset_test.dart`: the mobile reset screen.
-- `apps/api/test/integration/pd020-impersonation-http.spec.ts`: over real HTTP:
+- `apps/api/test/integration/pd021-impersonation-http.spec.ts`: over real HTTP:
   - who may;
   - acting as the person, with the labelled message;
   - no receipts;

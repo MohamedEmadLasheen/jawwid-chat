@@ -5,7 +5,7 @@ import type { AccountKind, AccountStatus } from './api'
 export { useCopy, type Pair } from '@/features/organization/copy'
 
 /**
- * PD-20 copy, Arabic and English side by side. Wording rule: nothing here
+ * PD-21 copy, Arabic and English side by side. Wording rule: nothing here
  * suggests the administrator can see or choose anyone's password -- they hand
  * over a one-time code, and the person chooses.
  */

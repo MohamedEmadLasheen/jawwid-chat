@@ -18,7 +18,7 @@ function administrator(request: AdminRequest): AdministratorContext {
 }
 
 /**
- * PD-20: `/admin/impersonations` -- support sessions.
+ * PD-21: `/admin/impersonations` -- support sessions.
  *
  * Every route runs on the ADMINISTRATOR's own token. A support session's token
  * cannot reach any of them: its actor is the parent or teacher, and

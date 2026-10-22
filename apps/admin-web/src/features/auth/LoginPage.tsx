@@ -14,7 +14,7 @@ export function LoginPage() {
   const queryClient = useQueryClient()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  // PD-20: finishing a reset an administrator issued, on the same page.
+  // PD-21: finishing a reset an administrator issued, on the same page.
   const [mode, setMode] = useState<'signIn' | 'reset'>('signIn')
   const [resetDone, setResetDone] = useState(false)
   const tx = useCopy()

@@ -2501,4 +2501,112 @@ class L10nEn extends L10n {
 
   @override
   String get billingDeniedBody => 'If you have a question, ask the academy.';
+
+  @override
+  String get tabPayments => 'Payments';
+
+  @override
+  String get roleSales => 'Sales';
+
+  @override
+  String get roleSuperAdmin => 'Super admin';
+
+  @override
+  String get conversationsEmptyBodySales =>
+      'Trial groups and your conversations will appear here.';
+
+  @override
+  String get internalNoteLabel => 'Internal note';
+
+  @override
+  String get trialGroupNotMember => 'You are not a member of this group yet.';
+
+  @override
+  String get trialGroupJoin => 'Join this group';
+
+  @override
+  String get salesSearchHint => 'Search parents or families';
+
+  @override
+  String get salesSearchEmpty => 'No parents found';
+
+  @override
+  String get salesSearchTruncated =>
+      'Showing the first results. Type more to narrow the search.';
+
+  @override
+  String salesChildrenCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count children',
+      one: '1 child',
+      zero: 'No children',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get salesPaymentsDenied =>
+      'Payments are not available for your account.';
+
+  @override
+  String get billingCurrencyLabel => 'Currency';
+
+  @override
+  String get billingStatusVoided => 'Voided';
+
+  @override
+  String salesPaidRecordedBy(String date, String method, String name) {
+    return 'Paid $date · $method · recorded by $name';
+  }
+
+  @override
+  String salesVoidedBy(String name, String reason) {
+    return 'Voided by $name: $reason';
+  }
+
+  @override
+  String salesVoidedReason(String reason) {
+    return 'Voided: $reason';
+  }
+
+  @override
+  String get salesRecordPayment => 'Record payment';
+
+  @override
+  String get salesVoid => 'Void';
+
+  @override
+  String get salesPaidOnLabel => 'Paid on';
+
+  @override
+  String get salesReferenceLabel => 'Reference (optional)';
+
+  @override
+  String get salesRecordSave => 'Record';
+
+  @override
+  String get salesVoidTitle => 'Void this instalment?';
+
+  @override
+  String get salesVoidFinal =>
+      'Voiding is final: the instalment can no longer be paid.';
+
+  @override
+  String get salesVoidReasonLabel => 'Reason';
+
+  @override
+  String get salesVoidConfirm => 'Void instalment';
+
+  @override
+  String get salesBillingStateConflict =>
+      'This instalment was already paid or voided. The list has been refreshed.';
+
+  @override
+  String get salesBillingInvalid =>
+      'Check the date and the reference, then try again.';
+
+  @override
+  String get salesWriteFailed => 'Could not save. Try again.';
 }

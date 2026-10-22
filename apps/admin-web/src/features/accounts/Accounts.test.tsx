@@ -8,12 +8,12 @@ import { makeStaff, renderWithProviders } from '@/test/utils'
 import type { AccountSummary } from './api'
 
 /**
- * PD-20 account administration, through the real route and the real API
+ * PD-21 account administration, through the real route and the real API
  * client, with `fetch` answered at the network boundary. This proves the
  * page's side: the server's list is shown with its own `allowed` answer, every
  * action sends a reason, the one-time code is shown once and is gone when the
  * dialog closes, and a refusal is said plainly. Who may do what to whom is
- * proven server-side (apps/api pd020-account-admin-http.spec.ts).
+ * proven server-side (apps/api pd021-account-admin-http.spec.ts).
  */
 
 function json(body: unknown, status = 200) {
@@ -70,7 +70,7 @@ afterEach(() => {
   tokenStore.clear()
 })
 
-describe('PD-20: the Accounts page', () => {
+describe('PD-21: the Accounts page', () => {
   it('is offered to a department role too, and lists what the server sends, children included', async () => {
     on('GET', /\/admin\/accounts(\?|$)/, () =>
       json({ accounts: [account(), account({ accountId: 'a-2', kind: 'teacher', name: 'Teacher Omega', familyName: null, children: [] })], truncated: false }),
@@ -140,7 +140,7 @@ describe('PD-20: the Accounts page', () => {
   })
 })
 
-describe('PD-20: finishing a reset on the sign-in page', () => {
+describe('PD-21: finishing a reset on the sign-in page', () => {
   it('sends the login, the code and the new password -- and opens no session', async () => {
     tokenStore.clear()
     on('POST', /\/auth\/password-reset$/, () => json({ ok: true }))

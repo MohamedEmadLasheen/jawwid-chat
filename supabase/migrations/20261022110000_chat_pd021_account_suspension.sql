@@ -1,4 +1,4 @@
--- PD-20 (2026-10-22): an administrator sets an account inactive, and back.
+-- PD-21 (2026-10-22): an administrator sets an account inactive, and back.
 --
 -- "Inactive" is chat.account.status = 'suspended' -- the reversible state
 -- IDENTITY-MODEL §3 already defines ("temporarily blocked, reason required,
@@ -26,7 +26,7 @@ declare
   v_changed integer;
 begin
   if not chat.caller_is_server_side() then
-    raise exception 'PD-20: only a server-side writer may reactivate an account (invoking role %)', chat.invoking_role()
+    raise exception 'PD-21: only a server-side writer may reactivate an account (invoking role %)', chat.invoking_role()
       using errcode = 'insufficient_privilege';
   end if;
   if p_reason is null or length(btrim(p_reason)) = 0 then
@@ -42,7 +42,7 @@ end;
 $$;
 
 comment on function chat.reactivate_account(uuid, text) is
-  'PD-20. Returns a SUSPENDED account to active (true), or changes nothing (false). Never reverses a '
+  'PD-21. Returns a SUSPENDED account to active (true), or changes nothing (false). Never reverses a '
   'deactivation. Revoked sessions stay revoked: the person signs in again. Server-side callers only.';
 
 revoke execute on function chat.reactivate_account(uuid, text) from public, anon, authenticated, chat_app;

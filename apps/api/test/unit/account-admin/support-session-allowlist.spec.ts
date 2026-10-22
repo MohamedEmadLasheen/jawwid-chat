@@ -1,5 +1,5 @@
 /**
- * PD-20 -- what a support session (an administrator acting as a parent or
+ * PD-21 -- what a support session (an administrator acting as a parent or
  * teacher) may WRITE. Deny by default: these pin the allowlist so that a route
  * added later is refused in a support session until someone decides otherwise,
  * and so that nothing which acts in the person's name where others see it
@@ -9,7 +9,7 @@
  */
 import { SUPPORT_SESSION_WRITES, supportSessionMayCall } from '@platform/auth/support-session.interceptor';
 
-describe('PD-20: the support-session allowlist', () => {
+describe('PD-21: the support-session allowlist', () => {
   it('every read is allowed', () => {
     for (const route of ['/conversations', '/conversations/:conversationId/messages', '/me', '/me/profile', '/calls/history']) {
       expect(supportSessionMayCall('GET', route)).toBe(true);

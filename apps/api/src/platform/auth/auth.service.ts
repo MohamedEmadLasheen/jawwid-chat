@@ -48,13 +48,13 @@ const LOCKOUT_MINUTES = 15;
 const ACTIVE_STATUS = 'active';
 
 /**
- * PD-20 support sessions: each step (a fresh token from the administrator's own
+ * PD-21 support sessions: each step (a fresh token from the administrator's own
  * session) gives this many minutes, never past MAX_MINUTES from the start.
  * The database states the hour too (impersonation_session_at_most_an_hour).
  */
 export const SUPPORT_SESSION = { STEP_MINUTES: 15, MAX_MINUTES: 60 } as const;
 
-/** PD-20: what a request on a support session carries beyond its actor. */
+/** PD-21: what a request on a support session carries beyond its actor. */
 export interface SupportSessionFacts {
   /** chat.impersonation_session.id */
   readonly id: string;
@@ -83,7 +83,7 @@ export interface AuthenticatedSession {
   readonly accountId: string;
   readonly sessionId: string;
   readonly claims: AccessClaims;
-  /** PD-20: present when this is a support session -- an administrator acting as the account. */
+  /** PD-21: present when this is a support session -- an administrator acting as the account. */
   readonly impersonation?: SupportSessionFacts;
 }
 
@@ -131,7 +131,7 @@ export class AuthService {
     @Optional()
     @Inject(REALTIME_REVOCATION)
     private readonly revocation: RealtimeRevocation = NO_REALTIME_REVOCATION,
-    // PD-20: re-decides a support session's permission on every request.
+    // PD-21: re-decides a support session's permission on every request.
     // Absent (a hand-built test service), every support session is refused.
     @Optional() private readonly authz?: AuthorizationService,
   ) {}
@@ -476,7 +476,7 @@ export class AuthService {
   }
 
   /**
-   * PD-20, gate 5 -- for a support session only. Everything that let the
+   * PD-21, gate 5 -- for a support session only. Everything that let the
    * administrator open it must STILL hold, now:
    *   - the support session has not ended and has not expired;
    *   - the administrator's own session is live (signing out ends it);
@@ -527,7 +527,7 @@ export class AuthService {
   }
 
   /**
-   * PD-20: the TARGET-side session of a support session, inside the caller's
+   * PD-21: the TARGET-side session of a support session, inside the caller's
    * transaction. Not a login: no device, no last_login_at, no failure reset,
    * no session.created audit (the caller writes impersonation.started). Its
    * refresh token is generated and DISCARDED -- the column is NOT NULL and
@@ -554,7 +554,7 @@ export class AuthService {
     return created.id;
   }
 
-  /** PD-20: an access token for a support session's target-side session. */
+  /** PD-21: an access token for a support session's target-side session. */
   signSupportAccessToken(
     account: { subject: string; organizationId: string },
     actor: Actor,
@@ -683,7 +683,7 @@ export class AuthService {
     }
 
     if (session.expiresAt <= new Date()) throw new AuthError(AuthErrorCode.SESSION_REVOKED);
-    // PD-20: a support session has no refresh token to present. Belt and braces.
+    // PD-21: a support session has no refresh token to present. Belt and braces.
     if (session.impersonationId) throw new AuthError(AuthErrorCode.SESSION_REVOKED);
 
     const account = session.account;
@@ -708,7 +708,7 @@ export class AuthService {
     // bound to the retired session now also answer to its successor, so a
     // later logout of the successor still reaches them.
     this.revocation.sessionRotated(session.id, pair.sessionId);
-    // PD-20: a support session started from this session follows it to its
+    // PD-21: a support session started from this session follows it to its
     // successor (the database allows that move through a rotation only).
     await this.prisma.impersonationSession.updateMany({
       where: { staffSessionId: session.id, endedAt: null },
@@ -827,7 +827,7 @@ export class AuthService {
   }
 
   /**
-   * PD-20: every live session of an account, revoked INSIDE the caller's
+   * PD-21: every live session of an account, revoked INSIDE the caller's
    * transaction -- so a password reset or a suspension and the end of the
    * sessions it implies commit together or not at all. Returns how many were
    * live. The caller MUST follow the commit with enforceAccountRevocation().
@@ -886,7 +886,7 @@ export class AuthService {
    * Sets an account's password. NOT an endpoint: there is no public
    * registration and no self-service reset in the MVP (PRD §7.1), so this is
    * reached only from seeds, tests and manager-driven provisioning. The
-   * administrator-issued reset (PD-20) is PasswordResetService, which also
+   * administrator-issued reset (PD-21) is PasswordResetService, which also
    * revokes the account's sessions; this does not.
    */
   async setPassword(accountId: string, plain: string): Promise<void> {

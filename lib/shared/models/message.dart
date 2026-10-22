@@ -147,6 +147,7 @@ class Message {
     this.isForwarded = false,
     this.isSentBySupport = false,
     this.editedAt,
+    this.isInternal = false,
   });
 
   /// Server id. Null until the server has accepted the message.
@@ -210,13 +211,18 @@ class Message {
   /// "Forwarded". The source is never named.
   final bool isForwarded;
 
-  /// PD-20: an administrator sent it in a support session, acting as its author (server
+  /// PD-21: an administrator sent it in a support session, acting as its author (server
   /// `MessageDto.sentBySupport`). Shown to everyone as "Sent by support".
   final bool isSentBySupport;
 
   /// When the author last edited it (server `MessageDto.editedAt`); null when
   /// never edited. [body] is already the edited wording. Shown as "Edited".
   final DateTime? editedAt;
+
+  /// Staff-only (server `MessageDto.visibility == 'internal'`). A parent or teacher is
+  /// never sent one; a Sales viewer may be, and it is labelled "Internal note" in the
+  /// thread so it is never mistaken for something the family read.
+  final bool isInternal;
 
   bool get isSystem => kind == MessageKind.system;
   bool get isPending => deliveryState.isInFlight;
@@ -257,6 +263,7 @@ class Message {
         isForwarded: isForwarded,
         isSentBySupport: isSentBySupport,
         editedAt: editedAt,
+        isInternal: isInternal,
       );
 
   Message copyWith({
@@ -299,6 +306,7 @@ class Message {
       isForwarded: isForwarded,
       isSentBySupport: isSentBySupport,
       editedAt: editedAt,
+      isInternal: isInternal,
     );
   }
 }

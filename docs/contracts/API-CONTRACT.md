@@ -375,7 +375,7 @@ Page<T> { items: T[], nextCursor: string|null }
 - Side effects: session revoked; device tokens registered under this session deactivated (`chat.device_token.is_active=false`); sockets of this session disconnected.
 - Audit: `audit_log` `{action:'session.revoked', entity:'session', entityId, reason:'logout'}`. Realtime: none to others.
 
-**POST /auth/password-reset** — EXISTS (PD-20)
+**POST /auth/password-reset** — EXISTS (PD-21)
 - Auth: none (the one-time code is the credential). Rate-limited by the login limiter, per identifier (`reset:<username>`) and per source, before anything else.
 - Request: `{ username: string, code: string /* 6 digits */, password: string /* 8..128 */ }`.
 - Response: `200 { ok: true }`. Opens no session: the client signs in with `POST /auth/login`.
@@ -1234,7 +1234,7 @@ AuditEntryDto { id: string, actorId: string|null, action, entity, entityId, befo
 - Query: `entity?`, `entityId?`, `actorId?`, `action?` (prefix match, e.g. `message.`), `from?`, `to?` (ISO-8601), `cursor`, `limit` (default 50, max 200). Response: `Page<AuditEntryDto>` newest first, read from `chat.audit_log`. `before`/`after` are returned as stored; they never contain message bodies (no writer stores one).
 - Audit: reading the audit log is itself recorded in `event_log` `{type:'audit_viewed', actorId, payload:{filters}}`.
 
-### 3.10a Account administration (`account-admin.controller.ts`) — EXISTS (PD-20)
+### 3.10a Account administration (`account-admin.controller.ts`) — EXISTS (PD-21)
 
 ```
 AccountSummaryDto { accountId, kind: 'family'|'teacher'|'staff', name, staffRole: string|null,
@@ -1255,7 +1255,7 @@ Permission (every route): `AuthorizationService.canAdministerAccount` — any ac
 
 **POST /admin/accounts/:accountId/reactivate** — Request: `{ reason }`. Response: `200 AccountSummaryDto`. `chat.reactivate_account` (suspended → active only); earlier sessions stay revoked. Audit `account.reactivated`. An active account is left alone (no audit row). Errors: `COMM.ACCOUNT_ADMIN_STATE` 409 (deactivated / provisioned).
 
-### 3.10b Support sessions — impersonation (`impersonation.controller.ts`) — EXISTS (PD-20)
+### 3.10b Support sessions — impersonation (`impersonation.controller.ts`) — EXISTS (PD-21)
 
 ```
 SupportSessionDto { id, target: { accountId, kind: 'family'|'teacher', name, actorId }, staff: { id, name },

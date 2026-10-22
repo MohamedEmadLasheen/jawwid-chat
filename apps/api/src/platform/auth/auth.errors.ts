@@ -42,7 +42,7 @@ export enum AuthErrorCode {
   /** 400. PD-16 parent sign-up: the chosen password is too short. */
   PASSWORD_TOO_WEAK = 'AUTH.PASSWORD_TOO_WEAK',
   /**
-   * 401. PD-20 password reset: the code is wrong, expired, used up or was never
+   * 401. PD-21 password reset: the code is wrong, expired, used up or was never
    * issued -- one code for all of them, and the same whether the login is known
    * or not, so the reset cannot enumerate accounts.
    */

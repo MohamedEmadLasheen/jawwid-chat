@@ -37,4 +37,9 @@ class HttpTrialRepository implements TrialRepository {
       'note': ?draft.note,
     });
   }
+
+  @override
+  Future<void> joinGroup(String conversationId) async {
+    await _client.post<Object?>('/trials/groups/$conversationId/join');
+  }
 }

@@ -1,4 +1,4 @@
-/* PD-20 support session. The banner stays in view: the administrator must never
+/* PD-21 support session. The banner stays in view: the administrator must never
    forget whose account this is. */
 .support-banner {
   position: sticky;

@@ -64,7 +64,7 @@ describe('The navigation registry', () => {
     expect(destinations.map((d) => d.key)).toEqual(['conversations', 'calls', 'people', 'stories', 'more'])
     const keys = destinations.flatMap((d) => entriesOf(d).map((e) => e.key))
     // The twenty sections, plus Chat (PD-8: where the super admin replies) and
-    // Accounts (PD-20: where every staff role administers accounts).
+    // Accounts (PD-21: where every staff role administers accounts).
     expect(keys).toHaveLength(22)
     expect([...keys].sort()).toEqual([...ADMIN_SECTIONS.map((s) => s.key), 'chat', 'accounts'].sort())
     const conversations = destinations.find((d) => d.key === 'conversations')!
@@ -102,7 +102,7 @@ describe('The navigation registry', () => {
     }
     // And the super admin's navigation is the portal, not the operator screens
     // -- except Chat, the one workspace it writes in (PD-8), and Accounts, the
-    // one page every staff role shares (PD-20).
+    // one page every staff role shares (PD-21).
     const listed = destinationsFor('super_admin').flatMap((d) => entriesOf(d).map((e) => e.path))
     expect(listed.filter((p) => !p.startsWith('/admin/'))).toEqual(['/chat', '/accounts'])
   })
@@ -238,7 +238,7 @@ describe('The desktop rail', () => {
     // PD-10: then the Teachers page,
     expect(document.activeElement).toHaveAccessibleName('Teachers')
     await userEvent.keyboard('{ArrowDown}')
-    // PD-20: then Accounts, closing the People group,
+    // PD-21: then Accounts, closing the People group,
     expect(document.activeElement).toHaveAccessibleName('Accounts')
     await userEvent.keyboard('{ArrowDown}')
     // PD-17: then Parents (an Operations section under People), then the menu wraps.
@@ -270,7 +270,7 @@ describe('The desktop rail', () => {
       ['manager', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Stories'], ['People & teams', 'More']],
       ['admin', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Stories', 'Tasks'], ['People & teams']],
       ['coverage', ['conversations', 'calls', 'people', 'stories', 'more'], ['Conversations', 'Calls', 'Stories', 'Tasks'], ['People & teams']],
-      // PD-20: Accounts is every role's, so a department has two one-page destinations.
+      // PD-21: Accounts is every role's, so a department has two one-page destinations.
       ['finance', ['people', 'more'], ['Accounts', 'Tasks'], []],
     ]
     for (const [role, keys, links, menus] of cases) {

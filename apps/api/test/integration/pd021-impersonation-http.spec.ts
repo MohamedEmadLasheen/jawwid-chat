@@ -1,5 +1,5 @@
 /**
- * PD-20 impersonation ("support sessions") over real HTTP: real logins, the
+ * PD-21 impersonation ("support sessions") over real HTTP: real logins, the
  * global bearer guard, the real routes, the real database rules.
  *
  *   - any staff role opens a parent's or a teacher's account, never staff;
@@ -39,8 +39,8 @@ jest.setTimeout(300_000);
 
 const REDIS_URL = process.env.AUTH_TEST_REDIS_URL ?? process.env.REDIS_URL ?? 'redis://localhost:6410';
 const inheritedRedisUrl = process.env.REDIS_URL;
-const PASSWORD = 'pd20-imp-spec-password-1';
-const DOMAIN = 'pd20imp.qa.jawwid.test';
+const PASSWORD = 'pd21-imp-spec-password-1';
+const DOMAIN = 'pd21imp.qa.jawwid.test';
 
 const g = buildGraph();
 let app: INestApplication;
@@ -79,11 +79,11 @@ beforeAll(async () => {
   await g.prisma.$connect();
   await truncate(g.prisma);
   await g.prisma.$executeRawUnsafe(`delete from chat.account where subject like '%@${DOMAIN}'`);
-  await g.prisma.$executeRawUnsafe(`delete from chat.organization where slug like 'pd20i-%'`);
+  await g.prisma.$executeRawUnsafe(`delete from chat.organization where slug like 'pd21i-%'`);
 
   orgId = randomUUID();
   await g.prisma.$executeRawUnsafe(
-    `insert into chat.organization (id, slug, display_name) values ('${orgId}'::uuid, 'pd20i-${orgId.slice(0, 8)}', 'PD-20 impersonation QA academy')`,
+    `insert into chat.organization (id, slug, display_name) values ('${orgId}'::uuid, 'pd21i-${orgId.slice(0, 8)}', 'PD-21 impersonation QA academy')`,
   );
   await g.prisma.$transaction(async (tx) => {
     await tx.$executeRawUnsafe(`select set_config('chat.provisioning_super_admin', 'on', true)`);
@@ -121,13 +121,13 @@ afterAll(async () => {
   for (let i = 0; i < 40 && presence && presence.status !== 'end'; i++) await new Promise((r) => setTimeout(r, 50));
   await truncate(g.prisma);
   await g.prisma.$executeRawUnsafe(`delete from chat.account where subject like '%@${DOMAIN}'`);
-  await g.prisma.$executeRawUnsafe(`delete from chat.organization where slug like 'pd20i-%'`);
+  await g.prisma.$executeRawUnsafe(`delete from chat.organization where slug like 'pd21i-%'`);
   await g.prisma.$disconnect();
   if (inheritedRedisUrl === undefined) delete process.env.REDIS_URL;
   else process.env.REDIS_URL = inheritedRedisUrl;
 });
 
-describe('PD-20: who may open a support session', () => {
+describe('PD-21: who may open a support session', () => {
   it('every route is behind the bearer guard', async () => {
     for (const [method, path] of [
       ['POST', '/admin/impersonations'],
@@ -161,7 +161,7 @@ describe('PD-20: who may open a support session', () => {
   });
 });
 
-describe('PD-20: acting as the person', () => {
+describe('PD-21: acting as the person', () => {
   it('reads as the parent, sends a LABELLED message, and records everything', async () => {
     const admin = (await login(m.supervisors[0]!.subject)).accessToken;
     const family = m.families[0]!;
@@ -277,7 +277,7 @@ describe('PD-20: acting as the person', () => {
   });
 });
 
-describe('PD-20: a support session ends', () => {
+describe('PD-21: a support session ends', () => {
   it('on Exit: its token is refused at once, the record says how, and Exit is idempotent', async () => {
     const admin = (await login(m.supervisors[1]!.subject)).accessToken;
     const opened = await start(admin, m.families[2]!.parent.subject);

@@ -9,7 +9,7 @@ import 'package:jawwid_chat/core/errors/app_error.dart';
 import 'package:jawwid_chat/features/auth/presentation/password_reset_screen.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 
-/// PD-20 on the client: a parent or teacher finishes a password reset with the one-time code
+/// PD-21 on the client: a parent or teacher finishes a password reset with the one-time code
 /// the academy handed over and a password of their own. The server's answers are stubbed;
 /// what is held here is that the screen sends exactly what the API takes, refuses locally
 /// what it would refuse, shows a refusal in plain words, and hands the credentials back to

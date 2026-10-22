@@ -1,7 +1,7 @@
 import { api } from '@/core/api/client'
 
 /**
- * PD-20 wire contract, mirrored from apps/api/src/account-admin.
+ * PD-21 wire contract, mirrored from apps/api/src/account-admin.
  *
  * Who may act on which account is the server's answer alone
  * (AuthorizationService.canAdministerAccount): any staff member for parents and

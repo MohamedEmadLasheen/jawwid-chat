@@ -83,7 +83,7 @@ export const loginRateLimitStoreProvider = {
 
 @Module({
   // PD-16: ParentSignupController -- a parent sets the password of the account Chat created at enrolment.
-  // PD-20: PasswordResetController -- the person finishes a reset an administrator issued.
+  // PD-21: PasswordResetController -- the person finishes a reset an administrator issued.
   controllers: [AuthController, MeController, ParentSignupController, PasswordResetController],
   providers: [
     AuthService,
@@ -103,7 +103,7 @@ export const loginRateLimitStoreProvider = {
     // policy -- see action-throttle.guard.ts.
     { provide: APP_GUARD, useClass: ActionThrottleGuard },
     { provide: APP_FILTER, useClass: AuthErrorFilter },
-    // PD-20: a support session may write only what its allowlist says, and
+    // PD-21: a support session may write only what its allowlist says, and
     // every request it makes is recorded.
     { provide: APP_INTERCEPTOR, useClass: SupportSessionInterceptor },
   ],
@@ -111,7 +111,7 @@ export const loginRateLimitStoreProvider = {
 })
 export class AuthModule implements NestModule {
   /**
-   * PD-20: one request context per HTTP request, opened BEFORE the guards so
+   * PD-21: one request context per HTTP request, opened BEFORE the guards so
    * the guard can mark a support session in it and everything downstream
    * (audit, messages) reads it. A support session that reached a handler with
    * no context would go unstamped, so the guard refuses it instead.

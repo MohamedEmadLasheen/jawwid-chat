@@ -8,13 +8,13 @@ import type { AccountSummary } from '@/features/accounts/api'
 import type { SupportToken } from './api'
 
 /**
- * PD-20 support sessions on the page side, with `fetch` answered at the
+ * PD-21 support sessions on the page side, with `fetch` answered at the
  * network boundary. Held here: opening needs a reason; the support token is
  * used for the person's routes and NEVER replaces the administrator's own;
  * the banner says whose account this is; what is sent is labelled; Exit ends
  * it on the server and returns to Accounts; a reload asks for a fresh token.
  * What a support session may do is proven server-side
- * (apps/api pd020-impersonation-http.spec.ts).
+ * (apps/api pd021-impersonation-http.spec.ts).
  */
 
 function json(body: unknown, status = 200) {
@@ -96,7 +96,7 @@ afterEach(() => {
   tokenStore.clear()
 })
 
-describe('PD-20: support sessions in Admin Web', () => {
+describe('PD-21: support sessions in Admin Web', () => {
   it('opens with a reason, acts on the support token only, labels what is sent, and exits back to Accounts', async () => {
     on('POST', /\/admin\/impersonations$/, () => json(token(), 201))
     on('POST', /\/conversations\/c-1\/messages$/, () => json({ id: 'm-3', sentBySupport: true }, 201))

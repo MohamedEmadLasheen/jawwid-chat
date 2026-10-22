@@ -142,7 +142,7 @@ export interface ChatMessage {
   /** Pinned for everyone in this conversation (at most three). */
   pinned?: boolean
   /**
-   * PD-20: an administrator sent it in a support session, acting as its
+   * PD-21: an administrator sent it in a support session, acting as its
    * author. Shown to everyone as "Sent by support".
    */
   sentBySupport?: boolean

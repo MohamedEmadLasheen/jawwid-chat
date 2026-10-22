@@ -2,7 +2,7 @@ import { api, requestAs } from '@/core/api/client'
 import type { ChatConversation, ChatMessage, MessagePage } from '@/features/chat/chatApi'
 
 /**
- * PD-20 support sessions, mirrored from apps/api/src/account-admin
+ * PD-21 support sessions, mirrored from apps/api/src/account-admin
  * (impersonation.controller.ts).
  *
  * Two clients, never mixed:

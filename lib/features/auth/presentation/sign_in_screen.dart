@@ -43,7 +43,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     await ref.read(authControllerProvider.notifier).signIn(username: result.email, password: result.password);
   }
 
-  /// PD-20: finishing a reset the academy issued, then signing in normally with the new password.
+  /// PD-21: finishing a reset the academy issued, then signing in normally with the new password.
   Future<void> _openReset() async {
     final result = await PasswordResetScreen.open(context, initialUsername: _username.text.trim());
     if (result == null || !mounted) return;

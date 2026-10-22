@@ -493,7 +493,7 @@ export class RealtimeGateway
     }
 
     const authenticated = await this.auth.authenticate(token);
-    // PD-20: a support session (an administrator acting as a parent or teacher)
+    // PD-21: a support session (an administrator acting as a parent or teacher)
     // never holds a socket: it would mark the person online, acknowledge
     // deliveries in their name, and bypass the HTTP allowlist and trail.
     if (!authenticated || !authenticated.actor.isActive || authenticated.impersonation) {

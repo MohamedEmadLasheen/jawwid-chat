@@ -101,7 +101,7 @@ export const sessionApi = {
     }
   },
   /**
-   * PD-20: finish a password reset an administrator issued -- the login, the
+   * PD-21: finish a password reset an administrator issued -- the login, the
    * one-time code, and a new password of the person's own. Opens no session:
    * the person signs in afterwards like anyone else.
    */

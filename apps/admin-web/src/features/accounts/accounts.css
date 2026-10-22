@@ -1,4 +1,4 @@
-/* PD-20 account administration. Uses the design system's table and toolbar. */
+/* PD-21 account administration. Uses the design system's table and toolbar. */
 .acct-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .acct-check { display: flex; gap: var(--space-2); align-items: flex-start; margin-block: var(--space-3); }
 .acct-code {

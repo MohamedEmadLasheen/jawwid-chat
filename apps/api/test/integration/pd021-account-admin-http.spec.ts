@@ -1,5 +1,5 @@
 /**
- * PD-20 over real HTTP: real logins, the global bearer guard, the real routes,
+ * PD-21 over real HTTP: real logins, the global bearer guard, the real routes,
  * the real database rules.
  *
  *   - password reset: the administrator gets a one-time code and never a
@@ -39,9 +39,9 @@ jest.setTimeout(300_000);
 
 const REDIS_URL = process.env.AUTH_TEST_REDIS_URL ?? process.env.REDIS_URL ?? 'redis://localhost:6410';
 const inheritedRedisUrl = process.env.REDIS_URL;
-const PASSWORD = 'pd20-http-spec-password-1';
+const PASSWORD = 'pd21-http-spec-password-1';
 const NEW_PASSWORD = 'pd20-chosen-by-the-person-2';
-const DOMAIN = 'pd20http.qa.jawwid.test';
+const DOMAIN = 'pd21http.qa.jawwid.test';
 
 const g = buildGraph();
 let app: INestApplication;
@@ -89,11 +89,11 @@ beforeAll(async () => {
   await g.prisma.$connect();
   await truncate(g.prisma);
   await g.prisma.$executeRawUnsafe(`delete from chat.account where subject like '%@${DOMAIN}'`);
-  await g.prisma.$executeRawUnsafe(`delete from chat.organization where slug like 'pd20h-%'`);
+  await g.prisma.$executeRawUnsafe(`delete from chat.organization where slug like 'pd21h-%'`);
 
   orgId = randomUUID();
   await g.prisma.$executeRawUnsafe(
-    `insert into chat.organization (id, slug, display_name) values ('${orgId}'::uuid, 'pd20h-${orgId.slice(0, 8)}', 'PD-20 HTTP QA academy')`,
+    `insert into chat.organization (id, slug, display_name) values ('${orgId}'::uuid, 'pd21h-${orgId.slice(0, 8)}', 'PD-21 HTTP QA academy')`,
   );
   await g.prisma.$transaction(async (tx) => {
     await tx.$executeRawUnsafe(`select set_config('chat.provisioning_super_admin', 'on', true)`);
@@ -132,13 +132,13 @@ afterAll(async () => {
   // chat.staff truncates CASCADE, which takes chat.password_reset_code with it.
   await truncate(g.prisma);
   await g.prisma.$executeRawUnsafe(`delete from chat.account where subject like '%@${DOMAIN}'`);
-  await g.prisma.$executeRawUnsafe(`delete from chat.organization where slug like 'pd20h-%'`);
+  await g.prisma.$executeRawUnsafe(`delete from chat.organization where slug like 'pd21h-%'`);
   await g.prisma.$disconnect();
   if (inheritedRedisUrl === undefined) delete process.env.REDIS_URL;
   else process.env.REDIS_URL = inheritedRedisUrl;
 });
 
-describe('PD-20: who may', () => {
+describe('PD-21: who may', () => {
   it('every route is behind the bearer guard', async () => {
     const id = await accountIdOf(m.families[0]!.parent.subject);
     for (const [method, path] of [
@@ -229,7 +229,7 @@ describe('PD-20: who may', () => {
   });
 });
 
-describe('PD-20: password reset', () => {
+describe('PD-21: password reset', () => {
   it('the administrator gets a code, never a password; the person sets their own; every old session ends', async () => {
     const parent = m.families[3]!.parent;
     const accountId = await accountIdOf(parent.subject);
@@ -341,7 +341,7 @@ describe('PD-20: password reset', () => {
   });
 });
 
-describe('PD-20: suspend and reactivate', () => {
+describe('PD-21: suspend and reactivate', () => {
   it('suspension refuses the next request and every login; reactivation revives nothing old', async () => {
     const teacher = m.teachers[2]!;
     const accountId = await accountIdOf(teacher.subject);

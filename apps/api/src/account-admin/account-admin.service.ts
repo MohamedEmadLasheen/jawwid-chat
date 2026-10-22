@@ -66,7 +66,7 @@ const ACCOUNT_SELECT = {
 type AccountRow = Prisma.AccountGetPayload<{ select: typeof ACCOUNT_SELECT }>;
 
 /**
- * PD-20: account administration from the Admin Portal -- find an account,
+ * PD-21: account administration from the Admin Portal -- find an account,
  * reset its password, suspend it, reactivate it.
  *
  * EVERY ACTION IS DECIDED HERE, on the server, by
@@ -325,7 +325,7 @@ export class AccountAdminService {
         resetPassword: may('reset_password') && row.status !== 'deactivated',
         suspend: may('suspend') && row.status === 'active',
         reactivate: may('reactivate') && row.status === 'suspended',
-        // PD-20: only an account that could sign in itself can be opened.
+        // PD-21: only an account that could sign in itself can be opened.
         impersonate: may('impersonate') && row.status === 'active',
       },
     };

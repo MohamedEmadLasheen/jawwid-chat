@@ -38,7 +38,7 @@ export interface IssueResetInput {
 }
 
 /**
- * PD-20: an administrator resets another account's password, and NEVER LEARNS
+ * PD-21: an administrator resets another account's password, and NEVER LEARNS
  * A PASSWORD.
  *
  *   1. issue()    -- AccountAdminService, after AuthorizationService allowed it.

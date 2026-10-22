@@ -35,7 +35,7 @@ const STATUS_TONE: Record<AccountStatus, Tone> = {
 }
 
 /**
- * PD-20: account administration. Every staff member finds a parent (by the
+ * PD-21: account administration. Every staff member finds a parent (by the
  * parent's, the family's or a child's name) or a teacher, and resets the
  * password or sets the account inactive; the super admin also other staff.
  * The server decides the list and every action; the buttons follow its
@@ -260,7 +260,7 @@ function StatusDialog({
   )
 }
 
-/** PD-20: opening an account as its person -- a support session, on the record. */
+/** PD-21: opening an account as its person -- a support session, on the record. */
 function StartSupportDialog({ account, onClose }: { account: AccountSummary; onClose: () => void }) {
   const tx = useCopy()
   const navigate = useNavigate()
@@ -287,7 +287,7 @@ function StartSupportDialog({ account, onClose }: { account: AccountSummary; onC
 }
 
 /**
- * PD-20: the record of support sessions -- the super admin's whole
+ * PD-21: the record of support sessions -- the super admin's whole
  * organization, anyone else their own. Who, whom, why, when, how many requests.
  */
 function SupportRecord() {
@@ -334,7 +334,7 @@ function SupportRecord() {
   )
 }
 
-/** ReasonDialog shows an ApiError in the reader's language; this one carries PD-20's own wording. */
+/** ReasonDialog shows an ApiError in the reader's language; this one carries PD-21's own wording. */
 function localized(error: unknown): ApiError | undefined {
   if (error == null) return undefined
   return new ApiError({

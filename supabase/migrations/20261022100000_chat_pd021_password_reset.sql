@@ -1,4 +1,4 @@
--- PD-20 (2026-10-22): an administrator resets another account's password.
+-- PD-21 (2026-10-22): an administrator resets another account's password.
 --
 -- THE ADMINISTRATOR NEVER KNOWS A PASSWORD. The admin issues a one-time code
 -- (6 digits, 10 minutes, 5 tries), is shown it ONCE, and passes it to the
@@ -7,7 +7,7 @@
 -- the PD-16 sign-up code there is no relay copy: the issuing admin already holds
 -- the code, and nobody else needs to read it back.
 --
--- WHO MAY ISSUE ONE (owner decision, PD-20): any active staff member, for any
+-- WHO MAY ISSUE ONE (owner decision, PD-21): any active staff member, for any
 -- parent or teacher account in their organization; a staff account only by the
 -- super admin; the super admin's own account never (the bootstrap CLI is its
 -- only credential writer); one's own account never. AuthorizationService is the
@@ -33,7 +33,7 @@ create table chat.password_reset_code (
 );
 
 comment on table chat.password_reset_code is
-  'PD-20: a one-time code an administrator issues so a person can set a new password. Hash only; short-lived; at most five tries; never deleted.';
+  'PD-21: a one-time code an administrator issues so a person can set a new password. Hash only; short-lived; at most five tries; never deleted.';
 
 create unique index password_reset_code_one_live on chat.password_reset_code (account_id)
   where used_at is null and superseded_at is null;

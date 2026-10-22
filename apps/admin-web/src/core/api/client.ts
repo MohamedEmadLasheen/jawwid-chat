@@ -20,7 +20,7 @@ export interface RequestOptions {
    */
   anonymous?: boolean
   /**
-   * PD-20: send THIS bearer instead of the staff session's (a support
+   * PD-21: send THIS bearer instead of the staff session's (a support
    * session's token). Implies `anonymous`'s other half: a 401 is never answered
    * by refreshing, and never ends the staff session.
    */
@@ -79,7 +79,7 @@ export function refreshSession(): Promise<boolean> {
 }
 
 /**
- * PD-20: a request on a support session -- the token of the account the
+ * PD-21: a request on a support session -- the token of the account the
  * administrator is acting as, held in memory by the support page only. Never
  * refreshed (a support session has no refresh token) and a 401 never touches
  * the administrator's own session.

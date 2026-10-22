@@ -16,7 +16,7 @@ const CurrentAccountId = createParamDecorator((_data: unknown, ctx: ExecutionCon
 });
 
 /**
- * PD-20: `/admin/accounts` -- reset a password, suspend, reactivate.
+ * PD-21: `/admin/accounts` -- reset a password, suspend, reactivate.
  *
  * Protected twice, and neither depends on the other: the global
  * AuthenticatedGuard (no verified bearer, no request), and

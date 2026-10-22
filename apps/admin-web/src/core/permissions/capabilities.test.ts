@@ -48,7 +48,7 @@ describe('role → navigation', () => {
     }
   })
 
-  it('gives departments tasks and, PD-20, account administration -- nothing else', () => {
+  it('gives departments tasks and, PD-21, account administration -- nothing else', () => {
     for (const role of ['finance', 'technical', 'academic'] as const) {
       expect(isDepartment(role)).toBe(true)
       expect(visibleAreas(role)).toEqual(['tasks', 'accounts'])

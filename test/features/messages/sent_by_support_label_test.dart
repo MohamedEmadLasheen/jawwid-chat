@@ -9,7 +9,7 @@ import 'package:jawwid_chat/features/messages/presentation/message_bubble.dart';
 import 'package:jawwid_chat/l10n/app_localizations.dart';
 import 'package:jawwid_chat/shared/models/message.dart';
 
-/// PD-20: a message an administrator sent in a support session, acting as a parent or
+/// PD-21: a message an administrator sent in a support session, acting as a parent or
 /// teacher, is labelled "Sent by support" -- to every reader, the person themself included.
 /// The server says so (`MessageDto.sentBySupport`); the client must never drop it.
 void main() {

@@ -15,7 +15,7 @@ import { Actor, SYSTEM_ACTOR } from '../../platform/types';
 import { ConversationService } from '../conversations/conversation.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { CommEvent } from '../contracts/events';
-import { CallOutcome, CallStatus, CallType, ConversationType, GROUP_CONVERSATION_TYPES } from '../contracts/vocab';
+import { CallOutcome, CallStatus, CallType, ConversationType, GROUP_CALL_CONVERSATION_TYPES } from '../contracts/vocab';
 
 /**
  * Calling.
@@ -95,7 +95,9 @@ export class CallService {
     );
     if (!decision.allowed) throw new CommError(decision.code, decision.reason);
 
-    const type = GROUP_CONVERSATION_TYPES.has(conv.type) ? CallType.GROUP : CallType.DIRECT;
+    // PD-19 second amendment: the staff-only groups around a teacher (trial
+    // group, supervision) seat several people, so their calls are group calls.
+    const type = GROUP_CALL_CONVERSATION_TYPES.has(conv.type) ? CallType.GROUP : CallType.DIRECT;
 
     // Unguessable and server-owned.
     const roomName = `jawwid-${conv.id}-${randomUUID()}`;
@@ -209,7 +211,7 @@ export class CallService {
     // they are not a member of -- and so, through canCall, could start a call
     // that rings everyone else while the caller holds no seat in it: a phantom
     // call. Starting a call is taking part in it, so it needs membership --
-    // except the super admin in a group (PD-19 amendment), who is given a seat
+    // except the super admin in a group (PD-19 amendments), who is given a seat
     // on the call itself below.
     const seat = this.authz.canStartCallAsParticipant(initiator, participantActors, conv);
     if (seat.allowed && !participantActors.some((a) => a.actorId === initiator.actorId)) {

@@ -48,7 +48,7 @@ export interface SupportTokenDto {
 }
 
 /**
- * PD-20: impersonation -- an administrator acting as a parent or teacher
+ * PD-21: impersonation -- an administrator acting as a parent or teacher
  * account, in a "support session" that:
  *   - is decided by AuthorizationService.canAdministerAccount('impersonate')
  *     (any staff role; parent and teacher accounts only), and RE-decided on

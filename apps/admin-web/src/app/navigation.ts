@@ -144,7 +144,7 @@ const AREA_ICON: Record<OperatorArea, IconName> = {
 /** The super admin's name for /chat, distinct from the read-only section's. */
 export const ADMIN_CHAT_LABEL: Bilingual = { en: 'Chat', ar: 'الدردشة' }
 
-/** PD-20: account administration, beside the read-only Users section. */
+/** PD-21: account administration, beside the read-only Users section. */
 export const ADMIN_ACCOUNTS_LABEL: Bilingual = { en: 'Accounts', ar: 'الحسابات' }
 
 function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
@@ -180,7 +180,7 @@ function adminDestinations(): Map<DestinationKey, NavEntryGroup[]> {
     label: { text: ADMIN_CHAT_LABEL },
     inDevelopment: false,
   })
-  // PD-20: the super admin administers accounts (reset, set inactive) at
+  // PD-21: the super admin administers accounts (reset, set inactive) at
   // /accounts, the same page every staff role has; Users stays read-only.
   out.get('people')?.[0]?.entries.push({
     key: 'accounts',

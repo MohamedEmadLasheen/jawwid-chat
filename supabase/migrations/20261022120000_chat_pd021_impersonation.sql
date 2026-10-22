@@ -1,4 +1,4 @@
--- PD-20 (2026-10-22): impersonation -- a "support session".
+-- PD-21 (2026-10-22): impersonation -- a "support session".
 --
 -- An administrator acts AS a parent (family) or teacher account, to see what
 -- they see and to make changes for them. Owner decisions: parent and teacher
@@ -43,7 +43,7 @@ create table chat.impersonation_session (
 );
 
 comment on table chat.impersonation_session is
-  'PD-20: an administrator acting as a parent or teacher account. Who, whom, why, when; never deleted; ends with the administrator''s own session.';
+  'PD-21: an administrator acting as a parent or teacher account. Who, whom, why, when; never deleted; ends with the administrator''s own session.';
 
 create index impersonation_session_staff on chat.impersonation_session (staff_id, started_at desc);
 create index impersonation_session_target on chat.impersonation_session (target_account_id, started_at desc);
@@ -142,7 +142,7 @@ create table chat.impersonation_action (
 );
 
 comment on table chat.impersonation_action is
-  'PD-20: every request made on a support session -- method, route template, status. Never a body. Append-only.';
+  'PD-21: every request made on a support session -- method, route template, status. Never a body. Append-only.';
 
 create index impersonation_action_session on chat.impersonation_action (impersonation_id, at);
 
@@ -159,7 +159,7 @@ create index audit_log_impersonation on chat.audit_log (impersonation_id) where 
 alter table chat.message add column impersonation_id uuid references chat.impersonation_session (id);
 
 comment on column chat.message.impersonation_id is
-  'PD-20: set when the message was sent by an administrator in a support session; clients label it "sent by support".';
+  'PD-21: set when the message was sent by an administrator in a support session; clients label it "sent by support".';
 
 -- Request roles: none.
 alter table chat.impersonation_session enable row level security;

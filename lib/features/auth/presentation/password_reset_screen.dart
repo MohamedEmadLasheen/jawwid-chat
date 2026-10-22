@@ -9,7 +9,7 @@ import '../../../l10n/app_localizations.dart';
 /// What a finished reset hands back to the sign-in screen, which then signs in normally.
 typedef PasswordResetResult = ({String username, String password});
 
-/// PD-20: a parent or teacher finishes a password reset the academy issued.
+/// PD-21: a parent or teacher finishes a password reset the academy issued.
 ///
 /// The administrator never knows the password: they hand over a one-time 6-digit code, and
 /// the person enters it here with a password of their own. On success the screen pops with

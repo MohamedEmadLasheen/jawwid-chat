@@ -14,7 +14,7 @@ import './support.css'
 type Tab = 'chats' | 'profile'
 
 /**
- * PD-20: a support session -- the administrator sees and acts as a parent or
+ * PD-21: a support session -- the administrator sees and acts as a parent or
  * teacher, on the record.
  *
  * The page holds the support token in memory (supportTokens) and asks for a

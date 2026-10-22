@@ -1,5 +1,5 @@
 /**
- * PD-20 -- who may reset, suspend, reactivate or impersonate which account,
+ * PD-21 -- who may reset, suspend, reactivate or impersonate which account,
  * exercised directly on AuthorizationService.canAdministerAccount.
  *
  * Owner decision 2026-10-22: EVERY staff role, org-wide, for parent and
@@ -43,7 +43,7 @@ function refused(d: ReturnType<typeof authz.canAdministerAccount>, code: CommErr
   if (!d.allowed) expect(d.code).toBe(code);
 }
 
-describe('PD-20: parent and teacher accounts', () => {
+describe('PD-21: parent and teacher accounts', () => {
   it('every staff role may do everything to a parent and a teacher account of its organization', () => {
     for (const actor of everyStaffRole()) {
       for (const target of [familyAccount(), teacherAccount()]) {
@@ -85,7 +85,7 @@ describe('PD-20: parent and teacher accounts', () => {
   });
 });
 
-describe('PD-20: staff accounts', () => {
+describe('PD-21: staff accounts', () => {
   it('only the super admin resets, suspends or reactivates another staff member', () => {
     for (const act of ['reset_password', 'suspend', 'reactivate'] as const) {
       expect(authz.canAdministerAccount(superAdmin(), staffAccount(), act).allowed).toBe(true);

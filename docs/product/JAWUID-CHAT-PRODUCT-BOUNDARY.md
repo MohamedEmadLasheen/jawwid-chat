@@ -120,7 +120,7 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-20 — CLOSED
+## 4. Product decisions PD-1 to PD-21 — CLOSED
 
 PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
 exit gate, before `main` was baselined. **PD-6 was closed by the product owner
@@ -137,8 +137,9 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-16 was closed by the product owner on 2026-10-21** (Chat enrols new students and parents sign up).
 **PD-17 was closed by the product owner on 2026-10-21** (Parent and Student Profiles; payments recorded in Chat). It supersedes PD-10 §1 and PD-12's "Core invoices, read-only" for family money.
 **PD-18 was closed by the product owner on 2026-10-21** (teacher payroll lives in Chat) and supersedes PD-10 item 4.
-**PD-19 was closed by the product owner on 2026-10-21** (a member may start a call in their own chat; supersedes PD-2).
-**PD-20 was closed by the product owner on 2026-10-22** (account administration: password reset, inactive accounts, impersonation).
+**PD-19 was closed by the product owner on 2026-10-21** (a member may start a call in their own chat; supersedes PD-2), amended 2026-10-21 (the super admin's group calls) and 2026-10-22 (calls in the trial group and the supervision conversation).
+**PD-20 was closed by the product owner on 2026-10-22** (the Sales team uses the app: chats, calls and payments). It amends PD-15's "staff work in Admin Web; the app is for parents and teachers".
+**PD-21 was closed by the product owner on 2026-10-22** (account administration: password reset, inactive accounts, impersonation).
 
 | ID | Subject | Status |
 |---|---|---|
@@ -160,8 +161,9 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-16** | **Enrolling a new student in Chat; the parent's own sign-up** (2026-10-21) | **CLOSED** — Assign on New Students creates the family, parent and children in Chat from Sales' form; an assigned entry is the supervisor's (and their manager's); the supervisor opens the family group; the parent signs up with their e-mail and a one-time code relayed by the supervisor until WhatsApp sending is connected |
 | **PD-17** | **Parent Profile and Student Profile; family payments recorded in Chat** (2026-10-21) | **CLOSED** — a Parent Profile (contact details, internal note, children, subscription, payment method, payment timeline) for the administration only, by the Instalment Payments rule plus Sales; Operations and Sales record payments; the parent sees their own payments in the app; a Student Profile for the administration and the child's own teacher; instalments and payments are Chat's own append-only records, nothing is read from Core; teachers reach neither a parent nor money by any route |
 | **PD-18** | **Teacher payroll in Chat** (2026-10-21) | **CLOSED** — salary terms, a sealed payout account and the amounts of bonuses and deductions are recorded in Chat, for the super admin only; the month's financial summary is computed, never stored; supersedes PD-10 item 4 |
-| **PD-19** | **Who may start a call: every member of their own chat** (2026-10-21) | **CLOSED** — teachers, parents and supervisors may start a call in any chat they may write in; parents may now start their family / Student Group calls; chats a person is not a member of, BR-1 / PD-7, C-4 and the no-phantom-call rule are unchanged; amended the same day so the super admin may start a group call in any chat they may write in, with a seat on the call |
-| **PD-20** | **Account administration: password reset, inactive accounts, impersonation** (2026-10-22) | **CLOSED** — every staff role, org-wide, for parent and teacher accounts; staff accounts by the super admin only; never the super admin's or one's own; a reset is a one-time code the person completes with their own password; inactive = suspended, signed out everywhere, reactivation revives no session; impersonation of parents and teachers only, labelled messages, fully audited |
+| **PD-19** | **Who may start a call: every member of their own chat** (2026-10-21) | **CLOSED** — teachers, parents and supervisors may start a call in any chat they may write in; parents may now start their family / Student Group calls; chats a person is not a member of, BR-1 / PD-7, C-4 and the no-phantom-call rule are unchanged; amended the same day so the super admin may start a group call in any chat they may write in, with a seat on the call; amended 2026-10-22 so trial-group and supervision calls are group calls (they were refused by the database) |
+| **PD-20** | **The Sales team in the app** (2026-10-22) | **CLOSED** — Sales-department staff sign in to the app and get Chats, Calls, Payments and Settings; they view and record payments (record once, void with a reason); instalment plans, the contact record and every other staff role stay in Admin Web; the app never holds a parent's phone or e-mail |
+| **PD-21** | **Account administration: password reset, inactive accounts, impersonation** (2026-10-22) | **CLOSED** — every staff role, org-wide, for parent and teacher accounts; staff accounts by the super admin only; never the super admin's or one's own; a reset is a one-time code the person completes with their own password; inactive = suspended, signed out everywhere, reactivation revives no session; impersonation of parents and teachers only, labelled messages, fully audited |
 
 ---
 
@@ -1915,9 +1917,104 @@ the super admin call too").
 - Protected by the D1 block of
   `apps/api/test/integration/staff-call-participation.spec.ts`.
 
+**Second amendment, 2026-10-22: calls in the trial group and the supervision
+conversation** (owner answer: "Allow + super admin").
+- **The defect.** A teacher's trial group (PD-11 T4) and their supervision
+  conversation (PD-11 / PD-12) seat the teacher with several staff. The call
+  button was offered there, but the server typed those calls as **direct**,
+  and the database refuses a direct call with more than two participants, so
+  every start failed with a server error. The capability check and the start
+  disagreed.
+- **Decision.** Calls are allowed there, and they are **group** calls. Any
+  member may start one (the teacher, a Teachers-department member, or a Sales or
+  Operations supervisor who has joined the trial group).
+- The super admin may start one there without being a member, with **a seat on
+  the call**, as in the first amendment. The chat's member list does not change.
+- **Unchanged.** Someone who may write in these chats without being a member
+  (for example a Sales supervisor who has not joined a trial group), a
+  department manager or an active backup still may not start a call (D1). A
+  direct call still has exactly two seats. C-4 is unaffected: no family contact
+  can be a member of either chat.
+- **Canonical rule.** `GROUP_CALL_CONVERSATION_TYPES` (in
+  `apps/api/src/communication/contracts/vocab.ts`) decides a call's type and
+  the super admin's seat. It is the family-facing groups plus `trial_group` and
+  `teacher_supervision`. `GROUP_CONVERSATION_TYPES`, which drives C-4 admin
+  presence, does not change.
+- Protected by `apps/api/test/integration/call-staff-group-chats.spec.ts` and
+  `apps/api/test/unit/authorization/call-seat-group-call-types.spec.ts`.
+
 ---
 
-### PD-20 · Account administration: password reset, inactive accounts, impersonation
+### PD-20 · The Sales team in the app
+
+**Closed 2026-10-22** by the product owner. Amends PD-15 ("staff work in Admin
+Web; the app is for parents and teachers") for the Sales department only.
+
+The owner asked to "let Sales see the Payments in the app too". Staff could not
+sign in to the app at all. Owner answers the same day: Sales **views and records**
+payments in the app (as in Admin Web: record a payment once, void a mistake with
+a reason; instalment plans stay in Admin Web), and also gets **Chats and Calls**.
+
+**Final decision.**
+
+```
+who signs in          = a parent, a teacher (unchanged), or a Sales-department
+                        staff member whose staff role is a conversation role
+                        (admin, coverage, manager). GET /lessons/access says
+                        `sales`. Since the amendment below, also the super
+                        admin. Every other staff member is still sent to
+                        Admin Web.
+Sales tabs            = Chats, Calls, Payments, Settings
+Chats                 = what the server already shows Sales (every trial group,
+                        their own directs and supervised groups); trial groups
+                        list as groups; an internal note is labelled as one
+Calls                 = the server's call capability, unchanged: only a live
+                        member starts a call (D1), so a Sales viewer first joins a
+                        trial group from the app ("Join this group")
+Payments              = search families (GET /parent-profiles?q=), a family's
+                        timeline (GET /families/:id/billing), record a payment
+                        (POST /instalments/:id/payment), void with a reason
+                        (POST /instalments/:id/void) -- PD-17's rules, server-side
+```
+
+* **No contact channel in the app.** The app never calls a Parent Profile's
+  detail route, so it never holds a parent's phone or e-mail (G-07, the
+  Contact File rule). A guard test confines the payment routes to the Sales
+  payments feature and fails on any parent-profile detail path anywhere in the
+  app.
+* **The server is unchanged** and remains the control: every route Sales uses
+  in the app is the one Admin Web already uses, with the same refusals.
+* A staff account the app refuses is now signed out on the server too (no
+  orphaned session).
+
+**Implementation phase.** Flutter only: `UserRole.sales`, the Sales shell, the
+`sales_payments` feature, trial groups as groups, internal-note labels, Join this
+group.
+
+**Consequences.** PD-15's sentence holds for every other staff role. Adding
+another department to the app is a new decision.
+
+**Deprecated behaviour.** "Staff accounts use the Jawwid console" no longer
+applies to Sales.
+
+**Defaults adopted at closing** (the owner may override without reopening PD-20):
+1. ~~The super admin keeps using Admin Web; the app does not admit it as Sales.~~
+   Overridden the same day, see the amendment.
+2. Composing an internal note from the app is not offered.
+
+**Amendment, 2026-10-22: the super admin signs in too** (owner: "let owner sign in
+with the Sales tabs"). The organization's `super_admin` signs in to the app with the
+same tabs (Chats, Calls, Payments, Settings), labelled "Super admin" / "المدير العام".
+No department is needed: the server already serves it every conversation, family
+and payment of the organization. It is not offered "Join this group": it may start a
+group call without a seat in the chat (PD-19 amendments). Admin Web's administration
+pages (Organization, Teacher Files, discipline, the Admin Portal) are not in the app.
+
+**Closed.** 2026-10-22.
+
+---
+
+### PD-21 · Account administration: password reset, inactive accounts, impersonation
 
 **Closed by the product owner on 2026-10-22** (owner request: admins, the super
 admin included, may impersonate a student's account, reset another account's
@@ -1957,7 +2054,7 @@ revoke sessions — was the super admin's alone, and no route served it.
    and the end, and every action taken; it is short-lived and ends with the
    administrator's own session. Calls, receipts and anything else that would act
    in the person's name unlabelled are refused in a support session (record:
-   `../admin/pd020-account-administration.md`).
+   `../admin/pd021-account-administration.md`).
 
 **Canonical rule.** `AuthorizationService.canAdministerAccount(actor, target,
 act)` decides all four acts; `AccountAdminService` asks it before it reveals or
@@ -1972,7 +2069,7 @@ transaction with the administrator as actor and their reason.
   on the sign-in page. The mobile app has the same reset screen.
 - Departments (finance, technical, academic) gain one page: Accounts.
 - Supersedes the super-admin-only scope of `users.manage` for these acts.
-- Record: `../admin/pd020-account-administration.md`.
+- Record: `../admin/pd021-account-administration.md`.
 
 **Deprecated behaviour.** `users.manage` as a super-admin-only key for reset and
 suspension. PRD §7.1's "temporary password" wording: the administrator issues a
@@ -1980,7 +2077,9 @@ code, never a password.
 
 **Closed.** 2026-10-22.
 
-### Decisions still open after PD-1 to PD-20
+---
+
+### Decisions still open after PD-1 to PD-21
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
 The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their

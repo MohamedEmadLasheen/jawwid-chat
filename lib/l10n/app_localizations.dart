@@ -4518,6 +4518,180 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'If you have a question, ask the academy.'**
   String get billingDeniedBody;
+
+  /// No description provided for @tabPayments.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments'**
+  String get tabPayments;
+
+  /// No description provided for @roleSales.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales'**
+  String get roleSales;
+
+  /// No description provided for @roleSuperAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'Super admin'**
+  String get roleSuperAdmin;
+
+  /// No description provided for @conversationsEmptyBodySales.
+  ///
+  /// In en, this message translates to:
+  /// **'Trial groups and your conversations will appear here.'**
+  String get conversationsEmptyBodySales;
+
+  /// No description provided for @internalNoteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Internal note'**
+  String get internalNoteLabel;
+
+  /// No description provided for @trialGroupNotMember.
+  ///
+  /// In en, this message translates to:
+  /// **'You are not a member of this group yet.'**
+  String get trialGroupNotMember;
+
+  /// No description provided for @trialGroupJoin.
+  ///
+  /// In en, this message translates to:
+  /// **'Join this group'**
+  String get trialGroupJoin;
+
+  /// No description provided for @salesSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search parents or families'**
+  String get salesSearchHint;
+
+  /// No description provided for @salesSearchEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No parents found'**
+  String get salesSearchEmpty;
+
+  /// No description provided for @salesSearchTruncated.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing the first results. Type more to narrow the search.'**
+  String get salesSearchTruncated;
+
+  /// How many children a family has, in a search result.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No children} =1{1 child} other{{count} children}}'**
+  String salesChildrenCount(int count);
+
+  /// No description provided for @salesPaymentsDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments are not available for your account.'**
+  String get salesPaymentsDenied;
+
+  /// No description provided for @billingCurrencyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Currency'**
+  String get billingCurrencyLabel;
+
+  /// No description provided for @billingStatusVoided.
+  ///
+  /// In en, this message translates to:
+  /// **'Voided'**
+  String get billingStatusVoided;
+
+  /// A paid instalment: when, how, and which staff member recorded it.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid {date} · {method} · recorded by {name}'**
+  String salesPaidRecordedBy(String date, String method, String name);
+
+  /// A voided instalment: who voided it and why.
+  ///
+  /// In en, this message translates to:
+  /// **'Voided by {name}: {reason}'**
+  String salesVoidedBy(String name, String reason);
+
+  /// A voided instalment whose voiding staff member is not known.
+  ///
+  /// In en, this message translates to:
+  /// **'Voided: {reason}'**
+  String salesVoidedReason(String reason);
+
+  /// No description provided for @salesRecordPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Record payment'**
+  String get salesRecordPayment;
+
+  /// No description provided for @salesVoid.
+  ///
+  /// In en, this message translates to:
+  /// **'Void'**
+  String get salesVoid;
+
+  /// No description provided for @salesPaidOnLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid on'**
+  String get salesPaidOnLabel;
+
+  /// No description provided for @salesReferenceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reference (optional)'**
+  String get salesReferenceLabel;
+
+  /// No description provided for @salesRecordSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Record'**
+  String get salesRecordSave;
+
+  /// No description provided for @salesVoidTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Void this instalment?'**
+  String get salesVoidTitle;
+
+  /// No description provided for @salesVoidFinal.
+  ///
+  /// In en, this message translates to:
+  /// **'Voiding is final: the instalment can no longer be paid.'**
+  String get salesVoidFinal;
+
+  /// No description provided for @salesVoidReasonLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get salesVoidReasonLabel;
+
+  /// No description provided for @salesVoidConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Void instalment'**
+  String get salesVoidConfirm;
+
+  /// No description provided for @salesBillingStateConflict.
+  ///
+  /// In en, this message translates to:
+  /// **'This instalment was already paid or voided. The list has been refreshed.'**
+  String get salesBillingStateConflict;
+
+  /// No description provided for @salesBillingInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the date and the reference, then try again.'**
+  String get salesBillingInvalid;
+
+  /// No description provided for @salesWriteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save. Try again.'**
+  String get salesWriteFailed;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

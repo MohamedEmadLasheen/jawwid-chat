@@ -185,7 +185,7 @@ model AuditLog {
   after    Json?
   reason   String
   at       DateTime @db.Timestamptz @default(now())
-  /// PD-20: set when written during a support session (an administrator acting as someone).
+  /// PD-21: set when written during a support session (an administrator acting as someone).
   impersonationId String? @map("impersonation_id") @db.Uuid
 
   @@map("audit_log")
@@ -287,7 +287,7 @@ model Message {
   /// A forward (20261020100000); `forwardedFromMessageId` is audit-only provenance, never sent to a client.
   forwarded              Boolean @default(false)
   forwardedFromMessageId String? @map("forwarded_from_message_id") @db.Uuid
-  /// PD-20: sent by an administrator in a support session, as this author. Clients label it.
+  /// PD-21: sent by an administrator in a support session, as this author. Clients label it.
   impersonationId String? @map("impersonation_id") @db.Uuid
   replyTo          Message?  @relation("MessageReply", fields: [replyToMessageId], references: [id])
   replies          Message[] @relation("MessageReply")
@@ -720,7 +720,7 @@ model Session {
   /// Hashed, never the raw address.
   ipHash           String?   @map("ip_hash")
   userAgent        String?   @map("user_agent")
-  /// PD-20: this session is a support session (an administrator acting as the account).
+  /// PD-21: this session is a support session (an administrator acting as the account).
   impersonationId  String?   @unique @map("impersonation_id") @db.Uuid
 
   @@map("session")
@@ -1868,8 +1868,8 @@ model ParentSignupCode {
   @@schema("chat")
 }
 
-/// PD-20: a one-time code an administrator issues so a person can set a new
-/// password. 20261022100000_chat_pd020_password_reset.sql owns the DDL and the
+/// PD-21: a one-time code an administrator issues so a person can set a new
+/// password. 20261022100000_chat_pd021_password_reset.sql owns the DDL and the
 /// rules (who may issue one; forward-only; never deleted). Hash only.
 model PasswordResetCode {
   id             String    @id @default(uuid()) @db.Uuid
@@ -1950,8 +1950,8 @@ model FamilyInstalment {
   @@schema("chat")
 }
 
-/// PD-20: an administrator acting as a parent or teacher account (a "support
-/// session"). 20261022120000_chat_pd020_impersonation.sql owns the DDL and the
+/// PD-21: an administrator acting as a parent or teacher account (a "support
+/// session"). 20261022120000_chat_pd021_impersonation.sql owns the DDL and the
 /// rules (who, whom, at most an hour, never deleted, forward-only).
 model ImpersonationSession {
   id              String    @id @default(uuid()) @db.Uuid
@@ -1975,7 +1975,7 @@ model ImpersonationSession {
   @@schema("chat")
 }
 
-/// PD-20: every request made on a support session -- method, route template,
+/// PD-21: every request made on a support session -- method, route template,
 /// status, never a body. Append-only.
 model ImpersonationAction {
   id              BigInt   @id @default(autoincrement())

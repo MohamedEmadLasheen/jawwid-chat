@@ -921,7 +921,7 @@ function MessageItem({
               {copy.forwarded}
             </span>
           )}
-          {/* PD-20: an administrator wrote this in a support session, as its author. */}
+          {/* PD-21: an administrator wrote this in a support session, as its author. */}
           {m.sentBySupport && (
             <span className="cw-forwarded cw-support">
               <Icon name="info" size={12} />

@@ -116,7 +116,12 @@ class AuthController extends Notifier<AuthState> {
       _adopt(principal);
       state = AuthAuthenticated(principal);
     } on AppError catch (error) {
-      if (error.terminatesSession || error.code == AuthFailures.roleNotSupported) {
+      if (error.code == AuthFailures.roleNotSupported) {
+        // The tokens are good -- only this app cannot act as the principal -- so the
+        // server session is ended too, not orphaned for thirty days.
+        await _logoutBestEffort();
+        await _endSession(AuthSignedOut.reasonFor(error));
+      } else if (error.terminatesSession) {
         await _endSession(AuthSignedOut.reasonFor(error));
       } else if (state is AuthSignedOut) {
         // The transport already ended the session while this was in flight; its reason
@@ -160,6 +165,9 @@ class AuthController extends Notifier<AuthState> {
           : AppError(AppErrorKind.unknown, debugDetail: thrown.runtimeType.toString());
       // Never log the attempted credentials, and never echo the raw server body.
       _logger.warn('sign-in failed', data: {'kind': error.kind.name});
+      // A principal the app cannot act as was still issued a real session (tokens are
+      // already stored): end it on the server before the tokens are forgotten.
+      if (error.code == AuthFailures.roleNotSupported) await _logoutBestEffort();
       // The same teardown a session ending performs, not just the tokens. A failed sign-in
       // must not be able to leave a principal adopted by the transport or a revocation watch
       // running: the router makes that unreachable today, and a controller whose safety
@@ -210,6 +218,18 @@ class AuthController extends Notifier<AuthState> {
       } else {
         _logger.warn('identity refresh failed', data: {'kind': error.kind.name});
       }
+    }
+  }
+
+  /// `POST /auth/logout` for a session about to be dropped locally. Never throws and never
+  /// blocks the sign-out: a session the client can no longer name expires on its own.
+  Future<void> _logoutBestEffort() async {
+    try {
+      await _repository.signOut();
+    } catch (error) {
+      _logger.warn('logout of a refused session failed', data: {
+        'kind': error is AppError ? error.kind.name : error.runtimeType.toString(),
+      });
     }
   }
 

@@ -67,6 +67,9 @@ abstract final class WireMappers {
         // cares about (moderated, admin present, several members); it may be
         // about more than one child, so it can arrive without a single learner.
         Wire.conversationFamilyGroup => ConversationKind.studentGroup,
+        // PD-20: a teacher's trial group with Sales is a GROUP (several members, Sales
+        // joins and leaves it) and lists under Groups -- for the teacher and for Sales.
+        Wire.conversationTrialGroup => ConversationKind.studentGroup,
         Wire.conversationDirect => _directKind(members),
         // An unknown type is not a direct conversation this client understands.
         // adminDirect remains the pre-PD-6 default for backward compatibility;
@@ -316,6 +319,9 @@ abstract final class WireMappers {
       isReadOnly: archivedAt != null || kind == ConversationKind.teacherParentDirect,
       isTeacherSupervision: json['type'] == Wire.conversationTeacherSupervision,
       isTrialGroup: json['type'] == Wire.conversationTrialGroup,
+      // Sales sees every teacher's trial group; the server's title (the teacher's name)
+      // is what tells them apart, so it is not replaced by "Trial lessons".
+      namedByServer: viewerRole == UserRole.sales,
     );
   }
 
@@ -404,6 +410,7 @@ abstract final class WireMappers {
       isForwarded: json['forwarded'] == true,
       isSentBySupport: json['sentBySupport'] == true,
       editedAt: parseTime(json['editedAt']),
+      isInternal: json['visibility'] == Wire.visibilityInternal,
       reactions: [
         for (final entry in byEmoji.entries)
           Reaction(

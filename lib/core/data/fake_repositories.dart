@@ -5,6 +5,7 @@ import '../../shared/models/conversation.dart';
 import '../../shared/models/message.dart';
 import '../../shared/models/parent_billing.dart';
 import '../../shared/models/parent_profile.dart';
+import '../../shared/models/trial.dart';
 import '../errors/app_error.dart';
 import '../storage/secure_token_store.dart';
 import 'fake_backend.dart';
@@ -204,6 +205,24 @@ class FakeMessageRepository implements MessageRepository {
 
   @override
   Future<void> setTyping(String conversationId, {required bool isTyping}) async {}
+}
+
+/// The fixture build's trial repository: no tickets, and a join that the fixture
+/// backend records, so a Sales seat can join a trial group without a server.
+class FakeTrialRepository implements TrialRepository {
+  FakeTrialRepository(this.backend);
+
+  final FakeBackend backend;
+
+  @override
+  Future<List<TrialTicket>> tickets(String conversationId) async => const [];
+
+  @override
+  Future<void> reportAttendance(String trialId, TrialAttendanceDraft draft) =>
+      throw UnsupportedError('no trial server in this build');
+
+  @override
+  Future<void> joinGroup(String conversationId) async => backend.joinTrialGroup(conversationId);
 }
 
 class FakeGroupRepository implements GroupRepository {
