@@ -281,6 +281,19 @@ class FakeBillingRepository implements BillingRepository {
 
   @override
   Future<ParentBilling> myBilling() async => ParentBilling.empty;
+
+  // Nothing is owed, so nothing can be paid: there is no request or instalment to name.
+  @override
+  Future<String> checkout({String? requestId, String? instalmentId}) =>
+      throw const AppError(AppErrorKind.notFound, code: 'COMM.BILLING_NOT_FOUND');
+
+  @override
+  Future<ParentBilling> submitReceipt(ReceiptDraft draft) =>
+      throw const AppError(AppErrorKind.notFound, code: 'COMM.BILLING_NOT_FOUND');
+
+  @override
+  Future<String> invoiceLink(String invoiceId) =>
+      throw const AppError(AppErrorKind.notFound, code: 'COMM.BILLING_NOT_FOUND');
 }
 
 class FakeProfileRepository implements ProfileRepository {

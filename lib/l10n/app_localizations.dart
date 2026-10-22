@@ -4782,6 +4782,342 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Could not change the time zone. Try again.'**
   String get timeZoneSaveFailed;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount due'**
+  String get billingAmountDueTitle;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay'**
+  String get billingPay;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid {paid} of {total}'**
+  String billingPaidOfTotal(String paid, String total);
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'{start} – {end}'**
+  String billingPeriod(String start, String end);
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'We\'re confirming your payment. This can take a minute.'**
+  String get billingConfirmingPayment;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'How would you like to pay?'**
+  String get billingPaySheetTitle;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay by card'**
+  String get billingPayByCard;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Opens a secure payment page'**
+  String get billingPayByCardHint;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer the amount, then upload the receipt'**
+  String get billingBankTransferHint;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Card payment isn\'t available right now. You can pay by bank transfer.'**
+  String get billingPaymentsUnavailable;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'This has already been paid or is no longer open. The list has been refreshed.'**
+  String get billingNoLongerOpen;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t open the page. Try again.'**
+  String get billingCouldNotOpen;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount to transfer'**
+  String get billingTransferAmount;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Bank'**
+  String get billingBankName;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Account name'**
+  String get billingAccountName;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'IBAN'**
+  String get billingIban;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Account number'**
+  String get billingAccountNumber;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'SWIFT'**
+  String get billingSwift;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get billingCopy;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get billingCopied;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'The academy hasn\'t added its bank details yet. Ask your supervisor for them.'**
+  String get billingNoBankAccount;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload receipt'**
+  String get billingUploadReceiptTitle;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo'**
+  String get billingReceiptPhoto;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera'**
+  String get billingReceiptCamera;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'PDF'**
+  String get billingReceiptPdf;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'A screenshot or PDF of the transfer: JPEG, PNG, WebP or PDF, up to 10 MB.'**
+  String get billingReceiptFileHint;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo attached'**
+  String get billingReceiptAttachedPhoto;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get billingReceiptRemove;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount you transferred ({currency})'**
+  String billingReceiptAmountLabel(String currency);
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer date'**
+  String get billingReceiptDateLabel;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get billingReceiptNoteLabel;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Send receipt'**
+  String get billingReceiptSend;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt sent. The academy will confirm it soon.'**
+  String get billingReceiptSent;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach the receipt first.'**
+  String get billingReceiptNeedFile;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the amount you transferred.'**
+  String get billingReceiptBadAmount;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Use a JPEG, PNG or WebP image, or a PDF.'**
+  String get billingReceiptWrongType;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'The file is larger than 10 MB.'**
+  String get billingReceiptTooLarge;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow access in Settings, then try again.'**
+  String get billingReceiptPickDenied;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t use that file. Try another one.'**
+  String get billingReceiptPickFailed;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the amount and the date, then try again.'**
+  String get billingReceiptInvalid;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer receipts'**
+  String get billingReceiptsTitle;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending verification'**
+  String get billingReceiptPending;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved'**
+  String get billingReceiptApproved;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Rejected'**
+  String get billingReceiptRejected;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason: {reason}'**
+  String billingReceiptRejectReason(String reason);
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Transferred {date}'**
+  String billingTransferredOn(String date);
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Invoices'**
+  String get billingInvoicesTitle;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Issued {date}'**
+  String billingInvoiceIssued(String date);
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Refunded'**
+  String get billingInvoiceRefunded;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Partially refunded'**
+  String get billingInvoicePartiallyRefunded;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Download'**
+  String get billingInvoiceDownload;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Refunded {amount}'**
+  String billingRefundedAmount(String amount);
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Card'**
+  String get billingMethodCard;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash'**
+  String get billingMethodCash;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many attempts. Wait a while, then try again.'**
+  String get billingTooManyAttempts;
+
+  /// PD-27: Settings -> Payments.
+  ///
+  /// In en, this message translates to:
+  /// **'This receipt can\'t be added: the amount is already paid or closed, or other receipts are still waiting to be checked.'**
+  String get billingReceiptNotAccepted;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

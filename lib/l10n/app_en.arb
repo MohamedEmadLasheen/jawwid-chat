@@ -1492,5 +1492,270 @@
   "timeZoneSaveFailed": "Could not change the time zone. Try again.",
   "@timeZoneSaveFailed": {
     "description": "PD-22: Settings -> Date & time."
+  },
+  "billingAmountDueTitle": "Amount due",
+  "@billingAmountDueTitle": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingPay": "Pay",
+  "@billingPay": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingPaidOfTotal": "Paid {paid} of {total}",
+  "@billingPaidOfTotal": {
+    "description": "PD-27: Settings -> Payments.",
+    "placeholders": {
+      "paid": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "billingPeriod": "{start} – {end}",
+  "@billingPeriod": {
+    "description": "PD-27: Settings -> Payments.",
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "billingConfirmingPayment": "We're confirming your payment. This can take a minute.",
+  "@billingConfirmingPayment": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingPaySheetTitle": "How would you like to pay?",
+  "@billingPaySheetTitle": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingPayByCard": "Pay by card",
+  "@billingPayByCard": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingPayByCardHint": "Opens a secure payment page",
+  "@billingPayByCardHint": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingBankTransferHint": "Transfer the amount, then upload the receipt",
+  "@billingBankTransferHint": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingPaymentsUnavailable": "Card payment isn't available right now. You can pay by bank transfer.",
+  "@billingPaymentsUnavailable": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingNoLongerOpen": "This has already been paid or is no longer open. The list has been refreshed.",
+  "@billingNoLongerOpen": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingCouldNotOpen": "Couldn't open the page. Try again.",
+  "@billingCouldNotOpen": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingTransferAmount": "Amount to transfer",
+  "@billingTransferAmount": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingBankName": "Bank",
+  "@billingBankName": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingAccountName": "Account name",
+  "@billingAccountName": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingIban": "IBAN",
+  "@billingIban": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingAccountNumber": "Account number",
+  "@billingAccountNumber": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingSwift": "SWIFT",
+  "@billingSwift": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingCopy": "Copy",
+  "@billingCopy": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingCopied": "Copied",
+  "@billingCopied": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingNoBankAccount": "The academy hasn't added its bank details yet. Ask your supervisor for them.",
+  "@billingNoBankAccount": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingUploadReceiptTitle": "Upload receipt",
+  "@billingUploadReceiptTitle": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingReceiptPhoto": "Photo",
+  "@billingReceiptPhoto": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingReceiptCamera": "Camera",
+  "@billingReceiptCamera": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingReceiptPdf": "PDF",
+  "@billingReceiptPdf": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingReceiptFileHint": "A screenshot or PDF of the transfer: JPEG, PNG, WebP or PDF, up to 10 MB.",
+  "@billingReceiptFileHint": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingReceiptAttachedPhoto": "Photo attached",
+  "@billingReceiptAttachedPhoto": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingReceiptRemove": "Remove",
+  "@billingReceiptRemove": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingReceiptAmountLabel": "Amount you transferred ({currency})",
+  "@billingReceiptAmountLabel": {
+    "description": "PD-27: Settings -> Payments.",
+    "placeholders": {
+      "currency": {
+        "type": "String"
+      }
+    }
+  },
+  "billingReceiptDateLabel": "Transfer date",
+  "@billingReceiptDateLabel": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingReceiptNoteLabel": "Note (optional)",
+  "@billingReceiptNoteLabel": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingReceiptSend": "Send receipt",
+  "@billingReceiptSend": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingReceiptSent": "Receipt sent. The academy will confirm it soon.",
+  "@billingReceiptSent": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingReceiptNeedFile": "Attach the receipt first.",
+  "@billingReceiptNeedFile": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingReceiptBadAmount": "Enter the amount you transferred.",
+  "@billingReceiptBadAmount": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingReceiptWrongType": "Use a JPEG, PNG or WebP image, or a PDF.",
+  "@billingReceiptWrongType": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingReceiptTooLarge": "The file is larger than 10 MB.",
+  "@billingReceiptTooLarge": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingReceiptPickDenied": "Allow access in Settings, then try again.",
+  "@billingReceiptPickDenied": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingReceiptPickFailed": "Couldn't use that file. Try another one.",
+  "@billingReceiptPickFailed": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingReceiptInvalid": "Check the amount and the date, then try again.",
+  "@billingReceiptInvalid": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingReceiptsTitle": "Transfer receipts",
+  "@billingReceiptsTitle": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingReceiptPending": "Pending verification",
+  "@billingReceiptPending": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingReceiptApproved": "Approved",
+  "@billingReceiptApproved": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingReceiptRejected": "Rejected",
+  "@billingReceiptRejected": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingReceiptRejectReason": "Reason: {reason}",
+  "@billingReceiptRejectReason": {
+    "description": "PD-27: Settings -> Payments.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "billingTransferredOn": "Transferred {date}",
+  "@billingTransferredOn": {
+    "description": "PD-27: Settings -> Payments.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "billingInvoicesTitle": "Invoices",
+  "@billingInvoicesTitle": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingInvoiceIssued": "Issued {date}",
+  "@billingInvoiceIssued": {
+    "description": "PD-27: Settings -> Payments.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "billingInvoiceRefunded": "Refunded",
+  "@billingInvoiceRefunded": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingInvoicePartiallyRefunded": "Partially refunded",
+  "@billingInvoicePartiallyRefunded": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingInvoiceDownload": "Download",
+  "@billingInvoiceDownload": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingRefundedAmount": "Refunded {amount}",
+  "@billingRefundedAmount": {
+    "description": "PD-27: Settings -> Payments.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "billingMethodCard": "Card",
+  "@billingMethodCard": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingMethodCash": "Cash",
+  "@billingMethodCash": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingTooManyAttempts": "Too many attempts. Wait a while, then try again.",
+  "@billingTooManyAttempts": {
+    "description": "PD-27: Settings -> Payments."
+  },
+  "billingReceiptNotAccepted": "This receipt can't be added: the amount is already paid or closed, or other receipts are still waiting to be checked.",
+  "@billingReceiptNotAccepted": {
+    "description": "PD-27: Settings -> Payments."
   }
 }

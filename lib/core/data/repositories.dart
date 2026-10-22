@@ -803,12 +803,64 @@ class NoLessonRepository implements LessonRepository {
       throw UnsupportedError('no lesson server in this build');
 }
 
-/// PD-17: the signed-in parent's own payments. One endpoint; NO AUTHORIZATION LIVES
+/// PD-17: the signed-in parent's own payments. NO AUTHORIZATION LIVES
 /// HERE -- the server answers only the parent who holds billing for their family and
 /// refuses everyone else (`COMM.BILLING_DENIED`), and that refusal reaches the caller.
+///
+/// PD-27 adds paying: a card checkout the server opens (and confirms only from Stripe's
+/// verified webhook -- nothing the app sees marks anything paid), a bank-transfer receipt
+/// the academy verifies, and each invoice's PDF.
 abstract interface class BillingRepository {
   /// `GET /me/billing`
   Future<ParentBilling> myBilling();
+
+  /// `POST /me/billing/checkout` with exactly one of [requestId] / [instalmentId]: the
+  /// Stripe Checkout URL to open in the browser. `503 COMM.PAYMENTS_UNAVAILABLE` on a
+  /// deployment without Stripe; `409 COMM.BILLING_STATE` when it is no longer open.
+  Future<String> checkout({String? requestId, String? instalmentId});
+
+  /// Upload the file (`POST /me/billing/receipts/upload`, then a bare PUT to the signed
+  /// URL), then `POST /me/billing/receipts`. Answers the whole billing view again.
+  Future<ParentBilling> submitReceipt(ReceiptDraft draft);
+
+  /// `GET /me/billing/invoices/:id/link`: a short-lived signed PDF link for this viewer.
+  Future<String> invoiceLink(String invoiceId);
+}
+
+/// PD-27: the refusals a payment screen answers in its own words.
+abstract final class BillingErrors {
+  /// 503: Stripe is not configured on this deployment.
+  static const paymentsUnavailable = 'COMM.PAYMENTS_UNAVAILABLE';
+
+  /// 409: already paid, cancelled, expired or decided.
+  static const state = 'COMM.BILLING_STATE';
+}
+
+/// PD-27: one bank-transfer receipt, before it is sent. Pays exactly one of
+/// [requestId] / [instalmentId] (a request wins when both are known).
+class ReceiptDraft {
+  const ReceiptDraft({
+    required this.file,
+    required this.amountMinor,
+    required this.transferredOn,
+    this.requestId,
+    this.instalmentId,
+    this.note,
+  });
+
+  /// JPEG, PNG, WebP or PDF, at most [maxBytes].
+  final PendingAttachment file;
+  final String? requestId;
+  final String? instalmentId;
+
+  /// What the parent says they sent, in the currency's minor units.
+  final int amountMinor;
+  final DateTime transferredOn;
+  final String? note;
+
+  /// The server's allow-list, mirrored so a wrong file is refused before any upload.
+  static const mimeTypes = {'image/jpeg', 'image/png', 'image/webp', 'application/pdf'};
+  static const maxBytes = 10 * 1024 * 1024;
 }
 
 /// The build with no billing server: refuses rather than answering "no payments",
@@ -818,6 +870,16 @@ class NoBillingRepository implements BillingRepository {
 
   @override
   Future<ParentBilling> myBilling() => throw UnsupportedError('no billing server in this build');
+
+  @override
+  Future<String> checkout({String? requestId, String? instalmentId}) =>
+      throw UnsupportedError('no billing server in this build');
+
+  @override
+  Future<ParentBilling> submitReceipt(ReceiptDraft draft) => throw UnsupportedError('no billing server in this build');
+
+  @override
+  Future<String> invoiceLink(String invoiceId) => throw UnsupportedError('no billing server in this build');
 }
 
 /// PD-11 T4: the teacher's trial group -- the trials they may report under "+", and the
