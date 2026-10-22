@@ -110,7 +110,7 @@ describe('PD-22 daylight-saving warning', () => {
     expect(bodies[0]).not.toMatch(/learner_l|parent_p|teacher_c/);
 
     const ar = await g.templates.render('lesson_clock_shift', 'ar', { day: 'الجمعة ٣٠ أكتوبر', time: '٦:٠٠ م' });
-    expect(ar).toEqual({ title: 'جوّيد', body: 'بسبب تغيير التوقيت، تبدأ الحصة ابتداءً من الجمعة ٣٠ أكتوبر الساعة ٦:٠٠ م بتوقيتك.' });
+    expect(ar).toEqual({ title: 'جَوِّد', body: 'بسبب تغيير التوقيت، تبدأ الحصة ابتداءً من الجمعة ٣٠ أكتوبر الساعة ٦:٠٠ م بتوقيتك.' });
   });
 
   it('tells nobody whose local time does not move, or whose zone is unknown', async () => {

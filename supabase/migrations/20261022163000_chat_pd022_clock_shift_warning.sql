@@ -24,7 +24,7 @@ insert into chat.notification_template (key, locale, version, title, body)
 select v.key, v.locale, 1, v.title, v.body
   from (values
     ('lesson_clock_shift', 'en', 'Jawwid', 'The clocks are changing: from {day}, the lesson starts at {time} your time.'),
-    ('lesson_clock_shift', 'ar', 'جوّيد',  'بسبب تغيير التوقيت، تبدأ الحصة ابتداءً من {day} الساعة {time} بتوقيتك.')
+    ('lesson_clock_shift', 'ar', 'جَوِّد',  'بسبب تغيير التوقيت، تبدأ الحصة ابتداءً من {day} الساعة {time} بتوقيتك.')
   ) as v(key, locale, title, body)
  where not exists (
    select 1 from chat.notification_template t where t.key = v.key and t.locale = v.locale and t.version = 1);
