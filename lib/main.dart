@@ -10,6 +10,7 @@ import 'app/bootstrap.dart';
 import 'app/providers.dart';
 import 'app/retry_policy.dart';
 import 'core/push/push_registration.dart';
+import 'core/time/time_zone_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,6 +47,10 @@ Future<void> main() async {
   // happens to be mounted -- and because `app.dart` and `router.dart` belong to a closed
   // workstream. It must be listened, not read: see `startPushRegistration`.
   startPushRegistration(container);
+
+  // PD-22. The account's time zone follows the phone (or the zone picked in Settings) for as
+  // long as the app runs; started here for the same reasons as push registration.
+  startTimeZoneSync(container);
 
   runApp(
     UncontrolledProviderScope(

@@ -12,6 +12,7 @@ import { ActivitySection } from './ActivitySection'
 import { TeamSection } from './TeamSection'
 import { OrganizationPanel } from './OrganizationPanel'
 import { ReportingLineDialog } from './ReportingLineDialog'
+import { D as DEVICES } from '@/features/devices/copy'
 import './profile.css'
 
 /**
@@ -55,6 +56,8 @@ export function ProfilePage() {
       <header className="sp-header">
         <h1 className="page__title">{own ? tx(T.myProfile) : tx(T.profileOf)}</h1>
         {!own && <Link to="/profile" className="btn btn--sm">{tx(T.back)}</Link>}
+        {/* PD-23: where this account is signed in -- one's own only. */}
+        {own && <Link to="/profile/devices" className="btn btn--sm">{tx(DEVICES.open)}</Link>}
       </header>
 
       <Completeness missing={profile.completeness.missing} done={profile.completeness.complete} total={profile.completeness.total} />

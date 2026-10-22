@@ -1,6 +1,6 @@
 package com.jawwid.jawwid_chat
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
@@ -33,8 +33,14 @@ import io.flutter.plugin.common.MethodChannel
  * Until then `start` is honest: it reports nothing rather than pretending a
  * token exists. The Dart side treats "no token" as "push is unavailable on this
  * build", which is exactly what it is.
+ *
+ * ## Why a FlutterFragmentActivity
+ *
+ * PD-23's app lock uses `local_auth`, whose BiometricPrompt is a Fragment and needs a
+ * FragmentActivity host. FlutterFragmentActivity offers the same `configureFlutterEngine`
+ * hook FlutterActivity did, so the push-token channel below is unchanged.
  */
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     private var channel: MethodChannel? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

@@ -71,7 +71,7 @@ assertively to screen readers.
 ## 5. Security-adjacent design rules
 
 - The password is never persisted. Tokens go to platform secure storage `[BE]` (AI #3's C1).
-- No biometric unlock in MVP.
+- Biometric unlock: an app lock over the stored session (PD-23, `../../security/pd023-convenient-sign-in.md` §3), never a server credential.
 - The role is **server-asserted** on every session and never trusted from local cache
   (AI #3's D3). The UI renders the navigation the server says the user has.
 - No account enumeration: a wrong username and a wrong password produce the same message.

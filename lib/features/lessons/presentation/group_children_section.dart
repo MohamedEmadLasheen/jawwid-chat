@@ -68,6 +68,15 @@ class _ChildCard extends StatelessWidget {
     // ISO weekday 1 = Monday; 2024-01-01 was a Monday.
     String weekday(int d) => DateFormat.EEEE(locale).format(DateTime(2024, 1, d));
     final notSet = l10n.groupChildNotSet;
+    final material = MaterialLocalizations.of(context);
+    // PD-22: the next real start in the reader's own zone; the teacher's wall clock only
+    // for a slot the server sent without one.
+    String when(GroupChildSlot s) {
+      final next = s.nextStartsAt;
+      return next == null
+          ? '${weekday(s.weekday)} · ${s.start}'
+          : '${weekday(next.weekday)} · ${material.formatTimeOfDay(TimeOfDay.fromDateTime(next))}';
+    }
 
     Widget row(String label, Widget value) => Padding(
           padding: const EdgeInsets.only(top: Spacing.spacing2),
@@ -100,7 +109,7 @@ class _ChildCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       for (final s in child.schedule)
-                        text('${weekday(s.weekday)} · ${s.start} · ${l10n.groupChildMinutes(s.durationMinutes)}'),
+                        text('${when(s)} · ${l10n.groupChildMinutes(s.durationMinutes)}'),
                     ],
                   ),
           ),

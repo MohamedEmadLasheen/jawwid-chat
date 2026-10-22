@@ -1,5 +1,6 @@
-import { api, newIdempotencyKey, request } from './client'
-import { tokenStore } from '@/core/auth/tokens'
+import { api, newIdempotencyKey, request, type SessionInfoDto } from './client'
+import { persistenceSupported, tokenStore } from '@/core/auth/tokens'
+import { deviceLabel } from '@/core/auth/device'
 import { ApiError } from './errors'
 import type {
   Absence,
@@ -45,6 +46,8 @@ interface TokenPairDto {
   expiresIn: number
   refreshToken: string
   actor: ActorDto
+  /** PD-23. `remembered` decides where the refresh token is kept. */
+  session?: SessionInfoDto
 }
 
 /** Raised when a non-staff login (a parent, a teacher) reaches Admin Web. */
@@ -84,13 +87,25 @@ export const sessionApi = {
    * `username` is the wire name of `chat.account.subject` (the decision gate
    * §5); for staff it is their email address.
    */
-  login: async (username: string, password: string): Promise<Staff> => {
+  /**
+   * PD-23: `remember` is the "Keep me signed in on this device" tick. It is
+   * only a request -- the SERVER's `session.remembered` decides where the token
+   * goes (it is always false for the super admin, and absent on an older API).
+   * The device name is this browser ("Chrome on macOS"), so each browser shows
+   * as its own device in "My devices".
+   */
+  login: async (username: string, password: string, remember = false): Promise<Staff> => {
     const pair = await request<TokenPairDto>('/auth/login', {
       method: 'POST',
-      body: { username, password, device: { platform: 'web', name: 'Admin Web' } },
+      body: {
+        username,
+        password,
+        remember: remember && persistenceSupported(),
+        device: { platform: 'web', name: deviceLabel() },
+      },
       anonymous: true,
     })
-    tokenStore.set(pair)
+    tokenStore.set(pair, { remembered: pair.session?.remembered === true })
     try {
       return toStaff(pair.actor)
     } catch (refusal) {

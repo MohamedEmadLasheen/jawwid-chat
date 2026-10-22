@@ -2,8 +2,10 @@ import '../../../shared/models/conversation.dart';
 import '../../../shared/models/lesson.dart';
 import '../../../shared/models/message.dart';
 import '../../../shared/models/story.dart';
+import '../../../shared/models/supervision.dart' show parseCalendarDay;
 import '../../../shared/models/teacher_profile.dart';
 import '../../../shared/models/user_role.dart';
+import '../../../shared/utils/app_clock.dart';
 import '../repositories.dart';
 import 'wire_vocab.dart';
 
@@ -27,8 +29,8 @@ abstract final class WireMappers {
         _ => null,
       };
 
-  static DateTime? parseTime(Object? raw) =>
-      raw is String ? DateTime.tryParse(raw)?.toLocal() : null;
+  /// An ISO instant, shown in the account's zone (PD-22, [AppClock]).
+  static DateTime? parseTime(Object? raw) => AppClock.parse(raw);
 
   /// Classify a conversation from its wire payload.
   ///
@@ -589,6 +591,20 @@ abstract final class WireMappers {
       // "you may" would offer actions the server then refuses.
       canOpenDirect: json['canOpenDirect'] == true,
       avatarUrl: _nonEmpty(json['avatarUrl']),
+      away: memberAway(json['away']),
+    );
+  }
+
+  /// PD-26 `away: { kind, until }`. Anything but a well-formed object is "not away":
+  /// a notice that guessed would tell a family something the server did not say.
+  /// Every kind but `leave` reads as away -- staff's own kinds included.
+  static MemberAway? memberAway(Object? raw) {
+    if (raw is! Map) return null;
+    final until = parseCalendarDay(raw['until']);
+    if (until == null) return null;
+    return MemberAway(
+      kind: raw['kind'] == 'leave' ? MemberAwayKind.leave : MemberAwayKind.away,
+      until: until,
     );
   }
 

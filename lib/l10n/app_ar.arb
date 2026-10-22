@@ -193,7 +193,7 @@
   "settingsLanguageEnglish": "English",
   "settingsLanguageSystem": "حسب إعدادات الجهاز",
   "settingsNotifications": "الإشعارات",
-  "settingsDevices": "الأجهزة النشطة",
+  "settingsDevices": "الأجهزة والجلسات",
   "devicesThisDevice": "هذا الجهاز",
   "devicesLastActive": "آخر نشاط {when}",
   "@devicesLastActive": {
@@ -204,6 +204,84 @@
     }
   },
   "devicesSignOutOther": "تسجيل الخروج من هذا الجهاز",
+  "devicesSignedIn": "تسجيل الدخول {date}",
+  "@devicesSignedIn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "devicesJustNow": "الآن",
+  "devicesMinutesAgo": "{count, plural, zero{الآن} one{منذ دقيقة} two{منذ دقيقتين} few{منذ {count} دقائق} many{منذ {count} دقيقة} other{منذ {count} دقيقة}}",
+  "@devicesMinutesAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "devicesHoursAgo": "{count, plural, zero{الآن} one{منذ ساعة} two{منذ ساعتين} few{منذ {count} ساعات} many{منذ {count} ساعة} other{منذ {count} ساعة}}",
+  "@devicesHoursAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "devicesDaysAgo": "{count, plural, zero{اليوم} one{منذ يوم} two{منذ يومين} few{منذ {count} أيام} many{منذ {count} يومًا} other{منذ {count} يوم}}",
+  "@devicesDaysAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "devicesNeverUsed": "لم يُستخدم منذ تسجيل الدخول",
+  "devicesPlatformIphone": "آيفون",
+  "devicesPlatformAndroid": "هاتف أندرويد",
+  "devicesPlatformWeb": "متصفح ويب",
+  "devicesPlatformUnknown": "جهاز غير معروف",
+  "devicesSignOutConfirmTitle": "تسجيل الخروج من {device}؟",
+  "@devicesSignOutConfirmTitle": {
+    "placeholders": {
+      "device": {
+        "type": "String"
+      }
+    }
+  },
+  "devicesSignOutConfirmBody": "سيحتاج ذلك الجهاز إلى كلمة المرور لتسجيل الدخول مرة أخرى.",
+  "devicesSignOutAllOthers": "تسجيل الخروج من جميع الأجهزة الأخرى",
+  "devicesSignOutAllOthersConfirm": "تسجيل الخروج من كل الأجهزة الأخرى؟ سيبقى هذا الجهاز وحده مسجّلًا الدخول.",
+  "devicesSignedOutOne": "تم تسجيل الخروج من ذلك الجهاز",
+  "devicesSignedOutOthers": "{count, plural, zero{لا توجد أجهزة أخرى مسجّلة الدخول} one{تم تسجيل الخروج من جهاز واحد} two{تم تسجيل الخروج من جهازين} few{تم تسجيل الخروج من {count} أجهزة} many{تم تسجيل الخروج من {count} جهازًا} other{تم تسجيل الخروج من {count} جهاز}}",
+  "@devicesSignedOutOthers": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "devicesSignOutFailed": "تعذّر تسجيل خروج ذلك الجهاز. حاول مرة أخرى.",
+  "devicesEmpty": "لا توجد جلسات نشطة",
+  "appLockTitle": "قفل التطبيق",
+  "appLockToggle": "القفل ببصمة الوجه أو الإصبع أو رمز المرور",
+  "appLockToggleSubtitle": "اطلب فتح القفل عند العودة إلى التطبيق",
+  "appLockUnavailable": "لاستخدام قفل التطبيق، فعّل بصمة الوجه أو بصمة الإصبع أو رمز مرور على هذا الجهاز.",
+  "appLockTimeoutLabel": "القفل تلقائيًا",
+  "appLockTimeoutImmediately": "فورًا",
+  "appLockTimeoutOneMinute": "بعد دقيقة واحدة",
+  "appLockTimeoutFifteenMinutes": "بعد 15 دقيقة",
+  "appLockTimeoutOneHour": "بعد ساعة واحدة",
+  "appLockReason": "افتح قفل التطبيق",
+  "appLockLockedTitle": "التطبيق مقفل",
+  "appLockLockedBody": "افتح القفل لرؤية محادثاتك.",
+  "appLockUnlockAction": "فتح القفل",
+  "appLockFailed": "تعذّر فتح القفل. حاول مرة أخرى.",
+  "appLockOfferTitle": "قفل التطبيق؟",
+  "appLockOfferBody": "استخدم بصمة الوجه أو بصمة الإصبع أو رمز المرور لفتح التطبيق، لتبقى محادثاتك خاصة إذا أمسك أحد غيرك بهاتفك. يمكنك تغيير ذلك في أي وقت من الإعدادات.",
+  "appLockOfferAccept": "تفعيل",
+  "appLockOfferDecline": "ليس الآن",
   "searchHint": "ابحث في محادثاتك",
   "searchEmpty": "لا توجد نتائج مطابقة",
   "retryAction": "إعادة المحاولة",
@@ -644,6 +722,10 @@
   "cardViolationLate": "تأخر {minutes} دقيقة",
   "cardViolationNoShow": "غياب عن الحصة",
   "cardViolationApology": "اعتذار عن الحصة",
+  "cardViolationAbsence": "غياب",
+  "cardViolationComplaint": "شكوى ثبتت",
+  "chatTeacherOnLeave": "{name} في إجازة حتى {date}. تظل الرسائل تصله.",
+  "chatTeacherAway": "{name} غير متاح حتى {date}. تظل الرسائل تصله.",
   "cardViolationStep": "المخالفة رقم {step} هذا الشهر",
   "cardPayrollNote": "يُحدَّد المبلغ في الرواتب.",
   "trialGroupTitle": "الحصص التجريبية",
@@ -1139,5 +1221,15 @@
   "salesVoidConfirm": "إلغاء القسط",
   "salesBillingStateConflict": "سبق دفع هذا القسط أو إلغاؤه. تم تحديث القائمة.",
   "salesBillingInvalid": "تحقّق من التاريخ والمرجع ثم حاول مجددًا.",
-  "salesWriteFailed": "تعذّر الحفظ. حاول مرة أخرى."
+  "salesWriteFailed": "تعذّر الحفظ. حاول مرة أخرى.",
+  "settingsDateTime": "التاريخ والوقت",
+  "settingsDateTimeSubtitle": "المنطقة الزمنية: {zone}",
+  "timeZoneSetAutomatically": "الضبط تلقائيًا",
+  "timeZoneAutomaticHint": "يستخدم المنطقة الزمنية لهاتفك، وتتغيّر من تلقاء نفسها عند السفر.",
+  "timeZoneLabel": "المنطقة الزمنية",
+  "timeZoneUnknown": "غير معروفة بعد",
+  "timeZoneAppliesTo": "تظهر مواعيد الحصص والتذكيرات والإشعارات بهذه المنطقة الزمنية.",
+  "timeZoneSearchHint": "ابحث عن مدينة",
+  "timeZoneNoMatch": "لا توجد منطقة زمنية مطابقة.",
+  "timeZoneSaveFailed": "تعذّر تغيير المنطقة الزمنية. حاول مرة أخرى."
 }

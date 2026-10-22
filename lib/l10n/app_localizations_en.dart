@@ -435,7 +435,7 @@ class L10nEn extends L10n {
   String get settingsNotifications => 'Notifications';
 
   @override
-  String get settingsDevices => 'Active devices';
+  String get settingsDevices => 'Devices & sessions';
 
   @override
   String get devicesThisDevice => 'This device';
@@ -447,6 +447,157 @@ class L10nEn extends L10n {
 
   @override
   String get devicesSignOutOther => 'Sign out this device';
+
+  @override
+  String devicesSignedIn(String date) {
+    return 'Signed in $date';
+  }
+
+  @override
+  String get devicesJustNow => 'just now';
+
+  @override
+  String devicesMinutesAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count minutes ago',
+      one: '1 minute ago',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String devicesHoursAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count hours ago',
+      one: '1 hour ago',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String devicesDaysAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count days ago',
+      one: '1 day ago',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get devicesNeverUsed => 'Not used since sign-in';
+
+  @override
+  String get devicesPlatformIphone => 'iPhone';
+
+  @override
+  String get devicesPlatformAndroid => 'Android phone';
+
+  @override
+  String get devicesPlatformWeb => 'Web browser';
+
+  @override
+  String get devicesPlatformUnknown => 'Unknown device';
+
+  @override
+  String devicesSignOutConfirmTitle(String device) {
+    return 'Sign out $device?';
+  }
+
+  @override
+  String get devicesSignOutConfirmBody =>
+      'That device will need your password to sign in again.';
+
+  @override
+  String get devicesSignOutAllOthers => 'Sign out all other devices';
+
+  @override
+  String get devicesSignOutAllOthersConfirm =>
+      'Sign out of every other device? Only this device stays signed in.';
+
+  @override
+  String get devicesSignedOutOne => 'Signed out of that device';
+
+  @override
+  String devicesSignedOutOthers(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Signed out of $count devices',
+      one: 'Signed out of 1 device',
+      zero: 'No other devices were signed in',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get devicesSignOutFailed =>
+      'Could not sign that device out. Try again.';
+
+  @override
+  String get devicesEmpty => 'No active sessions';
+
+  @override
+  String get appLockTitle => 'App lock';
+
+  @override
+  String get appLockToggle => 'Lock with Face ID, fingerprint or passcode';
+
+  @override
+  String get appLockToggleSubtitle =>
+      'Ask to unlock when you return to the app';
+
+  @override
+  String get appLockUnavailable =>
+      'Set up Face ID, a fingerprint or a passcode on this device to use app lock.';
+
+  @override
+  String get appLockTimeoutLabel => 'Lock automatically';
+
+  @override
+  String get appLockTimeoutImmediately => 'Immediately';
+
+  @override
+  String get appLockTimeoutOneMinute => 'After 1 minute';
+
+  @override
+  String get appLockTimeoutFifteenMinutes => 'After 15 minutes';
+
+  @override
+  String get appLockTimeoutOneHour => 'After 1 hour';
+
+  @override
+  String get appLockReason => 'Unlock Jawwid';
+
+  @override
+  String get appLockLockedTitle => 'Jawwid is locked';
+
+  @override
+  String get appLockLockedBody => 'Unlock to see your chats.';
+
+  @override
+  String get appLockUnlockAction => 'Unlock';
+
+  @override
+  String get appLockFailed => 'Could not unlock. Try again.';
+
+  @override
+  String get appLockOfferTitle => 'Lock the app?';
+
+  @override
+  String get appLockOfferBody =>
+      'Use Face ID, your fingerprint or your passcode to open Jawwid, so your chats stay private if someone else picks up your phone. You can change this anytime in Settings.';
+
+  @override
+  String get appLockOfferAccept => 'Turn on';
+
+  @override
+  String get appLockOfferDecline => 'Not now';
 
   @override
   String get searchHint => 'Search your chats';
@@ -1424,6 +1575,22 @@ class L10nEn extends L10n {
 
   @override
   String get cardViolationApology => 'Apologised for the lesson';
+
+  @override
+  String get cardViolationAbsence => 'Absent';
+
+  @override
+  String get cardViolationComplaint => 'A complaint was upheld';
+
+  @override
+  String chatTeacherOnLeave(String name, String date) {
+    return '$name is on leave until $date. Messages still reach them.';
+  }
+
+  @override
+  String chatTeacherAway(String name, String date) {
+    return '$name is away until $date. Messages still reach them.';
+  }
 
   @override
   String cardViolationStep(String step) {
@@ -2631,4 +2798,38 @@ class L10nEn extends L10n {
 
   @override
   String get salesWriteFailed => 'Could not save. Try again.';
+
+  @override
+  String get settingsDateTime => 'Date & time';
+
+  @override
+  String settingsDateTimeSubtitle(String zone) {
+    return 'Time zone: $zone';
+  }
+
+  @override
+  String get timeZoneSetAutomatically => 'Set automatically';
+
+  @override
+  String get timeZoneAutomaticHint =>
+      'Uses your phone\'s time zone, and changes by itself when you travel.';
+
+  @override
+  String get timeZoneLabel => 'Time zone';
+
+  @override
+  String get timeZoneUnknown => 'Not known yet';
+
+  @override
+  String get timeZoneAppliesTo =>
+      'Lesson times, reminders and notifications are shown in this time zone.';
+
+  @override
+  String get timeZoneSearchHint => 'Search for a city';
+
+  @override
+  String get timeZoneNoMatch => 'No time zone matches.';
+
+  @override
+  String get timeZoneSaveFailed => 'Could not change the time zone. Try again.';
 }

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-quer
 import { sessionApi, type DutyState } from '@/core/api/endpoints'
 import { qk } from '@/core/api/queryKeys'
 import { setUnauthenticatedHandler } from '@/core/api/client'
+import { onSignedOutElsewhere, tokenStore } from './tokens'
 import type { Staff } from '@/shared/types/domain'
 
 interface SessionValue {
@@ -12,6 +13,13 @@ interface SessionValue {
   isLoading: boolean
   isAuthenticated: boolean
   signOut: () => Promise<void>
+  /**
+   * PD-23: end the session on THIS side only, sending nothing -- for when the
+   * server has already ended it (signing out "this browser" from My devices).
+   * Calling /auth/logout or refreshing with a revoked token would only earn a
+   * 401, or worse, look like a replayed refresh token.
+   */
+  signOutLocally: () => void
 }
 
 const SessionContext = createContext<SessionValue | null>(null)
@@ -42,6 +50,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setUnauthenticatedHandler(() => endSession(queryClient))
   }, [queryClient])
 
+  // PD-23: in "Keep me signed in" mode every tab shares one token; when another
+  // tab signs out (or its refresh fails for good) it removes that token, and
+  // this tab follows at once instead of at its next request.
+  useEffect(() => onSignedOutElsewhere(() => endSession(queryClient)), [queryClient])
+
   const value = useMemo<SessionValue>(
     () => ({
       staff: meQuery.data ?? null,
@@ -50,6 +63,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       isAuthenticated: Boolean(meQuery.data),
       signOut: async () => {
         await sessionApi.logout().catch(() => undefined)
+        endSession(queryClient)
+      },
+      signOutLocally: () => {
+        tokenStore.clear()
         endSession(queryClient)
       },
     }),

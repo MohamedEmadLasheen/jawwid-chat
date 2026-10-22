@@ -288,6 +288,12 @@ export enum CommErrorCode {
   /** PD-21: not in a state for this (suspend an inactive account, reactivate one that is not suspended, impersonate an inactive one). 409. */
   ACCOUNT_ADMIN_STATE = 'COMM.ACCOUNT_ADMIN_STATE',
   /**
+   * PD-23: the account has no live session with this id -- ended already, or
+   * another account's. One code for both, so the status never confirms that a
+   * session id exists. 404.
+   */
+  SESSION_NOT_FOUND = 'COMM.SESSION_NOT_FOUND',
+  /**
    * PD-21: not allowed in a support session (an administrator acting as a
    * parent or teacher): it would act in the person's name where others see it,
    * unlabelled -- receipts, calls, reactions, edits, devices, logout, ... 403.

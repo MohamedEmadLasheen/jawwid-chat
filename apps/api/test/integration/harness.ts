@@ -457,6 +457,7 @@ export async function truncate(prisma: PrismaService): Promise<void> {
              chat.parent_signup_code, chat.student_enrolment,
              chat.payment_refund, chat.invoice, chat.invoice_counter, chat.payment_checkout,
              chat.payment_receipt, chat.payment, chat.payment_request, chat.stripe_event,
-             chat.family_instalment, chat.family_billing, chat.parent_file
+             chat.family_instalment, chat.family_billing, chat.parent_file,
+             chat.actor_time_zone
     restart identity cascade`);
 }

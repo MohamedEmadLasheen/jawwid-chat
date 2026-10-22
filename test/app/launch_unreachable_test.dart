@@ -190,12 +190,6 @@ class _Unreachable implements AuthRepository {
 
   @override
   Future<void> signOut() => _inner.signOut();
-
-  @override
-  Future<List<DeviceSession>> devices() => _inner.devices();
-
-  @override
-  Future<void> revokeDevice(String deviceId) => _inner.revokeDevice(deviceId);
 }
 
 class _NoTokens implements TokenProvider {

@@ -19,6 +19,7 @@ import '../../../shared/models/lesson.dart';
 import '../../../shared/models/message.dart';
 import '../../../shared/models/supervision.dart';
 import '../../../shared/models/trial.dart';
+import '../../../shared/utils/app_clock.dart';
 import '../../../shared/utils/relative_time.dart';
 import '../../../shared/utils/search_fold.dart';
 import '../../../shared/utils/text_direction.dart';
@@ -45,6 +46,7 @@ import 'message_actions.dart';
 import 'message_bubble.dart';
 import 'message_composer.dart';
 import 'pinned_banner.dart';
+import 'teacher_away_banner.dart';
 
 /// One conversation.
 ///
@@ -1043,6 +1045,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               tone: JawwidBannerTone.warning,
             ),
           ?widget.banner,
+          TeacherAwayBanner(conversationId: widget.conversationId),
           PinnedBanner(
             conversationId: widget.conversationId,
             onJump: (messageId) => _jumpToMessage(messageId, state),
@@ -1332,7 +1335,7 @@ class _DaySeparator extends StatelessWidget {
           child: Text(
             RelativeTime.forDaySeparator(
               when,
-              DateTime.now(),
+              AppClock.now(),
               locale: locale,
               todayLabel: l10n.todayLabel,
               yesterdayLabel: l10n.yesterdayLabel,

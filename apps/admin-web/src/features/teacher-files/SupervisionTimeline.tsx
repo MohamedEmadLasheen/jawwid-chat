@@ -16,6 +16,7 @@ const KIND: Record<string, { label: Pair; tone: Tone; filter: Exclude<Filter, 'a
   monthly_comment: { label: T.tMonthly, tone: 'info', filter: 'recognition' },
   complaint: { label: T.tComplaint, tone: 'warn', filter: 'concerns' },
   complaint_resolution: { label: T.tResolution, tone: 'ok', filter: 'concerns' },
+  complaint_followup: { label: T.tFollowUp, tone: 'info', filter: 'concerns' },
   teacher_apology: { label: T.tTeacherApology, tone: 'warn', filter: 'lessons' },
   teacher_no_show: { label: T.tTeacherNoShow, tone: 'danger', filter: 'lessons' },
   late_apology: { label: T.tLateApology, tone: 'outline', filter: 'lessons' },

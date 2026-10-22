@@ -1,4 +1,5 @@
 import type { Pair } from '../teachers/copy'
+import { ACADEMY_ZONE, isoToAcademyWallClock } from '@/core/time/academyTime'
 
 /**
  * Trial and New Students copy, Arabic and English side by side. Jawwid Chat is
@@ -222,15 +223,14 @@ export const NOT_SUBSCRIBED_REASON: Record<string, Pair> = {
   other: { en: 'Other', ar: 'أخرى' },
 }
 
-/** An instant in the reader's language and zone: "Mon 21 Oct, 05:30 PM". */
+/** PD-22: an instant on the academy's clock, in the reader's language: "Mon 21 Oct, 05:30 PM". */
 export function formatWhen(iso: string, locale: 'ar' | 'en'): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
-  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(d)
+  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: ACADEMY_ZONE }).format(d)
 }
 
-/** The local calendar day of an instant, as a grouping key. */
+/** The academy's calendar day of an instant, as a grouping key (PD-22: not the browser's). */
 export function localDay(iso: string): string {
-  const d = new Date(iso)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return isoToAcademyWallClock(iso).date
 }

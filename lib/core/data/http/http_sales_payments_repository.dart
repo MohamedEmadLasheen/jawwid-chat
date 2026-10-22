@@ -1,6 +1,7 @@
 import '../../../features/sales_payments/data/sales_payments_repository.dart';
 import '../../../features/sales_payments/domain/sales_billing.dart';
 import '../../../shared/models/parent_billing.dart';
+import '../../../shared/utils/app_clock.dart';
 import '../../network/api_client.dart';
 
 /// `SalesPaymentsRepository` over the PD-17 administration endpoints (PD-20: Sales in
@@ -123,7 +124,7 @@ class HttpSalesPaymentsRepository implements SalesPaymentsRepository {
             ? null
             : SalesVoid(
                 reason: _text(voided['reason']) ?? '',
-                at: voided['at'] is String ? DateTime.tryParse(voided['at'] as String)?.toLocal() : null,
+                at: AppClock.parse(voided['at']),
                 byName: _nameOf(voided['by']),
               ),
       ));

@@ -7,7 +7,8 @@ import { makeStaff, renderWithProviders } from '@/test/utils'
 import type { Violation } from './api'
 
 /**
- * PD-12 S2 discipline page, through the real routes and the real API client,
+ * PD-12 S2 discipline, now the Supervision page's Absences and Lateness
+ * sections (PD-26), through the real routes and the real API client,
  * with `fetch` answered at the network boundary. These prove the page's side:
  * the server's step and suggestion are shown, the suggestion is what is sent by
  * default, another choice asks for a reason first, and a suspension over open
@@ -74,9 +75,9 @@ afterEach(() => {
   tokenStore.clear()
 })
 
-describe('the discipline page', () => {
+describe('discipline on the Supervision page', () => {
   it('lists what waits for a decision with the server\'s step and suggestion, and sends the suggestion by default', async () => {
-    on('GET', /\/discipline\/violations\?state=open$/, () => json({ violations: [violation()] }))
+    on('GET', /\/discipline\/violations\?state=open&kind=absences$/, () => json({ violations: [violation()] }))
     on('POST', /\/discipline\/violations\/v-1\/decide$/, () =>
       json({ violation: violation({ decision: 'deduction_1' }), cancelledLessons: 0, notCancelled: [] }),
     )
@@ -87,14 +88,14 @@ describe('the discipline page', () => {
     await userEvent.click(within(row).getByRole('button', { name: 'Decide' }))
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByRole('radio', { name: /First deduction/ })).toBeChecked()
-    expect(within(dialog).getByText(/never here/)).toBeInTheDocument()
+    expect(within(dialog).getByText(/deducted in payroll for that month at once/)).toBeInTheDocument()
     await userEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
     await waitFor(() => expect(calls('POST', /\/decide$/)).toHaveLength(1))
     expect(bodyOf(calls('POST', /\/decide$/)[0])).toEqual({ decision: 'deduction_1' })
   })
 
   it('choosing another step or excusing asks for a reason before anything is sent', async () => {
-    on('GET', /\/discipline\/violations\?state=open$/, () => json({ violations: [violation()] }))
+    on('GET', /\/discipline\/violations\?state=open&kind=absences$/, () => json({ violations: [violation()] }))
     on('POST', /\/discipline\/violations\/v-1\/decide$/, () =>
       json({ violation: violation({ decision: 'excused' }), cancelledLessons: 0, notCancelled: [] }),
     )
@@ -112,7 +113,7 @@ describe('the discipline page', () => {
   })
 
   it('a suspension over open lessons is confirmed, then sent again with the confirmation', async () => {
-    on('GET', /\/discipline\/violations\?state=open$/, () =>
+    on('GET', /\/discipline\/violations\?state=open&kind=absences$/, () =>
       json({ violations: [violation({ step: 4, suggestedDecision: 'temporary_suspension' })] }),
     )
     let first = true
@@ -139,7 +140,7 @@ describe('the discipline page', () => {
   })
 
   it('records lateness on a held lesson of the chosen teacher', async () => {
-    on('GET', /\/discipline\/violations\?state=open$/, () => json({ violations: [] }))
+    on('GET', /\/discipline\/violations\?state=open&kind=late$/, () => json({ violations: [] }))
     on('GET', /\/lessons\/roster$/, () => json({ teachers: [{ id: 't-1', name: 'Teacher One', isActive: true, timezone: null }], learners: [] }))
     on('GET', /\/lessons\?/, () =>
       json({
@@ -150,7 +151,7 @@ describe('the discipline page', () => {
       }),
     )
     on('POST', /\/lessons\/l-7\/lateness$/, () => json({ violation: violation({ kind: 'late', lateMinutes: 15 }) }, 201))
-    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/discipline' })
+    renderWithProviders(<AppRoutes />, { staff: supervisor, route: '/teachers/supervision?section=lateness' })
     await userEvent.click(await screen.findByRole('button', { name: 'Record lateness' }))
     const dialog = await screen.findByRole('dialog')
     await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Teacher' }), 't-1')

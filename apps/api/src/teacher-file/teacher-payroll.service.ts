@@ -304,6 +304,120 @@ export class TeacherPayrollService {
   }
 
   // ------------------------------------------------------------------
+  // PD-26: default deduction amounts, and the Rewards list
+  // ------------------------------------------------------------------
+
+  /**
+   * The amount a first or second deduction is priced at the moment it is
+   * decided (chat.price_decided_deduction), per currency; the newest row wins.
+   * `currencies` are the ones teachers are paid in, so every one can be set.
+   */
+  async deductionDefaults(actorId: string) {
+    const { actor } = await this.files.gate(actorId, (a) => a.canViewFinance);
+    const org = actor.organizationId as string;
+    const rows = await this.prisma.teacherPayDefault.findMany({
+      where: { organizationId: org },
+      orderBy: [{ createdAt: 'desc' }],
+    });
+    const current = new Map<string, (typeof rows)[number]>();
+    for (const r of rows) if (!current.has(`${r.kind}|${r.currency}`)) current.set(`${r.kind}|${r.currency}`, r);
+    const staff = await this.names([...current.values()].map((r) => r.createdBy));
+    const inUse = await this.prisma.teacherPayTerms.findMany({ where: { organizationId: org }, distinct: ['currency'], select: { currency: true } });
+    return {
+      currencies: [...new Set([...inUse.map((t) => t.currency), ...[...current.values()].map((r) => r.currency)])].sort(),
+      defaults: [...current.values()]
+        .filter((r) => cents(r.amount) > 0)
+        .map((r) => ({
+          kind: r.kind as 'deduction_1' | 'deduction_2',
+          currency: r.currency,
+          amount: money(r.amount),
+          setAt: r.createdAt,
+          setBy: { id: r.createdBy, name: staff.get(r.createdBy) ?? '' },
+        })),
+    };
+  }
+
+  /** Set (or, with 0, stop) the default for one step in one currency. Applies to deductions decided from now on. */
+  async setDeductionDefault(actorId: string, body: Record<string, unknown>) {
+    const { actor } = await this.files.gate(actorId, (a) => a.canViewFinance);
+    if (body.kind !== 'deduction_1' && body.kind !== 'deduction_2') throw invalid('kind', 'must be deduction_1 or deduction_2');
+    const kind = body.kind;
+    const currency = requireCurrency(body.currency);
+    const amount = requireMoney('amount', body.amount, true);
+    await this.write(async (tx) => {
+      await tx.teacherPayDefault.create({
+        data: { organizationId: actor.organizationId as string, kind, currency, amount, createdBy: actor.actorId },
+      });
+      await this.audit.audit(tx, {
+        actorId: actor.actorId,
+        action: 'teacher_file.deduction_default_set',
+        entity: 'organization',
+        entityId: actor.organizationId as string,
+        after: { kind, currency },
+        reason: `default ${kind} amount`,
+      });
+    });
+    return this.deductionDefaults(actorId);
+  }
+
+  /**
+   * Every recorded reward (PD-11's bonus entry) of the organization, newest
+   * first: reason, date, who recorded it -- for whoever reads Teacher Files.
+   * The AMOUNT is payroll's: it is filled in only for the super admin (PD-10's
+   * finance tier); for everyone else `amount` is absent, never null.
+   */
+  async rewards(actorId: string, month?: unknown) {
+    const { actor, access } = await this.files.gate(actorId, (a) => a.canView);
+    const org = actor.organizationId as string;
+    const m = month === undefined || month === '' ? null : requireMonth('month', month);
+    const [from, to] = m ? await this.monthBounds(m) : [null, null];
+    const entries = await this.prisma.teacherSupervisionEntry.findMany({
+      where: { organizationId: org, kind: 'bonus', ...(from && to ? { createdAt: { gte: from, lt: to } } : {}) },
+      orderBy: [{ createdAt: 'desc' }],
+      take: 500,
+    });
+    const teachers = await this.prisma.teacher.findMany({
+      where: { id: { in: [...new Set(entries.map((e) => e.teacherId))] } },
+      select: { id: true, name: true },
+    });
+    const teacherName = new Map(teachers.map((t) => [t.id, t.name]));
+    const staff = await this.names(entries.map((e) => e.createdBy));
+    const priced = access.canViewFinance
+      ? new Map(
+          liveAdjustments(
+            await this.prisma.teacherPayAdjustment.findMany({
+              where: { bonusEntryId: { in: entries.map((e) => e.id) } },
+              orderBy: [{ createdAt: 'desc' }],
+            }),
+          ).map((a) => [a.bonusEntryId as string, a]),
+        )
+      : null;
+    return {
+      canViewAmounts: access.canViewFinance,
+      rewards: entries.map((e) => {
+        const a = priced?.get(e.id);
+        return {
+          id: e.id,
+          teacher: { id: e.teacherId, name: teacherName.get(e.teacherId) ?? '' },
+          reason: e.body,
+          recordedAt: e.createdAt,
+          recordedBy: { id: e.createdBy, name: staff.get(e.createdBy) ?? '' },
+          ...(priced ? { amount: a ? { amount: money(a.amount), currency: a.currency, month: ym(a.month) } : null } : {}),
+        };
+      }),
+    };
+  }
+
+  /** The instants a payroll month (academy calendar) starts and ends at. */
+  private async monthBounds(m: string): Promise<[Date, Date]> {
+    const [r] = await this.prisma.$queryRaw<Array<{ f: Date; t: Date }>>`
+      SELECT (${`${m}-01`}::date::timestamp AT TIME ZONE tz) AS f,
+             ((${`${m}-01`}::date + interval '1 month')::timestamp AT TIME ZONE tz) AS t
+        FROM (SELECT coalesce((SELECT c.value #>> '{}' FROM chat.config c WHERE c.key = 'schedule.timezone'), 'Africa/Cairo') AS tz) z`;
+    return [r.f, r.t];
+  }
+
+  // ------------------------------------------------------------------
 
   private requireKeyring(): PayoutKeyring {
     if (!this.keyring) {

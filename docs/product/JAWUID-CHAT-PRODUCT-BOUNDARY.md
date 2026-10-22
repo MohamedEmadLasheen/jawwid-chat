@@ -120,7 +120,7 @@ Admin Web: `docs/recovery/PHASE-0-ADMIN-WEB-RECONCILIATION.md`.
 
 ---
 
-## 4. Product decisions PD-1 to PD-21 and PD-24 — CLOSED
+## 4. Product decisions PD-1 to PD-24, PD-26 and PD-27 — CLOSED
 
 PD-1 to PD-5 were closed by the product owner on **2026-09-07**, at the Phase 0
 exit gate, before `main` was baselined. **PD-6 was closed by the product owner
@@ -140,6 +140,10 @@ contradicts it is superseded on that point, whatever its own status banner says.
 **PD-19 was closed by the product owner on 2026-10-21** (a member may start a call in their own chat; supersedes PD-2), amended 2026-10-21 (the super admin's group calls) and 2026-10-22 (calls in the trial group and the supervision conversation).
 **PD-20 was closed by the product owner on 2026-10-22** (the Sales team uses the app: chats, calls and payments). It amends PD-15's "staff work in Admin Web; the app is for parents and teachers".
 **PD-21 was closed by the product owner on 2026-10-22** (account administration: password reset, inactive accounts, impersonation).
+**PD-22 was closed by the product owner on 2026-10-22** (every account has its own time zone).
+**PD-23 was closed by the product owner on 2026-10-22** (convenient sign-in: session lifetimes per role, devices and sessions, app lock, "keep me signed in" on Admin Web).
+PD-25 is reserved by work in progress; `PD-NUMBER-REGISTRY.md` assigns it. PD-24 is recorded below.
+**PD-26 was closed by the product owner on 2026-10-22** (the Teacher Supervision page). It amends PD-12 (complaints join the ladder; a decided deduction is priced at once) and PD-18 item 3.
 **PD-27 was closed by the product owner on 2026-10-22** (payments: payment links, card payments through Stripe, bank-transfer receipts, cash, invoices, instalment reminders). It builds on PD-17.
 
 | ID | Subject | Status |
@@ -165,6 +169,9 @@ contradicts it is superseded on that point, whatever its own status banner says.
 | **PD-19** | **Who may start a call: every member of their own chat** (2026-10-21) | **CLOSED** — teachers, parents and supervisors may start a call in any chat they may write in; parents may now start their family / Student Group calls; chats a person is not a member of, BR-1 / PD-7, C-4 and the no-phantom-call rule are unchanged; amended the same day so the super admin may start a group call in any chat they may write in, with a seat on the call; amended 2026-10-22 so trial-group and supervision calls are group calls (they were refused by the database) |
 | **PD-20** | **The Sales team in the app** (2026-10-22) | **CLOSED** — Sales-department staff sign in to the app and get Chats, Calls, Payments and Settings; they view and record payments (record once, void with a reason); instalment plans, the contact record and every other staff role stay in Admin Web; the app never holds a parent's phone or e-mail |
 | **PD-21** | **Account administration: password reset, inactive accounts, impersonation** (2026-10-22) | **CLOSED** — every staff role, org-wide, for parent and teacher accounts; staff accounts by the super admin only; never the super admin's or one's own; a reset is a one-time code the person completes with their own password; inactive = suspended, signed out everywhere, reactivation revives no session; impersonation of parents and teachers only, labelled messages, fully audited |
+| **PD-22** | **Each account's time zone** (2026-10-22) | **CLOSED** — every person's times are shown and notified in their own zone, taken from their phone's OS zone ("Set automatically", like a phone) or picked by hand; teachers follow their phone too; a weekly lesson stays anchored in the teacher's zone; Admin Web shows Cairo time, named, with the family's local time beside it; reminders say the time in the recipient's zone. Record: `../architecture/TIME-ZONES.md` |
+| **PD-23** | **Convenient sign-in** (2026-10-22) | **CLOSED** — a session ends after an idle and an absolute limit per role (parents/teachers 30 d idle; staff app 14 d / 30 d; Admin Web kept signed in 7 d / 30 d, otherwise 12 h / 7 d; super admin 12 h / 7 d and never kept signed in); everyone sees and ends their own devices; staff sign out an account's devices under the PD-21 rule; an app lock with the phone's own Face ID / fingerprint / passcode, opt-in for families and on by default for staff; passkeys wait for a production domain. Record: `../security/pd023-convenient-sign-in.md` |
+| **PD-26** | **The Teacher Supervision page** (2026-10-22) | **CLOSED** — one page for leave, apologies and absences, lateness (trial / regular), rewards and complaints; a teacher on leave is shown as such and given no new students, but may still be messaged; an absence with no lesson and an upheld complaint join the monthly ladder; a decided deduction is priced at once from the super admin's default; complaints carry their source, handler, follow-ups and the action taken |
 | **PD-27** | **Payments: links, card, bank transfer, cash, invoices, reminders** (2026-10-22) | **CLOSED** — a payment request carries a unique link that works before the parent has an account; card payments through Stripe Checkout are recorded only from a verified webhook, exactly once; parents upload bank-transfer receipts that staff approve or reject with a reason; staff record cash; instalments may be paid in part and by several methods; every payment issues a numbered invoice the parent downloads as a PDF; a trial's payments move onto the family at Assign; append-only, audited, reminders before and after the due date |
 
 ---
@@ -2081,10 +2088,98 @@ code, never a password.
 
 ---
 
+### PD-22 · Each account's time zone
+
+**Closed 2026-10-22** by the product owner.
+
+The owner asked that every account have its own time zone, applied across the whole
+application and kept current when the person travels "like on mobile phones":
+teachers see lesson times in Cairo time, parents and students in their own country's
+time, and reminders arrive and read at the right local time. Owner answers the same
+day:
+
+1. **Teachers follow their phone** like everyone else (not locked to Cairo).
+2. **A weekly lesson stays anchored in the teacher's zone.** When Egypt changes its
+   clocks and the Gulf does not, the family's local time moves by an hour and the
+   teacher's does not.
+3. **Admin Web shows Cairo time, named, with the family's local time beside it.**
+4. **Push reminders state the local time** (still naming nobody).
+
+**Final decision.**
+
+```
+source of the zone   = the phone's OS time zone (IANA, e.g. Asia/Kuwait), reported
+                        by the app at sign-in and whenever it returns to the
+                        foreground. NEVER the location: the OS zone is what a phone
+                        itself uses, and needs no permission.
+setting              = "Set automatically" (default) follows the phone; turned off,
+                        the person picks a zone, which wins on every device until
+                        they turn it back on.            chat.actor_time_zone
+storage              = unchanged: every moment is an instant (timestamptz); a weekly
+                        lesson is a wall-clock time in the teacher's zone
+                        (PD-11 T2), materialized by Postgres AT TIME ZONE
+display (app)        = every instant in the account's zone; a weekly slot by its
+                        next real start (`nextStartsAt`), because the weekday can
+                        differ across zones
+display (Admin Web)  = Africa/Cairo for everyone, labelled; the family's local time
+                        beside a lesson where it differs
+text read by many    = a scheduled-call or trial card's text names its zone
+                        ("17:00 (Cairo time)"); the app draws `startsAt` instead
+reminders            = fire at the same instant as before (offsets from the lesson);
+                        the text's {time} is worded at SEND time in the recipient's
+                        zone; unknown zone -> the academy's time, named
+quiet hours          = the recipient's own night, in their zone
+clock-change warning = a parent whose local lesson time moves because one of the two
+                        zones changes its clocks is told once per weekly time per
+                        change, 3 days before the first lesson at the new time:
+                        "from {day}, the lesson starts at {time} your time" (both
+                        in their zone, at send time; names nobody)
+academy calendar     = instalment due dates, payroll month, leave days stay dates in
+                        schedule.timezone; they are never converted
+```
+
+**Implementation phase.** Migration `20261022130000_chat_pd022_account_time_zone.sql`
+(table + reminder templates v2); `/me/time-zone` (API-CONTRACT §3.6a); the app's
+`AppClock`, `TimeZoneController` and Settings -> Date & time; Admin Web's
+`core/time/academyTime.ts`.
+
+**Daylight-saving warning (follow-up, 2026-10-22).** The promise in answer 2 --
+families are told *before* their local time moves -- is kept by the worker:
+`SchedulingService.scheduleClockShiftWarnings` (hourly, inside the lesson sweep)
+looks at four consecutive starts of every live weekly time and, for each parent
+whose zone is known, compares their local weekday and clock between consecutive
+starts. A difference is a change: one notification per parent per weekly time per
+change (dedupe key `lesson_clock_shift_parent:<slot>:<date of the first new-time
+lesson>:<parent>`), scheduled 3 days before that lesson (rule
+`lesson_clock_shift_parent`, data, so the lead time is an UPDATE). It covers Egypt's
+two changes (end of the last Thursday of October; last Friday of April) against the
+Gulf, and a family in a country with its own change dates (London: two warnings in
+autumn). Nobody is told whose local time does not move (a Cairo family), whose zone
+is unknown (their reminders already name Cairo time), or whose weekly time begins
+after the change. A warning that stops holding before it is sent -- the weekly time
+is replaced, the parent flies to a zone where nothing moves, the lesson begins -- is
+cancelled, and revived if it holds again. Migration
+`20261022163000_chat_pd022_clock_shift_warning.sql` (template `lesson_clock_shift`
+ar + en, and the rule). Teachers are not warned: a slot is anchored in their
+availability zone, which is the zone they work in.
+
+**Consequences.** A family abroad sees a lesson move by an hour twice a year when
+Egypt changes its clocks, and is told three days before; no teacher is ever
+double-booked by a clock change. A person's zone is visible to the administration
+only as "the family's local time".
+
+**Deprecated behaviour.** The 2026-10-14 rule "a reminder shows no time" is replaced:
+the time is now right for its reader. Times in Admin Web no longer follow the staff
+member's browser.
+
+**Closed.** 2026-10-22.
+
+---
+
 ### PD-24 · Changing a family's supervisor without losing anything
 
 **Closed 2026-10-22** by the product owner. Amends PD-8's reassignment rule.
-(PD-22 and PD-23 are reserved by work in progress: per-account time zones and convenient sign-in.)
+(PD-23 is reserved by work in progress: convenient sign-in.)
 
 The owner's request of 2026-10-22: a group's supervisor can be changed; the
 chat history, participants, messages and attachments stay and the group is not
@@ -2141,6 +2236,95 @@ owner when the child was the old supervisor's last in the family.
 **Defaults adopted at closing** (the owner may override without reopening PD-24):
 1. A reason is required, as for every structure change.
 2. Only Operations primary supervisors can receive a family (PD-8's rule).
+
+**Closed.** 2026-10-22.
+
+---
+
+### PD-26 · The Teacher Supervision page
+
+**Closed 2026-10-22** by the product owner. Amends PD-12 §3 (what joins the
+ladder; deductions) and PD-18 item 3 (who prices a decided deduction).
+
+The owner asked for one admin page in five sections: teacher leave, apologies
+and absences, late arrivals (trial and regular), grants and rewards, and
+complaints (from management and from parents), every record on the teacher's
+file and every deduction and reward in payroll. Most of it already existed
+(PD-10 complaints, PD-11 bonuses, PD-12 leave and the ladder, PD-18 payroll).
+Asked the same day, the owner chose:
+
+1. **"Cannot be contacted while on leave"** means the teacher is **shown** as on
+   leave and **given no new assignments**. Messages still reach them.
+2. **Deduction amounts:** the super admin sets a **default amount per step**
+   (first and second deduction); deciding a deduction applies it to that
+   month's pay at once; one case can still be changed.
+3. **Complaints:** an **upheld complaint joins the same monthly ladder** as
+   absences and lateness.
+4. **Permanent suspension** keeps PD-12's behaviour: refused while the teacher
+   has students, then the teacher is deactivated.
+
+**Final decision.**
+
+1. **One page**, the Teachers area's *Supervision* tab (and Admin › Teachers ›
+   Supervision): Leave, Apologies & absences, Lateness, Grants & rewards,
+   Complaints. It replaces the Leave requests and Discipline tabs; their old
+   links land on their section.
+2. **Leave.** Each teacher's balance is shown next to the name, or "not
+   tracked" with the days taken when no allowance is set; the leave is
+   recorded either way. **On leave** is computed from PD-11's days off, never
+   stored. While a teacher is on leave or suspended: the Teacher File and the
+   lists carry the status; parents and teachers in a chat with them read "on
+   leave until …" (a suspension reads "away until …" to them); a **transfer**
+   to them and a **subscription form** naming them are refused; trials and
+   make-ups were already refused on a day off.
+3. **Apologies and absences.** The apology card and a lesson closed as the
+   teacher's absence are recorded by themselves (PD-12). An absence with **no
+   lesson** (a meeting, a shift) is recorded by the Teachers department, with
+   what happened, once the day has come. It joins the ladder like any other.
+4. **Lateness** lists trial and regular lessons apart, with the delay and the
+   action taken. A trial is late on the same terms as a lesson (it was held).
+5. **Rewards** are PD-11's bonus entries: reason, date, who recorded it. The
+   super admin can type the amount while recording; otherwise it is priced in
+   Payroll as before. Amounts stay the super admin's (PD-18).
+6. **Deductions.** The moment a first or second deduction is decided, the
+   super admin's default for that step, in the teacher's pay currency that
+   month, is written as its pay adjustment. No pay terms or no default (or a
+   default of 0) leaves it unpriced, as before. The super admin corrects one
+   case with PD-18's correction.
+7. **Complaints** carry their **source** (management or a parent) and the
+   **supervisor handling** them, any number of **follow-up notes**, and one
+   resolution. Upholding a complaint makes it a violation on the teacher's
+   monthly ladder; its decision is the **action taken**. A parent's complaint is
+   recorded by staff, linked to the parent's message where there is one; the
+   app has no complaint form.
+
+**Canonical rule.**
+```
+away(teacher, day)   = the run of chat.teacher_day_off rows from that day:
+                       suspended > leave > day_off, until its last day.
+                       Computed (chat.teacher_away); a plain day off never
+                       blocks an assignment.
+ladder               = PD-12's, over: the teacher's apology and absence
+                       (lesson), lateness, an absence with no lesson, an
+                       upheld complaint (counted in the complaint's month).
+priced deduction     = decided deduction_1|2 + terms(month).currency +
+                       newest default(step, currency) > 0
+                       -> one teacher_pay_adjustment, created by the decider.
+```
+
+**Implementation phase.** Built with the decision: migration
+`20261022150000_chat_pd026_teacher_supervision.sql`;
+`docs/admin/pd026-teacher-supervision.md`; protected by
+`apps/api/test/integration/pd026-teacher-supervision.spec.ts`.
+
+**Consequences.**
+- PD-12's "Teachers-department staff never see salary or amounts" stands: the
+  default amounts and reward amounts are the super admin's only.
+- PD-18 item 3 now reads: the super admin prices a bonus, and prices a
+  deduction only when no default applies or to correct one.
+- Complaints recorded before PD-26 have no source or handler; they read as such.
+
+**Deprecated behaviour.** PD-12's separate Leave requests and Discipline tabs.
 
 **Closed.** 2026-10-22.
 
@@ -2264,7 +2448,7 @@ payments; an instalment paid only whole, in one go.
 
 ---
 
-### Decisions still open after PD-1 to PD-21 and PD-24
+### Decisions still open after PD-1 to PD-24, PD-26 and PD-27
 
 None at the decision level. PD-8 is recorded in `../architecture/ORG-SCOPE-PD8.md`.
 The implementation items left open inside PD-9, PD-10, PD-11 and PD-12 are settled when their

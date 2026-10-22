@@ -96,9 +96,12 @@ export interface StudentProfile {
   birthDate?: string | null
   course: { id: string; name: string } | null
   teacher: { id: string; name: string } | null
-  schedule: Array<{ weekday: number; start: string; durationMinutes: number; timezone: string }>
+  /** `start` is the teacher's wall clock in `timezone`; `nextStartsAt` the next real start (PD-22). */
+  schedule: Array<{ weekday: number; start: string; durationMinutes: number; timezone: string; nextStartsAt?: string }>
   /** Staff only: the parents, to open their Parent Profile (whose own rule then decides). */
   family?: { id: string; name: string; parents: Array<{ id: string; name: string }> }
+  /** PD-22: the family's own zone (from a parent's phone), or null before any parent opened the app. */
+  familyTimeZone?: string | null
   viewer: 'teacher' | 'staff'
 }
 

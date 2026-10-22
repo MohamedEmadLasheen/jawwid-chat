@@ -3,6 +3,7 @@ import { Learner, LearnerSuspension } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { AppConfigService } from '../platform/app-config.service';
 import { CommError, CommErrorCode } from '../platform/errors';
+import { awayRefusal } from '../leave/away';
 import { AUDIT_SERVICE, REALTIME_REVOCATION } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import { NO_REALTIME_REVOCATION, type RealtimeRevocation } from '../platform/realtime-revocation';
@@ -77,6 +78,8 @@ export class LifecycleService {
 
     const toTeacher = await this.prisma.teacher.findFirst({ where: { id: toTeacherId, organizationId: learner.organizationId } });
     if (!toTeacher) throw new CommError(CommErrorCode.LESSON_NOT_FOUND, 'teacher not found');
+    const away = await awayRefusal(this.prisma, toTeacher);
+    if (away) throw new CommError(CommErrorCode.LESSON_STATE, away, 409);
     const fromTeacher = learner.teacherId
       ? await this.prisma.teacher.findUnique({ where: { id: learner.teacherId }, select: { id: true, name: true } })
       : null;

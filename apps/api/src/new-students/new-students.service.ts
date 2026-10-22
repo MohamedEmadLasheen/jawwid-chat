@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../platform/prisma.service';
 import { CommError, CommErrorCode } from '../platform/errors';
+import { awayRefusal } from '../leave/away';
 import { isUuid } from '../communication/conversations/conversation.service';
 
 type Tx = Prisma.TransactionClient;
@@ -83,6 +84,10 @@ export class NewStudentsService {
       where: { id: { in: teacherIds }, organizationId, isActive: true, leftAt: null },
     });
     if (live !== teacherIds.length) throw invalid('children[].teacherId: an active teacher of this academy');
+    for (const t of await this.prisma.teacher.findMany({ where: { id: { in: teacherIds } }, select: { id: true, name: true } })) {
+      const away = await awayRefusal(this.prisma, t);
+      if (away) throw new CommError(CommErrorCode.LESSON_STATE, away, 409);
+    }
 
     const paymentRaw = object(body.payment, 'subscription.payment');
     const currency = typeof paymentRaw.currency === 'string' ? paymentRaw.currency.trim().toUpperCase() : '';

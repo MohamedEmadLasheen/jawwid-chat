@@ -24,6 +24,22 @@ class Page<T> {
 ///
 /// There is no phone-number field. §5 makes phone numbers unrenderable, so the client does
 /// not model them and cannot leak what it never receives.
+/// PD-26: a teacher member who is away today, and the last day they are away.
+///
+/// Staff read why; a parent or teacher reads [MemberAwayKind.leave] or
+/// [MemberAwayKind.away] (a suspension or a recorded day off is the
+/// administration's business). Messaging still works; the chat only says so.
+enum MemberAwayKind { leave, away }
+
+class MemberAway {
+  const MemberAway({required this.kind, required this.until});
+
+  final MemberAwayKind kind;
+
+  /// A calendar day: the same day in every time zone.
+  final DateTime until;
+}
+
 class GroupMember {
   const GroupMember({
     required this.id,
@@ -31,6 +47,7 @@ class GroupMember {
     required this.role,
     this.avatarUrl,
     this.canOpenDirect = false,
+    this.away,
   });
 
   final String id;
@@ -47,6 +64,9 @@ class GroupMember {
   /// to false, which is what a server that does not send the field — an older
   /// build — correctly yields.
   final bool canOpenDirect;
+
+  /// PD-26. Null when not away, and from a server that does not send it.
+  final MemberAway? away;
 }
 
 class StudentGroup {
@@ -148,23 +168,6 @@ class CallHistoryEntry {
 
   /// Null when the row did not say who placed it, or before a session exists.
   final CallHistoryDirection? direction;
-}
-
-/// A device/session this user is signed in on (§9, §43).
-class DeviceSession {
-  const DeviceSession({
-    required this.id,
-    required this.label,
-    required this.platform,
-    required this.lastSeenAt,
-    this.isCurrent = false,
-  });
-
-  final String id;
-  final String label;
-  final String platform;
-  final DateTime lastSeenAt;
-  final bool isCurrent;
 }
 
 /// A recording sitting on disk that has not been uploaded yet.
@@ -301,9 +304,8 @@ abstract interface class AuthRepository {
 
   Future<void> signOut();
 
-  Future<List<DeviceSession>> devices();
-
-  Future<void> revokeDevice(String deviceId);
+  // The account's sessions ("Devices & sessions", PD-23) are not here: they are their own
+  // repository, `AccountSessionsRepository`, over the one authenticated ApiClient.
 
   /// Emits when the backend ends this session — revoked elsewhere, or account disabled.
   Stream<void> get sessionRevoked;

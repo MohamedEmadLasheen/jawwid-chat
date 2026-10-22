@@ -3,6 +3,7 @@ import '../../../core/data/repositories.dart'
 import '../../../core/data/wire/wire_vocab.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/network/api_client.dart';
+import '../../../shared/utils/app_clock.dart';
 import 'account_call_history.dart';
 
 /// `GET /calls/history` over the application's shared [ApiClient] (W8-W2).
@@ -78,7 +79,9 @@ class HttpAccountCallHistory implements AccountCallHistoryRepository {
   CallHistoryEntry _entry(Map<dynamic, dynamic> row) {
     final id = row['id'];
     final conversationId = row['conversationId'];
-    final startedAt = DateTime.tryParse(row['startedAt'] as String? ?? '');
+    // PD-22: in the account's zone. Parsed as UTC before, so the in-chat call card and its
+    // day separator showed UTC.
+    final startedAt = AppClock.parse(row['startedAt']);
     if (id is! String || conversationId is! String || startedAt == null) {
       throw _malformed('a call row was missing id, conversationId or startedAt');
     }

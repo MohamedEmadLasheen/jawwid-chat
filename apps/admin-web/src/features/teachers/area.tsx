@@ -34,9 +34,8 @@ export const TEACHERS_TABS: TeachersTab[] = [
   // PD-10 Teacher File and PD-12 S1's queues.
   { key: 'files', segment: 'files', label: { en: 'Teacher files', ar: 'ملفات المعلمين' } },
   { key: 'certificates', segment: 'certificates', label: { en: 'Certificates', ar: 'الشهادات' } },
-  { key: 'leave', segment: 'leave', label: { en: 'Leave requests', ar: 'طلبات الإجازة' } },
-  // PD-12 S2.
-  { key: 'discipline', segment: 'discipline', label: { en: 'Discipline', ar: 'الانضباط' } },
+  // PD-26: leave, apologies and absences, lateness, rewards and complaints (was Leave requests + Discipline).
+  { key: 'supervision', segment: 'supervision', label: { en: 'Supervision', ar: 'الإشراف' } },
 ]
 
 export function teachersTabPath(tab: TeachersTab, base: string = TEACHERS_AREA_BASE): string {

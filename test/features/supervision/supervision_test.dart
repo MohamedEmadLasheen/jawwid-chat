@@ -161,6 +161,20 @@ void main() {
     });
   });
 
+  group('discipline cards for incidents with no lesson (PD-26)', () {
+    testWidgets('an absence and an upheld complaint are named, with the day', (tester) async {
+      for (final (kind, text) in [('absence', 'Absent'), ('complaint', 'A complaint was upheld')]) {
+        final m = WireMappers.message(
+          wireCard('discipline_warning', {'violationKind': kind, 'learnerName': null, 'lessonDay': '2026-10-15', 'step': 1}),
+          viewerActorId: 't1',
+        );
+        await tester.pumpWidget(app(MessageBubble(message: m, showAuthor: true)));
+        expect(find.textContaining(text), findsOneWidget);
+        expect(find.textContaining('Apologised'), findsNothing);
+      }
+    });
+  });
+
   group('the + menu in a supervision conversation', () {
     testWidgets('offers the requests under their own heading; picking one returns it', (tester) async {
       ComposerChoice? picked;

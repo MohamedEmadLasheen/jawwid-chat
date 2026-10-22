@@ -28,11 +28,6 @@ class _Repo implements AuthRepository {
   @override
   Future<void> signOut() async {}
 
-  @override
-  Future<List<DeviceSession>> devices() async => const [];
-
-  @override
-  Future<void> revokeDevice(String deviceId) async {}
 
   @override
   Stream<void> get sessionRevoked => const Stream<void>.empty();

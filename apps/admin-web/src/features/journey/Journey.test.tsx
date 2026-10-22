@@ -111,10 +111,12 @@ describe('Reschedule a make-up class', () => {
     renderWithProviders(<LessonCardDialog conversationId="c-1" kind="makeup" tickets={[ticket('book_makeup', 'l-3')]} onClose={() => {}} />, { staff })
     const dialog = await screen.findByRole('dialog', { name: 'Reschedule a make-up class' })
     await userEvent.type(within(dialog).getByLabelText('Date'), '2026-10-25')
-    await userEvent.type(within(dialog).getByLabelText('Time'), '17:30')
+    await userEvent.type(within(dialog).getByLabelText('Time (Cairo time)'), '17:30')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Send' }))
     await waitFor(() => expect(sent('POST', /\/lessons\/l-3\/makeup$/)).toHaveLength(1))
-    expect(sent('POST', /\/lessons\/l-3\/makeup$/)[0]!.startsAt).toBe(new Date('2026-10-25T17:30').toISOString())
+    // PD-22: 17:30 on the academy's clock (Cairo, still UTC+3 on 25 October), whatever the
+    // browser's zone -- not the browser's 17:30.
+    expect(sent('POST', /\/lessons\/l-3\/makeup$/)[0]!.startsAt).toBe('2026-10-25T14:30:00.000Z')
   })
 })
 

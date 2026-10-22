@@ -1,4 +1,5 @@
 import '../../../shared/models/trial.dart';
+import '../../../shared/utils/app_clock.dart';
 import '../../network/api_client.dart';
 import '../repositories.dart';
 
@@ -21,7 +22,7 @@ class HttpTrialRepository implements TrialRepository {
       out.add(TrialTicket(
         trialId: row['trialId'] as String,
         prospectName: (row['prospectName'] as String?) ?? '',
-        startsAt: startsAt.toLocal(),
+        startsAt: AppClock.view(startsAt),
         durationMinutes: (row['durationMinutes'] as num?)?.toInt() ?? 0,
       ));
     }

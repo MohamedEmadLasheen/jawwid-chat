@@ -5,12 +5,16 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app.dart';
 import '../../../app/providers.dart';
 import '../../../app/router.dart';
+import '../../../core/time/time_zone_controller.dart';
 import '../../../design/tokens.dart';
 import '../../../design/widgets/jawwid_avatar.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/user_role.dart';
 import '../../../shared/utils/text_direction.dart';
+import '../../app_lock/application/app_lock_controller.dart';
+import '../../app_lock/domain/app_lock_settings.dart';
 import '../application/theme_mode_controller.dart';
+import 'date_time_screen.dart';
 
 /// Profile and settings.
 ///
@@ -203,6 +207,12 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const Divider(),
 
+          // PD-23: app lock -- per account, on this device.
+          if (user != null) ...[
+            const _AppLockSection(),
+            const Divider(),
+          ],
+
           // PD-12: the one leave surface in the teacher app -- their own balance and requests.
           if (user?.isTeacher ?? false) ...[
             ListTile(
@@ -225,17 +235,31 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const Divider(),
           ],
+          // PD-22: the account's time zone, under the same name a phone uses.
+          ListTile(
+            key: const ValueKey('settings-date-time'),
+            leading: const Icon(Icons.schedule_outlined),
+            title: Text(l10n.settingsDateTime),
+            subtitle: switch (ref.watch(timeZoneControllerProvider).value?.effectiveZone) {
+              final zone? => Text(l10n.settingsDateTimeSubtitle(zoneDisplayName(zone, Localizations.localeOf(context).languageCode))),
+              null => null,
+            },
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push(Routes.dateTime),
+          ),
           ListTile(
             leading: const Icon(Icons.notifications_outlined),
             title: Text(l10n.settingsNotifications),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {},
           ),
+          // PD-23: every device this account is signed in on.
           ListTile(
+            key: const ValueKey('settings-devices'),
             leading: const Icon(Icons.devices_outlined),
             title: Text(l10n.settingsDevices),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () {},
+            onTap: () => context.push(Routes.devices),
           ),
           const Divider(),
 
@@ -278,6 +302,76 @@ class SettingsScreen extends ConsumerWidget {
     if (confirmed ?? false) {
       await ref.read(authControllerProvider.notifier).signOut();
     }
+  }
+}
+
+/// PD-23: the app lock's toggle and timeout.
+///
+/// Disabled, with the reason, when the device can authenticate nobody -- no biometrics and
+/// no passcode -- rather than hidden: the person should learn what would make it work.
+class _AppLockSection extends ConsumerWidget {
+  const _AppLockSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = L10n.of(context);
+    final lock = ref.watch(appLockControllerProvider);
+    final controller = ref.read(appLockControllerProvider.notifier);
+    final enabled = lock.settings.enabled && lock.available;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SectionHeading(text: l10n.appLockTitle),
+        SwitchListTile(
+          key: const ValueKey('settings-app-lock'),
+          secondary: const Icon(Icons.lock_outline),
+          title: Text(l10n.appLockToggle),
+          subtitle: Text(lock.available ? l10n.appLockToggleSubtitle : l10n.appLockUnavailable),
+          value: enabled,
+          onChanged: !lock.available || lock.authenticating
+              ? null
+              : (value) => controller.setEnabled(value, reason: l10n.appLockReason),
+        ),
+        if (enabled)
+          RadioGroup<AppLockTimeout>(
+            groupValue: lock.settings.timeout,
+            onChanged: (value) {
+              if (value != null) controller.setTimeout(value);
+            },
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsetsDirectional.fromSTEB(
+                    Spacing.spacing5,
+                    Spacing.spacing2,
+                    Spacing.spacing5,
+                    0,
+                  ),
+                  child: Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Text(
+                      l10n.appLockTimeoutLabel,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                ),
+                for (final timeout in AppLockTimeout.values)
+                  RadioListTile<AppLockTimeout>(
+                    key: ValueKey('settings-app-lock-${timeout.wire}'),
+                    value: timeout,
+                    title: Text(switch (timeout) {
+                      AppLockTimeout.immediately => l10n.appLockTimeoutImmediately,
+                      AppLockTimeout.oneMinute => l10n.appLockTimeoutOneMinute,
+                      AppLockTimeout.fifteenMinutes => l10n.appLockTimeoutFifteenMinutes,
+                      AppLockTimeout.oneHour => l10n.appLockTimeoutOneHour,
+                    }),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
   }
 }
 

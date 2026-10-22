@@ -193,7 +193,7 @@
   "settingsLanguageEnglish": "English",
   "settingsLanguageSystem": "Follow device",
   "settingsNotifications": "Notifications",
-  "settingsDevices": "Active devices",
+  "settingsDevices": "Devices & sessions",
   "devicesThisDevice": "This device",
   "devicesLastActive": "Last active {when}",
   "@devicesLastActive": {
@@ -204,6 +204,84 @@
     }
   },
   "devicesSignOutOther": "Sign out this device",
+  "devicesSignedIn": "Signed in {date}",
+  "@devicesSignedIn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "devicesJustNow": "just now",
+  "devicesMinutesAgo": "{count, plural, =1{1 minute ago} other{{count} minutes ago}}",
+  "@devicesMinutesAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "devicesHoursAgo": "{count, plural, =1{1 hour ago} other{{count} hours ago}}",
+  "@devicesHoursAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "devicesDaysAgo": "{count, plural, =1{1 day ago} other{{count} days ago}}",
+  "@devicesDaysAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "devicesNeverUsed": "Not used since sign-in",
+  "devicesPlatformIphone": "iPhone",
+  "devicesPlatformAndroid": "Android phone",
+  "devicesPlatformWeb": "Web browser",
+  "devicesPlatformUnknown": "Unknown device",
+  "devicesSignOutConfirmTitle": "Sign out {device}?",
+  "@devicesSignOutConfirmTitle": {
+    "placeholders": {
+      "device": {
+        "type": "String"
+      }
+    }
+  },
+  "devicesSignOutConfirmBody": "That device will need your password to sign in again.",
+  "devicesSignOutAllOthers": "Sign out all other devices",
+  "devicesSignOutAllOthersConfirm": "Sign out of every other device? Only this device stays signed in.",
+  "devicesSignedOutOne": "Signed out of that device",
+  "devicesSignedOutOthers": "{count, plural, =0{No other devices were signed in} =1{Signed out of 1 device} other{Signed out of {count} devices}}",
+  "@devicesSignedOutOthers": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "devicesSignOutFailed": "Could not sign that device out. Try again.",
+  "devicesEmpty": "No active sessions",
+  "appLockTitle": "App lock",
+  "appLockToggle": "Lock with Face ID, fingerprint or passcode",
+  "appLockToggleSubtitle": "Ask to unlock when you return to the app",
+  "appLockUnavailable": "Set up Face ID, a fingerprint or a passcode on this device to use app lock.",
+  "appLockTimeoutLabel": "Lock automatically",
+  "appLockTimeoutImmediately": "Immediately",
+  "appLockTimeoutOneMinute": "After 1 minute",
+  "appLockTimeoutFifteenMinutes": "After 15 minutes",
+  "appLockTimeoutOneHour": "After 1 hour",
+  "appLockReason": "Unlock Jawwid",
+  "appLockLockedTitle": "Jawwid is locked",
+  "appLockLockedBody": "Unlock to see your chats.",
+  "appLockUnlockAction": "Unlock",
+  "appLockFailed": "Could not unlock. Try again.",
+  "appLockOfferTitle": "Lock the app?",
+  "appLockOfferBody": "Use Face ID, your fingerprint or your passcode to open Jawwid, so your chats stay private if someone else picks up your phone. You can change this anytime in Settings.",
+  "appLockOfferAccept": "Turn on",
+  "appLockOfferDecline": "Not now",
   "searchHint": "Search your chats",
   "searchEmpty": "Nothing matched your search",
   "retryAction": "Try again",
@@ -862,6 +940,30 @@
   },
   "cardViolationNoShow": "Absent from the lesson",
   "cardViolationApology": "Apologised for the lesson",
+  "cardViolationAbsence": "Absent",
+  "cardViolationComplaint": "A complaint was upheld",
+  "chatTeacherOnLeave": "{name} is on leave until {date}. Messages still reach them.",
+  "@chatTeacherOnLeave": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "chatTeacherAway": "{name} is away until {date}. Messages still reach them.",
+  "@chatTeacherAway": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "cardViolationStep": "Violation {step} this month",
   "@cardViolationStep": {
     "placeholders": {
@@ -1446,5 +1548,51 @@
   "salesVoidConfirm": "Void instalment",
   "salesBillingStateConflict": "This instalment was already paid or voided. The list has been refreshed.",
   "salesBillingInvalid": "Check the date and the reference, then try again.",
-  "salesWriteFailed": "Could not save. Try again."
+  "salesWriteFailed": "Could not save. Try again.",
+  "settingsDateTime": "Date & time",
+  "@settingsDateTime": {
+    "description": "PD-22: Settings -> Date & time."
+  },
+  "settingsDateTimeSubtitle": "Time zone: {zone}",
+  "@settingsDateTimeSubtitle": {
+    "description": "PD-22: Settings -> Date & time.",
+    "placeholders": {
+      "zone": {
+        "type": "String",
+        "example": "Kuwait (GMT+3)"
+      }
+    }
+  },
+  "timeZoneSetAutomatically": "Set automatically",
+  "@timeZoneSetAutomatically": {
+    "description": "PD-22: Settings -> Date & time."
+  },
+  "timeZoneAutomaticHint": "Uses your phone's time zone, and changes by itself when you travel.",
+  "@timeZoneAutomaticHint": {
+    "description": "PD-22: Settings -> Date & time."
+  },
+  "timeZoneLabel": "Time zone",
+  "@timeZoneLabel": {
+    "description": "PD-22: Settings -> Date & time."
+  },
+  "timeZoneUnknown": "Not known yet",
+  "@timeZoneUnknown": {
+    "description": "PD-22: Settings -> Date & time."
+  },
+  "timeZoneAppliesTo": "Lesson times, reminders and notifications are shown in this time zone.",
+  "@timeZoneAppliesTo": {
+    "description": "PD-22: Settings -> Date & time."
+  },
+  "timeZoneSearchHint": "Search for a city",
+  "@timeZoneSearchHint": {
+    "description": "PD-22: Settings -> Date & time."
+  },
+  "timeZoneNoMatch": "No time zone matches.",
+  "@timeZoneNoMatch": {
+    "description": "PD-22: Settings -> Date & time."
+  },
+  "timeZoneSaveFailed": "Could not change the time zone. Try again.",
+  "@timeZoneSaveFailed": {
+    "description": "PD-22: Settings -> Date & time."
+  }
 }

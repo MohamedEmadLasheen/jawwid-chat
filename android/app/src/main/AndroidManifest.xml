@@ -6,6 +6,10 @@
          Requested at the point a notification first matters, never at launch.
          The token itself needs no permission; this is about DISPLAY. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- PD-23 app lock (Face / fingerprint via BiometricPrompt, device credential as the
+         fallback). The local_auth plugin declares it too; stated here so the app's own
+         manifest says what it asks for. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <application
         android:label="jawwid_chat"
         android:name="${applicationName}"

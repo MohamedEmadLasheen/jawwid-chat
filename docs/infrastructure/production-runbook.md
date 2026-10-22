@@ -2,8 +2,9 @@
 
 Owner: AI #7 · Date: 2026-09-05
 Status: procedures are written and, where possible, verified locally. The
-platform-specific commands marked `PLATFORM` cannot be filled in until hosting
-is chosen (ADR-003 / BLOCKER-1).
+platform is DigitalOcean App Platform (ADR-010); the commands below use `doctl`
+with `<app-id>` = the environment's `DIGITALOCEAN_APP_ID`. They are unexecuted
+until the first app exists (`production-readiness.md`, owner steps).
 
 ---
 
@@ -15,10 +16,14 @@ staging.
 1. Confirm what staging is running and that its smoke test passed.
 2. Actions → **Deploy production** → `image_tag` = the commit SHA, `confirm` = `DEPLOY`.
 3. Approve the `production` environment when prompted.
-4. The workflow then, in order: validates configuration → backs up the database
+4. The workflow then, in order: rebuilds the production Admin Web image
+   (ADR-006) → checks the deploy credentials → validates configuration and
+   resolves `.do/app.production.yaml` → backs up the database
    (encrypted; refused without the `BACKUP_ENCRYPTION_PASSPHRASE` secret)
-   → uploads the backup as a 30-day artifact → applies migrations → releases →
-   smoke-tests → records the release in the run summary.
+   → uploads the backup as a 30-day artifact → applies migrations → releases
+   with `doctl apps update` and confirms the ACTIVE deployment runs the new
+   tags (`scripts/infra/do-release.sh`) → smoke-tests → records the release in
+   the run summary.
 5. Watch error rate and latency for 15 minutes.
 
 Any step failing stops the deployment. The configuration check runs **before**
@@ -69,8 +74,8 @@ Configuration is not versioned with the code; a change to it is a deployment.
 
 ## 4. Restart a service
 
-```
-PLATFORM: restart the API service / the worker service
+```bash
+doctl apps restart <app-id> --components api --wait     # or: worker, admin-web
 ```
 
 Restarting is safe: `SIGTERM` triggers graceful shutdown — stop accepting work,
@@ -82,8 +87,8 @@ if it reports the database down, restarting only moves the outage.
 
 ## 5. Logs
 
-```
-PLATFORM: stream API logs / worker logs
+```bash
+doctl apps logs <app-id> api --follow --no-prefix        # or: worker, admin-web
 ```
 
 Logs are structured JSON. Trace one request end to end by its `request_id`, and

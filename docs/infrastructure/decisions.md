@@ -77,10 +77,10 @@ implementation of it.
 
 ## ADR-003 · Hosting is not chosen yet, and the pipeline says so
 
-> **Superseded in part by ADR-010 (2026-10-22).** The provider is chosen. The
-> release step still fails loudly until the DigitalOcean deploy command and its
-> IaC replace it together (ADR-009). The "Recommendation" and "UNRESOLVED"
-> paragraphs below are history.
+> **Superseded in part by ADR-010 (2026-10-22).** The provider is chosen, and
+> the release step now deploys with `doctl` (ADR-012). Its rule survives: it
+> still fails loudly without the deploy token or app id, never a silent no-op.
+> The "Recommendation" and "UNRESOLVED" paragraphs below are history.
 
 **Decision.** The deployment workflows are complete up to the release step. That
 step **fails loudly** with a link to the blocker instead of pretending.
@@ -243,9 +243,10 @@ step is enforced by CI, so it cannot be skipped.
 
 ## ADR-009 · Infrastructure as code is required, and is blocked on the provider
 
-> **Unblocked by ADR-010 (2026-10-22).** The provider is DigitalOcean App
-> Platform, whose declarative format is the app spec. The rule below stands:
-> the app spec lands in the same change as the real release step.
+> **Unblocked by ADR-010 (2026-10-22), implemented by ADR-012.** The provider
+> is DigitalOcean App Platform, whose declarative format is the app spec. The
+> app spec and the real release step landed in one change, as the rule below
+> requires.
 
 **Decision.** No IaC tool is introduced yet. The requirement is recorded here so
 it is not lost, and the implementation follows provider selection rather than
@@ -367,3 +368,46 @@ image built with production URLs, and a rollback rebuilds the bundle.
 
 **Impact.** Any change to `default.conf.template` changes the production
 security posture.
+
+---
+
+## ADR-012 · The app spec is generated, holds no values, and is verified live
+
+**Decision.** `.do/app.staging.yaml` and `.do/app.production.yaml` are the
+infrastructure as code ADR-009 requires. They are rendered from
+`infra/env/manifest.tsv` by `scripts/infra/app-spec.py`, hold only `${NAME}`
+placeholders, and are deployed by the Release step of each deploy workflow with
+`scripts/infra/do-release.sh`. Components: `api` (service, `node dist/main.js`)
+and `worker` (worker, `node dist/worker.js`) from the one API image (ADR-004);
+`admin-web` as a container service (ADR-011). The API's readiness check is
+`/health/ready` and its liveness check `/health/live` (ADR-007). Each component
+gets its own host (`api.<domain>`, `admin.<domain>`) through authority-matched
+ingress rules.
+
+**Alternatives.** (a) A hand-written spec with literal values, edited in the
+DigitalOcean console afterwards. (b) Secrets set once in the console, and the
+spec carrying only the structure. (c) One host, with the API routed under path
+prefixes.
+
+**Why.** (a) is the drift ADR-008 exists to stop, and a console edit is an
+undocumented deployment. (b) breaks on the first `doctl apps update`, which
+replaces the whole spec and would clear any value the spec omits. Keeping the
+values in the GitHub Environment keeps one secret store, the one `check-env.sh`
+already validates. The placeholders are filled on the runner, before the backup
+and the migrations, so a missing value stops the run before anything changes.
+(c) would couple the routing to the API's route list and split one origin
+between a console and an API that the CSP and the CORS allowlist treat as two.
+
+The release is verified, not assumed. A failed App Platform deployment leaves
+the previous one active, so `do-release.sh` reads the ACTIVE deployment back
+and fails unless it runs the requested tags. It also refuses an app id that
+names the other environment's app, and refuses to create a second app.
+
+**Trade-offs.** The resolved spec, which holds secrets, briefly exists as a
+mode-600 file on an ephemeral GitHub runner. Every deploy re-sends every
+secret. A change made in the DigitalOcean console is overwritten by the next
+deploy, which is intended, but surprises anyone who makes one. The guard needs
+`doctl` (installed pinned and checksum-verified in CI). The domain must be
+chosen before the first deploy, because the Admin Web bundle compiles the API
+URL in.
+

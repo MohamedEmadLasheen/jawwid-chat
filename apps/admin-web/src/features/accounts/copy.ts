@@ -93,6 +93,8 @@ const BY_CODE: Record<string, Pair> = {
     en: 'The account changed meanwhile. The list has been refreshed.',
     ar: 'تغيّر الحساب في هذه الأثناء. تم تحديث القائمة.',
   },
+  // PD-23: ending a session that has already ended (or is not this account's).
+  'COMM.SESSION_NOT_FOUND': { en: 'This session has already ended.', ar: 'هذه الجلسة انتهت بالفعل.' },
   'COMMON.RATE_LIMITED': {
     en: 'Too many codes for this account in the last hour. Try again later.',
     ar: 'رموز كثيرة لهذا الحساب خلال الساعة الأخيرة. حاول لاحقًا.',

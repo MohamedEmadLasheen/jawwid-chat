@@ -25,6 +25,14 @@ const MONTH_RE = /^\d{4}-\d{2}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DEFAULT_TIME_ZONE = 'Africa/Cairo';
 
+/** The lists of the Teacher Supervision page (PD-26), by what happened. */
+const KIND_FILTERS = {
+  late: ['late'],
+  cancellations: ['teacher_apology', 'teacher_no_show'],
+  absences: ['teacher_apology', 'teacher_no_show', 'absence'],
+  complaints: ['complaint'],
+} as const;
+
 /**
  * PD-12 S2: the teacher discipline ladder.
  *
@@ -82,14 +90,14 @@ export class DisciplineService {
     if (!['open', 'decided', 'all'].includes(state)) throw invalid('state: open | decided | all');
     if (query.month !== undefined && !MONTH_RE.test(query.month)) throw invalid('month: YYYY-MM');
     if (query.teacherId !== undefined && !isUuid(query.teacherId)) throw invalid('teacherId: a uuid');
-    if (query.kind !== undefined && !['late', 'cancellations'].includes(query.kind)) throw invalid('kind: late | cancellations');
+    if (query.kind !== undefined && !(query.kind in KIND_FILTERS)) throw invalid(`kind: ${Object.keys(KIND_FILTERS).join(' | ')}`);
 
     const where: Prisma.TeacherViolationWhereInput = {
       organizationId: actor.organizationId,
       ...(state === 'open' ? { decision: null } : state === 'decided' ? { decision: { not: null } } : {}),
       ...(query.month ? { month: new Date(`${query.month}-01T00:00:00Z`) } : {}),
       ...(query.teacherId ? { teacherId: query.teacherId } : {}),
-      ...(query.kind === 'late' ? { kind: 'late' } : query.kind === 'cancellations' ? { kind: { in: ['teacher_apology', 'teacher_no_show'] } } : {}),
+      ...(query.kind ? { kind: { in: [...KIND_FILTERS[query.kind as keyof typeof KIND_FILTERS]] } } : {}),
     };
     const rows = await this.standing(await this.prisma.teacherViolation.findMany({
       where,
@@ -172,6 +180,93 @@ export class DisciplineService {
           entityId: lesson.teacherId,
           after: { violationId: created.id, lessonId: lesson.id, minutes },
           reason: note ?? 'lateness recorded',
+        });
+        return created;
+      }),
+    );
+    return { violation: (await this.dtos([row]))[0] };
+  }
+
+  // ------------------------------------------------------------------
+  // PD-26: incidents that are not a lesson's
+  // ------------------------------------------------------------------
+
+  /**
+   * An absence the teacher never reported, with no lesson to close (a missed
+   * meeting, a shift). When there IS a lesson, close it as the teacher's
+   * absence instead (POST /lessons/:id/teacher-no-show): that records the
+   * violation by itself, and the family is told.
+   */
+  async recordAbsence(actorId: string, teacherId: string, body: Record<string, unknown>) {
+    const actor = await this.requireSupervisor(actorId);
+    const teacher = await this.requireTeacher(actor, teacherId);
+    const tz = await this.timeZone();
+    const day = dateField(body, 'occurredOn');
+    if (!day) throw invalid('occurredOn: required, YYYY-MM-DD');
+    if (day > todayIn(tz)) throw stateError('an absence is recorded once it has happened');
+    const note = textField(body, 'note', true) as string;
+    const [{ at }] = await this.prisma.$queryRaw<Array<{ at: Date }>>`
+      SELECT (${day}::date::timestamp AT TIME ZONE ${tz}) AS at`;
+    const row = await this.write(() =>
+      this.prisma.$transaction(async (tx) => {
+        const created = await tx.teacherViolation.create({
+          data: {
+            organizationId: teacher.organizationId,
+            teacherId: teacher.id,
+            kind: 'absence',
+            occurredAt: at,
+            month: new Date(0), // set by the trigger, in the academy's month
+            recordedBy: actor.actorId,
+            note,
+          },
+        });
+        await this.audit.audit(tx, {
+          actorId: actor.actorId,
+          action: 'teacher.absence_recorded',
+          entity: 'teacher',
+          entityId: teacher.id,
+          after: { violationId: created.id, occurredOn: day },
+          reason: note,
+        });
+        return created;
+      }),
+    );
+    return { violation: (await this.dtos([row]))[0] };
+  }
+
+  /**
+   * An upheld complaint joins the same monthly ladder as absences and lateness
+   * (PD-26): it becomes a violation, decided like any other. Once.
+   */
+  async upholdComplaint(actorId: string, complaintId: string, body: Record<string, unknown>) {
+    const actor = await this.requireSupervisor(actorId);
+    if (!isUuid(complaintId)) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'complaint not found');
+    const complaint = await this.prisma.teacherSupervisionEntry.findFirst({
+      where: { id: complaintId, organizationId: actor.organizationId ?? '', kind: 'complaint' },
+    });
+    if (!complaint) throw new CommError(CommErrorCode.DISCIPLINE_NOT_FOUND, 'complaint not found');
+    const note = textField(body, 'note', false);
+    const row = await this.write(() =>
+      this.prisma.$transaction(async (tx) => {
+        const created = await tx.teacherViolation.create({
+          data: {
+            organizationId: complaint.organizationId,
+            teacherId: complaint.teacherId,
+            kind: 'complaint',
+            complaintEntryId: complaint.id,
+            occurredAt: complaint.createdAt, // the trigger sets it from the complaint
+            month: new Date(0),
+            recordedBy: actor.actorId,
+            note,
+          },
+        });
+        await this.audit.audit(tx, {
+          actorId: actor.actorId,
+          action: 'teacher.complaint_upheld',
+          entity: 'teacher',
+          entityId: complaint.teacherId,
+          after: { violationId: created.id, complaintId: complaint.id },
+          reason: note ?? 'complaint upheld',
         });
         return created;
       }),
@@ -372,10 +467,9 @@ export class DisciplineService {
 
   /** What a card says about the violation: what, whose lesson, which day (in the academy's calendar). */
   private async cardContext(v: TeacherViolation) {
-    const lesson = await this.prisma.lesson.findUnique({
-      where: { id: v.lessonId },
-      select: { learner: { select: { name: true } } },
-    });
+    const lesson = v.lessonId
+      ? await this.prisma.lesson.findUnique({ where: { id: v.lessonId }, select: { learner: { select: { name: true } } } })
+      : null;
     return {
       violationKind: v.kind,
       lateMinutes: v.lateMinutes,
@@ -394,8 +488,8 @@ export class DisciplineService {
     }));
     const steps = stepsOf(all.map((m) => ({ ...m, month: isoDate(m.month) })));
     const lessons = await this.prisma.lesson.findMany({
-      where: { id: { in: [...new Set(rows.map((r) => r.lessonId))] } },
-      select: { id: true, startsAt: true, outcomeNote: true, learner: { select: { name: true } } },
+      where: { id: { in: [...new Set(rows.map((r) => r.lessonId).filter((x): x is string => !!x))] } },
+      select: { id: true, kind: true, startsAt: true, outcomeNote: true, learner: { select: { name: true } } },
     });
     const lessonOf = new Map(lessons.map((l) => [l.id, l]));
     const teachers = await this.prisma.teacher.findMany({
@@ -410,16 +504,36 @@ export class DisciplineService {
       where: { id: { in: rows.map((r) => r.suspensionId).filter((x): x is string => !!x) } },
     });
     const suspensionOf = new Map(suspensions.map((s) => [s.id, s]));
+    const complaintIds = rows.map((r) => r.complaintEntryId).filter((x): x is string => !!x);
+    const complaints = complaintIds.length
+      ? await this.prisma.teacherSupervisionEntry.findMany({
+          where: { id: { in: complaintIds } },
+          select: { id: true, body: true, complaintSource: true, createdAt: true },
+        })
+      : [];
+    const complaintOf = new Map(complaints.map((c) => [c.id, c]));
 
     return rows.map((r) => {
       const step = r.suggestedStep ?? steps.get(r.id) ?? 1;
-      const lesson = lessonOf.get(r.lessonId);
+      const lesson = r.lessonId ? lessonOf.get(r.lessonId) : undefined;
       const s = r.suspensionId ? suspensionOf.get(r.suspensionId) : undefined;
+      const c = r.complaintEntryId ? complaintOf.get(r.complaintEntryId) : undefined;
       return {
         id: r.id,
         kind: r.kind,
         teacher: { id: r.teacherId, name: teacherName.get(r.teacherId) ?? null },
-        lesson: { id: r.lessonId, startsAt: lesson?.startsAt.toISOString() ?? null, learnerName: lesson?.learner?.name ?? null, note: lesson?.outcomeNote ?? null },
+        // PD-26: null for an absence without a lesson, and an upheld complaint.
+        lesson: r.lessonId
+          ? {
+              id: r.lessonId,
+              // trial | regular, so lateness reads in two lists (PD-26). A make-up is a regular lesson.
+              kind: lesson?.kind === 'trial' ? 'trial' : 'regular',
+              startsAt: lesson?.startsAt.toISOString() ?? null,
+              learnerName: lesson?.learner?.name ?? null,
+              note: lesson?.outcomeNote ?? null,
+            }
+          : null,
+        complaint: c ? { id: c.id, body: c.body, from: c.complaintSource, createdAt: c.createdAt.toISOString() } : null,
         occurredAt: r.occurredAt.toISOString(),
         month: isoDate(r.month).slice(0, 7),
         lateMinutes: r.lateMinutes,
@@ -450,15 +564,18 @@ export class DisciplineService {
    * toward the month's ladder and cannot be decided. A decision already taken
    * stays on record -- reversing one is the Teachers department's own act.
    */
-  private async standing<T extends { lessonId: string; kind: string; decision: string | null }>(rows: T[]): Promise<T[]> {
-    const open = rows.filter((r) => r.decision === null);
+  private async standing<T extends { lessonId: string | null; kind: string; decision: string | null }>(rows: T[]): Promise<T[]> {
+    const open = rows.filter((r) => r.decision === null && r.lessonId !== null);
     if (open.length === 0) return rows;
     const lessons = await this.prisma.lesson.findMany({
-      where: { id: { in: [...new Set(open.map((r) => r.lessonId))] } },
+      where: { id: { in: [...new Set(open.map((r) => r.lessonId as string))] } },
       select: { id: true, outcome: true },
     });
     const outcomeOf = new Map(lessons.map((l) => [l.id, l.outcome]));
-    return rows.filter((r) => r.decision !== null || outcomeOf.get(r.lessonId) === (r.kind === 'late' ? 'held' : r.kind));
+    // An absence or an upheld complaint has no lesson to be corrected: it stands.
+    return rows.filter(
+      (r) => r.decision !== null || r.lessonId === null || outcomeOf.get(r.lessonId) === (r.kind === 'late' ? 'held' : r.kind),
+    );
   }
 
   private async requireSupervisor(actorId: string): Promise<Actor> {

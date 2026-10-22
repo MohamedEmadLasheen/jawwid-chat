@@ -1,3 +1,4 @@
+import '../../../shared/utils/app_clock.dart';
 import '../../errors/app_error.dart';
 import '../../network/api_client.dart';
 import '../repositories.dart';
@@ -140,7 +141,9 @@ class HttpCallRepository implements CallRepository {
   CallHistoryEntry? _historyEntry(Map<dynamic, dynamic> row) {
     final id = row['id'];
     final conversationId = row['conversationId'];
-    final startedAt = DateTime.tryParse(row['startedAt'] as String? ?? '');
+    // PD-22: in the account's zone. Parsed as UTC before, so the in-chat call card and its
+    // day separator showed UTC.
+    final startedAt = AppClock.parse(row['startedAt']);
     if (id is! String || conversationId is! String || startedAt == null) {
       return null;
     }

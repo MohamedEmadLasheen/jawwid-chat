@@ -5,6 +5,7 @@ import { AUDIT_SERVICE } from '../platform/tokens';
 import type { AuditService } from '../platform/audit.service';
 import { AuthorizationService, type AccountAdminAct, type AccountAdminTarget } from '../platform/authorization.service';
 import { AuthService } from '../platform/auth/auth.service';
+import { toSessionListDto, type SessionDto } from '../platform/auth/auth.dto';
 import { PasswordResetService, RESET_CODE_MINUTES } from '../platform/auth/password-reset.service';
 import { CommError, CommErrorCode } from '../platform/errors';
 import { ActorKind, StaffRole } from '../communication/contracts/vocab';
@@ -17,6 +18,9 @@ export const ACCOUNT_AUDIT = {
 
 /** The revocation reason a suspension writes on every session it ends. */
 export const SUSPENSION_REVOCATION_REASON = 'account suspended';
+
+/** PD-23: the revocation reason an administrator's sign-out writes, followed by their reason. */
+export const ADMIN_SIGN_OUT_REASON = 'signed out by an administrator';
 
 const LIST_LIMIT = 100;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -39,7 +43,7 @@ export interface AccountSummaryDto {
   lockedUntil: string | null;
   lastLoginAt: string | null;
   /** What THIS caller may do now. Advisory: every action is decided again on the server. */
-  allowed: { resetPassword: boolean; suspend: boolean; reactivate: boolean; impersonate: boolean };
+  allowed: { resetPassword: boolean; suspend: boolean; reactivate: boolean; impersonate: boolean; signOut: boolean };
 }
 
 const ACCOUNT_SELECT = {
@@ -280,6 +284,60 @@ export class AccountAdminService {
   // -------------------------------------------------------------------------
 
   /** The decision first, then the row's existence is revealed: never the other way round. */
+  // -------------------------------------------------------------------------
+  // PD-23: the account's devices & sessions
+  // -------------------------------------------------------------------------
+
+  /** The account's live sessions. Read under the same decision as ending them. */
+  async listSessions(actor: Actor, accountId: string): Promise<{ sessions: SessionDto[] }> {
+    const { row } = await this.authorize(actor, accountId, 'sign_out');
+    return toSessionListDto(await this.auth.listLiveSessions(row.id), null);
+  }
+
+  /** Ends one session of the account. Audited by AuthService.revoke with the administrator's reason. */
+  async revokeSession(
+    actor: Actor,
+    actorAccountId: string,
+    accountId: string,
+    sessionId: string,
+    input: { reason?: unknown },
+  ): Promise<{ ok: true }> {
+    const reason = requireReason(input.reason);
+    const { row } = await this.authorize(actor, accountId, 'sign_out');
+    const ended = UUID.test(sessionId)
+      ? await this.auth.revokeSessionOf(row.id, sessionId, `${ADMIN_SIGN_OUT_REASON}: ${reason}`, {
+          revokedBy: actorAccountId,
+          actorId: actor.actorId,
+        })
+      : false;
+    if (!ended) throw new CommError(CommErrorCode.SESSION_NOT_FOUND, 'no such session');
+    this.log.log(`session ${sessionId} of account ${row.id} ended by staff ${actor.actorId}`);
+    return { ok: true };
+  }
+
+  /**
+   * Ends every session of the account -- including a support session, the same
+   * as a suspension does. The account stays active: the person signs in again.
+   */
+  async revokeAllSessions(
+    actor: Actor,
+    actorAccountId: string,
+    accountId: string,
+    input: { reason?: unknown },
+  ): Promise<{ revoked: number }> {
+    const reason = requireReason(input.reason);
+    const { row } = await this.authorize(actor, accountId, 'sign_out');
+    const revoked = await this.prisma.$transaction((tx) =>
+      this.auth.revokeAccountSessionsInTx(tx, row.id, `${ADMIN_SIGN_OUT_REASON}: ${reason}`, {
+        revokedBy: actorAccountId,
+        actorId: actor.actorId,
+      }),
+    );
+    await this.auth.enforceAccountRevocation(row.id, revoked > 0);
+    this.log.log(`all ${revoked} sessions of account ${row.id} ended by staff ${actor.actorId}`);
+    return { revoked };
+  }
+
   private async authorize(actor: Actor, accountId: string, act: AccountAdminAct): Promise<{ row: AccountRow }> {
     this.requireStaff(actor);
     const row = await this.loadRow(accountId);
@@ -327,6 +385,8 @@ export class AccountAdminService {
         reactivate: may('reactivate') && row.status === 'suspended',
         // PD-21: only an account that could sign in itself can be opened.
         impersonate: may('impersonate') && row.status === 'active',
+        // PD-23: a suspended account's sessions are already gone.
+        signOut: may('sign_out') && row.status === 'active',
       },
     };
   }
