@@ -1,9 +1,11 @@
-import { Body, Controller, Get, Headers, HttpCode, Inject, Ip, Optional, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Inject, Ip, Optional, Param, Post, Req, UseFilters } from '@nestjs/common';
+import { CommErrorFilter } from '../../communication/api/http-exception.filter';
+import { CommError, CommErrorCode } from '../errors';
 import { AuthService, DeviceInput } from './auth.service';
 import { LoginRateLimiter } from './login-rate-limit';
 import { Public, type AuthenticatedRequest } from './auth.guard';
 import { AuthError, AuthErrorCode } from './auth.errors';
-import { toActorDto, toTokenPairDto, type ActorDto, type TokenPairDto } from './auth.dto';
+import { toActorDto, toSessionListDto, toTokenPairDto, type ActorDto, type SessionDto, type TokenPairDto } from './auth.dto';
 import {
   CLIENT_ADDRESS_POLICY,
   readClientAddressPolicy,
@@ -15,6 +17,8 @@ interface LoginBody {
   username?: unknown;
   password?: unknown;
   device?: { platform?: unknown; name?: unknown; appVersion?: unknown };
+  /** PD-23: Admin Web "keep me signed in on this device". Only `true` asks. */
+  remember?: unknown;
 }
 
 interface RefreshBody {
@@ -83,6 +87,7 @@ export class AuthController {
       userAgent,
       ip,
       device: asDevice(body?.device),
+      remember: body?.remember === true,
     });
 
     // Only the identifier budget is released. The source budget survives a
@@ -139,6 +144,61 @@ export class MeController {
     if (!request.actor) throw new AuthError(AuthErrorCode.UNAUTHENTICATED);
     return toActorDto(request.actor);
   }
+}
+
+/**
+ * PD-23: Devices & sessions -- the signed-in person's own live sessions.
+ *
+ * Everything is keyed by the VERIFIED request: the account and the current
+ * session come from the guard, never from a parameter. A session id in the
+ * path only selects among the caller's own; another account's id is answered
+ * exactly like a made-up one (SESSION_NOT_FOUND).
+ *
+ * A support session (PD-21) can list but not revoke: these are writes, and the
+ * support-session allowlist does not name them.
+ */
+@Controller('me/sessions')
+@UseFilters(CommErrorFilter)
+export class MeSessionsController {
+  constructor(private readonly auth: AuthService) {}
+
+  @Get()
+  async list(@Req() request: AuthenticatedRequest): Promise<{ sessions: SessionDto[] }> {
+    const { accountId, sessionId } = verified(request);
+    return toSessionListDto(await this.auth.listLiveSessions(accountId), sessionId);
+  }
+
+  /** Revoking the CURRENT session is signing out; the client then clears itself. */
+  @Post(':sessionId/revoke')
+  @HttpCode(200)
+  async revoke(@Req() request: AuthenticatedRequest, @Param('sessionId') target: string): Promise<{ ok: true }> {
+    const { accountId, sessionId, actorId } = verified(request);
+    const reason = target === sessionId ? 'logout' : SIGNED_OUT_BY_HOLDER;
+    const ended = await this.auth.revokeSessionOf(accountId, target, reason, { revokedBy: accountId, actorId });
+    if (!ended) throw new CommError(CommErrorCode.SESSION_NOT_FOUND, 'no such session');
+    return { ok: true };
+  }
+
+  @Post('revoke-others')
+  @HttpCode(200)
+  async revokeOthers(@Req() request: AuthenticatedRequest): Promise<{ revoked: number }> {
+    const { accountId, sessionId, actorId } = verified(request);
+    const revoked = await this.auth.revokeOtherSessions(accountId, sessionId, SIGNED_OUT_BY_HOLDER, {
+      revokedBy: accountId,
+      actorId,
+    });
+    return { revoked };
+  }
+}
+
+/** PD-23: the revocation reason when the holder ends a session from another device. */
+export const SIGNED_OUT_BY_HOLDER = 'signed out from another device';
+
+function verified(request: AuthenticatedRequest): { accountId: string; sessionId: string; actorId: string } {
+  if (!request.accountId || !request.sessionId || !request.actor) {
+    throw new AuthError(AuthErrorCode.UNAUTHENTICATED);
+  }
+  return { accountId: request.accountId, sessionId: request.sessionId, actorId: request.actor.actorId };
 }
 
 /**

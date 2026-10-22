@@ -36,6 +36,7 @@ import { JoinLinkPage } from '@/features/calls-page/JoinLinkPage'
 import { TeacherProfilesPage } from '@/features/teacher-profiles/TeacherProfilesPage'
 import { AccountsPage } from '@/features/accounts/AccountsPage'
 import { SupportSessionPage } from '@/features/support/SupportSessionPage'
+import { DevicesPage } from '@/features/devices/DevicesPage'
 import { ForbiddenPage } from './ForbiddenPage'
 import type { ReactElement } from 'react'
 
@@ -141,6 +142,10 @@ export function AppRoutes() {
           request; the route only names which profile to ask for.
         */}
         <Route path="/profile" element={<ProfilePage />} />
+        {/* PD-23: the signed-in staff member's own devices and sessions, every
+            role (GET /me/sessions answers only for the caller). A static
+            segment, so it outranks /profile/:staffId. */}
+        <Route path="/profile/devices" element={<DevicesPage />} />
         <Route path="/profile/:staffId" element={<ProfilePage />} />
         <Route
           path="/admin/:section"

@@ -428,24 +428,6 @@ void main() {
   });
 
   group('capabilities the contract does not publish', () {
-    test('the session registry fails explicitly rather than inventing a list', () async {
-      final s = stack();
-
-      await expectLater(
-        s.auth.devices(),
-        throwsA(
-          isA<AppError>().having((e) => e.code, 'code', AuthFailures.sessionsNotSupported),
-        ),
-      );
-      await expectLater(
-        s.auth.revokeDevice('device-1'),
-        throwsA(
-          isA<AppError>().having((e) => e.code, 'code', AuthFailures.sessionsNotSupported),
-        ),
-      );
-      expect(server.requests, isEmpty, reason: 'no endpoint was guessed at');
-    });
-
     test('sessionRevoked is empty, not a fabricated channel', () async {
       expect(await stack().auth.sessionRevoked.toList(), isEmpty);
     });

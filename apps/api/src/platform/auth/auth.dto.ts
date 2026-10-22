@@ -1,5 +1,5 @@
 import type { Actor } from '../types';
-import type { TokenPair } from './auth.service';
+import type { LiveSession, TokenPair } from './auth.service';
 
 /**
  * The client-facing authentication shapes (API-CONTRACT §2, Phase 1 DTOs).
@@ -28,8 +28,52 @@ export interface TokenPairDto {
   readonly accessToken: string;
   readonly expiresIn: number;
   readonly refreshToken: string;
-  readonly session: { readonly id: string; readonly createdAt: string };
+  readonly session: {
+    readonly id: string;
+    readonly createdAt: string;
+    /** PD-23: "keep me signed in" is in effect. Admin Web stores the refresh token by this. */
+    readonly remembered: boolean;
+    /** PD-23: the refresh token must be used before this, or the session ends. */
+    readonly expiresAt: string;
+    /** PD-23: the session ends at this time regardless; null = no absolute limit. */
+    readonly absoluteExpiresAt: string | null;
+  };
   readonly actor: ActorDto;
+}
+
+/**
+ * PD-23: one row of Devices & sessions. Named fields only: no ip hash, no user
+ * agent, no token material -- a label and the times are all a person needs to
+ * recognise a device.
+ */
+export interface SessionDto {
+  readonly id: string;
+  /** The session this request is made with. Always false in the admin view. */
+  readonly current: boolean;
+  readonly platform: string | null;
+  readonly deviceName: string | null;
+  readonly appVersion: string | null;
+  readonly signedInAt: string;
+  readonly lastSeenAt: string | null;
+  readonly expiresAt: string;
+  readonly remembered: boolean;
+}
+
+/** Current first, then most recently active -- the order a person reads it in. */
+export function toSessionListDto(rows: readonly LiveSession[], currentSessionId: string | null): { sessions: SessionDto[] } {
+  const sessions = rows.map((row) => ({
+    id: row.id,
+    current: row.id === currentSessionId,
+    platform: row.platform,
+    deviceName: row.deviceName,
+    appVersion: row.appVersion,
+    signedInAt: row.signedInAt.toISOString(),
+    lastSeenAt: row.lastSeenAt?.toISOString() ?? null,
+    expiresAt: row.expiresAt.toISOString(),
+    remembered: row.remembered,
+  }));
+  sessions.sort((a, b) => Number(b.current) - Number(a.current));
+  return { sessions };
 }
 
 /**
@@ -66,7 +110,13 @@ export function toTokenPairDto(pair: TokenPair): TokenPairDto {
     accessToken: pair.accessToken,
     expiresIn: pair.expiresInSeconds,
     refreshToken: pair.refreshToken,
-    session: { id: pair.sessionId, createdAt: pair.sessionCreatedAt.toISOString() },
+    session: {
+      id: pair.sessionId,
+      createdAt: pair.sessionCreatedAt.toISOString(),
+      remembered: pair.remembered,
+      expiresAt: pair.expiresAt.toISOString(),
+      absoluteExpiresAt: pair.absoluteExpiresAt?.toISOString() ?? null,
+    },
     actor: toActorDto(pair.actor),
   };
 }

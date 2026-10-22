@@ -1,5 +1,5 @@
 import { ApiError, NetworkError, fallbackMessages } from './errors'
-import { tokenStore } from '@/core/auth/tokens'
+import { tokenStore, withRefreshLock } from '@/core/auth/tokens'
 
 const BASE_URL: string =
   (import.meta.env?.VITE_API_BASE_URL as string | undefined) ?? '/api/v1'
@@ -55,27 +55,58 @@ let refreshing: Promise<boolean> | null = null
  * treats a refresh token presented twice as theft and revokes every session on
  * the account (auth.service.ts handleRefreshReuse). Ten parallel 401s must
  * produce one `/auth/refresh`, and the other nine wait for its answer.
+ *
+ * Two layers:
+ *   - in this tab, `refreshing` shares one in-flight promise;
+ *   - across tabs (PD-23 "Keep me signed in", where every tab of the browser
+ *     shares one refresh token in localStorage), `withRefreshLock` runs the
+ *     rotation under a Web Lock, and the token is read INSIDE the lock -- so a
+ *     tab that waited behind another presents the token that tab just wrote,
+ *     never the one it would have read before waiting.
  */
 export function refreshSession(): Promise<boolean> {
-  refreshing ??= (async () => {
+  refreshing ??= withRefreshLock(async () => {
+    // Read here, inside the lock -- never hoist this above withRefreshLock.
     const refreshToken = tokenStore.refresh()
     if (!refreshToken) return false
     try {
-      const pair = await request<{ accessToken: string; refreshToken: string }>('/auth/refresh', {
+      const pair = await request<RefreshedSessionDto>('/auth/refresh', {
         method: 'POST',
         body: { refreshToken },
         anonymous: true,
       })
+      // No `remembered`: the rotated token goes back where the old one was.
       tokenStore.set(pair)
       return true
-    } catch {
+    } catch (error) {
+      // Only the server REFUSING the token ends the session. A network failure
+      // or a 5xx is not a verdict on it: clearing there would sign out every tab
+      // of a "kept signed in" browser each time a laptop wakes without Wi-Fi.
+      // The error goes up instead, and the stored token stays for the retry.
+      if (!(error instanceof ApiError) || error instanceof NetworkError || error.status >= 500) throw error
       tokenStore.clear()
       return false
     }
-  })().finally(() => {
+  }).finally(() => {
     refreshing = null
   })
   return refreshing
+}
+
+/** PD-23: the session the login and refresh answers describe. */
+export interface SessionInfoDto {
+  id: string
+  createdAt: string
+  /** Absent on an older API: treated as false (per-tab storage). */
+  remembered?: boolean
+  expiresAt?: string
+  absoluteExpiresAt?: string | null
+}
+
+interface RefreshedSessionDto {
+  accessToken: string
+  refreshToken: string
+  session?: SessionInfoDto
 }
 
 /**

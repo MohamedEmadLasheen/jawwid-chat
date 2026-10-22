@@ -27,8 +27,11 @@ import {
   Visibility,
 } from '../communication/contracts/vocab';
 
-/** PD-21: what an administrator may do to another account. */
-export type AccountAdminAct = 'reset_password' | 'suspend' | 'reactivate' | 'impersonate';
+/**
+ * PD-21: what an administrator may do to another account. PD-23 adds
+ * 'sign_out' (end one or all of its sessions), under the same rule as suspend.
+ */
+export type AccountAdminAct = 'reset_password' | 'suspend' | 'reactivate' | 'impersonate' | 'sign_out';
 
 /** PD-21: the account an administrator acts on, resolved by the caller. */
 export interface AccountAdminTarget {

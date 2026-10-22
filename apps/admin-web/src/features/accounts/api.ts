@@ -23,7 +23,14 @@ export interface AccountSummary {
   hasLogin: boolean
   lockedUntil: string | null
   lastLoginAt: string | null
-  allowed: { resetPassword: boolean; suspend: boolean; reactivate: boolean; impersonate: boolean }
+  allowed: {
+    resetPassword: boolean
+    suspend: boolean
+    reactivate: boolean
+    impersonate: boolean
+    /** PD-23: may end this account's sessions (and the account is active). Absent on an older API = no. */
+    signOut?: boolean
+  }
 }
 
 export interface AccountList {

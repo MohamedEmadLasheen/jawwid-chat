@@ -22,6 +22,7 @@ import {
 } from './jwt';
 import { hashPassword, spendComparableTime, verifyPassword } from './password';
 import { subjectHash } from './subject-hash';
+import { clientOfPlatform, sessionPolicyFor, sessionWindow, type SessionClient } from './session-policy';
 
 /**
  * The canonical event and action names (API-CONTRACT §3.1). Constants so a
@@ -76,7 +77,22 @@ export interface LoginContext {
   readonly userAgent?: string;
   readonly ip?: string;
   readonly device?: DeviceInput;
+  /** PD-23: Admin Web "keep me signed in on this device". Honoured per session-policy.ts. */
+  readonly remember?: boolean;
 }
+
+/**
+ * PD-23: what a refresh carries from the row it rotates. Read from the row,
+ * never restated by the client, so a refresh cannot buy a longer policy.
+ */
+interface LoginChain {
+  readonly authenticatedAt: Date;
+  readonly client: SessionClient | null;
+  readonly remembered: boolean;
+}
+
+/** PD-23: the revocation reason when a session reaches its policy's limit at a refresh. */
+export const LIFETIME_REASON = 'session lifetime reached';
 
 export interface AuthenticatedSession {
   readonly actor: Actor;
@@ -94,9 +110,28 @@ export interface TokenPair {
   readonly sessionId: string;
   readonly sessionCreatedAt: Date;
   readonly actor: Actor;
+  /** PD-23: "keep me signed in" is in effect for this session. */
+  readonly remembered: boolean;
+  /** PD-23: the refresh token stops working at this time unless used first. */
+  readonly expiresAt: Date;
+  /** PD-23: the session ends at this time however it is used; null = no absolute limit. */
+  readonly absoluteExpiresAt: Date | null;
 }
 
 const PLATFORMS = new Set(['ios', 'android', 'web']);
+
+/** PD-23: one row of a Devices & sessions list. */
+export interface LiveSession {
+  readonly id: string;
+  readonly platform: string | null;
+  readonly deviceName: string | null;
+  readonly appVersion: string | null;
+  /** When the password was entered for this login (not the last rotation). */
+  readonly signedInAt: Date;
+  readonly lastSeenAt: Date | null;
+  readonly expiresAt: Date;
+  readonly remembered: boolean;
+}
 
 /**
  * Runtime authentication (PR-B).
@@ -337,11 +372,24 @@ export class AuthService {
   private async issue(
     account: { id: string; organizationId: string; subject: string },
     actor: Actor,
-    context: LoginContext & { deviceId?: string | null },
+    context: LoginContext & { deviceId?: string | null; chain?: LoginChain },
     reason: 'login' | 'refresh',
   ): Promise<TokenPair> {
     const config = this.config();
     const refreshToken = newRefreshToken();
+
+    // PD-23: the policy is decided here, for login and refresh alike, from the
+    // CURRENT principal. A login has no chain yet: its authenticated_at is the
+    // column default (the database's now), and the window is counted from now.
+    const now = new Date();
+    const client = context.chain ? context.chain.client : clientOfPlatform(context.device?.platform);
+    const policy = sessionPolicyFor(actor, client, context.chain ? context.chain.remembered : context.remember === true);
+    const window = sessionWindow(policy, context.chain?.authenticatedAt ?? now, now, config.refreshTtlSeconds);
+    if (window.expiresAt <= now) {
+      // refresh() checks this before it rotates; reaching here is a race with
+      // the clock, and the answer is the same: sign in again.
+      throw new AuthError(AuthErrorCode.SESSION_REVOKED);
+    }
 
     const session = await this.prisma.$transaction(async (tx) => {
       if (reason === 'login') {
@@ -367,10 +415,15 @@ export class AuthService {
           accountId: account.id,
           deviceId: deviceId ?? null,
           refreshTokenHash: hashRefreshToken(refreshToken, config.refreshSecret),
-          expiresAt: new Date(Date.now() + config.refreshTtlSeconds * 1000),
+          expiresAt: window.expiresAt,
           lastSeenAt: new Date(),
           ipHash: hashIp(context.ip, config.refreshSecret),
           userAgent: context.userAgent?.slice(0, 200) ?? null,
+          // PD-23. authenticated_at is set only on a refresh (copied); a login
+          // takes the column default, so it can never postdate created_at.
+          ...(context.chain ? { authenticatedAt: context.chain.authenticatedAt } : {}),
+          client,
+          remembered: policy.remembered,
         },
         select: { id: true, createdAt: true },
       });
@@ -384,7 +437,13 @@ export class AuthService {
         entityId: created.id,
         // No token, no hash, no subject. Only what an incident review needs to
         // place the session: who, as what, on what kind of device.
-        after: { accountId: account.id, actorKind: actor.kind, deviceId: deviceId ?? null },
+        after: {
+          accountId: account.id,
+          actorKind: actor.kind,
+          deviceId: deviceId ?? null,
+          policy: policy.name,
+          expiresAt: window.expiresAt.toISOString(),
+        },
         reason,
       });
 
@@ -412,6 +471,9 @@ export class AuthService {
       sessionId: session.id,
       sessionCreatedAt: session.createdAt,
       actor,
+      remembered: policy.remembered,
+      expiresAt: window.expiresAt,
+      absoluteExpiresAt: window.absoluteExpiresAt,
     };
   }
 
@@ -698,12 +760,27 @@ export class AuthService {
       throw new AuthError(AuthErrorCode.ACCOUNT_DISABLED);
     }
 
+    // PD-23: would the successor still be inside its policy? Decided BEFORE the
+    // rotation: a row retired as 'rotated' and then refused would leave the
+    // client holding a rotated token, and presenting that again reads as theft.
+    const chain: LoginChain = {
+      authenticatedAt: session.authenticatedAt,
+      client: session.client === 'app' || session.client === 'web' ? session.client : null,
+      remembered: session.remembered,
+    };
+    const now = new Date();
+    const policy = sessionPolicyFor(actor, chain.client, chain.remembered);
+    if (sessionWindow(policy, chain.authenticatedAt, now, config.refreshTtlSeconds).expiresAt <= now) {
+      await this.revokeBeforeRefusing(session.id, LIFETIME_REASON);
+      throw new AuthError(AuthErrorCode.SESSION_REVOKED);
+    }
+
     // Retire the presented session and mint its successor. Two transactions,
     // each internally atomic: the rotation is recorded before the new session
     // exists, so an interruption between them leaves the caller logged out
     // rather than holding two live sessions.
     await this.revoke(session.id, 'rotated', undefined, actor.actorId);
-    const pair = await this.issue(account, actor, { ...context, deviceId: session.deviceId }, 'refresh');
+    const pair = await this.issue(account, actor, { ...context, deviceId: session.deviceId, chain }, 'refresh');
     // RT-009: rotation is the same login continuing, not a revocation. Sockets
     // bound to the retired session now also answer to its successor, so a
     // later logout of the successor still reaches them.
@@ -876,6 +953,106 @@ export class AuthService {
    */
   async logout(sessionId: string, actorId?: string): Promise<void> {
     await this.revoke(sessionId, 'logout', undefined, actorId);
+  }
+
+  // -------------------------------------------------------------------------
+  // Devices & sessions (PD-23)
+  // -------------------------------------------------------------------------
+
+  /**
+   * The account's live sessions: one row per signed-in device or browser.
+   * Rotation retires rows as it goes, so "live" is already one row per login.
+   *
+   * Support sessions (PD-21) are NOT listed: they are an administrator's, they
+   * end with the administrator's own session, and the person cannot end them
+   * from here. Their record is chat.impersonation_session.
+   */
+  async listLiveSessions(accountId: string): Promise<LiveSession[]> {
+    const rows = await this.prisma.session.findMany({
+      where: { accountId, revokedAt: null, expiresAt: { gt: new Date() }, impersonationId: null },
+      select: {
+        id: true,
+        authenticatedAt: true,
+        lastSeenAt: true,
+        expiresAt: true,
+        client: true,
+        remembered: true,
+        device: { select: { platform: true, name: true, appVersion: true } },
+      },
+      orderBy: [{ lastSeenAt: { sort: 'desc', nulls: 'last' } }, { authenticatedAt: 'desc' }],
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      platform: row.device?.platform ?? (row.client === 'web' ? 'web' : null),
+      deviceName: row.device?.name ?? null,
+      appVersion: row.device?.appVersion ?? null,
+      signedInAt: row.authenticatedAt,
+      lastSeenAt: row.lastSeenAt,
+      expiresAt: row.expiresAt,
+      remembered: row.remembered,
+    }));
+  }
+
+  /**
+   * Ends ONE live session of `accountId`. False when the account has no such
+   * live session -- which the callers answer as not found, so a session id of
+   * another account is indistinguishable from a made-up one.
+   *
+   * `revokedBy` is the ACCOUNT that asked (the holder, or an administrator):
+   * chat.session.revoked_by references chat.account.
+   */
+  async revokeSessionOf(
+    accountId: string,
+    sessionId: string,
+    reason: string,
+    by: { revokedBy: string; actorId: string },
+  ): Promise<boolean> {
+    const owned = await this.prisma.session.findFirst({
+      where: { id: sessionId, accountId, revokedAt: null, impersonationId: null },
+      select: { id: true },
+    });
+    if (!owned) return false;
+    await this.revoke(sessionId, reason, by.revokedBy, by.actorId);
+    return true;
+  }
+
+  /**
+   * "Sign out all other devices": every live session of the account except
+   * `keepSessionId`, in ONE transaction with its audit row. Support sessions
+   * are left to their administrator (see listLiveSessions).
+   */
+  async revokeOtherSessions(
+    accountId: string,
+    keepSessionId: string,
+    reason: string,
+    by: { revokedBy: string; actorId: string },
+  ): Promise<number> {
+    const ids = await this.prisma.$transaction(async (tx) => {
+      const live = await tx.session.findMany({
+        where: { accountId, revokedAt: null, impersonationId: null, id: { not: keepSessionId } },
+        select: { id: true },
+      });
+      if (live.length === 0) return [];
+      const targets = live.map((row) => row.id);
+      await tx.session.updateMany({
+        where: { id: { in: targets }, revokedAt: null },
+        data: { revokedAt: new Date(), revokedReason: reason, revokedBy: by.revokedBy },
+      });
+      await this.audit.audit(tx, {
+        actorId: by.actorId,
+        action: AUDIT_ACTION.SESSION_REVOKED,
+        entity: 'account',
+        entityId: accountId,
+        after: { revokedSessions: targets.length, kept: keepSessionId },
+        reason,
+      });
+      return targets;
+    });
+    // RT-009: the sockets of exactly those sessions -- not the account's, which
+    // would also end the device that asked.
+    if (ids.length > 0) this.revocation.disconnectSessions(ids);
+    await this.revocation.confirmRevoked();
+    return ids.length;
   }
 
   // -------------------------------------------------------------------------
