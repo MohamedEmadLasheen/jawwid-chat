@@ -2832,4 +2832,199 @@ class L10nEn extends L10n {
 
   @override
   String get timeZoneSaveFailed => 'Could not change the time zone. Try again.';
+
+  @override
+  String get billingAmountDueTitle => 'Amount due';
+
+  @override
+  String get billingPay => 'Pay';
+
+  @override
+  String billingPaidOfTotal(String paid, String total) {
+    return 'Paid $paid of $total';
+  }
+
+  @override
+  String billingPeriod(String start, String end) {
+    return '$start – $end';
+  }
+
+  @override
+  String get billingConfirmingPayment =>
+      'We\'re confirming your payment. This can take a minute.';
+
+  @override
+  String get billingPaySheetTitle => 'How would you like to pay?';
+
+  @override
+  String get billingPayByCard => 'Pay by card';
+
+  @override
+  String get billingPayByCardHint => 'Opens a secure payment page';
+
+  @override
+  String get billingBankTransferHint =>
+      'Transfer the amount, then upload the receipt';
+
+  @override
+  String get billingPaymentsUnavailable =>
+      'Card payment isn\'t available right now. You can pay by bank transfer.';
+
+  @override
+  String get billingNoLongerOpen =>
+      'This has already been paid or is no longer open. The list has been refreshed.';
+
+  @override
+  String get billingCouldNotOpen => 'Couldn\'t open the page. Try again.';
+
+  @override
+  String get billingTransferAmount => 'Amount to transfer';
+
+  @override
+  String get billingBankName => 'Bank';
+
+  @override
+  String get billingAccountName => 'Account name';
+
+  @override
+  String get billingIban => 'IBAN';
+
+  @override
+  String get billingAccountNumber => 'Account number';
+
+  @override
+  String get billingSwift => 'SWIFT';
+
+  @override
+  String get billingCopy => 'Copy';
+
+  @override
+  String get billingCopied => 'Copied';
+
+  @override
+  String get billingNoBankAccount =>
+      'The academy hasn\'t added its bank details yet. Ask your supervisor for them.';
+
+  @override
+  String get billingUploadReceiptTitle => 'Upload receipt';
+
+  @override
+  String get billingReceiptPhoto => 'Photo';
+
+  @override
+  String get billingReceiptCamera => 'Camera';
+
+  @override
+  String get billingReceiptPdf => 'PDF';
+
+  @override
+  String get billingReceiptFileHint =>
+      'A screenshot or PDF of the transfer: JPEG, PNG, WebP or PDF, up to 10 MB.';
+
+  @override
+  String get billingReceiptAttachedPhoto => 'Photo attached';
+
+  @override
+  String get billingReceiptRemove => 'Remove';
+
+  @override
+  String billingReceiptAmountLabel(String currency) {
+    return 'Amount you transferred ($currency)';
+  }
+
+  @override
+  String get billingReceiptDateLabel => 'Transfer date';
+
+  @override
+  String get billingReceiptNoteLabel => 'Note (optional)';
+
+  @override
+  String get billingReceiptSend => 'Send receipt';
+
+  @override
+  String get billingReceiptSent =>
+      'Receipt sent. The academy will confirm it soon.';
+
+  @override
+  String get billingReceiptNeedFile => 'Attach the receipt first.';
+
+  @override
+  String get billingReceiptBadAmount => 'Enter the amount you transferred.';
+
+  @override
+  String get billingReceiptWrongType =>
+      'Use a JPEG, PNG or WebP image, or a PDF.';
+
+  @override
+  String get billingReceiptTooLarge => 'The file is larger than 10 MB.';
+
+  @override
+  String get billingReceiptPickDenied =>
+      'Allow access in Settings, then try again.';
+
+  @override
+  String get billingReceiptPickFailed =>
+      'Couldn\'t use that file. Try another one.';
+
+  @override
+  String get billingReceiptInvalid =>
+      'Check the amount and the date, then try again.';
+
+  @override
+  String get billingReceiptsTitle => 'Transfer receipts';
+
+  @override
+  String get billingReceiptPending => 'Pending verification';
+
+  @override
+  String get billingReceiptApproved => 'Approved';
+
+  @override
+  String get billingReceiptRejected => 'Rejected';
+
+  @override
+  String billingReceiptRejectReason(String reason) {
+    return 'Reason: $reason';
+  }
+
+  @override
+  String billingTransferredOn(String date) {
+    return 'Transferred $date';
+  }
+
+  @override
+  String get billingInvoicesTitle => 'Invoices';
+
+  @override
+  String billingInvoiceIssued(String date) {
+    return 'Issued $date';
+  }
+
+  @override
+  String get billingInvoiceRefunded => 'Refunded';
+
+  @override
+  String get billingInvoicePartiallyRefunded => 'Partially refunded';
+
+  @override
+  String get billingInvoiceDownload => 'Download';
+
+  @override
+  String billingRefundedAmount(String amount) {
+    return 'Refunded $amount';
+  }
+
+  @override
+  String get billingMethodCard => 'Card';
+
+  @override
+  String get billingMethodCash => 'Cash';
+
+  @override
+  String get billingTooManyAttempts =>
+      'Too many attempts. Wait a while, then try again.';
+
+  @override
+  String get billingReceiptNotAccepted =>
+      'This receipt can\'t be added: the amount is already paid or closed, or other receipts are still waiting to be checked.';
 }

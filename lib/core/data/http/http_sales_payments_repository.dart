@@ -65,6 +65,10 @@ class HttpSalesPaymentsRepository implements SalesPaymentsRepository {
       'method': switch (method) {
         BillingMethod.invoice => 'invoice',
         BillingMethod.bankTransfer => 'bank_transfer',
+        BillingMethod.cash => 'cash',
+        // Never offered here: a card payment arrives only through Stripe (PD-27), and
+        // the server refuses it on this route.
+        BillingMethod.card => 'card',
       },
       if (ref != null && ref.isNotEmpty) 'reference': ref,
     })).data ?? const {};
