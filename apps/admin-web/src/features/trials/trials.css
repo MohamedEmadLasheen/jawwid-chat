@@ -89,3 +89,4 @@
 .tj-setup { padding-block-start: var(--space-3); border-block-start: 1px solid var(--border); display: grid; gap: var(--space-2); }
 .tj-setup__parent { grid-column: 1 / -1; }
 .tj-code { font-size: 1.25rem; letter-spacing: 0.2em; font-variant-numeric: tabular-nums; padding-inline: var(--space-2); }
+.tj-setup__supervisor { display: inline-flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }

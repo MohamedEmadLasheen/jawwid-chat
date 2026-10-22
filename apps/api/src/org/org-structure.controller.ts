@@ -38,6 +38,12 @@ export class OrgStructureController {
     return this.org.assignSupervisor(actorId, learnerId, body ?? {});
   }
 
+  /** PD-24: move a student group or family group, with all its children, to another supervisor. */
+  @Post('conversations/:conversationId/supervisor')
+  transferGroup(@ActorId() actorId: string, @Param('conversationId') conversationId: string, @Body() body: Record<string, unknown>) {
+    return this.org.transferGroup(actorId, conversationId, body ?? {});
+  }
+
   @Post('departments')
   upsertDepartment(@ActorId() actorId: string, @Body() body: Record<string, unknown>) {
     return this.org.upsertDepartment(actorId, body ?? {});

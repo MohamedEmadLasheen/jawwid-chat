@@ -2,8 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { chatKeys } from '@/features/chat/chatApi'
 import { orgApi, orgKeys, type NewFamilyGroup } from './api'
 
-export function useStructure() {
-  return useQuery({ queryKey: orgKeys.structure, queryFn: orgApi.structure, staleTime: 30_000 })
+export function useStructure(enabled = true) {
+  return useQuery({ queryKey: orgKeys.structure, queryFn: orgApi.structure, staleTime: 30_000, enabled })
 }
 
 export function useLearners(enabled: boolean) {

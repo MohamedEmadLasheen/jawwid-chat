@@ -521,6 +521,27 @@
     }
   },
   "systemGroupArchived": "Group archived",
+  "systemGroupSupervisorChanged": "{name} is now this group's supervisor",
+  "@systemGroupSupervisorChanged": {
+    "description": "PD-24 system message: the group was handed to another supervisor; history kept.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "systemGroupSupervisorChangedNoName": "This group's supervisor changed",
+  "systemDirectSupervisorChanged": "{name} is now your supervisor; the chat history is kept",
+  "@systemDirectSupervisorChanged": {
+    "description": "PD-24 system message in the parent's 1:1 with their supervisor after a transfer.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "systemDirectSupervisorChangedNoName": "Your supervisor changed; the chat history is kept",
+  "systemGroupLearnerDetached": "A child of this group moved to another supervisor",
   "systemUpdate": "System update",
   "lessonTicketsHeader": "Lesson",
   "@lessonTicketsHeader": {

@@ -391,7 +391,9 @@ export class OrgStructureService {
    * Assign (or reassign) a child to a supervisor. Reassignment moves the
    * child's groups with the child (ConversationService.reconcileSupervisionChange)
    * in the same transaction, and every other conversation's scope follows by
-   * itself because it is computed from this row at each read.
+   * itself because it is computed from this row at each read. One child at a
+   * time: a family group shared with siblings who stay keeps them and lets
+   * this child go. To move a whole group, see transferGroup (PD-24).
    */
   async assignSupervisor(actorId: string, learnerId: string, body: { supervisorId?: unknown; reason?: unknown }) {
     const actor = await this.conversations.requireActor(actorId);
@@ -420,6 +422,7 @@ export class OrgStructureService {
 
     const evictions = await this.write(async (tx) => {
       await this.conversations.assertActorLive(tx, actor);
+      const billingBefore = (await tx.familyBillingSupervision.findUnique({ where: { familyId: learner.familyId } }))?.supervisorId ?? null;
       await tx.learnerSupervision.upsert({
         where: { learnerId },
         create: { learnerId, organizationId: org, supervisorId, assignedBy: actor.actorId, reason },
@@ -432,6 +435,13 @@ export class OrgStructureService {
         supervisorId,
         actor.actorId,
       );
+      // PD-24: the family's 1:1, billing and owner follow when the old
+      // supervisor has none of the family's children left.
+      if (current) {
+        const directs = await this.conversations.transferFamilyDirects(tx, learner.familyId, [current.supervisorId], supervisorId, actor.actorId);
+        removed.push(...directs.evictions);
+        await this.followFamilyRecords(tx, actor, org, learner.familyId, [current.supervisorId], supervisorId, reason, billingBefore);
+      }
       await this.audit.audit(tx, {
         actorId: actor.actorId,
         action: current ? 'learner.supervisor_reassigned' : 'learner.supervisor_assigned',
@@ -452,6 +462,193 @@ export class OrgStructureService {
     }
     if (current) await this.revocation.confirmRevoked();
     return { learnerId, supervisorId, changed: true };
+  }
+
+  // ------------------------------------------------------------------
+  // PD-24: transferring children to another supervisor
+  // ------------------------------------------------------------------
+
+  /**
+   * PD-24: move a group to another supervisor. Every child the group is about
+   * moves (see transferLearners); the group itself is the same conversation,
+   * with the old supervisor's seat ended and the new one's added.
+   */
+  async transferGroup(actorId: string, conversationId: string, body: { supervisorId?: unknown; reason?: unknown }) {
+    const actor = await this.conversations.requireActor(actorId);
+    const org = this.requireOrg(actor);
+    if (!isUuid(conversationId)) throw notFound('conversation');
+    const conv = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { organizationId: true, type: true, learnerId: true, archivedAt: true },
+    });
+    if (!conv || conv.organizationId !== org) throw notFound('conversation');
+    if (conv.archivedAt || (conv.type !== 'student_group' && conv.type !== 'family_group')) {
+      throw invalid('conversation', 'only a live student group or family group has a supervisor to change');
+    }
+    const seeds = conv.type === 'student_group'
+      ? (conv.learnerId ? [conv.learnerId] : [])
+      : (await this.prisma.conversationLearner.findMany({ where: { conversationId }, select: { learnerId: true } })).map((r) => r.learnerId);
+    if (seeds.length === 0) throw invalid('conversation', 'this group is about no child');
+    return this.transferLearners(actor, seeds, body);
+  }
+
+  /**
+   * PD-24: transfer children -- and everything that hangs off them -- to
+   * another supervisor, as ONE unit, in one transaction. Nothing is copied or
+   * recreated; rows are re-pointed and access follows:
+   *
+   *   - the unit: the given children plus every child who shares a live family
+   *     group with one of them (transitively), so no group is ever split;
+   *   - supervision: one chat.learner_supervision row per child, audited with
+   *     the previous supervisor and the reason;
+   *   - groups: each child's Student Group and every family group about them
+   *     keep their conversation, members, messages and attachments; the old
+   *     supervisor's seat ends and the new one's is added
+   *     (ConversationService.reconcileSupervisionChange);
+   *   - per family: the parent's 1:1 with an old supervisor who has no child of
+   *     the family left passes to the new one (transferFamilyDirects), and so
+   *     do the family's billing supervision and its owner (workload);
+   *   - everything read through scope -- the Student and Parent Profiles,
+   *     lessons and reports, the New Students card, the learners list -- is
+   *     computed from chat.learner_supervision at each read, so it moves with
+   *     the row and the previous supervisor stops seeing it.
+   *
+   * Who: the super admin, or the Operations manager who runs both the old and
+   * the new supervisor (AuthorizationService.canAssignSupervision, per child).
+   */
+  async transferLearners(actorOrId: Actor | string, seeds: readonly string[], body: { supervisorId?: unknown; reason?: unknown }) {
+    const actor = typeof actorOrId === 'string' ? await this.conversations.requireActor(actorOrId) : actorOrId;
+    const org = this.requireOrg(actor);
+    const supervisorId = requireUuid('supervisorId', body.supervisorId);
+    const reason = requireText('reason', body.reason, 500);
+    const supervisor = await this.prisma.staff.findUnique({ where: { id: supervisorId } });
+    if (!supervisor || supervisor.organizationId !== org) throw notFound('supervisor');
+
+    const unit = await this.prisma.$queryRaw<Array<{ id: string; name: string; family_id: string; supervisor_id: string | null }>>`
+      WITH RECURSIVE unit(learner_id) AS (
+        SELECT unnest(${[...seeds]}::uuid[])
+        UNION
+        SELECT other.learner_id
+          FROM unit
+          JOIN chat.conversation_learner mine ON mine.learner_id = unit.learner_id
+          JOIN chat.conversation g ON g.id = mine.conversation_id AND g.archived_at IS NULL
+          JOIN chat.conversation_learner other ON other.conversation_id = g.id
+      )
+      SELECT l.id::text AS id, l.name, l.family_id::text AS family_id, ls.supervisor_id::text AS supervisor_id
+        FROM unit
+        JOIN chat.learner l ON l.id = unit.learner_id
+        LEFT JOIN chat.learner_supervision ls ON ls.learner_id = l.id
+       WHERE l.organization_id = ${org}::uuid
+       ORDER BY l.name`;
+    if (unit.length === 0) throw notFound('learner');
+
+    const now = new Date();
+    const actsForNew = await this.authz.actsFor(actor, supervisorId, now);
+    const currents = [...new Set(unit.map((l) => l.supervisor_id))];
+    for (const current of currents) {
+      const decision = this.authz.canAssignSupervision(actor, {
+        organizationId: org,
+        actsForNew,
+        currentSupervisorId: current,
+        actsForCurrent: current ? await this.authz.actsFor(actor, current, now) : null,
+      });
+      if (!decision.allowed) throw new CommError(decision.code, decision.reason);
+    }
+
+    const moving = unit.filter((l) => l.supervisor_id !== supervisorId);
+    const learners = unit.map((l) => ({ id: l.id, name: l.name }));
+    if (moving.length === 0) {
+      return { supervisorId, changed: false, learners, groups: 0, directChats: 0 };
+    }
+    const movingIds = moving.map((l) => l.id);
+    const oldIds = [...new Set(moving.map((l) => l.supervisor_id).filter((id): id is string => !!id))];
+    const familyIds = [...new Set(moving.map((l) => l.family_id))];
+
+    const result = await this.write(async (tx) => {
+      await this.conversations.assertActorLive(tx, actor);
+      const billingBefore = new Map(
+        (await tx.familyBillingSupervision.findMany({ where: { familyId: { in: familyIds } } })).map((b) => [b.familyId, b.supervisorId]),
+      );
+      for (const l of moving) {
+        await tx.learnerSupervision.upsert({
+          where: { learnerId: l.id },
+          create: { learnerId: l.id, organizationId: org, supervisorId, assignedBy: actor.actorId, reason },
+          update: { supervisorId, assignedBy: actor.actorId, assignedAt: new Date(), reason },
+        });
+        await this.audit.audit(tx, {
+          actorId: actor.actorId,
+          action: l.supervisor_id ? 'learner.supervisor_reassigned' : 'learner.supervisor_assigned',
+          entity: 'learner',
+          entityId: l.id,
+          before: l.supervisor_id ? { supervisorId: l.supervisor_id } : undefined,
+          after: { supervisorId, transferredWith: movingIds.filter((id) => id !== l.id) },
+          reason,
+        });
+      }
+      const evictions = await this.conversations.reconcileSupervisionChange(tx, movingIds, oldIds, supervisorId, actor.actorId);
+      const groups = evictions.length;
+      let directChats = 0;
+      for (const familyId of familyIds) {
+        const directs = await this.conversations.transferFamilyDirects(tx, familyId, oldIds, supervisorId, actor.actorId);
+        evictions.push(...directs.evictions);
+        directChats += directs.transferred;
+        await this.followFamilyRecords(tx, actor, org, familyId, oldIds, supervisorId, reason, billingBefore.get(familyId) ?? null);
+      }
+      return { evictions, groups, directChats };
+    });
+
+    for (const e of result.evictions) {
+      if (e.removed.length) this.revocation.leaveConversation(e.removed, e.conversationId);
+    }
+    if (oldIds.length) await this.revocation.confirmRevoked();
+    return { supervisorId, changed: true, learners, groups: result.groups, directChats: result.directChats };
+  }
+
+  /**
+   * The family-level records of a transfer: the billing supervisor and the
+   * family's owner pass to the new supervisor when they were an old supervisor
+   * who now has none of the family's children. (A billing supervisor who no
+   * longer supervises a child is cleared by the database itself --
+   * chat.billing_follows_learner_supervision -- so a transfer re-points it.)
+   */
+  private async followFamilyRecords(
+    tx: Prisma.TransactionClient,
+    actor: Actor,
+    org: string,
+    familyId: string,
+    oldIds: readonly string[],
+    supervisorId: string,
+    reason: string,
+    billingBefore: string | null,
+  ): Promise<void> {
+    const stillHasChild = async (staffId: string) =>
+      (await tx.$queryRaw<Array<{ ok: boolean }>>`SELECT chat.supervises_a_child_of(${staffId}::uuid, ${familyId}::uuid) AS ok`)[0]?.ok === true;
+
+    if (billingBefore && oldIds.includes(billingBefore) && !(await stillHasChild(billingBefore))) {
+      const current = await tx.familyBillingSupervision.findUnique({ where: { familyId } });
+      if (!current) {
+        await tx.familyBillingSupervision.create({
+          data: { familyId, organizationId: org, supervisorId, assignedBy: actor.actorId, reason },
+        });
+        await this.audit.audit(tx, {
+          actorId: actor.actorId,
+          action: 'family.billing_supervisor_transferred',
+          entity: 'family',
+          entityId: familyId,
+          before: { supervisorId: billingBefore },
+          after: { supervisorId },
+          reason,
+        });
+      }
+    }
+
+    const family = await tx.family.findUnique({ where: { id: familyId }, select: { ownerId: true } });
+    if (family && family.ownerId !== supervisorId && oldIds.includes(family.ownerId) && !(await stillHasChild(family.ownerId))) {
+      const newOwner = await tx.staff.findUnique({ where: { id: supervisorId }, select: { role: true } });
+      if (newOwner && (newOwner.role === StaffRole.ADMIN || newOwner.role === StaffRole.COVERAGE)) {
+        await tx.$executeRaw`SELECT chat.transfer_ownership(${familyId}::uuid, ${supervisorId}::uuid, ${reason}, ${actor.actorId}::uuid)`;
+      }
+    }
   }
 
   // ------------------------------------------------------------------

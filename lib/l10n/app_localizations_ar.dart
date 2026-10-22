@@ -839,6 +839,27 @@ class L10nAr extends L10n {
   String get systemGroupArchived => 'أُرشفت المجموعة';
 
   @override
+  String systemGroupSupervisorChanged(String name) {
+    return 'أصبح $name مشرف هذه المجموعة';
+  }
+
+  @override
+  String get systemGroupSupervisorChangedNoName => 'تغيّر مشرف هذه المجموعة';
+
+  @override
+  String systemDirectSupervisorChanged(String name) {
+    return 'أصبح $name مشرفك؛ سجلّ المحادثة كما هو';
+  }
+
+  @override
+  String get systemDirectSupervisorChangedNoName =>
+      'تغيّر مشرفك؛ سجلّ المحادثة كما هو';
+
+  @override
+  String get systemGroupLearnerDetached =>
+      'انتقل طفل من هذه المجموعة إلى مشرف آخر';
+
+  @override
   String get systemUpdate => 'تحديث من النظام';
 
   @override

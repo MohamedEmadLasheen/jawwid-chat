@@ -834,6 +834,28 @@ class L10nEn extends L10n {
   String get systemGroupArchived => 'Group archived';
 
   @override
+  String systemGroupSupervisorChanged(String name) {
+    return '$name is now this group\'s supervisor';
+  }
+
+  @override
+  String get systemGroupSupervisorChangedNoName =>
+      'This group\'s supervisor changed';
+
+  @override
+  String systemDirectSupervisorChanged(String name) {
+    return '$name is now your supervisor; the chat history is kept';
+  }
+
+  @override
+  String get systemDirectSupervisorChangedNoName =>
+      'Your supervisor changed; the chat history is kept';
+
+  @override
+  String get systemGroupLearnerDetached =>
+      'A child of this group moved to another supervisor';
+
+  @override
   String get systemUpdate => 'System update';
 
   @override

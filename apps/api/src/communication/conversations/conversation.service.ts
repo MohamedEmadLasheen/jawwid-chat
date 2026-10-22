@@ -1072,17 +1072,19 @@ export class ConversationService {
   }
 
   /**
-   * PD-8: a child moved from `oldSupervisorId` to `newSupervisorId`. Called by
-   * OrgStructureService INSIDE the transaction that writes the new
-   * chat.learner_supervision row, so the deferred coherence trigger judges the
-   * result, not the steps.
+   * PD-8: children moved to `newSupervisorId`. Called by OrgStructureService
+   * INSIDE the transaction that writes the new chat.learner_supervision rows,
+   * so the deferred coherence trigger judges the result, not the steps.
    *
-   *   - the child's Student Group: the old supervisor's admin seat goes to the
+   *   - each child's Student Group: the old supervisor's admin seat goes to the
    *     new one (the group IS the child's, so it follows the child);
-   *   - a family group about this child only: transferred the same way;
-   *   - a family group about this child AND others: the child is detached and
-   *     the group stays with the old supervisor's remaining children (its
-   *     teachers who teach none of them leave -- chat.prune_family_group_teachers).
+   *   - a family group about moving children only: transferred the same way --
+   *     the same conversation, its members, messages and attachments untouched;
+   *   - a family group about a moving child AND children who stay: the moving
+   *     children are detached and the group stays with the old supervisor's
+   *     remaining children (its teachers who teach none of them leave --
+   *     chat.prune_family_group_teachers). PD-24's transfer moves every child
+   *     of a group together, so it never reaches this branch.
    *
    * Access to everything else follows by itself: staff scope is computed from
    * chat.learner_supervision at every read. Returns the members removed per
@@ -1090,20 +1092,27 @@ export class ConversationService {
    */
   async reconcileSupervisionChange(
     tx: Prisma.TransactionClient,
-    learnerId: string,
-    oldSupervisorId: string | null,
+    learners: string | readonly string[],
+    oldSupervisors: string | null | readonly string[],
     newSupervisorId: string,
     actorId: string | null,
   ): Promise<Array<{ conversationId: string; removed: string[] }>> {
+    const learnerIds = typeof learners === 'string' ? [learners] : [...learners];
+    const oldIds = (oldSupervisors === null ? [] : typeof oldSupervisors === 'string' ? [oldSupervisors] : [...oldSupervisors])
+      .filter((id) => id !== newSupervisorId);
     const evictions: Array<{ conversationId: string; removed: string[] }> = [];
+    const newcomer = await tx.staff.findUnique({ where: { id: newSupervisorId }, select: { name: true } });
+    const done = new Set<string>();
     const swapAdmin = async (conversationId: string) => {
+      if (done.has(conversationId)) return;
+      done.add(conversationId);
       const removed: string[] = [];
-      if (oldSupervisorId && oldSupervisorId !== newSupervisorId) {
+      for (const oldId of oldIds) {
         const ended = await tx.conversationMember.updateMany({
-          where: { conversationId, actorId: oldSupervisorId, actorKind: ActorKind.STAFF, leftAt: null },
+          where: { conversationId, actorId: oldId, actorKind: ActorKind.STAFF, leftAt: null },
           data: { leftAt: new Date() },
         });
-        if (ended.count > 0) removed.push(oldSupervisorId);
+        if (ended.count > 0) removed.push(oldId);
       }
       const present = await tx.conversationMember.findFirst({
         where: { conversationId, actorId: newSupervisorId, leftAt: null },
@@ -1119,7 +1128,7 @@ export class ConversationService {
           },
         });
       }
-      await this.systemMessage(tx, conversationId, 'group.supervisor_changed', {});
+      await this.systemMessage(tx, conversationId, 'group.supervisor_changed', { supervisor: newcomer?.name ?? null });
       await this.outbox.enqueue(tx, CommEvent.MEMBERSHIP_CHANGED, {
         conversationId,
         added: present ? [] : [newSupervisorId],
@@ -1129,17 +1138,21 @@ export class ConversationService {
     };
 
     const studentGroups = await tx.conversation.findMany({
-      where: { learnerId, type: ConversationType.STUDENT_GROUP, archivedAt: null },
+      where: { learnerId: { in: learnerIds }, type: ConversationType.STUDENT_GROUP, archivedAt: null },
       select: { id: true },
     });
     for (const g of studentGroups) await swapAdmin(g.id);
 
-    const anchored = await tx.conversationLearner.findMany({ where: { learnerId }, select: { conversationId: true } });
+    const anchored = await tx.conversationLearner.findMany({
+      where: { learnerId: { in: learnerIds } },
+      select: { conversationId: true },
+      distinct: ['conversationId'],
+    });
     for (const { conversationId } of anchored) {
       const group = await tx.conversation.findUnique({ where: { id: conversationId }, select: { archivedAt: true } });
       if (!group || group.archivedAt) continue;
       const others = await tx.conversationLearner.count({
-        where: { conversationId, learnerId: { not: learnerId } },
+        where: { conversationId, learnerId: { notIn: learnerIds } },
       });
       if (others === 0) {
         await swapAdmin(conversationId);
@@ -1149,7 +1162,7 @@ export class ConversationService {
         where: { conversationId, actorKind: ActorKind.TEACHER, leftAt: null },
         select: { actorId: true },
       });
-      await tx.conversationLearner.delete({ where: { conversationId_learnerId: { conversationId, learnerId } } });
+      await tx.conversationLearner.deleteMany({ where: { conversationId, learnerId: { in: learnerIds } } });
       const teachersAfter = new Set(
         (
           await tx.conversationMember.findMany({
@@ -1164,6 +1177,102 @@ export class ConversationService {
       evictions.push({ conversationId, removed });
     }
     return evictions;
+  }
+
+  /**
+   * PD-24: a parent's 1:1 with the supervisor who no longer has their family
+   * passes to the new supervisor -- the same conversation, its whole history,
+   * the old supervisor's seat ended and the new one's added, the pair key
+   * rewritten. Called inside the transfer's transaction, after the supervision
+   * rows are written.
+   *
+   * Left alone when the old supervisor still has another child of the family
+   * (the 1:1 is still theirs) or when the parent already has a 1:1 with the new
+   * supervisor (two threads cannot share one pair key; the old one stays as
+   * history the old supervisor no longer reads -- chat.staff_conversation_access
+   * asks that a 1:1's staff member still reaches the family). In both cases the
+   * parent is given a 1:1 with the new supervisor if they have none.
+   */
+  async transferFamilyDirects(
+    tx: Prisma.TransactionClient,
+    familyId: string,
+    oldSupervisorIds: readonly string[],
+    newSupervisorId: string,
+    actorId: string,
+  ): Promise<{ evictions: Array<{ conversationId: string; removed: string[] }>; transferred: number; opened: number }> {
+    const evictions: Array<{ conversationId: string; removed: string[] }> = [];
+    let transferred = 0;
+    let opened = 0;
+    const newcomer = await tx.staff.findUnique({ where: { id: newSupervisorId }, select: { name: true, organizationId: true } });
+    const contacts = await tx.contact.findMany({ where: { familyId, isActive: true }, select: { id: true } });
+    for (const contact of contacts) {
+      let hadOld = false;
+      for (const oldId of oldSupervisorIds) {
+        if (oldId === newSupervisorId) continue;
+        const direct = await tx.conversation.findUnique({
+          where: { directKey: ConversationService.directKey(contact.id, oldId) },
+          select: { id: true, archivedAt: true },
+        });
+        if (!direct || direct.archivedAt) continue;
+        hadOld = true;
+        const stillTheirs = (
+          await tx.$queryRaw<Array<{ ok: boolean }>>`
+            SELECT chat.supervises_a_child_of(${oldId}::uuid, ${familyId}::uuid) AS ok`
+        )[0]?.ok === true;
+        if (stillTheirs) continue;
+        const clash = await tx.conversation.findUnique({
+          where: { directKey: ConversationService.directKey(contact.id, newSupervisorId) },
+          select: { id: true },
+        });
+        if (clash) continue;
+
+        const ended = await tx.conversationMember.updateMany({
+          where: { conversationId: direct.id, actorId: oldId, actorKind: ActorKind.STAFF, leftAt: null },
+          data: { leftAt: new Date() },
+        });
+        await tx.conversationMember.create({
+          data: {
+            conversationId: direct.id,
+            actorId: newSupervisorId,
+            actorKind: ActorKind.STAFF,
+            memberRole: MemberRole.ADMIN,
+            addedBy: actorId,
+          },
+        });
+        await tx.conversation.update({
+          where: { id: direct.id },
+          data: { directKey: ConversationService.directKey(contact.id, newSupervisorId) },
+        });
+        await this.systemMessage(tx, direct.id, 'direct.supervisor_changed', { supervisor: newcomer?.name ?? null });
+        const removed = ended.count > 0 ? [oldId] : [];
+        await this.outbox.enqueue(tx, CommEvent.MEMBERSHIP_CHANGED, {
+          conversationId: direct.id,
+          added: [newSupervisorId],
+          removed,
+        });
+        evictions.push({ conversationId: direct.id, removed });
+        transferred += 1;
+      }
+      if (!hadOld || !newcomer) continue;
+      const key = ConversationService.directKey(contact.id, newSupervisorId);
+      if (await tx.conversation.findUnique({ where: { directKey: key }, select: { id: true } })) continue;
+      const conv = await tx.conversation.create({
+        data: { organizationId: newcomer.organizationId, type: ConversationType.DIRECT, directKey: key, familyId, title: null },
+      });
+      await tx.conversationMember.createMany({
+        data: [
+          { conversationId: conv.id, actorId: contact.id, actorKind: ActorKind.CONTACT, memberRole: MemberRole.PARENT },
+          { conversationId: conv.id, actorId: newSupervisorId, actorKind: ActorKind.STAFF, memberRole: MemberRole.ADMIN, addedBy: actorId },
+        ],
+      });
+      await this.outbox.enqueue(tx, CommEvent.MEMBERSHIP_CHANGED, {
+        conversationId: conv.id,
+        added: [contact.id, newSupervisorId],
+        removed: [],
+      });
+      opened += 1;
+    }
+    return { evictions, transferred, opened };
   }
 
   /**

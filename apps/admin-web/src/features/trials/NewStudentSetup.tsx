@@ -8,10 +8,14 @@ import { useStructure } from '@/features/organization/hooks'
 import { describeOpsError } from '../teachers/opsCopy'
 import type { Pair } from '../teachers/copy'
 import { trialKeys, trialsApi, type AssignResult, type NewStudentDto } from './api'
+import { ChangeSupervisorDialog, transferNotice } from '@/features/organization/ChangeSupervisorDialog'
+import { useCopy } from '@/features/organization/copy'
+import { orgKeys } from '@/features/organization/api'
 
 const S: Record<string, Pair> = {
   setup: { en: 'Setup', ar: 'التجهيز' },
   assign: { en: 'Assign', ar: 'تعيين' },
+  change: { en: 'Change', ar: 'تغيير' },
   assignTitle: { en: 'Assign a supervisor', ar: 'تعيين مشرف' },
   assignHint: {
     en: 'The supervisor becomes responsible for this family. Chat creates the family, the parent and the children from this form; the form can no longer be edited after this.',
@@ -62,6 +66,9 @@ export function NewStudentSetup({ s, canAssign }: { s: NewStudentDto; canAssign:
   const qc = useQueryClient()
   const navigate = useNavigate()
   const [assigning, setAssigning] = useState(false)
+  const [changing, setChanging] = useState(false)
+  const [done, setDone] = useState<string | null>(null)
+  const orgTx = useCopy()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<unknown>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -87,7 +94,15 @@ export function NewStudentSetup({ s, canAssign }: { s: NewStudentDto; canAssign:
           <dt>{tx(S.supervisor)}</dt>
           <dd>
             {e?.supervisor ? (
-              <span dir="auto">{e.supervisor.name}</span>
+              <span className="tj-setup__supervisor">
+                <span dir="auto">{e.supervisor.name}</span>
+                {canAssign && (
+                  // PD-24: the Operations manager changes the supervisor at any time after Assign.
+                  <button type="button" className="btn btn--sm" onClick={() => setChanging(true)}>
+                    {tx(S.change)}
+                  </button>
+                )}
+              </span>
             ) : canAssign ? (
               <button type="button" className="btn btn--sm btn--primary" onClick={() => setAssigning(true)}>
                 {tx(S.assign)}
@@ -147,7 +162,24 @@ export function NewStudentSetup({ s, canAssign }: { s: NewStudentDto; canAssign:
         )}
       </dl>
       {notice && <p className="banner banner--warning" role="status">{notice}</p>}
+      {done && <p className="banner banner--info" role="status">{done}</p>}
       {error ? <p className="banner banner--danger" role="alert">{describeOpsError(error, locale)}</p> : null}
+      {changing && e && (
+        <ChangeSupervisorDialog
+          name={s.parent.name}
+          current={e.supervisor}
+          childNames={s.children.map((c) => c.name)}
+          submit={(body) => trialsApi.changeNewStudentSupervisor(s.trialId, body)}
+          onClose={() => setChanging(false)}
+          onDone={(result, supervisorName) => {
+            setChanging(false)
+            setDone(transferNotice(orgTx, result, supervisorName))
+            void qc.invalidateQueries({ queryKey: trialKeys.newStudents })
+            void qc.invalidateQueries({ queryKey: orgKeys.structure })
+            void qc.invalidateQueries({ queryKey: ['chat'] })
+          }}
+        />
+      )}
       {assigning && (
         <AssignDialog
           s={s}
