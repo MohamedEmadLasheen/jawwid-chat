@@ -185,6 +185,8 @@ model AuditLog {
   after    Json?
   reason   String
   at       DateTime @db.Timestamptz @default(now())
+  /// PD-21: set when written during a support session (an administrator acting as someone).
+  impersonationId String? @map("impersonation_id") @db.Uuid
 
   @@map("audit_log")
   @@schema("chat")
@@ -285,6 +287,8 @@ model Message {
   /// A forward (20261020100000); `forwardedFromMessageId` is audit-only provenance, never sent to a client.
   forwarded              Boolean @default(false)
   forwardedFromMessageId String? @map("forwarded_from_message_id") @db.Uuid
+  /// PD-21: sent by an administrator in a support session, as this author. Clients label it.
+  impersonationId String? @map("impersonation_id") @db.Uuid
   replyTo          Message?  @relation("MessageReply", fields: [replyToMessageId], references: [id])
   replies          Message[] @relation("MessageReply")
 
@@ -716,6 +720,8 @@ model Session {
   /// Hashed, never the raw address.
   ipHash           String?   @map("ip_hash")
   userAgent        String?   @map("user_agent")
+  /// PD-21: this session is a support session (an administrator acting as the account).
+  impersonationId  String?   @unique @map("impersonation_id") @db.Uuid
 
   @@map("session")
   @@schema("chat")
@@ -1862,6 +1868,26 @@ model ParentSignupCode {
   @@schema("chat")
 }
 
+/// PD-21: a one-time code an administrator issues so a person can set a new
+/// password. 20261022100000_chat_pd021_password_reset.sql owns the DDL and the
+/// rules (who may issue one; forward-only; never deleted). Hash only.
+model PasswordResetCode {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  accountId      String    @map("account_id") @db.Uuid
+  issuedBy       String    @map("issued_by") @db.Uuid
+  codeHash       String    @map("code_hash")
+  reason         String
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz
+  attempts       Int       @default(0)
+  usedAt         DateTime? @map("used_at") @db.Timestamptz
+  supersededAt   DateTime? @map("superseded_at") @db.Timestamptz
+
+  @@map("password_reset_code")
+  @@schema("chat")
+}
+
 // =====================================================================
 // PD-17 -- 20261021150000_chat_pd017_parent_student_profiles.sql owns the
 // DDL and every rule. No relations declared: these rows are read by key.
@@ -1921,5 +1947,45 @@ model FamilyInstalment {
   voidReason     String?   @map("void_reason")
 
   @@map("family_instalment")
+  @@schema("chat")
+}
+
+/// PD-21: an administrator acting as a parent or teacher account (a "support
+/// session"). 20261022120000_chat_pd021_impersonation.sql owns the DDL and the
+/// rules (who, whom, at most an hour, never deleted, forward-only).
+model ImpersonationSession {
+  id              String    @id @default(uuid()) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  staffId         String    @map("staff_id") @db.Uuid
+  staffAccountId  String    @map("staff_account_id") @db.Uuid
+  staffSessionId  String    @map("staff_session_id") @db.Uuid
+  targetAccountId String    @map("target_account_id") @db.Uuid
+  /// family | teacher
+  targetKind      String    @map("target_kind")
+  sessionId       String?   @unique @map("session_id") @db.Uuid
+  reason          String
+  startedAt       DateTime  @default(now()) @map("started_at") @db.Timestamptz
+  expiresAt       DateTime  @map("expires_at") @db.Timestamptz
+  endedAt         DateTime? @map("ended_at") @db.Timestamptz
+  endedReason     String?   @map("ended_reason")
+
+  actions ImpersonationAction[]
+
+  @@map("impersonation_session")
+  @@schema("chat")
+}
+
+/// PD-21: every request made on a support session -- method, route template,
+/// status, never a body. Append-only.
+model ImpersonationAction {
+  id              BigInt   @id @default(autoincrement())
+  impersonationId String   @map("impersonation_id") @db.Uuid
+  session         ImpersonationSession @relation(fields: [impersonationId], references: [id])
+  method          String
+  route           String
+  status          Int
+  at              DateTime @default(now()) @db.Timestamptz
+
+  @@map("impersonation_action")
   @@schema("chat")
 }

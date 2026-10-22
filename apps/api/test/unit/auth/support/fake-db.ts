@@ -196,6 +196,18 @@ export class FakeDb {
     },
   };
 
+  // -- impersonation_session (PD-21) ---------------------------------------
+  // No support session is ever started in these unit specs, so the table is
+  // always empty: refresh() finds nothing to carry over to the rotated
+  // session. Support sessions are proven against the real database in
+  // test/integration/pd021-impersonation-http.spec.ts.
+  readonly impersonationSession = {
+    updateMany: async (_args: { where: { staffSessionId: string; endedAt: null }; data: { staffSessionId: string } }) => ({
+      count: 0,
+    }),
+    findUnique: async (_args: { where: { id: string } }) => null,
+  };
+
   // -- device -------------------------------------------------------------
   readonly device = {
     findFirst: async (args: {

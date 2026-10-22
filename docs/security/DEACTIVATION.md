@@ -21,7 +21,19 @@ Status: implemented and verified on isolated databases, **uncommitted** in workt
 | Request roles through RLS | `20260905091200_chat_rls.sql:53,85` — `grant update on chat.staff to authenticated` (manager policy), `insert, update on chat.contact` (admins) | **Yes, in principle** — no client uses it (Admin Web talks to the API), but a request session with a manager context could set `is_active=false` (reproduced) | no barrier |
 | Operators / migrations / fixtures | psql, `20260910120000` (one-time backfill, not a transition), test suites | Yes | no barrier |
 
-So every deactivation that can happen is a **database write**, and none of them could
+**Update, PD-21 (2026-10-22).** The API now has a runtime writer:
+`POST /admin/accounts/:accountId/suspend` (`apps/api/src/account-admin/account-admin.service.ts`)
+calls `chat.deactivate_principal('account', id, reason, staff_id, 'suspended')` — so it
+is journaled and confirmed like every other writer — **and** revokes every session of
+the account in the same transaction, then runs the completion barrier. The extra
+revocation matters for the way back: `chat.reactivate_account()` (server-side only,
+`suspended` → `active`, never a deactivation) would otherwise make the account's
+unexpired sessions and refresh tokens valid again, because the guard re-checks the
+account's status and not why a session was left live. Pinned by
+`pd021-account-admin-http.spec.ts` ("reactivation revives nothing old"). A completed
+PD-21 password reset revokes every session too.
+
+So every deactivation that could happen before PD-21 was a **database write**, and none of them could
 wait for the API's completion barrier (`confirmRevoked`): that is RT-032.
 
 ## 2. The model
